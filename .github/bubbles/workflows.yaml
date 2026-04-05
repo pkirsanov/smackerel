@@ -1,0 +1,1698 @@
+# governance-version: 2.2.0\nversion: 1
+defaultMode: full-delivery
+
+gates:
+  G001:
+    name: artifact_gate
+    description: Required artifacts exist for current feature/bug context.
+  G002:
+    name: scope_definition_gate
+    description: Active scope contains scenarios, implementation plan, test plan, and DoD.
+  G003:
+    name: test_integrity_gate
+    description: Test classifications match execution reality.
+  G004:
+    name: test_execution_gate
+    description: Required tests executed and passing.
+  G005:
+    name: evidence_gate
+    description: Raw execution evidence is captured per policy.
+  G006:
+    name: docs_sync_gate
+    description: Feature and managed docs are updated, published where required, and coherent.
+  G007:
+    name: validation_gate
+    description: Validation checks pass and regressions are addressed.
+  G008:
+    name: audit_gate
+    description: Audit verdict is acceptable.
+  G009:
+    name: chaos_gate
+    description: Required chaos rounds complete without unresolved failures.
+  G010:
+    name: user_validation_gate
+    description: uservalidation checklist is updated according to policy.
+  G011:
+    name: session_gate
+    description: Session and feature state are updated for resume.
+  G012:
+    name: final_promotion_gate
+    description: All mode-required gates pass in current session.
+  G013:
+    name: priority_selection_gate
+    description: Highest-value next work item is selected with explicit rationale. Enforced by bubbles.workflow agent behavior (value-first scoring output), not by script. Agent MUST emit selection rationale per the bubbles.workflow output requirements.
+  G014:
+    name: bootstrap_readiness_gate
+    description: For new/underspecified work, design/spec/scopes are ready before implementation.
+  G015:
+    name: scenario_depth_gate
+    description: Spec/design/scopes contain detailed user stories and Gherkin scenarios covering declared use cases/models/algorithms.
+  G016:
+    name: gherkin_e2e_coverage_gate
+    description: Every required Gherkin scenario maps to specific E2E tests and expected assertions, every new/changed/fixed behavior has scenario-specific persistent E2E regression coverage tied to the planned behavior, and DoD explicitly includes high-quality E2E items aligned with scenario/use-case coverage including scenario-specific regression E2E items for each changed behavior plus a broader regression suite pass. Consolidates former G017 (dod_e2e_expansion_gate).
+  G018:
+    name: dod_completion_gate
+    description: A spec cannot be promoted to done while any DoD checkbox remains unchecked.
+  G019:
+    name: sequential_spec_completion_gate
+    description: Previous spec in batch MUST be fully complete (done/blocked) with ALL gates passed before starting next spec. No parallel or premature advancement.
+  G020:
+    name: cross_agent_verification_gate
+    description: Each specialist agent's output MUST be verified by the orchestrator before advancing to the next phase. Verification includes checking that commands were actually executed (not fabricated), evidence exists, and exit codes are real.
+  G021:
+    name: anti_fabrication_gate
+    description: Detect and block fabricated evidence. Applies heuristics - evidence sections with fewer than 10 lines, evidence that matches expected output templates verbatim, DoD items batch-checked without sequential execution, timestamps that are impossible (all identical or out of order), and copy-pasted evidence where identical or near-identical terminal output blocks (≥80% similarity) appear across multiple DoD items within the same scope. Consolidates former G049 (evidence_clone_detection_gate). Enforced by state-transition-guard.sh Check 12 (enhanced).
+  G022:
+    name: specialist_completion_gate
+    description: ALL specialist agents required by the mode (test, docs, validate, audit, chaos) MUST have executed and returned verifiable results before spec promotion. Missing specialist execution is a BLOCKING failure.
+  G023:
+    name: state_transition_guard_gate
+    description: MANDATORY mechanical enforcement gate. The state-transition-guard.sh script MUST be executed and exit with code 0 before ANY state.json status transition to "done". This gate verifies DoD completion, scope status consistency, certification/execution phase coherence, specialist phases, timestamp plausibility, test file existence, evidence depth, template placeholders, policy provenance, scenario manifest integrity, transition/rework packet closure, framework ownership/result contract integrity, artifact lint, and artifact freshness isolation in one blocking pass. Agents MUST NOT write "status":"done" without this gate passing.
+  G024:
+    name: all_scopes_done_before_spec_done_gate
+    description: ABSOLUTE BLOCKING gate. A spec CANNOT be marked "done" in state.json until EVERY scope in scopes.md has status "Done". Zero scopes with "Not Started", "In Progress", or "Blocked" are allowed. This is a hard dependency — no override, no workaround, no exception. Agents MUST verify by running grep for non-Done scope statuses and confirming zero matches before writing "done" to state.json.
+  G025:
+    name: per_dod_item_raw_evidence_gate
+    description: ABSOLUTE BLOCKING gate. EVERY DoD item marked [x] MUST have raw terminal output evidence (≥10 lines) recorded INLINE directly beneath it in scopes.md. Items without evidence are INVALID even if checked. Each item MUST be individually validated — batch-checking is forbidden. Test-related DoD items MUST show real test execution covering ALL scenarios (Gherkin, error paths, boundary conditions, parameter permutations) with 100% business logic coverage. Tests MUST be real (no internal mocks, real test DBs, real assertions that fail if feature is broken). Agents MUST verify each [x] item has evidence before marking scope Done.
+  G026:
+    name: sla_stress_coverage_gate
+    description: Scopes defining latency SLAs (p95, p99, response time targets) MUST have stress tests in the Test Plan and DoD, executed and passing with evidence.
+  G027:
+    name: phase_scope_coherence_gate
+    description: ABSOLUTE BLOCKING gate. Execution and certification phase records claiming implementation phases (implement, test) MUST have matching non-empty completedScopes AND Done scope artifacts. Claiming 6-7 lifecycle phases complete while completedScopes is empty or partial = FABRICATION. Guard script Check 15 enforces mechanically.
+  G028:
+    name: implementation_reality_scan_gate
+    description: ABSOLUTE BLOCKING gate. Source files referenced in scope artifacts MUST NOT contain stub/fake/hardcoded data patterns. Public handlers/endpoints/workflows returning literal collections, status-only payloads, or placeholder success without real delegation are BLOCKING. Frontend hooks calling getSimulationData() or containing zero API/query/client transport signals are BLOCKING. Live-system tests using request interception are BLOCKING unless reclassified out of live categories. Production code MUST NOT contain default/fallback values that mask missing configuration or hide failures — patterns like unwrap_or(), unwrap_or_default(), || "default", ?? "fallback", os.getenv("K", "default"), ${VAR:-default} are FORBIDDEN; all config MUST fail-fast if missing. Consolidates former G030 (no_defaults_no_fallbacks_gate). Enforced by implementation-reality-scan.sh (Scans 5 and 16) via guard script.
+  G029:
+    name: integration_completeness_gate
+    description: Every implemented artifact (endpoint, library, page, service, migration, proto) MUST be wired into the running system with at least one real consumer. Backend endpoints consumed by frontends or documented external-only. Libraries imported by consumers. Frontend using real APIs (no stubs/mocks/hardcoded data). Renamed/removed interfaces must leave zero stale first-party consumers behind. Verified by grep-based consumer checks.
+  G031:
+    name: findings_artifact_update_gate
+    description: Agent findings recorded in scope artifacts (scopes.md/state.json) before verdict.
+  G032:
+    name: business_analysis_gate
+    description: spec.md contains actors, use cases, business scenarios, and UI wireframes (when applicable). Competitive analysis is documented. Requirements are traceable and testable. Gate passes if spec.md has the required sections or if scope explicitly does not need business analysis (backend-infra work, bug fixes, etc.).
+  G033:
+    name: design_readiness_gate
+    description: ABSOLUTE BLOCKING gate for the implement phase. design.md MUST exist and contain substantive technical design (not stubs/placeholders). scopes.md MUST exist with at least one scope containing Gherkin scenarios, a Test Plan, and a Definition of Done. When this gate fails, the workflow MUST auto-escalate by invoking bubbles.design → bubbles.plan before proceeding to implement. This gate prevents implementation from starting with only spec.md. Exempt for bugfix-fastlane mode (bugs may not need new design artifacts).
+  G034:
+    name: security_gate
+    description: Security scan clean — no critical or high severity vulnerabilities. Dependency audit passed, code review found no injection/XSS/SSRF/auth-bypass findings above medium severity. When this gate fails, the workflow MUST route to bubbles.implement to fix security findings before proceeding.
+  G035:
+    name: vertical_slice_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. When a scope produces BOTH frontend AND backend code, the vertical slice MUST be complete — every frontend API call MUST map to a .route()-wired backend handler, every backend handler MUST be registered in the service router, gateway/proxy forwarding rules MUST exist for all service endpoints, and E2E tests MUST exercise the full stack (frontend → gateway → service → data store). Every backend service endpoint referenced in scope artifacts MUST have a corresponding gateway/proxy forwarding rule — unreachable endpoints represent incomplete vertical wiring. Applies conditionally — pure-backend or pure-frontend scopes are exempt. Consolidates former G050 (gateway_route_forwarding_gate). Detection: cross-reference frontend fetch/useQuery/dio calls against backend router .route() registrations and gateway forwarding config.
+  G036:
+    name: red_green_traceability_gate
+    description: New or changed behavior MUST show red→green evidence. Agents MUST capture failing targeted test or reproduction evidence before accepting a fix, then capture passing evidence after the change. Docs-only and artifact-only work are exempt.
+  G037:
+    name: scope_size_discipline_gate
+    description: Scopes and DoD items MUST stay small, isolated, and single-outcome by default. Optional time-budget hints like maxScopeMinutes and maxDodMinutes tighten the limit further. Mixed-purpose scopes MUST be split unless explicitly justified.
+  G038:
+    name: failure_recovery_containment_gate
+    description: Narrow failures MUST be handled by narrow repair loops first. Compile, lint, validation, and test failures must be fixed with the smallest viable context before broader reruns or escalations are allowed. Self-healing fix loops MUST NOT stack — maxDepth=1, a fix attempt NEVER triggers another fix loop. maxRetries=3 per failure, maxTotalRetries=5 per phase. Context narrows on each retry (full → file → function). If a fix introduces a NEW error, it counts against the same retry budget. No recursion, no nesting. Consolidates former G039 (self_healing_containment_gate).
+  G040:
+    name: incomplete_work_language_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Scope artifacts (scopes.md or scopes/*/scope.md) and report files MUST NOT contain deferral language indicating incomplete work (deferred, defer to, future scope, future work, follow-up, followup, out of scope, not in scope, will address later, revisit later, separate ticket, separate issue, punt, punted, postpone, postponed, skip for now, not implemented yet, not yet implemented, placeholder, temporary workaround) NOR pseudo-completion language indicating work claimed done but not finished (Next Steps headings, Recommended routing/resolution, Ready for /bubbles., Re-run /bubbles.validate, Commit the fix, Record DoD evidence, Run full E2E suite, [PENDING]). Consolidates former G065 (pseudo_completion_language_gate). Mechanically enforced by state-transition-guard.sh Check 18 and artifact-lint.sh. When this gate fails, the agent MUST either complete the deferred work NOW or remove the DoD item with justification.
+  G041:
+    name: dod_format_integrity_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Prevents agents from bypassing DoD completion checks by reformatting checkbox items, inventing non-canonical scope statuses, or rewriting DoD item text. FOUR enforcement layers: (1) DoD FORMAT — Only '- [ ] ' and '- [x] ' are valid DoD item formats inside Definition of Done sections. Patterns like '- (deferred) ...', '- ~~...~~', '- *deferred* ...', or '- Text without checkbox' are FORBIDDEN manipulations. (2) SCOPE STATUS — Only four canonical statuses are valid: 'Not Started', 'In Progress', 'Done', 'Blocked'. Invented statuses like 'Deferred', 'Deferred — Planned Improvement', 'Skipped', 'N/A' are FORBIDDEN. (3) DoD ITEM DELETION — Removing DoD items to pass checkbox validation is structural fabrication. If a prior workflow phase added DoD items, they MUST remain as checkboxes until legitimately completed with evidence or explicitly removed with documented justification in the same commit. (4) DoD TEXT REWRITING — Modifying the behavioral claim in a DoD item's text description to match what was delivered instead of what the Gherkin scenario specified is CONTENT FABRICATION, semantically equivalent to deleting the original item and inventing a new one. Only bubbles.plan may modify DoD item text. Mechanically enforced by state-transition-guard.sh Checks 4A, 4B, and 22.
+  G042:
+    name: artifact_ownership_enforcement_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. Agents MUST respect artifact ownership boundaries. Business requirements in spec.md belong to bubbles.analyst, UX sections of spec.md belong to bubbles.ux, design.md belongs to bubbles.design, and scopes.md/report.md/uservalidation.md planning structure belongs to bubbles.plan. Diagnostic agents such as bubbles.validate, bubbles.harden, bubbles.gaps, bubbles.stabilize, bubbles.security, bubbles.code-review, and bubbles.system-review MUST route required artifact changes to the owning specialist instead of editing foreign-owned artifacts directly. When work crosses a registered ownership boundary, the active agent MUST delegate to the owning specialist declared in bubbles/agent-capabilities.yaml or bubbles/agent-ownership.yaml. Only owning planning or execution specialists may modify their owned surfaces — diagnostic, certification, and routing agents MUST NOT perform foreign-owned remediation inline. Tiny fixes remain allowed only through orchestrator dispatch to the correct owner using a narrow packet. Consolidates former G054 (capability_delegation_gate) and G062 (owner_only_remediation_gate). Enforced by agent-ownership-lint.sh.
+  G043:
+    name: consumer_trace_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. When routes, paths, endpoints, contracts, identifiers, symbols, links, breadcrumbs, redirects, or UI targets are renamed, removed, moved, replaced, or deprecated, agents MUST inventory and update every first-party consumer and prove zero stale references remain across navigation, breadcrumbs, redirects, API clients, generated clients, docs, config, deep links, and tests. Planning artifacts MUST include a Consumer Impact Sweep plus consumer-facing regression coverage.
+  G044:
+    name: comprehensive_regression_gate
+    description: >-
+      BLOCKING gate. Three-phase regression safety: (1) Before implementation, scan the new/changed spec's requirements against all done/in-progress specs for conflicts (route/endpoint collisions, overlapping UI routes, contradictory business rules, shared table mutations, breaking API contract changes). If a conflict is detected, it MUST be resolved before implementation proceeds. (2) Before implementation starts, capture a test baseline snapshot (total tests, pass count, fail count, skip count per category). After implementation + test phases, rerun the FULL test suite and compare against the baseline — gate fails if any previously-passing test now fails or total pass count decreased. (3) After completing a spec/scope, tests belonging to OTHER already-completed specs (state.json status: done) MUST be re-executed — gate fails if any done-spec's tests now fail due to the current change. Consolidates former G045 (cross_spec_regression_gate) and G046 (spec_conflict_detection_gate). Evidence: before/after comparison table in report.md. Enforced by regression-baseline-guard.sh and the regression agent's cross-spec impact scan.
+  G047:
+    name: idor_auth_bypass_gate
+    description: >-
+      BLOCKING gate. Handlers/endpoints that perform authorization decisions MUST extract user identity exclusively from authenticated context (auth headers, JWT claims, session middleware) — NEVER from request body, query parameters, or URL path parameters that the caller controls. Detection patterns are project-configurable via .github/bubbles-project.yaml (scans.idor.bodyIdentityPatterns, scans.idor.authContextPatterns, scans.idor.handlerFilePatterns) with sensible generic defaults. This is an IDOR (Insecure Direct Object Reference) vulnerability — OWASP A01 Broken Access Control. Enforced by implementation-reality-scan.sh Scan 7 and bubbles.security Phase 3.2.
+  G048:
+    name: silent_decode_failure_gate
+    description: >-
+      BLOCKING gate. Deserialization/decode operations on stored data (database rows, protobuf messages, serialized blobs) MUST NOT silently discard failures. Detection patterns are project-configurable via .github/bubbles-project.yaml (scans.silentDecode.patterns, scans.silentDecode.errorHandling) with sensible generic defaults covering common anti-patterns across languages. Silent decode failures cause data corruption to go undetected — corrupted rows are silently dropped instead of surfaced. REQUIRED: decode failures MUST be logged with row identifier and error context, OR propagated as errors. Enforced by implementation-reality-scan.sh Scan 8.
+  G051:
+    name: test_env_dependency_gate
+    description: >-
+      BLOCKING gate. Test suites MUST NOT have silent dependencies on environment variables that cause failures when those variables are absent. Detection patterns are project-configurable via .github/bubbles-project.yaml (scans.testEnvDependency.patterns) with sensible generic defaults. When pre-existing test failures are caused by environmental dependencies, they MUST be fixed with either (a) proper test setup that provides required env vars, or (b) fail-fast with a clear skip message explaining the missing dependency. Tests that intermittently pass/fail based on environment state are unreliable and BLOCKING. Enforced by state-transition-guard.sh Check 19.
+  G052:
+    name: artifact_freshness_guard_gate
+    description: >-
+      BLOCKING gate. When stale requirements, UX, design decisions, or scopes are preserved for history, they MUST be isolated from active truth. Superseded or suppressed sections in spec/design artifacts must remain in an appendix-style boundary and must not be followed by active-looking headings. Superseded scope sections MUST NOT retain executable markers such as status blocks, Test Plan tables, DoD headings, or DoD checkboxes. Enforced by artifact-freshness-guard.sh and re-run by state-transition-guard.sh Check 13A.
+  G053:
+    name: implementation_delta_evidence_gate
+    description: >-
+      BLOCKING gate. Implementation-bearing workflows MUST prove runtime or integration delivery with git-backed code-diff evidence in report artifacts. The evidence must show at least one non-artifact source, runtime, config, or contract file path. Specs that only changed `spec.md`, `design.md`, or docs cannot be promoted as delivered implementation. Enforced by state-transition-guard.sh Check 13B.
+  G055:
+    name: policy_provenance_gate
+    description: >-
+      BLOCKING gate for control-plane-aware workflows. Active execution modes such as grill, tdd, autoCommit, lockdown, and regression strictness MUST be recorded together with provenance (`user-request`, `repo-default`, `workflow-forced`, or `spec-lockdown`) in state metadata.
+  G056:
+    name: validate_certification_gate
+    description: >-
+      BLOCKING gate. Completion certification state belongs exclusively to bubbles.validate. Other agents may submit execution claims or transition requests but MUST NOT directly certify scope/spec completion, invalidation, or lockdown state.
+  G057:
+    name: scenario_manifest_gate
+    description: >-
+      BLOCKING gate for scenario-contract-aware specs. Every changed user-visible or externally observable behavior MUST map to stable scenario IDs in scenario-manifest.json, and each scenario MUST map to real live-system BDD coverage plus report evidence. Validate-owned certification MUST replay or otherwise directly verify the linked live-system scenario proof for active SCN-* contracts before completion is certified. uservalidation.md remains a human acceptance surface and MUST NOT be toggled to mirror automation outcomes.
+  G058:
+    name: lockdown_gate
+    description: >-
+      BLOCKING gate. Locked scenarios MUST NOT change without an approval record routed through bubbles.grill plus a validate-certified invalidation or replacement path.
+  G059:
+    name: regression_contract_gate
+    description: >-
+      BLOCKING gate. Scenario-linked regression tests for non-invalidated behavior are protected contracts. They MUST NOT be weakened, removed, or repointed to new behavior until the owning scenario contract has been invalidated and replaced.
+  G060:
+    name: scenario_tdd_gate
+    description: >-
+      BLOCKING gate whenever TDD is active. For changed scenarios, targeted failing proof MUST exist before the implementation is accepted as green. Broader suites are not a substitute for the narrow red-to-green path.
+  G061:
+    name: rework_packet_gate
+    description: >-
+      BLOCKING gate for route-required findings. Diagnostic or certification phases that reopen work MUST emit structured transition or rework packets tied to concrete scenarios, DoD items, and owning specialists instead of narrative-only handoff text.
+  G063:
+    name: concrete_result_gate
+    description: >-
+      BLOCKING gate. Every agent or child-workflow invocation MUST end with a concrete result shape: completed_owned, completed_diagnostic, route_required, or blocked. Narrative-only findings or generic advice are invalid. Route-required and blocked outcomes MUST include owner, reason, and scope/scenario/DoD references.
+  G064:
+    name: child_workflow_depth_gate
+    description: >-
+      BLOCKING gate. Only orchestrators may invoke child workflows, and workflow nesting depth MUST NOT exceed 1. Non-orchestrator agents may emit packets but may not recursively spawn workflow execution.
+  G067:
+    name: shared_infrastructure_blast_radius_gate
+    description: >-
+      BLOCKING gate. When a scope touches high-fan-out shared test or bootstrap infrastructure (fixtures, harnesses, global setup, auth/login/session bootstrap, storage/session injection, ordering/timing contracts), planning artifacts MUST include a Shared Infrastructure Impact Sweep, an independent canary suite entry that validates downstream contracts before broad suite reruns, and a rollback or restore path. Agents MUST NOT rewrite such infrastructure wholesale unless the blast radius, downstream contract surfaces, and recovery path are explicitly planned and verified. Enforced by state-transition-guard.sh Check 8C.
+  G066:
+    name: phase_claim_provenance_gate
+    description: >-
+      BLOCKING gate. Phase claims in completedPhaseClaims must have matching agent provenance in executionHistory. An agent may only record its own phase name; cross-phase impersonation is fabrication. Enforced by state-transition-guard.sh Check 6B.
+  G069:
+    name: collateral_change_containment_gate
+    description: >-
+      BLOCKING gate. Mixed-purpose cleanup is forbidden for narrow repairs and risky refactors. Scopes that refactor, simplify, or repair high-fan-out infrastructure MUST declare a Change Boundary listing allowed file families and excluded surfaces that must remain untouched, and they MUST prove zero unrelated file families were changed as part of the fix loop. Opportunistic cleanups, unrelated handler/test edits, or broad repo sweeps bundled into the same repair path are blocking failures. Enforced by state-transition-guard.sh Check 8D.
+  G068:
+    name: dod_gherkin_content_fidelity_gate
+    description: >-
+      ABSOLUTE BLOCKING gate. DoD items MUST faithfully represent the behavioral claims of their source Gherkin scenarios. If a scope's Gherkin scenarios specify behavior X (e.g., "mock structs are removed and replaced with real test DB calls") but the DoD items describe behavior Y (e.g., "all files tagged for future migration"), the DoD has drifted from the spec and the scope MUST NOT be marked Done. This gate prevents execution agents from silently rewriting DoD item descriptions to match what was delivered instead of what was planned. Detection: cross-reference significant words from each Gherkin scenario against DoD item text using fuzzy matching. If a scenario's key behavioral claim has no corresponding DoD item preserving that claim, the gate fails. Enforced by traceability-guard.sh (Gherkin-to-DoD pass) and state-transition-guard.sh Check 22.
+  G070:
+    name: outcome_contract_gate
+    description: >-
+      BLOCKING gate for bootstrap and validate phases. spec.md MUST contain a non-empty Outcome Contract section with Intent, Success Signal, Hard Constraints, and Failure Condition fields before the bootstrap phase completes. During validation, the Success Signal MUST be demonstrated in report.md evidence and Hard Constraints MUST be verified as preserved. A feature that passes all process gates but fails to satisfy its declared Intent or violates a Hard Constraint is NOT done. Enforced by artifact-lint.sh (presence check) and bubbles.validate Step 0 (substance check).
+
+failureRouting:
+  code: implement
+  test: test
+  docs: docs
+  compliance: validate
+  audit: audit
+  chaos: implement
+  environment: devops
+
+retryPolicy:
+  maxPhaseRetries: 3
+  maxIdenticalFailures: 2
+  defaultMaxChaosRounds: 3
+
+# Auto-Continuation & Mode Escalation Policy (NON-NEGOTIABLE)
+#
+# Workflow agents MUST complete all target work without stopping to suggest
+# commands. When a workflow discovers that different actions are needed
+# (e.g., specs need hardening, bugs block progress, gaps need closing),
+# it MUST automatically escalate inline rather than stopping and suggesting
+# a different mode.
+#
+# `runUntilComplete: true` is the DEFAULT for all delivery modes (statusCeiling: done).
+# Agents MAY NOT stop and suggest resume commands unless a truly terminal
+# condition is reached (see terminalStopConditions below).
+#
+# `autoModeEscalation: true` is the DEFAULT for all delivery modes.
+# When an agent discovers work that would normally require a different mode,
+# it MUST handle it inline by invoking the appropriate specialist agents
+# rather than stopping and recommending a mode switch.
+
+autoEscalation:
+  enabled: true
+  # Inline escalation paths — when a condition is detected, invoke these
+  # agents inline via runSubagent and continue the workflow. NEVER stop.
+  inlineActions:
+    missingArtifacts:
+      description: Required artifacts (spec.md, design.md, scopes.md) are missing or incomplete
+      action: invoke bubbles.design → bubbles.plan → continue current workflow
+    missingDesignBeforeImplement:
+      description: implement phase reached but design.md or scopes.md are missing/stubs (G033 failure)
+      action: invoke bubbles.design → bubbles.plan inline → then proceed to implement
+    specsNeedHardening:
+      description: Specs/scopes are underspecified, missing Gherkin, weak DoD
+      action: invoke bubbles.harden inline → continue current workflow
+    deploymentOrCiFailures:
+      description: Build, deployment, CI/CD, monitoring, or observability work is required
+      action: invoke bubbles.devops inline → continue current workflow
+    bugsDiscovered:
+      description: Bugs found during implementation or testing
+      action: invoke bubbles.bug → bubbles.implement → bubbles.test inline → continue
+    gapsDiscovered:
+      description: Implementation gaps found during validation or audit
+      action: invoke bubbles.gaps → bubbles.implement inline → continue
+    testFailures:
+      description: Tests fail after implementation
+      action: invoke the smallest failing-scope fix loop first (bubbles.implement with only the failing command/file/scope context) → bubbles.test on the impacted tests → continue when clean
+    compileOrLintFailures:
+      description: Compile, type-check, or lint failures occur during implement/test/validate
+      action: invoke a micro-fix loop scoped to the failing file or symbol → rerun only the failing command → continue when resolved
+    validationFailures:
+      description: Validation finds a concrete broken contract, stale artifact, or missing evidence path
+      action: invoke the owning specialist for the precise failure class, repair only that contract/evidence path, rerun impacted validation, then continue
+    artifactDrift:
+      description: State claims don't match reality (stale completedPhases, wrong status)
+      action: reconcile state inline → continue current workflow
+    artifactFreshnessDrift:
+      description: spec.md, design.md, or scopes.md contain stale active content that no longer matches current truth
+      action: invoke bubbles.analyst and/or bubbles.ux and/or bubbles.design and/or bubbles.plan inline to reconcile active artifacts before continuing
+  # Self-healing loop configuration (consolidated into G038)
+  selfHealingLoop:
+    maxDepth: 1 # NEVER nest — a fix attempt cannot trigger another fix attempt
+    maxRetries: 3 # Per failure, max 3 attempts with the same error context
+    maxTotalRetries: 5 # Across ALL failures in one phase, hard cap
+    narrowingRule: |
+      Retry 1: full error context + surrounding code
+      Retry 2: only the failing file + error message
+      Retry 3: only the specific function/block + error message
+      After 3: escalate to next agent or mark blocked
+    antiStackingRule: |
+      A self-healing fix attempt is NEVER allowed to trigger another
+      self-healing loop. If a fix introduces a NEW error, it counts
+      against the same retry budget. No recursion. No nesting.
+  # Truly terminal conditions — ONLY these justify stopping the workflow
+  terminalStopConditions:
+  - all_target_specs_done_or_blocked_after_max_retries
+  - user_explicitly_requested_stop
+  - no_specs_could_be_resolved_from_input
+  # Conditions that MUST NOT cause a stop — handle inline instead
+  neverStopFor:
+  - mode_seems_suboptimal
+  - different_workflow_would_be_better
+  - artifacts_need_repair
+  - specs_need_hardening
+  - bugs_need_fixing
+  - gaps_need_closing
+  - test_failures_fixable
+  - state_drift_detected
+
+# Project-local custom gates (discovered from .github/bubbles-project.yaml)
+# These are NEVER defined in this file — this file is 100% Bubbles-owned.
+# Custom gates are auto-discovered by the state transition guard script.
+# See bubbles.super agent and bubbles-project.yaml for management.
+customGatesDiscovery:
+  configFile: .github/bubbles-project.yaml
+  idRange: G100+
+  enforcement: auto-discovered by state-transition-guard.sh
+
+# Lessons memory auto-compaction
+lessonsMemory:
+  file: .specify/memory/lessons.md
+  archiveFile: .specify/memory/lessons-archive.md
+  maxLines: 150
+  autoCompactTrigger: workflow_start
+  recencyTiers:
+    recent: 30d # Full detail
+    aging: 90d # Problem + fix only
+    archive: 90d+ # Moved to archive file
+  deduplicationThreshold: 3 # Same root cause 3+ times → collapse
+
+# ── Skill Evolution Loop ──
+#
+# Turns the passive lessons.md log into a closed-loop skill improvement system.
+# When the same problem/pattern is recorded 3+ times, the framework proposes
+# creating or updating a skill. Proposals are user-approved, never auto-applied.
+#
+# Flow: workflow execution → lessons captured → pattern frequency detected (≥3)
+#       → skill proposal generated → user approves → SKILL.md created/updated
+#       → future workflows load improved skill automatically
+skillEvolution:
+  enabled: true
+  triggerThreshold: 3 # Same lesson pattern 3+ times before proposing
+  sourceFile: .specify/memory/lessons.md
+  proposalFile: .specify/memory/skill-proposals.md
+  autoCreate: false # Propose only, user approves
+  autoUpdate: false # Propose only, user approves
+  reviewAgent: bubbles.super
+  reviewTrigger: workflow_start # Surface proposals at start of workflow
+  proposalFormat: |
+    ## Skill Proposal: {skill_name}
+    - Pattern: {pattern_description}
+    - Observed: {count} times across {spec_list}
+    - Proposed skill: .github/skills/{skill_name}/SKILL.md
+    - Action: [Create / Dismiss / Later]
+
+# ── Developer Profile (Observation-Driven) ──
+#
+# Dynamically built from observed developer activity. NOT manually maintained.
+# Observations are append-only facts; patterns are promoted after ≥3 observations.
+# Used ONLY by decisionPolicy for taste-decision auto-resolution. Execution
+# agents (implement, test, validate, audit) NEVER read the profile.
+developerProfile:
+  enabled: true
+  file: .specify/memory/developer-profile.md
+  observationsFile: .specify/metrics/observations.jsonl
+  maxProfileLines: 100
+  maxObservationsLines: 5000
+
+  collection:
+    triggers:
+    - workflow_finalize # Scan git + state.json at end of every workflow
+    - taste_decision # Record choice immediately when user picks A/B
+    - retro_invocation # Full historical analysis on demand
+    scans:
+      gitDiff: true # File types, naming changes, structural edits
+      stateHistory: true # Mode choices, tag usage, agent invocation patterns
+      tasteDecisions: true # Explicit A/B choices from decisionPolicy
+      codeModifications: true # Post-agent edits (git diff between agent commit and next)
+      scopeSizing: true # DoD item count, lines per scope
+
+  promotion:
+    threshold: 3 # Observations before pattern enters profile
+    contradictionPolicy: immediate_suspend # Suspend on first contradiction
+    resolutionAfterContradiction: next_observation # Next matching observation decides
+
+  freshness:
+    freshDays: 90 # Entries younger than this auto-resolve decisions
+    agingDays: 180 # Entries older than this only suggest, don't auto-resolve
+    staleAction: surface_for_review # Surfaced for user review
+    reviewAgent: bubbles.super
+    reviewTrigger: workflow_start
+    reviewMessage: |
+      Your developer profile has {N} stale preferences (>180 days).
+      Review and confirm/remove? [Show / Skip / Clear all stale]
+
+  confidenceTiers:
+    fresh:
+      maxAgeDays: 90
+      usage: auto_resolve_matching_decisions
+    aging:
+      maxAgeDays: 180
+      usage: suggest_only_no_auto_resolve
+    stale:
+      maxAgeDays: null # > 180 days
+      usage: ignored_surfaced_for_review
+    contradicted:
+      maxAgeDays: null # Any age, opposite choice observed
+      usage: suspended_immediately
+
+  consumers:
+  - decisionPolicy # Auto-resolve taste decisions (fresh patterns only)
+  - skillEvolution # Inform skill proposals
+  # NOT consumed by: implement, test, validate, audit (NEVER)
+
+  observationConfidence:
+    explicit: auto_resolve # From taste decisions — high confidence
+    inferred: suggest_only # From git scan — lower confidence, never auto-resolve
+
+# ── Activity Tracking (Measurable Metrics Only) ──
+#
+# Tracks ONLY what can be measured with certainty. NO dollar costs, NO token
+# estimates, NO "thinking time" — those are not exposed by the platform and
+# guessing would be fabricated data.
+#
+# What IS measured: invocation counts, wall-clock durations, retry budgets,
+# gate pass/fail rates, scope completion times, lines changed (git).
+metrics:
+  enabled: false
+  storageFile: .specify/metrics/events.jsonl
+  configFile: .specify/memory/bubbles.config.json
+  enableCommand: "bubbles.sh metrics enable"
+  disableCommand: "bubbles.sh metrics disable"
+  activityTracking:
+    enabled: false # Separate toggle from event metrics
+    storageFile: .specify/metrics/activity.jsonl
+    perAgentTracking: true
+    perSpecTracking: true
+    perScopeTracking: true
+    measuredDimensions:
+    - invocationCount # How many times each agent was called
+    - phaseDuration # Wall-clock seconds per phase (from terminal timestamps)
+    - retryCount # Self-healing retries consumed vs budget
+    - gatePassFailRate # Per gate ID pass/fail ratio
+    - scopeCompletionTime # First implement invocation to Done status
+    - linesChanged # git diff --stat per scope
+    - phaseSkipRate # Skipped vs executed phases
+    # Dimensions explicitly NOT tracked (not measurable):
+    # - tokenCount            # Not exposed by VS Code Copilot API
+    # - dollarCost            # Derived from unknown tokens = fabricated
+    # - thinkingTime          # No visibility into model inference
+    # - agentEfficiency       # No meaningful denominator
+    reportAgent: bubbles.retro
+  outcomeEvals:
+    enabled: true
+    dimensions:
+    - outcomeContractPresent # spec.md has Outcome Contract section
+    - successSignalDemonstrated # report.md evidence demonstrates the Success Signal
+    - hardConstraintsPreserved # Hard Constraints verified during validation
+    - intentSatisfied # Overall outcome matches declared Intent
+
+# ── Gate Classification (Model Compensation Tagging) ──
+#
+# Gates tagged modelCompensation: true exist primarily to compensate for
+# current AI model limitations (fabrication, shortcutting, batching).
+# Gates tagged modelCompensation: false enforce durable business, security,
+# or architectural invariants that should remain regardless of model capability.
+# Review model-compensation gates when models improve significantly.
+gateClassification:
+  modelCompensation:
+  - G021 # anti_fabrication_gate — models fabricate evidence (absorbs former G049 evidence_clone_detection)
+  - G025 # per_dod_item_raw_evidence — models batch-check DoD items
+  - G027 # phase_scope_coherence — models claim phases without doing work
+  - G040 # incomplete_work_language — models defer work or emit pseudo-completion (absorbs former G065)
+  - G041 # dod_format_integrity — models reformat checkboxes to bypass counts
+  - G066 # phase_claim_provenance — models impersonate other agents' phase claims
+  - G068 # dod_gherkin_content_fidelity — models rewrite DoD text to match delivery
+  businessInvariant:
+  - G028 # implementation_reality_scan — fail-fast configuration + no stubs (absorbs former G030)
+  - G034 # security_gate — vulnerability prevention
+  - G035 # vertical_slice — architectural completeness (absorbs former G050 gateway routing)
+  - G047 # idor_auth_bypass — OWASP A01 prevention
+  - G048 # silent_decode_failure — data corruption prevention
+  - G070 # outcome_contract — intent-first planning and verification
+
+priorityScoring:
+  model: weighted_sum
+  scoreRange:
+    min: 0
+    max: 100
+  weights:
+    userImpact: 30
+    deliveryBlocker: 25
+    complianceRisk: 15
+    regressionRisk: 10
+    readiness: 10
+    effortInverse: 10
+  dimensions:
+    userImpact:
+      scale: 0-5
+      guidance:
+        5: user-facing regression or core journey break
+        3: high-value workflow degradation
+        1: minor operator inconvenience
+    deliveryBlocker:
+      scale: 0-5
+      guidance:
+        5: blocks required gate or release progression
+        3: blocks one scope while alternatives exist
+        1: non-blocking issue
+    complianceRisk:
+      scale: 0-5
+      guidance:
+        5: security/compliance/audit failure likely
+        3: policy drift risk
+        1: low compliance relevance
+    regressionRisk:
+      scale: 0-5
+      guidance:
+        5: likely to produce widespread regressions
+        3: localized regression potential
+        1: low regression risk
+    readiness:
+      scale: 0-5
+      guidance:
+        5: scope/design/spec ready to execute now
+        3: partial readiness, small bootstrap needed
+        1: underdefined, heavy bootstrap required
+    effortInverse:
+      scale: 0-5
+      guidance:
+        5: small effort, high return
+        3: medium effort, medium return
+        1: large effort before value realized
+  tieBreakers:
+  - highest_deliveryBlocker
+  - highest_userImpact
+  - highest_readiness
+  - lowest_effort
+  - stable_sort_by_spec_id
+
+phases:
+  analyze:
+    owner: bubbles.workflow
+    requiredGates: [ G032 ]
+  discover:
+    owner: bubbles.workflow
+    requiredGates: [ G011, G013 ]
+  select:
+    owner: bubbles.iterate
+    requiredGates: [ G001, G011 ]
+  bootstrap:
+    owner: bubbles.workflow
+    requiredGates: [ G014 ]
+  harden:
+    owner: bubbles.harden
+    requiredGates: [ G015, G016 ]
+  gaps:
+    owner: bubbles.gaps
+    requiredGates: [ G001, G002 ]
+  bug:
+    owner: bubbles.bug
+    requiredGates: [ G001, G031 ]
+  implement:
+    owner: bubbles.implement
+    requiredGates: [ G002, G033, G047, G048 ]
+  test:
+    owner: bubbles.test
+    requiredGates: [ G003, G004, G005, G051 ]
+  docs:
+    owner: bubbles.docs
+    requiredGates: [ G006 ]
+  validate:
+    owner: bubbles.validate
+    requiredGates: [ G007 ]
+  audit:
+    owner: bubbles.audit
+    requiredGates: [ G008 ]
+  chaos:
+    owner: bubbles.chaos
+    requiredGates: [ G009 ]
+  regression:
+    owner: bubbles.regression
+    requiredGates: [ G044 ]
+  simplify:
+    owner: bubbles.simplify
+    requiredGates: [ G031 ]
+  stabilize:
+    owner: bubbles.stabilize
+    requiredGates: [ G031 ]
+  devops:
+    owner: bubbles.devops
+    requiredGates: [ G031 ]
+  security:
+    owner: bubbles.security
+    requiredGates: [ G034, G047 ]
+  spec-review:
+    owner: bubbles.spec-review
+    requiredGates: []
+  retro:
+    owner: bubbles.retro
+    requiredGates: []
+  code-review:
+    owner: bubbles.code-review
+    requiredGates: []
+  bug-discovery:
+    owner: bubbles.bug
+    requiredGates: [ G001 ]
+  certify-state:
+    owner: bubbles.validate
+    requiredGates: [ G023, G024, G056 ]
+  interrogate:
+    owner: bubbles.grill
+    requiredGates: []
+  finalize:
+    owner: bubbles.workflow
+    requiredGates: [ G010, G011, G012 ]
+
+# Status Ceiling Policy (NON-NEGOTIABLE)
+#
+# Each mode defines the MAXIMUM status it is allowed to set in state.json.
+# Modes that only produce planning/documentation artifacts MUST NOT set
+# status to "done". Only modes that include implementation + test phases
+# with passing evidence may set status to "done".
+#
+# Allowed ceilings:
+#   done             - Full implementation + tests completed and verified
+#   specs_hardened   - Planning artifacts improved, no implementation done
+#   docs_updated     - Documentation updated, no implementation done
+#   validated        - Validation/audit completed, no implementation done
+#   in_progress      - Partial work, used for resume-only
+
+# Mode Defaults (applied to ALL modes with statusCeiling: done)
+#
+# These constraints are inherited by every delivery mode unless explicitly
+# overridden with `false` in the mode's own constraints block.
+modeDefaults:
+  deliveryModes:
+    # Workflow MUST run to completion — no stopping to suggest commands.
+    # Only truly terminal conditions (all specs done/blocked, user stop,
+    # unresolvable input) are allowed stop reasons.
+    runUntilComplete: true
+    # When the workflow discovers that different actions are needed
+    # (e.g., specs need hardening, bugs block progress, gaps need closing),
+    # it MUST handle them inline by invoking specialist agents rather than
+    # stopping and suggesting the user run a different mode.
+    autoModeEscalation: true
+    # Delivery stays autonomous unless the caller explicitly opts into
+    # an interactive clarification loop.
+    defaultAutonomy: autonomous
+    allowOptionalSocraticDiscovery: true
+    allowGitIsolationFlag: true
+    allowAutoCommitFlag: true
+    requireSmallWellDefinedScopes: true
+    requireRedGreenEvidence: true
+    enableMicroFixLoops: true
+    inheritedRequiredGates: [ G036, G037, G038, G040, G042, G047, G048, G051, G052, G053, G063, G064, G066 ]
+
+# Batch Execution Parameter (NON-NEGOTIABLE)
+#
+# `batch: true|false` is a UNIVERSAL parameter for delivery modes.
+# When enabled, the orchestrator splits the mode's phaseOrder at the last
+# `implement` phase: phases up to and including implement run per-spec,
+# phases after implement run ONCE covering all specs together.
+#
+# This avoids redundant builds when multiple specs touch the same codebase.
+#
+# Split rule: per-spec = phases up to and including the LAST implement in
+# phaseOrder. Shared = everything after that implement.
+#
+# Auto-detection: batch defaults to true when multiple specs are targeted,
+# false when a single spec is targeted. User can override with batch: true
+# or batch: false explicitly.
+batchExecution:
+  # Auto-detect based on spec count: >1 spec = batch, 1 spec = sequential
+  autoDetect: true
+  autoDetectRule: "batch = (target_spec_count > 1)"
+  # Mechanical split rule applied to any mode when batch is enabled
+  splitRule: at_last_implement
+  # These constraints are auto-applied when batch is enabled
+  inheritedConstraints:
+    batchImplementation: true
+    sequentialWithinBatch: true
+    singleBuildAfterBatch: true
+    perSpecDodRequired: true
+  # G019 (sequentialSpecCompletion) is relaxed within the batch —
+  # specs proceed through per-spec phases without waiting for previous
+  # spec's full quality chain. ALL specs must pass ALL gates before
+  # ANY spec is marked done.
+
+executionOptions:
+  description: Universal optional workflow tags. These never override the default autonomous behavior unless explicitly enabled.
+  policyRegistry:
+    configFile: .specify/memory/bubbles.config.json
+    requiredStateField: policySnapshot
+    provenanceValues: [ user-request, repo-default, workflow-forced, spec-lockdown ]
+  optionalWorkflowTags:
+    socratic:
+      type: boolean
+      default: false
+      meaning: Enable a bounded clarification loop before discovery/bootstrap work.
+    socraticQuestions:
+      type: integer
+      default: 3
+      min: 1
+      max: 5
+      meaning: Maximum number of targeted Socratic questions when socratic=true.
+    grillFirst:
+      type: boolean
+      default: false
+      meaning: Deprecated compatibility alias for enabling a preflight grill pass. Prefer `grillMode` for new workflow invocations.
+    grillMode:
+      type: string
+      default: inherit
+      values:
+        inherit: Resolve grill behavior from the policy registry
+        off: Do not interrogate the user unless explicitly requested
+        on-demand: Allow explicit grill invocation without forcing it
+        required-on-ambiguity: Require bubbles.grill when ambiguity blocks safe execution
+        required-for-lockdown: Require bubbles.grill for locked-behavior changes
+      meaning: Override or elevate the effective grill policy for this workflow run.
+    tdd:
+      type: boolean
+      default: false
+      meaning: Enforce red-green-first execution inside implement and test loops.
+    lockdown:
+      type: string
+      default: inherit
+      values:
+        inherit: Resolve lockdown behavior from the policy registry
+        off: Do not enforce scenario lockdown rules for this run
+        protect-existing-scenarios: Treat existing linked scenarios as protected behavior contracts
+        require-approval: Require grill approval plus invalidation for locked scenario changes
+      meaning: Override or elevate the effective lockdown policy for this workflow run.
+    backlogExport:
+      type: string
+      default: "off"
+      values:
+        off: Do not add derived backlog outputs
+        tasks: Add per-scope backlog task checklists
+        issues: Add per-scope issue seeds with acceptance bullets
+      meaning: Forward backlog export preferences to bubbles.plan when scopes are created or refreshed.
+    improvementPrelude:
+      type: string
+      default: off
+      values:
+        off: Do not run a planning prelude before lockdown rounds
+        analyze-design-plan: Run analyst → design → plan before each eligible lockdown round
+        analyze-ux-design-plan: Run analyst → ux → design → plan before each eligible lockdown round
+      meaning: Delivery-lockdown only. Optional planning prelude to run before each implementation round.
+    improvementPreludeRounds:
+      type: integer
+      default: null
+      meaning: Delivery-lockdown only. Maximum number of rounds that may include the improvementPrelude. Null means every round until completion.
+    specReview:
+      type: string
+      default: off
+      values:
+        off: Do not run a one-shot spec freshness and redundancy review inside the workflow
+        once-before-implement: Run bubbles.spec-review once per target spec before the first implementation-capable stage in this workflow
+      meaning: Optional one-shot spec-review hook. If the mode includes analyze, run after analyze; otherwise run before the first improvement or implementation-capable stage. Never repeats on later rounds unless explicitly invoked again.
+    gitIsolation:
+      type: boolean
+      default: false
+      meaning: Opt into isolated branch/worktree setup before implementation when repo policy allows it.
+    autoCommit:
+      type: string
+      default: "off"
+      values:
+        off: No automatic commits
+        scope: Commit after scope reaches Done (recommended)
+        dod: Commit after each validated DoD item (fine-grained)
+      commitMessageTemplate: |
+        bubbles({spec}/{scope}): {scope_name} — {status}
+
+        Spec: {spec_name}
+        Scope: {scope_id}-{scope_name}
+        DoD: {checked}/{total} checked
+        Agent: {agent_name}
+      meaning: Opt into atomic commits after validated milestones.
+    maxScopeMinutes:
+      type: integer
+      default: null
+      meaning: Optional planning heuristic for maximum intended effort per scope.
+    maxDodMinutes:
+      type: integer
+      default: null
+      meaning: Optional planning heuristic for maximum intended effort per DoD item.
+    microFixes:
+      type: boolean
+      default: true
+      meaning: Keep failure recovery inside narrow error-scoped fix loops before broader retries.
+    crossModelReview:
+      type: string
+      default: "off"
+      values:
+        off: Single-model review only
+        codex: Use Codex CLI or configured reviewer for independent second opinion
+        terminal: Run project-configured review command via terminal
+      meaning: Request independent cross-model review during code-review or audit phases. Requires model registry in .specify/memory/bubbles.config.json.
+    parallelScopes:
+      type: string
+      default: "off"
+      values:
+        off: Sequential scope execution (current behavior, always safe)
+        dag: Execute DAG-independent scopes in parallel using git worktrees
+        dag-dry: Show parallelization plan without executing
+      meaning: Parallel independent scope execution using git worktrees. Scopes with no mutual dependencies run concurrently. Dependent scopes still wait for predecessors. Off by default.
+    maxParallelScopes:
+      type: integer
+      default: 2
+      min: 2
+      max: 4
+      meaning: Maximum concurrent scope executions when parallelScopes=dag. Each parallel scope runs in its own worktree.
+
+  defaultPolicyBehavior:
+    scenarioTddDefault: scenario-first
+    grillDefault: off
+    lockdownDefault: false
+    specReviewDefault: off
+    validateCertificationRequired: true
+    protectedRegressionContracts: true
+
+# ── Decision Policy: Mechanical vs. Taste Decisions ──
+#
+# When bubbles.plan or bubbles.design are invoked by the orchestrator
+# (not directly by the user), decisions are classified as mechanical
+# or taste. Mechanical decisions are auto-resolved. Taste decisions
+# are batched and surfaced at phase boundaries.
+#
+# COMPATIBILITY:
+# - grillMode: When grillMode is `required-on-ambiguity` or `required-for-lockdown`,
+#   taste decisions are routed through bubbles.grill before surfacing to user.
+#   Grill may approve, challenge, or split the decision.
+# - socratic: When socratic=true, taste decisions become Socratic questions
+#   (max socraticQuestions) before the decision batch. Mechanical decisions
+#   are still auto-resolved — socratic mode does NOT make everything interactive.
+# - Direct invocation: When user calls /bubbles.plan or /bubbles.design directly,
+#   ALL decisions are interactive (no auto-resolution). The decision policy
+#   only activates when callerMode=orchestrated.
+#
+decisionPolicy:
+  enabled: true
+  # Only applies when agent is invoked by orchestrator, not direct user invocation
+  activationCondition: callerMode=orchestrated
+  mechanicalPrinciples:
+  - name: prefer_completeness
+    description: "When two approaches differ by <30% effort, choose the more complete one"
+  - name: match_existing_patterns
+    description: "Follow conventions already established in the codebase (file structure, naming, test patterns)"
+  - name: prefer_reversible
+    description: "When both options are viable, choose the one easier to undo"
+  - name: defer_ambiguous
+    description: "When confidence is below 60%, classify as taste decision"
+  - name: escalate_security
+    description: "Security-affecting decisions are ALWAYS taste decisions — never auto-resolved"
+  - name: use_prior_preferences
+    description: "If user made a similar choice in prior sessions (from learnings.jsonl), follow that pattern"
+  - name: respect_spec_constraints
+    description: "If spec.md or design.md already specifies the approach, follow it (not a decision at all)"
+  tasteDecisionHandling:
+    batchTiming: end_of_phase # Collect during phase, present at boundary
+    maxPerPhase: 5 # If >5 taste decisions, the spec needs more clarity — route to bubbles.clarify
+    overflowAction: route_to_clarify
+    format: |
+      ## Taste Decisions (Require Your Input)
+      1. **{description}**
+         - Option A: {option_a} — {rationale_a}
+         - Option B: {option_b} — {rationale_b}
+         - Auto-resolution would choose: {auto_pick} because {auto_reason}
+         - [Choose A / Choose B / Accept auto-resolution]
+    grillIntegration:
+      # When grillMode is active, taste decisions get pressure-tested first
+      grillModes: [ required-on-ambiguity, required-for-lockdown ]
+      grillAction: "bubbles.grill reviews each taste decision and may approve, challenge, split, or escalate"
+    socraticIntegration:
+      # When socratic=true, taste decisions become the Socratic questions
+      socraticAction: "Taste decisions are converted to targeted questions (up to socraticQuestions limit), then remaining auto-resolve using mechanicalPrinciples"
+
+# ── Cross-Model Review Registry ──
+#
+# ── Cross-Model Review Registry ──
+#
+# Optional multi-AI review capability. When enabled, code review or audit
+# phases can request an independent review from a different AI model.
+#
+# DYNAMIC REGISTRY: The model list is maintained per-project in bubbles.config.json.
+# It is updated DYNAMICALLY based on actual usage:
+#
+# 1. When the user works with a model (any agent session), agents SHOULD
+#    increment `usageCount` and update `lastUsed` for that model in the registry.
+# 2. Models the user hasn't used in 90+ days get flagged for review.
+# 3. When the user switches to a new model not in the registry, agents SHOULD
+#    prompt: "You're using {model} which isn't in your model registry. Add it?"
+# 4. The `lastVerified` date triggers a full registry review reminder after 90 days.
+#
+# USER SOVEREIGNTY: The user always decides. Agents suggest additions/removals
+# based on usage patterns but never auto-modify the registry without confirmation.
+#
+crossModelReview:
+  enabled: false # User must explicitly enable in bubbles.config.json
+  freshnessPolicy:
+    maxAgeDays: 90
+    reminderAgent: bubbles.super
+    reminderTrigger: workflow_start
+    reminderMessage: "Your cross-model review registry was last verified {days} days ago. New models may be available. Run /bubbles.super update model registry to refresh."
+  # Dynamic usage tracking
+  usageTracking:
+    enabled: true # When autoTrackUsage=true in config, agents update usage stats
+    trackFields:
+      usageCount: integer # Incremented each time the model is used in a session
+      lastUsed: iso_date # Updated to current date on each use
+    stalePeriodDays: 90 # Models unused for 90+ days are flagged for review
+    autoDiscovery:
+      # When the active session model is not in the registry, suggest adding it
+      promptOnUnknownModel: true
+      promptFormat: "You're using {model} which isn't in your model registry. Want to add it? (Role: {suggested_role})"
+      # Suggest role based on provider heuristics
+      roleHeuristics:
+        anthropic: primary
+        openai: reviewer
+        google: adversarial
+        meta: reviewer
+        mistral: reviewer
+    # Periodic usage report (part of /bubbles.retro output)
+    usageReport:
+      includeInRetro: true
+      reportFields: [ name, provider, role, usageCount, lastUsed, daysSinceLastUse ]
+      flagStaleModels: true # Highlight models unused for >stalePeriodDays
+  # Model registry schema
+  modelRegistry:
+    configFile: .specify/memory/bubbles.config.json
+    registryKey: crossModelReview.models
+    schema:
+    - name: string # e.g., "claude-opus-4.6-1m"
+      provider: string # e.g., "anthropic", "openai", "google"
+      role: string # "primary" | "reviewer" | "adversarial"
+      available: boolean # user-set — is this model currently accessible?
+      notes: string # user notes
+      usageCount: integer # dynamic — incremented on use
+      lastUsed: iso_date # dynamic — updated on use
+    lastVerified: null # ISO date set by user when they confirm the registry
+  # How cross-model review integrates with phases
+  phaseIntegration:
+    codeReview:
+      when: crossModelReview.enabled AND reviewer model available
+      action: "bubbles.code-review invokes reviewer model via terminal command (configured per project)"
+      output: "Cross-model finding comparison table: overlapping vs unique findings"
+    audit:
+      when: crossModelReview.enabled AND adversarial model available
+      action: "bubbles.audit invokes adversarial model to challenge findings"
+      output: "Adversarial challenge report appended to audit output"
+  # Project-specific invocation command (resolved from agents.md or bubbles-project.yaml)
+  invocationPattern:
+    configKey: crossModelReview.command
+    example: "codex review --diff HEAD~1"
+    fallback: "echo 'Cross-model review command not configured. Set crossModelReview.command in bubbles-project.yaml'"
+
+modes:
+
+  # ── Phase Relevance: Smart Phase Routing ──
+  #
+  # Before invoking each phase, bubbles.workflow evaluates whether the phase
+  # is relevant to the current scope's changed surface. Irrelevant phases
+  # are SKIPPED with a recorded justification — never silently omitted.
+  #
+  # SAFETY GUARANTEES (NON-NEGOTIABLE):
+  # 1. Skipped phases are recorded in executionHistory as { phase, outcome: "skipped", reason }
+  # 2. If artifacts change AFTER a phase was skipped (e.g., specs updated by clarify/harden),
+  #    the skip decision is RE-EVALUATED. A previously-skipped phase MUST be included if new
+  #    changes make it relevant.
+  # 3. neverSkip phases are ALWAYS invoked regardless of relevance rules.
+  # 4. Phase relevance only applies to orchestrated workflows (bubbles.workflow).
+  #    Direct agent invocations are not subject to skip rules.
+  # 5. The orchestrator MUST log skip decisions so audits can verify correctness.
+  #
+  # Gate compatibility: G027 (phase-scope coherence) accepts skipped-with-reason as
+  # valid. Skipped phases do NOT appear in completedPhaseClaims. They appear only
+  # in executionHistory with outcome: skipped.
+  #
+  phaseRelevance:
+    enabled: true
+    # Re-evaluate skip decisions when these events occur
+    reevaluateTriggers:
+    - artifact_modified # spec.md, design.md, or scopes.md changed by a prior phase
+    - scope_surface_expanded # new files/directories added to scope plan
+    - gate_failure # a gate that was met pre-skip now fails (e.g., security finding added)
+    - phase_routed_new_work # a prior phase routed work that changes relevance
+    rules:
+    - phase: simplify
+      skipWhen: scope_changed_fewer_than_50_lines
+      reason: "Simplification pass skipped — scope delta is small enough to not warrant a dedicated pass"
+    - phase: stabilize
+      skipWhen: scope_has_no_sla_or_perf_targets
+      reason: "Stability pass skipped — scope defines no latency SLAs or performance targets"
+    - phase: devops
+      skipWhen: scope_has_no_ci_deploy_or_infra_changes
+      reason: "DevOps pass skipped — scope does not modify CI, deployment, monitoring, or infrastructure"
+    - phase: chaos
+      skipWhen: scope_is_docs_only_or_config_only
+      reason: "Chaos pass skipped — scope is documentation or configuration only, no runtime behavior to probe"
+    - phase: interrogate # grill
+      skipWhen: scope_has_no_ambiguity_markers
+      reason: "Grill pass skipped — scope has clear requirements with no ambiguity markers"
+    - phase: security
+      skipWhen: scope_has_no_auth_input_crypto_or_trust_boundary_changes
+      reason: "Security pass skipped — scope does not touch authentication, input handling, crypto, or trust boundaries"
+    - phase: regression
+      skipWhen: scope_is_new_feature_with_no_prior_specs
+      reason: "Regression pass skipped — no prior specs exist that could be affected"
+    # Phases that NEVER skip regardless of relevance rules
+    neverSkip:
+    - select
+    - bootstrap
+    - implement
+    - test
+    - validate
+    - finalize
+    - docs # docs must always sync after any change
+    - audit # audit is the final quality gate, never optional
+    # How skip decisions are recorded
+    skipRecordSchema:
+      phase: string
+      outcome: skipped
+      reason: string
+      changedSurface: list # dirs/files that were evaluated
+      reevaluated: boolean # true if skip was re-evaluated and upheld
+      reevaluationTrigger: string # which trigger caused re-evaluation (if any)
+
+  value-first-e2e-batch:
+    description: Discover highest-value next work (spec/scope/bug/gap/hardening/new feature), bootstrap missing artifacts, then run full E2E delivery loop.
+    statusCeiling: done
+    phaseOrder: [ discover, select, bootstrap, implement, test, regression, simplify, stabilize, devops, security, docs, validate, audit, chaos, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G013, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 5
+    constraints:
+      valueFirstSelection: true
+      allowBootstrapIterations: true
+      bootstrapAgents: [ bubbles.design, bubbles.plan ]
+      bootstrapLoopExit: design_spec_scopes_ready
+      executionWorkflowMode: full-delivery
+      usePriorityScoring: true
+      scoringProfile: default
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  spec-scope-hardening:
+    description: Harden spec/design/scopes quality and expand Gherkin-to-E2E coverage before implementation.
+    statusCeiling: specs_hardened
+    phaseOrder: [ select, bootstrap, harden, docs, validate, audit, finalize ]
+    requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016 ]
+    constraints:
+      requireDetailedStoriesAndGherkin: true
+      requireGherkinToE2ETraceability: true
+      requireDoDE2EExpansion: true
+      requireScenarioCoverageAcrossDeclaredUseCases: true
+      focus: specs_and_scopes_only
+      allowImplementationForFindings: false
+
+  full-delivery:
+    description: Default complete delivery workflow. Includes bootstrap phase to ensure design/scopes exist before implementation.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, implement, test, regression, simplify, stabilize, devops, security, docs, validate, audit, chaos, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 3
+    constraints:
+      requireDesignBeforeImplement: true
+      allowBootstrapIterations: true
+      bootstrapAgents: [ bubbles.design, bubbles.plan ]
+      bootstrapLoopExit: design_spec_scopes_ready
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  delivery-lockdown:
+    description: Maximum-assurance delivery loop. Runs the full improvement and certification chain repeatedly until validate certifies done or returns a documented blocked verdict. Optional improvement preludes can front-load analyst/UX/design/plan passes for a bounded number of rounds.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, implement, test, regression, simplify, gaps, harden, stabilize, devops, security, validate, audit, chaos, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 5
+    constraints:
+      continueOnBlocked: false
+      finalGlobalPassRequired: true
+      requireDesignBeforeImplement: true
+      allowBootstrapIterations: true
+      bootstrapAgents: [ bubbles.design, bubbles.plan ]
+      bootstrapLoopExit: design_spec_scopes_ready
+      forceSequentialPerSpec: true
+      requirePerSpecPhaseCompletion: [ simplify, gaps, harden, stabilize, security, validate, audit, chaos, docs ]
+      requireQualityLoopUntilCertifiedDone: true
+      restartLoopAtPhase: implement
+      allowImprovementPrelude: true
+      improvementPreludeDefault: off
+      improvementPreludeRoundLimitDefault: null
+      specReviewDefault: once-before-implement
+      useChildWorkflows: true
+      childWorkflowBundles:
+        testVerification: test-to-doc
+        qualitySweep: harden-gaps-to-doc
+        validationCertification: validate-to-doc
+        bugClosure: bugfix-fastlane
+      improvementPreludeProfiles:
+        analyze-design-plan: [ bubbles.analyst, bubbles.design, bubbles.plan ]
+        analyze-ux-design-plan: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      blockedOnlyWhenValidateBlocked: true
+      requireImplementedVsClaimedReconciliation: true
+      requireNoSkippedTests: true
+      requireNoPreexistingFailingTests: true
+      requireNoInternalMocksExceptExternalDeps: true
+      requireGherkinE2eCoverage: true
+      requireCoveragePolicyCompliance: true
+      requireChaosInQualitySweep: true
+      requireIssuePromotionToScenarioOrBug: true
+      requireScenarioExpansionTests: true
+      requireRegressionTestsForNewBugs: true
+      requireAllDiscoveredBugsClosedInRun: true
+      runUntilAllSpecsDone: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requirePhaseEvidenceBeforeAdvance: true
+      blockOnMissingSpecialistExecution: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  bugfix-fastlane:
+    description: Focused bug loop with mandatory reproduction and verification.
+    statusCeiling: done
+    phaseOrder: [ select, implement, test, regression, simplify, stabilize, devops, security, validate, audit, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G007, G008, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G035, G044, G047, G048, G051, G055, G056, G057, G059, G060, G061 ]
+    constraints:
+      requireBugReproductionBeforeFix: true
+      requireBugVerificationAfterFix: true
+      forceTddMode: scenario-first
+      requireProtectedRegressionContracts: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  docs-only:
+    description: Documentation maintenance without implementation changes.
+    statusCeiling: docs_updated
+    phaseOrder: [ select, docs, validate, audit, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012 ]
+
+  validate-only:
+    description: Validation-only run with evidence output.
+    statusCeiling: validated
+    phaseOrder: [ select, validate, finalize ]
+    requiredGates: [ G001, G007, G011, G012 ]
+
+  audit-only:
+    description: Audit-only run for already validated scopes.
+    statusCeiling: validated
+    phaseOrder: [ select, audit, finalize ]
+    requiredGates: [ G001, G008, G011, G012 ]
+
+  chaos-hardening:
+    description: Repeat chaos and bugfix cycles until clean or retry limit.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, chaos, implement, test, regression, simplify, stabilize, devops, security, validate, audit, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G007, G008, G009, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G044, G047, G048, G051, G055, G056, G057, G058, G059, G060, G061 ]
+    maxChaosRounds: 5
+    constraints:
+      forceTddMode: scenario-first
+      lockdownAware: true
+      requireProtectedRegressionContracts: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  harden-to-doc:
+    description: Start from validation baseline, then harden, implement fixes, and run full quality chain. For specs with existing implementation that need quality hardening.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, validate, harden, implement, test, regression, simplify, stabilize, devops, security, chaos, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 3
+    constraints:
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  gaps-to-doc:
+    description: Start from validation baseline, then close implementation/design gaps, implement fixes, and run full quality chain. For specs needing gap remediation before quality verification.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, validate, gaps, implement, test, regression, simplify, stabilize, devops, security, chaos, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 3
+    constraints:
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  harden-gaps-to-doc:
+    description: Full quality sweep - validate baseline, harden existing implementation, close design gaps, implement fixes, then run complete quality chain. Most thorough pre-release verification.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, validate, harden, gaps, implement, test, regression, simplify, stabilize, devops, security, chaos, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035 ]
+    maxChaosRounds: 3
+    constraints:
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  reconcile-to-doc:
+    description: Validate claimed completion against actual artifacts and evidence, reconcile stale state and scope status, then implement fixes and run the full quality chain.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, validate, implement, test, regression, simplify, stabilize, devops, security, validate, audit, chaos, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 3
+    constraints:
+      requireArtifactStateReconciliation: true
+      requireArtifactFreshnessReconciliation: true
+      specReviewDefault: once-before-implement
+      validateClaimsBeforeImplementation: true
+      resetStaleStateBeforeImplement: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  test-to-doc:
+    description: Run tests, then quality chain (validate, audit, docs). For specs with complete implementation needing test verification and quality sign-off.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, test, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G055, G056, G057, G059, G061 ]
+    constraints:
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  chaos-to-doc:
+    description: Run chaos probes, then quality chain (validate, audit, docs). For specs needing chaos hardening and quality verification.
+    statusCeiling: done
+    phaseOrder: [ select, chaos, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G009, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G027, G028, G029, G035, G055, G056, G057, G061 ]
+    maxChaosRounds: 3
+    constraints:
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  validate-to-doc:
+    description: Run validation, audit, and docs sync. For specs needing final quality verification without re-running tests or chaos.
+    statusCeiling: validated
+    phaseOrder: [ select, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012 ]
+    constraints:
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+
+  resume-only:
+    description: Resume from saved phase without re-selecting mode/work.
+    statusCeiling: in_progress
+    phaseOrder: [ select, finalize ]
+    requiredGates: [ G001, G011, G012 ]
+    constraints:
+      requireExistingSession: true
+
+  product-to-delivery:
+    description: Full pipeline from business analysis through UX, design, scopes, implementation, testing, and quality gates. Analyst/UX phases skippable if spec.md already has their output.
+    statusCeiling: done
+    phaseOrder: [ analyze, select, bootstrap, implement, test, regression, simplify, stabilize, devops, security, docs, validate, audit, chaos, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G013, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G032, G033, G035, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 5
+    constraints:
+      requireBusinessAnalysis: true
+      requireUXDesign: true
+      requireDesignBeforeImplement: true
+      requireArtifactFreshnessReconciliation: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  stabilize-to-doc:
+    description: Start from validation baseline, diagnose stability issues, then execute the operational remediation through DevOps before running the full quality chain. For specs with existing implementation that need operational hardening.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, validate, stabilize, devops, implement, test, regression, simplify, security, chaos, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G035 ]
+    maxChaosRounds: 3
+    constraints:
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  improve-existing:
+    description: Analyze existing feature against competitors and best practices. Minor improvements update existing spec; sizable changes create new spec folder. Then implement, test, and run full quality chain.
+    statusCeiling: done
+    phaseOrder: [ analyze, select, validate, harden, gaps, implement, test, regression, simplify, stabilize, devops, security, validate, audit, chaos, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G032, G033, G035, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 3
+    constraints:
+      requireExistingImplementation: true
+      requireCompetitiveAnalysis: true
+      requireArtifactStateReconciliation: true
+      requireArtifactFreshnessReconciliation: true
+      specReviewDefault: once-before-implement
+      validateClaimsBeforeImplementation: true
+      resetStaleStateBeforeImplement: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  simplify-to-doc:
+    description: Simplify an existing implementation, prove the behavior still works, then sync docs and evidence.
+    statusCeiling: done
+    phaseOrder: [ select, simplify, test, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G027, G028, G029, G035, G036, G044 ]
+    constraints:
+      requireExistingImplementation: true
+      preferSmallChangedSurface: true
+      requireRedGreenProofWhenBehaviorChanges: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  devops-to-doc:
+    description: "Execute focused DevOps work for an existing feature or bug: CI/CD, build, deployment, monitoring, observability, or release automation changes, then run the quality chain and sync docs."
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, devops, test, stabilize, security, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G027, G028, G029, G031, G033, G035, G055, G056, G057, G061 ]
+    constraints:
+      requireExistingImplementation: true
+      requireOperationalVerification: true
+      requireDeploymentOrMonitoringEvidence: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  spec-review-to-doc:
+    description: Audit all or selected specs for freshness, classify trust levels, and produce a maintenance context report. Read-only — no code changes, only spec trust classification and reporting.
+    statusCeiling: docs_updated
+    phaseOrder: [ select, spec-review, docs, finalize ]
+    requiredGates: [ G001, G010, G011, G012 ]
+    constraints:
+      requireExistingImplementation: true
+      readOnlyAudit: true
+      noCodeChanges: true
+      sequentialSpecCompletion: false
+      antiFabricationDetection: true
+
+  retro-to-simplify:
+    description: "Data-driven simplification: run retro hotspot analysis (bug magnets, coupling, bus factor) to identify the worst offenders, then simplify those files, prove behavior still works, and sync docs."
+    statusCeiling: done
+    phaseOrder: [ select, retro, simplify, test, regression, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G027, G028, G029, G035, G036, G044 ]
+    constraints:
+      requireExistingImplementation: true
+      preferSmallChangedSurface: true
+      requireRedGreenProofWhenBehaviorChanges: true
+      retroModes: [ hotspots ]
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  retro-to-harden:
+    description: "Data-driven hardening: run retro hotspot analysis to find bug magnets and worsening hotspots, then harden and close gaps on those areas, test, and sync docs."
+    statusCeiling: done
+    phaseOrder: [ select, retro, harden, gaps, implement, test, regression, simplify, stabilize, security, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G044, G055, G056, G057, G061 ]
+    constraints:
+      requireExistingImplementation: true
+      retroModes: [ hotspots ]
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  retro-to-review:
+    description: "Data-driven code review: run retro hotspot analysis to identify the highest-risk files, then perform a targeted code review on those areas. Read-only diagnostic — produces findings and recommendations, no code changes."
+    statusCeiling: docs_updated
+    phaseOrder: [ select, retro, code-review, docs, finalize ]
+    requiredGates: [ G001, G010, G011, G012 ]
+    constraints:
+      requireExistingImplementation: true
+      readOnlyAudit: true
+      noCodeChanges: true
+      retroModes: [ hotspots, coupling, busfactor ]
+      sequentialSpecCompletion: false
+      antiFabricationDetection: true
+
+  retro-quality-sweep:
+    description: "Data-driven quality sweep: run retro analysis first to identify the noisiest hotspots, then simplify those areas before hardening, gap-closing, fixing, and finishing with the full quality chain."
+    statusCeiling: done
+    phaseOrder: [ select, retro, simplify, harden, gaps, implement, test, regression, stabilize, devops, security, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G044, G055, G056, G057, G061 ]
+    constraints:
+      requireExistingImplementation: true
+      retroModes: [ hotspots, coupling, busfactor ]
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  stochastic-quality-sweep:
+    description: Run multiple randomized rounds where each round picks a random spec (from all specs by default, or from a user-provided subset) AND a random trigger agent from a configurable pool, probes that spec, then runs a trigger-specific fix cycle if findings exist. Rounds limited by count or time budget. For adversarial quality hardening across specs via random probe angles.
+    statusCeiling: done
+    phaseOrder: [ select, chaos, harden, gaps, simplify, stabilize, devops, security, regression, validate, bug, implement, test, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 5
+    constraints:
+      # Stochastic round execution model — NOT sequential phaseOrder.
+      # The orchestrator runs N rounds, each round:
+      #   1. Pick a random spec from the spec pool
+      #      - Default pool: ALL specs discovered from specs/ folder
+      #      - Optional: user provides spec targets (range, list, paths) to limit the pool
+      #   2. Pick a random trigger from triggerAgentPool (or user-specified subset)
+      #   3. Execute the trigger phase against the selected spec
+      #   4. If findings exist, run the trigger-specific fix cycle for that spec
+      #   5. If clean, skip fix cycle and proceed to next round
+      # After all rounds: docs → finalize (per-spec)
+      stochasticRoundExecution: true
+      # Spec pool discovery: when no spec targets provided, discover ALL spec
+      # folders under specs/ as the pool. User can restrict with standard spec
+      # target syntax (range: 011-037, list: 011,027,037, paths: specs/...).
+      autoDiscoverAllSpecs: true
+      # Default trigger pool — all probing/quality agents
+      # User can override with triggerAgents option to limit the pool
+      triggerAgentPool: [ chaos, harden, gaps, simplify, stabilize, validate, improve, security, regression ]
+      # Max rounds (overridable via maxRounds user option)
+      defaultMaxRounds: 10
+      # Time budget in minutes (overridable via minutes user option)
+      # When set, rounds continue until time runs out (finishing the active round)
+      defaultTimeBudgetMinutes: 60
+      # Per-trigger fix cycles — each trigger agent needs a different
+      # sequence of phases to resolve its findings.
+      # EVERY fix cycle containing `implement` MUST include `bootstrap` before it
+      # to ensure design.md and scopes.md are substantive (Gate G033 enforcement).
+      # The bootstrap phase is conditional — it verifies design readiness and only
+      # invokes design/plan agents if artifacts are missing or insufficient.
+      # chaos: finds runtime bugs → document bug → bootstrap design → implement fix → verify
+      # harden: finds spec/coverage gaps → bootstrap design → implement code+tests → verify
+      # gaps: finds missing implementations → bootstrap design → implement new code → verify
+      # simplify: makes cleanup changes itself → only verify nothing broke
+      # stabilize: finds perf/infra/config issues → bootstrap design → implement fix → verify
+      # validate: finds regressions/violations → bootstrap design → implement fixes → verify
+      triggerFixCycles:
+        chaos: [ bug, bootstrap, implement, test, validate, audit ]
+        harden: [ bootstrap, implement, test, validate, audit ]
+        gaps: [ bootstrap, implement, test, validate, audit ]
+        simplify: [ test, validate, audit ]
+        stabilize: [ bootstrap, implement, test, validate, audit ]
+        validate: [ bootstrap, implement, test, validate, audit ]
+        # improve trigger: runs full analyst→UX→design→plan pipeline before implementation
+        # bubbles.analyst analyzes existing capabilities and proposes improvements,
+        # bubbles.ux creates wireframes, bubbles.design updates design.md,
+        # bubbles.plan updates scopes.md, then implement carries out the changes
+        improve: [ analyze, bootstrap, implement, test, validate, audit ]
+        # security trigger: runs dependency scan + code review + threat modeling,
+        # then bootstraps design artifacts → implements fixes for any findings
+        security: [ bootstrap, implement, test, validate, audit ]
+        # regression trigger: runs cross-spec impact scan + baseline comparison,
+        # then bootstraps design artifacts → implements fixes for any regressions found
+        regression: [ bootstrap, implement, test, validate, audit ]
+      # Shared tail phases after all rounds complete
+      tailPhases: [ docs, finalize ]
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  iterate:
+    description: Priority-driven iterative execution loop. Each iteration picks the highest-priority work item across all specs (bugs, incomplete scopes, gaps, hardening needs, improvements, chaos probes), auto-selects the correct workflow mode for that work, and executes a full delivery cycle. Runs for N iterations or until a time budget is exhausted. Unlike stochastic-quality-sweep (random probing), iterate is deterministic and priority-ordered. Supports ALL work types including implementation, bug fixes, improvements, chaos hardening, gap closure, and competitive analysis.
+    statusCeiling: done
+    # phaseOrder represents the SUPERSET of all possible phases iterate may use.
+    # Each iteration selects a SUBSET based on auto-mode-selection (Work-Type-to-Mode Mapping).
+    phaseOrder: [ discover, select, analyze, bootstrap, harden, gaps, simplify, stabilize, devops, security, regression, bug, implement, test, docs, validate, audit, chaos, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G055, G056, G057, G059, G061 ]
+    constraints:
+      # Iterate round execution model — priority-driven, NOT random.
+      # Each round:
+      #   1. bubbles.iterate picks the highest-priority work item across all specs
+      #      using its Priority 0-4 selection logic
+      #   2. bubbles.iterate auto-selects the correct workflow mode for the work
+      #      (bugfix-fastlane, full-delivery, improve-existing, chaos-hardening, etc.)
+      #   3. bubbles.iterate dispatches to specialist agents following the selected
+      #      mode's phaseOrder
+      #   4. After the work item is complete (or blocked), the round ends
+      #   5. Next round: re-evaluate priorities and pick the next work item
+      # After all rounds: per-spec finalize for any spec that was touched
+      iterativeRoundExecution: true
+      # When no spec targets provided, iterate picks across ALL specs
+      autoDiscoverAllSpecs: true
+      # Priority-driven work selection (deterministic, not random)
+      priorityDrivenWorkSelection: true
+      # Auto-mode selection — iterate determines the correct workflow mode
+      # for each work item based on its type (see Work-Type-to-Mode Mapping)
+      autoModeSelection: true
+      # Supported sub-modes that iterate can dispatch per-iteration
+      supportedSubModes:
+      - full-delivery
+      - bugfix-fastlane
+      - harden-to-doc
+      - gaps-to-doc
+      - harden-gaps-to-doc
+      - stabilize-to-doc
+      - chaos-hardening
+      - improve-existing
+      - test-to-doc
+      - docs-only
+      - retro-to-simplify
+      - retro-to-harden
+      - retro-quality-sweep
+      - retro-to-review
+      - product-to-delivery
+      # Default iterations (overridable via iterations user option)
+      defaultIterations: 1
+      # Default time budget in minutes (overridable via minutes user option)
+      # When set, iterations continue until time runs out (finishing the active iteration)
+      defaultTimeBudgetMinutes: 120
+      # Supported work types for type: filtering
+      supportedWorkTypes: [ tests, docs, stabilize, simplify, gaps, harden, implement, refactor, feature, bugfix, analyze, improve, security, chaos ]
+      # Shared tail phases after all iterations complete
+      tailPhases: [ finalize ]
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
