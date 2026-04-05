@@ -1,0 +1,145 @@
+version: 2
+
+artifacts:
+  spec.md:
+    owner:
+    - bubbles.analyst
+    delegatedSections:
+      bubbles.ux:
+      - UI Wireframes
+      - User Flows
+      - Screen Inventory
+      - Interaction Notes
+    readOnlyFor:
+    - bubbles.design
+    - bubbles.plan
+    - bubbles.validate
+    - bubbles.harden
+    - bubbles.gaps
+    - bubbles.stabilize
+    - bubbles.security
+    - bubbles.regression
+    - bubbles.code-review
+    - bubbles.system-review
+  design.md:
+    owner:
+    - bubbles.design
+  scopes.md:
+    owner:
+    - bubbles.plan
+    executionUpdatesAllowed:
+    - bubbles.implement
+  report.md:
+    owner:
+    - bubbles.plan
+    evidenceUpdatesAllowed:
+    - bubbles.implement
+    - bubbles.test
+    - bubbles.devops
+    - bubbles.validate
+    - bubbles.audit
+    - bubbles.chaos
+    - bubbles.harden
+    - bubbles.gaps
+    - bubbles.stabilize
+    - bubbles.security
+    - bubbles.regression
+  uservalidation.md:
+    owner:
+    - bubbles.plan
+  state.json:
+    owner:
+    - bubbles.validate
+    executionClaimsAllowed:
+    - bubbles.workflow
+    - bubbles.iterate
+    - bubbles.bug
+    - bubbles.analyst
+    - bubbles.ux
+    - bubbles.clarify
+    - bubbles.design
+    - bubbles.plan
+    - bubbles.implement
+    - bubbles.test
+    - bubbles.devops
+    - bubbles.docs
+    - bubbles.chaos
+    - bubbles.regression
+    - bubbles.harden
+    - bubbles.gaps
+    - bubbles.stabilize
+    - bubbles.security
+    - bubbles.simplify
+    - bubbles.audit
+    certifiedFields:
+    - certification.status
+    - certification.completedScopes
+    - certification.certifiedCompletedPhases
+    - certification.scopeProgress
+    - certification.lockdownState
+    - certification.invalidationLedger
+  scenario-manifest.json:
+    owner:
+    - bubbles.plan
+    evidenceLinkUpdatesAllowed:
+    - bubbles.test
+    - bubbles.validate
+    - bubbles.regression
+  lockdown-approvals.json:
+    owner:
+    - bubbles.grill
+  invalidation-ledger.json:
+    owner:
+    - bubbles.validate
+  transition-requests.json:
+    owner:
+    - bubbles.validate
+    executionClaimsAllowed:
+    - bubbles.workflow
+    - bubbles.iterate
+    - bubbles.implement
+    - bubbles.test
+    - bubbles.docs
+    - bubbles.chaos
+    - bubbles.regression
+    - bubbles.audit
+  rework-queue.json:
+    owner:
+    - bubbles.validate
+  infra-code:
+    owner:
+    - bubbles.devops
+  ci-cd-config:
+    owner:
+    - bubbles.devops
+  deploy-config:
+    owner:
+    - bubbles.devops
+  observability-config:
+    owner:
+    - bubbles.devops
+  retro-reports:
+    owner:
+    - bubbles.retro
+
+diagnosticAgents:
+- bubbles.validate
+- bubbles.harden
+- bubbles.gaps
+- bubbles.stabilize
+- bubbles.security
+- bubbles.regression
+- bubbles.code-review
+- bubbles.system-review
+
+routingRules:
+  missingBusinessRequirements: bubbles.analyst
+  missingUxSections: bubbles.ux
+  missingTechnicalDesign: bubbles.design
+  missingPlanningStructure: bubbles.plan
+  missingScenarioContracts: bubbles.plan
+  operationalRemediation: bubbles.devops
+  stateCertification: bubbles.validate
+  lockedBehaviorChangeApproval: bubbles.grill
+  protectedRegressionContractChange: bubbles.validate
+  missingPlanningArtifacts: bubbles.plan

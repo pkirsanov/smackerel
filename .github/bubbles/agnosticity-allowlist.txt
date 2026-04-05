@@ -1,0 +1,3 @@
+# path_regex<TAB>rule_regex<TAB>line_regex<TAB>reason
+# Keep this file minimal. Each allowlist entry should document why the concrete
+# reference is required in a portable Bubbles surface.

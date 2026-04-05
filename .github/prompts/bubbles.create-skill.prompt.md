@@ -1,0 +1,3 @@
+---
+agent: bubbles.create-skill
+---
