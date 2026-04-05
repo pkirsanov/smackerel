@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "defaults": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "defaultForModes": ["bugfix-fastlane", "chaos-hardening"],
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "default": false,
+      "requireGrillForInvalidation": true,
+      "source": "repo-default"
+    },
+    "regression": {
+      "immutability": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "certificationRequired": true,
+      "source": "repo-default"
+    }
+  },
+  "modeOverrides": {
+    "bugfix-fastlane": {
+      "tdd": {
+        "mode": "scenario-first",
+        "source": "workflow-forced"
+      }
+    },
+    "chaos-hardening": {
+      "tdd": {
+        "mode": "scenario-first",
+        "source": "workflow-forced"
+      }
+    }
+  },
+  "metrics": {
+    "enabled": false,
+    "activityTrackingEnabled": false,
+    "outcomeEvalsEnabled": true
+  }
+}

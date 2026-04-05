@@ -1,0 +1,86 @@
+version: 1
+
+managedDocs:
+  architecture:
+    path: docs/Architecture.md
+    owner: bubbles.docs
+    required: true
+    audience: engineers
+    publishSources: [ feature, ops ]
+    requiredSections:
+      - Current System Shape
+      - Major Components
+      - Data And Control Flows
+      - Integration Boundaries
+      - Authoritative References
+  api:
+    path: docs/API.md
+    owner: bubbles.docs
+    required: true
+    audience: integrators
+    publishSources: [ feature, ops ]
+    requiredSections:
+      - Overview
+      - Authentication And Authorization
+      - Endpoints Or Contracts
+      - Error Behavior
+      - Change Notes
+  development:
+    path: docs/Development.md
+    owner: bubbles.docs
+    required: true
+    audience: contributors
+    publishSources: [ feature, ops ]
+    requiredSections:
+      - Setup
+      - Local Workflow
+      - Project Conventions
+      - Verification Commands
+  testing:
+    path: docs/Testing.md
+    owner: bubbles.docs
+    required: true
+    audience: contributors
+    publishSources: [ feature, ops ]
+    requiredSections:
+      - Test Types
+      - Execution Commands
+      - Evidence Expectations
+      - Failure Triage
+  deployment:
+    path: docs/Deployment.md
+    owner: bubbles.docs
+    required: true
+    audience: operators
+    publishSources: [ ops, feature ]
+    requiredSections:
+      - Build Inputs
+      - Deployment Flow
+      - Environment Requirements
+      - Rollback Or Recovery
+  operations:
+    path: docs/Operations.md
+    owner: bubbles.docs
+    required: true
+    audience: operators
+    publishSources: [ ops, feature ]
+    requiredSections:
+      - Runbook Entry Points
+      - Observability And Alerts
+      - Troubleshooting
+      - Recovery Actions
+
+policy:
+  publishManagedDocsOnCloseout: true
+  removeObsoleteContent: true
+  mergeDuplicateContentIntoManagedDocs: true
+  unmanagedDocsRequireExplicitTarget: true
+
+classification:
+  featureRoot: specs
+  featurePattern: NNN-feature-name
+  opsRoot: specs/_ops
+  opsPattern: OPS-NNN-short-name
+  crossCuttingBugRoot: specs/_bugs
+  crossCuttingBugPattern: BUG-NNN-short-name
+  featureBugPattern: specs/<feature>/bugs/BUG-NNN-short-name

@@ -1,0 +1,95 @@
+version: 1
+validRiskClasses:
+- read_only
+- owned_mutation
+- destructive_mutation
+- external_side_effect
+- runtime_teardown
+commands:
+  status:
+    defaultRiskClass: read_only
+  specs:
+    defaultRiskClass: read_only
+  blocked:
+    defaultRiskClass: read_only
+  dod:
+    defaultRiskClass: read_only
+  policy:
+    defaultRiskClass: read_only
+    overrides:
+      set: owned_mutation
+      reset: owned_mutation
+  runtime:
+    defaultRiskClass: read_only
+    overrides:
+      acquire: owned_mutation
+      attach: owned_mutation
+      heartbeat: owned_mutation
+      release: runtime_teardown
+      reclaim-stale: runtime_teardown
+  session:
+    defaultRiskClass: read_only
+  lint:
+    defaultRiskClass: read_only
+  agnosticity:
+    defaultRiskClass: read_only
+  guard:
+    defaultRiskClass: read_only
+  guard-selftest:
+    defaultRiskClass: read_only
+  runtime-selftest:
+    defaultRiskClass: read_only
+  workflow-selftest:
+    defaultRiskClass: read_only
+  scan:
+    defaultRiskClass: read_only
+  regression-quality:
+    defaultRiskClass: read_only
+  docs-registry:
+    defaultRiskClass: read_only
+  framework-write-guard:
+    defaultRiskClass: read_only
+  framework-validate:
+    defaultRiskClass: read_only
+  release-check:
+    defaultRiskClass: read_only
+  framework-events:
+    defaultRiskClass: read_only
+  run-state:
+    defaultRiskClass: read_only
+  repo-readiness:
+    defaultRiskClass: read_only
+  framework-proposal:
+    defaultRiskClass: owned_mutation
+  audit-done:
+    defaultRiskClass: read_only
+  autofix:
+    defaultRiskClass: owned_mutation
+  dag:
+    defaultRiskClass: read_only
+  doctor:
+    defaultRiskClass: read_only
+    overrides:
+      --heal: owned_mutation
+  hooks:
+    defaultRiskClass: owned_mutation
+  project:
+    defaultRiskClass: owned_mutation
+  metrics:
+    defaultRiskClass: owned_mutation
+  lessons:
+    defaultRiskClass: owned_mutation
+  skill-proposals:
+    defaultRiskClass: owned_mutation
+  profile:
+    defaultRiskClass: owned_mutation
+  upgrade:
+    defaultRiskClass: owned_mutation
+  lint-budget:
+    defaultRiskClass: read_only
+  sunnyvale:
+    defaultRiskClass: read_only
+  aliases:
+    defaultRiskClass: read_only
+  help:
+    defaultRiskClass: read_only
