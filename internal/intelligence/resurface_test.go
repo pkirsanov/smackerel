@@ -51,3 +51,41 @@ func TestResurfaceCandidate_Fields(t *testing.T) {
 		t.Error("expected positive score")
 	}
 }
+
+func TestResurfaceScore_ZeroRelevance(t *testing.T) {
+	score := ResurfaceScore(0.0, 60, 0)
+	// With 0 relevance, only dormancy bonus contributes
+	if score < 0 {
+		t.Errorf("score should not be negative, got %f", score)
+	}
+}
+
+func TestResurfaceScore_MaxDormancy(t *testing.T) {
+	score30 := ResurfaceScore(0.5, 130, 0)
+	score200 := ResurfaceScore(0.5, 230, 0)
+	// Dormancy bonus is capped at 1.0
+	if score200 > score30*2 {
+		t.Errorf("dormancy bonus should be capped, got score30=%.2f score200=%.2f", score30, score200)
+	}
+}
+
+func TestResurfaceScore_MaxAccessPenalty(t *testing.T) {
+	lowPenalty := ResurfaceScore(0.5, 40, 5)
+	highPenalty := ResurfaceScore(0.5, 40, 100)
+	// Access penalty is capped at 1.0, so both should be >= 0
+	if highPenalty < 0 {
+		t.Errorf("score should not be negative even with high access, got %f", highPenalty)
+	}
+	if highPenalty > lowPenalty {
+		t.Errorf("more access should not increase score")
+	}
+}
+
+func TestResurfaceScore_NoDormancyBelow30(t *testing.T) {
+	fresh := ResurfaceScore(0.5, 10, 0)
+	at30 := ResurfaceScore(0.5, 30, 0)
+	// No dormancy bonus until 30 days
+	if fresh != at30 {
+		t.Errorf("expected same score below 30 days: fresh=%.2f at30=%.2f", fresh, at30)
+	}
+}

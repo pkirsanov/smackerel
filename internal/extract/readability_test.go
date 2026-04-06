@@ -85,3 +85,117 @@ func TestExtractText_LongTitle(t *testing.T) {
 		t.Errorf("title should be capped at 100 chars, got %d", len(result.Title))
 	}
 }
+
+func TestExtractText_SingleLine(t *testing.T) {
+	result := ExtractText("Just a note")
+	if result.Title != "Just a note" {
+		t.Errorf("expected full text as title, got %q", result.Title)
+	}
+}
+
+func TestExtractText_EmptyString(t *testing.T) {
+	result := ExtractText("")
+	if result.ContentHash == "" {
+		t.Error("should produce hash even for empty text")
+	}
+}
+
+func TestExtractText_MultilineTitle(t *testing.T) {
+	result := ExtractText("Title line\nSecond line\nThird line")
+	if result.Title != "Title line" {
+		t.Errorf("expected first line as title, got %q", result.Title)
+	}
+}
+
+func TestHashContent_Deterministic(t *testing.T) {
+	h1 := HashContent("test content")
+	h2 := HashContent("test content")
+	if h1 != h2 {
+		t.Error("same content should produce same hash")
+	}
+}
+
+func TestHashContent_CaseInsensitive(t *testing.T) {
+	h1 := HashContent("Hello World")
+	h2 := HashContent("hello world")
+	if h1 != h2 {
+		t.Error("hash should be case-insensitive")
+	}
+}
+
+func TestHashContent_TrimsWhitespace(t *testing.T) {
+	h1 := HashContent("hello")
+	h2 := HashContent("  hello  ")
+	if h1 != h2 {
+		t.Error("hash should trim whitespace")
+	}
+}
+
+func TestDetectContentType_ProductURLs(t *testing.T) {
+	tests := []struct {
+		url      string
+		expected ContentType
+	}{
+		{"https://www.amazon.com/dp/B08N5WRWNW/ref=something", ContentTypeProduct},
+		{"https://www.amazon.com/some-product/dp/B123456", ContentTypeProduct},
+	}
+	for _, tt := range tests {
+		got := DetectContentType(tt.url)
+		if got != tt.expected {
+			t.Errorf("DetectContentType(%q) = %q, want %q", tt.url, got, tt.expected)
+		}
+	}
+}
+
+func TestExtractYouTubeID_VariousFormats(t *testing.T) {
+	tests := []struct {
+		url      string
+		expected string
+	}{
+		{"https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=60", "dQw4w9WgXcQ"},
+		{"https://youtu.be/dQw4w9WgXcQ?si=abc", "dQw4w9WgXcQ"},
+		{"https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1", "dQw4w9WgXcQ"},
+		{"https://youtube.com/watch?v=abc-_def123", "abc-_def123"},
+	}
+	for _, tt := range tests {
+		got := ExtractYouTubeID(tt.url)
+		if got != tt.expected {
+			t.Errorf("ExtractYouTubeID(%q) = %q, want %q", tt.url, got, tt.expected)
+		}
+	}
+}
+
+func TestResult_Fields(t *testing.T) {
+	r := &Result{
+		ContentType: ContentTypeArticle,
+		Title:       "Test",
+		Author:      "Author",
+		Date:        "2026-04-06",
+		Text:        "Some text",
+		ContentHash: "abc123",
+		SourceURL:   "https://example.com",
+	}
+	if r.ContentType != ContentTypeArticle {
+		t.Errorf("unexpected content type: %q", r.ContentType)
+	}
+	if r.VideoID != "" {
+		t.Error("non-youtube result should have empty VideoID")
+	}
+}
+
+func TestContentType_Constants(t *testing.T) {
+	types := []ContentType{
+		ContentTypeArticle, ContentTypeYouTube, ContentTypeProduct,
+		ContentTypeRecipe, ContentTypeGeneric,
+	}
+	seen := make(map[ContentType]bool)
+	for _, ct := range types {
+		if ct == "" {
+			t.Error("content type should not be empty")
+		}
+		if seen[ct] {
+			t.Errorf("duplicate content type: %q", ct)
+		}
+		seen[ct] = true
+	}
+}
