@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Observe: honey jar with eye — passive watching -->
+  <path d="M7 10 C6 10, 5 11.5, 5 13.5 C5 16, 6 18, 7 19 C8.5 20.5, 10 21, 12 21 C14 21, 15.5 20.5, 17 19 C18 18, 19 16, 19 13.5 C19 11.5, 18 10, 17 10Z"/>
+  <ellipse cx="12" cy="10" rx="5.5" ry="1.5"/>
+  <ellipse cx="12" cy="6" rx="3" ry="1.5"/>
+  <circle cx="12" cy="6" r="0.5" fill="currentColor"/>
+</svg>
