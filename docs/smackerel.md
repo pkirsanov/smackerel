@@ -1959,14 +1959,31 @@ The runtime implementation details for these standards are defined in:
 
 ### 20.2 Current Repo State
 
-The runtime is not committed yet. Today, only the Bubbles validation surface exists:
+The foundation runtime scaffold is committed today. Current operational entrypoints are:
+
+- `./smackerel.sh config generate`
+- `./smackerel.sh build`
+- `./smackerel.sh check`
+- `./smackerel.sh lint`
+- `./smackerel.sh format`
+- `./smackerel.sh test unit`
+- `./smackerel.sh test integration`
+- `./smackerel.sh test e2e`
+- `./smackerel.sh test stress`
+- `./smackerel.sh up`
+- `./smackerel.sh down`
+- `./smackerel.sh status`
+- `./smackerel.sh logs`
+- `./smackerel.sh clean smart|full|status|measure`
+
+Framework/bootstrap governance remains on the Bubbles validation surface:
 
 - `bash .github/bubbles/scripts/cli.sh doctor`
 - `timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate`
 - `bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>`
 - `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/<feature>`
 
-No `smackerel-core`, `smackerel-ml`, Docker Compose runtime, or `./smackerel.sh` command surface may be treated as present until those assets are committed.
+Later-phase product capabilities are still incomplete, but the runtime scaffold and its command surface are now present and must be treated as the source of truth for operations.
 
 ### 20.3 Planned Health Checks
 

@@ -1,22 +1,26 @@
 # Smackerel Testing Guide
 
-This guide defines what Smackerel must validate today and what the runtime must validate once implementation lands.
+This guide defines Smackerel's current CLI-owned validation surface and the rules later phases must keep following as the runtime expands.
 
-## Current Bootstrap Validation
+## Current Validation Surface
 
-Until the runtime is committed, validation is limited to the Bubbles framework and project-owned docs/spec artifacts.
+The repository now exposes a sanctioned CLI-owned runtime test surface for the foundation scaffold while retaining the Bubbles framework checks for governance work.
 
 | Test type | Command | Required when |
 |-----------|---------|---------------|
+| Go + Python unit | `./smackerel.sh test unit` | Runtime code changes |
+| Integration | `./smackerel.sh test integration` | Runtime lifecycle or health changes |
+| End-to-end | `./smackerel.sh test e2e` | Runtime, compose, or config changes |
+| Stress smoke | `./smackerel.sh test stress` | Runtime health or lifecycle changes |
 | Framework doctor | `bash .github/bubbles/scripts/cli.sh doctor` | Project-owned bootstrap docs change |
 | Framework validate | `timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate` | Before claiming bootstrap health |
 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>` | Spec or bug artifacts change |
 | Traceability guard | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/<feature>` | Traceability-sensitive artifact content changes |
 | Regression baseline guard | `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/<feature> --verbose` | Managed docs or competitive baseline content changes |
 
-## Required Runtime Test Matrix
+## Current Runtime Test Matrix
 
-When runtime code lands, the repo must expose all test categories through the single CLI.
+The current CLI-owned runtime surface exposes these categories today:
 
 | Test type | Category | Required command |
 |-----------|----------|------------------|
@@ -24,10 +28,10 @@ When runtime code lands, the repo must expose all test categories through the si
 | Python unit | `unit` | `./smackerel.sh test unit --python` |
 | Integration | `integration` | `./smackerel.sh test integration` |
 | End-to-end API | `e2e-api` | `./smackerel.sh test e2e` |
-| End-to-end UI | `e2e-ui` | `./smackerel.sh test e2e` |
+| End-to-end UI | `e2e-ui` | `N/A - no committed UI yet` |
 | Stress | `stress` | `./smackerel.sh test stress` |
 
-If a web UI is committed, UI-specific tests must stay behind the same CLI rather than introducing ad-hoc browser or package-manager commands into project docs.
+If a web UI is committed later, UI-specific tests must stay behind the same CLI rather than introducing ad-hoc browser or package-manager commands into project docs.
 
 ## Environment Isolation Rules
 
@@ -43,8 +47,8 @@ The persistent development stack exists for manual work only.
 
 The automated test environment must use ephemeral storage.
 
-- PostgreSQL test data should use `tmpfs` or disposable volumes.
-- JetStream or queue state used by tests should be disposable.
+- PostgreSQL test data should use project-scoped test volumes that are removed during test cleanup.
+- JetStream or queue state used by tests should use test-scoped volumes removed during cleanup.
 - Extracted artifact scratch data and temp uploads should be disposable.
 - Tests should create uniquely identifiable synthetic fixtures.
 
@@ -95,4 +99,4 @@ Smackerel inherits the Bubbles evidence rules:
 - Test evidence must include raw command output, not summaries.
 - Long-running commands must use explicit timeouts.
 
-When runtime code is committed, update this file, the command registry, and copilot instructions in the same change set so the documented test surface matches reality.
+When new runtime categories are added, update this file, the command registry, and copilot instructions in the same change set so the documented test surface matches reality.

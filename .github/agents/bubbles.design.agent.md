@@ -163,6 +163,7 @@ Core requirements:
   - Create `state.json` from the version 3 template in feature-templates.md if missing.
   - If `spec.md` is missing or incomplete, invoke `bubbles.analyst` via `runSubagent`, then continue only after analyst-owned sections exist.
   - If `design.md` is missing, it will be created as the primary output of this agent.
+- Update `state.json.execution`: set `activeAgent: "bubbles.design"`, `currentPhase: "bootstrap"`, capture `statusBefore` and `runStartedAt` for `executionHistory`, and keep `policySnapshot` intact.
 - Do NOT create `scopes.md`, `report.md`, or `uservalidation.md` — those are created by `/bubbles.plan`.
 - Determine whether to create design.md from scratch or reconcile/redesign/replace an existing design.
 - If key inputs are missing, ask clarification questions immediately.
@@ -259,7 +260,8 @@ The Design Brief is a short, human-reviewable alignment checkpoint at the top of
 1) Create or update `{FEATURE_DIR}/design.md`.
 2) Create or complete `{FEATURE_DIR}/spec.md` if it was missing/incomplete.
 3) Create `{FEATURE_DIR}/state.json` from the version 3 template if it was missing.
-4) Provide a short summary:
+4) Append an `executionHistory` entry to `state.json` with `agent: "bubbles.design"`, `phasesExecuted: ["bootstrap"]`, timestamps, and summary. Do NOT write `certification.*`.
+5) Provide a short summary:
 
 - Created/updated file(s)
 - Key design decisions

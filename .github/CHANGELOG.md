@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Workflow Dispatch Reliability
+
+- **Instruction budget is now a framework validation gate** — `framework-validate` and `doctor` now fail when any agent prompt exceeds the hard instruction-budget limit instead of treating budget drift as an informational audit only.
+- **Workflow fix-cycle protocol extracted** — the stochastic repair-round dispatch contract moved into `workflow-fix-cycle-protocol.md` so `bubbles.workflow` keeps the same behavior with less prompt bloat.
+- **Planning specialist provenance** — `bubbles.design` and `bubbles.plan` now record bootstrap execution in `state.json.executionHistory`, and the state transition guard now checks that analyze-first modes actually dispatched the required planning owners.
+
 ### Release Manifest And Install Provenance Trust
 
 - **Release manifest generation** — `bubbles/release-manifest.json` is now generated from the source repo and records version, git SHA, supported profiles, supported interop sources, validated surfaces, trust-doc digest, and framework-managed checksum inventory.

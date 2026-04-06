@@ -229,28 +229,7 @@ ok "$(ls "${TARGET}"/prompts/bubbles.*.prompt.md | wc -l) prompts installed"
 # ── Install workflows ───────────────────────────────────────────────
 info "Installing workflow config and registries..."
 mkdir -p "${TARGET}/bubbles"
-cp "$TEMP_DIR"/bubbles/workflows.yaml "${TARGET}/bubbles/"
-if [[ -f "$TEMP_DIR/bubbles/adoption-profiles.yaml" ]]; then
-  cp "$TEMP_DIR"/bubbles/adoption-profiles.yaml "${TARGET}/bubbles/"
-fi
-if [[ -f "$TEMP_DIR/bubbles/docs-registry.yaml" ]]; then
-  cp "$TEMP_DIR"/bubbles/docs-registry.yaml "${TARGET}/bubbles/"
-fi
-if [[ -f "$TEMP_DIR/bubbles/agent-ownership.yaml" ]]; then
-  cp "$TEMP_DIR"/bubbles/agent-ownership.yaml "${TARGET}/bubbles/"
-fi
-if [[ -f "$TEMP_DIR/bubbles/agent-capabilities.yaml" ]]; then
-  cp "$TEMP_DIR"/bubbles/agent-capabilities.yaml "${TARGET}/bubbles/"
-fi
-if [[ -f "$TEMP_DIR/bubbles/action-risk-registry.yaml" ]]; then
-  cp "$TEMP_DIR"/bubbles/action-risk-registry.yaml "${TARGET}/bubbles/"
-fi
-if [[ -f "$TEMP_DIR/bubbles/capability-ledger.yaml" ]]; then
-  cp "$TEMP_DIR"/bubbles/capability-ledger.yaml "${TARGET}/bubbles/"
-fi
-if [[ -f "$TEMP_DIR/bubbles/interop-registry.yaml" ]]; then
-  cp "$TEMP_DIR"/bubbles/interop-registry.yaml "${TARGET}/bubbles/"
-fi
+cp "$TEMP_DIR"/bubbles/*.yaml "${TARGET}/bubbles/" 2>/dev/null || true
 if [[ -f "$TEMP_DIR/bubbles/agnosticity-allowlist.txt" ]]; then
   cp "$TEMP_DIR"/bubbles/agnosticity-allowlist.txt "${TARGET}/bubbles/"
 fi

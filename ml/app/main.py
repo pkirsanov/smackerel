@@ -20,8 +20,13 @@ def _check_required_config() -> dict[str, str]:
         "NATS_URL": os.getenv("NATS_URL", ""),
         "LLM_PROVIDER": os.getenv("LLM_PROVIDER", ""),
         "LLM_MODEL": os.getenv("LLM_MODEL", ""),
-        "LLM_API_KEY": os.getenv("LLM_API_KEY", ""),
+        "OLLAMA_URL": os.getenv("OLLAMA_URL", ""),
     }
+
+    llm_provider = required["LLM_PROVIDER"].lower()
+    if llm_provider != "ollama":
+        required["LLM_API_KEY"] = os.getenv("LLM_API_KEY", "")
+
     missing = [k for k, v in required.items() if not v]
     if missing:
         logger.error("Missing required configuration: %s", ", ".join(missing))

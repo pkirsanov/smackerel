@@ -213,6 +213,7 @@ Template reference: [feature-templates.md](bubbles_shared/feature-templates.md)
   - `report.md` — Create with initial template headers (Summary, Test Evidence, Completion Statement).
   - `uservalidation.md` — Create with checked-by-default baseline template (`- [x]` items).
   - `scenario-manifest.json` — Create/update so every planned Gherkin scenario has a stable `SCN-...` contract entry with live test expectations.
+- Update `state.json.execution`: set `activeAgent: "bubbles.plan"`, `currentPhase: "bootstrap"`, capture `statusBefore` and `runStartedAt` for `executionHistory`, and keep `policySnapshot` intact.
 - Run User Validation Gate on `uservalidation.md` (check for unchecked regressions).
 - Determine impacted surfaces by reading spec/design and scanning the repo structure:
   - Backend services (Rust/Python)
@@ -232,6 +233,8 @@ FEATURE_DIR: ...
 IMPACTED SURFACES: backend, infra, admin, mobile, web, monitoring, scripts, ...
 ASSUMPTIONS: ...
 ```
+
+Before reporting results, append an `executionHistory` entry to `state.json` with `agent: "bubbles.plan"`, `phasesExecuted: ["bootstrap"]`, timestamps, and summary. Do NOT write `certification.*`.
 
 ### Phase 1: Extract Use Cases and Requirements
 

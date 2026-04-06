@@ -9,10 +9,10 @@ import (
 
 // Supervisor manages connector goroutines with crash recovery.
 type Supervisor struct {
-	registry    *Registry
-	stateStore  *StateStore
-	mu          sync.Mutex
-	running     map[string]context.CancelFunc
+	registry   *Registry
+	stateStore *StateStore
+	mu         sync.Mutex
+	running    map[string]context.CancelFunc
 }
 
 // NewSupervisor creates a new connector supervisor.

@@ -1,12 +1,12 @@
 # Smackerel Development Guidelines
 
-Smackerel is already Bubbles-bootstrapped. The current repository contains Bubbles governance assets, a product design document, and phased specs, but it does not yet contain the runtime implementation. Project-owned bootstrap configuration must stay truthful to that state.
+Smackerel is already Bubbles-bootstrapped. The current repository contains Bubbles governance assets, phased specs, a Go core runtime, a Python ML sidecar, Docker Compose, and a repo-standard CLI. Project-owned bootstrap configuration must stay truthful to that state.
 
 ## Current Repo State
 
-- Committed today: `README.md`, `docs/smackerel.md`, `specs/`, `.github/`, and `.specify/memory/`.
-- Not committed yet: Go runtime sources, Python ML sidecar sources, Docker Compose stack, or a project CLI such as `./smackerel.sh`.
-- Do not invent commands or paths for code that is not present in the repository.
+- Committed today: `README.md`, `docs/smackerel.md`, `specs/`, `.github/`, `.specify/memory/`, Go runtime sources under `cmd/` and `internal/`, the Python ML sidecar under `ml/`, `docker-compose.yml`, `config/smackerel.yaml`, and `./smackerel.sh`.
+- The current runtime surface covers the foundation scaffold: config generation, image builds, container lifecycle, unit tests, live-stack health checks, E2E scaffold tests, and stress smoke checks.
+- Do not invent commands or paths that are not present in the repository, and do not treat ad-hoc runtime commands as the sanctioned workflow when `./smackerel.sh` already owns the surface.
 
 ## Documentation References
 
@@ -35,24 +35,37 @@ This stack comes from `docs/smackerel.md` and should be treated as the project t
 
 ## Commands
 
-Use committed framework validation commands for current work:
+Use `./smackerel.sh` for runtime work and the committed Bubbles commands for framework/spec governance:
 
 | Action | Command | Timeout |
 |--------|---------|---------|
+| Config generate | `./smackerel.sh config generate` | 1 min |
+| Build | `./smackerel.sh build` | 20 min |
+| Check | `./smackerel.sh check` | 2 min |
+| Lint | `./smackerel.sh lint` | 10 min |
+| Format | `./smackerel.sh format --check` | 10 min |
+| Test unit | `./smackerel.sh test unit` | 10 min |
+| Test integration | `./smackerel.sh test integration` | 10 min |
+| Test e2e | `./smackerel.sh test e2e` | 15 min |
+| Test stress | `./smackerel.sh test stress` | 10 min |
+| Up | `./smackerel.sh up` | 5 min |
+| Down | `./smackerel.sh down` | 2 min |
+| Status | `./smackerel.sh status` | 2 min |
+| Logs | `./smackerel.sh logs` | 5 min |
+| Clean smart | `./smackerel.sh clean smart` | 3 min |
 | Bootstrap doctor | `bash .github/bubbles/scripts/cli.sh doctor` | 2 min |
 | Framework validate | `timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate` | 20 min |
 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>` | 5 min |
 | Traceability guard | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/<feature>` | 10 min |
 | Regression baseline guard | `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/<feature> --verbose` | 10 min |
-| Runtime build/test/lint | `N/A until runtime sources and repo CLI are committed` | N/A |
 
-## Required Runtime Standards Once Implementation Exists
+## Required Runtime Standards
 
-When runtime code lands, Smackerel must adopt the following standards in the same change set that introduces the implementation.
+The committed runtime already has a repo-standard operational surface. New work must preserve it.
 
 ### One CLI Surface
 
-The runtime must expose one documented entrypoint:
+The runtime entrypoint is:
 
 ```bash
 ./smackerel.sh
@@ -93,7 +106,7 @@ It must own config generation, build, lint, format, test, stack lifecycle, logs,
 | Traceability guard | `artifact` | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/<feature>` | When traceability-sensitive spec content changes |
 | Regression baseline guard | `artifact` | `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/<feature> --verbose` | When changing managed docs or competitive baselines |
 
-### Runtime Test Expectations Once Implementation Exists
+### Runtime Test Expectations
 
 | Test Type | Category | Expected Stack | Required? |
 |-----------|----------|----------------|-----------|
@@ -104,7 +117,7 @@ It must own config generation, build, lint, format, test, stack lifecycle, logs,
 | E2E UI | `e2e-ui` | Only if a committed web or mobile UI exists | When a UI is added |
 | Stress | `stress` | Ingestion, retrieval, and synthesis hot paths | When perf-sensitive paths change |
 
-Do not fill in runtime commands until the corresponding code and repo-standard command surface are actually committed.
+Runtime commands are committed and must stay aligned with this file and `.specify/memory/agents.md`.
 
 ### Planned Runtime CLI Contract
 
@@ -149,8 +162,8 @@ The future runtime command surface must converge on:
 See `instructions/terminal-discipline.instructions.md` for current terminal rules.
 
 At the present repo state:
+- Use `./smackerel.sh` for runtime build, test, lint, deploy-adjacent lifecycle, and service-management operations.
 - Use committed Bubbles validation commands for bootstrap and artifact checks.
-- Do not run build, test, lint, deploy, or service-management commands for a runtime that is not in the repository yet.
 
 ---
 
@@ -203,7 +216,7 @@ Testing guide:        docs/Testing.md
 Docker operations:    docs/Docker_Best_Practices.md
 Specifications:       specs/
 Bootstrap config:     .github/ and .specify/memory/
-Committed source:     no runtime source tree committed yet
+Committed source:     cmd/, internal/, ml/, docker-compose.yml, config/, smackerel.sh
 ```
 
 ---
@@ -217,9 +230,9 @@ Not applicable at the current repo state because no frontend container or bundle
 | Frontend container | `N/A - no frontend container committed` |
 | Frontend image | `N/A - no frontend image committed` |
 | Static root | `N/A - no bundled frontend committed` |
-| Stop command | `N/A - no runtime CLI committed` |
-| Build command | `N/A - no runtime CLI committed` |
-| Start command | `N/A - no runtime CLI committed` |
+| Stop command | `./smackerel.sh down` |
+| Build command | `./smackerel.sh build` |
+| Start command | `./smackerel.sh up` |
 | Bundler | `N/A - no bundled frontend committed` |
 
 ---
@@ -245,4 +258,4 @@ bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>
 timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/<feature>
 ```
 
-When runtime code lands, update this audit to use the committed repo-standard runtime commands in the same change set.
+Keep this audit aligned with the committed repo-standard runtime commands in the same change set that changes the CLI surface.

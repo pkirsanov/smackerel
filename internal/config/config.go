@@ -36,13 +36,13 @@ func Load() (*Config, error) {
 		LLMAPIKey:        os.Getenv("LLM_API_KEY"),
 		AuthToken:        os.Getenv("SMACKEREL_AUTH_TOKEN"),
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		OllamaURL:        getEnvDefault("OLLAMA_URL", "http://ollama:11434"),
+		OllamaURL:        os.Getenv("OLLAMA_URL"),
 		OllamaModel:      os.Getenv("OLLAMA_MODEL"),
-		EmbeddingModel:   getEnvDefault("EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
-		DigestCron:       getEnvDefault("DIGEST_CRON", "0 7 * * *"),
-		LogLevel:         getEnvDefault("LOG_LEVEL", "info"),
-		Port:             getEnvDefault("PORT", "8080"),
-		MLSidecarURL:     getEnvDefault("ML_SIDECAR_URL", "http://smackerel-ml:8081"),
+		EmbeddingModel:   os.Getenv("EMBEDDING_MODEL"),
+		DigestCron:       os.Getenv("DIGEST_CRON"),
+		LogLevel:         os.Getenv("LOG_LEVEL"),
+		Port:             os.Getenv("PORT"),
+		MLSidecarURL:     os.Getenv("ML_SIDECAR_URL"),
 	}
 
 	if chatIDs := os.Getenv("TELEGRAM_CHAT_IDS"); chatIDs != "" {
@@ -54,13 +54,6 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
-}
-
-func getEnvDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 // requiredVars returns the list of required environment variable names
@@ -80,6 +73,13 @@ func (c *Config) requiredVars() []struct {
 		{"LLM_PROVIDER", c.LLMProvider},
 		{"LLM_MODEL", c.LLMModel},
 		{"SMACKEREL_AUTH_TOKEN", c.AuthToken},
+		{"OLLAMA_URL", c.OllamaURL},
+		{"OLLAMA_MODEL", c.OllamaModel},
+		{"EMBEDDING_MODEL", c.EmbeddingModel},
+		{"DIGEST_CRON", c.DigestCron},
+		{"LOG_LEVEL", c.LogLevel},
+		{"PORT", c.Port},
+		{"ML_SIDECAR_URL", c.MLSidecarURL},
 	}
 }
 

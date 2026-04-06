@@ -44,6 +44,12 @@ echo
 
 run_check "Portable surface agnosticity" bash "$SCRIPT_DIR/agnosticity-lint.sh" --quiet "${agnosticity_targets[@]}"
 run_check "Workflow registry consistency" bash "$SCRIPT_DIR/workflow-registry-consistency.sh" --quiet
+if [[ -d "$REPO_ROOT/agents" ]]; then
+  agents_dir="$REPO_ROOT/agents"
+else
+  agents_dir="$REPO_ROOT/.github/agents"
+fi
+run_check "Instruction budget lint" bash "$SCRIPT_DIR/instruction-budget-lint.sh" "$agents_dir"
 run_check "Agent ownership lint" bash "$SCRIPT_DIR/agent-ownership-lint.sh"
 run_check "Action risk registry lint" bash "$SCRIPT_DIR/action-risk-registry-lint.sh"
 run_check "Capability ledger selftest" bash "$SCRIPT_DIR/capability-ledger-selftest.sh"

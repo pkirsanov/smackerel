@@ -214,6 +214,7 @@ agents/bubbles_shared/test-fidelity.md
 agents/bubbles_shared/ux-bootstrap.md
 agents/bubbles_shared/validation-core.md
 agents/bubbles_shared/validation-profiles.md
+agents/bubbles_shared/workflow-fix-cycle-protocol.md
 prompts/bubbles.analyst.prompt.md
 prompts/bubbles.audit.prompt.md
 prompts/bubbles.bug.prompt.md
