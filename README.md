@@ -1,19 +1,34 @@
-# Smackerel
+<p align="center">
+  <img src="assets/icons/logo-mark.svg" width="96" height="96" alt="Smackerel">
+</p>
 
-> *"What I like best is just doing nothing... and having a little smackerel of something." — Winnie-the-Pooh*
+<h1 align="center">Smackerel</h1>
 
-A passive intelligence layer across your entire digital life. It observes, captures, connects, and synthesizes information so you don't have to organize anything yourself.
+<p align="center">
+  <em>"What I like best is just doing nothing... and having a little smackerel of something." — Winnie-the-Pooh</em>
+</p>
+
+<p align="center">A passive intelligence layer across your entire digital life.<br>It observes, captures, connects, and synthesizes information so you don't have to organize anything yourself.</p>
+
+---
 
 ## What It Does
 
-- **Observes** everything — email, videos, maps, calendar, browsing, notes, purchases
-- **Captures** anything via zero-friction input from any device
-- **Connects** across domains — cross-links, detects themes, builds a living knowledge graph
-- **Searches** by meaning, not keywords — "that pricing video" just works
-- **Synthesizes** patterns, proposes ideas, identifies blind spots
-- **Evolves** — promotes hot topics, archives cold ones, tracks expertise growth
-- **Surfaces** the right information at the right time
-- **Runs locally** — you own your data, always
+<img src="assets/icons/feature-observe.svg" width="20" height="20" alt="">&ensp;**Observes** everything — email, videos, maps, calendar, browsing, notes, purchases
+
+<img src="assets/icons/feature-capture.svg" width="20" height="20" alt="">&ensp;**Captures** anything via zero-friction input from any device
+
+<img src="assets/icons/feature-connect.svg" width="20" height="20" alt="">&ensp;**Connects** across domains — cross-links, detects themes, builds a living knowledge graph
+
+<img src="assets/icons/feature-search.svg" width="20" height="20" alt="">&ensp;**Searches** by meaning, not keywords — "that pricing video" just works
+
+<img src="assets/icons/feature-synthesize.svg" width="20" height="20" alt="">&ensp;**Synthesizes** patterns, proposes ideas, identifies blind spots
+
+<img src="assets/icons/feature-evolve.svg" width="20" height="20" alt="">&ensp;**Evolves** — promotes hot topics, archives cold ones, tracks expertise growth
+
+<img src="assets/icons/feature-surface.svg" width="20" height="20" alt="">&ensp;**Surfaces** the right information at the right time
+
+<img src="assets/icons/feature-local.svg" width="20" height="20" alt="">&ensp;**Runs locally** — you own your data, always
 
 ## Docs
 

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../assets/icons/logotype.svg" width="380" height="128" alt="Smackerel">
+</p>
+
 # Smackerel — Design Document v2
 
 > *"What I like best is just doing nothing... and having a little smackerel of something." — Winnie-the-Pooh*
