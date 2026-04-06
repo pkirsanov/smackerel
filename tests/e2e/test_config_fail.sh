@@ -3,13 +3,15 @@
 # Scenario: SCN-002-044
 set -euo pipefail
 
-COMPOSE_PROJECT="smackerel-test-config"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$REPO_DIR/scripts/lib/runtime.sh"
+
+TEST_ENV="test"
 
 cleanup() {
     echo "Cleaning up test stack..."
-    docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" down -v --remove-orphans 2>/dev/null || true
+    "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -18,28 +20,30 @@ echo "=== SCN-002-044: Missing required config fails startup ==="
 # Clean state
 cleanup
 
-# Create a deliberately incomplete .env (missing LLM_PROVIDER, LLM_MODEL, LLM_API_KEY)
+"$REPO_DIR/smackerel.sh" --env "$TEST_ENV" config generate >/dev/null
+SOURCE_ENV="$(smackerel_require_env_file "$TEST_ENV")"
+COMPOSE_PROJECT="$(smackerel_compose_project "$TEST_ENV")"
+
+# Create a deliberately incomplete env file (missing LLM_PROVIDER, LLM_MODEL, LLM_API_KEY)
 TEMP_ENV=$(mktemp)
-cat > "$TEMP_ENV" <<'EOF'
-DATABASE_URL=postgres://smackerel:smackerel@postgres:5432/smackerel?sslmode=disable
-NATS_URL=nats://nats:4222
-SMACKEREL_AUTH_TOKEN=test-token
-EOF
+cp "$SOURCE_ENV" "$TEMP_ENV"
+sed -i '/^LLM_PROVIDER=/d' "$TEMP_ENV"
+sed -i '/^LLM_MODEL=/d' "$TEMP_ENV"
+sed -i '/^LLM_API_KEY=/d' "$TEMP_ENV"
 
 # Start only infrastructure so core can attempt to start
-docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" up -d postgres nats
+docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" --env-file "$SOURCE_ENV" up -d postgres nats
 sleep 10
 
 # Build core image
-docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" build smackerel-core 2>/dev/null
+docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" --env-file "$SOURCE_ENV" build smackerel-core
 
 # Run smackerel-core with incomplete config — expect failure
 echo "Starting smackerel-core with incomplete config..."
 set +e
-docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" run \
+OUTPUT=$(docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" --env-file "$TEMP_ENV" run \
     --rm --no-deps \
-    --env-file "$TEMP_ENV" \
-    smackerel-core 2>&1 | tee /tmp/config-fail-output.txt
+    smackerel-core 2>&1)
 EXIT_CODE=$?
 set -e
 
@@ -53,7 +57,6 @@ fi
 echo "Process exited with code $EXIT_CODE (expected non-zero)"
 
 # Verify error message names the missing variables
-OUTPUT=$(cat /tmp/config-fail-output.txt)
 FOUND_MISSING=0
 
 for VAR in LLM_PROVIDER LLM_MODEL LLM_API_KEY; do
