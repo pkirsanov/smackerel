@@ -1,9 +1,6 @@
 """Embedding generation via sentence-transformers."""
 
 import logging
-from typing import Any
-
-import numpy as np
 
 logger = logging.getLogger("smackerel-ml.embedder")
 

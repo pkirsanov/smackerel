@@ -58,13 +58,11 @@ func Load() (*Config, error) {
 
 // requiredVars returns the list of required environment variable names
 // and their corresponding values from the config.
-// requiredVars returns the list of required environment variable names
-// and their corresponding values from the config.
 func (c *Config) requiredVars() []struct {
 	Name  string
 	Value string
 } {
-	return []struct {
+	vars := []struct {
 		Name  string
 		Value string
 	}{
@@ -73,14 +71,20 @@ func (c *Config) requiredVars() []struct {
 		{"LLM_PROVIDER", c.LLMProvider},
 		{"LLM_MODEL", c.LLMModel},
 		{"SMACKEREL_AUTH_TOKEN", c.AuthToken},
-		{"OLLAMA_URL", c.OllamaURL},
-		{"OLLAMA_MODEL", c.OllamaModel},
 		{"EMBEDDING_MODEL", c.EmbeddingModel},
 		{"DIGEST_CRON", c.DigestCron},
 		{"LOG_LEVEL", c.LogLevel},
 		{"PORT", c.Port},
 		{"ML_SIDECAR_URL", c.MLSidecarURL},
 	}
+	// Ollama vars are only required when using Ollama as the LLM provider
+	if strings.EqualFold(c.LLMProvider, "ollama") {
+		vars = append(vars,
+			struct{ Name, Value string }{"OLLAMA_URL", c.OllamaURL},
+			struct{ Name, Value string }{"OLLAMA_MODEL", c.OllamaModel},
+		)
+	}
+	return vars
 }
 
 // Validate checks that all required configuration values are present.

@@ -71,6 +71,7 @@ handoffs:
 - Stay autonomous by default. Only enter a Socratic questioning loop when the workflow input explicitly sets `socratic: true`.
 - **This agent is a DRIVER, not an observer.** It MUST actively invoke specialist agents for every phase via `runSubagent`. It does NOT passively analyze state and report blockers — it executes work by delegating to specialists.
 - **Execute each phase autonomously using `runSubagent`** — embed the specialist agent's role, full context, and governance references in the subagent prompt. Do NOT rely on handoffs for phase execution; handoffs are for escalation only.
+- **Maintain an invocation ledger while orchestrating** — record every `runSubagent` call with phase/round, invoked agent, purpose, requested work, outcome, retries/escalations, and the key artifact/evidence/blocker returned so the final response can emit an audit-grade trail.
 - **Prefer reusable child workflows when the registry defines them.** When a mode bundles repeatable work such as quality sweeps, test verification, validation, or bug closure via child workflows, invoke those child workflows from this orchestrator instead of re-encoding the whole sequence inline.
 - **Enforce artifact ownership strictly** — when a phase requires updates to a foreign-owned artifact, invoke the owner mapped by the artifact ownership contract. Do NOT let a specialist substitute for the owner just because it can describe the change.
 - **Require a concrete result envelope from every specialist invocation** — each `runSubagent` response must end with a machine-readable `## RESULT-ENVELOPE` section carrying the agent, role class, outcome, affected scope/DoD/scenario references, evidence refs, and routing payload when follow-up work is required. Legacy `## ROUTE-REQUIRED` blocks may be consumed only as a compatibility fallback while prompts finish migrating.
@@ -1688,7 +1689,10 @@ Return:
 3. For specs marked `blocked` (ONLY after exhausting all retries AND auto-escalation): first failing gate, failure class, what auto-escalation was attempted, and why it failed.
 4. Resume commands ONLY for genuinely blocked specs (those where auto-escalation was exhausted). Do NOT emit resume commands as a routine pattern — the workflow should have completed all completable work.
 5. Validation check results (Tier 1 + Tier 2 per spec).
-6. If the workflow ends in any non-terminal state (`route_required`, `blocked`, or `in_progress`), append a `## CONTINUATION-ENVELOPE` that preserves the exact workflow target and preferred workflow mode. Never translate remaining work into raw specialist commands unless the user explicitly requested a direct specialist.
+6. A final `## Invocation Audit` section that lists EVERY `runSubagent` call in execution order. Each entry MUST include: phase/round, invoked agent, why it was invoked, what it was asked to do, outcome/status, and the primary artifact/evidence/blocker returned. Do NOT compress this into a comma-separated agent list.
+7. If the workflow ends in any non-terminal state (`route_required`, `blocked`, or `in_progress`), append a `## CONTINUATION-ENVELOPE` that preserves the exact workflow target and preferred workflow mode. Never translate remaining work into raw specialist commands unless the user explicitly requested a direct specialist.
+
+If a machine-readable envelope is emitted, place `## Invocation Audit` immediately before the final envelope block so the audit trail remains at the end of the narrative output and the envelope remains the last block.
 
 **⚠️ ANTI-PATTERN: Do NOT end with a list of suggested commands for the user to run.** If there are actions that could be taken, take them within this workflow run. The only acceptable ending states are:
 - ✅ "All target specs completed successfully" — no further action needed

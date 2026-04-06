@@ -2,8 +2,10 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -30,7 +32,7 @@ func (d *DedupChecker) Check(ctx context.Context, contentHash string) (*DedupRes
 
 	if err != nil {
 		// No rows = not a duplicate
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return &DedupResult{IsDuplicate: false}, nil
 		}
 		return nil, fmt.Errorf("check duplicate: %w", err)

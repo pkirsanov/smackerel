@@ -9,7 +9,6 @@ import (
 )
 
 // Dependencies holds shared service dependencies for API handlers.
-// Dependencies holds shared service dependencies for API handlers.
 type Dependencies struct {
 	DB           DBHealthChecker
 	NATS         NATSHealthChecker
@@ -35,8 +34,8 @@ type NATSHealthChecker interface {
 
 // HealthResponse is the JSON response for GET /api/health.
 type HealthResponse struct {
-	Status   string                    `json:"status"`
-	Services map[string]ServiceStatus  `json:"services"`
+	Status   string                   `json:"status"`
+	Services map[string]ServiceStatus `json:"services"`
 }
 
 // ServiceStatus represents the health of a single service.

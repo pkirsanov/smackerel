@@ -1,7 +1,9 @@
 package api
 
 import (
+	"crypto/subtle"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -37,14 +39,52 @@ func NewRouter(deps *Dependencies) http.Handler {
 		}
 
 		wh := deps.WebHandler.(webRouter)
-		r.Get("/", wh.SearchPage)
-		r.Post("/search", wh.SearchResults)
-		r.Get("/artifact", wh.ArtifactDetail)
-		r.Get("/ui/digest", wh.DigestPage)
-		r.Get("/topics", wh.TopicsPage)
-		r.Get("/settings", wh.SettingsPage)
-		r.Get("/ui/status", wh.StatusPage)
+
+		// Web UI group with optional auth (same as API)
+		r.Group(func(r chi.Router) {
+			r.Use(deps.webAuthMiddleware)
+			r.Get("/", wh.SearchPage)
+			r.Post("/search", wh.SearchResults)
+			r.Get("/artifact", wh.ArtifactDetail)
+			r.Get("/ui/digest", wh.DigestPage)
+			r.Get("/topics", wh.TopicsPage)
+			r.Get("/settings", wh.SettingsPage)
+			r.Get("/ui/status", wh.StatusPage)
+		})
 	}
 
 	return r
+}
+
+// webAuthMiddleware checks authentication for web UI routes.
+// Accepts Bearer token in Authorization header or auth_token cookie.
+// If no AuthToken is configured, all requests are allowed (dev mode).
+func (d *Dependencies) webAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if d.AuthToken == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Check Authorization header (Bearer token)
+		if auth := r.Header.Get("Authorization"); auth != "" {
+			parts := strings.SplitN(auth, " ", 2)
+			if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+				if subtle.ConstantTimeCompare([]byte(parts[1]), []byte(d.AuthToken)) == 1 {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+
+		// Check auth_token cookie (for browser sessions)
+		if cookie, err := r.Cookie("auth_token"); err == nil {
+			if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(d.AuthToken)) == 1 {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	})
 }

@@ -29,3 +29,11 @@ Not started.
 ## Scope: 07-settings-ui-connectors
 ### Summary
 Not started.
+
+---
+
+### Test Evidence
+No tests executed yet.
+
+### Completion Statement
+Spec 003 is not started. No scopes have been completed.

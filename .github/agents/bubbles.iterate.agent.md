@@ -76,6 +76,7 @@ handoffs:
 - Prepare all required artifacts (spec.md, design.md, scopes.md) if missing — by invoking `bubbles.design` and `bubbles.plan` via `runSubagent`
 - Determine the correct workflow mode for the identified work
 - Dispatch execution to specialist agents following the mode's `phaseOrder` from `bubbles/workflows.yaml`
+- Maintain an invocation ledger for every `runSubagent` call, capturing iteration/phase, invoked agent, purpose, requested work, outcome, and key artifact/evidence/blocker so the final output is audit-ready
 - Use `bubbles.code-review` or `bubbles.system-review` only as a narrow unblocking step when the next action is unclear from existing specs, design, scopes, validation signals, and failure logs
 - Treat review output as an input to planning or execution, not as the terminal result of an iteration
 - Preserve autonomous behavior by default. Only trigger a Socratic clarification loop when `socratic: true` is explicitly present.
@@ -665,4 +666,12 @@ If any required check fails, do not update `state.json` or report success. Fix t
 
 ## Output Requirements
 
-At completion, report: iterations completed, feature folder path, scope(s) completed, workflow mode used, specialist agents invoked + status, test suites executed + status, validation check results (Tier 1 + Tier 2), coverage percentage vs threshold.
+At completion, report:
+
+1. Iterations completed, feature folder path, scope(s) completed, and workflow mode used.
+2. Test suites executed + status.
+3. Validation check results (Tier 1 + Tier 2).
+4. Coverage percentage vs threshold.
+5. A final `## Invocation Audit` section listing EVERY `runSubagent` call in execution order. Each entry MUST include: iteration/phase, invoked agent, why it was invoked, what it was asked to do, outcome/status, and the primary artifact/evidence/blocker returned.
+
+Do NOT collapse the audit to `specialist agents invoked + status`. The audit must explain what each invoked specialist was asked to do. If no subagents were invoked, state that explicitly.

@@ -45,11 +45,11 @@ func TestValidate_MissingMultiple(t *testing.T) {
 }
 
 func TestValidate_MissingAllRequired(t *testing.T) {
-	// Clear all required vars
+	// Clear all required vars (with no LLM_PROVIDER set, Ollama vars are NOT required)
 	for _, key := range []string{
 		"DATABASE_URL", "NATS_URL", "LLM_PROVIDER",
 		"LLM_MODEL", "LLM_API_KEY", "SMACKEREL_AUTH_TOKEN",
-		"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL",
+		"EMBEDDING_MODEL",
 		"DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL",
 	} {
 		t.Setenv(key, "")
@@ -61,7 +61,7 @@ func TestValidate_MissingAllRequired(t *testing.T) {
 	for _, key := range []string{
 		"DATABASE_URL", "NATS_URL", "LLM_PROVIDER",
 		"LLM_MODEL", "LLM_API_KEY", "SMACKEREL_AUTH_TOKEN",
-		"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL",
+		"EMBEDDING_MODEL",
 		"DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL",
 	} {
 		if !strings.Contains(err.Error(), key) {
@@ -72,17 +72,37 @@ func TestValidate_MissingAllRequired(t *testing.T) {
 
 func TestValidate_MissingGeneratedRuntimeValues(t *testing.T) {
 	setRequiredEnv(t)
-	for _, key := range []string{"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL"} {
+	// OLLAMA_URL/OLLAMA_MODEL are only required when LLM_PROVIDER=ollama;
+	// setRequiredEnv sets LLM_PROVIDER=openai so they are NOT required
+	for _, key := range []string{"EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL"} {
 		t.Setenv(key, "")
 	}
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error when generated runtime values are missing")
 	}
-	for _, key := range []string{"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL"} {
+	for _, key := range []string{"EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL"} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error should name %s, got: %v", key, err)
 		}
+	}
+}
+
+func TestValidate_OllamaRequiresOllamaVars(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("LLM_PROVIDER", "ollama")
+	t.Setenv("OLLAMA_URL", "")
+	t.Setenv("OLLAMA_MODEL", "")
+	t.Setenv("LLM_API_KEY", "") // Not required for Ollama
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing Ollama vars")
+	}
+	if !strings.Contains(err.Error(), "OLLAMA_URL") {
+		t.Errorf("error should name OLLAMA_URL, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "OLLAMA_MODEL") {
+		t.Errorf("error should name OLLAMA_MODEL, got: %v", err)
 	}
 }
 

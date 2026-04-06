@@ -42,14 +42,14 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 
 | # | Scope | Depends On | Surfaces | Status |
 |---|-------|-----------|----------|--------|
-| 01 | project-scaffold | — | Infra, Backend | Not Started |
-| 02 | processing-pipeline | 01 | Backend (Go + Python) | Not Started |
-| 03 | active-capture-api | 02 | API | Not Started |
-| 04 | knowledge-graph-linking | 02 | Backend | Not Started |
-| 05 | semantic-search | 04 | API, Backend | Not Started |
-| 06 | telegram-bot | 03, 05 | Bot, API | Not Started |
-| 07 | daily-digest | 04 | Backend, API, Bot | Not Started |
-| 08 | web-ui | 05, 07 | Web UI | Not Started |
+| 01 | project-scaffold | — | Infra, Backend | Done |
+| 02 | processing-pipeline | 01 | Backend (Go + Python) | Done |
+| 03 | active-capture-api | 02 | API | Done |
+| 04 | knowledge-graph-linking | 02 | Backend | Done |
+| 05 | semantic-search | 04 | API, Backend | Done |
+| 06 | telegram-bot | 03, 05 | Bot, API | Done |
+| 07 | daily-digest | 04 | Backend, API, Bot | Done |
+| 08 | web-ui | 05, 07 | Web UI | Done |
 
 ### Spec Coverage
 

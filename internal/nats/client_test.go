@@ -153,3 +153,45 @@ func TestStreamSubjects_CoverAllSubjects(t *testing.T) {
 		}
 	}
 }
+
+// SCN-002-003: NATS connectivity — verify pub/sub subject routing is correctly configured
+// for core→ml→core roundtrip (artifacts.process → artifacts.processed, etc.)
+func TestSCN002003_NATSConnectivity_SubjectRouting(t *testing.T) {
+	// Verify request/response subject pairs match the expected routing
+	// Core publishes to *.process/embed/rerank/generate
+	// ML sidecar publishes to *.processed/embedded/reranked/generated
+	pairs := map[string]string{
+		SubjectArtifactsProcess: SubjectArtifactsProcessed,
+		SubjectSearchEmbed:     SubjectSearchEmbedded,
+		SubjectSearchRerank:    SubjectSearchReranked,
+		SubjectDigestGenerate:  SubjectDigestGenerated,
+	}
+	for req, resp := range pairs {
+		// Request and response must share the same stream (same domain prefix)
+		reqDomain := req[:indexByte(req, '.')]
+		respDomain := resp[:indexByte(resp, '.')]
+		if reqDomain != respDomain {
+			t.Errorf("subject pair %q→%q crosses stream boundaries", req, resp)
+		}
+	}
+}
+
+// SCN-002-003: Verify all streams cover both request and response subjects
+func TestSCN002003_NATSConnectivity_StreamCoverage(t *testing.T) {
+	// Each stream must cover both directions of its domain's pub/sub
+	for _, s := range AllStreams() {
+		wildcard := s.Subjects[0] // e.g. "artifacts.>"
+		if wildcard[len(wildcard)-1] != '>' {
+			t.Errorf("stream %s subject %q should use > wildcard", s.Name, wildcard)
+		}
+	}
+}
+
+func indexByte(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}

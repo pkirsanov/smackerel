@@ -21,3 +21,15 @@ Not started.
 ## Scope: 05-weekly-synthesis
 ### Summary
 Not started.
+
+## Scope: 06-enhanced-daily-digest
+### Summary
+Not started.
+
+---
+
+### Test Evidence
+No tests executed yet.
+
+### Completion Statement
+Spec 004 is not started. No scopes have been completed.
