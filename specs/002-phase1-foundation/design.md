@@ -435,55 +435,14 @@ Icon indicators in bot responses use the monochrome text marker system:
 
 ## UI/UX
 
-### Monochrome Icon System
+Full visual design system, ASCII wireframes for all pages, Telegram interaction flows, and responsive behavior are defined in the product-level design: [001-smackerel-mvp/design.md](../001-smackerel-mvp/design.md).
 
-All icons are custom SVG, 24x24 base grid, single-stroke line art:
-
-**Source icons:**
-- mail: envelope outline, single line
-- video: play-triangle inside rounded rectangle
-- calendar: grid with header bar
-- chat: speech bubble, single stroke
-- bookmark: ribbon fold
-- link: chain link, two interlocking ovals
-- note: page with corner fold
-
-**Artifact type icons:**
-- article: lines of text (3 horizontal lines)
-- idea: lightbulb outline
-- person: head and shoulders silhouette
-- place: map pin
-- book: open book spine
-- recipe: utensil crossing
-- bill: receipt with amount line
-
-**Status icons:**
-- syncing: circular arrow
-- healthy: check inside circle
-- error: x inside circle
-- dormant: crescent moon
-
-**Action icons:**
-- capture: plus inside circle
-- search: magnifying glass
-- archive: box with down arrow
-- resurface: box with up arrow
-
-### Web UI Pages
-
-**Layout:** Single-column, centered, max-width 720px. Dark/light theme support. Monochrome icons throughout.
-
-1. **Search (home):** Query input at top, results below. Each result: icon + title + type badge + date + summary snippet + connection count.
-
-2. **Artifact detail:** Title, type icon, source link, created date. Summary block. Key ideas list. Entities (linked people, places). Topics (linked). Connections (related artifacts as cards). Raw content (collapsible).
-
-3. **Digest:** Today's digest text rendered as plain text. Previous digests navigable by date.
-
-4. **Topics:** List of topics grouped by state (hot/active/emerging/cooling/dormant/archived). Each shows: name, artifact count, momentum score, trend arrow (text: ^, v, -).
-
-5. **Settings:** Source connector cards (connect/disconnect, sync status, last sync, error count). LLM configuration (provider, model, API key). Digest schedule. Telegram bot status.
-
-6. **Status:** Service health cards. Database stats (artifact count, topic count, edge count, storage size).
+Phase 1 implements these surfaces:
+- **Web App:** Search (home), Artifact detail, Digest, Topics, Settings, Status pages
+- **Telegram Bot:** URL capture, text capture, voice capture, /find, /digest, /status commands
+- **Monochrome icon set:** 24 SVG icons (8 source + 8 artifact + 4 status + 4 action)
+- **Design system CSS:** Warm monochrome palette, system fonts, responsive breakpoints, dark/light theme
+- **Text markers for Telegram:** . ? ! > - ~ # @ (no emoji)
 
 ---
 
