@@ -146,9 +146,38 @@ case "$COMMAND" in
         timeout 300 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
         ;;
       e2e)
+        # Scope 01: Project scaffold
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_compose_start.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_persistence.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_config_fail.sh"
+        # Scope 02: Processing pipeline
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_capture_pipeline.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_voice_pipeline.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_llm_failure_e2e.sh"
+        # Scope 03: Active capture API
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_capture_api.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_capture_errors.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_voice_capture_api.sh"
+        # Scope 04: Knowledge graph
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_knowledge_graph.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_graph_entities.sh"
+        # Scope 05: Semantic search
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_search.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_search_filters.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_search_empty.sh"
+        # Scope 06: Telegram bot
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_telegram.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_telegram_auth.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_telegram_voice.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_telegram_format.sh"
+        # Scope 07: Daily digest
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_digest.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_digest_quiet.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_digest_telegram.sh"
+        # Scope 08: Web UI
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_ui.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_detail.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_settings.sh"
         ;;
       stress)
         timeout 300 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"

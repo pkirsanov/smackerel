@@ -55,10 +55,6 @@ bubbles/scripts/value-selection-lint.sh
 bubbles/scripts/workflow-planning-provenance-selftest.sh
 bubbles/scripts/workflow-registry-consistency.sh
 bubbles/scripts/workflow-surface-selftest.sh
-install.sh
-README.md
-CHANGELOG.md
-VERSION
 templates/agents.md.tmpl
 templates/constitution.md.tmpl
 templates/copilot-instructions.md.tmpl

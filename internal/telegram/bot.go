@@ -21,6 +21,7 @@ type Bot struct {
 	searchURL    string // internal API URL for search
 	digestURL    string // internal API URL for digest
 	authToken    string
+	httpClient   *http.Client
 }
 
 // Config holds Telegram bot configuration.
@@ -62,6 +63,7 @@ func NewBot(cfg Config) (*Bot, error) {
 		searchURL:    baseURL + "/api/search",
 		digestURL:    baseURL + "/api/digest",
 		authToken:    cfg.AuthToken,
+		httpClient:   &http.Client{Timeout: 30 * time.Second},
 	}, nil
 }
 
@@ -254,13 +256,12 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 
 // handleDigest returns today's digest.
 func (b *Bot) handleDigest(ctx context.Context, msg *tgbotapi.Message) {
-	client := &http.Client{Timeout: 5 * time.Second}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, b.digestURL, nil)
 	if b.authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+b.authToken)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := b.httpClient.Do(req)
 	if err != nil {
 		b.reply(msg.Chat.ID, "? Couldn't get today's digest")
 		return
@@ -282,14 +283,92 @@ func (b *Bot) handleDigest(ctx context.Context, msg *tgbotapi.Message) {
 	b.reply(msg.Chat.ID, text)
 }
 
-// handleStatus returns system stats.
+// handleStatus returns system stats from the health endpoint.
 func (b *Bot) handleStatus(ctx context.Context, msg *tgbotapi.Message) {
-	b.reply(msg.Chat.ID, "> System status: all services running")
+	healthURL := strings.TrimSuffix(b.captureURL, "/capture") + "/health"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	if err != nil {
+		b.reply(msg.Chat.ID, "? Couldn't fetch status")
+		return
+	}
+
+	resp, err := b.httpClient.Do(req)
+	if err != nil {
+		b.reply(msg.Chat.ID, "? System unreachable")
+		return
+	}
+	defer resp.Body.Close()
+
+	var health struct {
+		Status   string                     `json:"status"`
+		Services map[string]json.RawMessage `json:"services"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		b.reply(msg.Chat.ID, "? Status parse error")
+		return
+	}
+
+	var lines []string
+	lines = append(lines, fmt.Sprintf("> System: %s", health.Status))
+	for name, raw := range health.Services {
+		var svc struct {
+			Status string `json:"status"`
+		}
+		json.Unmarshal(raw, &svc)
+		lines = append(lines, fmt.Sprintf("- %s: %s", name, svc.Status))
+	}
+	b.reply(msg.Chat.ID, strings.Join(lines, "\n"))
 }
 
-// handleRecent returns the last 10 artifacts.
+// handleRecent returns the last few captured artifacts.
 func (b *Bot) handleRecent(ctx context.Context, msg *tgbotapi.Message) {
-	b.reply(msg.Chat.ID, "> Recent artifacts feature coming soon")
+	body := map[string]interface{}{
+		"query": "*",
+		"limit": 5,
+	}
+	data, _ := json.Marshal(body)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.searchURL, bytes.NewReader(data))
+	if err != nil {
+		b.reply(msg.Chat.ID, "? Couldn't fetch recent items")
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if b.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	}
+
+	resp, err := b.httpClient.Do(req)
+	if err != nil {
+		b.reply(msg.Chat.ID, "? Search service unreachable")
+		return
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		b.reply(msg.Chat.ID, "? Response parse error")
+		return
+	}
+
+	items, _ := result["results"].([]interface{})
+	if len(items) == 0 {
+		b.reply(msg.Chat.ID, "> No artifacts captured yet")
+		return
+	}
+
+	var lines []string
+	lines = append(lines, "> Recent captures:")
+	for _, item := range items {
+		r, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		title, _ := r["title"].(string)
+		artType, _ := r["artifact_type"].(string)
+		lines = append(lines, fmt.Sprintf("- %s (%s)", title, artType))
+	}
+	b.reply(msg.Chat.ID, strings.Join(lines, "\n"))
 }
 
 // handleHelp shows available commands.
@@ -308,7 +387,6 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 // callCapture calls the internal capture API.
 func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[string]interface{}, error) {
 	data, _ := json.Marshal(body)
-	client := &http.Client{Timeout: 30 * time.Second}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.captureURL, bytes.NewReader(data))
 	if err != nil {
@@ -319,7 +397,7 @@ func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[stri
 		req.Header.Set("Authorization", "Bearer "+b.authToken)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := b.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("capture API call: %w", err)
 	}
@@ -346,7 +424,6 @@ func (b *Bot) callSearch(ctx context.Context, query string) (map[string]interfac
 		"limit": 3,
 	}
 	data, _ := json.Marshal(body)
-	client := &http.Client{Timeout: 10 * time.Second}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.searchURL, bytes.NewReader(data))
 	if err != nil {
@@ -357,7 +434,7 @@ func (b *Bot) callSearch(ctx context.Context, query string) (map[string]interfac
 		req.Header.Set("Authorization", "Bearer "+b.authToken)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := b.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("search API call: %w", err)
 	}

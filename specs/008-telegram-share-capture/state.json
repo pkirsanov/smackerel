@@ -1,0 +1,87 @@
+{
+  "version": 3,
+  "featureDir": "specs/008-telegram-share-capture",
+  "featureName": "Telegram Share & Chat Capture",
+  "status": "specs_hardened",
+  "workflowMode": "spec-scope-hardening",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-06T20:00:00Z",
+    "completedPhaseClaims": ["analyze", "design", "planning", "harden", "finalize"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "specs_hardened",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      { "scope": 1, "name": "Enhanced Share-Sheet URL Capture", "status": "Not Started" },
+      { "scope": 2, "name": "Forwarded Message Detection & Single Capture", "status": "Not Started" },
+      { "scope": 3, "name": "Conversation Assembly Buffer", "status": "Not Started" },
+      { "scope": 4, "name": "Conversation Artifact Model & Pipeline", "status": "Not Started" },
+      { "scope": 5, "name": "Media Group Assembly", "status": "Not Started" },
+      { "scope": 6, "name": "Configuration, Routing Finalization & E2E", "status": "Not Started" }
+    ],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-06T20:30:00Z",
+      "runEndedAt": "2026-04-06T20:35:00Z",
+      "summary": "Greenfield analysis complete. Created spec.md with problem statement, outcome contract, 7 goals, 9 requirements, 4 actors, 6 use cases, 10 business scenarios, 17 Gherkin acceptance scenarios, competitive analysis, and 5 improvement proposals. Covers enhanced share-sheet capture, forwarded message handling, conversation assembly algorithm, media group assembly, conversation artifact model, and configuration."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-06T20:50:00Z",
+      "runEndedAt": "2026-04-06T21:00:00Z",
+      "summary": "Created comprehensive design.md covering: architecture overview with 5 new files and 6 modified files, enhanced message routing order, ConversationAssembler with goroutine-safe in-memory buffer and inactivity-window algorithm, MediaGroupAssembler, enhanced share-sheet URL+context parsing, capture API extensions (ConversationPayload, MediaGroupPayload, ForwardMetaPayload), pipeline extensions for conversation content type, database migration 004_conversation_fields.sql, security model (allowlist on all paths, buffer isolation), configuration schema with validation, testing strategy covering unit/integration, and 5 alternatives considered."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["planning"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-06T21:10:00Z",
+      "runEndedAt": "2026-04-06T21:20:00Z",
+      "summary": "Created scopes.md with 6 sequential scopes: (1) Enhanced Share-Sheet URL Capture, (2) Forwarded Message Detection & Single Capture, (3) Conversation Assembly Buffer, (4) Conversation Artifact Model & Pipeline, (5) Media Group Assembly, (6) Configuration, Routing Finalization & E2E. Each scope includes Gherkin scenarios mapped from spec, detailed test plans with scenario-to-test tracing, implementation plans, and Definition of Done checklists. Updated report.md and uservalidation.md templates."
+    },
+    {
+      "id": "4",
+      "agent": "bubbles.harden",
+      "workflowMode": "spec-scope-hardening",
+      "startedAt": "2026-04-06T21:20:00Z",
+      "completedAt": "2026-04-06T21:35:00Z",
+      "statusBefore": "not_started",
+      "statusAfter": "specs_hardened",
+      "phasesExecuted": ["harden"],
+      "scopesCompleted": [],
+      "summary": "Hardened planning artifacts: fixed 11 issues including governance violation (pre-checked uservalidation.md), missing duplicate URL scenario (SC-TSC04), missing /done command scenario (SC-TSC12a), missing conversation URL extraction (SC-TSC12b), forwarded-with-URL edge case (SC-TSC05a), malformed forwarded message (SC-TSC05b), out-of-order timestamps (SC-TSC12c), conversation validation rejection (SC-TSC13a), and confirmation format coverage across all scopes. Verdict: PARTIALLY_HARDENED (planning artifacts ready, no implementation exists yet)."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-06T21:35:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": { "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md" },
+  "notes": "Telegram share-to-submit for capturing items via mobile share sheet, and sharing Telegram chat conversations into Smackerel."
+}

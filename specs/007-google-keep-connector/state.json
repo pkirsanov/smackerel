@@ -1,0 +1,111 @@
+{
+  "version": 3,
+  "featureDir": "specs/007-google-keep-connector",
+  "featureName": "Google Keep Connector",
+  "status": "specs_hardened",
+  "workflowMode": "spec-scope-hardening",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-06T20:00:00Z",
+    "completedPhaseClaims": ["analyze", "bootstrap", "harden", "bootstrap-replace", "plan-replace", "finalize"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "specs_hardened",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      { "scope": "Scope 1: Takeout Parser & Normalizer", "status": "Not Started", "priority": "P0", "tests": "22 unit", "scenarios": ["SCN-GK-001", "SCN-GK-002", "SCN-GK-003", "SCN-GK-004", "SCN-GK-005"] },
+      { "scope": "Scope 2: Keep Connector, Config & Registry", "status": "Not Started", "priority": "P0", "tests": "12 unit + 6 integration + 2 e2e", "scenarios": ["SCN-GK-006", "SCN-GK-007", "SCN-GK-008", "SCN-GK-009", "SCN-GK-010", "SCN-GK-011"] },
+      { "scope": "Scope 3: Source Qualifiers & Processing Tiers", "status": "Not Started", "priority": "P1", "tests": "8 unit + 4 integration + 1 e2e", "scenarios": ["SCN-GK-012", "SCN-GK-013", "SCN-GK-014", "SCN-GK-015"] },
+      { "scope": "Scope 4: Label-to-Topic Mapping", "status": "Not Started", "priority": "P1", "tests": "10 unit + 6 integration + 1 e2e", "scenarios": ["SCN-GK-016", "SCN-GK-017", "SCN-GK-018", "SCN-GK-019", "SCN-GK-020"] },
+      { "scope": "Scope 5: gkeepapi Python Bridge", "status": "Not Started", "priority": "P2", "tests": "8 unit + 4 integration + 1 e2e", "scenarios": ["SCN-GK-021", "SCN-GK-022", "SCN-GK-023", "SCN-GK-024"] },
+      { "scope": "Scope 6: Image OCR Pipeline", "status": "Not Started", "priority": "P2", "tests": "8 unit + 4 integration + 1 e2e", "scenarios": ["SCN-GK-025", "SCN-GK-026", "SCN-GK-027", "SCN-GK-028", "SCN-GK-029"] }
+    ],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-06T21:00:00Z",
+      "runCompletedAt": "2026-04-06T21:15:00Z",
+      "summary": "Created comprehensive spec.md with problem statement, outcome contract, 7 goals, API access strategy (hybrid Takeout + gkeepapi), 13 requirements, 4 actors, 6 use cases, 13 Gherkin business scenarios, competitive landscape, 6 improvement proposals, UI scenario matrix, and non-functional requirements."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-06T22:00:00Z",
+      "runCompletedAt": "2026-04-06T22:30:00Z",
+      "summary": "Created design.md with Design Brief, architecture overview (hybrid Takeout + gkeepapi via ML sidecar), 8 component designs (keep.go, takeout.go, normalizer.go, topic_mapper.go, keep_bridge.py, ocr.py, config schema, migration 004_keep.sql), data model, 4 NATS subject contracts (keep.sync.request/response, keep.ocr.request/response), pipeline integration flow, label-to-topic mapping algorithm with fuzzy matching, error handling matrix, security constraints, observability plan, testing strategy mapped to all 13 business scenarios, and 5 alternatives considered with rationale."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["planning"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-06T23:00:00Z",
+      "runCompletedAt": "2026-04-06T23:30:00Z",
+      "summary": "Created scopes.md with 6 sequential scopes: (1) Takeout Parser & Normalizer, (2) Keep Connector Config & Registry, (3) Source Qualifiers & Processing Tiers, (4) Label-to-Topic Mapping, (5) gkeepapi Python Bridge, (6) Image OCR Pipeline. 23 Gherkin scenarios (SCN-GK-001 through SCN-GK-023) mapped to all 13 business scenarios. 93 total tests across unit/integration/e2e/regression. Full scenario-to-scope traceability table."
+    },
+    {
+      "id": "4",
+      "agent": "bubbles.harden",
+      "workflowMode": "spec-scope-hardening",
+      "startedAt": "2026-04-06T23:30:00Z",
+      "completedAt": "2026-04-06T23:45:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "specs_hardened",
+      "phasesExecuted": ["harden"],
+      "scopesCompleted": [],
+      "summary": "Hardened planning artifacts: fixed 8 issues including 4 Gherkin scenario coverage gaps, 3 traceability errors, and 1 test type misclassification. Added SCN-GK-024 through SCN-GK-027 for edge cases (modified note graph edges, trashed note archiving, min content length, corrupted cursor fallback). Final: 27 Gherkin scenarios across 6 scopes. Verdict: HARDENED."
+    },
+    {
+      "id": "5",
+      "agent": "bubbles.design",
+      "workflowMode": "design-replace",
+      "startedAt": "2026-04-06T23:50:00Z",
+      "completedAt": "2026-04-06T23:59:00Z",
+      "statusBefore": "specs_hardened",
+      "statusAfter": "specs_hardened",
+      "phasesExecuted": ["bootstrap"],
+      "scopesCompleted": [],
+      "summary": "Replaced design.md with fresh, comprehensive design grounded in verified codebase facts. Covers: Design Brief, architecture overview with ASCII diagram, 7 component designs (keep.go, takeout.go, normalizer.go, topic_mapper.go, keep_bridge.py, ocr.py, ML sidecar integration), data model with artifact storage mapping, 4 NATS subject contracts on new KEEP stream, 004_keep.sql migration (ocr_cache + keep_exports tables), full processing pipeline integration flow, label-to-topic mapping algorithm (4-stage cascade), error handling matrix with 12 failure modes, configuration schema, security constraints, observability plan, testing strategy mapped to all 13 business scenarios, 6 risks, 5 alternatives considered."
+    },
+    {
+      "id": "6",
+      "agent": "bubbles.plan",
+      "workflowMode": "plan-replace",
+      "startedAt": "2026-04-06T23:59:00Z",
+      "completedAt": "2026-04-07T00:15:00Z",
+      "statusBefore": "specs_hardened",
+      "statusAfter": "specs_hardened",
+      "phasesExecuted": ["planning"],
+      "scopesCompleted": [],
+      "summary": "Replaced scopes.md with fresh 6-scope plan. 29 Gherkin scenarios (SCN-GK-001 through SCN-GK-029) mapped to all 13 business scenarios. 98 total tests across unit/integration/e2e. Full traceability matrix BS-001 through BS-013. Scopes: (1) Takeout Parser & Normalizer 22 unit, (2) Keep Connector Config & Registry 12u+6i+2e2e, (3) Source Qualifiers & Processing Tiers 8u+4i+1e2e, (4) Label-to-Topic Mapping 10u+6i+1e2e, (5) gkeepapi Python Bridge 8u+4i+1e2e, (6) Image OCR Pipeline 8u+4i+1e2e."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-07T00:15:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": { "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md" },
+  "notes": "Google Keep connector for passive note ingestion."
+}

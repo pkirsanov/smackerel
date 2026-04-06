@@ -35,6 +35,7 @@ handoffs:
 - Delegate fix implementation to `bubbles.implement` via `runSubagent`
 - Delegate test execution to `bubbles.test` via `runSubagent`
 - Delegate validation to `bubbles.validate` via `runSubagent`
+- Maintain an invocation ledger for every `runSubagent` call, capturing bug phase, invoked agent, why it was invoked, requested work, outcome, and the primary artifact/evidence/blocker returned so the final verdict is audit-ready
 - Update documentation to reflect fix
 - Follow DoD strictly before marking complete
 - Never leave a bug in a pseudo-complete state with narrative continuation items. If any required artifact, DoD item, guard/lint check, or certification field remains unresolved, keep the bug `in_progress`/`blocked` and route the owning work immediately.
@@ -540,6 +541,16 @@ Include bug status in status reports:
 3. Use NNN + 1
 
 ---
+
+## Output Requirements
+
+Before emitting any verdict, include a final `## Invocation Audit` section whenever this agent invoked one or more subagents.
+
+Rules:
+- List EVERY `runSubagent` call in execution order.
+- Each audit entry MUST include: bug phase, invoked agent, why it was invoked, what it was asked to do, outcome/status, and the primary artifact/evidence/blocker returned.
+- Do NOT compress the record into a short summary like `bubbles.implement and bubbles.test ran`.
+- If no subagents were invoked yet, state that explicitly so the audit trail is complete.
 
 ## Verdicts
 

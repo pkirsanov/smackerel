@@ -259,11 +259,6 @@ bubbles_framework_manifest_entries() {
     printf 'bubbles/scripts/%s\n' "$(basename "$file_path")"
   done
 
-  [[ -f "$source_root/install.sh" ]] && printf '%s\n' 'install.sh'
-  [[ -f "$source_root/README.md" ]] && printf '%s\n' 'README.md'
-  [[ -f "$source_root/CHANGELOG.md" ]] && printf '%s\n' 'CHANGELOG.md'
-  [[ -f "$source_root/VERSION" ]] && printf '%s\n' 'VERSION'
-
   while IFS= read -r file_path; do
     [[ -f "$file_path" ]] || continue
     relative_path="${file_path#$source_root/}"

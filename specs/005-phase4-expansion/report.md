@@ -21,3 +21,11 @@ Not started.
 ## Scope: 05-trail-journal
 ### Summary
 Not started.
+
+---
+
+### Test Evidence
+No tests executed yet.
+
+### Completion Statement
+Spec 005 is not started. No scopes have been completed.

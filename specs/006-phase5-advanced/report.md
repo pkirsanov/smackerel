@@ -25,3 +25,19 @@ Not started.
 ## Scope: 06-repeated-lookup-detection
 ### Summary
 Not started.
+
+## Scope: 07-content-creation-fuel
+### Summary
+Not started.
+
+## Scope: 08-seasonal-patterns
+### Summary
+Not started.
+
+---
+
+### Test Evidence
+No tests executed yet.
+
+### Completion Statement
+Spec 006 is not started. No scopes have been completed.

@@ -21,3 +21,11 @@ Not started.
 
 ### Summary
 Not started.
+
+---
+
+### Test Evidence
+No tests executed yet.
+
+### Completion Statement
+Spec 001 is not started. No scopes have been completed.

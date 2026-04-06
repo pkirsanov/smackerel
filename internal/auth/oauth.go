@@ -2,7 +2,11 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -62,28 +66,84 @@ func (g *GenericOAuth2) ProviderName() string {
 
 // AuthURL builds the authorization URL.
 func (g *GenericOAuth2) AuthURL(scopes []string, state string) string {
-	scopeStr := ""
-	for i, s := range scopes {
-		if i > 0 {
-			scopeStr += " "
-		}
-		scopeStr += s
+	params := url.Values{
+		"client_id":     {g.Config.ClientID},
+		"redirect_uri":  {g.Config.RedirectURL},
+		"scope":         {strings.Join(scopes, " ")},
+		"state":         {state},
+		"response_type": {"code"},
 	}
-
-	return fmt.Sprintf("%s?client_id=%s&redirect_uri=%s&scope=%s&state=%s&response_type=code",
-		g.Config.AuthEndpoint, g.Config.ClientID, g.Config.RedirectURL, scopeStr, state)
+	return fmt.Sprintf("%s?%s", g.Config.AuthEndpoint, params.Encode())
 }
 
 // ExchangeCode exchanges an authorization code for tokens.
 func (g *GenericOAuth2) ExchangeCode(ctx context.Context, code string) (*Token, error) {
-	// In a real implementation, this would make an HTTP call to the token endpoint
-	return nil, fmt.Errorf("ExchangeCode not implemented for generic provider %s", g.Name)
+	data := url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"redirect_uri":  {g.Config.RedirectURL},
+		"client_id":     {g.Config.ClientID},
+		"client_secret": {g.Config.ClientSecret},
+	}
+	return g.tokenRequest(ctx, data)
 }
 
 // RefreshToken refreshes an expired access token.
 func (g *GenericOAuth2) RefreshToken(ctx context.Context, refreshToken string) (*Token, error) {
-	// In a real implementation, this would make an HTTP call
-	return nil, fmt.Errorf("RefreshToken not implemented for generic provider %s", g.Name)
+	data := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refreshToken},
+		"client_id":     {g.Config.ClientID},
+		"client_secret": {g.Config.ClientSecret},
+	}
+	return g.tokenRequest(ctx, data)
+}
+
+// tokenRequest makes a POST to the token endpoint and parses the response.
+func (g *GenericOAuth2) tokenRequest(ctx context.Context, data url.Values) (*Token, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.Config.TokenEndpoint,
+		strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("create token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("token request to %s: %w", g.Name, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("token endpoint returned %d for %s", resp.StatusCode, g.Name)
+	}
+
+	var tokenResp struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
+		TokenType    string `json:"token_type"`
+		Scope        string `json:"scope"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, fmt.Errorf("decode token response: %w", err)
+	}
+
+	expiresAt := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	var scopes []string
+	if tokenResp.Scope != "" {
+		scopes = strings.Split(tokenResp.Scope, " ")
+	}
+
+	return &Token{
+		AccessToken:  tokenResp.AccessToken,
+		RefreshToken: tokenResp.RefreshToken,
+		ExpiresAt:    expiresAt,
+		TokenType:    tokenResp.TokenType,
+		Scopes:       scopes,
+	}, nil
 }
 
 // GoogleOAuth2Scopes returns the scopes needed for Google services.

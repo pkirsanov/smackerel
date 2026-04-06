@@ -1,22 +1,27 @@
 package pipeline
 
 import (
-	"context"
 	"testing"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestDedupChecker_NilPool(t *testing.T) {
-	// Verify DedupChecker struct can be created with a nil pool
-	// (actual database tests require a running PostgreSQL instance)
-	checker := &DedupChecker{Pool: (*pgxpool.Pool)(nil)}
+	checker := &DedupChecker{Pool: nil}
 	if checker.Pool != nil {
 		t.Error("expected nil pool")
 	}
 }
 
-func TestDedupResult_Fields(t *testing.T) {
+func TestDedupResult_NotDuplicate(t *testing.T) {
+	result := &DedupResult{IsDuplicate: false}
+	if result.IsDuplicate {
+		t.Error("expected not duplicate")
+	}
+	if result.ExistingID != "" {
+		t.Error("expected empty existing ID for non-duplicate")
+	}
+}
+
+func TestDedupResult_IsDuplicate(t *testing.T) {
 	result := &DedupResult{
 		IsDuplicate: true,
 		ExistingID:  "01HXYZ",
@@ -28,31 +33,35 @@ func TestDedupResult_Fields(t *testing.T) {
 	if result.ExistingID != "01HXYZ" {
 		t.Errorf("expected existing ID '01HXYZ', got %q", result.ExistingID)
 	}
-
-	// Non-duplicate
-	nodup := &DedupResult{IsDuplicate: false}
-	if nodup.IsDuplicate {
-		t.Error("expected not duplicate")
+	if result.Title != "Test Article" {
+		t.Errorf("expected title 'Test Article', got %q", result.Title)
 	}
 }
 
-// TestDedupChecker_Check_Integration would test against a real DB.
-// Skipped in unit tests; covered by integration tests.
-func TestDedupChecker_Check_Integration(t *testing.T) {
-	t.Skip("requires PostgreSQL; covered by integration tests")
-
-	pool, err := pgxpool.New(context.Background(), "postgres://smackerel:smackerel@localhost:5432/smackerel")
-	if err != nil {
-		t.Fatalf("connect to test DB: %v", err)
+func TestDedupResult_DuplicateWithEmptyTitle(t *testing.T) {
+	result := &DedupResult{
+		IsDuplicate: true,
+		ExistingID:  "01ABC",
+		Title:       "",
 	}
-	defer pool.Close()
-
-	checker := &DedupChecker{Pool: pool}
-	result, err := checker.Check(context.Background(), "nonexistent_hash")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if !result.IsDuplicate {
+		t.Error("expected duplicate even with empty title")
 	}
-	if result.IsDuplicate {
-		t.Error("expected no duplicate for nonexistent hash")
+	if result.ExistingID == "" {
+		t.Error("existing ID should not be empty for duplicate")
+	}
+}
+
+func TestDedupError_Fields(t *testing.T) {
+	err := &DuplicateError{
+		ExistingID: "01DEF",
+		Title:      "Existing Article",
+	}
+	if err.ExistingID != "01DEF" {
+		t.Errorf("expected '01DEF', got %q", err.ExistingID)
+	}
+	errMsg := err.Error()
+	if errMsg == "" {
+		t.Error("error message should not be empty")
 	}
 }

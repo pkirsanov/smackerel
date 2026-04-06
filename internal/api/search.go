@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
@@ -65,6 +66,8 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req SearchRequest
+	// Limit request body to 1MB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON body")
 		return
@@ -112,8 +115,17 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 // Search performs a semantic search: embed query → pgvector similarity → filters → graph expansion.
 func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchResult, int, error) {
-	// Step 1: Embed the query via NATS
+	// Step 1: Set up subscription BEFORE publishing to avoid race condition
 	queryID := fmt.Sprintf("q-%d", time.Now().UnixNano())
+
+	sub, err := s.NATS.Conn.SubscribeSync(smacknats.SubjectSearchEmbedded)
+	if err != nil {
+		slog.Warn("embedding subscription failed, falling back to text search", "error", err)
+		return s.textSearch(ctx, req)
+	}
+	defer sub.Unsubscribe()
+
+	// Step 2: Publish embed request (subscription is already active)
 	embedPayload, _ := json.Marshal(map[string]string{
 		"query_id": queryID,
 		"text":     req.Query,
@@ -123,8 +135,8 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		return nil, 0, fmt.Errorf("publish embed request: %w", err)
 	}
 
-	// Step 2: Wait for embedding response (with timeout)
-	embedding, err := s.waitForEmbedding(ctx, queryID)
+	// Step 3: Wait for embedding response (with timeout)
+	embedding, err := s.waitForEmbeddingOnSub(ctx, queryID, sub)
 	if err != nil {
 		// Fallback: text-based search if embedding fails
 		slog.Warn("embedding failed, falling back to text search", "error", err)
@@ -140,19 +152,10 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	return results, total, nil
 }
 
-// waitForEmbedding waits for the ML sidecar to return the query embedding.
-func (s *SearchEngine) waitForEmbedding(ctx context.Context, queryID string) ([]float32, error) {
-	// Poll for the response on NATS (simplified: use request-reply pattern or poll)
-	// For MVP, we'll use a synchronous approach with a timeout
+// waitForEmbeddingOnSub waits for the ML sidecar to return the query embedding on an existing subscription.
+func (s *SearchEngine) waitForEmbeddingOnSub(ctx context.Context, queryID string, sub *nats.Subscription) ([]float32, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-
-	// Subscribe to search.embedded for our query_id
-	sub, err := s.NATS.Conn.SubscribeSync(smacknats.SubjectSearchEmbedded)
-	if err != nil {
-		return nil, fmt.Errorf("subscribe to embedded: %w", err)
-	}
-	defer sub.Unsubscribe()
 
 	for {
 		msg, err := sub.NextMsgWithContext(ctx)

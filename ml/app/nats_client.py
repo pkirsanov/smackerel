@@ -83,11 +83,6 @@ class NATSClient:
 
     async def _consume_loop(self, subject: str, sub) -> None:
         """Background loop that fetches and processes messages from a subscription."""
-        from .processor import process_content
-        from .embedder import generate_embedding, generate_artifact_embedding
-        from .youtube import fetch_transcript
-        from .whisper_transcribe import transcribe_voice
-
         llm_provider = os.getenv("LLM_PROVIDER", "")
         llm_model = os.getenv("LLM_MODEL", "")
         llm_api_key = os.getenv("LLM_API_KEY", "")
@@ -144,10 +139,10 @@ class NATSClient:
         self, data: dict, provider: str, model: str, api_key: str, ollama_url: str,
     ) -> dict:
         """Process an artifact through LLM + embedding pipeline."""
-        from .processor import process_content
         from .embedder import generate_artifact_embedding
-        from .youtube import fetch_transcript
+        from .processor import process_content
         from .whisper_transcribe import transcribe_voice
+        from .youtube import fetch_transcript
 
         artifact_id = data["artifact_id"]
         content_type = data.get("content_type", "")
@@ -159,7 +154,6 @@ class NATSClient:
 
         # Handle YouTube — fetch transcript
         if content_type == "youtube" and url:
-            from .youtube import fetch_transcript
             video_id = url.split("v=")[-1].split("&")[0] if "v=" in url else url.split("/")[-1]
             transcript_result = await fetch_transcript(video_id)
             if transcript_result.get("success"):
@@ -241,7 +235,6 @@ class NATSClient:
         self, data: dict, provider: str, model: str, api_key: str,
     ) -> dict:
         """Re-rank search candidates using LLM."""
-        from .processor import process_content
         import litellm
 
         query_id = data.get("query_id", "")
@@ -296,7 +289,12 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
             return {
                 "query_id": query_id,
                 "ranked": [
-                    {"artifact_id": c.get("artifact_id", ""), "rank": i + 1, "relevance": "medium", "explanation": "LLM re-ranking unavailable"}
+                    {
+                        "artifact_id": c.get("artifact_id", ""),
+                        "rank": i + 1,
+                        "relevance": "medium",
+                        "explanation": "LLM re-ranking unavailable",
+                    }
                     for i, c in enumerate(candidates[:5])
                 ],
             }
@@ -324,13 +322,20 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
         # Build digest context
         context_parts = []
         if action_items:
-            items_text = "\n".join(f"- {a.get('text', '')} (from {a.get('person', 'unknown')}, waiting {a.get('days_waiting', 0)} days)" for a in action_items)
+            items_text = "\n".join(
+                f"- {a.get('text', '')} (from {a.get('person', 'unknown')}, waiting {a.get('days_waiting', 0)} days)"
+                for a in action_items
+            )
             context_parts.append(f"ACTION ITEMS:\n{items_text}")
         if overnight_artifacts:
-            artifacts_text = "\n".join(f"- {a.get('title', '')} ({a.get('type', '')})" for a in overnight_artifacts)
+            artifacts_text = "\n".join(
+                f"- {a.get('title', '')} ({a.get('type', '')})" for a in overnight_artifacts
+            )
             context_parts.append(f"OVERNIGHT ARTIFACTS:\n{artifacts_text}")
         if hot_topics:
-            topics_text = "\n".join(f"- {t.get('name', '')} ({t.get('captures_this_week', 0)} this week)" for t in hot_topics)
+            topics_text = "\n".join(
+                f"- {t.get('name', '')} ({t.get('captures_this_week', 0)} this week)" for t in hot_topics
+            )
             context_parts.append(f"HOT TOPICS:\n{topics_text}")
 
         prompt = f"""Generate a daily briefing digest. Rules:
