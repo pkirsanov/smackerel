@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Capture: honey dipper scooping — collecting information -->
+  <line x1="6" y1="20" x2="14" y2="6"/>
+  <path d="M13 8 C14.5 6, 17 6.5, 18 8.5 C19 10.5, 18 12.5, 16 13.5"/>
+  <path d="M14 8.5 L17 10"/>
+  <path d="M13.5 10.5 L16.5 12"/>
+  <!-- Drip -->
+  <path d="M7 18 C7 18.5, 6.5 19.5, 7 20.5 C7.5 21.5, 8.5 21.5, 9 20.5"/>
+</svg>
