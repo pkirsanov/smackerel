@@ -33,7 +33,10 @@
 18. [Privacy Architecture](#18-privacy-architecture)
 19. [Phased Implementation Plan](#19-phased-implementation-plan)
 20. [Operational Runbook](#20-operational-runbook)
-21. [Appendix](#21-appendix)
+21. [Competitive Landscape](#21-competitive-landscape)
+22. [Connector Ecosystem & Reuse](#22-connector-ecosystem--reuse)
+23. [Technology Stack Decision](#23-technology-stack-decision)
+24. [Appendix](#24-appendix)
 
 ---
 
@@ -135,50 +138,50 @@ Smackerel is **not** a to-do app, not a note-taking app, not a bookmarking tool,
 ```mermaid
 graph TB
     subgraph "Passive Ingestion Layer"
-        GMAIL[Gmail API]
+        GMAIL[Gmail API - google-api-go]
         YOUTUBE[YouTube Data API]
-        GCAL[Google Calendar API]
+        GCAL[Google Calendar API - google-api-go]
+        OUTLOOK[Outlook/Teams - msgraph-sdk-go]
         GMAPS[Google Maps Timeline]
         BROWSER[Browser History]
-        PODCASTS[Podcast Apps]
-        NOTES[Notes Apps]
-        PHOTOS[Photos Metadata]
+        PODCASTS[Podcast RSS - gofeed]
+        NOTES[Notion - notionapi / Obsidian - filesystem]
     end
 
     subgraph "Active Capture Layer"
         SHARE[Mobile Share Sheet]
         BEXT[Browser Extension]
-        MSG[Message Channels]
-        FWD[Email Forward]
+        TG_CAP[Telegram Bot - telegram-bot-api]
+        SLACK_CAP[Slack Bot - slack-go]
+        DISC_CAP[Discord Bot - discordgo]
+        FWD[Email Forward - go-imap]
         VOICE[Voice Input]
-        CLIP[Clipboard Monitor]
     end
 
-    subgraph "OpenClaw Gateway"
-        GW[Gateway Control Plane]
-        CRON[Cron Scheduler]
-        HOOKS[Webhooks + Pub/Sub]
-        SESSIONS[Agent Sessions]
+    subgraph "smackerel-core — Go"
+        API[HTTP API - Chi/Gin]
+        CONNECTORS[Connector Plugins]
+        SCHEDULER[Cron Scheduler]
+        EXTRACT[Content Extraction - go-readability]
+        KGRAPH[Knowledge Graph Engine]
+        LIFECYCLE[Topic Lifecycle + Momentum]
+        DIGEST_GEN[Digest Assembly]
+        SYNTH[Synthesis Orchestration]
+        NATS_PUB[NATS Publisher]
     end
 
-    subgraph "Processing Pipeline"
-        INGEST[Ingestion Skill]
-        EXTRACT[Extraction Skill]
-        ENRICH[Enrichment Skill]
-        LINK[Linking Skill]
+    subgraph "smackerel-ml — Python Sidecar"
+        LLM[LLM Gateway - litellm]
+        EMBED[Embedding - sentence-transformers]
+        YT_TRANS[YouTube Transcripts]
+        TRAF[Article Fallback - trafilatura]
+        NATS_SUB[NATS Subscriber]
     end
 
-    subgraph "Intelligence Layer"
-        LLM[LLM - Claude / GPT / Local]
-        EMBED[Embedding Model]
-        SYNTH[Synthesis Engine]
-    end
-
-    subgraph "Knowledge Store"
-        SQLITE[(SQLite - Structured Data)]
-        VECTOR[(Vector DB - Embeddings)]
-        FILES[Workspace Files]
-        GRAPH[(Knowledge Graph)]
+    subgraph "Data Layer"
+        PG[(PostgreSQL + pgvector)]
+        NATS_BUS[NATS JetStream]
+        OLLAMA[Ollama - Local LLM]
     end
 
     subgraph "Surfacing Layer"
@@ -186,108 +189,96 @@ graph TB
         WEEKLY[Weekly Synthesis]
         ALERTS[Contextual Alerts]
         SEARCH[Semantic Search]
-        CANVAS[Visual Canvas]
+        WEB_UI[Web UI]
     end
 
     subgraph "User Channels"
-        WA[WhatsApp]
         TG[Telegram]
         SLACK[Slack]
         DISC[Discord]
         WEB[WebChat]
         VOICE_OUT[Voice / Talk Mode]
-        IOS[iOS App]
-        ANDROID[Android App]
     end
 
-    GMAIL --> HOOKS
-    YOUTUBE --> CRON
-    GCAL --> CRON
-    GMAPS --> CRON
-    BROWSER --> CRON
-    PODCASTS --> CRON
-    NOTES --> CRON
-    PHOTOS --> CRON
+    GMAIL --> CONNECTORS
+    YOUTUBE --> CONNECTORS
+    GCAL --> CONNECTORS
+    OUTLOOK --> CONNECTORS
+    GMAPS --> CONNECTORS
+    BROWSER --> CONNECTORS
+    PODCASTS --> CONNECTORS
+    NOTES --> CONNECTORS
 
-    SHARE --> MSG
-    BEXT --> HOOKS
-    MSG --> GW
-    FWD --> HOOKS
-    VOICE --> GW
-    CLIP --> GW
+    SHARE --> API
+    BEXT --> API
+    TG_CAP --> API
+    SLACK_CAP --> API
+    DISC_CAP --> API
+    FWD --> CONNECTORS
+    VOICE --> API
 
-    GW --> SESSIONS
-    CRON --> SESSIONS
-    HOOKS --> SESSIONS
+    SCHEDULER --> CONNECTORS
+    CONNECTORS --> EXTRACT
+    EXTRACT --> NATS_PUB
+    NATS_PUB --> NATS_BUS
+    NATS_BUS --> NATS_SUB
+    NATS_SUB --> LLM
+    NATS_SUB --> EMBED
+    NATS_SUB --> YT_TRANS
+    NATS_SUB --> TRAF
+    LLM --> OLLAMA
 
-    SESSIONS --> INGEST
-    INGEST --> EXTRACT
-    EXTRACT --> LLM
-    EXTRACT --> ENRICH
-    ENRICH --> EMBED
-    ENRICH --> LINK
+    NATS_SUB --> NATS_BUS
+    NATS_BUS --> KGRAPH
+    KGRAPH --> PG
+    LIFECYCLE --> PG
+    SYNTH --> PG
 
-    LINK --> SQLITE
-    LINK --> VECTOR
-    LINK --> FILES
-    LINK --> GRAPH
+    KGRAPH --> DIGEST_GEN
+    DIGEST_GEN --> DIGEST
+    DIGEST_GEN --> WEEKLY
+    SYNTH --> WEEKLY
+    LIFECYCLE --> ALERTS
+    API --> SEARCH
 
-    SYNTH --> LLM
-    SYNTH --> GRAPH
-    SYNTH --> VECTOR
-
-    GRAPH --> DIGEST
-    GRAPH --> WEEKLY
-    GRAPH --> ALERTS
-    VECTOR --> SEARCH
-    GRAPH --> CANVAS
-
-    DIGEST --> WA
     DIGEST --> TG
     DIGEST --> SLACK
-    WEEKLY --> WA
-    ALERTS --> WA
+    WEEKLY --> TG
+    ALERTS --> TG
     SEARCH --> WEB
-    SEARCH --> DISC
-    CANVAS --> IOS
+    SEARCH --> WEB_UI
 ```
 
 ### 3.2 Layer Separation
 
 ```mermaid
 graph LR
-    subgraph "Channels (Swappable via OpenClaw)"
-        A1[WhatsApp]
-        A2[Telegram]
-        A3[Slack]
-        A4[Discord]
-        A5[Signal]
-        A6[iMessage]
-        A7[WebChat]
-        A8[Voice]
+    subgraph "Channels (Go SDKs)"
+        A1[Telegram - go-telegram-bot-api]
+        A2[Slack - slack-go]
+        A3[Discord - discordgo]
+        A4[WebChat]
+        A5[Voice]
     end
 
-    subgraph "Runtime (OpenClaw)"
-        B1[Gateway]
-        B2[Skills]
-        B3[Cron]
-        B4[Webhooks]
-        B5[Browser]
-        B6[Nodes]
+    subgraph "Core Runtime (Go)"
+        B1[HTTP API - Chi/Gin]
+        B2[Connectors]
+        B3[Cron Scheduler]
+        B4[Knowledge Graph Engine]
     end
 
-    subgraph "Intelligence (Swappable)"
-        C1[Claude]
-        C2[GPT]
-        C3[Gemini]
-        C4[Local LLM / Ollama]
+    subgraph "ML Sidecar (Python) via NATS"
+        C1[Claude - litellm]
+        C2[GPT - litellm]
+        C3[Gemini - litellm]
+        C4[Ollama - local]
+        C5[Embeddings - sentence-transformers]
     end
 
-    subgraph "Storage (Swappable)"
-        D1[SQLite + LanceDB]
-        D2[Postgres + pgvector]
-        D3[Notion Sync]
-        D4[Obsidian Vault]
+    subgraph "Storage"
+        D1[PostgreSQL + pgvector]
+        D2[NATS JetStream]
     end
 
     A1 --- B1
@@ -305,27 +296,28 @@ graph LR
 ```mermaid
 sequenceDiagram
     participant SRC as Source System
-    participant CRON as OpenClaw Cron
-    participant SKILL as Ingestion Skill
-    participant LLM as LLM
-    participant EMBED as Embedding Model
-    participant STORE as Knowledge Store
-    participant GRAPH as Knowledge Graph
+    participant CORE as smackerel-core (Go)
+    participant NATS as NATS JetStream
+    participant ML as smackerel-ml (Python)
+    participant PG as PostgreSQL + pgvector
 
-    CRON->>SRC: Poll for new data (API call)
-    SRC->>SKILL: Raw data + source qualifiers
-    SKILL->>SKILL: Dedup check (hash / ID)
+    CORE->>SRC: Poll for new data (Go connector, API call)
+    SRC->>CORE: Raw data + source qualifiers
+    CORE->>CORE: Dedup check (hash / ID)
     
     alt New artifact
-        SKILL->>LLM: Process prompt (extract, summarize, classify)
-        LLM->>SKILL: Structured artifact JSON
-        SKILL->>EMBED: Generate embedding (summary + content)
-        EMBED->>SKILL: Vector embedding
-        SKILL->>STORE: Store artifact + embedding
-        SKILL->>GRAPH: Find & create connections
-        GRAPH->>GRAPH: Update topic scores
+        CORE->>CORE: Extract content (go-readability)
+        CORE->>NATS: Publish artifact for ML processing
+        NATS->>ML: Receive artifact
+        ML->>ML: LLM process (litellm → Claude/GPT/Ollama)
+        ML->>ML: Generate embedding (sentence-transformers)
+        ML->>NATS: Return structured JSON + vector
+        NATS->>CORE: Receive processed result
+        CORE->>PG: Store artifact + embedding (pgvector)
+        CORE->>PG: Find & create knowledge graph connections
+        CORE->>PG: Update topic momentum scores
     else Already ingested
-        SKILL->>SKILL: Skip (log only if metadata changed)
+        CORE->>CORE: Skip (log only if metadata changed)
     end
 ```
 
@@ -334,31 +326,36 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant CH as Channel (WhatsApp/Telegram/etc.)
-    participant GW as OpenClaw Gateway
-    participant SKILL as Capture Skill
-    participant LLM as LLM
-    participant STORE as Knowledge Store
+    participant CH as Channel (Telegram/Slack/Discord)
+    participant CORE as smackerel-core (Go)
+    participant NATS as NATS JetStream
+    participant ML as smackerel-ml (Python)
+    participant PG as PostgreSQL + pgvector
 
     U->>CH: Share URL / paste text / voice note
-    CH->>GW: Inbound message
-    GW->>SKILL: Route to capture skill
+    CH->>CORE: Inbound message (via Go SDK)
     
     alt URL detected
-        SKILL->>SKILL: Fetch & extract content
-        SKILL->>LLM: Process (summarize, extract, classify)
-        LLM->>SKILL: Structured artifact
+        CORE->>CORE: Fetch & extract content (go-readability)
+        CORE->>NATS: Publish for ML processing
+        NATS->>ML: Process (summarize, extract, classify via litellm)
+        ML->>NATS: Structured artifact + embedding
+        NATS->>CORE: Receive result
     else Plain text
-        SKILL->>LLM: Process (interpret, classify, extract)
-        LLM->>SKILL: Structured artifact
+        CORE->>NATS: Publish for ML processing
+        NATS->>ML: Process (interpret, classify, extract)
+        ML->>NATS: Structured artifact + embedding
+        NATS->>CORE: Receive result
     else Voice note
-        SKILL->>SKILL: Transcribe
-        SKILL->>LLM: Process transcript
-        LLM->>SKILL: Structured artifact
+        CORE->>NATS: Publish for transcription
+        NATS->>ML: Transcribe (Whisper via Ollama)
+        ML->>ML: Process transcript via litellm
+        ML->>NATS: Structured artifact + embedding
+        NATS->>CORE: Receive result
     end
     
-    SKILL->>STORE: Store + embed + link
-    SKILL->>CH: Brief confirmation (optional, configurable)
+    CORE->>PG: Store + embed + link
+    CORE->>CH: Brief confirmation (optional, configurable)
 ```
 
 ### 3.5 Data Flow — Semantic Search
@@ -367,25 +364,26 @@ sequenceDiagram
 sequenceDiagram
     participant U as User
     participant CH as Channel
-    participant GW as OpenClaw Gateway
-    participant SEARCH as Search Skill
-    participant EMBED as Embedding Model
-    participant VECTOR as Vector DB
-    participant GRAPH as Knowledge Graph
-    participant LLM as LLM
+    participant CORE as smackerel-core (Go)
+    participant NATS as NATS JetStream
+    participant ML as smackerel-ml (Python)
+    participant PG as PostgreSQL + pgvector
 
     U->>CH: "that pricing video from the guy with the accent"
-    CH->>GW: Inbound query
-    GW->>SEARCH: Route to search skill
-    SEARCH->>EMBED: Embed query
-    EMBED->>SEARCH: Query vector
-    SEARCH->>VECTOR: Semantic similarity search (top 20)
-    VECTOR->>SEARCH: Candidate artifacts
-    SEARCH->>GRAPH: Expand connections for candidates
-    GRAPH->>SEARCH: Related artifacts + context
-    SEARCH->>LLM: Re-rank candidates against query + user context
-    LLM->>SEARCH: Ranked results with relevance explanation
-    SEARCH->>CH: Top result(s) with summary + source link
+    CH->>CORE: Inbound query (via Go SDK)
+    CORE->>NATS: Publish query for embedding
+    NATS->>ML: Embed query (sentence-transformers)
+    ML->>NATS: Query vector
+    NATS->>CORE: Receive query vector
+    CORE->>PG: Semantic similarity search via pgvector (top 20)
+    PG->>CORE: Candidate artifacts
+    CORE->>PG: Expand knowledge graph connections for candidates
+    PG->>CORE: Related artifacts + context
+    CORE->>NATS: Publish candidates for LLM re-ranking
+    NATS->>ML: Re-rank candidates against query + user context (litellm)
+    ML->>NATS: Ranked results with relevance explanation
+    NATS->>CORE: Receive ranked results
+    CORE->>CH: Top result(s) with summary + source link
 ```
 
 ---
@@ -1990,39 +1988,310 @@ After a lapse of any duration:
 
 ---
 
-## 21. Appendix
+## 21. Competitive Landscape
 
-### A. Technology Stack
+### 21.1 Direct Competitors
+
+| Product | Model | Strengths | Weaknesses |
+|---------|-------|-----------|------------|
+| **Fabric.so** | Cloud SaaS | Self-organizing AI Memory Engine, auto-tagging, multi-format (PDF/video/audio), MCP integration, Chrome extension, iOS/Android apps, team collaboration, AES-256 encryption | Cloud-only (no self-hosting), no passive email/calendar ingestion, requires manual capture, no daily digest or cross-domain synthesis |
+| **Mem.ai** | Cloud SaaS | Voice notes auto-organized, meeting transcription, "Heads Up" related context surfacing, semantic search, Chrome extension, SOC 2 Type II | Cloud-only, no passive ingestion, no knowledge graph visualization, no location intelligence, no synthesis engine |
+| **Recall (getrecall.ai)** | Cloud + local browsing | Summarize any content (YouTube/podcasts/PDFs/Google Docs), knowledge graph, spaced repetition, augmented browsing (local-first), 500K+ users | No passive email/calendar ingestion, no synthesis engine, no daily digest, no location/travel intelligence, cloud storage for knowledge base |
+| **Khoj** | Open-source, self-hostable | Open-source (AGPL-3.0), self-hostable via Docker, AI second brain, agents, scheduled automations, works with docs, 33.9k GitHub stars, Python + pgvector | Narrower scope (docs + web search), no passive email/YouTube ingestion layer, no knowledge graph with topic lifecycle, no multi-channel surfacing, no synthesis engine |
+| **Raindrop.io** | Cloud SaaS | Excellent bookmark management, full-text search, web archive, clean UI, open-source clients, API | Bookmarks only — no email, video transcripts, synthesis, knowledge graph, AI processing, or passive ingestion |
+| **Limitless (ex-Rewind)** | Cloud + hardware pendant | Ambient capture via wearable pendant, meeting transcription, AI-powered recall | Acquired by Meta (2025), sunsetting non-pendant features, no longer selling to new customers, privacy concerns under Meta ownership |
+
+### 21.2 Indirect Competitors
+
+| Product | Overlap | Smackerel Advantage |
+|---------|---------|---------------------|
+| **Obsidian** | Notes + knowledge graph | Smackerel is passive-first; Obsidian requires manual note-taking and organization |
+| **Notion** | Workspace + knowledge management | Smackerel doesn't require taxonomy at capture time; Notion demands structure upfront |
+| **Readwise/Reader** | Article + highlight management | Smackerel covers all content types and adds synthesis; Readwise is reading-only |
+| **Google Keep / Apple Notes** | Quick capture | No AI processing, no connections, no synthesis, no passive ingestion |
+
+### 21.3 Competitive Differentiation Matrix
+
+| Capability | Smackerel | Fabric | Mem | Recall | Khoj | Obsidian |
+|-----------|-----------|--------|-----|--------|------|----------|
+| Passive email ingestion | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Passive YouTube ingestion | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Passive calendar ingestion | ✅ | ❌ | Partial | ❌ | ❌ | ❌ |
+| Active capture (any channel) | ✅ | ✅ | ✅ | ✅ | ✅ | Manual |
+| AI processing (summary/entities) | ✅ | ✅ | ✅ | ✅ | ✅ | Plugin |
+| Knowledge graph | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ (manual) |
+| Topic lifecycle (hot/cooling/dormant) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Cross-domain synthesis | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Daily/weekly digest | ✅ | Recap | ❌ | ❌ | ❌ | ❌ |
+| Pre-meeting briefs | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Self-hostable (Docker) | ✅ | ❌ | ❌ | ❌ | ✅ | Local files |
+| Local-first / own your data | ✅ | ❌ | ❌ | Partial | ✅ | ✅ |
+| Compiled / high-performance | ✅ (Go) | ❌ | ❌ | ❌ | ❌ (Python) | ❌ |
+| Semantic search | ✅ | ✅ | ✅ | ✅ | ✅ | Plugin |
+| Location/travel intelligence | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Multi-channel delivery | ✅ | Web/mobile | Web/mobile | Web/ext | Web | Desktop |
+| Spaced repetition | ❌ (future) | ❌ | ❌ | ✅ | ❌ | Plugin |
+
+### 21.4 Unique Value Proposition
+
+**No competitor combines all three:**
+
+1. **Passive-first ingestion** — system observes email, YouTube, calendar without user doing anything
+2. **Cross-domain synthesis** — finds connections across different sources that users would never see manually
+3. **Self-hosted, compiled, high-performance** — your data never leaves your machine, runs in Docker on modest hardware, Go core handles thousands of artifacts per second
+
+This is Smackerel's moat. Every competitor is either cloud-only, manual-capture-only, Python-slow, or doesn't synthesize across domains.
+
+---
+
+## 22. Connector Ecosystem & Reuse
+
+### 22.1 Design Principle
+
+All connectors are built from **proven, well-maintained open-source libraries** with strong community support. No custom protocol implementations. Go libraries for all I/O-bound connectors; Python only where no Go alternative exists (YouTube transcripts, ML inference).
+
+### 22.2 Email Connectors
+
+| Source | Library | Language | License | Stars/Maturity | Notes |
+|--------|---------|----------|---------|----------------|-------|
+| Gmail | `google.golang.org/api/gmail/v1` | Go | Apache 2.0 | Official Google SDK | OAuth2, label filtering, Pub/Sub push support |
+| Outlook / O365 | `github.com/microsoftgraph/msgraph-sdk-go` | Go | MIT | Official Microsoft SDK | Covers mail + calendar + Teams in one SDK |
+| Generic IMAP | `github.com/emersion/go-imap` (v2) | Go | MIT | 2.1k stars, active | Works with Fastmail, ProtonMail Bridge, self-hosted |
+
+### 22.3 Calendar Connectors
+
+| Source | Library | Language | License | Stars/Maturity | Notes |
+|--------|---------|----------|---------|----------------|-------|
+| Google Calendar | `google.golang.org/api/calendar/v3` | Go | Apache 2.0 | Official Google SDK | Same SDK as Gmail, different service |
+| Outlook Calendar | `msgraph-sdk-go` (same as above) | Go | MIT | Official Microsoft SDK | Calendar endpoints via Graph API |
+| CalDAV (Nextcloud, iCloud, self-hosted) | `github.com/emersion/go-webdav` | Go | MIT | Active, same author as go-imap | RFC4791-compliant, covers any CalDAV server |
+
+### 22.4 Chat & Messaging Connectors
+
+| Source | Library | Language | License | Stars/Maturity | Notes |
+|--------|---------|----------|---------|----------------|-------|
+| Slack | `github.com/slack-go/slack` | Go | MIT | 5k stars, very active | Web API, Socket Mode, Events API |
+| Microsoft Teams | `msgraph-sdk-go` (same SDK) | Go | MIT | Official Microsoft SDK | Teams messages via Graph API, no separate lib |
+| Telegram | `github.com/go-telegram-bot-api/telegram-bot-api` | Go | MIT | 6k stars, active | Async, doubles as capture + delivery bot |
+| Discord | `github.com/bwmarrin/discordgo` | Go | BSD-3 | 5k stars, active | Read channels, threads, attachments |
+
+### 22.5 Notes & Knowledge Source Connectors
+
+| Source | Library | Language | License | Stars/Maturity | Notes |
+|--------|---------|----------|---------|----------------|-------|
+| Notion | `github.com/jomei/notionapi` | Go | MIT | 500+ stars | Full Notion API coverage |
+| Obsidian | Filesystem read (Go `os` package) | Go | N/A | Native | Mount vault as Docker volume, parse `.md` files. Obsidian vaults are just Markdown on disk. |
+| Apple Notes | ❌ Not viable | — | — | — | No public API. Locked to macOS SQLite DB. Recommend users export to Obsidian or Notion. |
+
+### 22.6 Content Extraction
+
+| Source | Library | Language | License | Stars/Maturity | Notes |
+|--------|---------|----------|---------|----------------|-------|
+| Web articles | `github.com/go-shiori/go-readability` | Go | MIT | 200+ stars | Port of Mozilla's Readability.js. Extracts main content from any web page. |
+| Web articles (fallback) | `trafilatura` | Python (ML sidecar) | Apache 2.0 | Best-in-class, used by HuggingFace/IBM/Microsoft Research | Fallback for pages where go-readability struggles |
+| YouTube transcripts | `youtube-transcript-api` | Python (ML sidecar) | MIT | No mature Go alternative exists | Fetches auto-generated + manual transcripts without browser |
+| RSS / Podcasts | `github.com/mmcdole/gofeed` | Go | MIT | 2.5k stars | Universal RSS/Atom/JSON Feed parser. Pair with Whisper for audio. |
+| PDF text | `github.com/ledongthuc/pdf` or `pdfcpu` | Go | MIT | Active | Extract text from PDFs natively in Go |
+
+### 22.7 Connector Framework Assessment
+
+We evaluated four connector frameworks for potential reuse:
+
+| Framework | Stars | License | Verdict |
+|-----------|-------|---------|---------|
+| **Airbyte** (600+ connectors) | 21k | Elastic License v2 | ❌ **Skip.** Not truly open source (Elastic License). Heavyweight — full platform with UI, metadata DB, scheduler. Overkill for single-user system. |
+| **Meltano / Singer** (600+ taps) | 2.4k | MIT | ⚠️ **Possible.** Singer taps are standalone Python packages (`pip install`). Could import specific taps without running full platform. But adds Python dependency per connector. |
+| **Nango** (700+ APIs) | 7k | Elastic License | ❌ **Skip.** Not truly open source. TypeScript-native, not Python or Go. Designed for SaaS product integrations, not personal ingestion. |
+| **n8n** (400+ integrations) | 183k | Sustainable Use License | ❌ **Skip.** Not truly open source (Sustainable Use License). TypeScript. Could be complementary orchestrator but adds operational complexity. |
+
+**Decision:** Use individual Go/Python libraries directly. The Go ecosystem has official SDKs from Google, Microsoft, and community libraries for every source we need. No framework dependency required.
+
+### 22.8 Reference: Khoj Architecture
+
+**Khoj** (33.9k GitHub stars, AGPL-3.0) is the closest existing open-source project. Key architecture observations:
+
+- Python backend (50.7% of codebase) with Django
+- Uses PostgreSQL + pgvector for structured data + vector search
+- Ingests: Markdown, PDF, Notion, Org-mode, Word docs
+- Semantic search + LLM chat across ingested content
+- Obsidian plugin for bidirectional sync
+- Self-hostable via Docker Compose
+
+**Smackerel differentiates from Khoj by:**
+- Passive email/calendar/YouTube ingestion (Khoj doesn't ingest these)
+- Cross-domain synthesis engine (Khoj doesn't find connections across sources)
+- Topic lifecycle with momentum scoring (Khoj doesn't model knowledge evolution)
+- Go core for high-performance compiled execution (Khoj is Python/Django)
+- Multi-channel delivery — Telegram, Slack, Discord, not just web UI
+
+---
+
+## 23. Technology Stack Decision
+
+### 23.1 Design Constraints
+
+All technology choices must satisfy:
+
+1. **Fully open source** — Apache 2.0, MIT, BSD, or PostgreSQL License only. No Elastic License, SSPL, or "source available" projects.
+2. **Strong community** — active development, responsive maintainers, >1k GitHub stars or official vendor SDK
+3. **Proven at scale** — used in production by large organizations
+4. **Compiled / high-performance** — Go or Rust for core services; Python only where no compiled alternative exists (ML inference, YouTube transcripts)
+
+### 23.2 Core Language: Go
+
+| Factor | Go |
+|--------|-----|
+| Performance | 10-50x faster than Python, compiled to single binary |
+| Concurrency | Goroutines — built for I/O-heavy services (polling APIs, processing pipelines) |
+| Ecosystem | Docker, Kubernetes, Prometheus, Traefik, NATS, Ollama — all Go |
+| Community | Massive, Google-backed, 20+ years of production use |
+| Deployment | Single static binary, tiny Docker images (~20 MB) |
+| LLM/ML gap | Thin — compensated by Python ML sidecar over NATS |
+
+### 23.3 Full Technology Stack
+
+| Layer | Technology | Language | License | Stars / Scale Proof |
+|-------|-----------|----------|---------|---------------------|
+| **Core service** | Custom (Gin or Chi router) | Go | MIT | Go runs Docker, K8s, half the cloud |
+| **ML sidecar** | Custom (FastAPI) | Python | MIT | Only for embeddings + LLM calls (~5% of codebase) |
+| **Database** | PostgreSQL + pgvector | C | PostgreSQL License | 40 years proven, billions of rows, pgvector 14k stars |
+| **Message bus** | NATS JetStream | Go | Apache 2.0 | 17k stars. Tesla, Huawei, Ericsson. |
+| **Local LLM** | Ollama | Go | MIT | 120k+ stars. Industry standard for local model serving. |
+| **Cloud LLM** | Claude / GPT / Gemini via litellm | Python (sidecar) | MIT | Unified gateway, model failover |
+| **Local embedding** | all-MiniLM-L6-v2 (sentence-transformers) | Python (sidecar) | Apache 2.0 | 80 MB model, zero API key needed |
+| **Article extraction** | go-readability | Go | MIT | Mozilla Readability port |
+| **RSS / Podcasts** | gofeed | Go | MIT | 2.5k stars |
+| **Transcription** | Whisper (via Ollama or whisper.cpp) | C++ / Go | MIT | OpenAI's model, local execution |
+| **Reverse proxy** | Traefik | Go | MIT | 53k stars, Docker-native |
+| **Observability** | OpenTelemetry | Go SDK | Apache 2.0 | CNCF standard |
+| **Metrics** | Prometheus + Grafana | Go | Apache 2.0 | 60k + 67k stars |
+
+### 23.4 Architecture: Go Monolith + Python ML Sidecar
+
+```
+docker-compose.yml
+├── smackerel-core (Go)            # API + connectors + scheduler + knowledge graph
+│   ├── HTTP API (Chi/Gin)
+│   │   ├── POST /api/capture      # Active capture
+│   │   ├── POST /api/search       # Semantic search
+│   │   ├── GET  /api/digest       # Daily/weekly digest
+│   │   └── GET  /api/health       # Health check
+│   ├── Connector plugins
+│   │   ├── Gmail (google-api-go)
+│   │   ├── Google Calendar (google-api-go)
+│   │   ├── Outlook/Teams (msgraph-sdk-go)
+│   │   ├── Slack (slack-go)
+│   │   ├── Telegram (telegram-bot-api)
+│   │   ├── Discord (discordgo)
+│   │   ├── Notion (notionapi)
+│   │   ├── IMAP generic (go-imap)
+│   │   ├── CalDAV (go-webdav)
+│   │   ├── RSS/Podcasts (gofeed)
+│   │   └── Obsidian (filesystem)
+│   ├── Content extraction (go-readability)
+│   ├── Knowledge graph engine
+│   ├── Topic lifecycle & momentum scoring
+│   ├── Digest assembly
+│   ├── Synthesis orchestration
+│   └── NATS publisher → ML sidecar
+│
+├── smackerel-ml (Python, slim)    # ONLY embedding + LLM inference
+│   ├── sentence-transformers      # Local embedding (all-MiniLM-L6-v2)
+│   ├── litellm                    # Unified LLM gateway (Claude/GPT/Ollama)
+│   ├── youtube-transcript-api     # YouTube transcript fetching
+│   ├── trafilatura                # Fallback article extraction
+│   └── NATS subscriber            # Receives work, returns vectors/completions
+│
+├── postgres (with pgvector)       # Structured data + vector search (single DB)
+├── nats                           # Async message passing between Go ↔ Python
+├── ollama (optional)              # Local LLM serving
+│
+└── volumes
+    └── ./data/
+        ├── postgres/              # PostgreSQL data directory
+        └── ollama/                # Local model weights
+```
+
+### 23.5 Why Not Microservices (Yet)
+
+The monolith + sidecar pattern is chosen for MVP because:
+
+- **Single Go binary** is simpler to deploy, debug, and reason about
+- **NATS** cleanly decouples the Go core from the Python ML sidecar without service mesh complexity
+- **PostgreSQL + pgvector** handles both structured storage and vector search — no separate vector DB container
+- When scale demands it, the Go monolith can be split along connector/search/synthesis boundaries
+
+### 23.6 Production Scale Path
+
+When the MVP outgrows the monolith:
+
+| Trigger | Action |
+|---------|--------|
+| pgvector search >500ms at 10M+ vectors | Add Milvus (Go + C++, Apache 2.0, CNCF, 35k stars) as dedicated vector engine |
+| Connector scheduling needs durability | Add Temporal (Go, MIT, 13k stars, used by Netflix/Snap) for workflow orchestration |
+| Need caching layer | Add Valkey (C, BSD-3, 20k stars, Linux Foundation Redis fork) |
+| Full-text search beyond Postgres | Add Meilisearch (Rust, MIT, 50k stars) for typo-tolerant instant search |
+
+### 23.7 Vector DB Comparison (Decision Record)
+
+| | **pgvector** (chosen) | **Milvus** (scale path) | **Qdrant** | **ChromaDB** |
+|---|---|---|---|---|
+| Language | C (PG extension) | Go + C++ | Rust | Python |
+| License | PostgreSQL (MIT-like) | Apache 2.0 | Apache 2.0 | Apache 2.0 |
+| Stars | 14k | 35k | 30k | 27k |
+| Backing | Supabase, Neon | CNCF, Zilliz | YC-backed | — |
+| Scale proven | Billions (Postgres) | Billions (Shopee, eBay) | ~100M vectors | ~10M vectors |
+| Extra container | ❌ No (PG extension) | ✅ Yes | ✅ Yes | ✅ Yes |
+| Hybrid search | ✅ SQL + vectors | ✅ Native | ✅ Native | ⚠️ Limited |
+
+**Decision:** pgvector for MVP (zero extra container, Postgres handles everything). Milvus as scale-path when >10M vectors (CNCF pedigree, proven at Shopee/eBay/Salesforce scale).
+
+### 23.8 Cost Estimate (Fully Open Source)
+
+| Service | Usage | Monthly Cost |
+|---------|-------|-------------|
+| All infrastructure (Docker self-hosted) | Postgres, NATS, Go core, Python sidecar | $0 |
+| Ollama (local LLM) | All processing + synthesis | $0 |
+| Local embeddings (all-MiniLM-L6-v2) | All embeddings | $0 |
+| Gmail API | Free tier (10,000 queries/day) | $0 |
+| YouTube Data API | Free tier (10,000 units/day) | $0 |
+| Google Calendar API | Free tier | $0 |
+| **Total (fully local)** | | **$0/mo** |
+| **Total (with cloud LLM)** | Claude/GPT API for higher quality | **~$15-30/mo** |
+
+---
+
+## 24. Appendix
+
+### A. Technology Stack (Summary)
 
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| Runtime | OpenClaw | Local-first, multi-channel, skills platform, cron, webhooks, nodes, voice |
-| Primary Intelligence | Claude Opus 4-6 | Best reasoning for synthesis and processing |
-| Fallback Intelligence | GPT-4o / Gemini 2.5 | Model failover via OpenClaw |
-| Local Intelligence | Ollama (Llama 3.3+) | For sensitive content, offline processing |
-| Embedding | OpenAI text-embedding-3-small | Best quality/cost ratio for embeddings |
-| Local Embedding | nomic-embed-text | For fully local operation |
-| Structured Storage | SQLite | Zero-config, local, robust, single-file |
-| Vector Storage | LanceDB | Local, embedded, no server, columnar + vector search |
-| Language | Python (skills) + TypeScript (OpenClaw) | Python for data processing; TypeScript for OpenClaw ecosystem |
-| Content Extraction | Readability + Trafilatura | Article text extraction from URLs |
-| Transcription | YouTube Transcript API + Whisper | Video and voice transcription |
-| OCR | Tesseract | Screenshot and image text extraction |
+| Core Runtime | Go (Chi/Gin) | Compiled, high-performance, single binary, goroutine concurrency |
+| ML Sidecar | Python (FastAPI) | Embedding + LLM inference only, <5% of codebase |
+| Database | PostgreSQL + pgvector | 40-year proven track record, structured + vector in one DB |
+| Message Bus | NATS JetStream | Go-native, Apache 2.0, proven at Tesla/Ericsson scale |
+| Local LLM | Ollama | Go, MIT, 120k+ stars, industry standard |
+| Cloud LLM | Claude / GPT / Gemini via litellm | Unified gateway with model failover |
+| Local Embedding | all-MiniLM-L6-v2 | 80 MB, zero-config, Apache 2.0 |
+| Content Extraction | go-readability | Mozilla Readability port, Go, MIT |
+| RSS / Podcasts | gofeed | Go, MIT, 2.5k stars |
+| YouTube Transcripts | youtube-transcript-api | Python (sidecar), MIT |
+| Article Fallback | trafilatura | Python (sidecar), Apache 2.0 |
+| Transcription | Whisper via Ollama | Local, MIT |
+| Reverse Proxy | Traefik | Go, MIT, 53k stars |
+| Observability | OpenTelemetry + Prometheus + Grafana | CNCF standard |
 
 ### B. Cost Estimate
 
 | Service | Usage | Monthly Cost |
 |---------|-------|-------------|
-| OpenClaw | Self-hosted | $0 |
-| Claude API | ~2,000 processing calls/mo + ~200 search/synthesis | ~$15-30 |
-| OpenAI Embedding API | ~2,000 embeddings/mo | ~$0.50 |
-| Gmail API | Free tier (10,000 queries/day) | $0 |
-| YouTube Data API | Free tier (10,000 units/day) | $0 |
-| Google Calendar API | Free tier | $0 |
-| Whisper API (optional) | ~50 transcriptions/mo | ~$2-5 |
-| **Total** | | **~$18-36/mo** |
-
-With fully local LLM (Ollama): **$0/mo** (hardware cost only)
+| All infrastructure (self-hosted) | Docker Compose | $0 |
+| Ollama (local LLM) | Processing + synthesis | $0 |
+| Local embeddings | sentence-transformers | $0 |
+| Google APIs (Gmail, Calendar, YouTube) | Free tier | $0 |
+| **Total (fully local)** | | **$0/mo** |
+| **Total (with cloud LLM)** | Claude/GPT API optional | **~$15-30/mo** |
 
 ### C. Glossary
 
