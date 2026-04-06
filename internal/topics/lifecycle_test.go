@@ -1,5 +1,4 @@
 package topics
-package topics
 
 import (
 	"testing"

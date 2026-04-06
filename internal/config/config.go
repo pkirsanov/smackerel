@@ -65,6 +65,8 @@ func getEnvDefault(key, fallback string) string {
 
 // requiredVars returns the list of required environment variable names
 // and their corresponding values from the config.
+// requiredVars returns the list of required environment variable names
+// and their corresponding values from the config.
 func (c *Config) requiredVars() []struct {
 	Name  string
 	Value string
@@ -77,7 +79,6 @@ func (c *Config) requiredVars() []struct {
 		{"NATS_URL", c.NATSURL},
 		{"LLM_PROVIDER", c.LLMProvider},
 		{"LLM_MODEL", c.LLMModel},
-		{"LLM_API_KEY", c.LLMAPIKey},
 		{"SMACKEREL_AUTH_TOKEN", c.AuthToken},
 	}
 }
@@ -90,6 +91,10 @@ func (c *Config) Validate() error {
 		if v.Value == "" {
 			missing = append(missing, v.Name)
 		}
+	}
+	// LLM_API_KEY is required unless using Ollama
+	if !strings.EqualFold(c.LLMProvider, "ollama") && c.LLMAPIKey == "" {
+		missing = append(missing, "LLM_API_KEY")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
@@ -50,6 +49,8 @@ func TestValidate_MissingAllRequired(t *testing.T) {
 	for _, key := range []string{
 		"DATABASE_URL", "NATS_URL", "LLM_PROVIDER",
 		"LLM_MODEL", "LLM_API_KEY", "SMACKEREL_AUTH_TOKEN",
+		"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL",
+		"DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL",
 	} {
 		t.Setenv(key, "")
 	}
@@ -69,9 +70,9 @@ func TestValidate_MissingAllRequired(t *testing.T) {
 
 func TestValidate_OptionalDefaults(t *testing.T) {
 	setRequiredEnv(t)
-	// Do not set any optional vars
+	// Unset optional vars — they should use defaults
 	for _, key := range []string{"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT"} {
-		os.Unsetenv(key)
+		t.Setenv(key, "")
 	}
 	cfg, err := Load()
 	if err != nil {
@@ -101,7 +102,7 @@ func TestValidate_TelegramChatIDs(t *testing.T) {
 }
 
 func TestValidate_NoHiddenDefaults_Required(t *testing.T) {
-	// Ensure required vars have no hidden defaults when env is empty.
+	// Ensure truly required vars have no hidden defaults when env is empty.
 	for _, key := range []string{
 		"DATABASE_URL", "NATS_URL", "LLM_PROVIDER",
 		"LLM_MODEL", "LLM_API_KEY", "SMACKEREL_AUTH_TOKEN",
