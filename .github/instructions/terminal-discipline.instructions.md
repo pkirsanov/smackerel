@@ -4,73 +4,51 @@ applyTo: "**"
 
 # Terminal Discipline Policy (NON-NEGOTIABLE)
 
-## 1. No Piping/Redirecting Output Into Files (ABSOLUTE)
+## 1. No Piping or Redirecting Output Into Files
 
-**FORBIDDEN:** Using shell pipes or redirects to write files.
+Use IDE file-editing tools for file writes. Do not use shell redirection or pipe output into files.
 
-```bash
-# ❌ FORBIDDEN
-echo "content" > /path/to/file.txt
-cat source.txt > dest.txt
-command | tee output.log
-command > output.txt 2>&1
-```
+## 2. No Truncating Command Output
 
-**REQUIRED:** Use the dedicated file creation/editing tools provided by the IDE.
+Do not use `head`, `tail`, or filtered command pipelines that hide output lines. Capture full output.
 
----
+## 3. Current Repo State: No Runtime CLI Yet
 
-## 2. No Truncating Command Output (ABSOLUTE)
+Smackerel does not currently have a committed runtime CLI, build pipeline, or service stack in the repository.
 
-**FORBIDDEN:** Filtering, truncating, or limiting command output with pipes.
+### Forbidden
 
-```bash
-# ❌ FORBIDDEN
-command | head -20
-command | tail -50
-command | grep "pattern" | head
-```
+- Inventing `./smackerel.sh` commands.
+- Running ad-hoc build, lint, test, deploy, or service-management commands against source trees that do not exist.
+- Claiming runtime validation for Go, Python, Docker Compose, PostgreSQL, NATS, or Ollama assets that are not committed yet.
 
-**REQUIRED:** Always capture and display the FULL unfiltered output.
+### Required
 
----
-
-## 3. Always Use Repo CLI — No Ad-Hoc Commands (ABSOLUTE)
-
-**FORBIDDEN:** Running build, test, lint, deploy, or service management commands directly.
+Use the committed Bubbles validation commands for current repo work:
 
 ```bash
-# ❌ FORBIDDEN — bypassing repo CLI
-cargo build
-npm test
-go test ./...
-python -m pytest
-docker compose up
+bash .github/bubbles/scripts/cli.sh doctor
+timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate
+bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>
+timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/<feature>
 ```
 
-**REQUIRED:** Use `./smackerel.sh` for ALL build, test, lint, deploy, and service operations.
+Once a real repo CLI is committed, update this instruction file, `.specify/memory/agents.md`, and `.github/copilot-instructions.md` together.
 
-```bash
-# ✅ REQUIRED
-./smackerel.sh build
-./smackerel.sh test
-./smackerel.sh lint
-```
+## 4. Allowed Read-Only Commands
 
-**Exception:** Read-only inspection commands that don't build, test, or modify state are allowed:
-- `ls`, `cat`, `find`, `grep`, `wc` for exploring the filesystem
-- `git log`, `git diff`, `git status` for version control inspection
-- `docker ps`, `docker logs` for observing running containers
-- `curl --max-time 5` for quick health checks (always with timeout)
-
----
+Read-only inspection commands are allowed:
+- `ls`, `cat`, `find`, `grep`, `wc`
+- `git log`, `git diff`, `git status`
+- `docker ps`, `docker logs`
+- `curl --max-time 5` for quick health checks when a runtime actually exists
 
 ## Summary Table
 
-| Category | FORBIDDEN | REQUIRED |
+| Category | Forbidden | Required |
 |----------|-----------|----------|
-| **File writes** | `>`, `>>`, `tee`, heredoc-to-file, pipe-to-file | IDE file tools (create_file, replace_string_in_file) |
-| **Output filtering** | `head`, `tail`, `awk 'NR<=N'`, `sed -n`, pipe-to-grep on commands | Full unfiltered output from every command |
-| **Build/test/lint** | Direct tool invocation | `./smackerel.sh <command>` exclusively |
+| File writes | shell redirection, `tee`, heredoc-to-file | IDE file tools |
+| Output filtering | `head`, `tail`, filtered command pipes | full unfiltered output |
+| Build/test/lint | invented `./smackerel.sh` or ad-hoc runtime commands | committed Bubbles validation commands only, until runtime tooling exists |
 
-**Violations of this policy are blocking issues.**
+Violations of this policy are blocking issues.
