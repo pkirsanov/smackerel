@@ -86,6 +86,12 @@ format_doc_list() {
   local output=""
   local IFS=$'\034'
   local item
+  local glob_disabled='false'
+
+  case $- in
+    *f*) glob_disabled='true' ;;
+  esac
+  set -f
 
   for item in $list_blob; do
     [[ -n "$item" ]] || continue
@@ -99,6 +105,10 @@ format_doc_list() {
     output='—'
   fi
 
+  if [[ "$glob_disabled" == 'false' ]]; then
+    set +f
+  fi
+
   printf '%s' "$output"
 }
 
@@ -107,6 +117,12 @@ format_inline_list() {
   local output=""
   local IFS=$'\034'
   local item
+  local glob_disabled='false'
+
+  case $- in
+    *f*) glob_disabled='true' ;;
+  esac
+  set -f
 
   for item in $list_blob; do
     [[ -n "$item" ]] || continue
@@ -120,6 +136,10 @@ format_inline_list() {
     output='—'
   fi
 
+  if [[ "$glob_disabled" == 'false' ]]; then
+    set +f
+  fi
+
   printf '%s' "$output"
 }
 
@@ -129,6 +149,12 @@ format_issue_list() {
   local IFS=$'\034'
   local item
   local label
+  local glob_disabled='false'
+
+  case $- in
+    *f*) glob_disabled='true' ;;
+  esac
+  set -f
 
   for item in $list_blob; do
     [[ -n "$item" ]] || continue
@@ -141,6 +167,10 @@ format_issue_list() {
 
   if [[ -z "$output" ]]; then
     output='—'
+  fi
+
+  if [[ "$glob_disabled" == 'false' ]]; then
+    set +f
   fi
 
   printf '%s' "$output"

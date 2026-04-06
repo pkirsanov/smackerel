@@ -36,7 +36,7 @@ func (b *Backoff) Next() (time.Duration, bool) {
 	}
 
 	// Add jitter: ±25%
-	jitter := time.Duration(rand.Int63n(int64(delay) / 2)) - time.Duration(int64(delay)/4)
+	jitter := time.Duration(rand.Int63n(int64(delay)/2)) - time.Duration(int64(delay)/4)
 	delay += jitter
 
 	b.attempt++

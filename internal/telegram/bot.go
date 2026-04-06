@@ -25,10 +25,10 @@ type Bot struct {
 
 // Config holds Telegram bot configuration.
 type Config struct {
-	BotToken     string
-	ChatIDs      []string
-	CoreAPIURL   string // e.g., "http://localhost:8080"
-	AuthToken    string
+	BotToken   string
+	ChatIDs    []string
+	CoreAPIURL string // e.g., "http://localhost:8080"
+	AuthToken  string
 }
 
 // NewBot creates and initializes a Telegram bot.

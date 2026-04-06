@@ -78,7 +78,7 @@ generated_at=''
 if bubbles_owns_git_checkout "$REPO_ROOT"; then
   generated_at="$({ git -C "$REPO_ROOT" log -1 --format=%cI; } || true)"
 elif [[ -f "$OUTPUT_PATH" ]]; then
-  generated_at="$(bubbles_json_string_field "$OUTPUT_PATH" generatedAt)"
+  generated_at="$({ bubbles_json_string_field "$OUTPUT_PATH" generatedAt; } 2>/dev/null || true)"
 fi
 [[ -n "$generated_at" ]] || generated_at="$(bubbles_current_timestamp)"
 capability_ledger_version="$({ awk '/^version:/ { print $2; exit }' "$REPO_ROOT/bubbles/capability-ledger.yaml"; } || true)"

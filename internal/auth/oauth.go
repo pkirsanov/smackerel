@@ -37,10 +37,10 @@ type OAuth2Provider interface {
 
 // OAuth2Config holds the configuration for an OAuth2 provider.
 type OAuth2Config struct {
-	ClientID     string
-	ClientSecret string
-	RedirectURL  string
-	AuthEndpoint string
+	ClientID      string
+	ClientSecret  string
+	RedirectURL   string
+	AuthEndpoint  string
 	TokenEndpoint string
 }
 

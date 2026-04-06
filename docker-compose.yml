@@ -1,19 +1,19 @@
 # Smackerel Docker Compose
-# Usage: docker compose up -d
+# Runtime env is generated via ./smackerel.sh config generate
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT}:${POSTGRES_CONTAINER_PORT}"
     environment:
-      POSTGRES_USER: smackerel
-      POSTGRES_PASSWORD: smackerel
-      POSTGRES_DB: smackerel
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U smackerel -d smackerel"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,13 +22,15 @@ services:
       com.smackerel.lifecycle: persistent
 
   nats:
-    image: nats:latest
-    command: ["--jetstream", "--store_dir", "/data"]
+    image: nats:2.10-alpine
+    command: ["--jetstream", "--store_dir", "/data", "--http_port", "${NATS_MONITOR_PORT}"]
     ports:
-      - "4222:4222"
-      - "8222:8222"
+      - "${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
+      - "${NATS_MONITOR_HOST_PORT}:${NATS_MONITOR_PORT}"
+    volumes:
+      - nats-data:/data
     healthcheck:
-      test: ["CMD", "nats-server", "--signal", "ldm"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${NATS_MONITOR_PORT}/healthz"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -42,9 +44,23 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
-    env_file:
-      - .env
+      - "${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NATS_URL: ${NATS_URL}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      SMACKEREL_AUTH_TOKEN: ${SMACKEREL_AUTH_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_IDS: ${TELEGRAM_CHAT_IDS}
+      OLLAMA_URL: ${OLLAMA_URL}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      DIGEST_CRON: ${DIGEST_CRON}
+      LOG_LEVEL: ${LOG_LEVEL}
+      PORT: ${CORE_CONTAINER_PORT}
+      ML_SIDECAR_URL: ${ML_SIDECAR_URL}
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,15 +80,20 @@ services:
     build:
       context: ./ml
       dockerfile: Dockerfile
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
     ports:
-      - "8081:8081"
-    env_file:
-      - .env
+      - "${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+    environment:
+      NATS_URL: ${NATS_URL}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      OLLAMA_URL: ${OLLAMA_URL}
     depends_on:
       nats:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${ML_CONTAINER_PORT}/health')"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -84,11 +105,19 @@ services:
   ollama:
     image: ollama/ollama
     ports:
-      - "11434:11434"
+      - "${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
     volumes:
-      - ./data/ollama:/root/.ollama
+      - ollama-data:/root/.ollama
     profiles:
       - ollama
     labels:
       com.smackerel.component: ollama
       com.smackerel.lifecycle: persistent
+
+volumes:
+  postgres-data:
+    name: ${POSTGRES_VOLUME_NAME}
+  nats-data:
+    name: ${NATS_VOLUME_NAME}
+  ollama-data:
+    name: ${OLLAMA_VOLUME_NAME}

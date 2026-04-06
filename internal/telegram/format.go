@@ -7,14 +7,14 @@ import (
 
 // Text markers used by the Telegram bot. No emoji allowed.
 const (
-	MarkerSuccess     = ". "  // saved/confirmed
-	MarkerUncertain   = "? "  // uncertainty/low confidence
-	MarkerAction      = "! "  // action needed
-	MarkerInfo        = "> "  // information/result
-	MarkerListItem    = "- "  // list item
-	MarkerContinued   = "~ "  // continued/related
-	MarkerHeading     = "# "  // section heading
-	MarkerMention     = "@ "  // person/entity mention
+	MarkerSuccess   = ". " // saved/confirmed
+	MarkerUncertain = "? " // uncertainty/low confidence
+	MarkerAction    = "! " // action needed
+	MarkerInfo      = "> " // information/result
+	MarkerListItem  = "- " // list item
+	MarkerContinued = "~ " // continued/related
+	MarkerHeading   = "# " // section heading
+	MarkerMention   = "@ " // person/entity mention
 )
 
 // AllMarkers returns the complete set of text markers.
@@ -84,15 +84,33 @@ func SanitizeOutput(text string) string {
 // isEmoji checks if a rune is an emoji character.
 func isEmoji(r rune) bool {
 	// Emoji ranges
-	if r >= 0x1F600 && r <= 0x1F9FF { return true } // Emoticons, Supplemental
-	if r >= 0x2600 && r <= 0x26FF { return true }   // Misc symbols
-	if r >= 0x2700 && r <= 0x27BF { return true }   // Dingbats
-	if r >= 0x1F300 && r <= 0x1F5FF { return true }  // Misc symbols & pictographs
-	if r >= 0x1FA00 && r <= 0x1FA6F { return true }  // Chess, extended-A
-	if r >= 0x1FA70 && r <= 0x1FAFF { return true }  // Symbols extended-A
-	if r >= 0xFE00 && r <= 0xFE0F { return true }   // Variation selectors
-	if r == 0x200D { return true }                    // ZWJ
+	if r >= 0x1F600 && r <= 0x1F9FF {
+		return true
+	} // Emoticons, Supplemental
+	if r >= 0x2600 && r <= 0x26FF {
+		return true
+	} // Misc symbols
+	if r >= 0x2700 && r <= 0x27BF {
+		return true
+	} // Dingbats
+	if r >= 0x1F300 && r <= 0x1F5FF {
+		return true
+	} // Misc symbols & pictographs
+	if r >= 0x1FA00 && r <= 0x1FA6F {
+		return true
+	} // Chess, extended-A
+	if r >= 0x1FA70 && r <= 0x1FAFF {
+		return true
+	} // Symbols extended-A
+	if r >= 0xFE00 && r <= 0xFE0F {
+		return true
+	} // Variation selectors
+	if r == 0x200D {
+		return true
+	} // ZWJ
 	// Don't flag standard punctuation and symbols
-	if unicode.IsPrint(r) && r < 0x2000 { return false }
+	if unicode.IsPrint(r) && r < 0x2000 {
+		return false
+	}
 	return false
 }

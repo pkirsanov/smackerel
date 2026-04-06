@@ -1110,6 +1110,47 @@ fi
 echo ""
 
 # =============================================================================
+# CHECK 6A: Planning specialist dispatch for analyze-first modes
+# =============================================================================
+echo "--- Check 6A: Planning Specialist Dispatch ---"
+if [[ -n "$state_workflow_mode" ]]; then
+  planning_required_agents=()
+  case "$state_workflow_mode" in
+    product-to-delivery|improve-existing)
+      planning_required_agents=("bubbles.analyst" "bubbles.design" "bubbles.plan")
+      if [[ -f "$spec_file" ]] && grep -qE '^## UI Wireframes' "$spec_file"; then
+        planning_required_agents+=("bubbles.ux")
+      fi
+      ;;
+  esac
+
+  if [[ ${#planning_required_agents[@]} -gt 0 ]]; then
+    execution_history_agents="$({
+      python3 -c "import json; data=json.load(open('$state_file')); history=data.get('execution', {}).get('executionHistory', data.get('executionHistory', [])); print('\\n'.join(entry.get('agent', '') for entry in history if entry.get('agent')))"
+    } || true)"
+
+    missing_planning_agents=0
+    for planning_agent in "${planning_required_agents[@]}"; do
+      if printf '%s\n' "$execution_history_agents" | grep -qx "$planning_agent"; then
+        pass "Planning specialist '$planning_agent' recorded in executionHistory"
+      else
+        fail "Planning specialist '$planning_agent' missing from executionHistory (workflow may have bypassed required dispatch)"
+        missing_planning_agents=$((missing_planning_agents + 1))
+      fi
+    done
+
+    if [[ "$missing_planning_agents" -gt 0 ]]; then
+      fail "$missing_planning_agents planning specialist dispatch record(s) missing — planning-first workflow compliance not proven"
+    fi
+  else
+    info "No planning-specialist dispatch requirement for mode '$state_workflow_mode'"
+  fi
+else
+  info "No workflow mode recorded; skipping planning-specialist dispatch check"
+fi
+echo ""
+
+# =============================================================================
 # CHECK 6B: Phase-claim provenance — cross-reference completedPhaseClaims
 # against executionHistory agent identity (Gate G022 extension)
 # =============================================================================

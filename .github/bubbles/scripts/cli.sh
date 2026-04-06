@@ -1871,6 +1871,13 @@ cmd_doctor() {
   echo -e "${DIM}Installer payload, trust provenance, and managed-file integrity.${NC}"
   echo ""
 
+  local doctor_agents_dir=''
+  if [[ -d "$REPO_ROOT/agents" ]]; then
+    doctor_agents_dir="$REPO_ROOT/agents"
+  elif [[ -d "$REPO_ROOT/.github/agents" ]]; then
+    doctor_agents_dir="$REPO_ROOT/.github/agents"
+  fi
+
   # Check 1: Core agents
   local agent_count
   agent_count=$(ls "$AGENTS_DIR/bubbles."*.agent.md 2>/dev/null | wc -l)
@@ -1983,6 +1990,15 @@ cmd_doctor() {
     passed=$((passed + 1))
   else
     echo -e "  ${RED}❌${NC} Workflow inventory or documented control-plane surfaces drifted"
+    failed=$((failed + 1))
+  fi
+
+  # Check 9A: Prompt budgets stay within the hard limit
+  if [[ -n "$doctor_agents_dir" ]] && bash "$SCRIPT_DIR/instruction-budget-lint.sh" "$doctor_agents_dir" >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✅${NC} Agent instruction budgets are within the hard limit"
+    passed=$((passed + 1))
+  else
+    echo -e "  ${RED}❌${NC} At least one agent prompt exceeds the hard instruction budget"
     failed=$((failed + 1))
   fi
 
