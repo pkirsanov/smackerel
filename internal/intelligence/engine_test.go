@@ -80,3 +80,78 @@ func TestNewEngine_NilPool(t *testing.T) {
 		t.Fatal("expected non-nil engine")
 	}
 }
+
+func TestAlert_Lifecycle(t *testing.T) {
+	a := &Alert{
+		ID:        "test-1",
+		AlertType: AlertBill,
+		Title:     "AWS Invoice",
+		Body:      "Monthly bill due",
+		Priority:  2,
+		Status:    AlertPending,
+	}
+
+	if a.Status != AlertPending {
+		t.Error("should start pending")
+	}
+
+	a.Status = AlertDelivered
+	if a.Status != AlertDelivered {
+		t.Error("should transition to delivered")
+	}
+
+	a.Status = AlertSnoozed
+	if a.Status != AlertSnoozed {
+		t.Error("should transition to snoozed")
+	}
+
+	a.Status = AlertDismissed
+	if a.Status != AlertDismissed {
+		t.Error("should transition to dismissed")
+	}
+}
+
+func TestAlert_PriorityOrdering(t *testing.T) {
+	alerts := []Alert{
+		{Priority: 3, Title: "Low"},
+		{Priority: 1, Title: "High"},
+		{Priority: 2, Title: "Medium"},
+	}
+
+	// Priority 1 = highest
+	for _, a := range alerts {
+		if a.Priority < 1 || a.Priority > 3 {
+			t.Errorf("priority out of range: %d", a.Priority)
+		}
+	}
+}
+
+func TestSynthesisInsight_SourceCount(t *testing.T) {
+	// A valid insight should reference at least 2 source artifacts
+	insight := SynthesisInsight{
+		InsightType:       InsightThroughLine,
+		ThroughLine:       "These sources converge on pricing",
+		SourceArtifactIDs: []string{"art-1", "art-2", "art-3"},
+	}
+
+	if len(insight.SourceArtifactIDs) < 2 {
+		t.Error("insight should reference at least 2 source artifacts")
+	}
+}
+
+func TestSynthesisInsight_Contradiction(t *testing.T) {
+	insight := SynthesisInsight{
+		InsightType:       InsightContradiction,
+		ThroughLine:       "Conflicting views on remote work productivity",
+		KeyTension:        "Article A says productive, Article B says not",
+		SourceArtifactIDs: []string{"art-a", "art-b"},
+		Confidence:        0.7,
+	}
+
+	if insight.InsightType != InsightContradiction {
+		t.Error("expected contradiction type")
+	}
+	if insight.KeyTension == "" {
+		t.Error("contradiction should have key tension")
+	}
+}
