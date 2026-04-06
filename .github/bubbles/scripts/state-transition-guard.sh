@@ -987,26 +987,29 @@ echo ""
 # =============================================================================
 echo "--- Check 6: Specialist Phase Completion ---"
 state_completed_phases_block="$({
-  certification_phases_block="$({
-    grep -A40 '"certification"' "$state_file" 2>/dev/null \
-      | awk '/"certifiedCompletedPhases"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}'
-  } || true)"
-  execution_phase_claims_block="$({
-    grep -A40 '"execution"' "$state_file" 2>/dev/null \
-      | awk '/"completedPhaseClaims"[[:space:]]*:/ {capture=1} capture {print} capture && /\]/ {exit}'
-  } || true)"
+  python3 - "$state_file" <<'PY'
+import json
+import sys
 
-  if [[ -n "$certification_phases_block" ]]; then
-    echo "$certification_phases_block"
-  elif [[ -n "$execution_phase_claims_block" ]]; then
-    echo "$execution_phase_claims_block"
-  else
-    awk '
-      /"completedPhases"[[:space:]]*:/ {capture=1}
-      capture {print}
-      capture && /\]/ {exit}
-    ' "$state_file"
-  fi
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = json.load(handle)
+
+certification_phases = data.get("certification", {}).get("certifiedCompletedPhases", [])
+execution_phase_claims = data.get("execution", {}).get("completedPhaseClaims", [])
+legacy_phases = data.get("completedPhases", [])
+
+if not isinstance(certification_phases, list):
+    certification_phases = []
+if not isinstance(execution_phase_claims, list):
+    execution_phase_claims = []
+if not isinstance(legacy_phases, list):
+    legacy_phases = []
+
+selected_phases = certification_phases or execution_phase_claims or legacy_phases
+for phase in selected_phases:
+    if isinstance(phase, str):
+        print(f'"{phase}"')
+PY
 } || true)"
 
 if [[ -n "$state_workflow_mode" ]]; then
@@ -1115,6 +1118,7 @@ echo ""
 echo "--- Check 6A: Planning Specialist Dispatch ---"
 if [[ -n "$state_workflow_mode" ]]; then
   planning_required_agents=()
+  spec_file="$feature_dir/spec.md"
   case "$state_workflow_mode" in
     product-to-delivery|improve-existing)
       planning_required_agents=("bubbles.analyst" "bubbles.design" "bubbles.plan")
