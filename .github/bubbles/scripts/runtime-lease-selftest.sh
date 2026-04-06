@@ -51,7 +51,9 @@ EOF
 
 echo "Running runtime lease selftest..."
 
-acquire_one_output="$(BUBBLES_REPO_ROOT="$TEST_ROOT" BUBBLES_SESSION_ID="workflow-session-a" BUBBLES_AGENT_NAME="bubbles.validate" bash "$RUNTIME_SCRIPT" acquire --purpose validation --environment dev --share-mode shared-compatible --fingerprint-input schema:v1 --resource container:test-a)"
+quoted_session_id='workflow-session-"quoted"-a'
+
+acquire_one_output="$(BUBBLES_REPO_ROOT="$TEST_ROOT" BUBBLES_SESSION_ID="$quoted_session_id" BUBBLES_AGENT_NAME="bubbles.validate" bash "$RUNTIME_SCRIPT" acquire --purpose validation --environment dev --share-mode shared-compatible --fingerprint-input schema:v1 --resource container:test-a)"
 lease_one="$(printf '%s\n' "$acquire_one_output" | sed -nE 's/leaseId=([^ ]+).*/\1/p')"
 if [[ -n "$lease_one" ]]; then
   pass "Acquire returns a lease id"
@@ -68,7 +70,7 @@ else
 fi
 
 lookup_shared_output="$(BUBBLES_REPO_ROOT="$TEST_ROOT" bash "$RUNTIME_SCRIPT" lookup --compose-project "$(printf '%s\n' "$acquire_two_output" | sed -nE 's/.*composeProject=([^ ]+).*/\1/p')")"
-if printf '%s\n' "$lookup_shared_output" | grep -q 'attachedSessions=workflow-session-a,workflow-session-b'; then
+if printf '%s\n' "$lookup_shared_output" | grep -Fq "attachedSessions=${quoted_session_id},workflow-session-b"; then
   pass "Lookup reports both attached shared-runtime sessions"
 else
   fail "Lookup should report both attached shared-runtime sessions"
@@ -126,13 +128,13 @@ else
 fi
 
 lookup_after_detach="$(BUBBLES_REPO_ROOT="$TEST_ROOT" bash "$RUNTIME_SCRIPT" lookup --lease-id "$lease_one")"
-if printf '%s\n' "$lookup_after_detach" | grep -q 'status=active' && printf '%s\n' "$lookup_after_detach" | grep -q 'attachedSessions=workflow-session-a'; then
+if printf '%s\n' "$lookup_after_detach" | grep -q 'status=active' && printf '%s\n' "$lookup_after_detach" | grep -Fq "attachedSessions=${quoted_session_id}"; then
   pass "Lease stays active while another shared session remains attached"
 else
   fail "Lease should stay active after detaching one shared session"
 fi
 
-shared_release_output="$(BUBBLES_REPO_ROOT="$TEST_ROOT" bash "$RUNTIME_SCRIPT" release "$lease_one" --session-id workflow-session-a)"
+shared_release_output="$(BUBBLES_REPO_ROOT="$TEST_ROOT" bash "$RUNTIME_SCRIPT" release "$lease_one" --session-id "$quoted_session_id")"
 if printf '%s\n' "$shared_release_output" | grep -q 'Released runtime lease'; then
   pass "Last attached shared session releases the lease"
 else

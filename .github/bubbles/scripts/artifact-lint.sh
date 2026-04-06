@@ -94,6 +94,29 @@ json_first_number() {
     | sed -E 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*([0-9]+)/\1/'
 }
 
+json_nested_string() {
+  local parent_key="$1"
+  local child_key="$2"
+  local file="$3"
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+
+  python3 - "$file" "$parent_key" "$child_key" <<'PY'
+import json
+import sys
+
+file_path, parent_key, child_key = sys.argv[1:4]
+with open(file_path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+parent = data.get(parent_key, {})
+value = parent.get(child_key, "") if isinstance(parent, dict) else ""
+if isinstance(value, str):
+    print(value)
+PY
+}
+
 extract_array_block() {
   local array_key="$1"
   local file="$2"
@@ -348,11 +371,7 @@ if [[ -f "$state_file" ]]; then
       | sed -E 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)"/\1/'
   } || true)"
 
-  state_certification_status="$({
-    grep -A12 '"certification"' "$state_file" 2>/dev/null \
-      | grep -m1 '"status"' \
-      | sed -E 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]+)"/\1/'
-  } || true)"
+  state_certification_status="$(json_nested_string "certification" "status" "$state_file" || true)"
 
   state_workflow_mode="$({
     grep -Eo '"workflowMode"[[:space:]]*:[[:space:]]*"[^"]+"' "$state_file" \
