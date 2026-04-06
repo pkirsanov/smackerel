@@ -205,6 +205,12 @@
 | `typed framework event` | Structured framework log entry for gate outcomes, packet routing, lease changes, and policy provenance instead of narrative-only breadcrumbs. |
 | `action risk class` | Safety label for an operation such as read-only, owned mutation, destructive mutation, external side effect, or runtime teardown. |
 | `repo-readiness` | Advisory repo hygiene check for agent adoption. Useful before deep framework use, but separate from `bubbles.validate` certification. |
+| `adoption profile` | Maturity-tier onboarding posture such as `foundation`, `delivery`, or `assured`. It changes guidance and early guardrail messaging, not certification rigor. |
+| `release manifest` | Upstream trust bundle that states what version shipped, which profiles and interop sources are supported, what surfaces were validated, and which managed files belong to the release. |
+| `install provenance` | The install record that explains where a downstream framework copy came from and whether local-source risk exists before upgrade or doctor guidance is trusted. |
+| `trust preview` | Upgrade dry-run output that compares the current installed provenance and manifest to the target release before any framework-managed files are replaced. |
+| `review-only interop intake` | Project-owned import path that snapshots and normalizes Claude Code, Roo Code, Cursor, or Cline assets without mutating framework-managed Bubbles files. |
+| `supported interop apply` | Safe promotion path that writes only declared project-owned outputs from an interop import and falls back to proposals when a change would touch framework-owned or colliding surfaces. |
 | `objective research pass` | Brownfield workflows split question generation from codebase research so the research context reports current truth instead of solution-shaped opinions. |
 | `current truth` | The short section in `design.md` produced by objective research that summarizes how the code actually works today. |
 | `design brief` | A short top-of-file checkpoint in `design.md` that lets humans steer the design without reviewing the whole document. |
@@ -531,6 +537,10 @@ The super resolves intent and generates commands. Workflow delegates to it autom
 | `/bubbles.super  show me the framework event stream` | `bash bubbles/scripts/cli.sh framework-events --tail 20` |
 | `/bubbles.super  show current workflow run-state` | `bash bubbles/scripts/cli.sh run-state --all` |
 | `/bubbles.super  is this repo agent-ready?` | `bash bubbles/scripts/cli.sh repo-readiness .` with the explicit note that this is advisory and not completion certification |
+| `/bubbles.super  compare the adoption profiles for this repo` | `bash bubbles/scripts/cli.sh profile show` plus the right `repo-readiness` profile example for `foundation`, `delivery`, or `assured` |
+| `/bubbles.super  what exactly will this upgrade replace?` | `bash bubbles/scripts/cli.sh upgrade --dry-run` with trust-preview explanation from release manifest and install provenance |
+| `/bubbles.super  import my Claude Code or Cursor setup without touching framework files` | `bash bubbles/scripts/cli.sh interop import --review-only` and the project-owned intake path |
+| `/bubbles.super  apply only the safe project-owned interop outputs` | `bash bubbles/scripts/cli.sh interop apply --safe` with proposal fallback for collisions |
 | `/bubbles.super  why are my parallel sessions colliding?` | `bubbles runtime doctor` plus the right recovery step |
 | `/bubbles.super  reuse the validation stack if it is compatible` | `bubbles runtime acquire --purpose validation --share-mode shared-compatible --fingerprint-file docker-compose.yml` |
 | `/bubbles.super  turn this problem into the right Bubbles prompts` | A command sequence with brief reasons for each step |

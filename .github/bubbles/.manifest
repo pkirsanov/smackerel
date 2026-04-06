@@ -52,6 +52,7 @@ bubbles/scripts/traceability-guard.sh
 bubbles/scripts/trust-doctor-selftest.sh
 bubbles/scripts/trust-metadata.sh
 bubbles/scripts/value-selection-lint.sh
+bubbles/scripts/workflow-planning-provenance-selftest.sh
 bubbles/scripts/workflow-registry-consistency.sh
 bubbles/scripts/workflow-surface-selftest.sh
 install.sh
