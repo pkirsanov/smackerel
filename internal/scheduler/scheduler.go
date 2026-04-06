@@ -27,9 +27,11 @@ func New(digestGen *digest.Generator, bot *telegram.Bot) *Scheduler {
 }
 
 // Start begins running scheduled tasks.
-func (s *Scheduler) Start(ctx context.Context, cronExpr string) error {
+func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	_, err := s.cron.AddFunc(cronExpr, func() {
 		slog.Info("digest cron triggered")
+		// Create a fresh context per cron invocation to avoid using a cancelled parent
+		ctx := context.Background()
 		digestCtx, err := s.digestGen.Generate(ctx)
 		if err != nil {
 			slog.Error("digest generation failed", "error", err)

@@ -210,10 +210,17 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 		sourceURL = req.VoiceURL
 	}
 
+	// Truncate content_raw to 500KB to prevent database bloat
+	contentRaw := result.Text
+	const maxContentRaw = 500 * 1024
+	if len(contentRaw) > maxContentRaw {
+		contentRaw = contentRaw[:maxContentRaw]
+	}
+
 	_, err := p.DB.Exec(ctx, `
 		INSERT INTO artifacts (id, artifact_type, title, content_raw, content_hash, source_id, source_url, processing_tier, capture_method, user_starred)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	`, id, string(result.ContentType), result.Title, result.Text, result.ContentHash,
+	`, id, string(result.ContentType), result.Title, contentRaw, result.ContentHash,
 		sourceID, sourceURL, tier, captureMethod, req.Starred)
 	if err != nil {
 		return fmt.Errorf("insert artifact: %w", err)

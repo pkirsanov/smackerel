@@ -59,16 +59,21 @@ func NewHandler(pool *pgxpool.Pool, nc *smacknats.Client, startTime time.Time) *
 
 // SearchPage handles GET / — the main search page.
 func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
-	h.Templates.ExecuteTemplate(w, "search.html", map[string]interface{}{
+	if err := h.Templates.ExecuteTemplate(w, "search.html", map[string]interface{}{
 		"Title": "Smackerel",
-	})
+	}); err != nil {
+		slog.Error("template render failed", "template", "search.html", "error", err)
+	}
 }
 
 // SearchResults handles POST /search — HTMX partial for search results.
 func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
 	query := r.FormValue("query")
 	if query == "" {
-		w.Write([]byte(`<div class="empty">Type a query to search your knowledge</div>`))
+		h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
+			"Results": nil,
+			"Empty":   "Type a query to search your knowledge",
+		})
 		return
 	}
 
@@ -84,7 +89,10 @@ func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
 	`, query)
 	if err != nil {
 		slog.Error("web search query failed", "error", err)
-		w.Write([]byte(`<div class="error">Search failed. Try again.</div>`))
+		h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
+			"Results": nil,
+			"Error":   "Search failed. Try again.",
+		})
 		return
 	}
 	defer rows.Close()
@@ -108,7 +116,10 @@ func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(results) == 0 {
-		w.Write([]byte(`<div class="empty">No results found. Try a different query.</div>`))
+		h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
+			"Results": nil,
+			"Empty":   "No results found. Try a different query.",
+		})
 		return
 	}
 

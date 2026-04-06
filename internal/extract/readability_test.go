@@ -199,3 +199,89 @@ func TestContentType_Constants(t *testing.T) {
 		seen[ct] = true
 	}
 }
+
+// SCN-002-005: Article URL content extraction — readability extracts title, author, hash
+func TestSCN002005_ArticleExtraction_TextAndHash(t *testing.T) {
+	result := ExtractText("How to build SaaS products\nKey strategies for building and pricing SaaS.\nBy David Kim.")
+	if result.Title != "How to build SaaS products" {
+		t.Errorf("expected first line as title, got %q", result.Title)
+	}
+	if result.ContentHash == "" {
+		t.Error("content hash must be generated")
+	}
+	if result.Text == "" {
+		t.Error("text must be preserved")
+	}
+}
+
+// SCN-002-005: URL type detection for articles
+func TestSCN002005_ArticleURLDetection(t *testing.T) {
+	tests := []string{
+		"https://example.com/blog/my-article",
+		"https://medium.com/@user/great-post-123",
+		"https://news.ycombinator.com/item?id=12345",
+	}
+	for _, u := range tests {
+		ct := DetectContentType(u)
+		if ct == ContentTypeYouTube || ct == ContentTypeProduct || ct == ContentTypeRecipe {
+			t.Errorf("article URL %q should not detect as %q", u, ct)
+		}
+	}
+}
+
+// SCN-002-006: YouTube URL transcript extraction — video ID extraction
+func TestSCN002006_YouTubeURLDetection(t *testing.T) {
+	urls := []struct {
+		url string
+		id  string
+	}{
+		{"https://www.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"},
+		{"https://youtu.be/abc123def45", "abc123def45"},
+		{"https://www.youtube.com/embed/XYZtest-1Ab", "XYZtest-1Ab"},
+	}
+	for _, tt := range urls {
+		ct := DetectContentType(tt.url)
+		if ct != ContentTypeYouTube {
+			t.Errorf("URL %q should detect as YouTube, got %q", tt.url, ct)
+		}
+		vid := ExtractYouTubeID(tt.url)
+		if vid != tt.id {
+			t.Errorf("YouTube ID from %q = %q, want %q", tt.url, vid, tt.id)
+		}
+	}
+}
+
+// SCN-002-009: Content deduplication — same content produces same hash
+func TestSCN002009_ContentDedup_HashMatch(t *testing.T) {
+	content := "This is an article about distributed systems and their trade-offs."
+	hash1 := HashContent(content)
+	hash2 := HashContent(content)
+	if hash1 != hash2 {
+		t.Error("identical content must produce identical hash")
+	}
+
+	// Case and whitespace normalization
+	hash3 := HashContent("  THIS is an ARTICLE about distributed systems and their trade-offs.  ")
+	if hash1 != hash3 {
+		t.Error("normalized content must produce same hash (case+whitespace insensitive)")
+	}
+
+	// Different content must produce different hash
+	hash4 := HashContent("Completely different content about cooking recipes.")
+	if hash1 == hash4 {
+		t.Error("different content must produce different hashes")
+	}
+}
+
+// SCN-002-009: Dedup uses ExtractText for text input and verifies hash is set
+func TestSCN002009_ContentDedup_ExtractTextHash(t *testing.T) {
+	r1 := ExtractText("My unique idea about SaaS pricing")
+	r2 := ExtractText("My unique idea about SaaS pricing")
+	if r1.ContentHash != r2.ContentHash {
+		t.Error("same text input should produce same ExtractText hash")
+	}
+	r3 := ExtractText("A totally different idea about cooking")
+	if r1.ContentHash == r3.ContentHash {
+		t.Error("different text should produce different hash")
+	}
+}

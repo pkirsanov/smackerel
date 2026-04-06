@@ -34,7 +34,10 @@ async def fetch_transcript(video_id: str) -> dict[str, Any]:
             return {"success": False, "error": "No transcript available"}
 
         segments = transcript.fetch()
-        full_text = " ".join(seg.get("text", seg.get("snippet", "")) if isinstance(seg, dict) else str(seg) for seg in segments)
+        full_text = " ".join(
+            seg.get("text", seg.get("snippet", "")) if isinstance(seg, dict) else str(seg)
+            for seg in segments
+        )
 
         return {
             "success": True,

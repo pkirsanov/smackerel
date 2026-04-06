@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -51,6 +52,8 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CaptureRequest
+	// Limit request body to 1MB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON body")
 		return
@@ -137,7 +140,7 @@ func (d *Dependencies) checkAuth(r *http.Request) bool {
 		return false
 	}
 
-	return parts[1] == d.AuthToken
+	return subtle.ConstantTimeCompare([]byte(parts[1]), []byte(d.AuthToken)) == 1
 }
 
 // writeError writes a standardized error response.
