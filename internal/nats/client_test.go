@@ -66,3 +66,90 @@ func TestStreamConfig_HasRequiredFields(t *testing.T) {
 		}
 	}
 }
+
+func TestSubjectPairs(t *testing.T) {
+	// Every publish subject should have a matching response subject
+	pairs := []struct {
+		request  string
+		response string
+	}{
+		{SubjectArtifactsProcess, SubjectArtifactsProcessed},
+		{SubjectSearchEmbed, SubjectSearchEmbedded},
+		{SubjectSearchRerank, SubjectSearchReranked},
+		{SubjectDigestGenerate, SubjectDigestGenerated},
+	}
+
+	for _, p := range pairs {
+		if p.request == "" || p.response == "" {
+			t.Errorf("subject pair has empty value: %q -> %q", p.request, p.response)
+		}
+		// Response subject should be the request subject + "ed" or "d" suffix pattern
+		if p.request == p.response {
+			t.Errorf("request and response should differ: %q", p.request)
+		}
+	}
+}
+
+func TestSubjectNaming_Convention(t *testing.T) {
+	// All subjects should follow domain.action pattern
+	subjects := []string{
+		SubjectArtifactsProcess, SubjectArtifactsProcessed,
+		SubjectSearchEmbed, SubjectSearchEmbedded,
+		SubjectSearchRerank, SubjectSearchReranked,
+		SubjectDigestGenerate, SubjectDigestGenerated,
+	}
+
+	for _, s := range subjects {
+		dotCount := 0
+		for _, c := range s {
+			if c == '.' {
+				dotCount++
+			}
+		}
+		if dotCount != 1 {
+			t.Errorf("subject %q should have exactly 1 dot separator, got %d", s, dotCount)
+		}
+	}
+}
+
+func TestStreamNames_Unique(t *testing.T) {
+	streams := AllStreams()
+	names := make(map[string]bool)
+	for _, s := range streams {
+		if names[s.Name] {
+			t.Errorf("duplicate stream name: %s", s.Name)
+		}
+		names[s.Name] = true
+	}
+}
+
+func TestStreamSubjects_CoverAllSubjects(t *testing.T) {
+	// Verify that all subject constants are covered by at least one stream's wildcard
+	allSubjects := []string{
+		SubjectArtifactsProcess, SubjectArtifactsProcessed,
+		SubjectSearchEmbed, SubjectSearchEmbedded,
+		SubjectSearchRerank, SubjectSearchReranked,
+		SubjectDigestGenerate, SubjectDigestGenerated,
+	}
+
+	streams := AllStreams()
+	for _, subj := range allSubjects {
+		covered := false
+		for _, s := range streams {
+			for _, wildcard := range s.Subjects {
+				// Check if subject matches wildcard (e.g., "artifacts.>" covers "artifacts.process")
+				prefix := wildcard[:len(wildcard)-1] // remove ">"
+				if len(subj) >= len(prefix) && subj[:len(prefix)] == prefix {
+					covered = true
+					break
+				}
+			}
+			if covered {
+				break
+			}
+		}
+		if !covered {
+			t.Errorf("subject %q not covered by any stream", subj)
+		}
+	}
+}
