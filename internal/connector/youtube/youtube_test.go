@@ -1,5 +1,4 @@
 package youtube
-package youtube
 
 import (
 	"context"
