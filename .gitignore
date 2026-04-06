@@ -1,2 +1,5 @@
 ml/app/__pycache__/
 ml/tests/__pycache__/
+
+# Prevent Bubbles framework README from overriding project README on GitHub
+.github/README.md
