@@ -23,6 +23,38 @@ Phase 1 establishes the entire runtime foundation: a Go monolith core with a Pyt
 
 ---
 
+## Design Brief
+
+**Current State:** No runtime code exists. The repository contains Bubbles governance, product design (`docs/smackerel.md`), and the product-level architecture in `specs/001-smackerel-mvp/design.md`. All artifacts below this point will be built from scratch.
+
+**Target State:** A deployable Go monolith + Python ML sidecar system that accepts content via REST API, Telegram bot, or web UI, processes it through an LLM pipeline, stores structured artifacts with embeddings in PostgreSQL + pgvector, links them in a knowledge graph, supports semantic search, and generates daily digests. Everything runs via `docker compose up`.
+
+**Patterns to Follow:**
+- Generic Connector interface from 001 design (protocol layers: IMAP, CalDAV, Webhook, Feed)
+- Monochrome SVG icon system + text markers for Telegram (001 visual design)
+- HTMX + Go templates for web UI — no SPA, no JS build step
+- Bearer token auth from `.env` (single-user MVP)
+- NATS JetStream for async Go ↔ Python boundary (pub/sub, not request/reply)
+
+**Patterns to Avoid:**
+- SQLite or LanceDB — repo design mandates PostgreSQL + pgvector exclusively
+- Emoji in bot output — text markers only (`. ? ! > - ~ # @`)
+- REST calls between Go and Python — all inter-service communication via NATS
+- Heavyweight frontend frameworks — no React, Vue, or Node.js build pipelines
+
+**Resolved Decisions:**
+- ULID for all primary keys (sortable, URL-safe)
+- SHA-256 content hash for dedup
+- 384-dim embeddings via all-MiniLM-L6-v2 (local default)
+- IVFFlat index for pgvector (tunable `lists` parameter)
+- `robfig/cron` for digest scheduling in Go
+- `litellm` as LLM gateway in Python sidecar (cloud + local unified interface)
+
+**Open Questions:**
+- None blocking — all architectural decisions are resolved for Phase 1
+
+---
+
 ## Architecture
 
 ### Container Topology
@@ -168,6 +200,48 @@ User query ("that pricing video")
            +-- 10. Format and return results to user
 ```
 
+### Data Flow: Digest Generation
+
+```
+Cron trigger (robfig/cron, configurable, default 7:00 AM)
+           |
+           v
+     smackerel-core (Go)
+           |
+           +-- 1. Query recent artifacts (since last digest)
+           |       SELECT pending action_items (status='open')
+           |       SELECT hot topics (momentum_score > threshold)
+           |       SELECT overnight processing stats
+           |
+           +-- 2. Assemble digest context payload
+           |       action_items, overnight_summary, hot_topics,
+           |       calendar_context (placeholder for Phase 2)
+           |
+           +-- 3. Check: if no notable content → store "All quiet" digest, skip LLM
+           |
+           +-- 4. Publish context to NATS "digest.generate"
+           |
+           v
+     smackerel-ml (Python)
+           |
+           +-- 5. Generate digest text via LLM (Daily Digest Prompt)
+           |       Enforce: <150 words, calm/direct/warm tone (SOUL.md)
+           |       Structure: action items → overnight summary → hot topics
+           |
+           +-- 6. Publish digest text to NATS "digest.generated"
+           |
+           v
+     smackerel-core (Go)
+           |
+           +-- 7. Store digest in database (digests table)
+           |
+           +-- 8. Deliver via configured channels:
+           |       - Always: available at GET /api/digest
+           |       - Optional: send to Telegram chat if configured
+           |
+           +-- 9. Log digest generation metrics
+```
+
 ---
 
 ## Data Model
@@ -299,6 +373,20 @@ CREATE TABLE action_items (
 );
 
 CREATE INDEX idx_action_items_status ON action_items(status);
+
+-- Digests: generated daily/weekly digests
+CREATE TABLE digests (
+    id              TEXT PRIMARY KEY,        -- ULID
+    digest_date     DATE NOT NULL UNIQUE,
+    digest_text     TEXT NOT NULL,
+    word_count      INTEGER NOT NULL,
+    action_items    JSONB,
+    hot_topics      JSONB,
+    is_quiet        BOOLEAN DEFAULT FALSE,   -- true if "All quiet" digest
+    model_used      TEXT,
+    delivered_at    TIMESTAMPTZ,             -- when sent to Telegram/channels
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 ```
 
 ### NATS Subjects
@@ -313,6 +401,97 @@ CREATE INDEX idx_action_items_status ON action_items(status);
 | `search.reranked` | smackerel-ml | smackerel-core | Ranked results with explanations |
 | `digest.generate` | smackerel-core | smackerel-ml | Digest context for LLM generation |
 | `digest.generated` | smackerel-ml | smackerel-core | Generated digest text |
+
+### NATS Payload Schemas
+
+**artifacts.process** (core → ml):
+```json
+{
+  "artifact_id": "01HXYZ...",
+  "content_type": "url|text|voice|image|pdf",
+  "url": "https://...",
+  "raw_text": "extracted article text...",
+  "transcript": "whisper output if voice...",
+  "processing_tier": "full|standard|light|metadata",
+  "user_context": "Sarah recommended this",
+  "source_id": "telegram|capture|browser",
+  "retry_count": 0
+}
+```
+
+**artifacts.processed** (ml → core):
+```json
+{
+  "artifact_id": "01HXYZ...",
+  "success": true,
+  "error": null,
+  "result": {
+    "artifact_type": "article",
+    "title": "SaaS Pricing Strategy",
+    "summary": "2-4 sentence summary...",
+    "key_ideas": ["idea1", "idea2"],
+    "entities": {"people": [], "orgs": [], "places": [], "products": [], "dates": []},
+    "action_items": [],
+    "topics": ["pricing", "saas"],
+    "sentiment": "positive",
+    "temporal_relevance": {"relevant_from": null, "relevant_until": null},
+    "source_quality": "high"
+  },
+  "embedding": [0.123, -0.456, ...],
+  "processing_time_ms": 3200,
+  "model_used": "claude-3-haiku",
+  "tokens_used": 1450
+}
+```
+
+**search.embed** / **search.embedded** (core ↔ ml):
+```json
+// search.embed
+{"query_id": "q-01HXYZ", "text": "that pricing video"}
+
+// search.embedded
+{"query_id": "q-01HXYZ", "embedding": [0.123, -0.456, ...], "model": "all-MiniLM-L6-v2"}
+```
+
+**search.rerank** / **search.reranked** (core ↔ ml):
+```json
+// search.rerank
+{
+  "query_id": "q-01HXYZ",
+  "query_text": "that pricing video",
+  "candidates": [
+    {"artifact_id": "01H...", "title": "...", "summary": "...", "artifact_type": "video", "topics": [...]}
+  ]
+}
+
+// search.reranked
+{
+  "query_id": "q-01HXYZ",
+  "ranked": [
+    {"artifact_id": "01H...", "rank": 1, "relevance": "high", "explanation": "Matches 'pricing video'..."}
+  ]
+}
+```
+
+**digest.generate** / **digest.generated** (core ↔ ml):
+```json
+// digest.generate
+{
+  "digest_date": "2026-04-06",
+  "action_items": [{"text": "...", "person": "...", "days_waiting": 2}],
+  "overnight_artifacts": [{"title": "...", "type": "..."}],
+  "hot_topics": [{"name": "...", "captures_this_week": 4}],
+  "calendar_context": []
+}
+
+// digest.generated
+{
+  "digest_date": "2026-04-06",
+  "text": "! Reply to Sarah about...",
+  "word_count": 87,
+  "model_used": "claude-3-haiku"
+}
+```
 
 ---
 
@@ -344,6 +523,18 @@ Response (200):
 ```
 
 Error responses: 400 (invalid input), 409 (duplicate detected), 503 (ML sidecar unavailable).
+
+Detailed error model:
+```json
+{"error": {"code": "INVALID_INPUT", "message": "At least one of url, text, or voice_url is required"}}
+{"error": {"code": "DUPLICATE_DETECTED", "message": "Already saved", "existing_artifact_id": "01H...", "title": "..."}}
+{"error": {"code": "EXTRACTION_FAILED", "message": "Could not fetch URL content", "url": "..."}}
+{"error": {"code": "ML_UNAVAILABLE", "message": "Processing sidecar is not responding"}}
+{"error": {"code": "LLM_FAILED", "message": "LLM returned malformed response, artifact saved with metadata only"}}
+{"error": {"code": "PROCESSING_TIMEOUT", "message": "Processing exceeded time limit", "artifact_id": "01H...", "status": "queued"}}
+```
+
+HTTP status mapping: 400=INVALID_INPUT, 409=DUPLICATE_DETECTED, 422=EXTRACTION_FAILED, 503=ML_UNAVAILABLE, 504=PROCESSING_TIMEOUT. LLM_FAILED returns 200 with degraded result (metadata-only artifact).
 
 ### POST /api/search
 
@@ -382,6 +573,16 @@ Response (200):
 }
 ```
 
+Error responses:
+```json
+{"error": {"code": "EMPTY_QUERY", "message": "Query text is required"}}
+{"error": {"code": "EMBEDDING_FAILED", "message": "Could not generate query embedding"}}
+{"error": {"code": "ML_UNAVAILABLE", "message": "Search sidecar is not responding"}}
+```
+HTTP: 400=EMPTY_QUERY, 502=EMBEDDING_FAILED, 503=ML_UNAVAILABLE.
+
+Empty results return 200 with `"results": []` and `"message": "I don't have anything about that yet"` (per SC-F09).
+
 ### GET /api/digest
 
 Response (200):
@@ -393,6 +594,14 @@ Response (200):
   "generated_at": "2026-04-06T07:00:00Z"
 }
 ```
+
+Error responses:
+```json
+{"error": {"code": "NO_DIGEST", "message": "No digest generated for this date"}}
+```
+HTTP: 404=NO_DIGEST. If digest not yet generated today, returns 404.
+
+Query parameters: `?date=2026-04-05` to retrieve historical digests.
 
 ### GET /api/health
 
@@ -410,6 +619,8 @@ Response (200):
   }
 }
 ```
+
+Health check aggregation: overall `status` is `"healthy"` only when all required services (api, postgres, nats, ml_sidecar) report up. If any required service is down, overall status is `"degraded"` or `"unhealthy"`. Optional services (ollama, telegram_bot) do not affect overall status. Response time target: <1 second (per SC-F19).
 
 ### Telegram Bot Commands
 
@@ -481,6 +692,288 @@ Phase 1 implements these surfaces:
 | Integration | API endpoints with real PostgreSQL, NATS pub/sub flow, Telegram bot webhook handling | Docker test containers |
 | E2E | Full capture-to-search flow, digest generation, Telegram bot conversation | Against running Docker Compose stack |
 | Stress | Search latency with 1000+ artifacts, concurrent capture requests | k6 or custom Go benchmarks |
+
+---
+
+## Content Extraction Strategy
+
+Content extraction is split between Go (fast, structural) and Python (ML-dependent, fallback).
+
+### Go-Side Extraction (smackerel-core)
+
+| Input Type | Detection | Extraction Method | Fallback |
+|------------|-----------|-------------------|----------|
+| Article URL | HTTP HEAD Content-Type text/html, no special domain match | `go-readability` (Mozilla Readability port) | Send raw HTML to Python trafilatura |
+| YouTube URL | Regex: `youtube\.com/watch\|youtu\.be/\|youtube\.com/shorts/` | Metadata only (title from OG tags); transcript via Python | Metadata-only artifact if transcript unavailable |
+| Product URL | Domain allowlist (amazon.*, ebay.*, etc.) + JSON-LD `@type: Product` detection | Extract from JSON-LD/microdata: name, price, description, specs | Treat as generic article |
+| Recipe URL | JSON-LD `@type: Recipe` detection | Extract from JSON-LD: ingredients, steps, time, servings | Treat as generic article |
+| Plain text | No URL pattern, Content-Type not binary | Pass through directly; classify in LLM step | N/A |
+| Voice note | Telegram audio message or `voice_url` provided | Send to Python for Whisper transcription | Fail with error if transcription unavailable |
+| Image | Content-Type image/*, or file extension .png/.jpg/.webp | Send to Python for OCR (if text detected) + metadata extraction | Store as media artifact with metadata only |
+| PDF | Content-Type application/pdf or .pdf extension | `pdfcpu` or `unipdf` for text extraction in Go | Send to Python for OCR-based extraction |
+
+### Python-Side Extraction (smackerel-ml)
+
+| Task | Library | When Used |
+|------|---------|-----------|
+| Article fallback | `trafilatura` | When go-readability returns empty or low-quality content |
+| YouTube transcript | `youtube-transcript-api` | For all YouTube URLs; tries auto-captions first, then manual |
+| Whisper transcription | `openai-whisper` or Ollama whisper model | Voice notes, audio files |
+| OCR | `pytesseract` or `easyocr` | Images with detected text regions |
+
+### URL Type Detection Flow
+
+```
+URL received
+  |
+  +-- Match youtube.com / youtu.be? --> YouTube pipeline
+  |
+  +-- Match known shopping domains OR JSON-LD Product? --> Product pipeline
+  |
+  +-- JSON-LD Recipe detected? --> Recipe pipeline
+  |
+  +-- Content-Type application/pdf? --> PDF pipeline
+  |
+  +-- Content-Type image/*? --> Image pipeline
+  |
+  +-- Default: Article pipeline (go-readability → trafilatura fallback)
+```
+
+---
+
+## Processing Tier Logic
+
+Processing tier determines how much LLM compute is spent per artifact. Assigned during intake based on input signals.
+
+| Tier | LLM Work | When Assigned | Example |
+|------|----------|---------------|---------|
+| **Full** | Complete structured extraction + embedding + graph linking | User adds explicit context; starred items; content from priority senders | User says "Sarah recommended this" |
+| **Standard** | Structured extraction + embedding + graph linking (default) | Most active captures; articles; videos | User pastes a URL with no context |
+| **Light** | Summary + entities + embedding only (no key_ideas, no sentiment analysis) | Bulk imports; RSS feed items; low-priority sources | Batch bookmark import |
+| **Metadata-only** | Title + type + source metadata; no LLM call | Dedup merges; failed LLM calls; content-type not supported | Image with no detectable text |
+
+Tier escalation: if a metadata-only artifact gets searched and accessed 3+ times, re-queue at Standard tier.
+
+---
+
+## Dedup & Idempotency Design
+
+### Dedup Detection Points
+
+```
+Incoming content
+  |
+  +-- 1. URL match: exact source_url match in artifacts table
+  |      Result: DUPLICATE if match found
+  |
+  +-- 2. Source ID match: source_id + source_ref combination
+  |      Result: DUPLICATE if match found (e.g., same Telegram message ID)
+  |
+  +-- 3. Content hash match: SHA-256 of normalized raw content
+  |      Normalization: lowercase, strip whitespace, remove HTML tags
+  |      Result: DUPLICATE if match found
+  |
+  +-- If DUPLICATE detected:
+  |      - Merge new metadata (context, source_qualifiers) into existing artifact
+  |      - Update updated_at timestamp
+  |      - DO NOT re-run LLM processing or re-generate embedding
+  |      - Return 409 with existing artifact reference
+  |
+  +-- If NOT duplicate: proceed with normal pipeline
+```
+
+### Delta Processing (Updated Content)
+
+For content that updates over time (e.g., email threads with new replies):
+- Compute content hash of new version
+- If hash differs from stored hash: re-extract only the delta (new replies in thread)
+- Re-run LLM on delta content, merge result into existing artifact
+- Re-generate embedding from updated title + summary + key_ideas
+- Update knowledge graph edges
+
+### Idempotency Key
+
+All capture requests via API accept an optional `X-Idempotency-Key` header. If provided:
+- First request: process normally, store key → artifact_id mapping (TTL 24h)
+- Repeat request with same key: return cached response without reprocessing
+
+---
+
+## Knowledge Graph Linking Algorithm
+
+Executed in smackerel-core (Go) after artifact storage (step 10 in capture flow).
+
+### Step 1: Vector Similarity
+
+```sql
+SELECT id, title, artifact_type, topics,
+       1 - (embedding <=> $new_embedding) AS similarity
+FROM artifacts
+WHERE id != $new_artifact_id
+ORDER BY embedding <=> $new_embedding
+LIMIT 10;
+```
+
+Create `RELATED_TO` edge for each result where similarity > 0.3, with `weight = similarity`.
+
+### Step 2: Entity Matching
+
+For each entity extracted by LLM (people, orgs, places):
+
+```
+For each person in artifact.entities.people:
+  1. Exact name match in people table
+  2. Fuzzy match via pg_trgm: similarity(name, $entity_name) > 0.7
+  3. Alias match: check aliases JSONB array
+  
+  If match found:
+    - Create MENTIONS edge: artifact → person
+    - Increment person.interaction_count
+    - Update person.last_interaction
+  
+  If no match:
+    - Create new person record
+    - Create MENTIONS edge
+```
+
+### Step 3: Topic Clustering
+
+```
+For each topic in artifact.topics (from LLM output):
+  1. Exact name match in topics table
+  2. Synonym/alias match (e.g., "ML" → "machine-learning")
+  3. Parent topic match via hierarchical lookup
+  
+  If match found:
+    - Create BELONGS_TO edge: artifact → topic
+    - Increment topic.capture_count_total, capture_count_30d
+    - Recalculate topic.momentum_score
+    - Update topic state if threshold crossed:
+        emerging (1-2 captures) → active (3-9) → hot (10+, rising)
+  
+  If no match:
+    - Create new topic record (state: emerging)
+    - Create BELONGS_TO edge
+```
+
+### Step 4: Temporal Linking
+
+```sql
+SELECT id FROM artifacts
+WHERE DATE(created_at) = DATE($new_artifact_created_at)
+  AND id != $new_artifact_id;
+```
+
+Create `TEMPORAL` edges to same-day artifacts with weight 0.5.
+
+### Step 5: Source Linking
+
+```sql
+SELECT id FROM artifacts
+WHERE source_id = $new_source_id
+  AND id != $new_artifact_id
+ORDER BY created_at DESC
+LIMIT 5;
+```
+
+Create `FROM_SAME_SOURCE` edges with weight 0.3.
+
+---
+
+## Configuration Design
+
+### Required Environment Variables
+
+| Variable | Purpose | Default | Failure if Missing |
+|----------|---------|---------|-------------------|
+| `SMACKEREL_API_TOKEN` | Bearer token for API auth | None | Server refuses to start |
+| `SMACKEREL_DB_URL` | PostgreSQL connection string | `postgres://smackerel:smackerel@postgres:5432/smackerel` | Falls back to default (Docker internal) |
+
+### Optional Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `SMACKEREL_LLM_PROVIDER` | LLM backend: `ollama`, `openai`, `anthropic`, `google` | `ollama` |
+| `SMACKEREL_LLM_MODEL` | Model name | `llama3.1` (Ollama) / `claude-3-haiku` (Anthropic) |
+| `SMACKEREL_LLM_API_KEY` | API key for cloud LLM | None (not needed for Ollama) |
+| `SMACKEREL_EMBEDDING_PROVIDER` | `local` or `openai` | `local` |
+| `SMACKEREL_EMBEDDING_MODEL` | Embedding model name | `all-MiniLM-L6-v2` |
+| `SMACKEREL_OPENAI_API_KEY` | OpenAI API key (embeddings and/or LLM) | None |
+| `SMACKEREL_DIGEST_TIME` | Daily digest cron expression | `0 7 * * *` (7:00 AM daily) |
+| `SMACKEREL_DIGEST_CHANNEL` | Digest delivery: `api`, `telegram`, `both` | `both` |
+| `SMACKEREL_TELEGRAM_TOKEN` | Telegram bot API token | None (bot disabled if missing) |
+| `SMACKEREL_TELEGRAM_CHAT_ID` | Allowed Telegram chat ID(s), comma-separated | None (bot rejects all if missing) |
+| `SMACKEREL_NATS_URL` | NATS server URL | `nats://nats:4222` |
+| `SMACKEREL_LOG_LEVEL` | Log level: `debug`, `info`, `warn`, `error` | `info` |
+| `SMACKEREL_OLLAMA_URL` | Ollama server URL | `http://ollama:11434` |
+
+### Startup Validation
+
+On startup, smackerel-core validates:
+1. `SMACKEREL_API_TOKEN` is set and non-empty → fatal error if missing
+2. PostgreSQL connection succeeds → fatal error with clear message if unreachable
+3. NATS connection succeeds → fatal error with clear message if unreachable
+4. If `SMACKEREL_TELEGRAM_TOKEN` is set, validate bot token with Telegram API → warn if invalid
+5. If LLM provider is cloud, validate API key with a test call → warn if invalid (system runs but LLM processing fails gracefully)
+6. All validation results logged at startup
+
+### .env.example
+
+```env
+# === REQUIRED ===
+SMACKEREL_API_TOKEN=change-me-to-a-random-string
+
+# === LLM Configuration ===
+# Provider: ollama (default, local), openai, anthropic, google
+SMACKEREL_LLM_PROVIDER=ollama
+SMACKEREL_LLM_MODEL=llama3.1
+# SMACKEREL_LLM_API_KEY=sk-...  # Required for cloud providers
+
+# === Embedding Configuration ===
+# Provider: local (default), openai
+SMACKEREL_EMBEDDING_PROVIDER=local
+SMACKEREL_EMBEDDING_MODEL=all-MiniLM-L6-v2
+
+# === Telegram Bot ===
+# SMACKEREL_TELEGRAM_TOKEN=123456:ABC-DEF...
+# SMACKEREL_TELEGRAM_CHAT_ID=123456789
+
+# === Digest ===
+SMACKEREL_DIGEST_TIME=0 7 * * *
+SMACKEREL_DIGEST_CHANNEL=both
+
+# === Infrastructure (defaults work for Docker Compose) ===
+# SMACKEREL_DB_URL=postgres://smackerel:smackerel@postgres:5432/smackerel
+# SMACKEREL_NATS_URL=nats://nats:4222
+# SMACKEREL_OLLAMA_URL=http://ollama:11434
+# SMACKEREL_LOG_LEVEL=info
+```
+
+---
+
+## Scenario-to-Design Mapping
+
+| Scenario | Design Component(s) | Requirement |
+|----------|---------------------|-------------|
+| SC-F01 Capture article URL | Content Extraction (article pipeline), LLM Processing, Embedding, Knowledge Graph Linking, POST /api/capture | R-003, R-004, R-005, R-006, R-007 |
+| SC-F02 Capture YouTube via Telegram | Telegram Bot, Content Extraction (YouTube pipeline), Python transcript fetch, LLM Processing | R-003, R-004, R-008 |
+| SC-F03 Capture plain text | POST /api/capture, LLM Processing (classify as idea), Knowledge Graph Linking | R-003, R-004, R-007 |
+| SC-F04 Capture voice note | Telegram Bot, Python Whisper transcription, LLM Processing | R-003, R-004, R-008 |
+| SC-F05 Duplicate URL detection | Dedup & Idempotency (URL match, content hash), 409 error response | R-011 |
+| SC-F06 Vague content recall | Semantic Search pipeline, embedding, pgvector, LLM re-rank | R-005, R-009 |
+| SC-F07 Person-scoped search | Semantic Search + entity filter, Knowledge Graph (MENTIONS edges) | R-006, R-009 |
+| SC-F08 Topic-scoped search | Semantic Search + topic filter, Knowledge Graph (BELONGS_TO edges) | R-006, R-009 |
+| SC-F09 Empty search results | POST /api/search empty-results response with honest message | R-009 |
+| SC-F10 Search response time | pgvector IVFFlat index, search pipeline <3s target | R-009 |
+| SC-F11 Morning digest | Digest Generation flow, Cron scheduler, LLM digest prompt, <150 words | R-010 |
+| SC-F12 Quiet day digest | Digest Generation flow step 3 (skip LLM, store "All quiet") | R-010 |
+| SC-F13 Digest via Telegram | Digest Generation flow step 8 (Telegram delivery), Telegram Bot | R-008, R-010 |
+| SC-F14 Automatic topic creation | Knowledge Graph Linking (Step 3: Topic Clustering), topic state machine | R-006 |
+| SC-F15 Cross-artifact linking | Knowledge Graph Linking (Step 1: Vector Similarity), RELATED_TO edges | R-006 |
+| SC-F16 Person entity linking | Knowledge Graph Linking (Step 2: Entity Matching), MENTIONS edges | R-006 |
+| SC-F17 Cold start deployment | Docker Compose topology, volume mounts, health check endpoint | R-001 |
+| SC-F18 Data persistence | Docker volumes (./data/postgres/, ./data/ollama/) | R-001 |
+| SC-F19 Health check | GET /api/health, service status aggregation | R-001 |
 
 ---
 

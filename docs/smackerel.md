@@ -1941,50 +1941,82 @@ gantt
 
 ## 20. Operational Runbook
 
-### 20.1 Health Check
+### 20.1 Operational Standards
+
+Smackerel's committed runtime must follow these repo-level operational standards:
+
+1. **Docker-only execution** for development, testing, validation, and deployment
+2. **One repo CLI** (`./smackerel.sh`) for build, test, config generation, stack lifecycle, logs, and cleanup
+3. **Single source of truth configuration** via `config/smackerel.yaml`
+4. **Strict environment isolation** between persistent dev state and disposable test or validation state
+5. **Smart cleanup and build freshness** based on project-scoped lifecycle metadata rather than timestamps or `latest` tags
+
+The runtime implementation details for these standards are defined in:
+
+- `docs/Development.md`
+- `docs/Testing.md`
+- `docs/Docker_Best_Practices.md`
+
+### 20.2 Current Repo State
+
+The runtime is not committed yet. Today, only the Bubbles validation surface exists:
+
+- `bash .github/bubbles/scripts/cli.sh doctor`
+- `timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate`
+- `bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>`
+- `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/<feature>`
+
+No `smackerel-core`, `smackerel-ml`, Docker Compose runtime, or `./smackerel.sh` command surface may be treated as present until those assets are committed.
+
+### 20.3 Planned Health Checks
 
 | Check | How | Frequency |
 |-------|-----|-----------|
-| Ingestion running | `openclaw cron status` — verify all cron jobs active | Daily (automated) |
-| Source sync healthy | Check `sync_state` table for errors | Daily (automated) |
-| Storage size | Check SQLite + LanceDB size | Weekly |
-| Digest delivery | Verify daily smackerel was sent | Automated (alert if skipped) |
-| LLM API status | Check for rate limits or auth failures | Per cron job (automated) |
+| API health | `./smackerel.sh status` must confirm Go API healthy | Continuous / on demand |
+| Connector sync lag | Observe connector state and last successful sync per source | Automated |
+| Queue health | Observe NATS JetStream pending, redelivery, and consumer lag | Automated |
+| Database health | Observe PostgreSQL availability, disk growth, and pgvector index health | Automated |
+| LLM reachability | Check Ollama or configured LLM gateway health without blocking the rest of the stack | Automated |
+| Digest production | Verify scheduled digest generation and delivery succeeded | Automated |
+| Cleanup pressure | Report build cache, logs, disposable volumes, and disk thresholds before cleanup escalates | Daily / before builds |
 
-### 20.2 When Things Go Wrong
+### 20.4 Environment Model
 
-| Problem | Symptom | Fix |
-|---------|---------|-----|
-| Gmail OAuth expired | Gmail ingestion stops, errors in sync_state | Re-auth via `openclaw` CLI |
-| LLM returns malformed JSON | Processing failures in logs | Check prompt. Add JSON repair step. Fall back to metadata-only. |
-| Vector DB corrupted | Search returns garbage | Rebuild embeddings from SQLite artifact data |
-| Topic scores out of whack | Irrelevant topics showing as Hot | Run `smackerel-lifecycle --recalculate` to recompute all scores |
-| Digest feels useless | User stops reading | Run calibration prompt. Adjust priority weights. |
-| Storage growing too fast | SQLite >10GB | Enable data retention policy. Archive old raw content. Keep processed only. |
-| Source producing too much noise | Gmail promotions flooding artifacts | Tighten source qualifiers (skip labels, min-quality filters) |
+| Environment | Storage model | Purpose |
+|-------------|---------------|---------|
+| Development | Persistent named volumes | Daily manual development and exploration |
+| Test | Disposable `tmpfs` or disposable volumes | Integration and E2E automation |
+| Validation | Isolated Compose project + disposable stores | Certification, chaos, and release validation |
 
-### 20.3 Restart Protocol
+Rules:
 
-After a lapse of any duration:
+- Automated tests must never write to the primary dev database or long-lived queue state.
+- Validation and chaos must never run on the persistent dev store.
+- Test and validation fixtures must be synthetic and disposable.
 
-1. System was still ingesting passively the whole time
-2. Ask: "What did I miss?" → system generates catch-up summary
-3. Optionally capture anything new: brain dump into the channel
-4. Tomorrow's digest resumes as normal
-
-**There is no backlog. There is no guilt. The system never stopped working.**
-
-### 20.4 Maintenance
+### 20.5 Recovery And Maintenance
 
 | Task | Frequency | Automated |
 |------|-----------|-----------|
 | Knowledge graph consistency check | Weekly | Yes |
-| Topic lifecycle recalculation | Daily | Yes (part of lifecycle cron) |
+| Topic lifecycle recalculation | Daily | Yes |
 | Sync state cleanup | Weekly | Yes |
-| LanceDB compaction | Monthly | Yes |
-| Source qualifier tuning | Monthly | Manual (based on noise levels) |
+| pgvector maintenance and vacuum plan | Monthly | Yes |
+| Queue retention review | Monthly | Yes |
+| Source qualifier tuning | Monthly | Manual |
 | Prompt quality review | Quarterly | Manual |
-| Full data export/backup | Weekly | Configurable |
+| Backup and export verification | Weekly | Configurable |
+
+### 20.6 Restart Protocol
+
+After a lapse of any duration:
+
+1. Start or resume the stack through the repo CLI
+2. Ask: "What did I miss?" and generate a catch-up summary from stored artifacts
+3. Resume passive ingestion and digest generation normally
+4. Reuse only runtime state that is proven compatible with the current stack inputs
+
+**There is no backlog. There is no guilt. The system keeps absorbing and organizing the user's digital life.**
 
 ---
 
@@ -2136,6 +2168,8 @@ All technology choices must satisfy:
 2. **Strong community** — active development, responsive maintainers, >1k GitHub stars or official vendor SDK
 3. **Proven at scale** — used in production by large organizations
 4. **Compiled / high-performance** — Go or Rust for core services; Python only where no compiled alternative exists (ML inference, YouTube transcripts)
+
+In addition to technology selection, the runtime implementation must satisfy the operational contract documented in `docs/Development.md`, `docs/Testing.md`, and `docs/Docker_Best_Practices.md`.
 
 ### 23.2 Core Language: Go
 

@@ -2,6 +2,39 @@
 
 > **Spec:** [spec.md](spec.md)
 > **Parent Design Doc:** [docs/smackerel.md](../../docs/smackerel.md)
+> **Product Architecture:** [001-smackerel-mvp/design.md](../001-smackerel-mvp/design.md)
+
+---
+
+## Design Brief
+
+**Current State:** Phases 1-2 provide capture, processing, storage, semantic search, and daily digests. The knowledge graph connects artifacts by similarity, topic co-occurrence, and entity mentions. The action_items table exists from Phase 1 but only tracks explicit user-created items. No proactive intelligence, no synthesis, no contextual alerts.
+
+**Target State:** Add an intelligence engine that proactively discovers cross-domain connections, tracks commitments from email, delivers pre-meeting briefs, generates weekly synthesis digests, and surfaces contextual alerts — transforming Smackerel from a knowledge store into a knowledge engine.
+
+**Patterns to Follow:**
+- Go orchestration with LLM delegation to Python ML sidecar via NATS JetStream (same as artifact processing pipeline in 001 design)
+- NATS request/reply pattern with `smk.` subject prefix and WorkQueuePolicy retention
+- PostgreSQL for all persistent state; no in-memory caches across restarts
+- Alert delivery through the same channel abstraction used by daily digest (Telegram, web)
+- Monochrome icon set from 001 design for new alert/synthesis UI surfaces
+
+**Patterns to Avoid:**
+- Real-time event-watching for calendar (polling is sufficient and simpler)
+- Separate LLM calls for commitment detection (piggyback on existing email processing pipeline)
+- In-memory alert queues (use database-backed queue for crash recovery)
+- Over-alerting (hard caps: 2 contextual alerts/day, 3 system prompts/week)
+
+**Resolved Decisions:**
+- Synthesis runs daily after topic lifecycle cron, not continuously
+- Cluster detection uses pgvector cosine similarity + topic co-occurrence (dual signal)
+- Pre-meeting check polls every 5 minutes for events 25-35 minutes ahead
+- Commitment detection extends the existing email processing LLM prompt — no separate pass
+- Weekly synthesis is a dedicated LLM call, not an aggregation of daily insights
+- Alert queue is database-backed with status lifecycle: pending -> delivered -> dismissed/snoozed
+
+**Open Questions:**
+- (none)
 
 ---
 
@@ -80,11 +113,13 @@ smackerel-core (Go)
     |
     +-- 7. If genuine: store synthesis insight as artifact (type=synthesis)
     +-- 8. Create SYNTHESIZED_FROM edges to source artifacts
-    +-- 9. If contradiction: create CONTRADICTS edge between artifacts
+    +-- 9. If contradiction (R-306): create CONTRADICTS edge between artifacts
+    |       Store both positions, key difference, do not take sides
     +-- 10. Queue noteworthy insights for weekly synthesis
+    |       Contradictions queued for weekly synthesis "Two articles disagree on X"
 ```
 
-### Data Flow: Pre-Meeting Brief
+### Data Flow: Pre-Meeting Brief (R-303)
 
 ```
 Calendar Check Cron (every 5 minutes)
@@ -170,12 +205,265 @@ The `action_items` table from Phase 1 is used directly for commitment tracking. 
 | `weekly.generate` | smackerel-core | smackerel-ml | Weekly context for synthesis generation |
 | `weekly.generated` | smackerel-ml | smackerel-core | Generated weekly synthesis text |
 
+### NATS Payload Schemas
+
+**synthesis.analyze:**
+```json
+{
+  "id": "uuid-v4",
+  "cluster_id": "uuid-v4",
+  "artifacts": [
+    {
+      "artifact_id": "uuid-v4",
+      "title": "string",
+      "summary": "string",
+      "source_type": "email|article|video|note|...",
+      "topics": ["string"],
+      "captured_at": "ISO-8601"
+    }
+  ],
+  "shared_topics": ["string"],
+  "created_at": "ISO-8601"
+}
+```
+
+**synthesis.analyzed:**
+```json
+{
+  "id": "uuid-v4",
+  "cluster_id": "uuid-v4",
+  "has_genuine_connection": true,
+  "through_line": "3-4 sentence synthesis (null if not genuine)",
+  "key_tension": "disagreement point or null",
+  "suggested_action": "next step or null",
+  "is_contradiction": false,
+  "contradiction_summary": "null unless is_contradiction=true",
+  "created_at": "ISO-8601"
+}
+```
+
+**brief.generate:**
+```json
+{
+  "id": "uuid-v4",
+  "event_id": "string",
+  "event_title": "string",
+  "event_time": "ISO-8601",
+  "attendees": [
+    {
+      "person_id": "uuid-v4 or null",
+      "name": "string",
+      "email": "string",
+      "recent_threads": [{"subject": "string", "date": "ISO-8601", "snippet": "string"}],
+      "shared_topics": ["string"],
+      "pending_commitments": [{"text": "string", "type": "string", "days_overdue": 0}],
+      "is_known": true
+    }
+  ],
+  "created_at": "ISO-8601"
+}
+```
+
+**brief.generated:**
+```json
+{
+  "id": "uuid-v4",
+  "event_id": "string",
+  "brief_text": "2-3 sentence brief with specific references",
+  "created_at": "ISO-8601"
+}
+```
+
+---
+
+## Algorithms
+
+### Cluster Detection (R-301)
+
+The synthesis engine uses a two-phase approach to find meaningful artifact clusters:
+
+```
+Phase 1: Vector Proximity Clusters
+  1. Query pgvector for all artifact pairs with cosine similarity > 0.75
+  2. Build adjacency graph from similarity pairs
+  3. Extract connected components (clusters)
+  4. Filter to clusters with 2-5 artifacts (too large = too broad)
+
+Phase 2: Cross-Domain Filtering
+  5. For each cluster, check source_type diversity:
+     - Must contain artifacts from >= 2 different source_types
+     - e.g., email + article, or video + note + email
+  6. Score clusters by: avg_similarity * source_diversity * recency_weight
+     - recency_weight = 1.0 for articles < 7 days, 0.8 for < 30 days, 0.5 for older
+  7. Take top 20 clusters by combined score
+  8. Publish each to NATS "synthesis.analyze" for LLM evaluation
+```
+
+### Commitment Detection (R-305)
+
+Commitment detection piggybacks on the existing email processing LLM prompt (Phase 2). The ProcessRequest payload for emails includes an additional instruction block:
+
+```
+Commitment Detection Extension (added to email processing prompt):
+  Scan for commitment language in the email body:
+  
+  POSITIVE signals (IS a commitment):
+    - "I'll send you...", "I'll follow up on...", "Let me get back to you..."
+    - "I'll have that to you by...", "I'll send the report..."
+    - "Can you review...", "Please check...", "Action item: ..."
+    - Explicit dates: "by Friday", "end of week", "tomorrow", "by March 15"
+  
+  NEGATIVE signals (NOT a commitment):
+    - "I'll think about it", "I might...", "We should consider..."
+    - "It would be nice to...", "Maybe we could..."
+    - Hypothetical language: "If we were to...", "In theory..."
+  
+  For each detected commitment, return:
+    type: user-promise | contact-promise | deadline | todo
+    text: the commitment text (verbatim or close paraphrase)
+    person: who is the counterparty (name or email)
+    expected_date: ISO date if detectable, null otherwise
+    confidence: high | medium (discard low-confidence detections)
+```
+
+### Commitment Lifecycle
+
+```
+                    Email processed
+                         |
+                         v
+                  Commitment Detected
+                   (confidence >= medium)
+                         |
+                         v
+                    +--------+
+                    |  OPEN  |
+                    +--------+
+                    /    |    \
+                   /     |     \
+        follow-up    user      overdue
+        detected   resolves   (3+ days)
+            |        |            |
+            v        v            v
+     +----------+ +----------+ +----------+
+     | PROMPTED | | RESOLVED | |  ALERTED |
+     +----------+ +----------+ +----------+
+          |                          |
+     user confirms              user resolves
+     or dismisses               or dismisses
+          |                          |
+          v                          v
+     +----------+              +----------+
+     | RESOLVED |              | RESOLVED |
+     | or OPEN  |              | or       |
+     +----------+              | DISMISSED|
+                               +----------+
+```
+
+### Alert Batching Algorithm (R-304)
+
+```
+Daily Alert Processing (runs hourly):
+  1. Collect all pending alerts created since last batch
+  2. If total pending + already-delivered-today >= 2:
+     - Batch remaining into a single combined alert
+     - Priority order: commitment_overdue > bill_reminder > return_window > relationship > trip_prep
+  3. If combined delivery count for today would exceed 2:
+     - Hold lowest-priority alerts until tomorrow
+     - Exception: pre-meeting briefs bypass the daily limit (they are time-critical)
+  4. Deliver batch via configured channel
+  5. Update alert status to "delivered" with delivered_at timestamp
+```
+
+### Pattern Recognition (R-307)
+
+Pattern recognition runs weekly, immediately before the weekly synthesis generation:
+
+```
+Pattern Analysis Steps:
+  1. Topic Distribution: query artifact counts by topic, grouped by month
+     - Compare current month vs previous month distribution
+     - Flag shifts > 10 percentage points
+  
+  2. Capture Frequency: query artifact creation timestamps
+     - Group by day-of-week and hour
+     - Identify peak capture windows (e.g., "Wednesday mornings")
+  
+  3. Blind Spot Detection: find topics referenced in artifacts
+     (entity extraction mentions) but with < 5 dedicated captures
+     - "You reference 'analytics' in 15 articles but have only 3 analytics captures"
+  
+  4. Commitment Patterns: query overdue commitment count per week
+     - Flag if 3+ overdue in same week
+  
+  5. Interest Acceleration: find topics with capture velocity 
+     (captures this week / avg weekly captures) > 2.0
+     - "Leadership: 12 captures in 3 weeks, up from 2/week average"
+  
+  6. Select the single most interesting pattern for the weekly synthesis
+     - Priority: commitment_pattern > blind_spot > acceleration > distribution > frequency
+```
+
+### Enhanced Daily Digest Integration (R-308)
+
+The Phase 1 daily digest generator is extended with intelligence data:
+
+```
+Digest Assembly (updated for Phase 3):
+  1. TOP ACTIONS section (new):
+     - Query open action_items WHERE status = 'open'
+     - Sort by: overdue first (days_overdue DESC), then by expected_date ASC
+     - Include top 3, with overdue flag and days count
+     - Format: "! Send pricing article to @Sarah (5 days overdue)"
+  
+  2. OVERNIGHT section (enhanced):
+     - Include source-type breakdown: "12 emails, 3 articles from RSS"
+     - Highlight any email needing attention (flagged or from priority sender)
+  
+  3. HOT TOPIC section (enhanced):
+     - Include acceleration context from momentum scoring
+     - "distributed-systems: 4 new this week (up from 1/week avg)"
+  
+  4. TODAY section (new):
+     - Query calendar events for today
+     - For each event with known attendees: generate 1-line preview
+     - "2 PM -- David Kim (last: acquisition strategy, owe: pricing analysis)"
+  
+  5. Word budget: 150 total
+     - TOP ACTIONS: ~40 words (top 2 items)
+     - OVERNIGHT: ~30 words
+     - HOT TOPIC: ~25 words
+     - TODAY: ~30 words
+     - Header/footer: ~25 words
+```
+
+### Serendipity Selection for Weekly Synthesis (R-302, section 5)
+
+```
+FROM THE ARCHIVE selection:
+  1. Query artifacts WHERE state = 'archived' AND last_accessed_at < (now - 6 months)
+  2. Filter to relevance_score > median (quality gate)
+  3. Score candidates:
+     - calendar_match: +3 if artifact topic/content matches any event in next 7 days
+     - topic_match: +2 if artifact topic is currently 'hot' or 'active'
+     - person_match: +1 if artifact mentions a person the user is meeting this week
+     - quality_bonus: +1 if artifact has user-added notes or context
+  4. If any candidate scores > 0: select highest scorer (context-matched)
+  5. If no candidate scores > 0: select random from quality-filtered pool (pure serendipity)
+  6. Format: "Remember this? [Date]: '[Title/summary]'. [Context reason if matched]."
+```
+
 ---
 
 ## API Contracts
 
+All API endpoints follow the error model from [001-smackerel-mvp/design.md](../001-smackerel-mvp/design.md). Phase 3 endpoints require the same bearer token authentication.
+
 ### GET /api/alerts
 
+Query parameters: `?status=pending|delivered|dismissed|snoozed&type=premeeting|bill|commitment|return_window|relationship&limit=20`
+
+**200 OK:**
 ```json
 {
   "alerts": [
@@ -184,25 +472,144 @@ The `action_items` table from Phase 1 is used directly for commitment tracking. 
       "alert_type": "premeeting",
       "title": "Meeting with David in 30 min",
       "body": "Last discussed acquisition strategy. You owe: pricing analysis (5 days overdue).",
+      "related_artifact_id": "art_123",
+      "related_person_id": "person_456",
+      "priority": 2,
       "status": "pending",
+      "snooze_until": null,
       "created_at": "2026-04-06T13:30:00Z"
     }
-  ]
+  ],
+  "total": 1
 }
 ```
 
+**401 Unauthorized:** `{"error": "invalid_token", "message": "Bearer token required"}`
+
 ### POST /api/alerts/{id}/dismiss
 
+**204 No Content** on success.
+
+**404 Not Found:** `{"error": "not_found", "message": "Alert not found"}`
+**409 Conflict:** `{"error": "already_dismissed", "message": "Alert already dismissed"}`
+
 ### POST /api/alerts/{id}/snooze
-Request: `{"snooze_hours": 24}`
+
+**Request:**
+```json
+{"snooze_hours": 24}
+```
+
+**200 OK:**
+```json
+{
+  "id": "alert_001",
+  "status": "snoozed",
+  "snooze_until": "2026-04-07T13:30:00Z"
+}
+```
+
+**400 Bad Request:** `{"error": "invalid_snooze", "message": "snooze_hours must be between 1 and 168"}`
+**404 Not Found:** `{"error": "not_found", "message": "Alert not found"}`
 
 ### GET /api/commitments
-Returns open action items.
+
+Query parameters: `?status=open|resolved|dismissed&person_id=X&type=user-promise|contact-promise|deadline|todo`
+
+**200 OK:**
+```json
+{
+  "commitments": [
+    {
+      "id": "commit_001",
+      "item_type": "user-promise",
+      "text": "Send pricing article",
+      "person_id": "person_sarah",
+      "person_name": "Sarah",
+      "expected_date": "2026-04-01",
+      "status": "open",
+      "days_overdue": 5,
+      "source_artifact_id": "art_email_123",
+      "created_at": "2026-04-01T10:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
 
 ### POST /api/commitments/{id}/resolve
 
+**204 No Content** on success.
+
+**404 Not Found:** `{"error": "not_found", "message": "Commitment not found"}`
+**409 Conflict:** `{"error": "already_resolved", "message": "Commitment already resolved"}`
+
 ### GET /api/synthesis/weekly
-Returns latest weekly synthesis.
+
+Query parameters: `?date=YYYY-MM-DD` (returns weekly synthesis containing that date; defaults to current week)
+
+**200 OK:**
+```json
+{
+  "id": "weekly_2026_14",
+  "week_start": "2026-03-30",
+  "week_end": "2026-04-05",
+  "sections": {
+    "this_week": "47 artifacts: 23 emails, 8 articles, 6 videos...",
+    "connection_discovered": {
+      "through_line": "The article on Team Topologies, the YouTube talk...",
+      "source_artifacts": [
+        {"id": "art_1", "title": "Team Topologies", "date": "2026-04-01"}
+      ]
+    },
+    "topic_momentum": {
+      "rising": [{"name": "system-design", "captures": 8, "change": "+200%"}],
+      "steady": [{"name": "leadership", "captures": 3, "change": "0%"}],
+      "declining": [{"name": "machine-learning", "captures": 0, "change": "-100%"}]
+    },
+    "open_loops": [
+      {"text": "David's proposal -- not responded", "days": 5}
+    ],
+    "from_archive": {
+      "artifact_id": "art_old_1",
+      "title": "The best way to predict the future...",
+      "saved_date": "2025-10-15",
+      "context_reason": "Your offsite is next week."
+    },
+    "patterns_noticed": "You captured 6 items about communication this week but only 1 about execution."
+  },
+  "word_count": 230,
+  "generated_at": "2026-04-05T16:00:00Z"
+}
+```
+
+**404 Not Found:** `{"error": "not_found", "message": "No weekly synthesis for the requested date"}`
+
+### GET /api/synthesis/insights
+
+Query parameters: `?type=connection|contradiction|pattern&limit=20&offset=0`
+
+**200 OK:**
+```json
+{
+  "insights": [
+    {
+      "id": "insight_001",
+      "insight_type": "connection",
+      "through_line": "Three artifacts converge on aligning team structure...",
+      "key_tension": null,
+      "suggested_action": "Consider applying Conway's Law to the platform reorg.",
+      "source_artifacts": [
+        {"id": "art_1", "title": "Team Topologies", "type": "article"},
+        {"id": "art_2", "title": "Inverse Conway Maneuver", "type": "video"},
+        {"id": "art_3", "title": "Platform reorg thread", "type": "email"}
+      ],
+      "created_at": "2026-04-05T06:00:00Z"
+    }
+  ],
+  "total": 3
+}
+```
 
 ---
 

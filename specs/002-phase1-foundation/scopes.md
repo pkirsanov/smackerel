@@ -4,6 +4,60 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 
 ---
 
+## Execution Outline
+
+### Phase Order
+
+1. **01-project-scaffold** — Docker Compose stack, Go/Python project structure, PostgreSQL schema, NATS streams, health endpoint
+2. **02-processing-pipeline** — Content extraction, NATS-mediated LLM processing, embedding generation, dedup, voice/Whisper transcription
+3. **03-active-capture-api** — REST API for URL/text/voice capture with type detection, error responses, processing tier assignment
+4. **04-knowledge-graph-linking** — Vector similarity edges, entity matching, topic clustering, temporal linking
+5. **05-semantic-search** — Natural language query → embed → vector search → graph expansion → LLM re-rank
+6. **06-telegram-bot** — Telegram long-poll bot for URL/text/voice capture, /find search, /digest retrieval, chat allowlist
+7. **07-daily-digest** — Cron-triggered digest assembly, LLM generation, API + Telegram delivery
+8. **08-web-ui** — HTMX + Go templates: search, artifact detail, digest, topics, settings, status pages
+
+### New Types & Signatures
+
+- `POST /api/capture` — `{url?, text?, voice_url?}` → `{artifact_id, title, type, summary, connections}`
+- `POST /api/search` — `{query, limit?, filters?}` → `[{title, type, summary, source_link, relevance_explanation}]`
+- `GET /api/digest` — `→ {date, text, action_items_count}`
+- `GET /api/health` — `→ {status, services: {core, ml, db, nats}}`
+- `artifacts` table — ULID PK, pgvector(384) embedding, JSONB entities/topics/key_ideas
+- `people`, `topics`, `edges` tables — knowledge graph schema
+- NATS streams: `artifacts.process`, `artifacts.processed`, `search.embed`, `search.embedded`, `search.rerank`, `digest.generate`, `digest.generated`
+
+### Validation Checkpoints
+
+- After Scope 01: `docker compose up` starts all services, health check green, schema verified
+- After Scope 02: End-to-end pipeline test — URL submitted → artifact stored with embedding
+- After Scope 03: Capture API contract tests — all input types accepted, error codes correct
+- After Scope 04: Graph edges created on capture — verify via SQL query after pipeline run
+- After Scope 05: Search accuracy gate — vague query returns correct artifact
+- After Scope 06: Telegram bot E2E — message sent → capture confirmed → search works
+- After Scope 07: Digest E2E — cron fires → digest generated → API returns it
+- After Scope 08: Web UI E2E — search page renders, query returns results, artifact detail loads
+
+### Scope Dependency Graph
+
+| # | Scope | Depends On | Surfaces | Status |
+|---|-------|-----------|----------|--------|
+| 01 | project-scaffold | — | Infra, Backend | Not Started |
+| 02 | processing-pipeline | 01 | Backend (Go + Python) | Not Started |
+| 03 | active-capture-api | 02 | API | Not Started |
+| 04 | knowledge-graph-linking | 02 | Backend | Not Started |
+| 05 | semantic-search | 04 | API, Backend | Not Started |
+| 06 | telegram-bot | 03, 05 | Bot, API | Not Started |
+| 07 | daily-digest | 04 | Backend, API, Bot | Not Started |
+| 08 | web-ui | 05, 07 | Web UI | Not Started |
+
+### Spec Coverage
+
+All 19 spec scenarios (SC-F01 through SC-F19) and 12 requirements (R-001 through R-012) are covered.
+Key mapping: SC-F04 (voice note) → Scope 02 (pipeline) + Scope 06 (Telegram delivery).
+
+---
+
 ## Scope: 01-project-scaffold
 
 **Status:** Not Started
@@ -35,6 +89,13 @@ Scenario: SCN-002-004 Data persistence across restarts
   Given artifacts have been stored in PostgreSQL
   When docker compose down and docker compose up are run
   Then all artifacts and knowledge graph data persist
+
+Scenario: SCN-002-044 Missing required config fails on startup
+  Given the .env file is missing a required LLM configuration variable
+  When the user runs "docker compose up -d"
+  Then smackerel-core logs an explicit error naming the missing variable
+  And exits with a non-zero code
+  And does not fall back to hidden defaults
 ```
 
 ### Implementation Plan
@@ -56,7 +117,10 @@ Scenario: SCN-002-004 Data persistence across restarts
 | 3 | NATS pub/sub roundtrip | Integration | internal/nats/client_test.go | SCN-002-003 |
 | 4 | Data survives container restart | E2E | tests/e2e/test_persistence.sh | SCN-002-004 |
 | 5 | Health check reports all statuses | Integration | internal/api/health_test.go | SCN-002-001 |
-| 6 | Regression E2E: compose lifecycle | E2E | tests/e2e/test_compose_start.sh | SCN-002-001 |
+| 6 | Missing config fails startup explicitly | Unit | internal/config/validate_test.go | SCN-002-044 |
+| 7 | Regression E2E: compose lifecycle | Regression E2E | tests/e2e/test_compose_start.sh | SCN-002-001 |
+| 8 | Regression E2E: data persistence | Regression E2E | tests/e2e/test_persistence.sh | SCN-002-004 |
+| 9 | Regression E2E: config validation | Regression E2E | tests/e2e/test_config_fail.sh | SCN-002-044 |
 
 ### Definition of Done
 - [ ] Go project builds and produces smackerel-core binary
@@ -67,7 +131,8 @@ Scenario: SCN-002-004 Data persistence across restarts
 - [ ] GET /api/health returns aggregated service statuses
 - [ ] .env.example documents all required and optional variables
 - [ ] Data persists across docker compose down/up cycle
-- [ ] Scenario-specific E2E regression tests for compose lifecycle
+- [ ] Missing required config variables fail startup with explicit error (no hidden defaults)
+- [ ] Scenario-specific E2E regression tests for compose lifecycle, persistence, and config validation
 - [ ] Broader E2E regression suite passes
 - [ ] Zero warnings, lint/format clean
 
@@ -118,6 +183,21 @@ Scenario: SCN-002-010 Processing tier assignment
   When the intake stage runs
   Then the processing tier is set to "full"
   And the full pipeline (summary + entities + action items + connections) executes
+
+Scenario: SCN-002-037 Voice note transcription via Whisper
+  Given an audio file is published to NATS for processing
+  When the ML sidecar receives the audio
+  Then it transcribes the audio via Whisper
+  And returns the transcript text
+  And the Go core processes the transcript through the standard pipeline
+
+Scenario: SCN-002-038 LLM processing failure handling
+  Given extracted content is published to NATS
+  When the ML sidecar calls the LLM and receives a timeout or error
+  Then the error is logged with artifact ID and error details
+  And the artifact is marked with processing_tier "metadata"
+  And no partial or malformed data is stored
+  And the system remains healthy for subsequent requests
 ```
 
 ### Implementation Plan
@@ -142,7 +222,11 @@ Scenario: SCN-002-010 Processing tier assignment
 | 6 | Duplicate detected by content hash | Unit | internal/pipeline/dedup_test.go | SCN-002-009 |
 | 7 | Processing tier assigned from signals | Unit | internal/pipeline/tier_test.go | SCN-002-010 |
 | 8 | Full pipeline: URL to stored artifact | Integration | tests/integration/test_pipeline.go | SCN-002-005 |
-| 9 | Regression E2E: capture to storage pipeline | E2E | tests/e2e/test_capture_pipeline.sh | SCN-002-005 |
+| 9 | Voice note transcribed via Whisper | Integration | tests/integration/test_whisper.py | SCN-002-037 |
+| 10 | LLM timeout/error handled gracefully | Integration | tests/integration/test_llm_failure.py | SCN-002-038 |
+| 11 | Regression E2E: capture to storage pipeline | Regression E2E | tests/e2e/test_capture_pipeline.sh | SCN-002-005 |
+| 12 | Regression E2E: voice note pipeline | Regression E2E | tests/e2e/test_voice_pipeline.sh | SCN-002-037 |
+| 13 | Regression E2E: LLM failure resilience | Regression E2E | tests/e2e/test_llm_failure_e2e.sh | SCN-002-038 |
 
 ### Definition of Done
 - [ ] Article URLs extracted via go-readability with title, author, date
@@ -152,7 +236,9 @@ Scenario: SCN-002-010 Processing tier assignment
 - [ ] Content hash dedup prevents reprocessing of identical content
 - [ ] Processing tiers (Full/Standard/Light/Metadata) assign correctly
 - [ ] NATS pub/sub roundtrip works: core -> ml -> core
-- [ ] Scenario-specific E2E regression tests for capture pipeline
+- [ ] Voice note transcription via Whisper in ML sidecar
+- [ ] LLM timeout/error handled gracefully — artifact marked metadata-only, no partial data stored
+- [ ] Scenario-specific E2E regression tests for capture pipeline, voice notes, and LLM failure
 - [ ] Broader E2E regression suite passes
 - [ ] Zero warnings, lint/format clean
 
@@ -198,6 +284,20 @@ Scenario: SCN-002-015 Invalid input returns 400
   Given the API is running
   When POST /api/capture is called with empty body
   Then the system returns 400 with validation error
+
+Scenario: SCN-002-039 ML sidecar unavailable returns 503
+  Given the API is running
+  And the ML sidecar (smackerel-ml) is not responding
+  When POST /api/capture is called with a valid URL
+  Then the system returns 503 with message "Processing service unavailable"
+  And the request is not partially stored
+
+Scenario: SCN-002-040 Capture voice note URL via API
+  Given the API is running
+  When POST /api/capture is called with {"voice_url": "https://example.com/audio.ogg"}
+  Then the system sends the audio to the ML sidecar for Whisper transcription
+  And processes the transcript through the LLM pipeline
+  And returns 200 with artifact type "note" and the transcription summary
 ```
 
 ### Implementation Plan
@@ -218,7 +318,11 @@ Scenario: SCN-002-015 Invalid input returns 400
 | 4 | Duplicate returns 409 | Integration | internal/api/capture_test.go | SCN-002-014 |
 | 5 | Empty body returns 400 | Unit | internal/api/capture_test.go | SCN-002-015 |
 | 6 | Processing under 30s with cloud LLM | Stress | tests/stress/test_capture_latency.go | SCN-002-011 |
-| 7 | Regression E2E: capture API contract | E2E | tests/e2e/test_capture_api.sh | SCN-002-011 |
+| 7 | ML sidecar down returns 503 | Integration | internal/api/capture_test.go | SCN-002-039 |
+| 8 | Voice note URL captured via API | Integration | internal/api/capture_test.go | SCN-002-040 |
+| 9 | Regression E2E: capture API contract | Regression E2E | tests/e2e/test_capture_api.sh | SCN-002-011 |
+| 10 | Regression E2E: capture error responses | Regression E2E | tests/e2e/test_capture_errors.sh | SCN-002-014, SCN-002-015, SCN-002-039 |
+| 11 | Regression E2E: voice capture via API | Regression E2E | tests/e2e/test_voice_capture_api.sh | SCN-002-040 |
 
 ### Definition of Done
 - [ ] POST /api/capture accepts URL, text, and voice_url inputs
@@ -228,7 +332,9 @@ Scenario: SCN-002-015 Invalid input returns 400
 - [ ] Plain text classified as idea/note with entity extraction
 - [ ] Duplicate URL returns 409 with existing artifact
 - [ ] Invalid input returns 400 with descriptive error
-- [ ] Scenario-specific E2E regression tests for capture API
+- [ ] ML sidecar unavailable returns 503 with descriptive message
+- [ ] Voice note URL accepted and transcribed via Whisper pipeline
+- [ ] Scenario-specific E2E regression tests for capture API, error responses, and voice capture
 - [ ] Broader E2E regression suite passes
 - [ ] Zero warnings, lint/format clean
 
@@ -283,7 +389,8 @@ Scenario: SCN-002-019 Temporal linking
 | 2 | Person entity matched and edge created | Integration | internal/graph/entity_test.go | SCN-002-017 |
 | 3 | Topic created/assigned from artifact tags | Integration | internal/graph/topic_test.go | SCN-002-018 |
 | 4 | Same-day artifacts get temporal edge | Unit | internal/graph/temporal_test.go | SCN-002-019 |
-| 5 | Regression E2E: artifact creates graph edges | E2E | tests/e2e/test_knowledge_graph.sh | SCN-002-016 |
+| 5 | Regression E2E: vector similarity linking | Regression E2E | tests/e2e/test_knowledge_graph.sh | SCN-002-016 |
+| 6 | Regression E2E: entity and topic linking | Regression E2E | tests/e2e/test_graph_entities.sh | SCN-002-017, SCN-002-018 |
 
 ### Definition of Done
 - [ ] Vector similarity finds top 10 related artifacts via pgvector
@@ -351,7 +458,9 @@ Scenario: SCN-002-024 Search response under 3 seconds
 | 3 | Topic filter works | Integration | internal/api/search_test.go | SCN-002-022 |
 | 4 | Empty results return graceful message | Unit | internal/api/search_test.go | SCN-002-023 |
 | 5 | Search < 3s with 1000 artifacts | Stress | tests/stress/test_search_latency.go | SCN-002-024 |
-| 6 | Regression E2E: search accuracy | E2E | tests/e2e/test_search.sh | SCN-002-020 |
+| 6 | Regression E2E: vague query accuracy | Regression E2E | tests/e2e/test_search.sh | SCN-002-020 |
+| 7 | Regression E2E: person and topic search | Regression E2E | tests/e2e/test_search_filters.sh | SCN-002-021, SCN-002-022 |
+| 8 | Regression E2E: empty results message | Regression E2E | tests/e2e/test_search_empty.sh | SCN-002-023 |
 
 ### Definition of Done
 - [ ] POST /api/search accepts natural language queries
@@ -402,6 +511,18 @@ Scenario: SCN-002-029 Telegram unauthorized chat rejected
   Given the bot is configured with chat ID allowlist
   When a message arrives from an unauthorized chat
   Then the bot ignores the message silently
+
+Scenario: SCN-002-041 Telegram voice note capture
+  Given the user has a Telegram conversation with the Smackerel bot
+  When the user sends a voice note
+  Then the bot forwards the audio to the capture pipeline for Whisper transcription
+  And processes the transcript through the LLM pipeline
+  And replies: ". Saved: 'Extracted Title' (note, N connections)"
+
+Scenario: SCN-002-042 Telegram unsupported attachment type
+  Given the user has a Telegram conversation with the Smackerel bot
+  When the user sends an unsupported file type (e.g., .zip archive)
+  Then the bot replies: "? Not sure what to do with this. Can you add context?"
 ```
 
 ### Implementation Plan
@@ -422,7 +543,11 @@ Scenario: SCN-002-029 Telegram unauthorized chat rejected
 | 3 | /find returns search results | Integration | internal/telegram/bot_test.go | SCN-002-027 |
 | 4 | /digest returns daily digest | Integration | internal/telegram/bot_test.go | SCN-002-028 |
 | 5 | Unauthorized chat rejected | Unit | internal/telegram/auth_test.go | SCN-002-029 |
-| 6 | Regression E2E: Telegram capture flow | E2E | tests/e2e/test_telegram.sh | SCN-002-025 |
+| 6 | Voice note triggers Whisper + capture | Integration | internal/telegram/bot_test.go | SCN-002-041 |
+| 7 | Unsupported attachment prompts user | Unit | internal/telegram/bot_test.go | SCN-002-042 |
+| 8 | Regression E2E: Telegram URL capture | Regression E2E | tests/e2e/test_telegram.sh | SCN-002-025 |
+| 9 | Regression E2E: Telegram voice capture | Regression E2E | tests/e2e/test_telegram_voice.sh | SCN-002-041 |
+| 10 | Regression E2E: Telegram auth rejection | Regression E2E | tests/e2e/test_telegram_auth.sh | SCN-002-029 |
 
 ### Definition of Done
 - [ ] Telegram bot connects via long-polling and receives messages
@@ -432,8 +557,10 @@ Scenario: SCN-002-029 Telegram unauthorized chat rejected
 - [ ] /digest command returns daily digest
 - [ ] /status command returns system stats
 - [ ] Chat ID allowlist enforced -- unauthorized chats silently ignored
+- [ ] Voice notes transcribed via Whisper and captured as artifacts
+- [ ] Unsupported attachment types prompt user for context
 - [ ] Bot responses use monochrome text markers, no emoji
-- [ ] Scenario-specific E2E regression tests for Telegram flow
+- [ ] Scenario-specific E2E regression tests for Telegram URL capture, voice capture, and auth
 - [ ] Broader E2E regression suite passes
 - [ ] Zero warnings, lint/format clean
 
@@ -464,6 +591,13 @@ Scenario: SCN-002-032 Digest via Telegram
   Given the user configured Telegram as digest channel
   When the digest is generated
   Then it is also sent to the user's Telegram chat
+
+Scenario: SCN-002-043 Digest LLM failure fallback
+  Given notable artifacts were processed since the last digest
+  When the digest cron fires and the LLM is unavailable
+  Then the system generates a plain-text fallback digest from metadata
+  And includes action item count and artifact count without LLM summaries
+  And logs the LLM failure for observability
 ```
 
 ### Implementation Plan
@@ -483,7 +617,10 @@ Scenario: SCN-002-032 Digest via Telegram
 | 3 | Digest delivered via Telegram | Integration | internal/digest/delivery_test.go | SCN-002-032 |
 | 4 | Digest under 150 words | Unit | internal/digest/generator_test.go | SCN-002-030 |
 | 5 | GET /api/digest returns latest | Integration | internal/api/digest_test.go | SCN-002-030 |
-| 6 | Regression E2E: digest generation | E2E | tests/e2e/test_digest.sh | SCN-002-030 |
+| 6 | LLM failure produces fallback digest | Integration | internal/digest/generator_test.go | SCN-002-043 |
+| 7 | Regression E2E: digest with action items | Regression E2E | tests/e2e/test_digest.sh | SCN-002-030 |
+| 8 | Regression E2E: quiet day digest | Regression E2E | tests/e2e/test_digest_quiet.sh | SCN-002-031 |
+| 9 | Regression E2E: digest Telegram delivery | Regression E2E | tests/e2e/test_digest_telegram.sh | SCN-002-032 |
 
 ### Definition of Done
 - [ ] Digest cron runs at configured time
@@ -492,7 +629,8 @@ Scenario: SCN-002-032 Digest via Telegram
 - [ ] Quiet days produce minimal "all quiet" digest
 - [ ] GET /api/digest returns latest generated digest
 - [ ] Telegram delivery sends digest to configured chat
-- [ ] Scenario-specific E2E regression tests for digest
+- [ ] LLM failure fallback generates plain-text digest from metadata
+- [ ] Scenario-specific E2E regression tests for digest generation, quiet day, and Telegram delivery
 - [ ] Broader E2E regression suite passes
 - [ ] Zero warnings, lint/format clean
 
@@ -543,7 +681,9 @@ Scenario: SCN-002-036 System status page
 | 3 | Settings page shows service status | Integration | internal/web/settings_test.go | SCN-002-035 |
 | 4 | Status page reports all services | Integration | internal/web/status_test.go | SCN-002-036 |
 | 5 | Monochrome icons render correctly | Unit | internal/web/icons_test.go | SCN-002-033 |
-| 6 | Regression E2E: web UI loads and searches | E2E | tests/e2e/test_web_ui.sh | SCN-002-033 |
+| 6 | Regression E2E: web search flow | Regression E2E | tests/e2e/test_web_ui.sh | SCN-002-033 |
+| 7 | Regression E2E: artifact detail view | Regression E2E | tests/e2e/test_web_detail.sh | SCN-002-034 |
+| 8 | Regression E2E: settings and status pages | Regression E2E | tests/e2e/test_web_settings.sh | SCN-002-035, SCN-002-036 |
 
 ### Definition of Done
 - [ ] Search page with query input and HTMX-powered results

@@ -1,0 +1,48 @@
+{
+  "version": 3,
+  "featureDir": "specs/003-phase2-ingestion",
+  "featureName": "Phase 2: Passive Ingestion",
+  "status": "not_started",
+  "workflowMode": "spec-scope-hardening",
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "bootstrap",
+    "currentScope": null,
+    "runStartedAt": "2026-04-06T12:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      { "scope": 1, "name": "Connector Framework", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 2, "name": "IMAP Email Connector", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 3, "name": "CalDAV Calendar Connector", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 4, "name": "YouTube Connector", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 5, "name": "Bookmarks Import", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 6, "name": "Topic Lifecycle", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 7, "name": "Settings UI Connectors", "status": "not_started", "dependsOn": [2, 3, 4, 5], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
+    ],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-06T12:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": { "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md" },
+  "notes": "Phase 2: Generic IMAP email, CalDAV calendar, YouTube, Chrome bookmarks, topic lifecycle."
+}
