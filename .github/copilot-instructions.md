@@ -8,6 +8,16 @@ Smackerel is already Bubbles-bootstrapped. The current repository contains Bubbl
 - Not committed yet: Go runtime sources, Python ML sidecar sources, Docker Compose stack, or a project CLI such as `./smackerel.sh`.
 - Do not invent commands or paths for code that is not present in the repository.
 
+## Documentation References
+
+Project-owned operational docs live in:
+
+- `README.md` — project overview and runtime standards summary
+- `docs/smackerel.md` — product and architecture design
+- `docs/Development.md` — current repo state plus required runtime command/config contract
+- `docs/Testing.md` — bootstrap validation and future runtime testing rules
+- `docs/Docker_Best_Practices.md` — Docker lifecycle, cleanup, freshness, and isolation rules
+
 ## Planned Runtime Stack
 
 | Area | Technology | Scope |
@@ -36,6 +46,39 @@ Use committed framework validation commands for current work:
 | Regression baseline guard | `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/<feature> --verbose` | 10 min |
 | Runtime build/test/lint | `N/A until runtime sources and repo CLI are committed` | N/A |
 
+## Required Runtime Standards Once Implementation Exists
+
+When runtime code lands, Smackerel must adopt the following standards in the same change set that introduces the implementation.
+
+### One CLI Surface
+
+The runtime must expose one documented entrypoint:
+
+```bash
+./smackerel.sh
+```
+
+It must own config generation, build, lint, format, test, stack lifecycle, logs, status, and cleanup. Do not document direct `go`, `python`, `docker compose`, or `pytest` commands as the normal project workflow.
+
+### Configuration Single Source Of Truth
+
+- All runtime config values must originate from `config/smackerel.yaml`.
+- Generated env files and Compose files are derived artifacts, not hand-edited sources of truth.
+- Missing required config must fail loudly. No hidden defaults or fallback hostnames/ports.
+
+### Test Environment Isolation
+
+- Persistent dev state is for manual development only.
+- Automated tests must use disposable storage.
+- E2E, validation, and chaos runs must never write to the main dev store.
+
+### Smart Docker Lifecycle
+
+- Prefer project-scoped cleanup before broader Docker cleanup.
+- Preserve persistent volumes by default.
+- Prove build freshness through image identity metadata, not timestamps or `latest` tags.
+- Use Compose project names, profiles, and labels for grouping and lifecycle control.
+
 ---
 
 ## Testing Requirements
@@ -63,10 +106,35 @@ Use committed framework validation commands for current work:
 
 Do not fill in runtime commands until the corresponding code and repo-standard command surface are actually committed.
 
+### Planned Runtime CLI Contract
+
+The future runtime command surface must converge on:
+
+- `./smackerel.sh config generate`
+- `./smackerel.sh build`
+- `./smackerel.sh check`
+- `./smackerel.sh lint`
+- `./smackerel.sh format`
+- `./smackerel.sh test unit`
+- `./smackerel.sh test integration`
+- `./smackerel.sh test e2e`
+- `./smackerel.sh test stress`
+- `./smackerel.sh up`
+- `./smackerel.sh down`
+- `./smackerel.sh status`
+- `./smackerel.sh logs`
+- `./smackerel.sh clean smart|full|status|measure`
+
 ### Live-Stack Test Authenticity
 
 - Tests labeled `integration`, `e2e-api`, `e2e-ui`, or otherwise described as live-stack MUST hit the real running system.
 - If a test uses request interception such as `route()`, `intercept()`, `msw`, `nock`, or equivalent, it is mocked and MUST be classified as `unit`, `functional`, or `ui-unit` instead.
+
+### E2E And Validation Isolation
+
+- `./smackerel.sh test e2e` must run against the disposable test stack, never the persistent dev stack.
+- Validation and chaos workflows must use isolated Compose projects and disposable state.
+- Synthetic test fixtures must be uniquely identifiable and safe to clean up.
 
 ### Adversarial Regression Tests For Bug Fixes
 
@@ -130,6 +198,9 @@ All work must be organized under feature or bug folders:
 ```text
 Product overview:     README.md
 Architecture/design:  docs/smackerel.md
+Development guide:    docs/Development.md
+Testing guide:        docs/Testing.md
+Docker operations:    docs/Docker_Best_Practices.md
 Specifications:       specs/
 Bootstrap config:     .github/ and .specify/memory/
 Committed source:     no runtime source tree committed yet

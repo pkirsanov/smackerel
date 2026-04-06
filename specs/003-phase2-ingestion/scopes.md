@@ -4,6 +4,39 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 
 ---
 
+## Execution Outline
+
+### Phase Order
+1. **Scope 01 — Connector Framework**: Generic connector interface, registry, cron scheduler, sync state persistence, rate-limit backoff
+2. **Scope 02 — IMAP Email Connector**: IMAP protocol via go-imap v2, Gmail OAuth2 XOAUTH2, source qualifiers, tier assignment, action-item extraction
+3. **Scope 03 — CalDAV Calendar Connector**: CalDAV protocol via go-webdav, Google adapter, attendee linking, pre-meeting context assembly
+4. **Scope 04 — YouTube Connector**: YouTube Data API v3, engagement-based tiers, transcript fetching via Python sidecar, topic tagging
+5. **Scope 05 — Bookmarks Import**: Chrome JSON + Netscape HTML parsing, folder-to-topic mapping, dedup, async batch queue
+6. **Scope 06 — Topic Lifecycle**: Momentum scoring (R-208 formula), state machine transitions, decay notifications, resurface logic
+7. **Scope 07 — Settings UI Connectors**: Connector cards, OAuth connect/disconnect flows, manual sync triggers, bookmark upload
+
+### New Types & Signatures
+- `Connector` interface: `ID()`, `Connect(ctx, config)`, `Sync(ctx, cursor)`, `GetState(ctx)`, `Health(ctx)`, `Close()`
+- `SyncState` struct: `ConnectorID`, `CursorValue`, `LastSyncAt`, `ItemsSynced`, `ErrorCount`, `LastError`
+- `ConnectorConfig` struct: `SourceID`, `AuthType`, `Credentials`, `Schedule`, `Qualifiers`, `ProcessingRules`
+- `QualifierConfig` struct: `PrioritySenders`, `SkipLabels`, `PriorityLabels`, `MinDwellTime`, `SkipDomains`
+- IMAP connector: `imap.Connector` with `gmail_adapter.go` for XOAUTH2
+- CalDAV connector: `caldav.Connector` with `google_adapter.go` for OAuth2
+- YouTube connector: `youtube.Connector` with engagement qualifiers
+- Bookmark importer: `bookmarks.Importer` with multi-format parser
+- Topic lifecycle: momentum formula, state machine, decay queue
+- OAuth2 shared module: token encrypt/store, auto-refresh, provider adapters
+- REST endpoints: `POST /api/bookmarks/import`, connector status on `/api/health`
+
+### Validation Checkpoints
+- After Scope 01: Connector interface, scheduler, state persistence, and backoff verified via unit + integration + E2E
+- After Scopes 02-04 (parallel-eligible): Each connector verified independently with sync cycle E2E tests
+- After Scope 05: Bookmark import verified with parse + dedup + async queue E2E
+- After Scope 06: Topic momentum + transitions verified against R-208 formula E2E
+- After Scope 07: Full UI integration validates OAuth flows + status indicators + manual sync E2E
+
+---
+
 ## Scope: 01-connector-framework
 
 **Status:** Not Started
@@ -35,6 +68,13 @@ Scenario: SCN-003-004 Error handling and backoff
   Then exponential backoff with jitter is applied
   And the error is logged and error_count incremented
   And the next scheduled sync proceeds normally
+
+Scenario: SCN-003-004b Connector authentication failure
+  Given a connector with invalid or expired credentials attempts to connect
+  When Connect() is called
+  Then a clear authentication error is returned
+  And the connector status shows "disconnected - auth error"
+  And the health check surfaces the auth failure
 ```
 
 ### Implementation Plan
@@ -54,6 +94,7 @@ Scenario: SCN-003-004 Error handling and backoff
 | 3 | Sync state persisted correctly | Integration | internal/connector/state_test.go | SCN-003-003 |
 | 4 | Rate limit triggers backoff | Unit | internal/connector/retry_test.go | SCN-003-004 |
 | 5 | Regression E2E: connector lifecycle | E2E | tests/e2e/test_connector_framework.sh | SCN-003-001 |
+| 6 | Auth failure surfaces in health check | Unit | internal/connector/registry_test.go | SCN-003-004b |
 
 ### Definition of Done
 - [ ] Connector interface defined with ID, Connect, Sync, Health, Close
@@ -106,6 +147,20 @@ Scenario: SCN-003-009 OAuth token auto-refresh
   When the system detects this before the next sync
   Then it refreshes the token automatically
   And the sync proceeds without interruption
+
+Scenario: SCN-003-009b OAuth token revoked externally
+  Given the user revoked Gmail access from their Google account
+  When the next IMAP sync attempts to connect
+  Then the system detects the auth failure
+  And marks Gmail as "disconnected - re-auth required"
+  And surfaces re-auth prompt in the daily digest
+
+Scenario: SCN-003-009c IMAP connection failure
+  Given the IMAP server is unreachable
+  When the scheduled sync runs
+  Then the error is logged and error_count incremented
+  And the connector status shows the connection error
+  And the next scheduled sync retries normally
 ```
 
 ### Implementation Plan
@@ -129,6 +184,8 @@ Scenario: SCN-003-009 OAuth token auto-refresh
 | 4 | Junk/Trash folder emails skipped | Unit | internal/connector/imap/qualifiers_test.go | SCN-003-008 |
 | 5 | OAuth token refreshed before expiry | Integration | internal/auth/oauth_test.go | SCN-003-009 |
 | 6 | Regression E2E: Gmail IMAP sync cycle | E2E | tests/e2e/test_imap_sync.sh | SCN-003-005 |
+| 7 | Revoked token detected and surfaced | Integration | internal/connector/imap/imap_test.go | SCN-003-009b |
+| 8 | IMAP connection failure logged + retried | Unit | internal/connector/imap/imap_test.go | SCN-003-009c |
 
 ### Definition of Done
 - [ ] IMAP connector syncs emails from any IMAP server
@@ -178,6 +235,13 @@ Scenario: SCN-003-013 Pre-meeting context building
   And 3 email threads with David exist
   When pre-meeting context is assembled
   Then the context includes: recent emails, shared topics, pending commitments
+
+Scenario: SCN-003-013b CalDAV sync failure with retry
+  Given the CalDAV server returns a 503 Service Unavailable
+  When the sync encounters this error
+  Then the error is logged and error_count incremented
+  And the sync retries with backoff
+  And already-processed events from this cycle are not lost
 ```
 
 ### Implementation Plan
@@ -198,6 +262,7 @@ Scenario: SCN-003-013 Pre-meeting context building
 | 3 | Recurring events not duplicated | Unit | internal/connector/caldav/recurrence_test.go | SCN-003-012 |
 | 4 | Pre-meeting context assembled correctly | Integration | internal/connector/caldav/context_test.go | SCN-003-013 |
 | 5 | Regression E2E: CalDAV sync cycle | E2E | tests/e2e/test_caldav_sync.sh | SCN-003-010 |
+| 6 | CalDAV 503 logged and retried | Unit | internal/connector/caldav/caldav_test.go | SCN-003-013b |
 
 ### Definition of Done
 - [ ] CalDAV connector syncs events from any CalDAV server
@@ -242,6 +307,13 @@ Scenario: SCN-003-017 Playlist video at full tier
   When the YouTube sync detects the playlist addition
   Then the video is processed at Full tier
   And the topic "leadership" is created or updated
+
+Scenario: SCN-003-017b YouTube API quota exhaustion
+  Given the YouTube Data API returns a 403 quota exceeded error
+  When the sync encounters this error
+  Then the sync stops gracefully and preserves the current cursor
+  And the error is surfaced in health check
+  And the next scheduled sync resumes from the saved cursor
 ```
 
 ### Implementation Plan
@@ -260,6 +332,7 @@ Scenario: SCN-003-017 Playlist video at full tier
 | 3 | No-transcript video handled gracefully | Integration | internal/connector/youtube/transcript_test.go | SCN-003-016 |
 | 4 | Playlist video at Full tier with topic | Integration | internal/connector/youtube/playlist_test.go | SCN-003-017 |
 | 5 | Regression E2E: YouTube sync cycle | E2E | tests/e2e/test_youtube_sync.sh | SCN-003-014 |
+| 6 | API quota exhaustion handled gracefully | Unit | internal/connector/youtube/youtube_test.go | SCN-003-017b |
 
 ### Definition of Done
 - [ ] YouTube connector syncs watch history, liked videos, playlists
@@ -305,6 +378,12 @@ Scenario: SCN-003-021 Large bookmark file with progress
   When the import begins
   Then progress is reported (queued count, processed count)
   And the system does not block other operations during import
+
+Scenario: SCN-003-021b Malformed bookmark file rejected
+  Given the user uploads a file that is neither Chrome JSON nor Netscape HTML
+  When the parser attempts to process it
+  Then the import fails with a clear "unsupported format" error
+  And no partial artifacts are created
 ```
 
 ### Implementation Plan
@@ -324,6 +403,7 @@ Scenario: SCN-003-021 Large bookmark file with progress
 | 3 | Duplicate URLs skipped | Unit | internal/connector/bookmarks/import_test.go | SCN-003-020 |
 | 4 | Large file processed async with progress | Integration | internal/connector/bookmarks/import_test.go | SCN-003-021 |
 | 5 | Regression E2E: bookmark import flow | E2E | tests/e2e/test_bookmark_import.sh | SCN-003-018 |
+| 6 | Malformed file rejected with clear error | Unit | internal/connector/bookmarks/parser_test.go | SCN-003-021b |
 
 ### Definition of Done
 - [ ] Chrome JSON bookmark format parsed correctly
@@ -373,6 +453,13 @@ Scenario: SCN-003-026 Archived topic resurfaces
   Given a topic is "archived"
   When the user captures a new artifact matching that topic
   Then the topic transitions back to "active"
+
+Scenario: SCN-003-026b Momentum calculation with zero activity windows
+  Given a brand-new topic with 0 captures in all time windows
+  When the lifecycle cron recalculates momentum
+  Then the momentum score is 0
+  And no state transition occurs
+  And the topic stays at its current state
 ```
 
 ### Implementation Plan
@@ -393,6 +480,7 @@ Scenario: SCN-003-026 Archived topic resurfaces
 | 4 | Dormant after 90 days inactive | Unit | internal/lifecycle/transition_test.go | SCN-003-025 |
 | 5 | Archived topic resurfaces on new capture | Integration | internal/lifecycle/resurface_test.go | SCN-003-026 |
 | 6 | Regression E2E: topic lifecycle | E2E | tests/e2e/test_topic_lifecycle.sh | SCN-003-022 |
+| 7 | Zero-activity momentum stays at 0 | Unit | internal/lifecycle/momentum_test.go | SCN-003-026b |
 
 ### Definition of Done
 - [ ] Daily lifecycle cron recalculates all topic momentum scores
@@ -435,6 +523,12 @@ Scenario: SCN-003-030 Bookmark file upload
   Given the user navigates to Settings > Bookmarks
   When they upload a bookmark file
   Then the import starts with progress reporting
+
+Scenario: SCN-003-030b OAuth redirect failure
+  Given the user initiates Gmail OAuth connect
+  When the OAuth redirect fails or the user cancels
+  Then the Settings page shows "Connection failed" with a retry option
+  And the connector stays in "disconnected" state
 ```
 
 ### Implementation Plan
@@ -453,6 +547,7 @@ Scenario: SCN-003-030 Bookmark file upload
 | 3 | Manual sync triggers and reports | Integration | internal/web/sync_test.go | SCN-003-029 |
 | 4 | Bookmark upload and progress | Integration | internal/web/bookmarks_test.go | SCN-003-030 |
 | 5 | Regression E2E: settings connector UI | E2E | tests/e2e/test_settings_connectors.sh | SCN-003-027 |
+| 6 | OAuth redirect failure handled | Integration | internal/web/oauth_test.go | SCN-003-030b |
 
 ### Definition of Done
 - [ ] Connector cards show status, last sync, items, errors

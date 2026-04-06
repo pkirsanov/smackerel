@@ -23,6 +23,9 @@
 |----------|------|
 | Product overview | `README.md` |
 | Product design and architecture | `docs/smackerel.md` |
+| Development guide | `docs/Development.md` |
+| Testing guide | `docs/Testing.md` |
+| Docker lifecycle guide | `docs/Docker_Best_Practices.md` |
 | Phase specifications | `specs/` |
 
 ---
@@ -59,6 +62,28 @@ DOWN_COMMAND=N/A - no stack lifecycle command surface is committed yet
 STATUS_COMMAND=bash .github/bubbles/scripts/cli.sh doctor
 ```
 
+### Planned Runtime Command Contract (Documentation Only)
+
+The future runtime must expose a single repo CLI, but these commands are not executable until the runtime is committed.
+
+```text
+FUTURE_CLI_ENTRYPOINT=./smackerel.sh
+FUTURE_CONFIG_COMMAND=./smackerel.sh config generate
+FUTURE_BUILD_COMMAND=./smackerel.sh build
+FUTURE_CHECK_COMMAND=./smackerel.sh check
+FUTURE_LINT_COMMAND=./smackerel.sh lint
+FUTURE_FORMAT_COMMAND=./smackerel.sh format
+FUTURE_UNIT_COMMAND=./smackerel.sh test unit
+FUTURE_INTEGRATION_COMMAND=./smackerel.sh test integration
+FUTURE_E2E_COMMAND=./smackerel.sh test e2e
+FUTURE_STRESS_COMMAND=./smackerel.sh test stress
+FUTURE_UP_COMMAND=./smackerel.sh up
+FUTURE_DOWN_COMMAND=./smackerel.sh down
+FUTURE_STATUS_COMMAND=./smackerel.sh status
+FUTURE_LOGS_COMMAND=./smackerel.sh logs
+FUTURE_CLEAN_COMMAND=./smackerel.sh clean smart|full|status|measure
+```
+
 ---
 
 ## IV. Code Patterns
@@ -68,7 +93,7 @@ STATUS_COMMAND=bash .github/bubbles/scripts/cli.sh doctor
 | Source code | Not committed yet. Planned runtime is a Go core plus a Python ML sidecar, as defined in `docs/smackerel.md` Section 23. |
 | Tests | Not committed yet. Planned coverage is Go unit tests, Python unit tests, integration tests, and end-to-end workflow tests. |
 | Specs | `specs/` |
-| Config | Project bootstrap config lives in `.github/` and `.specify/memory/`; runtime config will be added with the implementation. |
+| Config | Project bootstrap config lives in `.github/` and `.specify/memory/`; committed runtime config must converge on `config/smackerel.yaml` as a single source of truth. |
 | Docs | `README.md` and `docs/` |
 
 ---
@@ -81,6 +106,14 @@ STATUS_COMMAND=bash .github/bubbles/scripts/cli.sh doctor
 - **Async boundary:** NATS JetStream between the Go core and Python sidecar.
 - **Local inference:** Ollama.
 - **Deployment model:** Docker Compose on user-controlled hardware.
+
+### Planned Runtime Operational Contract
+
+- **Single CLI:** all runtime operations flow through `./smackerel.sh`.
+- **SSOT config:** runtime config originates from `config/smackerel.yaml` and generated artifacts.
+- **Environment isolation:** dev state is persistent; test and validation state are disposable.
+- **Smart cleanup:** default cleanup preserves persistent stores and useful caches.
+- **Freshness proof:** image identity and input hashes prove build freshness.
 
 ---
 
@@ -98,6 +131,7 @@ When encountering errors:
 
 - Project-owned Bubbles configuration must stay free of placeholder commands and dead document links.
 - Runtime stack declarations must match `docs/smackerel.md`.
+- Runtime command, testing, and Docker lifecycle rules must match `docs/Development.md`, `docs/Testing.md`, and `docs/Docker_Best_Practices.md`.
 - Do not advertise commands, CLIs, or source paths that are not committed in the repository.
 - When runtime code lands, update this registry, `.github/copilot-instructions.md`, and terminal discipline in the same change set.
 

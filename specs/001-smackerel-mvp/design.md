@@ -5,6 +5,37 @@
 
 ---
 
+## Design Brief
+
+**Current State:** The repository contains product design (`docs/smackerel.md`), a fully elaborated spec with 12 use cases and 26 business scenarios, and phased specs (002–006). No runtime source code exists yet.
+
+**Target State:** Define the product-level architecture that all phase specs inherit from: runtime topology, visual design system, user interaction surfaces (web + Telegram), generic connector contract, processing pipeline, core data model, security model, and observability. Phase-specific designs refine but never contradict this document.
+
+**Patterns to Follow:**
+- Go monolith with internal package structure (Chi router, robfig/cron, go-telegram-bot-api)
+- Python ML sidecar behind NATS JetStream (FastAPI, litellm, sentence-transformers)
+- PostgreSQL + pgvector as the canonical store; no secondary databases
+- HTMX + Go templates for web UI; no JavaScript framework
+- Protocol-level connector abstractions (IMAP, CalDAV, webhook, feed) with thin provider adapters
+
+**Patterns to Avoid:**
+- Provider-locked connectors (e.g., Gmail SDK instead of generic IMAP) — limits portability
+- Client-side rendering frameworks (React, Vue) — contradicts HTMX mandate
+- Emoji or generic icon libraries anywhere in the UI — violates monochrome design language
+- Multi-database architectures (Redis, ElasticSearch) — spec mandates PostgreSQL + pgvector only
+
+**Resolved Decisions:**
+- Telegram bot is P0 (Phase 1), not a follow-up
+- Custom monochrome SVG icons throughout — no emoji, no FontAwesome
+- System font stack — no custom web fonts
+- Single bearer token auth for MVP — no user/role management
+- NATS JetStream as the sole async boundary between Go and Python
+
+**Open Questions:**
+- (none — all spec-level questions resolved)
+
+---
+
 ## Overview
 
 This is the product-level architecture document for the Smackerel MVP. Phase-specific designs (002-006) inherit from this document and should not contradict it. This design covers: the runtime topology, cross-cutting infrastructure, the visual design system, user interaction surfaces, and the generic connector contract.
@@ -74,6 +105,200 @@ There is no native mobile app. Telegram (and future Slack/Discord bots) IS the m
 |  |  Article Fallback (trafilatura)                   |        |
 |  +--------------------------------------------------+        |
 +-------------------------------------------------------------+
+```
+
+---
+
+## Artifact Processing Pipeline
+
+Every captured or ingested item passes through the same pipeline regardless of source. The Go core orchestrates stages 1–3 and 6–7; stages 4–5 are delegated to the Python ML sidecar via NATS.
+
+```
+  1. Ingest         2. Detect          3. Extract
+  (receive raw)     (classify type)    (content pull)
+  +-----------+     +-----------+      +-----------+
+  | URL/text/ |---->| article?  |----->| readability|
+  | voice/img |     | youtube?  |      | transcript |
+  | email/cal |     | idea?     |      | MIME parse |
+  +-----------+     | voice?    |      | OCR / ASR  |
+                    | pdf/img?  |      +-----------+
+                    +-----------+            |
+                                             v
+  6. Link           5. Embed           4. Process (ML)
+  (knowledge graph) (vector store)     (LLM pipeline)
+  +-----------+     +-----------+      +-----------+
+  | similarity|<----| 384-dim   |<-----| summary   |
+  | entity    |     | sentence- |      | entities  |
+  | topic     |     | transform |      | topics    |
+  | temporal  |     +-----------+      | actions   |
+  +-----------+                        | tier qual |
+       |                               +-----------+
+       v
+  7. Notify
+  +-----------+
+  | confirm   |
+  | to source |
+  | channel   |
+  +-----------+
+```
+
+### Processing Tiers
+
+Connectors assign a processing tier based on source qualifiers. The tier determines pipeline depth:
+
+| Tier | When | Pipeline Steps | Examples |
+|------|------|----------------|----------|
+| **Full** | High-value signal: priority sender, liked video, explicit capture, completed video | All 7 stages, full LLM analysis | Email from boss, liked YouTube video, user-captured URL |
+| **Standard** | Normal signal: regular email thread, playlist video, calendar event with attendees | Stages 1–6, standard LLM prompt (shorter) | Newsletter from known sender, scheduled meeting |
+| **Light** | Low signal: promotional, unread thread, partial video watch, empty calendar slots | Stages 1–3 + 5 only (embed raw content, skip LLM) | Promotional email, video watched <20% |
+| **Skip** | Noise: spam, unsubscribe, automated notifications | Store metadata only (stage 1), no processing | Marketing blast, automated CI notification |
+
+### Duplicate Detection
+
+Before entering the pipeline, every item is checked for duplicates:
+
+1. **URL match** — exact URL dedup (normalized: strip tracking params, fragment)
+2. **Content hash** — SHA-256 of extracted body text for non-URL items
+3. **On duplicate:** merge new metadata (capture context, new source), skip reprocessing, notify user: `? Already saved: "<Title>" (updated context)`
+
+---
+
+## Core Data Model (Conceptual)
+
+Phase-specific designs provide DDL. This section defines the entity relationships all phases share.
+
+```
++------------------+       BELONGS_TO       +------------------+
+|    Artifact      |<---------------------->|      Topic       |
++------------------+     (many-to-many)     +------------------+
+| id               |                        | id               |
+| type (enum)      |                        | name             |
+| title            |                        | state (enum)     |
+| summary          |                        | momentum_score   |
+| content_text     |                        | artifact_count   |
+| source_url       |                        | created_at       |
+| source_type      |                        | last_activity_at |
+| content_hash     |                        +------------------+
+| embedding (vec)  |
+| entities (jsonb) |       MENTIONS /        +------------------+
+| key_ideas (jsonb)|       RELATES_TO        |     Person       |
+| action_items     |<---------------------->+------------------+
+| processing_tier  |     (many-to-many)     | id               |
+| access_count     |                        | name             |
+| created_at       |                        | email            |
+| captured_at      |                        | interaction_count|
+| source_connector |                        +------------------+
+| capture_context  |
++------------------+
+        |
+        | SIMILAR_TO / CONNECTED_TO (edges table)
+        v
++------------------+
+|  KnowledgeEdge   |
++------------------+
+| source_id        |
+| target_id        |
+| edge_type        |
+| weight           |
+| created_at       |
++------------------+
+
+Artifact types: article, video, idea, note, email, event, book,
+                recipe, bill, place, trip, person-note
+
+Topic states:   emerging -> active -> hot -> cooling -> dormant -> archived
+```
+
+### Sync Cursor Table
+
+```
++------------------+
+|   SyncCursor     |
++------------------+
+| connector_id     |
+| cursor_value     |  -- opaque string: IMAP UID, page token, timestamp
+| last_sync_at     |
+| items_synced     |
+| error_count      |
+| last_error       |
++------------------+
+```
+
+---
+
+## Topic Lifecycle State Machine
+
+Topics transition based on momentum scoring. The lifecycle cron runs daily.
+
+```
+                   3+ artifacts
+   (created) -----> EMERGING
+                        |
+                  momentum >= 10
+                        v
+                      ACTIVE  <-------- user resurfaces
+                        |                    ^
+                  momentum >= 40             |
+                        v                    |
+                       HOT                   |
+                        |                    |
+                  momentum drops < 20        |
+                        v                    |
+                     COOLING                 |
+                        |                    |
+                  0 captures in 90 days      |
+                        v                    |
+                     DORMANT ----------------+
+                        |       (resurface)
+                  user archives or
+                  dismissed decay prompt
+                        v
+                     ARCHIVED
+                        |
+                  in serendipity pool
+```
+
+**Momentum formula (daily):**
+```
+momentum = (captures_7d * 3) + (captures_30d * 1) + (searches_7d * 2) - (days_since_last_activity * 0.5)
+```
+
+**Decay notification rules (from spec):**
+- Exactly one prompt per dormant topic: "You haven't engaged with X in N months. M items. Archive or resurface?"
+- User response: archive → ARCHIVED, keep → stays DORMANT (no repeat prompt), resurface → ACTIVE (one item/week resurfaced)
+
+---
+
+## NATS JetStream Message Contract
+
+All async communication between Go core and Python ML sidecar flows through NATS JetStream.
+
+| Subject | Direction | Payload | Purpose |
+|---------|-----------|---------|---------|
+| `smk.process.request` | Go → Python | `ProcessRequest` | Request LLM processing for an artifact |
+| `smk.process.result` | Python → Go | `ProcessResult` | Return LLM analysis results |
+| `smk.embed.request` | Go → Python | `EmbedRequest` | Request embedding generation |
+| `smk.embed.result` | Python → Go | `EmbedResult` | Return embedding vector |
+| `smk.transcript.request` | Go → Python | `TranscriptRequest` | Request YouTube transcript fetch |
+| `smk.transcript.result` | Python → Go | `TranscriptResult` | Return transcript text |
+| `smk.extract.request` | Go → Python | `ExtractRequest` | Request article content extraction (trafilatura) |
+| `smk.extract.result` | Python → Go | `ExtractResult` | Return extracted article text |
+
+**Stream configuration:**
+- Stream name: `SMACKEREL`
+- Retention: `WorkQueuePolicy` (consumed once)
+- Max delivery attempts: 3 (then dead-letter)
+- Ack wait: 120s (LLM calls can be slow)
+
+**Message envelope (all subjects):**
+```json
+{
+  "id": "uuid-v4",
+  "artifact_id": "uuid-v4",
+  "tier": "full|standard|light",
+  "payload": { ... },
+  "created_at": "ISO-8601"
+}
 ```
 
 ---
@@ -157,6 +382,25 @@ Icon Construction Rules:
  |  |   |    |  \   |    | +--+ |    | +--+ |
  +------+    +------+    +------+    +------+
   plus-o      mag-glass   box-down    box-up
+```
+
+**Navigation & UI Chrome Icons:**
+```
+  menu        back        expand      collapse
+ +------+    +------+    +------+    +------+
+ |  --  |    |  <-  |    |  v   |    |  ^   |
+ |  --  |    |      |    | / \  |    | \ /  |
+ |  --  |    |      |    |     |    |      |
+ +------+    +------+    +------+    +------+
+  hamburger   arrow-l     chevron-d   chevron-u
+
+  filter      settings    close       refresh
+ +------+    +------+    +------+    +------+
+ | ---- |    |  (o) |    |  X   |    |  ->  |
+ | ---  |    |  |   |    |      |    |  <-  |
+ | --   |    |  (o) |    |      |    |      |
+ +------+    +------+    +------+    +------+
+  funnel      sliders     cross       rotate
 ```
 
 ### Text Markers (Telegram Bot + Digest)
@@ -296,6 +540,14 @@ Each result card:
   Source description
   Summary snippet (2 lines max, truncated)
   Date  .  N connections  .  topic tags
+
+Search states:
+  Empty (initial):  search input only, no results area
+  Loading:          "Searching..." below input
+  Results:          ranked cards as shown above
+  No results:       "I don't have anything about that yet."
+  Low confidence:   "I'm not sure, but the closest thing I have is..."
+                    followed by single best-guess card with reduced opacity
 ```
 
 ### Artifact Detail Page
@@ -378,6 +630,53 @@ Digest content is plain text, same format as Telegram delivery.
 ! markers for action items, ~ for topics, @ for people.
 ```
 
+### Weekly Synthesis Page
+
+```
++------------------------------------------------------------------+
+|  smackerel                                                        |
++------------------------------------------------------------------+
+|  search | digest | topics | settings | status                     |
++------------------------------------------------------------------+
+|                                                                    |
+|  Weekly -- Mar 30 - Apr 5              [< prev]  [next >]        |
+|  ----                                                              |
+|                                                                    |
+|  This week: 47 artifacts processed (12 email, 8 YouTube,         |
+|  4 calendar, 23 captures)                                         |
+|                                                                    |
+|  -- Connection Discovered --                                       |
+|  Three artifacts this week converge on aligning team              |
+|  structure with system boundaries: a Team Topologies              |
+|  article (Mon), a Conway's Law talk (Wed), and your note         |
+|  about reorg (Fri). The through-line: organization                |
+|  structure shapes software architecture whether you plan          |
+|  it or not.                                                        |
+|                                                                    |
+|  -- Topic Momentum --                                              |
+|  ~ Distributed systems: 4 new captures (^ rising)                |
+|  ~ Leadership: steady at 28 items                                 |
+|  ~ Machine learning: 0 new in 4 weeks (v cooling)                |
+|                                                                    |
+|  -- Open Loops --                                                  |
+|  ! Sarah's pricing analysis (5 days overdue)                      |
+|  ! Q3 budget review (due Friday)                                  |
+|                                                                    |
+|  -- Resurface --                                                   |
+|  "The Manager's Path" highlights from January -- still            |
+|  relevant to your current leadership captures.                    |
+|                                                                    |
+|  -- Pattern --                                                     |
+|  You've been saving more video content than articles              |
+|  lately (3:1 ratio vs 1:2 last month).                            |
+|                                                                    |
++------------------------------------------------------------------+
+
+Synthesis follows the same plain text conventions as digest.
+Under 250 words. Sections: stats, connection, momentum, open
+loops, resurface, pattern observation.
+```
+
 ### Topics Page
 
 ```
@@ -438,6 +737,12 @@ Trend indicators: ^ rising, v falling, - steady (plain text, no emoji).
 |  +--------------------------------------------------------------+ |
 |  |  [video] YouTube                             [x] disconnected | |
 |  |                                              [Connect]        | |
+|  +--------------------------------------------------------------+ |
+|                                                                    |
+|  +--------------------------------------------------------------+ |
+|  |  [video] YouTube                          [!] auth expired    | |
+|  |  OAuth token expired. Re-authorize to resume sync.            | |
+|  |                                              [Reconnect]      | |
 |  +--------------------------------------------------------------+ |
 |                                                                    |
 |  +--------------------------------------------------------------+ |
@@ -523,6 +828,10 @@ Trend indicators: ^ rising, v falling, - steady (plain text, no emoji).
 
 Simple overlay modal. URL detection is automatic.
 After save: modal closes, brief toast: ". Saved: Title (type)"
+
+Error states for save:
+  Extraction fails:  "? Could not extract content from that URL. Saved metadata only."
+  Duplicate:         "? Already saved: '<Title>' (updated context)"
 ```
 
 ---
@@ -546,6 +855,41 @@ User sends:  (voice note, 15 seconds)
 
 Bot replies:  . Saved: "Delegation framework for managers" (note, transcribed)
               #leadership #management
+
+User sends:  (photo of whiteboard)
+
+Bot replies:  . Saved: "Whiteboard -- org chart draft" (note, OCR)
+              #team-structure
+
+User sends:  (PDF attachment)
+
+Bot replies:  . Saved: "Q3 Budget Proposal" (article, 2 connections)
+              #budget #planning
+```
+
+### Capture Error Flows
+
+```
+User sends:  https://example.com/saas-pricing-article
+  (already saved)
+             
+Bot replies:  ? Already saved: "SaaS Pricing Strategy" (updated context)
+
+User sends:  https://broken-site.example/404
+
+Bot replies:  ? Could not extract content. Saved URL with metadata only.
+              Will retry extraction later.
+
+User sends:  (unintelligible voice note or ambiguous text)
+
+Bot replies:  ? Not sure what to do with this. Can you add context?
+
+User sends:  Recipe for grandma's cookies
+
+Bot replies:  . Saved: "Recipe for grandma's cookies" (idea)
+              #recipes
+  (if low confidence on type classification, bot still saves
+   and lets the user correct later rather than blocking)
 ```
 
 ### Search Flow
@@ -592,6 +936,59 @@ Bot sends:   ! Meeting with @David Kim in 30 min
              You owe: pricing analysis (5 days overdue)
 
 Bot sends:   ! Electric bill ($142) due in 3 days
+```
+
+### Topic Decay Prompt Flow
+
+```
+Bot sends:   You haven't engaged with Machine Learning in 4 months.
+             23 items saved.
+             
+             /archive -- remove from active topics
+             /keep    -- leave as-is (no further prompts)
+             /resurface -- get 1 item/week resurfaced
+
+User sends:  /resurface
+
+Bot replies:  . Machine Learning moved to resurface mode.
+              You'll get 1 highlight per week.
+```
+
+### Weekly Synthesis Flow (Phase 3)
+
+```
+Bot sends:   Weekly -- Mar 30 - Apr 5
+             47 artifacts (12 email, 8 video, 4 calendar, 23 captures)
+
+             Connection: Team Topologies article + Conway's Law
+             talk + your reorg note all say the same thing --
+             org structure shapes software architecture.
+
+             ~ Distributed systems: 4 new (^ rising)
+             ~ Machine learning: 0 new in 4 weeks (v cooling)
+
+             ! Sarah's pricing analysis (5 days overdue)
+
+             Resurface: "The Manager's Path" from January --
+             still relevant to your leadership captures.
+```
+
+### Help / Command Reference Flow
+
+```
+User sends:  /help
+
+Bot replies:  Smackerel commands:
+              /find <query>  -- search your knowledge
+              /digest        -- today's digest
+              /weekly        -- this week's synthesis
+              /status        -- system health
+              /archive       -- archive a topic (in reply to decay prompt)
+              /keep          -- keep a topic (in reply to decay prompt)
+              /resurface     -- resurface a topic (in reply to decay prompt)
+              
+              Or just send any URL, text, voice note, image, or PDF
+              to capture it.
 ```
 
 ---
@@ -701,6 +1098,73 @@ type Connector interface {
 +-------------------------------------------------------------------+
 ```
 
+### Connector Error Recovery
+
+All connectors follow these error handling patterns:
+
+| Error Type | Behavior | Surfacing |
+|-----------|----------|-----------|
+| OAuth token expired | Auto-refresh via refresh token. If refresh fails, mark connector `error` and prompt re-auth in status dashboard + Telegram alert | Status page, Telegram |
+| Rate limit (429) | Exponential backoff: 1s → 2s → 4s → 8s → 16s → skip cycle | Logged, not surfaced unless 3+ consecutive failures |
+| Network timeout | Retry 3x with backoff, then skip cycle | Status page error count |
+| Content extraction failure | Store artifact with metadata only, flag `extraction_pending` for retry on next cycle | Capture confirmation notes "metadata only" |
+| Invalid content (corrupt PDF, missing transcript) | Store metadata, set `extraction_failed` permanently | Artifact detail shows "content not available" |
+| Connector crash | Process supervisor restarts connector goroutine. Dead-letter queue preserves unprocessed items | Status page shows restart count |
+
+**Health status values:** `healthy` (last sync succeeded), `syncing` (sync in progress), `error` (last sync failed, will retry), `disconnected` (no credentials or auth revoked)
+
+### Data Export Design
+
+Per BS-026, users can export their complete knowledge base:
+
+```
+GET /api/export
+Authorization: Bearer <token>
+
+Response: application/gzip
+  smackerel-export-2026-04-06.tar.gz
+    ├── artifacts.jsonl       (one JSON object per artifact, including embeddings)
+    ├── topics.jsonl          (topic definitions with scores and state)
+    ├── people.jsonl          (person entities)
+    ├── edges.jsonl           (knowledge graph edges)
+    ├── sync_cursors.jsonl    (connector sync state)
+    └── README.md             (schema documentation)
+```
+
+Format: JSONL for streaming reads. Embeddings are base64-encoded float32 arrays. All IDs are UUIDs. Timestamps are ISO-8601 UTC.
+
+---
+
+## Observability
+
+| Signal | Implementation | Storage |
+|--------|---------------|---------|
+| **Structured logs** | Go: `slog` with JSON output. Python: `structlog`. | stdout → Docker log driver |
+| **Metrics** | Go: `expvar` exposed at `/debug/vars`. Counts: artifacts processed, search queries, NATS messages, errors by type | In-process (no Prometheus for MVP) |
+| **Health check** | `GET /api/health` returns component status map | Computed on request |
+| **Connector status** | Per-connector sync timestamp, item count, error count | PostgreSQL `sync_cursors` table |
+| **Processing audit** | Every artifact stores `processing_log` (jsonb): pipeline stages completed, duration per stage, tier assigned | PostgreSQL `artifacts` table |
+
+### Health Check Response
+
+```json
+{
+  "status": "healthy",
+  "services": {
+    "api": {"status": "up", "uptime_seconds": 45240},
+    "postgres": {"status": "up", "artifacts": 142, "topics": 89},
+    "nats": {"status": "up", "queue_depth": 0},
+    "ml_sidecar": {"status": "up", "model": "all-MiniLM-L6-v2"},
+    "telegram": {"status": "up", "chat_id": "123456789"},
+    "ollama": {"status": "up", "model": "llama3.1"}
+  },
+  "storage": {
+    "db_size_mb": 48,
+    "vector_size_mb": 12
+  }
+}
+```
+
 ---
 
 ## Security Model
@@ -726,6 +1190,60 @@ type Connector interface {
 | E2E | Full capture-to-search, digest generation, Telegram bot conversation | Running Docker Compose stack |
 | Visual | Icon rendering at multiple sizes, dark/light theme toggle, responsive breakpoints | Browser-based manual check + screenshot regression |
 | Stress | Search latency with 1000+ artifacts, concurrent captures | k6 or Go benchmarks |
+
+---
+
+## Use Case & Scenario Traceability
+
+This matrix maps spec use cases and business scenarios to design sections.
+
+### Use Case Coverage
+
+| UC | Name | Design Section(s) |
+|----|------|--------------------|
+| UC-001 | System Deployment | Runtime Topology, Health Check Response |
+| UC-002 | Source Connector Setup | Settings Page wireframe, Connector Contract, Protocol Layers |
+| UC-003 | Active Capture | Processing Pipeline, Capture Modal, Telegram Capture Flow + Error Flows |
+| UC-004 | Semantic Search | Search Page wireframe (incl. error states), Search Flow (Telegram) |
+| UC-005 | Daily Digest Delivery | Digest Page wireframe, Telegram Digest Flow |
+| UC-006 | Passive Email Ingestion | Connector Contract (IMAPConnector, GmailAdapter), Processing Tiers |
+| UC-007 | Passive YouTube Ingestion | Connector Contract (YouTubeAdapter), Processing Tiers |
+| UC-008 | Passive Calendar Ingestion | Connector Contract (CalDAVConnector, GoogleCalendarAdapter) |
+| UC-009 | Pre-Meeting Brief | Telegram Alert Flow, Digest Page (meeting context) |
+| UC-010 | Weekly Synthesis | Weekly Synthesis Page wireframe, Telegram Weekly Synthesis Flow |
+| UC-011 | Topic Lifecycle | Topic Lifecycle State Machine, Topics Page wireframe, Telegram Topic Decay Flow |
+| UC-012 | Cross-Domain Synthesis | Weekly Synthesis Page (Connection Discovered section) |
+
+### Business Scenario Coverage
+
+| BS | Name | Design Section(s) |
+|----|------|--------------------|
+| BS-001 | Zero-friction first run | Runtime Topology, Health Check Response |
+| BS-002 | Source connector setup | Settings Page, Connector Contract |
+| BS-003 | Capture article from phone | Telegram Capture Flow, Processing Pipeline |
+| BS-004 | Capture YouTube video | Telegram Capture Flow, Processing Pipeline |
+| BS-005 | Capture spontaneous idea | Telegram Capture Flow |
+| BS-006 | Capture via voice note | Telegram Capture Flow (voice note example) |
+| BS-007 | Duplicate detection | Duplicate Detection, Telegram Capture Error Flows |
+| BS-008 | Vague content recall | Search Page wireframe, Telegram Search Flow |
+| BS-009 | Person-scoped search | Core Data Model (Person entity, MENTIONS edges), Search Page |
+| BS-010 | Topic exploration | Topics Page wireframe, Core Data Model (BELONGS_TO) |
+| BS-011 | Cross-type search | Search Page (mixed-type result cards) |
+| BS-012 | Passive email intelligence | Processing Tiers, Connector Contract (GmailAdapter) |
+| BS-013 | Email commitment detection | Processing Pipeline (action_items field), Digest Page |
+| BS-014 | YouTube watch history | Processing Tiers (Full tier for liked+completed), Connector Contract |
+| BS-015 | Calendar pre-meeting brief | Telegram Alert Flow, Digest Page (meeting context) |
+| BS-016 | Automatic topic emergence | Topic Lifecycle State Machine, Core Data Model |
+| BS-017 | Topic goes hot | Topic Lifecycle State Machine, Topics Page |
+| BS-018 | Topic decay notification | Topic Lifecycle State Machine, Telegram Topic Decay Flow |
+| BS-019 | Cross-domain connection | Weekly Synthesis Page (Connection Discovered) |
+| BS-020 | Daily digest with action items | Digest Page wireframe, Telegram Digest Flow |
+| BS-021 | Quiet day digest | Search Page error states (pattern applies to digest) |
+| BS-022 | Weekly synthesis delivery | Weekly Synthesis Page, Telegram Weekly Synthesis Flow |
+| BS-023 | Contextual bill reminder | Telegram Alert Flow (bill example) |
+| BS-024 | Data persistence | Runtime Topology (PostgreSQL volumes) |
+| BS-025 | Fully local operation | Runtime Topology (Ollama optional), Design Brief |
+| BS-026 | Data export | Data Export Design |
 
 ---
 
