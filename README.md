@@ -18,3 +18,17 @@ A passive intelligence layer across your entire digital life. It observes, captu
 ## Docs
 
 - [Design Document](docs/smackerel.md)
+- [Development Guide](docs/Development.md)
+- [Testing Guide](docs/Testing.md)
+- [Docker Best Practices](docs/Docker_Best_Practices.md)
+
+## Runtime Standards
+
+Smackerel does not have a committed runtime yet. When it lands, the implementation must follow the same operational standards used in the stronger repos in this workspace:
+
+- Docker-only runtime and test execution
+- One repo CLI for build, test, config generation, stack lifecycle, logs, and cleanup
+- A single configuration source of truth with generated runtime artifacts
+- Persistent development state separated from disposable test and validation state
+- Smart cleanup and build-freshness verification instead of destructive default cleanup
+- Live-stack integration and E2E requirements with isolated test environments

@@ -1,6 +1,6 @@
 # Smackerel — Project Constitution
 
-> Version 1.1.0
+> Version 1.2.0
 
 ---
 
@@ -34,6 +34,26 @@
 - Stateful services must be isolated and restart-safe.
 - Deployment documentation and committed configuration must describe the same topology.
 
+### 7. Single CLI Operations
+- Build, test, lint, format, stack lifecycle, config generation, logs, and cleanup must flow through one repo CLI.
+- Ad-hoc operational commands are not the documented runtime interface.
+- The CLI must own environment selection and safety checks.
+
+### 8. Single Source Of Truth Configuration
+- All runtime configuration must originate from one committed source file.
+- Generated env files and Compose files are derived outputs, not handwritten truth.
+- Missing required config must fail loudly; hidden defaults are forbidden.
+
+### 9. Isolated Test Environments
+- Persistent development state is separate from automated test and validation state.
+- Integration, E2E, chaos, and validation flows must use disposable storage.
+- Automated test writes must never target the primary development store.
+
+### 10. Docker Lifecycle Safety And Freshness
+- Cleanup defaults must preserve persistent data and useful caches.
+- Build freshness must be proven through image identity and input hashes, not timestamps or `latest` tags.
+- Project-scoped cleanup is required before any broader Docker cleanup.
+
 ---
 
 ## Testing Doctrine
@@ -43,12 +63,17 @@
 - **Integration tests:** exercise Go, NATS, Python, PostgreSQL, and Ollama boundaries together.
 - **End-to-end tests:** prove capture, retrieval, synthesis, and digest workflows from user input to surfaced output.
 - **Stress tests:** required for ingestion, retrieval, and synthesis hot paths.
+- **E2E environment isolation:** end-to-end tests must run against disposable test state, never the primary dev store.
+- **Live-stack authenticity:** integration and end-to-end tests must hit the real running stack; mocked request interception in live categories is forbidden.
 
 ---
 
 ## Documentation Doctrine
 
 - `docs/smackerel.md` is the authoritative product and architecture design.
+- `docs/Development.md` is the authoritative runtime command and configuration contract.
+- `docs/Testing.md` is the authoritative test taxonomy and environment isolation guide.
+- `docs/Docker_Best_Practices.md` is the authoritative Docker lifecycle, cleanup, and freshness guide.
 - Specs under `specs/` define phased behavior and scope sequencing.
 - Any change to the planned runtime stack must update `docs/smackerel.md`, this constitution, and the project-owned Bubbles config in the same change set.
 
@@ -58,6 +83,7 @@
 
 - No hidden defaults or fallback runtime topology.
 - Runtime service boundaries, storage choices, and deployment commands must be committed and documented.
+- Runtime configuration must flow from a single committed source-of-truth file.
 - Secrets stay out of the repository; missing required runtime configuration must fail loudly.
 
 ---
