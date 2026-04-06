@@ -136,31 +136,126 @@ Returns latest monthly self-knowledge report.
 
 ## UI/UX Extensions
 
+The product-level design system is defined in [001-smackerel-mvp/design.md](../001-smackerel-mvp/design.md). Phase 5 adds these surfaces:
+
 ### Expertise Map
 
-Topic cards arranged by depth tier, sized by capture count:
-- Expert (100+): largest card, filled
-- Deep (51-100): large card
-- Intermediate (21-50): medium card
-- Foundation (6-20): small card
-- Novice (1-5): minimal card
-
-Growth trajectory shown as text: ^ accelerating, v decelerating, - steady, . stopped.
-Blind spots highlighted with a gap indicator icon (broken circle).
+```
++------------------------------------------------------------------+
+|  Expertise Map                                                     |
++------------------------------------------------------------------+
+|                                                                    |
+|  Expert (100+)                                                     |
+|  ----                                                              |
+|  +---------------------------+                                    |
+|  | product-strategy          |                                    |
+|  | 230 items  ^ accelerating |                                    |
+|  | Sources: email, articles, |                                    |
+|  | videos, notes, books      |                                    |
+|  +---------------------------+                                    |
+|                                                                    |
+|  Deep (51-100)                                                     |
+|  ----                                                              |
+|  +-------------------+  +-------------------+                     |
+|  | distributed-systems|  | leadership        |                     |
+|  | 67 items  ^ rising |  | 55 items  - steady|                     |
+|  +-------------------+  +-------------------+                     |
+|                                                                    |
+|  Intermediate (21-50)                                              |
+|  ----                                                              |
+|  saas-pricing  32 items  -    negotiation  28 items  v            |
+|  team-design   25 items  ^    go-lang      22 items  ^            |
+|                                                                    |
+|  Foundation / Novice                                               |
+|  ----                                                              |
+|  rust  8 items    typescript  5 items    cooking  3 items          |
+|                                                                    |
+|  Blind Spots                                                       |
+|  ----                                                              |
+|  (o) data-analytics        12 items (expected: 50+ for your role) |
+|  (o) financial-modeling      4 items (referenced in 15 artifacts) |
+|                                                                    |
+|  (o) = gap indicator icon (broken circle)                         |
+|                                                                    |
++------------------------------------------------------------------+
+```
 
 ### Learning Path View
 
-Ordered vertical list of resources:
-- Each resource: difficulty badge (B/I/A), type icon, title, estimated time
-- Completed items show check-circle icon
-- Current position highlighted
-- Gap callout cards between difficulty jumps
+```
++------------------------------------------------------------------+
+|  Learning Path: TypeScript                   3/8 completed (37%)  |
++------------------------------------------------------------------+
+|                                                                    |
+|  [check]  B  [article]  TypeScript Basics             ~15 min    |
+|  [check]  B  [article]  TS Type System Intro          ~20 min    |
+|  [check]  I  [video]    TypeScript Advanced Types     ~45 min    |
+|  [ >>> ]  I  [video]    Generics Deep Dive            ~30 min    |
+|  [    ]   I  [article]  TS Design Patterns            ~25 min    |
+|  [    ]   A  [book]     Programming TypeScript        ~5 hrs     |
+|  [    ]   A  [article]  TS Compiler Internals         ~40 min    |
+|  [    ]   A  [article]  Advanced TS Metaprogramming   ~30 min    |
+|                                                                    |
+|  Estimated remaining: ~7 hrs 30 min                               |
+|                                                                    |
+|  B = beginner   I = intermediate   A = advanced                   |
+|  [check] = completed   [ >>> ] = current   [    ] = pending      |
+|                                                                    |
++------------------------------------------------------------------+
+```
 
 ### Subscription View
 
-Table: Service | Amount | Frequency | Category | Status.
-Summary card at top: "N active subscriptions, $X/mo total, N overlaps detected."
-Overlap groups highlighted with link-chain icon.
+```
++------------------------------------------------------------------+
+|  Subscriptions                                                     |
++------------------------------------------------------------------+
+|                                                                    |
+|  6 active  .  $67/mo total  .  1 overlap detected                |
+|                                                                    |
+|  Service          Amount    Freq      Category        Status      |
+|  ----             ------    ----      --------        ------      |
+|  Netflix          $15.49    monthly   entertainment   active      |
+|  Spotify          $10.99    monthly   entertainment   active      |
+|  GitHub Pro        $4.00    monthly   productivity    active      |
+|  Grammarly        $12.00    monthly   writing         active      |
+|  LanguageTool      $5.00    monthly   writing         active      |
+|  ProWritingAid     $8.00    monthly   writing         active      |
+|                                                                    |
+|  [link] Overlap: Grammarly + LanguageTool + ProWritingAid         |
+|         3 writing/grammar tools, combined $25/mo                  |
+|                                                                    |
++------------------------------------------------------------------+
+```
+
+### Monthly Report View
+
+```
++------------------------------------------------------------------+
+|  Monthly Report -- March 2026                                      |
++------------------------------------------------------------------+
+|                                                                    |
+|  Expertise Shifts                                                  |
+|  ----                                                              |
+|  ^ distributed-systems  Foundation -> Deep (15 -> 55 items)       |
+|  ^ go-lang              Novice -> Intermediate (4 -> 22 items)    |
+|  v machine-learning     No new items, was active in Q4 2025       |
+|                                                                    |
+|  Information Diet                                                  |
+|  ----                                                              |
+|  Articles: 42%  Videos: 25%  Emails: 20%  Notes: 8%  Books: 5%  |
+|  (vs Feb: articles +8%, videos -4%, rest stable)                  |
+|                                                                    |
+|  Productivity Patterns                                             |
+|  ----                                                              |
+|  Your idea-dense capture windows: Wednesday mornings,              |
+|  Sunday evenings. Lowest activity: Friday afternoons.              |
+|                                                                    |
+|  Subscriptions: $67/mo (1 overlap flagged)                        |
+|  Learning: TypeScript 37%, Negotiation 60%                        |
+|                                                                    |
++------------------------------------------------------------------+
+```
 
 ---
 

@@ -108,24 +108,107 @@ CREATE TABLE privacy_consent (
 
 ## UI/UX Extensions
 
+The product-level design system is defined in [001-smackerel-mvp/design.md](../001-smackerel-mvp/design.md). Phase 4 adds these surfaces:
+
 ### Trip Dossier View
 
-Structured sections with monochrome icons:
-- plane icon: Flights card
-- bed icon: Accommodation card
-- utensil icon: Restaurants list
-- map-pin icon: Activities list
-- route icon: Routes (linked from Maps)
-- person icon: People meeting at destination
-- cloud icon: Weather outlook
+```
++------------------------------------------------------------------+
+|  Berlin Trip -- May 12-18, 2026                     status: upcoming|
++------------------------------------------------------------------+
+|                                                                    |
+|  [plane] Flights                                                   |
+|  ----                                                              |
+|  TAP TP502, LHR -> LIS, May 12   confirmation: ABC123            |
+|  TAP TP503, LIS -> LHR, May 18   confirmation: ABC124            |
+|                                                                    |
+|  [bed] Accommodation                                               |
+|  ----                                                              |
+|  Memmo Alfama, May 12-18          confirmation: XYZ789            |
+|  Rua das Escolas Gerais 4, Alfama                                 |
+|                                                                    |
+|  [utensil] Restaurants                                             |
+|  ----                                                              |
+|  Time Out Market             saved Feb 3, from @Sarah             |
+|  Belcanto                    saved Mar 15, article                |
+|  Cervejaria Ramiro           saved Mar 22, from @David            |
+|                                                                    |
+|  [map-pin] Activities                                              |
+|  ----                                                              |
+|  Alfama walking tour         saved Jan 8, article                 |
+|  LX Factory                  saved Feb 20, @Sarah recommended     |
+|                                                                    |
+|  [person] Meeting                                                  |
+|  ----                                                              |
+|  Lunch with Hans, May 14     calendar event                       |
+|                                                                    |
+|  [cloud] Weather                                                   |
+|  ----                                                              |
+|  Lisbon in May: ~22C, mostly sunny (typical)                      |
+|                                                                    |
++------------------------------------------------------------------+
+```
 
 ### Trail Browser
 
-List view with columns: Date, Location, Type (walk/cycle/drive icon), Distance, Duration, Elevation. Click-through to detail with route visualization (map embed or ASCII art for MVP).
+```
++------------------------------------------------------------------+
+|  Trails                                          [filter: all v]  |
++------------------------------------------------------------------+
+|                                                                    |
+|  Date         Location        Type    Distance  Duration  Elev.   |
+|  ----         --------        ----    --------  --------  -----   |
+|  Mar 15       Serra da Arrabida walk   8.5 km   2:30      +450m  |
+|  Mar 9        Sintra           walk   12.1 km   3:45      +680m  |
+|  Mar 2        Monsanto         walk    5.2 km   1:15      +120m  |
+|  Feb 28       Cascais coast    cycle  22.0 km   1:30       +80m  |
+|  Feb 15       Sintra           walk    9.8 km   2:50      +520m  |
+|  Feb 10       Sintra           walk   11.0 km   3:20      +610m  |
+|                                                                    |
+|  (click any row for route detail + linked captures)               |
+|                                                                    |
++------------------------------------------------------------------+
+```
 
 ### People Profile
 
-Interaction timeline chart (text-based for MVP: monthly bar chart using block characters). Sections: Shared Topics, Recommendations, Pending Items, Notes.
+```
++------------------------------------------------------------------+
+|  [person] Sarah Chen                                               |
++------------------------------------------------------------------+
+|                                                                    |
+|  Organization: Acme Corp                                          |
+|  Last interaction: Apr 3 (email)                                  |
+|  Trend: - steady (weekly contact)                                 |
+|                                                                    |
+|  Interaction Timeline (emails + meetings per month)                |
+|  ----                                                              |
+|  Jan  ||||||||   8                                                |
+|  Feb  ||||||     6                                                |
+|  Mar  |||||||    7                                                |
+|  Apr  |||        3 (so far)                                       |
+|                                                                    |
+|  Shared Topics                                                     |
+|  ----                                                              |
+|  #negotiation  #leadership  #product-strategy                     |
+|                                                                    |
+|  Recommendations from Sarah                                        |
+|  ----                                                              |
+|  [book] Never Split the Difference -- Jan 8                       |
+|  [article] Pricing Psychology -- Feb 12                           |
+|  [place] Fabrica Coffee Roasters, Lisbon -- Mar 1                 |
+|                                                                    |
+|  Pending Items                                                     |
+|  ----                                                              |
+|  ! You owe: pricing article (5 days overdue)                      |
+|                                                                    |
+|  Notes                                                             |
+|  ----                                                              |
+|  Met at ProductCon 2025. Likes Italian food.                      |
+|  Alex wanted the Ottolenghi cookbook (mentioned Mar 15)            |
+|                                                                    |
++------------------------------------------------------------------+
+```
 
 ---
 
