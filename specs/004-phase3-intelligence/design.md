@@ -208,27 +208,106 @@ Returns latest weekly synthesis.
 
 ## UI/UX Extensions
 
-### Alert Display
+The product-level design system (monochrome palette, icon set, typography, responsive layout) is defined in [001-smackerel-mvp/design.md](../001-smackerel-mvp/design.md). Phase 3 adds these surfaces:
 
-Alerts use monochrome icons:
-- Pre-meeting: calendar icon + person silhouette
-- Bill: receipt icon
-- Commitment: arrow-right icon (promise outgoing) or arrow-left (promise incoming)
+### Alert Banner (Web UI)
+
+```
++------------------------------------------------------------------+
+|  ! Meeting with @David Kim in 30 min                     [x] [C] |
+|    Last discussed: acquisition strategy                           |
+|    You owe: pricing analysis (5 days overdue)                     |
++------------------------------------------------------------------+
+```
+
+Alerts appear as a top-of-page banner with:
+- [x] dismiss button (x-circle icon)
+- [C] snooze button (crescent icon)
+- Alert type icon: calendar (premeeting), receipt (bill), arrow-right (commitment)
 - Return window: box icon with timer
-
-Alerts appear as a banner at the top of the web UI with dismiss (x) and snooze (crescent) actions.
 
 ### Weekly Synthesis Page
 
-Dedicated page showing the latest weekly synthesis with sections visually separated. Each artifact reference in the CONNECTION DISCOVERED section links to the artifact detail page. Contradictions show both artifact cards side-by-side.
+```
++------------------------------------------------------------------+
+|  Weekly Synthesis -- Mar 30 - Apr 5                               |
++------------------------------------------------------------------+
+|                                                                    |
+|  This Week                                                        |
+|  ----                                                              |
+|  47 artifacts: 23 emails, 8 articles, 6 videos, 4 notes,         |
+|  3 products, 2 trails, 1 book                                    |
+|                                                                    |
+|  Connection Discovered                                             |
+|  ----                                                              |
+|  The article on "Team Topologies" (Tue), the YouTube talk on      |
+|  "Inverse Conway Maneuver" (Thu), and your note about reorging    |
+|  the platform team (today) all argue for aligning team structure  |
+|  with system boundaries.                                          |
+|  [-> Team Topologies]  [-> Conway's Law talk]  [-> reorg note]   |
+|                                                                    |
+|  Topic Momentum                                                    |
+|  ----                                                              |
+|  ^ system-design    8 captures, +200% vs last month               |
+|  - leadership       3/week, steady for 4 weeks                    |
+|  v machine-learning 0 captures, was 5/week in January             |
+|                                                                    |
+|  Open Loops                                                        |
+|  ----                                                              |
+|  ! David's proposal -- opened but not responded (5 days)          |
+|  ! "Read later" queue: 12 articles, oldest is 3 weeks            |
+|                                                                    |
+|  From the Archive                                                  |
+|  ----                                                              |
+|  "The best way to predict the future is to invent it"             |
+|  -- saved Oct 15 with note "use for team offsite intro"           |
+|  Your offsite is next week.                   [resurface] [dismiss]|
+|                                                                    |
+|  Patterns Noticed                                                  |
+|  ----                                                              |
+|  You captured 6 items about communication this week but only      |
+|  1 about execution. Possible blind spot?                          |
+|                                                                    |
++------------------------------------------------------------------+
+```
 
 ### Commitments View
 
-List of open commitments with:
-- Person icon + name
-- Commitment text
-- Days since promise (with overdue indicator after deadline)
-- Resolve button (check-circle) / Dismiss button (x-circle)
+```
++------------------------------------------------------------------+
+|  Open Commitments                                                  |
++------------------------------------------------------------------+
+|                                                                    |
+|  [->] You -> @Sarah: pricing article               5 days overdue |
+|       "I'll send you the pricing article"                         |
+|       From: email thread, Apr 1           [check] resolve  [x]   |
+|                                                                    |
+|  [<-] @David -> You: budget numbers        expected end of week   |
+|       "I'll have the budget numbers to you by end of week"        |
+|       From: email, Apr 3                                          |
+|                                                                    |
++------------------------------------------------------------------+
+
+[->] = user-promise (arrow-right icon)
+[<-] = contact-promise (arrow-left icon)
+```
+
+### Contradiction View
+
+```
++---------------------------+  +-----------------------------+
+| [article] Remote Work     |  | [article] Return to Office  |
+| Revolution (HBR)          |  | is Working (WSJ)            |
+|                           |  |                             |
+| "Remote workers 13%      |  | "Collaborative output       |
+| more productive..."      |  | drops 20% in fully          |
+|                           |  | remote teams..."            |
+| Saved: Feb 12             |  | Saved: Mar 8                |
++---------------------------+  +-----------------------------+
+
+Key difference: They define "productivity" differently.
+HBR measures individual output. WSJ measures team innovation.
+```
 
 ---
 
