@@ -1,0 +1,118 @@
+version: 1
+sources:
+  claude-code:
+    displayName: Claude Code
+    parserKind: markdown
+    reviewRequired: true
+    proposalWhenFrameworkChangeRequired: true
+    detectors:
+    - CLAUDE.md
+    - .claude/commands/
+    - .claude/agents/
+    normalizedClasses:
+    - instruction
+    - command-surface
+    - tool-request
+    - docs-reference
+    applyTargetInstruction: .github/instructions/imported-<source>.instructions.md
+    applyTargetGuardrail: .github/instructions/imported-<source>.instructions.md
+    applyTargetCommandSurface: .specify/memory/agents.md
+    applyTargetToolRequest: scripts/imported-<source>-tooling.md
+    applyTargetDocsReference: .github/skills/imported-<source>-migration/SKILL.md
+    supportedTargets:
+    - .github/bubbles-project/imports/<source>/<timestamp>/raw/
+    - .github/bubbles-project/imports/<source>/<timestamp>/normalized.json
+    - .github/bubbles-project/imports/<source>/<timestamp>/translation-report.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/.github/instructions/imported-<source>.instructions.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/.specify/memory/imported-<source>-agents.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/scripts/imported-<source>-tooling.md
+    unsupportedTargets:
+    - .github/agents/bubbles*
+    - .github/prompts/bubbles*
+    - .github/skills/bubbles-*
+    - .github/bubbles/**
+  roo-code:
+    displayName: Roo Code
+    parserKind: hybrid
+    reviewRequired: true
+    proposalWhenFrameworkChangeRequired: true
+    detectors:
+    - .roo/rules/
+    - .roo/modes/
+    - .roomodes
+    normalizedClasses:
+    - instruction
+    - guardrail
+    - workflow-mode
+    - tool-request
+    applyTargetInstruction: .github/instructions/imported-<source>.instructions.md
+    applyTargetGuardrail: .github/instructions/imported-<source>.instructions.md
+    applyTargetToolRequest: scripts/imported-<source>-tooling.md
+    supportedTargets:
+    - .github/bubbles-project/imports/<source>/<timestamp>/raw/
+    - .github/bubbles-project/imports/<source>/<timestamp>/normalized.json
+    - .github/bubbles-project/imports/<source>/<timestamp>/translation-report.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/.github/instructions/imported-<source>.instructions.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/.github/copilot-imports/imported-<source>-guardrails.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/scripts/imported-<source>-tooling.md
+    unsupportedTargets:
+    - .github/agents/bubbles*
+    - .github/prompts/bubbles*
+    - .github/skills/bubbles-*
+    - .github/bubbles/**
+  cursor:
+    displayName: Cursor
+    parserKind: markdown
+    reviewRequired: true
+    proposalWhenFrameworkChangeRequired: true
+    detectors:
+    - .cursor/rules/
+    - .cursorrules
+    normalizedClasses:
+    - instruction
+    - guardrail
+    - docs-reference
+    applyTargetInstruction: .github/instructions/imported-<source>.instructions.md
+    applyTargetGuardrail: .github/instructions/imported-<source>.instructions.md
+    applyTargetDocsReference: .github/skills/imported-<source>-migration/SKILL.md
+    supportedTargets:
+    - .github/bubbles-project/imports/<source>/<timestamp>/raw/
+    - .github/bubbles-project/imports/<source>/<timestamp>/normalized.json
+    - .github/bubbles-project/imports/<source>/<timestamp>/translation-report.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/.github/instructions/imported-<source>.instructions.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/.github/copilot-imports/imported-<source>-guardrails.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/docs/imported-<source>-migration-notes.md
+    unsupportedTargets:
+    - .github/agents/bubbles*
+    - .github/prompts/bubbles*
+    - .github/skills/bubbles-*
+    - .github/bubbles/**
+  cline:
+    displayName: Cline
+    parserKind: markdown
+    reviewRequired: true
+    proposalWhenFrameworkChangeRequired: true
+    detectors:
+    - .clinerules
+    - .cline/rules/
+    - .cline/modes/
+    normalizedClasses:
+    - instruction
+    - guardrail
+    - workflow-mode
+    - docs-reference
+    applyTargetInstruction: .github/instructions/imported-<source>.instructions.md
+    applyTargetGuardrail: .github/instructions/imported-<source>.instructions.md
+    applyTargetDocsReference: .github/skills/imported-<source>-migration/SKILL.md
+    supportedTargets:
+    - .github/bubbles-project/imports/<source>/<timestamp>/raw/
+    - .github/bubbles-project/imports/<source>/<timestamp>/normalized.json
+    - .github/bubbles-project/imports/<source>/<timestamp>/translation-report.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/.github/instructions/imported-<source>.instructions.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/.github/copilot-imports/imported-<source>-guardrails.md
+    - .github/bubbles-project/imports/<source>/<timestamp>/proposed-overrides/docs/imported-<source>-migration-notes.md
+    unsupportedTargets:
+    - .github/agents/bubbles*
+    - .github/prompts/bubbles*
+    - .github/skills/bubbles-*
+    - .github/bubbles/**

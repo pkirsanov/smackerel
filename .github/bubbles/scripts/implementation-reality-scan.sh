@@ -152,6 +152,32 @@ add_impl_file() {
 impl_files=()
 test_files=()
 
+IMPL_DISCOVERY_PATTERN='`[^`]+\.(rs|ts|tsx|js|jsx|py|go|java|dart|scala|brs|sh|yaml|yml|json|md)\b[^`]*`'
+TEST_DISCOVERY_PATTERN='`[^`]+(spec|test)[^`]*\.(rs|ts|tsx|js|jsx|py|go|java|dart|scala|brs|sh)\b[^`]*`'
+
+normalize_declared_path() {
+  local raw_path="$1"
+
+  raw_path="${raw_path//\`/}"
+  printf '%s\n' "${raw_path%%::*}"
+}
+
+resolve_declared_paths_from_text() {
+  local source_text="$1"
+  local discovery_pattern="$2"
+  local raw_path=""
+  local normalized_path=""
+  local resolved_path=""
+
+  while IFS= read -r raw_path; do
+    normalized_path="$(normalize_declared_path "$raw_path")"
+    resolved_path="$(resolve_path "$normalized_path")"
+    if [[ -n "$resolved_path" ]]; then
+      printf '%s\n' "$resolved_path"
+    fi
+  done < <(printf '%s\n' "$source_text" | grep -oE "$discovery_pattern" 2>/dev/null | sort -u || true)
+}
+
 add_test_file() {
   local path="$1"
   for existing in "${test_files[@]+"${test_files[@]}"}"; do
@@ -166,25 +192,21 @@ add_test_file() {
 # a single grep pass per file (avoids per-line subprocess overhead on large
 # scopes.md files).
 for scope_file in "${scope_files[@]}"; do
-  while IFS= read -r raw_path; do
-    # Strip backticks
-    path="${raw_path//\`/}"
-    # Strip any trailing ::test_name references (e.g., `file.rs::test_foo`)
-    path="${path%%::*}"
-    resolved="$(resolve_path "$path")"
-    if [[ -n "$resolved" ]]; then
-      add_impl_file "$resolved"
-    fi
-  done < <(grep -oE '`[^`]+\.(rs|ts|tsx|js|jsx|py|go|java|dart|scala|brs)\b[^`]*`' "$scope_file" 2>/dev/null | sort -u || true)
+  implementation_section="$({ awk '
+    /^### Implementation Files$/ { in_impl=1; next }
+    /^## / { in_impl=0 }
+    /^### / && in_impl { in_impl=0 }
+    in_impl { print }
+  ' "$scope_file"; } || true)"
 
-  while IFS= read -r raw_test_path; do
-    test_path="${raw_test_path//\`/}"
-    test_path="${test_path%%::*}"
-    resolved_test="$(resolve_path "$test_path")"
-    if [[ -n "$resolved_test" ]]; then
-      add_test_file "$resolved_test"
-    fi
-  done < <(grep -oE '`[^`]+(spec|test)[^`]*\.(rs|ts|tsx|js|jsx|py|go|java|dart|scala|brs)\b[^`]*`' "$scope_file" 2>/dev/null | sort -u || true)
+  while IFS= read -r resolved; do
+    add_impl_file "$resolved"
+  done < <(resolve_declared_paths_from_text "$implementation_section" "$IMPL_DISCOVERY_PATTERN")
+
+  scope_text="$(<"$scope_file")"
+  while IFS= read -r resolved_test; do
+    add_test_file "$resolved_test"
+  done < <(resolve_declared_paths_from_text "$scope_text" "$TEST_DISCOVERY_PATTERN")
 done
 
 is_live_system_test_file() {
@@ -211,14 +233,10 @@ is_live_system_test_file() {
 # =============================================================================
 if [[ ${#impl_files[@]} -eq 0 ]] && [[ -f "$feature_dir/design.md" ]]; then
   info "Scopes yielded 0 files — falling back to design.md for file discovery"
-  while IFS= read -r raw_path; do
-    path="${raw_path//\`/}"
-    path="${path%%::*}"
-    resolved="$(resolve_path "$path")"
-    if [[ -n "$resolved" ]]; then
-      add_impl_file "$resolved"
-    fi
-  done < <(grep -oE '`[^`]+\.(rs|ts|tsx|js|jsx|py|go|java|dart|scala|brs)\b[^`]*`' "$feature_dir/design.md" 2>/dev/null | sort -u || true)
+  design_text="$(<"$feature_dir/design.md")"
+  while IFS= read -r resolved; do
+    add_impl_file "$resolved"
+  done < <(resolve_declared_paths_from_text "$design_text" "$IMPL_DISCOVERY_PATTERN")
   if [[ ${#impl_files[@]} -gt 0 ]]; then
     vwarn "Resolved ${#impl_files[@]} file(s) from design.md fallback — scopes.md should reference these directly"
   fi
@@ -232,7 +250,7 @@ if [[ ${#impl_files[@]} -eq 0 ]]; then
   echo "    2. Reference files that do not exist on disk"
   echo ""
   echo "  Scanning nothing = no assurance. This is a blocking failure."
-  echo "  Fix: Ensure scopes.md lists implementation files as \`path/to/file.rs\`"
+  echo "  Fix: Ensure scopes.md lists implementation files as \`path/to/file.ext\`"
   echo ""
   echo "============================================================"
   echo "  REALITY SCAN RESULT: 1 violation(s), 0 warning(s)"

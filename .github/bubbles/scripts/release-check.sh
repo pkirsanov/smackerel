@@ -28,12 +28,18 @@ check_required_files() {
   local missing=0
   local required_files=(
     "$REPO_ROOT/README.md"
+    "$REPO_ROOT/CHANGELOG.md"
     "$REPO_ROOT/docs/CHEATSHEET.md"
     "$REPO_ROOT/docs/its-not-rocket-appliances.html"
+    "$REPO_ROOT/docs/generated/competitive-capabilities.md"
+    "$REPO_ROOT/docs/generated/issue-status.md"
     "$REPO_ROOT/docs/guides/AGENT_MANUAL.md"
+    "$REPO_ROOT/docs/guides/INSTALLATION.md"
     "$REPO_ROOT/docs/guides/CONTROL_PLANE_DESIGN.md"
     "$REPO_ROOT/docs/guides/CONTROL_PLANE_SCHEMAS.md"
     "$REPO_ROOT/docs/recipes/framework-ops.md"
+    "$REPO_ROOT/bubbles/capability-ledger.yaml"
+    "$REPO_ROOT/bubbles/release-manifest.json"
     "$REPO_ROOT/bubbles/action-risk-registry.yaml"
     "$REPO_ROOT/bubbles/scripts/repo-readiness.sh"
     "$REPO_ROOT/install.sh"
@@ -70,6 +76,8 @@ echo "Repository: $REPO_ROOT"
 echo
 
 run_check "Framework validation" bash "$SCRIPT_DIR/framework-validate.sh"
+run_check "Capability ledger docs freshness" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" --check
+run_check "Release manifest freshness" bash "$SCRIPT_DIR/generate-release-manifest.sh" --check
 run_check "Required release files" check_required_files
 run_check "No stray temp or backup files" check_stray_release_files
 

@@ -961,8 +961,8 @@ When `batch` is true, the orchestrator changes the execution model to avoid redu
         - New DoD items (`- [ ]`) exist for each new test/fix
         - Scope status was reset to "In Progress" if new unchecked DoD items were added
       - **If planning artifacts were NOT updated:** Invoke `bubbles.plan` via `runSubagent` with the findings and explicit instruction to add the required Gherkin scenarios, Test Plan rows, DoD items, and any needed scope-status resets.
-      - **Invoke implement:** Run `implement` phase via `runSubagent` with instruction: **"Fix ALL issues identified by harden/gaps/stabilize/security phases. The scope artifacts have been updated with new DoD items — satisfy each one. Write code changes only, do NOT trigger builds."**
-      - **Verify implement addressed findings:** Check that the implement agent’s response references the specific findings and that code changes were made.
+      - **Invoke implement:** Run `implement` phase via `runSubagent` with instruction: **"Fix ALL issues identified by harden/gaps/stabilize/security phases. The scope artifacts have been updated with new DoD items — satisfy each one. You MUST account for every finding individually. If any finding cannot be fully closed in this round, return `route_required` or `blocked` with the unresolved findings preserved verbatim. Do NOT fix the easy subset while narrating the rest as later or separate work. Write code changes only, do NOT trigger builds."**
+      - **Verify implement addressed findings:** Require one-to-one accounting against the finding list and new DoD items. Reject responses that only mention a subset of findings or narrate unresolved findings without returning `route_required` / `blocked`.
 
    c. **If clean** (HARDENED / GAP_FREE / STABLE):
       - Skip implement if no code changes needed (artifacts-only hardening)
@@ -1282,12 +1282,13 @@ When mode is `stochastic-quality-sweep`, the orchestrator replaces the normal se
 
       **⚠️ POST-FIX-CYCLE VERIFICATION (MANDATORY after ALL fix cycle phases complete):**
       After the entire fix cycle for a round completes, the workflow agent MUST verify:
-      1. **Bootstrap ran and updated artifacts:** design + plan agents were invoked (not skipped). design.md reflects trigger findings. scopes.md has Gherkin + DoD for all findings. Cross-artifact coherence verified (spec.md ↔ design.md ↔ scopes.md consistent)
-      2. **Implementation happened:** at least one file was modified by bubbles.implement (check response for file paths)
-      3. **Tests actually ran:** bubbles.test response contains terminal commands and exit codes
-      4. **Validation actually ran:** bubbles.validate response contains gate pass/fail with evidence
-      5. **Audit actually ran:** bubbles.audit response contains a verdict (✅/⚠️/🛑)
-      6. **Scope artifacts reflect the work:** DoD items added during findings should now be `[x]` with evidence
+      1. **Every finding was accounted for:** implement response lists addressed findings and any unresolved findings explicitly. If unresolved findings remain, outcome MUST be `route_required` or `blocked`.
+      2. **Bootstrap ran and updated artifacts:** design + plan agents were invoked (not skipped). design.md reflects trigger findings. scopes.md has Gherkin + DoD for all findings. Cross-artifact coherence verified (spec.md ↔ design.md ↔ scopes.md consistent)
+      3. **Implementation happened:** at least one file was modified by bubbles.implement (check response for file paths)
+      4. **Tests actually ran:** bubbles.test response contains terminal commands and exit codes
+      5. **Validation actually ran:** bubbles.validate response contains gate pass/fail with evidence
+      6. **Audit actually ran:** bubbles.audit response contains a verdict (✅/⚠️/🛑)
+      7. **Scope artifacts reflect the work:** DoD items added during findings should now be `[x]` with evidence
       If ANY verification fails → log the gap and either re-invoke the missing phase or mark the round as incomplete.
 
         **Note on simplify trigger:** When `bubbles.simplify` is the trigger, it both identifies AND makes the code changes (refactoring, dead code removal, complexity reduction). No separate implement phase is needed — go directly to `test → validate → audit` to verify the simplification didn't break anything. This is the ONLY trigger without a `bootstrap` phase.
@@ -1647,7 +1648,7 @@ For each target spec in order:
       - **Revert spec status:** If `state.json` or `certification.status` was `"done"`, set it to `"in_progress"`. Remove stale finalize entries from `execution.completedPhaseClaims` and `certification.certifiedCompletedPhases`.
       - **Verify scope artifacts were updated:** Read `scopes.md` and confirm new Gherkin scenarios, Test Plan rows, and DoD items (`- [ ]`) were added for each finding. Scope status must be reset to "In Progress" if new unchecked items exist.
       - **If planning artifacts were NOT updated:** Invoke `bubbles.plan` via `runSubagent` with the findings and explicit instruction to update planning artifacts before continuing.
-      - **Advance to implement phase:** The next phase (`implement`) will address all findings. Include the findings summary in the implement prompt.
+      - **Advance to implement phase:** The next phase (`implement`) will address all findings. Include the full finding ledger in the implement prompt and require one-to-one closure accounting. Reject partial-remediation success claims.
 
    c. **If clean:** Advance normally. The implement phase may still run (to fix minor code-level improvements) or be skipped if no changes needed.
 
