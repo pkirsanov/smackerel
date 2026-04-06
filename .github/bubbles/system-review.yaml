@@ -1,0 +1,83 @@
+version: 1
+defaultMode: full
+defaultDepth: standard
+defaultOutput: summary-only
+defaultLenses:
+- product
+- ux
+- runtime
+- stability
+- devops
+- simplify
+- trust
+- validation
+- engineering
+- docs
+dispatch:
+  product:
+    primaryAgent: bubbles.analyst
+    purpose: Business value, feature coherence, gaps, opportunities
+  ux:
+    primaryAgent: bubbles.ux
+    purpose: Usability, accessibility, flow clarity, and IA
+  runtime:
+    primaryAgent: bubbles.chaos
+    purpose: Real-user execution, brittle flows, and breakpoints
+  stability:
+    primaryAgent: bubbles.stabilize
+    purpose: Performance, infra, config, and reliability
+  devops:
+    primaryAgent: bubbles.devops
+    purpose: Build, deployment, CI/CD, monitoring, observability, and release operations
+  simplify:
+    primaryAgent: bubbles.simplify
+    purpose: Duplicate functionality, clutter, and streamlining
+  trust:
+    primaryAgent: bubbles.security
+    purpose: Security, compliance, auth, and trust boundaries
+  validation:
+    primaryAgent: bubbles.validate
+    purpose: Claims-vs-reality, validation evidence, contract checks
+  audit:
+    primaryAgent: bubbles.audit
+    purpose: Policy and ship-readiness concerns
+  engineering:
+    primaryAgent: bubbles.code-review
+    purpose: Engineering-only findings affecting the system
+  docs:
+    primaryAgent: bubbles.docs
+    purpose: Documentation drift, missing docs, stale docs
+modes:
+  product:
+    description: Product, UX, simplification, and engineering coherence review
+    lenses: [ product, ux, simplify, engineering, docs ]
+    top: 12
+  runtime:
+    description: Real-user execution, runtime reliability, and validation review
+    lenses: [ runtime, stability, devops, validation, engineering, docs ]
+    top: 12
+  trust:
+    description: Security, validation, audit, and UX trust review
+    lenses: [ ux, trust, validation, audit, engineering, docs ]
+    top: 12
+  full:
+    description: Complete cross-domain system review
+    lenses: [ product, ux, runtime, stability, devops, simplify, trust, validation, engineering, docs ]
+    top: 15
+promotionRules:
+  createSpecWhen:
+  - Cross-cutting change requires new behavior, architecture, or operating model
+  - Multiple components or surfaces require coordinated implementation
+  - User explicitly requests spec creation
+  updateSpecWhen:
+  - Existing spec exists and findings materially change scope, scenarios, or DoD
+  - Docs and behavior drift from an active feature folder
+  - User explicitly requests spec update
+  summaryOnlyWhen:
+  - User requests assessment, prioritization, or discovery only
+  - Findings are isolated cleanup items or backlog candidates
+followUpTags:
+  directFix: Ready for implementation without new spec work
+  promoteToSpec: Should be converted into spec/design/scope work
+  documentOnly: Docs/process update only
+  monitor: Track but do not act immediately

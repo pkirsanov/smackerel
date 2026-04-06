@@ -1,0 +1,73 @@
+version: 1
+defaultProfile: engineering-sweep
+defaultDepth: standard
+defaultOutput: summary-only
+defaultLenses:
+- gaps
+- harden
+- simplify
+- stabilize
+- devops
+- security
+- validate
+- tests
+- docs
+dispatch:
+  gaps:
+    primaryAgent: bubbles.gaps
+    purpose: Design drift, missing implementation, spec mismatch
+  harden:
+    primaryAgent: bubbles.harden
+    purpose: Robustness, reliability, and quality gaps
+  simplify:
+    primaryAgent: bubbles.simplify
+    purpose: Complexity reduction, duplication, dead code
+  stabilize:
+    primaryAgent: bubbles.stabilize
+    purpose: Performance, infra, config, and reliability
+  devops:
+    primaryAgent: bubbles.devops
+    purpose: CI/CD, build/release automation, deployment, monitoring, and observability execution
+  security:
+    primaryAgent: bubbles.security
+    purpose: Security, compliance, auth, and dependencies
+  validate:
+    primaryAgent: bubbles.validate
+    purpose: Contract alignment, validation evidence, implementation-vs-spec checks
+  tests:
+    primaryAgent: bubbles.test
+    purpose: Coverage quality, realism, taxonomy, mocks/stubs review
+  docs:
+    primaryAgent: bubbles.docs
+    purpose: Documentation drift, missing docs, stale docs
+profiles:
+  engineering-sweep:
+    description: Balanced engineering review across code quality, drift, stability, tests, and docs
+    lenses: [ gaps, harden, simplify, stabilize, devops, security, validate, tests, docs ]
+    top: 12
+  correctness-first:
+    description: Focused review of correctness, validation, and tests
+    lenses: [ gaps, validate, tests, docs ]
+    top: 10
+  maintainability-first:
+    description: Focused review of complexity, duplication, quality, and docs
+    lenses: [ harden, simplify, stabilize, docs ]
+    top: 10
+  release-readiness:
+    description: Shipping-focused engineering review for quality, risk, and correctness
+    lenses: [ harden, stabilize, devops, security, validate, tests, docs ]
+    top: 15
+  security-first:
+    description: Focused code security and compliance review
+    lenses: [ security, validate, tests, docs ]
+    top: 10
+escalationRules:
+  routeToSystemReviewWhen:
+  - User asks for feature, component, journey, or whole-system review
+  - User asks for product, UX, accessibility, usability, or competitive feedback
+  - Review requires live user execution or UI behavior assessment
+followUpTags:
+  directFix: Ready for engineering implementation without new spec work
+  routeToSystemReview: Broader than code-only; escalate to system-review
+  documentOnly: Docs/process update only
+  monitor: Track but do not act immediately

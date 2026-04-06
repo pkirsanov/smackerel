@@ -41,6 +41,26 @@ The runtime should use:
 
 Do not rely on `container_name` alone for grouping or cleanup.
 
+### Use A Dedicated Host-Port Block
+
+Smackerel owns the `40000-49999` host-forwarding block in this workspace.
+
+Current allocation policy:
+
+| Range | Purpose |
+|-------|---------|
+| `40001-40099` | Development app endpoints |
+| `42001-42099` | Development infrastructure endpoints |
+| `45001-45099` | Test app endpoints |
+| `47001-47099` | Test infrastructure endpoints |
+
+Rules:
+
+- Do not forward Smackerel services onto generic low ports such as `5432`, `4222`, `8222`, `8080`, `8081`, or `11434` on the host.
+- Keep internal container ports unchanged unless the service contract itself changes.
+- Add new host forwards inside the Smackerel block instead of borrowing from another repo's block.
+- Use `127.0.0.1:<host-port>` for external access and Compose DNS names for internal traffic.
+
 ## Build Freshness Rules
 
 Freshness must be proven through image identity, not guessed from timestamps or `latest` tags.

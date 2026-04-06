@@ -8,10 +8,13 @@ REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$REPO_DIR/scripts/lib/runtime.sh"
 
 TEST_ENV="test"
+SOURCE_ENV=""
+COMPOSE_PROJECT=""
+CORE_IMAGE=""
 
 cleanup() {
     echo "Cleaning up test stack..."
-    "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+    timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -23,6 +26,7 @@ cleanup
 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" config generate >/dev/null
 SOURCE_ENV="$(smackerel_require_env_file "$TEST_ENV")"
 COMPOSE_PROJECT="$(smackerel_compose_project "$TEST_ENV")"
+CORE_IMAGE="${COMPOSE_PROJECT}-smackerel-core:latest"
 
 # Create a deliberately incomplete env file (missing LLM_PROVIDER, LLM_MODEL, LLM_API_KEY)
 TEMP_ENV=$(mktemp)
@@ -41,9 +45,7 @@ docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" --env-fil
 # Run smackerel-core with incomplete config — expect failure
 echo "Starting smackerel-core with incomplete config..."
 set +e
-OUTPUT=$(docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" --env-file "$TEMP_ENV" run \
-    --rm --no-deps \
-    smackerel-core 2>&1)
+OUTPUT=$(timeout 60 docker run --rm --env-file "$TEMP_ENV" "$CORE_IMAGE" 2>&1)
 EXIT_CODE=$?
 set -e
 

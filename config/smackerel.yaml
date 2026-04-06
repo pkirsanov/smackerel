@@ -1,0 +1,74 @@
+project:
+  name: smackerel
+
+# Workspace host-port allocation review:
+# - WanderAide:          20000-26999
+# - QuantitativeFinance: 30000-39999
+# - Smackerel:           40000-49999
+# - GuestHost:           50000-59999
+#
+# Smackerel host forwarding block:
+# - Dev app:    40001-40099
+# - Dev infra:  42001-42099
+# - Test app:   45001-45099
+# - Test infra: 47001-47099
+
+runtime:
+  log_level: info
+  auth_token: development-change-me
+  digest_cron: "0 7 * * *"
+  embedding_model: all-MiniLM-L6-v2
+
+llm:
+  provider: ollama
+  model: llama3.2
+  api_key: ""
+  ollama_url: http://ollama:11434
+  ollama_model: llama3.2
+
+telegram:
+  bot_token: ""
+  chat_ids: ""
+
+services:
+  core:
+    container_port: 8080
+  ml:
+    container_port: 8081
+
+infrastructure:
+  postgres:
+    user: smackerel
+    password: smackerel
+    database: smackerel
+    container_port: 5432
+  nats:
+    client_port: 4222
+    monitor_port: 8222
+  ollama:
+    enabled: false
+    container_port: 11434
+
+environments:
+  dev:
+    compose_project: smackerel
+    postgres_host_port: 42001
+    nats_client_host_port: 42002
+    nats_monitor_host_port: 42003
+    core_host_port: 40001
+    ml_host_port: 40002
+    ollama_host_port: 42004
+    postgres_volume_name: smackerel-postgres-data
+    nats_volume_name: smackerel-nats-data
+    ollama_volume_name: smackerel-ollama-data
+  test:
+    compose_project: smackerel-test
+    postgres_host_port: 47001
+    nats_client_host_port: 47002
+    nats_monitor_host_port: 47003
+    core_host_port: 45001
+    ml_host_port: 45002
+    ollama_host_port: 47004
+    postgres_volume_name: smackerel-test-postgres-data
+    nats_volume_name: smackerel-test-nats-data
+    ollama_volume_name: smackerel-test-ollama-data

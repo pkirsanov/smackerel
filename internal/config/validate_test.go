@@ -61,6 +61,8 @@ func TestValidate_MissingAllRequired(t *testing.T) {
 	for _, key := range []string{
 		"DATABASE_URL", "NATS_URL", "LLM_PROVIDER",
 		"LLM_MODEL", "LLM_API_KEY", "SMACKEREL_AUTH_TOKEN",
+		"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL",
+		"DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL",
 	} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error should name %s, got: %v", key, err)
@@ -68,24 +70,19 @@ func TestValidate_MissingAllRequired(t *testing.T) {
 	}
 }
 
-func TestValidate_OptionalDefaults(t *testing.T) {
+func TestValidate_MissingGeneratedRuntimeValues(t *testing.T) {
 	setRequiredEnv(t)
-	// Unset optional vars — they should use defaults
-	for _, key := range []string{"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT"} {
+	for _, key := range []string{"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL"} {
 		t.Setenv(key, "")
 	}
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when generated runtime values are missing")
 	}
-	if cfg.Port != "8080" {
-		t.Errorf("expected default port 8080, got: %s", cfg.Port)
-	}
-	if cfg.LogLevel != "info" {
-		t.Errorf("expected default log level info, got: %s", cfg.LogLevel)
-	}
-	if cfg.EmbeddingModel != "all-MiniLM-L6-v2" {
-		t.Errorf("expected default embedding model, got: %s", cfg.EmbeddingModel)
+	for _, key := range []string{"OLLAMA_URL", "OLLAMA_MODEL", "EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL"} {
+		if !strings.Contains(err.Error(), key) {
+			t.Errorf("error should name %s, got: %v", key, err)
+		}
 	}
 }
 
@@ -124,4 +121,11 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("LLM_MODEL", "gpt-4o-mini")
 	t.Setenv("LLM_API_KEY", "sk-test-key")
 	t.Setenv("SMACKEREL_AUTH_TOKEN", "test-token")
+	t.Setenv("OLLAMA_URL", "http://ollama:11434")
+	t.Setenv("OLLAMA_MODEL", "llama3.2")
+	t.Setenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+	t.Setenv("DIGEST_CRON", "0 7 * * *")
+	t.Setenv("LOG_LEVEL", "info")
+	t.Setenv("PORT", "8080")
+	t.Setenv("ML_SIDECAR_URL", "http://smackerel-ml:8081")
 }
