@@ -7,6 +7,8 @@
 - **Instruction budget is now a framework validation gate** — `framework-validate` and `doctor` now fail when any agent prompt exceeds the hard instruction-budget limit instead of treating budget drift as an informational audit only.
 - **Workflow fix-cycle protocol extracted** — the stochastic repair-round dispatch contract moved into `workflow-fix-cycle-protocol.md` so `bubbles.workflow` keeps the same behavior with less prompt bloat.
 - **Planning specialist provenance** — `bubbles.design` and `bubbles.plan` now record bootstrap execution in `state.json.executionHistory`, and the state transition guard now checks that analyze-first modes actually dispatched the required planning owners.
+- **Planning provenance selftest** — `framework-validate` now runs a dedicated negative fixture proving `bubbles.workflow` cannot author planning artifacts without analyst, UX, design, and plan provenance in `executionHistory`.
+- **Source-repo project config cleanup** — the Bubbles source checkout now carries real maintainer commands and source-repo paths in `.github/copilot-instructions.md`, eliminating the last doctor-visible bootstrap placeholders.
 
 ### Release Manifest And Install Provenance Trust
 

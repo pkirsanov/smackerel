@@ -1160,6 +1160,26 @@
     <div class="wf-name">repo-readiness</div>
     <div class="wf-desc">Advisory repo hygiene check for agent adoption. Useful before deep framework use, but separate from <code>bubbles.validate</code> certification.</div>
   </div>
+  <div class="workflow-card">
+    <div class="wf-name">adoption profile</div>
+    <div class="wf-desc">Maturity-tier onboarding posture such as <code>foundation</code>, <code>delivery</code>, or <code>assured</code>. It changes guidance and readiness severity, not certification rigor.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">release manifest</div>
+    <div class="wf-desc">Upstream trust bundle that records version, git SHA, supported profiles, supported interop sources, validated surfaces, and the managed file inventory for the release.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">install provenance</div>
+    <div class="wf-desc">Installed-source record that tells you where the framework copy came from and whether local-source upgrade risk exists before you trust doctor or upgrade output.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">review-only interop intake</div>
+    <div class="wf-desc">Project-owned import path for Claude Code, Roo Code, Cursor, or Cline assets that normalizes snapshots without mutating framework-managed Bubbles files.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">supported interop apply</div>
+    <div class="wf-desc">Safe apply path that writes only declared project-owned outputs from an interop import and falls back to proposals when a collision would touch framework-owned surfaces.</div>
+  </div>
 </div>
 
 <div class="quick-ref">
@@ -1256,6 +1276,30 @@
     <span class="situation">Advisory repo-readiness check</span>
     <span class="quote-text"><code>repo-readiness</code></span>
   </div>
+  <div class="line">
+    <span class="situation">Onboarding posture and readiness tone</span>
+    <span class="quote-text"><code>adoption profile</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Upstream trust bundle for shipped framework state</span>
+    <span class="quote-text"><code>release-manifest.json</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Installed-source trust record</span>
+    <span class="quote-text"><code>.install-source.json</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Upgrade diff before managed files move</span>
+    <span class="quote-text"><code>trust preview</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Import competitor assets without touching framework-owned files</span>
+    <span class="quote-text"><code>review-only interop intake</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Promote only declared project-owned outputs</span>
+    <span class="quote-text"><code>supported interop apply</code></span>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════ SHARED SKILLS ═══════════════════════════════ -->
@@ -1345,6 +1389,12 @@
     <div class="gate-msg"><span class="status">📦</span><span class="msg">"Project-agnostic"</span><span class="context">— no repo names, no ports, no CLI commands. Skills travel.</span></div>
     <div class="gate-msg"><span class="status">🛠️</span><span class="msg">"Walk the lot first"</span><span class="context">— check repo surfaces before declaring the framework ready to operate there</span></div>
     <div class="gate-msg"><span class="status">🛠️</span><span class="msg">"Advisory, not certification"</span><span class="context">— repo-readiness informs framework ops, but it does not satisfy bubbles.validate</span></div>
+    <div class="gate-msg"><span class="status">🛠️</span><span class="msg">"Foundation first"</span><span class="context">— choose the adoption profile that matches repo maturity; it changes guidance, not the finish line</span></div>
+    <div class="gate-msg"><span class="status">📦</span><span class="msg">"Read the manifest"</span><span class="context">— the release manifest is the trust bundle for what actually shipped</span></div>
+    <div class="gate-msg"><span class="status">📦</span><span class="msg">"Where'd this trailer come from?"</span><span class="context">— install provenance explains whether the current framework copy came from a release or a local source checkout</span></div>
+    <div class="gate-msg"><span class="status">📦</span><span class="msg">"Trust preview"</span><span class="context">— upgrade dry-run compares current installed trust metadata with the target release before replacing managed files</span></div>
+    <div class="gate-msg"><span class="status">🔁</span><span class="msg">"Look, don't touch"</span><span class="context">— review-only interop intake snapshots outside tools into project-owned paths without mutating the framework layer</span></div>
+    <div class="gate-msg"><span class="status">🔁</span><span class="msg">"Safe apply only"</span><span class="context">— supported interop apply writes only declared project-owned outputs and falls back to proposals on collisions</span></div>
     <div class="gate-msg"><span class="status">🧭</span><span class="msg">"Owner-only remediation"</span><span class="context">— diagnostics and certification route it; owners and executors do it</span></div>
     <div class="gate-msg"><span class="status">🧭</span><span class="msg">"Result envelope"</span><span class="context">— every run ends with completed_owned, completed_diagnostic, route_required, or blocked</span></div>
     <div class="gate-msg"><span class="status">🧭</span><span class="msg">"Narrow packet"</span><span class="context">— tiny fixes stay fast by dispatching the exact owner with the smallest safe context</span></div>
@@ -1486,6 +1536,22 @@
   <div class="line">
     <span class="situation">Brownfield feature improvement starts</span>
     <span class="quote-text">"Check what the trailer actually looks like before you start renovating it."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Pick the right onboarding posture</span>
+    <span class="quote-text">"Foundation, delivery, or assured — pick the way this repo talks before you pick a fight with the gates."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Preview trust before upgrade</span>
+    <span class="quote-text">"Read the manifest and the install tag before you let the replacement trucks in."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Import competitor assets safely</span>
+    <span class="quote-text">"Look at their trailer first. Review-only import before anybody starts moving walls."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Promote only safe project-owned interop outputs</span>
+    <span class="quote-text">"Safe apply only, boys. If it hits the framework wall, kick it over to a proposal."</span>
   </div>
 </div>
 
