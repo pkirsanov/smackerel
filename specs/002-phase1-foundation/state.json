@@ -2,14 +2,14 @@
   "version": 3,
   "featureDir": "specs/002-phase1-foundation",
   "featureName": "Phase 1: Foundation",
-  "status": "not_started",
-  "workflowMode": "spec-scope-hardening",
+  "status": "in_progress",
+  "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "bootstrap",
-    "currentScope": null,
-    "runStartedAt": "2026-04-06T12:00:00Z",
-    "completedPhaseClaims": [],
+    "currentPhase": "implement",
+    "currentScope": "01-project-scaffold",
+    "runStartedAt": "2026-04-06T14:00:00Z",
+    "completedPhaseClaims": ["select", "bootstrap"],
     "pendingTransitionRequests": []
   },
   "certification": {
@@ -17,7 +17,7 @@
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
-      { "scope": 1, "name": "Project Scaffold", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 1, "name": "Project Scaffold", "status": "implemented", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
       { "scope": 2, "name": "Processing Pipeline", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
       { "scope": 3, "name": "Active Capture API", "status": "not_started", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
       { "scope": 4, "name": "Knowledge Graph Linking", "status": "not_started", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
@@ -42,7 +42,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-06T12:00:00Z",
+  "lastUpdatedAt": "2026-04-06T14:30:00Z",
   "scopeLayout": "single-file",
   "artifacts": { "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md" },
   "notes": "Phase 1: Docker deployment, data model, processing pipeline, active capture, semantic search, Telegram bot, daily digest, web UI."
