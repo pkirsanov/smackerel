@@ -60,11 +60,14 @@ slugify() {
 json_escape() {
   local raw="$1"
 
-  raw=${raw//\\/\\\\}
-  raw=${raw//"/\\"}
-  raw=${raw//$'\n'/ }
-  raw=${raw//$'\r'/ }
-  printf '%s' "$raw"
+  JSON_ESCAPE_INPUT="$raw" python3 - <<'PY'
+import json
+import os
+import sys
+
+raw = os.environ.get('JSON_ESCAPE_INPUT', '')
+sys.stdout.write(json.dumps(raw)[1:-1])
+PY
 }
 
 append_jsonl() {
@@ -118,6 +121,80 @@ hash_file() {
   fi
 }
 
+json_first_value_from_file() {
+  local file="$1"
+  local key="$2"
+  local expected_type="$3"
+  local value=''
+
+  value="$(python3 - "$file" "$key" "$expected_type" <<'PY'
+import json
+import sys
+
+file_path, target_key, expected_type = sys.argv[1:4]
+
+def visit(node):
+    if isinstance(node, dict):
+        if target_key in node:
+            value = node[target_key]
+            if expected_type == 'string' and isinstance(value, str):
+                return value
+            if expected_type == 'number' and isinstance(value, int):
+                return str(value)
+        for child in node.values():
+            result = visit(child)
+            if result is not None:
+                return result
+    elif isinstance(node, list):
+        for child in node:
+            result = visit(child)
+            if result is not None:
+                return result
+    return None
+
+try:
+    with open(file_path, 'r', encoding='utf-8') as handle:
+        payload = json.load(handle)
+except FileNotFoundError:
+    sys.exit(0)
+
+result = visit(payload)
+if result is not None:
+    sys.stdout.write(result)
+PY
+)"
+
+  printf '%s\n' "$value"
+}
+
+json_string_field_from_line() {
+  local line="$1"
+  local field="$2"
+  local value=''
+
+  value="$(LEASE_JSON_LINE="$line" python3 - "$field" <<'PY'
+import json
+import os
+import sys
+
+field = sys.argv[1]
+line = os.environ.get('LEASE_JSON_LINE', '')
+if not line:
+    sys.exit(0)
+
+payload = json.loads(line)
+value = payload.get(field)
+if value is None:
+    sys.exit(0)
+if not isinstance(value, str):
+    value = str(value)
+sys.stdout.write(value)
+PY
+)" || die "Runtime lease registry contains malformed JSON while reading field '$field'"
+
+  printf '%s\n' "$value"
+}
+
 config_number_value() {
   local _section="$1"
   local key="$2"
@@ -125,11 +202,7 @@ config_number_value() {
   local file="$4"
   local value
 
-  value="$({
-    grep -oE "\"$key\"[[:space:]]*:[[:space:]]*[0-9]+" "$file" 2>/dev/null \
-      | head -1 \
-      | sed -E 's/.*:[[:space:]]*([0-9]+)/\1/'
-  } || true)"
+  value="$(json_first_value_from_file "$file" "$key" number)"
 
   if [[ "$value" =~ ^[0-9]+$ ]]; then
     printf '%s\n' "$value"
@@ -145,11 +218,7 @@ config_string_value() {
   local file="$4"
   local value
 
-  value="$({
-    grep -oE "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]+\"" "$file" 2>/dev/null \
-      | head -1 \
-      | sed -E 's/.*:[[:space:]]*"([^"]+)"/\1/'
-  } || true)"
+  value="$(json_first_value_from_file "$file" "$key" string)"
 
   if [[ -n "$value" ]]; then
     printf '%s\n' "$value"
@@ -252,7 +321,7 @@ field_from_line() {
   local line="$1"
   local field="$2"
 
-  printf '%s\n' "$line" | sed -nE "s/.*\"${field}\":\"([^\"]*)\".*/\1/p"
+  json_string_field_from_line "$line" "$field"
 }
 
 append_unique_csv() {
@@ -354,7 +423,7 @@ derive_session_id() {
 
   if [[ -f "$SESSION_FILE" ]]; then
     local session_id
-    session_id="$({ grep -oE '"sessionId"[[:space:]]*:[[:space:]]*"[^"]+"' "$SESSION_FILE" | head -1 | sed -E 's/.*"([^"]+)"$/\1/'; } || true)"
+    session_id="$(json_first_value_from_file "$SESSION_FILE" sessionId string)"
     if [[ -n "$session_id" ]]; then
       printf '%s\n' "$session_id"
       return 0

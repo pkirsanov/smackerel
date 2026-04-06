@@ -85,6 +85,20 @@ If deferred work is still required, the scope stays in progress.
 
 **Detection rule:** `artifact-lint.sh` and `state-transition-guard.sh` scan for these phrases. Any match in report.md or scope artifacts blocks the `done` transition.
 
+## Finding-Set Closure Is Mandatory
+
+When a workflow round, audit, harden pass, stabilize pass, security review, gap scan, or validation step discovers multiple findings, completion requires one-to-one closure accounting for the entire finding set.
+
+- Every finding must end in exactly one of these states: fixed and revalidated, routed to the correct owner with the unresolved finding preserved verbatim, or blocked with a concrete blocker.
+- Fixing only the easy subset while narrating the remaining findings as larger, later, separate, or follow-up work is invalid.
+- The workflow and implement agents must reject responses that claim success without enumerating addressed versus unresolved findings.
+
+Invalid example:
+
+- "The timing attack is fixable now. The JWT migration is a larger change. Let me fix the timing attack."
+
+That pattern is incomplete work. The correct outcomes are either: fix both findings now, or return `route_required` / `blocked` with the full unresolved list.
+
 ## Partial Stack Fixes Do Not Close Full Findings
 
 If a finding affects both backend and consumer surfaces, completion requires the full stack to participate.

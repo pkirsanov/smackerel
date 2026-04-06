@@ -1,0 +1,110 @@
+version: 1
+profiles:
+  foundation:
+    id: foundation
+    label: Foundation
+    description: Advisory-first onboarding for brownfield repos that need the smallest safe entry path without weakening Bubbles completion gates.
+    intendedAudience: Teams adopting Bubbles into an existing repo with active local conventions, partial docs, or in-flight delivery pressure.
+    bootstrapSummary: Bubbles Lite onboarding with full certification rules intact.
+    doctorProjectReadiness: advisory
+    repoReadinessPosture: onboarding-first
+    docsFrontDoor: recommended
+    bootstrapDefaults:
+      grillMode: off
+      tddMode: scenario-first
+      autoCommitMode: off
+      repoReadiness: advisory
+    doctorSections:
+    - adoption-profile-progress
+    - project-readiness-advisory
+    - repo-owned-bootstrap-gaps
+    repoReadinessSeverityMap:
+      agentFacingInstructions: warn
+      specsDirectory: warn
+      commandRegistry: warn
+    policyDefaults:
+      grillMode: off
+      tddMode: scenario-first
+      autoCommitMode: off
+      certificationRequired: true
+    requiredDocs:
+    - docs/guides/CONTROL_PLANE_ADOPTION.md
+    - docs/recipes/ask-the-super-first.md
+    recommendedNextCommands:
+    - bash bubbles/scripts/cli.sh repo-readiness .
+    - bash bubbles/scripts/cli.sh doctor
+    - bash bubbles/scripts/cli.sh policy status
+    governanceInvariant: full-certification
+  delivery:
+    id: delivery
+    label: Delivery
+    description: Full delivery guidance for teams ready to wire the standard docs, command surfaces, and workflow packet expectations immediately.
+    intendedAudience: Teams already committed to Bubbles-managed delivery packets who want the default posture across bootstrap, doctor, and readiness surfaces.
+    bootstrapSummary: Full bootstrap guidance for teams ready to wire commands, docs, and gates immediately.
+    doctorProjectReadiness: gating
+    repoReadinessPosture: full-checklist
+    docsFrontDoor: default
+    bootstrapDefaults:
+      grillMode: off
+      tddMode: scenario-first
+      autoCommitMode: off
+      repoReadiness: standard
+    doctorSections:
+    - adoption-profile-progress
+    - project-readiness-advisory
+    - framework-integrity
+    repoReadinessSeverityMap:
+      agentFacingInstructions: warn
+      specsDirectory: fail
+      commandRegistry: fail
+    policyDefaults:
+      grillMode: off
+      tddMode: scenario-first
+      autoCommitMode: off
+      certificationRequired: true
+    requiredDocs:
+    - docs/guides/CONTROL_PLANE_ADOPTION.md
+    - docs/guides/WORKFLOW_MODES.md
+    - docs/recipes/ask-the-super-first.md
+    recommendedNextCommands:
+    - bash bubbles/scripts/cli.sh profile show
+    - bash bubbles/scripts/cli.sh repo-readiness .
+    - bash bubbles/scripts/cli.sh policy status
+    governanceInvariant: full-certification
+  assured:
+    id: assured
+    label: Assured
+    description: Higher-assurance guidance that pushes earlier guardrail visibility while keeping validate-owned certification and scenario contracts unchanged.
+    intendedAudience: Teams that want stronger early framework hygiene expectations before scaling multi-agent or multi-spec delivery.
+    bootstrapSummary: Assured guidance adds earlier guardrail visibility, stricter readiness expectations, and the same full-strength certification model.
+    doctorProjectReadiness: gating
+    repoReadinessPosture: guardrail-forward
+    docsFrontDoor: recommended
+    bootstrapDefaults:
+      grillMode: required-on-ambiguity
+      tddMode: scenario-first
+      autoCommitMode: off
+      repoReadiness: strict
+    doctorSections:
+    - adoption-profile-progress
+    - project-readiness-advisory
+    - framework-integrity
+    - certification-boundary
+    repoReadinessSeverityMap:
+      agentFacingInstructions: fail
+      specsDirectory: fail
+      commandRegistry: fail
+    policyDefaults:
+      grillMode: required-on-ambiguity
+      tddMode: scenario-first
+      autoCommitMode: off
+      certificationRequired: true
+    requiredDocs:
+    - docs/guides/CONTROL_PLANE_ADOPTION.md
+    - docs/guides/WORKFLOW_MODES.md
+    - docs/recipes/ask-the-super-first.md
+    recommendedNextCommands:
+    - bash bubbles/scripts/cli.sh profile show
+    - bash bubbles/scripts/cli.sh repo-readiness . --profile assured
+    - bash bubbles/scripts/cli.sh doctor
+    governanceInvariant: full-certification

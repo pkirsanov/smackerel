@@ -32,6 +32,7 @@ handoffs:
 - Enforce `execution-core.md`, `test-fidelity.md`, `consumer-trace.md`, `e2e-regression.md`, `evidence-rules.md`, and `state-gates.md`.
 - Do NOT repair undocumented work ad hoc. If the implementation gap is not already represented in real planning artifacts, route back to the planning owners before changing code.
 - Do NOT relabel TODOs, stubs, placeholders, or fake values as softer wording to satisfy a scope. Either implement the behavior fully or push the owning artifact update first.
+- When invoked with a routed finding set from harden, gaps, stabilize, security, validate, regression, or chaos, account for EVERY routed finding individually. Never fix the easy subset while narrating the rest as later, larger, or separate work.
 - Non-interactive by default: do NOT ask the user for clarifications; document open questions instead
  - Only invoke `/bubbles.clarify` if the user explicitly requests interactive clarification
 - End every invocation with a `## RESULT-ENVELOPE`. Use `completed_owned` when implementation changes and owned evidence were produced, `route_required` when foreign-owned follow-up is required, or `blocked` when a concrete blocker prevents completion.
@@ -41,6 +42,7 @@ handoffs:
 - Use `completed_owned` when implementation changes and owned evidence were produced under this agent's execution surface.
 - Use `route_required` when planning, docs, validation, audit, or any other foreign-owned follow-up is still required.
 - Use `blocked` when a concrete blocker prevents verified implementation progress.
+- When routed findings are present, include a finding-closure summary with `addressedFindings` and `unresolvedFindings`. `completed_owned` is valid only when `unresolvedFindings` is empty; otherwise use `route_required` or `blocked` and preserve the unresolved findings verbatim.
 
 **⚠️ Anti-Fabrication (NON-NEGOTIABLE):** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md) and [state-gates.md](bubbles_shared/state-gates.md).
 
@@ -231,6 +233,7 @@ At completion, report:
 - Feature folder path
 - Test suites executed + status
 - Validation check results (Tier 1 + Tier 2 — pass/fail per check)
+- Finding closure summary (`addressedFindings`, `unresolvedFindings`) when routed findings were part of the assignment
 - Remaining scope status (if partial execution; report factual remaining work only, no user-facing next-step commands)
 
 Do NOT claim completion if any required test was not run and passing.

@@ -1,0 +1,147 @@
+version: 1
+
+capabilities:
+  workflow-orchestration:
+    label: Workflow orchestration
+    state: shipped
+    summary: Universal natural-language workflow entry point backed by explicit specialist orchestration and mode routing.
+    ownerSurface: bubbles/workflows.yaml
+    releaseIntroduced: pre-1.0
+    docsRefs:
+    - README.md
+    - docs/guides/WORKFLOW_MODES.md
+    evidenceRefs:
+    - bubbles/workflows.yaml
+    - agents/bubbles.workflow.agent.md
+    competitorTags:
+    - claude-code
+    - roo-code
+    - cursor
+    - cline
+    freshnessTargets:
+    - README.md
+    - docs/generated/competitive-capabilities.md
+
+  artifact-ownership:
+    label: Hard artifact ownership
+    state: shipped
+    summary: Specialist-owned artifacts and routing gates prevent cross-owner edits and keep remediation packets precise.
+    ownerSurface: bubbles/agent-ownership.yaml
+    releaseIntroduced: pre-1.0
+    docsRefs:
+    - README.md
+    - agents/bubbles_shared/artifact-ownership.md
+    evidenceRefs:
+    - bubbles/agent-ownership.yaml
+    - bubbles/workflows.yaml
+    competitorTags:
+    - claude-code
+    - roo-code
+    freshnessTargets:
+    - README.md
+    - docs/generated/competitive-capabilities.md
+
+  validate-owned-certification:
+    label: Validate-owned certification
+    state: shipped
+    summary: Certification authority stays with bubbles.validate and state.json ownership instead of leaking into execution agents.
+    ownerSurface: agents/bubbles_shared/artifact-ownership.md
+    releaseIntroduced: pre-1.0
+    docsRefs:
+    - README.md
+    - docs/guides/CONTROL_PLANE_DESIGN.md
+    evidenceRefs:
+    - agents/bubbles_shared/artifact-ownership.md
+    - agents/bubbles_shared/agent-common.md
+    competitorTags:
+    - claude-code
+    - cursor
+    freshnessTargets:
+    - README.md
+    - docs/generated/competitive-capabilities.md
+
+  supported-interop-apply:
+    label: Supported interop apply
+    state: shipped
+    summary: Review-only intake can promote explicit project-owned outputs through a safe apply flow while leaving framework-managed downstream files untouched.
+    ownerSurface: bubbles/scripts/interop-apply.sh
+    releaseIntroduced: v1.0.0
+    docsRefs:
+    - README.md
+    - docs/guides/CONTROL_PLANE_ADOPTION.md
+    - docs/recipes/setup-project.md
+    - docs/guides/INTEROP_MIGRATION.md
+    evidenceRefs:
+    - bubbles/scripts/interop-intake.sh
+    - bubbles/scripts/interop-apply.sh
+    - bubbles/scripts/interop-apply-selftest.sh
+    - bubbles/interop-registry.yaml
+    competitorTags:
+    - claude-code
+    - roo-code
+    - cursor
+    - cline
+    freshnessTargets:
+    - README.md
+    - docs/generated/competitive-capabilities.md
+    - docs/generated/interop-migration-matrix.md
+
+  repo-readiness-guidance:
+    label: Repo-readiness guidance
+    state: partial
+    summary: Advisory repo-readiness exists today, but trust packaging and evaluation clarity are still improving.
+    ownerSurface: bubbles/scripts/repo-readiness.sh
+    releaseIntroduced: v1.0.0
+    docsRefs:
+    - README.md
+    - docs/recipes/framework-ops.md
+    evidenceRefs:
+    - bubbles/scripts/repo-readiness.sh
+    - bubbles/scripts/cli.sh
+    competitorTags:
+    - cursor
+    - cline
+    freshnessTargets:
+    - README.md
+    - docs/generated/competitive-capabilities.md
+
+  session-aware-runtime-coordination:
+    label: Session-aware runtime coordination
+    state: proposed
+    summary: Runtime lease coordination is defined as a framework proposal, but not yet shipped into the control plane.
+    ownerSurface: docs/issues/session-aware-runtime-coordination.md
+    releaseIntroduced: proposed
+    docsRefs:
+    - docs/issues/session-aware-runtime-coordination.md
+    - docs/generated/issue-status.md
+    evidenceRefs:
+    - docs/issues/session-aware-runtime-coordination.md
+    competitorTags:
+    - claude-code
+    - roo-code
+    - cursor
+    issueRefs:
+    - docs/issues/session-aware-runtime-coordination.md
+    freshnessTargets:
+    - docs/issues/session-aware-runtime-coordination.md
+    - docs/generated/issue-status.md
+
+  dod-gherkin-fidelity-threshold:
+    label: G068 DoD-Gherkin fidelity threshold tuning
+    state: proposed
+    summary: The current G068 overlap heuristic has a documented false-positive gap and remains an open framework issue.
+    ownerSurface: docs/issues/G068-word-overlap-threshold.md
+    releaseIntroduced: proposed
+    docsRefs:
+    - docs/issues/G068-word-overlap-threshold.md
+    - docs/generated/issue-status.md
+    evidenceRefs:
+    - docs/issues/G068-word-overlap-threshold.md
+    competitorTags:
+    - cline
+    - roo-code
+    issueRefs:
+    - docs/issues/G068-word-overlap-threshold.md
+    freshnessTargets:
+    - docs/issues/G068-word-overlap-threshold.md
+    - docs/generated/issue-status.md

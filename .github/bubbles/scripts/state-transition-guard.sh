@@ -85,6 +85,29 @@ json_first_string() {
     | sed -E 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*"([^"]+)"/\1/'
 }
 
+json_nested_string() {
+  local parent_key="$1"
+  local child_key="$2"
+  local file="$3"
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+
+  python3 - "$file" "$parent_key" "$child_key" <<'PY'
+import json
+import sys
+
+file_path, parent_key, child_key = sys.argv[1:4]
+with open(file_path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+parent = data.get(parent_key, {})
+value = parent.get(child_key, "") if isinstance(parent, dict) else ""
+if isinstance(value, str):
+    print(value)
+PY
+}
+
 detect_scope_layout() {
   local state_layout=""
   state_layout="$(json_first_string "scopeLayout" "$feature_dir/state.json" || true)"
@@ -488,11 +511,7 @@ echo "--- Check 3B: Validate Certification State (Gate G056) ---"
 if grep -qE '"certification"[[:space:]]*:[[:space:]]*\{' "$state_file"; then
   pass "state.json contains certification block"
 
-  certification_status="$({
-    grep -A10 '"certification"' "$state_file" 2>/dev/null \
-      | grep -m1 '"status"' \
-      | sed -E 's/.*:[[:space:]]*"([^"]+)".*/\1/'
-  } || true)"
+  certification_status="$(json_nested_string "certification" "status" "$state_file" || true)"
 
   if [[ -n "$certification_status" ]]; then
     if [[ -n "$state_status" && "$certification_status" != "$state_status" ]]; then

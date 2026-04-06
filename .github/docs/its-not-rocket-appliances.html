@@ -1,0 +1,1740 @@
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bubbles Agent System — Sunnyvale Cheat Sheet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700;900&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --orange: #d18616;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    padding: 2rem;
+    line-height: 1.6;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding: 2rem;
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    background: linear-gradient(135deg, #161b22 0%, #1a1f2e 100%);
+  }
+
+  .header img {
+    width: 300px;
+    margin-bottom: 1rem;
+  }
+
+  .header h1 {
+    font-size: 2.5rem;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.25rem;
+  }
+
+  .header .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .header .tagline {
+    font-style: italic;
+    color: var(--yellow);
+    font-size: 1.1rem;
+  }
+
+  .section-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .section-title .emoji { font-size: 1.6rem; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 1rem;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    transition: border-color 0.2s;
+  }
+
+  .card:hover {
+    border-color: var(--accent);
+  }
+
+  .card .icon {
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    background: #21262d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+  }
+
+  .card .icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .card .info { flex: 1; min-width: 0; }
+
+  .card .agent-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 0.95rem;
+  }
+
+  .card .character {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 1rem;
+    margin-top: 0.1rem;
+  }
+
+  .card .role {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.15rem;
+  }
+
+  .card .quote {
+    font-style: italic;
+    color: var(--yellow);
+    font-size: 0.82rem;
+    margin-top: 0.4rem;
+    padding-left: 0.5rem;
+    border-left: 2px solid var(--yellow);
+  }
+
+  .alias-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+  }
+
+  .alias-table th {
+    text-align: left;
+    padding: 0.6rem 1rem;
+    background: #21262d;
+    color: var(--accent);
+    border-bottom: 2px solid var(--border);
+    font-weight: 700;
+  }
+
+  .alias-table td {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .alias-table tr:hover td {
+    background: #1c2128;
+  }
+
+  .alias-table .cmd {
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  .alias-table .maps-to {
+    color: var(--text-muted);
+  }
+
+  .alias-table .quote-col {
+    color: var(--yellow);
+    font-style: italic;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .gate-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .gate-msg {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .gate-msg .status { font-size: 1.1rem; }
+  .gate-msg .msg { color: var(--yellow); font-style: italic; }
+  .gate-msg .context { color: var(--text-muted); font-size: 0.75rem; }
+
+  .workflow-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .workflow-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+  }
+
+  .workflow-card .wf-name {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--green);
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+
+  .workflow-card .wf-alias {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--purple);
+    font-size: 0.8rem;
+  }
+
+  .workflow-card .wf-desc {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    margin-top: 0.3rem;
+  }
+
+  .workflow-card .wf-quote {
+    color: var(--yellow);
+    font-style: italic;
+    font-size: 0.78rem;
+    margin-top: 0.3rem;
+  }
+
+  .footer {
+    text-align: center;
+    margin-top: 3rem;
+    padding: 2rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .footer .big-quote {
+    font-size: 1.3rem;
+    color: var(--yellow);
+    font-style: italic;
+    margin-bottom: 0.5rem;
+  }
+
+  .phase-flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+    margin: 1rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+
+  .phase-flow .phase {
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    background: #21262d;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .phase-flow .arrow {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  .quick-ref {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .quick-ref h3 {
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+  }
+
+  .quick-ref .line {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid #21262d;
+    font-size: 0.85rem;
+  }
+
+  .quick-ref .line .quote-text {
+    color: var(--yellow);
+    font-style: italic;
+    text-align: right;
+    max-width: 55%;
+  }
+
+  .quick-ref .line .situation {
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HEADER ═══════════════════════════════ -->
+<div class="header">
+  <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
+  <h1>BUBBLES</h1>
+  <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
+  <div class="subtitle">Agent Orchestration System v3.3.0</div>
+  <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
+  <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
+  <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
+</div>
+
+<!-- ═══════════════════════════════ THE ROSTER ═══════════════════════════════ -->
+<!-- GENERATED:FRAMEWORK_STATS_ROSTER_START -->
+<div class="section-title"><img src="../icons/bubbles-glasses.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The Sunnyvale Roster — All 34 Agents</div>
+<!-- GENERATED:FRAMEWORK_STATS_ROSTER_END -->
+
+<h3 style="color: var(--accent); margin: 1rem 0 0.5rem;"><img src="../icons/bubbles-glasses.svg" width="20" style="vertical-align: middle;"> Start Here — Universal Entry Point</h3>
+<div class="grid">
+  <div class="card" style="border-color: var(--green); border-width: 2px;">
+    <div class="icon"><img src="../icons/bubbles-glasses.svg" alt="Bubbles' Glasses"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.workflow</div>
+      <div class="character">Bubbles</div>
+      <div class="role"><strong>Universal entry point.</strong> Just describe what you want. Accepts plain English, structured commands, or "continue" — resolves intent via super, picks work via iterate, and drives all phases to completion.</div>
+      <div class="quote">"Decent. I can see how all this fits together. Just tell me what you need."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/lahey-badge.svg" alt="Lahey's Badge"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.super</div>
+      <div class="character">Mr. Lahey</div>
+      <div class="role">Framework ops &amp; advice. NLP resolver, command generator, health checks, framework validation, release hygiene, hooks, gates, upgrades, and repo-readiness guidance. Workflow delegates to him automatically for vague input.</div>
+      <div class="quote">"I'm the trailer park supervisor. I'll tell you the next move."</div>
+    </div>
+  </div>
+</div>
+
+<h3 style="color: var(--accent); margin: 1rem 0 0.5rem;"><img src="../icons/jacob-hardhat.svg" width="20" style="vertical-align: middle;"> Orchestrators</h3>
+<div class="grid">
+  <div class="card">
+    <div class="icon"><img src="../icons/jacob-hardhat.svg" alt="Jacob's Hard Hat"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.iterate</div>
+      <div class="character">Jacob</div>
+      <div class="role">Single-iteration work picker. Quietly chooses the next high-priority slice and runs the right specialist chain. Also accepts plain English via super delegation.</div>
+      <div class="quote">"I can help with that, Mr. Lahey."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/cory-cap.svg" alt="Cory's Cap"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.bug</div>
+      <div class="character">Cory</div>
+      <div class="role">Bug orchestrator. Reproduces the issue, packets the work, dispatches the right owners, and keeps going until the defect is actually closed.</div>
+      <div class="quote">"I didn't wanna find it, but... there it is."</div>
+    </div>
+  </div>
+</div>
+
+<h3 style="color: var(--accent); margin: 1.5rem 0 0.5rem;"><img src="../icons/julian-glass.svg" width="20" style="vertical-align: middle;"> Owners &amp; Executors</h3>
+<div class="grid">
+  <div class="card">
+    <div class="icon"><img src="../icons/ray-lawnchair.svg" alt="Ray's Chair"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.analyst</div>
+      <div class="character">Ray</div>
+      <div class="role">"Way she goes, boys." — except as analyst, he figures out WHY the way she goes. Sees patterns from his chair.</div>
+      <div class="quote">"Sometimes she goes, sometimes she doesn't. She didn't go."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/lucy-mirror.svg" alt="Lucy's Mirror"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.ux</div>
+      <div class="character">Lucy</div>
+      <div class="role">The one who actually cares about how things feel and look. Emotional intelligence of the park.</div>
+      <div class="quote">"Ricky, you can't just— you know what, fine."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/sarah-clipboard.svg" alt="Sarah's Clipboard"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.design</div>
+      <div class="character">Sarah</div>
+      <div class="role">Turns loose ideas into a clean architecture and keeps the details from falling apart.</div>
+      <div class="quote">"Let's get this organized before anybody breaks it."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/barb-keys.svg" alt="Barb's Keys"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.plan</div>
+      <div class="character">Barb Lahey</div>
+      <div class="role">Actually ran the trailer park's business side. The planner. Defines the scopes. Keeps the books.</div>
+      <div class="quote">"Jim, you need a plan."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/julian-glass.svg" alt="Julian's Glass"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.implement</div>
+      <div class="character">Julian</div>
+      <div class="role">Delivers code. Every. Time. Drink in hand. Zero drops, zero rollbacks.</div>
+      <div class="quote">"I got work to do."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/trinity-notebook.svg" alt="Trinity's Notebook"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.test</div>
+      <div class="character">Trinity</div>
+      <div class="role">Grew up in utter chaos. Learned to verify everything independently. Trust nothing.</div>
+      <div class="quote">"Dad, that's not how that works."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/jroc-mic.svg" alt="J-Roc's Mic"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.docs</div>
+      <div class="character">J-Roc</div>
+      <div class="role">Publishes the managed-doc truth and cleans out stale paperwork before closeout.</div>
+      <div class="quote">"Know what I'm sayin'? Publish the truth."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/ricky-dynamite.svg" alt="Ricky's Dynamite"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.chaos</div>
+      <div class="character">Ricky</div>
+      <div class="role">Breaks things in ways nobody could predict. Grows "vegetables" in unusual places. Worst case Ontario, something catches fire.</div>
+      <div class="quote">"It's not rocket appliances."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/donny-ducttape.svg" alt="Donny's Duct Tape"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.simplify</div>
+      <div class="character">Donny</div>
+      <div class="role">Reduces needless complexity without weakening the behavior contract or crossing ownership boundaries.</div>
+      <div class="quote">"Just tape it up and move on."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/tommy-rack.svg" alt="Tommy's Rack"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.devops</div>
+      <div class="character">Tommy Bean</div>
+      <div class="role">Owns CI/CD, build, deployment, monitoring, and observability execution once operational work is identified.</div>
+      <div class="quote">"Get the rack humming and keep the park online."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/sebastian-guitar.svg" alt="Sebastian's Guitar"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.cinematic-designer</div>
+      <div class="character">Sebastian Bach</div>
+      <div class="role">Premium UI implementation when the surface needs flagship treatment, not default sludge.</div>
+      <div class="quote">"I was in Skid Row!"</div>
+    </div>
+  </div>
+</div>
+
+<h3 style="color: var(--accent); margin: 1.5rem 0 0.5rem;"><img src="../icons/ted-badge.svg" width="20" style="vertical-align: middle;"> Diagnostic &amp; Certification Routing</h3>
+<div class="grid">
+  <div class="card">
+    <div class="icon"><img src="../icons/randy-cheeseburger.svg" alt="Randy's Cheeseburger"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.validate</div>
+      <div class="character">Randy</div>
+      <div class="role">Owns certification state, checks the gates, and can reopen work only through concrete packets and evidence.</div>
+      <div class="quote">"Mr. Lahey, the tests aren't passing!"</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/bill-wrench.svg" alt="Bill's Wrench"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.stabilize</div>
+      <div class="character">Shitty Bill</div>
+      <div class="role">Quiet. Reliable. Surfaces reliability issues and routes the correct owner. Doesn't say much.</div>
+      <div class="quote">"..." (he barely talks — he just routes)</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/steve-french-paw.svg" alt="Steve French's Paw"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.regression</div>
+      <div class="character">Steve French</div>
+      <div class="role">The cougar. Prowls the codebase. Catches cross-feature interference. Nothing gets past his territory.</div>
+      <div class="quote">"Something's prowlin' around in the code, boys."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/cyrus-sunglasses.svg" alt="Cyrus' Shades"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.security</div>
+      <div class="character">Cyrus</div>
+      <div class="role">"Safety... always off." EXCEPT in our system — safety is ALWAYS ON. Finds threats. Confrontational. Effective.</div>
+      <div class="quote">"F*** off, I got work to do."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/ted-badge.svg" alt="Ted's Badge"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.audit</div>
+      <div class="character">Ted Johnson</div>
+      <div class="role">Final compliance cop. Certifies, routes rework, and does not implement fixes.</div>
+      <div class="quote">"This is an official audit now."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/private-dancer-lamp.svg" alt="Leslie Dancer's Spotlight"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.grill</div>
+      <div class="character">Leslie Dancer</div>
+      <div class="role">Pressure-tests ideas, approval paths, and workflow choices before the wrong work starts.</div>
+      <div class="quote">"Let's get it under the light and see if it survives."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/george-green-badge.svg" alt="George Green's Badge"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.clarify</div>
+      <div class="character">George Green</div>
+      <div class="role">Calls out what is unclear and routes the correct owner instead of patching foreign artifacts himself.</div>
+      <div class="quote">"What in the f— is going on here?"</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/conky-puppet.svg" alt="Conky"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.harden</div>
+      <div class="character">Conky</div>
+      <div class="role">Finds the weak spots and packets the follow-up work. Does not fix inline.</div>
+      <div class="quote">"Why don't you go pave your cave, you dirty caveman?"</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/phil-collins-baam.svg" alt="Phil Collins"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.gaps</div>
+      <div class="character">Philadelphia Collins</div>
+      <div class="role">Finds the gaps nobody else sees and routes the repair. Does not fix inline.</div>
+      <div class="quote">"What are ya lookin' at my gut fer?"</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/gary-laser-eyes.svg" alt="Gary Laser Eyes"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.spec-review</div>
+      <div class="character">Gary Laser Eyes</div>
+      <div class="role">The spec freshness auditor. Sees right through stale specs. Checks if artifacts still match reality.</div>
+      <div class="quote">"Gary can see right through it, boys. That spec expired three refactors ago."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/green-bastard-outline.svg" alt="Green Bastard Mask"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.code-review</div>
+      <div class="character">Green Bastard</div>
+      <div class="role">Engineering-only review surface. Detects problems and priorities without pretending to be the owner.</div>
+      <div class="quote">"From parts unknown, I can smell what's broken in the code."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/orangie-fishbowl.svg" alt="Orangie's Fishbowl"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.system-review</div>
+      <div class="character">Orangie</div>
+      <div class="role">Holistic product, runtime, trust, and UX reviewer. Finds what needs attention, then routes it.</div>
+      <div class="quote">"Orangie sees everything. He's not dead, he's just... reviewing."</div>
+    </div>
+  </div>
+</div>
+
+<h3 style="color: var(--accent); margin: 1.5rem 0 0.5rem;"><img src="../icons/camera-crew.svg" width="20" style="vertical-align: middle;"> Utilities</h3>
+<div class="grid">
+  <div class="card">
+    <div class="icon"><img src="../icons/camera-crew.svg" alt="Camera"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.status</div>
+      <div class="character">The Camera Crew</div>
+      <div class="role">Documentary crew. Observes. Reports. Never interferes. Read-only. No side effects.</div>
+      <div class="quote">(just watches silently)</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/camera-crew.svg" alt="Talking Head"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.recap</div>
+      <div class="character">Talking Head</div>
+      <div class="role">The interview segment. Looks at the camera and gives the fast narrative version: what happened, what is in progress, and which workflow should safely continue next.</div>
+      <div class="quote">"So basically what happened was..."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/lahey-bottle.svg" alt="Lahey's Bottle"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.retro</div>
+      <div class="character">Jim Lahey (Bottle)</div>
+      <div class="role">The liquor-fueled retrospective. Analyzes velocity, gate health, deep code hotspots (bug magnets, co-change coupling, bus factor, churn trends), and shipping patterns across sessions. The liquor helps him see the patterns.</div>
+      <div class="quote">"The liquor helps me see the patterns, Randy."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/cory-trevor-smokes.svg" alt="Smokes"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.handoff / bubbles.setup</div>
+      <div class="character">Cory & Trevor</div>
+      <div class="role">The errand duo. Refresh the framework setup, prep the assets, and carry the handoff package when the shift changes.</div>
+      <div class="quote">"Smokes, let's go."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/t-cap.svg" alt="T's Cap"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.commands</div>
+      <div class="character">T</div>
+      <div class="role">J-Roc's right hand. Makes the command registry. Says very little but is always there.</div>
+      <div class="quote">"True."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/sam-binoculars.svg" alt="Sam Losco"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.create-skill</div>
+      <div class="character">Sam Losco</div>
+      <div class="role">Packages weird but useful specializations into something reusable when the situation gets strangely specific.</div>
+      <div class="quote">"I used to be a vet, you know. I got specialties."</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ COMMAND ALIASES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/ricky-dynamite.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> Sunnyvale Command Aliases</div>
+
+<table class="alias-table">
+  <thead>
+    <tr>
+      <th>Alias</th>
+      <th>Maps To</th>
+      <th>When Ricky Would Say It</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="cmd">sunnyvale pull-the-strings</td>
+      <td class="maps-to">bubbles.workflow</td>
+      <td class="quote-col">"Bubbles is pulling the strings, boys"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale worst-case-ontario</td>
+      <td class="maps-to">bubbles.chaos</td>
+      <td class="quote-col">"Worst case Ontario, something breaks"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale by-the-book</td>
+      <td class="maps-to">bubbles.audit --strict</td>
+      <td class="quote-col">"This is by the book now."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale open-and-shut</td>
+      <td class="maps-to">bubbles.audit</td>
+      <td class="quote-col">"Open and shut case."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale get-two-birds-stoned</td>
+      <td class="maps-to">bubbles.implement + bubbles.test</td>
+      <td class="quote-col">"Get two birds stoned at once"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale smokes-lets-go</td>
+      <td class="maps-to">bubbles.setup</td>
+      <td class="quote-col">"Smokes, let's go. C'mon."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale know-what-im-sayin</td>
+      <td class="maps-to">bubbles.docs</td>
+      <td class="quote-col">"Know what I'm sayin'? Publish the truth."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale somethings-fucky</td>
+      <td class="maps-to">bubbles.validate</td>
+      <td class="quote-col">"Something's fucky"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale way-she-goes</td>
+      <td class="maps-to">bubbles.analyst</td>
+      <td class="quote-col">"Way she goes, boys. Way she goes."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale peanut-butter-and-jam</td>
+      <td class="maps-to">bubbles.gaps</td>
+      <td class="quote-col">"BAAAAM! Peanut butter and JAAAAM!"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale safety-always-off</td>
+      <td class="maps-to">bubbles.security</td>
+      <td class="quote-col">"Safety... always off" (ironic: scans FOR safety)</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale somethings-prowlin</td>
+      <td class="maps-to">bubbles.regression</td>
+      <td class="quote-col">"Something's prowlin' around in the code, boys."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale roll-camera</td>
+      <td class="maps-to">bubbles.status</td>
+      <td class="quote-col">(camera keeps rolling)</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale greasy</td>
+      <td class="maps-to">bubbles.harden</td>
+      <td class="quote-col">"That's greasy, boys. Real greasy."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale supply-and-command</td>
+      <td class="maps-to">bubbles.plan</td>
+      <td class="quote-col">"It's supply and command, Julian"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale under-the-light</td>
+      <td class="maps-to">bubbles.grill</td>
+      <td class="quote-col">"Put it under the light before we burn a week on it."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale private-dancer</td>
+      <td class="maps-to">bubbles.grill</td>
+      <td class="quote-col">"You want answers? Put it under the light."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale water-under-the-fridge</td>
+      <td class="maps-to">bubbles.simplify</td>
+      <td class="quote-col">"It's all water under the fridge"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale laser-eyes</td>
+      <td class="maps-to">bubbles.spec-review</td>
+      <td class="quote-col">"Gary sees what's really there"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale have-a-good-one</td>
+      <td class="maps-to">bubbles.handoff</td>
+      <td class="quote-col">"Have a good one, boys"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale skid-row</td>
+      <td class="maps-to">bubbles.cinematic-designer</td>
+      <td class="quote-col">"I was in Skid Row!"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale mans-gotta-eat</td>
+      <td class="maps-to">bubbles.validate</td>
+      <td class="quote-col">"A man's gotta eat, Julian"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale the-super</td>
+      <td class="maps-to">bubbles.super</td>
+      <td class="quote-col">"I'm the trailer park supervisor."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale i-got-work-to-do</td>
+      <td class="maps-to">bubbles.implement</td>
+      <td class="quote-col">"I got work to do."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale not-how-that-works</td>
+      <td class="maps-to">bubbles.test</td>
+      <td class="quote-col">"Dad, that's not how that works."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale lets-get-organized</td>
+      <td class="maps-to">bubbles.design</td>
+      <td class="quote-col">"Let's get this organized."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale whats-going-on-here</td>
+      <td class="maps-to">bubbles.clarify</td>
+      <td class="quote-col">"What in the f--- is going on here?"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale parts-unknown</td>
+      <td class="maps-to">bubbles.code-review</td>
+      <td class="quote-col">"From parts unknown!"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale keep-the-park-online</td>
+      <td class="maps-to">bubbles.devops</td>
+      <td class="quote-col">"Get the rack humming and keep the park online."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale whole-show</td>
+      <td class="maps-to">bubbles.system-review</td>
+      <td class="quote-col">"Orangie sees everything. He's not dead, he's just... reviewing."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale nice-kitty</td>
+      <td class="maps-to">bubbles.bug</td>
+      <td class="quote-col">"That's a nice f***ing kitty right there."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale just-fixes</td>
+      <td class="maps-to">bubbles.stabilize</td>
+      <td class="quote-col">"..." (Bill just fixes things)</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale pave-your-cave</td>
+      <td class="maps-to">bubbles.harden</td>
+      <td class="quote-col">"Why don't you go pave your cave?"</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale jim-needs-a-plan</td>
+      <td class="maps-to">bubbles.plan</td>
+      <td class="quote-col">"Jim, you need a plan."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale used-to-be-a-vet</td>
+      <td class="maps-to">bubbles.create-skill</td>
+      <td class="quote-col">"I used to be a vet, you know."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale true</td>
+      <td class="maps-to">bubbles.commands</td>
+      <td class="quote-col">"True."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale ill-do-whatever</td>
+      <td class="maps-to">bubbles.iterate</td>
+      <td class="quote-col">"I'll do whatever you need, Julian."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale cant-just-slap</td>
+      <td class="maps-to">bubbles.ux</td>
+      <td class="quote-col">"You can't just slap things together."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale catch-me-up</td>
+      <td class="maps-to">bubbles.recap</td>
+      <td class="quote-col">"So basically what happened was..."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale i-am-the-liquor</td>
+      <td class="maps-to">bubbles.retro</td>
+      <td class="quote-col">"The liquor helps me see the patterns, Randy."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale see-the-patterns</td>
+      <td class="maps-to">bubbles.retro</td>
+      <td class="quote-col">"I AM the liquor."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale wheres-the-bodies</td>
+      <td class="maps-to">bubbles.retro hotspots</td>
+      <td class="quote-col">"The liquor knows where the bodies are buried, Randy."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale whos-driving</td>
+      <td class="maps-to">bubbles.retro busfactor</td>
+      <td class="quote-col">"Somebody's gotta know how to drive this thing."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale tangled-up</td>
+      <td class="maps-to">bubbles.retro coupling</td>
+      <td class="quote-col">"It's all tangled up like Christmas lights, Randy."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale liquor-then-tape</td>
+      <td class="maps-to">retro-to-simplify</td>
+      <td class="quote-col">"The liquor shows me the problems. Donny tapes them up."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale liquor-then-harden</td>
+      <td class="maps-to">retro-to-harden</td>
+      <td class="quote-col">"The liquor shows me the weak spots. Harden up, boys."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale liquor-then-sweep</td>
+      <td class="maps-to">retro-quality-sweep</td>
+      <td class="quote-col">"The liquor finds the mess. Then the whole crew sweeps it clean."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale liquor-then-look</td>
+      <td class="maps-to">retro-to-review</td>
+      <td class="quote-col">"The liquor shows me where to look. Green Bastard tells me what's broken."</td>
+    </tr>
+    <tr>
+      <td class="cmd">sunnyvale same-lot-new-trailer</td>
+      <td class="maps-to">redesign-existing</td>
+      <td class="quote-col">"Same lot, boys. New trailer."</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════════════════ WORKFLOW MODES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/julian-glass.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> Workflow Mode Aliases</div>
+
+<div class="workflow-grid">
+  <div class="workflow-card">
+    <div class="wf-name">value-first-e2e-batch</div>
+    <div class="wf-alias">→ sunnyvale boys-plan</div>
+    <div class="wf-desc">Auto-discover highest-value work, full delivery pipeline. The master plan.</div>
+    <div class="wf-quote">"Boys, I got a plan. And this time it's a good one."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">full-delivery</div>
+    <div class="wf-alias">→ sunnyvale full-send</div>
+    <div class="wf-desc">Standard complete delivery. The default. Get it done.</div>
+    <div class="wf-quote">"Just get 'er done, Julian."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">full-delivery-strict</div>
+    <div class="wf-alias">→ sunnyvale clean-and-sober</div>
+    <div class="wf-desc">Strict enforcement. No blocked continuation. Per-spec commits.</div>
+    <div class="wf-quote">"I'm off the liquor, Randy. For real this time."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">delivery-lockdown</div>
+    <div class="wf-alias">→ sunnyvale no-loose-ends</div>
+    <div class="wf-desc">Maximum-assurance delivery. Keep looping until validate certifies done or records a real blocker. Default continuation target for active recap/status/handoff follow-up.</div>
+    <div class="wf-quote">"No loose ends. All green or we keep going."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">chaos-hardening</div>
+    <div class="wf-alias">→ sunnyvale shit-storm</div>
+    <div class="wf-desc">Iterative chaos + bugfix cycles until clean or limit reached.</div>
+    <div class="wf-quote">"We're in the eye of a shiticane, Randy."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">bugfix-fastlane</div>
+    <div class="wf-alias">→ sunnyvale smash-and-grab</div>
+    <div class="wf-desc">Fast bug closure. In. Fix. Out. Mandatory reproduce-before/verify-after.</div>
+    <div class="wf-quote">"Get in, get out. That's a good plan."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">validate-only</div>
+    <div class="wf-alias">→ sunnyvale randy-put-a-shirt-on</div>
+    <div class="wf-desc">Run validation gates only. Things are about to get serious.</div>
+    <div class="wf-quote">"Randy, put a shirt on. We got company."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">stochastic-quality-sweep</div>
+    <div class="wf-alias">→ sunnyvale bottle-kids</div>
+    <div class="wf-desc">Randomized adversarial probing. You never know where they'll hit, and follow-up commands like <code>fix all found</code> should resume the sweep instead of dropping into raw specialist work.</div>
+    <div class="wf-quote">"BOTTLE KIDS!" *runs for cover*</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">harden-gaps-to-doc</div>
+    <div class="wf-alias">→ sunnyvale conky-says</div>
+    <div class="wf-desc">The most thorough pre-release sweep. Uncomfortable truths revealed.</div>
+    <div class="wf-quote">"Conky says you missed something, Bubbles."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">product-to-delivery</div>
+    <div class="wf-alias">→ sunnyvale freedom-35</div>
+    <div class="wf-desc">Full pipeline: analyst → UX → design → scopes → implement → test → quality.</div>
+    <div class="wf-quote">"Freedom 35, boys! This is the one!"</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">docs-only</div>
+    <div class="wf-alias">→ sunnyvale gnome-sayin</div>
+    <div class="wf-desc">Managed-doc maintenance only. J-Roc publishes the truth.</div>
+    <div class="wf-quote">"You're sayin' 'gnome sayin'' too many times — 80, 90 times? That's too many times."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">feature-bootstrap</div>
+    <div class="wf-alias">→ sunnyvale smokes-and-setup</div>
+    <div class="wf-desc">Set up design + scope artifacts before implementing. The prep work.</div>
+    <div class="wf-quote">"Smokes, let's go. Set it up."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">iterate</div>
+    <div class="wf-alias">→ sunnyvale keep-going</div>
+    <div class="wf-desc">Priority-driven scope-by-scope execution. Picks the next thing and does it.</div>
+    <div class="wf-quote">"Keep going, boys. Don't stop."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">resume-only</div>
+    <div class="wf-alias">→ sunnyvale resume-the-tape</div>
+    <div class="wf-desc">Resume from saved session state. Pick up where you left off.</div>
+    <div class="wf-quote">"Roll that tape back, boys."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">product-discovery</div>
+    <div class="wf-alias">→ sunnyvale whats-the-big-idea</div>
+    <div class="wf-desc">Business analysis + UX exploration. No implementation — just discovery.</div>
+    <div class="wf-quote">"What's the big idea here, Julian?"</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">test-to-doc</div>
+    <div class="wf-alias">→ sunnyvale quick-dirty</div>
+    <div class="wf-desc">Run tests, fix failures, publish docs. Quick verification pass.</div>
+    <div class="wf-quote">"Quick and dirty, boys."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">audit-only</div>
+    <div class="wf-alias">→ sunnyvale open-and-shut</div>
+    <div class="wf-desc">Run audit phase only. Pure compliance check.</div>
+    <div class="wf-quote">"Open and shut case."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">stabilize-to-doc</div>
+    <div class="wf-alias">→ sunnyvale bill-fixes-it</div>
+    <div class="wf-desc">Stability diagnosis → DevOps execution → test → docs. Bill finds it, Tommy ships it.</div>
+    <div class="wf-quote">"..." (Bill just points at the problem.)</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">devops-to-doc</div>
+    <div class="wf-alias">→ sunnyvale keep-the-park-online</div>
+    <div class="wf-desc">Focused DevOps execution for CI/CD, build, deployment, monitoring, observability, and release automation.</div>
+    <div class="wf-quote">"Get the rack humming and keep the park online."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">improve-existing</div>
+    <div class="wf-alias">→ sunnyvale survival-of-the-fitness</div>
+    <div class="wf-desc">Analyze, harden, close gaps, improve → test → docs. Evolutionary improvement.</div>
+    <div class="wf-quote">"Survival of the fitness, boys."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">redesign-existing</div>
+    <div class="wf-alias">→ sunnyvale same-lot-new-trailer</div>
+    <div class="wf-desc">Reconcile stale artifacts, redesign the feature, then deliver it through the full quality chain.</div>
+    <div class="wf-quote">"Same lot, boys. New trailer."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">spec-scope-hardening</div>
+    <div class="wf-alias">→ sunnyvale harden-up</div>
+    <div class="wf-desc">Tighten specs and scope definitions. No implementation, just planning quality.</div>
+    <div class="wf-quote">"Harden up, boys. This has gotta be tight."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">brainstorm</div>
+    <div class="wf-alias">→ sunnyvale smokes-and-thinking</div>
+    <div class="wf-desc">Explore an idea thoroughly before building. Competitive analysis, scenarios, alternatives — zero code. Like YC office hours.</div>
+    <div class="wf-quote">"Let me think about it over a couple smokes."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">retro-to-simplify</div>
+    <div class="wf-alias">→ sunnyvale liquor-then-tape</div>
+    <div class="wf-desc">Data-driven simplification. Retro analyzes git history for bug magnets and hotspots, then Donny simplifies the worst offenders.</div>
+    <div class="wf-quote">"The liquor shows me the problems. Donny tapes them up."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">retro-to-harden</div>
+    <div class="wf-alias">→ sunnyvale liquor-then-harden</div>
+    <div class="wf-desc">Data-driven hardening. Retro finds bug magnets and worsening hotspots, then the hardening pipeline targets those areas.</div>
+    <div class="wf-quote">"The liquor shows me the weak spots. Harden up, boys."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">retro-quality-sweep</div>
+    <div class="wf-alias">→ sunnyvale liquor-then-sweep</div>
+    <div class="wf-desc">Retro-guided quality sweep. The liquor finds the hotspot mess, then simplify, harden, and the rest of the crew clean it up deterministically.</div>
+    <div class="wf-quote">"The liquor finds the mess. Then the whole crew sweeps it clean."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">retro-to-review</div>
+    <div class="wf-alias">→ sunnyvale liquor-then-look</div>
+    <div class="wf-desc">Data-driven code review. Retro identifies highest-risk files, then Green Bastard reviews them. Read-only diagnostic.</div>
+    <div class="wf-quote">"The liquor shows me where to look. Green Bastard tells me what's broken."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">harden-to-doc</div>
+    <div class="wf-alias">→ sunnyvale shit-winds-coming</div>
+    <div class="wf-desc">Harden existing code, fix issues, then test and doc. Prepare for the storm.</div>
+    <div class="wf-quote">"The shit winds are coming, Randy. Harden up."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">gaps-to-doc</div>
+    <div class="wf-alias">→ sunnyvale gut-feeling</div>
+    <div class="wf-desc">Gap analysis → implement fixes → test → docs. Find what's missing.</div>
+    <div class="wf-quote">"What are ya lookin' at my gut fer?"</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">chaos-to-doc</div>
+    <div class="wf-alias">→ sunnyvale we-broke-it</div>
+    <div class="wf-desc">Chaos probing → fix → docs. Break it, then document what happened.</div>
+    <div class="wf-quote">"We broke it. Now document what happened."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">reconcile-to-doc</div>
+    <div class="wf-alias">→ sunnyvale i-toad-a-so</div>
+    <div class="wf-desc">Reconcile stale state, fix conflicts → test → docs. Told you so.</div>
+    <div class="wf-quote">"I toad a so. I f***ing toad a so."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">validate-to-doc</div>
+    <div class="wf-alias">→ sunnyvale just-watching</div>
+    <div class="wf-desc">Validate + audit + docs. The camera crew watches and documents.</div>
+    <div class="wf-quote">"(camera crew just watches)"</div>
+  </div>
+</div>
+
+<div class="section-title"><img src="../icons/bubbles-glasses.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> TPB Vocabulary</div>
+
+<div class="workflow-grid">
+  <div class="workflow-card">
+    <div class="wf-name">workflow-only continuation</div>
+    <div class="wf-desc">Recap, status, and handoff point you back to <code>/bubbles.workflow ...</code> by default instead of raw implement/test/validate commands.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">continuation envelope</div>
+    <div class="wf-desc">Machine-readable packet from a read-only agent carrying target, intent, preferred workflow mode, and reason for the next workflow step.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">scenario replay</div>
+    <div class="wf-desc">Validate reruns the linked live-system <code>SCN-*</code> journeys from <code>scenario-manifest.json</code> before certification.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">human acceptance</div>
+    <div class="wf-desc"><code>uservalidation.md</code> is human-owned acceptance input. Automation findings do not toggle it.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">framework validation</div>
+    <div class="wf-desc">The framework's own self-check surface. Runs portable-surface, ownership, registry, and selftest checks before you trust a release or upgrade.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">release hygiene</div>
+    <div class="wf-desc">Source-repo ship check for Bubbles itself. Confirms framework validation passed, required release docs exist, and no stray temp or backup files are riding along.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">workflow run-state</div>
+    <div class="wf-desc">Durable per-run coordination state that makes resume, runtime reuse, and packet routing explicit instead of guesswork.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">typed framework event</div>
+    <div class="wf-desc">Structured framework log entry for gate outcomes, packet routing, lease changes, and policy provenance instead of narrative-only breadcrumbs.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">action risk class</div>
+    <div class="wf-desc">Safety label for operations such as read-only, owned mutation, destructive mutation, external side effect, or runtime teardown.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">repo-readiness</div>
+    <div class="wf-desc">Advisory repo hygiene check for agent adoption. Useful before deep framework use, but separate from <code>bubbles.validate</code> certification.</div>
+  </div>
+</div>
+
+<div class="quick-ref">
+  <h3>🧩 Optional Execution Tags</h3>
+  <div class="line">
+    <span class="situation">Pressure-test assumptions or locked behavior</span>
+    <span class="quote-text"><code>grillMode</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Scenario-first red→green proof</span>
+    <span class="quote-text"><code>tdd</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Bounded clarification loop</span>
+    <span class="quote-text"><code>socratic</code> + <code>socraticQuestions</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Backlog export from planning</span>
+    <span class="quote-text"><code>backlogExport</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Isolated worktree or branch</span>
+    <span class="quote-text"><code>gitIsolation</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Validated milestone commits</span>
+    <span class="quote-text"><code>autoCommit</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Keep scopes small</span>
+    <span class="quote-text"><code>maxScopeMinutes</code> + <code>maxDodMinutes</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Repair the smallest failure first</span>
+    <span class="quote-text"><code>microFixes</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Multi-AI second opinion on review</span>
+    <span class="quote-text"><code>crossModelReview</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Parallel independent scopes via worktrees</span>
+    <span class="quote-text"><code>parallelScopes</code> + <code>maxParallelScopes</code></span>
+  </div>
+</div>
+
+<div class="quick-ref">
+  <h3>🧠 Control Plane Quick Rules</h3>
+  <div class="line">
+    <span class="situation">Runtime claims</span>
+    <span class="quote-text"><code>state.json.execution.*</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Validate-owned authority</span>
+    <span class="quote-text"><code>state.json.certification.*</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Default mode provenance</span>
+    <span class="quote-text"><code>policySnapshot</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Behavior contract registry</span>
+    <span class="quote-text"><code>scenario-manifest.json</code> + <code>SCN-*</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Concrete completion contract</span>
+    <span class="quote-text"><code>## RESULT-ENVELOPE</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Who fixes versus who routes</span>
+    <span class="quote-text">Owners execute. Diagnostics and certification packetize.</span>
+  </div>
+  <div class="line">
+    <span class="situation">Who can spawn child workflows</span>
+    <span class="quote-text"><code>bubbles.workflow</code>, <code>bubbles.iterate</code>, <code>bubbles.bug</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Framework self-check</span>
+    <span class="quote-text"><code>framework-validate</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Source-repo release gate</span>
+    <span class="quote-text"><code>release-check</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Typed framework event stream</span>
+    <span class="quote-text"><code>framework-events</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Workflow run-state view</span>
+    <span class="quote-text"><code>run-state</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Advisory repo-readiness check</span>
+    <span class="quote-text"><code>repo-readiness</code></span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ SHARED SKILLS ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/trinity-notebook.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The Park Bylaws — Shared Skills</div>
+
+<div style="color: var(--yellow); font-style: italic; margin: 0.5rem 0 1rem 0; font-size: 0.9rem;">"Dad, that's not how that works. You have to actually run them."</div>
+
+<div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Portable procedural checklists auto-installed to every repo. Think of them as the park bylaws — posted on the community board, enforced by everyone.</div>
+
+<div class="grid">
+  <div class="card">
+    <div class="icon"><img src="../icons/trinity-notebook.svg" alt="Trinity"></div>
+    <div class="info">
+      <div class="agent-name">bubbles-test-integrity</div>
+      <div class="character">Trinity's Field Manual</div>
+      <div class="role">Tests are real. No fakes. No shortcuts. No greasy workarounds. Gherkin coverage, anti-mock scans, anti-false-positive scans, assertion audits, Test Plan↔DoD parity.</div>
+      <div class="quote">"Dad, that's not how that works. You have to actually run them."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/ray-lawnchair.svg" alt="Ray"></div>
+    <div class="info">
+      <div class="agent-name">bubbles-spec-template-bdd</div>
+      <div class="character">The Spec Book</div>
+      <div class="role">Enforces spec.md adherence to template. Gherkin-style BDD scenarios. Tech-agnostic requirements. No implementation details leaking in.</div>
+      <div class="quote">"Way she goes? No. Way the SPEC goes."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/barb-keys.svg" alt="Barb"></div>
+    <div class="info">
+      <div class="agent-name">bubbles-docker-lifecycle-governance</div>
+      <div class="character">The Lot Rules</div>
+      <div class="role">Docker resource classification, build freshness, cleanup safety, test storage isolation, stack grouping. Knows what stays and what gets cleaned.</div>
+      <div class="quote">"Jim, there are RULES about what stays and what gets cleaned."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/ted-badge.svg" alt="Ted"></div>
+    <div class="info">
+      <div class="agent-name">bubbles-docker-port-standards</div>
+      <div class="character">The Port Authority</div>
+      <div class="role">The 10k Rule for port allocation. Dual-URL Standard. No localhost. No standard-port host mappings. You can't just park wherever you want.</div>
+      <div class="quote">"You can't just park wherever you want. There's a system."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/sam-binoculars.svg" alt="Sam"></div>
+    <div class="info">
+      <div class="agent-name">bubbles-skill-authoring</div>
+      <div class="character">Sam's Specialties</div>
+      <div class="role">How to create or update repo-local skills. Project-agnostic. Progressive disclosure. No hardcoded hosts, ports, or URLs.</div>
+      <div class="quote">"I used to be a vet, you know. I got specialties."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/lahey-badge.svg" alt="Lahey"></div>
+    <div class="info">
+      <div class="agent-name">bubbles-repo-readiness</div>
+      <div class="character">The Pre-Flight Walkaround</div>
+      <div class="role">Verify-first repo hygiene for agent adoption. Checks whether the commands, docs, and framework-owned surfaces are clear enough for agents to work safely. Advisory only, never a replacement for certification.</div>
+      <div class="quote">"Before the liquor starts talking, make sure the trailer's still standing."</div>
+    </div>
+  </div>
+</div>
+
+<!-- SKILL VOCABULARY -->
+<div style="margin-top: 1.5rem;">
+  <div style="color: var(--accent); font-weight: 700; font-size: 1rem; margin-bottom: 0.75rem;">🗣️ Skill Vocabulary — Sunnyvale Dictionary</div>
+  <div class="gate-section">
+    <div class="gate-msg"><span class="status">🧪</span><span class="msg">"Greasy test"</span><span class="context">— passes when it shouldn't (no assertions, mocked internals, silent-pass)</span></div>
+    <div class="gate-msg"><span class="status">🧪</span><span class="msg">"Proxy assertion"</span><span class="context">— asserting status codes instead of actual behavior</span></div>
+    <div class="gate-msg"><span class="status">🧪</span><span class="msg">"Red before green"</span><span class="context">— changed behavior must show a failing test first</span></div>
+    <div class="gate-msg"><span class="status">🧪</span><span class="msg">"Trinity's checklist"</span><span class="context">— read Gherkin, read spec, identify all paths, then write tests</span></div>
+    <div class="gate-msg"><span class="status">📋</span><span class="msg">"Tech leak"</span><span class="context">— mentioning Rust, PostgreSQL, React in a spec</span></div>
+    <div class="gate-msg"><span class="status">📋</span><span class="msg">"Way the spec goes"</span><span class="context">— spec defines truth; tests validate it; implementation follows</span></div>
+    <div class="gate-msg"><span class="status">📋</span><span class="msg">"Observable behavior"</span><span class="context">— what users see, not how code is structured</span></div>
+    <div class="gate-msg"><span class="status">🐳</span><span class="msg">"Persistent volume"</span><span class="context">— sacred ground, like Ray's bottles — never cleaned by default</span></div>
+    <div class="gate-msg"><span class="status">🐳</span><span class="msg">"Ephemeral storage"</span><span class="context">— gone by morning, like Ricky's plans</span></div>
+    <div class="gate-msg"><span class="status">🐳</span><span class="msg">"Build freshness"</span><span class="context">— proving the image was built from current code, not last Tuesday</span></div>
+    <div class="gate-msg"><span class="status">🐳</span><span class="msg">"Label-aware cleanup"</span><span class="context">— prune by labels, not burning down the park</span></div>
+    <div class="gate-msg"><span class="status">🔌</span><span class="msg">"The 10k Rule"</span><span class="context">— each project gets a 10,000-port block. Stay in your lot.</span></div>
+    <div class="gate-msg"><span class="status">🔌</span><span class="msg">"Dual-URL"</span><span class="context">— lot number (internal) AND mailing address (external)</span></div>
+    <div class="gate-msg"><span class="status">🔌</span><span class="msg">"Port squatting"</span><span class="context">— mapping 5432:5432 on the host. Not allowed.</span></div>
+    <div class="gate-msg"><span class="status">🔌</span><span class="msg">"Localhost is a lie"</span><span class="context">— use 127.0.0.1, no DNS games</span></div>
+    <div class="gate-msg"><span class="status">📦</span><span class="msg">"Progressive disclosure"</span><span class="context">— SKILL.md is the field card, references/ are the textbooks</span></div>
+    <div class="gate-msg"><span class="status">📦</span><span class="msg">"Project-agnostic"</span><span class="context">— no repo names, no ports, no CLI commands. Skills travel.</span></div>
+    <div class="gate-msg"><span class="status">🛠️</span><span class="msg">"Walk the lot first"</span><span class="context">— check repo surfaces before declaring the framework ready to operate there</span></div>
+    <div class="gate-msg"><span class="status">🛠️</span><span class="msg">"Advisory, not certification"</span><span class="context">— repo-readiness informs framework ops, but it does not satisfy bubbles.validate</span></div>
+    <div class="gate-msg"><span class="status">🧭</span><span class="msg">"Owner-only remediation"</span><span class="context">— diagnostics and certification route it; owners and executors do it</span></div>
+    <div class="gate-msg"><span class="status">🧭</span><span class="msg">"Result envelope"</span><span class="context">— every run ends with completed_owned, completed_diagnostic, route_required, or blocked</span></div>
+    <div class="gate-msg"><span class="status">🧭</span><span class="msg">"Narrow packet"</span><span class="context">— tiny fixes stay fast by dispatching the exact owner with the smallest safe context</span></div>
+    <div class="gate-msg"><span class="status">🧭</span><span class="msg">"Action risk class"</span><span class="context">— read_only, owned_mutation, destructive_mutation, external_side_effect, or runtime_teardown</span></div>
+    <div class="gate-msg"><span class="status">🧭</span><span class="msg">"3-strike rule"</span><span class="context">— after 3 failed fix attempts, STOP and escalate. No thrashing.</span></div>
+    <div class="gate-msg"><span class="status">📊</span><span class="msg">"Done with concerns"</span><span class="context">— all gates pass but agent flags observational risks worth monitoring</span></div>
+    <div class="gate-msg"><span class="status">📊</span><span class="msg">"Smart phase routing"</span><span class="context">— irrelevant phases skip with recorded justification, re-evaluate if artifacts change</span></div>
+    <div class="gate-msg"><span class="status">📊</span><span class="msg">"Taste vs mechanical"</span><span class="context">— auto-resolve the obvious decisions, surface only the genuine tradeoffs</span></div>
+    <div class="gate-msg"><span class="status">📊</span><span class="msg">"Cross-model review"</span><span class="context">— two different AIs look at the same diff, compare what each catches</span></div>
+    <div class="gate-msg"><span class="status">📊</span><span class="msg">"Adversarial regression skeleton"</span><span class="context">— every bug fix auto-generates a test that would FAIL if the bug came back</span></div>
+    <div class="gate-msg"><span class="status">📊</span><span class="msg">"test-plan.json"</span><span class="context">— machine-readable test handoff from planning to test phase. No Markdown parsing lottery.</span></div>
+    <div class="gate-msg"><span class="status">🏷️</span><span class="msg">"Lease the lot"</span><span class="context">— claim runtime ownership before starting or reusing a shared stack</span></div>
+    <div class="gate-msg"><span class="status">🏷️</span><span class="msg">"Same stack, same lease"</span><span class="context">— shared-compatible reuse only when the fingerprint matches exactly</span></div>
+    <div class="gate-msg"><span class="status">🏷️</span><span class="msg">"Stale trailer tag"</span><span class="context">— the session disappeared, the lease aged out, and Runtime doctor decides whether reclaim is safe</span></div>
+    <div class="gate-msg"><span class="status">🏷️</span><span class="msg">"Don't burn down the wrong trailer"</span><span class="context">— lease-aware cleanup only touches owned or stale stacks</span></div>
+    <div class="gate-msg"><span class="status">🧠</span><span class="msg">"Smokes and thinking"</span><span class="context">— brainstorm mode: explore the idea before building anything</span></div>
+    <div class="gate-msg"><span class="status">🧠</span><span class="msg">"Same greasy mistake"</span><span class="context">— lesson pattern detected ≥3 times → skill evolution proposes a SKILL.md</span></div>
+    <div class="gate-msg"><span class="status">🧠</span><span class="msg">"The park knows what you like"</span><span class="context">— developer profile auto-resolving taste decisions from observed patterns</span></div>
+    <div class="gate-msg"><span class="status">🧠</span><span class="msg">"Two birds stoned at once"</span><span class="context">— parallelScopes: dag — independent scopes run concurrently via worktrees</span></div>
+    <div class="gate-msg"><span class="status">🧠</span><span class="msg">"Count the empties"</span><span class="context">— activity tracking: only measurable metrics (invocations, durations, retries), never fabricated costs</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Where the bodies are buried"</span><span class="context">— deep code hotspot analysis: bug magnets, co-change coupling, bus factor, churn trends</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Bug magnet"</span><span class="context">— a file with &gt;50% bug-fix commits vs feature commits. The bugs keep coming back.</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Tangled up like Christmas lights"</span><span class="context">— co-change coupling: files that always change together, revealing hidden architectural dependencies</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Somebody's gotta drive"</span><span class="context">— bus factor = 1: only one person has touched this file. Knowledge silo.</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Cooling hotspot"</span><span class="context">— a file that was hot last retro but is stabilizing. Refactoring worked.</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Heating hotspot"</span><span class="context">— a file with increasing churn period-over-period. Getting worse.</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Liquor then tape"</span><span class="context">— retro-to-simplify: retro finds the hotspots, Donny simplifies them</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Liquor then harden"</span><span class="context">— retro-to-harden: retro finds the weak spots, then harden them up</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Liquor then sweep"</span><span class="context">— retro-quality-sweep: retro picks the hotspot mess, then the deterministic quality crew sweeps it clean</span></div>
+    <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Liquor then look"</span><span class="context">— retro-to-review: retro identifies the riskiest files, Green Bastard reviews them</span></div>
+    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Outcome contract"</span><span class="context">— Intent, Success Signal, Hard Constraints, Failure Condition in spec.md — what 'done' actually means for the user</span></div>
+    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Success signal"</span><span class="context">— observable user/system proof that the outcome was achieved, not 'tests pass'</span></div>
+    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Hard constraint"</span><span class="context">— business invariant that survives model upgrades: 'never double-charge', 'PII encrypted'</span></div>
+    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Model compensation"</span><span class="context">— gate that exists because current models fabricate/shortcut; review when models improve</span></div>
+    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Just tell Bubbles"</span><span class="context">— start with /bubbles.workflow and describe what you want in plain English</span></div>
+    <div class="gate-msg"><span class="status">🎯</span><span class="msg">"Bubbles figures it out"</span><span class="context">— workflow delegates to super for NLP + iterate for work-picking. Zero knowledge required.</span></div>
+  </div>
+</div>
+
+<!-- SKILL ALIASES -->
+<div style="margin-top: 1.5rem;">
+<table class="alias-table">
+  <tr><th>Sunnyvale Alias</th><th>Skill</th><th>Quote</th></tr>
+  <tr><td class="cmd">sunnyvale no-greasy-tests</td><td class="maps-to">bubbles-test-integrity</td><td class="quote-col">"That test is GREASY, boys."</td></tr>
+  <tr><td class="cmd">sunnyvale trinity-says</td><td class="maps-to">bubbles-test-integrity</td><td class="quote-col">"Dad, that's not how that works."</td></tr>
+  <tr><td class="cmd">sunnyvale way-the-spec-goes</td><td class="maps-to">bubbles-spec-template-bdd</td><td class="quote-col">"Way she goes? No. Way the SPEC goes."</td></tr>
+  <tr><td class="cmd">sunnyvale lot-rules</td><td class="maps-to">bubbles-docker-lifecycle-governance</td><td class="quote-col">"There are RULES about what stays."</td></tr>
+  <tr><td class="cmd">sunnyvale no-port-squatting</td><td class="maps-to">bubbles-docker-port-standards</td><td class="quote-col">"You can't just squat on standard ports."</td></tr>
+  <tr><td class="cmd">sunnyvale sams-specialties</td><td class="maps-to">bubbles-skill-authoring</td><td class="quote-col">"I used to be a vet, you know."</td></tr>
+  <tr><td class="cmd">sunnyvale walk-the-lot</td><td class="maps-to">bubbles-repo-readiness</td><td class="quote-col">"Before we start, walk the lot and see what's actually standing."</td></tr>
+</table>
+</div>
+
+<!-- ═══════════════════════════════ FUN MODE LOG MESSAGES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/phil-collins-baam.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> Fun Mode — Gate Messages (BUBBLES_FUN_MODE=true)</div>
+
+<div class="gate-section">
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"Decent!"</span><span class="context">— Gate passed</span></div>
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"Looks good, boys."</span><span class="context">— G002 scope ready</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"Something's fucky."</span><span class="context">— Any gate failure</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"That's GREASY, boys. Real greasy."</span><span class="context">— G020 fabrication detected</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"Where's your evidence? Shit hawk circling."</span><span class="context">— G025 missing evidence</span></div>
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"Way she goes, boys. Way she goes."</span><span class="context">— All gates passed</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"Holy f***, boys."</span><span class="context">— Build failed</span></div>
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"DEEEE-CENT!"</span><span class="context">— Spec completed</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"The shit winds are coming, Randy."</span><span class="context">— Zero warnings gate failed</span></div>
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"Worst case Ontario... nothing broke."</span><span class="context">— Chaos clean</span></div>
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"Steve French is purrin'. No regressions, boys."</span><span class="context">— Regression clean</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"Something's prowlin' around in the code, boys."</span><span class="context">— Regression found</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"Steve French found another cougar's territory. Two specs, same route."</span><span class="context">— Spec conflict detected</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"Safety... always ON."</span><span class="context">— G034 security vuln found</span></div>
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"Know what I'm sayin'? It's published."</span><span class="context">— Docs updated</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"You can't just NOT do things, Corey!"</span><span class="context">— Deferral detected</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"That's NOT gettin' two birds stoned — that's just sayin' you WILL."</span><span class="context">— G040 deferral blocks done</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"That's GREASY, boys. You can't just cross things out and say they're done!"</span><span class="context">— DoD manipulation detected</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"You can't just erase the checkboxes and call it a day, Ricky!"</span><span class="context">— G041 format bypass</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"'Deferred — Planned Improvement'?! That's not even a real thing, Julian!"</span><span class="context">— G041 invented status</span></div>
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"Have a good one, boys."</span><span class="context">— Handoff complete</span></div>
+  <div class="gate-msg"><span class="status">🧠</span><span class="msg">"Let me think about it over a couple smokes."</span><span class="context">— Brainstorm mode started</span></div>
+  <div class="gate-msg"><span class="status">🧠</span><span class="msg">"Same greasy mistake, boys. Time for a skill."</span><span class="context">— Skill proposal generated from repeated lessons</span></div>
+  <div class="gate-msg"><span class="status">🧠</span><span class="msg">"The park knows what you like."</span><span class="context">— Auto-resolved taste decision from developer profile</span></div>
+  <div class="gate-msg"><span class="status">🧠</span><span class="msg">"Two birds stoned at once!"</span><span class="context">— Parallel scopes launched via worktrees</span></div>
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"Count the empties, Randy."</span><span class="context">— Activity tracking report generated</span></div>
+  <div class="gate-msg"><span class="status">🔍</span><span class="msg">"The liquor knows where the bodies are buried."</span><span class="context">— Deep hotspot analysis complete</span></div>
+  <div class="gate-msg"><span class="status">🔍</span><span class="msg">"It's all tangled up like Christmas lights, Randy."</span><span class="context">— Co-change coupling detected</span></div>
+  <div class="gate-msg"><span class="status">🔍</span><span class="msg">"Somebody's gotta know how to drive this thing."</span><span class="context">— Bus factor risk detected (single-author file)</span></div>
+  <div class="gate-msg"><span class="status">🔴</span><span class="msg">"That file's a bug magnet, Randy. Stay away from it."</span><span class="context">— Bug-fix ratio &gt; 50% (bug magnet file)</span></div>
+  <div class="gate-msg"><span class="status">❌</span><span class="msg">"This is f***ed. BAAAAM!"</span><span class="context">— Gap found by Phil</span></div>
+  <div class="gate-msg"><span class="status">✅</span><span class="msg">"That's a nice f***ing kitty right there."</span><span class="context">— Bug located</span></div>
+  <div class="gate-msg"><span class="status">⟳</span><span class="msg">"Knock knock." "Who's there?" "A passing build."</span><span class="context">— Build succeeds</span></div>
+  <div class="gate-msg"><span class="status">★</span><span class="msg">"Freedom 35, boys!"</span><span class="context">— Project milestone reached</span></div>
+</div>
+
+<!-- ═══════════════════════════════ QUICK REFERENCE ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/trinity-notebook.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> Sunnyvale Quick Reference — What To Say When</div>
+
+<div class="quick-ref">
+  <h3>🚀 Starting A Job</h3>
+  <div class="line">
+    <span class="situation">Starting full orchestration</span>
+    <span class="quote-text">"Alright boys, here's what we're gonna do."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Planning scopes</span>
+    <span class="quote-text">"Julian's got a plan. A good plan this time."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Bootstrapping artifacts</span>
+    <span class="quote-text">"Smokes, let's go."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Analysis phase</span>
+    <span class="quote-text">"Way she goes, boys."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Release lockdown starts</span>
+    <span class="quote-text">"No loose ends. All green or we keep going."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Brainstorm mode starts</span>
+    <span class="quote-text">"Let me think about it over a couple smokes."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Parallel scopes launched</span>
+    <span class="quote-text">"Getting two birds stoned at once, boys."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Shared runtime preflight</span>
+    <span class="quote-text">"Lease the lot first, boys. Then nobody burns down the wrong trailer."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Legacy improvement preflight</span>
+    <span class="quote-text">"Gary checks the paperwork before we start wrenching."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Explore the idea before writing code</span>
+    <span class="quote-text">"Couple smokes first, boys. Then we decide if it's worth building."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Brownfield feature improvement starts</span>
+    <span class="quote-text">"Check what the trailer actually looks like before you start renovating it."</span>
+  </div>
+</div>
+
+<div class="quick-ref">
+  <h3><img src="../icons/julian-glass.svg" width="20" style="vertical-align: middle;"> During Implementation</h3>
+  <div class="line">
+    <span class="situation">Writing code</span>
+    <span class="quote-text">"I got work to do."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Simplifying complexity</span>
+    <span class="quote-text">"I'm gonna pay you $100 to f*** off." (to complexity)</span>
+  </div>
+  <div class="line">
+    <span class="situation">Explaining the approach</span>
+    <span class="quote-text">"It's not rocket appliances."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Design decisions</span>
+    <span class="quote-text">"It's all about supply and command."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Stale-spec preflight</span>
+    <span class="quote-text">"Gary can see right through it, boys. Check the old paperwork once before you touch the code."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Review the short planning checkpoints</span>
+    <span class="quote-text">"Read the short brief, then read the actual code."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Horizontal plan detected</span>
+    <span class="quote-text">"Quit doing all the plumbing first, boys. Build a slice that actually works."</span>
+  </div>
+</div>
+
+<div class="quick-ref">
+  <h3>🧪 Testing & Validation</h3>
+  <div class="line">
+    <span class="situation">test runner starts</span>
+    <span class="quote-text">"Dad, that's not how that works."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Validation gate running</span>
+    <span class="quote-text">"Mr. Lahey, the tests aren't passing!"</span>
+  </div>
+  <div class="line">
+    <span class="situation">Any gate failure</span>
+    <span class="quote-text">"Something's fucky."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Fabrication detected</span>
+    <span class="quote-text">"That's GREASY. That's real greasy."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Audit starts</span>
+    <span class="quote-text">"I AM the liquor."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Retro / code health check</span>
+    <span class="quote-text">"The liquor helps me see the patterns, Randy."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Finding bug magnets</span>
+    <span class="quote-text">"The liquor knows where the bodies are buried."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Checking whether progress is real or just rework</span>
+    <span class="quote-text">"Count the slop tax, Randy."</span>
+  </div>
+</div>
+
+<div class="quick-ref">
+  <h3>🔥 When Things Go Wrong</h3>
+  <div class="line">
+    <span class="situation">Chaos testing started</span>
+    <span class="quote-text">"Worst case Ontario..."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Audit reveals problems</span>
+    <span class="quote-text">"The shit winds are coming, Randy."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Multiple gates failing</span>
+    <span class="quote-text">"Boys, we're in the eye of a shiticane."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Bug discovered</span>
+    <span class="quote-text">"That's a nice f***ing kitty right there."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Security vulnerability found</span>
+    <span class="quote-text">"F*** off, I got vulnerabilities to find."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Stochastic sweep triggered</span>
+    <span class="quote-text">"BOTTLE KIDS!" *ducks*</span>
+  </div>
+  <div class="line">
+    <span class="situation">Parallel sessions colliding</span>
+    <span class="quote-text">"Runtime doctor, boys. Figure out whose trailer this is before you touch it."</span>
+  </div>
+</div>
+
+<div class="quick-ref">
+  <h3>🎉 Success</h3>
+  <div class="line">
+    <span class="situation">Gate passed</span>
+    <span class="quote-text">"Decent!"</span>
+  </div>
+  <div class="line">
+    <span class="situation">Spec completed</span>
+    <span class="quote-text">"DEEEE-CENT!"</span>
+  </div>
+  <div class="line">
+    <span class="situation">All gates pass</span>
+    <span class="quote-text">"Way she goes."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Build succeeds</span>
+    <span class="quote-text">"Knock knock." "Who's there?" "A passing build."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Project milestone</span>
+    <span class="quote-text">"Freedom 35, boys!"</span>
+  </div>
+  <div class="line">
+    <span class="situation">Session handoff</span>
+    <span class="quote-text">"Have a good one, boys."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Everything is clean</span>
+    <span class="quote-text">"It's all water under the fridge."</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ RICKYISMS GLOSSARY ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/ricky-dynamite.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> Rickyisms — The Official Glossary</div>
+
+<table class="alias-table">
+  <thead>
+    <tr>
+      <th>Rickyism</th>
+      <th>What He Meant</th>
+      <th>Bubbles Context</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td class="cmd">"Worst case Ontario"</td><td class="maps-to">Worst case scenario</td><td class="quote-col">Chaos testing fallback</td></tr>
+    <tr><td class="cmd">"Get two birds stoned at once"</td><td class="maps-to">Kill two birds with one stone</td><td class="quote-col">Implement + test combo</td></tr>
+    <tr><td class="cmd">"It's not rocket appliances"</td><td class="maps-to">It's not rocket science</td><td class="quote-col">When someone overcomplicates things</td></tr>
+    <tr><td class="cmd">"Supply and command"</td><td class="maps-to">Supply and demand</td><td class="quote-col">Planning & resource allocation</td></tr>
+    <tr><td class="cmd">"Water under the fridge"</td><td class="maps-to">Water under the bridge</td><td class="quote-col">Simplification complete, move on</td></tr>
+    <tr><td class="cmd">"I toad a so"</td><td class="maps-to">I told you so</td><td class="quote-col">When Conky (harden) was right</td></tr>
+    <tr><td class="cmd">"Same lot, new trailer"</td><td class="maps-to">Major redesign on top of the existing feature footprint</td><td class="quote-col">Reconcile stale artifacts, then rebuild the active plan</td></tr>
+    <tr><td class="cmd">"Make like a tree and f*** off"</td><td class="maps-to">Make like a tree and leave</td><td class="quote-col">Cleaning up dead code</td></tr>
+    <tr><td class="cmd">"Keep your friends close and get your enemies toaster"</td><td class="maps-to">Keep your friends close and your enemies closer</td><td class="quote-col">Dependency management</td></tr>
+    <tr><td class="cmd">"What comes around is all around"</td><td class="maps-to">What goes around comes around</td><td class="quote-col">Circular dependency detected</td></tr>
+    <tr><td class="cmd">"Denial and error"</td><td class="maps-to">Trial and error</td><td class="quote-col">Ignoring failing tests</td></tr>
+    <tr><td class="cmd">"Passed with flying carpets"</td><td class="maps-to">Passed with flying colors</td><td class="quote-col">All gates passed</td></tr>
+    <tr><td class="cmd">"Survival of the fitness, boys"</td><td class="maps-to">Survival of the fittest</td><td class="quote-col">Stochastic quality sweep results</td></tr>
+    <tr><td class="cmd">"No loose ends"</td><td class="maps-to">Keep looping until the certification chain is actually green</td><td class="quote-col">Delivery-lockdown release workflow</td></tr>
+    <tr><td class="cmd">"Gary checks the paperwork first"</td><td class="maps-to">Run a one-shot spec freshness and redundancy review before legacy implementation work</td><td class="quote-col">`specReview: once-before-implement` execution tag</td></tr>
+    <tr><td class="cmd">"Gorilla see, gorilla do"</td><td class="maps-to">Monkey see, monkey do</td><td class="quote-col">Copy-paste code detected</td></tr>
+    <tr><td class="cmd">"It's a doggy-dog world"</td><td class="maps-to">It's a dog-eat-dog world</td><td class="quote-col">Competitive analysis complete</td></tr>
+    <tr><td class="cmd">"I'll do it tomorrah"</td><td class="maps-to">I'll do it tomorrow</td><td class="quote-col">Deferring work (G040 violation)</td></tr>
+    <tr><td class="cmd">"The liquor helps me see"</td><td class="maps-to">Retrospective analysis reveals hidden patterns</td><td class="quote-col">Running /bubbles.retro to analyze velocity, hotspots, and code health</td></tr>
+    <tr><td class="cmd">"Where the bodies are buried"</td><td class="maps-to">Deep code hotspot analysis — bug magnets, coupling, bus factor</td><td class="quote-col">/bubbles.retro hotspots — the liquor sees which files keep breaking</td></tr>
+    <tr><td class="cmd">"All tangled up like Christmas lights"</td><td class="maps-to">Co-change coupling — files that always change together</td><td class="quote-col">/bubbles.retro coupling — hidden architectural dependencies</td></tr>
+    <tr><td class="cmd">"Somebody's gotta drive"</td><td class="maps-to">Bus factor — single-author files are knowledge silos</td><td class="quote-col">/bubbles.retro busfactor — who knows what</td></tr>
+    <tr><td class="cmd">"Liquor then tape"</td><td class="maps-to">Data-driven simplification — retro finds hotspots, Donny simplifies</td><td class="quote-col">retro-to-simplify workflow mode</td></tr>
+    <tr><td class="cmd">"Liquor then harden"</td><td class="maps-to">Data-driven hardening — retro finds weak spots, then harden</td><td class="quote-col">retro-to-harden workflow mode</td></tr>
+    <tr><td class="cmd">"Liquor then sweep"</td><td class="maps-to">Retro-guided quality sweep — retro finds the hotspot mess, then the crew sweeps it clean</td><td class="quote-col">retro-quality-sweep workflow mode</td></tr>
+    <tr><td class="cmd">"Liquor then look"</td><td class="maps-to">Data-driven review — retro targets riskiest files for review</td><td class="quote-col">retro-to-review workflow mode</td></tr>
+    <tr><td class="cmd">"3 strikes you're out"</td><td class="maps-to">Three strikes and you're out</td><td class="quote-col">3-strike escalation — stop fixing, start escalating</td></tr>
+    <tr><td class="cmd">"Are we concerned or just done?"</td><td class="maps-to">Done… but watch that thing</td><td class="quote-col">done_with_concerns — all gates pass but risks flagged</td></tr>
+    <tr><td class="cmd">"Skip the boring parts"</td><td class="maps-to">Smart phase routing — skip irrelevant phases safely</td><td class="quote-col">phaseRelevance skips simplify/stabilize/devops/chaos when scope doesn't need them</td></tr>
+    <tr><td class="cmd">"Let the machines decide the easy stuff"</td><td class="maps-to">Mechanical vs taste decisions</td><td class="quote-col">decisionPolicy auto-resolves obvious choices, surfaces real tradeoffs</td></tr>
+    <tr><td class="cmd">"Let me think about it over a couple smokes"</td><td class="maps-to">Think about it before acting</td><td class="quote-col">Brainstorm mode — explore before building, like YC office hours</td></tr>
+    <tr><td class="cmd">"Get two birds stoned at once"</td><td class="maps-to">Kill two birds with one stone</td><td class="quote-col">Parallel scope execution — run independent scopes concurrently via worktrees</td></tr>
+    <tr><td class="cmd">"The park knows what you like"</td><td class="maps-to">Personalized from observed behavior</td><td class="quote-col">Developer profile auto-resolving taste decisions from 3+ observations</td></tr>
+    <tr><td class="cmd">"Same greasy mistake three times"</td><td class="maps-to">Repeated pattern detected</td><td class="quote-col">Skill evolution loop — lessons→pattern→skill proposal after 3+ occurrences</td></tr>
+    <tr><td class="cmd">"Count the empties, Randy"</td><td class="maps-to">Count what actually happened</td><td class="quote-col">Activity tracking — only measurable metrics (invocations, durations, retries), no fabricated costs</td></tr>
+    <tr><td class="cmd">"Just tell Bubbles"</td><td class="maps-to">Start with /bubbles.workflow and describe what you want</td><td class="quote-col">Universal entry point — workflow resolves intent, picks work, drives phases</td></tr>
+    <tr><td class="cmd">"Bubbles figures it out"</td><td class="maps-to">Workflow delegates to super + iterate automatically</td><td class="quote-col">Intent delegation — no need to know which agent or mode to use</td></tr>
+    <tr><td class="cmd">"What's it supposed to DO?"</td><td class="maps-to">Define the outcome before the process</td><td class="quote-col">Outcome Contract — Intent, Success Signal, Hard Constraints must exist before work starts</td></tr>
+    <tr><td class="cmd">"Tests passed but it don't WORK"</td><td class="maps-to">Process completion ≠ outcome achieved</td><td class="quote-col">G070 — a feature can pass every gate and still fail its own Success Signal</td></tr>
+    <tr><td class="cmd">"That rule ain't going anywhere"</td><td class="maps-to">Business invariant that transcends model generations</td><td class="quote-col">Hard Constraints survive model upgrades; model compensations get reviewed</td></tr>
+    <tr><td class="cmd">"Lease the lot"</td><td class="maps-to">Claim runtime ownership before starting or reusing a stack</td><td class="quote-col">`bubbles runtime acquire` — make shared Docker/Compose ownership explicit</td></tr>
+    <tr><td class="cmd">"Same stack, same lease"</td><td class="maps-to">Reuse only when the runtime fingerprint matches</td><td class="quote-col">`shared-compatible` runtime reuse — same stack only when compatibility is proven</td></tr>
+    <tr><td class="cmd">"Stale trailer tag"</td><td class="maps-to">Stale lease</td><td class="quote-col">`bubbles runtime doctor` / `bubbles runtime reclaim-stale` — the session vanished, now recover safely</td></tr>
+    <tr><td class="cmd">"Don't burn down the wrong trailer"</td><td class="maps-to">Lease-aware cleanup</td><td class="quote-col">Teardown must touch only owned or stale stacks, never someone else's live runtime</td></tr>
+    <tr><td class="cmd">"Check what the trailer actually looks like first"</td><td class="maps-to">Research current reality before designing the fix</td><td class="quote-col">Objective Research Pass in brownfield workflows</td></tr>
+    <tr><td class="cmd">"Current truth, boys"</td><td class="maps-to">What the code actually does today</td><td class="quote-col">The Current Truth section produced in design.md before brownfield changes</td></tr>
+    <tr><td class="cmd">"Short brief, then the real work"</td><td class="maps-to">Review the short checkpoints, then read the code</td><td class="quote-col">Design Brief and Execution Outline before implementation, code review after</td></tr>
+    <tr><td class="cmd">"Quit doing all the plumbing first"</td><td class="maps-to">Avoid horizontal layer-by-layer plans</td><td class="quote-col">Horizontal plan detection rewrites DB → service → API → UI into vertical slices</td></tr>
+    <tr><td class="cmd">"Build a slice that actually works"</td><td class="maps-to">Prove progress in stack-shaped checkpoints</td><td class="quote-col">Vertical slices with earlier checkpoints and validation</td></tr>
+    <tr><td class="cmd">"Count the slop tax, Randy"</td><td class="maps-to">Measure rework instead of hand-waving about productivity</td><td class="quote-col">/bubbles.retro reports retries, reversions, reopened scopes, and forward progress</td></tr>
+    <tr><td class="cmd">"Too many damn instructions"</td><td class="maps-to">Prompt surfaces got too bloated</td><td class="quote-col">Run `bubbles lint-budget` to audit instruction budgets</td></tr>
+  </tbody>
+</table>
+
+<!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_START -->
+<!-- ═══════════════════════════════ THE 60 GATES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 60 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
+<!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_END -->
+
+<div class="phase-flow">
+  <span class="phase" style="border-color: var(--purple);">analyze</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--purple);">discover</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--accent);">select</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--accent);">bootstrap</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--yellow);">harden</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--yellow);">gaps</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--orange);">implement</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--green);">test</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--orange);">regression</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--accent);">simplify</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--accent);">stabilize</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--red);">security</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--accent);">docs</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--green);">validate</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--yellow);">audit</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--red);">chaos</span><span class="arrow">→</span>
+  <span class="phase" style="border-color: var(--green);">finalize</span>
+</div>
+
+<p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; font-style: italic;">
+  <!-- GENERATED:FRAMEWORK_STATS_HTML_QUOTE_START -->
+  "60 gates, boys. That's more security than the trailer park has ever had. 
+  Something's fucky? We'll find it. That's greasy? We'll clean it. 
+  Red first, green after. Small scopes. Tiny fix loops.
+  Can't defer things either — you can't just NOT do things, Corey!
+  Worst case Ontario, we revert and try again. DEEEE-CENT."
+  <!-- GENERATED:FRAMEWORK_STATS_HTML_QUOTE_END -->
+  <br>— Bubbles, probably
+</p>
+
+<!-- ═══════════════════════════════ FOOTER ═══════════════════════════════ -->
+<div class="footer">
+  <div class="big-quote">"Have a good one, boys."</div>
+  <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
+  <p>Bubbles Agent System v3.3.0 — Sunnyvale Trailer Park Software Division</p>
+  <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
+  <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
+  <p>60 Gates • 34 Agents • 29 Workflow Modes • 25 Phases • 0 Shit Hawks</p>
+  <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_END -->
+  <p style="margin-top: 0.5rem;">© 2026 — All rights reserved by the residents of Sunnyvale Trailer Park</p>
+  <p style="margin-top: 0.25rem; font-size: 0.75rem; color: #555;">"It's not rocket appliances."</p>
+</div>
+
+</body>
+</html>
