@@ -31,6 +31,15 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Get("/recent", deps.RecentHandler)
 		r.Get("/artifact/{id}", deps.ArtifactDetailHandler)
 		r.Get("/export", deps.ExportHandler)
+
+		// OAuth status requires authentication (token-bearing callers)
+		if deps.OAuthHandler != nil {
+			type oauthStatusRouter interface {
+				StatusHandler(w http.ResponseWriter, r *http.Request)
+			}
+			oh := deps.OAuthHandler.(oauthStatusRouter)
+			r.Get("/auth/status", oh.StatusHandler)
+		}
 	})
 
 	// OAuth routes — no Bearer auth (browser redirect flow)
@@ -38,12 +47,10 @@ func NewRouter(deps *Dependencies) http.Handler {
 		type oauthRouter interface {
 			StartHandler(w http.ResponseWriter, r *http.Request)
 			CallbackHandler(w http.ResponseWriter, r *http.Request)
-			StatusHandler(w http.ResponseWriter, r *http.Request)
 		}
 		oh := deps.OAuthHandler.(oauthRouter)
 		r.Get("/auth/{provider}/start", oh.StartHandler)
 		r.Get("/auth/{provider}/callback", oh.CallbackHandler)
-		r.Get("/auth/status", oh.StatusHandler)
 	}
 
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes

@@ -103,6 +103,7 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 			}
 			s.panicCounts[id]++
 			count := s.panicCounts[id]
+			stopped := s.stopped
 			delete(s.running, id)
 			s.mu.Unlock()
 
@@ -116,7 +117,7 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 			}
 
 			// Skip restart if supervisor has been stopped
-			if s.stopped {
+			if stopped {
 				slog.Warn("skipping restart — supervisor stopped", "connector", id)
 				return
 			}

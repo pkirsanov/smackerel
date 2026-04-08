@@ -232,7 +232,12 @@ func (b *Bot) handleURLCapture(ctx context.Context, msg *tgbotapi.Message, text 
 		connections = int(c)
 	}
 
-	b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections)", title, artType, connections))
+	suffix := ""
+	if ps, _ := result["processing_status"].(string); ps == "pending" {
+		suffix = " (processing pending)"
+	}
+
+	b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections)%s", title, artType, connections, suffix))
 }
 
 // handleTextCapture captures plain text as an idea/note.
@@ -253,7 +258,13 @@ func (b *Bot) handleTextCapture(ctx context.Context, msg *tgbotapi.Message, text
 	}
 
 	title, _ := result["title"].(string)
-	b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (idea)", title))
+
+	suffix := ""
+	if ps, _ := result["processing_status"].(string); ps == "pending" {
+		suffix = " (processing pending)"
+	}
+
+	b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (idea)%s", title, suffix))
 }
 
 // handleVoice captures a voice note through Whisper transcription.

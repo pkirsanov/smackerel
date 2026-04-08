@@ -16,6 +16,8 @@ import (
 	"github.com/smackerel/smackerel/internal/connector"
 	caldavConnector "github.com/smackerel/smackerel/internal/connector/caldav"
 	imapConnector "github.com/smackerel/smackerel/internal/connector/imap"
+	keepConnector "github.com/smackerel/smackerel/internal/connector/keep"
+	rssConnector "github.com/smackerel/smackerel/internal/connector/rss"
 	youtubeConnector "github.com/smackerel/smackerel/internal/connector/youtube"
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
@@ -117,12 +119,17 @@ func run() error {
 	imapConn := imapConnector.New("gmail")
 	caldavConn := caldavConnector.New("google-calendar")
 	ytConn := youtubeConnector.New("youtube")
+	rssConn := rssConnector.New("rss", nil) // feed URLs configured via source_config
+	keepConn := keepConnector.New("google-keep")
 	registry.Register(imapConn)
 	registry.Register(caldavConn)
 	registry.Register(ytConn)
+	registry.Register(rssConn)
+	registry.Register(keepConn)
 
 	// Set up OAuth handler for connector authorization
-	tokenStore := auth.NewTokenStore(pg.Pool)
+	// Auth token is used as the encryption key for OAuth tokens at rest (AES-256-GCM)
+	tokenStore := auth.NewTokenStore(pg.Pool, cfg.AuthToken)
 	oauthHandler := auth.NewOAuthHandler(tokenStore)
 	slog.Info("OAuth handler initialized")
 
