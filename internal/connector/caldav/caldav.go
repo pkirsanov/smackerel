@@ -2,8 +2,12 @@ package caldav
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -144,13 +148,177 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	return artifacts, newCursor, nil
 }
 
-// fetchEvents retrieves events from source config or live CalDAV.
+// fetchEvents retrieves events from source config (for testing/local)
+// or from the Google Calendar REST API when OAuth credentials are present.
 func (c *Connector) fetchEvents(ctx context.Context, cursor string) ([]CalendarEvent, error) {
 	rawEvents, ok := c.config.SourceConfig["events"]
 	if ok {
 		return parseCalendarEvents(rawEvents)
 	}
-	return nil, nil
+
+	// Check for OAuth access token (live API path)
+	accessToken := getCredential(c.config.Credentials, "access_token")
+	if accessToken == "" {
+		slog.Debug("CalDAV: no source_config events and no access_token", "id", c.id)
+		return nil, nil
+	}
+
+	return c.fetchGoogleCalendarEvents(ctx, accessToken, cursor)
+}
+
+// fetchGoogleCalendarEvents fetches events from the Google Calendar REST API v3.
+func (c *Connector) fetchGoogleCalendarEvents(ctx context.Context, token string, cursor string) ([]CalendarEvent, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Build request for primary calendar events
+	params := url.Values{
+		"maxResults":   {"100"},
+		"singleEvents": {"true"},
+		"orderBy":      {"startTime"},
+	}
+
+	// Use cursor as sync token or time-based filter
+	if cursor != "" {
+		if t, err := time.Parse(time.RFC3339, cursor); err == nil {
+			params.Set("timeMin", t.Format(time.RFC3339))
+		} else {
+			params.Set("syncToken", cursor)
+		}
+	} else {
+		// Default: events from the last 7 days + next 30 days
+		params.Set("timeMin", time.Now().AddDate(0, 0, -7).Format(time.RFC3339))
+		params.Set("timeMax", time.Now().AddDate(0, 0, 30).Format(time.RFC3339))
+	}
+
+	apiURL := "https://www.googleapis.com/calendar/v3/calendars/primary/events?" + params.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create calendar request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("calendar API request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("calendar API: token expired or invalid (401)")
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("calendar API: HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var calResp struct {
+		Items []struct {
+			ID          string `json:"id"`
+			Summary     string `json:"summary"`
+			Description string `json:"description"`
+			Location    string `json:"location"`
+			Status      string `json:"status"`
+			Start       struct {
+				DateTime string `json:"dateTime"`
+				Date     string `json:"date"`
+			} `json:"start"`
+			End struct {
+				DateTime string `json:"dateTime"`
+				Date     string `json:"date"`
+			} `json:"end"`
+			Organizer struct {
+				Email       string `json:"email"`
+				DisplayName string `json:"displayName"`
+			} `json:"organizer"`
+			Attendees []struct {
+				Email       string `json:"email"`
+				DisplayName string `json:"displayName"`
+			} `json:"attendees"`
+			Recurrence []string `json:"recurrence"`
+			Updated    string   `json:"updated"`
+		} `json:"items"`
+		NextSyncToken string `json:"nextSyncToken"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&calResp); err != nil {
+		return nil, fmt.Errorf("decode calendar response: %w", err)
+	}
+
+	var events []CalendarEvent
+	for _, item := range calResp.Items {
+		evt := CalendarEvent{
+			UID:         item.ID,
+			Summary:     item.Summary,
+			Description: item.Description,
+			Location:    item.Location,
+			Status:      item.Status,
+			Recurring:   len(item.Recurrence) > 0,
+		}
+
+		// Parse organizer
+		if item.Organizer.DisplayName != "" {
+			evt.Organizer = item.Organizer.DisplayName
+		} else {
+			evt.Organizer = item.Organizer.Email
+		}
+
+		// Parse attendees
+		for _, a := range item.Attendees {
+			name := a.DisplayName
+			if name == "" {
+				name = a.Email
+			}
+			evt.Attendees = append(evt.Attendees, name)
+		}
+
+		// Parse start/end times
+		startStr := item.Start.DateTime
+		if startStr == "" {
+			startStr = item.Start.Date
+		}
+		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			evt.Start = t
+		} else if t, err := time.Parse("2006-01-02", startStr); err == nil {
+			evt.Start = t
+		}
+
+		endStr := item.End.DateTime
+		if endStr == "" {
+			endStr = item.End.Date
+		}
+		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			evt.End = t
+		} else if t, err := time.Parse("2006-01-02", endStr); err == nil {
+			evt.End = t
+		}
+
+		// Parse updated timestamp
+		if item.Updated != "" {
+			if t, err := time.Parse(time.RFC3339, item.Updated); err == nil {
+				evt.Updated = t
+			}
+		}
+		if evt.Updated.IsZero() {
+			evt.Updated = evt.Start
+		}
+
+		if evt.Status == "" {
+			evt.Status = "confirmed"
+		}
+
+		events = append(events, evt)
+	}
+
+	slog.Info("google calendar API fetch complete", "events", len(events))
+	return events, nil
+}
+
+func getCredential(creds map[string]string, key string) string {
+	if creds == nil {
+		return ""
+	}
+	return creds[key]
 }
 
 // parseCalendarEvents converts interface{} events from config into CalendarEvent structs.

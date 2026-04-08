@@ -2,8 +2,13 @@ package imap
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -151,17 +156,223 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 }
 
 // fetchMessages retrieves messages from source config (for testing/local)
-// or would fetch from a live IMAP server when credentials are present.
+// or from the Gmail REST API when OAuth credentials are present.
 func (c *Connector) fetchMessages(ctx context.Context, cursor string) ([]EmailMessage, error) {
-	// Check for local/test messages in source_config
+	// Check for local/test messages in source_config (testing path)
 	rawMsgs, ok := c.config.SourceConfig["messages"]
 	if ok {
 		return parseEmailMessages(rawMsgs)
 	}
 
-	// No local messages and no live IMAP connection — return empty
-	slog.Debug("IMAP: no messages in source_config and no live connection", "id", c.id)
-	return nil, nil
+	// Check for OAuth access token (live API path)
+	accessToken := getCredential(c.config.Credentials, "access_token")
+	if accessToken == "" {
+		slog.Debug("IMAP: no source_config messages and no access_token", "id", c.id)
+		return nil, nil
+	}
+
+	return c.fetchGmailMessages(ctx, accessToken, cursor)
+}
+
+// fetchGmailMessages fetches emails from the Gmail REST API using OAuth2 Bearer token.
+func (c *Connector) fetchGmailMessages(ctx context.Context, token string, cursor string) ([]EmailMessage, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	// Build query: messages after cursor timestamp, in INBOX
+	query := "in:inbox"
+	if cursor != "" {
+		query += " after:" + cursor
+	}
+
+	// List message IDs
+	listURL := fmt.Sprintf("https://www.googleapis.com/gmail/v1/users/me/messages?q=%s&maxResults=50",
+		url.QueryEscape(query))
+
+	listResp, err := gmailAPICall(ctx, client, listURL, token)
+	if err != nil {
+		return nil, fmt.Errorf("gmail list messages: %w", err)
+	}
+
+	msgs, _ := listResp["messages"].([]interface{})
+	if len(msgs) == 0 {
+		return nil, nil
+	}
+
+	var result []EmailMessage
+	for _, m := range msgs {
+		mm, ok := m.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		msgID, _ := mm["id"].(string)
+		if msgID == "" {
+			continue
+		}
+
+		// Fetch individual message with metadata and snippet
+		getURL := fmt.Sprintf("https://www.googleapis.com/gmail/v1/users/me/messages/%s?format=full", msgID)
+		msgData, err := gmailAPICall(ctx, client, getURL, token)
+		if err != nil {
+			slog.Warn("gmail fetch message failed", "message_id", msgID, "error", err)
+			continue
+		}
+
+		email := parseGmailMessage(msgData)
+		if email != nil {
+			result = append(result, *email)
+		}
+	}
+
+	slog.Info("gmail API fetch complete", "messages", len(result))
+	return result, nil
+}
+
+// gmailAPICall makes an authenticated GET request to the Gmail API.
+func gmailAPICall(ctx context.Context, client *http.Client, apiURL string, token string) (map[string]interface{}, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("gmail API: token expired or invalid (401)")
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("gmail API: HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("gmail API: decode response: %w", err)
+	}
+	return result, nil
+}
+
+// parseGmailMessage extracts an EmailMessage from a Gmail API message response.
+func parseGmailMessage(data map[string]interface{}) *EmailMessage {
+	payload, _ := data["payload"].(map[string]interface{})
+	if payload == nil {
+		return nil
+	}
+
+	headers, _ := payload["headers"].([]interface{})
+	msg := &EmailMessage{
+		UID:       fmt.Sprintf("%v", data["id"]),
+		MessageID: fmt.Sprintf("%v", data["id"]),
+		Date:      time.Now(),
+	}
+
+	// Extract headers
+	for _, h := range headers {
+		hm, ok := h.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := hm["name"].(string)
+		value, _ := hm["value"].(string)
+		switch strings.ToLower(name) {
+		case "from":
+			msg.From = value
+		case "to":
+			msg.To = []string{value}
+		case "subject":
+			msg.Subject = value
+		case "date":
+			if t, err := time.Parse(time.RFC1123Z, value); err == nil {
+				msg.Date = t
+			} else if t, err := time.Parse("Mon, 2 Jan 2006 15:04:05 -0700", value); err == nil {
+				msg.Date = t
+			}
+		case "message-id":
+			msg.MessageID = value
+		case "in-reply-to":
+			msg.InReplyTo = value
+		}
+	}
+
+	// Extract labels
+	labelIDs, _ := data["labelIds"].([]interface{})
+	for _, l := range labelIDs {
+		if s, ok := l.(string); ok {
+			msg.Labels = append(msg.Labels, s)
+		}
+	}
+
+	// Extract body text (try plain text part first, then HTML)
+	msg.Body = extractGmailBody(payload)
+
+	// Check for attachments
+	parts, _ := payload["parts"].([]interface{})
+	for _, p := range parts {
+		pm, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if fn, _ := pm["filename"].(string); fn != "" {
+			msg.HasAttach = true
+			break
+		}
+	}
+
+	return msg
+}
+
+// extractGmailBody extracts the text body from a Gmail message payload.
+func extractGmailBody(payload map[string]interface{}) string {
+	// Try direct body first (simple messages)
+	if body, ok := payload["body"].(map[string]interface{}); ok {
+		if data, ok := body["data"].(string); ok && data != "" {
+			decoded, err := base64.URLEncoding.DecodeString(data)
+			if err == nil {
+				return string(decoded)
+			}
+		}
+	}
+
+	// Try multipart — find text/plain or text/html
+	parts, _ := payload["parts"].([]interface{})
+	var htmlBody string
+	for _, p := range parts {
+		pm, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		mimeType, _ := pm["mimeType"].(string)
+		body, _ := pm["body"].(map[string]interface{})
+		if body == nil {
+			continue
+		}
+		data, _ := body["data"].(string)
+		if data == "" {
+			continue
+		}
+		decoded, err := base64.URLEncoding.DecodeString(data)
+		if err != nil {
+			continue
+		}
+		if mimeType == "text/plain" {
+			return string(decoded) // Prefer plain text
+		}
+		if mimeType == "text/html" {
+			htmlBody = string(decoded)
+		}
+	}
+	return htmlBody
+}
+
+func getCredential(creds map[string]string, key string) string {
+	if creds == nil {
+		return ""
+	}
+	return creds[key]
 }
 
 // parseEmailMessages converts interface{} messages from config into EmailMessage structs.
