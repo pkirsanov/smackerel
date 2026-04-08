@@ -23,6 +23,9 @@ type ResultSubscriber struct {
 	DigestGen *digest.Generator
 	done      chan struct{}
 	wg        sync.WaitGroup
+	mu        sync.Mutex
+	started   bool
+	stopped   bool
 }
 
 // NewResultSubscriber creates a subscriber for artifacts.processed messages.
@@ -32,12 +35,24 @@ func NewResultSubscriber(db *pgxpool.Pool, nc *smacknats.Client) *ResultSubscrib
 		NATS:      nc,
 		Processor: NewProcessor(db, nc),
 		DigestGen: digest.NewGenerator(db, nc),
-		done:      make(chan struct{}),
 	}
 }
 
 // Start begins consuming artifacts.processed and digest.generated messages in background goroutines.
 func (rs *ResultSubscriber) Start(ctx context.Context) error {
+	rs.mu.Lock()
+	if rs.stopped {
+		rs.mu.Unlock()
+		return fmt.Errorf("subscriber already stopped")
+	}
+	if rs.started {
+		rs.mu.Unlock()
+		return fmt.Errorf("subscriber already started")
+	}
+	rs.done = make(chan struct{})
+	rs.started = true
+	rs.mu.Unlock()
+
 	// artifacts.processed consumer
 	processedConsumer, err := rs.NATS.JetStream.CreateOrUpdateConsumer(ctx, "ARTIFACTS", jetstream.ConsumerConfig{
 		Durable:       "smackerel-core-processed",
@@ -118,7 +133,14 @@ func (rs *ResultSubscriber) Start(ctx context.Context) error {
 
 // Stop signals the background goroutines to exit and waits for them to finish.
 func (rs *ResultSubscriber) Stop() {
+	rs.mu.Lock()
+	if !rs.started || rs.stopped {
+		rs.mu.Unlock()
+		return
+	}
+	rs.stopped = true
 	close(rs.done)
+	rs.mu.Unlock()
 	rs.wg.Wait()
 }
 

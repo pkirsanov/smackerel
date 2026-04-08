@@ -137,7 +137,18 @@ func ExtractArticle(ctx context.Context, articleURL string) (*Result, error) {
 		return nil, fmt.Errorf("URL blocked: %w", err)
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return http.ErrUseLastResponse
+			}
+			if err := validateURLSafety(req.URL); err != nil {
+				return fmt.Errorf("redirect blocked: %w", err)
+			}
+			return nil
+		},
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, articleURL, nil)
 	if err != nil {
