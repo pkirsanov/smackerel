@@ -33,6 +33,19 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Get("/export", deps.ExportHandler)
 	})
 
+	// OAuth routes — no Bearer auth (browser redirect flow)
+	if deps.OAuthHandler != nil {
+		type oauthRouter interface {
+			StartHandler(w http.ResponseWriter, r *http.Request)
+			CallbackHandler(w http.ResponseWriter, r *http.Request)
+			StatusHandler(w http.ResponseWriter, r *http.Request)
+		}
+		oh := deps.OAuthHandler.(oauthRouter)
+		r.Get("/auth/{provider}/start", oh.StartHandler)
+		r.Get("/auth/{provider}/callback", oh.CallbackHandler)
+		r.Get("/auth/status", oh.StatusHandler)
+	}
+
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes
 	if deps.WebHandler != nil {
 		type webRouter interface {

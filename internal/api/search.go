@@ -117,6 +117,24 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 // Search performs a semantic search: embed query → pgvector similarity → filters → graph expansion.
 func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchResult, int, error) {
+	// Step 0: Parse temporal intent from query (e.g., "from last week")
+	if temporal := parseTemporalIntent(req.Query); temporal != nil {
+		if req.Filters.DateFrom == "" {
+			req.Filters.DateFrom = temporal.DateFrom
+		}
+		if req.Filters.DateTo == "" {
+			req.Filters.DateTo = temporal.DateTo
+		}
+		if temporal.Cleaned != "" {
+			req.Query = temporal.Cleaned
+		}
+		slog.Info("temporal intent parsed",
+			"original_query", req.Query,
+			"date_from", req.Filters.DateFrom,
+			"date_to", req.Filters.DateTo,
+		)
+	}
+
 	// Step 1: Create a unique inbox for this query to avoid shared-subject races
 	replySubject := s.NATS.Conn.NewInbox()
 
@@ -155,6 +173,25 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	results, total, err := s.vectorSearch(ctx, embedding, req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("vector search: %w", err)
+	}
+
+	// Step 4: Graph expansion — find related artifacts via knowledge graph edges
+	if len(results) > 0 && len(results) < req.Limit {
+		expanded := s.graphExpand(ctx, results, req.Limit-len(results))
+		if len(expanded) > 0 {
+			results = append(results, expanded...)
+			total += len(expanded)
+		}
+	}
+
+	// Step 5: LLM re-ranking via ML sidecar (best-effort, skip on failure)
+	if len(results) > 1 {
+		reranked, err := s.rerankViaML(ctx, req.Query, results)
+		if err != nil {
+			slog.Warn("LLM re-ranking failed, using similarity order", "error", err)
+		} else {
+			results = reranked
+		}
 	}
 
 	return results, total, nil
@@ -303,6 +340,161 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 	}
 
 	return results, total, nil
+}
+
+// rerankViaML sends search candidates to the ML sidecar for LLM-based re-ranking.
+// Uses NATS request-reply with a 3-second timeout. Falls back gracefully.
+func (s *SearchEngine) rerankViaML(ctx context.Context, query string, candidates []SearchResult) ([]SearchResult, error) {
+	// Build candidate summaries for the LLM
+	type candidate struct {
+		ID      string `json:"id"`
+		Title   string `json:"title"`
+		Summary string `json:"summary"`
+		Type    string `json:"type"`
+	}
+	var cands []candidate
+	for _, r := range candidates {
+		cands = append(cands, candidate{
+			ID:      r.ArtifactID,
+			Title:   r.Title,
+			Summary: r.Summary,
+			Type:    r.ArtifactType,
+		})
+	}
+
+	// Create unique reply inbox
+	replySubject := s.NATS.Conn.NewInbox()
+	sub, err := s.NATS.Conn.SubscribeSync(replySubject)
+	if err != nil {
+		return nil, fmt.Errorf("subscribe for rerank reply: %w", err)
+	}
+	defer sub.Unsubscribe()
+	sub.AutoUnsubscribe(1)
+
+	payload, _ := json.Marshal(map[string]interface{}{
+		"query":         query,
+		"candidates":    cands,
+		"reply_subject": replySubject,
+	})
+
+	if err := s.NATS.Publish(ctx, smacknats.SubjectSearchRerank, payload); err != nil {
+		return nil, fmt.Errorf("publish rerank request: %w", err)
+	}
+
+	// Wait for response with timeout
+	rerankCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	msg, err := sub.NextMsgWithContext(rerankCtx)
+	if err != nil {
+		return nil, fmt.Errorf("wait for rerank response: %w", err)
+	}
+
+	var resp struct {
+		RankedIDs []string `json:"ranked_ids"`
+	}
+	if err := json.Unmarshal(msg.Data, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal rerank response: %w", err)
+	}
+
+	if len(resp.RankedIDs) == 0 {
+		return candidates, nil // No re-ranking available
+	}
+
+	// Reorder results by the ranked ID order
+	resultMap := make(map[string]SearchResult)
+	for _, r := range candidates {
+		resultMap[r.ArtifactID] = r
+	}
+
+	var reranked []SearchResult
+	for i, id := range resp.RankedIDs {
+		if r, ok := resultMap[id]; ok {
+			r.Relevance = "reranked"
+			r.Explanation = fmt.Sprintf("LLM rank: #%d", i+1)
+			reranked = append(reranked, r)
+			delete(resultMap, id)
+		}
+	}
+	// Append any results not covered by re-ranking
+	for _, r := range candidates {
+		if _, remaining := resultMap[r.ArtifactID]; remaining {
+			reranked = append(reranked, r)
+		}
+	}
+
+	return reranked, nil
+}
+
+// graphExpand finds related artifacts via knowledge graph edges from the primary results.
+// This enriches search results by discovering connections that vector similarity alone might miss.
+func (s *SearchEngine) graphExpand(ctx context.Context, primaryResults []SearchResult, maxExpansion int) []SearchResult {
+	if maxExpansion <= 0 || len(primaryResults) == 0 {
+		return nil
+	}
+
+	// Collect primary artifact IDs to exclude from expansion
+	primaryIDs := make(map[string]bool)
+	var ids []string
+	for _, r := range primaryResults {
+		primaryIDs[r.ArtifactID] = true
+		ids = append(ids, r.ArtifactID)
+	}
+
+	// Find connected artifacts via edges (both directions)
+	rows, err := s.Pool.Query(ctx, `
+		SELECT DISTINCT a.id, a.title, a.artifact_type, COALESCE(a.summary, ''),
+		       COALESCE(a.source_url, ''), a.created_at, e.edge_type, e.weight
+		FROM edges e
+		JOIN artifacts a ON (
+			(e.dst_type = 'artifact' AND e.dst_id = a.id) OR
+			(e.src_type = 'artifact' AND e.src_id = a.id)
+		)
+		WHERE (
+			(e.src_type = 'artifact' AND e.src_id = ANY($1)) OR
+			(e.dst_type = 'artifact' AND e.dst_id = ANY($1))
+		)
+		AND a.id != ALL($1)
+		AND a.processing_status = 'processed'
+		AND e.weight >= 0.3
+		ORDER BY e.weight DESC
+		LIMIT $2
+	`, ids, maxExpansion)
+	if err != nil {
+		slog.Warn("graph expansion query failed", "error", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var expanded []SearchResult
+	seen := make(map[string]bool)
+	for rows.Next() {
+		var r SearchResult
+		var createdAt time.Time
+		var edgeType string
+		var weight float64
+
+		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
+			&r.SourceURL, &createdAt, &edgeType, &weight); err != nil {
+			continue
+		}
+
+		if primaryIDs[r.ArtifactID] || seen[r.ArtifactID] {
+			continue
+		}
+		seen[r.ArtifactID] = true
+
+		r.CreatedAt = createdAt.Format(time.RFC3339)
+		r.Relevance = "graph"
+		r.Explanation = fmt.Sprintf("Connected via %s (weight: %.2f)", edgeType, weight)
+
+		expanded = append(expanded, r)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Warn("graph expansion iteration error", "error", err)
+	}
+
+	return expanded
 }
 
 // textSearch is a fallback when embedding is unavailable — uses trigram text search.

@@ -19,6 +19,7 @@ type Dependencies struct {
 	SearchEngine interface{}
 	DigestGen    interface{}
 	WebHandler   interface{}
+	OAuthHandler interface{}
 	AuthToken    string
 }
 

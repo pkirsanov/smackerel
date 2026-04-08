@@ -174,6 +174,16 @@ class NATSClient:
                             llm_model,
                             llm_api_key,
                         )
+                        # Reply directly to Go inbox if reply_subject is set
+                        reply_subject = data.get("reply_subject")
+                        if reply_subject and self._nc:
+                            result["processing_time_ms"] = int(
+                                (time.time() - start) * 1000
+                            )
+                            payload = json.dumps(result).encode()
+                            await self._nc.publish(reply_subject, payload)
+                            await msg.ack()
+                            continue
                     elif subject == "digest.generate":
                         result = await self._handle_digest_generate(
                             data,
@@ -322,7 +332,7 @@ class NATSClient:
         import litellm
 
         query_id = data.get("query_id", "")
-        query_text = data.get("query_text", "")
+        query_text = data.get("query", data.get("query_text", ""))
         candidates = data.get("candidates", [])
 
         if not candidates:
@@ -360,29 +370,37 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
                 if 0 <= idx < len(candidates):
                     ranked.append(
                         {
-                            "artifact_id": candidates[idx].get("artifact_id", ""),
+                            "artifact_id": candidates[idx].get(
+                                "id", candidates[idx].get("artifact_id", "")
+                            ),
                             "rank": len(ranked) + 1,
                             "relevance": item.get("relevance", "medium"),
                             "explanation": item.get("explanation", ""),
                         }
                     )
 
-            return {"query_id": query_id, "ranked": ranked}
+            return {
+                "query_id": query_id,
+                "ranked": ranked,
+                "ranked_ids": [r["artifact_id"] for r in ranked],
+            }
 
         except Exception as e:
             logger.error("Re-ranking failed: %s", e)
             # Fall back to returning candidates in original order
+            fallback = [
+                {
+                    "artifact_id": c.get("id", c.get("artifact_id", "")),
+                    "rank": i + 1,
+                    "relevance": "medium",
+                    "explanation": "LLM re-ranking unavailable",
+                }
+                for i, c in enumerate(candidates[:5])
+            ]
             return {
                 "query_id": query_id,
-                "ranked": [
-                    {
-                        "artifact_id": c.get("artifact_id", ""),
-                        "rank": i + 1,
-                        "relevance": "medium",
-                        "explanation": "LLM re-ranking unavailable",
-                    }
-                    for i, c in enumerate(candidates[:5])
-                ],
+                "ranked": fallback,
+                "ranked_ids": [r["artifact_id"] for r in fallback],
             }
 
     async def _handle_digest_generate(

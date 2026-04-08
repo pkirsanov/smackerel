@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/db"
@@ -111,6 +112,11 @@ func run() error {
 	_ = supervisor // Connectors are registered when configured via OAuth
 	slog.Info("connector supervisor initialized")
 
+	// Set up OAuth handler for connector authorization
+	tokenStore := auth.NewTokenStore(pg.Pool)
+	oauthHandler := auth.NewOAuthHandler(tokenStore)
+	slog.Info("OAuth handler initialized")
+
 	// Create web UI handler
 	webHandler := web.NewHandler(pg.Pool, nc, time.Now())
 
@@ -124,6 +130,7 @@ func run() error {
 		SearchEngine: searchEngine,
 		DigestGen:    digestGen,
 		WebHandler:   webHandler,
+		OAuthHandler: oauthHandler,
 		AuthToken:    cfg.AuthToken,
 	}
 
