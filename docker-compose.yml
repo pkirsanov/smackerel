@@ -29,7 +29,7 @@ services:
   nats:
     image: nats:2.10-alpine
     restart: unless-stopped
-    command: ["--jetstream", "--store_dir", "/data", "--http_port", "${NATS_MONITOR_PORT}"]
+    command: ["--jetstream", "--store_dir", "/data", "--http_port", "${NATS_MONITOR_PORT}", "--auth", "${SMACKEREL_AUTH_TOKEN}"]
     ports:
       - "${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
       - "${NATS_MONITOR_HOST_PORT}:${NATS_MONITOR_PORT}"
@@ -104,6 +104,7 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER}
       LLM_MODEL: ${LLM_MODEL}
       LLM_API_KEY: ${LLM_API_KEY}
+      SMACKEREL_AUTH_TOKEN: ${SMACKEREL_AUTH_TOKEN}
       OLLAMA_URL: ${OLLAMA_URL}
     depends_on:
       nats:

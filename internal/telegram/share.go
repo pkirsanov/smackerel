@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -35,6 +36,14 @@ func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, tex
 
 		result, err := b.callCapture(ctx, body)
 		if err != nil {
+			if errors.Is(err, errDuplicate) {
+				b.reply(msg.Chat.ID, ". Already saved")
+				return
+			}
+			if errors.Is(err, errServiceUnavailable) {
+				b.reply(msg.Chat.ID, "? Service temporarily unavailable")
+				return
+			}
 			slog.Error("share capture failed", "error", err, "url", urls[0])
 			b.reply(msg.Chat.ID, "? Failed to save. Try again in a moment.")
 			return

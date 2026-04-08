@@ -52,7 +52,8 @@ type Client struct {
 }
 
 // Connect establishes a NATS connection and returns a Client.
-func Connect(ctx context.Context, url string) (*Client, error) {
+// authToken is used for NATS token-based authentication; pass empty string to skip.
+func Connect(ctx context.Context, url string, authToken string) (*Client, error) {
 	opts := []nats.Option{
 		nats.Name("smackerel-core"),
 		nats.ReconnectWait(2 * time.Second),
@@ -63,6 +64,10 @@ func Connect(ctx context.Context, url string) (*Client, error) {
 		nats.ReconnectHandler(func(nc *nats.Conn) {
 			slog.Info("NATS reconnected", "url", nc.ConnectedUrl())
 		}),
+	}
+
+	if authToken != "" {
+		opts = append(opts, nats.Token(authToken))
 	}
 
 	nc, err := nats.Connect(url, opts...)
