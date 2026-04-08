@@ -6,10 +6,19 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 
 | Language | Packages/Files | Test Count | Type |
 |----------|---------------|------------|------|
-| Go | 24 packages | 200+ test functions | Unit (behavioral + structural) |
-| Python | 2 test files | 20 tests | Unit |
+| Go | 24 packages | 400+ test functions | Unit (behavioral + structural) |
+| Python | 2 test files | 20+ tests | Unit |
 | Shell (E2E) | 57 scripts | End-to-end | Live-stack |
 | Shell (Stress) | 2 scripts | Stress | Live-stack |
+
+### Key Test Areas
+
+- **Security tests**: auth token validation (placeholder rejection, min length), SSRF URL blocking (private IPs, IPv6, metadata), ILIKE wildcard escaping, config validation (PORT, CRON)
+- **Search tests**: temporal intent parsing (8 patterns), search request handling
+- **Connector tests**: IMAP tier assignment, CalDAV event parsing, YouTube engagement tiers, RSS/Atom parsing, bookmarks parsing, browser dwell time, Keep takeout parsing + label mapping + qualifiers
+- **Telegram tests**: share capture, forward metadata, conversation assembly (timer/overflow/concurrent), media group assembly
+- **Intelligence tests**: synthesis insights, alert lifecycle, resurfacing scoring
+- **Pipeline tests**: dedup, processing, embedding format, tier assignment
 
 ## Current Validation Surface
 
