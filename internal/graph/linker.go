@@ -19,11 +19,18 @@ type Linker struct {
 
 // NewLinker creates a new knowledge graph linker.
 func NewLinker(pool *pgxpool.Pool) *Linker {
+	if pool == nil {
+		return nil
+	}
 	return &Linker{Pool: pool}
 }
 
 // LinkArtifact runs all linking strategies for a processed artifact.
 func (l *Linker) LinkArtifact(ctx context.Context, artifactID string) (int, error) {
+	if l == nil || l.Pool == nil {
+		return 0, nil
+	}
+
 	var totalEdges int
 
 	// 1. Vector similarity linking

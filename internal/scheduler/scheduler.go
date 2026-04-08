@@ -37,6 +37,10 @@ func New(digestGen *digest.Generator, bot *telegram.Bot, engine *intelligence.En
 func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	_, err := s.cron.AddFunc(cronExpr, func() {
 		slog.Info("digest cron triggered")
+		if s.digestGen == nil {
+			slog.Warn("digest generator not configured")
+			return
+		}
 		// Create a fresh context per cron invocation with a timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
