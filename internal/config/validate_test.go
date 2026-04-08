@@ -156,6 +156,56 @@ func TestValidate_NoHiddenDefaults_Required(t *testing.T) {
 	}
 }
 
+func TestValidate_PortSemanticValid(t *testing.T) {
+	setRequiredEnv(t)
+	for _, port := range []string{"1", "80", "8080", "65535"} {
+		t.Setenv("PORT", port)
+		_, err := Load()
+		if err != nil {
+			t.Errorf("PORT=%s should be valid, got: %v", port, err)
+		}
+	}
+}
+
+func TestValidate_PortSemanticInvalid(t *testing.T) {
+	setRequiredEnv(t)
+	for _, port := range []string{"abc", "0", "65536", "-1", "8080x"} {
+		t.Setenv("PORT", port)
+		_, err := Load()
+		if err == nil {
+			t.Errorf("PORT=%s should be rejected", port)
+		}
+		if err != nil && !strings.Contains(err.Error(), "PORT") {
+			t.Errorf("PORT=%s error should mention PORT, got: %v", port, err)
+		}
+	}
+}
+
+func TestValidate_DigestCronValid(t *testing.T) {
+	setRequiredEnv(t)
+	for _, cron := range []string{"0 7 * * *", "*/5 * * * *", "0 0 1 1 0"} {
+		t.Setenv("DIGEST_CRON", cron)
+		_, err := Load()
+		if err != nil {
+			t.Errorf("DIGEST_CRON=%q should be valid, got: %v", cron, err)
+		}
+	}
+}
+
+func TestValidate_DigestCronInvalid(t *testing.T) {
+	setRequiredEnv(t)
+	for _, cron := range []string{"every day", "* * *", "0 7 * * * *"} {
+		t.Setenv("DIGEST_CRON", cron)
+		_, err := Load()
+		if err == nil {
+			t.Errorf("DIGEST_CRON=%q should be rejected", cron)
+		}
+		if err != nil && !strings.Contains(err.Error(), "DIGEST_CRON") {
+			t.Errorf("DIGEST_CRON=%q error should mention DIGEST_CRON, got: %v", cron, err)
+		}
+	}
+}
+
 // setRequiredEnv sets all required env vars with test values.
 func setRequiredEnv(t *testing.T) {
 	t.Helper()

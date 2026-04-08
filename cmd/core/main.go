@@ -72,7 +72,7 @@ func run() error {
 	slog.Info("database migrations complete")
 
 	// Connect to NATS
-	nc, err := smacknats.Connect(ctx, cfg.NATSURL)
+	nc, err := smacknats.Connect(ctx, cfg.NATSURL, cfg.AuthToken)
 	if err != nil {
 		return fmt.Errorf("NATS connection: %w", err)
 	}

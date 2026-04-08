@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -138,6 +139,14 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 		}
 		result, err := b.callCapture(ctx, body)
 		if err != nil {
+			if errors.Is(err, errDuplicate) {
+				b.reply(msg.Chat.ID, ". Already saved")
+				return
+			}
+			if errors.Is(err, errServiceUnavailable) {
+				b.reply(msg.Chat.ID, "? Service temporarily unavailable")
+				return
+			}
 			slog.Error("forward URL capture failed", "error", err)
 			b.reply(msg.Chat.ID, "? Failed to save forwarded message. Try again in a moment.")
 			return
@@ -155,6 +164,14 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 		}
 		result, err := b.callCapture(ctx, body)
 		if err != nil {
+			if errors.Is(err, errDuplicate) {
+				b.reply(msg.Chat.ID, ". Already saved")
+				return
+			}
+			if errors.Is(err, errServiceUnavailable) {
+				b.reply(msg.Chat.ID, "? Service temporarily unavailable")
+				return
+			}
 			slog.Error("forward text capture failed", "error", err)
 			b.reply(msg.Chat.ID, "? Failed to save forwarded message. Try again in a moment.")
 			return

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -211,6 +212,14 @@ func (b *Bot) handleURLCapture(ctx context.Context, msg *tgbotapi.Message, text 
 
 	result, err := b.callCapture(ctx, map[string]string{"url": url})
 	if err != nil {
+		if errors.Is(err, errDuplicate) {
+			b.reply(msg.Chat.ID, ". Already saved")
+			return
+		}
+		if errors.Is(err, errServiceUnavailable) {
+			b.reply(msg.Chat.ID, "? Service temporarily unavailable")
+			return
+		}
 		slog.Error("telegram capture failed", "error", err)
 		b.reply(msg.Chat.ID, "? Failed to save. Try again in a moment.")
 		return
@@ -230,6 +239,14 @@ func (b *Bot) handleURLCapture(ctx context.Context, msg *tgbotapi.Message, text 
 func (b *Bot) handleTextCapture(ctx context.Context, msg *tgbotapi.Message, text string) {
 	result, err := b.callCapture(ctx, map[string]string{"text": text})
 	if err != nil {
+		if errors.Is(err, errDuplicate) {
+			b.reply(msg.Chat.ID, ". Already saved")
+			return
+		}
+		if errors.Is(err, errServiceUnavailable) {
+			b.reply(msg.Chat.ID, "? Service temporarily unavailable")
+			return
+		}
 		slog.Error("telegram text capture failed", "error", err)
 		b.reply(msg.Chat.ID, "? Failed to save. Try again in a moment.")
 		return
@@ -249,6 +266,14 @@ func (b *Bot) handleVoice(ctx context.Context, msg *tgbotapi.Message) {
 		"context": "telegram_voice_file_id:" + msg.Voice.FileID,
 	})
 	if err != nil {
+		if errors.Is(err, errDuplicate) {
+			b.reply(msg.Chat.ID, ". Already saved")
+			return
+		}
+		if errors.Is(err, errServiceUnavailable) {
+			b.reply(msg.Chat.ID, "? Service temporarily unavailable")
+			return
+		}
 		slog.Error("telegram voice capture failed", "error", err)
 		b.reply(msg.Chat.ID, "? Failed to process voice note. Try again in a moment.")
 		return
@@ -432,6 +457,12 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 	b.reply(msg.Chat.ID, help)
 }
 
+// errDuplicate is a sentinel error returned when capture API responds with 409.
+var errDuplicate = fmt.Errorf("duplicate")
+
+// errServiceUnavailable is a sentinel error returned when capture API responds with 503.
+var errServiceUnavailable = fmt.Errorf("service temporarily unavailable")
+
 // callCapture calls the internal capture API.
 func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[string]interface{}, error) {
 	data, _ := json.Marshal(body)
@@ -457,9 +488,16 @@ func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[stri
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		errDetail, _ := result["error"].(map[string]interface{})
-		msg, _ := errDetail["message"].(string)
-		return nil, fmt.Errorf("capture API error %d: %s", resp.StatusCode, msg)
+		switch resp.StatusCode {
+		case http.StatusConflict:
+			return result, errDuplicate
+		case http.StatusServiceUnavailable:
+			return nil, errServiceUnavailable
+		default:
+			errDetail, _ := result["error"].(map[string]interface{})
+			msg, _ := errDetail["message"].(string)
+			return nil, fmt.Errorf("capture API error %d: %s", resp.StatusCode, msg)
+		}
 	}
 
 	return result, nil
