@@ -15,7 +15,7 @@ project:
 
 runtime:
   log_level: info
-  auth_token: development-change-me
+  auth_token: "" # REQUIRED: set a secure random token (min 16 chars). Run: openssl rand -hex 24
   digest_cron: "0 7 * * *"
   embedding_model: all-MiniLM-L6-v2
 
@@ -29,6 +29,17 @@ llm:
 telegram:
   bot_token: ""
   chat_ids: ""
+
+connectors:
+  google-keep:
+    enabled: false
+    sync_mode: takeout # takeout, gkeepapi, or hybrid
+    import_dir: "" # path to Google Takeout Keep export directory
+    include_archived: false
+    min_content_length: 0
+    gkeep_enabled: false
+    gkeep_poll_interval: 60m
+    gkeep_warning_acknowledged: false
 
 services:
   core:

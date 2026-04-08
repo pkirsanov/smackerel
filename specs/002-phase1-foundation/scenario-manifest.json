@@ -1,0 +1,713 @@
+{
+  "version": 2,
+  "specId": "002",
+  "featureDir": "specs/002-phase1-foundation",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-04-07T12:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-002-001",
+      "name": "Docker compose cold start",
+      "scope": "01-project-scaffold",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_AllHealthy"},
+        {"file": "tests/e2e/test_compose_start.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/health_test.go::TestHealthHandler_AllHealthy"},
+        {"type": "e2e-script", "location": "tests/e2e/test_compose_start.sh"}
+      ],
+      "linkedDoD": ["Go project builds and produces smackerel-core binary", "docker compose up starts all 4 services from cold", "GET /api/health returns aggregated service statuses"]
+    },
+    {
+      "scenarioId": "SCN-002-002",
+      "name": "Database schema initialization",
+      "scope": "01-project-scaffold",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationsEmbed"},
+        {"file": "tests/e2e/test_compose_start.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/db/migration_test.go::TestMigrationsEmbed"},
+        {"type": "e2e-script", "location": "tests/e2e/test_compose_start.sh"}
+      ],
+      "linkedDoD": ["PostgreSQL schema migrations run on first start"]
+    },
+    {
+      "scenarioId": "SCN-002-003",
+      "name": "NATS connectivity",
+      "scope": "01-project-scaffold",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/nats/client_test.go", "function": "TestSCN002003_NATSConnectivity_SubjectRouting"},
+        {"file": "tests/e2e/test_compose_start.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/nats/client_test.go::TestSCN002003_NATSConnectivity_SubjectRouting"},
+        {"type": "e2e-script", "location": "tests/e2e/test_compose_start.sh"}
+      ],
+      "linkedDoD": ["NATS JetStream streams created for all subjects"]
+    },
+    {
+      "scenarioId": "SCN-002-004",
+      "name": "Data persistence across restarts",
+      "scope": "01-project-scaffold",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationSQL_Parseable"},
+        {"file": "tests/e2e/test_persistence.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/db/migration_test.go::TestMigrationSQL_Parseable"},
+        {"type": "e2e-script", "location": "tests/e2e/test_persistence.sh"}
+      ],
+      "linkedDoD": ["Data persists across docker compose down/up cycle"]
+    },
+    {
+      "scenarioId": "SCN-002-005",
+      "name": "Article URL content extraction",
+      "scope": "02-processing-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/extract/readability_test.go", "function": "TestSCN002005_ArticleExtraction_TextAndHash"},
+        {"file": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/extract/readability_test.go::TestSCN002005_ArticleExtraction_TextAndHash"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "linkedDoD": ["Article URLs extracted via go-readability with title, author, date"]
+    },
+    {
+      "scenarioId": "SCN-002-006",
+      "name": "YouTube URL transcript extraction",
+      "scope": "02-processing-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "ml/tests/test_main.py", "function": "test_scn002006_youtube_transcript_function"},
+        {"file": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_scn002006_youtube_transcript_function"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "linkedDoD": ["YouTube URLs trigger transcript fetch via Python sidecar"]
+    },
+    {
+      "scenarioId": "SCN-002-007",
+      "name": "LLM processing produces structured output",
+      "scope": "02-processing-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "ml/tests/test_main.py", "function": "test_scn002007_universal_processing_prompt_exists"},
+        {"file": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_scn002007_universal_processing_prompt_exists"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "linkedDoD": ["LLM processing returns valid JSON via Universal Processing Prompt"]
+    },
+    {
+      "scenarioId": "SCN-002-008",
+      "name": "Embedding generation",
+      "scope": "02-processing-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "ml/tests/test_main.py", "function": "test_scn002008_embedding_model_config"},
+        {"file": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_scn002008_embedding_model_config"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "linkedDoD": ["384-dim embeddings generated and stored in pgvector"]
+    },
+    {
+      "scenarioId": "SCN-002-009",
+      "name": "Content deduplication",
+      "scope": "02-processing-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/extract/readability_test.go", "function": "TestSCN002009_ContentDedup_HashMatch"},
+        {"file": "tests/e2e/test_capture_api.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/extract/readability_test.go::TestSCN002009_ContentDedup_HashMatch"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_api.sh"}
+      ],
+      "linkedDoD": ["Content hash dedup prevents reprocessing of identical content"]
+    },
+    {
+      "scenarioId": "SCN-002-010",
+      "name": "Processing tier assignment",
+      "scope": "02-processing-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/pipeline/tier_test.go", "function": "TestAssignTier_UserStarred"},
+        {"file": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/tier_test.go::TestAssignTier_UserStarred"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_pipeline.sh"}
+      ],
+      "linkedDoD": ["Processing tiers (Full/Standard/Light/Metadata) assign correctly"]
+    },
+    {
+      "scenarioId": "SCN-002-011",
+      "name": "Capture article URL via REST API",
+      "scope": "03-active-capture-api",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/capture_test.go", "function": "TestCaptureHandler_AuthCorrectToken"},
+        {"file": "tests/e2e/test_capture_api.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/capture_test.go::TestCaptureHandler_AuthCorrectToken"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_api.sh"}
+      ],
+      "linkedDoD": ["POST /api/capture accepts URL, text, and voice_url inputs", "Article capture returns structured artifact with summary in <30s"]
+    },
+    {
+      "scenarioId": "SCN-002-012",
+      "name": "Capture plain text note",
+      "scope": "03-active-capture-api",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/capture_test.go", "function": "TestCaptureHandler_EmptyBody"},
+        {"file": "tests/e2e/test_capture_api.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/capture_test.go::TestCaptureHandler_EmptyBody"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_api.sh"}
+      ],
+      "linkedDoD": ["Plain text classified as idea/note with entity extraction"]
+    },
+    {
+      "scenarioId": "SCN-002-013",
+      "name": "Capture YouTube URL",
+      "scope": "03-active-capture-api",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/extract/readability_test.go", "function": "TestSCN002006_YouTubeURLDetection"},
+        {"file": "tests/e2e/test_capture_api.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/extract/readability_test.go::TestSCN002006_YouTubeURLDetection"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_api.sh"}
+      ],
+      "linkedDoD": ["YouTube capture fetches transcript and returns narrative summary"]
+    },
+    {
+      "scenarioId": "SCN-002-014",
+      "name": "Duplicate URL returns existing artifact",
+      "scope": "03-active-capture-api",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSCN002014_DuplicateURL_ErrorResponse"},
+        {"file": "tests/e2e/test_capture_errors.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSCN002014_DuplicateURL_ErrorResponse"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_errors.sh"}
+      ],
+      "linkedDoD": ["Duplicate URL returns 409 with existing artifact"]
+    },
+    {
+      "scenarioId": "SCN-002-015",
+      "name": "Invalid input returns 400",
+      "scope": "03-active-capture-api",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSCN002015_InvalidInput_Returns400"},
+        {"file": "tests/e2e/test_capture_errors.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSCN002015_InvalidInput_Returns400"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_errors.sh"}
+      ],
+      "linkedDoD": ["Invalid input returns 400 with descriptive error"]
+    },
+    {
+      "scenarioId": "SCN-002-016",
+      "name": "Vector similarity linking",
+      "scope": "04-knowledge-graph-linking",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/graph/linker_test.go", "function": "TestSCN002016_VectorSimilarityLinker_Exists"},
+        {"file": "tests/e2e/test_knowledge_graph.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/graph/linker_test.go::TestSCN002016_VectorSimilarityLinker_Exists"},
+        {"type": "e2e-script", "location": "tests/e2e/test_knowledge_graph.sh"}
+      ],
+      "linkedDoD": ["Vector similarity finds top 10 related artifacts via pgvector", "RELATED_TO edges created with cosine similarity weights"]
+    },
+    {
+      "scenarioId": "SCN-002-017",
+      "name": "Entity-based linking",
+      "scope": "04-knowledge-graph-linking",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/graph/linker_test.go", "function": "TestSCN002017_EntityLinking_PeopleExtraction"},
+        {"file": "tests/e2e/test_graph_entities.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/graph/linker_test.go::TestSCN002017_EntityLinking_PeopleExtraction"},
+        {"type": "e2e-script", "location": "tests/e2e/test_graph_entities.sh"}
+      ],
+      "linkedDoD": ["People entities matched across artifacts, MENTIONS edges created"]
+    },
+    {
+      "scenarioId": "SCN-002-018",
+      "name": "Topic clustering",
+      "scope": "04-knowledge-graph-linking",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/graph/linker_test.go", "function": "TestSCN002018_TopicClustering_TopicExtraction"},
+        {"file": "tests/e2e/test_graph_entities.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/graph/linker_test.go::TestSCN002018_TopicClustering_TopicExtraction"},
+        {"type": "e2e-script", "location": "tests/e2e/test_graph_entities.sh"}
+      ],
+      "linkedDoD": ["Topics auto-created and BELONGS_TO edges assigned"]
+    },
+    {
+      "scenarioId": "SCN-002-019",
+      "name": "Temporal linking",
+      "scope": "04-knowledge-graph-linking",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/graph/linker_test.go", "function": "TestSCN002019_TemporalLinking_Exists"},
+        {"file": "tests/e2e/test_knowledge_graph.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/graph/linker_test.go::TestSCN002019_TemporalLinking_Exists"},
+        {"type": "e2e-script", "location": "tests/e2e/test_knowledge_graph.sh"}
+      ],
+      "linkedDoD": ["Temporal linking for same-day captures"]
+    },
+    {
+      "scenarioId": "SCN-002-020",
+      "name": "Vague query returns correct result",
+      "scope": "05-semantic-search",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSCN002020_VagueQuery_ReturnsResults"},
+        {"file": "tests/e2e/test_search.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSCN002020_VagueQuery_ReturnsResults"},
+        {"type": "e2e-script", "location": "tests/e2e/test_search.sh"}
+      ],
+      "linkedDoD": ["POST /api/search accepts natural language queries", "Query embedded and similarity search runs via pgvector"]
+    },
+    {
+      "scenarioId": "SCN-002-021",
+      "name": "Person-scoped search",
+      "scope": "05-semantic-search",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSCN002021_PersonScopedSearch"},
+        {"file": "tests/e2e/test_search_filters.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSCN002021_PersonScopedSearch"},
+        {"type": "e2e-script", "location": "tests/e2e/test_search_filters.sh"}
+      ],
+      "linkedDoD": ["Metadata filters extracted from query (type, date, person, topic)"]
+    },
+    {
+      "scenarioId": "SCN-002-022",
+      "name": "Topic-scoped search",
+      "scope": "05-semantic-search",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSCN002022_TopicScopedSearch"},
+        {"file": "tests/e2e/test_search_filters.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSCN002022_TopicScopedSearch"},
+        {"type": "e2e-script", "location": "tests/e2e/test_search_filters.sh"}
+      ],
+      "linkedDoD": ["Metadata filters extracted from query (type, date, person, topic)"]
+    },
+    {
+      "scenarioId": "SCN-002-023",
+      "name": "Empty results handled gracefully",
+      "scope": "05-semantic-search",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSCN002023_EmptyResults_GracefulMessage"},
+        {"file": "tests/e2e/test_search_empty.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSCN002023_EmptyResults_GracefulMessage"},
+        {"type": "e2e-script", "location": "tests/e2e/test_search_empty.sh"}
+      ],
+      "linkedDoD": ["Empty results handled gracefully with honest message"]
+    },
+    {
+      "scenarioId": "SCN-002-024",
+      "name": "Search response under 3 seconds",
+      "scope": "05-semantic-search",
+      "status": "active",
+      "requiredTestType": ["unit", "stress"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSCN002024_SearchTiming_FieldExists"},
+        {"file": "tests/stress/test_search_stress.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSCN002024_SearchTiming_FieldExists"},
+        {"type": "stress-test", "location": "tests/stress/test_search_stress.sh"}
+      ],
+      "linkedDoD": ["Search completes in <3s with 1000+ artifacts"]
+    },
+    {
+      "scenarioId": "SCN-002-025",
+      "name": "Telegram URL capture",
+      "scope": "06-telegram-bot",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/telegram/bot_test.go", "function": "TestSCN002025_TelegramURLCapture"},
+        {"file": "tests/e2e/test_telegram.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/bot_test.go::TestSCN002025_TelegramURLCapture"},
+        {"type": "e2e-script", "location": "tests/e2e/test_telegram.sh"}
+      ],
+      "linkedDoD": ["Telegram bot connects via long-polling and receives messages", "URL messages captured and processed via pipeline"]
+    },
+    {
+      "scenarioId": "SCN-002-026",
+      "name": "Telegram text capture",
+      "scope": "06-telegram-bot",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/telegram/bot_test.go", "function": "TestSCN002026_TelegramTextCapture"},
+        {"file": "tests/e2e/test_telegram.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/bot_test.go::TestSCN002026_TelegramTextCapture"},
+        {"type": "e2e-script", "location": "tests/e2e/test_telegram.sh"}
+      ],
+      "linkedDoD": ["Text messages captured as ideas/notes"]
+    },
+    {
+      "scenarioId": "SCN-002-027",
+      "name": "Telegram search command",
+      "scope": "06-telegram-bot",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/telegram/bot_test.go", "function": "TestSCN002027_TelegramFindCommand"},
+        {"file": "tests/e2e/test_telegram.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/bot_test.go::TestSCN002027_TelegramFindCommand"},
+        {"type": "e2e-script", "location": "tests/e2e/test_telegram.sh"}
+      ],
+      "linkedDoD": ["/find command returns top search results"]
+    },
+    {
+      "scenarioId": "SCN-002-028",
+      "name": "Telegram digest command",
+      "scope": "06-telegram-bot",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/telegram/bot_test.go", "function": "TestSCN002028_TelegramDigestCommand"},
+        {"file": "tests/e2e/test_telegram.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/bot_test.go::TestSCN002028_TelegramDigestCommand"},
+        {"type": "e2e-script", "location": "tests/e2e/test_telegram.sh"}
+      ],
+      "linkedDoD": ["/digest command returns daily digest"]
+    },
+    {
+      "scenarioId": "SCN-002-029",
+      "name": "Telegram unauthorized chat rejected",
+      "scope": "06-telegram-bot",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/telegram/bot_test.go", "function": "TestSCN002029_TelegramUnauthorized"},
+        {"file": "tests/e2e/test_telegram_auth.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/bot_test.go::TestSCN002029_TelegramUnauthorized"},
+        {"type": "e2e-script", "location": "tests/e2e/test_telegram_auth.sh"}
+      ],
+      "linkedDoD": ["Chat ID allowlist enforced -- unauthorized chats silently ignored"]
+    },
+    {
+      "scenarioId": "SCN-002-030",
+      "name": "Digest with action items",
+      "scope": "07-daily-digest",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestSCN002030_DigestWithActionItems"},
+        {"file": "tests/e2e/test_digest.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestSCN002030_DigestWithActionItems"},
+        {"type": "e2e-script", "location": "tests/e2e/test_digest.sh"}
+      ],
+      "linkedDoD": ["Digest cron runs at configured time", "Action items, overnight summary, hot topics assembled as context", "LLM generates digest under 150 words using SOUL.md personality"]
+    },
+    {
+      "scenarioId": "SCN-002-031",
+      "name": "Quiet day digest",
+      "scope": "07-daily-digest",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestSCN002031_QuietDayDigest"},
+        {"file": "tests/e2e/test_digest_quiet.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestSCN002031_QuietDayDigest"},
+        {"type": "e2e-script", "location": "tests/e2e/test_digest_quiet.sh"}
+      ],
+      "linkedDoD": ["Quiet days produce minimal 'all quiet' digest"]
+    },
+    {
+      "scenarioId": "SCN-002-032",
+      "name": "Digest via Telegram",
+      "scope": "07-daily-digest",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/telegram/bot_test.go", "function": "TestSCN002028_TelegramDigestCommand"},
+        {"file": "tests/e2e/test_digest_telegram.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/bot_test.go::TestSCN002028_TelegramDigestCommand"},
+        {"type": "e2e-script", "location": "tests/e2e/test_digest_telegram.sh"}
+      ],
+      "linkedDoD": ["GET /api/digest returns latest generated digest", "Telegram delivery sends digest to configured chat"]
+    },
+    {
+      "scenarioId": "SCN-002-033",
+      "name": "Search via web UI",
+      "scope": "08-web-ui",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go", "function": "TestSCN002033_WebSearchPage"},
+        {"file": "tests/e2e/test_web_ui.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/web/handler_test.go::TestSCN002033_WebSearchPage"},
+        {"type": "e2e-script", "location": "tests/e2e/test_web_ui.sh"}
+      ],
+      "linkedDoD": ["Search page with query input and HTMX-powered results"]
+    },
+    {
+      "scenarioId": "SCN-002-034",
+      "name": "Artifact detail view",
+      "scope": "08-web-ui",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go", "function": "TestSCN002034_ArtifactDetail_RedirectsWithoutID"},
+        {"file": "tests/e2e/test_web_detail.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/web/handler_test.go::TestSCN002034_ArtifactDetail_RedirectsWithoutID"},
+        {"type": "e2e-script", "location": "tests/e2e/test_web_detail.sh"}
+      ],
+      "linkedDoD": ["Artifact detail page with summary, key ideas, entities, connections"]
+    },
+    {
+      "scenarioId": "SCN-002-035",
+      "name": "Settings page",
+      "scope": "08-web-ui",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go", "function": "TestSCN002035_SettingsPage"},
+        {"file": "tests/e2e/test_web_settings.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/web/handler_test.go::TestSCN002035_SettingsPage"},
+        {"type": "e2e-script", "location": "tests/e2e/test_web_settings.sh"}
+      ],
+      "linkedDoD": ["Settings page with source status and LLM config"]
+    },
+    {
+      "scenarioId": "SCN-002-036",
+      "name": "System status page",
+      "scope": "08-web-ui",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go", "function": "TestSCN002036_StatusPage_TemplateExists"},
+        {"file": "tests/e2e/test_web_settings.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/web/handler_test.go::TestSCN002036_StatusPage_TemplateExists"},
+        {"type": "e2e-script", "location": "tests/e2e/test_web_settings.sh"}
+      ],
+      "linkedDoD": ["Status page with service health and database stats"]
+    },
+    {
+      "scenarioId": "SCN-002-037",
+      "name": "Voice note transcription via Whisper",
+      "scope": "02-processing-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "ml/tests/test_main.py", "function": "test_scn002037_whisper_transcribe_function"},
+        {"file": "tests/e2e/test_voice_pipeline.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_scn002037_whisper_transcribe_function"},
+        {"type": "e2e-script", "location": "tests/e2e/test_voice_pipeline.sh"}
+      ],
+      "linkedDoD": ["Voice note transcription via Whisper in ML sidecar"]
+    },
+    {
+      "scenarioId": "SCN-002-038",
+      "name": "LLM processing failure handling",
+      "scope": "02-processing-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "ml/tests/test_main.py", "function": "test_scn002038_llm_failure_returns_error"},
+        {"file": "tests/e2e/test_llm_failure_e2e.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_scn002038_llm_failure_returns_error"},
+        {"type": "e2e-script", "location": "tests/e2e/test_llm_failure_e2e.sh"}
+      ],
+      "linkedDoD": ["LLM timeout/error handled gracefully — artifact marked metadata-only, no partial data stored"]
+    },
+    {
+      "scenarioId": "SCN-002-039",
+      "name": "ML sidecar unavailable returns 503",
+      "scope": "03-active-capture-api",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSCN002039_MLUnavailable_Returns503"},
+        {"file": "tests/e2e/test_capture_errors.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSCN002039_MLUnavailable_Returns503"},
+        {"type": "e2e-script", "location": "tests/e2e/test_capture_errors.sh"}
+      ],
+      "linkedDoD": ["ML sidecar unavailable returns 503 with descriptive message"]
+    },
+    {
+      "scenarioId": "SCN-002-040",
+      "name": "Capture voice note URL via API",
+      "scope": "03-active-capture-api",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSCN002040_VoiceCaptureAPI_VoiceURLField"},
+        {"file": "tests/e2e/test_voice_capture_api.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSCN002040_VoiceCaptureAPI_VoiceURLField"},
+        {"type": "e2e-script", "location": "tests/e2e/test_voice_capture_api.sh"}
+      ],
+      "linkedDoD": ["Voice note URL accepted and transcribed via Whisper pipeline"]
+    },
+    {
+      "scenarioId": "SCN-002-041",
+      "name": "Telegram voice note capture",
+      "scope": "06-telegram-bot",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/telegram/bot_test.go", "function": "TestSCN002041_TelegramVoiceCapture"},
+        {"file": "tests/e2e/test_telegram_voice.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/bot_test.go::TestSCN002041_TelegramVoiceCapture"},
+        {"type": "e2e-script", "location": "tests/e2e/test_telegram_voice.sh"}
+      ],
+      "linkedDoD": ["Voice notes transcribed via Whisper and captured as artifacts"]
+    },
+    {
+      "scenarioId": "SCN-002-042",
+      "name": "Telegram unsupported attachment type",
+      "scope": "06-telegram-bot",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/telegram/bot_test.go", "function": "TestSCN002042_TelegramUnsupportedAttachment"},
+        {"file": "tests/e2e/test_telegram.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/bot_test.go::TestSCN002042_TelegramUnsupportedAttachment"},
+        {"type": "e2e-script", "location": "tests/e2e/test_telegram.sh"}
+      ],
+      "linkedDoD": ["Unsupported attachment types prompt user for context"]
+    },
+    {
+      "scenarioId": "SCN-002-043",
+      "name": "Digest LLM failure fallback",
+      "scope": "07-daily-digest",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestSCN002043_DigestLLMFailureFallback"},
+        {"file": "tests/e2e/test_digest.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestSCN002043_DigestLLMFailureFallback"},
+        {"type": "e2e-script", "location": "tests/e2e/test_digest.sh"}
+      ],
+      "linkedDoD": ["LLM failure fallback generates plain-text digest from metadata"]
+    },
+    {
+      "scenarioId": "SCN-002-044",
+      "name": "Missing required config fails on startup",
+      "scope": "01-project-scaffold",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_MissingDatabaseURL"},
+        {"file": "tests/e2e/test_config_fail.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_MissingDatabaseURL"},
+        {"type": "e2e-script", "location": "tests/e2e/test_config_fail.sh"}
+      ],
+      "linkedDoD": ["Missing required config variables fail startup with explicit error (no hidden defaults)"]
+    }
+  ]
+}

@@ -1,7 +1,10 @@
 package pipeline
 
 import (
+	"sync"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/extract"
 )
 
 func TestDedupChecker_NilPool(t *testing.T) {
@@ -63,5 +66,28 @@ func TestDedupError_Fields(t *testing.T) {
 	errMsg := err.Error()
 	if errMsg == "" {
 		t.Error("error message should not be empty")
+	}
+}
+
+func TestHashContent_ConcurrentSafety(t *testing.T) {
+	const goroutines = 10
+	input := "identical content for concurrent hashing"
+
+	results := make([]string, goroutines)
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			results[idx] = extract.HashContent(input)
+		}(i)
+	}
+	wg.Wait()
+
+	for i := 1; i < goroutines; i++ {
+		if results[i] != results[0] {
+			t.Errorf("goroutine %d produced hash %q, expected %q", i, results[i], results[0])
+		}
 	}
 }

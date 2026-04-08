@@ -67,17 +67,25 @@ adoption_profile_ids() {
   ' "$registry_file"
 }
 
-git_sha="$(bubbles_local_source_sha "$REPO_ROOT")"
+mapfile -t managed_entries < <(bubbles_framework_manifest_entries "$REPO_ROOT" false)
+
+payload_git_sha=''
+payload_generated_at=''
+if bubbles_owns_git_checkout "$REPO_ROOT" && [[ "${#managed_entries[@]}" -gt 0 ]]; then
+  payload_git_sha="$({ git -C "$REPO_ROOT" log -1 --format=%H -- "${managed_entries[@]}"; } 2>/dev/null || true)"
+  payload_generated_at="$({ git -C "$REPO_ROOT" log -1 --format=%cI -- "${managed_entries[@]}"; } 2>/dev/null || true)"
+fi
+
+git_sha="${payload_git_sha:-$(bubbles_local_source_sha "$REPO_ROOT") }"
+git_sha="${git_sha% }"
 [[ -n "$git_sha" ]] || {
-  echo "generate-release-manifest requires a git checkout with a readable HEAD SHA" >&2
+  echo "generate-release-manifest requires a git checkout with a readable managed-payload SHA" >&2
   exit 1
 }
 
 version_value="$(cat "$REPO_ROOT/VERSION")"
-generated_at=''
-if bubbles_owns_git_checkout "$REPO_ROOT"; then
-  generated_at="$({ git -C "$REPO_ROOT" log -1 --format=%cI; } || true)"
-elif [[ -f "$OUTPUT_PATH" ]]; then
+generated_at="$payload_generated_at"
+if [[ -z "$generated_at" && -f "$OUTPUT_PATH" ]]; then
   generated_at="$({ bubbles_json_string_field "$OUTPUT_PATH" generatedAt; } 2>/dev/null || true)"
 fi
 [[ -n "$generated_at" ]] || generated_at="$(bubbles_current_timestamp)"
@@ -98,7 +106,6 @@ mapfile -t validated_surfaces < <(printf '%s\n' \
   'finding-closure-selftest' \
   'interop-import-selftest' \
   'trust-doctor-selftest')
-mapfile -t managed_entries < <(bubbles_framework_manifest_entries "$REPO_ROOT" false)
 
 docs_digest_material=''
 for docs_file in \

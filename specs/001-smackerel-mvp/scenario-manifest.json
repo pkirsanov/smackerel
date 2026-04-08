@@ -1,155 +1,280 @@
 {
-  "version": 1,
+  "version": 2,
   "specId": "001",
+  "featureDir": "specs/001-smackerel-mvp",
   "generatedBy": "bubbles.plan",
-  "generatedAt": "2026-04-06T14:00:00Z",
+  "generatedAt": "2026-04-07T10:00:00Z",
   "scenarios": [
     {
-      "id": "SCN-001-001",
-      "title": "Icon set covers all categories",
+      "scenarioId": "SCN-001-001",
+      "name": "Icon set covers all categories",
       "scope": "01-monochrome-icon-system",
-      "liveTestExpected": true,
-      "testFiles": ["internal/web/icons_test.go", "tests/e2e/test_icons.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/icons/icons_test.go", "function": "TestAllIcons_Count"},
+        {"file": "internal/web/icons/icons_test.go", "function": "TestAllIcons_NoEmoji"},
+        {"file": "internal/web/icons/icons_test.go", "function": "TestAllIcons_NoColorFills"},
+        {"file": "tests/e2e/test_icons.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Icon set covers all categories with 32 unique monochrome icons", "No emoji, color fills, or external icon library glyphs"]
     },
     {
-      "id": "SCN-001-002",
-      "title": "Icons adapt to light and dark theme",
+      "scenarioId": "SCN-001-002",
+      "name": "Icons adapt to light and dark theme",
       "scope": "01-monochrome-icon-system",
-      "liveTestExpected": true,
-      "testFiles": ["internal/web/icons_test.go", "tests/e2e/test_icons.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/icons/icons_test.go", "function": "TestAllIcons_ValidSVG"},
+        {"file": "tests/e2e/test_icons.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Icons render correctly in light and dark themes via CSS currentColor"]
     },
     {
-      "id": "SCN-001-003",
-      "title": "Icons render at multiple sizes",
+      "scenarioId": "SCN-001-003",
+      "name": "Icons render at multiple sizes",
       "scope": "01-monochrome-icon-system",
-      "liveTestExpected": true,
-      "testFiles": ["internal/web/icons_test.go", "tests/e2e/test_icons.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/icons/icons_test.go", "function": "TestAllIcons_ValidSVG"},
+        {"file": "tests/e2e/test_icons.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Icons render cleanly at 16px, 24px, 32px with consistent visual weight"]
     },
     {
-      "id": "SCN-001-004",
-      "title": "Telegram bot uses text markers only",
+      "scenarioId": "SCN-001-004",
+      "name": "Telegram bot uses text markers only",
       "scope": "01-monochrome-icon-system",
-      "liveTestExpected": true,
-      "testFiles": ["internal/telegram/format_test.go", "tests/e2e/test_telegram_format.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/telegram/format_test.go", "function": "TestAllMarkers"},
+        {"file": "internal/telegram/format_test.go", "function": "TestSCN001004_NoEmojiInOutput"},
+        {"file": "tests/e2e/test_telegram_format.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Telegram text marker constants defined", "No emoji in any system output"]
     },
     {
-      "id": "SCN-001-018",
-      "title": "Navigation and UI chrome icons exist",
-      "scope": "01-monochrome-icon-system",
-      "liveTestExpected": true,
-      "testFiles": ["internal/web/icons_test.go"]
-    },
-    {
-      "id": "SCN-001-005",
-      "title": "Light theme renders correctly",
+      "scenarioId": "SCN-001-005",
+      "name": "Light theme renders correctly",
       "scope": "02-design-system-css",
-      "liveTestExpected": true,
-      "testFiles": ["tests/visual/test_theme.html", "tests/e2e/test_design_system.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go"},
+        {"file": "tests/e2e/test_design_system.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["CSS custom properties define full monochrome palette for light theme"]
     },
     {
-      "id": "SCN-001-006",
-      "title": "Dark theme renders correctly",
+      "scenarioId": "SCN-001-006",
+      "name": "Dark theme renders correctly",
       "scope": "02-design-system-css",
-      "liveTestExpected": true,
-      "testFiles": ["tests/visual/test_theme.html", "tests/e2e/test_design_system.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go"},
+        {"file": "tests/e2e/test_design_system.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Dark mode auto-detects from OS prefers-color-scheme"]
     },
     {
-      "id": "SCN-001-007",
-      "title": "Responsive layout at mobile width",
+      "scenarioId": "SCN-001-007",
+      "name": "Responsive layout at mobile width",
       "scope": "02-design-system-css",
-      "liveTestExpected": true,
-      "testFiles": ["tests/visual/test_responsive.html", "tests/e2e/test_design_system.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go"},
+        {"file": "tests/e2e/test_design_system.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Responsive breakpoints with mobile padding and appropriate tap targets"]
     },
     {
-      "id": "SCN-001-008",
-      "title": "Typography uses system fonts",
+      "scenarioId": "SCN-001-008",
+      "name": "Typography uses system fonts",
       "scope": "02-design-system-css",
-      "liveTestExpected": true,
-      "testFiles": ["tests/visual/test_typography.html"]
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["System font stack used", "Type scale applied"]
     },
     {
-      "id": "SCN-001-009",
-      "title": "No accent colors anywhere",
+      "scenarioId": "SCN-001-009",
+      "name": "No accent colors anywhere",
       "scope": "02-design-system-css",
-      "liveTestExpected": true,
-      "testFiles": ["tests/lint/test_no_accent.sh", "tests/e2e/test_design_system.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go"},
+        {"file": "tests/e2e/test_design_system.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["No accent colors, no colored badges, no blue links anywhere"]
     },
     {
-      "id": "SCN-001-010",
-      "title": "Connector interface contract",
+      "scenarioId": "SCN-001-010",
+      "name": "Connector interface contract",
       "scope": "03-generic-connector-framework",
-      "liveTestExpected": true,
-      "testFiles": ["internal/connector/connector_test.go", "internal/connector/registry_test.go", "tests/e2e/test_connector_framework.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/connector_test.go", "function": "TestConnectorInterface"},
+        {"file": "internal/connector/connector_test.go", "function": "TestRegistry_Register"},
+        {"file": "tests/e2e/test_connector_framework.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Connector interface defined with ID, Connect, Sync, Health, Close", "ConnectorRegistry registers, retrieves, and manages connector lifecycle"]
     },
     {
-      "id": "SCN-001-011",
-      "title": "OAuth2 provider abstraction",
+      "scenarioId": "SCN-001-011",
+      "name": "OAuth2 provider abstraction",
       "scope": "03-generic-connector-framework",
-      "liveTestExpected": true,
-      "testFiles": ["internal/auth/oauth_test.go"]
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["OAuth2Provider interface with Google, Generic implementations", "Single Google OAuth consent covers Gmail IMAP + Calendar + YouTube"]
     },
     {
-      "id": "SCN-001-012",
-      "title": "Protocol layer reuse",
+      "scenarioId": "SCN-001-012",
+      "name": "Protocol layer reuse",
       "scope": "03-generic-connector-framework",
-      "liveTestExpected": true,
-      "testFiles": ["internal/connector/imap/imap_test.go"]
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/imap/imap_test.go"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Protocol layer reuse — IMAP connector with provider-specific adapters"]
     },
     {
-      "id": "SCN-001-013",
-      "title": "Sync state contract",
+      "scenarioId": "SCN-001-013",
+      "name": "Sync state contract",
       "scope": "03-generic-connector-framework",
-      "liveTestExpected": true,
-      "testFiles": ["internal/connector/state_test.go", "tests/e2e/test_connector_framework.sh"]
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/connector_test.go"},
+        {"file": "tests/e2e/test_connector_framework.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Sync state CRUD on sync_state table", "Cursor-based incremental sync contract enforced"]
     },
     {
-      "id": "SCN-001-019",
-      "title": "Rate limit detection and exponential backoff",
-      "scope": "03-generic-connector-framework",
-      "liveTestExpected": true,
-      "testFiles": ["internal/connector/backoff_test.go"]
-    },
-    {
-      "id": "SCN-001-020",
-      "title": "Connector health status reporting",
-      "scope": "03-generic-connector-framework",
-      "liveTestExpected": true,
-      "testFiles": ["internal/connector/health_test.go"]
-    },
-    {
-      "id": "SCN-001-021",
-      "title": "Connector error recovery and dead-letter",
-      "scope": "03-generic-connector-framework",
-      "liveTestExpected": true,
-      "testFiles": ["internal/connector/deadletter_test.go", "internal/connector/supervisor_test.go", "tests/e2e/test_connector_framework.sh"]
-    },
-    {
-      "id": "SCN-001-014",
-      "title": "End-to-end capture-to-search",
+      "scenarioId": "SCN-001-014",
+      "name": "End-to-end capture-to-search",
       "scope": "04-product-level-testing",
-      "liveTestExpected": true,
-      "testFiles": ["tests/e2e/test_capture_to_search.sh", "tests/benchmark/test_search_accuracy.sh", "tests/e2e/test_product_flows.sh"]
+      "status": "active",
+      "requiredTestType": ["e2e", "stress"],
+      "linkedTests": [
+        {"file": "tests/e2e/test_capture_to_search.sh"},
+        {"file": "tests/stress/test_search_stress.sh"},
+        {"file": "tests/e2e/test_product_flows.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["E2E capture-to-search flow passes with vague queries"]
     },
     {
-      "id": "SCN-001-015",
-      "title": "Cross-phase integration",
+      "scenarioId": "SCN-001-015",
+      "name": "Cross-phase integration",
       "scope": "04-product-level-testing",
-      "liveTestExpected": true,
-      "testFiles": ["tests/e2e/test_cross_phase.sh"]
+      "status": "active",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/test_cross_phase.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Cross-phase integration verified"]
     },
     {
-      "id": "SCN-001-016",
-      "title": "Full digest pipeline",
+      "scenarioId": "SCN-001-016",
+      "name": "Full digest pipeline",
       "scope": "04-product-level-testing",
-      "liveTestExpected": true,
-      "testFiles": ["tests/e2e/test_digest_pipeline.sh"]
+      "status": "active",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/test_digest_pipeline.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Digest pipeline generates from multi-source data"]
     },
     {
-      "id": "SCN-001-017",
-      "title": "Data persistence and portability",
+      "scenarioId": "SCN-001-017",
+      "name": "Data persistence and portability",
       "scope": "04-product-level-testing",
-      "liveTestExpected": true,
-      "testFiles": ["tests/e2e/test_persistence.sh"]
+      "status": "active",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/test_persistence.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Data persists across docker compose down/up cycle", "Full export produces portable backup"]
+    },
+    {
+      "scenarioId": "SCN-001-018",
+      "name": "Navigation and UI chrome icons exist",
+      "scope": "01-monochrome-icon-system",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/web/icons/icons_test.go", "function": "TestNavigationIcons_Count"},
+        {"file": "internal/web/icons/icons_test.go", "function": "TestAllIcons_ValidSVG"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Navigation icons follow same 24x24 grid, 1.5px stroke rules"]
+    },
+    {
+      "scenarioId": "SCN-001-019",
+      "name": "Rate limit detection and exponential backoff",
+      "scope": "03-generic-connector-framework",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/backoff_test.go", "function": "TestBackoff_Exponential"},
+        {"file": "internal/connector/backoff_test.go", "function": "TestBackoff_MaxRetries"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Rate limit backoff with jitter", "After max retries the current sync cycle is skipped"]
+    },
+    {
+      "scenarioId": "SCN-001-020",
+      "name": "Connector health status reporting",
+      "scope": "03-generic-connector-framework",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/connector_test.go"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["HealthStatus enum: healthy, syncing, error, disconnected"]
+    },
+    {
+      "scenarioId": "SCN-001-021",
+      "name": "Connector error recovery and dead-letter",
+      "scope": "03-generic-connector-framework",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/connector_test.go"},
+        {"file": "tests/e2e/test_connector_framework.sh"}
+      ],
+      "evidenceRefs": ["report.md"],
+      "linkedDoD": ["Connector supervisor with crash recovery", "Dead-letter handling for items failing delivery attempts"]
     }
   ]
 }

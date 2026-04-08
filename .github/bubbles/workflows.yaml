@@ -306,6 +306,8 @@ autoEscalation:
   - gaps_need_closing
   - test_failures_fixable
   - state_drift_detected
+  - baseline_already_green # A green test suite does NOT make stochastic/iterate rounds redundant
+  - sweep_deemed_redundant # The orchestrator MUST NOT self-assess sweep utility and skip rounds
 
 # Project-local custom gates (discovered from .github/bubbles-project.yaml)
 # These are NEVER defined in this file — this file is 100% Bubbles-owned.
@@ -1190,12 +1192,16 @@ modes:
     requiredGates: [ G001, G008, G011, G012 ]
 
   chaos-hardening:
-    description: Repeat chaos and bugfix cycles until clean or retry limit.
+    description: Start with chaos probes, then run the remediation, verification, docs, and finalize chain until clean or retry limit.
     statusCeiling: done
-    phaseOrder: [ select, bootstrap, chaos, implement, test, regression, simplify, stabilize, devops, security, validate, audit, finalize ]
-    requiredGates: [ G001, G003, G004, G005, G007, G008, G009, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G044, G047, G048, G051, G055, G056, G057, G058, G059, G060, G061 ]
+    phaseOrder: [ select, bootstrap, chaos, implement, test, regression, simplify, stabilize, devops, security, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G034, G035, G044, G047, G048, G051, G055, G056, G057, G058, G059, G060, G061 ]
     maxChaosRounds: 5
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       forceTddMode: scenario-first
       lockdownAware: true
       requireProtectedRegressionContracts: true
@@ -1219,6 +1225,10 @@ modes:
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       sequentialSpecCompletion: true
       crossAgentVerification: true
       antiFabricationDetection: true
@@ -1239,6 +1249,10 @@ modes:
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       sequentialSpecCompletion: true
       crossAgentVerification: true
       antiFabricationDetection: true
@@ -1279,6 +1293,10 @@ modes:
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       requireArtifactStateReconciliation: true
       requireArtifactFreshnessReconciliation: true
       specReviewDefault: once-before-implement
@@ -1298,11 +1316,15 @@ modes:
       requireIntegrationCompleteness: true
 
   test-to-doc:
-    description: Run tests, then quality chain (validate, audit, docs). For specs with complete implementation needing test verification and quality sign-off.
+    description: Run tests, and if they expose real work, execute the full finding-owned planning/remediation chain before completing validation, audit, docs, and finalize.
     statusCeiling: done
     phaseOrder: [ select, bootstrap, test, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G033, G035, G055, G056, G057, G059, G061 ]
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       sequentialSpecCompletion: true
       crossAgentVerification: true
       antiFabricationDetection: true
@@ -1317,12 +1339,16 @@ modes:
       requireIntegrationCompleteness: true
 
   chaos-to-doc:
-    description: Run chaos probes, then quality chain (validate, audit, docs). For specs needing chaos hardening and quality verification.
+    description: Run chaos probes, and if they expose real work, execute the full finding-owned planning/remediation chain before completing validation, audit, docs, and finalize.
     statusCeiling: done
     phaseOrder: [ select, chaos, validate, audit, docs, finalize ]
     requiredGates: [ G001, G006, G007, G008, G009, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G027, G028, G029, G035, G055, G056, G057, G061 ]
     maxChaosRounds: 3
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       sequentialSpecCompletion: true
       crossAgentVerification: true
       antiFabricationDetection: true
@@ -1382,6 +1408,58 @@ modes:
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G035 ]
     maxChaosRounds: 3
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  security-to-doc:
+    description: Start from a security pass, then implement fixes and run the full quality chain through docs and finalize.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, security, implement, test, regression, simplify, stabilize, devops, chaos, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 3
+    constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  regression-to-doc:
+    description: Start from regression analysis, then implement fixes and run the full quality chain through docs and finalize.
+    statusCeiling: done
+    phaseOrder: [ select, bootstrap, regression, implement, test, simplify, stabilize, devops, security, chaos, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G014, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G044, G055, G056, G057, G059, G061 ]
+    maxChaosRounds: 3
+    constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       sequentialSpecCompletion: true
       crossAgentVerification: true
       antiFabricationDetection: true
@@ -1402,6 +1480,10 @@ modes:
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G032, G033, G035, G055, G056, G057, G059, G061 ]
     maxChaosRounds: 3
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       requireExistingImplementation: true
       requireCompetitiveAnalysis: true
       requireArtifactStateReconciliation: true
@@ -1423,11 +1505,15 @@ modes:
       requireIntegrationCompleteness: true
 
   simplify-to-doc:
-    description: Simplify an existing implementation, prove the behavior still works, then sync docs and evidence.
+    description: Simplify an existing implementation, and if simplification exposes real work, execute the full finding-owned planning/remediation chain before syncing docs and evidence.
     statusCeiling: done
     phaseOrder: [ select, simplify, test, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G027, G028, G029, G035, G036, G044 ]
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       requireExistingImplementation: true
       preferSmallChangedSurface: true
       requireRedGreenProofWhenBehaviorChanges: true
@@ -1450,6 +1536,10 @@ modes:
     phaseOrder: [ select, bootstrap, devops, test, stabilize, security, validate, audit, docs, finalize ]
     requiredGates: [ G001, G003, G004, G005, G006, G007, G008, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G027, G028, G029, G031, G033, G035, G055, G056, G057, G061 ]
     constraints:
+      requireFindingOwnedPlanningWorkflow: true
+      findingPlanningAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      findingDeliveryPhases: [ implement, test, validate, audit, docs, finalize ]
+      requireTerminalFindingClosure: true
       requireExistingImplementation: true
       requireOperationalVerification: true
       requireDeploymentOrMonitoringEvidence: true
@@ -1557,7 +1647,7 @@ modes:
       requireIntegrationCompleteness: true
 
   stochastic-quality-sweep:
-    description: Run multiple randomized rounds where each round picks a random spec (from all specs by default, or from a user-provided subset) AND a random trigger agent from a configurable pool, probes that spec, then runs a trigger-specific fix cycle if findings exist. Rounds limited by count or time budget. For adversarial quality hardening across specs via random probe angles.
+    description: Run multiple randomized rounds where each round picks a random spec (from all specs by default, or from a user-provided subset) AND a random trigger, then dispatches the trigger-owned end-to-end workflow for that trigger. Stochastic sweep itself only chooses the target and trigger; the child workflow owns probing, remediation, verification, docs, and finalize.
     statusCeiling: done
     phaseOrder: [ select, chaos, harden, gaps, simplify, stabilize, devops, security, regression, validate, bug, implement, test, validate, audit, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G055, G056, G057, G059, G061 ]
@@ -1569,10 +1659,10 @@ modes:
       #      - Default pool: ALL specs discovered from specs/ folder
       #      - Optional: user provides spec targets (range, list, paths) to limit the pool
       #   2. Pick a random trigger from triggerAgentPool (or user-specified subset)
-      #   3. Execute the trigger phase against the selected spec
-      #   4. If findings exist, run the trigger-specific fix cycle for that spec
-      #   5. If clean, skip fix cycle and proceed to next round
-      # After all rounds: docs → finalize (per-spec)
+      #   3. Resolve the trigger-owned child workflow mode from triggerWorkflowModes
+      #   4. Dispatch that child workflow against the selected spec
+      #   5. Record the child workflow outcome in the sweep ledger
+      # After all rounds: parent records a sweep summary only; child workflows own docs/finalize
       stochasticRoundExecution: true
       # Spec pool discovery: when no spec targets provided, discover ALL spec
       # folders under specs/ as the pool. User can restrict with standard spec
@@ -1580,44 +1670,31 @@ modes:
       autoDiscoverAllSpecs: true
       # Default trigger pool — all probing/quality agents
       # User can override with triggerAgents option to limit the pool
-      triggerAgentPool: [ chaos, harden, gaps, simplify, stabilize, validate, improve, security, regression ]
+      triggerAgentPool: [ chaos, harden, gaps, simplify, stabilize, test, devops, validate, improve, security, regression ]
       # Max rounds (overridable via maxRounds user option)
       defaultMaxRounds: 10
       # Time budget in minutes (overridable via minutes user option)
       # When set, rounds continue until time runs out (finishing the active round)
       defaultTimeBudgetMinutes: 60
-      # Per-trigger fix cycles — each trigger agent needs a different
-      # sequence of phases to resolve its findings.
-      # EVERY fix cycle containing `implement` MUST include `bootstrap` before it
-      # to ensure design.md and scopes.md are substantive (Gate G033 enforcement).
-      # The bootstrap phase is conditional — it verifies design readiness and only
-      # invokes design/plan agents if artifacts are missing or insufficient.
-      # chaos: finds runtime bugs → document bug → bootstrap design → implement fix → verify
-      # harden: finds spec/coverage gaps → bootstrap design → implement code+tests → verify
-      # gaps: finds missing implementations → bootstrap design → implement new code → verify
-      # simplify: makes cleanup changes itself → only verify nothing broke
-      # stabilize: finds perf/infra/config issues → bootstrap design → implement fix → verify
-      # validate: finds regressions/violations → bootstrap design → implement fixes → verify
-      triggerFixCycles:
-        chaos: [ bug, bootstrap, implement, test, validate, audit ]
-        harden: [ bootstrap, implement, test, validate, audit ]
-        gaps: [ bootstrap, implement, test, validate, audit ]
-        simplify: [ test, validate, audit ]
-        stabilize: [ bootstrap, implement, test, validate, audit ]
-        validate: [ bootstrap, implement, test, validate, audit ]
-        # improve trigger: runs full analyst→UX→design→plan pipeline before implementation
-        # bubbles.analyst analyzes existing capabilities and proposes improvements,
-        # bubbles.ux creates wireframes, bubbles.design updates design.md,
-        # bubbles.plan updates scopes.md, then implement carries out the changes
-        improve: [ analyze, bootstrap, implement, test, validate, audit ]
-        # security trigger: runs dependency scan + code review + threat modeling,
-        # then bootstraps design artifacts → implements fixes for any findings
-        security: [ bootstrap, implement, test, validate, audit ]
-        # regression trigger: runs cross-spec impact scan + baseline comparison,
-        # then bootstraps design artifacts → implements fixes for any regressions found
-        regression: [ bootstrap, implement, test, validate, audit ]
-      # Shared tail phases after all rounds complete
-      tailPhases: [ docs, finalize ]
+      # Trigger-owned child workflow map.
+      # Every trigger in triggerAgentPool MUST resolve to a delivery-capable child workflow.
+      # The stochastic parent MUST NOT execute the trigger directly or build an inline
+      # bespoke fix cycle when a mapped child workflow exists.
+      requireTriggerOwnedChildWorkflows: true
+      triggerWorkflowModes:
+        chaos: chaos-hardening
+        harden: harden-to-doc
+        gaps: gaps-to-doc
+        simplify: simplify-to-doc
+        stabilize: stabilize-to-doc
+        test: test-to-doc
+        devops: devops-to-doc
+        validate: reconcile-to-doc
+        improve: improve-existing
+        security: security-to-doc
+        regression: regression-to-doc
+      # Child workflows own docs/finalize/certification; parent only records sweep summary.
+      tailPhases: []
       sequentialSpecCompletion: true
       crossAgentVerification: true
       antiFabricationDetection: true

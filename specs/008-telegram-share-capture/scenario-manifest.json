@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "featureDir": "specs/008-telegram-share-capture",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-008-001",
+      "name": "Capture URL with context text from share sheet",
+      "scope": 1,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/share_test.go::TestSCN008001_ShareSheetURLWithContext"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-002",
+      "name": "Capture bare URL without context (backward compatibility)",
+      "scope": 1,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/share_test.go::TestSCN008003_BareURLBackwardCompat"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-003",
+      "name": "Capture message with multiple URLs",
+      "scope": 1,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/share_test.go::TestSCN008002_MultipleURLsFromShareSheet"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-004",
+      "name": "Duplicate URL share merges new context",
+      "scope": 1,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/share_test.go::TestExtractAllURLs_DuplicateURLs"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-005",
+      "name": "Capture single forwarded message with full metadata",
+      "scope": 2,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/forward_test.go::TestExtractForwardMeta_FromUser", "internal/telegram/forward_test.go::TestSCN008005_ForwardedURLCapture"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-005a",
+      "name": "Forwarded message containing a URL captured as forwarded artifact",
+      "scope": 2,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/forward_test.go::TestSCN008005a_ForwardedWithURLEdge"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-005b",
+      "name": "Malformed forwarded message captured best-effort",
+      "scope": 2,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/forward_test.go::TestSCN008005b_MalformedForward"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-006",
+      "name": "Capture forwarded message from privacy-restricted user",
+      "scope": 2,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/forward_test.go::TestExtractForwardMeta_PrivacyRestricted"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-007",
+      "name": "Capture forwarded message from a channel",
+      "scope": 2,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/forward_test.go::TestExtractForwardMeta_FromChannel"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-008",
+      "name": "Assemble forwarded messages into conversation",
+      "scope": 3,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/assembly_test.go::TestConversationAssembler_MultipleMessages_Clustered", "internal/telegram/assembly_test.go::TestExtractParticipants_Deduplication"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-009",
+      "name": "Single forwarded message is not assembled",
+      "scope": 3,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/assembly_test.go::TestConversationAssembler_SingleMessage_FlushesAsSingle"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-010",
+      "name": "Messages from different source chats create separate conversations",
+      "scope": 3,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/assembly_test.go::TestConversationAssembler_ConcurrentKeys"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-011",
+      "name": "Non-forwarded message during assembly does not interfere",
+      "scope": 3,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/assembly_test.go::TestConversationAssembler_MultipleMessages_Clustered"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-012",
+      "name": "Assembly buffer overflow",
+      "scope": 3,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/assembly_test.go::TestConversationAssembler_OverflowFlush"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-012a",
+      "name": "Explicit /done command flushes assembly immediately",
+      "scope": 3,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/assembly_test.go::TestConversationAssembler_FlushChat"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-012b",
+      "name": "URLs within conversation are not separately captured",
+      "scope": 3,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/assembly_test.go::TestConversationAssembler_MultipleMessages_Clustered"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-012c",
+      "name": "Out-of-order forward_date timestamps",
+      "scope": 3,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/assembly_test.go::TestFormatConversation"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-008p",
+      "name": "Assembled conversation flows through capture pipeline",
+      "scope": 4,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/api/capture_test.go"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-013",
+      "name": "Assembly produces searchable conversation",
+      "scope": 4,
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": ["internal/api/capture_test.go"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-013a",
+      "name": "Conversation validation rejects invalid payloads",
+      "scope": 4,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/api/capture_test.go"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-014",
+      "name": "Assemble media group into single artifact",
+      "scope": 5,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/media_test.go::TestMediaGroupAssembler_BasicAssembly"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-015",
+      "name": "Media group with captions",
+      "scope": 5,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/media_test.go::TestCollectCaptions"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-016",
+      "name": "Unauthorized chat cannot trigger assembly",
+      "scope": 6,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/bot_test.go::TestSCN002029_TelegramUnauthorized"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    },
+    {
+      "scenarioId": "SCN-008-017",
+      "name": "Assembly buffer isolation between chats",
+      "scope": 6,
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": ["internal/telegram/assembly_test.go::TestConversationAssembler_ConcurrentKeys"],
+      "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"testing"
 )
 
@@ -124,13 +125,28 @@ func TestConnectionCount_Structure(t *testing.T) {
 	_ = l
 }
 
-// SCN-002-016: Vector similarity linking — verify linker has similarity method
+// SCN-002-016: Vector similarity linking — linkBySimilarity runs and attempts DB query
 func TestSCN002016_VectorSimilarityLinker_Exists(t *testing.T) {
 	l := NewLinker(nil)
-	// linkBySimilarity is a private method; verify the public orchestrator exists
-	// and the linker can be constructed. Real DB test runs in E2E.
 	if l == nil {
 		t.Fatal("linker must be constructable")
+	}
+
+	// Call linkBySimilarity directly: with nil pool it panics at Pool.QueryRow,
+	// proving the method exists, accepts (context, string), and attempts DB access.
+	ctx := context.Background()
+	panicked := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicked = true
+			}
+		}()
+		l.linkBySimilarity(ctx, "test-artifact-001")
+	}()
+
+	if !panicked {
+		t.Error("linkBySimilarity with nil pool should attempt DB access")
 	}
 }
 
@@ -171,23 +187,79 @@ func TestSCN002018_TopicClustering_TopicExtraction(t *testing.T) {
 	}
 }
 
-// SCN-002-019: Temporal linking — verify linker has temporal method
+// SCN-002-019: Temporal linking — linkByTemporal runs and attempts DB query
 func TestSCN002019_TemporalLinking_Exists(t *testing.T) {
 	l := NewLinker(nil)
 	if l == nil {
 		t.Fatal("linker must be constructable for temporal linking")
 	}
-	// linkByTemporal is private; verify the struct exists.
-	// Real temporal edge creation is tested in E2E with live DB.
+
+	// Call linkByTemporal directly: nil pool → panic at Pool.Query,
+	// proving the method exists and attempts same-day proximity DB query.
+	ctx := context.Background()
+	panicked := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicked = true
+			}
+		}()
+		l.linkByTemporal(ctx, "test-artifact-001")
+	}()
+
+	if !panicked {
+		t.Error("linkByTemporal with nil pool should attempt DB access")
+	}
 }
 
-// SCN-002-016: Verify all four linking strategies are called by LinkArtifact
+// SCN-002-016/019: LinkArtifact orchestrates all four linking strategies
 func TestSCN002016_019_LinkArtifact_OrchestratesAllStrategies(t *testing.T) {
-	// LinkArtifact calls similarity, entity, topic, temporal linking
-	// With nil pool it will fail gracefully (log warnings, return 0 edges)
 	l := NewLinker(nil)
-	// Can't call LinkArtifact without pool — but verify the method exists
-	// and the type is correct
-	var _ func(ctx interface{}, artifactID string) (int, error)
-	_ = l
+	ctx := context.Background()
+
+	// LinkArtifact calls similarity → entities → topics → temporal.
+	// With nil pool the first strategy panics, proving orchestration begins.
+	panicked := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicked = true
+			}
+		}()
+		edges, err := l.LinkArtifact(ctx, "test-artifact-001")
+		_ = edges
+		_ = err
+	}()
+
+	if !panicked {
+		t.Error("LinkArtifact with nil pool should attempt DB access via strategies")
+	}
+
+	// Verify all four strategy methods exist with correct (ctx, string) → (int, error) signatures
+	strategies := []struct {
+		name string
+		fn   func(context.Context, string) (int, error)
+	}{
+		{"linkBySimilarity", l.linkBySimilarity},
+		{"linkByEntities", l.linkByEntities},
+		{"linkByTopics", l.linkByTopics},
+		{"linkByTemporal", l.linkByTemporal},
+	}
+
+	for _, s := range strategies {
+		t.Run(s.name, func(t *testing.T) {
+			panicked := false
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						panicked = true
+					}
+				}()
+				s.fn(ctx, "test-artifact-002")
+			}()
+			if !panicked {
+				t.Errorf("strategy %s should attempt DB access with nil pool", s.name)
+			}
+		})
+	}
 }

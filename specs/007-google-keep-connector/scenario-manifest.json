@@ -1,0 +1,480 @@
+{
+  "version": 2,
+  "specId": "007",
+  "featureDir": "specs/007-google-keep-connector",
+  "generatedBy": "bubbles.iterate",
+  "generatedAt": "2026-04-07T18:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-007-001",
+      "name": "Parse all 5 note types from Takeout export",
+      "scope": "01-takeout-parser-normalizer",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/takeout_test.go", "function": "TestParseTextNote"},
+        {"file": "internal/connector/keep/takeout_test.go", "function": "TestParseChecklistNote"},
+        {"file": "internal/connector/keep/takeout_test.go", "function": "TestParseImageNote"},
+        {"file": "internal/connector/keep/takeout_test.go", "function": "TestParseAudioNote"},
+        {"file": "internal/connector/keep/takeout_test.go", "function": "TestParseMixedNote"},
+        {"file": "internal/connector/keep/takeout_test.go", "function": "TestParseExportDirectory"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/takeout_test.go::TestParseTextNote"},
+        {"type": "unit-test", "location": "internal/connector/keep/takeout_test.go::TestParseExportDirectory"},
+        {"type": "source", "location": "internal/connector/keep/takeout.go::ParseExport"}
+      ],
+      "linkedDoD": ["All 5 note types (text, checklist, image, audio, mixed) parse correctly from real Takeout JSON format"]
+    },
+    {
+      "scenarioId": "SCN-007-002",
+      "name": "Normalize TakeoutNote to RawArtifact with full metadata",
+      "scope": "01-takeout-parser-normalizer",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/normalizer_test.go", "function": "TestNormalizeTextNote"},
+        {"file": "internal/connector/keep/normalizer_test.go", "function": "TestMetadataMapping"},
+        {"file": "internal/connector/keep/normalizer_test.go", "function": "TestNormalizeChecklistContent"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/normalizer_test.go::TestMetadataMapping"},
+        {"type": "source", "location": "internal/connector/keep/normalizer.go::Normalize"}
+      ],
+      "linkedDoD": ["buildMetadata() populates all 13 R-005 metadata fields"]
+    },
+    {
+      "scenarioId": "SCN-007-003",
+      "name": "Cursor-based filtering skips old notes",
+      "scope": "01-takeout-parser-normalizer",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/takeout_test.go", "function": "TestCursorFiltering"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/takeout_test.go::TestCursorFiltering"},
+        {"type": "source", "location": "internal/connector/keep/takeout.go::FilterByCursor"}
+      ],
+      "linkedDoD": ["Cursor filtering returns only notes with modified_at > cursor"]
+    },
+    {
+      "scenarioId": "SCN-007-004",
+      "name": "Processing tier assignment per R-008",
+      "scope": "01-takeout-parser-normalizer",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/normalizer_test.go", "function": "TestAssignTierPinned"},
+        {"file": "internal/connector/keep/normalizer_test.go", "function": "TestAssignTierLabeled"},
+        {"file": "internal/connector/keep/normalizer_test.go", "function": "TestAssignTierArchived"},
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierEvaluationOrder"},
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestEvaluateBatch"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/normalizer_test.go::TestAssignTierPinned"},
+        {"type": "unit-test", "location": "internal/connector/keep/qualifiers_test.go::TestEvaluateBatch"},
+        {"type": "source", "location": "internal/connector/keep/normalizer.go::assignTier"}
+      ],
+      "linkedDoD": ["assignTier() follows R-008 evaluation order correctly"]
+    },
+    {
+      "scenarioId": "SCN-007-005",
+      "name": "Corrupted JSON files produce partial results",
+      "scope": "01-takeout-parser-normalizer",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/takeout_test.go", "function": "TestParseExportWithCorrupted"},
+        {"file": "internal/connector/keep/takeout_test.go", "function": "TestCorruptedJSONDoesNotCrash"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/takeout_test.go::TestParseExportWithCorrupted"},
+        {"type": "source", "location": "internal/connector/keep/takeout.go::ParseExport"}
+      ],
+      "linkedDoD": ["Corrupted JSON files are logged and skipped without crashing"]
+    },
+    {
+      "scenarioId": "SCN-007-006",
+      "name": "Connector implements full lifecycle",
+      "scope": "02-keep-connector-config-registry",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestConnectorID"},
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestConnectValidTakeoutConfig"},
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestHealthTransitions"},
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestCloseResetsHealth"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/keep_test.go::TestConnectorID"},
+        {"type": "unit-test", "location": "internal/connector/keep/keep_test.go::TestHealthTransitions"},
+        {"type": "source", "location": "internal/connector/keep/keep.go::Connector"}
+      ],
+      "linkedDoD": ["internal/connector/keep/keep.go created with full Connector implementation"]
+    },
+    {
+      "scenarioId": "SCN-007-007",
+      "name": "Config validation rejects invalid settings",
+      "scope": "02-keep-connector-config-registry",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestConnectMissingImportDir"},
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestConnectGkeepWithoutAck"},
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestParseKeepConfigValidation"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/keep_test.go::TestParseKeepConfigValidation"},
+        {"type": "source", "location": "internal/connector/keep/keep.go::parseKeepConfig"}
+      ],
+      "linkedDoD": ["Connect() validates config: sync_mode enum, import_dir existence, gkeepapi warning_acknowledged gate, poll_interval minimum"]
+    },
+    {
+      "scenarioId": "SCN-007-008",
+      "name": "Takeout sync produces artifacts",
+      "scope": "02-keep-connector-config-registry",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestSyncTakeoutProducesArtifacts"},
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestSyncAdvancesCursor"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/keep_test.go::TestSyncTakeoutProducesArtifacts"},
+        {"type": "source", "location": "internal/connector/keep/keep.go::syncTakeout"}
+      ],
+      "linkedDoD": ["Sync() orchestrates Takeout path: detect exports → parse → normalize → filter → return artifacts + cursor"]
+    },
+    {
+      "scenarioId": "SCN-007-009",
+      "name": "Cursor persistence across restarts",
+      "scope": "02-keep-connector-config-registry",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestKeepExportTracking"},
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestCorruptedCursorFallback"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/keep_test.go::TestKeepExportTracking"},
+        {"type": "source", "location": "internal/connector/keep/keep.go::Sync"}
+      ],
+      "linkedDoD": ["Corrupted/missing cursor triggers full re-sync with dedup protection"]
+    },
+    {
+      "scenarioId": "SCN-007-010",
+      "name": "Trashed note skipped during sync",
+      "scope": "02-keep-connector-config-registry",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/keep_test.go", "function": "TestSyncSkipsTrashedNotes"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/keep_test.go::TestSyncSkipsTrashedNotes"},
+        {"type": "source", "location": "internal/connector/keep/normalizer.go::shouldSkip"}
+      ],
+      "linkedDoD": ["shouldSkip() filters trashed, archived (when disabled), and short-content notes"]
+    },
+    {
+      "scenarioId": "SCN-007-011",
+      "name": "Database migration creates Keep tables",
+      "scope": "02-keep-connector-config-registry",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationsEmbed"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/db/migrations/004_keep.sql"}
+      ],
+      "linkedDoD": ["internal/db/migrations/004_keep.sql created with ocr_cache and keep_exports tables"]
+    },
+    {
+      "scenarioId": "SCN-007-012",
+      "name": "Full qualifier engine evaluation order",
+      "scope": "03-source-qualifiers-processing-tiers",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierEvaluationOrder"},
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierPinnedOverridesAll"},
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierLabeledGetsFull"},
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierImageGetsFull"},
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierRecentGetsStandard"},
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierOldGetsLight"},
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierArchivedGetsLight"},
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierTrashedGetsSkip"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/qualifiers_test.go::TestQualifierEvaluationOrder"},
+        {"type": "source", "location": "internal/connector/keep/qualifiers.go::Evaluate"}
+      ],
+      "linkedDoD": ["assignTier() evaluation order matches R-008 exactly"]
+    },
+    {
+      "scenarioId": "SCN-007-013",
+      "name": "Pipeline respects Keep artifact processing tiers",
+      "scope": "03-source-qualifiers-processing-tiers",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierEvaluationOrder"},
+        {"file": "internal/connector/keep/normalizer_test.go", "function": "TestAssignTierPinned"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/qualifiers_test.go::TestQualifierEvaluationOrder"},
+        {"type": "source", "location": "internal/connector/keep/qualifiers.go::Evaluate"}
+      ],
+      "linkedDoD": ["Pipeline respects tier: full gets summarization+entities+embedding+linking, light gets only metadata+embedding"]
+    },
+    {
+      "scenarioId": "SCN-007-014",
+      "name": "Health reporting includes qualifier breakdown",
+      "scope": "03-source-qualifiers-processing-tiers",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestEvaluateBatch"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/qualifiers_test.go::TestEvaluateBatch"},
+        {"type": "source", "location": "internal/connector/keep/qualifiers.go::EvaluateBatch"}
+      ],
+      "linkedDoD": ["Sync metadata includes per-tier breakdown (full/standard/light/skip counts)"]
+    },
+    {
+      "scenarioId": "SCN-007-015",
+      "name": "Incremental sync preserves tier assignment accuracy",
+      "scope": "03-source-qualifiers-processing-tiers",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/normalizer_test.go", "function": "TestAssignTierPinned"},
+        {"file": "internal/connector/keep/normalizer_test.go", "function": "TestAssignTierArchived"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/normalizer_test.go::TestAssignTierPinned"},
+        {"type": "source", "location": "internal/connector/keep/normalizer.go::assignTier"}
+      ],
+      "linkedDoD": ["Tier re-evaluation on re-sync updates artifact processing_tier in database"]
+    },
+    {
+      "scenarioId": "SCN-007-016",
+      "name": "Labels seed new topics in knowledge graph",
+      "scope": "04-label-to-topic-mapping",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/labels_test.go", "function": "TestCreateNewTopic"},
+        {"file": "internal/connector/keep/labels_test.go", "function": "TestEmptyLabelSkipped"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/labels_test.go::TestCreateNewTopic"},
+        {"type": "source", "location": "internal/connector/keep/labels.go::MapLabels"}
+      ],
+      "linkedDoD": ["Create new: inserts topic with state emerging"]
+    },
+    {
+      "scenarioId": "SCN-007-017",
+      "name": "Exact label match links to existing topic",
+      "scope": "04-label-to-topic-mapping",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/labels_test.go", "function": "TestExactLabelMatch"},
+        {"file": "internal/connector/keep/labels_test.go", "function": "TestExactMatchCaseInsensitive"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/labels_test.go::TestExactLabelMatch"},
+        {"type": "source", "location": "internal/connector/keep/labels.go::resolveLabel"}
+      ],
+      "linkedDoD": ["Exact match: case-insensitive query against topics.name"]
+    },
+    {
+      "scenarioId": "SCN-007-018",
+      "name": "Abbreviation match resolves ML to Machine Learning",
+      "scope": "04-label-to-topic-mapping",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/labels_test.go", "function": "TestAbbreviationMatch"},
+        {"file": "internal/connector/keep/labels_test.go", "function": "TestAbbreviationBidirectional"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/labels_test.go::TestAbbreviationMatch"},
+        {"type": "source", "location": "internal/connector/keep/labels.go::resolveLabel"}
+      ],
+      "linkedDoD": ["Abbreviation match: built-in map with 10+ common abbreviations, bidirectional lookup"]
+    },
+    {
+      "scenarioId": "SCN-007-019",
+      "name": "Fuzzy match via trigram handles variations",
+      "scope": "04-label-to-topic-mapping",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/labels_test.go", "function": "TestFuzzyMatch"},
+        {"file": "internal/connector/keep/labels_test.go", "function": "TestFuzzyMatchBelowThreshold"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/labels_test.go::TestFuzzyMatch"},
+        {"type": "source", "location": "internal/connector/keep/labels.go::fuzzyMatch"}
+      ],
+      "linkedDoD": ["Fuzzy match: trigram similarity with threshold 0.4"]
+    },
+    {
+      "scenarioId": "SCN-007-020",
+      "name": "Label removal diffs correctly",
+      "scope": "04-label-to-topic-mapping",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/labels_test.go", "function": "TestDiffLabels"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/labels_test.go::TestDiffLabels"},
+        {"type": "source", "location": "internal/connector/keep/labels.go::DiffLabels"}
+      ],
+      "linkedDoD": ["Label diff on re-sync correctly identifies added/removed labels"]
+    },
+    {
+      "scenarioId": "SCN-007-021",
+      "name": "gkeepapi serialize and sync round-trip",
+      "scope": "05-gkeepapi-python-bridge",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_keep.py", "function": "TestKeepBridge::test_serialize_text_note"},
+        {"file": "ml/tests/test_keep.py", "function": "TestKeepBridge::test_serialize_checklist_note"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_keep.py::TestKeepBridge::test_serialize_text_note"},
+        {"type": "source", "location": "ml/app/keep_bridge.py::serialize_note"}
+      ],
+      "linkedDoD": ["ml/app/keep_bridge.py created with handle_sync_request(), serialize_note(), authenticate()"]
+    },
+    {
+      "scenarioId": "SCN-007-022",
+      "name": "gkeepapi opt-in gate enforced",
+      "scope": "05-gkeepapi-python-bridge",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_keep.py", "function": "TestKeepBridge::test_auth_failure_returns_error_response"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_keep.py::TestKeepBridge::test_auth_failure_returns_error_response"},
+        {"type": "source", "location": "ml/app/keep_bridge.py::authenticate"}
+      ],
+      "linkedDoD": ["Opt-in gate: warning_acknowledged: false → Connect() error"]
+    },
+    {
+      "scenarioId": "SCN-007-023",
+      "name": "gkeepapi failure returns error response",
+      "scope": "05-gkeepapi-python-bridge",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_keep.py", "function": "TestKeepBridge::test_auth_failure_returns_error_response"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_keep.py::TestKeepBridge::test_auth_failure_returns_error_response"},
+        {"type": "source", "location": "ml/app/keep_bridge.py::handle_sync_request"}
+      ],
+      "linkedDoD": ["Fallback: gkeepapi error in hybrid mode → Takeout continues, health reports error detail"]
+    },
+    {
+      "scenarioId": "SCN-007-024",
+      "name": "gkeepapi session caching avoids re-authentication",
+      "scope": "05-gkeepapi-python-bridge",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_keep.py", "function": "TestKeepBridge::test_session_caching"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_keep.py::TestKeepBridge::test_session_caching"},
+        {"type": "source", "location": "ml/app/keep_bridge.py::authenticate"}
+      ],
+      "linkedDoD": ["Session caching: authenticated gkeepapi instance reused across sync cycles"]
+    },
+    {
+      "scenarioId": "SCN-007-025",
+      "name": "Whiteboard image OCR produces searchable text",
+      "scope": "06-image-ocr-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_keep.py", "function": "TestOCR::test_cache_miss"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_keep.py::TestOCR::test_cache_miss"},
+        {"type": "source", "location": "ml/app/ocr.py::handle_ocr_request"}
+      ],
+      "linkedDoD": ["ml/app/ocr.py created with handle_ocr_request(), extract_text_tesseract(), extract_text_ollama()"]
+    },
+    {
+      "scenarioId": "SCN-007-026",
+      "name": "OCR result cached by image hash",
+      "scope": "06-image-ocr-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_keep.py", "function": "TestOCR::test_cache_hit"},
+        {"file": "ml/tests/test_keep.py", "function": "TestOCR::test_store_and_check_cache"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_keep.py::TestOCR::test_cache_hit"},
+        {"type": "source", "location": "ml/app/ocr.py::check_cache"}
+      ],
+      "linkedDoD": ["OCR results cached in ocr_cache table by image_hash PK"]
+    },
+    {
+      "scenarioId": "SCN-007-027",
+      "name": "Tesseract failure falls back to Ollama vision",
+      "scope": "06-image-ocr-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_keep.py", "function": "TestOCR::test_ollama_fallback"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_keep.py::TestOCR::test_ollama_fallback"},
+        {"type": "source", "location": "ml/app/ocr.py::handle_ocr_request"}
+      ],
+      "linkedDoD": ["Tesseract is primary OCR engine; Ollama vision fallback when Tesseract produces <10 chars"]
+    },
+    {
+      "scenarioId": "SCN-007-028",
+      "name": "OCR failure does not block note processing",
+      "scope": "06-image-ocr-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_keep.py", "function": "TestOCR::test_both_ocr_fail_returns_ok"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_keep.py::TestOCR::test_both_ocr_fail_returns_ok"},
+        {"type": "source", "location": "ml/app/ocr.py::handle_ocr_request"}
+      ],
+      "linkedDoD": ["Both engines fail → empty text returned with status ok"]
+    },
+    {
+      "scenarioId": "SCN-007-029",
+      "name": "OCR timeout handled gracefully",
+      "scope": "06-image-ocr-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_keep.py", "function": "TestOCR::test_both_ocr_fail_returns_ok"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_keep.py::TestOCR::test_both_ocr_fail_returns_ok"},
+        {"type": "source", "location": "ml/app/ocr.py::handle_ocr_request"}
+      ],
+      "linkedDoD": ["OCR timeout handled gracefully — note processed without OCR, flagged for retry"]
+    }
+  ]
+}

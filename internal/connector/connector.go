@@ -49,15 +49,15 @@ type Connector interface {
 // ConnectorConfig holds configuration for a connector instance.
 type ConnectorConfig struct {
 	// Auth configuration
-	AuthType    string            `json:"auth_type"`    // oauth2, api_key, token, none
-	Credentials map[string]string `json:"credentials"`  // type-specific credentials
+	AuthType    string            `json:"auth_type"`   // oauth2, api_key, token, none
+	Credentials map[string]string `json:"credentials"` // type-specific credentials
 
 	// Schedule configuration
 	SyncSchedule string `json:"sync_schedule"` // cron expression
 	Enabled      bool   `json:"enabled"`
 
 	// Processing configuration
-	ProcessingTier string `json:"processing_tier"` // full, standard, light, metadata
+	ProcessingTier string                 `json:"processing_tier"` // full, standard, light, metadata
 	Qualifiers     map[string]interface{} `json:"qualifiers"`
 
 	// Source-specific configuration

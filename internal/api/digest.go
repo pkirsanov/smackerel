@@ -29,7 +29,7 @@ func (d *Dependencies) DigestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"date":         result.DigestDate,
+		"date":         result.DigestDate.Format("2006-01-02"),
 		"text":         result.DigestText,
 		"word_count":   result.WordCount,
 		"is_quiet":     result.IsQuiet,

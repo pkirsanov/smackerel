@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"net/url"
 	"testing"
 )
 
@@ -283,5 +284,41 @@ func TestSCN002009_ContentDedup_ExtractTextHash(t *testing.T) {
 	r3 := ExtractText("A totally different idea about cooking")
 	if r1.ContentHash == r3.ContentHash {
 		t.Error("different text should produce different hash")
+	}
+}
+
+func TestValidateURLSafety_BlocksPrivateIPs(t *testing.T) {
+	tests := []struct {
+		name    string
+		rawURL  string
+		blocked bool
+	}{
+		{"localhost", "http://localhost/secret", true},
+		{"loopback IP", "http://127.0.0.1/admin", true},
+		{"private 10.x", "http://10.0.0.1/internal", true},
+		{"private 172.16.x", "http://172.16.0.1/db", true},
+		{"private 192.168.x", "http://192.168.1.1/router", true},
+		{"metadata endpoint", "http://169.254.169.254/latest", true},
+		{"internal hostname", "http://metadata.google.internal/token", true},
+		{"ftp scheme", "ftp://example.com/file", true},
+		{"IPv6 loopback", "http://[::1]/admin", true},
+		{"unspecified 0.0.0.0", "http://0.0.0.0:8080/", true},
+		{"public URL", "https://example.com/article", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u, err := url.Parse(tt.rawURL)
+			if err != nil {
+				t.Fatalf("parse URL: %v", err)
+			}
+			err = validateURLSafety(u)
+			if tt.blocked && err == nil {
+				t.Errorf("expected URL %q to be blocked", tt.rawURL)
+			}
+			if !tt.blocked && err != nil {
+				t.Errorf("expected URL %q to be allowed, got error: %v", tt.rawURL, err)
+			}
+		})
 	}
 }

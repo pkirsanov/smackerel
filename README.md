@@ -82,14 +82,20 @@ All configuration lives in **`config/smackerel.yaml`**. After editing, always ru
 
 ### Authentication
 
-The API uses Bearer token authentication. Set a strong token for any non-local use:
+The API uses Bearer token authentication. Generate a secure token (minimum 16 characters):
+
+```bash
+openssl rand -hex 24
+```
+
+Set it in config:
 
 ```yaml
 runtime:
-  auth_token: your-secret-token-here   # default: development-change-me
+  auth_token: your-generated-token-here
 ```
 
-Use it in API calls:
+Known placeholder values like `development-change-me` are rejected at startup. Use it in API calls:
 
 ```
 Authorization: Bearer your-secret-token-here
@@ -144,11 +150,17 @@ telegram:
 
 4. Regenerate and restart. The bot accepts:
    - **Any URL** → captures and processes the article/video/product
+   - **URL + context text** → share-sheet payloads preserve the description alongside the URL
    - **Plain text** → saved as idea/note
    - **Voice note** → transcribed via Whisper, then processed
+   - **Forwarded messages** → captured with original sender, source chat, and timestamp metadata
+   - **Forwarded conversation** → multiple forwarded messages from the same source are assembled into a single conversation artifact with participant extraction and timeline
+   - **Media groups** → photos/videos shared together are assembled into a single multi-attachment artifact
    - `/find <query>` → semantic search (top 3 results)
    - `/digest` → today's daily digest
+   - `/done` → finalize conversation assembly (flush all open buffers)
    - `/status` → system stats
+   - `/recent` → last 5 captured artifacts
 
 Messages from chat IDs not in the allowlist are silently ignored.
 
@@ -233,6 +245,32 @@ Imports browsing history from Chrome's SQLite database. Requires explicit privac
 3. Social media domains (Twitter, Reddit, etc.) are aggregated rather than individually processed
 4. Configurable skip-list for domains to never process (e.g., localhost, internal tools)
 
+#### Google Keep
+
+Imports notes from Google Keep via Takeout export or live gkeepapi bridge.
+
+**Takeout mode (default):**
+1. Export Keep data from [Google Takeout](https://takeout.google.com/) (JSON format)
+2. Configure the import directory in `config/smackerel.yaml`:
+
+```yaml
+connectors:
+  google-keep:
+    enabled: true
+    sync_mode: takeout
+    import_dir: /path/to/takeout/Keep
+```
+
+3. Notes are parsed with full metadata: titles, labels, checklists, timestamps, attachments
+4. Labels are automatically mapped to knowledge graph topics via 4-stage cascade: exact match → abbreviation → fuzzy (trigram similarity) → create new
+5. Processing tiers: pinned → full, labeled → full, images → full, recent → standard, archived → light, trashed → skip
+6. Image attachments can be OCR'd via Tesseract (primary) with Ollama vision fallback
+
+**gkeepapi mode (optional):**
+- Live sync via the unofficial gkeepapi Python library through the ML sidecar
+- Requires Google app password and explicit opt-in acknowledgment
+- Session caching for efficient re-authentication
+
 ## API Usage
 
 All API endpoints (except `/api/health`) require the Bearer token.
@@ -306,20 +344,31 @@ curl http://127.0.0.1:40001/api/health
 
 Returns status of all services: api, postgres, nats, ml_sidecar, telegram_bot, ollama.
 
+### Recent Items
+
+```bash
+curl -H "Authorization: Bearer your-token" \
+  http://127.0.0.1:40001/api/recent
+```
+
+Returns the 5 most recently captured artifacts.
+
 ## Web UI
 
 Open **http://127.0.0.1:40001** in a browser. Pages:
 
-- **/** — Search with live HTMX-powered results
-- **/topics** — Topic lifecycle view (emerging → active → hot → cooling → dormant)
+- **/** — Search with live HTMX-powered semantic search results
+- **/artifact/{id}** — Artifact detail with summary, key ideas, entities, connections
+- **/topics** — Topic lifecycle view with pagination (emerging → active → hot → cooling → dormant)
+- **/ui/digest** — Today's daily digest
+- **/ui/status** — System status (DB, NATS, ML sidecar health)
 - **/settings** — Connector status and configuration
-- **/artifact?id=...** — Artifact detail with summary, key ideas, entities, connections
 
-Dark/light theme follows OS preference. Monochrome design — no accent colors, no emoji.
+The web search uses the same semantic search engine as the API (pgvector + embedding + LLM re-ranking). Dark/light theme follows OS preference. Monochrome design — no accent colors, no emoji.
 
 ## Runtime Standards
 
-Smackerel now has a foundation runtime scaffold with a repo CLI, YAML-backed config generation, a Go core, a Python ML sidecar, and Docker Compose orchestration. The runtime still only covers the current scaffold scope, but the operational surface is now standardized:
+Smackerel has a complete runtime with a repo CLI, YAML-backed config generation, a Go core (47 source files), a Python ML sidecar (9 source files), and Docker Compose orchestration. The operational surface is standardized:
 
 - Docker-only runtime and test execution
 - One repo CLI for build, test, config generation, stack lifecycle, logs, and cleanup: `./smackerel.sh`

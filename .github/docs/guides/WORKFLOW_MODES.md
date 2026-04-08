@@ -18,8 +18,8 @@ Workflow modes define **which phases run** and **in what order** for a given pie
 
 **How it works:**
 - **Structured input** (has `mode:` + spec target) → executes phases directly (existing behavior)
-- **Plain English** → delegates to `super` for intent resolution → gets mode + spec + tags → executes
-- **"Continue" / continuation-shaped input** → resumes the active workflow when continuation context is available; otherwise delegates to `iterate` for work-picking → gets next priority item → executes
+- **Plain English** → delegates to `super` for intent resolution. `super` owns that translation, returns mode + spec + tags, then workflow executes.
+- **"Continue" / continuation-shaped input** → resumes the active workflow when continuation context is available; otherwise delegates to `iterate` for work-picking. `iterate` owns highest-priority work selection, returns the next priority item, then workflow executes.
 - **Framework ops** ("doctor", "hooks", "upgrade") → delegates to `super` for framework operations
 
 Direct agent calls (`/bubbles.super`, `/bubbles.iterate`, `/bubbles.implement`, etc.) still work for users who know exactly what they want, but recap/status/handoff continuations should normally route back through `/bubbles.workflow` so orchestration and certification stay intact.
@@ -101,7 +101,7 @@ This prevents confirmation bias where the model finds patterns that support its 
 
 If you don't specify a mode, `full-delivery` is the default.
 
-**Natural language works too** — just describe what you want:
+**Natural language works too** — workflow routes plain-English requests through `super`, then executes the resolved mode:
 
 ```
 /bubbles.workflow  improve the booking feature to be competitive
@@ -110,7 +110,7 @@ If you don't specify a mode, `full-delivery` is the default.
 /bubbles.workflow  harden specs 11 through 37
 ```
 
-The workflow agent infers the correct mode and parameters from your description. See the **Natural Language Mode Resolution** section in the workflow agent for the complete intent-to-mode mapping.
+The workflow entry point does not keep its own second routing brain. `bubbles.super` owns natural-language translation into workflow parameters, and `bubbles.iterate` owns generic work-picking when no active continuation is recoverable.
 
 **Not sure which mode?** Ask the super: `/bubbles.super  which mode should I use for <your situation>`
 
@@ -300,13 +300,22 @@ select → retro → simplify → harden → gaps → implement → test → reg
 
 Do one thing well.
 
+### Finding-Owned Closure Rule
+
+Focused modes are still closure modes. If their starting specialist finds a legitimate bug, regression, gap, or improvement, the mode must launch the full finding-owned closure workflow before it returns terminal success upward:
+
+- Planning workflow: `bubbles.analyst` → `bubbles.ux` when the finding touches UI or a user-visible journey → `bubbles.design` → `bubbles.plan`
+- Delivery workflow: `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` → finalize/certification
+
+This applies to `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, `gaps`, and future trigger-style workflows. Parent workflows must wait for the child workflow's terminal result envelope instead of accepting a diagnosis-only return.
+
 ### <img src="../../icons/trinity-notebook.svg" width="20"> test-to-doc
 
 ```
 test → validate → docs
 ```
 
-**Use when:** Tests need running and docs need updating.
+**Use when:** Tests need running and docs need updating. If tests expose real work, this mode must execute the full finding-owned planning/remediation chain before it returns.
 
 ### <img src="../../icons/jroc-mic.svg" width="20"> docs-only
 
@@ -350,7 +359,7 @@ Focused operational delivery for an existing feature or bug.
 select → bootstrap → devops → test → stabilize → security → validate → audit → docs → finalize
 ```
 
-**Use when:** CI/CD, build, deployment, monitoring, observability, or release automation needs direct execution work.
+**Use when:** CI/CD, build, deployment, monitoring, observability, or release automation needs direct execution work. If DevOps work exposes real product or planning changes, this mode must execute the full finding-owned planning/remediation chain before it returns.
 
 ### <img src="../../icons/cyrus-sunglasses.svg" width="20"> improve-existing
 
@@ -374,7 +383,7 @@ analyze → select → bootstrap → implement → test → regression → simpl
 select → simplify → test → validate → audit → docs → finalize
 ```
 
-**Use when:** The main goal is to reduce complexity without inventing a new product direction.
+**Use when:** The main goal is to reduce complexity without inventing a new product direction. If simplification exposes legitimate new work, this mode must execute the full finding-owned planning/remediation chain before it returns.
 
 ### <img src="../../icons/gary-laser-eyes.svg" width="20"> spec-review-to-doc
 
@@ -406,7 +415,7 @@ bootstrap → validate → gaps → implement → test → regression → simpli
 chaos → validate → audit → docs
 ```
 
-**Use when:** You want chaos findings documented without an implementation pass.
+**Use when:** You want a chaos-started workflow. If chaos finds real bugs or regressions, this mode must execute the full finding-owned planning/remediation chain before it returns.
 
 ### <img src="../../icons/randy-cheeseburger.svg" width="20"> reconcile-to-doc
 

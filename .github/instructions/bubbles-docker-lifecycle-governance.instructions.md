@@ -29,6 +29,6 @@ Use this instruction when creating or modifying Dockerfiles, Compose files, clea
 
 ## References
 
-- `.github/agents/bubbles_shared/docker-lifecycle-governance.md`
-- `.github/agents/bubbles_shared/agent-common.md`
-- `.github/bubbles/workflows.yaml`
+- `../agents/bubbles_shared/docker-lifecycle-governance.md`
+- `../agents/bubbles_shared/agent-common.md`
+- `../bubbles/workflows.yaml`

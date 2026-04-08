@@ -6,14 +6,15 @@ import (
 
 func TestAllStreams_Coverage(t *testing.T) {
 	streams := AllStreams()
-	if len(streams) != 3 {
-		t.Fatalf("expected 3 streams, got %d", len(streams))
+	if len(streams) != 4 {
+		t.Fatalf("expected 4 streams, got %d", len(streams))
 	}
 
 	expected := map[string][]string{
 		"ARTIFACTS": {"artifacts.>"},
 		"SEARCH":    {"search.>"},
 		"DIGEST":    {"digest.>"},
+		"KEEP":      {"keep.>"},
 	}
 
 	for _, s := range streams {
@@ -162,9 +163,9 @@ func TestSCN002003_NATSConnectivity_SubjectRouting(t *testing.T) {
 	// ML sidecar publishes to *.processed/embedded/reranked/generated
 	pairs := map[string]string{
 		SubjectArtifactsProcess: SubjectArtifactsProcessed,
-		SubjectSearchEmbed:     SubjectSearchEmbedded,
-		SubjectSearchRerank:    SubjectSearchReranked,
-		SubjectDigestGenerate:  SubjectDigestGenerated,
+		SubjectSearchEmbed:      SubjectSearchEmbedded,
+		SubjectSearchRerank:     SubjectSearchReranked,
+		SubjectDigestGenerate:   SubjectDigestGenerated,
 	}
 	for req, resp := range pairs {
 		// Request and response must share the same stream (same domain prefix)

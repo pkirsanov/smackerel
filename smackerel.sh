@@ -181,6 +181,7 @@ case "$COMMAND" in
         ;;
       stress)
         timeout 300 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"
+        timeout 600 bash "$SCRIPT_DIR/tests/stress/test_search_stress.sh"
         ;;
       *)
         usage

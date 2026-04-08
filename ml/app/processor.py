@@ -8,8 +8,9 @@ import litellm
 
 logger = logging.getLogger("smackerel-ml.processor")
 
-UNIVERSAL_PROCESSING_PROMPT = (
-    """You are an intelligent content processor. Analyze the following content and return a structured JSON response.
+UNIVERSAL_PROCESSING_PROMPT = """\
+You are an intelligent content processor. \
+Analyze the following content and return a structured JSON response.
 
 Content type: {content_type}
 Source: {source_id}
@@ -53,7 +54,6 @@ Rules:
 - For "light" tier: only return title, summary, topics, sentiment
 - For "metadata" tier: only return title, artifact_type
 """
-)
 
 
 async def process_content(

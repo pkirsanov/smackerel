@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -177,6 +176,12 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 	}
 
 	if err := p.NATS.Publish(ctx, smacknats.SubjectArtifactsProcess, data); err != nil {
+		// Clean up orphaned artifact on NATS publish failure
+		if _, cleanupErr := p.DB.Exec(ctx, "DELETE FROM artifacts WHERE id = $1", artifactID); cleanupErr != nil {
+			slog.Error("failed to clean up orphaned artifact", "artifact_id", artifactID, "error", cleanupErr)
+		} else {
+			slog.Warn("cleaned up orphaned artifact after NATS publish failure", "artifact_id", artifactID)
+		}
 		return nil, fmt.Errorf("publish to NATS: %w", err)
 	}
 
@@ -314,10 +319,4 @@ type DuplicateError struct {
 
 func (e *DuplicateError) Error() string {
 	return fmt.Sprintf("duplicate content: existing artifact %s (%s)", e.ExistingID, e.Title)
-}
-
-// newULID generates a new ULID. Exported for test mocking.
-var newULID = func() string {
-	entropy := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return ulid.MustNew(ulid.Timestamp(time.Now()), ulid.Monotonic(entropy, 0)).String()
 }

@@ -8,17 +8,21 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/graph"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
 // Handler serves the web UI pages.
 type Handler struct {
-	Pool      *pgxpool.Pool
-	NATS      *smacknats.Client
-	Templates *template.Template
-	StartTime time.Time
+	Pool         *pgxpool.Pool
+	NATS         *smacknats.Client
+	Templates    *template.Template
+	StartTime    time.Time
+	SearchEngine *api.SearchEngine
 }
 
 // NewHandler creates a web UI handler with embedded templates.
@@ -43,17 +47,14 @@ func NewHandler(pool *pgxpool.Pool, nc *smacknats.Client, startTime time.Time) *
 				return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 			}
 		},
-		"json": func(v interface{}) string {
-			b, _ := json.Marshal(v)
-			return string(b)
-		},
 	}).Parse(allTemplates))
 
 	return &Handler{
-		Pool:      pool,
-		NATS:      nc,
-		Templates: tmpl,
-		StartTime: startTime,
+		Pool:         pool,
+		NATS:         nc,
+		Templates:    tmpl,
+		StartTime:    startTime,
+		SearchEngine: &api.SearchEngine{Pool: pool, NATS: nc},
 	}
 }
 
@@ -70,32 +71,32 @@ func (h *Handler) SearchPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
 	query := r.FormValue("query")
 	if query == "" {
-		h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
+		if err := h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
 			"Results": nil,
 			"Empty":   "Type a query to search your knowledge",
-		})
+		}); err != nil {
+			slog.Error("template error", "error", err)
+			http.Error(w, "Internal error", 500)
+		}
 		return
 	}
 
-	// Query artifacts with text search fallback
-	rows, err := h.Pool.Query(r.Context(), `
-		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
-		       created_at
-		FROM artifacts
-		WHERE title ILIKE '%' || $1 || '%'
-		   OR summary ILIKE '%' || $1 || '%'
-		   OR content_raw ILIKE '%' || $1 || '%'
-		ORDER BY created_at DESC LIMIT 20
-	`, query)
+	// Use the semantic search engine (vector + text fallback) instead of raw ILIKE
+	results, _, err := h.SearchEngine.Search(r.Context(), api.SearchRequest{
+		Query: query,
+		Limit: 20,
+	})
 	if err != nil {
-		slog.Error("web search query failed", "error", err)
-		h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
+		slog.Error("web search failed", "error", err)
+		if err := h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
 			"Results": nil,
 			"Error":   "Search failed. Try again.",
-		})
+		}); err != nil {
+			slog.Error("template error", "error", err)
+			http.Error(w, "Internal error", 500)
+		}
 		return
 	}
-	defer rows.Close()
 
 	type Result struct {
 		ID        string
@@ -106,32 +107,45 @@ func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
 		CreatedAt time.Time
 	}
 
-	var results []Result
-	for rows.Next() {
-		var r Result
-		if err := rows.Scan(&r.ID, &r.Title, &r.Type, &r.Summary, &r.SourceURL, &r.CreatedAt); err != nil {
-			continue
+	var viewResults []Result
+	for _, sr := range results {
+		var createdAt time.Time
+		if t, err := time.Parse(time.RFC3339, sr.CreatedAt); err == nil {
+			createdAt = t
 		}
-		results = append(results, r)
+		viewResults = append(viewResults, Result{
+			ID:        sr.ArtifactID,
+			Title:     sr.Title,
+			Type:      sr.ArtifactType,
+			Summary:   sr.Summary,
+			SourceURL: sr.SourceURL,
+			CreatedAt: createdAt,
+		})
 	}
 
-	if len(results) == 0 {
-		h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
+	if len(viewResults) == 0 {
+		if err := h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
 			"Results": nil,
 			"Empty":   "No results found. Try a different query.",
-		})
+		}); err != nil {
+			slog.Error("template error", "error", err)
+			http.Error(w, "Internal error", 500)
+		}
 		return
 	}
 
-	h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
-		"Results": results,
+	if err := h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
+		"Results": viewResults,
 		"Query":   query,
-	})
+	}); err != nil {
+		slog.Error("template error", "error", err)
+		http.Error(w, "Internal error", 500)
+	}
 }
 
 // ArtifactDetail handles GET /artifact/{id}.
 func (h *Handler) ArtifactDetail(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
+	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -140,7 +154,6 @@ func (h *Handler) ArtifactDetail(w http.ResponseWriter, r *http.Request) {
 	var title, artType, summary, sourceURL string
 	var keyIdeas, entities, topics []byte
 	var createdAt time.Time
-	var connections int
 
 	err := h.Pool.QueryRow(r.Context(), `
 		SELECT title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
@@ -153,10 +166,7 @@ func (h *Handler) ArtifactDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.Pool.QueryRow(r.Context(), `
-		SELECT COUNT(*) FROM edges
-		WHERE (src_type = 'artifact' AND src_id = $1) OR (dst_type = 'artifact' AND dst_id = $1)
-	`, id).Scan(&connections)
+	connections := graph.ConnectionCount(r.Context(), h.Pool, id)
 
 	var keyIdeasParsed []string
 	json.Unmarshal(keyIdeas, &keyIdeasParsed)
@@ -192,25 +202,42 @@ func (h *Handler) DigestPage(w http.ResponseWriter, r *http.Request) {
 		digestDate = time.Now().Format("2006-01-02")
 	}
 
-	h.Templates.ExecuteTemplate(w, "digest.html", map[string]interface{}{
+	if err := h.Templates.ExecuteTemplate(w, "digest.html", map[string]interface{}{
 		"Title":      "Daily Digest",
 		"DigestText": digestText,
 		"DigestDate": digestDate,
 		"IsQuiet":    isQuiet,
-	})
+	}); err != nil {
+		slog.Error("template error", "error", err)
+		http.Error(w, "Internal error", 500)
+	}
 }
 
 // TopicsPage handles GET /topics.
 func (h *Handler) TopicsPage(w http.ResponseWriter, r *http.Request) {
+	// Parse pagination
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if n, err := fmt.Sscanf(p, "%d", &page); n != 1 || err != nil || page < 1 {
+			page = 1
+		}
+	}
+	const perPage = 20
+	offset := (page - 1) * perPage
+
 	rows, err := h.Pool.Query(r.Context(), `
 		SELECT id, name, state, capture_count_total, last_active
 		FROM topics ORDER BY momentum_score DESC, capture_count_total DESC
-	`)
+		LIMIT $1 OFFSET $2
+	`, perPage+1, offset)
 	if err != nil {
 		slog.Error("topics query failed", "error", err)
-		h.Templates.ExecuteTemplate(w, "topics.html", map[string]interface{}{
+		if err := h.Templates.ExecuteTemplate(w, "topics.html", map[string]interface{}{
 			"Title": "Topics", "Topics": nil,
-		})
+		}); err != nil {
+			slog.Error("template error", "error", err)
+			http.Error(w, "Internal error", 500)
+		}
 		return
 	}
 	defer rows.Close()
@@ -232,10 +259,24 @@ func (h *Handler) TopicsPage(w http.ResponseWriter, r *http.Request) {
 		topics = append(topics, t)
 	}
 
-	h.Templates.ExecuteTemplate(w, "topics.html", map[string]interface{}{
-		"Title":  "Topics",
-		"Topics": topics,
-	})
+	// Determine if there is a next page (we fetched perPage+1 rows)
+	hasNext := len(topics) > perPage
+	if hasNext {
+		topics = topics[:perPage]
+	}
+
+	if err := h.Templates.ExecuteTemplate(w, "topics.html", map[string]interface{}{
+		"Title":    "Topics",
+		"Topics":   topics,
+		"Page":     page,
+		"PrevPage": page - 1,
+		"NextPage": page + 1,
+		"HasPrev":  page > 1,
+		"HasNext":  hasNext,
+	}); err != nil {
+		slog.Error("template error", "error", err)
+		http.Error(w, "Internal error", 500)
+	}
 }
 
 // SettingsPage handles GET /settings.
@@ -260,7 +301,7 @@ func (h *Handler) StatusPage(w http.ResponseWriter, r *http.Request) {
 		"TopicCount":    topicCount,
 		"EdgeCount":     edgeCount,
 		"Uptime":        fmt.Sprintf("%dh %dm", int(uptime.Hours()), int(uptime.Minutes())%60),
-		"DBHealthy":     true,
+		"DBHealthy":     h.Pool.Ping(r.Context()) == nil,
 		"NATSHealthy":   h.NATS != nil && h.NATS.Healthy(),
 	})
 }

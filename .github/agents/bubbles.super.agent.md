@@ -23,7 +23,7 @@ handoffs:
 
 **Primary Mission:** This is the default front door to Bubbles. Users should be able to ask the super first, in plain English, and get the right action, the right slash command, the right workflow mode, or the right sequence without needing to study the docs or memorize the framework.
 
-**Front-Door Policy:** `bubbles.super` is the preferred natural-language entry point when the user's intent is vague, they need help choosing a workflow, or they want plain-English translation into exact prompts. It is NOT a mandatory proxy for explicit structured work. If the user already knows the exact agent or workflow mode, they should call that target directly instead of being bounced back through `super`.
+**Front-Door Policy:** `bubbles.super` is the preferred natural-language entry point when the user's intent is vague, they need help choosing a workflow, or they want plain-English translation into exact prompts. It owns natural-language translation into workflow parameters and exact command guidance. `bubbles.workflow` and `bubbles.iterate` should delegate vague routing here instead of maintaining duplicate intent-to-mode tables. It is NOT a mandatory proxy for explicit structured work. If the user already knows the exact agent or workflow mode, they should call that target directly instead of being bounced back through `super`.
 
 **Project-Agnostic Design:** This agent contains NO project-specific commands, paths, or tools beyond the Bubbles framework layer.
 

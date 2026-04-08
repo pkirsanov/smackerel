@@ -1,67 +1,64 @@
-# Workflow Fix-Cycle Protocol
+# Trigger Workflow Dispatch And Finding Closure Protocol
 
-Use this module when `bubbles.workflow` runs a stochastic or routed repair round after findings were discovered.
+Use this module when `bubbles.workflow` runs a stochastic or other trigger-owned round after a trigger was selected.
 
 ## Core Contract
 
-- Each fix-cycle stage is a separate `runSubagent` call.
-- Follow the trigger-defined order from `bubbles/workflows.yaml`.
-- Do not collapse `bootstrap`, `implement`, `test`, `validate`, and `audit` into one child invocation.
-- Do not accept narrative-only success. Verification-capable children must return concrete evidence and a `## RESULT-ENVELOPE`.
+- Parent workflows select the target spec and trigger, then resolve `triggerWorkflowModes[trigger]` from `bubbles/workflows.yaml`.
+- Parent workflows MUST dispatch the mapped child workflow mode instead of pre-running the trigger or hand-building a bespoke fix cycle when a mapping exists.
+- The child workflow owns trigger execution and the full finding-owned closure chain for that spec.
+- Every trigger in an active trigger pool MUST have a mapped delivery-capable child workflow.
+- Do not accept narrative-only success. Child workflows must return concrete evidence and a `## RESULT-ENVELOPE`.
 
-## Bootstrap Rule
+## Finding-Owned Closure Workflow
 
-If a repair round changes requirements, findings, scenarios, or DoD in planning artifacts, `bootstrap` must refresh cross-artifact coherence before implementation:
+- Any specialist or child workflow that discovers a legitimate bug, regression, design gap, operational gap, or improvement MUST start a finding-owned closure workflow before returning `completed_owned` to its parent.
+- Full finding-owned planning workflow: `bubbles.analyst` → `bubbles.ux` when the finding touches UI or a user-visible journey → `bubbles.design` → `bubbles.plan`.
+- Full finding-owned delivery workflow: `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` → finalize/certification owned by `bubbles.workflow` and `bubbles.validate`.
+- This applies to `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, `gaps`, and future trigger-style workflows.
+- When the current workflow already owns some downstream phases later in the same mode, those phases remain workflow-owned, but the planning chain MUST still run before code changes continue and the workflow MUST NOT report terminal success until the downstream closure phases finish.
 
-- `bubbles.design` updates `design.md` against the current `spec.md` and `scopes.md`
-- `bubbles.plan` updates `scopes.md` so every finding has matching Gherkin, Test Plan, and DoD coverage
+## Parent Responsibilities
 
-This rule is unconditional for fix cycles that reached planning drift. The workflow must not treat an existing `design.md` as permission to skip ownership-safe bootstrap.
+- Pick the round target and trigger.
+- Invoke `bubbles.workflow` as a child workflow with the resolved mode and the selected spec target only.
+- Pass through policy/options context that affects execution (`socratic`, `tdd`, `gitIsolation`, `autoCommit`, `specReview`, and similar workflow tags).
+- Preserve any `route_required` or `blocked` outcome from the child workflow. Parent workflows must not downgrade those outcomes into a clean round summary.
+- Parent workflows MUST wait for the child finding-owned workflow to reach a terminal `## RESULT-ENVELOPE`, then report that envelope upward instead of narrating partially-closed work.
+- **In round-based loops (stochastic sweep, iterate):** the parent MUST complete steps dispatch → wait → record for one round before starting the next. Selecting multiple rounds without dispatching child workflows is a batch-then-summarize violation.
 
-## Phase Expectations
+## Child Workflow Responsibilities
 
-### `bug`
-- Use for chaos-discovered runtime failures that require bug-packet creation before repair.
-- Require the bug packet and its owned artifacts before continuing.
-
-### `analyze`
-- Use only for triggers whose cycle explicitly includes analysis.
-- `bubbles.analyst` owns business/problem framing.
-- `bubbles.ux` joins only when the feature has UI.
-
-### `implement`
-- `bubbles.implement` fixes only the routed findings.
-- The response must reference concrete changed files or return `route_required`/`blocked` when findings remain.
-
-### `test`
-- `bubbles.test` must execute the required suites and show actual command output.
-
-### `validate`
-- `bubbles.validate` must return gate results plus a `## RESULT-ENVELOPE`.
-- If the envelope is `route_required`, the workflow invokes the owner immediately, reruns impacted checks, and reruns validation.
-
-### `audit`
-- `bubbles.audit` must return a concrete verdict plus a `## RESULT-ENVELOPE`.
-- If the envelope is `route_required`, the workflow repairs, reruns impacted checks, and reruns audit before advancing.
+- Own the trigger phase for the selected spec.
+- Own any required finding-owned planning refresh, bug packet creation, implementation, testing, validation, audit, docs, and finalize work for that trigger mode.
+- Return a concrete `## RESULT-ENVELOPE` outcome.
+- Keep workflow-owned continuation intact if the selected spec remains non-terminal.
 
 ## Reject Malformed Success
 
 Treat the child result as incomplete when any of these are true:
 
 - Verification is claimed without execution evidence
-- `bubbles.validate` or `bubbles.audit` omits the result envelope
-- The response mixes a success verdict with unresolved manual follow-up bullets
-- The child describes what should happen instead of what it actually executed
+- The child workflow omits the result envelope
+- The child workflow asks the user to continue manually instead of routing or completing the work itself
+- The parent ran the trigger directly even though a mapped child workflow existed
+- The child workflow reports `completed_owned` before the full finding-owned planning and delivery closure workflow reached a terminal outcome
 
 ## Round Ledger Requirement
 
-Every repair round must emit a ledger line that includes:
+Every trigger-owned round must emit a ledger line that includes:
 
 - `spec`
 - `trigger`
-- `findings`
-- `fix_cycle`
-- `agents_invoked=[...]`
+- `triggerWorkflowMode`
+- `childOutcome`
+- `agents_invoked=[bubbles.workflow(<mode>)]`
 - `duration`
 
-The `agents_invoked` list is the proof that the workflow actually dispatched the repair chain instead of narrating it.
+The ledger must prove which trigger-owned workflow actually ran. A round without `triggerWorkflowMode` is malformed.
+
+## Summary And Continuation Contract
+
+- Child workflows own docs/finalize/certification for touched specs. Parent workflows must not rerun a bespoke docs/finalize tail after the child returns.
+- If any round remains `route_required`, `blocked`, or otherwise non-terminal, the parent workflow must preserve a workflow-owned continuation packet instead of ending in summary-only output.
+- Summary-only output is invalid while any trigger-owned round remains non-terminal.
