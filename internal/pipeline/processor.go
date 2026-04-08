@@ -231,13 +231,29 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 		contentRaw = truncateUTF8(contentRaw, maxContentRaw)
 	}
 
-	_, err := p.DB.Exec(ctx, `
+	// Use ON CONFLICT to handle the TOCTOU race: if a concurrent request already
+	// inserted the same content_hash, this INSERT becomes a no-op and we return
+	// a DuplicateError consistent with the explicit dedup check path.
+	ct, err := p.DB.Exec(ctx, `
 		INSERT INTO artifacts (id, artifact_type, title, content_raw, content_hash, source_id, source_url, processing_tier, capture_method, user_starred, processing_status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (content_hash) WHERE content_hash IS NOT NULL DO NOTHING
 	`, id, string(result.ContentType), result.Title, contentRaw, result.ContentHash,
 		sourceID, sourceURL, tier, captureMethod, req.Starred, "pending")
 	if err != nil {
 		return fmt.Errorf("insert artifact: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		// Concurrent insert won — look up the winner to return a proper DuplicateError.
+		var existingID, existingTitle string
+		lookupErr := p.DB.QueryRow(ctx,
+			"SELECT id, title FROM artifacts WHERE content_hash = $1 LIMIT 1",
+			result.ContentHash,
+		).Scan(&existingID, &existingTitle)
+		if lookupErr != nil {
+			return fmt.Errorf("lookup concurrent duplicate: %w", lookupErr)
+		}
+		return &DuplicateError{ExistingID: existingID, Title: existingTitle}
 	}
 	return nil
 }

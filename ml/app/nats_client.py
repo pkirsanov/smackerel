@@ -64,14 +64,20 @@ class NATSClient:
 
     async def connect(self) -> None:
         """Connect to NATS and initialize JetStream."""
-        self._nc = await nats.connect(
-            self.url,
+        connect_opts: dict = dict(
+            servers=[self.url],
             name="smackerel-ml",
             reconnect_time_wait=2,
             max_reconnect_attempts=60,
             disconnected_cb=self._on_disconnect,
             reconnected_cb=self._on_reconnect,
         )
+        # Token authentication — mirrors Go core's NATS auth enforcement
+        auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
+        if auth_token:
+            connect_opts["token"] = auth_token
+
+        self._nc = await nats.connect(**connect_opts)
         self._js = self._nc.jetstream()
         logger.info("Connected to NATS at %s", self.url)
 

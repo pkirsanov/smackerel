@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -122,5 +124,37 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("SMACKEREL_AUTH_TOKEN must be at least 16 characters (got %d)", len(c.AuthToken))
 	}
 
+	// Semantic validation: PORT must be a valid TCP port number
+	if c.Port != "" {
+		port, err := strconv.Atoi(c.Port)
+		if err != nil || port < 1 || port > 65535 {
+			return fmt.Errorf("PORT must be a number between 1 and 65535 (got %q)", c.Port)
+		}
+	}
+
+	// Semantic validation: DIGEST_CRON must look like a valid 5-field cron expression
+	if c.DigestCron != "" {
+		if !isValidCronExpr(c.DigestCron) {
+			return fmt.Errorf("DIGEST_CRON is not a valid cron expression (got %q)", c.DigestCron)
+		}
+	}
+
 	return nil
+}
+
+// cronFieldPattern matches a single cron field: number, *, ranges, steps, lists.
+var cronFieldPattern = regexp.MustCompile(`^(\*|[0-9]+(-[0-9]+)?)((/[0-9]+)|(,[0-9]+(-[0-9]+)?)*)$`)
+
+// isValidCronExpr validates a 5-field standard cron expression (minute hour dom month dow).
+func isValidCronExpr(expr string) bool {
+	fields := strings.Fields(expr)
+	if len(fields) != 5 {
+		return false
+	}
+	for _, f := range fields {
+		if !cronFieldPattern.MatchString(f) {
+			return false
+		}
+	}
+	return true
 }
