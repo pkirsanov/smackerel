@@ -37,6 +37,7 @@ type SearchResponse struct {
 	Results         []SearchResult `json:"results"`
 	TotalCandidates int            `json:"total_candidates"`
 	SearchTimeMs    int64          `json:"search_time_ms"`
+	SearchMode      string         `json:"search_mode"`
 	Message         string         `json:"message,omitempty"`
 }
 
@@ -93,7 +94,7 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, totalCandidates, err := engine.Search(r.Context(), req)
+	results, totalCandidates, searchMode, err := engine.Search(r.Context(), req)
 	if err != nil {
 		slog.Error("search failed", "error", err, "query", req.Query)
 		writeError(w, http.StatusInternalServerError, "SEARCH_FAILED", "Search processing error")
@@ -106,6 +107,7 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		Results:         results,
 		TotalCandidates: totalCandidates,
 		SearchTimeMs:    elapsed,
+		SearchMode:      searchMode,
 	}
 
 	if len(results) == 0 {
@@ -116,7 +118,7 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Search performs a semantic search: embed query → pgvector similarity → filters → graph expansion.
-func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchResult, int, error) {
+func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchResult, int, string, error) {
 	// Step 0: Parse temporal intent from query (e.g., "from last week")
 	if temporal := parseTemporalIntent(req.Query); temporal != nil {
 		if req.Filters.DateFrom == "" {
@@ -137,7 +139,8 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 
 	// Temporal-only query — use time-range-filtered recency query, skip embedding
 	if req.Query == "" {
-		return s.timeRangeSearch(ctx, req)
+		results, total, err := s.timeRangeSearch(ctx, req)
+		return results, total, "time_range", err
 	}
 
 	// Step 1: Create a unique inbox for this query to avoid shared-subject races
@@ -146,7 +149,8 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	sub, err := s.NATS.Conn.SubscribeSync(replySubject)
 	if err != nil {
 		slog.Warn("embedding subscription failed, falling back to text search", "error", err)
-		return s.textSearch(ctx, req)
+		results, total, err := s.textSearch(ctx, req)
+		return results, total, "text_fallback", err
 	}
 	defer sub.Unsubscribe()
 	// Auto-unsubscribe after 1 message — this inbox is single-use
@@ -163,7 +167,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	})
 
 	if err := s.NATS.Publish(ctx, smacknats.SubjectSearchEmbed, embedPayload); err != nil {
-		return nil, 0, fmt.Errorf("publish embed request: %w", err)
+		return nil, 0, "", fmt.Errorf("publish embed request: %w", err)
 	}
 
 	// Step 3: Wait for embedding response on the unique inbox (with timeout)
@@ -171,13 +175,14 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	if err != nil {
 		// Fallback: text-based search if embedding fails
 		slog.Warn("embedding failed, falling back to text search", "error", err)
-		return s.textSearch(ctx, req)
+		results, total, err := s.textSearch(ctx, req)
+		return results, total, "text_fallback", err
 	}
 
 	// Step 3: Vector similarity search with pgvector
 	results, total, err := s.vectorSearch(ctx, embedding, req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("vector search: %w", err)
+		return nil, 0, "", fmt.Errorf("vector search: %w", err)
 	}
 
 	// Step 4: Graph expansion — find related artifacts via knowledge graph edges
@@ -199,7 +204,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		}
 	}
 
-	return results, total, nil
+	return results, total, "semantic", nil
 }
 
 // waitForEmbeddingOnInbox waits for a single embedding response on a unique inbox subscription.
@@ -246,6 +251,12 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 	if req.Filters.DateFrom != "" {
 		query += fmt.Sprintf(" AND created_at >= $%d::timestamptz", argN)
 		args = append(args, req.Filters.DateFrom)
+		argN++
+	}
+
+	if req.Filters.DateTo != "" {
+		query += fmt.Sprintf(" AND created_at <= $%d::timestamptz", argN)
+		args = append(args, req.Filters.DateTo)
 		argN++
 	}
 

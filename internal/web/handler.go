@@ -89,7 +89,7 @@ func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use the semantic search engine (vector + text fallback) instead of raw ILIKE
-	results, _, err := h.SearchEngine.Search(r.Context(), api.SearchRequest{
+	results, _, _, err := h.SearchEngine.Search(r.Context(), api.SearchRequest{
 		Query: query,
 		Limit: 20,
 	})

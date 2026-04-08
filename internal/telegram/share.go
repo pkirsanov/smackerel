@@ -56,10 +56,15 @@ func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, tex
 			connections = int(c)
 		}
 
+		suffix := ""
+		if ps, _ := result["processing_status"].(string); ps == "pending" {
+			suffix = " (processing pending)"
+		}
+
 		if contextText != "" {
-			b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections) with context", title, artType, connections))
+			b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections) with context%s", title, artType, connections, suffix))
 		} else {
-			b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections)", title, artType, connections))
+			b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections)%s", title, artType, connections, suffix))
 		}
 		return
 	}
