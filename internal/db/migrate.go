@@ -15,15 +15,23 @@ var migrationFS embed.FS
 
 // Migrate runs all SQL migration files in order.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	// Acquire a dedicated connection so the advisory lock is held for
+	// the entire migration run — pool.Exec would use arbitrary connections.
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire migration connection: %w", err)
+	}
+	defer conn.Release()
+
 	// Acquire advisory lock to prevent concurrent migrations
-	_, err := pool.Exec(ctx, "SELECT pg_advisory_lock(42)") // 42 = smackerel migration lock
+	_, err = conn.Exec(ctx, "SELECT pg_advisory_lock(42)") // 42 = smackerel migration lock
 	if err != nil {
 		return fmt.Errorf("acquire migration lock: %w", err)
 	}
-	defer pool.Exec(ctx, "SELECT pg_advisory_unlock(42)")
+	defer conn.Exec(ctx, "SELECT pg_advisory_unlock(42)")
 
 	// Create migrations tracking table
-	_, err = pool.Exec(ctx, `
+	_, err = conn.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -51,7 +59,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 
 		// Check if already applied
 		var exists bool
-		err := pool.QueryRow(ctx,
+		err := conn.QueryRow(ctx,
 			"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)",
 			version,
 		).Scan(&exists)
@@ -69,7 +77,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 			return fmt.Errorf("read migration %s: %w", version, err)
 		}
 
-		tx, err := pool.Begin(ctx)
+		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin transaction for %s: %w", version, err)
 		}

@@ -50,7 +50,7 @@ func (s *StateStore) Save(ctx context.Context, state *SyncState) error {
 		INSERT INTO sync_state (source_id, enabled, sync_cursor, items_synced, errors_count, last_error, last_sync, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
 		ON CONFLICT (source_id) DO UPDATE SET
-			enabled = $2, sync_cursor = $3, items_synced = sync_state.items_synced + $4,
+			enabled = $2, sync_cursor = $3, items_synced = sync_state.items_synced + EXCLUDED.items_synced,
 			errors_count = $5, last_error = $6, last_sync = NOW(), updated_at = NOW()
 	`, state.SourceID, state.Enabled, state.SyncCursor, state.ItemsSynced,
 		state.ErrorsCount, state.LastError)
@@ -64,11 +64,12 @@ func (s *StateStore) Save(ctx context.Context, state *SyncState) error {
 // RecordError increments the error count and stores the error message.
 func (s *StateStore) RecordError(ctx context.Context, sourceID string, errMsg string) error {
 	_, err := s.Pool.Exec(ctx, `
-		UPDATE sync_state SET
-			errors_count = errors_count + 1,
+		INSERT INTO sync_state (source_id, enabled, sync_cursor, items_synced, errors_count, last_error, last_sync, updated_at)
+		VALUES ($1, true, '', 0, 1, $2, NOW(), NOW())
+		ON CONFLICT (source_id) DO UPDATE SET
+			errors_count = sync_state.errors_count + 1,
 			last_error = $2,
 			updated_at = NOW()
-		WHERE source_id = $1
 	`, sourceID, errMsg)
 	return err
 }

@@ -25,6 +25,10 @@ type ResurfaceCandidate struct {
 // this resurfacing output. See Engine.GenerateDigest in engine.go for the full
 // intelligence pipeline.
 func (e *Engine) Resurface(ctx context.Context, limit int) ([]ResurfaceCandidate, error) {
+	if e.Pool == nil {
+		return nil, fmt.Errorf("resurface requires a database connection")
+	}
+
 	if limit <= 0 {
 		limit = 5
 	}
@@ -80,6 +84,10 @@ func (e *Engine) Resurface(ctx context.Context, limit int) ([]ResurfaceCandidate
 
 // serendipityPick selects random artifacts from underexplored topics.
 func (e *Engine) serendipityPick(ctx context.Context, limit int) ([]ResurfaceCandidate, error) {
+	if e.Pool == nil {
+		return nil, fmt.Errorf("resurface requires a database connection")
+	}
+
 	rows, err := e.Pool.Query(ctx, `
 		SELECT a.id, a.title, a.relevance_score, COALESCE(a.last_accessed, a.created_at)
 		FROM artifacts a

@@ -56,6 +56,7 @@ class NATSClient:
         self._js: JetStreamContext | None = None
         self._subscriptions: list = []
         self._tasks: list[asyncio.Task] = []
+        self._failure_counts: dict[int, int] = {}  # msg seq -> nak count
 
     @property
     def is_connected(self) -> bool:
@@ -218,7 +219,19 @@ class NATSClient:
                     await msg.ack()  # Don't redeliver malformed messages
                 except Exception as e:
                     logger.error("Error processing %s message: %s", subject, e, exc_info=True)
-                    await msg.nak()
+                    seq = msg.metadata.sequence.stream if msg.metadata else 0
+                    self._failure_counts[seq] = self._failure_counts.get(seq, 0) + 1
+                    if self._failure_counts[seq] >= 5:
+                        logger.critical(
+                            "Poison pill detected on %s (seq=%d, failures=%d) — terminating message",
+                            subject,
+                            seq,
+                            self._failure_counts[seq],
+                        )
+                        await msg.term()
+                        del self._failure_counts[seq]
+                    else:
+                        await msg.nak()
 
     async def _handle_artifact_process(
         self,
