@@ -2,8 +2,11 @@ package youtube
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -138,11 +141,224 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 // fetchVideos retrieves videos from source config or live API.
 func (c *Connector) fetchVideos(ctx context.Context, cursor string) ([]VideoItem, error) {
+	// Check for local/test videos in source_config (testing path)
 	rawVideos, ok := c.config.SourceConfig["videos"]
 	if ok {
 		return parseVideoItems(rawVideos)
 	}
-	return nil, nil
+
+	// Check for OAuth access token (live API path)
+	accessToken := getCredential(c.config.Credentials, "access_token")
+	if accessToken == "" {
+		slog.Debug("YouTube: no source_config videos and no access_token", "id", c.id)
+		return nil, nil
+	}
+
+	return c.fetchYouTubeVideos(ctx, accessToken, cursor)
+}
+
+// fetchYouTubeVideos fetches liked videos and playlist items from YouTube Data API v3.
+func (c *Connector) fetchYouTubeVideos(ctx context.Context, token string, cursor string) ([]VideoItem, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	var allVideos []VideoItem
+
+	// Fetch liked videos
+	likedVideos, err := c.fetchPlaylistItems(ctx, client, token, "LL", cursor, true)
+	if err != nil {
+		slog.Warn("youtube: failed to fetch liked videos", "error", err)
+	} else {
+		allVideos = append(allVideos, likedVideos...)
+	}
+
+	// Fetch watch later
+	wlVideos, err := c.fetchPlaylistItems(ctx, client, token, "WL", cursor, false)
+	if err != nil {
+		slog.Warn("youtube: failed to fetch watch later", "error", err)
+	} else {
+		for i := range wlVideos {
+			wlVideos[i].WatchLater = true
+		}
+		allVideos = append(allVideos, wlVideos...)
+	}
+
+	// Fetch custom playlists
+	playlists, err := c.fetchUserPlaylists(ctx, client, token)
+	if err != nil {
+		slog.Warn("youtube: failed to fetch playlists", "error", err)
+	} else {
+		for _, pl := range playlists {
+			plVideos, err := c.fetchPlaylistItems(ctx, client, token, pl.ID, cursor, false)
+			if err != nil {
+				slog.Warn("youtube: failed to fetch playlist", "playlist_id", pl.ID, "error", err)
+				continue
+			}
+			for i := range plVideos {
+				plVideos[i].Playlist = pl.Title
+			}
+			allVideos = append(allVideos, plVideos...)
+		}
+	}
+
+	// Deduplicate by video ID (same video may appear in liked + playlist)
+	seen := make(map[string]bool)
+	var deduped []VideoItem
+	for _, v := range allVideos {
+		if !seen[v.VideoID] {
+			seen[v.VideoID] = true
+			deduped = append(deduped, v)
+		}
+	}
+
+	slog.Info("youtube API fetch complete", "total_videos", len(deduped))
+	return deduped, nil
+}
+
+type ytPlaylist struct {
+	ID    string
+	Title string
+}
+
+// fetchUserPlaylists lists the user's custom playlists.
+func (c *Connector) fetchUserPlaylists(ctx context.Context, client *http.Client, token string) ([]ytPlaylist, error) {
+	apiURL := "https://www.googleapis.com/youtube/v3/playlists?part=snippet&mine=true&maxResults=25"
+
+	data, err := youtubeAPICall(ctx, client, apiURL, token)
+	if err != nil {
+		return nil, err
+	}
+
+	items, _ := data["items"].([]interface{})
+	var playlists []ytPlaylist
+	for _, item := range items {
+		im, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		snippet, _ := im["snippet"].(map[string]interface{})
+		if snippet == nil {
+			continue
+		}
+		id, _ := im["id"].(string)
+		title, _ := snippet["title"].(string)
+		if id != "" && title != "" {
+			playlists = append(playlists, ytPlaylist{ID: id, Title: title})
+		}
+	}
+	return playlists, nil
+}
+
+// fetchPlaylistItems fetches video items from a specific YouTube playlist.
+func (c *Connector) fetchPlaylistItems(ctx context.Context, client *http.Client, token string, playlistID string, cursor string, markLiked bool) ([]VideoItem, error) {
+	apiURL := fmt.Sprintf("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=%s&maxResults=50",
+		playlistID)
+	if cursor != "" {
+		apiURL += "&pageToken=" + cursor
+	}
+
+	data, err := youtubeAPICall(ctx, client, apiURL, token)
+	if err != nil {
+		return nil, err
+	}
+
+	items, _ := data["items"].([]interface{})
+	var videos []VideoItem
+
+	for _, item := range items {
+		im, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		snippet, _ := im["snippet"].(map[string]interface{})
+		if snippet == nil {
+			continue
+		}
+		contentDetails, _ := im["contentDetails"].(map[string]interface{})
+
+		var videoID string
+		if contentDetails != nil {
+			videoID, _ = contentDetails["videoId"].(string)
+		}
+		if videoID == "" {
+			// Try resource ID
+			resID, _ := snippet["resourceId"].(map[string]interface{})
+			if resID != nil {
+				videoID, _ = resID["videoId"].(string)
+			}
+		}
+		if videoID == "" {
+			continue
+		}
+
+		title, _ := snippet["title"].(string)
+		channel, _ := snippet["channelTitle"].(string)
+		desc, _ := snippet["description"].(string)
+		publishedAt, _ := snippet["publishedAt"].(string)
+
+		vid := VideoItem{
+			VideoID:     videoID,
+			Title:       title,
+			Channel:     channel,
+			Description: desc,
+			Liked:       markLiked,
+			Published:   time.Now(),
+		}
+
+		if publishedAt != "" {
+			if t, err := time.Parse(time.RFC3339, publishedAt); err == nil {
+				vid.Published = t
+			}
+		}
+
+		// Extract categories/tags from snippet if available
+		if tags, ok := snippet["tags"].([]interface{}); ok {
+			for _, t := range tags {
+				if s, ok := t.(string); ok {
+					vid.Tags = append(vid.Tags, s)
+				}
+			}
+		}
+
+		videos = append(videos, vid)
+	}
+
+	return videos, nil
+}
+
+// youtubeAPICall makes an authenticated GET request to the YouTube Data API v3.
+func youtubeAPICall(ctx context.Context, client *http.Client, apiURL string, token string) (map[string]interface{}, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, fmt.Errorf("youtube API: token expired or invalid (401)")
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("youtube API: HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("youtube API: decode response: %w", err)
+	}
+	return result, nil
+}
+
+func getCredential(creds map[string]string, key string) string {
+	if creds == nil {
+		return ""
+	}
+	return creds[key]
 }
 
 // parseVideoItems converts interface{} video data into VideoItem structs.
