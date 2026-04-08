@@ -18,6 +18,17 @@ _ocr_cache: dict[str, dict] = {}
 
 MIN_TESSERACT_CHARS = 10
 
+# Maximum base64 image size: 10 MB base64 ≈ 7.5 MB decoded image
+MAX_IMAGE_SIZE_B64 = 10 * 1024 * 1024
+
+# Prevent PIL decompression bombs (25 megapixels)
+try:
+    from PIL import Image as _PILImage
+
+    _PILImage.MAX_IMAGE_PIXELS = 25_000_000
+except ImportError:
+    pass
+
 
 def extract_text_tesseract(image_bytes: bytes) -> str:
     """Extract text from image bytes using Tesseract OCR.
@@ -125,6 +136,16 @@ async def handle_ocr_request(data: dict) -> dict:
 
     image_hash = data.get("image_hash", "")
     image_data_b64 = data.get("image_data", "")
+
+    if image_data_b64 and len(image_data_b64) > MAX_IMAGE_SIZE_B64:
+        return {
+            "status": "error",
+            "text": "",
+            "cached": False,
+            "ocr_engine": "none",
+            "image_hash": image_hash,
+            "error": f"image too large: {len(image_data_b64)} bytes base64 exceeds {MAX_IMAGE_SIZE_B64} limit",
+        }
 
     if not image_hash and image_data_b64:
         raw = base64.b64decode(image_data_b64)
