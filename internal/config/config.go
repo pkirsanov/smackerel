@@ -103,5 +103,24 @@ func (c *Config) Validate() error {
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
 	}
+
+	// Reject known placeholder auth tokens — these are guessable defaults
+	placeholders := []string{
+		"development-change-me",
+		"changeme",
+		"change-me",
+		"placeholder",
+		"test-token",
+		"default",
+	}
+	for _, p := range placeholders {
+		if strings.EqualFold(c.AuthToken, p) {
+			return fmt.Errorf("SMACKEREL_AUTH_TOKEN is set to a known placeholder value %q — generate a secure random token", c.AuthToken)
+		}
+	}
+	if len(c.AuthToken) < 16 {
+		return fmt.Errorf("SMACKEREL_AUTH_TOKEN must be at least 16 characters (got %d)", len(c.AuthToken))
+	}
+
 	return nil
 }

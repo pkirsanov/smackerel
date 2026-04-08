@@ -63,6 +63,28 @@ Don't know what to check? Let the system randomly pick:
 /bubbles.workflow  stochastic-quality-sweep
 ```
 
+The stochastic parent now does exactly two things per round: pick a spec and pick a trigger. After that it dispatches the mapped trigger-owned end-to-end workflow via `runSubagent` and **waits for it to complete** before starting the next round.
+
+**Rounds are synchronous.** The sweep MUST NOT batch-select all rounds first and then produce a findings table — that is a scoreboard, not a sweep. Each round dispatches a child workflow, waits for its terminal `RESULT-ENVELOPE`, records the outcome, and only then proceeds to the next round.
+
+That child workflow is not allowed to stop at a diagnosis. If the trigger finds a legitimate bug, regression, gap, or improvement, it must run the full finding-owned closure workflow before returning a terminal result upward:
+
+- Planning workflow: `bubbles.analyst` → `bubbles.ux` when UI or a user-visible journey is implicated → `bubbles.design` → `bubbles.plan`
+- Delivery workflow: `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` → finalize/certification
+
+**Built-in trigger-owned workflow map:**
+- `chaos` → `chaos-hardening`
+- `harden` → `harden-to-doc`
+- `gaps` → `gaps-to-doc`
+- `simplify` → `simplify-to-doc`
+- `stabilize` → `stabilize-to-doc`
+- `test` → `test-to-doc`
+- `devops` → `devops-to-doc`
+- `validate` → `reconcile-to-doc`
+- `improve` → `improve-existing`
+- `security` → `security-to-doc`
+- `regression` → `regression-to-doc`
+
 When a stochastic sweep turns up real work, keep the remediation inside workflow orchestration:
 
 ```
@@ -71,6 +93,10 @@ When a stochastic sweep turns up real work, keep the remediation inside workflow
 ```
 
 Those follow-ups now preserve the active sweep context when continuation state is available, so the system keeps the workflow-owned fix/finalize chain instead of collapsing into raw `/bubbles.implement` or `/bubbles.test` advice.
+
+The sweep is not allowed to stop at a scoreboard. Each round must either finish through the mapped trigger-owned workflow or emit a workflow-owned continuation packet that preserves the non-terminal child outcome. A summary-only finish is invalid while routed or blocked work remains.
+
+The same rule applies outside stochastic sweeps: if `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, or `gaps` is invoked inside another workflow and finds real work, that child workflow must launch the same planning-to-delivery closure substream and finish it before reporting upward.
 
 For repeated passes from one specialist angle, constrain the trigger pool instead of using a deterministic batch mode:
 

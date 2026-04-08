@@ -18,6 +18,8 @@ SUBSCRIBE_SUBJECTS = [
     "search.embed",
     "search.rerank",
     "digest.generate",
+    "keep.sync.request",
+    "keep.ocr.request",
 ]
 
 # Subjects this sidecar publishes to
@@ -26,6 +28,8 @@ PUBLISH_SUBJECTS = [
     "search.embedded",
     "search.reranked",
     "digest.generated",
+    "keep.sync.response",
+    "keep.ocr.response",
 ]
 
 # Map of subscribe subject -> publish response subject
@@ -34,6 +38,8 @@ SUBJECT_RESPONSE_MAP = {
     "search.embed": "search.embedded",
     "search.rerank": "search.reranked",
     "digest.generate": "digest.generated",
+    "keep.sync.request": "keep.sync.response",
+    "keep.ocr.request": "keep.ocr.response",
 }
 
 
@@ -65,15 +71,42 @@ class NATSClient:
         logger.info("Connected to NATS at %s", self.url)
 
     async def subscribe_all(self) -> None:
-        """Subscribe to all processing subjects and start consumer loops."""
+        """Subscribe to all processing subjects and start consumer loops.
+
+        Retries each subscription with exponential backoff in case the
+        JetStream streams have not been created yet (e.g. core runtime
+        is still initialising after a fresh-volume start).
+        """
         if not self._js:
             raise RuntimeError("NATS not connected")
 
+        max_attempts = 30
+        base_delay = 1.0  # seconds
+        max_delay = 15.0
+
         for subject in SUBSCRIBE_SUBJECTS:
-            sub = await self._js.pull_subscribe(
-                subject,
-                durable=f"smackerel-ml-{subject.replace('.', '-')}",
-            )
+            sub = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    sub = await self._js.pull_subscribe(
+                        subject,
+                        durable=f"smackerel-ml-{subject.replace('.', '-')}",
+                    )
+                    break
+                except Exception as exc:
+                    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                    logger.warning(
+                        "Subscribe to %s failed (attempt %d/%d): %s — retrying in %.1fs",
+                        subject,
+                        attempt,
+                        max_attempts,
+                        exc,
+                        delay,
+                    )
+                    if attempt == max_attempts:
+                        raise RuntimeError(f"Failed to subscribe to {subject} after {max_attempts} attempts") from exc
+                    await asyncio.sleep(delay)
+
             self._subscriptions.append(sub)
             logger.info("Subscribed to %s", subject)
 
@@ -83,10 +116,10 @@ class NATSClient:
 
     async def _consume_loop(self, subject: str, sub) -> None:
         """Background loop that fetches and processes messages from a subscription."""
-        llm_provider = os.getenv("LLM_PROVIDER", "")
-        llm_model = os.getenv("LLM_MODEL", "")
-        llm_api_key = os.getenv("LLM_API_KEY", "")
-        ollama_url = os.getenv("OLLAMA_URL", "")
+        llm_provider = os.environ.get("LLM_PROVIDER")
+        llm_model = os.environ.get("LLM_MODEL")
+        llm_api_key = os.environ.get("LLM_API_KEY")
+        ollama_url = os.environ.get("OLLAMA_URL")
 
         while True:
             try:
@@ -102,18 +135,36 @@ class NATSClient:
 
                     if subject == "artifacts.process":
                         result = await self._handle_artifact_process(
-                            data, llm_provider, llm_model, llm_api_key, ollama_url,
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                            ollama_url,
                         )
                     elif subject == "search.embed":
                         result = await self._handle_search_embed(data)
                     elif subject == "search.rerank":
                         result = await self._handle_search_rerank(
-                            data, llm_provider, llm_model, llm_api_key,
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
                         )
                     elif subject == "digest.generate":
                         result = await self._handle_digest_generate(
-                            data, llm_provider, llm_model, llm_api_key,
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
                         )
+                    elif subject == "keep.sync.request":
+                        from .keep_bridge import handle_sync_request
+
+                        result = await handle_sync_request(data)
+                    elif subject == "keep.ocr.request":
+                        from .ocr import handle_ocr_request
+
+                        result = await handle_ocr_request(data)
                     else:
                         logger.warning("Unknown subject: %s", subject)
                         await msg.ack()
@@ -136,7 +187,12 @@ class NATSClient:
                     await msg.nak()
 
     async def _handle_artifact_process(
-        self, data: dict, provider: str, model: str, api_key: str, ollama_url: str,
+        self,
+        data: dict,
+        provider: str,
+        model: str,
+        api_key: str,
+        ollama_url: str,
     ) -> dict:
         """Process an artifact through LLM + embedding pipeline."""
         from .embedder import generate_artifact_embedding
@@ -232,7 +288,11 @@ class NATSClient:
         }
 
     async def _handle_search_rerank(
-        self, data: dict, provider: str, model: str, api_key: str,
+        self,
+        data: dict,
+        provider: str,
+        model: str,
+        api_key: str,
     ) -> dict:
         """Re-rank search candidates using LLM."""
         import litellm
@@ -246,7 +306,7 @@ class NATSClient:
 
         # Build re-ranking prompt
         candidate_text = "\n".join(
-            f"[{i+1}] {c.get('title', '')} ({c.get('artifact_type', '')}): {c.get('summary', '')[:200]}"
+            f"[{i + 1}] {c.get('title', '')} ({c.get('artifact_type', '')}): {c.get('summary', '')[:200]}"
             for i, c in enumerate(candidates[:20])
         )
 
@@ -274,12 +334,14 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
             for item in result.get("ranked", []):
                 idx = item.get("index", 0) - 1
                 if 0 <= idx < len(candidates):
-                    ranked.append({
-                        "artifact_id": candidates[idx].get("artifact_id", ""),
-                        "rank": len(ranked) + 1,
-                        "relevance": item.get("relevance", "medium"),
-                        "explanation": item.get("explanation", ""),
-                    })
+                    ranked.append(
+                        {
+                            "artifact_id": candidates[idx].get("artifact_id", ""),
+                            "rank": len(ranked) + 1,
+                            "relevance": item.get("relevance", "medium"),
+                            "explanation": item.get("explanation", ""),
+                        }
+                    )
 
             return {"query_id": query_id, "ranked": ranked}
 
@@ -300,7 +362,11 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
             }
 
     async def _handle_digest_generate(
-        self, data: dict, provider: str, model: str, api_key: str,
+        self,
+        data: dict,
+        provider: str,
+        model: str,
+        api_key: str,
     ) -> dict:
         """Generate a daily digest using LLM."""
         import litellm
@@ -328,9 +394,7 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
             )
             context_parts.append(f"ACTION ITEMS:\n{items_text}")
         if overnight_artifacts:
-            artifacts_text = "\n".join(
-                f"- {a.get('title', '')} ({a.get('type', '')})" for a in overnight_artifacts
-            )
+            artifacts_text = "\n".join(f"- {a.get('title', '')} ({a.get('type', '')})" for a in overnight_artifacts)
             context_parts.append(f"OVERNIGHT ARTIFACTS:\n{artifacts_text}")
         if hot_topics:
             topics_text = "\n".join(

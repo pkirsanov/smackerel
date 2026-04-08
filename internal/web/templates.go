@@ -9,7 +9,7 @@ const allTemplates = `
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{.Title}} - Smackerel</title>
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzSR5/VeIZlJGW6b2fUe6w0rKWFIIbP7cM+QaJaTtRv8bXqpKW7MSR" crossorigin="anonymous"></script>
     <style>
         :root {
             --bg: #fafaf8; --fg: #1a1a18; --muted: #6b6b68;
@@ -63,16 +63,17 @@ const allTemplates = `
         .back-link { font-size: 0.9rem; color: var(--muted); text-decoration: none; }
         .back-link:hover { color: var(--fg); }
         .digest-text { white-space: pre-wrap; line-height: 1.8; }
+        .htmx-indicator { display: none; text-align: center; padding: 1rem; color: var(--muted); }
         @media (max-width: 600px) { body { padding: 0.5rem; } .status-card { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <nav>
         <a href="/">Search</a>
-        <a href="/digest">Digest</a>
+        <a href="/ui/digest">Digest</a>
         <a href="/topics">Topics</a>
         <a href="/settings">Settings</a>
-        <a href="/status">Status</a>
+        <a href="/ui/status">Status</a>
     </nav>
 {{end}}
 
@@ -83,7 +84,8 @@ const allTemplates = `
 <h1>Search</h1>
 <input class="search-box" type="search" name="query" placeholder="Search your knowledge..."
        hx-post="/search" hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
-       hx-target="#results">
+       hx-target="#results" hx-indicator="#search-spinner">
+<div id="search-spinner" class="htmx-indicator">Searching...</div>
 <div id="results"><div class="empty">Type a query to search your knowledge</div></div>
 {{template "foot"}}
 {{end}}
@@ -91,7 +93,7 @@ const allTemplates = `
 {{define "results-partial.html"}}
 {{range .Results}}
 <div class="card">
-    <h3><a href="/artifact?id={{.ID}}">{{.Title}}</a></h3>
+    <h3><a href="/artifact/{{.ID}}">{{.Title}}</a></h3>
     <div class="meta"><span class="type-badge">{{.Type}}</span></div>
     {{if .Summary}}<div class="summary">{{truncate .Summary 200}}</div>{{end}}
 </div>

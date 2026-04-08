@@ -61,13 +61,15 @@ First mark expired leases stale, then re-run doctor so you know whether the runt
 
 Never patch `.github/bubbles` by hand in a consumer repo just because the runtime commands are missing.
 
-Refresh the framework layer from the upstream Bubbles checkout instead:
+Refresh the framework layer from the downstream repo root by using the upstream Bubbles checkout instead:
 
 ```bash
 bash /path/to/bubbles/install.sh --local-source /path/to/bubbles --bootstrap
 ```
 
 That updates the installed framework scripts and also scaffolds the runtime ignore rules under `.specify/runtime/` when needed.
+
+Do not run that installer command inside the Bubbles source repository itself. Source-repo maintainers should work directly in the framework checkout and validate with `bash bubbles/scripts/cli.sh framework-validate` or `bash bubbles/scripts/cli.sh release-check`.
 
 ## Ask The Super Instead
 

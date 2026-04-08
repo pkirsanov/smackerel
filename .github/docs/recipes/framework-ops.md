@@ -174,11 +174,13 @@ bash .github/bubbles/scripts/cli.sh runtime summary
 bash .github/bubbles/scripts/cli.sh runtime doctor
 ```
 
-If a consumer repo is missing the runtime commands entirely, refresh the framework layer from the upstream Bubbles checkout instead of patching `.github/bubbles` by hand:
+If a consumer repo is missing the runtime commands entirely, refresh the framework layer from the downstream repo root by using a trusted upstream Bubbles checkout instead of patching `.github/bubbles` by hand:
 
 ```bash
 bash /path/to/bubbles/install.sh --local-source /path/to/bubbles --bootstrap
 ```
+
+Do not run that installer command inside the Bubbles source repository itself. Source-repo maintainers should update the framework directly and validate with `bash bubbles/scripts/cli.sh framework-validate` or `bash bubbles/scripts/cli.sh release-check`.
 
 ## View Lessons Learned
 

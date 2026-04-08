@@ -57,6 +57,7 @@ async def _whisper_local(audio_path: str) -> str | None:
     """Attempt local Whisper transcription."""
     try:
         import whisper
+
         model = whisper.load_model("base")
         result = model.transcribe(audio_path)
         return result.get("text", "")

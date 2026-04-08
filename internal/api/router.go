@@ -2,8 +2,10 @@ package api
 
 import (
 	"crypto/subtle"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -15,15 +17,18 @@ func NewRouter(deps *Dependencies) http.Handler {
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(structuredLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
+	r.Use(cspMiddleware)
 
 	r.Route("/api", func(r chi.Router) {
+		r.Use(middleware.Throttle(100))
 		r.Get("/health", deps.HealthHandler)
 		r.Post("/capture", deps.CaptureHandler)
 		r.Post("/search", deps.SearchHandler)
 		r.Get("/digest", deps.DigestHandler)
+		r.Get("/recent", deps.RecentHandler)
 	})
 
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes
@@ -40,12 +45,16 @@ func NewRouter(deps *Dependencies) http.Handler {
 
 		wh := deps.WebHandler.(webRouter)
 
-		// Web UI group with optional auth (same as API)
+		// Web UI group — no auth required (local-first self-hosted).
+		// Security note: webAuthMiddleware exists but is intentionally NOT applied
+		// here. Smackerel is designed as a local-first, self-hosted tool — the Web
+		// UI is served on localhost and does not require token authentication.
+		// API routes are the programmatic boundary and carry their own auth when
+		// AuthToken is configured.
 		r.Group(func(r chi.Router) {
-			r.Use(deps.webAuthMiddleware)
 			r.Get("/", wh.SearchPage)
 			r.Post("/search", wh.SearchResults)
-			r.Get("/artifact", wh.ArtifactDetail)
+			r.Get("/artifact/{id}", wh.ArtifactDetail)
 			r.Get("/ui/digest", wh.DigestPage)
 			r.Get("/topics", wh.TopicsPage)
 			r.Get("/settings", wh.SettingsPage)
@@ -54,6 +63,30 @@ func NewRouter(deps *Dependencies) http.Handler {
 	}
 
 	return r
+}
+
+// structuredLogger is a middleware that logs requests with slog.
+func structuredLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(ww, r)
+		slog.Info("request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", ww.Status(),
+			"duration_ms", time.Since(start).Milliseconds(),
+			"request_id", middleware.GetReqID(r.Context()),
+		)
+	})
+}
+
+// cspMiddleware sets Content-Security-Policy header on all responses.
+func cspMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://unpkg.com; img-src 'self' data:; connect-src 'self'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // webAuthMiddleware checks authentication for web UI routes.

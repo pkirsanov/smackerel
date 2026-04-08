@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -84,6 +85,10 @@ func NewEngine(pool *pgxpool.Pool, nats *smacknats.Client) *Engine {
 
 // RunSynthesis detects cross-domain clusters and generates insights.
 func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
+	if e.Pool == nil {
+		return nil, fmt.Errorf("synthesis requires a database connection")
+	}
+
 	// Find clusters: artifacts sharing topics that also have high embedding similarity
 	rows, err := e.Pool.Query(ctx, `
 		WITH topic_groups AS (
@@ -110,6 +115,20 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 		if err := rows.Scan(&topicID, &topicName, &artifactIDs); err != nil {
 			continue
 		}
+
+		count := len(artifactIDs)
+		if count < 3 {
+			continue
+		}
+
+		insights = append(insights, SynthesisInsight{
+			ID:                ulid.Make().String(),
+			InsightType:       InsightThroughLine,
+			ThroughLine:       topicName,
+			SourceArtifactIDs: artifactIDs,
+			Confidence:        math.Min(1.0, math.Log2(float64(count))/5.0),
+			CreatedAt:         time.Now(),
+		})
 
 		// Publish to NATS for LLM synthesis analysis
 		payload := map[string]interface{}{
@@ -160,10 +179,12 @@ func (e *Engine) SnoozeAlert(ctx context.Context, alertID string, until time.Tim
 func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
 	// Check delivery count today
 	var deliveredToday int
-	e.Pool.QueryRow(ctx, `
+	if err := e.Pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM alerts
 		WHERE status = 'delivered' AND delivered_at >= CURRENT_DATE
-	`).Scan(&deliveredToday)
+	`).Scan(&deliveredToday); err != nil {
+		return nil, fmt.Errorf("query delivered today: %w", err)
+	}
 
 	if deliveredToday >= 2 {
 		return nil, nil // Max 2 alerts per day
@@ -197,6 +218,10 @@ func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
 
 // CheckOverdueCommitments finds action items past their expected date.
 func (e *Engine) CheckOverdueCommitments(ctx context.Context) error {
+	if e.Pool == nil {
+		return fmt.Errorf("commitment check requires a database connection")
+	}
+
 	rows, err := e.Pool.Query(ctx, `
 		SELECT ai.id, ai.text, ai.expected_date, COALESCE(p.name, 'unknown')
 		FROM action_items ai

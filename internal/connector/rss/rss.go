@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -110,14 +111,25 @@ func FetchFeed(ctx context.Context, feedURL string) ([]FeedItem, error) {
 	}
 	defer resp.Body.Close()
 
+	// Limit feed body to 5MB to prevent resource exhaustion
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("read feed body: %w", err)
+	}
+
 	// Try RSS first
 	var rss rssDocument
-	decoder := xml.NewDecoder(resp.Body)
-	if err := decoder.Decode(&rss); err == nil && len(rss.Channel.Items) > 0 {
+	if err := xml.Unmarshal(body, &rss); err == nil && len(rss.Channel.Items) > 0 {
 		return parseRSSItems(rss.Channel.Items), nil
 	}
 
-	return nil, fmt.Errorf("could not parse feed at %s", feedURL)
+	// Try Atom
+	var atom atomFeed
+	if err := xml.Unmarshal(body, &atom); err == nil && len(atom.Entries) > 0 {
+		return parseAtomEntries(atom.Entries), nil
+	}
+
+	return nil, fmt.Errorf("could not parse feed at %s (neither RSS nor Atom)", feedURL)
 }
 
 type rssDocument struct {
@@ -158,6 +170,72 @@ func parseRSSItems(items []rssItem) []FeedItem {
 			Description: item.Description,
 			Published:   published,
 			Author:      item.Author,
+			GUID:        guid,
+		})
+	}
+	return result
+}
+
+// Atom feed types and parser
+type atomFeed struct {
+	XMLName xml.Name    `xml:"feed"`
+	Entries []atomEntry `xml:"entry"`
+}
+
+type atomEntry struct {
+	Title   string     `xml:"title"`
+	Links   []atomLink `xml:"link"`
+	Summary string     `xml:"summary"`
+	Content string     `xml:"content"`
+	Updated string     `xml:"updated"`
+	Author  struct {
+		Name string `xml:"name"`
+	} `xml:"author"`
+	ID string `xml:"id"`
+}
+
+type atomLink struct {
+	Href string `xml:"href,attr"`
+	Rel  string `xml:"rel,attr"`
+}
+
+func parseAtomEntries(entries []atomEntry) []FeedItem {
+	var result []FeedItem
+	for _, entry := range entries {
+		// Find the best link (prefer alternate, fall back to first)
+		link := ""
+		for _, l := range entry.Links {
+			if l.Rel == "alternate" || l.Rel == "" {
+				link = l.Href
+				break
+			}
+		}
+		if link == "" && len(entry.Links) > 0 {
+			link = entry.Links[0].Href
+		}
+
+		// Use content or summary
+		desc := entry.Summary
+		if desc == "" {
+			desc = entry.Content
+		}
+
+		published, _ := time.Parse(time.RFC3339, entry.Updated)
+		if published.IsZero() {
+			published = time.Now()
+		}
+
+		guid := entry.ID
+		if guid == "" {
+			guid = link
+		}
+
+		result = append(result, FeedItem{
+			Title:       entry.Title,
+			Link:        link,
+			Description: desc,
+			Published:   published,
+			Author:      entry.Author.Name,
 			GUID:        guid,
 		})
 	}

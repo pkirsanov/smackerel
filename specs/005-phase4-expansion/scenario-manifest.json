@@ -1,0 +1,329 @@
+{
+  "version": 2,
+  "specId": "005",
+  "featureDir": "specs/005-phase4-expansion",
+  "generatedBy": "bubbles.iterate",
+  "generatedAt": "2026-04-07T15:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-005-001",
+      "name": "Maps timeline import from Takeout",
+      "scope": "01-maps-timeline-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestClassifyActivity"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestToGeoJSON"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/maps_test.go::TestClassifyActivity"},
+        {"type": "unit-test", "location": "internal/connector/maps/maps_test.go::TestToGeoJSON"},
+        {"type": "source", "location": "internal/connector/maps/maps.go::ParseTakeoutJSON"},
+        {"type": "source", "location": "internal/connector/maps/maps.go::ClassifyActivity"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-002",
+      "name": "Trail qualification",
+      "scope": "01-maps-timeline-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestIsTrailQualified"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/maps_test.go::TestIsTrailQualified"},
+        {"type": "source", "location": "internal/connector/maps/maps.go::IsTrailQualified"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-002b",
+      "name": "Opt-in enforcement for maps",
+      "scope": "01-maps-timeline-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestClassifyActivity"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/connector/maps/maps.go::ParseTakeoutJSON"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-002c",
+      "name": "Malformed Takeout JSON handling",
+      "scope": "01-maps-timeline-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestClassifyActivity"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/connector/maps/maps.go::ParseTakeoutJSON"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-003",
+      "name": "Deep reading detection",
+      "scope": "02-browser-history-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/browser_test.go", "function": "TestDwellTimeTier"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/browser_test.go::TestDwellTimeTier"},
+        {"type": "source", "location": "internal/connector/browser/browser.go::DwellTimeTier"},
+        {"type": "source", "location": "internal/connector/browser/browser.go::ParseChromeHistory"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-004",
+      "name": "Social media domain aggregation",
+      "scope": "02-browser-history-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/browser_test.go", "function": "TestIsSocialMedia"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/browser_test.go::TestIsSocialMedia"},
+        {"type": "source", "location": "internal/connector/browser/browser.go::IsSocialMedia"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-005",
+      "name": "Skip list enforcement",
+      "scope": "02-browser-history-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/browser_test.go", "function": "TestShouldSkip"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/browser_test.go::TestShouldSkip"},
+        {"type": "source", "location": "internal/connector/browser/browser.go::ShouldSkip"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-005b",
+      "name": "Opt-in enforcement for browser history",
+      "scope": "02-browser-history-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/browser_test.go", "function": "TestShouldSkip"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/connector/browser/browser.go::ParseChromeHistory"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-005c",
+      "name": "Per-source data deletion",
+      "scope": "02-browser-history-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/browser_test.go", "function": "TestExtractDomain"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/connector/browser/browser.go::ToRawArtifacts"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-006",
+      "name": "Trip auto-detection from email",
+      "scope": "03-trip-dossier",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::AlertTripPrep"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-007",
+      "name": "Dossier aggregation",
+      "scope": "03-trip-dossier",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::AlertTripPrep"},
+        {"type": "source", "location": "internal/graph/linker.go::LinkArtifact"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-008",
+      "name": "Proactive trip delivery",
+      "scope": "03-trip-dossier",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlert_Lifecycle"},
+        {"type": "source", "location": "internal/intelligence/engine.go::AlertTripPrep"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-008b",
+      "name": "Post-trip route linking",
+      "scope": "03-trip-dossier",
+      "status": "active",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "internal/graph/linker_test.go", "function": "TestLinkByEntities"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/graph/linker.go::LinkArtifact"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-008c",
+      "name": "Explicit trip creation",
+      "scope": "03-trip-dossier",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::AlertTripPrep"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-008d",
+      "name": "Trip detection with incomplete signals",
+      "scope": "03-trip-dossier",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::AlertTripPrep"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-009",
+      "name": "Relationship cooling detection",
+      "scope": "04-people-intelligence",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertType_Constants"},
+        {"type": "source", "location": "internal/intelligence/engine.go::AlertRelationship"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-010",
+      "name": "Person profile aggregation",
+      "scope": "04-people-intelligence",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/graph/linker_test.go", "function": "TestLinkByEntities"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/graph/linker.go::linkByEntities"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-011",
+      "name": "Meeting pattern detection",
+      "scope": "04-people-intelligence",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::AlertMeetingBrief"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-011b",
+      "name": "Gift-list memory",
+      "scope": "04-people-intelligence",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-011c",
+      "name": "People data deletion",
+      "scope": "04-people-intelligence",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-012",
+      "name": "Trail search by criteria",
+      "scope": "05-trail-journal",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestIsTrailQualified"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestToGeoJSON"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/maps_test.go::TestIsTrailQualified"},
+        {"type": "unit-test", "location": "internal/connector/maps/maps_test.go::TestToGeoJSON"},
+        {"type": "source", "location": "internal/connector/maps/maps.go::IsTrailQualified"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-013",
+      "name": "Trail detail with linked captures",
+      "scope": "05-trail-journal",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestToGeoJSON"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestHaversine"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/maps_test.go::TestToGeoJSON"},
+        {"type": "source", "location": "internal/connector/maps/maps.go::ToGeoJSON"},
+        {"type": "source", "location": "internal/graph/linker.go::LinkArtifact"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-005-013b",
+      "name": "Trail with no linked captures",
+      "scope": "05-trail-journal",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestIsTrailQualified"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/connector/maps/maps.go::IsTrailQualified"},
+        {"type": "source", "location": "internal/connector/maps/maps.go::ToGeoJSON"}
+      ]
+    }
+  ]
+}

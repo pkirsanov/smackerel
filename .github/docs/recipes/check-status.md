@@ -53,7 +53,7 @@ bash .github/bubbles/scripts/cli.sh repo-readiness .
 
 `doctor` now shows the active adoption profile separately from framework integrity and keeps foundation-profile onboarding gaps advisory. `repo-readiness` remains advisory for every profile and does not replace `bubbles.validate` certification.
 
-For first-time adoption, the docs-recommended path is a foundation bootstrap:
+For first-time adoption in a downstream project repo, the docs-recommended path is a foundation bootstrap:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pkirsanov/bubbles/main/install.sh | bash -s -- --bootstrap --profile foundation

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -19,11 +20,13 @@ import (
 type ContentType string
 
 const (
-	ContentTypeArticle ContentType = "article"
-	ContentTypeYouTube ContentType = "youtube"
-	ContentTypeProduct ContentType = "product"
-	ContentTypeRecipe  ContentType = "recipe"
-	ContentTypeGeneric ContentType = "generic"
+	ContentTypeArticle      ContentType = "article"
+	ContentTypeYouTube      ContentType = "youtube"
+	ContentTypeProduct      ContentType = "product"
+	ContentTypeRecipe       ContentType = "recipe"
+	ContentTypeGeneric      ContentType = "generic"
+	ContentTypeConversation ContentType = "conversation"
+	ContentTypeMediaGroup   ContentType = "media_group"
 )
 
 // Result holds extracted content from a URL or text input.
@@ -81,11 +84,57 @@ func ExtractYouTubeID(rawURL string) string {
 	return ""
 }
 
+// validateURLSafety blocks SSRF attempts by rejecting URLs pointing to
+// private networks, loopback, link-local, or metadata endpoints.
+func validateURLSafety(u *url.URL) error {
+	host := u.Hostname()
+
+	// Block non-HTTP(S) schemes
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("scheme %q not allowed — only http and https", u.Scheme)
+	}
+
+	// Block common private hostnames
+	lower := strings.ToLower(host)
+	if lower == "localhost" || lower == "metadata.google.internal" || strings.HasSuffix(lower, ".internal") {
+		return fmt.Errorf("hostname %q is a private/internal address", host)
+	}
+
+	// Resolve and check IP ranges
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		// If resolution fails, block to be safe
+		return fmt.Errorf("cannot resolve hostname %q", host)
+	}
+
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			continue
+		}
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+			ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return fmt.Errorf("resolved IP %s is a private/internal address", ipStr)
+		}
+		// Block AWS/GCP/Azure metadata IPs
+		if ipStr == "169.254.169.254" || ipStr == "169.254.170.2" {
+			return fmt.Errorf("resolved IP %s is a cloud metadata endpoint", ipStr)
+		}
+	}
+
+	return nil
+}
+
 // ExtractArticle fetches and extracts readable content from an article URL using go-readability.
 func ExtractArticle(ctx context.Context, articleURL string) (*Result, error) {
 	parsedURL, err := url.Parse(articleURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse URL: %w", err)
+	}
+
+	// SSRF protection: reject URLs pointing to private/internal networks
+	if err := validateURLSafety(parsedURL); err != nil {
+		return nil, fmt.Errorf("URL blocked: %w", err)
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}

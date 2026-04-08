@@ -62,6 +62,7 @@ run_check "Install provenance selftest" bash "$SCRIPT_DIR/install-provenance-sel
 run_check "Trust doctor selftest" bash "$SCRIPT_DIR/trust-doctor-selftest.sh"
 run_check "Finding closure selftest" bash "$SCRIPT_DIR/finding-closure-selftest.sh"
 run_check "Super surface selftest" bash "$SCRIPT_DIR/super-surface-selftest.sh"
+run_check "Workflow delegation selftest" bash "$SCRIPT_DIR/workflow-delegation-selftest.sh"
 run_check "Continuation routing selftest" bash "$SCRIPT_DIR/continuation-routing-selftest.sh"
 run_check "Workflow planning provenance selftest" bash "$SCRIPT_DIR/workflow-planning-provenance-selftest.sh"
 run_check "Transition guard selftest" bash "$SCRIPT_DIR/state-transition-guard-selftest.sh"

@@ -6,6 +6,8 @@ First time using Bubbles? Here's how to go from zero to a working project.
 
 ## Step 1: Install Bubbles
 
+This recipe is for a downstream project repo, not the Bubbles source repository itself. If you are maintaining the framework, work directly in the source checkout and use `bash bubbles/scripts/cli.sh ...` validation surfaces instead of rerunning `install.sh` there.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/pkirsanov/bubbles/main/install.sh | bash -s -- --bootstrap --profile foundation
 ```

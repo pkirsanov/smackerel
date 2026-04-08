@@ -53,7 +53,7 @@ STATUS=$(curl -s --max-time 15 -o /dev/null -w '%{http_code}' \
   "$CORE_URL/api/capture")
 e2e_assert_eq "$STATUS" "400" "Empty body returns 400"
 
-RESPONSE=$(curl -sf --max-time 15 \
+RESPONSE=$(curl -s --max-time 15 \
   -X POST \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $AUTH_TOKEN" \
@@ -73,7 +73,7 @@ DUP_STATUS=$(curl -s --max-time 15 -o /dev/null -w '%{http_code}' \
   "$CORE_URL/api/capture")
 e2e_assert_eq "$DUP_STATUS" "409" "Duplicate returns 409"
 
-DUP_RESPONSE=$(curl -sf --max-time 15 \
+DUP_RESPONSE=$(curl -s --max-time 15 \
   -X POST \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $AUTH_TOKEN" \

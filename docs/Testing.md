@@ -1,6 +1,15 @@
 # Smackerel Testing Guide
 
-This guide defines Smackerel's current CLI-owned validation surface and the rules later phases must keep following as the runtime expands.
+This guide defines Smackerel's CLI-owned test surface and the isolation rules for runtime testing.
+
+## Current Test Coverage
+
+| Language | Packages/Files | Test Count | Type |
+|----------|---------------|------------|------|
+| Go | 24 packages | 200+ test functions | Unit (behavioral + structural) |
+| Python | 2 test files | 20 tests | Unit |
+| Shell (E2E) | 57 scripts | End-to-end | Live-stack |
+| Shell (Stress) | 2 scripts | Stress | Live-stack |
 
 ## Current Validation Surface
 
@@ -28,10 +37,37 @@ The current CLI-owned runtime surface exposes these categories today:
 | Python unit | `unit` | `./smackerel.sh test unit --python` |
 | Integration | `integration` | `./smackerel.sh test integration` |
 | End-to-end API | `e2e-api` | `./smackerel.sh test e2e` |
-| End-to-end UI | `e2e-ui` | `N/A - no committed UI yet` |
+| End-to-end UI | `e2e-ui` | `./smackerel.sh test e2e` (web UI paths included) |
 | Stress | `stress` | `./smackerel.sh test stress` |
 
-If a web UI is committed later, UI-specific tests must stay behind the same CLI rather than introducing ad-hoc browser or package-manager commands into project docs.
+### Go Package Coverage
+
+All 24 Go packages have tests:
+
+- `internal/api` — capture, search, health, digest, recent handlers
+- `internal/auth` — OAuth2 provider, token exchange
+- `internal/config` — validation, placeholder rejection, env parsing
+- `internal/connector` — framework, registry, backoff, supervisor
+- `internal/connector/bookmarks` — Chrome/Netscape parsing
+- `internal/connector/browser` — dwell time, skip list, privacy
+- `internal/connector/caldav` — event sync, attendee extraction, tier assignment
+- `internal/connector/imap` — email sync, tier qualification, action item extraction
+- `internal/connector/keep` — Takeout parsing, normalization, labels, qualifiers
+- `internal/connector/maps` — activity classification, trail detection, GeoJSON
+- `internal/connector/rss` — RSS + Atom feed parsing
+- `internal/connector/youtube` — video sync, engagement tiers
+- `internal/db` — migration system
+- `internal/digest` — generation, formatting
+- `internal/extract` — readability, SSRF protection, content hashing
+- `internal/graph` — similarity, entity, topic, temporal linking
+- `internal/intelligence` — synthesis, alerts, commitments, resurfacing
+- `internal/nats` — JetStream client, stream management
+- `internal/pipeline` — processing, dedup, tier assignment
+- `internal/scheduler` — cron scheduling
+- `internal/telegram` — bot routing, share capture, forwarding, conversation assembly, media groups, format
+- `internal/topics` — lifecycle management
+- `internal/web` — handler, search, artifact detail, status
+- `internal/web/icons` — SVG validation
 
 ## Environment Isolation Rules
 

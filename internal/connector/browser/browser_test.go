@@ -74,3 +74,48 @@ func TestChromeTimeToGo(t *testing.T) {
 		t.Errorf("chromeTimeToGo() = %v, want %v", got, expectedTime)
 	}
 }
+
+func TestOptInRequired(t *testing.T) {
+	// Browser connector must not process URLs when consent is absent.
+	// ShouldSkip must block internal/sensitive URLs even with no custom skip list.
+	internalURLs := []string{
+		"chrome://settings",
+		"chrome-extension://abc/options.html",
+		"about:blank",
+		"file:///home/user/secret.html",
+		"localhost:3000/dashboard",
+	}
+	for _, u := range internalURLs {
+		if !ShouldSkip(u, nil) {
+			t.Errorf("ShouldSkip(%q, nil) = false, want true (privacy-sensitive URL)", u)
+		}
+	}
+
+	// User-provided skip list must be respected as an opt-out mechanism
+	customSkip := []string{"private.corp.com"}
+	if !ShouldSkip("private.corp.com/page", customSkip) {
+		t.Error("custom skip domain should be blocked")
+	}
+}
+
+func TestPerSourceDeletion(t *testing.T) {
+	// ToRawArtifacts must tag each artifact with source_id="browser"
+	// so deletion by source can isolate browser data from other connectors.
+	entries := []HistoryEntry{
+		{URL: "https://a.com", Title: "A", VisitTime: time.Now(), Domain: "a.com"},
+		{URL: "https://b.com", Title: "B", VisitTime: time.Now(), Domain: "b.com"},
+	}
+
+	artifacts := ToRawArtifacts(entries)
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts, got %d", len(artifacts))
+	}
+	for i, a := range artifacts {
+		if a.SourceID != "browser" {
+			t.Errorf("artifact[%d].SourceID = %q, want \"browser\"", i, a.SourceID)
+		}
+		if a.SourceRef != entries[i].URL {
+			t.Errorf("artifact[%d].SourceRef = %q, want %q", i, a.SourceRef, entries[i].URL)
+		}
+	}
+}

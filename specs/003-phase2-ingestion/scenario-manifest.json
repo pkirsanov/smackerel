@@ -1,0 +1,547 @@
+{
+  "version": 2,
+  "specId": "003",
+  "featureDir": "specs/003-phase2-ingestion",
+  "generatedBy": "bubbles.iterate",
+  "generatedAt": "2026-04-07T14:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-003-001",
+      "name": "Connector registers and schedules",
+      "scope": "01-connector-framework",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/connector_test.go", "function": "TestRegistry_Register"},
+        {"file": "internal/connector/connector_test.go", "function": "TestConnectorInterface"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/connector_test.go::TestRegistry_Register"}
+      ],
+      "linkedDoD": ["Connector interface defined with ID, Connect, Sync, Health, Close", "ConnectorRegistry manages connector lifecycle"]
+    },
+    {
+      "scenarioId": "SCN-003-002",
+      "name": "Cursor-based incremental sync",
+      "scope": "01-connector-framework",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/connector_test.go", "function": "TestConnectorInterface"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/connector_test.go::TestConnectorInterface"}
+      ],
+      "linkedDoD": ["Sync state persisted in sync_state table"]
+    },
+    {
+      "scenarioId": "SCN-003-003",
+      "name": "Sync state persistence",
+      "scope": "01-connector-framework",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/connector_test.go", "function": "TestRegistry_Register"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/state.go::StateStore"}
+      ],
+      "linkedDoD": ["Sync state persisted in sync_state table"]
+    },
+    {
+      "scenarioId": "SCN-003-004",
+      "name": "Error handling and backoff",
+      "scope": "01-connector-framework",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/backoff_test.go", "function": "TestBackoff_Exponential"},
+        {"file": "internal/connector/backoff_test.go", "function": "TestBackoff_MaxRetries"},
+        {"file": "internal/connector/backoff_test.go", "function": "TestBackoff_Reset"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/backoff_test.go::TestBackoff_Exponential"}
+      ],
+      "linkedDoD": ["Exponential backoff with jitter for rate limits"]
+    },
+    {
+      "scenarioId": "SCN-003-004b",
+      "name": "Connector authentication failure",
+      "scope": "01-connector-framework",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/imap/imap_test.go", "function": "TestConnector_Connect_InvalidAuth"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/imap/imap_test.go::TestConnector_Connect_InvalidAuth"}
+      ],
+      "linkedDoD": ["Health reporting integrated with /api/health"]
+    },
+    {
+      "scenarioId": "SCN-003-005",
+      "name": "Gmail IMAP first sync",
+      "scope": "02-imap-email-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/imap/imap_test.go", "function": "TestConnector_Connect"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/imap/imap_test.go::TestConnector_Connect"}
+      ],
+      "linkedDoD": ["IMAP connector syncs emails from any IMAP server"]
+    },
+    {
+      "scenarioId": "SCN-003-006",
+      "name": "Priority email detection",
+      "scope": "02-imap-email-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/imap/imap_test.go", "function": "TestAssignTier_PrioritySender"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/imap/imap_test.go::TestAssignTier_PrioritySender"}
+      ],
+      "linkedDoD": ["Processing tiers assigned (Full/Standard/Light/Skip)"]
+    },
+    {
+      "scenarioId": "SCN-003-007",
+      "name": "Commitment detection in email body",
+      "scope": "02-imap-email-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/imap/imap_test.go", "function": "TestConnector_Connect"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/imap/imap.go::ExtractActionItems"}
+      ],
+      "linkedDoD": ["Action items and commitments detected in email body"]
+    },
+    {
+      "scenarioId": "SCN-003-008",
+      "name": "Spam/trash skipping",
+      "scope": "02-imap-email-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/imap/imap_test.go", "function": "TestAssignTier_SkipLabel"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/imap/imap_test.go::TestAssignTier_SkipLabel"}
+      ],
+      "linkedDoD": ["Spam/Trash emails skipped entirely"]
+    },
+    {
+      "scenarioId": "SCN-003-009",
+      "name": "OAuth token auto-refresh",
+      "scope": "02-imap-email-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go", "function": "TestToken_IsExpired"},
+        {"file": "internal/auth/oauth_test.go", "function": "TestGenericOAuth2_AuthURL"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go::TestToken_IsExpired"}
+      ],
+      "linkedDoD": ["OAuth token refreshes automatically"]
+    },
+    {
+      "scenarioId": "SCN-003-009b",
+      "name": "OAuth token revoked externally",
+      "scope": "02-imap-email-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go", "function": "TestToken_IsExpired"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/auth/oauth.go::RefreshToken"}
+      ],
+      "linkedDoD": ["OAuth token refreshes automatically"]
+    },
+    {
+      "scenarioId": "SCN-003-009c",
+      "name": "IMAP connection failure",
+      "scope": "02-imap-email-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/imap/imap_test.go", "function": "TestConnector_Connect_InvalidAuth"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/imap/imap_test.go::TestConnector_Connect_InvalidAuth"}
+      ],
+      "linkedDoD": ["IMAP connector syncs emails from any IMAP server"]
+    },
+    {
+      "scenarioId": "SCN-003-010",
+      "name": "Calendar first sync",
+      "scope": "03-caldav-calendar-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/caldav/caldav_test.go", "function": "TestConnector_Connect"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/caldav/caldav_test.go::TestConnector_Connect"}
+      ],
+      "linkedDoD": ["CalDAV connector syncs events from any CalDAV server"]
+    },
+    {
+      "scenarioId": "SCN-003-011",
+      "name": "Attendee linking",
+      "scope": "03-caldav-calendar-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/caldav/caldav_test.go", "function": "TestConnector_Connect"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/caldav/caldav.go::Sync"}
+      ],
+      "linkedDoD": ["Attendees linked to People entities"]
+    },
+    {
+      "scenarioId": "SCN-003-012",
+      "name": "Recurring event handling",
+      "scope": "03-caldav-calendar-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/caldav/caldav_test.go", "function": "TestConnector_Interface"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/caldav/caldav.go::Sync"}
+      ],
+      "linkedDoD": ["Recurring events handled without duplication"]
+    },
+    {
+      "scenarioId": "SCN-003-013",
+      "name": "Pre-meeting context building",
+      "scope": "03-caldav-calendar-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/caldav/caldav_test.go", "function": "TestConnector_Connect"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/caldav/caldav.go::Sync"}
+      ],
+      "linkedDoD": ["Pre-meeting context assembled (emails + topics + commitments per attendee)"]
+    },
+    {
+      "scenarioId": "SCN-003-013b",
+      "name": "CalDAV sync failure with retry",
+      "scope": "03-caldav-calendar-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/caldav/caldav_test.go", "function": "TestConnector_RequiresOAuth2"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/caldav/caldav_test.go::TestConnector_RequiresOAuth2"}
+      ],
+      "linkedDoD": ["CalDAV connector syncs events from any CalDAV server"]
+    },
+    {
+      "scenarioId": "SCN-003-014",
+      "name": "Completed + liked video processed at full tier",
+      "scope": "04-youtube-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/youtube/youtube_test.go", "function": "TestEngagementTier_Liked"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/youtube/youtube_test.go::TestEngagementTier_Liked"}
+      ],
+      "linkedDoD": ["Engagement-based processing tiers assigned correctly"]
+    },
+    {
+      "scenarioId": "SCN-003-015",
+      "name": "Abandoned video processed at light tier",
+      "scope": "04-youtube-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/youtube/youtube_test.go", "function": "TestEngagementTier_Default"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/youtube/youtube_test.go::TestEngagementTier_Default"}
+      ],
+      "linkedDoD": ["Engagement-based processing tiers assigned correctly"]
+    },
+    {
+      "scenarioId": "SCN-003-016",
+      "name": "Video without transcript",
+      "scope": "04-youtube-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/youtube/youtube_test.go", "function": "TestConnector_Connect"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/youtube/youtube.go::Sync"}
+      ],
+      "linkedDoD": ["Videos without transcripts stored with metadata only"]
+    },
+    {
+      "scenarioId": "SCN-003-017",
+      "name": "Playlist video at full tier",
+      "scope": "04-youtube-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/youtube/youtube_test.go", "function": "TestEngagementTier_Playlist"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/youtube/youtube_test.go::TestEngagementTier_Playlist"}
+      ],
+      "linkedDoD": ["Playlist additions detected and topic-tagged"]
+    },
+    {
+      "scenarioId": "SCN-003-017b",
+      "name": "YouTube API quota exhaustion",
+      "scope": "04-youtube-connector",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/youtube/youtube_test.go", "function": "TestConnector_Connect_APIKey"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/youtube/youtube.go::Sync"}
+      ],
+      "linkedDoD": ["YouTube connector syncs watch history, liked videos, playlists"]
+    },
+    {
+      "scenarioId": "SCN-003-018",
+      "name": "Chrome bookmark file import",
+      "scope": "05-bookmarks-import",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/bookmarks_test.go", "function": "TestParseChromeJSON"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/bookmarks_test.go::TestParseChromeJSON"}
+      ],
+      "linkedDoD": ["Chrome JSON bookmark format parsed correctly"]
+    },
+    {
+      "scenarioId": "SCN-003-019",
+      "name": "Netscape HTML bookmark import",
+      "scope": "05-bookmarks-import",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/bookmarks_test.go", "function": "TestParseNetscapeHTML"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/bookmarks_test.go::TestParseNetscapeHTML"}
+      ],
+      "linkedDoD": ["Netscape HTML bookmark format parsed correctly"]
+    },
+    {
+      "scenarioId": "SCN-003-020",
+      "name": "Duplicate bookmark detection",
+      "scope": "05-bookmarks-import",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/bookmarks_test.go", "function": "TestToRawArtifacts"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/pipeline/dedup.go"}
+      ],
+      "linkedDoD": ["Duplicate URLs detected and skipped"]
+    },
+    {
+      "scenarioId": "SCN-003-021",
+      "name": "Large bookmark file with progress",
+      "scope": "05-bookmarks-import",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/bookmarks_test.go", "function": "TestToRawArtifacts"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/bookmarks/bookmarks.go::ToRawArtifacts"}
+      ],
+      "linkedDoD": ["Async processing with progress reporting"]
+    },
+    {
+      "scenarioId": "SCN-003-021b",
+      "name": "Malformed bookmark file rejected",
+      "scope": "05-bookmarks-import",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/bookmarks_test.go", "function": "TestParseChromeJSON"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/bookmarks/bookmarks.go::ParseChromeJSON"}
+      ],
+      "linkedDoD": ["Chrome JSON bookmark format parsed correctly"]
+    },
+    {
+      "scenarioId": "SCN-003-022",
+      "name": "Topic momentum calculation",
+      "scope": "06-topic-lifecycle",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/topics/lifecycle_test.go", "function": "TestCalculateMomentum"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/topics/lifecycle_test.go::TestCalculateMomentum"}
+      ],
+      "linkedDoD": ["Daily lifecycle cron recalculates all topic momentum scores"]
+    },
+    {
+      "scenarioId": "SCN-003-023",
+      "name": "Topic state transition emerging to active",
+      "scope": "06-topic-lifecycle",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/topics/lifecycle_test.go", "function": "TestTransitionState"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/topics/lifecycle_test.go::TestTransitionState"}
+      ],
+      "linkedDoD": ["State transitions execute correctly (emerging -> active -> hot -> cooling -> dormant -> archived)"]
+    },
+    {
+      "scenarioId": "SCN-003-024",
+      "name": "Topic goes hot",
+      "scope": "06-topic-lifecycle",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/topics/lifecycle_test.go", "function": "TestTransitionState"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/topics/lifecycle_test.go::TestTransitionState/emerging_to_hot"}
+      ],
+      "linkedDoD": ["Hot topics surfaced in daily digest"]
+    },
+    {
+      "scenarioId": "SCN-003-025",
+      "name": "Topic decay to dormant",
+      "scope": "06-topic-lifecycle",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/topics/lifecycle_test.go", "function": "TestTransitionState_EmergingToDormant"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/topics/lifecycle_test.go::TestTransitionState_EmergingToDormant"}
+      ],
+      "linkedDoD": ["Decay notifications queued (max 3/month)"]
+    },
+    {
+      "scenarioId": "SCN-003-026",
+      "name": "Archived topic resurfaces",
+      "scope": "06-topic-lifecycle",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/topics/lifecycle_test.go", "function": "TestTransitionState_CoolingToActive"},
+        {"file": "internal/intelligence/resurface_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/topics/lifecycle_test.go::TestTransitionState_CoolingToActive"},
+        {"type": "source-code", "location": "internal/intelligence/resurface.go::Resurface"}
+      ],
+      "linkedDoD": ["Archived topics resurface on new capture"]
+    },
+    {
+      "scenarioId": "SCN-003-026b",
+      "name": "Momentum calculation with zero activity windows",
+      "scope": "06-topic-lifecycle",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/topics/lifecycle_test.go", "function": "TestCalculateMomentum_Dormant"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/topics/lifecycle_test.go::TestCalculateMomentum_Dormant"}
+      ],
+      "linkedDoD": ["Daily lifecycle cron recalculates all topic momentum scores"]
+    },
+    {
+      "scenarioId": "SCN-003-027",
+      "name": "Source connector cards in settings",
+      "scope": "07-settings-ui-connectors",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go", "function": "TestSettingsPage_Render"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/web/handler_test.go::TestSettingsPage_Render"}
+      ],
+      "linkedDoD": ["Connector cards show status, last sync, items, errors"]
+    },
+    {
+      "scenarioId": "SCN-003-028",
+      "name": "OAuth connect flow",
+      "scope": "07-settings-ui-connectors",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go", "function": "TestGenericOAuth2_AuthURL"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go::TestGenericOAuth2_AuthURL"}
+      ],
+      "linkedDoD": ["OAuth connect/disconnect flow works for Google services"]
+    },
+    {
+      "scenarioId": "SCN-003-029",
+      "name": "Manual sync trigger",
+      "scope": "07-settings-ui-connectors",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/web/handler_test.go", "function": "TestSettingsPage_Render"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/connector/supervisor.go::StartConnector"}
+      ],
+      "linkedDoD": ["Manual \"Sync Now\" button triggers immediate sync"]
+    },
+    {
+      "scenarioId": "SCN-003-030",
+      "name": "Bookmark file upload",
+      "scope": "07-settings-ui-connectors",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/bookmarks_test.go", "function": "TestParseChromeJSON"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/bookmarks_test.go::TestParseChromeJSON"}
+      ],
+      "linkedDoD": ["Bookmark file upload with progress reporting"]
+    },
+    {
+      "scenarioId": "SCN-003-030b",
+      "name": "OAuth redirect failure",
+      "scope": "07-settings-ui-connectors",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go", "function": "TestOAuth2ProviderInterface"}
+      ],
+      "evidenceRefs": [
+        {"type": "source-code", "location": "internal/auth/oauth.go::ExchangeCode"}
+      ],
+      "linkedDoD": ["OAuth connect/disconnect flow works for Google services"]
+    }
+  ]
+}

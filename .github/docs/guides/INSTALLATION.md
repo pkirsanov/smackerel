@@ -10,6 +10,8 @@
 - `curl` and `bash` (available on macOS, Linux, WSL)
 - VS Code with GitHub Copilot Chat extension
 
+> **Source repo note:** this guide is for downstream project repos. Do not run `install.sh` inside the Bubbles source repository itself; maintainers should edit the framework directly and validate with `bash bubbles/scripts/cli.sh framework-validate` or `bash bubbles/scripts/cli.sh release-check`.
+
 ---
 
 ## Step 1: Install Bubbles (With Bootstrap)
@@ -233,13 +235,13 @@ The dry-run output now shows the current installed provenance, the target releas
 - Ensure GitHub Copilot Chat extension is up to date
 
 **"Something's fucky" — agents can't find project commands:**
-- Run with `--bootstrap` if you haven't: `bash install.sh --bootstrap`
+- Run with `--bootstrap` from your downstream project root if you haven't: `curl -fsSL https://raw.githubusercontent.com/pkirsanov/bubbles/main/install.sh | bash -s -- --bootstrap`
 - Check `.specify/memory/agents.md` has your CLI commands
 - Ensure your repo has a runner script (`./yourproject.sh`)
 
 **Doctor says `.specify/memory/bubbles.config.json` is missing:**
 - Do not create the file manually
-- Rerun Bubbles install with `--bootstrap`
+- Rerun Bubbles install with `--bootstrap` from your downstream project root, for example: `curl -fsSL https://raw.githubusercontent.com/pkirsanov/bubbles/main/install.sh | bash -s -- --bootstrap`
 - Then run `/bubbles.setup mode: refresh` to reconcile `.github` framework assets
 
 ---

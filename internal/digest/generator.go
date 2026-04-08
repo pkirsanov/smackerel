@@ -54,7 +54,7 @@ type TopicBrief struct {
 // Digest is a generated digest record.
 type Digest struct {
 	ID          string    `json:"id"`
-	DigestDate  string    `json:"date"`
+	DigestDate  time.Time `json:"date"`
 	DigestText  string    `json:"text"`
 	WordCount   int       `json:"word_count"`
 	ActionItems []byte    `json:"action_items,omitempty"`

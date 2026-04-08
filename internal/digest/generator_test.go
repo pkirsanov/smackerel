@@ -2,6 +2,7 @@ package digest
 
 import (
 	"testing"
+	"time"
 )
 
 func TestJoinStrings(t *testing.T) {
@@ -151,7 +152,7 @@ func TestTopicBrief_Fields(t *testing.T) {
 func TestDigest_Fields(t *testing.T) {
 	d := Digest{
 		ID:         "d-1",
-		DigestDate: "2026-04-06",
+		DigestDate: time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC),
 		DigestText: "! Reply to Sarah about proposal.",
 		WordCount:  6,
 		IsQuiet:    false,

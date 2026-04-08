@@ -118,6 +118,30 @@ func TestValidate_TelegramChatIDs(t *testing.T) {
 	}
 }
 
+func TestValidate_PlaceholderAuthTokenRejected(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("SMACKEREL_AUTH_TOKEN", "development-change-me")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for placeholder auth token")
+	}
+	if !strings.Contains(err.Error(), "placeholder") {
+		t.Errorf("error should mention placeholder, got: %v", err)
+	}
+}
+
+func TestValidate_ShortAuthTokenRejected(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("SMACKEREL_AUTH_TOKEN", "short")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for short auth token")
+	}
+	if !strings.Contains(err.Error(), "at least 16 characters") {
+		t.Errorf("error should mention length, got: %v", err)
+	}
+}
+
 func TestValidate_NoHiddenDefaults_Required(t *testing.T) {
 	// Ensure truly required vars have no hidden defaults when env is empty.
 	for _, key := range []string{
@@ -140,7 +164,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("LLM_PROVIDER", "openai")
 	t.Setenv("LLM_MODEL", "gpt-4o-mini")
 	t.Setenv("LLM_API_KEY", "sk-test-key")
-	t.Setenv("SMACKEREL_AUTH_TOKEN", "test-token")
+	t.Setenv("SMACKEREL_AUTH_TOKEN", "a-secure-test-token-for-unit-tests")
 	t.Setenv("OLLAMA_URL", "http://ollama:11434")
 	t.Setenv("OLLAMA_MODEL", "llama3.2")
 	t.Setenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")

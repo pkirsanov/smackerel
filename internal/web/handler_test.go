@@ -187,7 +187,7 @@ func TestSCN002036_StatusPage_TemplateExists(t *testing.T) {
 	}
 }
 
-// Verify all 7 templates are present  
+// Verify all 7 templates are present
 func TestAllTemplates_Present(t *testing.T) {
 	h := NewHandler(nil, nil, time.Now())
 	required := []string{

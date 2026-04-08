@@ -1,6 +1,18 @@
 # Smackerel Docker Best Practices
 
-Smackerel is designed as a self-hosted Docker stack. This document defines the Docker lifecycle rules the runtime must follow once it is committed.
+Smackerel runs as a self-hosted Docker Compose stack with 4 services. This document defines the Docker lifecycle rules.
+
+## Current Stack
+
+| Service | Image | Restart | Memory Limit | Health Check |
+|---------|-------|---------|--------------|--------------|
+| `postgres` | `pgvector/pgvector:pg16` | `unless-stopped` | 512M | `pg_isready` |
+| `nats` | `nats:2.10-alpine` | `unless-stopped` | 256M | HTTP `/healthz` |
+| `smackerel-core` | Built from `./Dockerfile` | `unless-stopped` | 256M | HTTP `/api/health` |
+| `smackerel-ml` | Built from `./ml/Dockerfile` | `unless-stopped` | 2G | HTTP `/health` |
+| `ollama` | `ollama/ollama:0.6` (profile: ollama) | `unless-stopped` | 8G | — |
+
+All services have restart policies. The core service binds to `127.0.0.1` by default for security. NATS retention is 7 days.
 
 ## Core Rules
 

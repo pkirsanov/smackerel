@@ -27,22 +27,32 @@ e2e_cleanup() {
     return 0
   fi
   "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+  # Force-remove explicitly-named test volumes (docker compose down -v does not remove them)
+  local env_file
+  env_file="$(smackerel_env_file "$TEST_ENV")"
+  if [ -f "$env_file" ]; then
+    local pg_vol nats_vol ollama_vol
+    pg_vol="$(smackerel_env_value "$env_file" "POSTGRES_VOLUME_NAME")"
+    nats_vol="$(smackerel_env_value "$env_file" "NATS_VOLUME_NAME")"
+    ollama_vol="$(smackerel_env_value "$env_file" "OLLAMA_VOLUME_NAME")"
+    docker volume rm "$pg_vol" "$nats_vol" "$ollama_vol" 2>/dev/null || true
+  fi
 }
 
 e2e_start() {
   if [ "$E2E_STACK_MANAGED" = "1" ]; then
     e2e_setup
-    e2e_wait_healthy 60
+    e2e_wait_healthy 120
     return 0
   fi
   e2e_cleanup
   "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
   e2e_setup
-  e2e_wait_healthy 60
+  e2e_wait_healthy 120
 }
 
 e2e_wait_healthy() {
-  local timeout="${1:-60}"
+  local timeout="${1:-120}"
   local elapsed=0
   echo "Waiting for services to be healthy (max ${timeout}s)..."
   while [ $elapsed -lt "$timeout" ]; do
@@ -70,7 +80,7 @@ e2e_api() {
 }
 
 e2e_psql() {
-  smackerel_compose "$TEST_ENV" exec -T postgres \
+  smackerel_compose "$TEST_ENV" exec --interactive=false -T postgres \
     psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "$1" | tr -d '[:space:]'
 }
 
@@ -133,7 +143,7 @@ e2e_seed_artifact() {
   local art_type="${3:-article}"
   local hash="${4:-hash-$(date +%s)-$RANDOM}"
 
-  smackerel_compose "$TEST_ENV" exec -T postgres \
+  smackerel_compose "$TEST_ENV" exec --interactive=false -T postgres \
     psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
 INSERT INTO artifacts (id, artifact_type, title, content_hash, source_id, summary, created_at, updated_at)
 VALUES ('$id', '$art_type', '$title', '$hash', 'test', 'Test summary for $title', NOW(), NOW())

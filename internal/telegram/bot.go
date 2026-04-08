@@ -15,21 +15,27 @@ import (
 
 // Bot manages the Telegram bot lifecycle and message handling.
 type Bot struct {
-	api          *tgbotapi.BotAPI
-	allowedChats map[int64]bool
-	captureURL   string // internal API URL for capture
-	searchURL    string // internal API URL for search
-	digestURL    string // internal API URL for digest
-	authToken    string
-	httpClient   *http.Client
+	api            *tgbotapi.BotAPI
+	allowedChats   map[int64]bool
+	captureURL     string // internal API URL for capture
+	searchURL      string // internal API URL for search
+	digestURL      string // internal API URL for digest
+	recentURL      string // internal API URL for recent
+	authToken      string
+	httpClient     *http.Client
+	assembler      *ConversationAssembler
+	mediaAssembler *MediaGroupAssembler
 }
 
 // Config holds Telegram bot configuration.
 type Config struct {
-	BotToken   string
-	ChatIDs    []string
-	CoreAPIURL string // e.g., "http://localhost:8080"
-	AuthToken  string
+	BotToken                string
+	ChatIDs                 []string
+	CoreAPIURL              string // e.g., "http://localhost:8080"
+	AuthToken               string
+	AssemblyWindowSeconds   int // conversation assembly inactivity window (default: 10)
+	AssemblyMaxMessages     int // max messages per conversation buffer (default: 100)
+	MediaGroupWindowSeconds int // media group assembly window (default: 3)
 }
 
 // NewBot creates and initializes a Telegram bot.
@@ -56,15 +62,35 @@ func NewBot(cfg Config) (*Bot, error) {
 		baseURL = "http://localhost:8080"
 	}
 
-	return &Bot{
+	bot := &Bot{
 		api:          api,
 		allowedChats: allowed,
 		captureURL:   baseURL + "/api/capture",
 		searchURL:    baseURL + "/api/search",
 		digestURL:    baseURL + "/api/digest",
+		recentURL:    baseURL + "/api/recent",
 		authToken:    cfg.AuthToken,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
-	}, nil
+	}
+
+	// Initialize assemblers with config-driven parameters
+	ctx := context.Background()
+	bot.assembler = NewConversationAssembler(
+		ctx,
+		cfg.AssemblyWindowSeconds,
+		cfg.AssemblyMaxMessages,
+		bot.flushConversation,
+		func(chatID int64, count int) {
+			bot.reply(chatID, "~ Receiving messages... send /done when finished")
+		},
+	)
+	bot.mediaAssembler = NewMediaGroupAssembler(
+		ctx,
+		cfg.MediaGroupWindowSeconds,
+		bot.flushMediaGroup,
+	)
+
+	return bot, nil
 }
 
 // Start begins long-polling for Telegram messages.
@@ -115,11 +141,26 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 			b.handleStatus(ctx, msg)
 		case "recent":
 			b.handleRecent(ctx, msg)
+		case "done":
+			b.handleDone(ctx, msg)
 		case "start", "help":
 			b.handleHelp(ctx, msg)
 		default:
-			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /digest, /status, or /recent")
+			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /digest, /done, /status, or /recent")
 		}
+		return
+	}
+
+	// Handle media groups (before forward check — forwarded media groups
+	// are grouped by media_group_id, forward meta preserved on group)
+	if msg.MediaGroupID != "" {
+		b.mediaAssembler.Add(msg.MediaGroupID, msg)
+		return
+	}
+
+	// Handle forwarded messages (before URL/text — forward metadata preserved)
+	if msg.ForwardDate != 0 {
+		b.handleForwardedMessage(ctx, msg)
 		return
 	}
 
@@ -129,15 +170,27 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		return
 	}
 
+	// Handle photos without media group (single photo share)
+	if msg.Photo != nil && msg.MediaGroupID == "" {
+		// Treat as text capture with caption
+		caption := msg.Caption
+		if caption != "" {
+			b.handleTextCapture(ctx, msg, caption)
+		} else {
+			b.reply(chatID, "? Photo received but no caption to capture. Add a description.")
+		}
+		return
+	}
+
 	// Handle documents/attachments
 	if msg.Document != nil {
 		b.reply(chatID, "? Not sure what to do with this. Can you add context?")
 		return
 	}
 
-	// Handle URLs in text
+	// Handle URLs in text (enhanced share-sheet support)
 	if containsURL(text) {
-		b.handleURLCapture(ctx, msg, text)
+		b.handleShareCapture(ctx, msg, text)
 		return
 	}
 
@@ -188,13 +241,13 @@ func (b *Bot) handleTextCapture(ctx context.Context, msg *tgbotapi.Message, text
 
 // handleVoice captures a voice note through Whisper transcription.
 func (b *Bot) handleVoice(ctx context.Context, msg *tgbotapi.Message) {
-	fileURL, err := b.api.GetFileDirectURL(msg.Voice.FileID)
-	if err != nil {
-		b.reply(msg.Chat.ID, "? Couldn't download voice note")
-		return
-	}
-
-	result, err := b.callCapture(ctx, map[string]string{"voice_url": fileURL})
+	// Do not pass the Telegram file URL (which contains the bot token) to the capture API.
+	// Instead, pass just the file ID reference so the ML sidecar can fetch it through
+	// a separate authenticated path without leaking the token into stored artifacts.
+	result, err := b.callCapture(ctx, map[string]string{
+		"text":    "[Voice note transcription requested]",
+		"context": "telegram_voice_file_id:" + msg.Voice.FileID,
+	})
 	if err != nil {
 		slog.Error("telegram voice capture failed", "error", err)
 		b.reply(msg.Chat.ID, "? Failed to process voice note. Try again in a moment.")
@@ -322,25 +375,18 @@ func (b *Bot) handleStatus(ctx context.Context, msg *tgbotapi.Message) {
 
 // handleRecent returns the last few captured artifacts.
 func (b *Bot) handleRecent(ctx context.Context, msg *tgbotapi.Message) {
-	body := map[string]interface{}{
-		"query": "*",
-		"limit": 5,
-	}
-	data, _ := json.Marshal(body)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.searchURL, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.recentURL, nil)
 	if err != nil {
 		b.reply(msg.Chat.ID, "? Couldn't fetch recent items")
 		return
 	}
-	req.Header.Set("Content-Type", "application/json")
 	if b.authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+b.authToken)
 	}
 
 	resp, err := b.httpClient.Do(req)
 	if err != nil {
-		b.reply(msg.Chat.ID, "? Search service unreachable")
+		b.reply(msg.Chat.ID, "? Recent items service unreachable")
 		return
 	}
 	defer resp.Body.Close()
@@ -377,8 +423,10 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 - Send a URL to save an article/video
 - Send text to save an idea
 - Send a voice note to transcribe and save
+- Forward messages to assemble conversations
 - /find <query> - Search your knowledge
 - /digest - Get today's digest
+- /done - Finalize conversation assembly
 - /status - System status
 - /recent - Recent items`
 	b.reply(msg.Chat.ID, help)
@@ -484,4 +532,69 @@ func (b *Bot) SendDigest(text string) {
 	for chatID := range b.allowedChats {
 		b.reply(chatID, text)
 	}
+}
+
+// handleDone flushes all open assembly buffers for the current chat.
+func (b *Bot) handleDone(ctx context.Context, msg *tgbotapi.Message) {
+	if b.assembler != nil {
+		b.assembler.FlushChat(msg.Chat.ID)
+	}
+	b.reply(msg.Chat.ID, ". Conversation assembly finalized")
+}
+
+// Stop flushes all open buffers and stops the bot gracefully.
+func (b *Bot) Stop() {
+	if b.assembler != nil {
+		b.assembler.FlushAll()
+	}
+	if b.mediaAssembler != nil {
+		b.mediaAssembler.FlushAll()
+	}
+}
+
+// flushConversation is the callback for the ConversationAssembler.
+// It formats the conversation and sends it through the capture API.
+func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) error {
+	text := FormatConversation(buf)
+	participants := extractParticipants(buf.Messages)
+
+	contextStr := fmt.Sprintf("Conversation with %d messages from %s",
+		len(buf.Messages), strings.Join(participants, ", "))
+
+	body := map[string]string{
+		"text":    text,
+		"context": contextStr,
+	}
+	result, err := b.callCapture(ctx, body)
+	if err != nil {
+		b.reply(buf.Key.chatID, "? Failed to save conversation. Try again.")
+		return err
+	}
+
+	title, _ := result["title"].(string)
+	b.reply(buf.Key.chatID, fmt.Sprintf(". Saved conversation: \"%s\" (%d messages, %d participants)",
+		title, len(buf.Messages), len(participants)))
+	return nil
+}
+
+// flushMediaGroup is the callback for the MediaGroupAssembler.
+func (b *Bot) flushMediaGroup(ctx context.Context, buf *MediaGroupBuffer) error {
+	text := FormatMediaGroup(buf)
+
+	body := map[string]string{
+		"text": text,
+	}
+	if buf.ForwardMeta != nil {
+		body["context"] = fmt.Sprintf("Forwarded media group from %s", buf.ForwardMeta.SenderName)
+	}
+
+	result, err := b.callCapture(ctx, body)
+	if err != nil {
+		b.reply(buf.ChatID, "? Failed to save media group. Try again.")
+		return err
+	}
+
+	title, _ := result["title"].(string)
+	b.reply(buf.ChatID, fmt.Sprintf(". Saved media group: \"%s\" (%d items)", title, len(buf.Items)))
+	return nil
 }
