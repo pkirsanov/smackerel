@@ -1,5 +1,8 @@
 -- Migration: 007_oauth_tokens.sql
 -- Stores OAuth2 tokens for connector authentication.
+--
+-- ROLLBACK:
+--   DROP TABLE IF EXISTS oauth_tokens CASCADE;
 
 CREATE TABLE IF NOT EXISTS oauth_tokens (
     provider TEXT NOT NULL,

@@ -70,10 +70,10 @@ const allTemplates = `
 <body>
     <nav>
         <a href="/">Search</a>
-        <a href="/ui/digest">Digest</a>
+        <a href="/digest">Digest</a>
         <a href="/topics">Topics</a>
         <a href="/settings">Settings</a>
-        <a href="/ui/status">Status</a>
+        <a href="/status">Status</a>
     </nav>
 {{end}}
 
@@ -131,9 +131,10 @@ const allTemplates = `
 {{define "settings.html"}}
 {{template "head" .}}
 <h1>Settings</h1>
-<div class="card"><h3>LLM Configuration</h3><p class="meta">Configured via environment variables</p></div>
-<div class="card"><h3>Digest Schedule</h3><p class="meta">Daily at configured time</p></div>
-<div class="card"><h3>Telegram Bot</h3><p class="meta">Check /status for connection state</p></div>
+<div class="card"><h3>LLM Configuration</h3><p class="meta">Provider: {{.LLMProvider}} / Model: {{.LLMModel}}</p></div>
+<div class="card"><h3>Digest Schedule</h3><p class="meta">Cron: {{.DigestCron}}</p></div>
+{{if .Connectors}}<div class="card"><h3>Connectors</h3>{{range .Connectors}}<p><span class="health {{if .Enabled}}up{{else}}down{{end}}"></span> {{.Name}}{{if .LastErr}} <span class="meta">({{.LastErr}})</span>{{end}}</p>{{end}}</div>{{else}}<div class="card"><h3>Connectors</h3><p class="meta">No connectors registered</p></div>{{end}}
+{{if .OAuth}}<div class="card"><h3>OAuth Connections</h3>{{range .OAuth}}<p><span class="health {{if .Connected}}up{{else}}down{{end}}"></span> {{.Provider}}</p>{{end}}</div>{{end}}
 {{template "foot"}}
 {{end}}
 

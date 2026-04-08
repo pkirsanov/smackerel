@@ -5,12 +5,10 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir hatchling
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY pyproject.toml .
 COPY app/ app/
-
-RUN pip install --no-cache-dir .
 
 # --- Runtime stage ---
 FROM python:3.12-slim

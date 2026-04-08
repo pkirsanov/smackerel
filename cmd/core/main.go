@@ -30,6 +30,12 @@ import (
 	"github.com/smackerel/smackerel/internal/web"
 )
 
+// version and commitHash are set by -ldflags at build time.
+var (
+	version    = "dev"
+	commitHash = "unknown"
+)
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("fatal startup error", "error", err)
@@ -61,7 +67,7 @@ func run() error {
 	}
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})))
 
-	slog.Info("starting smackerel-core", "port", cfg.Port)
+	slog.Info("starting smackerel-core", "port", cfg.Port, "version", version, "commit", commitHash)
 
 	// Connect to PostgreSQL
 	pg, err := db.Connect(ctx, cfg.DatabaseURL)
@@ -176,6 +182,8 @@ func run() error {
 		WebHandler:   webHandler,
 		OAuthHandler: oauthHandler,
 		AuthToken:    cfg.AuthToken,
+		Version:      version,
+		CommitHash:   commitHash,
 	}
 
 	router := api.NewRouter(deps)

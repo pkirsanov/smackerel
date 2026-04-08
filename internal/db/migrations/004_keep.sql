@@ -1,5 +1,9 @@
 -- Google Keep connector tables
 -- Migration: 004_keep.sql
+--
+-- ROLLBACK:
+--   DROP TABLE IF EXISTS keep_exports CASCADE;
+--   DROP TABLE IF EXISTS ocr_cache CASCADE;
 
 -- OCR result cache: avoid re-processing images already OCR'd
 CREATE TABLE IF NOT EXISTS ocr_cache (

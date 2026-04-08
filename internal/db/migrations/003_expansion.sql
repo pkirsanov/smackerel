@@ -1,5 +1,11 @@
 -- 003_expansion.sql
 -- Phase 4 Expansion: maps, browser, trips, trails, people intelligence, privacy consent
+--
+-- ROLLBACK:
+--   ALTER TABLE artifacts DROP COLUMN IF EXISTS location_geo;
+--   DROP TABLE IF EXISTS trails CASCADE;
+--   DROP TABLE IF EXISTS trips CASCADE;
+--   DROP TABLE IF EXISTS privacy_consent CASCADE;
 
 -- Privacy consent: opt-in enforcement for sensitive data sources
 CREATE TABLE IF NOT EXISTS privacy_consent (
