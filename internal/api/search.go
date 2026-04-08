@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 
+	"github.com/smackerel/smackerel/internal/db"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
@@ -181,7 +182,7 @@ func (s *SearchEngine) waitForEmbeddingOnInbox(ctx context.Context, sub *nats.Su
 // vectorSearch performs pgvector cosine similarity search.
 func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, req SearchRequest) ([]SearchResult, int, error) {
 	// Format embedding for pgvector
-	embStr := formatEmbeddingStr(embedding)
+	embStr := db.FormatEmbedding(embedding)
 
 	// Build query with optional filters
 	query := `
@@ -260,6 +261,10 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		results = append(results, r)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("vector search row iteration: %w", err)
+	}
+
 	// Batch-fetch connection counts for all results (N+1 fix)
 	if len(results) > 0 {
 		ids := make([]string, len(results))
@@ -281,6 +286,9 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 				if connRows.Scan(&aid, &count) == nil {
 					connMap[aid] = count
 				}
+			}
+			if err := connRows.Err(); err != nil {
+				slog.Warn("connection count row iteration error", "error", err)
 			}
 			connRows.Close()
 			for i := range results {
@@ -339,6 +347,10 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 		results = append(results, r)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("text search row iteration: %w", err)
+	}
+
 	return results, len(results), nil
 }
 
@@ -351,20 +363,4 @@ func escapeLikePattern(s string) string {
 		`\`, `\\`,
 	)
 	return r.Replace(s)
-}
-
-// formatEmbeddingStr converts a float32 slice to pgvector string format.
-func formatEmbeddingStr(vec []float32) string {
-	if len(vec) == 0 {
-		return ""
-	}
-	s := "["
-	for i, v := range vec {
-		if i > 0 {
-			s += ","
-		}
-		s += fmt.Sprintf("%f", v)
-	}
-	s += "]"
-	return s
 }

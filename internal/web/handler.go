@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -46,6 +47,12 @@ func NewHandler(pool *pgxpool.Pool, nc *smacknats.Client, startTime time.Time) *
 			default:
 				return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 			}
+		},
+		"safeURL": func(s string) string {
+			if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
+				return s
+			}
+			return ""
 		},
 	}).Parse(allTemplates))
 
@@ -259,6 +266,10 @@ func (h *Handler) TopicsPage(w http.ResponseWriter, r *http.Request) {
 		topics = append(topics, t)
 	}
 
+	if err := rows.Err(); err != nil {
+		slog.Error("topics row iteration error", "error", err)
+	}
+
 	// Determine if there is a next page (we fetched perPage+1 rows)
 	hasNext := len(topics) > perPage
 	if hasNext {
@@ -289,9 +300,12 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 // StatusPage handles GET /status.
 func (h *Handler) StatusPage(w http.ResponseWriter, r *http.Request) {
 	var artifactCount, topicCount, edgeCount int
-	h.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM artifacts").Scan(&artifactCount)
-	h.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM topics").Scan(&topicCount)
-	h.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM edges").Scan(&edgeCount)
+	h.Pool.QueryRow(r.Context(), `
+		SELECT
+			(SELECT COUNT(*) FROM artifacts WHERE processing_status = 'processed') AS artifacts,
+			(SELECT COUNT(*) FROM topics) AS topics,
+			(SELECT COUNT(*) FROM edges) AS edges
+	`).Scan(&artifactCount, &topicCount, &edgeCount)
 
 	uptime := time.Since(h.StartTime)
 

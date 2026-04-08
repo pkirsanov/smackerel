@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
+	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/extract"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
@@ -46,6 +50,7 @@ type NATSProcessPayload struct {
 	UserContext    string `json:"user_context,omitempty"`
 	SourceID       string `json:"source_id"`
 	RetryCount     int    `json:"retry_count"`
+	TraceID        string `json:"trace_id,omitempty"`
 }
 
 // NATSProcessedPayload is what ML sidecar publishes to artifacts.processed.
@@ -163,6 +168,7 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 		UserContext:    req.Context,
 		SourceID:       req.SourceID,
 		RetryCount:     0,
+		TraceID:        middleware.GetReqID(ctx),
 	}
 
 	if req.VoiceURL != "" {
@@ -215,18 +221,19 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 		sourceURL = req.VoiceURL
 	}
 
-	// Truncate content_raw to 500KB to prevent database bloat
+	// Truncate content_raw to 500KB to prevent database bloat.
+	// Use rune-safe truncation to avoid splitting multi-byte UTF-8 characters.
 	contentRaw := result.Text
 	const maxContentRaw = 500 * 1024
 	if len(contentRaw) > maxContentRaw {
-		contentRaw = contentRaw[:maxContentRaw]
+		contentRaw = truncateUTF8(contentRaw, maxContentRaw)
 	}
 
 	_, err := p.DB.Exec(ctx, `
-		INSERT INTO artifacts (id, artifact_type, title, content_raw, content_hash, source_id, source_url, processing_tier, capture_method, user_starred)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO artifacts (id, artifact_type, title, content_raw, content_hash, source_id, source_url, processing_tier, capture_method, user_starred, processing_status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`, id, string(result.ContentType), result.Title, contentRaw, result.ContentHash,
-		sourceID, sourceURL, tier, captureMethod, req.Starred)
+		sourceID, sourceURL, tier, captureMethod, req.Starred, "pending")
 	if err != nil {
 		return fmt.Errorf("insert artifact: %w", err)
 	}
@@ -258,9 +265,9 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 	topicsJSON, _ := json.Marshal(payload.Result.Topics)
 
 	// Convert embedding to pgvector format
-	embeddingStr := formatEmbedding(payload.Embedding)
+	embeddingStr := db.FormatEmbedding(payload.Embedding)
 
-	_, err := p.DB.Exec(ctx, `
+	ct, err := p.DB.Exec(ctx, `
 		UPDATE artifacts SET
 			artifact_type = $2,
 			title = COALESCE(NULLIF($3, ''), title),
@@ -273,6 +280,7 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 			source_quality = $10,
 			embedding = $11,
 			processing_tier = CASE WHEN $12 = '' THEN processing_tier ELSE $12 END,
+			processing_status = 'processed',
 			updated_at = NOW()
 		WHERE id = $1
 	`, payload.ArtifactID, payload.Result.ArtifactType, payload.Result.Title,
@@ -285,6 +293,10 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 		return fmt.Errorf("update artifact with ML results: %w", err)
 	}
 
+	if ct.RowsAffected() == 0 {
+		slog.Warn("artifact not found for update", "artifact_id", payload.ArtifactID)
+	}
+
 	slog.Info("artifact ML processing complete",
 		"artifact_id", payload.ArtifactID,
 		"type", payload.Result.ArtifactType,
@@ -295,22 +307,6 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 	return nil
 }
 
-// formatEmbedding converts a float32 slice to pgvector string format.
-func formatEmbedding(vec []float32) string {
-	if len(vec) == 0 {
-		return ""
-	}
-	s := "["
-	for i, v := range vec {
-		if i > 0 {
-			s += ","
-		}
-		s += fmt.Sprintf("%f", v)
-	}
-	s += "]"
-	return s
-}
-
 // DuplicateError indicates that the submitted content already exists.
 type DuplicateError struct {
 	ExistingID string
@@ -319,4 +315,17 @@ type DuplicateError struct {
 
 func (e *DuplicateError) Error() string {
 	return fmt.Sprintf("duplicate content: existing artifact %s (%s)", e.ExistingID, e.Title)
+}
+
+// truncateUTF8 truncates s to at most maxBytes, ensuring the cut falls on a
+// valid UTF-8 rune boundary.
+func truncateUTF8(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	// Walk backwards from maxBytes to find the start of the last valid rune.
+	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
+		maxBytes--
+	}
+	return s[:maxBytes]
 }

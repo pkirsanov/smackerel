@@ -339,6 +339,7 @@ For the selected scope:
    - missing negative/edge cases
    - missing auth/validation checks
    - tests asserting implementation details vs required behavior
+   - **self-validating tests** that assert on hardcoded values the test itself created rather than on values produced by the code under test (e.g., test injects `{ score: 0.912 }` and then asserts `score == 0.912` — this tests the mock, not the code)
    - missing round-trip / data-flow verification (save → reload → assert new state) for features involving persistence
    - shallow E2E tests that only check status codes or page-loads without asserting actual behavior/data (proxy tests)
 3. Implement missing tests to reach the requested coverage target.
@@ -456,6 +457,41 @@ For each required regression-capable test file in scope:
 ```
 
 **Blocking:** Bailout patterns in required test bodies are violations. Missing adversarial regression coverage in a bug-fix scope is a violation.
+
+### Phase 3d: Self-Validating Test Audit (MANDATORY for all scopes)
+
+**Purpose:** Detect tests that assert on their own hardcoded setup data rather than on values produced by the code under test.
+
+For each test in the selected scope:
+
+1. **Trace the data path:** For every assertion, trace backward — does the asserted value originate from:
+   - **(a)** The code under test computing/transforming/querying/routing data → ✅ Valid
+   - **(b)** The test's own setup (hardcoded literals, mock return values, fixture constants) passed through a trivial or pass-through code path → ❌ Self-validating
+
+2. **Apply the replacement heuristic:** Would the test still pass if the code under test were replaced with `return input` or `return hardcodedLiteral`? If yes → the test is self-validating.
+
+3. **Common self-validating patterns to detect:**
+   - Test injects `{ score: 0.912, tier: "Tier 1" }` via mock → code returns it → test asserts `score == 0.912` ← testing the mock, not the code
+   - Test seeds DB with exact row → endpoint returns it unprocessed → test asserts exact seeded values ← valid ONLY if the endpoint applies real filtering, sorting, auth, or transformation
+   - Test creates expected output → calls identity/passthrough function → asserts output matches expected ← circular
+   - E2E test hardcodes fixture values and asserts those exact literals appear in UI without verifying real rendering/computation occurred
+
+4. **Remediation:** Rewrite self-validating tests to either:
+   - Assert on **computed** output (values the code produces through real logic)
+   - Assert on **structural correctness** (shape, type, range, format, cardinality) when data sources are dynamic
+   - Assert on **round-trip transformations** (write → read → verify the system persisted and returned correctly)
+   - Assert on **behavioral contracts** (given known input, code produces output matching spec-defined transformation rules)
+
+5. **Record results in report.md:**
+
+```markdown
+### Self-Validating Test Audit
+- **Tests audited:** [count]
+- **Self-validating tests found:** [count/list]
+- **Remediation:** [tests rewritten or list of remaining violations]
+```
+
+**Blocking:** Self-validating tests in required DoD items are violations. The scope cannot be Done until all self-validating tests are rewritten to assert on code-produced output.
 
 ### Phase 4: Final Test Pass (No Exceptions)
 

@@ -14,6 +14,7 @@ type Dependencies struct {
 	NATS         NATSHealthChecker
 	StartTime    time.Time
 	MLSidecarURL string
+	MLClient     *http.Client
 	Pipeline     interface{}
 	SearchEngine interface{}
 	DigestGen    interface{}
@@ -76,7 +77,7 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	services["nats"] = natsStatus
 
 	// ML sidecar status
-	mlStatus := checkMLSidecar(ctx, d.MLSidecarURL)
+	mlStatus := checkMLSidecar(ctx, d.MLSidecarURL, d.mlClient())
 	services["ml_sidecar"] = mlStatus
 
 	// Telegram bot (placeholder — not yet wired)
@@ -108,13 +109,21 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// mlClient returns the shared HTTP client for ML sidecar health checks,
+// initialising it on first use.
+func (d *Dependencies) mlClient() *http.Client {
+	if d.MLClient == nil {
+		d.MLClient = &http.Client{Timeout: 2 * time.Second}
+	}
+	return d.MLClient
+}
+
 // checkMLSidecar probes the ML sidecar health endpoint.
-func checkMLSidecar(ctx context.Context, baseURL string) ServiceStatus {
+func checkMLSidecar(ctx context.Context, baseURL string, client *http.Client) ServiceStatus {
 	if baseURL == "" {
 		return ServiceStatus{Status: "down"}
 	}
 
-	client := &http.Client{Timeout: 2 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/health", nil)
 	if err != nil {
 		return ServiceStatus{Status: "down"}

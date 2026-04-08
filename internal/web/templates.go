@@ -108,7 +108,7 @@ const allTemplates = `
 <div class="detail-section"><h2>Summary</h2><p>{{.Summary}}</p></div>
 {{if .KeyIdeas}}<div class="detail-section"><h2>Key Ideas</h2><ul class="idea-list">{{range .KeyIdeas}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
 {{if .Topics}}<div class="detail-section"><h2>Topics</h2>{{range .Topics}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
-{{if .SourceURL}}<div class="detail-section"><a href="{{.SourceURL}}" target="_blank">View Source</a></div>{{end}}
+{{if .SourceURL}}<div class="detail-section"><a href="{{safeURL .SourceURL}}" target="_blank">View Source</a></div>{{end}}
 {{template "foot"}}
 {{end}}
 

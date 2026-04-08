@@ -186,6 +186,9 @@ func (g *Generator) getPendingActionItems(ctx context.Context) ([]ActionItem, er
 		}
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil {
+		return items, err
+	}
 	return items, nil
 }
 
@@ -209,6 +212,9 @@ func (g *Generator) getOvernightArtifacts(ctx context.Context) ([]ArtifactBrief,
 		}
 		artifacts = append(artifacts, a)
 	}
+	if err := rows.Err(); err != nil {
+		return artifacts, err
+	}
 	return artifacts, nil
 }
 
@@ -231,6 +237,9 @@ func (g *Generator) getHotTopics(ctx context.Context) ([]TopicBrief, error) {
 			continue
 		}
 		topics = append(topics, t)
+	}
+	if err := rows.Err(); err != nil {
+		return topics, err
 	}
 	return topics, nil
 }

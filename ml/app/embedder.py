@@ -1,5 +1,6 @@
 """Embedding generation via sentence-transformers."""
 
+import asyncio
 import logging
 
 logger = logging.getLogger("smackerel-ml.embedder")
@@ -21,15 +22,17 @@ def _load_model():
     return _model
 
 
-def generate_embedding(text: str) -> list[float]:
+async def generate_embedding(text: str) -> list[float]:
     """Generate a 384-dimension embedding vector from text."""
     model = _load_model()
-    # Combine meaningful text for richer embedding
-    embedding = model.encode(text, normalize_embeddings=True)
-    return embedding.tolist()
+    loop = asyncio.get_event_loop()
+    return await asyncio.wait_for(
+        loop.run_in_executor(None, lambda: model.encode(text, normalize_embeddings=True).tolist()),
+        timeout=10.0,
+    )
 
 
-def generate_artifact_embedding(title: str, summary: str, key_ideas: list[str]) -> list[float]:
+async def generate_artifact_embedding(title: str, summary: str, key_ideas: list[str]) -> list[float]:
     """Generate embedding from artifact's title + summary + key ideas."""
     parts = [title]
     if summary:
@@ -38,7 +41,7 @@ def generate_artifact_embedding(title: str, summary: str, key_ideas: list[str]) 
         parts.extend(key_ideas[:5])  # Limit to top 5 ideas
 
     combined = " ".join(parts)
-    return generate_embedding(combined)
+    return await generate_embedding(combined)
 
 
 def embedding_dimension() -> int:
