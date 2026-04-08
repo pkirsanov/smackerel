@@ -125,6 +125,35 @@ func validateURLSafety(u *url.URL) error {
 	return nil
 }
 
+// ssrfSafeTransport returns an http.Transport with a DialContext that validates
+// resolved IPs at connect time, preventing DNS rebinding SSRF attacks.
+func ssrfSafeTransport() *http.Transport {
+	return &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("split host/port: %w", err)
+			}
+			ips, err := net.DefaultResolver.LookupHost(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("DNS rebinding blocked: cannot resolve %s: %w", host, err)
+			}
+			for _, ipStr := range ips {
+				ip := net.ParseIP(ipStr)
+				if ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {
+					return nil, fmt.Errorf("DNS rebinding blocked: %s resolved to private IP %s", host, ipStr)
+				}
+				if ipStr == "169.254.169.254" || ipStr == "169.254.170.2" {
+					return nil, fmt.Errorf("DNS rebinding blocked: %s resolved to metadata IP %s", host, ipStr)
+				}
+			}
+			// Connect using the first resolved IP to ensure we connect to the validated address
+			dialer := &net.Dialer{Timeout: 10 * time.Second}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
+		},
+	}
+}
+
 // ExtractArticle fetches and extracts readable content from an article URL using go-readability.
 func ExtractArticle(ctx context.Context, articleURL string) (*Result, error) {
 	parsedURL, err := url.Parse(articleURL)
@@ -138,7 +167,8 @@ func ExtractArticle(ctx context.Context, articleURL string) (*Result, error) {
 	}
 
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout:   15 * time.Second,
+		Transport: ssrfSafeTransport(),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return http.ErrUseLastResponse

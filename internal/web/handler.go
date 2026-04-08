@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -292,8 +293,70 @@ func (h *Handler) TopicsPage(w http.ResponseWriter, r *http.Request) {
 
 // SettingsPage handles GET /settings.
 func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Query LLM provider from environment
+	llmProvider := "unknown"
+	if p := os.Getenv("LLM_PROVIDER"); p != "" {
+		llmProvider = p
+	}
+	llmModel := "unknown"
+	if m := os.Getenv("LLM_MODEL"); m != "" {
+		llmModel = m
+	}
+
+	// Digest cron schedule
+	digestCron := "not configured"
+	if c := os.Getenv("DIGEST_CRON"); c != "" {
+		digestCron = c
+	}
+
+	// Connector status from sync_state
+	type ConnectorStatus struct {
+		Name    string
+		Enabled bool
+		LastErr string
+	}
+	var connectors []ConnectorStatus
+	if h.Pool != nil {
+		rows, err := h.Pool.Query(ctx, `SELECT source_id, enabled, COALESCE(last_error, '') FROM sync_state ORDER BY source_id`)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var cs ConnectorStatus
+				if err := rows.Scan(&cs.Name, &cs.Enabled, &cs.LastErr); err == nil {
+					connectors = append(connectors, cs)
+				}
+			}
+		}
+	}
+
+	// OAuth connection status
+	type OAuthStatus struct {
+		Provider  string
+		Connected bool
+	}
+	var oauthStatuses []OAuthStatus
+	if h.Pool != nil {
+		oauthRows, err := h.Pool.Query(ctx, `SELECT provider, expires_at > NOW() AS connected FROM oauth_tokens ORDER BY provider`)
+		if err == nil {
+			defer oauthRows.Close()
+			for oauthRows.Next() {
+				var os OAuthStatus
+				if err := oauthRows.Scan(&os.Provider, &os.Connected); err == nil {
+					oauthStatuses = append(oauthStatuses, os)
+				}
+			}
+		}
+	}
+
 	h.Templates.ExecuteTemplate(w, "settings.html", map[string]interface{}{
-		"Title": "Settings",
+		"Title":       "Settings",
+		"LLMProvider": llmProvider,
+		"LLMModel":    llmModel,
+		"DigestCron":  digestCron,
+		"Connectors":  connectors,
+		"OAuth":       oauthStatuses,
 	})
 }
 

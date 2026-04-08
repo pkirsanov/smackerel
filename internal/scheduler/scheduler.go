@@ -75,24 +75,33 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Deliver via Telegram if bot is available
 		if s.bot != nil {
-			// Poll for the digest result (ML sidecar processes asynchronously)
 			today := digestCtx.DigestDate
-			var delivered bool
-			for attempt := 0; attempt < 10; attempt++ {
-				d, err := s.digestGen.GetLatest(ctx, today)
-				if err == nil && d != nil && d.DigestDate.Format("2006-01-02") == today {
-					s.bot.SendDigest(d.DigestText)
-					slog.Info("digest delivered via Telegram", "attempt", attempt+1)
-					delivered = true
-					break
+			// Fire a background goroutine to poll for the ML-processed digest result
+			// so we don't block the cron callback
+			go func() {
+				pollCtx, pollCancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer pollCancel()
+
+				ticker := time.NewTicker(500 * time.Millisecond)
+				defer ticker.Stop()
+
+				for {
+					select {
+					case <-pollCtx.Done():
+						slog.Warn("digest delivery timed out — will retry next cycle", "date", today)
+						s.digestPendingRetry = true
+						s.digestPendingDate = today
+						return
+					case <-ticker.C:
+						d, err := s.digestGen.GetLatest(pollCtx, today)
+						if err == nil && d != nil && d.DigestDate.Format("2006-01-02") == today {
+							s.bot.SendDigest(d.DigestText)
+							slog.Info("digest delivered via Telegram", "date", today)
+							return
+						}
+					}
 				}
-				time.Sleep(3 * time.Second)
-			}
-			if !delivered {
-				slog.Warn("digest delivery failed: result not available after polling — will retry next cycle")
-				s.digestPendingRetry = true
-				s.digestPendingDate = today
-			}
+			}()
 		}
 	})
 	if err != nil {

@@ -96,6 +96,19 @@ func NewBot(cfg Config) (*Bot, error) {
 
 // Start begins long-polling for Telegram messages.
 func (b *Bot) Start(ctx context.Context) {
+	// Register commands so they appear in Telegram's autocomplete menu
+	commands := tgbotapi.NewSetMyCommands(
+		tgbotapi.BotCommand{Command: "find", Description: "Search your knowledge"},
+		tgbotapi.BotCommand{Command: "digest", Description: "Get today's digest"},
+		tgbotapi.BotCommand{Command: "done", Description: "Finalize conversation assembly"},
+		tgbotapi.BotCommand{Command: "status", Description: "System status"},
+		tgbotapi.BotCommand{Command: "recent", Description: "Recent captured items"},
+		tgbotapi.BotCommand{Command: "help", Description: "Show available commands"},
+	)
+	if _, err := b.api.Request(commands); err != nil {
+		slog.Warn("failed to register Telegram bot commands", "error", err)
+	}
+
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 30
 
@@ -183,9 +196,13 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		return
 	}
 
-	// Handle documents/attachments
+	// Handle documents/attachments — extract filename and caption as text capture
 	if msg.Document != nil {
-		b.reply(chatID, "? Not sure what to do with this. Can you add context?")
+		docText := "Document: " + msg.Document.FileName
+		if msg.Caption != "" {
+			docText += ". " + msg.Caption
+		}
+		b.handleTextCapture(ctx, msg, docText)
 		return
 	}
 
@@ -464,7 +481,8 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 - /digest - Get today's digest
 - /done - Finalize conversation assembly
 - /status - System status
-- /recent - Recent items`
+- /recent - Recent items
+- /help - Show this help`
 	b.reply(msg.Chat.ID, help)
 }
 

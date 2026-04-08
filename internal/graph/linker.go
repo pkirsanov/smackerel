@@ -32,11 +32,13 @@ func (l *Linker) LinkArtifact(ctx context.Context, artifactID string) (int, erro
 	}
 
 	var totalEdges int
+	var errs []string
 
 	// 1. Vector similarity linking
 	simEdges, err := l.linkBySimilarity(ctx, artifactID)
 	if err != nil {
 		slog.Warn("similarity linking failed", "artifact_id", artifactID, "error", err)
+		errs = append(errs, fmt.Sprintf("similarity: %v", err))
 	} else {
 		totalEdges += simEdges
 	}
@@ -45,6 +47,7 @@ func (l *Linker) LinkArtifact(ctx context.Context, artifactID string) (int, erro
 	entEdges, err := l.linkByEntities(ctx, artifactID)
 	if err != nil {
 		slog.Warn("entity linking failed", "artifact_id", artifactID, "error", err)
+		errs = append(errs, fmt.Sprintf("entity: %v", err))
 	} else {
 		totalEdges += entEdges
 	}
@@ -53,6 +56,7 @@ func (l *Linker) LinkArtifact(ctx context.Context, artifactID string) (int, erro
 	topicEdges, err := l.linkByTopics(ctx, artifactID)
 	if err != nil {
 		slog.Warn("topic linking failed", "artifact_id", artifactID, "error", err)
+		errs = append(errs, fmt.Sprintf("topic: %v", err))
 	} else {
 		totalEdges += topicEdges
 	}
@@ -61,6 +65,7 @@ func (l *Linker) LinkArtifact(ctx context.Context, artifactID string) (int, erro
 	tempEdges, err := l.linkByTemporal(ctx, artifactID)
 	if err != nil {
 		slog.Warn("temporal linking failed", "artifact_id", artifactID, "error", err)
+		errs = append(errs, fmt.Sprintf("temporal: %v", err))
 	} else {
 		totalEdges += tempEdges
 	}
@@ -69,6 +74,10 @@ func (l *Linker) LinkArtifact(ctx context.Context, artifactID string) (int, erro
 		"artifact_id", artifactID,
 		"edges_created", totalEdges,
 	)
+
+	if len(errs) > 0 {
+		return totalEdges, fmt.Errorf("linking partial failure: %s", strings.Join(errs, "; "))
+	}
 	return totalEdges, nil
 }
 
