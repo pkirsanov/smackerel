@@ -1,6 +1,20 @@
 import asyncio
+import sys
+import types
 
 import pytest
+
+# Mock litellm and its exceptions submodule before any app imports that use it
+if "litellm" not in sys.modules:
+    _mock_litellm = types.ModuleType("litellm")
+    _mock_litellm.acompletion = None  # type: ignore[attr-defined]
+    sys.modules["litellm"] = _mock_litellm
+
+    _mock_exc = types.ModuleType("litellm.exceptions")
+    _mock_exc.RateLimitError = type("RateLimitError", (Exception,), {})  # type: ignore[attr-defined]
+    _mock_exc.ServiceUnavailableError = type("ServiceUnavailableError", (Exception,), {})  # type: ignore[attr-defined]
+    _mock_exc.InternalServerError = type("InternalServerError", (Exception,), {})  # type: ignore[attr-defined]
+    sys.modules["litellm.exceptions"] = _mock_exc
 
 from app.main import _check_required_config, health
 
@@ -40,16 +54,6 @@ def test_health_endpoint_reports_disconnected_without_nats_client():
 
 # SCN-002-007: LLM processing prompt exists and is well-formed
 def test_scn002007_universal_processing_prompt_exists():
-    import sys
-    import types
-
-    # Mock litellm before importing processor (not installed in test env)
-    if "litellm" not in sys.modules:
-        import types
-
-        sys.modules["litellm"] = types.ModuleType("litellm")
-        sys.modules["litellm"].acompletion = None
-
     from app.processor import UNIVERSAL_PROCESSING_PROMPT
 
     assert UNIVERSAL_PROCESSING_PROMPT is not None
@@ -66,13 +70,6 @@ def test_scn002007_universal_processing_prompt_exists():
 
 # SCN-002-007: LLM prompt has tier-specific instructions
 def test_scn002007_processing_prompt_has_tier_instructions():
-    import sys
-    import types
-
-    if "litellm" not in sys.modules:
-        sys.modules["litellm"] = types.ModuleType("litellm")
-        sys.modules["litellm"].acompletion = None
-
     from app.processor import UNIVERSAL_PROCESSING_PROMPT
 
     assert "light" in UNIVERSAL_PROCESSING_PROMPT.lower()
@@ -104,13 +101,6 @@ def test_scn002037_whisper_transcribe_function():
 
 # SCN-002-038: LLM processing failure returns proper error structure
 def test_scn002038_llm_failure_returns_error():
-    import sys
-    import types
-
-    if "litellm" not in sys.modules:
-        sys.modules["litellm"] = types.ModuleType("litellm")
-        sys.modules["litellm"].acompletion = None
-
     from app.processor import process_content
 
     assert callable(process_content)

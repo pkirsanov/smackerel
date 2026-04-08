@@ -3,29 +3,31 @@ package pipeline
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/db"
 )
 
 func TestFormatEmbedding_Empty(t *testing.T) {
-	result := formatEmbedding(nil)
+	result := db.FormatEmbedding(nil)
 	if result != "" {
 		t.Errorf("expected empty string for nil embedding, got %q", result)
 	}
 
-	result2 := formatEmbedding([]float32{})
+	result2 := db.FormatEmbedding([]float32{})
 	if result2 != "" {
 		t.Errorf("expected empty string for empty slice, got %q", result2)
 	}
 }
 
 func TestFormatEmbedding_SingleValue(t *testing.T) {
-	result := formatEmbedding([]float32{0.5})
+	result := db.FormatEmbedding([]float32{0.5})
 	if result != "[0.500000]" {
 		t.Errorf("expected [0.500000], got %q", result)
 	}
 }
 
 func TestFormatEmbedding_MultipleValues(t *testing.T) {
-	result := formatEmbedding([]float32{0.1, -0.2, 0.3})
+	result := db.FormatEmbedding([]float32{0.1, -0.2, 0.3})
 	if result[0] != '[' || result[len(result)-1] != ']' {
 		t.Errorf("expected brackets, got %q", result)
 	}

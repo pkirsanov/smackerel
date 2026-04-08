@@ -135,6 +135,35 @@ Bug-fix regression tests MUST include at least one adversarial test case — a t
 
 This gate applies to bug fixes and regression scopes. Feature-only scopes are exempt unless they claim to close an existing bug.
 
+### Gate 7: No Self-Validating Test Setup
+
+Every test assertion MUST verify a value **produced by the code under test**, not a value the test itself hardcoded or injected.
+
+**The core rule:** The path from test input to test assertion MUST pass through real production code that meaningfully transforms, validates, computes, queries, or routes the data.
+
+**Prohibited patterns:**
+- Test creates hardcoded data → passes it through trivial/pass-through code → asserts on the same hardcoded values
+- Test injects mock response `{ score: 0.912, tier: "Tier 1" }` → asserts `score == 0.912` (testing what the mock returns, not what the code computes)
+- E2E test seeds exact literal values → asserts on those literals without verifying real code processed them
+- Test constructs expected output → calls code that returns input unchanged → asserts output matches expected
+
+**Detection heuristic:** If the code under test were replaced with `return input` or `return hardcodedLiteral`, would the test still pass? If yes → the test is self-validating and MUST be rewritten.
+
+**Valid assertion patterns:**
+- Computed output: `assert add(2, 3) == 5` — value `5` is the product of real logic
+- Structural correctness: element exists, content is numeric, value is within valid range, format matches spec
+- Round-trip transformation: write via API → read back → values persisted correctly and format is correct
+- Behavioral contracts: given known input, code produces output matching the spec's defined transformation
+
+**For unit tests with mocks:** Mocking external dependencies is allowed, but assert that the code under test *responded correctly* to the mock's behavior — not that the mock returned what it was told to return.
+
+**For dynamic data sources** (connectors, simulators, feeds): Prefer structural assertions (shape, type, range, cardinality) over exact-value assertions on magic literals the test invented.
+
+**Scan before marking done:**
+Review each test and ask: "Does this assertion prove the code did something, or does it only prove the test setup was correct?"
+
+This gate applies to ALL test categories.
+
 ---
 
 ## Per-Category Requirements
@@ -171,13 +200,16 @@ Run silent-pass pattern scan against all required test files.
 ### Step 4: Assertion Audit
 Verify every test body contains at least one behavior-proving assertion matching the corresponding Gherkin scenario.
 
-### Step 5: Adversarial Regression Audit
+### Step 5: Self-Validating Test Audit
+For each test, trace the asserted value backward. If it originates from the test's own setup (hardcoded literal, mock return value, fixture constant) and passes through trivial or pass-through code, the test is self-validating. Apply the replacement heuristic: would the test still pass if the code under test were replaced with `return input`? If yes, the test must be rewritten to assert on values actually produced by the code.
+
+### Step 6: Adversarial Regression Audit
 For bug-fix scopes, verify at least one regression case would fail if the bug returned and that no bailout patterns convert the bug back into a pass.
 
-### Step 6: Test Plan ↔ DoD Cross-Check
+### Step 7: Test Plan ↔ DoD Cross-Check
 Count Test Plan rows. Count DoD test items. Confirm parity.
 
-### Step 7: Execute and Record Evidence
+### Step 8: Execute and Record Evidence
 Run all tests. Capture raw terminal output (≥10 lines per test category). Record in `report.md`.
 
 ---
@@ -188,18 +220,21 @@ Run all tests. Capture raw terminal output (≥10 lines per test category). Reco
 Does the test execute real production code?
 ├─ NO → ❌ FAKE — rewrite to use real code paths
 └─ YES
-   Does it assert the exact behavior from a Gherkin scenario or spec requirement?
-   ├─ NO → ❌ PROXY — rewrite assertions to match spec
+   Does the assertion verify output PRODUCED BY the code under test (not the test's own setup data)?
+   ├─ NO → ❌ SELF-VALIDATING — rewrite to assert on code-produced output, not test-injected values
    └─ YES
-      For live categories: does it hit the real stack without interception?
-      ├─ NO → ❌ MOCKED — reclassify or remove interception
+      Does it assert the exact behavior from a Gherkin scenario or spec requirement?
+      ├─ NO → ❌ PROXY — rewrite assertions to match spec
       └─ YES
-         Can the test fail if the feature is broken or missing?
-         ├─ NO → ❌ SILENT-PASS — add direct failure assertions
+         For live categories: does it hit the real stack without interception?
+         ├─ NO → ❌ MOCKED — reclassify or remove interception
          └─ YES
-            For bug fixes: is at least one regression case adversarial rather than tautological?
-            ├─ NO → ❌ TAUTOLOGICAL — rewrite the regression case with adversarial input
-            └─ YES → ✅ REAL TEST
+            Can the test fail if the feature is broken or missing?
+            ├─ NO → ❌ SILENT-PASS — add direct failure assertions
+            └─ YES
+               For bug fixes: is at least one regression case adversarial rather than tautological?
+               ├─ NO → ❌ TAUTOLOGICAL — rewrite the regression case with adversarial input
+               └─ YES → ✅ REAL TEST
 ```
 
 ---

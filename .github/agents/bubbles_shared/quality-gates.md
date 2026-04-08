@@ -68,6 +68,28 @@ Forbidden patterns for required live-system tests include:
 
 These patterns convert real failures into silent passes and block completion.
 
+## No Self-Validating Test Setup
+
+Tests must not validate their own fixture data. Every assertion must prove that the **code under test** produced the expected output — not that the test's own hardcoded values round-tripped unchanged.
+
+Prohibited patterns:
+
+- Test injects hardcoded mock data → calls trivial pass-through code → asserts on the same hardcoded values
+- Test creates fixture with `value: 0.912` → code returns it unprocessed → test asserts `== 0.912`
+- Test constructs expected response → injects it via mock/stub → asserts response matches what was injected
+- E2E/integration test seeds exact literal values → asserts on those same literals without verifying that real code processed, computed, persisted, or retrieved them
+
+Detection heuristic: if the code under test were replaced with `return input` or `return hardcodedLiteral`, would the test still pass? If yes, the test is self-validating.
+
+Valid alternatives:
+
+- Assert on computed output: `add(2, 3) == 5` — the value `5` is the product of real logic
+- Assert on structural correctness: element exists, has numeric content within valid range, has expected format/type
+- Assert on round-trip transformation: write via real API → read back via real API → values match and format is correct
+- Assert on behavioral contracts: given known input, the code produces output matching the specification's defined transformation rules
+
+This is a blocking test quality failure for all test categories.
+
 ## Adversarial Regression Tests For Bug Fixes
 
 Every bug-fix regression test must include at least one adversarial case that would fail if the bug were reintroduced.

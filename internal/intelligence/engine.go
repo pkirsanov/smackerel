@@ -142,6 +142,10 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 		}
 	}
 
+	if err := rows.Err(); err != nil {
+		return insights, fmt.Errorf("synthesis row iteration: %w", err)
+	}
+
 	return insights, nil
 }
 
@@ -213,6 +217,9 @@ func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
 		}
 		alerts = append(alerts, a)
 	}
+	if err := rows.Err(); err != nil {
+		return alerts, err
+	}
 	return alerts, nil
 }
 
@@ -248,6 +255,10 @@ func (e *Engine) CheckOverdueCommitments(ctx context.Context) error {
 			Priority:   1,
 			ArtifactID: id,
 		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("overdue commitments row iteration: %w", err)
 	}
 
 	return nil

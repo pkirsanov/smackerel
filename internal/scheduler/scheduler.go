@@ -49,11 +49,21 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Deliver via Telegram if bot is available
 		if s.bot != nil {
-			// Get the stored digest text
-			d, err := s.digestGen.GetLatest(ctx, digestCtx.DigestDate)
-			if err == nil && d != nil {
-				s.bot.SendDigest(d.DigestText)
-				slog.Info("digest delivered via Telegram")
+			// Poll for the digest result (ML sidecar processes asynchronously)
+			today := digestCtx.DigestDate
+			var delivered bool
+			for attempt := 0; attempt < 10; attempt++ {
+				d, err := s.digestGen.GetLatest(ctx, today)
+				if err == nil && d != nil && d.DigestDate.Format("2006-01-02") == today {
+					s.bot.SendDigest(d.DigestText)
+					slog.Info("digest delivered via Telegram", "attempt", attempt+1)
+					delivered = true
+					break
+				}
+				time.Sleep(3 * time.Second)
+			}
+			if !delivered {
+				slog.Warn("digest delivery failed: result not available after polling")
 			}
 		}
 	})

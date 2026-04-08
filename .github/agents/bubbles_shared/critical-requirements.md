@@ -122,6 +122,16 @@
    - Opportunistic cleanup, unrelated test rewrites, broad handler changes, or cross-directory sweeps MUST NOT be bundled into a shared-infrastructure repair loop unless the planning artifacts explicitly expand scope first.
    - If unrelated files change during a narrow repair, the work remains incomplete until the collateral edits are either removed or promoted into explicitly planned follow-up work owned by the correct scope.
 
+22. **No Self-Validating Test Setup (Tests Must Not Test Their Own Fixtures)**
+   - A test MUST assert on values **produced by the code under test**, not on values the test itself hardcoded or injected.
+   - The test's input-to-assertion path MUST pass through real production code that meaningfully transforms, validates, queries, computes, or routes the data. If the code under test is a pass-through, identity function, or stub that returns its input unchanged, the test is validating its own setup — not the system.
+   - **Hardcoded expected values are only valid when they represent the correct output of a known computation.** Example: asserting `add(2, 3) == 5` is valid because `5` is the expected output of real addition logic. Asserting `render(mockData).text == mockData.title` is invalid if `render` is a trivial pass-through — the test proves nothing about real rendering.
+   - **Structural assertions are preferred over exact-value assertions when the data source is dynamic** (connectors, simulations, external feeds). Assert that the output has the correct shape, type, range, format, or cardinality rather than matching magic literals the test invented.
+   - **Detection heuristic:** If replacing the code under test with `return input` or `return hardcodedLiteral` would still make the test pass, the test is self-validating and MUST be rewritten.
+   - This policy applies to ALL test categories (unit, functional, integration, e2e-api, e2e-ui, stress, load).
+   - For **unit tests**: provide input, call the function/method, assert the output reflects correct processing by that unit. Mocks of **external** dependencies (third-party APIs, non-owned services) are allowed — but the mock must simulate realistic external behavior, and the assertion must verify that the code under test responded correctly to that external behavior, not that the mock returned what it was told to return.
+   - For **integration/e2e/stress/functional tests**: the system under test must be real and running. Assertions must verify end-to-end behavior where real code processed real (or realistically simulated) input. Asserting on canned response data injected by the test harness is self-validation.
+
 ---
 
 ## Enforcement Rules
@@ -174,5 +184,6 @@ Before reporting completion, all answers must be **YES**:
 11. Were any TODOs, stubs, or placeholders resolved by real implementation or tracked planning instead of cosmetic relabeling?
 12. If shared fixtures, harnesses, or bootstrap contracts changed, was blast radius planned with a canary suite and rollback path before the broad suite reran?
 13. If the work was a narrow repair or risky refactor, did it stay inside an explicit change boundary with zero excluded file families changed?
+14. Do all tests assert on values produced by the code under test rather than on values the test itself hardcoded or injected? (No self-validating test setups)
 
 If any answer is **NO**, completion is prohibited.

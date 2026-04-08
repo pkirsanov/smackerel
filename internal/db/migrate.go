@@ -15,8 +15,15 @@ var migrationFS embed.FS
 
 // Migrate runs all SQL migration files in order.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	// Acquire advisory lock to prevent concurrent migrations
+	_, err := pool.Exec(ctx, "SELECT pg_advisory_lock(42)") // 42 = smackerel migration lock
+	if err != nil {
+		return fmt.Errorf("acquire migration lock: %w", err)
+	}
+	defer pool.Exec(ctx, "SELECT pg_advisory_unlock(42)")
+
 	// Create migrations tracking table
-	_, err := pool.Exec(ctx, `
+	_, err = pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
