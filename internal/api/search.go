@@ -135,6 +135,11 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		)
 	}
 
+	// Temporal-only query — use time-range-filtered recency query, skip embedding
+	if req.Query == "" {
+		return s.timeRangeSearch(ctx, req)
+	}
+
 	// Step 1: Create a unique inbox for this query to avoid shared-subject races
 	replySubject := s.NATS.Conn.NewInbox()
 
@@ -541,6 +546,86 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 
 	if err := rows.Err(); err != nil {
 		return nil, 0, fmt.Errorf("text search row iteration: %w", err)
+	}
+
+	return results, len(results), nil
+}
+
+// timeRangeSearch returns artifacts filtered by DateFrom/DateTo, ordered by created_at DESC.
+// Used when a temporal phrase consumed the entire query (e.g., "yesterday", "last week").
+func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) ([]SearchResult, int, error) {
+	query := `
+		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
+		       COALESCE(topics::text, '[]'), created_at
+		FROM artifacts
+		WHERE 1=1`
+
+	args := []interface{}{}
+	argN := 1
+
+	if req.Filters.DateFrom != "" {
+		query += fmt.Sprintf(" AND created_at >= $%d::timestamptz", argN)
+		args = append(args, req.Filters.DateFrom)
+		argN++
+	}
+
+	if req.Filters.DateTo != "" {
+		query += fmt.Sprintf(" AND created_at <= $%d::timestamptz", argN)
+		args = append(args, req.Filters.DateTo)
+		argN++
+	}
+
+	if req.Filters.Type != "" {
+		query += fmt.Sprintf(" AND artifact_type = $%d", argN)
+		args = append(args, req.Filters.Type)
+		argN++
+	}
+
+	if req.Filters.Person != "" {
+		query += fmt.Sprintf(" AND entities->'people' ? $%d", argN)
+		args = append(args, req.Filters.Person)
+		argN++
+	}
+
+	if req.Filters.Topic != "" {
+		query += fmt.Sprintf(" AND topics ? $%d", argN)
+		args = append(args, req.Filters.Topic)
+		argN++
+	}
+
+	query += " ORDER BY created_at DESC LIMIT $" + fmt.Sprintf("%d", argN)
+	args = append(args, req.Limit)
+
+	rows, err := s.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("time range search: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SearchResult
+	for rows.Next() {
+		var r SearchResult
+		var topicsStr string
+		var createdAt time.Time
+
+		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
+			&r.SourceURL, &topicsStr, &createdAt); err != nil {
+			continue
+		}
+
+		r.CreatedAt = createdAt.Format(time.RFC3339)
+		r.Relevance = "recent"
+		r.Explanation = "Time-range match"
+
+		var topics []string
+		_ = json.Unmarshal([]byte(topicsStr), &topics)
+		r.Topics = topics
+
+		results = append(results, r)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("time range search iteration: %w", err)
 	}
 
 	return results, len(results), nil

@@ -89,9 +89,12 @@ func (s *TokenStore) Delete(ctx context.Context, provider string) error {
 	return err
 }
 
-// HasToken returns true if a valid token exists for the provider.
+// HasToken returns true if a valid (non-expired) token exists for the provider.
 func (s *TokenStore) HasToken(ctx context.Context, provider string) bool {
 	var expiresAt time.Time
-	err := s.pool.QueryRow(ctx, "SELECT expires_at FROM oauth_tokens WHERE provider = $1", provider).Scan(&expiresAt)
+	err := s.pool.QueryRow(ctx,
+		"SELECT expires_at FROM oauth_tokens WHERE provider = $1 AND expires_at > NOW()",
+		provider,
+	).Scan(&expiresAt)
 	return err == nil
 }

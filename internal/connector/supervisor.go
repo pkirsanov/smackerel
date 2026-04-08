@@ -16,6 +16,7 @@ type Supervisor struct {
 	running      map[string]context.CancelFunc
 	panicCounts  map[string]int       // circuit breaker: panic count per connector
 	panicResetAt map[string]time.Time // time when panic count was first incremented
+	stopped      bool                 // set by StopAll to prevent panic-recovery restarts
 }
 
 const (
@@ -38,6 +39,10 @@ func NewSupervisor(registry *Registry, stateStore *StateStore) *Supervisor {
 func (s *Supervisor) StartConnector(ctx context.Context, id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.stopped {
+		return // Supervisor has been stopped, reject new starts
+	}
 
 	if _, running := s.running[id]; running {
 		return // Already running
@@ -65,6 +70,7 @@ func (s *Supervisor) StopAll() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	s.stopped = true
 	for id, cancel := range s.running {
 		cancel()
 		delete(s.running, id)
@@ -107,6 +113,12 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 					"window", panicWindowDuration,
 				)
 				return // Do NOT restart
+			}
+
+			// Skip restart if supervisor has been stopped
+			if s.stopped {
+				slog.Warn("skipping restart — supervisor stopped", "connector", id)
+				return
 			}
 
 			// Skip restart if parent context is cancelled (shutdown in progress)
