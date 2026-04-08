@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -115,28 +116,34 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 // Search performs a semantic search: embed query → pgvector similarity → filters → graph expansion.
 func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchResult, int, error) {
-	// Step 1: Set up subscription BEFORE publishing to avoid race condition
-	queryID := fmt.Sprintf("q-%d", time.Now().UnixNano())
+	// Step 1: Create a unique inbox for this query to avoid shared-subject races
+	replySubject := s.NATS.Conn.NewInbox()
 
-	sub, err := s.NATS.Conn.SubscribeSync(smacknats.SubjectSearchEmbedded)
+	sub, err := s.NATS.Conn.SubscribeSync(replySubject)
 	if err != nil {
 		slog.Warn("embedding subscription failed, falling back to text search", "error", err)
 		return s.textSearch(ctx, req)
 	}
 	defer sub.Unsubscribe()
+	// Auto-unsubscribe after 1 message — this inbox is single-use
+	if err := sub.AutoUnsubscribe(1); err != nil {
+		slog.Warn("auto-unsubscribe failed", "error", err)
+	}
 
-	// Step 2: Publish embed request (subscription is already active)
+	// Step 2: Publish embed request with reply subject so ML sidecar responds to our inbox
+	queryID := fmt.Sprintf("q-%d", time.Now().UnixNano())
 	embedPayload, _ := json.Marshal(map[string]string{
-		"query_id": queryID,
-		"text":     req.Query,
+		"query_id":      queryID,
+		"text":          req.Query,
+		"reply_subject": replySubject,
 	})
 
 	if err := s.NATS.Publish(ctx, smacknats.SubjectSearchEmbed, embedPayload); err != nil {
 		return nil, 0, fmt.Errorf("publish embed request: %w", err)
 	}
 
-	// Step 3: Wait for embedding response (with timeout)
-	embedding, err := s.waitForEmbeddingOnSub(ctx, queryID, sub)
+	// Step 3: Wait for embedding response on the unique inbox (with timeout)
+	embedding, err := s.waitForEmbeddingOnInbox(ctx, sub)
 	if err != nil {
 		// Fallback: text-based search if embedding fails
 		slog.Warn("embedding failed, falling back to text search", "error", err)
@@ -152,28 +159,23 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	return results, total, nil
 }
 
-// waitForEmbeddingOnSub waits for the ML sidecar to return the query embedding on an existing subscription.
-func (s *SearchEngine) waitForEmbeddingOnSub(ctx context.Context, queryID string, sub *nats.Subscription) ([]float32, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+// waitForEmbeddingOnInbox waits for a single embedding response on a unique inbox subscription.
+func (s *SearchEngine) waitForEmbeddingOnInbox(ctx context.Context, sub *nats.Subscription) ([]float32, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	for {
-		msg, err := sub.NextMsgWithContext(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("wait for embedding: %w", err)
-		}
-
-		var resp struct {
-			QueryID   string    `json:"query_id"`
-			Embedding []float32 `json:"embedding"`
-		}
-		if err := json.Unmarshal(msg.Data, &resp); err != nil {
-			continue
-		}
-		if resp.QueryID == queryID {
-			return resp.Embedding, nil
-		}
+	msg, err := sub.NextMsgWithContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("wait for embedding: %w", err)
 	}
+
+	var resp struct {
+		Embedding []float32 `json:"embedding"`
+	}
+	if err := json.Unmarshal(msg.Data, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal embedding response: %w", err)
+	}
+	return resp.Embedding, nil
 }
 
 // vectorSearch performs pgvector cosine similarity search.
@@ -255,16 +257,36 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		}
 		r.Explanation = fmt.Sprintf("Similarity: %.2f", similarity)
 
-		// Get connection count
-		var connCount int
-		_ = s.Pool.QueryRow(ctx, `
-			SELECT COUNT(*) FROM edges
-			WHERE (src_type = 'artifact' AND src_id = $1)
-			   OR (dst_type = 'artifact' AND dst_id = $1)
-		`, r.ArtifactID).Scan(&connCount)
-		r.Connections = connCount
-
 		results = append(results, r)
+	}
+
+	// Batch-fetch connection counts for all results (N+1 fix)
+	if len(results) > 0 {
+		ids := make([]string, len(results))
+		for i, r := range results {
+			ids[i] = r.ArtifactID
+		}
+		connRows, err := s.Pool.Query(ctx, `
+			SELECT id, COUNT(*) FROM (
+				SELECT src_id AS id FROM edges WHERE src_type = 'artifact' AND src_id = ANY($1)
+				UNION ALL
+				SELECT dst_id AS id FROM edges WHERE dst_type = 'artifact' AND dst_id = ANY($1)
+			) sub GROUP BY id
+		`, ids)
+		if err == nil {
+			connMap := make(map[string]int)
+			for connRows.Next() {
+				var aid string
+				var count int
+				if connRows.Scan(&aid, &count) == nil {
+					connMap[aid] = count
+				}
+			}
+			connRows.Close()
+			for i := range results {
+				results[i].Connections = connMap[results[i].ArtifactID]
+			}
+		}
 	}
 
 	total := len(results)
@@ -277,15 +299,18 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 
 // textSearch is a fallback when embedding is unavailable — uses trigram text search.
 func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]SearchResult, int, error) {
+	// Escape ILIKE metacharacters in user query to prevent wildcard injection
+	safeQuery := escapeLikePattern(req.Query)
+
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
 		       COALESCE(topics::text, '[]'), created_at,
 		       similarity(title, $1) AS sim
 		FROM artifacts
-		WHERE title % $1 OR summary ILIKE '%' || $1 || '%'
+		WHERE title % $1 OR summary ILIKE '%' || $2 || '%'
 		ORDER BY sim DESC
-		LIMIT $2
-	`, req.Query, req.Limit)
+		LIMIT $3
+	`, req.Query, safeQuery, req.Limit)
 	if err != nil {
 		return nil, 0, fmt.Errorf("text search: %w", err)
 	}
@@ -315,6 +340,17 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 	}
 
 	return results, len(results), nil
+}
+
+// escapeLikePattern escapes ILIKE metacharacters (%, _) in user input
+// to prevent wildcard injection in text search fallback queries.
+func escapeLikePattern(s string) string {
+	r := strings.NewReplacer(
+		`%`, `\%`,
+		`_`, `\_`,
+		`\`, `\\`,
+	)
+	return r.Replace(s)
 }
 
 // formatEmbeddingStr converts a float32 slice to pgvector string format.

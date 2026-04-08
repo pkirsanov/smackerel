@@ -9,7 +9,7 @@
 
 ## Agent File Format
 
-Agent files live in `.github/agents/` and use the `.agent.md` extension.
+Agent files live in `agents/` in the Bubbles source repo and `.github/agents/` in downstream installs. They use the `.agent.md` extension.
 
 ### Required Frontmatter
 
@@ -35,8 +35,8 @@ model: <model-preference>  # e.g., claude-sonnet-4-20250514, gpt-4.1
 
 This repo uses a **prompt shim + agent definition** architecture:
 
-1. **Prompt shims** (`.github/prompts/*.prompt.md`): Minimal files with frontmatter routing to agents
-2. **Agent definitions** (`.github/agents/*.agent.md`): Full behavior and instructions
+1. **Prompt shims** (`prompts/*.prompt.md` in source, `.github/prompts/*.prompt.md` downstream): Minimal files with frontmatter routing to agents
+2. **Agent definitions** (`agents/*.agent.md` in source, `.github/agents/*.agent.md` downstream): Full behavior and instructions
 
 ### Prompt Shim Example
 
@@ -85,14 +85,14 @@ Description of expected output structure.
   - Define what is **Required** vs **Optional** in the User Input section.
   - If `$ADDITIONAL_CONTEXT` supports structured options, document them.
 - **Reference source-of-truth docs** - do NOT duplicate policy boilerplate:
--  - For workflow and gate enforcement, reference `.github/bubbles/workflows.yaml`.
--  - For cross-project portability and command indirection, reference `.github/agents/bubbles_shared/project-config-contract.md`.
+-  - For workflow and gate enforcement, reference `../bubbles/workflows.yaml`.
+-  - For cross-project portability and command indirection, reference `../agents/bubbles_shared/project-config-contract.md`.
 - **Use tiered context loading** via repo governance docs:
   - Tier 1: Governance (constitution.md, agents.md, copilot-instructions.md)
   - Tier 2: Feature context (spec.md, scopes.md, design.md)
   - Tier 3: Reference docs (on-demand only)
 - Avoid drift:
-  - If you add/remove a Bubbles command, update the relevant prompt shim under `.github/prompts/` and keep any command inventories in sync.
+  - If you add/remove a Bubbles command, update the relevant prompt shim under `../prompts/` and keep any command inventories in sync.
 
 ## Bubbles Governance (MANDATORY for bubbles.* agents)
 
@@ -128,8 +128,8 @@ All agents MUST enforce strict truthfulness and test-substance requirements per 
 ### Authoring Requirement
 
 Every new or updated `bubbles.*` agent MUST include a Policy/Compliance section that references:
-- `.github/agents/bubbles_shared/agent-common.md` for anti-fabrication and test-substance rules
-- `.github/bubbles/workflows.yaml` for mode/gate enforcement
+- `../agents/bubbles_shared/agent-common.md` for anti-fabrication and test-substance rules
+- `../bubbles/workflows.yaml` for mode/gate enforcement
 
 ### Agent Identity Section (REQUIRED)
 
@@ -172,7 +172,7 @@ Follow policy compliance, session tracking, and context loading per the repo gov
 Key requirements:
 - Load Tier 1 governance docs first (constitution.md, agents.md, copilot-instructions.md)
 - Maintain session state in `bubbles.session.json` with `agent: <agent-name>` when the repo uses a session file
-- Respect loop limits and status ceilings from `.github/bubbles/workflows.yaml`
+- Respect loop limits and status ceilings from `../bubbles/workflows.yaml`
 ```
 
 ### Action First

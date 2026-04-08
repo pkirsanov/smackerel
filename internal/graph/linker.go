@@ -67,21 +67,21 @@ func (l *Linker) LinkArtifact(ctx context.Context, artifactID string) (int, erro
 
 // linkBySimilarity finds the top 10 most similar artifacts by embedding and creates RELATED_TO edges.
 func (l *Linker) linkBySimilarity(ctx context.Context, artifactID string) (int, error) {
-	// Get the artifact's embedding
-	var hasEmbedding bool
+	// Fetch the target artifact's embedding directly
+	var embeddingBytes []byte
 	err := l.Pool.QueryRow(ctx,
-		"SELECT embedding IS NOT NULL FROM artifacts WHERE id = $1", artifactID,
-	).Scan(&hasEmbedding)
-	if err != nil || !hasEmbedding {
+		"SELECT embedding FROM artifacts WHERE id = $1 AND embedding IS NOT NULL", artifactID,
+	).Scan(&embeddingBytes)
+	if err != nil {
 		return 0, nil // No embedding yet, skip
 	}
 
-	// Find top 10 most similar artifacts (cosine distance)
+	// Single parameterized nearest-neighbor query using the fetched embedding
 	rows, err := l.Pool.Query(ctx, `
-		SELECT a2.id, 1 - (a1.embedding <=> a2.embedding) AS similarity
-		FROM artifacts a1, artifacts a2
-		WHERE a1.id = $1 AND a2.id != $1 AND a2.embedding IS NOT NULL
-		ORDER BY a1.embedding <=> a2.embedding
+		SELECT id, 1 - (embedding <=> (SELECT embedding FROM artifacts WHERE id = $1)) AS similarity
+		FROM artifacts
+		WHERE id != $1 AND embedding IS NOT NULL
+		ORDER BY embedding <=> (SELECT embedding FROM artifacts WHERE id = $1)
 		LIMIT 10
 	`, artifactID)
 	if err != nil {
@@ -154,10 +154,12 @@ func (l *Linker) linkByEntities(ctx context.Context, artifactID string) (int, er
 		}
 
 		// Increment interaction count
-		_, _ = l.Pool.Exec(ctx, `
+		if _, err := l.Pool.Exec(ctx, `
 			UPDATE people SET interaction_count = interaction_count + 1, last_interaction = NOW(), updated_at = NOW()
 			WHERE id = $1
-		`, personID)
+		`, personID); err != nil {
+			slog.Warn("failed to update interaction count", "person_id", personID, "error", err)
+		}
 
 		count++
 	}
@@ -200,7 +202,7 @@ func (l *Linker) linkByTopics(ctx context.Context, artifactID string) (int, erro
 		}
 
 		// Update topic stats
-		_, _ = l.Pool.Exec(ctx, `
+		if _, err := l.Pool.Exec(ctx, `
 			UPDATE topics SET
 				capture_count_total = capture_count_total + 1,
 				capture_count_30d = capture_count_30d + 1,
@@ -213,7 +215,9 @@ func (l *Linker) linkByTopics(ctx context.Context, artifactID string) (int, erro
 				END,
 				updated_at = NOW()
 			WHERE id = $1
-		`, topicID)
+		`, topicID); err != nil {
+			slog.Warn("failed to update topic stats", "topic_id", topicID, "error", err)
+		}
 
 		count++
 	}
@@ -228,6 +232,8 @@ func (l *Linker) linkByTemporal(ctx context.Context, artifactID string) (int, er
 		WHERE a1.id = $1
 		AND a2.id != $1
 		AND DATE(a2.created_at) = DATE(a1.created_at)
+		AND a1.embedding IS NOT NULL AND a2.embedding IS NOT NULL
+		AND a1.embedding <=> a2.embedding < 0.8
 		LIMIT 20
 	`, artifactID)
 	if err != nil {
@@ -270,44 +276,32 @@ func (l *Linker) createEdgeWithMetadata(ctx context.Context, srcType, srcID, dst
 
 // findOrCreatePerson finds a person by name or creates a new record.
 func (l *Linker) findOrCreatePerson(ctx context.Context, name string) (string, error) {
-	var id string
-	err := l.Pool.QueryRow(ctx,
-		"SELECT id FROM people WHERE LOWER(name) = LOWER($1) LIMIT 1", name,
-	).Scan(&id)
-	if err == nil {
-		return id, nil
-	}
-
-	id = ulid.Make().String()
-	_, err = l.Pool.Exec(ctx, `
+	id := ulid.Make().String()
+	var returnedID string
+	err := l.Pool.QueryRow(ctx, `
 		INSERT INTO people (id, name) VALUES ($1, $2)
-		ON CONFLICT DO NOTHING
-	`, id, name)
+		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+		RETURNING id
+	`, id, name).Scan(&returnedID)
 	if err != nil {
-		return "", fmt.Errorf("insert person: %w", err)
+		return "", fmt.Errorf("upsert person: %w", err)
 	}
-	return id, nil
+	return returnedID, nil
 }
 
 // findOrCreateTopic finds a topic by name or creates a new record.
 func (l *Linker) findOrCreateTopic(ctx context.Context, name string) (string, error) {
-	var id string
-	err := l.Pool.QueryRow(ctx,
-		"SELECT id FROM topics WHERE LOWER(name) = LOWER($1) LIMIT 1", name,
-	).Scan(&id)
-	if err == nil {
-		return id, nil
-	}
-
-	id = ulid.Make().String()
-	_, err = l.Pool.Exec(ctx, `
+	id := ulid.Make().String()
+	var returnedID string
+	err := l.Pool.QueryRow(ctx, `
 		INSERT INTO topics (id, name, state) VALUES ($1, $2, 'emerging')
-		ON CONFLICT (name) DO NOTHING
-	`, id, name)
+		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+		RETURNING id
+	`, id, name).Scan(&returnedID)
 	if err != nil {
-		return "", fmt.Errorf("insert topic: %w", err)
+		return "", fmt.Errorf("upsert topic: %w", err)
 	}
-	return id, nil
+	return returnedID, nil
 }
 
 // ConnectionCount returns the number of edges connected to an artifact.
@@ -319,6 +313,18 @@ func (l *Linker) ConnectionCount(ctx context.Context, artifactID string) (int, e
 		   OR (dst_type = 'artifact' AND dst_id = $1)
 	`, artifactID).Scan(&count)
 	return count, err
+}
+
+// ConnectionCount returns the number of graph edges connected to an artifact.
+// Package-level helper for use by other packages without needing a Linker instance.
+func ConnectionCount(ctx context.Context, pool *pgxpool.Pool, artifactID string) int {
+	var count int
+	_ = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM edges
+		WHERE (src_type = 'artifact' AND src_id = $1)
+		   OR (dst_type = 'artifact' AND dst_id = $1)
+	`, artifactID).Scan(&count)
+	return count
 }
 
 func parseJSON(data []byte, v interface{}) error {

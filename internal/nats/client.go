@@ -1,3 +1,5 @@
+// Package nats provides the NATS JetStream sdk integration layer for Smackerel.
+// It wraps the nats-io/nats.go client with stream management and publish helpers.
 package nats
 
 import (
@@ -20,6 +22,10 @@ const (
 	SubjectSearchReranked     = "search.reranked"
 	SubjectDigestGenerate     = "digest.generate"
 	SubjectDigestGenerated    = "digest.generated"
+	SubjectKeepSyncRequest    = "keep.sync.request"
+	SubjectKeepSyncResponse   = "keep.sync.response"
+	SubjectKeepOCRRequest     = "keep.ocr.request"
+	SubjectKeepOCRResponse    = "keep.ocr.response"
 )
 
 // StreamConfig defines a JetStream stream and its subjects.
@@ -34,6 +40,7 @@ func AllStreams() []StreamConfig {
 		{Name: "ARTIFACTS", Subjects: []string{"artifacts.>"}},
 		{Name: "SEARCH", Subjects: []string{"search.>"}},
 		{Name: "DIGEST", Subjects: []string{"digest.>"}},
+		{Name: "KEEP", Subjects: []string{"keep.>"}},
 	}
 }
 
@@ -79,7 +86,7 @@ func (c *Client) EnsureStreams(ctx context.Context) error {
 			Name:      sc.Name,
 			Subjects:  sc.Subjects,
 			Retention: jetstream.WorkQueuePolicy,
-			MaxAge:    24 * time.Hour,
+			MaxAge:    7 * 24 * time.Hour, // 7 days — prevent message loss during extended ML outages
 			Storage:   jetstream.FileStorage,
 		}
 

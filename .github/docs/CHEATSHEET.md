@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **34 Agents · 60 Gates · 29 Workflow Modes · 25 Phases**
+> **34 Agents · 60 Gates · 31 Workflow Modes · 25 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -208,6 +208,7 @@
 | `adoption profile` | Maturity-tier onboarding posture such as `foundation`, `delivery`, or `assured`. It changes guidance and early guardrail messaging, not certification rigor. |
 | `release manifest` | Upstream trust bundle that states what version shipped, which profiles and interop sources are supported, what surfaces were validated, and which managed files belong to the release. |
 | `install provenance` | The install record that explains where a downstream framework copy came from and whether local-source risk exists before upgrade or doctor guidance is trusted. |
+| `source-native refresh` | In the Bubbles source repo, maintain the framework directly and use `bash bubbles/scripts/cli.sh ...` validation surfaces. `install.sh` is for downstream repos, not for installing Bubbles into the Bubbles checkout itself. |
 | `trust preview` | Upgrade dry-run output that compares the current installed provenance and manifest to the target release before any framework-managed files are replaced. |
 | `review-only interop intake` | Project-owned import path that snapshots and normalizes Claude Code, Roo Code, Cursor, or Cline assets without mutating framework-managed Bubbles files. |
 | `supported interop apply` | Safe promotion path that writes only declared project-owned outputs from an interop import and falls back to proposals when a change would touch framework-owned or colliding surfaces. |

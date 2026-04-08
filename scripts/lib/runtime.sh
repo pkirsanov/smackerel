@@ -71,5 +71,11 @@ smackerel_compose() {
     args+=(--profile ollama)
   fi
 
-  "${args[@]}" "$@"
+  # Prevent docker compose exec from hanging on stdin in non-interactive contexts
+  # (e.g. when run under timeout or piped shells)
+  if [[ "${1:-}" == "exec" ]]; then
+    "${args[@]}" "$@" </dev/null
+  else
+    "${args[@]}" "$@"
+  fi
 }

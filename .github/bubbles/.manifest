@@ -52,6 +52,7 @@ bubbles/scripts/traceability-guard.sh
 bubbles/scripts/trust-doctor-selftest.sh
 bubbles/scripts/trust-metadata.sh
 bubbles/scripts/value-selection-lint.sh
+bubbles/scripts/workflow-delegation-selftest.sh
 bubbles/scripts/workflow-planning-provenance-selftest.sh
 bubbles/scripts/workflow-registry-consistency.sh
 bubbles/scripts/workflow-surface-selftest.sh
@@ -211,7 +212,13 @@ agents/bubbles_shared/test-fidelity.md
 agents/bubbles_shared/ux-bootstrap.md
 agents/bubbles_shared/validation-core.md
 agents/bubbles_shared/validation-profiles.md
+agents/bubbles_shared/workflow-delegation-core.md
+agents/bubbles_shared/workflow-execution-loops.md
 agents/bubbles_shared/workflow-fix-cycle-protocol.md
+agents/bubbles_shared/workflow-input-bootstrap.md
+agents/bubbles_shared/workflow-mode-resolution.md
+agents/bubbles_shared/workflow-orchestration-core.md
+agents/bubbles_shared/workflow-phase-engine.md
 prompts/bubbles.analyst.prompt.md
 prompts/bubbles.audit.prompt.md
 prompts/bubbles.bug.prompt.md

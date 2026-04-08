@@ -18,7 +18,7 @@ func newTestConnector(id string) *testConnector {
 	return &testConnector{id: id, health: HealthHealthy}
 }
 
-func (c *testConnector) ID() string                           { return c.id }
+func (c *testConnector) ID() string                                         { return c.id }
 func (c *testConnector) Connect(_ context.Context, _ ConnectorConfig) error { return nil }
 func (c *testConnector) Sync(_ context.Context, _ string) ([]RawArtifact, string, error) {
 	return c.items, "cursor-1", nil

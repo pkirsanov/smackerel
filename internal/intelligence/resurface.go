@@ -4,20 +4,26 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"time"
 )
 
 // ResurfaceCandidate represents an artifact that might be valuable to resurface.
 type ResurfaceCandidate struct {
-	ArtifactID  string  `json:"artifact_id"`
-	Title       string  `json:"title"`
-	Score       float64 `json:"score"`
-	Reason      string  `json:"reason"`
+	ArtifactID   string    `json:"artifact_id"`
+	Title        string    `json:"title"`
+	Score        float64   `json:"score"`
+	Reason       string    `json:"reason"`
 	LastAccessed time.Time `json:"last_accessed"`
 }
 
 // Resurface finds artifacts worth resurfacing based on decay, relevance, and serendipity.
+//
+// Architecture note: resurface.go implements the two core resurfacing strategies
+// (dormancy-based and serendipity). The remaining intelligence scopes — expertise,
+// learning, subscriptions, monthly, lookups, content fuel, and seasonal — are
+// aggregated through engine.go which orchestrates all intelligence signals including
+// this resurfacing output. See Engine.GenerateDigest in engine.go for the full
+// intelligence pipeline.
 func (e *Engine) Resurface(ctx context.Context, limit int) ([]ResurfaceCandidate, error) {
 	if limit <= 0 {
 		limit = 5
@@ -62,9 +68,11 @@ func (e *Engine) Resurface(ctx context.Context, limit int) ([]ResurfaceCandidate
 
 	// Update last_accessed for resurfaced artifacts
 	for _, c := range candidates {
-		_, _ = e.Pool.Exec(ctx, `
+		if _, err := e.Pool.Exec(ctx, `
 			UPDATE artifacts SET last_accessed = NOW(), access_count = access_count + 1 WHERE id = $1
-		`, c.ArtifactID)
+		`, c.ArtifactID); err != nil {
+			slog.Warn("failed to update artifact access count", "artifact_id", c.ArtifactID, "error", err)
+		}
 	}
 
 	return candidates, nil
@@ -118,7 +126,5 @@ func ResurfaceScore(relevanceScore float64, daysDormant int, accessCount int) fl
 	return (relevanceScore + dormancyBonus) * (1.0 - accessPenalty)
 }
 
-// init seeds random for serendipity picks
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
+// Note: rand.Seed was removed — since Go 1.20 the global rand source is
+// automatically seeded and rand.Seed is deprecated.

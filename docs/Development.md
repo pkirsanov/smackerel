@@ -1,27 +1,36 @@
 # Smackerel Development Guide
 
-Smackerel is Bubbles-bootstrapped and now exposes a repo-standard runtime CLI and config pipeline for the current foundation scaffold. This guide documents the current command surface and the constraints the runtime must keep following as later phases land.
+Smackerel is Bubbles-bootstrapped and exposes a repo-standard runtime CLI and config pipeline. This guide documents the current command surface and the constraints the runtime must follow.
 
 ## Current Repo State
 
-Committed today:
+Committed:
 
 - `README.md`
 - `docs/smackerel.md`
-- `specs/`
+- `specs/` (001-008, all with spec, design, scopes, reports)
 - `.github/`
 - `.specify/memory/`
-- Go core runtime sources under `cmd/` and `internal/`
-- Python ML sidecar sources under `ml/`
-- `docker-compose.yml`
+- Go core runtime sources under `cmd/` and `internal/` (48 source files, 39 test files)
+- Python ML sidecar sources under `ml/` (9 source files, 2 test files)
+- `docker-compose.yml` with health checks, resource limits, restart policies
 - `config/smackerel.yaml`
 - Generated environment files under `config/generated/` via `./smackerel.sh config generate`
 - `./smackerel.sh`
+- E2E test scripts under `tests/e2e/` (57 scripts)
+- Stress test scripts under `tests/stress/` (2 scripts)
 
-Not committed yet:
+Implemented runtime capabilities:
 
-- Later-phase runtime capabilities such as passive ingestion connectors, semantic search, digest delivery, and web UI
-- A validate-specific runtime stack or certification-grade chaos workflow
+- Capture pipeline (URL, text, voice, conversation, media group)
+- Semantic search (pgvector + embedding + re-ranking)
+- Daily digest generation with Telegram delivery
+- Knowledge graph linking (vector similarity, entity, topic, temporal)
+- Telegram bot (share-sheet capture, forwarded messages, conversation assembly, media groups)
+- Web UI (HTMX search, artifact detail, digest, topics, settings, status)
+- 7 passive connectors (IMAP, CalDAV, YouTube, RSS, Bookmarks, Browser, Google Keep)
+- Intelligence engine (synthesis, commitments, alerts, resurfacing)
+- Database migrations (5 SQL files)
 
 Do not bypass `./smackerel.sh` with ad-hoc `go`, `python`, `pytest`, or `docker compose` commands as the normal repo workflow.
 

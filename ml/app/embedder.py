@@ -14,6 +14,7 @@ def _load_model():
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
+
         logger.info("Loading embedding model: %s", _model_name)
         _model = SentenceTransformer(_model_name)
         logger.info("Embedding model loaded (dim=%d)", _model.get_sentence_embedding_dimension())

@@ -4,6 +4,7 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     ports:
       - "${POSTGRES_HOST_PORT}:${POSTGRES_CONTAINER_PORT}"
     environment:
@@ -17,12 +18,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     labels:
       com.smackerel.component: postgres
       com.smackerel.lifecycle: persistent
 
   nats:
     image: nats:2.10-alpine
+    restart: unless-stopped
     command: ["--jetstream", "--store_dir", "/data", "--http_port", "${NATS_MONITOR_PORT}"]
     ports:
       - "${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
@@ -35,6 +41,10 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     labels:
       com.smackerel.component: nats
       com.smackerel.lifecycle: ephemeral
@@ -43,8 +53,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
-      - "${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+      - "127.0.0.1:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
     environment:
       DATABASE_URL: ${DATABASE_URL}
       NATS_URL: ${NATS_URL}
@@ -67,11 +78,15 @@ services:
       nats:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${CORE_CONTAINER_PORT}/api/health"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     labels:
       com.smackerel.component: core
       com.smackerel.lifecycle: ephemeral
@@ -81,6 +96,7 @@ services:
       context: ./ml
       dockerfile: Dockerfile
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
+    restart: unless-stopped
     ports:
       - "${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
     environment:
@@ -97,19 +113,28 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     labels:
       com.smackerel.component: ml
       com.smackerel.lifecycle: ephemeral
 
   ollama:
-    image: ollama/ollama
+    image: ollama/ollama:0.6
+    restart: unless-stopped
     ports:
       - "${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
     volumes:
       - ollama-data:/root/.ollama
     profiles:
       - ollama
+    deploy:
+      resources:
+        limits:
+          memory: 8G
     labels:
       com.smackerel.component: ollama
       com.smackerel.lifecycle: persistent

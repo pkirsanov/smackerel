@@ -1,0 +1,384 @@
+{
+  "version": 2,
+  "specId": "004",
+  "featureDir": "specs/004-phase3-intelligence",
+  "generatedBy": "bubbles.iterate",
+  "generatedAt": "2026-04-07T14:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-004-001",
+      "name": "Cross-domain connection detected",
+      "scope": "01-synthesis-engine",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_SourceCount"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-002",
+      "name": "Surface-level overlap discarded",
+      "scope": "01-synthesis-engine",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_SourceCount"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-003",
+      "name": "Contradiction flagged",
+      "scope": "01-synthesis-engine",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Contradiction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Contradiction"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-003b",
+      "name": "Synthesis cites sources accurately",
+      "scope": "01-synthesis-engine",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-003c",
+      "name": "Synthesis with insufficient data",
+      "scope": "01-synthesis-engine",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_SourceCount"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_SourceCount"},
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-004",
+      "name": "User promise detected",
+      "scope": "02-commitment-tracking",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlert_Lifecycle"},
+        {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-005",
+      "name": "Contact promise detected",
+      "scope": "02-commitment-tracking",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertType_Constants"},
+        {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-006",
+      "name": "Auto-resolve on follow-up",
+      "scope": "02-commitment-tracking",
+      "status": "active",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-007",
+      "name": "Overdue commitment surfaced",
+      "scope": "02-commitment-tracking",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertStatus_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlert_Lifecycle"},
+        {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-007b",
+      "name": "False positive commitment rejection",
+      "scope": "02-commitment-tracking",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-008",
+      "name": "Brief with full context",
+      "scope": "03-pre-meeting-briefs",
+      "status": "active",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-009",
+      "name": "Brief for new contact",
+      "scope": "03-pre-meeting-briefs",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestNewEngine_NilPool"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-010",
+      "name": "No duplicate briefs",
+      "scope": "03-pre-meeting-briefs",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-010b",
+      "name": "Brief with shared topic context",
+      "scope": "03-pre-meeting-briefs",
+      "status": "active",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-011",
+      "name": "Bill reminder",
+      "scope": "04-contextual-alerts",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertType_Constants"},
+        {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-012",
+      "name": "Alert batching",
+      "scope": "04-contextual-alerts",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertPriority"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_PriorityOrdering"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertPriority"},
+        {"type": "source", "location": "internal/intelligence/engine.go::GetPendingAlerts"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-013",
+      "name": "Alert dismissal",
+      "scope": "04-contextual-alerts",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertStatus_Lifecycle"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertStatus_Lifecycle"},
+        {"type": "source", "location": "internal/intelligence/engine.go::DismissAlert"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-013b",
+      "name": "Return window closing alert",
+      "scope": "04-contextual-alerts",
+      "status": "active",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-013c",
+      "name": "Relationship cooling alert",
+      "scope": "04-contextual-alerts",
+      "status": "active",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-013d",
+      "name": "Trip prep alert",
+      "scope": "04-contextual-alerts",
+      "status": "active",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-014",
+      "name": "Full weekly synthesis",
+      "scope": "05-weekly-synthesis",
+      "status": "active",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore"},
+        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_WithItems"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore"},
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_WithItems"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-015",
+      "name": "Quiet week synthesis",
+      "scope": "05-weekly-synthesis",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_QuietDay"},
+        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_IsQuiet"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_QuietDay"},
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_IsQuiet"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-016",
+      "name": "Serendipity resurface with calendar match",
+      "scope": "05-weekly-synthesis",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore"},
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_DormancyBonus"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-016b",
+      "name": "Pattern observation in weekly synthesis",
+      "scope": "05-weekly-synthesis",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-017",
+      "name": "Digest with commitment-tracked action items",
+      "scope": "06-enhanced-daily-digest",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestSCN002030_DigestWithActionItems"},
+        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_WithItems"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestSCN002030_DigestWithActionItems"},
+        {"type": "source", "location": "internal/digest/generator.go::Generate"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-018",
+      "name": "Enhanced digest stays under 150 words",
+      "scope": "06-enhanced-daily-digest",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestSCN002043_DigestLLMFailureFallback"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestSCN002043_DigestLLMFailureFallback"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-004-018b",
+      "name": "Digest with no intelligence data",
+      "scope": "06-enhanced-daily-digest",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestSCN002031_QuietDayDigest"},
+        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_QuietDay"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestSCN002031_QuietDayDigest"},
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_QuietDay"}
+      ]
+    }
+  ]
+}

@@ -77,3 +77,50 @@ func TestHaversine(t *testing.T) {
 		t.Errorf("NYC to LA distance should be ~3940 km, got %.0f km", distance)
 	}
 }
+
+func TestParseJSON_MalformedInput(t *testing.T) {
+	// Completely invalid JSON
+	_, err := ParseTakeoutJSON([]byte(`{not valid json`))
+	if err == nil {
+		t.Error("expected error for malformed JSON, got nil")
+	}
+
+	// Valid JSON but wrong structure (missing timelineObjects)
+	activities, err := ParseTakeoutJSON([]byte(`{"other": "data"}`))
+	if err != nil {
+		t.Errorf("unexpected error for empty structure: %v", err)
+	}
+	if len(activities) != 0 {
+		t.Errorf("expected 0 activities for wrong structure, got %d", len(activities))
+	}
+
+	// Empty array of timeline objects
+	activities, err = ParseTakeoutJSON([]byte(`{"timelineObjects": []}`))
+	if err != nil {
+		t.Errorf("unexpected error for empty timeline: %v", err)
+	}
+	if len(activities) != 0 {
+		t.Errorf("expected 0 activities for empty timeline, got %d", len(activities))
+	}
+}
+
+func TestOptInRequired(t *testing.T) {
+	// Maps connector processes location data which requires explicit consent.
+	// ParseTakeoutJSON must not silently fabricate data from nil/empty input.
+	activities, err := ParseTakeoutJSON(nil)
+	if err == nil {
+		t.Error("expected error when parsing nil input (no consent/data provided)")
+	}
+	if len(activities) != 0 {
+		t.Errorf("expected 0 activities from nil input, got %d", len(activities))
+	}
+
+	// Empty byte slice should also produce no activities
+	activities, err = ParseTakeoutJSON([]byte{})
+	if err == nil {
+		t.Error("expected error when parsing empty input")
+	}
+	if len(activities) != 0 {
+		t.Errorf("expected 0 activities from empty input, got %d", len(activities))
+	}
+}

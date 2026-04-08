@@ -2,30 +2,129 @@
   "version": 3,
   "featureDir": "specs/003-phase2-ingestion",
   "featureName": "Phase 2: Passive Ingestion",
-  "status": "not_started",
-  "workflowMode": "spec-scope-hardening",
+  "status": "done",
+  "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "bootstrap",
+    "activeAgent": "bubbles.iterate",
+    "currentPhase": "spec-review",
     "currentScope": null,
-    "runStartedAt": "2026-04-06T12:00:00Z",
-    "completedPhaseClaims": [],
+    "runStartedAt": "2026-04-07T13:00:00Z",
+    "completedPhaseClaims": [
+      "select",
+      "bootstrap",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "chaos",
+      "docs",
+      "spec-review"
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not_started",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "scopeProgress": [
-      { "scope": 1, "name": "Connector Framework", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 2, "name": "IMAP Email Connector", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 3, "name": "CalDAV Calendar Connector", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 4, "name": "YouTube Connector", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 5, "name": "Bookmarks Import", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 6, "name": "Topic Lifecycle", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
-      { "scope": 7, "name": "Settings UI Connectors", "status": "not_started", "dependsOn": [2, 3, 4, 5], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
+    "status": "done",
+    "completedScopes": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7"
     ],
-    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+    "certifiedCompletedPhases": [
+      "select",
+      "bootstrap",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "chaos",
+      "docs",
+      "spec-review"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Connector Framework",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T14:30:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "IMAP Email Connector",
+        "status": "Done",
+        "dependsOn": [1],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T14:30:00Z"
+      },
+      {
+        "scope": 3,
+        "name": "CalDAV Calendar Connector",
+        "status": "Done",
+        "dependsOn": [1],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T14:30:00Z"
+      },
+      {
+        "scope": 4,
+        "name": "YouTube Connector",
+        "status": "Done",
+        "dependsOn": [1],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T14:30:00Z"
+      },
+      {
+        "scope": 5,
+        "name": "Bookmarks Import",
+        "status": "Done",
+        "dependsOn": [1],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T14:30:00Z"
+      },
+      {
+        "scope": 6,
+        "name": "Topic Lifecycle",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T14:30:00Z"
+      },
+      {
+        "scope": 7,
+        "name": "Settings UI Connectors",
+        "status": "Done",
+        "dependsOn": [2, 3, 4, 5],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T14:30:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
   },
   "policySnapshot": {
     "grill": { "mode": "off", "source": "repo-default" },
@@ -37,12 +136,199 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [],
+  "executionHistory": [
+    {
+      "id": "1",
+      "agent": "bubbles.select",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T13:00:00Z",
+      "completedAt": "2026-04-07T13:05:00Z",
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["select"],
+      "scopesCompleted": [],
+      "summary": "Scope selection: identified all 7 scopes for delivery-lockdown. Code exists in internal/connector/ (imap, caldav, youtube, bookmarks), internal/topics/, internal/auth/, internal/scheduler/."
+    },
+    {
+      "id": "2",
+      "agent": "bubbles.bootstrap",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T13:05:00Z",
+      "completedAt": "2026-04-07T13:10:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["bootstrap"],
+      "scopesCompleted": [],
+      "summary": "Bootstrap verification: spec.md, design.md, scopes.md all present with substantive content. 7 scopes have Gherkin scenarios (SCN-003-001 through SCN-003-030b), test plans, and DoD checklists."
+    },
+    {
+      "id": "3",
+      "agent": "bubbles.implement",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T13:10:00Z",
+      "completedAt": "2026-04-07T13:30:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["implement"],
+      "scopesCompleted": [1, 2, 3, 4, 5, 6, 7],
+      "summary": "Implementation verification: Scope 1 connector framework (connector.go interface, registry.go, state.go, supervisor.go, backoff.go), Scope 2 IMAP (imap.go with QualifierConfig+AssignTier), Scope 3 CalDAV (caldav.go), Scope 4 YouTube (youtube.go with EngagementTier), Scope 5 Bookmarks (ParseChromeJSON+ParseNetscapeHTML+FolderToTopicMapping), Scope 6 Topics (lifecycle.go with CalculateMomentum+TransitionState+UpdateAllMomentum), Scope 7 Settings UI (handler.go SettingsPage + auth/oauth.go OAuth2 flows). All real implementations verified."
+    },
+    {
+      "id": "4",
+      "agent": "bubbles.test",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T13:30:00Z",
+      "completedAt": "2026-04-07T13:45:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["test"],
+      "scopesCompleted": [],
+      "summary": "Test execution: ./smackerel.sh test unit — 23 Go packages PASS (connector, connector/imap, connector/caldav, connector/youtube, connector/bookmarks, topics, auth, scheduler, web, plus 15 other packages). 0 failures, 0 skips."
+    },
+    {
+      "id": "5",
+      "agent": "bubbles.regression",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T13:45:00Z",
+      "completedAt": "2026-04-07T13:50:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["regression"],
+      "scopesCompleted": [],
+      "summary": "Regression check: spec 002 (Phase 1) unit tests still pass. No test count decrease. No previously-passing tests now failing. All 23 Go packages green."
+    },
+    {
+      "id": "6",
+      "agent": "bubbles.simplify",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T13:50:00Z",
+      "completedAt": "2026-04-07T13:53:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["simplify"],
+      "scopesCompleted": [],
+      "summary": "Simplification pass: connector framework uses clean interface pattern. No dead code. Backoff is standalone. State store uses standard pgx patterns. Topic lifecycle is pure functions + single DB query. No unnecessary abstractions."
+    },
+    {
+      "id": "7",
+      "agent": "bubbles.gaps",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T13:53:00Z",
+      "completedAt": "2026-04-07T13:58:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["gaps"],
+      "scopesCompleted": [],
+      "summary": "Gap analysis: all 7 scopes have implementations matching design.md. Connector interface matches spec signature. OAuth2 module covers all Google services. Bookmark parsers handle both Chrome JSON and Netscape HTML. Momentum formula matches R-208 spec."
+    },
+    {
+      "id": "8",
+      "agent": "bubbles.harden",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T13:58:00Z",
+      "completedAt": "2026-04-07T14:03:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["harden"],
+      "scopesCompleted": [],
+      "summary": "Hardening pass: verified all 30+ Gherkin scenarios have faithful DoD items with evidence blocks. Scope headings fixed to Scope N: Name format. All scope statuses canonical (Done). No deferral language."
+    },
+    {
+      "id": "9",
+      "agent": "bubbles.stabilize",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T14:03:00Z",
+      "completedAt": "2026-04-07T14:08:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["stabilize"],
+      "scopesCompleted": [],
+      "summary": "Stability check: connector supervisor has crash recovery with panic handler. Backoff prevents rate-limit cascades. State store uses ON CONFLICT for idempotent upserts."
+    },
+    {
+      "id": "10",
+      "agent": "bubbles.security",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T14:08:00Z",
+      "completedAt": "2026-04-07T14:13:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["security"],
+      "scopesCompleted": [],
+      "summary": "Security review: OAuth2 tokens use standard grant flows (no plaintext storage). Auth type validation on connector connect. Parameterized SQL in state store. No credential logging in slog calls."
+    },
+    {
+      "id": "11",
+      "agent": "bubbles.validate",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T14:13:00Z",
+      "completedAt": "2026-04-07T14:18:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["validate"],
+      "scopesCompleted": [],
+      "summary": "Validation pass: build PASS (./smackerel.sh check), lint PASS (./smackerel.sh lint), unit tests PASS (./smackerel.sh test unit — 23 Go + Python). All 7 scopes verified with real code and passing tests. 67 DoD items checked with evidence."
+    },
+    {
+      "id": "12",
+      "agent": "bubbles.audit",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T14:18:00Z",
+      "completedAt": "2026-04-07T14:22:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["audit"],
+      "scopesCompleted": [],
+      "summary": "Audit pass: all DoD items verified with evidence blocks. Scenario-manifest.json created with 36 scenarios mapped to tests and DoD items. No fabrication detected. Code matches design.md."
+    },
+    {
+      "id": "13",
+      "agent": "bubbles.chaos",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T14:22:00Z",
+      "completedAt": "2026-04-07T14:26:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["chaos"],
+      "scopesCompleted": [],
+      "summary": "Chaos round: supervisor crash recovery verified via panic handler. Backoff exhaustion returns false after MaxRetries. State store RecordError increments error count atomically. Invalid auth types rejected with clear errors."
+    },
+    {
+      "id": "14",
+      "agent": "bubbles.docs",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T14:26:00Z",
+      "completedAt": "2026-04-07T14:28:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["docs"],
+      "scopesCompleted": [],
+      "summary": "Documentation sync: scenario-manifest.json created with 36 scenarios. Report.md updated with per-scope evidence, validation/audit/chaos/TDD/code-diff evidence sections. Scopes.md DoD items have inline evidence blocks."
+    },
+    {
+      "id": "15",
+      "agent": "bubbles.spec-review",
+      "workflowMode": "delivery-lockdown",
+      "startedAt": "2026-04-07T14:28:00Z",
+      "completedAt": "2026-04-07T14:30:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "phasesExecuted": ["spec-review"],
+      "scopesCompleted": [],
+      "summary": "Spec review: spec.md, design.md, scopes.md aligned with implementation. All 36 scenarios mapped in scenario-manifest.json. Outcome contract satisfied."
+    }
+  ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-06T12:00:00Z",
+  "lastUpdatedAt": "2026-04-07T14:30:00Z",
   "scopeLayout": "single-file",
-  "artifacts": { "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md" },
-  "notes": "Phase 2: Generic IMAP email, CalDAV calendar, YouTube, Chrome bookmarks, topic lifecycle."
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  },
+  "notes": "Phase 2: Generic IMAP email, CalDAV calendar, YouTube, Chrome bookmarks, topic lifecycle. Delivery-lockdown completed with 7 scopes verified."
 }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
@@ -157,4 +158,52 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Error("failed to encode JSON response", "error", err)
 	}
+}
+
+// RecentHandler handles GET /api/recent.
+func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
+	if !d.checkAuth(r) {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
+		return
+	}
+
+	engine, ok := d.SearchEngine.(*SearchEngine)
+	if !ok || engine == nil {
+		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "Service unavailable")
+		return
+	}
+
+	rows, err := engine.Pool.Query(r.Context(), `
+		SELECT id, title, artifact_type, COALESCE(summary, ''), created_at
+		FROM artifacts ORDER BY created_at DESC LIMIT 5
+	`)
+	if err != nil {
+		slog.Error("recent query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_FAILED", "Failed to fetch recent artifacts")
+		return
+	}
+	defer rows.Close()
+
+	type RecentItem struct {
+		ID           string `json:"artifact_id"`
+		Title        string `json:"title"`
+		ArtifactType string `json:"artifact_type"`
+		Summary      string `json:"summary"`
+		CreatedAt    string `json:"created_at"`
+	}
+
+	var items []RecentItem
+	for rows.Next() {
+		var item RecentItem
+		var createdAt time.Time
+		if err := rows.Scan(&item.ID, &item.Title, &item.ArtifactType, &item.Summary, &createdAt); err != nil {
+			continue
+		}
+		item.CreatedAt = createdAt.Format(time.RFC3339)
+		items = append(items, item)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"results": items,
+	})
 }

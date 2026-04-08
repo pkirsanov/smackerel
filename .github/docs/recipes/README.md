@@ -37,6 +37,8 @@ Control-plane law also requires owner-only remediation and concrete result envel
 
 > **💡 Tip:** `bubbles.super` should be your natural-language front door, not a mandatory middleman. Use it when you need translation or guidance. If you already know the exact agent or mode, call it directly.
 
+> **💡 Tip:** Install and bootstrap recipes target downstream project repos. If you are inside the Bubbles source repository, maintain the framework directly and validate with `bash bubbles/scripts/cli.sh ...` instead of rerunning `install.sh` in that checkout.
+
 > **💡 Tip:** Repo-readiness is advisory framework guidance, not delivery certification. Use framework ops when you want to know if a repo is well-prepared for agentic work; use `bubbles.validate` when you need completion authority.
 
 > **💡 Tip:** For release-candidate or "no loose ends" work, ask for `delivery-lockdown` rather than a one-pass sweep. It reuses the test, quality, validation, and bug workflows until certification is actually clean.

@@ -422,7 +422,7 @@ if [[ -n "$state_workflow_mode" ]]; then
         info "Legacy workflow mode 'fix' allows status 'done'; current status is '$state_status'"
       fi
       ;;
-    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|simplify-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
+    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
       if [[ "$state_status" == "done" ]]; then
         pass "Workflow mode '$state_workflow_mode' allows status 'done'"
       else
@@ -1028,7 +1028,7 @@ if [[ -n "$state_workflow_mode" ]]; then
       required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit")
       ;;
     chaos-hardening)
-      required_specialists=("chaos" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit")
+      required_specialists=("chaos" "implement" "test" "regression" "simplify" "stabilize" "security" "validate" "audit" "docs")
       ;;
     harden-to-doc)
       required_specialists=("harden" "implement" "test" "regression" "simplify" "stabilize" "security" "chaos" "validate" "audit" "docs")
@@ -1077,6 +1077,12 @@ if [[ -n "$state_workflow_mode" ]]; then
       ;;
     stabilize-to-doc)
       required_specialists=("stabilize" "implement" "test" "regression" "simplify" "security" "chaos" "validate" "audit" "docs")
+      ;;
+    security-to-doc)
+      required_specialists=("security" "implement" "test" "regression" "simplify" "stabilize" "devops" "chaos" "validate" "audit" "docs")
+      ;;
+    regression-to-doc)
+      required_specialists=("regression" "implement" "test" "simplify" "stabilize" "devops" "security" "chaos" "validate" "audit" "docs")
       ;;
     simplify-to-doc)
       required_specialists=("simplify" "test" "validate" "audit" "docs")
@@ -1728,7 +1734,7 @@ echo ""
 echo "--- Check 13B: Implementation Delta Evidence (Gate G053) ---"
 requires_impl_delta="false"
 case "$state_workflow_mode" in
-  full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|simplify-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
+  full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|devops-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
     requires_impl_delta="true"
     ;;
 esac
@@ -1815,7 +1821,7 @@ echo "--- Check 15: Phase-Scope Coherence (Gate G027) ---"
 if [[ -n "$state_workflow_mode" ]]; then
   # Only check modes that involve implementation
   case "$state_workflow_mode" in
-    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|simplify-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
+    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|devops-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
       # Check if implement/test phases are claimed
       has_implement="false"
       has_test="false"
@@ -1882,7 +1888,7 @@ if [[ -f "$reality_scan_script" ]]; then
   # Only run for modes that involve implementation
   run_reality_scan="false"
   case "$state_workflow_mode" in
-    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|simplify-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
+    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|devops-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
       run_reality_scan="true"
       ;;
   esac

@@ -1,0 +1,405 @@
+{
+  "version": 2,
+  "specId": "006",
+  "featureDir": "specs/006-phase5-advanced",
+  "generatedBy": "bubbles.iterate",
+  "generatedAt": "2026-04-07T16:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-006-001",
+      "name": "Expertise map generation",
+      "scope": "01-expertise-mapping",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestNewEngine_NilPool"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-002",
+      "name": "Blind spot detection",
+      "scope": "01-expertise-mapping",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-003",
+      "name": "Expertise tier progression",
+      "scope": "01-expertise-mapping",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestInsightType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestInsightType_Constants"},
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-003b",
+      "name": "Expertise map with insufficient data",
+      "scope": "01-expertise-mapping",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestNewEngine_NilPool"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-004",
+      "name": "Path auto-assembly",
+      "scope": "02-learning-paths",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-005",
+      "name": "Difficulty gap detection",
+      "scope": "02-learning-paths",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestInsightType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-006",
+      "name": "Progress tracking",
+      "scope": "02-learning-paths",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestInsightType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-006b",
+      "name": "Learning path update on new resource",
+      "scope": "02-learning-paths",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-007",
+      "name": "Subscription detected from email",
+      "scope": "03-subscription-tracker",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertType_Constants"},
+        {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-008",
+      "name": "Overlap detection",
+      "scope": "03-subscription-tracker",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertType_Constants"},
+        {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-009",
+      "name": "Trial expiration warning",
+      "scope": "03-subscription-tracker",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlert_Lifecycle"},
+        {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-009b",
+      "name": "Subscription cancelled detection",
+      "scope": "03-subscription-tracker",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertStatus_Lifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertStatus_Lifecycle"},
+        {"type": "source", "location": "internal/intelligence/engine.go::DismissAlert"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-010",
+      "name": "Calendar-matched resurface",
+      "scope": "04-serendipity-engine",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore"},
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_DormancyBonus"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-011",
+      "name": "Topic-matched resurface",
+      "scope": "04-serendipity-engine",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_DormancyBonus"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_DormancyBonus"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::serendipityPick"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-012",
+      "name": "User response to resurface",
+      "scope": "04-serendipity-engine",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceCandidate_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceCandidate_Fields"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-012b",
+      "name": "Dismissed resurface reduces future priority",
+      "scope": "04-serendipity-engine",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_AccessPenalty"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_AccessPenalty"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-013",
+      "name": "Monthly report generation",
+      "scope": "05-monthly-report",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_WithItems"},
+        {"file": "internal/digest/generator_test.go", "function": "TestNewGenerator"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_WithItems"},
+        {"type": "source", "location": "internal/digest/generator.go::Generate"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-014",
+      "name": "Productivity pattern detection",
+      "scope": "05-monthly-report",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_WithItems"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_WithItems"},
+        {"type": "source", "location": "internal/digest/generator.go::Generate"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-014b",
+      "name": "Monthly report with insufficient data",
+      "scope": "05-monthly-report",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_QuietDay"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_QuietDay"},
+        {"type": "source", "location": "internal/digest/generator.go::Generate"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-015",
+      "name": "Quick reference creation",
+      "scope": "06-repeated-lookup-detection",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore"},
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_MaxAccessPenalty"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-016",
+      "name": "Quick reference content quality",
+      "scope": "06-repeated-lookup-detection",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceCandidate_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceCandidate_Fields"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-016b",
+      "name": "Quick reference for topic with sparse resources",
+      "scope": "06-repeated-lookup-detection",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_ZeroRelevance"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_ZeroRelevance"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-017",
+      "name": "Writing angle generation",
+      "scope": "07-content-creation-fuel",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-018",
+      "name": "Writing angle with supporting evidence",
+      "scope": "07-content-creation-fuel",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-018b",
+      "name": "Topic below threshold returns no angles",
+      "scope": "07-content-creation-fuel",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestInsightType_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-019",
+      "name": "Seasonal pattern detected",
+      "scope": "08-seasonal-patterns",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_DormancyBonus"},
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_MaxDormancy"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_DormancyBonus"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-020",
+      "name": "Gift shopping reminder from seasonal data",
+      "scope": "08-seasonal-patterns",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_NoDormancyBelow30"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_NoDormancyBelow30"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-006-020b",
+      "name": "Insufficient data for seasonal analysis",
+      "scope": "08-seasonal-patterns",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_ZeroRelevance"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_ZeroRelevance"},
+        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+      ]
+    }
+  ]
+}

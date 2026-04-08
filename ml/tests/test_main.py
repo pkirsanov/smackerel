@@ -46,6 +46,7 @@ def test_scn002007_universal_processing_prompt_exists():
     # Mock litellm before importing processor (not installed in test env)
     if "litellm" not in sys.modules:
         import types
+
         sys.modules["litellm"] = types.ModuleType("litellm")
         sys.modules["litellm"].acompletion = None
 
@@ -67,6 +68,7 @@ def test_scn002007_universal_processing_prompt_exists():
 def test_scn002007_processing_prompt_has_tier_instructions():
     import sys
     import types
+
     if "litellm" not in sys.modules:
         sys.modules["litellm"] = types.ModuleType("litellm")
         sys.modules["litellm"].acompletion = None
@@ -104,6 +106,7 @@ def test_scn002037_whisper_transcribe_function():
 def test_scn002038_llm_failure_returns_error():
     import sys
     import types
+
     if "litellm" not in sys.modules:
         sys.modules["litellm"] = types.ModuleType("litellm")
         sys.modules["litellm"].acompletion = None

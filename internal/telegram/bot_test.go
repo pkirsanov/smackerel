@@ -96,7 +96,7 @@ func TestContainsURL_EdgeCases(t *testing.T) {
 	}{
 		{"mailto:test@example.com", false},
 		{"file:///tmp/test", false},
-		{"https://", true},      // technically contains the prefix
+		{"https://", true}, // technically contains the prefix
 		{"text with https:// in it", true},
 	}
 

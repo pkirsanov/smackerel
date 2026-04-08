@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/robfig/cron/v3"
 
@@ -30,8 +31,9 @@ func New(digestGen *digest.Generator, bot *telegram.Bot) *Scheduler {
 func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	_, err := s.cron.AddFunc(cronExpr, func() {
 		slog.Info("digest cron triggered")
-		// Create a fresh context per cron invocation to avoid using a cancelled parent
-		ctx := context.Background()
+		// Create a fresh context per cron invocation with a timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
 		digestCtx, err := s.digestGen.Generate(ctx)
 		if err != nil {
 			slog.Error("digest generation failed", "error", err)
