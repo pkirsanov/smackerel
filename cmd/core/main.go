@@ -14,6 +14,9 @@ import (
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector"
+	caldavConnector "github.com/smackerel/smackerel/internal/connector/caldav"
+	imapConnector "github.com/smackerel/smackerel/internal/connector/imap"
+	youtubeConnector "github.com/smackerel/smackerel/internal/connector/youtube"
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
@@ -109,13 +112,47 @@ func run() error {
 	registry := connector.NewRegistry()
 	stateStore := connector.NewStateStore(pg.Pool)
 	supervisor := connector.NewSupervisor(registry, stateStore)
-	_ = supervisor // Connectors are registered when configured via OAuth
-	slog.Info("connector supervisor initialized")
+
+	// Register connectors and start those with valid OAuth tokens
+	imapConn := imapConnector.New("gmail")
+	caldavConn := caldavConnector.New("google-calendar")
+	ytConn := youtubeConnector.New("youtube")
+	registry.Register(imapConn)
+	registry.Register(caldavConn)
+	registry.Register(ytConn)
 
 	// Set up OAuth handler for connector authorization
 	tokenStore := auth.NewTokenStore(pg.Pool)
 	oauthHandler := auth.NewOAuthHandler(tokenStore)
 	slog.Info("OAuth handler initialized")
+
+	// Start connectors that have valid OAuth tokens
+	if tokenStore.HasToken(ctx, "google") {
+		token, err := tokenStore.Get(ctx, "google")
+		if err == nil && token != nil {
+			creds := map[string]string{"access_token": token.AccessToken}
+			connConfig := connector.ConnectorConfig{
+				AuthType:    "oauth2",
+				Credentials: creds,
+				Enabled:     true,
+			}
+			if err := imapConn.Connect(ctx, connConfig); err == nil {
+				supervisor.StartConnector(ctx, "gmail")
+				slog.Info("gmail connector started with OAuth token")
+			}
+			if err := caldavConn.Connect(ctx, connConfig); err == nil {
+				supervisor.StartConnector(ctx, "google-calendar")
+				slog.Info("google-calendar connector started with OAuth token")
+			}
+			connConfig.AuthType = "oauth2"
+			if err := ytConn.Connect(ctx, connConfig); err == nil {
+				supervisor.StartConnector(ctx, "youtube")
+				slog.Info("youtube connector started with OAuth token")
+			}
+		}
+	} else {
+		slog.Info("no Google OAuth token found — connectors will start when user authorizes via /auth/google/start")
+	}
 
 	// Create web UI handler
 	webHandler := web.NewHandler(pg.Pool, nc, time.Now())
