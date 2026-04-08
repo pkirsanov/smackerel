@@ -11,9 +11,9 @@ Committed:
 - `specs/` (001-008, all with spec, design, scopes, reports)
 - `.github/`
 - `.specify/memory/`
-- Go core runtime sources under `cmd/` and `internal/` (48 source files, 39 test files)
-- Python ML sidecar sources under `ml/` (9 source files, 2 test files)
-- `docker-compose.yml` with health checks, resource limits, restart policies
+- Go core runtime sources under `cmd/` and `internal/` (51 source files, 40 test files)
+- Python ML sidecar sources under `ml/` (11 files, 2 test files)
+- `docker-compose.yml` with health checks, resource limits, restart policies, NATS auth
 - `config/smackerel.yaml`
 - Generated environment files under `config/generated/` via `./smackerel.sh config generate`
 - `./smackerel.sh`
@@ -22,15 +22,19 @@ Committed:
 
 Implemented runtime capabilities:
 
-- Capture pipeline (URL, text, voice, conversation, media group)
-- Semantic search (pgvector + embedding + re-ranking)
-- Daily digest generation with Telegram delivery
-- Knowledge graph linking (vector similarity, entity, topic, temporal)
-- Telegram bot (share-sheet capture, forwarded messages, conversation assembly, media groups)
-- Web UI (HTMX search, artifact detail, digest, topics, settings, status)
-- 7 passive connectors (IMAP, CalDAV, YouTube, RSS, Bookmarks, Browser, Google Keep)
-- Intelligence engine (synthesis, commitments, alerts, resurfacing)
-- Database migrations (5 SQL files)
+- Capture pipeline (URL, text, voice, conversation, media group) with SSRF protection
+- 5-stage semantic search (temporal intent → embed → pgvector → graph expand → LLM rerank)
+- Daily digest generation with Telegram delivery and retry
+- Knowledge graph linking (4 strategies: similarity, entity, topic, temporal) — wired into pipeline
+- Telegram bot (share-sheet, forwards, conversation assembly, media groups, 7 commands)
+- Web UI (HTMX semantic search, artifact detail, digest, topics, settings, status)
+- 10 passive connectors (Gmail API, Google Calendar API, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps)
+- Intelligence engine (synthesis at 2AM, momentum hourly, resurfacing at 8AM, overdue alerts)
+- OAuth2 flow with CSRF protection, token storage, auto-refresh
+- Data export endpoint with cursor pagination (JSONL streaming)
+- Database migrations (8 SQL files)
+- NATS JetStream with token authentication (5 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, SYNTHESIS)
+- Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 
 Do not bypass `./smackerel.sh` with ad-hoc `go`, `python`, `pytest`, or `docker compose` commands as the normal repo workflow.
 

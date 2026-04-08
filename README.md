@@ -175,40 +175,80 @@ runtime:
 
 ### Connectors (Passive Ingestion)
 
-Connectors run on cron schedules and sync data incrementally using cursors stored in the `sync_state` table. Each connector requires opt-in configuration.
+Connectors run on 5-minute sync cycles via the supervisor and sync data incrementally using cursors stored in the `sync_state` table.
 
-#### Gmail (IMAP)
+#### Google OAuth Setup (Gmail + Calendar + YouTube)
 
-Ingests email via IMAP with OAuth2 XOAUTH2 authentication. A single Google OAuth consent screen covers Gmail + Calendar + YouTube.
+A single Google OAuth2 consent screen covers all three Google connectors. Set this up once:
 
-1. Create OAuth2 credentials in [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-2. Enable the Gmail API
-3. Required OAuth scope: `https://mail.google.com/` (read-only access)
-4. Configure the connector with OAuth2 credentials and priority rules:
-   - **Priority senders** → emails from these addresses get full LLM processing
-   - **Skip labels** → emails with these labels are stored as metadata only
-   - **Priority labels** → emails with these labels (Starred, Important) get full processing
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → Create a project (or use existing)
+2. Enable these APIs:
+   - Gmail API
+   - Google Calendar API
+   - YouTube Data API v3
+3. Go to **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**
+   - Application type: **Web application**
+   - Authorized redirect URI: `http://127.0.0.1:40001/auth/google/callback`
+4. Copy the Client ID and Client Secret
+5. Configure in `config/smackerel.yaml`:
 
-#### Google Calendar (CalDAV)
+```yaml
+oauth:
+  google:
+    client_id: "123456789-xxxxx.apps.googleusercontent.com"
+    client_secret: "GOCSPX-xxxxxxxxxxxxxxxx"
+    redirect_url: "http://127.0.0.1:40001/auth/google/callback"
+```
 
-Syncs calendar events via CalDAV protocol with OAuth2 authentication.
+6. Regenerate config and restart: `./smackerel.sh config generate && ./smackerel.sh down && ./smackerel.sh up`
+7. Open `http://127.0.0.1:40001/auth/google/start` in your browser
+8. Grant access to Gmail, Calendar, and YouTube
+9. On successful callback, all three connectors start automatically
 
-1. Use the same Google OAuth2 credentials as Gmail
-2. Required OAuth scope: `https://www.googleapis.com/auth/calendar.readonly`
-3. Events are processed for: attendee linking to People entities, pre-meeting context assembly (related artifacts for each attendee), and temporal linking
+Tokens are stored in PostgreSQL with automatic refresh. Check connection status at `http://127.0.0.1:40001/auth/status`.
+
+#### Gmail
+
+Fetches email via the Gmail REST API using the OAuth2 token from above.
+
+- Messages fetched from INBOX with incremental cursor
+- Headers extracted: From, To, Subject, Date, Message-ID, In-Reply-To
+- Body extracted: prefers text/plain, falls back to text/html
+- Labels preserved for tier assignment
+- Processing tiers:
+  - **Priority senders** → full LLM processing
+  - **Priority labels** (Starred, Important) → full processing
+  - **Skip labels** (Promotions, Social) → metadata only
+  - **Skip domains** (newsletters, noreply) → skipped entirely
+  - **Default** → standard processing
+- Action items extracted from email body (deadlines, todos, requests)
+
+#### Google Calendar
+
+Fetches events via Google Calendar API v3 using the same OAuth2 token.
+
+- Supports time-based and syncToken cursors for incremental sync
+- Extracts full event metadata: summary, description, location, organizer, attendees
+- Handles all-day events and recurring events
+- Processing tiers:
+  - **Events with attendees** → full processing (pre-meeting context assembly)
+  - **Solo events** → standard processing
+  - **Recurring events** → light processing
+  - **Cancelled events** → skipped
+- Attendees linked to People entities in the knowledge graph
 
 #### YouTube
 
-Syncs liked videos, watch later, and playlist content via YouTube Data API v3.
+Fetches videos via YouTube Data API v3 using the same OAuth2 token.
 
-1. Use the same Google OAuth2 credentials
-2. Required OAuth scope: `https://www.googleapis.com/auth/youtube.readonly`
-3. Processing tiers based on engagement:
-   - **Liked videos** → full processing (transcript + summary + entities)
-   - **Playlist videos** → full processing
-   - **Watch later** → standard processing
-   - **History** → light processing
-4. Transcripts are fetched via `youtube-transcript-api` in the ML sidecar; falls back to Whisper for audio-only
+- Sources: Liked videos, Watch Later, custom playlists
+- Deduplicates across sources (same video in liked + playlist)
+- Processing tiers based on engagement:
+  - **Liked videos** → full processing (transcript + summary + entities)
+  - **Playlist videos** → full processing (tagged with playlist name)
+  - **Watch Later** → standard processing
+  - **Default** → light processing
+- Transcripts fetched via `youtube-transcript-api`; falls back to Whisper
 
 #### RSS / Atom Feeds
 
@@ -322,7 +362,9 @@ curl -X POST http://127.0.0.1:40001/api/search \
   -d '{"query": "recommendations", "filters": {"person": "Sarah", "type": "video"}}'
 ```
 
-Search pipeline: query → embed → pgvector cosine similarity (top 30) → metadata filters → knowledge graph expansion → LLM re-ranking → top results with relevance explanations.
+Search pipeline: query → **temporal intent parsing** ("from last week" → auto-filter) → embed → pgvector cosine similarity (top 30) → metadata filters → **knowledge graph expansion** (discovers connected artifacts via edges) → **LLM re-ranking** (context-aware relevance ordering) → top results with relevance explanations.
+
+Temporal expressions are automatically detected: "yesterday", "last week", "this month", "recently", etc. The temporal phrase is removed from the query and converted to date filters.
 
 ### Daily Digest
 
@@ -351,7 +393,73 @@ curl -H "Authorization: Bearer your-token" \
   http://127.0.0.1:40001/api/recent
 ```
 
-Returns the 5 most recently captured artifacts.
+Returns the 5 most recently captured artifacts. Accepts optional `?limit=N` parameter (max 50).
+
+### Export / Backup
+
+```bash
+# Export all artifacts as JSONL
+curl -H "Authorization: Bearer your-token" \
+  http://127.0.0.1:40001/api/export
+
+# Paginated export (10K artifacts per page)
+curl -H "Authorization: Bearer your-token" \
+  "http://127.0.0.1:40001/api/export?limit=1000"
+
+# Next page using cursor from X-Next-Cursor header
+curl -H "Authorization: Bearer your-token" \
+  "http://127.0.0.1:40001/api/export?cursor=2026-04-01T00:00:00Z&limit=1000"
+```
+
+Returns JSONL (one JSON object per line) with `Content-Disposition: attachment`. The response includes an `X-Next-Cursor` header for pagination. Maximum 10,000 artifacts per request.
+
+### Artifact Detail
+
+```bash
+curl -H "Authorization: Bearer your-token" \
+  http://127.0.0.1:40001/api/artifact/01HXYZ...
+```
+
+### OAuth Status
+
+```bash
+# Check which providers have valid tokens
+curl http://127.0.0.1:40001/auth/status
+```
+
+## Intelligence Engine
+
+Smackerel runs background intelligence jobs on a schedule:
+
+| Job | Schedule | What it does |
+|-----|----------|-------------|
+| **Topic momentum** | Hourly | Updates topic lifecycle states (emerging → active → hot → cooling → dormant) based on capture frequency and decay |
+| **Synthesis** | Daily at 2 AM | Detects cross-domain clusters (3+ artifacts sharing topics), identifies through-lines, contradictions, and patterns |
+| **Overdue commitments** | Daily at 2 AM | Scans action items with passed deadlines, creates alerts |
+| **Resurfacing** | Daily at 8 AM | Selects high-value dormant artifacts + serendipity picks, delivers via Telegram |
+| **Daily digest** | Configurable cron | Assembles action items + hot topics + overnight artifacts → LLM summary → Telegram delivery |
+
+All jobs have timeouts, nil-guards, and graceful failure handling. Digest delivery retries on the next cycle if the ML sidecar was slow.
+
+## Security
+
+| Protection | Implementation |
+|-----------|----------------|
+| **API authentication** | Bearer token (min 16 chars, placeholder values rejected at startup) |
+| **NATS authentication** | Token auth enforced on all NATS connections (Go + Python + server) |
+| **SSRF protection** | URL validation blocks private IPs, loopback, metadata endpoints, non-HTTP schemes. Redirect chains re-validated per hop. |
+| **SQL injection** | All queries parameterized with `$N` placeholders, ILIKE metacharacters escaped |
+| **XSS prevention** | Go `html/template` auto-escaping + `safeURL` blocks `javascript:`/`data:` schemes |
+| **CSP header** | `default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'` |
+| **Rate limiting** | 100 concurrent API requests (Chi middleware) |
+| **Dedup integrity** | Unique partial index on `content_hash` + belt-and-suspenders check |
+| **OAuth CSRF** | Crypto-random state tokens with 10-minute TTL and 100-entry cap |
+| **Token storage** | OAuth tokens in PostgreSQL with automatic refresh on expiry |
+| **Config validation** | Fail-fast on missing vars, validates PORT (1-65535), DIGEST_CRON (5-field), auth token strength |
+| **Constant-time auth** | `subtle.ConstantTimeCompare` for token verification |
+| **Body size limits** | 1MB API request bodies, 5MB RSS feeds, 10MB OCR images, 10MB article fetch |
+| **Resource limits** | Docker memory limits: postgres 512M, nats 256M, core 256M, ml 2G, ollama 8G |
+| **Migration safety** | PostgreSQL advisory lock pinned to single connection prevents concurrent migration races |
 
 ## Web UI
 
@@ -368,7 +476,7 @@ The web search uses the same semantic search engine as the API (pgvector + embed
 
 ## Runtime Standards
 
-Smackerel has a complete runtime with a repo CLI, YAML-backed config generation, a Go core (47 source files), a Python ML sidecar (9 source files), and Docker Compose orchestration. The operational surface is standardized:
+Smackerel has a complete runtime with a repo CLI, YAML-backed config generation, a Go core (51 source files, 40 test files), a Python ML sidecar (11 files), and Docker Compose orchestration. The operational surface is standardized:
 
 - Docker-only runtime and test execution
 - One repo CLI for build, test, config generation, stack lifecycle, logs, and cleanup: `./smackerel.sh`
