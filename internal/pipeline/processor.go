@@ -15,6 +15,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/extract"
+	"github.com/smackerel/smackerel/internal/graph"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
@@ -78,13 +79,14 @@ type NATSProcessedPayload struct {
 
 // Processor orchestrates the content processing pipeline.
 type Processor struct {
-	DB   *pgxpool.Pool
-	NATS *smacknats.Client
+	DB     *pgxpool.Pool
+	NATS   *smacknats.Client
+	Linker *graph.Linker
 }
 
 // NewProcessor creates a new pipeline processor.
 func NewProcessor(db *pgxpool.Pool, nats *smacknats.Client) *Processor {
-	return &Processor{DB: db, NATS: nats}
+	return &Processor{DB: db, NATS: nats, Linker: graph.NewLinker(db)}
 }
 
 // Process runs the full pipeline: extract -> dedup -> publish to NATS for ML processing.
@@ -303,6 +305,23 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 		"model", payload.ModelUsed,
 		"processing_ms", payload.ProcessingMs,
 	)
+
+	// Link artifact in knowledge graph — creates edges via similarity,
+	// entity, topic, and temporal strategies
+	if p.Linker != nil {
+		edgeCount, linkErr := p.Linker.LinkArtifact(ctx, payload.ArtifactID)
+		if linkErr != nil {
+			slog.Warn("knowledge graph linking failed",
+				"artifact_id", payload.ArtifactID,
+				"error", linkErr,
+			)
+		} else if edgeCount > 0 {
+			slog.Info("knowledge graph linked",
+				"artifact_id", payload.ArtifactID,
+				"edges_created", edgeCount,
+			)
+		}
+	}
 
 	return nil
 }

@@ -26,7 +26,7 @@ Feature directories require:
 
 ## Required Bug Artifacts
 
-Bug directories require:
+Bug directories require ALL of the following — no subset is valid:
 
 - `bug.md`
 - `spec.md`
@@ -34,6 +34,29 @@ Bug directories require:
 - `scopes.md`
 - `report.md`
 - `state.json`
+
+### Bug Artifact Completeness Gate (BLOCKING — ALL-OR-NOTHING)
+
+**Creating a bug folder with only a subset of required artifacts (e.g., just `bug.md` + `state.json`) is a policy violation.** Every agent that creates a bug folder MUST either:
+
+1. Create ALL 6 required artifacts in a single operation, OR
+2. Delegate to `bubbles.bug` which owns the complete bug artifact creation workflow
+
+**Prohibited patterns:**
+- Creating `bug.md` + `state.json` as "minimal placeholders" and deferring other artifacts
+- Creating a bug folder with skeleton/empty files that lack substantive content
+- Creating partial artifacts and claiming they will be "filled in later"
+- Any agent other than `bubbles.bug` creating bug artifacts without producing the complete set
+
+**Enforcement:** If a bug folder is found with fewer than 6 required artifacts, the bug is NOT valid work and MUST NOT be treated as an actionable bug packet. Agents encountering incomplete bug folders MUST either complete the missing artifacts (if they are `bubbles.bug`) or route to `bubbles.bug` to complete them.
+
+**The correct dispatch chain for bug work:**
+1. `bubbles.bug` discovers/documents bugs and creates ALL 6 artifacts
+2. `bubbles.implement` receives a complete bug packet and implements the fix
+3. `bubbles.test` runs tests against the fix
+4. `bubbles.validate` + `bubbles.audit` validate and audit
+
+No agent may skip step 1 by creating partial artifacts and jumping directly to implementation.
 
 ## Required Ops Artifacts
 

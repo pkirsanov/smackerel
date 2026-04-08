@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -272,4 +273,37 @@ func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Requ
 		"created_at":      createdAt.Format(time.RFC3339),
 		"updated_at":      updatedAt.Format(time.RFC3339),
 	})
+}
+
+// ExportHandler streams all artifacts as JSONL for backup/export.
+func (d *Dependencies) ExportHandler(w http.ResponseWriter, r *http.Request) {
+	if !d.checkAuth(r) {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
+		return
+	}
+
+	// Get query capability from DB
+	type querier interface {
+		ExportArtifacts(ctx context.Context) ([]map[string]interface{}, error)
+	}
+	exporter, ok := d.DB.(querier)
+	if !ok {
+		writeError(w, http.StatusServiceUnavailable, "EXPORT_UNAVAILABLE", "Export not supported")
+		return
+	}
+
+	artifacts, err := exporter.ExportArtifacts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "EXPORT_FAILED", "Failed to export artifacts")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Content-Disposition", "attachment; filename=smackerel-export.jsonl")
+
+	enc := json.NewEncoder(w)
+	for _, a := range artifacts {
+		enc.Encode(a)
+	}
+	slog.Info("export complete", "artifacts", len(artifacts))
 }

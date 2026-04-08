@@ -12,12 +12,15 @@ import (
 
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
+	"github.com/smackerel/smackerel/internal/intelligence"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/pipeline"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
+	"github.com/smackerel/smackerel/internal/topics"
 	"github.com/smackerel/smackerel/internal/web"
 )
 
@@ -95,6 +98,19 @@ func run() error {
 	// Create digest generator
 	digestGen := digest.NewGenerator(pg.Pool, nc)
 
+	// Create intelligence engine for synthesis, alerts, and resurfacing
+	intEngine := intelligence.NewEngine(pg.Pool, nc)
+
+	// Create topic lifecycle manager for momentum tracking
+	topicLifecycle := topics.NewLifecycle(pg.Pool)
+
+	// Create and start connector supervisor
+	registry := connector.NewRegistry()
+	stateStore := connector.NewStateStore(pg.Pool)
+	supervisor := connector.NewSupervisor(registry, stateStore)
+	_ = supervisor // Connectors are registered when configured via OAuth
+	slog.Info("connector supervisor initialized")
+
 	// Create web UI handler
 	webHandler := web.NewHandler(pg.Pool, nc, time.Now())
 
@@ -131,8 +147,8 @@ func run() error {
 		}
 	}
 
-	// Start digest scheduler
-	sched := scheduler.New(digestGen, tgBot)
+	// Start digest scheduler + intelligence jobs
+	sched := scheduler.New(digestGen, tgBot, intEngine, topicLifecycle)
 	if err := sched.Start(ctx, cfg.DigestCron); err != nil {
 		slog.Warn("digest scheduler failed to start", "error", err)
 	}
@@ -171,6 +187,13 @@ func run() error {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("server shutdown: %w", err)
 	}
+
+	// Drain components gracefully
+	if tgBot != nil {
+		tgBot.Stop()
+	}
+	resultSub.Stop()
+	supervisor.StopAll()
 
 	slog.Info("smackerel-core stopped")
 	return nil
