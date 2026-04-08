@@ -31,13 +31,14 @@ type ProcessRequest struct {
 
 // ProcessResult is the output after full pipeline processing.
 type ProcessResult struct {
-	ArtifactID   string   `json:"artifact_id"`
-	Title        string   `json:"title"`
-	ArtifactType string   `json:"artifact_type"`
-	Summary      string   `json:"summary"`
-	Connections  int      `json:"connections"`
-	Topics       []string `json:"topics"`
-	ProcessingMs int64    `json:"processing_time_ms"`
+	ArtifactID       string   `json:"artifact_id"`
+	Title            string   `json:"title"`
+	ArtifactType     string   `json:"artifact_type"`
+	Summary          string   `json:"summary"`
+	Connections      int      `json:"connections"`
+	Topics           []string `json:"topics"`
+	ProcessingMs     int64    `json:"processing_time_ms"`
+	ProcessingStatus string   `json:"processing_status"`
 }
 
 // NATSProcessPayload is what core publishes to artifacts.process.
@@ -200,13 +201,14 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 	)
 
 	return &ProcessResult{
-		ArtifactID:   artifactID,
-		Title:        extracted.Title,
-		ArtifactType: string(extracted.ContentType),
-		Summary:      "", // Will be populated after ML processing
-		Connections:  0,
-		Topics:       nil,
-		ProcessingMs: time.Since(start).Milliseconds(),
+		ArtifactID:       artifactID,
+		Title:            extracted.Title,
+		ArtifactType:     string(extracted.ContentType),
+		Summary:          "", // Will be populated after ML processing
+		Connections:      0,
+		Topics:           nil,
+		ProcessingMs:     time.Since(start).Milliseconds(),
+		ProcessingStatus: "pending",
 	}, nil
 }
 

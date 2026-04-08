@@ -20,7 +20,7 @@ runtime:
   embedding_model: all-MiniLM-L6-v2
 
 llm:
-  provider: ollama
+  provider: "" # REQUIRED: set to ollama, openai, or anthropic
   model: llama3.2
   api_key: ""
   ollama_url: http://ollama:11434
