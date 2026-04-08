@@ -231,6 +231,8 @@ Feature: [Bug] Prevent [short description]
 
 **⚠️ THIS GATE IS BLOCKING - NO WORK UNTIL ALL ARTIFACTS EXIST**
 
+**⛔ ALL-OR-NOTHING RULE:** Bug artifact creation is atomic. ALL required artifacts MUST be created in a single operation with substantive content. Creating a subset (e.g., just `bug.md` + `state.json`) and deferring other artifacts is a policy violation equivalent to creating stubs. If ANY artifact cannot be created with meaningful content, the entire bug folder creation MUST be deferred until sufficient information exists.
+
 Before ANY bug work (discovery, analysis, or fixing), ensure the bug folder and ALL required artifacts exist:
 
 #### Required Bug Artifacts

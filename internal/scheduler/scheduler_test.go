@@ -5,7 +5,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	s := New(nil, nil)
+	s := New(nil, nil, nil, nil)
 	if s == nil {
 		t.Fatal("expected non-nil scheduler")
 	}
@@ -21,7 +21,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestStart_InvalidCron(t *testing.T) {
-	s := New(nil, nil)
+	s := New(nil, nil, nil, nil)
 	err := s.Start(nil, "invalid-cron-expression")
 	if err == nil {
 		t.Error("expected error for invalid cron expression")
@@ -29,7 +29,7 @@ func TestStart_InvalidCron(t *testing.T) {
 }
 
 func TestStart_ValidCron(t *testing.T) {
-	s := New(nil, nil)
+	s := New(nil, nil, nil, nil)
 	// This will succeed but the cron job will fail on nil digestGen when triggered
 	err := s.Start(nil, "0 7 * * *")
 	if err != nil {
@@ -39,7 +39,7 @@ func TestStart_ValidCron(t *testing.T) {
 }
 
 func TestStop(t *testing.T) {
-	s := New(nil, nil)
+	s := New(nil, nil, nil, nil)
 	s.Start(nil, "0 0 * * *")
 	// Stop should not panic
 	s.Stop()

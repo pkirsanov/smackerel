@@ -80,6 +80,7 @@
    - Implementation, bug fixing, hardening, stabilization, gap-closure, and cross-cutting operational work MUST be anchored to real feature, bug, or ops artifacts before completion work proceeds.
    - If `spec.md`, `design.md`, `scopes.md`, or required sibling artifacts are missing, empty, or placeholder-only, agents MUST route to the owning planning agents first instead of improvising implementation.
    - Empty feature directories, partial artifact sets, or artifact files containing only skeletal headers are workflow failures, not permission to continue unplanned work.
+   - **Bug artifact creation is ALL-OR-NOTHING:** Creating a bug folder with a partial artifact subset (e.g., only `bug.md` + `state.json`) is a policy violation equivalent to creating a stub. ALL 6 required bug artifacts (`bug.md`, `spec.md`, `design.md`, `scopes.md`, `report.md`, `state.json`) MUST be created together with substantive content — not skeleton headers or empty templates. Only `bubbles.bug` owns the complete bug artifact creation workflow; other agents discovering bugs MUST delegate to `bubbles.bug` instead of creating partial artifacts.
 
 16. **No Cosmetic Relabeling Of Incomplete Work**
    - Renaming a `TODO`, stub, placeholder, fake value, or incomplete branch to softer language does NOT count as progress.
@@ -185,5 +186,6 @@ Before reporting completion, all answers must be **YES**:
 12. If shared fixtures, harnesses, or bootstrap contracts changed, was blast radius planned with a canary suite and rollback path before the broad suite reran?
 13. If the work was a narrow repair or risky refactor, did it stay inside an explicit change boundary with zero excluded file families changed?
 14. Do all tests assert on values produced by the code under test rather than on values the test itself hardcoded or injected? (No self-validating test setups)
+15. For bug work: do ALL 6 required bug artifacts exist with substantive content (not skeletons), and were they created by the correct owning agent (`bubbles.bug`)?
 
 If any answer is **NO**, completion is prohibited.

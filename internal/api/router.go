@@ -30,6 +30,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Get("/digest", deps.DigestHandler)
 		r.Get("/recent", deps.RecentHandler)
 		r.Get("/artifact/{id}", deps.ArtifactDetailHandler)
+		r.Get("/export", deps.ExportHandler)
 	})
 
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes

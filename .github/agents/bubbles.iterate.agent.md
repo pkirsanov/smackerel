@@ -322,6 +322,7 @@ If `{FEATURE_DIR}/bugs/*/state.json` has `status` != `"done"`:
 - Select the highest-priority incomplete bug folder that already has canonical bug artifacts and a `scopes.md` with at least one incomplete DoD item
 - Treat the iteration as bug work scoped to that bug folder (Bug Artifacts Gate + bug-scoped DoD + evidence)
 - If no suitable bug folder exists (missing artifacts or no scopes): report why and return blocked status to the orchestrator (do not create placeholder artifacts)
+- **⛔ NEVER create partial bug artifacts.** If a bug folder needs to be created, delegate to `bubbles.bug` via `runSubagent`. The `bubbles.iterate` agent does NOT own bug artifact creation \u2014 only `bubbles.bug` may create the complete 6-artifact set (`bug.md`, `spec.md`, `design.md`, `scopes.md`, `report.md`, `state.json`). Creating a subset is a policy violation.
 
 ---
 

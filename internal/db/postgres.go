@@ -61,3 +61,53 @@ func (p *Postgres) Healthy(ctx context.Context) bool {
 	defer cancel()
 	return p.Pool.Ping(ctx) == nil
 }
+
+// ExportArtifacts returns all processed artifacts for data export.
+func (p *Postgres) ExportArtifacts(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := p.Pool.Query(ctx, `
+		SELECT id, title, artifact_type, COALESCE(summary, ''),
+		       COALESCE(source_url, ''), COALESCE(content_raw, ''),
+		       COALESCE(topics::text, '[]'),
+		       COALESCE(entities::text, '{}'),
+		       COALESCE(key_ideas::text, '[]'),
+		       created_at, updated_at
+		FROM artifacts
+		WHERE processing_status = 'processed'
+		ORDER BY created_at ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("export query: %w", err)
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var id, title, artType, summary, sourceURL, content string
+		var topicsStr, entitiesStr, keyIdeasStr string
+		var createdAt, updatedAt time.Time
+
+		if err := rows.Scan(&id, &title, &artType, &summary, &sourceURL,
+			&content, &topicsStr, &entitiesStr, &keyIdeasStr,
+			&createdAt, &updatedAt); err != nil {
+			continue
+		}
+
+		results = append(results, map[string]interface{}{
+			"artifact_id":   id,
+			"title":         title,
+			"artifact_type": artType,
+			"summary":       summary,
+			"source_url":    sourceURL,
+			"content":       content,
+			"topics":        topicsStr,
+			"entities":      entitiesStr,
+			"key_ideas":     keyIdeasStr,
+			"created_at":    createdAt.Format(time.RFC3339),
+			"updated_at":    updatedAt.Format(time.RFC3339),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return results, fmt.Errorf("export iteration: %w", err)
+	}
+	return results, nil
+}
