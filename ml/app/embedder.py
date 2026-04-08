@@ -2,12 +2,18 @@
 
 import asyncio
 import logging
+import threading
 
 logger = logging.getLogger("smackerel-ml.embedder")
 
 # Global model holder — loaded once at import/startup
 _model = None
 _model_name = "all-MiniLM-L6-v2"
+
+# Backpressure: track in-flight executor tasks to prevent thread leak
+_pending_count = 0
+_pending_lock = threading.Lock()
+_MAX_PENDING = 3
 
 
 def _load_model():
@@ -24,12 +30,28 @@ def _load_model():
 
 async def generate_embedding(text: str) -> list[float]:
     """Generate a 384-dimension embedding vector from text."""
+    global _pending_count
+
+    with _pending_lock:
+        if _pending_count >= _MAX_PENDING:
+            raise RuntimeError(
+                f"embedding backpressure: {_pending_count} requests in flight, rejecting"
+            )
+        _pending_count += 1
+
     model = _load_model()
     loop = asyncio.get_event_loop()
-    return await asyncio.wait_for(
-        loop.run_in_executor(None, lambda: model.encode(text, normalize_embeddings=True).tolist()),
-        timeout=10.0,
+    future = loop.run_in_executor(
+        None, lambda: model.encode(text, normalize_embeddings=True).tolist()
     )
+    try:
+        return await asyncio.wait_for(future, timeout=10.0)
+    except asyncio.TimeoutError:
+        future.cancel()  # best-effort cancel
+        raise
+    finally:
+        with _pending_lock:
+            _pending_count -= 1
 
 
 async def generate_artifact_embedding(title: str, summary: str, key_ideas: list[str]) -> list[float]:

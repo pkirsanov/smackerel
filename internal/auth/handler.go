@@ -7,22 +7,25 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 )
 
 // OAuthHandler manages OAuth2 web flows for connector authorization.
 type OAuthHandler struct {
-	providers map[string]OAuth2Provider
-	store     *TokenStore
-	states    map[string]string // state → provider name (CSRF protection)
-	mu        sync.Mutex
+	providers    map[string]OAuth2Provider
+	store        *TokenStore
+	states       map[string]string    // state → provider name (CSRF protection)
+	stateCreated map[string]time.Time // state → creation time (for TTL eviction)
+	mu           sync.Mutex
 }
 
 // NewOAuthHandler creates a new OAuth handler.
 func NewOAuthHandler(store *TokenStore) *OAuthHandler {
 	return &OAuthHandler{
-		providers: make(map[string]OAuth2Provider),
-		store:     store,
-		states:    make(map[string]string),
+		providers:    make(map[string]OAuth2Provider),
+		store:        store,
+		states:       make(map[string]string),
+		stateCreated: make(map[string]time.Time),
 	}
 }
 
@@ -48,7 +51,22 @@ func (h *OAuthHandler) StartHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate CSRF state token
 	state := generateState()
 	h.mu.Lock()
+	// Evict entries older than 10 minutes
+	cutoff := time.Now().Add(-10 * time.Minute)
+	for s, created := range h.stateCreated {
+		if created.Before(cutoff) {
+			delete(h.states, s)
+			delete(h.stateCreated, s)
+		}
+	}
+	// Cap at 100 entries to prevent abuse
+	if len(h.states) >= 100 {
+		h.mu.Unlock()
+		http.Error(w, "too many pending authorization requests", http.StatusTooManyRequests)
+		return
+	}
 	h.states[state] = providerName
+	h.stateCreated[state] = time.Now()
 	h.mu.Unlock()
 
 	// Determine scopes
@@ -88,6 +106,7 @@ func (h *OAuthHandler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	providerName, ok := h.states[state]
 	if ok {
 		delete(h.states, state)
+		delete(h.stateCreated, state)
 	}
 	h.mu.Unlock()
 

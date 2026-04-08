@@ -62,8 +62,20 @@ func (p *Postgres) Healthy(ctx context.Context) bool {
 	return p.Pool.Ping(ctx) == nil
 }
 
-// ExportArtifacts returns all processed artifacts for data export.
-func (p *Postgres) ExportArtifacts(ctx context.Context) ([]map[string]interface{}, error) {
+// ExportResult holds exported artifacts and a cursor for pagination.
+type ExportResult struct {
+	Artifacts  []map[string]interface{}
+	NextCursor time.Time // last created_at value; zero if no results
+}
+
+// ExportArtifacts returns processed artifacts for data export with cursor-based pagination.
+// cursor is the starting point (exclusive); use time.Time{} for the first page.
+// limit is capped at 10000.
+func (p *Postgres) ExportArtifacts(ctx context.Context, cursor time.Time, limit int) (*ExportResult, error) {
+	if limit <= 0 || limit > 10000 {
+		limit = 10000
+	}
+
 	rows, err := p.Pool.Query(ctx, `
 		SELECT id, title, artifact_type, COALESCE(summary, ''),
 		       COALESCE(source_url, ''), COALESCE(content_raw, ''),
@@ -72,15 +84,17 @@ func (p *Postgres) ExportArtifacts(ctx context.Context) ([]map[string]interface{
 		       COALESCE(key_ideas::text, '[]'),
 		       created_at, updated_at
 		FROM artifacts
-		WHERE processing_status = 'processed'
+		WHERE processing_status = 'processed' AND created_at > $1
 		ORDER BY created_at ASC
-	`)
+		LIMIT $2
+	`, cursor, limit)
 	if err != nil {
 		return nil, fmt.Errorf("export query: %w", err)
 	}
 	defer rows.Close()
 
 	var results []map[string]interface{}
+	var lastCreatedAt time.Time
 	for rows.Next() {
 		var id, title, artType, summary, sourceURL, content string
 		var topicsStr, entitiesStr, keyIdeasStr string
@@ -92,6 +106,7 @@ func (p *Postgres) ExportArtifacts(ctx context.Context) ([]map[string]interface{
 			continue
 		}
 
+		lastCreatedAt = createdAt
 		results = append(results, map[string]interface{}{
 			"artifact_id":   id,
 			"title":         title,
@@ -107,7 +122,7 @@ func (p *Postgres) ExportArtifacts(ctx context.Context) ([]map[string]interface{
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return results, fmt.Errorf("export iteration: %w", err)
+		return &ExportResult{Artifacts: results, NextCursor: lastCreatedAt}, fmt.Errorf("export iteration: %w", err)
 	}
-	return results, nil
+	return &ExportResult{Artifacts: results, NextCursor: lastCreatedAt}, nil
 }

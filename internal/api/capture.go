@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
 
@@ -275,16 +276,38 @@ func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// ExportHandler streams all artifacts as JSONL for backup/export.
+// ExportHandler streams artifacts as JSONL for backup/export with cursor-based pagination.
 func (d *Dependencies) ExportHandler(w http.ResponseWriter, r *http.Request) {
 	if !d.checkAuth(r) {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 		return
 	}
 
+	// Parse cursor (RFC3339 timestamp)
+	var cursor time.Time
+	if c := r.URL.Query().Get("cursor"); c != "" {
+		var err error
+		cursor, err = time.Parse(time.RFC3339, c)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_INPUT", "cursor must be RFC3339 timestamp")
+			return
+		}
+	}
+
+	// Parse limit (default 10000, max 10000)
+	limit := 10000
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if limit > 10000 {
+		limit = 10000
+	}
+
 	// Get query capability from DB
 	type querier interface {
-		ExportArtifacts(ctx context.Context) ([]map[string]interface{}, error)
+		ExportArtifacts(ctx context.Context, cursor time.Time, limit int) (*db.ExportResult, error)
 	}
 	exporter, ok := d.DB.(querier)
 	if !ok {
@@ -292,7 +315,7 @@ func (d *Dependencies) ExportHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	artifacts, err := exporter.ExportArtifacts(r.Context())
+	result, err := exporter.ExportArtifacts(r.Context(), cursor, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "EXPORT_FAILED", "Failed to export artifacts")
 		return
@@ -300,10 +323,13 @@ func (d *Dependencies) ExportHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("Content-Disposition", "attachment; filename=smackerel-export.jsonl")
+	if !result.NextCursor.IsZero() {
+		w.Header().Set("X-Next-Cursor", result.NextCursor.Format(time.RFC3339))
+	}
 
 	enc := json.NewEncoder(w)
-	for _, a := range artifacts {
+	for _, a := range result.Artifacts {
 		enc.Encode(a)
 	}
-	slog.Info("export complete", "artifacts", len(artifacts))
+	slog.Info("export complete", "artifacts", len(result.Artifacts))
 }
