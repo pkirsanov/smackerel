@@ -21,6 +21,8 @@ type Dependencies struct {
 	WebHandler   interface{}
 	OAuthHandler interface{}
 	AuthToken    string
+	Version      string
+	CommitHash   string
 }
 
 // DBHealthChecker is the interface for database health checks.
@@ -36,8 +38,10 @@ type NATSHealthChecker interface {
 
 // HealthResponse is the JSON response for GET /api/health.
 type HealthResponse struct {
-	Status   string                   `json:"status"`
-	Services map[string]ServiceStatus `json:"services"`
+	Status     string                   `json:"status"`
+	Version    string                   `json:"version,omitempty"`
+	CommitHash string                   `json:"commit_hash,omitempty"`
+	Services   map[string]ServiceStatus `json:"services"`
 }
 
 // ServiceStatus represents the health of a single service.
@@ -99,8 +103,10 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := HealthResponse{
-		Status:   overall,
-		Services: services,
+		Status:     overall,
+		Version:    d.Version,
+		CommitHash: d.CommitHash,
+		Services:   services,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -468,8 +468,8 @@ Open **http://127.0.0.1:40001** in a browser. Pages:
 - **/** — Search with live HTMX-powered semantic search results
 - **/artifact/{id}** — Artifact detail with summary, key ideas, entities, connections
 - **/topics** — Topic lifecycle view with pagination (emerging → active → hot → cooling → dormant)
-- **/ui/digest** — Today's daily digest
-- **/ui/status** — System status (DB, NATS, ML sidecar health)
+- **/digest** — Today's daily digest
+- **/status** — System status (DB, NATS, ML sidecar health)
 - **/settings** — Connector status and configuration
 
 The web search uses the same semantic search engine as the API (pgvector + embedding + LLM re-ranking). Dark/light theme follows OS preference. Monochrome design — no accent colors, no emoji.

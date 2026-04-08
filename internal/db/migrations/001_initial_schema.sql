@@ -1,5 +1,16 @@
 -- 001_initial_schema.sql
 -- Smackerel initial schema: artifacts, people, topics, edges, sync_state, action_items, digests
+--
+-- ROLLBACK:
+--   DROP TABLE IF EXISTS digests CASCADE;
+--   DROP TABLE IF EXISTS action_items CASCADE;
+--   DROP TABLE IF EXISTS sync_state CASCADE;
+--   DROP TABLE IF EXISTS edges CASCADE;
+--   DROP TABLE IF EXISTS topics CASCADE;
+--   DROP TABLE IF EXISTS people CASCADE;
+--   DROP TABLE IF EXISTS artifacts CASCADE;
+--   DROP EXTENSION IF EXISTS pg_trgm;
+--   DROP EXTENSION IF EXISTS vector;
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;

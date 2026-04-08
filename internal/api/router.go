@@ -77,10 +77,10 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Get("/", wh.SearchPage)
 			r.Post("/search", wh.SearchResults)
 			r.Get("/artifact/{id}", wh.ArtifactDetail)
-			r.Get("/ui/digest", wh.DigestPage)
+			r.Get("/digest", wh.DigestPage)
 			r.Get("/topics", wh.TopicsPage)
 			r.Get("/settings", wh.SettingsPage)
-			r.Get("/ui/status", wh.StatusPage)
+			r.Get("/status", wh.StatusPage)
 		})
 	}
 

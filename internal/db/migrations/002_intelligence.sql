@@ -1,5 +1,11 @@
 -- 002_intelligence.sql
 -- Intelligence layer: synthesis insights, alerts, enhanced action items
+--
+-- ROLLBACK:
+--   DROP TABLE IF EXISTS weekly_synthesis CASCADE;
+--   DROP TABLE IF EXISTS meeting_briefs CASCADE;
+--   DROP TABLE IF EXISTS alerts CASCADE;
+--   DROP TABLE IF EXISTS synthesis_insights CASCADE;
 
 -- Synthesis insights: detected cross-domain connections
 CREATE TABLE IF NOT EXISTS synthesis_insights (

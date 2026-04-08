@@ -69,21 +69,28 @@ func (rs *ResultSubscriber) Start(ctx context.Context) error {
 	go func() {
 		defer rs.wg.Done()
 		for {
-			select {
-			case <-rs.done:
-				return
-			case <-ctx.Done():
-				return
-			default:
-			}
-
 			msgs, err := processedConsumer.Fetch(10, jetstream.FetchMaxWait(5*time.Second))
 			if err != nil {
+				// Check for shutdown between fetch attempts
+				select {
+				case <-rs.done:
+					return
+				case <-ctx.Done():
+					return
+				default:
+				}
 				slog.Debug("fetch artifacts.processed batch", "error", err)
 				continue
 			}
 
 			for msg := range msgs.Messages() {
+				select {
+				case <-rs.done:
+					return
+				case <-ctx.Done():
+					return
+				default:
+				}
 				rs.handleMessage(ctx, msg)
 			}
 		}
@@ -107,21 +114,28 @@ func (rs *ResultSubscriber) Start(ctx context.Context) error {
 	go func() {
 		defer rs.wg.Done()
 		for {
-			select {
-			case <-rs.done:
-				return
-			case <-ctx.Done():
-				return
-			default:
-			}
-
 			msgs, err := digestConsumer.Fetch(10, jetstream.FetchMaxWait(5*time.Second))
 			if err != nil {
+				// Check for shutdown between fetch attempts
+				select {
+				case <-rs.done:
+					return
+				case <-ctx.Done():
+					return
+				default:
+				}
 				slog.Debug("fetch digest.generated batch", "error", err)
 				continue
 			}
 
 			for msg := range msgs.Messages() {
+				select {
+				case <-rs.done:
+					return
+				case <-ctx.Done():
+					return
+				default:
+				}
 				rs.handleDigestMessage(ctx, msg)
 			}
 		}
