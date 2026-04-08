@@ -76,12 +76,13 @@ func (l *Linker) linkBySimilarity(ctx context.Context, artifactID string) (int, 
 		return 0, nil // No embedding yet, skip
 	}
 
-	// Single parameterized nearest-neighbor query using the fetched embedding
+	// Single parameterized nearest-neighbor query using a CTE to avoid subquery duplication
 	rows, err := l.Pool.Query(ctx, `
-		SELECT id, 1 - (embedding <=> (SELECT embedding FROM artifacts WHERE id = $1)) AS similarity
+		WITH target AS (SELECT embedding FROM artifacts WHERE id = $1)
+		SELECT id, 1 - (embedding <=> (SELECT embedding FROM target)) AS similarity
 		FROM artifacts
 		WHERE id != $1 AND embedding IS NOT NULL
-		ORDER BY embedding <=> (SELECT embedding FROM artifacts WHERE id = $1)
+		ORDER BY embedding <=> (SELECT embedding FROM target)
 		LIMIT 10
 	`, artifactID)
 	if err != nil {
@@ -102,11 +103,21 @@ func (l *Linker) linkBySimilarity(ctx context.Context, artifactID string) (int, 
 			continue
 		}
 
-		if err := l.createEdge(ctx, "artifact", artifactID, "artifact", relatedID, "RELATED_TO", float32(similarity)); err != nil {
-			slog.Debug("edge creation failed", "src", artifactID, "dst", relatedID, "error", err)
+		// Normalize direction to prevent bidirectional duplicates
+		srcID, dstID := artifactID, relatedID
+		if srcID > dstID {
+			srcID, dstID = dstID, srcID
+		}
+
+		if err := l.createEdge(ctx, "artifact", srcID, "artifact", dstID, "RELATED_TO", float32(similarity)); err != nil {
+			slog.Debug("edge creation failed", "src", srcID, "dst", dstID, "error", err)
 			continue
 		}
 		count++
+	}
+
+	if err := rows.Err(); err != nil {
+		return count, fmt.Errorf("similarity row iteration: %w", err)
 	}
 
 	return count, nil
@@ -133,17 +144,28 @@ func (l *Linker) linkByEntities(ctx context.Context, artifactID string) (int, er
 		return 0, nil // No parseable entities
 	}
 
-	count := 0
-	for _, personName := range entities.People {
-		personName = strings.TrimSpace(personName)
-		if personName == "" {
-			continue
+	// Collect unique non-empty names
+	var names []string
+	for _, name := range entities.People {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			names = append(names, name)
 		}
+	}
+	if len(names) == 0 {
+		return 0, nil
+	}
 
-		// Find or create person
-		personID, err := l.findOrCreatePerson(ctx, personName)
-		if err != nil {
-			slog.Debug("person upsert failed", "name", personName, "error", err)
+	// Batch upsert all people
+	personMap, err := l.findOrCreatePeople(ctx, names)
+	if err != nil {
+		return 0, fmt.Errorf("batch upsert people: %w", err)
+	}
+
+	count := 0
+	for _, personName := range names {
+		personID, ok := personMap[personName]
+		if !ok {
 			continue
 		}
 
@@ -183,16 +205,28 @@ func (l *Linker) linkByTopics(ctx context.Context, artifactID string) (int, erro
 		return 0, nil
 	}
 
-	count := 0
-	for _, topicName := range topicNames {
-		topicName = strings.TrimSpace(strings.ToLower(topicName))
-		if topicName == "" {
-			continue
+	// Collect unique non-empty names
+	var cleaned []string
+	for _, name := range topicNames {
+		name = strings.TrimSpace(strings.ToLower(name))
+		if name != "" {
+			cleaned = append(cleaned, name)
 		}
+	}
+	if len(cleaned) == 0 {
+		return 0, nil
+	}
 
-		topicID, err := l.findOrCreateTopic(ctx, topicName)
-		if err != nil {
-			slog.Debug("topic upsert failed", "name", topicName, "error", err)
+	// Batch upsert all topics
+	topicMap, err := l.findOrCreateTopics(ctx, cleaned)
+	if err != nil {
+		return 0, fmt.Errorf("batch upsert topics: %w", err)
+	}
+
+	count := 0
+	for _, topicName := range cleaned {
+		topicID, ok := topicMap[topicName]
+		if !ok {
 			continue
 		}
 
@@ -228,7 +262,7 @@ func (l *Linker) linkByTopics(ctx context.Context, artifactID string) (int, erro
 // linkByTemporal creates edges between artifacts captured on the same day.
 func (l *Linker) linkByTemporal(ctx context.Context, artifactID string) (int, error) {
 	rows, err := l.Pool.Query(ctx, `
-		SELECT a2.id FROM artifacts a1, artifacts a2
+		SELECT a2.id, DATE(a1.created_at) FROM artifacts a1, artifacts a2
 		WHERE a1.id = $1
 		AND a2.id != $1
 		AND DATE(a2.created_at) = DATE(a1.created_at)
@@ -244,15 +278,26 @@ func (l *Linker) linkByTemporal(ctx context.Context, artifactID string) (int, er
 	count := 0
 	for rows.Next() {
 		var relatedID string
-		if err := rows.Scan(&relatedID); err != nil {
+		var createdDate time.Time
+		if err := rows.Scan(&relatedID, &createdDate); err != nil {
 			continue
 		}
 
-		metadata := fmt.Sprintf(`{"proximity": "same_day", "date": "%s"}`, time.Now().Format("2006-01-02"))
-		if err := l.createEdgeWithMetadata(ctx, "artifact", artifactID, "artifact", relatedID, "RELATED_TO", 0.5, metadata); err != nil {
+		// Normalize direction to prevent bidirectional duplicates
+		srcID, dstID := artifactID, relatedID
+		if srcID > dstID {
+			srcID, dstID = dstID, srcID
+		}
+
+		metadata := fmt.Sprintf(`{"proximity": "same_day", "date": "%s"}`, createdDate.Format("2006-01-02"))
+		if err := l.createEdgeWithMetadata(ctx, "artifact", srcID, "artifact", dstID, "RELATED_TO", 0.5, metadata); err != nil {
 			continue
 		}
 		count++
+	}
+
+	if err := rows.Err(); err != nil {
+		return count, fmt.Errorf("temporal row iteration: %w", err)
 	}
 
 	return count, nil
@@ -274,34 +319,66 @@ func (l *Linker) createEdgeWithMetadata(ctx context.Context, srcType, srcID, dst
 	return err
 }
 
-// findOrCreatePerson finds a person by name or creates a new record.
-func (l *Linker) findOrCreatePerson(ctx context.Context, name string) (string, error) {
-	id := ulid.Make().String()
-	var returnedID string
-	err := l.Pool.QueryRow(ctx, `
-		INSERT INTO people (id, name) VALUES ($1, $2)
-		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-		RETURNING id
-	`, id, name).Scan(&returnedID)
-	if err != nil {
-		return "", fmt.Errorf("upsert person: %w", err)
+// findOrCreatePeople batch-upserts people by name and returns a map of name→id.
+func (l *Linker) findOrCreatePeople(ctx context.Context, names []string) (map[string]string, error) {
+	ids := make([]string, len(names))
+	for i := range names {
+		ids[i] = ulid.Make().String()
 	}
-	return returnedID, nil
+	rows, err := l.Pool.Query(ctx, `
+		INSERT INTO people (id, name)
+		SELECT unnest($1::text[]), unnest($2::text[])
+		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+		RETURNING name, id
+	`, ids, names)
+	if err != nil {
+		return nil, fmt.Errorf("batch upsert people: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]string, len(names))
+	for rows.Next() {
+		var name, id string
+		if err := rows.Scan(&name, &id); err != nil {
+			continue
+		}
+		result[name] = id
+	}
+	if err := rows.Err(); err != nil {
+		return result, fmt.Errorf("batch upsert people rows: %w", err)
+	}
+	return result, nil
 }
 
-// findOrCreateTopic finds a topic by name or creates a new record.
-func (l *Linker) findOrCreateTopic(ctx context.Context, name string) (string, error) {
-	id := ulid.Make().String()
-	var returnedID string
-	err := l.Pool.QueryRow(ctx, `
-		INSERT INTO topics (id, name, state) VALUES ($1, $2, 'emerging')
-		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-		RETURNING id
-	`, id, name).Scan(&returnedID)
-	if err != nil {
-		return "", fmt.Errorf("upsert topic: %w", err)
+// findOrCreateTopics batch-upserts topics by name and returns a map of name→id.
+func (l *Linker) findOrCreateTopics(ctx context.Context, names []string) (map[string]string, error) {
+	ids := make([]string, len(names))
+	for i := range names {
+		ids[i] = ulid.Make().String()
 	}
-	return returnedID, nil
+	rows, err := l.Pool.Query(ctx, `
+		INSERT INTO topics (id, name, state)
+		SELECT unnest($1::text[]), unnest($2::text[]), 'emerging'
+		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+		RETURNING name, id
+	`, ids, names)
+	if err != nil {
+		return nil, fmt.Errorf("batch upsert topics: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]string, len(names))
+	for rows.Next() {
+		var name, id string
+		if err := rows.Scan(&name, &id); err != nil {
+			continue
+		}
+		result[name] = id
+	}
+	if err := rows.Err(); err != nil {
+		return result, fmt.Errorf("batch upsert topics rows: %w", err)
+	}
+	return result, nil
 }
 
 // ConnectionCount returns the number of edges connected to an artifact.

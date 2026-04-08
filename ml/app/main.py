@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from .embedder import _model
 from .nats_client import NATSClient
 
 logger = logging.getLogger("smackerel-ml")
@@ -74,5 +75,5 @@ async def health():
     return {
         "status": "up" if nats_connected else "degraded",
         "nats": "connected" if nats_connected else "disconnected",
-        "model_loaded": True,  # Embedding model loads at import time
+        "model_loaded": _model is not None,
     }

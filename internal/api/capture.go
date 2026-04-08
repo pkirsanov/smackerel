@@ -6,9 +6,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
 
@@ -173,10 +175,20 @@ func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	limit := 5
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
 	rows, err := engine.Pool.Query(r.Context(), `
 		SELECT id, title, artifact_type, COALESCE(summary, ''), created_at
-		FROM artifacts ORDER BY created_at DESC LIMIT 5
-	`)
+		FROM artifacts ORDER BY created_at DESC LIMIT $1
+	`, limit)
 	if err != nil {
 		slog.Error("recent query failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_FAILED", "Failed to fetch recent artifacts")
@@ -203,7 +215,61 @@ func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
 		items = append(items, item)
 	}
 
+	if err := rows.Err(); err != nil {
+		slog.Error("recent items row iteration error", "error", err)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"results": items,
+	})
+}
+
+// ArtifactDetailHandler handles GET /api/artifact/{id}.
+func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Request) {
+	if !d.checkAuth(r) {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
+		return
+	}
+
+	artifactID := chi.URLParam(r, "id")
+	if artifactID == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Artifact ID is required")
+		return
+	}
+
+	engine, ok := d.SearchEngine.(*SearchEngine)
+	if !ok || engine == nil {
+		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "Service unavailable")
+		return
+	}
+
+	var (
+		id, title, artifactType, summary, sourceURL, sentiment, sourceQuality, processingTier string
+		createdAt, updatedAt                                                                  time.Time
+	)
+	err := engine.Pool.QueryRow(r.Context(), `
+		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
+		       COALESCE(sentiment, ''), COALESCE(source_quality, ''), COALESCE(processing_tier, ''),
+		       created_at, updated_at
+		FROM artifacts WHERE id = $1
+	`, artifactID).Scan(&id, &title, &artifactType, &summary, &sourceURL,
+		&sentiment, &sourceQuality, &processingTier,
+		&createdAt, &updatedAt)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "Artifact not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"artifact_id":     id,
+		"title":           title,
+		"artifact_type":   artifactType,
+		"summary":         summary,
+		"source_url":      sourceURL,
+		"sentiment":       sentiment,
+		"source_quality":  sourceQuality,
+		"processing_tier": processingTier,
+		"created_at":      createdAt.Format(time.RFC3339),
+		"updated_at":      updatedAt.Format(time.RFC3339),
 	})
 }

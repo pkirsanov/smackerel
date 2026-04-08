@@ -29,6 +29,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Post("/search", deps.SearchHandler)
 		r.Get("/digest", deps.DigestHandler)
 		r.Get("/recent", deps.RecentHandler)
+		r.Get("/artifact/{id}", deps.ArtifactDetailHandler)
 	})
 
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes
@@ -69,6 +70,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 func structuredLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		reqID := middleware.GetReqID(r.Context())
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
 		slog.Info("request",
@@ -76,7 +78,7 @@ func structuredLogger(next http.Handler) http.Handler {
 			"path", r.URL.Path,
 			"status", ww.Status(),
 			"duration_ms", time.Since(start).Milliseconds(),
-			"request_id", middleware.GetReqID(r.Context()),
+			"request_id", reqID,
 		)
 	})
 }

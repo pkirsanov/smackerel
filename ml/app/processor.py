@@ -1,10 +1,16 @@
 """LLM processing via litellm — Universal Processing Prompt."""
 
+import asyncio
 import json
 import logging
 from typing import Any
 
 import litellm
+from litellm.exceptions import (
+    InternalServerError,
+    RateLimitError,
+    ServiceUnavailableError,
+)
 
 logger = logging.getLogger("smackerel-ml.processor")
 
@@ -77,15 +83,40 @@ async def process_content(
 
     try:
         model_name = f"{provider}/{model}" if provider not in ("openai", "") else model
-        response = await litellm.acompletion(
-            model=model_name,
-            messages=[{"role": "user", "content": prompt}],
-            api_key=api_key,
-            temperature=0.1,
-            max_tokens=2000,
-            response_format={"type": "json_object"},
-            timeout=30,
-        )
+
+        # Retry with exponential backoff for transient LLM errors
+        max_attempts = 3
+        backoff_delays = [1, 2, 4]  # seconds
+        last_exc: Exception | None = None
+        response = None
+
+        for attempt in range(max_attempts):
+            try:
+                response = await litellm.acompletion(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    api_key=api_key,
+                    temperature=0.1,
+                    max_tokens=2000,
+                    response_format={"type": "json_object"},
+                    timeout=30,
+                )
+                break
+            except (RateLimitError, ServiceUnavailableError, InternalServerError) as exc:
+                last_exc = exc
+                if attempt < max_attempts - 1:
+                    delay = backoff_delays[attempt]
+                    logger.warning(
+                        "LLM call failed (attempt %d/%d): %s — retrying in %ds",
+                        attempt + 1,
+                        max_attempts,
+                        exc,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+
+        if response is None:
+            raise last_exc  # type: ignore[misc]
 
         result_text = response.choices[0].message.content
         result = json.loads(result_text)
@@ -121,6 +152,6 @@ async def process_content(
     except json.JSONDecodeError as e:
         logger.error("LLM returned invalid JSON: %s", e)
         return {"success": False, "error": f"Invalid JSON from LLM: {e}"}
-    except Exception as e:
-        logger.error("LLM processing failed: %s", e)
-        return {"success": False, "error": str(e)}
+    except Exception:
+        logger.error("LLM processing failed", exc_info=True)
+        return {"success": False, "error": "LLM processing failed"}

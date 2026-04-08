@@ -43,6 +43,10 @@ SUBJECT_RESPONSE_MAP = {
 }
 
 
+# Subjects that are critical — failure to subscribe is fatal
+CRITICAL_SUBJECTS = {"artifacts.process", "search.embed"}
+
+
 class NATSClient:
     """Manages NATS JetStream connection and subscriptions for the ML sidecar."""
 
@@ -104,8 +108,20 @@ class NATSClient:
                         delay,
                     )
                     if attempt == max_attempts:
-                        raise RuntimeError(f"Failed to subscribe to {subject} after {max_attempts} attempts") from exc
+                        if subject in CRITICAL_SUBJECTS:
+                            raise RuntimeError(
+                                f"Failed to subscribe to {subject} after {max_attempts} attempts"
+                            ) from exc
+                        logger.warning(
+                            "Non-critical subject %s: giving up after %d attempts — skipping",
+                            subject,
+                            max_attempts,
+                        )
+                        break
                     await asyncio.sleep(delay)
+
+            if sub is None:
+                continue  # non-critical subject failed, skip
 
             self._subscriptions.append(sub)
             logger.info("Subscribed to %s", subject)
@@ -143,6 +159,14 @@ class NATSClient:
                         )
                     elif subject == "search.embed":
                         result = await self._handle_search_embed(data)
+                        # Reply directly to Go inbox if reply_subject is set
+                        reply_subject = data.get("reply_subject")
+                        if reply_subject and self._nc:
+                            result["processing_time_ms"] = int((time.time() - start) * 1000)
+                            payload = json.dumps(result).encode()
+                            await self._nc.publish(reply_subject, payload)
+                            await msg.ack()
+                            continue
                     elif subject == "search.rerank":
                         result = await self._handle_search_rerank(
                             data,
@@ -258,7 +282,7 @@ class NATSClient:
 
         # Generate embedding
         result = llm_result["result"]
-        embedding = generate_artifact_embedding(
+        embedding = await generate_artifact_embedding(
             title=result.get("title", ""),
             summary=result.get("summary", ""),
             key_ideas=result.get("key_ideas", []),
@@ -280,7 +304,7 @@ class NATSClient:
         query_id = data.get("query_id", "")
         text = data.get("text", "")
 
-        embedding = generate_embedding(text)
+        embedding = await generate_embedding(text)
         return {
             "query_id": query_id,
             "embedding": embedding,

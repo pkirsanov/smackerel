@@ -60,6 +60,17 @@ func (s *Supervisor) StopConnector(id string) {
 	}
 }
 
+// StopAll stops all running connectors and clears the running map.
+func (s *Supervisor) StopAll() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for id, cancel := range s.running {
+		cancel()
+		delete(s.running, id)
+	}
+}
+
 // runWithRecovery runs a connector sync loop and recovers from panics.
 // parentCtx is the original caller context used for restart; connCtx is the
 // per-attempt child context that is cancelled on panic recovery so a fresh
@@ -96,6 +107,12 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 					"window", panicWindowDuration,
 				)
 				return // Do NOT restart
+			}
+
+			// Skip restart if parent context is cancelled (shutdown in progress)
+			if parentCtx.Err() != nil {
+				slog.Warn("skipping restart during shutdown", "connector", id)
+				return
 			}
 
 			slog.Warn("restarting connector after panic",
