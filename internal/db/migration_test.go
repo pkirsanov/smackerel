@@ -110,3 +110,120 @@ func searchSubstring(s, substr string) bool {
 var _ = func() {
 	_ = Migrate(context.Background(), nil)
 }
+
+func TestFormatEmbedding_Empty(t *testing.T) {
+	result := FormatEmbedding(nil)
+	if result != "" {
+		t.Errorf("expected empty string for nil, got %q", result)
+	}
+	result = FormatEmbedding([]float32{})
+	if result != "" {
+		t.Errorf("expected empty string for empty slice, got %q", result)
+	}
+}
+
+func TestFormatEmbedding_SingleElement(t *testing.T) {
+	result := FormatEmbedding([]float32{1.5})
+	if !contains(result, "[") || !contains(result, "]") {
+		t.Errorf("expected brackets, got %q", result)
+	}
+	if !contains(result, "1.5") {
+		t.Errorf("expected 1.5 in output, got %q", result)
+	}
+}
+
+func TestFormatEmbedding_MultipleElements(t *testing.T) {
+	result := FormatEmbedding([]float32{0.1, 0.2, 0.3})
+	if result[0] != '[' || result[len(result)-1] != ']' {
+		t.Errorf("expected brackets wrapping, got %q", result)
+	}
+	// Should contain commas separating values
+	parts := result[1 : len(result)-1] // strip brackets
+	if len(parts) == 0 {
+		t.Fatal("empty content inside brackets")
+	}
+	commaCount := 0
+	for _, ch := range parts {
+		if ch == ',' {
+			commaCount++
+		}
+	}
+	if commaCount != 2 {
+		t.Errorf("expected 2 commas for 3 elements, got %d", commaCount)
+	}
+}
+
+func TestFormatEmbedding_ZeroValues(t *testing.T) {
+	result := FormatEmbedding([]float32{0.0, 0.0})
+	if !contains(result, "0.") {
+		t.Errorf("expected zero values, got %q", result)
+	}
+}
+
+func TestFormatEmbedding_NegativeValues(t *testing.T) {
+	result := FormatEmbedding([]float32{-1.5, 2.5})
+	if !contains(result, "-1.5") {
+		t.Errorf("expected negative value, got %q", result)
+	}
+}
+
+func TestMigrationFiles_SortOrder(t *testing.T) {
+	entries, err := migrationFS.ReadDir("migrations")
+	if err != nil {
+		t.Fatalf("read migrations: %v", err)
+	}
+	for i := 1; i < len(entries); i++ {
+		if entries[i].Name() < entries[i-1].Name() {
+			t.Errorf("migration files not sorted: %s before %s", entries[i-1].Name(), entries[i].Name())
+		}
+	}
+}
+
+func TestMigrationFiles_SQLNotEmpty(t *testing.T) {
+	entries, err := migrationFS.ReadDir("migrations")
+	if err != nil {
+		t.Fatalf("read migrations: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		content, err := migrationFS.ReadFile("migrations/" + entry.Name())
+		if err != nil {
+			t.Errorf("failed to read %s: %v", entry.Name(), err)
+			continue
+		}
+		if len(content) == 0 {
+			t.Errorf("migration %s is empty", entry.Name())
+		}
+	}
+}
+
+func TestMigrationSQL_Constraints(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/001_initial_schema.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	sql := string(content)
+
+	// Should have primary key constraints
+	if !contains(sql, "PRIMARY KEY") && !contains(sql, "primary key") {
+		t.Error("migration missing PRIMARY KEY constraints")
+	}
+
+	// Should have NOT NULL on critical columns
+	if !contains(sql, "NOT NULL") {
+		t.Error("migration missing NOT NULL constraints")
+	}
+}
+
+func TestMigrationSQL_VectorType(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/001_initial_schema.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	sql := string(content)
+	if !contains(sql, "vector") {
+		t.Error("migration missing vector column type")
+	}
+}

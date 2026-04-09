@@ -5,6 +5,76 @@
 
 ---
 
+## Current Truth (2026-04-09 System Review Findings)
+
+### ENG-001 (CRITICAL): Scheduler Data Race
+
+**Location:** `internal/scheduler/scheduler.go` lines 23-24 (field declaration), 51-59 (cron callback reads/writes), 92-93 (goroutine writes).
+
+**Root Cause:** `digestPendingRetry` (bool) and `digestPendingDate` (string) are read/written from the cron callback goroutine AND the background polling goroutine with zero synchronization. Under `-race`, this is a data race.
+
+**Fix Design:** Add `sync.Mutex` to the `Scheduler` struct (`mu sync.Mutex`). Lock all reads and writes of `digestPendingRetry` and `digestPendingDate` — the cron callback reads/clears them (lines 51-59) and the polling goroutine sets them (lines 92-93).
+
+### ENG-005 (HIGH): Scheduler Test Coverage at 21%
+
+**Location:** `internal/scheduler/scheduler_test.go` — 46 lines covering only `New()`, invalid cron, `Stop()`.
+
+**Fix Design:** Add tests for: (1) digest retry fields are properly set/cleared, (2) concurrent access to retry fields with `-race`, (3) cron job scheduling actually registers entries, (4) nil digestGen guard in cron callback. Depends on ENG-001 mutex being added first.
+
+### ENG-010 / SEC-001 (HIGH): No API Auth Middleware
+
+**Location:** `internal/api/router.go` lines 25-33.
+
+**Root Cause:** API routes use per-handler `checkAuth()` calls. The `/api/health` endpoint correctly needs no auth (monitoring). But if any handler forgets `checkAuth()`, it's unprotected. The existing `webAuthMiddleware` on `Dependencies` handles Bearer + Cookie but is only for web routes.
+
+**Fix Design:** Create a `bearerAuthMiddleware` method on `Dependencies` that checks only `Authorization: Bearer <token>` (no cookie, as API routes are programmatic). Apply it to a nested `/api` sub-group containing `capture`, `search`, `digest`, `recent`, `artifact/{id}`, `export`, and `auth/status` routes. Keep `/api/health` outside the authed sub-group. When `AuthToken` is empty, the middleware is a no-op (dev mode). Remove per-handler `checkAuth()` calls from handlers that are now covered. The `checkAuth` helper remains for any future use but is no longer the primary auth enforcement.
+
+### ENG-003 (MEDIUM): Supervisor Sleep Ignores Context Cancellation
+
+**Location:** `internal/connector/supervisor.go` ~line 127.
+
+**Root Cause:** After panic recovery, `time.Sleep(5 * time.Second)` does not respect context cancellation. If the parent context is cancelled during the 5-second sleep (e.g., during graceful shutdown), the goroutine blocks for the full duration instead of exiting immediately. The existing `parentCtx.Err()` check runs before the sleep and cannot catch cancellation that arrives during the wait.
+
+**Fix Design:** Replace `time.Sleep(5 * time.Second)` with a `select` on `parentCtx.Done()` and `time.After(5 * time.Second)`. If the context is cancelled during the wait, return immediately without restarting the connector.
+
+### ENG-004 (MEDIUM): Dead SYNTHESIS Stream
+
+**Location:** `internal/nats/client.go` AllStreams(), `config/nats_contract.json` streams section, `internal/intelligence/engine.go` ~line 140.
+
+**Root Cause:** The `SYNTHESIS` stream is declared in `AllStreams()` and `nats_contract.json` with pattern `synthesis.>`, but no Go constant for any `synthesis.*` subject exists. The only usage is a raw-string publish `e.NATS.Publish(ctx, "synthesis.analyze", data)` in `engine.go`, which has no subscriber — messages go into the void. This is dead infrastructure that creates a JetStream stream at startup for no purpose.
+
+**Fix Design:** Remove the SYNTHESIS stream from `AllStreams()` in `client.go` and from the `streams` section in `nats_contract.json`. Remove the dead `synthesis.analyze` publish from `engine.go` — the `RunSynthesis` function still returns `SynthesisInsight` structs from the DB query; the NATS publish was supplementary fire-and-forget with no consumer.
+
+### ENG-009 (MEDIUM): CoreAPIURL Hardcodes Localhost
+
+**Location:** `cmd/core/main.go` ~line 278, where `CoreAPIURL: "http://localhost:" + cfg.Port`.
+
+**Root Cause:** The Telegram bot's `CoreAPIURL` is constructed by hardcoding `localhost`, which only works when the bot and core API run in the same process on the host. In Docker Compose, the Telegram bot (inside `smackerel-core`) needs to reach the API via the container's internal address, which is already `localhost:PORT` inside the same container — but this pattern breaks if the bot is ever separated into its own service. More importantly, this is an SST violation: the URL should be derived from config.
+
+**Fix Design:** Add `CORE_API_URL` as a derived value in the config generation pipeline (composed from the service name and container port, like `ML_SIDECAR_URL`). Add `CoreAPIURL` to the config struct, read from the `CORE_API_URL` environment variable, and fail-loud if empty. Use `cfg.CoreAPIURL` in `main.go` instead of the hardcoded string.
+
+### ENG-011 (LOW): Digest NATS Path Uses Untyped Map
+
+**Location:** `internal/pipeline/subscriber.go` ~line 187-198, `internal/digest/generator.go` `HandleDigestResult`.
+
+**Root Cause:** `handleDigestMessage` unmarshals `digest.generated` payloads to `map[string]interface{}` with no typed struct or boundary validation. This contrasts with `handleMessage` which uses the typed `NATSProcessedPayload` struct with `ValidateProcessedPayload`. Missing field type assertions silently produce zero values.
+
+**Fix Design:** Define `NATSDigestGeneratedPayload` struct in `internal/pipeline/processor.go` (alongside the other NATS payload types) with fields `DigestDate`, `Text`, `WordCount`, `ModelUsed`. Add `ValidateDigestGeneratedPayload` function. Update `handleDigestMessage` to unmarshal into the typed struct with validation. Update `HandleDigestResult` to accept `*NATSDigestGeneratedPayload` instead of `map[string]interface{}`.
+
+### ENG-006 (MEDIUM): ExportArtifacts Silently Skips Scan Errors
+
+**Location:** `internal/db/postgres.go` line 107 — `rows.Scan` error triggers `continue` with no logging.
+
+**Fix Design:** Log the scan error with `slog.Warn` including the row index, then `continue`. Also track `scanErrors` count. If `scanErrors > 0`, return a wrapped error alongside partial results so callers can decide whether to use them.
+
+### ENG-008 (MEDIUM): Auth Decryption Silently Returns Ciphertext
+
+**Location:** `internal/auth/store.go` lines 76, 89, 97 — all decryption failure paths return `encoded` (the raw ciphertext/base64).
+
+**Fix Design:** Add `slog.Warn` on each fallback path so operators know tokens are being served in degraded mode. The three fallback paths: (1) not valid base64 → log "token not base64-encoded, treating as plaintext", (2) data too short → log "token too short for encrypted data, treating as plaintext", (3) gcm.Open failed → log "token decryption failed, treating as plaintext". This preserves backward compatibility while making the migration state visible.
+
+---
+
 ## Current Truth (2026-04-09 Retro-Driven Improvement)
 
 ### Problem: processor.go Is the #1 Bug Magnet

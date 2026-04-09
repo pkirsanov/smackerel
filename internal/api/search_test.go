@@ -62,12 +62,13 @@ func TestSearchHandler_NoAuth(t *testing.T) {
 		AuthToken: "secret",
 	}
 
+	router := NewRouter(deps)
 	body := `{"query": "test"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	deps.SearchHandler(rec, req)
+	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", rec.Code)
@@ -102,10 +103,11 @@ func TestDigestHandler_NoAuth(t *testing.T) {
 		AuthToken: "secret",
 	}
 
+	router := NewRouter(deps)
 	req := httptest.NewRequest(http.MethodGet, "/api/digest", nil)
 	rec := httptest.NewRecorder()
 
-	deps.DigestHandler(rec, req)
+	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", rec.Code)

@@ -50,12 +50,6 @@ type ErrorDetail struct {
 
 // CaptureHandler handles POST /api/capture.
 func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
-	// Require authentication
-	if !d.checkAuth(r) {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
-		return
-	}
-
 	var req CaptureRequest
 	// Limit request body to 1MB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -166,11 +160,6 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 
 // RecentHandler handles GET /api/recent.
 func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
-	if !d.checkAuth(r) {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
-		return
-	}
-
 	engine, ok := d.SearchEngine.(*SearchEngine)
 	if !ok || engine == nil {
 		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "Service unavailable")
@@ -228,11 +217,6 @@ func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
 
 // ArtifactDetailHandler handles GET /api/artifact/{id}.
 func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Request) {
-	if !d.checkAuth(r) {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
-		return
-	}
-
 	artifactID := chi.URLParam(r, "id")
 	if artifactID == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Artifact ID is required")
@@ -278,11 +262,6 @@ func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Requ
 
 // ExportHandler streams artifacts as JSONL for backup/export with cursor-based pagination.
 func (d *Dependencies) ExportHandler(w http.ResponseWriter, r *http.Request) {
-	if !d.checkAuth(r) {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
-		return
-	}
-
 	// Parse cursor (RFC3339 timestamp)
 	var cursor time.Time
 	if c := r.URL.Query().Get("cursor"); c != "" {

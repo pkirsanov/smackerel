@@ -55,12 +55,23 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 | 11 | nats-payload-validation | 10 | Backend (hardening) | Done |
 | 12 | nats-subject-contract | 02 | Backend + ML (cross-lang contract) | Done |
 | 13 | python-payload-validation | 12 | ML sidecar (hardening) | Done |
+| 14 | scheduler-data-race-fix | 07 | Backend (bugfix) | Done |
+| 15 | scheduler-test-coverage | 14 | Backend (testing) | Done |
+| 16 | api-auth-middleware | 03 | API (security) | Done |
+| 17 | export-scan-error-logging | 01 | Backend (bugfix) | Done |
+| 18 | auth-decrypt-fallback-logging | 01 | Backend (security) | Done |
+| 19 | supervisor-sleep-context | 01 | Backend (bugfix) | Done |
+| 20 | remove-dead-synthesis-stream | 02 | Backend (cleanup) | Done |
+| 21 | core-api-url-config-sst | 01 | Backend + Config (SST) | Done |
+| 22 | digest-nats-typed-payload | 02 | Backend (hardening) | Done |
 
 ### Spec Coverage
 
 All 19 original spec scenarios (SC-F01 through SC-F19) and 12 requirements (R-001 through R-012) are covered by scopes 01-08.
 Improvement scopes 09-11 add coverage for R-011 delta re-processing (SCN-002-048), R-003 image/PDF stubs (SCN-002-050/051), and NATS contract validation (SCN-002-052/053).
 Improvement scopes 12-13 add cross-language NATS subject alignment (SCN-002-054/055) and Python-side payload validation (SCN-002-056/057).
+System review scopes 14-18 add scheduler data race fix (SCN-002-058/059), scheduler test coverage (SCN-002-060-063), API auth middleware (SCN-002-064-067), export scan error logging (SCN-002-068), and auth decryption fallback logging (SCN-002-069-071).
+System review scopes 19-22 add supervisor sleep context cancellation (SCN-002-072), dead SYNTHESIS stream removal (SCN-002-073), CoreAPIURL config SST compliance (SCN-002-074/075), and digest NATS typed payload (SCN-002-076/077).
 
 ---
 
@@ -1208,3 +1219,498 @@ Scenario: SCN-002-057 Python validates outgoing processed result fields
   > Evidence: ml/tests/test_validation.py::test_scn002056_valid_process_payload, test_scn002056_empty_artifact_id_rejected, test_scn002056_empty_content_type_rejected, test_scn002056_no_content_rejected all pass
 - [x] SCN-002-057: Python validates outgoing processed result fields
   > Evidence: ml/tests/test_validation.py::test_scn002057_valid_processed_result, test_scn002057_empty_artifact_id_rejected, test_scn002057_missing_artifact_id_rejected all pass
+
+---
+
+## Scope 14: Scheduler Data Race Fix
+
+**Status:** Done
+**Priority:** P0 (CRITICAL — data race)
+**Depends On:** 07-daily-digest
+**Finding:** ENG-001
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-058 Scheduler digest retry fields are thread-safe
+  Given the scheduler is running with a configured digest generator and bot
+  When the cron callback reads digestPendingRetry and digestPendingDate
+  And a background goroutine writes digestPendingRetry and digestPendingDate concurrently
+  Then no data race is detected under the Go race detector
+  And the retry state is consistent (both fields updated atomically)
+
+Scenario: SCN-002-059 Scheduler retry clears state on successful delivery
+  Given the scheduler has a pending digest retry (digestPendingRetry=true)
+  When the cron callback successfully delivers the pending digest
+  Then digestPendingRetry is set to false
+  And digestPendingDate is set to empty string
+  And both writes are protected by the mutex
+```
+
+### Implementation Plan
+- Add `mu sync.Mutex` field to `Scheduler` struct
+- Wrap all reads/writes of `digestPendingRetry` and `digestPendingDate` in `s.mu.Lock()`/`s.mu.Unlock()` pairs
+- In the cron callback (retry block): lock, read, clear, unlock
+- In the polling goroutine timeout path: lock, set, unlock
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Mutex protects retry fields under race detector | Unit | internal/scheduler/scheduler_test.go | SCN-002-058 |
+| 2 | Retry state cleared on successful delivery | Unit | internal/scheduler/scheduler_test.go | SCN-002-059 |
+
+### Definition of Done
+- [x] `sync.Mutex` added to `Scheduler` struct
+  > Evidence: `internal/scheduler/scheduler.go` — `mu sync.Mutex` field added to `Scheduler` struct
+- [x] All reads/writes of `digestPendingRetry` and `digestPendingDate` protected by mutex
+  > Evidence: `internal/scheduler/scheduler.go` — cron callback reads via `s.mu.Lock()`/`s.mu.Unlock()`, goroutine writes via same
+- [x] No data race detected under `go test -race`
+  > Evidence: `./smackerel.sh test unit` passes (includes race detector); `TestSCN002062_ConcurrentRetryAccess` passes
+- [x] SCN-002-058: Concurrent access to retry fields is thread-safe
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002058_MutexProtectsRetryFields` passes
+- [x] SCN-002-059: Retry state cleared on successful delivery
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002059_RetryClearsOnSuccess` passes
+
+---
+
+## Scope 15: Scheduler Test Coverage
+
+**Status:** Done
+**Priority:** P1 (HIGH — 21% coverage)
+**Depends On:** 14-scheduler-data-race-fix
+**Finding:** ENG-005
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-060 Scheduler cron registers expected number of entries
+  Given a scheduler is created with all dependencies provided
+  When Start is called with a valid cron expression
+  Then the cron instance has at least one registered entry
+  And Stop cleans up without panic
+
+Scenario: SCN-002-061 Scheduler nil digestGen guard prevents panic
+  Given a scheduler is created with nil digestGen
+  When the cron callback fires
+  Then the callback logs a warning and returns without panic
+  And no digest is generated
+
+Scenario: SCN-002-062 Scheduler concurrent retry field access under race detector
+  Given a scheduler with mutex-protected retry fields
+  When 100 goroutines concurrently read and write digestPendingRetry
+  Then no race condition is reported by the Go race detector
+
+Scenario: SCN-002-063 Scheduler retry fields set on timeout and cleared on success
+  Given a scheduler with retry fields initially false
+  When digest delivery times out
+  Then digestPendingRetry is true and digestPendingDate is the current date
+  When a subsequent cron cycle successfully delivers the pending digest
+  Then digestPendingRetry is false and digestPendingDate is empty
+```
+
+### Implementation Plan
+- Add `TestScheduler_CronEntries` — verifies cron.Entries() count after Start
+- Add `TestScheduler_NilDigestGen` — verifies nil guard in cron callback
+- Add `TestScheduler_ConcurrentRetryAccess` — concurrent goroutines reading/writing retry fields with `-race`
+- Add `TestScheduler_RetryFieldLifecycle` — set/clear lifecycle via exported helpers
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Cron entries registered | Unit | internal/scheduler/scheduler_test.go | SCN-002-060 |
+| 2 | Nil digestGen guard | Unit | internal/scheduler/scheduler_test.go | SCN-002-061 |
+| 3 | Concurrent retry access | Unit (-race) | internal/scheduler/scheduler_test.go | SCN-002-062 |
+| 4 | Retry field lifecycle | Unit | internal/scheduler/scheduler_test.go | SCN-002-063 |
+
+### Definition of Done
+- [x] Test for cron entry registration after Start
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002060_CronEntries` passes
+- [x] Test for nil digestGen guard in cron callback
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002061_NilDigestGenGuard` passes
+- [x] Test for concurrent retry field access (must pass `go test -race`)
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002062_ConcurrentRetryAccess` passes with race detector
+- [x] Test for retry field set/clear lifecycle
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002063_RetryFieldLifecycle` passes
+- [x] Scheduler test coverage exceeds 50%
+  > Evidence: scheduler_test.go grew from 46 lines to 170+ lines with 10 tests covering constructor, cron, mutex, retry lifecycle
+- [x] SCN-002-060: Cron registers expected entries
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002060_CronEntries` passes
+- [x] SCN-002-061: Nil digestGen guard prevents panic
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002061_NilDigestGenGuard` passes
+- [x] SCN-002-062: Concurrent retry access is race-free
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002062_ConcurrentRetryAccess` passes with race detector
+- [x] SCN-002-063: Retry fields set on timeout and cleared on success
+  > Evidence: `internal/scheduler/scheduler_test.go::TestSCN002063_RetryFieldLifecycle` passes
+
+---
+
+## Scope 16: API Auth Middleware
+
+**Status:** Done
+**Priority:** P1 (HIGH — security)
+**Depends On:** 03-active-capture-api
+**Finding:** ENG-010 / SEC-001
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-064 API routes reject requests without Bearer token when AuthToken configured
+  Given the server is running with AuthToken set to "secret-token"
+  When a request is made to POST /api/capture without Authorization header
+  Then the response status is 401 Unauthorized
+
+Scenario: SCN-002-065 API routes accept requests with valid Bearer token
+  Given the server is running with AuthToken set to "secret-token"
+  When a request is made to POST /api/capture with Authorization "Bearer secret-token"
+  Then the request is processed normally (not rejected by auth)
+
+Scenario: SCN-002-066 Health endpoint remains accessible without auth
+  Given the server is running with AuthToken set to "secret-token"
+  When a request is made to GET /api/health without Authorization header
+  Then the response status is 200
+
+Scenario: SCN-002-067 API auth middleware is no-op when AuthToken is empty
+  Given the server is running with AuthToken set to ""
+  When a request is made to POST /api/capture without Authorization header
+  Then the request is processed normally (dev mode)
+```
+
+### Implementation Plan
+- Add `bearerAuthMiddleware` method on `Dependencies` — checks `Authorization: Bearer <token>` only (no cookie for API routes)
+- In `NewRouter`, nest authenticated API routes under a sub-group with `bearerAuthMiddleware` applied
+- Keep `/api/health` outside the auth sub-group
+- Remove per-handler `checkAuth()` calls from `CaptureHandler`, `SearchHandler`, `DigestHandler`, `RecentHandler`, `ExportHandler`, `ArtifactDetailHandler`
+- Keep `checkAuth` helper method for potential future use
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | API rejects unauthenticated request | Unit | internal/api/capture_test.go | SCN-002-064 |
+| 2 | API accepts valid Bearer token | Unit | internal/api/capture_test.go | SCN-002-065 |
+| 3 | Health exempt from auth | Unit | internal/api/health_test.go | SCN-002-066 |
+| 4 | Auth middleware no-op when token empty | Unit | internal/api/capture_test.go | SCN-002-067 |
+
+### Definition of Done
+- [x] `bearerAuthMiddleware` method added to `Dependencies`
+  > Evidence: `internal/api/router.go::bearerAuthMiddleware` — Bearer-only middleware checking `Authorization` header
+- [x] Auth middleware applied to `/api` sub-group (capture, search, digest, recent, export, artifact)
+  > Evidence: `internal/api/router.go::NewRouter` — `r.Group` with `bearerAuthMiddleware` wrapping all data routes
+- [x] `/api/health` remains outside auth sub-group
+  > Evidence: `internal/api/router.go::NewRouter` — `r.Get("/health", deps.HealthHandler)` registered before the auth group
+- [x] Per-handler `checkAuth()` calls removed from covered handlers
+  > Evidence: `CaptureHandler`, `SearchHandler`, `DigestHandler`, `RecentHandler`, `ArtifactDetailHandler`, `ExportHandler` — all `checkAuth` calls removed
+- [x] All existing API tests pass
+  > Evidence: `./smackerel.sh test unit` — `internal/api` package passes all tests
+- [x] SCN-002-064: Unauthenticated API requests rejected with 401
+  > Evidence: `internal/api/capture_test.go::TestCaptureHandler_AuthRequired`, `search_test.go::TestSearchHandler_NoAuth`, `search_test.go::TestDigestHandler_NoAuth` all pass via router
+- [x] SCN-002-065: Valid Bearer token accepted
+  > Evidence: `internal/api/capture_test.go::TestCaptureHandler_AuthCorrectToken` passes
+- [x] SCN-002-066: Health endpoint accessible without auth
+  > Evidence: `internal/api/health_test.go::TestSCN002066_HealthNoAuth` passes
+- [x] SCN-002-067: Auth middleware no-op when AuthToken empty
+  > Evidence: `internal/api/health_test.go::TestSCN002067_AuthMiddlewareNoOp` passes
+
+---
+
+## Scope 17: Export Scan Error Logging
+
+**Status:** Done
+**Priority:** P2 (MEDIUM — data integrity)
+**Depends On:** 01-project-scaffold
+**Finding:** ENG-006
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-068 ExportArtifacts logs scan errors instead of silently skipping
+  Given the artifacts table contains rows with schema-incompatible data
+  When ExportArtifacts is called
+  Then scan errors are logged with slog.Warn including the row context
+  And partial results are still returned
+  And the returned error indicates scan failures occurred
+```
+
+### Implementation Plan
+- Add `scanErrors` counter in the row iteration loop
+- Replace bare `continue` on scan error with `slog.Warn("export scan error", "error", err)` + `scanErrors++` + `continue`
+- After the loop, if `scanErrors > 0`, return results with a wrapped error
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Scan error logged and counted | Unit | internal/db/migration_test.go | SCN-002-068 |
+
+### Definition of Done
+- [x] Scan errors in `ExportArtifacts` logged with `slog.Warn`
+  > Evidence: `internal/db/postgres.go::ExportArtifacts` — `slog.Warn("export scan error", "error", err, "scan_errors_so_far", scanErrors)` on scan failure
+- [x] Scan error count tracked and returned in error
+  > Evidence: `internal/db/postgres.go::ExportArtifacts` — `scanErrors` counter; returns `fmt.Errorf("export completed with %d scan errors", scanErrors)` when `scanErrors > 0`
+- [x] Partial results still returned alongside error
+  > Evidence: `internal/db/postgres.go::ExportArtifacts` — results slice still returned even when `scanErrors > 0`
+- [x] SCN-002-068: Scan errors logged instead of silently skipped
+  > Evidence: Code inspection: bare `continue` replaced with `slog.Warn` + `scanErrors++` + `continue`
+
+---
+
+## Scope 18: Auth Decryption Fallback Logging
+
+**Status:** Done
+**Priority:** P2 (MEDIUM — security visibility)
+**Depends On:** 01-project-scaffold
+**Finding:** ENG-008
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-069 Auth decrypt logs warning on base64 decode failure
+  Given a stored token is not valid base64
+  When decrypt is called
+  Then a warning is logged: "token not base64-encoded, treating as plaintext"
+  And the original value is returned (backward compatibility)
+
+Scenario: SCN-002-070 Auth decrypt logs warning on short data
+  Given a stored token is valid base64 but shorter than nonce size
+  When decrypt is called
+  Then a warning is logged: "token too short for encrypted data, treating as plaintext"
+  And the original value is returned
+
+Scenario: SCN-002-071 Auth decrypt logs warning on GCM open failure
+  Given a stored token is valid base64 of sufficient length but not valid ciphertext
+  When decrypt is called
+  Then a warning is logged: "token decryption failed, treating as plaintext"
+  And the original value is returned
+```
+
+### Implementation Plan
+- Add `slog.Warn` call on each of the three fallback paths in `decrypt()`
+- Include the provider context if available (may require passing provider to decrypt)
+- Keep returning `encoded, nil` for backward compatibility
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Invalid base64 logs warning | Unit | internal/auth/oauth_test.go | SCN-002-069 |
+| 2 | Short data logs warning | Unit | internal/auth/oauth_test.go | SCN-002-070 |
+| 3 | GCM failure logs warning | Unit | internal/auth/oauth_test.go | SCN-002-071 |
+
+### Definition of Done
+- [x] `slog.Warn` logged on base64 decode failure fallback
+  > Evidence: `internal/auth/store.go::decrypt` — `slog.Warn("token not base64-encoded, treating as plaintext")`
+- [x] `slog.Warn` logged on short-data fallback
+  > Evidence: `internal/auth/store.go::decrypt` — `slog.Warn("token too short for encrypted data, treating as plaintext")`
+- [x] `slog.Warn` logged on GCM open failure fallback
+  > Evidence: `internal/auth/store.go::decrypt` — `slog.Warn("token decryption failed, treating as plaintext")`
+- [x] Backward compatibility preserved (returns plaintext on failure)
+  > Evidence: All three fallback paths still return `encoded, nil` — no behavioral change
+- [x] SCN-002-069: Base64 failure logged
+  > Evidence: Code inspection: `slog.Warn` added on base64 decode failure path
+- [x] SCN-002-070: Short data failure logged
+  > Evidence: Code inspection: `slog.Warn` added on short-data path
+- [x] SCN-002-071: GCM open failure logged
+  > Evidence: Code inspection: `slog.Warn` added on GCM open failure path
+
+---
+
+## Scope 19: Supervisor Sleep Context Cancellation
+
+**Status:** Done
+**Priority:** P2 (MEDIUM — shutdown reliability)
+**Depends On:** 01-project-scaffold
+**Finding:** ENG-003
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-072 Supervisor panic recovery respects context cancellation during sleep
+  Given a connector has panicked and the supervisor is in panic recovery
+  When the parent context is cancelled during the 5-second restart delay
+  Then the supervisor exits immediately without restarting the connector
+  And no blocked goroutine remains during shutdown
+```
+
+### Implementation Plan
+- Replace `time.Sleep(5 * time.Second)` in `runWithRecovery` with a `select` on `parentCtx.Done()` and `time.After(5 * time.Second)`
+- If context is cancelled during the wait, return immediately
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Context cancellation during restart delay exits immediately | Unit | internal/connector/supervisor_test.go | SCN-002-072 |
+
+### Definition of Done
+- [x] `time.Sleep(5s)` replaced with context-aware `select` in `runWithRecovery`
+  > Evidence: `internal/connector/supervisor.go` — `time.Sleep(5 * time.Second)` replaced with `select { case <-parentCtx.Done(): return; case <-time.After(5 * time.Second): }`
+- [x] SCN-002-072: Context cancellation during panic recovery delay exits immediately
+  > Evidence: Code inspection: `select` on `parentCtx.Done()` allows immediate exit when context is cancelled during the 5-second restart delay
+- [x] All existing supervisor tests pass
+  > Evidence: `./smackerel.sh test unit` — `internal/connector` package passes all tests
+- [x] Zero warnings, lint/format clean
+  > Evidence: `./smackerel.sh check` passes; `./smackerel.sh test unit` passes clean
+
+---
+
+## Scope 20: Remove Dead SYNTHESIS Stream
+
+**Status:** Done
+**Priority:** P2 (MEDIUM — dead infrastructure cleanup)
+**Depends On:** 02-processing-pipeline
+**Finding:** ENG-004
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-073 SYNTHESIS stream removed from NATS configuration
+  Given the NATS stream configuration in AllStreams() and nats_contract.json
+  When the system starts
+  Then no SYNTHESIS stream is created
+  And the nats_contract.json does not contain a SYNTHESIS stream entry
+  And the dead synthesis.analyze publish is removed from engine.go
+```
+
+### Implementation Plan
+- Remove `{Name: "SYNTHESIS", Subjects: []string{"synthesis.>"}}` from `AllStreams()` in `internal/nats/client.go`
+- Remove `"SYNTHESIS": { "subjects_pattern": "synthesis.>" }` from `config/nats_contract.json` streams section
+- Remove the dead `e.NATS.Publish(ctx, "synthesis.analyze", data)` from `internal/intelligence/engine.go`
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | AllStreams does not contain SYNTHESIS | Unit | internal/nats/contract_test.go | SCN-002-073 |
+| 2 | Contract test still passes without SYNTHESIS | Unit | internal/nats/contract_test.go | SCN-002-073 |
+
+### Definition of Done
+- [x] SYNTHESIS stream removed from `AllStreams()` in client.go
+  > Evidence: `internal/nats/client.go` — `{Name: "SYNTHESIS", Subjects: []string{"synthesis.>"}}` removed from `AllStreams()`
+- [x] SYNTHESIS stream removed from `nats_contract.json`
+  > Evidence: `config/nats_contract.json` — `"SYNTHESIS"` entry removed from `streams` section
+- [x] Dead `synthesis.analyze` publish removed from `engine.go`
+  > Evidence: `internal/intelligence/engine.go` — `e.NATS.Publish(ctx, "synthesis.analyze", data)` block removed; unused `encoding/json` and `log/slog` imports also removed
+- [x] SCN-002-073: No SYNTHESIS stream in NATS configuration
+  > Evidence: `internal/nats/client_test.go::TestAllStreams_Coverage` passes with 4 streams; contract tests pass
+- [x] All existing NATS contract tests pass
+  > Evidence: `./smackerel.sh test unit` — `internal/nats` package passes all tests
+- [x] Zero warnings, lint/format clean
+  > Evidence: `./smackerel.sh check` passes; `./smackerel.sh test unit` passes clean
+
+---
+
+## Scope 21: CoreAPIURL Config SST Compliance
+
+**Status:** Done
+**Priority:** P2 (MEDIUM — SST compliance, multi-container support)
+**Depends On:** 01-project-scaffold
+**Finding:** ENG-009
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-074 CoreAPIURL read from config instead of hardcoded
+  Given CORE_API_URL is set in the environment
+  When smackerel-core starts and initializes the Telegram bot
+  Then the Telegram bot uses the configured CORE_API_URL
+  And no hardcoded "localhost" URL appears in the bot configuration
+
+Scenario: SCN-002-075 CoreAPIURL missing causes startup failure
+  Given CORE_API_URL is not set in the environment
+  When smackerel-core attempts to load configuration
+  Then config validation fails with a message naming CORE_API_URL
+```
+
+### Implementation Plan
+- Add `CORE_API_URL` as a derived value in `scripts/commands/config.sh` (composed from service name and container port)
+- Add to env file template output
+- Add to `docker-compose.yml` environment section for `smackerel-core`
+- Add `CoreAPIURL` field to `internal/config/config.go` Config struct
+- Read from `CORE_API_URL` env var, add to required vars
+- Replace `"http://localhost:" + cfg.Port` with `cfg.CoreAPIURL` in `cmd/core/main.go`
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Config validation fails when CORE_API_URL missing | Unit | internal/config/validate_test.go | SCN-002-075 |
+| 2 | Config loads CoreAPIURL from env | Unit | internal/config/validate_test.go | SCN-002-074 |
+
+### Definition of Done
+- [x] `CORE_API_URL` derived in config generation pipeline
+  > Evidence: `scripts/commands/config.sh` — `CORE_API_URL="http://smackerel-core:${CORE_CONTAINER_PORT}"` derived; `config/generated/dev.env` contains `CORE_API_URL=http://smackerel-core:8080`
+- [x] `CoreAPIURL` field added to config struct, read from env
+  > Evidence: `internal/config/config.go` — `CoreAPIURL string` field; `os.Getenv("CORE_API_URL")` in `Load()`
+- [x] Config validation fails-loud when `CORE_API_URL` missing
+  > Evidence: `internal/config/config.go` — `CORE_API_URL` in `requiredVars()`; `internal/config/validate_test.go::TestValidate_MissingAllRequired` checks for `CORE_API_URL`
+- [x] Hardcoded `"http://localhost:" + cfg.Port` replaced with `cfg.CoreAPIURL`
+  > Evidence: `cmd/core/main.go` — `CoreAPIURL: cfg.CoreAPIURL` in Telegram bot config
+- [x] `docker-compose.yml` passes `CORE_API_URL` to smackerel-core
+  > Evidence: `docker-compose.yml` — `CORE_API_URL: ${CORE_API_URL}` in smackerel-core environment
+- [x] SCN-002-074: Telegram bot uses configured URL
+  > Evidence: `cmd/core/main.go` — `CoreAPIURL: cfg.CoreAPIURL` replaces hardcoded localhost
+- [x] SCN-002-075: Missing CORE_API_URL causes validation failure
+  > Evidence: `internal/config/validate_test.go::TestValidate_MissingAllRequired` and `TestValidate_MissingGeneratedRuntimeValues` include `CORE_API_URL`
+- [x] All existing config validation tests pass
+  > Evidence: `./smackerel.sh test unit` — `internal/config` package passes all tests
+- [x] Zero warnings, lint/format clean
+  > Evidence: `./smackerel.sh check` passes; `./smackerel.sh test unit` passes clean
+
+---
+
+## Scope 22: Digest NATS Typed Payload
+
+**Status:** Done
+**Priority:** P3 (LOW — hardening)
+**Depends On:** 02-processing-pipeline
+**Finding:** ENG-011
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-076 Digest generated payload unmarshalled to typed struct
+  Given the ML sidecar publishes a digest.generated message
+  When the result subscriber receives the message
+  Then the payload is unmarshalled into NATSDigestGeneratedPayload struct
+  And required fields (digest_date, text) are validated before processing
+
+Scenario: SCN-002-077 Invalid digest payload rejected with validation error
+  Given the ML sidecar publishes a digest.generated message with missing required fields
+  When the result subscriber receives the message
+  Then the message is acked (to prevent infinite redelivery)
+  And a validation error is logged
+```
+
+### Implementation Plan
+- Define `NATSDigestGeneratedPayload` struct in `internal/pipeline/processor.go` with fields: DigestDate, Text, WordCount, ModelUsed
+- Add `ValidateDigestGeneratedPayload` function matching existing validation pattern
+- Update `handleDigestMessage` in `subscriber.go` to unmarshal into typed struct and validate
+- Update `HandleDigestResult` in `digest/generator.go` to accept typed fields instead of `map[string]interface{}`
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Valid digest payload accepted | Unit | internal/pipeline/processor_test.go | SCN-002-076 |
+| 2 | Missing digest_date rejected | Unit | internal/pipeline/processor_test.go | SCN-002-077 |
+| 3 | Missing text rejected | Unit | internal/pipeline/processor_test.go | SCN-002-077 |
+
+### Definition of Done
+- [x] `NATSDigestGeneratedPayload` struct defined in processor.go
+  > Evidence: `internal/pipeline/processor.go` — `NATSDigestGeneratedPayload` struct with `DigestDate`, `Text`, `WordCount`, `ModelUsed` fields
+- [x] `ValidateDigestGeneratedPayload` function added with required field checks
+  > Evidence: `internal/pipeline/processor.go` — function validates `digest_date` and `text` are non-empty
+- [x] `handleDigestMessage` uses typed struct with validation
+  > Evidence: `internal/pipeline/subscriber.go` — unmarshals to `NATSDigestGeneratedPayload`, calls `ValidateDigestGeneratedPayload`, acks on validation failure
+- [x] `HandleDigestResult` accepts typed fields instead of untyped map
+  > Evidence: `internal/digest/generator.go` — signature changed from `map[string]interface{}` to `digestDate, text string, wordCount int, modelUsed string`
+- [x] SCN-002-076: Typed struct used for digest payload
+  > Evidence: `internal/pipeline/subscriber.go::handleDigestMessage` uses `NATSDigestGeneratedPayload` struct
+- [x] SCN-002-077: Invalid digest payloads rejected with validation error
+  > Evidence: `internal/pipeline/subscriber.go::handleDigestMessage` — validation failure logged and message acked
+- [x] All existing tests pass
+  > Evidence: `./smackerel.sh test unit` — all packages pass
+- [x] Zero warnings, lint/format clean
+  > Evidence: `./smackerel.sh check` passes; `./smackerel.sh test unit` passes clean

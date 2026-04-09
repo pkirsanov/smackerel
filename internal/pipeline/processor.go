@@ -104,6 +104,25 @@ func ValidateProcessedPayload(p *NATSProcessedPayload) error {
 	return nil
 }
 
+// NATSDigestGeneratedPayload is what ML sidecar publishes to digest.generated.
+type NATSDigestGeneratedPayload struct {
+	DigestDate string `json:"digest_date"`
+	Text       string `json:"text"`
+	WordCount  int    `json:"word_count"`
+	ModelUsed  string `json:"model_used,omitempty"`
+}
+
+// ValidateDigestGeneratedPayload checks required fields on an incoming digest result.
+func ValidateDigestGeneratedPayload(p *NATSDigestGeneratedPayload) error {
+	if p.DigestDate == "" {
+		return fmt.Errorf("NATSDigestGeneratedPayload: digest_date is required")
+	}
+	if p.Text == "" {
+		return fmt.Errorf("NATSDigestGeneratedPayload: text is required")
+	}
+	return nil
+}
+
 // Processor orchestrates the content processing pipeline.
 type Processor struct {
 	DB     *pgxpool.Pool

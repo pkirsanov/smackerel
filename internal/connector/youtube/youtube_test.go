@@ -184,3 +184,264 @@ func TestFetchPlaylistItems_CursorURLEncoded(t *testing.T) {
 		t.Errorf("encoded cursor must not contain raw '&', got %q", result)
 	}
 }
+
+func TestNew_Defaults(t *testing.T) {
+	c := New("yt-1")
+	if c.ID() != "yt-1" {
+		t.Errorf("expected ID 'yt-1', got %q", c.ID())
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("expected disconnected before connect, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestConnect_InvalidAuth(t *testing.T) {
+	c := New("yt")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{AuthType: "password"})
+	if err == nil {
+		t.Error("expected error for password auth type")
+	}
+}
+
+func TestClose_SetsDisconnected(t *testing.T) {
+	c := New("yt")
+	c.Connect(context.Background(), connector.ConnectorConfig{AuthType: "oauth2"})
+	if err := c.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("expected disconnected after close, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSync_DescriptionTruncation(t *testing.T) {
+	longDesc := strings.Repeat("a", 600)
+	c := New("yt")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"videos": []interface{}{
+				map[string]interface{}{
+					"video_id":    "truncated",
+					"title":       "Long Desc Video",
+					"description": longDesc,
+					"published":   "2026-04-08T10:00:00Z",
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+	// Description should be truncated to 500 + "..."
+	if !strings.Contains(artifacts[0].RawContent, "...") {
+		t.Error("expected truncated description with '...'")
+	}
+	// Content should not contain the full 600-char description
+	if strings.Contains(artifacts[0].RawContent, longDesc) {
+		t.Error("description should be truncated, not full")
+	}
+}
+
+func TestSync_URLConstruction(t *testing.T) {
+	c := New("yt")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "api_key",
+		SourceConfig: map[string]interface{}{
+			"videos": []interface{}{
+				map[string]interface{}{
+					"video_id":  "abc123",
+					"title":     "URL Test",
+					"published": "2026-04-08T10:00:00Z",
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	expected := "https://www.youtube.com/watch?v=abc123"
+	if artifacts[0].URL != expected {
+		t.Errorf("expected URL %q, got %q", expected, artifacts[0].URL)
+	}
+}
+
+func TestSync_MetadataFields(t *testing.T) {
+	c := New("yt")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"videos": []interface{}{
+				map[string]interface{}{
+					"video_id":   "meta-test",
+					"title":      "Metadata Video",
+					"channel":    "TestChannel",
+					"duration":   "PT10M",
+					"liked":      true,
+					"playlist":   "Favorites",
+					"categories": []interface{}{"Tech"},
+					"tags":       []interface{}{"go", "programming"},
+					"published":  "2026-04-08T10:00:00Z",
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	m := artifacts[0].Metadata
+	if m["video_id"] != "meta-test" {
+		t.Errorf("video_id: %v", m["video_id"])
+	}
+	if m["channel"] != "TestChannel" {
+		t.Errorf("channel: %v", m["channel"])
+	}
+	if m["duration"] != "PT10M" {
+		t.Errorf("duration: %v", m["duration"])
+	}
+	if m["liked"] != true {
+		t.Errorf("liked: %v", m["liked"])
+	}
+	if m["playlist"] != "Favorites" {
+		t.Errorf("playlist: %v", m["playlist"])
+	}
+}
+
+func TestParseVideoItems_InvalidInput(t *testing.T) {
+	_, err := parseVideoItems("not-an-array")
+	if err == nil {
+		t.Error("expected error for non-array input")
+	}
+}
+
+func TestParseVideoItems_SkipsNonMapEntries(t *testing.T) {
+	vids, err := parseVideoItems([]interface{}{
+		"not-a-map",
+		42,
+		map[string]interface{}{
+			"video_id": "valid",
+			"title":    "Valid Video",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(vids) != 1 {
+		t.Fatalf("expected 1 valid video, got %d", len(vids))
+	}
+	if vids[0].VideoID != "valid" {
+		t.Errorf("expected video_id 'valid', got %q", vids[0].VideoID)
+	}
+}
+
+func TestParseVideoItems_AllFields(t *testing.T) {
+	vids, err := parseVideoItems([]interface{}{
+		map[string]interface{}{
+			"video_id":    "v1",
+			"title":       "Full Video",
+			"channel":     "Ch1",
+			"description": "Desc",
+			"duration":    "PT5M",
+			"playlist":    "PL1",
+			"published":   "2026-04-05T12:00:00Z",
+			"liked":       true,
+			"watch_later": true,
+			"categories":  []interface{}{"Cat1", "Cat2"},
+			"tags":        []interface{}{"tag1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	v := vids[0]
+	if v.Description != "Desc" {
+		t.Errorf("description: %q", v.Description)
+	}
+	if v.Duration != "PT5M" {
+		t.Errorf("duration: %q", v.Duration)
+	}
+	if v.Playlist != "PL1" {
+		t.Errorf("playlist: %q", v.Playlist)
+	}
+	if !v.Liked {
+		t.Error("expected liked=true")
+	}
+	if !v.WatchLater {
+		t.Error("expected watch_later=true")
+	}
+	if len(v.Categories) != 2 {
+		t.Errorf("expected 2 categories, got %d", len(v.Categories))
+	}
+	if len(v.Tags) != 1 {
+		t.Errorf("expected 1 tag, got %d", len(v.Tags))
+	}
+	if v.Published.IsZero() {
+		t.Error("expected non-zero published time")
+	}
+}
+
+func TestGetCredential_NilMap(t *testing.T) {
+	if v := getCredential(nil, "key"); v != "" {
+		t.Errorf("expected empty for nil map, got %q", v)
+	}
+}
+
+func TestGetCredential_MissingKey(t *testing.T) {
+	if v := getCredential(map[string]string{"a": "b"}, "missing"); v != "" {
+		t.Errorf("expected empty for missing key, got %q", v)
+	}
+}
+
+func TestGetStr_MissingKey(t *testing.T) {
+	m := map[string]interface{}{"a": "b"}
+	if v := getStr(m, "missing"); v != "" {
+		t.Errorf("expected empty, got %q", v)
+	}
+}
+
+func TestGetStr_NonStringValue(t *testing.T) {
+	m := map[string]interface{}{"num": 42}
+	if v := getStr(m, "num"); v != "" {
+		t.Errorf("expected empty for non-string, got %q", v)
+	}
+}
+
+func TestSync_HealthTransitions(t *testing.T) {
+	c := New("yt")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"videos": []interface{}{},
+		},
+	})
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected healthy after sync, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSync_ErrorOnInvalidVideos(t *testing.T) {
+	c := New("yt")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"videos": "not-an-array",
+		},
+	})
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error for invalid videos format")
+	}
+}

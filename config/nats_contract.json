@@ -78,8 +78,7 @@
     "ARTIFACTS": { "subjects_pattern": "artifacts.>" },
     "SEARCH": { "subjects_pattern": "search.>" },
     "DIGEST": { "subjects_pattern": "digest.>" },
-    "KEEP": { "subjects_pattern": "keep.>" },
-    "SYNTHESIS": { "subjects_pattern": "synthesis.>" }
+    "KEEP": { "subjects_pattern": "keep.>" }
   },
   "request_response_pairs": [
     { "request": "artifacts.process", "response": "artifacts.processed" },

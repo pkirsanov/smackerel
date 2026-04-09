@@ -1,8 +1,12 @@
 package rss
 
 import (
+	"context"
+	"net"
 	"testing"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/connector"
 )
 
 func TestParseRSSItems(t *testing.T) {
@@ -161,4 +165,208 @@ func searchSubstring(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+func TestConnect_LoadsFeedURLs(t *testing.T) {
+	c := New("rss-1", nil)
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"feed_urls": []interface{}{
+				"https://example.com/rss",
+				"https://blog.example.com/feed",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	if len(c.feedURLs) != 2 {
+		t.Errorf("expected 2 feed URLs, got %d", len(c.feedURLs))
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected healthy, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestConnect_PreservesConstructorURLs(t *testing.T) {
+	c := New("rss-1", []string{"https://existing.com/rss"})
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"feed_urls": []interface{}{"https://new.com/rss"},
+		},
+	})
+	if len(c.feedURLs) != 2 {
+		t.Errorf("expected 2 feed URLs (existing + new), got %d", len(c.feedURLs))
+	}
+}
+
+func TestClose_SetsDisconnected(t *testing.T) {
+	c := New("rss-1", nil)
+	c.Connect(context.Background(), connector.ConnectorConfig{})
+	if err := c.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("expected disconnected after close, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestNew_Defaults(t *testing.T) {
+	c := New("feed-x", nil)
+	if c.ID() != "feed-x" {
+		t.Errorf("expected ID 'feed-x', got %q", c.ID())
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("expected disconnected before connect, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestParseRSSItems_RFC1123Date(t *testing.T) {
+	items := []rssItem{
+		{
+			Title:   "RFC1123",
+			Link:    "https://example.com/rfc1123",
+			PubDate: "Mon, 06 Apr 2026 10:00:00 GMT",
+			GUID:    "g1",
+		},
+	}
+	result := parseRSSItems(items)
+	if result[0].Published.IsZero() {
+		t.Error("expected parsed RFC1123 date, got zero time")
+	}
+}
+
+func TestParseRSSItems_InvalidDate(t *testing.T) {
+	items := []rssItem{
+		{Title: "Bad Date", PubDate: "not-a-date", GUID: "g2"},
+	}
+	result := parseRSSItems(items)
+	// Should fall back to time.Now()
+	if result[0].Published.IsZero() {
+		t.Error("expected fallback to time.Now(), got zero time")
+	}
+	if time.Since(result[0].Published) > time.Minute {
+		t.Error("expected recent fallback time")
+	}
+}
+
+func TestParseAtomEntries_Basic(t *testing.T) {
+	entries := []atomEntry{
+		{
+			Title: "Atom Post",
+			Links: []atomLink{
+				{Href: "https://example.com/atom", Rel: "alternate"},
+			},
+			Summary: "Atom summary",
+			Updated: "2026-04-05T10:00:00Z",
+			ID:      "atom-1",
+		},
+	}
+	entries[0].Author.Name = "AtomAuthor"
+
+	result := parseAtomEntries(entries)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(result))
+	}
+	if result[0].Title != "Atom Post" {
+		t.Errorf("title: %q", result[0].Title)
+	}
+	if result[0].Link != "https://example.com/atom" {
+		t.Errorf("link: %q", result[0].Link)
+	}
+	if result[0].Author != "AtomAuthor" {
+		t.Errorf("author: %q", result[0].Author)
+	}
+	if result[0].GUID != "atom-1" {
+		t.Errorf("GUID: %q", result[0].GUID)
+	}
+}
+
+func TestParseAtomEntries_FallbackContent(t *testing.T) {
+	entries := []atomEntry{
+		{
+			Title:   "Content Only",
+			Content: "Full content here",
+			ID:      "atom-2",
+		},
+	}
+	result := parseAtomEntries(entries)
+	if result[0].Description != "Full content here" {
+		t.Errorf("expected content as description, got %q", result[0].Description)
+	}
+}
+
+func TestParseAtomEntries_FallbackLinkAndGUID(t *testing.T) {
+	entries := []atomEntry{
+		{
+			Title: "No Alt Link",
+			Links: []atomLink{
+				{Href: "https://example.com/first", Rel: "self"},
+			},
+		},
+	}
+	result := parseAtomEntries(entries)
+	// Should fall back to first link
+	if result[0].Link != "https://example.com/first" {
+		t.Errorf("expected fallback to first link, got %q", result[0].Link)
+	}
+	// GUID should fall back to link
+	if result[0].GUID != "https://example.com/first" {
+		t.Errorf("expected GUID fallback to link, got %q", result[0].GUID)
+	}
+}
+
+func TestParseAtomEntries_InvalidDate(t *testing.T) {
+	entries := []atomEntry{
+		{Title: "Bad Date", Updated: "not-a-date", ID: "a3"},
+	}
+	result := parseAtomEntries(entries)
+	if result[0].Published.IsZero() {
+		t.Error("expected fallback time.Now() for invalid date")
+	}
+}
+
+func TestIsPrivateIP_Loopback(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("127.0.0.1")) {
+		t.Error("127.0.0.1 should be private")
+	}
+	if !isPrivateIP(net.ParseIP("::1")) {
+		t.Error("::1 should be private")
+	}
+}
+
+func TestIsPrivateIP_RFC1918(t *testing.T) {
+	private := []string{"10.0.0.1", "172.16.0.1", "192.168.1.1"}
+	for _, ip := range private {
+		if !isPrivateIP(net.ParseIP(ip)) {
+			t.Errorf("%s should be private", ip)
+		}
+	}
+}
+
+func TestIsPrivateIP_Public(t *testing.T) {
+	public := []string{"8.8.8.8", "1.1.1.1", "203.0.113.1"}
+	for _, ip := range public {
+		if isPrivateIP(net.ParseIP(ip)) {
+			t.Errorf("%s should NOT be private", ip)
+		}
+	}
+}
+
+func TestIsPrivateIP_MetadataIP(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("169.254.169.254")) {
+		t.Error("169.254.169.254 (metadata) should be private")
+	}
+}
+
+func TestIsPrivateIP_LinkLocal(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("169.254.0.1")) {
+		t.Error("169.254.0.1 should be link-local/private")
+	}
+}
+
+func TestIsPrivateIP_Unspecified(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("0.0.0.0")) {
+		t.Error("0.0.0.0 should be private")
+	}
 }
