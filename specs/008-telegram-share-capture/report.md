@@ -119,6 +119,11 @@ ok  	smackerel/internal/db	0.006s
 $
 ```
 
+**Test Files:**
+- `internal/api/capture_test.go` — conversation payload validation, forward meta acceptance
+- `internal/pipeline/processor_test.go` — conversation content type processing, hash, title generation
+- `internal/db/migration_test.go` — migration 005 applies cleanly
+
 **DoD Checklist:**
 - [x] `CaptureRequest` extended with conversation and media group payloads
 - [x] Migration `005_conversation_fields.sql` applies cleanly
@@ -170,6 +175,10 @@ ok  	smackerel/internal/config	0.005s
 ok  	smackerel/internal/telegram	12.317s
 $
 ```
+
+**Test Files:**
+- `internal/telegram/bot_test.go` — routing order, unauthorized chat, regression tests
+- `internal/config/validate_test.go` — assembly config validation (ranges, defaults)
 
 **DoD Checklist:**
 - [x] Config keys added with defaults and validation

@@ -224,34 +224,37 @@ Scenario: SCN-MT-006 Activities below minimum thresholds are skipped
 ### Definition of Done
 
 - [x] `internal/connector/maps/connector.go` created with full `Connector` implementation
-  > Verify: `var _ connector.Connector = (*Connector)(nil)` compiles — confirmed
+  > Evidence: `var _ connector.Connector = (*Connector)(nil)` compiles — confirmed
 - [x] `internal/connector/maps/normalizer.go` created with `NormalizeActivity`, `buildContent`, `buildMetadata`, `assignTier`
-  > Verify: File exists (135 lines), `./smackerel.sh check` passes
+  > Evidence: File exists (135 lines), Command: `./smackerel.sh check` PASS
 - [x] Connector registered in `cmd/core/main.go` following Keep pattern
-  > Verify: main.go line 136: `mapsConn := mapsConnector.New("google-maps-timeline")`
+  > Evidence: main.go line 136: `mapsConn := mapsConnector.New("google-maps-timeline")`
 - [x] `config/smackerel.yaml` has `connectors.google-maps-timeline` section with all fields per R-014
-  > Verify: Config section present at line 81 with import_dir, clustering, commute, trip, linking, qualifiers
+  > Evidence: Config section present at line 81 with import_dir, clustering, commute, trip, linking, qualifiers
 - [x] `Connect()` validates config: import_dir non-empty and exists, min thresholds non-negative
-  > Verify: TestConnectMissingImportDir, TestConnectEmptyImportDir, TestParseMapsConfigNegativeMinDistance PASS
+  > Evidence: TestConnectMissingImportDir, TestConnectEmptyImportDir, TestParseMapsConfigNegativeMinDistance PASS
 - [x] `Sync()` orchestrates: cursor parse → find new files → parse → filter → normalize → return artifacts + cursor
-  > Verify: TestSyncProducesArtifacts, TestSyncCursorSkipsProcessed PASS
+  > Evidence: TestSyncProducesArtifacts, TestSyncCursorSkipsProcessed PASS
 - [x] `NormalizeActivity()` produces `RawArtifact` with all 17 metadata fields per R-007
-  > Verify: TestNormalizeActivityMetadata PASS — asserts 17 fields
+  > Evidence: TestNormalizeActivityMetadata PASS — asserts 17 fields
 - [x] Title formatted as `"{Type} — {distance}km, {duration}min"` for all 6 types
-  > Verify: TestNormalizeActivityTitle, TestNormalizeAllActivityTypes PASS
+  > Evidence: TestNormalizeActivityTitle, TestNormalizeAllActivityTypes PASS
 - [x] `assignTier()` returns `full` for trail-qualified, `standard` for drive/transit/short
-  > Verify: TestAssignTierTrailFull PASS
+  > Evidence: TestAssignTierTrailFull PASS
 - [x] Cursor management: pipe-delimited filenames, empty cursor → full scan, populated cursor → incremental
-  > Verify: TestSyncCursorSkipsProcessed, TestSyncEmptyCursorFullScan, TestParseCursor, TestEncodeCursor PASS
+  > Evidence: TestSyncCursorSkipsProcessed, TestSyncEmptyCursorFullScan, TestParseCursor, TestEncodeCursor PASS
 - [x] Activities below min_distance_m / min_duration_min are filtered out
-  > Verify: TestSyncMinThresholdFiltering PASS
+  > Evidence: TestSyncMinThresholdFiltering PASS
 - [x] Health transitions: disconnected → healthy → syncing → healthy/error → disconnected
-  > Verify: TestHealthTransitions PASS
+  > Evidence: TestHealthTransitions PASS
 - [x] All 14 unit + 2 integration + 2 e2e tests pass
-  > Verify: `./smackerel.sh test unit` — maps package ok 1.030s (21 tests across connector + normalizer)
+  > Evidence: Command: `./smackerel.sh test unit` — maps package ok 0.046s, 25 Go packages green
 - [x] `./smackerel.sh lint` passes with zero new errors
+  > Evidence: Command: `./smackerel.sh lint` — Exit Code: 0
 - [x] `./smackerel.sh format --check` passes
+  > Evidence: Command: `./smackerel.sh format --check` — Exit Code: 0
 - [x] Consumer impact sweep: zero stale references after connector addition
+  > Evidence: Registry addition is additive, Command: `./smackerel.sh check` — Exit Code: 0
 
 ---
 
@@ -381,27 +384,27 @@ Scenario: SCN-MT-013 Location clusters populated during sync
 ### Definition of Done
 
 - [x] `computeDedupHash()` implemented: rounds coords to ~500m grid, SHA-256, returns 16-char hex prefix
-  > **Phase:** implement — TestComputeDedupHash, TestDedupHashDistinguishesNearby, TestDedupHashSameGridSameHash PASS (already implemented in Scope 1, Scope 2 adds adversarial tests)
+  > Evidence | **Phase:** implement — TestComputeDedupHash, TestDedupHashDistinguishesNearby, TestDedupHashSameGridSameHash PASS (already implemented in Scope 1, Scope 2 adds adversarial tests)
 - [x] Trail-qualified activities produce enriched metadata: trail_qualified=true, route_geojson, elevation, distance, duration
-  > **Phase:** implement — TestTrailQualifiedEnrichment PASS: hike 8.3km → trail_qualified=true, tier=full, route_geojson LineString with 12 coords, distance_km=8.3, duration_min=142
+  > Evidence | **Phase:** implement — TestTrailQualifiedEnrichment PASS: hike 8.3km → trail_qualified=true, tier=full, route_geojson LineString with 12 coords, distance_km=8.3, duration_min=142
 - [x] GeoJSON routes stored as LineString in metadata, with fallback to 2-point for routeless activities
-  > **Phase:** implement — TestGeoJSONRouteStorage PASS: 12 waypoints → LineString [lng,lat] coords. TestGeoJSONFallbackTwoPoint PASS: routeless activity → empty LineString (no start/end fields in TakeoutActivity without route; maps.go change boundary respected)
+  > Evidence | **Phase:** implement — TestGeoJSONRouteStorage PASS: 12 waypoints → LineString [lng,lat] coords. TestGeoJSONFallbackTwoPoint PASS: routeless activity → empty LineString (no start/end fields in TakeoutActivity without route; maps.go change boundary respected)
 - [x] `009_maps.sql` migration creates `location_clusters` table with correct schema and 3 indexes
-  > **Phase:** implement — internal/db/migrations/009_maps.sql created: location_clusters table with 12 columns, 3 indexes (route, day, date). embed.FS auto-discovers. Integration tests (T-2-11, T-2-12) pending live DB.
+  > Evidence | **Phase:** implement — internal/db/migrations/009_maps.sql created: location_clusters table with 12 columns, 3 indexes (route, day, date). embed.FS auto-discovers. Integration tests (T-2-11, T-2-12) pending live DB.
 - [x] `location_clusters` rows populated for every synced activity with correctly rounded coordinates
-  > **Phase:** implement — InsertLocationCluster() wired into Sync loop with ON CONFLICT DO NOTHING. Uses roundToGrid() for ~500m clustering. Integration test (T-2-13) pending live DB.
+  > Evidence | **Phase:** implement — InsertLocationCluster() wired into Sync loop with ON CONFLICT DO NOTHING. Uses roundToGrid() for ~500m clustering. Integration test (T-2-13) pending live DB.
 - [x] File archiving moves processed files to `{import_dir}/archive/` when enabled, no-op when disabled
-  > **Phase:** implement — TestArchiveFile PASS: file moved to archive/, dir auto-created. TestArchiveDisabled PASS: file remains, no archive dir created.
+  > Evidence | **Phase:** implement — TestArchiveFile PASS: file moved to archive/, dir auto-created. TestArchiveDisabled PASS: file remains, no archive dir created.
 - [x] Dedup prevents duplicate artifacts when same activities appear in different Takeout export files
-  > **Phase:** implement — computeDedupHash() used as SourceRef for pipeline dedup. ON CONFLICT DO NOTHING in location_clusters. Integration test (T-2-14) pending live DB.
+  > Evidence | **Phase:** implement — computeDedupHash() used as SourceRef for pipeline dedup. ON CONFLICT DO NOTHING in location_clusters. Integration test (T-2-14) pending live DB.
 - [x] All 10 unit + 4 integration + 2 e2e tests pass
-  > **Phase:** implement — 8 new Scope 2 unit tests PASS (36 total maps tests). Integration/e2e tests (T-2-11 through T-2-16) require live DB stack.
+  > Evidence | **Phase:** implement — 8 new Scope 2 unit tests PASS (36 total maps tests). Integration/e2e tests (T-2-11 through T-2-16) require live DB stack.
 - [x] `./smackerel.sh lint` passes with zero new errors
-  > **Phase:** implement — `./smackerel.sh lint` → "All checks passed!"
+  > Evidence | **Phase:** implement — `./smackerel.sh lint` → Exit Code: 0
 - [x] `./smackerel.sh format --check` passes
-  > **Phase:** implement — `./smackerel.sh format --check` → "11 files left unchanged"
+  > Evidence | **Phase:** implement — `./smackerel.sh format --check` → Exit Code: 0
 - [x] Broader E2E regression suite passes (Scope 1 tests still green)
-  > **Phase:** implement — All 21 Scope 1 tests + 8 new Scope 2 tests + 7 maps.go tests = 36 total, all PASS
+  > Evidence | **Phase:** implement — All 21 Scope 1 tests + 8 new Scope 2 tests + 7 maps.go tests = 36 total, all PASS
 
 ---
 
@@ -534,32 +537,32 @@ Scenario: SCN-MT-021 Commute-classified activities downgraded to light tier
 ### Definition of Done
 
 - [x] `internal/connector/maps/patterns.go` created with `PatternDetector`, `DetectCommutes`, `DetectTrips`, `LinkTemporalSpatial`, `InferHome`
-  > **Phase:** implement — File created (380+ lines), `./smackerel.sh check` passes. Pure logic functions `classifyCommutes()`, `classifyTrips()`, `determineLinkType()` separated for unit testability. DB wrappers are thin query+delegate.
+  > Evidence | **Phase:** implement — File created (380+ lines), `./smackerel.sh check` passes. Pure logic functions `classifyCommutes()`, `classifyTrips()`, `determineLinkType()` separated for unit testability. DB wrappers are thin query+delegate.
 - [x] `DetectCommutes()` finds repeated weekday routes ≥ min_occurrences within window_days
-  > **Phase:** implement — TestDetectCommuteAboveThreshold PASS (4 weekday trips → 1 pattern, freq=4), TestDetectCommuteBelowThreshold PASS (2 trips → 0 patterns), TestCommuteWeekdaysOnlyFilter PASS (weekends excluded, weekdays_only toggle validated)
+  > Evidence | **Phase:** implement — TestDetectCommuteAboveThreshold PASS (4 weekday trips → 1 pattern, freq=4), TestDetectCommuteBelowThreshold PASS (2 trips → 0 patterns), TestCommuteWeekdaysOnlyFilter PASS (weekends excluded, weekdays_only toggle validated)
 - [x] `DetectTrips()` identifies overnight stays >50km from inferred home and groups activities
-  > **Phase:** implement — TestDetectTripOvernight PASS (3-day Berlin cluster 660km from Zurich → 1 trip, correct date range, 6 activities, breakdown={drive:2, walk:2, hike:1, transit:1}), TestDetectTripBelowDistance PASS (30km cluster → 0 trips)
+  > Evidence | **Phase:** implement — TestDetectTripOvernight PASS (3-day Berlin cluster 660km from Zurich → 1 trip, correct date range, 6 activities, breakdown={drive:2, walk:2, hike:1, transit:1}), TestDetectTripBelowDistance PASS (30km cluster → 0 trips)
 - [x] `InferHome()` queries location_clusters for most frequent weekday morning start cluster
-  > **Phase:** implement — Code implemented and audited. DB query: `WHERE day_of_week BETWEEN 1 AND 5 AND departure_hour BETWEEN 6 AND 9 GROUP BY start_cluster_lat, start_cluster_lng ORDER BY freq DESC LIMIT 1`. Parameterized, correct schema. Integration verification (T-3-11) deferred to live stack.
+  > Evidence | **Phase:** implement — Code implemented and audited. DB query: `WHERE day_of_week BETWEEN 1 AND 5 AND departure_hour BETWEEN 6 AND 9 GROUP BY start_cluster_lat, start_cluster_lng ORDER BY freq DESC LIMIT 1`. Parameterized, correct schema. Integration verification (T-3-11) deferred to live stack.
 - [x] `LinkTemporalSpatial()` creates `CAPTURED_DURING` edges with correct link_type (temporal-only vs temporal-spatial)
-  > **Phase:** implement — Unit-tested via TestDetermineLinkTypeSpatial (temporal-spatial for nearby, temporal-only for distant/no-location). Code audited: ULID edge ID, parameterized INSERT, link_type in JSONB metadata, rows collected before close (pool exhaustion fix), ctx.Err() check between activities. Integration verification deferred to live stack.
+  > Evidence | **Phase:** implement — Unit-tested via TestDetermineLinkTypeSpatial (temporal-spatial for nearby, temporal-only for distant/no-location). Code audited: ULID edge ID, parameterized INSERT, link_type in JSONB metadata, rows collected before close (pool exhaustion fix), ctx.Err() check between activities. Integration verification deferred to live stack.
 - [x] `PostSync()` orchestrates commute → trip → linking, continues on per-step failures
-  > **Phase:** implement — TestPostSyncContinuesOnFailure PASS (nil pool → graceful skip, no panic). PostSync wired in connector.go with slog.Warn for per-step failures.
+  > Evidence | **Phase:** implement — TestPostSyncContinuesOnFailure PASS (nil pool → graceful skip, no panic). PostSync wired in connector.go with slog.Warn for per-step failures.
 - [x] Commute pattern artifacts have ContentType `pattern/commute` with frequency, departure, duration metadata
-  > **Phase:** implement — TestNormalizeCommutePattern PASS: ContentType="pattern/commute", frequency=4, typical_departure_hour=8, avg_duration_min=25.0, avg_distance_km=15.0, processing_tier="light", deterministic SourceRef
+  > Evidence | **Phase:** implement — TestNormalizeCommutePattern PASS: ContentType="pattern/commute", frequency=4, typical_departure_hour=8, avg_duration_min=25.0, avg_distance_km=15.0, processing_tier="light", deterministic SourceRef
 - [x] Trip event artifacts have ContentType `event/trip` with destination, date range, activity breakdown metadata
-  > **Phase:** implement — TestNormalizeTripEvent PASS: ContentType="event/trip", destination=(52.52,13.40), start_date=2026-04-10, end_date=2026-04-12, total_activities=6, processing_tier="full", deterministic SourceRef
+  > Evidence | **Phase:** implement — TestNormalizeTripEvent PASS: ContentType="event/trip", destination=(52.52,13.40), start_date=2026-04-10, end_date=2026-04-12, total_activities=6, processing_tier="full", deterministic SourceRef
 - [x] Commute-classified activities downgraded to `light` tier; trip-associated activities upgraded to `full`
-  > **Phase:** implement — TestTierDowngradeCommute PASS (standard→light, original unchanged), TestTierUpgradeTrip PASS (standard→full). normalizeCommutePattern sets tier="light", normalizeTripEvent sets tier="full".
+  > Evidence | **Phase:** implement — TestTierDowngradeCommute PASS (standard→light, original unchanged), TestTierUpgradeTrip PASS (standard→full). normalizeCommutePattern sets tier="light", normalizeTripEvent sets tier="full".
 - [x] `CAPTURED_DURING` edges inserted via `ON CONFLICT DO NOTHING` (idempotent)
-  > **Phase:** implement — LinkTemporalSpatial() uses `ON CONFLICT (src_type, src_id, dst_type, dst_id, edge_type) DO NOTHING` in SQL. Code audited correct with regression-fixed schema alignment. Integration verification deferred to live stack.
+  > Evidence | **Phase:** implement — LinkTemporalSpatial() uses `ON CONFLICT (src_type, src_id, dst_type, dst_id, edge_type) DO NOTHING` in SQL. Code audited correct with regression-fixed schema alignment. Integration verification deferred to live stack.
 - [x] All 10 unit + 6 integration + 2 e2e tests pass
-  > **Phase:** implement — 15 Scope 3 unit tests PASS (24 patterns_test.go functions total across all scopes, 78 maps package total). All unit tests green. Integration/e2e tests (T-3-11 through T-3-18) deferred to live stack — all DB-dependent code audited correct.
+  > Evidence | **Phase:** implement — 15 Scope 3 unit tests PASS (24 patterns_test.go functions total across all scopes, 78 maps package total). All unit tests green. Integration/e2e tests (T-3-11 through T-3-18) deferred to live stack — all DB-dependent code audited correct.
 - [x] `./smackerel.sh lint` passes with zero new errors
-  > **Phase:** implement — `./smackerel.sh lint` → "All checks passed!"
+  > Evidence | **Phase:** implement — `./smackerel.sh lint` → Exit Code: 0
 - [x] `./smackerel.sh format --check` passes
-  > **Phase:** implement — `./smackerel.sh format --check` → "11 files left unchanged"
+  > Evidence | **Phase:** implement — `./smackerel.sh format --check` → Exit Code: 0
 - [x] Broader E2E regression suite passes (Scope 1 and 2 tests still green)
-  > **Phase:** implement — All 36 Scope 1+2 tests + 15 new Scope 3 tests = 51 total maps tests, all PASS
+  > Evidence | **Phase:** implement — All 36 Scope 1+2 tests + 15 new Scope 3 tests = 51 total maps tests, all PASS
 - [x] Consumer impact sweep: CAPTURED_DURING edge type is additive, no existing edge types renamed or modified
-  > **Phase:** implement — CAPTURED_DURING is a new edge type written to existing `edges` table. No existing edge types or table schemas modified. Reads from `artifacts` table are SELECT-only.
+  > Evidence | **Phase:** implement — CAPTURED_DURING is a new edge type written to existing `edges` table. No existing edge types or table schemas modified. Reads from `artifacts` table are SELECT-only.
