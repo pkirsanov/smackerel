@@ -30,12 +30,58 @@
 
 <img src="assets/icons/feature-local.svg" width="20" height="20" alt="">&ensp;**Runs locally** — you own your data, always
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Smackerel Stack                         │
+│                                                                │
+│  ┌──────────────┐    ┌───────────┐    ┌──────────────────────┐ │
+│  │  Telegram Bot │    │  Web UI   │    │    REST API          │ │
+│  │  (Go)         │    │  (HTMX)   │    │    (Go / Chi)        │ │
+│  └──────┬───────┘    └─────┬─────┘    └──────────┬───────────┘ │
+│         │                  │                     │             │
+│         └──────────────────┼─────────────────────┘             │
+│                            │                                   │
+│                   ┌────────▼────────┐                          │
+│                   │  Go Core        │                          │
+│                   │  (smackerel-    │                          │
+│                   │   core)         │                          │
+│                   │                 │                          │
+│                   │ • Pipeline      │                          │
+│                   │ • Scheduler     │                          │
+│                   │ • Intelligence  │                          │
+│                   │ • Connectors    │                          │
+│                   │ • Graph Linker  │                          │
+│                   └───┬────────┬────┘                          │
+│                       │        │                               │
+│              ┌────────▼──┐  ┌──▼───────────┐                   │
+│              │   NATS     │  │  PostgreSQL  │                   │
+│              │ JetStream  │  │  + pgvector  │                   │
+│              └────────┬───┘  └─────────────┘                   │
+│                       │                                        │
+│              ┌────────▼──────────┐    ┌──────────────┐         │
+│              │  Python ML Sidecar│    │  Ollama      │         │
+│              │  (smackerel-ml)   │    │  (optional)  │         │
+│              │                   │    └──────────────┘         │
+│              │ • Embeddings      │                             │
+│              │ • LLM gateway     │                             │
+│              │ • Transcription   │                             │
+│              └───────────────────┘                             │
+└─────────────────────────────────────────────────────────────────┘
+
+Connectors (passive ingestion):
+  Gmail · Calendar · YouTube · RSS · Bookmarks · Browser History
+  Google Keep · Google Maps Timeline · Hospitable
+```
+
 ## Docs
 
 - [Design Document](docs/smackerel.md)
 - [Development Guide](docs/Development.md)
 - [Testing Guide](docs/Testing.md)
 - [Docker Best Practices](docs/Docker_Best_Practices.md)
+- [Connector Development](docs/Connector_Development.md)
 
 ## Quick Start
 
@@ -175,7 +221,20 @@ runtime:
 
 ### Connectors (Passive Ingestion)
 
-Connectors run on 5-minute sync cycles via the supervisor and sync data incrementally using cursors stored in the `sync_state` table.
+Connectors run on 5-minute sync cycles via the supervisor and sync data incrementally using cursors stored in the `sync_state` table. See the [Connector Development Guide](docs/Connector_Development.md) for implementation details.
+
+| Connector | Source | Auth | Status |
+|-----------|--------|------|--------|
+| Gmail | Email via Gmail REST API | OAuth2 (Google) | Implemented |
+| Google Calendar | Events via Calendar API v3 | OAuth2 (Google) | Implemented |
+| YouTube | Liked/playlist videos via Data API v3 | OAuth2 (Google) | Implemented |
+| RSS / Atom | Feed subscriptions | None | Implemented |
+| Bookmarks | Browser bookmark exports (Chrome JSON, Netscape HTML) | None (file import) | Implemented |
+| Browser History | Chrome SQLite history | None (file-based) | Implemented |
+| Google Keep | Notes via Takeout export or gkeepapi bridge | None (Takeout) / app password | Implemented |
+| Google Maps Timeline | Location history via Takeout export | None (file import) | Implemented |
+| Hospitable | Reservations, messages, reviews from Hospitable API | API token | Implemented |
+| GuestHost | Direct bookings, property ops, guest messaging | API token | Planned — see `specs/013-guesthost-connector/` |
 
 #### Google OAuth Setup (Gmail + Calendar + YouTube)
 
@@ -414,6 +473,23 @@ The [USGS Earthquake Hazards API](https://earthquake.usgs.gov/fdsnws/event/1/) p
 A single `environmental-alerts` connector could aggregate NWS weather alerts + USGS earthquakes + tsunami warnings based on the user's configured home location and travel destinations (from Maps data or reservation locations from Hospitable). Alerts would produce `alert/weather`, `alert/earthquake`, and `alert/tsunami` artifact types and automatically link to active reservations or upcoming trips via temporal-spatial edges.
 
 This is not yet specced. If you'd like it prioritized, it would follow the same pattern as the other connectors: `specs/013-environmental-alerts-connector/`.
+
+## API Reference
+
+All API endpoints except `/api/health` require a Bearer token in the `Authorization` header.
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/health` | No | Service health (API, PostgreSQL, NATS, ML sidecar, Telegram, Ollama) |
+| `POST` | `/api/capture` | Yes | Capture a URL, text note, or voice note |
+| `POST` | `/api/search` | Yes | Semantic search with optional filters (type, date range, person, topic) |
+| `GET` | `/api/digest` | Yes | Daily digest (optional `?date=YYYY-MM-DD`) |
+| `GET` | `/api/recent` | Yes | Most recent artifacts (optional `?limit=N`, max 50) |
+| `GET` | `/api/artifact/{id}` | Yes | Full artifact detail |
+| `GET` | `/api/export` | Yes | Bulk export as JSONL with cursor pagination (`?cursor=&limit=`) |
+| `GET` | `/api/auth/status` | Yes | OAuth provider token status |
+| `GET` | `/auth/{provider}/start` | No | Start OAuth flow (browser redirect) |
+| `GET` | `/auth/{provider}/callback` | No | OAuth callback handler |
 
 ## API Usage
 

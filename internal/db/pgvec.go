@@ -1,19 +1,24 @@
 package db
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // FormatEmbedding converts a float32 slice to pgvector string format.
 func FormatEmbedding(vec []float32) string {
 	if len(vec) == 0 {
 		return ""
 	}
-	s := "["
+	var b strings.Builder
+	b.Grow(len(vec) * 12) // pre-allocate ~12 bytes per float
+	b.WriteByte('[')
 	for i, v := range vec {
 		if i > 0 {
-			s += ","
+			b.WriteByte(',')
 		}
-		s += fmt.Sprintf("%f", v)
+		fmt.Fprintf(&b, "%f", v)
 	}
-	s += "]"
-	return s
+	b.WriteByte(']')
+	return b.String()
 }

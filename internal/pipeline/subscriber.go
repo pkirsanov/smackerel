@@ -183,14 +183,20 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 
 // handleDigestMessage processes a single digest.generated message.
 func (rs *ResultSubscriber) handleDigestMessage(ctx context.Context, msg jetstream.Msg) {
-	var payload map[string]interface{}
+	var payload NATSDigestGeneratedPayload
 	if err := json.Unmarshal(msg.Data(), &payload); err != nil {
 		slog.Error("invalid digest.generated payload", "error", err)
 		_ = msg.Ack()
 		return
 	}
 
-	if err := rs.DigestGen.HandleDigestResult(ctx, payload); err != nil {
+	if err := ValidateDigestGeneratedPayload(&payload); err != nil {
+		slog.Error("digest.generated payload validation failed", "error", err)
+		_ = msg.Ack()
+		return
+	}
+
+	if err := rs.DigestGen.HandleDigestResult(ctx, payload.DigestDate, payload.Text, payload.WordCount, payload.ModelUsed); err != nil {
 		slog.Error("failed to handle digest result", "error", err)
 		_ = msg.Nak()
 		return

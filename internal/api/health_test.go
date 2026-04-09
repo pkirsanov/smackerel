@@ -118,6 +118,49 @@ func TestHealthHandler_NATSDown(t *testing.T) {
 	}
 }
 
+// SCN-002-066: Health endpoint accessible without auth even when AuthToken set
+func TestSCN002066_HealthNoAuth(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true, artifactCount: 1},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		AuthToken: "secret-token",
+	}
+
+	router := NewRouter(deps)
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	// No Authorization header
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (health exempt from auth), got %d", rec.Code)
+	}
+}
+
+// SCN-002-067: Auth middleware no-op when AuthToken empty
+func TestSCN002067_AuthMiddlewareNoOp(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true, artifactCount: 1},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		AuthToken: "", // dev mode
+	}
+
+	router := NewRouter(deps)
+	req := httptest.NewRequest(http.MethodGet, "/api/digest", nil)
+	// No Authorization header — should still work in dev mode
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	// Should pass auth (no-op) and hit 503/404/200 depending on deps, NOT 401
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatalf("expected auth to be no-op in dev mode, got 401")
+	}
+}
+
 func TestHealthHandler_NilDeps(t *testing.T) {
 	deps := &Dependencies{
 		DB:        nil,

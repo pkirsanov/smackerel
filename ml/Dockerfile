@@ -19,6 +19,10 @@ COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY app/ app/
 
+# SEC-002: Run as non-root user
+RUN groupadd -r smackerel && useradd -r -g smackerel smackerel
+USER smackerel
+
 EXPOSE 8081
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8081"]

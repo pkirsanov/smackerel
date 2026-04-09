@@ -8,11 +8,6 @@ import (
 
 // DigestHandler handles GET /api/digest.
 func (d *Dependencies) DigestHandler(w http.ResponseWriter, r *http.Request) {
-	if !d.checkAuth(r) {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
-		return
-	}
-
 	gen, ok := d.DigestGen.(*digest.Generator)
 	if !ok || gen == nil {
 		writeError(w, http.StatusServiceUnavailable, "DIGEST_UNAVAILABLE", "Digest service unavailable")

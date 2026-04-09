@@ -29,6 +29,8 @@ services:
   nats:
     image: nats:2.10-alpine
     restart: unless-stopped
+    # SEC-003: Auth token visible in command args (docker ps). Acceptable for
+    # local-first deployment. For hardened deployment, use nats.conf file mount.
     command: ["--jetstream", "--store_dir", "/data", "--http_port", "${NATS_MONITOR_PORT}", "--auth", "${SMACKEREL_AUTH_TOKEN}"]
     ports:
       - "${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
@@ -72,6 +74,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL}
       PORT: ${CORE_CONTAINER_PORT}
       ML_SIDECAR_URL: ${ML_SIDECAR_URL}
+      CORE_API_URL: ${CORE_API_URL}
       BOOKMARKS_IMPORT_DIR: ${BOOKMARKS_IMPORT_DIR:+/data/bookmarks-import}
     depends_on:
       postgres:

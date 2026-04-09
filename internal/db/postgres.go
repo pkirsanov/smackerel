@@ -95,6 +95,7 @@ func (p *Postgres) ExportArtifacts(ctx context.Context, cursor time.Time, limit 
 
 	var results []map[string]interface{}
 	var lastCreatedAt time.Time
+	var scanErrors int
 	for rows.Next() {
 		var id, title, artType, summary, sourceURL, content string
 		var topicsStr, entitiesStr, keyIdeasStr string
@@ -103,6 +104,8 @@ func (p *Postgres) ExportArtifacts(ctx context.Context, cursor time.Time, limit 
 		if err := rows.Scan(&id, &title, &artType, &summary, &sourceURL,
 			&content, &topicsStr, &entitiesStr, &keyIdeasStr,
 			&createdAt, &updatedAt); err != nil {
+			scanErrors++
+			slog.Warn("export scan error", "error", err, "scan_errors_so_far", scanErrors)
 			continue
 		}
 
@@ -123,6 +126,9 @@ func (p *Postgres) ExportArtifacts(ctx context.Context, cursor time.Time, limit 
 	}
 	if err := rows.Err(); err != nil {
 		return &ExportResult{Artifacts: results, NextCursor: lastCreatedAt}, fmt.Errorf("export iteration: %w", err)
+	}
+	if scanErrors > 0 {
+		return &ExportResult{Artifacts: results, NextCursor: lastCreatedAt}, fmt.Errorf("export completed with %d scan errors", scanErrors)
 	}
 	return &ExportResult{Artifacts: results, NextCursor: lastCreatedAt}, nil
 }

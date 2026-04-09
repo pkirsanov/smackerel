@@ -92,13 +92,14 @@ func TestCaptureHandler_AuthRequired(t *testing.T) {
 		AuthToken: "test-secret-token",
 	}
 
+	router := NewRouter(deps)
 	body := `{"url": "https://example.com/article"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	// No Authorization header
 	rec := httptest.NewRecorder()
 
-	deps.CaptureHandler(rec, req)
+	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", rec.Code)

@@ -51,7 +51,7 @@ func (s *Supervisor) StartConnector(ctx context.Context, id string) {
 	connCtx, cancel := context.WithCancel(ctx)
 	s.running[id] = cancel
 
-	go s.runWithRecovery(ctx, connCtx, id)
+	go s.runWithRecovery(ctx, connCtx, cancel, id)
 }
 
 // StopConnector stops a running connector.
@@ -81,9 +81,12 @@ func (s *Supervisor) StopAll() {
 // parentCtx is the original caller context used for restart; connCtx is the
 // per-attempt child context that is cancelled on panic recovery so a fresh
 // child can be created by StartConnector.
-func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.Context, id string) {
+func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.Context, connCancel context.CancelFunc, id string) {
 	defer func() {
 		if r := recover(); r != nil {
+			// Cancel the stale connCtx before any restart so resources are released.
+			connCancel()
+
 			slog.Error("connector panicked",
 				"connector", id,
 				"panic", r,
@@ -133,7 +136,12 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 				"panic_count", count,
 				"max_before_disable", maxPanicsBeforeDisable,
 			)
-			time.Sleep(5 * time.Second)
+			select {
+			case <-parentCtx.Done():
+				slog.Warn("skipping restart — context cancelled during delay", "connector", id)
+				return
+			case <-time.After(5 * time.Second):
+			}
 			s.StartConnector(parentCtx, id)
 		}
 	}()
@@ -162,7 +170,10 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 			}
 		}
 
-		// Run sync
+		// Run sync.
+		// Contract: connectors are responsible for publishing artifacts to NATS
+		// during Sync(). The supervisor tracks item count for health/observability
+		// but does not republish.
 		items, newCursor, err := conn.Sync(connCtx, cursor)
 		if err != nil {
 			slog.Error("connector sync failed",

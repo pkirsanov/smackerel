@@ -63,11 +63,6 @@ type SearchEngine struct {
 
 // SearchHandler handles POST /api/search.
 func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
-	if !d.checkAuth(r) {
-		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
-		return
-	}
-
 	var req SearchRequest
 	// Limit request body to 1MB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)

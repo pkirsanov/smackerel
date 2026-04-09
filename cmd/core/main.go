@@ -263,7 +263,7 @@ func run() error {
 		tgBot, err = telegram.NewBot(telegram.Config{
 			BotToken:   cfg.TelegramBotToken,
 			ChatIDs:    cfg.TelegramChatIDs,
-			CoreAPIURL: "http://localhost:" + cfg.Port,
+			CoreAPIURL: cfg.CoreAPIURL,
 			AuthToken:  cfg.AuthToken,
 		})
 		if err != nil {
