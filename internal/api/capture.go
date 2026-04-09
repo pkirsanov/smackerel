@@ -83,7 +83,7 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 		Text:     req.Text,
 		VoiceURL: req.VoiceURL,
 		Context:  req.Context,
-		SourceID: "capture",
+		SourceID: pipeline.SourceCapture,
 	})
 
 	if err != nil {

@@ -27,6 +27,9 @@ const (
 	ContentTypeGeneric      ContentType = "generic"
 	ContentTypeConversation ContentType = "conversation"
 	ContentTypeMediaGroup   ContentType = "media_group"
+	ContentTypeVoice        ContentType = "voice"
+	ContentTypeImage        ContentType = "image"
+	ContentTypePDF          ContentType = "pdf"
 )
 
 // Result holds extracted content from a URL or text input.
@@ -45,6 +48,8 @@ var (
 	youtubeRe = regexp.MustCompile(`(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]{11})`)
 	recipeRe  = regexp.MustCompile(`(?i)(recipe|cooking|allrecipes|epicurious|foodnetwork|seriouseats)`)
 	productRe = regexp.MustCompile(`(?i)(amazon\.com/.*dp/|shopify|product|ebay\.com/itm/)`)
+	imageRe   = regexp.MustCompile(`(?i)\.(jpe?g|png|gif|webp|bmp|tiff?|svg|heic)(\?|$)`)
+	pdfRe     = regexp.MustCompile(`(?i)\.pdf(\?|$)`)
 )
 
 // DetectContentType determines the type of content from a URL.
@@ -55,6 +60,14 @@ func DetectContentType(rawURL string) ContentType {
 
 	if youtubeRe.MatchString(rawURL) {
 		return ContentTypeYouTube
+	}
+
+	// Check file-extension-based types before domain-based heuristics
+	if imageRe.MatchString(rawURL) {
+		return ContentTypeImage
+	}
+	if pdfRe.MatchString(rawURL) {
+		return ContentTypePDF
 	}
 
 	parsed, err := url.Parse(rawURL)
