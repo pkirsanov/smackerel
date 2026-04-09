@@ -21,7 +21,12 @@ FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates tzdata
 
+# SEC-002: Run as non-root user
+RUN addgroup -S smackerel && adduser -S smackerel -G smackerel
+
 COPY --from=builder /bin/smackerel-core /usr/local/bin/smackerel-core
+
+USER smackerel
 
 EXPOSE 8080
 

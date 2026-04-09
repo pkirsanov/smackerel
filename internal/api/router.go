@@ -24,22 +24,29 @@ func NewRouter(deps *Dependencies) http.Handler {
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.Throttle(100))
-		r.Get("/health", deps.HealthHandler)
-		r.Post("/capture", deps.CaptureHandler)
-		r.Post("/search", deps.SearchHandler)
-		r.Get("/digest", deps.DigestHandler)
-		r.Get("/recent", deps.RecentHandler)
-		r.Get("/artifact/{id}", deps.ArtifactDetailHandler)
-		r.Get("/export", deps.ExportHandler)
 
-		// OAuth status requires authentication (token-bearing callers)
-		if deps.OAuthHandler != nil {
-			type oauthStatusRouter interface {
-				StatusHandler(w http.ResponseWriter, r *http.Request)
+		// Health endpoint — no auth required (monitoring)
+		r.Get("/health", deps.HealthHandler)
+
+		// Authenticated API routes
+		r.Group(func(r chi.Router) {
+			r.Use(deps.bearerAuthMiddleware)
+			r.Post("/capture", deps.CaptureHandler)
+			r.Post("/search", deps.SearchHandler)
+			r.Get("/digest", deps.DigestHandler)
+			r.Get("/recent", deps.RecentHandler)
+			r.Get("/artifact/{id}", deps.ArtifactDetailHandler)
+			r.Get("/export", deps.ExportHandler)
+
+			// OAuth status requires authentication (token-bearing callers)
+			if deps.OAuthHandler != nil {
+				type oauthStatusRouter interface {
+					StatusHandler(w http.ResponseWriter, r *http.Request)
+				}
+				oh := deps.OAuthHandler.(oauthStatusRouter)
+				r.Get("/auth/status", oh.StatusHandler)
 			}
-			oh := deps.OAuthHandler.(oauthStatusRouter)
-			r.Get("/auth/status", oh.StatusHandler)
-		}
+		})
 	})
 
 	// OAuth routes — no Bearer auth (browser redirect flow)
@@ -142,5 +149,35 @@ func (d *Dependencies) webAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	})
+}
+
+// bearerAuthMiddleware checks Bearer token authentication for API routes.
+// If no AuthToken is configured, all requests are allowed (dev mode).
+func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if d.AuthToken == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		auth := r.Header.Get("Authorization")
+		if auth == "" {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
+			return
+		}
+
+		parts := strings.SplitN(auth, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
+			return
+		}
+
+		if subtle.ConstantTimeCompare([]byte(parts[1]), []byte(d.AuthToken)) != 1 {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }

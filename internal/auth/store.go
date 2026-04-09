@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -67,6 +68,7 @@ func (s *TokenStore) decrypt(encoded string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		// Not base64 — might be a plaintext token from before encryption was added
+		slog.Warn("token not base64-encoded, treating as plaintext")
 		return encoded, nil
 	}
 
@@ -83,6 +85,7 @@ func (s *TokenStore) decrypt(encoded string) (string, error) {
 	nonceSize := gcm.NonceSize()
 	if len(data) < nonceSize {
 		// Too short for encrypted data — probably a plaintext token from before encryption
+		slog.Warn("token too short for encrypted data, treating as plaintext")
 		return encoded, nil
 	}
 
@@ -90,6 +93,7 @@ func (s *TokenStore) decrypt(encoded string) (string, error) {
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		// Decryption failed — might be plaintext from before encryption was added
+		slog.Warn("token decryption failed, treating as plaintext")
 		return encoded, nil
 	}
 

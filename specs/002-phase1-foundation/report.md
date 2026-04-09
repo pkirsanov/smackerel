@@ -2,6 +2,77 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Scope: 19-supervisor-sleep-context (improve-existing)
+### Summary
+Replaced blocking `time.Sleep(5 * time.Second)` in supervisor panic recovery with a context-aware `select` statement. The supervisor now exits immediately when the parent context is cancelled during the restart delay, preventing blocked goroutines during shutdown.
+
+### Finding Addressed
+ENG-003 (MEDIUM): After panic recovery, `time.Sleep(5s)` didn't respect context cancellation — blocked shutdown for up to 5 seconds per panicked connector.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/supervisor.go` | Replaced `time.Sleep(5*time.Second)` with `select` on `parentCtx.Done()` and `time.After(5*time.Second)` |
+
+---
+
+## Scope: 20-remove-dead-synthesis-stream (improve-existing)
+### Summary
+Removed the dead SYNTHESIS JetStream stream from `AllStreams()`, `nats_contract.json`, and the dead `synthesis.analyze` publish from `engine.go`. The SYNTHESIS stream was declared but had no subjects using it and no subscribers. The only publish (`synthesis.analyze` in `engine.go`) had no consumer, making it dead infrastructure.
+
+### Finding Addressed
+ENG-004 (MEDIUM): SYNTHESIS stream declared but no subjects use it — dead infrastructure creating an unnecessary JetStream stream at startup.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/nats/client.go` | Removed `{Name: "SYNTHESIS", Subjects: []string{"synthesis.>"}}` from `AllStreams()` |
+| `config/nats_contract.json` | Removed `"SYNTHESIS"` from `streams` section |
+| `internal/intelligence/engine.go` | Removed dead `synthesis.analyze` publish and unused `encoding/json`, `log/slog` imports |
+| `internal/nats/client_test.go` | Updated `TestAllStreams_Coverage` to expect 4 streams |
+
+---
+
+## Scope: 21-core-api-url-config-sst (improve-existing)
+### Summary
+Added `CORE_API_URL` as a derived value in the config generation pipeline, replacing the hardcoded `"http://localhost:" + cfg.Port` in the Telegram bot configuration. The URL is now composed from the service name and container port (like `ML_SIDECAR_URL`), read from environment, and validated as required at startup.
+
+### Finding Addressed
+ENG-009 (MEDIUM): `CoreAPIURL: "http://localhost:" + cfg.Port` hardcodes localhost, violating SST and breaking multi-container deployment.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `scripts/commands/config.sh` | Added `CORE_API_URL` derivation and env file output |
+| `docker-compose.yml` | Added `CORE_API_URL: ${CORE_API_URL}` to smackerel-core environment |
+| `internal/config/config.go` | Added `CoreAPIURL` field, `CORE_API_URL` env var, required var validation |
+| `internal/config/validate_test.go` | Added `CORE_API_URL` to `setRequiredEnv`, `TestValidate_MissingAllRequired`, `TestValidate_MissingGeneratedRuntimeValues` |
+| `cmd/core/main.go` | Replaced `"http://localhost:" + cfg.Port` with `cfg.CoreAPIURL` |
+| `config/generated/dev.env` | Regenerated with `CORE_API_URL=http://smackerel-core:8080` |
+| `config/generated/test.env` | Regenerated with `CORE_API_URL=http://smackerel-core:8080` |
+
+---
+
+## Scope: 22-digest-nats-typed-payload (improve-existing)
+### Summary
+Defined `NATSDigestGeneratedPayload` struct and `ValidateDigestGeneratedPayload` function in `processor.go`, matching the existing pattern for `NATSProcessedPayload`/`ValidateProcessedPayload`. Updated `handleDigestMessage` to unmarshal into the typed struct with boundary validation, and changed `HandleDigestResult` to accept typed fields instead of `map[string]interface{}`.
+
+### Finding Addressed
+ENG-011 (LOW): `handleDigestMessage` unmarshalled to `map[string]interface{}` with no typed struct or boundary validation, unlike the pattern used for `NATSProcessedPayload`.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/pipeline/processor.go` | Added `NATSDigestGeneratedPayload` struct and `ValidateDigestGeneratedPayload` function |
+| `internal/pipeline/subscriber.go` | Updated `handleDigestMessage` to use typed struct with validation |
+| `internal/digest/generator.go` | Changed `HandleDigestResult` from `map[string]interface{}` to typed fields |
+
+---
+
 ## Scope: 12-nats-subject-contract (improve-existing)
 ### Summary
 Created a shared NATS contract file (`config/nats_contract.json`) as the single source of truth for all NATS subjects, streams, and request/response pairs. Added bilateral contract tests: Go tests verify `internal/nats/client.go` constants match the contract, Python tests verify `ml/app/nats_client.py` subject lists match the contract. Adding or removing a NATS subject now produces a test failure on the side that hasn't been updated.

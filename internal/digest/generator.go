@@ -114,15 +114,8 @@ func (g *Generator) Generate(ctx context.Context) (*DigestContext, error) {
 }
 
 // HandleDigestResult processes the generated digest from the ML sidecar.
-func (g *Generator) HandleDigestResult(ctx context.Context, digest map[string]interface{}) error {
-	digestDate, _ := digest["digest_date"].(string)
-	text, _ := digest["text"].(string)
-	wordCount := 0
-	if wc, ok := digest["word_count"].(float64); ok {
-		wordCount = int(wc)
-	}
-	modelUsed, _ := digest["model_used"].(string)
-
+// Accepts typed fields validated by the caller (pipeline subscriber).
+func (g *Generator) HandleDigestResult(ctx context.Context, digestDate, text string, wordCount int, modelUsed string) error {
 	if digestDate == "" || text == "" {
 		return fmt.Errorf("invalid digest result: missing date or text")
 	}

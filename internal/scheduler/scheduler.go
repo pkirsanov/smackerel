@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -20,8 +21,9 @@ type Scheduler struct {
 	bot                *telegram.Bot
 	engine             *intelligence.Engine
 	lifecycle          *topics.Lifecycle
-	digestPendingRetry bool   // true when last digest was generated but delivery failed
-	digestPendingDate  string // date of the pending digest for retry
+	mu                 sync.Mutex // protects digestPendingRetry and digestPendingDate
+	digestPendingRetry bool       // true when last digest was generated but delivery failed
+	digestPendingDate  string     // date of the pending digest for retry
 }
 
 // New creates a new scheduler.
@@ -48,15 +50,22 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		defer cancel()
 
 		// Retry delivery of a previously generated but undelivered digest
-		if s.digestPendingRetry && s.bot != nil && s.digestPendingDate != "" {
-			d, err := s.digestGen.GetLatest(ctx, s.digestPendingDate)
-			if err == nil && d != nil && d.DigestDate.Format("2006-01-02") == s.digestPendingDate {
+		s.mu.Lock()
+		pendingRetry := s.digestPendingRetry
+		pendingDate := s.digestPendingDate
+		s.mu.Unlock()
+
+		if pendingRetry && s.bot != nil && pendingDate != "" {
+			d, err := s.digestGen.GetLatest(ctx, pendingDate)
+			if err == nil && d != nil && d.DigestDate.Format("2006-01-02") == pendingDate {
 				s.bot.SendDigest(d.DigestText)
-				slog.Info("pending digest delivered via retry", "date", s.digestPendingDate)
+				slog.Info("pending digest delivered via retry", "date", pendingDate)
+				s.mu.Lock()
 				s.digestPendingRetry = false
 				s.digestPendingDate = ""
+				s.mu.Unlock()
 			} else {
-				slog.Warn("pending digest retry failed, will try again next cycle", "date", s.digestPendingDate)
+				slog.Warn("pending digest retry failed, will try again next cycle", "date", pendingDate)
 			}
 		}
 
@@ -89,8 +98,10 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 					select {
 					case <-pollCtx.Done():
 						slog.Warn("digest delivery timed out — will retry next cycle", "date", today)
+						s.mu.Lock()
 						s.digestPendingRetry = true
 						s.digestPendingDate = today
+						s.mu.Unlock()
 						return
 					case <-ticker.C:
 						d, err := s.digestGen.GetLatest(pollCtx, today)
@@ -174,4 +185,31 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 func (s *Scheduler) Stop() {
 	ctx := s.cron.Stop()
 	<-ctx.Done()
+}
+
+// DigestPendingRetry returns the current retry state (thread-safe).
+func (s *Scheduler) DigestPendingRetry() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.digestPendingRetry
+}
+
+// DigestPendingDate returns the current pending date (thread-safe).
+func (s *Scheduler) DigestPendingDate() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.digestPendingDate
+}
+
+// SetDigestPending sets the retry state (thread-safe, used in tests).
+func (s *Scheduler) SetDigestPending(retry bool, date string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.digestPendingRetry = retry
+	s.digestPendingDate = date
+}
+
+// CronEntryCount returns the number of registered cron entries.
+func (s *Scheduler) CronEntryCount() int {
+	return len(s.cron.Entries())
 }

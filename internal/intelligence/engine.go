@@ -2,9 +2,7 @@ package intelligence
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log/slog"
 	"math"
 	"time"
 
@@ -129,17 +127,6 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 			Confidence:        math.Min(1.0, math.Log2(float64(count))/5.0),
 			CreatedAt:         time.Now(),
 		})
-
-		// Publish to NATS for LLM synthesis analysis
-		payload := map[string]interface{}{
-			"topic_id":     topicID,
-			"topic_name":   topicName,
-			"artifact_ids": artifactIDs,
-		}
-		data, _ := json.Marshal(payload)
-		if err := e.NATS.Publish(ctx, "synthesis.analyze", data); err != nil {
-			slog.Warn("synthesis publish failed", "topic", topicName, "error", err)
-		}
 	}
 
 	if err := rows.Err(); err != nil {

@@ -41,7 +41,6 @@ func AllStreams() []StreamConfig {
 		{Name: "SEARCH", Subjects: []string{"search.>"}},
 		{Name: "DIGEST", Subjects: []string{"digest.>"}},
 		{Name: "KEEP", Subjects: []string{"keep.>"}},
-		{Name: "SYNTHESIS", Subjects: []string{"synthesis.>"}},
 	}
 }
 

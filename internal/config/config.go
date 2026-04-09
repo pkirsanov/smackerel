@@ -25,6 +25,7 @@ type Config struct {
 	LogLevel         string
 	Port             string
 	MLSidecarURL     string
+	CoreAPIURL       string
 }
 
 // Load reads configuration from environment variables.
@@ -45,6 +46,7 @@ func Load() (*Config, error) {
 		LogLevel:         os.Getenv("LOG_LEVEL"),
 		Port:             os.Getenv("PORT"),
 		MLSidecarURL:     os.Getenv("ML_SIDECAR_URL"),
+		CoreAPIURL:       os.Getenv("CORE_API_URL"),
 	}
 
 	if chatIDs := os.Getenv("TELEGRAM_CHAT_IDS"); chatIDs != "" {
@@ -78,6 +80,7 @@ func (c *Config) requiredVars() []struct {
 		{"LOG_LEVEL", c.LogLevel},
 		{"PORT", c.Port},
 		{"ML_SIDECAR_URL", c.MLSidecarURL},
+		{"CORE_API_URL", c.CoreAPIURL},
 	}
 	// Ollama vars are only required when using Ollama as the LLM provider
 	if strings.EqualFold(c.LLMProvider, "ollama") {

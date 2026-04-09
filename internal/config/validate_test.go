@@ -51,6 +51,7 @@ func TestValidate_MissingAllRequired(t *testing.T) {
 		"LLM_MODEL", "LLM_API_KEY", "SMACKEREL_AUTH_TOKEN",
 		"EMBEDDING_MODEL",
 		"DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL",
+		"CORE_API_URL",
 	} {
 		t.Setenv(key, "")
 	}
@@ -63,6 +64,7 @@ func TestValidate_MissingAllRequired(t *testing.T) {
 		"LLM_MODEL", "LLM_API_KEY", "SMACKEREL_AUTH_TOKEN",
 		"EMBEDDING_MODEL",
 		"DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL",
+		"CORE_API_URL",
 	} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error should name %s, got: %v", key, err)
@@ -74,14 +76,14 @@ func TestValidate_MissingGeneratedRuntimeValues(t *testing.T) {
 	setRequiredEnv(t)
 	// OLLAMA_URL/OLLAMA_MODEL are only required when LLM_PROVIDER=ollama;
 	// setRequiredEnv sets LLM_PROVIDER=openai so they are NOT required
-	for _, key := range []string{"EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL"} {
+	for _, key := range []string{"EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL", "CORE_API_URL"} {
 		t.Setenv(key, "")
 	}
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error when generated runtime values are missing")
 	}
-	for _, key := range []string{"EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL"} {
+	for _, key := range []string{"EMBEDDING_MODEL", "DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL", "CORE_API_URL"} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error should name %s, got: %v", key, err)
 		}
@@ -222,4 +224,5 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "info")
 	t.Setenv("PORT", "8080")
 	t.Setenv("ML_SIDECAR_URL", "http://smackerel-ml:8081")
+	t.Setenv("CORE_API_URL", "http://smackerel-core:8080")
 }

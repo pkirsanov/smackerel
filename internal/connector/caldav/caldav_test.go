@@ -152,3 +152,267 @@ func TestSync_Empty(t *testing.T) {
 		t.Errorf("expected empty cursor, got %q", cursor)
 	}
 }
+
+func TestNew_Defaults(t *testing.T) {
+	c := New("cal-1")
+	if c.ID() != "cal-1" {
+		t.Errorf("expected ID 'cal-1', got %q", c.ID())
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("expected disconnected before connect, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestClose_SetsDisconnected(t *testing.T) {
+	c := New("test")
+	c.Connect(context.Background(), connector.ConnectorConfig{AuthType: "oauth2"})
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Fatal("expected healthy after connect")
+	}
+	if err := c.Close(); err != nil {
+		t.Fatalf("close error: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("expected disconnected after close, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSync_ContentBuilding(t *testing.T) {
+	c := New("cal")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"events": []interface{}{
+				map[string]interface{}{
+					"uid":         "evt-full",
+					"summary":     "Design Review",
+					"description": "Review the new design system",
+					"location":    "Conference Room B",
+					"organizer":   "lead@example.com",
+					"attendees":   []interface{}{"dev1@example.com"},
+					"start":       "2026-04-10T14:00:00Z",
+					"end":         "2026-04-10T15:00:00Z",
+					"updated":     "2026-04-09T10:00:00Z",
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+
+	a := artifacts[0]
+	content := a.RawContent
+	if !containsSubstr(content, "Design Review") {
+		t.Error("content missing summary")
+	}
+	if !containsSubstr(content, "Review the new design system") {
+		t.Error("content missing description")
+	}
+	if !containsSubstr(content, "Location: Conference Room B") {
+		t.Error("content missing location")
+	}
+	if !containsSubstr(content, "Attendees: dev1@example.com") {
+		t.Error("content missing attendees")
+	}
+
+	// Metadata verification
+	if a.Metadata["organizer"] != "lead@example.com" {
+		t.Errorf("unexpected organizer: %v", a.Metadata["organizer"])
+	}
+	if a.Metadata["location"] != "Conference Room B" {
+		t.Errorf("unexpected location: %v", a.Metadata["location"])
+	}
+	if a.ContentType != "event" {
+		t.Errorf("expected content type 'event', got %q", a.ContentType)
+	}
+	if a.SourceRef != "evt-full" {
+		t.Errorf("expected source ref 'evt-full', got %q", a.SourceRef)
+	}
+}
+
+func TestSync_StandardTier_NoAttendees(t *testing.T) {
+	c := New("cal")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"events": []interface{}{
+				map[string]interface{}{
+					"uid":     "evt-solo",
+					"summary": "Focus Time",
+					"start":   "2026-04-10T10:00:00Z",
+					"updated": "2026-04-09T08:00:00Z",
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+	if artifacts[0].Metadata["processing_tier"] != "standard" {
+		t.Errorf("expected standard tier for solo event, got %v", artifacts[0].Metadata["processing_tier"])
+	}
+}
+
+func TestParseCalendarEvents_InvalidInput(t *testing.T) {
+	_, err := parseCalendarEvents("not-an-array")
+	if err == nil {
+		t.Error("expected error for non-array input")
+	}
+}
+
+func TestParseCalendarEvents_SkipsNonMapEntries(t *testing.T) {
+	events, err := parseCalendarEvents([]interface{}{
+		"not-a-map",
+		42,
+		map[string]interface{}{
+			"uid":     "valid",
+			"summary": "Valid Event",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 valid event, got %d", len(events))
+	}
+	if events[0].UID != "valid" {
+		t.Errorf("expected UID 'valid', got %q", events[0].UID)
+	}
+}
+
+func TestParseCalendarEvents_AllFields(t *testing.T) {
+	events, err := parseCalendarEvents([]interface{}{
+		map[string]interface{}{
+			"uid":         "e1",
+			"summary":     "Full Event",
+			"description": "Desc",
+			"location":    "Room A",
+			"organizer":   "org@test.com",
+			"status":      "tentative",
+			"start":       "2026-04-10T09:00:00Z",
+			"end":         "2026-04-10T10:00:00Z",
+			"updated":     "2026-04-09T12:00:00Z",
+			"recurring":   true,
+			"attendees":   []interface{}{"a@b.com", "c@d.com"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	e := events[0]
+	if e.Description != "Desc" {
+		t.Errorf("description: %q", e.Description)
+	}
+	if e.Location != "Room A" {
+		t.Errorf("location: %q", e.Location)
+	}
+	if e.Organizer != "org@test.com" {
+		t.Errorf("organizer: %q", e.Organizer)
+	}
+	if e.Status != "tentative" {
+		t.Errorf("status: %q", e.Status)
+	}
+	if !e.Recurring {
+		t.Error("expected recurring=true")
+	}
+	if len(e.Attendees) != 2 {
+		t.Errorf("expected 2 attendees, got %d", len(e.Attendees))
+	}
+	if e.Start.IsZero() || e.End.IsZero() || e.Updated.IsZero() {
+		t.Error("expected non-zero times")
+	}
+}
+
+func TestGetCredential_NilMap(t *testing.T) {
+	if v := getCredential(nil, "key"); v != "" {
+		t.Errorf("expected empty string for nil map, got %q", v)
+	}
+}
+
+func TestGetCredential_MissingKey(t *testing.T) {
+	creds := map[string]string{"a": "b"}
+	if v := getCredential(creds, "missing"); v != "" {
+		t.Errorf("expected empty string for missing key, got %q", v)
+	}
+}
+
+func TestGetCredential_Found(t *testing.T) {
+	creds := map[string]string{"token": "abc123"}
+	if v := getCredential(creds, "token"); v != "abc123" {
+		t.Errorf("expected 'abc123', got %q", v)
+	}
+}
+
+func TestGetStr_MissingKey(t *testing.T) {
+	m := map[string]interface{}{"a": "b"}
+	if v := getStr(m, "missing"); v != "" {
+		t.Errorf("expected empty string, got %q", v)
+	}
+}
+
+func TestGetStr_NonStringValue(t *testing.T) {
+	m := map[string]interface{}{"num": 42}
+	if v := getStr(m, "num"); v != "" {
+		t.Errorf("expected empty string for non-string, got %q", v)
+	}
+}
+
+func TestSync_HealthTransitions(t *testing.T) {
+	c := New("cal")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"events": []interface{}{},
+		},
+	})
+	// After successful sync, health should be healthy
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected healthy after sync, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSync_ErrorOnInvalidEvents(t *testing.T) {
+	c := New("cal")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"events": "not-an-array",
+		},
+	})
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error for invalid events format")
+	}
+}
+
+func containsSubstr(s, sub string) bool {
+	return len(s) >= len(sub) && searchStr(s, sub)
+}
+
+func searchStr(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
