@@ -1,0 +1,39 @@
+{
+  "version": 3,
+  "featureDir": "specs/017-gov-alerts-connector",
+  "featureName": "Government Alerts Connector",
+  "status": "specs_hardened",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "bootstrap",
+    "currentScope": null,
+    "runStartedAt": "2026-04-09T00:00:00Z",
+    "completedScopes": [],
+    "completedPhaseClaims": ["analyze", "select", "bootstrap"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not-started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "lastCertifiedAt": null,
+    "reopenHistory": []
+  },
+  "policySnapshot": {
+    "tdd": {
+      "mode": "scenario-first"
+    }
+  },
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not-started",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-04-09T00:00:00Z",
+      "runFinishedAt": null,
+      "summary": "Initial business analysis and spec.md creation for government alerts connector"
+    }
+  ]
+}
