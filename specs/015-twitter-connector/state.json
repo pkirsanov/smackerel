@@ -1,0 +1,16 @@
+{
+  "version": 3,
+  "feature": "015-twitter-connector",
+  "status": "specs_hardened",
+  "certification": {
+    "bootstrap": "not_started",
+    "artifact_lint": "not_started",
+    "traceability": "not_started",
+    "regression_baseline": "not_started"
+  },
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "bootstrap",
+    "executionHistory": []
+  }
+}
