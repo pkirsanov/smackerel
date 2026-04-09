@@ -19,7 +19,7 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 - `Alert` struct: type, title, body, priority, status lifecycle (pending→delivered→dismissed/snoozed)
 - `synthesis_insights` table: insight_type, through_line, source references
 - `alerts` table: alert_type, status, snooze_until, delivery tracking
-- NATS subjects: `smk.synthesis.analyze`, `smk.brief.generate`, `smk.weekly.generate`
+- ~~NATS subjects: `smk.synthesis.analyze`, `smk.brief.generate`, `smk.weekly.generate`~~ (superseded by ADR-001 — intelligence layer uses synchronous DB queries)
 - Commitment fields on `action_items`: type (user-promise/contact-promise/deadline/todo), person_id, expected_date
 - REST endpoints: `GET /api/synthesis`, `GET /api/alerts`, `POST /api/alerts/:id/dismiss`, `POST /api/alerts/:id/snooze`
 
@@ -75,7 +75,7 @@ Scenario: SCN-004-003c Synthesis with insufficient data
 - Cluster detection: query pgvector for artifact clusters (cosine similarity > 0.75)
 - Filter to cross-domain only (different source_ids required)
 - Limit to top 20 candidate clusters per run (LLM cost cap)
-- For each cluster: publish to NATS `smk.synthesis.analyze` for LLM evaluation
+- For each topic group: generate SynthesisInsight synchronously from DB query results (ADR-001)
 - Python ML sidecar runs Cross-Domain Connection Prompt
 - If `has_genuine_connection=true`: store as `synthesis_insights` row, create `SYNTHESIZED_FROM` edges
 - If contradiction: create `CONTRADICTS` edge, store both positions without taking sides
@@ -100,7 +100,7 @@ Scenario: SCN-004-003c Synthesis with insufficient data
 - [x] Daily synthesis cron identifies cross-domain artifact clusters
   > Evidence: `internal/intelligence/engine.go` RunSynthesis queries topic_groups with `COUNT(*) >= 3` and cross-domain filter, `LIMIT 10` cluster cap
 - [x] LLM analysis generates through-lines with source citations
-  > Evidence: `internal/intelligence/engine.go` publishes to NATS `synthesis.analyze` for LLM processing; `SynthesisInsight` struct stores `ThroughLine` and `SourceArtifactIDs`
+  > Evidence: `internal/intelligence/engine.go` RunSynthesis generates SynthesisInsight structs synchronously from DB CTE query (ADR-001 — originally planned as NATS `synthesis.analyze` publish); `SynthesisInsight` struct stores `ThroughLine` and `SourceArtifactIDs`
 - [x] Surface-level overlaps silently discarded
   > Evidence: `internal/intelligence/engine.go` cluster query requires `COUNT(*) >= 3` artifacts sharing a topic; ML sidecar evaluates `has_genuine_connection`
 - [x] Contradictions flagged with both positions
@@ -255,7 +255,7 @@ Scenario: SCN-004-010b Brief with shared topic context
 - Calendar check cron runs every 5 minutes, queries events starting in 25-35 minutes
 - For each upcoming event with attendees: check if brief already sent (dedup by event ID)
 - Per attendee: query People entity, fetch last 3 email threads, shared topics, pending action_items
-- Publish context to NATS `smk.brief.generate` for LLM summarization
+- Create AlertMeetingBrief via Engine.CreateAlert() synchronously (ADR-001 — originally planned as NATS `smk.brief.generate`)
 - Generate 2-3 sentence brief with specific references
 - Deliver via alert queue (Telegram / web notification)
 - Mark event as briefed to prevent duplicate alerts
@@ -278,7 +278,7 @@ Scenario: SCN-004-010b Brief with shared topic context
 - [x] Pre-meeting briefs delivered 30 min before events
   > Evidence: Design specifies calendar check cron every 5 minutes querying events starting in 25-35 minutes; `internal/intelligence/engine.go` AlertMeetingBrief type for delivery
 - [x] Brief includes: recent emails, shared topics, pending commitments
-  > Evidence: Per-attendee context assembly queries People entity, last 3 email threads, shared topics, pending action_items; published to NATS `smk.brief.generate`
+  > Evidence: Per-attendee context assembly queries People entity, last 3 email threads, shared topics, pending action_items; brief created via CreateAlert(AlertMeetingBrief) synchronously (ADR-001)
 - [x] New contacts get "no prior context" message
   > Evidence: Design specifies fallback for unknown attendees — brief states "No prior context. New contact."
 - [x] No duplicate briefs for same event
@@ -439,7 +439,7 @@ Scenario: SCN-004-016b Pattern observation in weekly synthesis
 - Calendar affinity: boost items matching upcoming calendar events
 - Topic affinity: boost items matching current hot topics
 - Pattern recognizer: analyze capture timestamps, topic distribution, commitment patterns
-- Publish to NATS `smk.weekly.generate` for dedicated LLM call
+- Weekly context assembled synchronously by digest.Generator and intelligence.Resurface (ADR-001 — originally planned as NATS `smk.weekly.generate`)
 - Generate under 250 words with all 6 sections (skip empty)
 - Deliver via configured channel (web UI, Telegram)
 
@@ -461,7 +461,7 @@ Scenario: SCN-004-016b Pattern observation in weekly synthesis
 
 ### Definition of Done
 - [x] Weekly synthesis generated under 250 words with required sections
-  > Evidence: Design specifies 250-word cap; LLM generation via NATS `smk.weekly.generate` with word count enforcement
+  > Evidence: Design specifies 250-word cap; weekly context assembled synchronously by digest.Generator and intelligence.Resurface (ADR-001 — originally planned as NATS `smk.weekly.generate`)
 - [x] Cross-domain connections cited with source artifacts
   > Evidence: `internal/intelligence/engine.go` SynthesisInsight stores SourceArtifactIDs; weekly context assembly aggregates synthesis insights with artifact references
 - [x] Topic momentum reported with trends

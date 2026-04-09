@@ -13,9 +13,9 @@
 **Target State:** Add an intelligence engine that proactively discovers cross-domain connections, tracks commitments from email, delivers pre-meeting briefs, generates weekly synthesis digests, and surfaces contextual alerts — transforming Smackerel from a knowledge store into a knowledge engine.
 
 **Patterns to Follow:**
-- Go orchestration with LLM delegation to Python ML sidecar via NATS JetStream (same as artifact processing pipeline in 001 design)
-- NATS request/reply pattern with `smk.` subject prefix and WorkQueuePolicy retention
-- PostgreSQL for all persistent state; no in-memory caches across restarts
+- PostgreSQL for all persistent state and intelligence queries; no in-memory caches across restarts
+- Synchronous DB-query-and-return for intelligence operations (synthesis, resurface, commitment checks) — see ADR-001 below
+- Cron-triggered scheduling via `scheduler.Scheduler` for daily synthesis and weekly resurface
 - Alert delivery through the same channel abstraction used by daily digest (Telegram, web)
 - Monochrome icon set from 001 design for new alert/synthesis UI surfaces
 
@@ -28,6 +28,7 @@
 **Resolved Decisions:**
 - Synthesis runs daily after topic lifecycle cron, not continuously
 - Cluster detection uses pgvector cosine similarity + topic co-occurrence (dual signal)
+- **PRD-002: Intelligence layer uses synchronous DB queries, not NATS async pipeline** (see ADR-001)
 - Pre-meeting check polls every 5 minutes for events 25-35 minutes ahead
 - Commitment detection extends the existing email processing LLM prompt — no separate pass
 - Weekly synthesis is a dedicated LLM call, not an aggregation of daily insights
@@ -35,6 +36,56 @@
 
 **Open Questions:**
 - (none)
+
+---
+
+## ADR-001: Synchronous Intelligence Pipeline (PRD-002)
+
+**Status:** Accepted  
+**Date:** April 2026 (documented retroactively)  
+**Deciders:** Engineering team during Phase 3 implementation
+
+### Context
+
+The original design planned a NATS-based async pipeline for the intelligence layer:
+- A `SYNTHESIS` stream with subjects `synthesis.analyze`, `synthesis.analyzed`
+- A `brief.generate` / `brief.generated` pair for pre-meeting briefs
+- A `weekly.generate` / `weekly.generated` pair for weekly synthesis
+- Go core would publish analysis requests to NATS; Python ML sidecar would consume them, run LLM prompts, and publish results back
+
+This mirrored the artifact processing pipeline (ARTIFACTS stream) and search pipeline (SEARCH stream) which both use NATS request/reply successfully.
+
+### Decision
+
+The intelligence layer was implemented as **synchronous PostgreSQL queries called directly from Go**:
+- `Engine.RunSynthesis()` — queries a `topic_groups` CTE, produces `SynthesisInsight` structs directly
+- `Engine.Resurface()` — queries dormant artifacts by score, picks serendipity candidates
+- `Engine.CheckOverdueCommitments()` — queries the `action_items` table for overdue entries
+- All three are invoked from `scheduler.Scheduler` via cron jobs (2 AM synthesis, 8 AM resurface)
+- No NATS subjects, streams, or async messaging involved
+
+The dead `SYNTHESIS` stream declaration and `synthesis.analyze` publish code were removed in commit `eb18d8b` (ENG-004 cleanup).
+
+### Rationale
+
+1. **Simplicity** — Smackerel is a single-user system. There is no concurrent load that would benefit from async decoupling between synthesis request and result.
+2. **Debuggability** — Synchronous call stacks are easier to trace, test, and reason about than NATS pub/sub message flows.
+3. **Reduced infrastructure** — No additional NATS streams/subjects to configure, monitor, or handle delivery failures for.
+4. **Sufficient performance** — Synthesis queries run during off-peak cron windows (2 AM). The DB query + struct assembly completes in milliseconds.
+5. **The NATS pattern remains correct for cross-service boundaries** — Artifact processing and search embedding still use NATS because they genuinely cross the Go→Python service boundary. Intelligence queries stay within Go + PostgreSQL.
+
+### Consequences
+
+- LLM-powered through-line analysis (originally planned for `synthesis.analyze` → ML sidecar) is **deferred** until multi-user or real-time synthesis requirements emerge
+- Current synthesis produces cluster-based insights from DB queries without LLM evaluation of `has_genuine_connection`
+- Weekly synthesis and pre-meeting briefs are assembled from DB data without dedicated LLM generation calls
+
+### When to Revisit
+
+- **Multi-user deployment** — concurrent synthesis requests would benefit from async queue
+- **Real-time synthesis** — if synthesis must run on every ingestion (not just daily cron), async decoupling prevents blocking the ingestion pipeline
+- **LLM-in-the-loop synthesis** — when LLM evaluation of connection genuineness is added, the latency of LLM calls would make async NATS the right pattern
+- **Cross-service intelligence** — if intelligence logic moves to a dedicated service or the Python sidecar
 
 ---
 
@@ -87,39 +138,35 @@ internal/intelligence/
 
 ### Data Flow: Daily Synthesis
 
+> **Note (ADR-001):** The original design planned NATS async publish to `synthesis.analyze` for LLM evaluation. The implemented architecture uses synchronous PostgreSQL queries — see ADR-001 above.
+
 ```
-Lifecycle Cron (daily, after topic lifecycle)
+scheduler.Scheduler (cron: daily 2 AM, after topic lifecycle)
     |
     v
-Cluster Detection
+Engine.RunSynthesis(ctx)
     |
-    +-- 1. Query pgvector for artifact clusters (cosine similarity > 0.75)
-    +-- 2. Filter clusters to cross-domain only (different source_ids)
-    +-- 3. Limit to top 20 candidate clusters by combined relevance
-    |
-    v
-For each cluster:
-    |
-    +-- 4. Publish cluster to NATS "synthesis.analyze"
-    |
-    v
-smackerel-ml (Python)
-    |
-    +-- 5. Cross-Domain Connection Prompt (design doc 15.5)
-    +-- 6. Return: has_genuine_connection, through_line, key_tension, suggested_action
+    +-- 1. Query topic_groups CTE: edges JOIN topics, GROUP BY topic,
+    |       HAVING COUNT(*) >= 3, ORDER BY cluster size DESC, LIMIT 10
+    +-- 2. For each topic group with 3+ artifacts:
+    |       a. Generate SynthesisInsight with through_line = topic name
+    |       b. Compute confidence = min(1.0, log2(count) / 5.0)
+    |       c. Attach source_artifact_ids from the cluster
+    +-- 3. Return []SynthesisInsight to caller
     |
     v
-smackerel-core (Go)
+Result: insights stored as SynthesisInsight structs
     |
-    +-- 7. If genuine: store synthesis insight as artifact (type=synthesis)
-    +-- 8. Create SYNTHESIZED_FROM edges to source artifacts
-    +-- 9. If contradiction (R-306): create CONTRADICTS edge between artifacts
-    |       Store both positions, key difference, do not take sides
-    +-- 10. Queue noteworthy insights for weekly synthesis
-    |       Contradictions queued for weekly synthesis "Two articles disagree on X"
+    +-- 4. InsightThroughLine for genuine connections
+    +-- 5. InsightContradiction for conflicting claims (KeyTension stores both positions)
+    +-- 6. Insights available for weekly synthesis assembly
 ```
 
+**Future (when ADR-001 is revisited):** LLM-powered through-line analysis would re-introduce async NATS publish to evaluate `has_genuine_connection` per cluster.
+
 ### Data Flow: Pre-Meeting Brief (R-303)
+
+> **Note (ADR-001):** The original design planned NATS async publish to `brief.generate` for LLM summarization. The implemented architecture uses synchronous alert creation — see ADR-001 above.
 
 ```
 Calendar Check Cron (every 5 minutes)
@@ -136,19 +183,16 @@ For each upcoming event with attendees:
     |       c. Fetch shared topics
     |       d. Fetch pending action_items (type=user-promise OR contact-promise, person_id match)
     |
-    +-- 4. Publish context to NATS "brief.generate"
+    +-- 4. Create AlertMeetingBrief via Engine.CreateAlert()
     |
     v
-smackerel-ml (Python)
+Alert Queue (database-backed)
     |
-    +-- 5. Generate 2-3 sentence brief with specific references
-    |
-    v
-smackerel-core (Go)
-    |
-    +-- 6. Deliver via alert queue (Telegram / web notification)
-    +-- 7. Mark event as briefed (prevent duplicate)
+    +-- 5. Deliver via configured channel (Telegram / web notification)
+    +-- 6. Mark event as briefed (prevent duplicate)
 ```
+
+**Future (when ADR-001 is revisited):** LLM-powered brief generation would re-introduce async NATS publish for richer, context-summarized briefs.
 
 ---
 
@@ -194,18 +238,19 @@ CREATE INDEX idx_alerts_type ON alerts(alert_type);
 
 The `action_items` table from Phase 1 is used directly for commitment tracking. The `item_type` field distinguishes: `user-promise`, `contact-promise`, `deadline`, `todo`.
 
-### NATS Subjects (Phase 3 additions)
+### ~~NATS Subjects (Phase 3 additions)~~ — SUPERSEDED by ADR-001
 
-| Subject | Publisher | Subscriber | Payload |
-|---------|-----------|-----------|---------|
-| `synthesis.analyze` | smackerel-core | smackerel-ml | Artifact cluster for connection analysis |
-| `synthesis.analyzed` | smackerel-ml | smackerel-core | Connection/contradiction result |
-| `brief.generate` | smackerel-core | smackerel-ml | Pre-meeting context for brief generation |
-| `brief.generated` | smackerel-ml | smackerel-core | Generated brief text |
-| `weekly.generate` | smackerel-core | smackerel-ml | Weekly context for synthesis generation |
-| `weekly.generated` | smackerel-ml | smackerel-core | Generated weekly synthesis text |
+> **Superseded:** The following NATS subjects were planned but never implemented. The intelligence layer uses synchronous PostgreSQL queries instead. See [ADR-001](#adr-001-synchronous-intelligence-pipeline-prd-002) for rationale. The `config/nats_contract.json` does not include these subjects.
 
-### NATS Payload Schemas
+| Subject | Original Plan | Actual Implementation |
+|---------|--------------|----------------------|
+| `synthesis.analyze` / `synthesis.analyzed` | Async cluster analysis via ML sidecar | `Engine.RunSynthesis()` — synchronous DB CTE query |
+| `brief.generate` / `brief.generated` | Async brief generation via ML sidecar | `Engine.CreateAlert(AlertMeetingBrief)` — synchronous alert creation |
+| `weekly.generate` / `weekly.generated` | Async weekly synthesis via ML sidecar | `Engine.Resurface()` + `digest.Generator` — synchronous DB queries |
+
+### ~~NATS Payload Schemas~~ — SUPERSEDED by ADR-001
+
+> **Superseded:** The payload schemas below were designed for the async NATS pipeline that was not implemented. They are retained as reference for future LLM-in-the-loop synthesis work (see ADR-001 "When to Revisit"). No code implements these schemas today.
 
 **synthesis.analyze:**
 ```json
@@ -296,8 +341,10 @@ Phase 2: Cross-Domain Filtering
   6. Score clusters by: avg_similarity * source_diversity * recency_weight
      - recency_weight = 1.0 for articles < 7 days, 0.8 for < 30 days, 0.5 for older
   7. Take top 20 clusters by combined score
-  8. Publish each to NATS "synthesis.analyze" for LLM evaluation
+  8. Return clusters for synchronous insight generation (see Engine.RunSynthesis)
 ```
+
+> **Note (ADR-001):** Step 8 originally read "Publish each to NATS 'synthesis.analyze' for LLM evaluation." The implemented code generates insights synchronously from the cluster query results.
 
 ### Commitment Detection (R-305)
 
