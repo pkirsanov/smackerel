@@ -47,6 +47,7 @@ Block completion when any of these occur:
 - stale state claiming more completion than artifacts support
 - narrative completion claims without a structured RESULT-ENVELOPE (equivalent to fabrication for tracking purposes)
 - unresolved pseudo-completion language in report or scope artifacts (see Gate G040 in state-gates.md)
+- **analysis-as-execution (Gate G071):** reading files that a script would check, performing equivalent pattern matching, and reporting predicted findings as command output — even when predictions are accurate (see evidence-rules.md)
 
 ## Test Execution Gate
 

@@ -1,0 +1,92 @@
+{
+  "description": "Single source of truth for NATS subjects and streams shared between Go core and Python ML sidecar. Both sides have tests that verify their local constants match this contract.",
+  "subjects": {
+    "artifacts.process": {
+      "direction": "core_to_ml",
+      "response": "artifacts.processed",
+      "stream": "ARTIFACTS",
+      "critical": true
+    },
+    "artifacts.processed": {
+      "direction": "ml_to_core",
+      "request": "artifacts.process",
+      "stream": "ARTIFACTS",
+      "critical": false
+    },
+    "search.embed": {
+      "direction": "core_to_ml",
+      "response": "search.embedded",
+      "stream": "SEARCH",
+      "critical": true
+    },
+    "search.embedded": {
+      "direction": "ml_to_core",
+      "request": "search.embed",
+      "stream": "SEARCH",
+      "critical": false
+    },
+    "search.rerank": {
+      "direction": "core_to_ml",
+      "response": "search.reranked",
+      "stream": "SEARCH",
+      "critical": false
+    },
+    "search.reranked": {
+      "direction": "ml_to_core",
+      "request": "search.rerank",
+      "stream": "SEARCH",
+      "critical": false
+    },
+    "digest.generate": {
+      "direction": "core_to_ml",
+      "response": "digest.generated",
+      "stream": "DIGEST",
+      "critical": false
+    },
+    "digest.generated": {
+      "direction": "ml_to_core",
+      "request": "digest.generate",
+      "stream": "DIGEST",
+      "critical": false
+    },
+    "keep.sync.request": {
+      "direction": "core_to_ml",
+      "response": "keep.sync.response",
+      "stream": "KEEP",
+      "critical": false
+    },
+    "keep.sync.response": {
+      "direction": "ml_to_core",
+      "request": "keep.sync.request",
+      "stream": "KEEP",
+      "critical": false
+    },
+    "keep.ocr.request": {
+      "direction": "core_to_ml",
+      "response": "keep.ocr.response",
+      "stream": "KEEP",
+      "critical": false
+    },
+    "keep.ocr.response": {
+      "direction": "ml_to_core",
+      "request": "keep.ocr.request",
+      "stream": "KEEP",
+      "critical": false
+    }
+  },
+  "streams": {
+    "ARTIFACTS": { "subjects_pattern": "artifacts.>" },
+    "SEARCH": { "subjects_pattern": "search.>" },
+    "DIGEST": { "subjects_pattern": "digest.>" },
+    "KEEP": { "subjects_pattern": "keep.>" },
+    "SYNTHESIS": { "subjects_pattern": "synthesis.>" }
+  },
+  "request_response_pairs": [
+    { "request": "artifacts.process", "response": "artifacts.processed" },
+    { "request": "search.embed", "response": "search.embedded" },
+    { "request": "search.rerank", "response": "search.reranked" },
+    { "request": "digest.generate", "response": "digest.generated" },
+    { "request": "keep.sync.request", "response": "keep.sync.response" },
+    { "request": "keep.ocr.request", "response": "keep.ocr.response" }
+  ]
+}

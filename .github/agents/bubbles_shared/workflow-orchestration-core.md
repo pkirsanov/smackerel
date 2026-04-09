@@ -25,6 +25,18 @@ These are baseline workflow laws, not optional tags:
 
 These requirements are enforced by planning readiness, G033 design readiness, Gherkin/Test Plan/DoD checks, and planning-first recovery. They are not what `tdd: true` turns on.
 
+## Review-To-Delivery Transition (MANDATORY)
+
+When a review agent (`bubbles.system-review`, `bubbles.code-review`, `bubbles.spec-review`) produces findings that require code changes, the transition from diagnostic findings to delivery work MUST follow this chain:
+
+1. **Every finding that requires a code change MUST be tracked as a bug.** Invoke `bubbles.bug` to create the full 6-artifact bug packet (`bug.md`, `spec.md`, `design.md`, `scopes.md`, `report.md`, `state.json`) before any implementation begins.
+2. **The `directFix` follow-up tag does NOT exempt findings from bug artifact creation.** It only indicates that the fix design is straightforward and does not require new feature-level spec work. Bug-level artifacts are still mandatory.
+3. **After bug artifacts are created, deliver via `bugfix-fastlane` mode** (or the appropriate delivery mode) using the standard specialist chain: `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs`.
+4. **The workflow agent MUST NOT make code changes directly** when processing review findings. All code changes flow through `bubbles.implement` via `runSubagent`.
+5. **Batch review findings into individual bug packets** — each distinct finding gets its own bug folder, not a single combined bug for multiple unrelated issues.
+
+This protocol applies regardless of fix complexity. A one-line `go.mod` change and a multi-file architectural refactor both go through the same artifact-first pipeline.
+
 ## Auto-Escalation Protocol
 
 When a phase fails and retry limits are approaching or exhausted, orchestration must attempt bounded inline recovery before handing off or blocking:

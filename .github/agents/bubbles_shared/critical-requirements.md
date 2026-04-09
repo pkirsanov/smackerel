@@ -123,7 +123,14 @@
    - Opportunistic cleanup, unrelated test rewrites, broad handler changes, or cross-directory sweeps MUST NOT be bundled into a shared-infrastructure repair loop unless the planning artifacts explicitly expand scope first.
    - If unrelated files change during a narrow repair, the work remains incomplete until the collateral edits are either removed or promoted into explicitly planned follow-up work owned by the correct scope.
 
-22. **No Self-Validating Test Setup (Tests Must Not Test Their Own Fixtures)**
+22. **Review Follow-Up Tags Do Not Override Planning-First**
+   - Review follow-up tags (`directFix`, `promoteToSpec`, `documentOnly`, `monitor`) classify the SCOPE of planning needed, not whether planning can be skipped.
+   - `directFix` means the fix design is straightforward and does not need a new feature-level spec. It does NOT mean "skip bug artifacts" or "implement inline."
+   - Every `directFix` finding MUST still be processed through `bubbles.bug` (full 6-artifact bug packet) before implementation.
+   - Every `promoteToSpec` finding MUST be processed through the full analyst → design → plan chain.
+   - An agent that treats `directFix` as permission to bypass the planning-first delivery policy is committing a critical-requirements violation.
+
+23. **No Self-Validating Test Setup (Tests Must Not Test Their Own Fixtures)**
    - A test MUST assert on values **produced by the code under test**, not on values the test itself hardcoded or injected.
    - The test's input-to-assertion path MUST pass through real production code that meaningfully transforms, validates, queries, computes, or routes the data. If the code under test is a pass-through, identity function, or stub that returns its input unchanged, the test is validating its own setup — not the system.
    - **Hardcoded expected values are only valid when they represent the correct output of a known computation.** Example: asserting `add(2, 3) == 5` is valid because `5` is the expected output of real addition logic. Asserting `render(mockData).text == mockData.title` is invalid if `render` is a trivial pass-through — the test proves nothing about real rendering.
