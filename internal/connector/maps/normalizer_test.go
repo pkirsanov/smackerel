@@ -284,6 +284,264 @@ func TestRoundToGrid(t *testing.T) {
 	}
 }
 
+// --- Scope 02 tests ---
+
+func TestTrailQualifiedEnrichment(t *testing.T) {
+	// Hike 8.3km → trail_qualified=true, tier=full, has route_geojson
+	activity := TakeoutActivity{
+		Type:        ActivityHike,
+		StartTime:   time.Date(2026, 3, 15, 13, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 3, 15, 15, 22, 0, 0, time.UTC),
+		DistanceKm:  8.3,
+		DurationMin: 142,
+		Route: []LatLng{
+			{Lat: 47.500, Lng: 8.700},
+			{Lat: 47.505, Lng: 8.710},
+			{Lat: 47.510, Lng: 8.720},
+			{Lat: 47.515, Lng: 8.730},
+			{Lat: 47.520, Lng: 8.740},
+			{Lat: 47.525, Lng: 8.745},
+			{Lat: 47.528, Lng: 8.748},
+			{Lat: 47.530, Lng: 8.749},
+			{Lat: 47.532, Lng: 8.750},
+			{Lat: 47.534, Lng: 8.751},
+			{Lat: 47.536, Lng: 8.752},
+			{Lat: 47.538, Lng: 8.754},
+		},
+	}
+
+	cfg := MapsConfig{DefaultTier: "standard"}
+	artifact := NormalizeActivity(activity, "trails.json", cfg)
+
+	if artifact.Metadata["trail_qualified"] != true {
+		t.Errorf("trail_qualified = %v, want true", artifact.Metadata["trail_qualified"])
+	}
+	if artifact.Metadata["processing_tier"] != "full" {
+		t.Errorf("processing_tier = %v, want %q", artifact.Metadata["processing_tier"], "full")
+	}
+
+	geojson, ok := artifact.Metadata["route_geojson"].(map[string]interface{})
+	if !ok {
+		t.Fatal("route_geojson missing or wrong type")
+	}
+	if geojson["type"] != "LineString" {
+		t.Errorf("geojson type = %v, want LineString", geojson["type"])
+	}
+	coords, ok := geojson["coordinates"].([][]float64)
+	if !ok {
+		t.Fatal("coordinates missing or wrong type")
+	}
+	if len(coords) != 12 {
+		t.Errorf("coordinates count = %d, want 12", len(coords))
+	}
+
+	// Check metadata contains enrichment fields
+	if artifact.Metadata["distance_km"] != 8.3 {
+		t.Errorf("distance_km = %v, want 8.3", artifact.Metadata["distance_km"])
+	}
+	if artifact.Metadata["duration_min"] != 142.0 {
+		t.Errorf("duration_min = %v, want 142", artifact.Metadata["duration_min"])
+	}
+}
+
+func TestNonTrailNotEnriched(t *testing.T) {
+	// Walk 1.5km → trail_qualified=false, tier=standard
+	activity := TakeoutActivity{
+		Type:        ActivityWalk,
+		StartTime:   time.Date(2026, 3, 15, 9, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 3, 15, 9, 20, 0, 0, time.UTC),
+		DistanceKm:  1.5,
+		DurationMin: 20,
+		Route: []LatLng{
+			{Lat: 47.500, Lng: 8.700},
+			{Lat: 47.505, Lng: 8.710},
+			{Lat: 47.508, Lng: 8.715},
+			{Lat: 47.510, Lng: 8.720},
+		},
+	}
+
+	cfg := MapsConfig{DefaultTier: "standard"}
+	artifact := NormalizeActivity(activity, "walks.json", cfg)
+
+	if artifact.Metadata["trail_qualified"] != false {
+		t.Errorf("trail_qualified = %v, want false", artifact.Metadata["trail_qualified"])
+	}
+	if artifact.Metadata["processing_tier"] != "standard" {
+		t.Errorf("processing_tier = %v, want %q", artifact.Metadata["processing_tier"], "standard")
+	}
+}
+
+func TestGeoJSONRouteStorage(t *testing.T) {
+	// 12 waypoints → GeoJSON LineString with 12 coords in [lng, lat] order
+	route := make([]LatLng, 12)
+	for i := 0; i < 12; i++ {
+		route[i] = LatLng{Lat: 47.500 + float64(i)*0.003, Lng: 8.700 + float64(i)*0.005}
+	}
+
+	activity := TakeoutActivity{
+		Type:        ActivityHike,
+		StartTime:   time.Date(2026, 3, 15, 13, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 3, 15, 15, 22, 0, 0, time.UTC),
+		DistanceKm:  8.3,
+		DurationMin: 142,
+		Route:       route,
+	}
+
+	cfg := MapsConfig{DefaultTier: "standard"}
+	artifact := NormalizeActivity(activity, "routes.json", cfg)
+
+	geojson, ok := artifact.Metadata["route_geojson"].(map[string]interface{})
+	if !ok {
+		t.Fatal("route_geojson missing or wrong type")
+	}
+	if geojson["type"] != "LineString" {
+		t.Errorf("type = %v, want LineString", geojson["type"])
+	}
+	coords, ok := geojson["coordinates"].([][]float64)
+	if !ok {
+		t.Fatal("coordinates missing or wrong type")
+	}
+	if len(coords) != 12 {
+		t.Errorf("expected 12 coordinate pairs, got %d", len(coords))
+	}
+	// GeoJSON convention: [longitude, latitude]
+	if coords[0][0] != 8.700 {
+		t.Errorf("first coord lng = %v, want 8.700", coords[0][0])
+	}
+	if coords[0][1] != 47.500 {
+		t.Errorf("first coord lat = %v, want 47.500", coords[0][1])
+	}
+}
+
+func TestGeoJSONFallbackTwoPoint(t *testing.T) {
+	// 0 waypoints → GeoJSON LineString with empty coordinates (no start/end in TakeoutActivity without route)
+	activity := TakeoutActivity{
+		Type:        ActivityDrive,
+		StartTime:   time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 3, 15, 10, 30, 0, 0, time.UTC),
+		DistanceKm:  20.0,
+		DurationMin: 30,
+		Route:       nil,
+	}
+
+	cfg := MapsConfig{DefaultTier: "standard"}
+	artifact := NormalizeActivity(activity, "drives.json", cfg)
+
+	geojson, ok := artifact.Metadata["route_geojson"].(map[string]interface{})
+	if !ok {
+		t.Fatal("route_geojson missing or wrong type")
+	}
+	if geojson["type"] != "LineString" {
+		t.Errorf("type = %v, want LineString", geojson["type"])
+	}
+	// Fallback produces empty coords when no route data available
+	coords, ok := geojson["coordinates"].([][]float64)
+	if !ok {
+		t.Fatal("coordinates missing or wrong type")
+	}
+	// No waypoints and no separate start/end fields → empty coordinates
+	if len(coords) != 0 {
+		t.Errorf("expected 0 fallback coordinates for routeless activity, got %d", len(coords))
+	}
+}
+
+func TestDedupHashDistinguishesNearby(t *testing.T) {
+	// Same date, different end locations >500m apart → different hashes
+	morning := TakeoutActivity{
+		StartTime: time.Date(2026, 3, 15, 8, 0, 0, 0, time.UTC),
+		Route:     []LatLng{{Lat: 47.500, Lng: 8.700}, {Lat: 47.505, Lng: 8.710}},
+	}
+	evening := TakeoutActivity{
+		StartTime: time.Date(2026, 3, 15, 18, 0, 0, 0, time.UTC),
+		Route:     []LatLng{{Lat: 47.500, Lng: 8.700}, {Lat: 47.530, Lng: 8.750}},
+	}
+
+	hash1 := computeDedupHash(morning)
+	hash2 := computeDedupHash(evening)
+
+	if hash1 == hash2 {
+		t.Error("activities with different end locations (>500m) should produce different hashes")
+	}
+	if len(hash1) != 16 {
+		t.Errorf("hash length = %d, want 16 hex chars", len(hash1))
+	}
+}
+
+func TestDedupHashSameGridSameHash(t *testing.T) {
+	// Two activities within same ~500m grid cell + same date → same hash
+	a1 := TakeoutActivity{
+		StartTime: time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC),
+		Route:     []LatLng{{Lat: 47.501, Lng: 8.702}, {Lat: 47.521, Lng: 8.751}},
+	}
+	a2 := TakeoutActivity{
+		StartTime: time.Date(2026, 3, 15, 10, 30, 0, 0, time.UTC),
+		Route:     []LatLng{{Lat: 47.503, Lng: 8.703}, {Lat: 47.523, Lng: 8.753}},
+	}
+
+	hash1 := computeDedupHash(a1)
+	hash2 := computeDedupHash(a2)
+
+	if hash1 != hash2 {
+		t.Errorf("activities in same grid cell on same date should have same hash: %s vs %s", hash1, hash2)
+	}
+}
+
+func TestComputeDedupHashEmptyRoute(t *testing.T) {
+	// Activity with nil route should still produce a valid deterministic hash
+	a := TakeoutActivity{
+		StartTime: time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC),
+		Route:     nil,
+	}
+
+	hash := computeDedupHash(a)
+	if len(hash) != 16 {
+		t.Errorf("hash length = %d, want 16 hex chars", len(hash))
+	}
+
+	// Same activity → same hash
+	hash2 := computeDedupHash(a)
+	if hash != hash2 {
+		t.Errorf("empty-route hash not deterministic: %s vs %s", hash, hash2)
+	}
+
+	// Empty route on different date → different hash
+	b := TakeoutActivity{
+		StartTime: time.Date(2026, 3, 16, 10, 0, 0, 0, time.UTC),
+		Route:     nil,
+	}
+	if computeDedupHash(a) == computeDedupHash(b) {
+		t.Error("empty-route activities on different dates should have different hashes")
+	}
+}
+
+func TestActivityDisplayNameUnknown(t *testing.T) {
+	// Unknown type should return "Activity"
+	got := activityDisplayName(ActivityType("teleport"))
+	if got != "Activity" {
+		t.Errorf("activityDisplayName(unknown) = %q, want %q", got, "Activity")
+	}
+}
+
+func TestBuildContentNoRoute(t *testing.T) {
+	activity := TakeoutActivity{
+		Type:        ActivityDrive,
+		StartTime:   time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 3, 15, 10, 30, 0, 0, time.UTC),
+		DistanceKm:  20.0,
+		DurationMin: 30,
+		Route:       nil,
+	}
+
+	content := buildContent(activity)
+	if content == "" {
+		t.Fatal("buildContent returned empty string for no-route activity")
+	}
+	// Should NOT contain "waypoints" or "Start:" since there's no route
+	if containsAll(content, "waypoints") {
+		t.Error("no-route content should not mention waypoints")
+	}
+}
+
 // containsAll checks if s contains all fragments.
 func containsAll(s string, fragments ...string) bool {
 	for _, f := range fragments {

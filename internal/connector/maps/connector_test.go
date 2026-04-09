@@ -302,6 +302,269 @@ func TestEncodeCursor(t *testing.T) {
 	}
 }
 
+// --- Scope 02 tests ---
+
+func TestArchiveFile(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "takeout-march.json")
+	if err := os.WriteFile(testFile, []byte(`{}`), 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	c := New("google-maps-timeline")
+	c.config = MapsConfig{ImportDir: dir, ArchiveProcessed: true}
+
+	if err := c.archiveFile(testFile); err != nil {
+		t.Fatalf("archiveFile: %v", err)
+	}
+
+	// Original file should be gone
+	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
+		t.Error("original file still exists after archive")
+	}
+
+	// Archived file should exist
+	archived := filepath.Join(dir, "archive", "takeout-march.json")
+	if _, err := os.Stat(archived); err != nil {
+		t.Errorf("archived file not found: %v", err)
+	}
+
+	// Archive dir should have been created
+	archiveDir := filepath.Join(dir, "archive")
+	info, err := os.Stat(archiveDir)
+	if err != nil {
+		t.Fatalf("archive directory not found: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("archive path is not a directory")
+	}
+}
+
+func TestArchiveDisabled(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "takeout-april.json")
+	writeTakeoutFile(t, dir, "takeout-april.json", makeTakeoutJSON(2))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir":        dir,
+			"archive_processed": false,
+			"min_distance_m":    float64(0),
+			"min_duration_min":  float64(0),
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// File should still exist in original location (not archived)
+	if _, err := os.Stat(testFile); err != nil {
+		t.Errorf("file should remain when archive_processed=false: %v", err)
+	}
+
+	// No archive directory should have been created
+	archiveDir := filepath.Join(dir, "archive")
+	if _, err := os.Stat(archiveDir); !os.IsNotExist(err) {
+		t.Error("archive directory should not exist when archive_processed=false")
+	}
+}
+
+func TestConnectImportDirIsFile(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "not-a-dir.txt")
+	if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("create file: %v", err)
+	}
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir": filePath,
+		},
+	}
+	err := c.Connect(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("expected error when import_dir is a file, not a directory")
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected health %q, got %q", connector.HealthError, c.Health(context.Background()))
+	}
+}
+
+func TestParseMapsConfigNegativeMinDuration(t *testing.T) {
+	_, err := parseMapsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":       "/tmp/test",
+			"min_duration_min": float64(-5),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected validation error for negative min_duration_min")
+	}
+}
+
+func TestParseMapsConfigInvalidWatchInterval(t *testing.T) {
+	_, err := parseMapsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":     "/tmp/test",
+			"watch_interval": "not-a-duration",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected validation error for invalid watch_interval")
+	}
+}
+
+func TestParseMapsConfigIntTypes(t *testing.T) {
+	cfg, err := parseMapsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":       "/tmp/test",
+			"min_distance_m":   int(200),
+			"min_duration_min": int(5),
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MinDistanceM != 200 {
+		t.Errorf("MinDistanceM = %v, want 200", cfg.MinDistanceM)
+	}
+	if cfg.MinDurationMin != 5 {
+		t.Errorf("MinDurationMin = %v, want 5", cfg.MinDurationMin)
+	}
+}
+
+func TestParseMapsConfigCustomOverrides(t *testing.T) {
+	cfg, err := parseMapsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":               "/tmp/test",
+			"archive_processed":        true,
+			"default_tier":             "full",
+			"location_radius_m":        float64(250),
+			"home_detection":           "manual",
+			"commute_min_occurrences":  float64(5),
+			"commute_window_days":      float64(30),
+			"commute_weekdays_only":    false,
+			"trip_min_distance_km":     float64(100),
+			"trip_min_overnight_hours": float64(24),
+			"link_time_extend_min":     float64(60),
+			"link_proximity_radius_m":  float64(2000),
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.ArchiveProcessed {
+		t.Error("ArchiveProcessed should be true")
+	}
+	if cfg.DefaultTier != "full" {
+		t.Errorf("DefaultTier = %q, want %q", cfg.DefaultTier, "full")
+	}
+	if cfg.LocationRadiusM != 250 {
+		t.Errorf("LocationRadiusM = %v, want 250", cfg.LocationRadiusM)
+	}
+	if cfg.HomeDetection != "manual" {
+		t.Errorf("HomeDetection = %q, want %q", cfg.HomeDetection, "manual")
+	}
+	if cfg.CommuteMinOccurrences != 5 {
+		t.Errorf("CommuteMinOccurrences = %v, want 5", cfg.CommuteMinOccurrences)
+	}
+	if cfg.CommuteWindowDays != 30 {
+		t.Errorf("CommuteWindowDays = %v, want 30", cfg.CommuteWindowDays)
+	}
+	if cfg.CommuteWeekdaysOnly {
+		t.Error("CommuteWeekdaysOnly should be false")
+	}
+	if cfg.TripMinDistanceKm != 100 {
+		t.Errorf("TripMinDistanceKm = %v, want 100", cfg.TripMinDistanceKm)
+	}
+	if cfg.TripMinOvernightHours != 24 {
+		t.Errorf("TripMinOvernightHours = %v, want 24", cfg.TripMinOvernightHours)
+	}
+	if cfg.LinkTimeExtendMin != 60 {
+		t.Errorf("LinkTimeExtendMin = %v, want 60", cfg.LinkTimeExtendMin)
+	}
+	if cfg.LinkProximityRadiusM != 2000 {
+		t.Errorf("LinkProximityRadiusM = %v, want 2000", cfg.LinkProximityRadiusM)
+	}
+}
+
+func TestSyncMalformedFileContinues(t *testing.T) {
+	dir := t.TempDir()
+	// One valid file + one malformed file
+	writeTakeoutFile(t, dir, "good.json", makeTakeoutJSON(2))
+	writeTakeoutFile(t, dir, "bad.json", `{not valid json`)
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir":       dir,
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync should not fail entirely on one bad file: %v", err)
+	}
+	// The good file should still produce artifacts
+	if len(artifacts) != 2 {
+		t.Errorf("expected 2 artifacts from good file only, got %d", len(artifacts))
+	}
+}
+
+func TestSyncArchiveEnabled(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "archive-me.json", makeTakeoutJSON(1))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir":        dir,
+			"archive_processed": true,
+			"min_distance_m":    float64(0),
+			"min_duration_min":  float64(0),
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// Original file should be archived
+	originalPath := filepath.Join(dir, "archive-me.json")
+	if _, err := os.Stat(originalPath); !os.IsNotExist(err) {
+		t.Error("original file should be moved to archive after sync")
+	}
+
+	archivedPath := filepath.Join(dir, "archive", "archive-me.json")
+	if _, err := os.Stat(archivedPath); err != nil {
+		t.Errorf("archived file should exist: %v", err)
+	}
+}
+
 // --- test helpers ---
 
 func writeTakeoutFile(t *testing.T, dir, name, content string) {

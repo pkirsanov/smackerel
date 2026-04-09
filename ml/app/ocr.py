@@ -47,9 +47,7 @@ def _validate_ollama_url(url: str) -> str:
     """
     parsed = urlparse(url)
     if parsed.scheme not in _ALLOWED_OLLAMA_SCHEMES:
-        raise ValueError(
-            f"OLLAMA_URL must use http or https scheme, got: {parsed.scheme!r}"
-        )
+        raise ValueError(f"OLLAMA_URL must use http or https scheme, got: {parsed.scheme!r}")
     if not parsed.hostname:
         raise ValueError("OLLAMA_URL must have a valid hostname")
     return url
