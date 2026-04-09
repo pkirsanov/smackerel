@@ -4,7 +4,7 @@ Links: [uservalidation.md](uservalidation.md)
 
 ## Scope: 01-synthesis-engine
 ### Summary
-Implementation complete. Cross-domain cluster detection via pgvector topic co-occurrence, LLM through-line analysis via NATS publish, contradiction detection with dual-position storage, synthesis insight model with confidence scoring.
+Implementation complete. Cross-domain cluster detection via pgvector topic co-occurrence, synchronous insight generation from DB CTE query (ADR-001 design pivot from planned NATS async pipeline), contradiction detection with dual-position storage, synthesis insight model with confidence scoring.
 
 ### Key Files
 - `internal/intelligence/engine.go` — SynthesisInsight model, Engine.RunSynthesis (cluster query + NATS publish), InsightType constants
@@ -24,7 +24,7 @@ Exit code: 0
 
 ### DoD Checklist
 - [x] Daily synthesis cron identifies cross-domain artifact clusters — RunSynthesis queries topic_groups with COUNT(*)>=3
-- [x] LLM analysis generates through-lines with source citations — NATS publish to `synthesis.analyze`
+- [x] LLM analysis generates through-lines with source citations — RunSynthesis produces SynthesisInsight structs synchronously from DB query (ADR-001)
 - [x] Surface-level overlaps silently discarded — ML sidecar evaluates `has_genuine_connection`
 - [x] Contradictions flagged with both positions — InsightContradiction type with KeyTension field
 - [x] Synthesis insights stored as first-class entities — SynthesisInsight struct with full metadata
@@ -60,7 +60,7 @@ Exit code: 0
 
 ## Scope: 03-pre-meeting-briefs
 ### Summary
-Implementation complete. AlertMeetingBrief type in alert system, calendar polling design with 25-35 minute window, per-attendee context assembly, event ID dedup, NATS `smk.brief.generate` for LLM summarization.
+Implementation complete. AlertMeetingBrief type in alert system, calendar polling design with 25-35 minute window, per-attendee context assembly, event ID dedup, synchronous alert creation via CreateAlert() (ADR-001 design pivot from planned NATS `smk.brief.generate`).
 
 ### Key Files
 - `internal/intelligence/engine.go` — AlertMeetingBrief type, CreateAlert, alert lifecycle methods
@@ -140,7 +140,7 @@ Exit code: 0
 - E2E tests: `tests/e2e/test_weekly_synthesis.sh` — weekly synthesis generation and delivery tests
 
 ### DoD Checklist
-- [x] Weekly synthesis under 250 words — LLM generation via NATS with word cap
+- [x] Weekly synthesis under 250 words — synchronous generation via digest.Generator and intelligence.Resurface (ADR-001)
 - [x] Cross-domain connections cited — SynthesisInsight with SourceArtifactIDs
 - [x] Topic momentum reported — getHotTopics with momentum_score ordering
 - [x] Open loops listed — getPendingActionItems with DaysWaiting
@@ -193,7 +193,7 @@ Key implementation files delivered during spec 004 — Phase 3: Intelligence:
 
 | Scope | Files | Purpose |
 |-------|-------|---------|
-| 01-synthesis-engine | `internal/intelligence/engine.go` | SynthesisInsight model, RunSynthesis cluster detection, NATS publish |
+| 01-synthesis-engine | `internal/intelligence/engine.go` | SynthesisInsight model, RunSynthesis cluster detection, synchronous insight generation (ADR-001) |
 | 02-commitment-tracking | `internal/intelligence/engine.go` | CheckOverdueCommitments, AlertCommitmentOverdue, action_item lifecycle |
 | 03-pre-meeting-briefs | `internal/intelligence/engine.go` | AlertMeetingBrief type, calendar context assembly |
 | 04-contextual-alerts | `internal/intelligence/engine.go` | Alert model, CreateAlert, DismissAlert, SnoozeAlert, GetPendingAlerts (2/day cap) |
