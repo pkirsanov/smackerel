@@ -43,6 +43,28 @@ func TestIsTrailQualified(t *testing.T) {
 	if IsTrailQualified(driving) {
 		t.Error("driving should not qualify as trail")
 	}
+
+	// R003 regression: duration-based qualification per R-404 (>=30 min)
+	longWalk := TakeoutActivity{Type: ActivityWalk, DistanceKm: 1.5, DurationMin: 45.0}
+	if !IsTrailQualified(longWalk) {
+		t.Error("1.5km / 45min walk should qualify as trail by duration (R-404: >=30 min)")
+	}
+
+	shortWalk := TakeoutActivity{Type: ActivityWalk, DistanceKm: 1.0, DurationMin: 20.0}
+	if IsTrailQualified(shortWalk) {
+		t.Error("1.0km / 20min walk should not qualify (below both thresholds)")
+	}
+
+	// Cycling requires >=5km per R-404
+	shortCycle := TakeoutActivity{Type: ActivityCycle, DistanceKm: 3.0}
+	if IsTrailQualified(shortCycle) {
+		t.Error("3km cycle should not qualify (cycling threshold is 5km)")
+	}
+
+	longCycle := TakeoutActivity{Type: ActivityCycle, DistanceKm: 8.0}
+	if !IsTrailQualified(longCycle) {
+		t.Error("8km cycle should qualify as trail")
+	}
 }
 
 func TestToGeoJSON(t *testing.T) {
@@ -122,5 +144,120 @@ func TestOptInRequired(t *testing.T) {
 	}
 	if len(activities) != 0 {
 		t.Errorf("expected 0 activities from empty input, got %d", len(activities))
+	}
+}
+
+func TestParseTakeoutJSON_HappyPath(t *testing.T) {
+	// R004 regression: verify ParseTakeoutJSON correctly parses valid Takeout JSON
+	input := `{
+		"timelineObjects": [
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:30:00Z"
+					},
+					"distance": 8500,
+					"activityType": "WALKING",
+					"waypointPath": {
+						"waypoints": [
+							{"latE7": 407128000, "lngE7": -740060000},
+							{"latE7": 407350000, "lngE7": -739950000},
+							{"latE7": 407580000, "lngE7": -739855000}
+						]
+					}
+				}
+			},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"endLocation":   {"latitudeE7": 405220000, "longitudeE7": -742437000},
+					"duration": {
+						"startTimestamp": "2026-03-15T12:00:00Z",
+						"endTimestamp":   "2026-03-15T12:45:00Z"
+					},
+					"distance": 20000,
+					"activityType": "IN_VEHICLE",
+					"waypointPath": {"waypoints": []}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 2 {
+		t.Fatalf("expected 2 activities, got %d", len(activities))
+	}
+
+	// First activity: 8.5km walk → classified as hike (>5km)
+	a0 := activities[0]
+	if a0.Type != ActivityHike {
+		t.Errorf("activity[0].Type = %q, want %q (8.5km walk → hike)", a0.Type, ActivityHike)
+	}
+	if a0.DistanceKm != 8.5 {
+		t.Errorf("activity[0].DistanceKm = %f, want 8.5", a0.DistanceKm)
+	}
+	if len(a0.Route) != 3 {
+		t.Errorf("activity[0].Route has %d waypoints, want 3", len(a0.Route))
+	}
+	if a0.DurationMin != 90.0 {
+		t.Errorf("activity[0].DurationMin = %f, want 90.0", a0.DurationMin)
+	}
+
+	// Second activity: 20km drive
+	a1 := activities[1]
+	if a1.Type != ActivityDrive {
+		t.Errorf("activity[1].Type = %q, want %q", a1.Type, ActivityDrive)
+	}
+}
+
+func TestParseTakeoutJSON_BadTimestamp(t *testing.T) {
+	// R004 regression: activities with unparseable timestamps are skipped
+	input := `{
+		"timelineObjects": [
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "not-a-timestamp",
+						"endTimestamp":   "2026-03-15T11:30:00Z"
+					},
+					"distance": 5000,
+					"activityType": "WALKING",
+					"waypointPath": {"waypoints": []}
+				}
+			},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:00:00Z"
+					},
+					"distance": 3000,
+					"activityType": "CYCLING",
+					"waypointPath": {"waypoints": []}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// First activity has bad timestamp → skipped; only second should parse
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (bad timestamp skipped), got %d", len(activities))
+	}
+	if activities[0].Type != ActivityCycle {
+		t.Errorf("expected cycling activity, got %q", activities[0].Type)
 	}
 }

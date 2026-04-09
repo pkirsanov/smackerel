@@ -147,6 +147,7 @@ LLM_MODEL="$(required_value llm.model)"
 LLM_API_KEY="$(required_value llm.api_key)"
 OLLAMA_URL="$(required_value llm.ollama_url)"
 OLLAMA_MODEL="$(required_value llm.ollama_model)"
+OLLAMA_VISION_MODEL="$(required_value llm.ollama_vision_model)"
 SMACKEREL_AUTH_TOKEN="$(required_value runtime.auth_token)"
 DIGEST_CRON="$(required_value runtime.digest_cron)"
 EMBEDDING_MODEL="$(required_value runtime.embedding_model)"
@@ -170,6 +171,9 @@ NATS_URL="nats://nats:${NATS_CLIENT_PORT}"
 ML_SIDECAR_URL="http://smackerel-ml:${ML_CONTAINER_PORT}"
 CORE_EXTERNAL_URL="http://127.0.0.1:${CORE_HOST_PORT}"
 ML_EXTERNAL_URL="http://127.0.0.1:${ML_HOST_PORT}"
+
+# Connector import paths (optional — empty string is valid default)
+BOOKMARKS_IMPORT_DIR="$(yaml_get connectors.bookmarks.import_dir 2>/dev/null)" || BOOKMARKS_IMPORT_DIR=""
 
 mkdir -p "$REPO_ROOT/config/generated"
 
@@ -209,6 +213,7 @@ LLM_API_KEY=${LLM_API_KEY}
 SMACKEREL_AUTH_TOKEN=${SMACKEREL_AUTH_TOKEN}
 OLLAMA_URL=${OLLAMA_URL}
 OLLAMA_MODEL=${OLLAMA_MODEL}
+OLLAMA_VISION_MODEL=${OLLAMA_VISION_MODEL}
 EMBEDDING_MODEL=${EMBEDDING_MODEL}
 DIGEST_CRON=${DIGEST_CRON}
 LOG_LEVEL=${LOG_LEVEL}
@@ -218,6 +223,7 @@ TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
 TELEGRAM_CHAT_IDS=${TELEGRAM_CHAT_IDS}
 CORE_EXTERNAL_URL=${CORE_EXTERNAL_URL}
 ML_EXTERNAL_URL=${ML_EXTERNAL_URL}
+BOOKMARKS_IMPORT_DIR=${BOOKMARKS_IMPORT_DIR}
 EOF
 
 echo "Generated $OUTPUT_FILE"

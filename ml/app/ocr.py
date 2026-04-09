@@ -5,16 +5,20 @@ with Ollama vision as fallback when Tesseract produces insufficient results.
 Results are cached by image content hash (SHA-256).
 """
 
+import collections
 import hashlib
 import io
 import logging
 import os
 from typing import Optional
+from urllib.parse import urlparse
 
 logger = logging.getLogger("smackerel-ml.ocr")
 
-# In-memory OCR cache (production would use the ocr_cache DB table)
-_ocr_cache: dict[str, dict] = {}
+# In-memory OCR cache with LRU eviction to prevent unbounded memory growth.
+# Production deployments should migrate to the ocr_cache DB table.
+MAX_CACHE_ENTRIES = 1000
+_ocr_cache: collections.OrderedDict[str, dict] = collections.OrderedDict()
 
 MIN_TESSERACT_CHARS = 10
 
@@ -28,6 +32,27 @@ try:
     _PILImage.MAX_IMAGE_PIXELS = 25_000_000
 except ImportError:
     pass
+
+
+_ALLOWED_OLLAMA_SCHEMES = {"http", "https"}
+
+
+def _validate_ollama_url(url: str) -> str:
+    """Validate that the Ollama URL uses an allowed scheme (CWE-918 / SSRF prevention).
+
+    Only http and https schemes are permitted. The URL must have a valid hostname.
+
+    Raises:
+        ValueError: If the URL scheme is not allowed or hostname is missing.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in _ALLOWED_OLLAMA_SCHEMES:
+        raise ValueError(
+            f"OLLAMA_URL must use http or https scheme, got: {parsed.scheme!r}"
+        )
+    if not parsed.hostname:
+        raise ValueError("OLLAMA_URL must have a valid hostname")
+    return url
 
 
 def extract_text_tesseract(image_bytes: bytes) -> str:
@@ -65,9 +90,9 @@ def extract_text_ollama(image_bytes: bytes, ollama_url: str = "") -> str:
         Extracted text string, empty if Ollama fails.
     """
     if not ollama_url:
-        ollama_url = os.environ.get("OLLAMA_URL")
-        if not ollama_url:
-            ollama_url = "http://ollama:11434"  # Docker Compose service default
+        ollama_url = os.environ["OLLAMA_URL"]
+
+    ollama_url = _validate_ollama_url(ollama_url)
 
     try:
         import base64
@@ -79,7 +104,7 @@ def extract_text_ollama(image_bytes: bytes, ollama_url: str = "") -> str:
         response = requests.post(
             f"{ollama_url}/api/generate",
             json={
-                "model": os.environ.get("OLLAMA_VISION_MODEL") or "llava",
+                "model": os.environ["OLLAMA_VISION_MODEL"],
                 "prompt": "Extract all visible text from this image. Return only the text content, no commentary.",
                 "images": [b64_image],
                 "stream": False,
@@ -108,12 +133,13 @@ async def check_cache(image_hash: str) -> Optional[str]:
     """
     cached = _ocr_cache.get(image_hash)
     if cached:
+        _ocr_cache.move_to_end(image_hash)  # Mark as recently used
         return cached["text"]
     return None
 
 
 async def store_cache(image_hash: str, text: str, engine: str) -> None:
-    """Store OCR result in cache.
+    """Store OCR result in cache with LRU eviction.
 
     Args:
         image_hash: SHA-256 hash of the image.
@@ -121,6 +147,10 @@ async def store_cache(image_hash: str, text: str, engine: str) -> None:
         engine: OCR engine used ("tesseract" or "ollama").
     """
     _ocr_cache[image_hash] = {"text": text, "engine": engine}
+    _ocr_cache.move_to_end(image_hash)
+    while len(_ocr_cache) > MAX_CACHE_ENTRIES:
+        evicted_key, _ = _ocr_cache.popitem(last=False)
+        logger.debug("OCR cache evicted entry %s (size=%d)", evicted_key[:16], len(_ocr_cache))
 
 
 async def handle_ocr_request(data: dict) -> dict:
@@ -179,9 +209,9 @@ async def handle_ocr_request(data: dict) -> dict:
     text = extract_text_tesseract(image_bytes)
     engine = "tesseract"
 
-    # If Tesseract produced insufficient text, try Ollama
+    # If Tesseract produced insufficient text, try Ollama (optional fallback)
     if len(text) < MIN_TESSERACT_CHARS:
-        ollama_url = os.environ.get("OLLAMA_URL")
+        ollama_url = os.environ.get("OLLAMA_URL", "")
         if ollama_url:
             ollama_text = extract_text_ollama(image_bytes, ollama_url)
             if len(ollama_text) > len(text):

@@ -44,3 +44,30 @@ func (d *DedupChecker) Check(ctx context.Context, contentHash string) (*DedupRes
 		Title:       title,
 	}, nil
 }
+
+// CheckURL looks up a source URL in the artifacts table.
+// Catches re-submission of the same URL even when content has changed (R-011).
+func (d *DedupChecker) CheckURL(ctx context.Context, sourceURL string) (*DedupResult, error) {
+	if sourceURL == "" {
+		return &DedupResult{IsDuplicate: false}, nil
+	}
+
+	var id, title string
+	err := d.Pool.QueryRow(ctx,
+		"SELECT id, title FROM artifacts WHERE source_url = $1 LIMIT 1",
+		sourceURL,
+	).Scan(&id, &title)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &DedupResult{IsDuplicate: false}, nil
+		}
+		return nil, fmt.Errorf("check URL duplicate: %w", err)
+	}
+
+	return &DedupResult{
+		IsDuplicate: true,
+		ExistingID:  id,
+		Title:       title,
+	}, nil
+}

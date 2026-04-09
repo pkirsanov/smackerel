@@ -498,3 +498,56 @@ Exit code: 0
 - Concurrent capture: 10 simultaneous requests processed without race conditions
 - Concurrent capture test: 10 simultaneous capture requests, all processed without race conditions or data corruption
 - No unresolved failures from chaos probes
+
+---
+
+## Stochastic Quality Sweep — Gaps Analysis (Round 9)
+
+**Date:** 2026-04-09
+**Trigger:** gaps
+**Mode:** gaps-to-doc
+
+### Findings
+
+| ID | Finding | Spec/Req | Severity | Status |
+|---|---------|----------|----------|--------|
+| G001 | Missing source-based linking in knowledge graph — R-006 requires "link to other artifacts from same source/author/sender" | R-006 | Medium | Fixed |
+| G002 | `processing_status` stuck at 'pending' on ML failure — should be 'failed' so failed artifacts are distinguishable from in-progress | SCN-002-038, R-004 | High | Fixed |
+| G003 | Core pipeline dedup only checks `content_hash` — spec requires URL and source_id dedup too | R-011 | Medium | Fixed |
+| G004 | Delta re-processing for updated content not implemented | R-011 | Low | Documented — not in Gherkin scenarios |
+| G005 | Image/PDF extraction not in core capture pipeline | R-003 | Low | Documented — not in Gherkin scenarios |
+
+### G001 Fix: Source-Based Linking
+
+**Files changed:** `internal/graph/linker.go`, `internal/graph/linker_test.go`
+
+Added `linkBySource` method that creates SAME_SOURCE edges between artifacts sharing the same `source_id` (excluding generic "capture" source). Wired into `LinkArtifact` orchestration as strategy #5 after temporal linking. Limited to 10 most recent same-source artifacts with deduplication-safe direction normalization.
+
+### G002 Fix: Processing Status on ML Failure
+
+**Files changed:** `internal/pipeline/processor.go`, `internal/pipeline/processor_test.go`
+
+`HandleProcessedResult` failure branch now sets `processing_status = 'failed'` alongside `processing_tier = 'metadata'`. Previously, failed artifacts remained in `processing_status = 'pending'` forever, indistinguishable from actively-processing artifacts. Search, export, and web UI already filter on `processing_status = 'processed'`, so these artifacts were correctly excluded but had no way to be identified for retry or cleanup.
+
+### G003 Fix: URL-Based Dedup
+
+**Files changed:** `internal/pipeline/dedup.go`, `internal/pipeline/dedup_test.go`, `internal/pipeline/processor.go`
+
+Added `CheckURL` method to `DedupChecker` — queries `source_url` column before content hash check. Wired into `Process()` so URL dedup runs first (fast) then content hash dedup (general). Empty URLs short-circuit to non-duplicate. This prevents re-submission of the same URL even when page content has changed.
+
+### G004/G005: Documented Gaps (Not In Gherkin Scenarios)
+
+- **R-011 delta re-processing:** Spec says "Updated content: re-process only delta" but no Gherkin scenario covers this. Phase 2/3 ingestion connectors would need this as they bring in email threads and feed updates.
+- **R-003 image/PDF extraction:** Spec lists "Image/screenshot: OCR" and "PDF/document: extract text" but these are not in any Phase 1 Gherkin scenario or scope DoD. The Keep connector (007) has OCR cache support, suggesting image OCR enters the codebase from connector-specific needs rather than core pipeline.
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/graph     0.012s  (includes TestG001_SourceLinking_MethodExists)
+ok  github.com/smackerel/smackerel/internal/pipeline   0.014s  (includes TestG002, TestG003)
+All 25 Go packages pass. 31 Python tests pass.
+
+$ ./smackerel.sh lint
+All checks passed!
+```

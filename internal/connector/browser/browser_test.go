@@ -24,6 +24,31 @@ func TestDwellTimeTier(t *testing.T) {
 	}
 }
 
+func TestDwellTimeTier_BoundaryValues(t *testing.T) {
+	tests := []struct {
+		name     string
+		dwell    time.Duration
+		expected string
+	}{
+		{"exactly 5m is full", 5 * time.Minute, "full"},
+		{"5m minus 1us is standard", 5*time.Minute - time.Microsecond, "standard"},
+		{"exactly 2m is standard", 2 * time.Minute, "standard"},
+		{"2m minus 1us is light", 2*time.Minute - time.Microsecond, "light"},
+		{"exactly 30s is light", 30 * time.Second, "light"},
+		{"30s minus 1us is metadata", 30*time.Second - time.Microsecond, "metadata"},
+		{"zero dwell is metadata", 0, "metadata"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DwellTimeTier(tt.dwell)
+			if got != tt.expected {
+				t.Errorf("DwellTimeTier(%v) = %q, want %q", tt.dwell, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestIsSocialMedia(t *testing.T) {
 	if !IsSocialMedia("twitter.com") {
 		t.Error("twitter.com should be social media")
@@ -63,6 +88,29 @@ func TestExtractDomain(t *testing.T) {
 	}
 }
 
+func TestExtractDomain_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		{"short URL returns as-is", "http://", "http://"},
+		{"very short string", "abc", "abc"},
+		{"empty string", "", ""},
+		{"https no host", "https://", ""},
+		{"https with trailing slash only", "https:///path", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractDomain(tt.url)
+			if got != tt.expected {
+				t.Errorf("extractDomain(%q) = %q, want %q", tt.url, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestChromeTimeToGo(t *testing.T) {
 	// A known Chrome timestamp for 2024-01-01 00:00:00 UTC
 	// ChromeTime = UnixMicro + 11644473600000000
@@ -94,7 +142,19 @@ func TestOptInRequired(t *testing.T) {
 	// User-provided skip list must be respected as an opt-out mechanism
 	customSkip := []string{"private.corp.com"}
 	if !ShouldSkip("private.corp.com/page", customSkip) {
-		t.Error("custom skip domain should be blocked")
+		t.Error("custom skip domain should be blocked (no scheme)")
+	}
+
+	// R001 regression: user skip domains must match URLs WITH https:// scheme
+	if !ShouldSkip("https://private.corp.com/page", customSkip) {
+		t.Error("custom skip domain should block https:// URLs (SCN-005-005)")
+	}
+	if !ShouldSkip("http://private.corp.com/internal", customSkip) {
+		t.Error("custom skip domain should block http:// URLs")
+	}
+	// Non-matching domain must not be skipped
+	if ShouldSkip("https://public.example.com/page", customSkip) {
+		t.Error("non-skip domain should not be blocked")
 	}
 }
 

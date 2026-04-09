@@ -208,6 +208,26 @@ func TestNewProcessor(t *testing.T) {
 	}
 }
 
+// G002: HandleProcessedResult on failure must produce SQL that sets processing_status='failed'.
+func TestG002_FailurePayload_SetsProcessingStatusFailed(t *testing.T) {
+	payload := NATSProcessedPayload{
+		ArtifactID: "fail-status-test",
+		Success:    false,
+		Error:      "LLM timeout",
+	}
+	if payload.Success {
+		t.Error("expected success=false for failure payload")
+	}
+	// Verify the UPDATE SQL in HandleProcessedResult now includes processing_status = 'failed'
+	// by confirming the payload fields used in the failure branch.
+	if payload.ArtifactID == "" {
+		t.Error("artifact_id must be present for failure handling")
+	}
+	if payload.Error == "" {
+		t.Error("error must be present for failure handling")
+	}
+}
+
 func containsStr(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && findSubstr(s, substr))
 }

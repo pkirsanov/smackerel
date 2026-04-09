@@ -55,6 +55,10 @@ type TakeoutNote struct {
 	Attachments             []TakeoutAttachment `json:"attachments"`
 	ListContent             []TakeoutListItem   `json:"listContent"`
 	Sharees                 []TakeoutSharee     `json:"sharees"`
+
+	// SourceFile is the original filename from the Takeout export directory.
+	// Populated by ParseExport; not part of the Takeout JSON schema.
+	SourceFile string `json:"-"`
 }
 
 // TakeoutParser parses Google Takeout Keep export directories.
@@ -67,10 +71,22 @@ func NewTakeoutParser() *TakeoutParser {
 
 // ParseExport parses all JSON note files in a Takeout export directory.
 // Returns parsed notes and a list of file paths that failed to parse.
+// Rejects symlinks and paths that resolve outside the export directory
+// to prevent directory traversal attacks (CWE-22).
 func (p *TakeoutParser) ParseExport(exportDir string) ([]TakeoutNote, []string, error) {
-	entries, err := os.ReadDir(exportDir)
+	// Resolve the export directory itself to an absolute, symlink-free path.
+	absExportDir, err := filepath.Abs(exportDir)
 	if err != nil {
-		return nil, nil, fmt.Errorf("read export directory %s: %w", exportDir, err)
+		return nil, nil, fmt.Errorf("resolve export directory %s: %w", exportDir, err)
+	}
+	resolvedExportDir, err := filepath.EvalSymlinks(absExportDir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolve export directory symlinks %s: %w", absExportDir, err)
+	}
+
+	entries, err := os.ReadDir(resolvedExportDir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read export directory %s: %w", resolvedExportDir, err)
 	}
 
 	var notes []TakeoutNote
@@ -80,20 +96,51 @@ func (p *TakeoutParser) ParseExport(exportDir string) ([]TakeoutNote, []string, 
 		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".json") {
 			continue
 		}
-		filePath := filepath.Join(exportDir, entry.Name())
+
+		// Reject symlinks to prevent traversal via crafted export directories.
+		if entry.Type()&os.ModeSymlink != 0 {
+			errors = append(errors, filepath.Join(resolvedExportDir, entry.Name()))
+			continue
+		}
+
+		filePath := filepath.Join(resolvedExportDir, entry.Name())
+
+		// Verify the resolved path stays within the export directory boundary.
+		resolved, resolveErr := filepath.EvalSymlinks(filePath)
+		if resolveErr != nil {
+			errors = append(errors, filePath)
+			continue
+		}
+		if !strings.HasPrefix(resolved, resolvedExportDir+string(filepath.Separator)) {
+			errors = append(errors, filePath)
+			continue
+		}
+
 		note, err := p.ParseNoteFile(filePath)
 		if err != nil {
 			errors = append(errors, filePath)
 			continue
 		}
+		note.SourceFile = entry.Name()
 		notes = append(notes, *note)
 	}
 
 	return notes, errors, nil
 }
 
+// maxNoteFileSize is the maximum size of a single Takeout JSON note file (50 MB).
+const maxNoteFileSize = 50 * 1024 * 1024
+
 // ParseNoteFile parses a single Keep Takeout JSON file.
 func (p *TakeoutParser) ParseNoteFile(filePath string) (*TakeoutNote, error) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("stat note file %s: %w", filePath, err)
+	}
+	if info.Size() > maxNoteFileSize {
+		return nil, fmt.Errorf("note file %s exceeds max size (%d bytes > %d)", filePath, info.Size(), maxNoteFileSize)
+	}
+
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("read note file %s: %w", filePath, err)

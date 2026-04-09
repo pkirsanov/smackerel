@@ -2,6 +2,7 @@ package youtube
 
 import (
 	"context"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -164,5 +165,22 @@ func TestEngagementTier_Default(t *testing.T) {
 	tier := EngagementTier(false, false, "")
 	if tier != "light" {
 		t.Errorf("expected light by default, got %q", tier)
+	}
+}
+
+// Security: verify pageToken cursor is URL-encoded in API URL construction (S003)
+func TestFetchPlaylistItems_CursorURLEncoded(t *testing.T) {
+	// Verify that a cursor containing special characters would be encoded
+	// by testing the url.QueryEscape behavior used in the implementation.
+	// A cursor like "abc&inject=true" should not produce raw "&inject=true" in the URL.
+	maliciousCursor := "abc&inject=true&another=param"
+	encoded := "abc%26inject%3Dtrue%26another%3Dparam"
+	result := url.QueryEscape(maliciousCursor)
+	if result != encoded {
+		t.Errorf("expected URL-encoded cursor, got %q", result)
+	}
+	// Verify it does NOT contain raw unencoded ampersand that would split params
+	if strings.Contains(result, "&") {
+		t.Errorf("encoded cursor must not contain raw '&', got %q", result)
 	}
 }

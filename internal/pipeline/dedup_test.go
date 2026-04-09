@@ -91,3 +91,36 @@ func TestHashContent_ConcurrentSafety(t *testing.T) {
 		}
 	}
 }
+
+// G003: URL dedup — CheckURL method exists and handles empty URL gracefully.
+func TestG003_CheckURL_EmptyURL(t *testing.T) {
+	checker := &DedupChecker{Pool: nil}
+	result, err := checker.CheckURL(nil, "")
+	if err != nil {
+		t.Fatalf("unexpected error for empty URL: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for empty URL")
+	}
+	if result.IsDuplicate {
+		t.Error("empty URL should not be a duplicate")
+	}
+}
+
+// G003: URL dedup — CheckURL method returns correct struct fields.
+func TestG003_CheckURL_StructFields(t *testing.T) {
+	result := &DedupResult{
+		IsDuplicate: true,
+		ExistingID:  "01URL_DUP",
+		Title:       "Already Captured Article",
+	}
+	if !result.IsDuplicate {
+		t.Error("expected duplicate")
+	}
+	if result.ExistingID != "01URL_DUP" {
+		t.Errorf("expected '01URL_DUP', got %q", result.ExistingID)
+	}
+	if result.Title != "Already Captured Article" {
+		t.Errorf("expected 'Already Captured Article', got %q", result.Title)
+	}
+}

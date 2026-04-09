@@ -72,11 +72,14 @@ services:
       LOG_LEVEL: ${LOG_LEVEL}
       PORT: ${CORE_CONTAINER_PORT}
       ML_SIDECAR_URL: ${ML_SIDECAR_URL}
+      BOOKMARKS_IMPORT_DIR: ${BOOKMARKS_IMPORT_DIR:+/data/bookmarks-import}
     depends_on:
       postgres:
         condition: service_healthy
       nats:
         condition: service_healthy
+    volumes:
+      - ${BOOKMARKS_IMPORT_DIR:-./data/bookmarks-import}:/data/bookmarks-import:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${CORE_CONTAINER_PORT}/api/health"]
       interval: 10s
@@ -106,6 +109,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY}
       SMACKEREL_AUTH_TOKEN: ${SMACKEREL_AUTH_TOKEN}
       OLLAMA_URL: ${OLLAMA_URL}
+      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL}
     depends_on:
       nats:
         condition: service_healthy

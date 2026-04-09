@@ -1,0 +1,58 @@
+{
+  "version": 3,
+  "featureDir": "specs/010-browser-history-connector",
+  "featureName": "Browser History Connector",
+  "status": "done",
+  "workflowMode": "delivery-lockdown",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-09T00:00:00Z",
+    "completedScopes": ["scope-01", "scope-02"],
+    "completedPhaseClaims": ["analyze", "design", "plan", "implement", "test", "validate"],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "Spec authored with full requirements, use cases, business scenarios, and actor personas"
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap"],
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "Design authored: wrapper connector over existing browser.go utilities, copy-then-read file access, cursor-based incremental sync, social media aggregation, repeat visit detection, dwell-time privacy tiers, no new NATS streams or DB migrations"
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap"],
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "2-scope plan created: Scope 1 covers Connector interface, ParseChromeHistorySince, config, registration, and basic sync flow. Scope 2 adds social media aggregation, repeat visit detection, privacy gate, and content fetch failure handling."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "Implemented both scopes: connector.go (540 lines) with full Connector interface, social media aggregation, repeat visit detection, privacy gate, content fetch failure handling. connector_test.go (838 lines) with 21 tests. Registered in main.go with auto-start. Config added to smackerel.yaml."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["test", "validate", "finalize"],
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "All unit tests pass (21 tests), lint passes, format passes, check passes. Both scopes marked Done with verified DoD items."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-01", "scope-02"],
+    "certifiedCompletedPhases": ["analyze", "design", "plan", "implement", "test", "validate"]
+  }
+}
