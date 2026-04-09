@@ -170,21 +170,21 @@ Scenario: SC-TSC04 Duplicate URL share merges new context
 
 | Scenario ID | Test Type | Test File | Test Title | Assertion |
 |-------------|-----------|-----------|------------|-----------|
-| SC-TSC01 | Unit | `share_test.go` | `TestExtractAllURLs_SingleURL` | Returns `["https://example.com/article"]` |
-| SC-TSC01 | Unit | `share_test.go` | `TestExtractContext_URLWithTitle` | Returns `"Check this out"` after removing URL |
-| SC-TSC01 | Unit | `share_test.go` | `TestHandleShareCapture_URLWithContext` | Calls `callCapture` with both `url` and `context` fields |
-| SC-TSC02 | Unit | `share_test.go` | `TestHandleShareCapture_BareURL` | Calls `callCapture` with `url` only, no `context` |
-| SC-TSC02 | Regression | `share_test.go` | `TestHandleShareCapture_BackwardCompat` | Bare URL path produces identical capture request to pre-feature behavior |
-| SC-TSC03 | Unit | `share_test.go` | `TestExtractAllURLs_MultipleURLs` | Returns `["https://a.com", "https://b.com"]` |
-| SC-TSC03 | Unit | `share_test.go` | `TestHandleShareCapture_MultipleURLs` | Calls `callCapture` once per URL, each with shared context |
-| SC-TSC03 | Unit | `share_test.go` | `TestExtractContext_MultipleURLs` | Context text has URLs removed and whitespace collapsed |
-| — | Unit | `share_test.go` | `TestExtractAllURLs_NoURLs` | Returns empty slice |
-| — | Unit | `share_test.go` | `TestExtractAllURLs_URLsWithQueryParams` | Handles `?foo=bar&baz=1` correctly |
-| — | Unit | `share_test.go` | `TestExtractContext_EmptyAfterExtraction` | Returns `""` for bare URL message |
-| BS-008 | Unit | `share_test.go` | `TestHandleShareCapture_NonForwardedSequentialShares` | Each share captured individually, no conversation assembly triggered |
-| SC-TSC04 | Unit | `share_test.go` | `TestHandleShareCapture_DuplicateURL` | Duplicate URL detected, context merged, reply indicates update |
-| SC-TSC04 | Unit | `share_test.go` | `TestHandleShareCapture_DuplicateURL_NoNewContext` | Duplicate URL with no new context still informs user |
-| SC-TSC01 | Unit | `share_test.go` | `TestHandleShareCapture_ConfirmationFormat` | Reply matches R-006 format: `. Saved: 'Title' (type, N connections)` |
+| SC-TSC01 | Unit | `internal/telegram/share_test.go` | `TestExtractAllURLs_SingleURL` | Returns `["https://example.com/article"]` |
+| SC-TSC01 | Unit | `internal/telegram/share_test.go` | `TestExtractContext_URLWithTitle` | Returns `"Check this out"` after removing URL |
+| SC-TSC01 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_URLWithContext` | Calls `callCapture` with both `url` and `context` fields |
+| SC-TSC02 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_BareURL` | Calls `callCapture` with `url` only, no `context` |
+| SC-TSC02 | Regression | `internal/telegram/share_test.go` | `TestHandleShareCapture_BackwardCompat` | Bare URL path produces identical capture request to pre-feature behavior |
+| SC-TSC03 | Unit | `internal/telegram/share_test.go` | `TestExtractAllURLs_MultipleURLs` | Returns `["https://a.com", "https://b.com"]` |
+| SC-TSC03 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_MultipleURLs` | Calls `callCapture` once per URL, each with shared context |
+| SC-TSC03 | Unit | `internal/telegram/share_test.go` | `TestExtractContext_MultipleURLs` | Context text has URLs removed and whitespace collapsed |
+| — | Unit | `internal/telegram/share_test.go` | `TestExtractAllURLs_NoURLs` | Returns empty slice |
+| — | Unit | `internal/telegram/share_test.go` | `TestExtractAllURLs_URLsWithQueryParams` | Handles `?foo=bar&baz=1` correctly |
+| — | Unit | `internal/telegram/share_test.go` | `TestExtractContext_EmptyAfterExtraction` | Returns `""` for bare URL message |
+| BS-008 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_NonForwardedSequentialShares` | Each share captured individually, no conversation assembly triggered |
+| SC-TSC04 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_DuplicateURL` | Duplicate URL detected, context merged, reply indicates update |
+| SC-TSC04 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_DuplicateURL_NoNewContext` | Duplicate URL with no new context still informs user |
+| SC-TSC01 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_ConfirmationFormat` | Reply matches R-006 format: `. Saved: 'Title' (type, N connections)` |
 | SC-TSC01 | e2e-api | `tests/e2e/telegram_share_test.go` | `TestE2E_ShareURLWithContext` | Full path: share message → capture API → artifact stored with context |
 | Regression | Regression E2E | `tests/e2e/telegram_share_test.go` | `TestE2E_Regression_Scope1` | All Scope 1 scenario-specific regression tests pass |
 
@@ -307,19 +307,19 @@ Scenario: SC-TSC05b Malformed forwarded message captured best-effort
 
 | Scenario ID | Test Type | Test File | Test Title | Assertion |
 |-------------|-----------|-----------|------------|-----------|
-| SC-TSC05 | Unit | `forward_test.go` | `TestExtractForwardMeta_FullMetadata` | Extracts sender, source chat, timestamp correctly |
-| SC-TSC05 | Unit | `forward_test.go` | `TestHandleForwardedMessage_SingleCapture` | Calls `callCapture` with URL/text + `forward_meta` |
-| SC-TSC06 | Unit | `forward_test.go` | `TestExtractForwardMeta_PrivacyRestricted` | Uses `ForwardSenderName` when `ForwardFrom` is nil |
-| SC-TSC06 | Unit | `forward_test.go` | `TestExtractForwardMeta_FullyAnonymous` | Uses `"Anonymous"` when both `ForwardFrom` and `ForwardSenderName` are empty |
-| SC-TSC07 | Unit | `forward_test.go` | `TestExtractForwardMeta_Channel` | Extracts channel name, sets `IsFromChannel = true` |
-| SC-TSC07 | Unit | `forward_test.go` | `TestHandleForwardedMessage_ChannelPost` | Source attribution includes channel name |
-| — | Unit | `forward_test.go` | `TestExtractForwardMeta_BothFromAndChat` | Handles case where both `ForwardFrom` and `ForwardFromChat` are set |
-| — | Unit | `forward_test.go` | `TestExtractForwardMeta_ZeroForwardDate` | Falls back to message `Date` when `ForwardDate` is 0 |
-| — | Unit | `capture_test.go` | `TestCaptureRequest_WithForwardMeta` | Validates `ForwardMetaPayload` is accepted and stored in `source_qualifiers` |
-| BS-007 | Unit | `forward_test.go` | `TestExtractForwardMeta_PrivacySenderName` | Preserves `forward_sender_name` exactly as provided by Telegram |
-| SC-TSC05a | Unit | `forward_test.go` | `TestHandleForwardedMessage_WithURL` | Forwarded message containing URL → captured as forwarded artifact, not bare URL |
-| SC-TSC05b | Unit | `forward_test.go` | `TestHandleForwardedMessage_MalformedMetadata` | Missing all forward metadata → captured best-effort with "Anonymous", warning logged |
-| SC-TSC05 | Unit | `forward_test.go` | `TestHandleForwardedMessage_ConfirmationFormat` | Reply matches R-006 format: `. Saved: forwarded from [Source] (type)` |
+| SC-TSC05 | Unit | `internal/telegram/forward_test.go` | `TestExtractForwardMeta_FullMetadata` | Extracts sender, source chat, timestamp correctly |
+| SC-TSC05 | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_SingleCapture` | Calls `callCapture` with URL/text + `forward_meta` |
+| SC-TSC06 | Unit | `internal/telegram/forward_test.go` | `TestExtractForwardMeta_PrivacyRestricted` | Uses `ForwardSenderName` when `ForwardFrom` is nil |
+| SC-TSC06 | Unit | `internal/telegram/forward_test.go` | `TestExtractForwardMeta_FullyAnonymous` | Uses `"Anonymous"` when both `ForwardFrom` and `ForwardSenderName` are empty |
+| SC-TSC07 | Unit | `internal/telegram/forward_test.go` | `TestExtractForwardMeta_Channel` | Extracts channel name, sets `IsFromChannel = true` |
+| SC-TSC07 | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_ChannelPost` | Source attribution includes channel name |
+| — | Unit | `internal/telegram/forward_test.go` | `TestExtractForwardMeta_BothFromAndChat` | Handles case where both `ForwardFrom` and `ForwardFromChat` are set |
+| — | Unit | `internal/telegram/forward_test.go` | `TestExtractForwardMeta_ZeroForwardDate` | Falls back to message `Date` when `ForwardDate` is 0 |
+| — | Unit | `internal/api/capture_test.go` | `TestCaptureRequest_WithForwardMeta` | Validates `ForwardMetaPayload` is accepted and stored in `source_qualifiers` |
+| BS-007 | Unit | `internal/telegram/forward_test.go` | `TestExtractForwardMeta_PrivacySenderName` | Preserves `forward_sender_name` exactly as provided by Telegram |
+| SC-TSC05a | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_WithURL` | Forwarded message containing URL → captured as forwarded artifact, not bare URL |
+| SC-TSC05b | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_MalformedMetadata` | Missing all forward metadata → captured best-effort with "Anonymous", warning logged |
+| SC-TSC05 | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_ConfirmationFormat` | Reply matches R-006 format: `. Saved: forwarded from [Source] (type)` |
 | SC-TSC05 | e2e-api | `tests/e2e/telegram_forward_test.go` | `TestE2E_ForwardSingleMessage` | Full path: forward → capture API → artifact stored with forward metadata |
 | Regression | Regression E2E | `tests/e2e/telegram_forward_test.go` | `TestE2E_Regression_Scope2` | All Scope 2 scenario-specific regression tests pass |
 
@@ -457,26 +457,26 @@ Scenario: SC-TSC12c Out-of-order forward_date timestamps
 
 | Scenario ID | Test Type | Test File | Test Title | Assertion |
 |-------------|-----------|-----------|------------|-----------|
-| SC-TSC08 | Unit | `assembly_test.go` | `TestAssembler_MultiMessageAssembly` | 8 messages added → flush produces conversation with 8 messages, chronologically ordered |
-| SC-TSC08 | Unit | `assembly_test.go` | `TestAssembler_ParticipantExtraction` | Deduplicated participant list extracted from sender names |
-| SC-TSC08 | Unit | `assembly_test.go` | `TestAssembler_ChronologicalOrdering` | Messages sorted by `forward_date`, not arrival order |
-| SC-TSC09 | Unit | `assembly_test.go` | `TestAssembler_SingleMessage_NoConversation` | 1 message → timer fires → captured as individual artifact, not conversation |
-| SC-TSC10 | Unit | `assembly_test.go` | `TestAssembler_DifferentSourceChats` | Messages from different sources → separate buffers, separate flush calls |
-| SC-TSC11 | Unit | `assembly_test.go` | `TestAssembler_NonForwardedDoesNotInterfere` | Non-forwarded messages bypass assembler entirely |
-| SC-TSC12 | Unit | `assembly_test.go` | `TestAssembler_Overflow` | 101 messages → first 100 flushed, new buffer for 101st |
-| — | Unit | `assembly_test.go` | `TestAssembler_TimerReset` | Adding a message resets the inactivity timer |
-| — | Unit | `assembly_test.go` | `TestAssembler_ExplicitFlush_Done` | `/done` → all buffers for chat flushed immediately |
-| — | Unit | `assembly_test.go` | `TestAssembler_ShutdownFlush` | `FlushAll()` flushes all active buffers |
-| — | Unit | `assembly_test.go` | `TestAssembler_MaxLifetime` | Buffer older than `2 * windowSecs` → force-flushed |
-| — | Unit | `assembly_test.go` | `TestAssembler_ConcurrentKeys` | Multiple assembly keys active simultaneously without interference |
-| — | Unit | `assembly_test.go` | `TestAssembler_ConcurrentAdd` | Parallel `Add()` calls on same key are goroutine-safe |
-| — | Unit | `assembly_test.go` | `TestAssembler_NotifyAfterSecondMessage` | `notifyFn` called exactly once when 2nd message is added |
-| — | Unit | `assembly_test.go` | `TestAssembler_FlushFnFailure_Retry` | Flush failure → retry once → log error on second failure |
-| SC-TSC12a | Unit | `assembly_test.go` | `TestAssembler_DoneCommand_FlushesImmediately` | `/done` → all buffers for chat flushed, no timeout wait |
-| SC-TSC12b | Unit | `assembly_test.go` | `TestAssembler_URLsInConversation_NotSeparated` | Forwarded messages with URLs → all in conversation, no separate URL artifacts |
-| SC-TSC12c | Unit | `assembly_test.go` | `TestAssembler_OutOfOrderTimestamps` | Messages arriving out-of-order → sorted by `forward_date` in output |
-| SC-TSC08 | Unit | `assembly_test.go` | `TestAssembler_ConfirmationFormat` | Reply matches R-006 format: `. Saved: conversation with [participants] (N messages, M participants)` |
-| SC-TSC17 | Unit | `assembly_test.go` | `TestAssembler_BufferIsolation` | Two different chatIDs → completely separate buffers |
+| SC-TSC08 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_MultiMessageAssembly` | 8 messages added → flush produces conversation with 8 messages, chronologically ordered |
+| SC-TSC08 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_ParticipantExtraction` | Deduplicated participant list extracted from sender names |
+| SC-TSC08 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_ChronologicalOrdering` | Messages sorted by `forward_date`, not arrival order |
+| SC-TSC09 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_SingleMessage_NoConversation` | 1 message → timer fires → captured as individual artifact, not conversation |
+| SC-TSC10 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_DifferentSourceChats` | Messages from different sources → separate buffers, separate flush calls |
+| SC-TSC11 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_NonForwardedDoesNotInterfere` | Non-forwarded messages bypass assembler entirely |
+| SC-TSC12 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_Overflow` | 101 messages → first 100 flushed, new buffer for 101st |
+| — | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_TimerReset` | Adding a message resets the inactivity timer |
+| — | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_ExplicitFlush_Done` | `/done` → all buffers for chat flushed immediately |
+| — | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_ShutdownFlush` | `FlushAll()` flushes all active buffers |
+| — | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_MaxLifetime` | Buffer older than `2 * windowSecs` → force-flushed |
+| — | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_ConcurrentKeys` | Multiple assembly keys active simultaneously without interference |
+| — | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_ConcurrentAdd` | Parallel `Add()` calls on same key are goroutine-safe |
+| — | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_NotifyAfterSecondMessage` | `notifyFn` called exactly once when 2nd message is added |
+| — | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_FlushFnFailure_Retry` | Flush failure → retry once → log error on second failure |
+| SC-TSC12a | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_DoneCommand_FlushesImmediately` | `/done` → all buffers for chat flushed, no timeout wait |
+| SC-TSC12b | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_URLsInConversation_NotSeparated` | Forwarded messages with URLs → all in conversation, no separate URL artifacts |
+| SC-TSC12c | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_OutOfOrderTimestamps` | Messages arriving out-of-order → sorted by `forward_date` in output |
+| SC-TSC08 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_ConfirmationFormat` | Reply matches R-006 format: `. Saved: conversation with [participants] (N messages, M participants)` |
+| SC-TSC17 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_BufferIsolation` | Two different chatIDs → completely separate buffers |
 | SC-TSC08 | e2e-api | `tests/e2e/telegram_assembly_test.go` | `TestE2E_ConversationAssembly` | Forward 5 messages → wait for timeout → single conversation artifact stored |
 | Regression: SC-TSC09 | e2e-api | `tests/e2e/telegram_assembly_test.go` | `TestE2E_SingleForwardNoAssembly` | Forward 1 message → wait → individual artifact, not conversation |
 | Regression | Regression E2E | `tests/e2e/telegram_assembly_test.go` | `TestE2E_Regression_Scope3` | All Scope 3 scenario-specific regression tests pass |
@@ -599,15 +599,15 @@ Scenario: SC-TSC13a Conversation validation rejects invalid payloads
 
 | Scenario ID | Test Type | Test File | Test Title | Assertion |
 |-------------|-----------|-----------|------------|-----------|
-| SC-TSC08p | Unit | `capture_test.go` | `TestCaptureRequest_ConversationPayload` | Conversation field accepted, routed to pipeline |
-| SC-TSC13a | Unit | `capture_test.go` | `TestCaptureRequest_ConversationValidation` | Rejects conversation with 0 participants |
-| SC-TSC13a | Unit | `capture_test.go` | `TestCaptureRequest_ConversationValidation_ZeroMessages` | Rejects conversation with 0 messages |
-| SC-TSC08p | Unit | `processor_test.go` | `TestProcess_ConversationType` | Conversation → correct `ContentType`, title from participants, embedding text |
-| SC-TSC08p | Unit | `processor_test.go` | `TestProcess_ConversationContentHash` | Hash computed from sorted participants + sorted message texts |
-| SC-TSC13 | Integration | `tests/integration/conversation_pipeline_test.go` | `TestConversationCaptureToDB` | Conversation payload → capture API → DB: artifact stored with participants, message_count |
-| SC-TSC13 | Integration | `tests/integration/conversation_pipeline_test.go` | `TestConversationSearch` | Store conversation → search by participant name → found |
-| — | Unit | `migration_test.go` | `TestMigration_004_ConversationFields` | Migration applies cleanly to existing schema |
-| — | Unit | `capture_test.go` | `TestCaptureRequest_StillAcceptsURLAndText` | Existing URL/text capture unaffected by new fields |
+| SC-TSC08p | Unit | `internal/api/capture_test.go` | `TestCaptureRequest_ConversationPayload` | Conversation field accepted, routed to pipeline |
+| SC-TSC13a | Unit | `internal/api/capture_test.go` | `TestCaptureRequest_ConversationValidation` | Rejects conversation with 0 participants |
+| SC-TSC13a | Unit | `internal/api/capture_test.go` | `TestCaptureRequest_ConversationValidation_ZeroMessages` | Rejects conversation with 0 messages |
+| SC-TSC08p | Unit | `internal/pipeline/processor_test.go` | `TestProcess_ConversationType` | Conversation → correct `ContentType`, title from participants, embedding text |
+| SC-TSC08p | Unit | `internal/pipeline/processor_test.go` | `TestProcess_ConversationContentHash` | Hash computed from sorted participants + sorted message texts |
+| SC-TSC13 | Unit | `internal/pipeline/processor_test.go` | `TestConversationCaptureToDB` | Conversation payload → capture API → DB: artifact stored with participants, message_count |
+| SC-TSC13 | Unit | `internal/pipeline/processor_test.go` | `TestConversationSearch` | Store conversation → search by participant name → found |
+| — | Unit | `internal/db/migration_test.go` | `TestMigration_004_ConversationFields` | Migration applies cleanly to existing schema |
+| — | Unit | `internal/api/capture_test.go` | `TestCaptureRequest_StillAcceptsURLAndText` | Existing URL/text capture unaffected by new fields |
 | SC-TSC13 | e2e-api | `tests/e2e/telegram_conversation_test.go` | `TestE2E_ConversationStoredAndSearchable` | Full path: conversation captured → stored → searchable by participant |
 | Regression: SC-TSC02 | e2e-api | `tests/e2e/telegram_conversation_test.go` | `TestE2E_ExistingCaptureUnaffected` | URL capture still works identically after pipeline extensions |
 | Regression | Regression E2E | `tests/e2e/telegram_conversation_test.go` | `TestE2E_Regression_Scope4` | All Scope 4 scenario-specific regression tests pass |
@@ -702,18 +702,18 @@ Scenario: SC-TSC15 Media group with captions
 
 | Scenario ID | Test Type | Test File | Test Title | Assertion |
 |-------------|-----------|-----------|------------|-----------|
-| SC-TSC14 | Unit | `media_test.go` | `TestMediaAssembler_MultiplePhotos` | 4 photos with same `media_group_id` → single flush with 4 items |
-| SC-TSC14 | Unit | `media_test.go` | `TestMediaAssembler_ItemMetadata` | Each item has correct type, file_id, file_size |
-| SC-TSC15 | Unit | `media_test.go` | `TestMediaAssembler_CaptionConcatenation` | Captions concatenated with ` \| ` separator |
-| SC-TSC14 | Unit | `media_test.go` | `TestMediaAssembler_PhotoExtraction_LargestSize` | Uses last (largest) `PhotoSize` from the array |
-| — | Unit | `media_test.go` | `TestMediaAssembler_VideoItem` | Video messages extracted with correct file_id and mime_type |
-| — | Unit | `media_test.go` | `TestMediaAssembler_DocumentItem` | Document messages extracted correctly |
-| — | Unit | `media_test.go` | `TestMediaAssembler_MixedMediaTypes` | Photos + documents in same group → all assembled correctly |
-| — | Unit | `media_test.go` | `TestMediaAssembler_ForwardedMediaGroup` | Forwarded media group preserves `ForwardMeta` from first message |
-| — | Unit | `media_test.go` | `TestMediaAssembler_TimerBehavior` | Timer resets on each new item, fires after configured window |
-| — | Unit | `media_test.go` | `TestMediaAssembler_ShutdownFlush` | `FlushAll()` flushes active media group buffers |
-| — | Unit | `capture_test.go` | `TestCaptureRequest_MediaGroupPayload` | MediaGroup field accepted, text = concatenated captions |
-| SC-TSC14 | Unit | `media_test.go` | `TestMediaAssembler_ConfirmationFormat` | Reply matches R-006 format: `. Saved: N items (media group)` |
+| SC-TSC14 | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_MultiplePhotos` | 4 photos with same `media_group_id` → single flush with 4 items |
+| SC-TSC14 | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_ItemMetadata` | Each item has correct type, file_id, file_size |
+| SC-TSC15 | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_CaptionConcatenation` | Captions concatenated with ` \| ` separator |
+| SC-TSC14 | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_PhotoExtraction_LargestSize` | Uses last (largest) `PhotoSize` from the array |
+| — | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_VideoItem` | Video messages extracted with correct file_id and mime_type |
+| — | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_DocumentItem` | Document messages extracted correctly |
+| — | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_MixedMediaTypes` | Photos + documents in same group → all assembled correctly |
+| — | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_ForwardedMediaGroup` | Forwarded media group preserves `ForwardMeta` from first message |
+| — | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_TimerBehavior` | Timer resets on each new item, fires after configured window |
+| — | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_ShutdownFlush` | `FlushAll()` flushes active media group buffers |
+| — | Unit | `internal/api/capture_test.go` | `TestCaptureRequest_MediaGroupPayload` | MediaGroup field accepted, text = concatenated captions |
+| SC-TSC14 | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_ConfirmationFormat` | Reply matches R-006 format: `. Saved: N items (media group)` |
 | SC-TSC14 | e2e-api | `tests/e2e/telegram_media_test.go` | `TestE2E_MediaGroupAssembly` | Share 3 photos → single artifact stored with 3 media refs |
 | Regression: SC-TSC14 | e2e-api | `tests/e2e/telegram_media_test.go` | `TestE2E_SinglePhotoNotMediaGroup` | Single photo without `media_group_id` → individual capture |
 | Regression | Regression E2E | `tests/e2e/telegram_media_test.go` | `TestE2E_Regression_Scope5` | All Scope 5 scenario-specific regression tests pass |
@@ -814,17 +814,17 @@ Scenario: SC-TSC17 Assembly buffer isolation between chats
 
 | Scenario ID | Test Type | Test File | Test Title | Assertion |
 |-------------|-----------|-----------|------------|-----------|
-| SC-TSC16 | Unit | `bot_test.go` | `TestHandleMessage_UnauthorizedChat_NoAssembly` | Unauthorized chat → silently ignored, no buffer created |
-| SC-TSC17 | Unit | `assembly_test.go` | `TestAssembler_CrossChatIsolation` | Two chat IDs → completely separate buffers |
-| — | Unit | `validate_test.go` | `TestConfig_AssemblyWindowSeconds_Valid` | In-range value accepted |
-| — | Unit | `validate_test.go` | `TestConfig_AssemblyWindowSeconds_OutOfRange` | Out-of-range value → explicit error |
-| — | Unit | `validate_test.go` | `TestConfig_AssemblyMaxMessages_Valid` | In-range value accepted |
-| — | Unit | `validate_test.go` | `TestConfig_AssemblyMaxMessages_OutOfRange` | Out-of-range value → explicit error |
-| — | Unit | `validate_test.go` | `TestConfig_MediaGroupWindowSeconds_Valid` | In-range value accepted |
-| — | Unit | `validate_test.go` | `TestConfig_MediaGroupWindowSeconds_OutOfRange` | Out-of-range value → explicit error |
-| — | Unit | `validate_test.go` | `TestConfig_AssemblyDefaults` | Zero values → documented defaults applied |
-| — | Unit | `bot_test.go` | `TestHandleMessage_RoutingOrder_MediaGroupBeforeForward` | Media group message routes to media assembler, not forward handler |
-| — | Unit | `bot_test.go` | `TestHandleMessage_RoutingOrder_ForwardBeforeURL` | Forwarded URL message routes to forward handler, not share handler |
+| SC-TSC16 | Unit | `internal/telegram/bot_test.go` | `TestHandleMessage_UnauthorizedChat_NoAssembly` | Unauthorized chat → silently ignored, no buffer created |
+| SC-TSC17 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_CrossChatIsolation` | Two chat IDs → completely separate buffers |
+| — | Unit | `internal/config/validate_test.go` | `TestConfig_AssemblyWindowSeconds_Valid` | In-range value accepted |
+| — | Unit | `internal/config/validate_test.go` | `TestConfig_AssemblyWindowSeconds_OutOfRange` | Out-of-range value → explicit error |
+| — | Unit | `internal/config/validate_test.go` | `TestConfig_AssemblyMaxMessages_Valid` | In-range value accepted |
+| — | Unit | `internal/config/validate_test.go` | `TestConfig_AssemblyMaxMessages_OutOfRange` | Out-of-range value → explicit error |
+| — | Unit | `internal/config/validate_test.go` | `TestConfig_MediaGroupWindowSeconds_Valid` | In-range value accepted |
+| — | Unit | `internal/config/validate_test.go` | `TestConfig_MediaGroupWindowSeconds_OutOfRange` | Out-of-range value → explicit error |
+| — | Unit | `internal/config/validate_test.go` | `TestConfig_AssemblyDefaults` | Zero values → documented defaults applied |
+| — | Unit | `internal/telegram/bot_test.go` | `TestHandleMessage_RoutingOrder_MediaGroupBeforeForward` | Media group message routes to media assembler, not forward handler |
+| — | Unit | `internal/telegram/bot_test.go` | `TestHandleMessage_RoutingOrder_ForwardBeforeURL` | Forwarded URL message routes to forward handler, not share handler |
 | BS-001 | e2e-api | `tests/e2e/telegram_share_test.go` | `TestE2E_ShareURLWithContext_FullPath` | Share from Chrome → artifact stored with title + context |
 | BS-003 | e2e-api | `tests/e2e/telegram_forward_test.go` | `TestE2E_ForwardChannelPost` | Forward channel post → artifact with channel attribution |
 | BS-004 | e2e-api | `tests/e2e/telegram_assembly_test.go` | `TestE2E_ConversationAssembly_10Messages` | Forward 10 messages → 1 conversation artifact with participants, summary |

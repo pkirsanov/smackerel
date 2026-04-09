@@ -1,12 +1,16 @@
 {
   "version": 3,
-  "featureId": "013-guesthost-connector",
+  "featureDir": "specs/013-guesthost-connector",
   "featureName": "GuestHost Connector & Hospitality Intelligence",
   "status": "deferred",
   "workflowMode": "full",
   "execution": {
     "activeAgent": "bubbles.plan",
     "currentPhase": "plan",
+    "runStartedAt": "2026-04-09T00:00:00Z",
+    "completedScopes": [],
+    "completedPhaseClaims": ["analyze", "plan"],
+    "pendingTransitionRequests": [],
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
@@ -28,7 +32,22 @@
       }
     ]
   },
-  "completedPhases": ["analyze", "plan"],
-  "completedScopes": [],
-  "certification": {}
+  "certification": {
+    "status": "deferred",
+    "completedScopes": [],
+    "certifiedCompletedPhases": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-09T00:00:00Z",
+  "notes": "Deferred — planning complete, no implementation started."
 }

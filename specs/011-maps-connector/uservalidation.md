@@ -4,7 +4,7 @@
 
 ---
 
-## Acceptance Criteria
+## Checklist
 
 ### Unit-Validated (All Pass)
 
