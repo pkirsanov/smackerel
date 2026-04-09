@@ -70,6 +70,15 @@ func (l *Linker) LinkArtifact(ctx context.Context, artifactID string) (int, erro
 		totalEdges += tempEdges
 	}
 
+	// 5. Source linking (same source_id)
+	srcEdges, err := l.linkBySource(ctx, artifactID)
+	if err != nil {
+		slog.Warn("source linking failed", "artifact_id", artifactID, "error", err)
+		errs = append(errs, fmt.Sprintf("source: %v", err))
+	} else {
+		totalEdges += srcEdges
+	}
+
 	slog.Info("artifact linking complete",
 		"artifact_id", artifactID,
 		"edges_created", totalEdges,
@@ -314,6 +323,50 @@ func (l *Linker) linkByTemporal(ctx context.Context, artifactID string) (int, er
 
 	if err := rows.Err(); err != nil {
 		return count, fmt.Errorf("temporal row iteration: %w", err)
+	}
+
+	return count, nil
+}
+
+// linkBySource creates edges between artifacts that share the same source_id,
+// implementing R-006 "source linking: link to other artifacts from same source/author/sender".
+func (l *Linker) linkBySource(ctx context.Context, artifactID string) (int, error) {
+	rows, err := l.Pool.Query(ctx, `
+		SELECT a2.id FROM artifacts a1, artifacts a2
+		WHERE a1.id = $1
+		AND a2.id != $1
+		AND a2.source_id = a1.source_id
+		AND a1.source_id != ''
+		AND a1.source_id != 'capture'
+		ORDER BY a2.created_at DESC
+		LIMIT 10
+	`, artifactID)
+	if err != nil {
+		return 0, fmt.Errorf("source query: %w", err)
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		var relatedID string
+		if err := rows.Scan(&relatedID); err != nil {
+			continue
+		}
+
+		// Normalize direction to prevent bidirectional duplicates
+		srcID, dstID := artifactID, relatedID
+		if srcID > dstID {
+			srcID, dstID = dstID, srcID
+		}
+
+		if err := l.createEdge(ctx, "artifact", srcID, "artifact", dstID, "SAME_SOURCE", 0.7); err != nil {
+			continue
+		}
+		count++
+	}
+
+	if err := rows.Err(); err != nil {
+		return count, fmt.Errorf("source row iteration: %w", err)
 	}
 
 	return count, nil

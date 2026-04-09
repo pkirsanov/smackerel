@@ -97,12 +97,20 @@ var DefaultSkipDomains = []string{
 }
 
 // ShouldSkip checks if a URL should be skipped for processing.
+// User-provided skip domains are matched against the extracted domain of the URL
+// (so "private.corp.com" matches "https://private.corp.com/page").
+// Default skip domains use prefix matching (for protocol-prefix entries like "chrome://").
 func ShouldSkip(url string, skipDomains []string) bool {
-	for _, skip := range skipDomains {
-		if len(url) >= len(skip) && url[:len(skip)] == skip {
-			return true
+	// Match user skip domains against the extracted domain
+	if len(skipDomains) > 0 {
+		domain := extractDomain(url)
+		for _, skip := range skipDomains {
+			if domain == skip {
+				return true
+			}
 		}
 	}
+	// Default skip domains use prefix matching (protocol-prefix entries)
 	for _, skip := range DefaultSkipDomains {
 		if len(url) >= len(skip) && url[:len(skip)] == skip {
 			return true
@@ -130,6 +138,57 @@ func ToRawArtifacts(entries []HistoryEntry) []connector.RawArtifact {
 		})
 	}
 	return artifacts
+}
+
+// ParseChromeHistorySince reads Chrome history entries with visit_time > cursor.
+// Unlike ParseChromeHistory, this has no row limit and orders ASC for cursor-based
+// incremental sync.
+func ParseChromeHistorySince(dbPath string, chromeTimeCursor int64) ([]HistoryEntry, error) {
+	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
+	if err != nil {
+		return nil, fmt.Errorf("open Chrome history: %w", err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query(`
+		SELECT u.url, u.title, v.visit_time, v.visit_duration
+		FROM urls u
+		JOIN visits v ON v.url = u.id
+		WHERE v.visit_time > ?
+		ORDER BY v.visit_time ASC
+	`, chromeTimeCursor)
+	if err != nil {
+		return nil, fmt.Errorf("query history since cursor: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []HistoryEntry
+	for rows.Next() {
+		var e HistoryEntry
+		var visitTime int64
+		var duration int64
+		if err := rows.Scan(&e.URL, &e.Title, &visitTime, &duration); err != nil {
+			continue
+		}
+		e.VisitTime = chromeTimeToGo(visitTime)
+		e.DwellTime = time.Duration(duration) * time.Microsecond
+		e.Domain = extractDomain(e.URL)
+		entries = append(entries, e)
+	}
+
+	return entries, nil
+}
+
+// GoTimeToChrome converts a Go time.Time to Chrome's microseconds-since-1601 format.
+func GoTimeToChrome(t time.Time) int64 {
+	const chromeEpochDiff = 11644473600000000
+	return t.UnixMicro() + chromeEpochDiff
+}
+
+// ChromeTimeToGo converts Chrome's microseconds-since-1601 to time.Time.
+// Exports the existing chromeTimeToGo for use by the connector.
+func ChromeTimeToGo(chromeTime int64) time.Time {
+	return chromeTimeToGo(chromeTime)
 }
 
 func chromeTimeToGo(chromeTime int64) time.Time {

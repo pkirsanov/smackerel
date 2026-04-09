@@ -198,6 +198,50 @@ func TestShouldSkipShortContent(t *testing.T) {
 	}
 }
 
+func TestAudioAttachmentInContent(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{
+		Title: "Voice Memo",
+		Attachments: []TakeoutAttachment{
+			{FilePath: "recording.3gp", MimeType: "audio/3gpp"},
+		},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.Normalize(note, "audio-1", "takeout")
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if artifact == nil {
+		t.Fatal("artifact should not be nil")
+	}
+	if !strings.Contains(artifact.RawContent, "[Audio attached: recording.3gp]") {
+		t.Errorf("content missing audio reference: %q", artifact.RawContent)
+	}
+}
+
+func TestNormalizerDelegatesToQualifier(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	q := NewQualifier()
+
+	// Verify normalizer and qualifier produce the same tier for various notes
+	cases := []TakeoutNote{
+		{IsPinned: true, UserEditedTimestampUsec: time.Now().UnixMicro()},
+		{Labels: []TakeoutLabel{{Name: "Work"}}, UserEditedTimestampUsec: time.Now().UnixMicro()},
+		{IsArchived: true, UserEditedTimestampUsec: time.Now().Add(-60 * 24 * time.Hour).UnixMicro()},
+		{TextContent: "recent", UserEditedTimestampUsec: time.Now().Add(-5 * 24 * time.Hour).UnixMicro()},
+	}
+
+	for i, note := range cases {
+		normTier := n.assignTier(&note)
+		qualTier := q.Evaluate(&note).Tier
+		if normTier != qualTier {
+			t.Errorf("case %d: normalizer tier=%q, qualifier tier=%q — should be identical", i, normTier, qualTier)
+		}
+	}
+}
+
 func TestEmptyTitleFallback(t *testing.T) {
 	n := NewNormalizer(KeepConfig{})
 	note := &TakeoutNote{
@@ -215,5 +259,74 @@ func TestEmptyTitleFallback(t *testing.T) {
 	}
 	if len(artifact.Title) > 50 {
 		t.Errorf("title length = %d, should be capped at 50", len(artifact.Title))
+	}
+}
+
+// --- Security Tests ---
+
+func TestAnnotationURLSchemeFiltering(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+
+	tests := []struct {
+		name        string
+		url         string
+		shouldExist bool
+	}{
+		{"https allowed", "https://example.com", true},
+		{"http allowed", "http://example.com", true},
+		{"mailto allowed", "mailto:user@example.com", true},
+		{"javascript blocked", "javascript:alert(1)", false},
+		{"data blocked", "data:text/html,<script>alert(1)</script>", false},
+		{"vbscript blocked", "vbscript:MsgBox(1)", false},
+		{"file blocked", "file:///etc/passwd", false},
+		{"ftp blocked", "ftp://evil.com/payload", false},
+		{"empty scheme blocked", "://no-scheme", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			note := &TakeoutNote{
+				TextContent:             "test",
+				Annotations:             []TakeoutAnnotation{{URL: tt.url, Title: "Link"}},
+				UserEditedTimestampUsec: time.Now().UnixMicro(),
+				CreatedTimestampUsec:    time.Now().UnixMicro(),
+			}
+			artifact, _ := n.Normalize(note, "scheme-test", "takeout")
+			if artifact == nil {
+				t.Fatal("artifact should not be nil")
+			}
+			containsURL := strings.Contains(artifact.RawContent, tt.url)
+			if tt.shouldExist && !containsURL {
+				t.Errorf("SECURITY: safe URL %q was stripped from content", tt.url)
+			}
+			if !tt.shouldExist && containsURL {
+				t.Errorf("SECURITY: dangerous URL scheme %q was included in content", tt.url)
+			}
+		})
+	}
+}
+
+func TestIsSafeURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		safe bool
+	}{
+		{"https://example.com/path", true},
+		{"http://localhost:8080", true},
+		{"mailto:user@example.com", true},
+		{"javascript:alert(document.cookie)", false},
+		{"data:text/html,<h1>XSS</h1>", false},
+		{"vbscript:MsgBox", false},
+		{"file:///etc/shadow", false},
+		{"", false},
+		{"://missing-scheme", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			if got := isSafeURL(tt.url); got != tt.safe {
+				t.Errorf("isSafeURL(%q) = %v, want %v", tt.url, got, tt.safe)
+			}
+		})
 	}
 }

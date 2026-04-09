@@ -26,7 +26,7 @@ func AssignTier(s TierSignals) Tier {
 	}
 
 	// Active captures (user-initiated) get full processing
-	if s.SourceID == "capture" || s.SourceID == "telegram" || s.SourceID == "browser" {
+	if s.SourceID == "capture" || s.SourceID == "telegram" || s.SourceID == "browser" || s.SourceID == "browser-history" {
 		return TierFull
 	}
 

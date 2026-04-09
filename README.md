@@ -252,7 +252,21 @@ Fetches videos via YouTube Data API v3 using the same OAuth2 token.
 
 #### RSS / Atom Feeds
 
-Subscribes to RSS and Atom feeds. Configure feed URLs through the settings UI or sync_state table. Each feed is polled on a schedule and new items are processed through the standard pipeline.
+Subscribes to RSS and Atom feeds. Each feed is polled on a schedule and new items are processed through the standard pipeline.
+
+```yaml
+connectors:
+  rss:
+    enabled: true
+    sync_schedule: "*/30 * * * *"    # every 30 minutes
+    source_config:
+      feed_urls:
+        - "https://example.com/feed.xml"
+        - "https://news.ycombinator.com/rss"
+        - "https://feeds.acast.com/public/shows/your-podcast"
+```
+
+Supports both RSS 2.0 and Atom formats. Podcast feeds work too — episode metadata is captured as artifacts. Items are deduped by URL content hash.
 
 #### Bookmarks Import
 
@@ -310,6 +324,96 @@ connectors:
 - Live sync via the unofficial gkeepapi Python library through the ML sidecar
 - Requires Google app password and explicit opt-in acknowledgment
 - Session caching for efficient re-authentication
+
+#### Hospitable (Short-Term Rentals)
+
+Syncs reservations, guest messages, property details, and reviews from [Hospitable](https://hospitable.com/) into Smackerel. Hospitable aggregates Airbnb, VRBO, Booking.com, and direct bookings — one connector covers all your OTA channels.
+
+**Status:** Spec complete, implementation pending. See `specs/012-hospitable-connector/`.
+
+1. Sign up or log in at [Hospitable](https://hospitable.com/)
+2. Generate a Personal Access Token from your Hospitable dashboard (see [developer docs](https://developer.hospitable.com/))
+3. Configure in `config/smackerel.yaml`:
+
+```yaml
+connectors:
+  hospitable:
+    enabled: true
+    access_token: "your-hospitable-personal-access-token"
+    sync_schedule: "0 */2 * * *"    # every 2 hours
+    initial_lookback_days: 90        # how far back on first sync
+    sync_properties: true
+    sync_reservations: true
+    sync_messages: true
+    sync_reviews: true
+```
+
+4. Regenerate config and restart: `./smackerel.sh config generate && ./smackerel.sh down && ./smackerel.sh up`
+
+**What gets synced:**
+- **Properties** → name, address, amenities, channel listings (tier: light)
+- **Reservations** → check-in/out, guest info, channel, financial summary (tier: standard)
+- **Guest messages** → full conversation threads per reservation (tier: full)
+- **Reviews** → ratings, review text, host responses (tier: full)
+
+Knowledge graph edges: reservations → properties (BELONGS_TO), messages → reservations (PART_OF), reviews → properties (REVIEW_OF). Artifacts captured during a guest's stay are automatically linked via DURING_STAY edges.
+
+### Google Voice — How to Capture
+
+Google Voice has no public API. Here's how to get Voice data into Smackerel:
+
+**Option A: Gmail forwarding (recommended — works today)**
+
+Google Voice transcribes voicemails and forwards them to your Gmail. If Gmail ingestion is enabled, voicemail transcripts are already being captured automatically — no extra setup needed. SMS messages can also be configured to forward to Gmail.
+
+1. Open [Google Voice settings](https://voice.google.com/settings)
+2. Under **Voicemail**, ensure "Get voicemail via email" is enabled
+3. Under **Messages**, enable "Forward messages to email" (if desired)
+4. Voicemail transcripts and SMS arrive in Gmail → captured by the Gmail connector
+
+**Option B: Google Takeout export (batch)**
+
+1. Go to [Google Takeout](https://takeout.google.com/)
+2. Select only "Google Voice" → export
+3. The export contains call history, voicemail audio files, and SMS as HTML
+4. Voicemail audio files can be captured via the voice note API endpoint for Whisper transcription
+5. SMS/call logs can be captured as text artifacts via the capture API
+
+### Weather & Government Alerts — Future Connectors
+
+The following public APIs are candidates for a future **environmental alerts** connector. All are free, require no API keys, and follow standard REST patterns that fit the existing connector architecture.
+
+#### NWS Weather Alerts (NOAA)
+
+The [National Weather Service API](https://api.weather.gov) provides weather alerts (watches, warnings, advisories) for any US location. No API key required — only a `User-Agent` header identifying your app.
+
+- **Endpoint:** `GET https://api.weather.gov/alerts/active?point={lat},{lng}`
+- **Data:** Severe weather warnings, flood watches, winter storm advisories, heat alerts, tornado warnings
+- **Auth:** None (User-Agent header only)
+- **Format:** GeoJSON / JSON-LD
+- **Sync pattern:** Poll every 15-30 minutes for active alerts in the user's area
+
+#### USGS Earthquake Catalog
+
+The [USGS Earthquake Hazards API](https://earthquake.usgs.gov/fdsnws/event/1/) provides real-time earthquake data globally. No API key required.
+
+- **Endpoint:** `GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&latitude={lat}&longitude={lng}&maxradiuskm=500&minmagnitude=3`
+- **Data:** Earthquake events with magnitude, depth, location, PAGER alert level, tsunami flag
+- **Auth:** None
+- **Format:** GeoJSON
+- **Sync pattern:** Poll every 5-10 minutes; filter by configurable radius and minimum magnitude
+
+#### NOAA Tsunami Warning Center
+
+- **Endpoint:** `GET https://api.weather.gov/alerts/active?event=Tsunami` (via NWS alerts API)
+- **Data:** Tsunami watches, warnings, advisories, and information statements
+- **Sync pattern:** Covered by the NWS alerts connector above (tsunami is an alert event type)
+
+#### Potential Design
+
+A single `environmental-alerts` connector could aggregate NWS weather alerts + USGS earthquakes + tsunami warnings based on the user's configured home location and travel destinations (from Maps data or reservation locations from Hospitable). Alerts would produce `alert/weather`, `alert/earthquake`, and `alert/tsunami` artifact types and automatically link to active reservations or upcoming trips via temporal-spatial edges.
+
+This is not yet specced. If you'd like it prioritized, it would follow the same pattern as the other connectors: `specs/013-environmental-alerts-connector/`.
 
 ## API Usage
 

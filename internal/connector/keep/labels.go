@@ -145,12 +145,13 @@ func (tm *TopicMapper) fuzzyMatch(label string, topics []string) (string, float6
 	return bestTopic, bestSim
 }
 
-// trigrams generates trigrams from a string.
+// trigrams generates trigrams from a string using rune-based slicing
+// to correctly handle multibyte UTF-8 characters.
 func trigrams(s string) map[string]bool {
-	padded := "  " + s + " "
+	padded := []rune("  " + s + " ")
 	t := make(map[string]bool)
 	for i := 0; i <= len(padded)-3; i++ {
-		t[padded[i:i+3]] = true
+		t[string(padded[i:i+3])] = true
 	}
 	return t
 }

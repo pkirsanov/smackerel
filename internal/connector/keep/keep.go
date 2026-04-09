@@ -201,7 +201,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			slog.Warn("gkeepapi sync failed in hybrid mode, continuing with takeout results", "error", err)
 		} else {
 			allArtifacts = append(allArtifacts, gkeepArtifacts...)
-			if gkeepCur != "" && gkeepCur > newCursor {
+			if gkeepCur != "" && newCursor != "" {
+				gkeepTime, gErr := time.Parse(time.RFC3339, gkeepCur)
+				newTime, nErr := time.Parse(time.RFC3339, newCursor)
+				if gErr == nil && nErr == nil && gkeepTime.After(newTime) {
+					newCursor = gkeepCur
+				}
+			} else if gkeepCur != "" {
 				newCursor = gkeepCur
 			}
 			syncErrors += gkeepErrs
@@ -244,8 +250,15 @@ func (c *Connector) syncTakeout(ctx context.Context, cursor string) ([]connector
 	filtered, newCursor := c.parser.FilterByCursor(notes, cursor)
 
 	var artifacts []connector.RawArtifact
+	// Accumulate tier counts locally to avoid per-note lock contention
+	localTierCounts := make(map[Tier]int)
+
 	for i := range filtered {
-		noteID := c.parser.NoteID(&filtered[i], fmt.Sprintf("%s/%s.json", importDir, filtered[i].Title))
+		if err := ctx.Err(); err != nil {
+			return artifacts, cursor, 0, fmt.Errorf("sync cancelled: %w", err)
+		}
+
+		noteID := c.parser.NoteID(&filtered[i], filtered[i].SourceFile)
 		if noteID == "" {
 			noteID = fmt.Sprintf("keep-note-%d", i)
 		}
@@ -257,17 +270,13 @@ func (c *Connector) syncTakeout(ctx context.Context, cursor string) ([]connector
 		}
 		if artifact == nil {
 			// Skipped (trashed, archived, etc.)
-			c.mu.Lock()
-			c.tierCounts[TierSkip]++
-			c.mu.Unlock()
+			localTierCounts[TierSkip]++
 			continue
 		}
 
-		// Track tier counts
+		// Track tier counts locally (no lock needed)
 		if tierStr, ok := artifact.Metadata["processing_tier"].(string); ok {
-			c.mu.Lock()
-			c.tierCounts[Tier(tierStr)]++
-			c.mu.Unlock()
+			localTierCounts[Tier(tierStr)]++
 		}
 
 		// Publish artifact to NATS for pipeline processing
@@ -282,6 +291,13 @@ func (c *Connector) syncTakeout(ctx context.Context, cursor string) ([]connector
 
 		artifacts = append(artifacts, *artifact)
 	}
+
+	// Write accumulated tier counts under a single lock
+	c.mu.Lock()
+	for tier, count := range localTierCounts {
+		c.tierCounts[tier] += count
+	}
+	c.mu.Unlock()
 
 	// Mark export as processed
 	c.processedExports[importDir] = true

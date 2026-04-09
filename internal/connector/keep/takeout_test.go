@@ -332,3 +332,135 @@ func TestCorruptedJSONDoesNotCrash(t *testing.T) {
 		t.Errorf("errors = %d, want 3", len(errors))
 	}
 }
+
+func TestParseExportPreservesSourceFile(t *testing.T) {
+	dir := t.TempDir()
+	writeTestJSON(t, dir, "unique-filename-abc.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Content", "title": "Duplicate Title",
+		"userEditedTimestampUsec": 1712000000000000, "createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+	writeTestJSON(t, dir, "unique-filename-def.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Content", "title": "Duplicate Title",
+		"userEditedTimestampUsec": 1712000000000000, "createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+
+	parser := NewTakeoutParser()
+	notes, _, err := parser.ParseExport(dir)
+	if err != nil {
+		t.Fatalf("parse export: %v", err)
+	}
+	if len(notes) != 2 {
+		t.Fatalf("notes = %d, want 2", len(notes))
+	}
+
+	// Both notes have same Title but different SourceFile
+	ids := make(map[string]bool)
+	for _, n := range notes {
+		if n.SourceFile == "" {
+			t.Error("SourceFile should be populated by ParseExport")
+		}
+		id := parser.NoteID(&n, n.SourceFile)
+		if ids[id] {
+			t.Errorf("duplicate NoteID %q — SourceFile should prevent collisions", id)
+		}
+		ids[id] = true
+	}
+}
+
+func TestSourceFilePreservedThroughCursorFilter(t *testing.T) {
+	parser := NewTakeoutParser()
+
+	notes := []TakeoutNote{
+		{
+			TextContent:             "Note 1",
+			UserEditedTimestampUsec: time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC).UnixMicro(),
+			SourceFile:              "note-aaa.json",
+		},
+		{
+			TextContent:             "Note 2",
+			UserEditedTimestampUsec: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC).UnixMicro(),
+			SourceFile:              "note-bbb.json",
+		},
+	}
+
+	cursor := "2026-03-15T00:00:00Z"
+	filtered, _ := parser.FilterByCursor(notes, cursor)
+	if len(filtered) != 1 {
+		t.Fatalf("filtered = %d, want 1", len(filtered))
+	}
+	if filtered[0].SourceFile != "note-aaa.json" {
+		t.Errorf("SourceFile = %q, want note-aaa.json", filtered[0].SourceFile)
+	}
+}
+
+// --- Security Tests ---
+
+func TestParseExportRejectsSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	secretDir := t.TempDir()
+	writeTestJSON(t, secretDir, "secret.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "SECRET DATA", "title": "Secret",
+		"userEditedTimestampUsec": 1712000000000000, "createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+
+	// Create a symlink inside the export directory pointing to a file outside it
+	symPath := filepath.Join(dir, "link-to-secret.json")
+	if err := os.Symlink(filepath.Join(secretDir, "secret.json"), symPath); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+
+	// Also add a legitimate note to verify normal parsing still works
+	writeTestJSON(t, dir, "legitimate.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Normal note", "title": "Legit",
+		"userEditedTimestampUsec": 1712000000000000, "createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+
+	parser := NewTakeoutParser()
+	notes, parseErrors, err := parser.ParseExport(dir)
+	if err != nil {
+		t.Fatalf("ParseExport should not fail: %v", err)
+	}
+
+	// The symlink target should NOT be parsed — it must appear in the error list
+	if len(notes) != 1 {
+		t.Errorf("notes = %d, want 1 (legitimate note only)", len(notes))
+	}
+	if len(parseErrors) != 1 {
+		t.Errorf("errors = %d, want 1 (symlink rejected)", len(parseErrors))
+	}
+	for _, n := range notes {
+		if n.TextContent == "SECRET DATA" {
+			t.Fatal("SECURITY: symlink to external file was parsed — directory traversal is possible")
+		}
+	}
+}
+
+func TestParseNoteFileSizeLimit(t *testing.T) {
+	dir := t.TempDir()
+	// Create a file that exceeds maxNoteFileSize
+	path := filepath.Join(dir, "huge.json")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// Write just enough to trigger the size check (write a small header then truncate to size)
+	if err := f.Truncate(maxNoteFileSize + 1); err != nil {
+		f.Close()
+		t.Fatalf("truncate: %v", err)
+	}
+	f.Close()
+
+	parser := NewTakeoutParser()
+	_, err = parser.ParseNoteFile(path)
+	if err == nil {
+		t.Fatal("expected error for oversized file")
+	}
+}

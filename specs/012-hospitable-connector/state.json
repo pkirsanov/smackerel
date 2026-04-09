@@ -1,0 +1,90 @@
+{
+  "version": 3,
+  "featureDir": "specs/012-hospitable-connector",
+  "featureName": "Hospitable Connector",
+  "status": "done",
+  "workflowMode": "delivery-lockdown",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "complete",
+    "currentScope": null,
+    "runStartedAt": "2026-04-09T00:00:00Z",
+    "completedScopes": ["scope-01", "scope-02", "scope-03"],
+    "completedPhaseClaims": [
+      {
+        "phase": "analyze",
+        "agent": "bubbles.analyst",
+        "timestamp": "2026-04-09T00:00:00Z"
+      },
+      {
+        "phase": "bootstrap",
+        "agent": "bubbles.design",
+        "timestamp": "2026-04-09T00:00:00Z"
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-04-09T00:00:00Z"
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-09T00:00:00Z"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-09T00:00:00Z"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-09T00:00:00Z"
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "Created spec.md: Hospitable connector for STR data ingestion. 2 primary actors, 6 use cases, 22 Gherkin scenarios, 15 requirements, outcome contract. PAT auth, 4 resource types (properties, reservations, messages, reviews), incremental cursor sync."
+      },
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-09T12:00:00Z",
+        "runCompletedAt": "2026-04-09T12:00:00Z",
+        "summary": "Updated spec.md from code review findings: +7 requirements (R-016..R-022) for message sync gap, Retry-After parsing, property name cache, sender classification, URL population, message cursor isolation, rating precision. +4 improvement proposals (IMP-005..IMP-008) for calendar/pricing, inquiries, webhooks v2, MCP server. Updated non-goals with Future Considerations for confirmed API capabilities. Updated competitive analysis with 3 integration channels."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "Created design.md: API-based connector with 4 new files in internal/connector/hospitable/ (types.go, client.go, connector.go, normalizer.go). PAT Bearer auth, paginated fetch, exponential backoff on 429. JSON cursor per resource type. Edge hints for BELONGS_TO, PART_OF, REVIEW_OF, DURING_STAY. No new DB migrations, no new NATS streams."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "Created scopes.md: 3 scopes. Scope 1: API client, types, config (12 unit + 2 integration). Scope 2: Connector interface, normalizer, cursor, registration (14 unit + 3 integration + 2 e2e). Scope 3: Edge hints, cross-domain linking, partial failure, property name cache (8 unit + 4 integration + 2 e2e)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-01", "scope-02", "scope-03"],
+    "certifiedCompletedPhases": ["analyze", "bootstrap", "plan", "implement", "test", "validate"]
+  }
+}

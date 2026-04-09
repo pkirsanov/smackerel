@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from app.keep_bridge import authenticate, handle_sync_request, serialize_note
 from app.ocr import _ocr_cache, check_cache, handle_ocr_request, store_cache
+from app.ocr import _validate_ollama_url
 
 
 # --- keep_bridge tests ---
@@ -83,10 +84,13 @@ class TestKeepBridge:
 
     def test_session_caching(self):
         """Two calls reuse the cached session."""
+        import time
+
         import app.keep_bridge as bridge
 
         bridge._keep_session = MagicMock()
         bridge._session_email = "test@example.com"
+        bridge._session_authenticated_at = time.time()  # Mark session as freshly authenticated
 
         with patch.dict(
             os.environ,
@@ -101,6 +105,7 @@ class TestKeepBridge:
         # Reset
         bridge._keep_session = None
         bridge._session_email = None
+        bridge._session_authenticated_at = 0.0
 
 
 # --- OCR tests ---
@@ -113,9 +118,7 @@ class TestOCR:
         """Known image hash returns cached text."""
         _ocr_cache["abc123"] = {"text": "Meeting room layout", "engine": "tesseract"}
 
-        result = asyncio.run(
-            handle_ocr_request({"image_hash": "abc123", "image_data": ""})
-        )
+        result = asyncio.run(handle_ocr_request({"image_hash": "abc123", "image_data": ""}))
         assert result["cached"] is True
         assert result["text"] == "Meeting room layout"
 
@@ -126,9 +129,7 @@ class TestOCR:
         """Unknown image hash runs OCR."""
         _ocr_cache.clear()
 
-        result = asyncio.run(
-            handle_ocr_request({"image_hash": "unknown", "image_data": ""})
-        )
+        result = asyncio.run(handle_ocr_request({"image_hash": "unknown", "image_data": ""}))
         assert result["cached"] is False
 
     def test_both_ocr_fail_returns_ok(self):
@@ -185,3 +186,121 @@ class TestOCR:
             assert "Ollama" in result["text"]
 
         _ocr_cache.clear()
+
+
+# --- Security Tests ---
+
+
+class TestSecurityOCR:
+    """Security tests for the OCR pipeline."""
+
+    def test_ssrf_javascript_scheme_rejected(self):
+        """SSRF: javascript: scheme in OLLAMA_URL must be rejected."""
+        import pytest
+
+        with pytest.raises(ValueError, match="http or https"):
+            _validate_ollama_url("javascript:alert(1)")
+
+    def test_ssrf_file_scheme_rejected(self):
+        """SSRF: file:// scheme in OLLAMA_URL must be rejected."""
+        import pytest
+
+        with pytest.raises(ValueError, match="http or https"):
+            _validate_ollama_url("file:///etc/passwd")
+
+    def test_ssrf_ftp_scheme_rejected(self):
+        """SSRF: ftp:// scheme in OLLAMA_URL must be rejected."""
+        import pytest
+
+        with pytest.raises(ValueError, match="http or https"):
+            _validate_ollama_url("ftp://evil.com/payload")
+
+    def test_ssrf_gopher_scheme_rejected(self):
+        """SSRF: gopher:// scheme in OLLAMA_URL must be rejected."""
+        import pytest
+
+        with pytest.raises(ValueError, match="http or https"):
+            _validate_ollama_url("gopher://internal:25")
+
+    def test_ssrf_empty_scheme_rejected(self):
+        """SSRF: empty/missing scheme in OLLAMA_URL must be rejected."""
+        import pytest
+
+        with pytest.raises(ValueError, match="http or https"):
+            _validate_ollama_url("no-scheme-at-all")
+
+    def test_ssrf_no_hostname_rejected(self):
+        """SSRF: URL with no hostname must be rejected."""
+        import pytest
+
+        with pytest.raises(ValueError, match="valid hostname"):
+            _validate_ollama_url("http://")
+
+    def test_valid_http_allowed(self):
+        """Valid http URL passes validation."""
+        assert _validate_ollama_url("http://localhost:11434") == "http://localhost:11434"
+
+    def test_valid_https_allowed(self):
+        """Valid https URL passes validation."""
+        assert _validate_ollama_url("https://ollama.internal:443") == "https://ollama.internal:443"
+
+    def test_image_size_limit(self):
+        """Oversized base64 image data must be rejected."""
+        _ocr_cache.clear()
+        huge_data = "A" * (10 * 1024 * 1024 + 1)
+        result = asyncio.run(
+            handle_ocr_request({"image_hash": "huge", "image_data": huge_data})
+        )
+        assert result["status"] == "error"
+        assert "too large" in result["error"]
+
+
+class TestSecurityKeepBridge:
+    """Security tests for the Keep bridge."""
+
+    def test_error_response_does_not_leak_credentials(self):
+        """Auth error NATS response must NOT contain raw exception details."""
+        import app.keep_bridge as bridge
+
+        bridge._keep_session = None
+        bridge._session_email = None
+        bridge._session_authenticated_at = 0.0
+
+        with patch.dict(
+            os.environ,
+            {"KEEP_GOOGLE_EMAIL": "", "KEEP_GOOGLE_APP_PASSWORD": ""},
+        ):
+            result = asyncio.run(handle_sync_request({"cursor": ""}))
+            assert result["status"] == "error"
+            err_msg = result["error"]
+            # Must be a sanitized message, not a raw exception string
+            assert "KEEP_GOOGLE_APP_PASSWORD" not in err_msg
+            assert "password" not in err_msg.lower() or err_msg == "gkeepapi authentication failed"
+
+    def test_sync_retry_error_does_not_leak_internals(self):
+        """Sync failure after retry must use sanitized error message."""
+        import time
+
+        import app.keep_bridge as bridge
+
+        mock_keep = MagicMock()
+        mock_keep.sync.side_effect = Exception("internal timeout at db:5432 connection refused")
+        bridge._keep_session = mock_keep
+        bridge._session_email = "test@example.com"
+        bridge._session_authenticated_at = time.time()
+
+        with patch.dict(
+            os.environ,
+            {"KEEP_GOOGLE_EMAIL": "test@example.com", "KEEP_GOOGLE_APP_PASSWORD": "secret123"},
+        ):
+            with patch.object(bridge, "authenticate", return_value=mock_keep):
+                result = asyncio.run(handle_sync_request({"cursor": ""}))
+                assert result["status"] == "error"
+                err_msg = result["error"]
+                # Must NOT contain internal infrastructure details
+                assert "db:5432" not in err_msg
+                assert "connection refused" not in err_msg
+
+        bridge._keep_session = None
+        bridge._session_email = None
+        bridge._session_authenticated_at = 0.0

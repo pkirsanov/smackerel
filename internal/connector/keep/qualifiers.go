@@ -8,12 +8,14 @@ import (
 // Qualifier evaluates Keep note properties and assigns processing tiers.
 type Qualifier struct {
 	recentThresholdDays int
+	parser              *TakeoutParser
 }
 
 // NewQualifier creates a new source qualifier engine.
 func NewQualifier() *Qualifier {
 	return &Qualifier{
 		recentThresholdDays: 30,
+		parser:              NewTakeoutParser(),
 	}
 }
 
@@ -43,8 +45,7 @@ func (q *Qualifier) Evaluate(note *TakeoutNote) QualifierResult {
 		}
 	}
 
-	parser := NewTakeoutParser()
-	modifiedAt := parser.ModifiedAt(note)
+	modifiedAt := q.parser.ModifiedAt(note)
 	daysSinceModified := time.Since(modifiedAt).Hours() / 24
 
 	if daysSinceModified <= float64(q.recentThresholdDays) {

@@ -6,6 +6,7 @@ This is an OPTIONAL, opt-in feature that uses an UNOFFICIAL Google API.
 
 import logging
 import os
+import time
 from typing import Any
 
 logger = logging.getLogger("smackerel-ml.keep-bridge")
@@ -13,6 +14,18 @@ logger = logging.getLogger("smackerel-ml.keep-bridge")
 # Cached gkeepapi session
 _keep_session = None
 _session_email = None
+_session_authenticated_at: float = 0.0
+
+# Session max age: re-authenticate after 50 minutes to avoid stale sessions.
+# gkeepapi sessions can expire server-side after extended inactivity.
+SESSION_MAX_AGE_SECONDS = 50 * 60
+
+
+def _is_session_expired() -> bool:
+    """Check if the cached session has exceeded its max age."""
+    if _session_authenticated_at == 0.0:
+        return True
+    return (time.time() - _session_authenticated_at) > SESSION_MAX_AGE_SECONDS
 
 
 def authenticate() -> Any:
@@ -20,8 +33,9 @@ def authenticate() -> Any:
 
     Uses KEEP_GOOGLE_EMAIL and KEEP_GOOGLE_APP_PASSWORD env vars.
     Caches the authenticated session for reuse across sync cycles.
+    Re-authenticates when the session exceeds SESSION_MAX_AGE_SECONDS.
     """
-    global _keep_session, _session_email
+    global _keep_session, _session_email, _session_authenticated_at
 
     email = os.environ.get("KEEP_GOOGLE_EMAIL")
     password = os.environ.get("KEEP_GOOGLE_APP_PASSWORD")
@@ -29,10 +43,13 @@ def authenticate() -> Any:
     if not email or not password:
         raise ValueError("KEEP_GOOGLE_EMAIL and KEEP_GOOGLE_APP_PASSWORD must be set for gkeepapi")
 
-    # Reuse cached session if same email
-    if _keep_session is not None and _session_email == email:
+    # Reuse cached session if same email and not expired
+    if _keep_session is not None and _session_email == email and not _is_session_expired():
         logger.info("Reusing cached gkeepapi session for %s", email)
         return _keep_session
+
+    if _keep_session is not None and _is_session_expired():
+        logger.info("gkeepapi session expired after %ds, re-authenticating", SESSION_MAX_AGE_SECONDS)
 
     try:
         import gkeepapi  # noqa: F811
@@ -41,6 +58,7 @@ def authenticate() -> Any:
         keep.login(email, password)
         _keep_session = keep
         _session_email = email
+        _session_authenticated_at = time.time()
         logger.info("Authenticated with gkeepapi for %s", email)
         return keep
     except ImportError:
@@ -48,6 +66,7 @@ def authenticate() -> Any:
     except Exception as exc:
         _keep_session = None
         _session_email = None
+        _session_authenticated_at = 0.0
         raise RuntimeError(f"gkeepapi authentication failed: {exc}") from exc
 
 
@@ -121,6 +140,7 @@ async def handle_sync_request(data: dict) -> dict:
     Returns:
         Response dict with 'status', 'notes', 'cursor', and optional 'error'.
     """
+    global _keep_session, _session_email, _session_authenticated_at
     cursor = data.get("cursor", "")
 
     try:
@@ -131,61 +151,82 @@ async def handle_sync_request(data: dict) -> dict:
             "status": "error",
             "notes": [],
             "cursor": cursor,
-            "error": str(exc),
+            "error": "gkeepapi authentication failed",
         }
 
-    try:
-        # Sync to get latest state
-        keep.sync()
+    for attempt in range(2):  # retry once on sync failure with re-auth
+        try:
+            # Sync to get latest state
+            keep.sync()
 
-        notes = []
-        for gnote in keep.all():
-            serialized = serialize_note(gnote)
+            notes = []
+            for gnote in keep.all():
+                serialized = serialize_note(gnote)
 
-            # Filter by cursor if provided
-            if cursor and serialized["modified_usec"] > 0:
-                import datetime
+                # Filter by cursor if provided
+                if cursor and serialized["modified_usec"] > 0:
+                    import datetime
 
-                cursor_time = datetime.datetime.fromisoformat(cursor.replace("Z", "+00:00"))
-                cursor_usec = int(cursor_time.timestamp() * 1_000_000)
-                if serialized["modified_usec"] <= cursor_usec:
-                    continue
+                    cursor_time = datetime.datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+                    cursor_usec = int(cursor_time.timestamp() * 1_000_000)
+                    if serialized["modified_usec"] <= cursor_usec:
+                        continue
 
-            notes.append(serialized)
+                notes.append(serialized)
 
-        # Determine new cursor from latest modified time
-        new_cursor = cursor
-        if notes:
-            latest_usec = max(n["modified_usec"] for n in notes)
-            if latest_usec > 0:
-                import datetime
+            # Determine new cursor from latest modified time
+            new_cursor = cursor
+            if notes:
+                latest_usec = max(n["modified_usec"] for n in notes)
+                if latest_usec > 0:
+                    import datetime
 
-                new_cursor = (
-                    datetime.datetime.fromtimestamp(
-                        latest_usec / 1_000_000,
-                        tz=datetime.timezone.utc,
+                    new_cursor = (
+                        datetime.datetime.fromtimestamp(
+                            latest_usec / 1_000_000,
+                            tz=datetime.timezone.utc,
+                        )
+                        .isoformat()
+                        .replace("+00:00", "Z")
                     )
-                    .isoformat()
-                    .replace("+00:00", "Z")
-                )
 
-        logger.info(
-            "gkeepapi sync complete: %d notes fetched, cursor=%s",
-            len(notes),
-            new_cursor,
-        )
+            logger.info(
+                "gkeepapi sync complete: %d notes fetched, cursor=%s",
+                len(notes),
+                new_cursor,
+            )
 
-        return {
-            "status": "ok",
-            "notes": notes,
-            "cursor": new_cursor,
-        }
+            return {
+                "status": "ok",
+                "notes": notes,
+                "cursor": new_cursor,
+            }
 
-    except Exception as exc:
-        logger.error("gkeepapi sync failed: %s", exc)
-        return {
-            "status": "error",
-            "notes": [],
-            "cursor": cursor,
-            "error": str(exc),
-        }
+        except Exception as exc:
+            if attempt == 0:
+                # First failure: invalidate session and retry with fresh auth
+                logger.warning("gkeepapi sync failed (attempt %d), re-authenticating: %s", attempt + 1, exc)
+                _keep_session = None
+                _session_email = None
+                _session_authenticated_at = 0.0
+                try:
+                    keep = authenticate()
+                except Exception as reauth_exc:
+                    logger.error("gkeepapi re-authentication failed: %s", reauth_exc)
+                    return {
+                        "status": "error",
+                        "notes": [],
+                        "cursor": cursor,
+                        "error": "gkeepapi re-authentication failed",
+                    }
+            else:
+                logger.error("gkeepapi sync failed after retry: %s", exc)
+                return {
+                    "status": "error",
+                    "notes": [],
+                    "cursor": cursor,
+                    "error": "gkeepapi sync failed after retry",
+                }
+
+    # Should not reach here, but guard anyway
+    return {"status": "error", "notes": [], "cursor": cursor, "error": "unexpected retry exhaustion"}

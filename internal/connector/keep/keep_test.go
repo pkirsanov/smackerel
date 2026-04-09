@@ -245,3 +245,40 @@ func testConnectorConfig(importDir, mode string, gkeepEnabled, gkeepAck bool) co
 		},
 	}
 }
+
+func TestSyncSameTitleDifferentFiles(t *testing.T) {
+	dir := t.TempDir()
+	// Two notes with identical titles but different filenames
+	writeTestJSON(t, dir, "meeting-2026-04-01.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "First meeting notes with enough content for min length",
+		"title": "Meeting Notes", "userEditedTimestampUsec": 1712000000000000,
+		"createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+	writeTestJSON(t, dir, "meeting-2026-04-03.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Second meeting notes with enough content for min length",
+		"title": "Meeting Notes", "userEditedTimestampUsec": 1712000000000000,
+		"createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+
+	c := New("google-keep")
+	if err := c.Connect(context.Background(), testConnectorConfig(dir, "takeout", false, false)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("artifacts = %d, want 2", len(artifacts))
+	}
+
+	// NoteIDs must be unique despite same title
+	if artifacts[0].SourceRef == artifacts[1].SourceRef {
+		t.Errorf("NoteIDs collide: both are %q — filenames should produce unique IDs", artifacts[0].SourceRef)
+	}
+}

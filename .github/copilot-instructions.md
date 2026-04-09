@@ -92,6 +92,21 @@ Regenerate all config: `./smackerel.sh config generate`
 
 **ALL configuration values MUST originate from `config/smackerel.yaml`. Zero hardcoded ports, URLs, hostnames, or fallback defaults anywhere in the codebase.**
 
+### Secrets Management
+
+| Aspect | Details |
+|--------|---------|
+| **Dev secrets** | Inline in `config/smackerel.yaml` as empty-string placeholders (except dev DB password) |
+| **Secret fields** | `runtime.auth_token`, `llm.api_key`, `telegram.bot_token`, connector `access_token` fields |
+| **Gitignored** | `config/generated/` directory — resolved env files with secrets are not committed |
+| **Production** | MUST set all secret values via environment variables or populate `smackerel.yaml` before `config generate` |
+
+**Rules:**
+- Empty-string placeholders in `smackerel.yaml` are the intended dev pattern — services must validate at startup
+- Dev DB password (`smackerel`) is acceptable for local dev only — override for any non-local deployment
+- `auth_token`, `api_key`, `bot_token` MUST be set before runtime — services should fail-loud if empty
+- Generated env files (`config/generated/*.env`) contain resolved secrets — NEVER commit them
+
 | Language | FORBIDDEN | REQUIRED |
 |----------|-----------|----------|
 | **Shell** | `${VAR:-default}` with fallback | `${VAR:?error message}` fail-loud |

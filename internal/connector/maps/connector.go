@@ -1,0 +1,411 @@
+package maps
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/smackerel/smackerel/internal/connector"
+)
+
+// Compile-time interface check.
+var _ connector.Connector = (*Connector)(nil)
+
+// MapsConfig holds parsed Maps-specific configuration.
+type MapsConfig struct {
+	ImportDir        string
+	WatchInterval    time.Duration
+	ArchiveProcessed bool
+	MinDistanceM     float64
+	MinDurationMin   float64
+	DefaultTier      string
+
+	// Cluster/commute/trip/link config (used by future scopes)
+	LocationRadiusM       float64
+	HomeDetection         string
+	CommuteMinOccurrences int
+	CommuteWindowDays     int
+	CommuteWeekdaysOnly   bool
+	TripMinDistanceKm     float64
+	TripMinOvernightHours float64
+	LinkTimeExtendMin     float64
+	LinkProximityRadiusM  float64
+}
+
+// Connector implements the Google Maps Timeline connector.
+type Connector struct {
+	id     string
+	health connector.HealthStatus
+	mu     sync.RWMutex
+	config MapsConfig
+
+	// Sync metadata for health reporting
+	lastSyncTime   time.Time
+	lastSyncCount  int
+	lastSyncErrors int
+	lastTrailCount int
+}
+
+// New creates a new Google Maps Timeline connector.
+func New(id string) *Connector {
+	return &Connector{
+		id:     id,
+		health: connector.HealthDisconnected,
+	}
+}
+
+func (c *Connector) ID() string { return c.id }
+
+func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
+	mapsCfg, err := parseMapsConfig(config)
+	if err != nil {
+		c.mu.Lock()
+		c.health = connector.HealthError
+		c.mu.Unlock()
+		return err
+	}
+
+	// Validate import directory exists and is readable.
+	info, err := os.Stat(mapsCfg.ImportDir)
+	if os.IsNotExist(err) {
+		c.mu.Lock()
+		c.health = connector.HealthError
+		c.mu.Unlock()
+		return fmt.Errorf("import directory does not exist: %s", mapsCfg.ImportDir)
+	}
+	if err != nil {
+		c.mu.Lock()
+		c.health = connector.HealthError
+		c.mu.Unlock()
+		return fmt.Errorf("import directory stat error: %w", err)
+	}
+	if !info.IsDir() {
+		c.mu.Lock()
+		c.health = connector.HealthError
+		c.mu.Unlock()
+		return fmt.Errorf("import directory is not a directory: %s", mapsCfg.ImportDir)
+	}
+
+	c.mu.Lock()
+	c.config = mapsCfg
+	c.health = connector.HealthHealthy
+	c.mu.Unlock()
+
+	slog.Info("google maps timeline connector connected",
+		"import_dir", mapsCfg.ImportDir,
+		"archive_processed", mapsCfg.ArchiveProcessed,
+		"min_distance_m", mapsCfg.MinDistanceM,
+		"min_duration_min", mapsCfg.MinDurationMin,
+	)
+	return nil
+}
+
+func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	c.mu.Lock()
+	c.health = connector.HealthSyncing
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		c.lastSyncTime = time.Now()
+		if c.lastSyncErrors > 0 && c.lastSyncCount == 0 {
+			c.health = connector.HealthError
+		} else {
+			c.health = connector.HealthHealthy
+		}
+		c.mu.Unlock()
+	}()
+
+	processedFiles := parseCursor(cursor)
+
+	newFiles, err := c.findNewFiles(processedFiles)
+	if err != nil {
+		c.mu.Lock()
+		c.lastSyncErrors = 1
+		c.mu.Unlock()
+		return nil, cursor, fmt.Errorf("scan import directory: %w", err)
+	}
+
+	if len(newFiles) == 0 {
+		return nil, cursor, nil
+	}
+
+	var allArtifacts []connector.RawArtifact
+	var processedThisCycle []string
+	syncErrors := 0
+	trailCount := 0
+
+	for _, file := range newFiles {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			slog.Warn("failed to read takeout file", "file", file, "error", err)
+			syncErrors++
+			continue
+		}
+
+		activities, err := ParseTakeoutJSON(data)
+		if err != nil {
+			slog.Warn("failed to parse takeout file", "file", file, "error", err)
+			syncErrors++
+			continue
+		}
+
+		filename := filepath.Base(file)
+		for _, activity := range activities {
+			if activity.DistanceKm*1000 < c.config.MinDistanceM {
+				continue
+			}
+			if activity.DurationMin < c.config.MinDurationMin {
+				continue
+			}
+
+			artifact := NormalizeActivity(activity, filename, c.config)
+			allArtifacts = append(allArtifacts, artifact)
+
+			if IsTrailQualified(activity) {
+				trailCount++
+			}
+		}
+
+		processedThisCycle = append(processedThisCycle, filename)
+
+		if c.config.ArchiveProcessed {
+			if err := c.archiveFile(file); err != nil {
+				slog.Warn("failed to archive processed file", "file", file, "error", err)
+			}
+		}
+	}
+
+	allProcessed := append(processedFiles, processedThisCycle...)
+	newCursor := encodeCursor(allProcessed)
+
+	c.mu.Lock()
+	c.lastSyncCount = len(allArtifacts)
+	c.lastSyncErrors = syncErrors
+	c.lastTrailCount = trailCount
+	c.mu.Unlock()
+
+	slog.Info("google maps timeline sync complete",
+		"new_files", len(newFiles),
+		"artifacts", len(allArtifacts),
+		"trail_qualified", trailCount,
+		"errors", syncErrors,
+	)
+
+	return allArtifacts, newCursor, nil
+}
+
+func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.health
+}
+
+func (c *Connector) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.health = connector.HealthDisconnected
+	slog.Info("google maps timeline connector closed")
+	return nil
+}
+
+// findNewFiles scans the import directory for .json files not in the processed set.
+func (c *Connector) findNewFiles(processedFiles []string) ([]string, error) {
+	processed := make(map[string]bool, len(processedFiles))
+	for _, f := range processedFiles {
+		processed[f] = true
+	}
+
+	entries, err := os.ReadDir(c.config.ImportDir)
+	if err != nil {
+		return nil, fmt.Errorf("read import directory: %w", err)
+	}
+
+	var newFiles []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if strings.ToLower(filepath.Ext(name)) != ".json" {
+			continue
+		}
+
+		if processed[name] {
+			continue
+		}
+
+		newFiles = append(newFiles, filepath.Join(c.config.ImportDir, name))
+	}
+	return newFiles, nil
+}
+
+// archiveFile moves a processed file to the archive/ subdirectory.
+func (c *Connector) archiveFile(filePath string) error {
+	archiveDir := filepath.Join(c.config.ImportDir, "archive")
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+		return fmt.Errorf("create archive directory: %w", err)
+	}
+	dest := filepath.Join(archiveDir, filepath.Base(filePath))
+	if err := os.Rename(filePath, dest); err != nil {
+		return fmt.Errorf("move file to archive: %w", err)
+	}
+	slog.Debug("archived processed file", "from", filePath, "to", dest)
+	return nil
+}
+
+// parseCursor splits a pipe-delimited cursor into a list of processed filenames.
+func parseCursor(cursor string) []string {
+	if cursor == "" {
+		return nil
+	}
+	return strings.Split(cursor, "|")
+}
+
+// encodeCursor joins processed filenames into a pipe-delimited cursor string.
+func encodeCursor(files []string) string {
+	return strings.Join(files, "|")
+}
+
+// parseMapsConfig extracts Maps-specific fields from ConnectorConfig.SourceConfig.
+func parseMapsConfig(config connector.ConnectorConfig) (MapsConfig, error) {
+	cfg := MapsConfig{
+		WatchInterval:         5 * time.Minute,
+		ArchiveProcessed:      false,
+		MinDistanceM:          100,
+		MinDurationMin:        2,
+		DefaultTier:           "standard",
+		LocationRadiusM:       500,
+		HomeDetection:         "frequency",
+		CommuteMinOccurrences: 3,
+		CommuteWindowDays:     14,
+		CommuteWeekdaysOnly:   true,
+		TripMinDistanceKm:     50,
+		TripMinOvernightHours: 18,
+		LinkTimeExtendMin:     30,
+		LinkProximityRadiusM:  1000,
+	}
+
+	sc := config.SourceConfig
+
+	// Import directory (required)
+	if importDir, ok := sc["import_dir"].(string); ok && importDir != "" {
+		cfg.ImportDir = importDir
+	} else {
+		return MapsConfig{}, fmt.Errorf("import directory is required")
+	}
+
+	// Watch interval
+	if wi, ok := sc["watch_interval"].(string); ok && wi != "" {
+		d, err := time.ParseDuration(wi)
+		if err != nil {
+			return MapsConfig{}, fmt.Errorf("invalid watch_interval %q: %w", wi, err)
+		}
+		cfg.WatchInterval = d
+	}
+
+	// Archive processed
+	if ap, ok := sc["archive_processed"].(bool); ok {
+		cfg.ArchiveProcessed = ap
+	}
+
+	// Min distance
+	if md, ok := sc["min_distance_m"]; ok {
+		switch v := md.(type) {
+		case float64:
+			if v < 0 {
+				return MapsConfig{}, fmt.Errorf("min_distance_m must be non-negative, got %v", v)
+			}
+			cfg.MinDistanceM = v
+		case int:
+			if v < 0 {
+				return MapsConfig{}, fmt.Errorf("min_distance_m must be non-negative, got %v", v)
+			}
+			cfg.MinDistanceM = float64(v)
+		}
+	}
+
+	// Min duration
+	if md, ok := sc["min_duration_min"]; ok {
+		switch v := md.(type) {
+		case float64:
+			if v < 0 {
+				return MapsConfig{}, fmt.Errorf("min_duration_min must be non-negative, got %v", v)
+			}
+			cfg.MinDurationMin = v
+		case int:
+			if v < 0 {
+				return MapsConfig{}, fmt.Errorf("min_duration_min must be non-negative, got %v", v)
+			}
+			cfg.MinDurationMin = float64(v)
+		}
+	}
+
+	// Default tier
+	if dt, ok := sc["default_tier"].(string); ok && dt != "" {
+		cfg.DefaultTier = dt
+	}
+
+	// Clustering config
+	if lr, ok := sc["location_radius_m"]; ok {
+		if v, ok := lr.(float64); ok {
+			cfg.LocationRadiusM = v
+		}
+	}
+	if hd, ok := sc["home_detection"].(string); ok && hd != "" {
+		cfg.HomeDetection = hd
+	}
+
+	// Commute config
+	if cmo, ok := sc["commute_min_occurrences"]; ok {
+		switch v := cmo.(type) {
+		case float64:
+			cfg.CommuteMinOccurrences = int(v)
+		case int:
+			cfg.CommuteMinOccurrences = v
+		}
+	}
+	if cwd, ok := sc["commute_window_days"]; ok {
+		switch v := cwd.(type) {
+		case float64:
+			cfg.CommuteWindowDays = int(v)
+		case int:
+			cfg.CommuteWindowDays = v
+		}
+	}
+	if cwo, ok := sc["commute_weekdays_only"].(bool); ok {
+		cfg.CommuteWeekdaysOnly = cwo
+	}
+
+	// Trip config
+	if tmd, ok := sc["trip_min_distance_km"]; ok {
+		if v, ok := tmd.(float64); ok {
+			cfg.TripMinDistanceKm = v
+		}
+	}
+	if tmo, ok := sc["trip_min_overnight_hours"]; ok {
+		if v, ok := tmo.(float64); ok {
+			cfg.TripMinOvernightHours = v
+		}
+	}
+
+	// Link config
+	if lte, ok := sc["link_time_extend_min"]; ok {
+		if v, ok := lte.(float64); ok {
+			cfg.LinkTimeExtendMin = v
+		}
+	}
+	if lpr, ok := sc["link_proximity_radius_m"]; ok {
+		if v, ok := lpr.(float64); ok {
+			cfg.LinkProximityRadiusM = v
+		}
+	}
+
+	return cfg, nil
+}

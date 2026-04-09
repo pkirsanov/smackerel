@@ -14,9 +14,13 @@ import (
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector"
+	bookmarksConnector "github.com/smackerel/smackerel/internal/connector/bookmarks"
+	browserConnector "github.com/smackerel/smackerel/internal/connector/browser"
 	caldavConnector "github.com/smackerel/smackerel/internal/connector/caldav"
+	hospitableConnector "github.com/smackerel/smackerel/internal/connector/hospitable"
 	imapConnector "github.com/smackerel/smackerel/internal/connector/imap"
 	keepConnector "github.com/smackerel/smackerel/internal/connector/keep"
+	mapsConnector "github.com/smackerel/smackerel/internal/connector/maps"
 	rssConnector "github.com/smackerel/smackerel/internal/connector/rss"
 	youtubeConnector "github.com/smackerel/smackerel/internal/connector/youtube"
 	"github.com/smackerel/smackerel/internal/db"
@@ -127,11 +131,75 @@ func run() error {
 	ytConn := youtubeConnector.New("youtube")
 	rssConn := rssConnector.New("rss", nil) // feed URLs configured via source_config
 	keepConn := keepConnector.New("google-keep")
+	bmConn := bookmarksConnector.NewConnector("bookmarks")
+	browserHistConn := browserConnector.New("browser-history")
+	mapsConn := mapsConnector.New("google-maps-timeline")
+	hospitableConn := hospitableConnector.New("hospitable")
 	registry.Register(imapConn)
 	registry.Register(caldavConn)
 	registry.Register(ytConn)
 	registry.Register(rssConn)
 	registry.Register(keepConn)
+	registry.Register(bmConn)
+	registry.Register(browserHistConn)
+	registry.Register(mapsConn)
+	registry.Register(hospitableConn)
+
+	// Auto-start bookmarks connector (no OAuth needed — file-based import)
+	if importDir := os.Getenv("BOOKMARKS_IMPORT_DIR"); importDir != "" {
+		bmConfig := connector.ConnectorConfig{
+			AuthType:       "none",
+			Enabled:        true,
+			ProcessingTier: "full",
+			SourceConfig: map[string]interface{}{
+				"import_dir":        importDir,
+				"archive_processed": true,
+			},
+		}
+		if err := bmConn.Connect(ctx, bmConfig); err == nil {
+			supervisor.StartConnector(ctx, "bookmarks")
+			slog.Info("bookmarks connector started", "import_dir", importDir)
+		} else {
+			slog.Warn("bookmarks connector failed to start", "error", err)
+		}
+	}
+
+	// Auto-start browser history connector (no OAuth needed — file-based)
+	if histPath := os.Getenv("BROWSER_HISTORY_PATH"); histPath != "" {
+		browserCfg := connector.ConnectorConfig{
+			AuthType: "none",
+			Enabled:  true,
+			SourceConfig: map[string]interface{}{
+				"history_path": histPath,
+			},
+		}
+		if err := browserHistConn.Connect(ctx, browserCfg); err == nil {
+			supervisor.StartConnector(ctx, "browser-history")
+			slog.Info("browser history connector started", "history_path", histPath)
+		} else {
+			slog.Warn("browser history connector failed to start", "error", err)
+		}
+	}
+
+	// Auto-start Google Maps Timeline connector (no OAuth needed — file-based Takeout import)
+	if mapsDir := os.Getenv("MAPS_IMPORT_DIR"); mapsDir != "" {
+		mapsCfg := connector.ConnectorConfig{
+			AuthType: "none",
+			Enabled:  true,
+			SourceConfig: map[string]interface{}{
+				"import_dir":        mapsDir,
+				"archive_processed": false,
+				"min_distance_m":    float64(100),
+				"min_duration_min":  float64(2),
+			},
+		}
+		if err := mapsConn.Connect(ctx, mapsCfg); err == nil {
+			supervisor.StartConnector(ctx, "google-maps-timeline")
+			slog.Info("google maps timeline connector started", "import_dir", mapsDir)
+		} else {
+			slog.Warn("google maps timeline connector failed to start", "error", err)
+		}
+	}
 
 	// Set up OAuth handler for connector authorization
 	// Auth token is used as the encryption key for OAuth tokens at rest (AES-256-GCM)

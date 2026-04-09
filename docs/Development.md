@@ -8,10 +8,10 @@ Committed:
 
 - `README.md`
 - `docs/smackerel.md`
-- `specs/` (001-008, all with spec, design, scopes, reports)
+- `specs/` (002-013, all with spec, design, scopes, reports)
 - `.github/`
 - `.specify/memory/`
-- Go core runtime sources under `cmd/` and `internal/` (51 source files, 40 test files)
+- Go core runtime sources under `cmd/` and `internal/` (62 source files, 48 test files)
 - Python ML sidecar sources under `ml/` (11 files, 2 test files)
 - `docker-compose.yml` with health checks, resource limits, restart policies, NATS auth
 - `config/smackerel.yaml`
@@ -28,7 +28,7 @@ Implemented runtime capabilities:
 - Knowledge graph linking (4 strategies: similarity, entity, topic, temporal) — wired into pipeline
 - Telegram bot (share-sheet, forwards, conversation assembly, media groups, 7 commands)
 - Web UI (HTMX semantic search, artifact detail, digest, topics, settings, status)
-- 10 passive connectors (Gmail API, Google Calendar API, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps)
+- 11 passive connectors (Gmail API, Google Calendar API, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps, Hospitable STR)
 - Intelligence engine (synthesis at 2AM, momentum hourly, resurfacing at 8AM, overdue alerts)
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)

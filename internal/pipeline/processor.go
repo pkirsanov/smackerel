@@ -133,8 +133,21 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 		return nil, fmt.Errorf("at least one of url, text, or voice_url is required")
 	}
 
-	// Step 2: Dedup check
+	// Step 2: Dedup check — by URL first (R-011), then by content hash
 	dedup := &DedupChecker{Pool: p.DB}
+
+	if req.URL != "" {
+		urlResult, err := dedup.CheckURL(ctx, req.URL)
+		if err != nil {
+			slog.Warn("URL dedup check failed, continuing", "error", err)
+		} else if urlResult != nil && urlResult.IsDuplicate {
+			return nil, &DuplicateError{
+				ExistingID: urlResult.ExistingID,
+				Title:      urlResult.Title,
+			}
+		}
+	}
+
 	dupResult, err := dedup.Check(ctx, extracted.ContentHash)
 	if err != nil {
 		slog.Warn("dedup check failed, continuing", "error", err)
@@ -263,9 +276,10 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 // HandleProcessedResult processes the result from the ML sidecar (artifacts.processed).
 func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProcessedPayload) error {
 	if !payload.Success {
-		// Mark artifact as metadata-only on LLM failure
+		// Mark artifact as metadata-only on LLM failure and set processing_status
+		// to 'failed' so it can be distinguished from still-pending artifacts.
 		_, err := p.DB.Exec(ctx, `
-			UPDATE artifacts SET processing_tier = 'metadata', updated_at = NOW()
+			UPDATE artifacts SET processing_tier = 'metadata', processing_status = 'failed', updated_at = NOW()
 			WHERE id = $1
 		`, payload.ArtifactID)
 		if err != nil {

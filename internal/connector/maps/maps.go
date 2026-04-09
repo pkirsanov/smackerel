@@ -3,6 +3,7 @@ package maps
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
 )
@@ -76,8 +77,18 @@ func ParseTakeoutJSON(data []byte) ([]TakeoutActivity, error) {
 			continue
 		}
 
-		startTime, _ := time.Parse(time.RFC3339, seg.Duration.StartTimestamp)
-		endTime, _ := time.Parse(time.RFC3339, seg.Duration.EndTimestamp)
+		startTime, err := time.Parse(time.RFC3339, seg.Duration.StartTimestamp)
+		if err != nil {
+			slog.Warn("skipping activity with unparseable start timestamp",
+				"timestamp", seg.Duration.StartTimestamp, "error", err)
+			continue
+		}
+		endTime, err := time.Parse(time.RFC3339, seg.Duration.EndTimestamp)
+		if err != nil {
+			slog.Warn("skipping activity with unparseable end timestamp",
+				"timestamp", seg.Duration.EndTimestamp, "error", err)
+			continue
+		}
 
 		actType := ClassifyActivity(seg.ActivityType, float64(seg.Distance)/1000.0)
 
@@ -123,11 +134,14 @@ func ClassifyActivity(googleType string, distanceKm float64) ActivityType {
 	}
 }
 
-// IsTrailQualified checks if an activity qualifies as a trail (>=2km walking/hiking/running).
+// IsTrailQualified checks if an activity qualifies as a trail.
+// Per R-404: walking/hiking/running >=2km OR >=30min, cycling >=5km.
 func IsTrailQualified(activity TakeoutActivity) bool {
 	switch activity.Type {
-	case ActivityWalk, ActivityHike, ActivityRun, ActivityCycle:
-		return activity.DistanceKm >= 2.0
+	case ActivityWalk, ActivityHike, ActivityRun:
+		return activity.DistanceKm >= 2.0 || activity.DurationMin >= 30.0
+	case ActivityCycle:
+		return activity.DistanceKm >= 5.0
 	default:
 		return false
 	}

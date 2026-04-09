@@ -184,9 +184,7 @@ class NATSClient:
                         # Reply directly to Go inbox if reply_subject is set
                         reply_subject = data.get("reply_subject")
                         if reply_subject and self._nc:
-                            result["processing_time_ms"] = int(
-                                (time.time() - start) * 1000
-                            )
+                            result["processing_time_ms"] = int((time.time() - start) * 1000)
                             payload = json.dumps(result).encode()
                             await self._nc.publish(reply_subject, payload)
                             await msg.ack()
@@ -389,9 +387,7 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
                 if 0 <= idx < len(candidates):
                     ranked.append(
                         {
-                            "artifact_id": candidates[idx].get(
-                                "id", candidates[idx].get("artifact_id", "")
-                            ),
+                            "artifact_id": candidates[idx].get("id", candidates[idx].get("artifact_id", "")),
                             "rank": len(ranked) + 1,
                             "relevance": item.get("relevance", "medium"),
                             "explanation": item.get("explanation", ""),
