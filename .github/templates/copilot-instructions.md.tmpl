@@ -95,6 +95,51 @@ Config:          [TODO: update paths]
 
 ---
 
+## Configuration — Single Source of Truth (SST)
+
+**ALL configuration is generated from `config/{{PROJECT_NAME_LOWER}}.yaml`**
+
+### Regenerate All Configs
+```bash
+{{CLI_ENTRYPOINT}} config generate
+```
+
+### Generated Files (DO NOT EDIT DIRECTLY)
+
+> **TODO:** List all generated files and their purpose.
+
+| File | Purpose |
+|------|---------|
+| `[TODO]` | `[TODO]` |
+
+### SST Zero-Defaults Enforcement (NON-NEGOTIABLE)
+
+**ALL configuration values MUST originate from `config/{{PROJECT_NAME_LOWER}}.yaml`. Zero hardcoded ports, URLs, hostnames, or fallback defaults anywhere in the codebase.**
+
+#### Per-Language Enforcement Rules
+
+| Language | FORBIDDEN | REQUIRED |
+|----------|-----------|----------|
+| **Shell** | `${VAR:-default}` with fallback | `${VAR:?error message}` fail-loud |
+| **Go** | `getEnv("KEY", "fallback")` | `os.Getenv("KEY")` + empty check → fatal |
+| **Rust** | `unwrap_or("fallback")` | `Result::Err` or `?` on missing |
+| **TypeScript** | `process.env.X \|\| 'fallback'` | `process.env.X` + throw if missing |
+| **Python** | `os.getenv("KEY", "default")` | `os.environ["KEY"]` (raises KeyError) |
+
+> **TODO:** Customize the language list for your project's tech stack.
+
+#### Port Allocation (from SST `ports:` section)
+
+> **TODO:** Document port assignments from your SST YAML.
+
+| Service | YAML Key | Port | Usage |
+|---------|----------|------|-------|
+| `[TODO]` | `ports.[service].host` | `[TODO]` | `[TODO]` |
+
+**These port numbers MUST NOT appear as literals in source code.** They flow from YAML → generated files → consumed via environment variables at runtime.
+
+---
+
 ## Docker Bundle Freshness Configuration
 
 > **TODO:** Fill in if your project serves UI from Docker containers.

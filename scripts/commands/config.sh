@@ -176,6 +176,10 @@ mkdir -p "$REPO_ROOT/config/generated"
 OUTPUT_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
 
 cat > "$OUTPUT_FILE" <<EOF
+# Auto-generated from config/smackerel.yaml — DO NOT EDIT DIRECTLY
+# Regenerate: ./smackerel.sh config generate
+# Environment: ${TARGET_ENV}
+# Generated: $(date -u +%Y-%m-%dT%H:%M:%S+00:00)
 PROJECT_NAME=${PROJECT_NAME}
 COMPOSE_PROJECT=${COMPOSE_PROJECT}
 POSTGRES_USER=${POSTGRES_USER}

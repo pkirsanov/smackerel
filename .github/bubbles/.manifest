@@ -254,8 +254,10 @@ prompts/bubbles.ux.prompt.md
 prompts/bubbles.validate.prompt.md
 prompts/bubbles.workflow.prompt.md
 instructions/bubbles-agents.instructions.md
+instructions/bubbles-config-sst.instructions.md
 instructions/bubbles-docker-lifecycle-governance.instructions.md
 instructions/bubbles-skills.instructions.md
+skills/bubbles-config-sst/SKILL.md
 skills/bubbles-docker-lifecycle-governance/SKILL.md
 skills/bubbles-docker-port-standards/SKILL.md
 skills/bubbles-repo-readiness/SKILL.md

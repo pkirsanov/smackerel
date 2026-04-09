@@ -79,6 +79,25 @@ It must own config generation, build, lint, format, test, stack lifecycle, logs,
 - Generated env files and Compose files are derived artifacts, not hand-edited sources of truth.
 - Missing required config must fail loudly. No hidden defaults or fallback hostnames/ports.
 
+### Generated Files (DO NOT EDIT DIRECTLY)
+
+| File | Purpose |
+|------|---------|
+| `config/generated/dev.env` | Development environment variables |
+| `config/generated/test.env` | Test environment variables |
+
+Regenerate all config: `./smackerel.sh config generate`
+
+### SST Zero-Defaults Enforcement (NON-NEGOTIABLE)
+
+**ALL configuration values MUST originate from `config/smackerel.yaml`. Zero hardcoded ports, URLs, hostnames, or fallback defaults anywhere in the codebase.**
+
+| Language | FORBIDDEN | REQUIRED |
+|----------|-----------|----------|
+| **Shell** | `${VAR:-default}` with fallback | `${VAR:?error message}` fail-loud |
+| **Go** | `getEnv("KEY", "fallback")` | `os.Getenv("KEY")` + empty check → fatal |
+| **Python** | `os.getenv("KEY", "default")` | `os.environ["KEY"]` (raises KeyError) |
+
 ### Test Environment Isolation
 
 - Persistent dev state is for manual development only.

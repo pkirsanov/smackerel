@@ -33,6 +33,66 @@ Every project using Bubbles MUST have these files:
 
 ---
 
+## Configuration Single Source of Truth (SST) — Required Pattern
+
+Every project using Bubbles MUST implement a Configuration SST pipeline. This ensures all runtime configuration values flow from a single canonical file, preventing config drift, hardcoded values, and silent defaults.
+
+### SST Pipeline Requirements
+
+| Requirement | Description |
+|-------------|-------------|
+| **SST File** | A single YAML file (`config/<project>.yaml`) where ALL config values are defined |
+| **Config Generator** | A script that parses the SST file and produces all derived config files |
+| **CLI Command** | A `config generate` (or `config compile`) subcommand on the project CLI |
+| **Generated File Manifest** | A documented list of generated files in `copilot-instructions.md` marked "DO NOT EDIT" |
+| **Fail-Loud Validation** | Every required value validated at generation time and startup time — no silent defaults |
+| **Per-Language Enforcement** | Rules in `copilot-instructions.md` forbidding fallback patterns per language |
+
+### SST File Structure (Canonical Layout)
+
+```yaml
+# config/<project>.yaml — SINGLE SOURCE OF TRUTH
+project:
+  name: <project-name>
+  namespace: <namespace>
+
+ports:
+  <service>:
+    host: <host-port>        # Exposed to host
+    internal: <internal-port> # Inside container
+
+services:
+  <service-name>:
+    container: <container-name>
+    image: <image-name>
+    env: { ... }
+
+infrastructure:
+  database: { ... }
+  cache: { ... }
+  messaging: { ... }
+
+environments:
+  dev: { ... }
+  test: { ... }
+```
+
+### What MUST Be in the SST File
+
+All values that appear in generated `.env` files, Docker Compose port mappings, frontend build-time config, or test environment config MUST originate from the SST file. This includes ports, URLs, credentials (or secret refs), timeouts, resource limits, and service identity (container/image/volume names).
+
+### What copilot-instructions.md MUST Document
+
+Projects MUST list all generated files and their purpose, the config generation command, per-language zero-defaults enforcement rules, and port allocation from the SST. See the `bubbles-config-sst` instruction and skill for the full enforcement model.
+
+### References
+
+- Instruction: `instructions/bubbles-config-sst.instructions.md`
+- Skill: `skills/bubbles-config-sst/SKILL.md`
+- Docker port standards: `skills/bubbles-docker-port-standards/SKILL.md`
+
+---
+
 ## `.specify/memory/agents.md` — Command Registry (REQUIRED)
 
 This is the **single source of truth** for all project-specific commands and file organization.
@@ -254,6 +314,9 @@ When adopting Bubbles for a new project, populate these files:
 - [ ] `.specify/memory/agents.md` — Fill in CLI entrypoint, all commands, file organization, naming
 - [ ] `.specify/memory/constitution.md` — Adapt principles for your project's domain (keep universal ones, add domain-specific ones)
 - [ ] `.github/copilot-instructions.md` — Fill in testing requirements, Docker config, language rules, framework-specific rules
+- [ ] `config/<project>.yaml` — Create the SST config file with ports, services, infrastructure, environments
+- [ ] `scripts/commands/config.sh` (or equivalent) — Create the config generator that parses SST and writes derived files
+- [ ] `.github/copilot-instructions.md` → SST section — Document generated files, per-language enforcement, port allocation
 - [ ] `bubbles/workflows.yaml` — Copy as-is (project-agnostic) or customize modes
 - [ ] `agents/` — Copy all `bubbles.*.agent.md` files as-is (project-agnostic)
 - [ ] `agents/bubbles_shared/` — Copy all shared files as-is (project-agnostic)
@@ -309,7 +372,7 @@ When adopting Bubbles for a new project, populate these files:
 | `bubbles/workflows.yaml` | Workflow modes, gates, phases, retry policy, priority scoring | Orchestration config, no project references |
 | `bubbles/scripts/*.sh` | Governance scripts (artifact lint, done-spec audit, state transition guard, implementation reality scan, agent ownership lint, etc.) | Validate artifact structure, not project-specific content |
 | `instructions/bubbles-*.instructions.md` | Namespaced portable instruction files | Clearly Bubbles-owned while remaining project-agnostic |
-| `skills/bubbles-*/SKILL.md` | Namespaced portable governance skills | Clearly Bubbles-owned while remaining project-agnostic |
+| `skills/bubbles-*/SKILL.md` | Namespaced portable governance skills (includes `bubbles-config-sst/`) | Clearly Bubbles-owned while remaining project-agnostic |
 | `docs/*.md` | Bubbles documentation (examples, cheatsheet, sessions, prompts, etc.) | Project-agnostic reference docs |
 | `prompts/bubbles.*.prompt.md` | Prompt shims routing to agents | Minimal routing files, no project content |
 
