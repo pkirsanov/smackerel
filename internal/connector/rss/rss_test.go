@@ -68,3 +68,97 @@ func TestFeedItem_Fields(t *testing.T) {
 		t.Errorf("unexpected title: %q", item.Title)
 	}
 }
+
+// Security: SSRF validation tests for feed URL validation (S001)
+func TestValidateFeedURL_AllowsHTTPAndHTTPS(t *testing.T) {
+	// These should not be rejected by scheme check (DNS may fail, that's OK)
+	for _, u := range []string{
+		"https://feeds.example.com/rss",
+		"http://feeds.example.com/rss",
+	} {
+		err := validateFeedURL(u)
+		// DNS failures are acceptable; only check for scheme/host-level rejections
+		if err != nil && !isExpectedDNSError(err) {
+			t.Errorf("validateFeedURL(%q) unexpected error: %v", u, err)
+		}
+	}
+}
+
+func TestValidateFeedURL_BlocksNonHTTPSchemes(t *testing.T) {
+	blocked := []string{
+		"file:///etc/passwd",
+		"ftp://internal.server/data",
+		"gopher://evil.host/ssrf",
+		"javascript:alert(1)",
+		"data:text/xml,<rss/>",
+	}
+	for _, u := range blocked {
+		err := validateFeedURL(u)
+		if err == nil {
+			t.Errorf("validateFeedURL(%q) should have been rejected", u)
+		}
+	}
+}
+
+func TestValidateFeedURL_BlocksLocalhostAndPrivateIPs(t *testing.T) {
+	blocked := []string{
+		"http://127.0.0.1/rss",
+		"http://localhost/rss",
+		"http://[::1]/rss",
+		"http://0.0.0.0/rss",
+	}
+	for _, u := range blocked {
+		err := validateFeedURL(u)
+		if err == nil {
+			t.Errorf("validateFeedURL(%q) should have been rejected (SSRF)", u)
+		}
+	}
+}
+
+func TestValidateFeedURL_BlocksMetadataEndpoints(t *testing.T) {
+	blocked := []string{
+		"http://169.254.169.254/latest/meta-data/",
+		"http://metadata.google.internal/computeMetadata/v1/",
+	}
+	for _, u := range blocked {
+		err := validateFeedURL(u)
+		if err == nil {
+			t.Errorf("validateFeedURL(%q) should have been rejected (cloud metadata)", u)
+		}
+	}
+}
+
+func TestValidateFeedURL_BlocksEmptyAndInvalidURLs(t *testing.T) {
+	blocked := []string{
+		"",
+		"not-a-url",
+		"://missing-scheme",
+	}
+	for _, u := range blocked {
+		err := validateFeedURL(u)
+		if err == nil {
+			t.Errorf("validateFeedURL(%q) should have been rejected", u)
+		}
+	}
+}
+
+func isExpectedDNSError(err error) bool {
+	s := err.Error()
+	return testing.Short() ||
+		contains(s, "DNS") || contains(s, "dns") ||
+		contains(s, "no such host") || contains(s, "lookup") ||
+		contains(s, "resolution failed")
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && searchSubstring(s, substr)
+}
+
+func searchSubstring(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -253,7 +254,7 @@ func (c *Connector) fetchPlaylistItems(ctx context.Context, client *http.Client,
 	apiURL := fmt.Sprintf("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=%s&maxResults=50",
 		playlistID)
 	if cursor != "" {
-		apiURL += "&pageToken=" + cursor
+		apiURL += "&pageToken=" + url.QueryEscape(cursor)
 	}
 
 	data, err := youtubeAPICall(ctx, client, apiURL, token)
@@ -347,8 +348,9 @@ func youtubeAPICall(ctx context.Context, client *http.Client, apiURL string, tok
 		return nil, fmt.Errorf("youtube API: HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
+	// Limit response body to 10MB to prevent resource exhaustion
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("youtube API: decode response: %w", err)
 	}
 	return result, nil

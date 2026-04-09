@@ -6,7 +6,7 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 
 | Language | Packages/Files | Test Count | Type |
 |----------|---------------|------------|------|
-| Go | 24 packages | 400+ test functions | Unit (behavioral + structural) |
+| Go | 25 packages | 450+ test functions | Unit (behavioral + structural) |
 | Python | 2 test files | 20+ tests | Unit |
 | Shell (E2E) | 57 scripts | End-to-end | Live-stack |
 | Shell (Stress) | 2 scripts | Stress | Live-stack |
@@ -15,7 +15,7 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 
 - **Security tests**: auth token validation (placeholder rejection, min length), SSRF URL blocking (private IPs, IPv6, metadata), ILIKE wildcard escaping, config validation (PORT, CRON)
 - **Search tests**: temporal intent parsing (8 patterns), search request handling
-- **Connector tests**: IMAP tier assignment, CalDAV event parsing, YouTube engagement tiers, RSS/Atom parsing, bookmarks parsing, browser dwell time, Keep takeout parsing + label mapping + qualifiers
+- **Connector tests**: IMAP tier assignment, CalDAV event parsing, YouTube engagement tiers, RSS/Atom parsing, bookmarks parsing, browser dwell time, Keep takeout parsing + label mapping + qualifiers, Hospitable PAT auth + pagination + rate-limit retry + multi-resource sync + cursor management + sender classification + rating precision
 - **Telegram tests**: share capture, forward metadata, conversation assembly (timer/overflow/concurrent), media group assembly
 - **Intelligence tests**: synthesis insights, alert lifecycle, resurfacing scoring
 - **Pipeline tests**: dedup, processing, embedding format, tier assignment
@@ -51,7 +51,7 @@ The current CLI-owned runtime surface exposes these categories today:
 
 ### Go Package Coverage
 
-All 24 Go packages have tests:
+All 25 Go packages have tests:
 
 - `internal/api` — capture, search, health, digest, recent handlers
 - `internal/auth` — OAuth2 provider, token exchange
@@ -62,6 +62,7 @@ All 24 Go packages have tests:
 - `internal/connector/caldav` — event sync, attendee extraction, tier assignment
 - `internal/connector/imap` — email sync, tier qualification, action item extraction
 - `internal/connector/keep` — Takeout parsing, normalization, labels, qualifiers
+- `internal/connector/hospitable` — PAT auth, pagination, Retry-After, active reservation sync, normalizer (4 types), cursor round-trip, partial failure, sender classification, URL population, rating precision
 - `internal/connector/maps` — activity classification, trail detection, GeoJSON
 - `internal/connector/rss` — RSS + Atom feed parsing
 - `internal/connector/youtube` — video sync, engagement tiers

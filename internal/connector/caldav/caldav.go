@@ -212,6 +212,9 @@ func (c *Connector) fetchGoogleCalendarEvents(ctx context.Context, token string,
 		return nil, fmt.Errorf("calendar API: HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
+	// Limit response body to 10MB to prevent resource exhaustion
+	limitedBody := io.LimitReader(resp.Body, 10*1024*1024)
+
 	var calResp struct {
 		Items []struct {
 			ID          string `json:"id"`
@@ -241,7 +244,7 @@ func (c *Connector) fetchGoogleCalendarEvents(ctx context.Context, token string,
 		NextSyncToken string `json:"nextSyncToken"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&calResp); err != nil {
+	if err := json.NewDecoder(limitedBody).Decode(&calResp); err != nil {
 		return nil, fmt.Errorf("decode calendar response: %w", err)
 	}
 

@@ -1,5 +1,19 @@
 ml/app/__pycache__/
 ml/tests/__pycache__/
 
+# Generated config (contains resolved secrets)
+config/generated/
+
+# Runtime data directories (user import data)
+data/
+
+# Secrets and credentials
+*.key
+*.pem
+*.p12
+.env
+.env.*
+secrets.yaml
+
 # Prevent Bubbles framework README from overriding project README on GitHub
 .github/README.md

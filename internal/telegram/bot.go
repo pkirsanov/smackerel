@@ -60,7 +60,7 @@ func NewBot(cfg Config) (*Bot, error) {
 
 	baseURL := cfg.CoreAPIURL
 	if baseURL == "" {
-		baseURL = "http://localhost:8080"
+		return nil, fmt.Errorf("CoreAPIURL is required: set PORT env var via config generate")
 	}
 
 	bot := &Bot{

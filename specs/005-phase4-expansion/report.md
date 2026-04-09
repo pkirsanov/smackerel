@@ -267,3 +267,125 @@ Exit code: 0
 
 ### Completion Statement
 Spec 005 delivery-lockdown validated. All 5 scopes have full implementation with passing unit tests (23 Go packages + 11 Python tests), clean build, clean lint, clean format. 23 Gherkin scenarios mapped to DoD items with evidence. Scenario manifest (23 entries) created. Code diff evidence with git log and git diff output included.
+
+---
+
+## Regression Sweep — 2026-04-09
+
+**Trigger:** Stochastic quality sweep Round 5 (regression trigger)
+**Agent:** bubbles.regression → bubbles.workflow (regression-to-doc)
+
+### Findings
+
+| ID | Severity | Component | Finding | Status |
+|----|----------|-----------|---------|--------|
+| R001 | HIGH | `browser/browser.go::ShouldSkip` | Prefix-matching on raw URLs fails for user skip domains with `https://` scheme. `ShouldSkip("https://private.corp.com/page", []string{"private.corp.com"})` returned false. SCN-005-005 test was a false positive (test omitted scheme). | FIXED |
+| R002 | MEDIUM | `config/smackerel.yaml` | Duplicate `google-maps-timeline` key under `connectors:`. Second entry (simpler) silently overrides first (complete, with privacy/sync settings). SST violation. | FIXED |
+| R003 | LOW | `maps/maps.go::IsTrailQualified` | Only checked distance >=2km. Spec R-404 says "Walking >2km **or >30 min**". Duration-based trail qualification missing. Cycling used same 2km threshold instead of 5km. | FIXED |
+| R004 | LOW | `maps/maps.go::ParseTakeoutJSON` | Silently discarded timestamp parse errors (`startTime, _ := time.Parse(...)`). Activities with bad timestamps got zero-value times. No happy-path unit test existed for valid Takeout JSON parsing. | FIXED |
+
+### Fix Details
+
+**R001 — ShouldSkip domain matching:**
+- Changed user skip domain matching from prefix-match on raw URL to domain extraction via `extractDomain(url)` + exact domain comparison
+- Default protocol-prefix skip entries (`chrome://`, `localhost`, etc.) retain prefix matching
+- Added adversarial regression tests: `ShouldSkip("https://private.corp.com/page", ...)` must return `true`
+
+**R002 — Duplicate config key:**
+- Removed the second `google-maps-timeline:` block (lines 120-141)
+- Retained the first, authoritative block (lines 83-112) which includes privacy, sync_schedule, and default_tier settings
+
+**R003 — Duration-based trail qualification:**
+- `IsTrailQualified` now checks: walk/hike/run >=2km OR >=30min, cycling >=5km
+- Added tests: 1.5km/45min walk qualifies (duration), 1km/20min walk doesn't, 3km cycle doesn't (threshold is 5km), 8km cycle qualifies
+
+**R004 — Timestamp parse errors + happy-path test:**
+- `ParseTakeoutJSON` now logs a warning and skips activities with unparseable timestamps instead of silently accepting zero-value times
+- Added `TestParseTakeoutJSON_HappyPath`: validates 2-activity Takeout JSON parsing with classification, distance, waypoints, duration
+- Added `TestParseTakeoutJSON_BadTimestamp`: verifies bad-timestamp activities are skipped while valid ones parse correctly
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/maps     0.036s
+ok  github.com/smackerel/smackerel/internal/connector/browser   0.075s
+25 Go packages ok, 0 failures
+20 Python tests passed
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+Exit code: 0
+```
+
+---
+
+## Stochastic Security Pass (Round 10)
+
+**Date:** 2026-04-09
+**Trigger:** security-to-doc
+**Source:** Stochastic quality sweep Round 10
+
+### Findings
+
+| ID | Severity | Connector | Issue | Status |
+|----|----------|-----------|-------|--------|
+| S001 | HIGH | RSS | SSRF — `FetchFeed` made HTTP requests to user-configured URLs without scheme allowlisting, private IP blocking, or cloud metadata endpoint protection | FIXED |
+| S002 | MEDIUM | IMAP/CalDAV/YouTube | Unbounded JSON response body on successful 200 API responses — resource exhaustion risk from oversized responses | FIXED |
+| S003 | MEDIUM | YouTube | `pageToken` cursor concatenated into URL without URL-encoding — HTTP parameter injection | FIXED |
+
+### S001 — RSS SSRF Protection
+
+**Root Cause:** `rss/rss.go::FetchFeed` accepted any URL from `source_config["feed_urls"]` and made HTTP GET requests without validation. An attacker who could configure a feed URL could target internal services (RFC1918), cloud metadata endpoints (169.254.169.254), or use non-HTTP schemes (file://, gopher://).
+
+**Fix:**
+- Added `validateFeedURL()` function in `internal/connector/rss/rss.go`
+- Scheme allowlist: only `http://` and `https://` permitted
+- DNS resolution check: all resolved IPs checked against loopback, link-local, RFC1918, IPv6 ULA, and unspecified ranges
+- Cloud metadata blocking: `169.254.169.254` IP and `metadata.google.internal` hostname explicitly blocked
+- `FetchFeed` calls `validateFeedURL` before making any HTTP request
+
+**Tests Added:**
+- `TestValidateFeedURL_AllowsHTTPAndHTTPS` — valid schemes pass
+- `TestValidateFeedURL_BlocksNonHTTPSchemes` — file://, ftp://, gopher://, javascript:, data: all rejected
+- `TestValidateFeedURL_BlocksLocalhostAndPrivateIPs` — 127.0.0.1, localhost, ::1, 0.0.0.0 all rejected
+- `TestValidateFeedURL_BlocksMetadataEndpoints` — 169.254.169.254 and metadata.google.internal rejected
+- `TestValidateFeedURL_BlocksEmptyAndInvalidURLs` — empty strings and non-URLs rejected
+
+### S002 — API Response Body Size Limits
+
+**Root Cause:** `gmailAPICall` (IMAP), `fetchGoogleCalendarEvents` (CalDAV), and `youtubeAPICall` (YouTube) decoded JSON from `resp.Body` without size limits on successful 200 responses. Only error responses had `io.LimitReader(resp.Body, 1024)`. A compromised or MITM'd response could cause OOM.
+
+**Fix:**
+- Added `io.LimitReader(resp.Body, 10*1024*1024)` (10MB limit) around the JSON decoder in all three API call functions
+- 10MB is generous for API responses but prevents unbounded memory growth
+
+**Files Changed:**
+- `internal/connector/imap/imap.go` — `gmailAPICall`
+- `internal/connector/caldav/caldav.go` — `fetchGoogleCalendarEvents`
+- `internal/connector/youtube/youtube.go` — `youtubeAPICall`
+
+### S003 — YouTube pageToken URL Encoding
+
+**Root Cause:** In `youtube.go::fetchPlaylistItems`, the cursor was concatenated directly into the URL: `apiURL += "&pageToken=" + cursor`. A crafted cursor value containing `&key=value` could inject additional HTTP parameters.
+
+**Fix:** Changed to `apiURL += "&pageToken=" + url.QueryEscape(cursor)` in `internal/connector/youtube/youtube.go`
+
+**Test Added:** `TestFetchPlaylistItems_CursorURLEncoded` — verifies that special characters in cursor values are properly encoded and cannot inject raw ampersands.
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/rss       0.183s
+ok  github.com/smackerel/smackerel/internal/connector/imap      0.025s
+ok  github.com/smackerel/smackerel/internal/connector/caldav    0.015s
+ok  github.com/smackerel/smackerel/internal/connector/youtube   0.039s
+26 Go packages ok, 0 failures
+31 Python tests passed
+Exit code: 0
+
+$ ./smackerel.sh lint
+Exit code: 0
+```

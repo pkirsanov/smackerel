@@ -1,17 +1,18 @@
 project:
   name: smackerel
 
-# Workspace host-port allocation review:
+# Workspace host-port allocation (cross-project registry):
+# - GuestHost:           10000-19999
 # - WanderAide:          20000-26999
 # - QuantitativeFinance: 30000-39999
-# - Smackerel:           40000-49999
-# - GuestHost:           50000-59999
+# - Smackerel:           40000-48999  (49000-49999 reserved buffer — IANA ephemeral zone starts at 49152)
 #
-# Smackerel host forwarding block:
+# Smackerel host forwarding sub-blocks:
 # - Dev app:    40001-40099
 # - Dev infra:  42001-42099
 # - Test app:   45001-45099
 # - Test infra: 47001-47099
+# - Reserved:   49000-49999  (do not allocate — ephemeral port buffer)
 
 runtime:
   log_level: info
@@ -25,6 +26,7 @@ llm:
   api_key: ""
   ollama_url: http://ollama:11434
   ollama_model: llama3.2
+  ollama_vision_model: llava # Vision model used for OCR fallback on Keep image notes
 
 telegram:
   bot_token: ""
@@ -40,6 +42,96 @@ connectors:
     gkeep_enabled: false
     gkeep_poll_interval: 60m
     gkeep_warning_acknowledged: false
+
+  bookmarks:
+    enabled: false
+    sync_schedule: "*/30 * * * *"
+    import_dir: "" # path to directory where browser bookmark exports are placed
+    watch_interval: 5m
+    archive_processed: true
+    processing_tier: full
+    min_url_length: 10
+    exclude_domains: []
+
+  browser-history:
+    enabled: false # Opt-in — disabled by default
+    sync_schedule: "0 */4 * * *" # Every 4 hours
+
+    chrome:
+      history_path: ""
+        # REQUIRED when enabled: path to Chrome History SQLite file
+        # Linux:  ~/.config/google-chrome/Default/History
+        # macOS:  ~/Library/Application Support/Google/Chrome/Default/History
+      access_strategy: "copy" # "copy" (safe default) or "wal-read" (fresher, advanced)
+
+    processing:
+      initial_lookback_days: 30
+      dwell_time_thresholds:
+        full_min: "5m"
+        standard_min: "2m"
+        light_min: "30s"
+      repeat_visit_window: "7d"
+      repeat_visit_threshold: 3
+      content_fetch_timeout: "15s"
+      content_fetch_concurrency: 5
+      content_fetch_domain_delay: "1s"
+
+    skip:
+      custom_domains: []
+      social_media_individual_threshold: "5m"
+
+  google-maps-timeline:
+    enabled: false
+    sync_schedule: "0 */6 * * *"
+    import_dir: "" # path to directory containing Google Takeout Semantic Location History JSON files
+    watch_interval: 5m
+    archive_processed: false
+    min_distance_m: 100
+    min_duration_min: 2
+    default_tier: standard
+
+    clustering:
+      location_radius_m: 500
+      home_detection: frequency
+
+    commute:
+      min_occurrences: 3
+      window_days: 14
+      weekdays_only: true
+
+    trip:
+      min_distance_km: 50
+      min_overnight_hours: 18
+
+    linking:
+      time_extend_min: 30
+      proximity_radius_m: 1000
+
+    privacy:
+      store_full_urls_above_tier: "light"
+      aggregate_only_below_tier: "metadata"
+
+  rss:
+    enabled: false
+    sync_schedule: "*/30 * * * *" # Every 30 minutes
+    source_config:
+      feed_urls: [] # Add RSS/Atom feed URLs here
+
+  hospitable:
+    enabled: false
+    sync_schedule: "0 */2 * * *" # Every 2 hours
+    access_token: "" # REQUIRED when enabled: Hospitable Personal Access Token
+    base_url: "https://api.hospitable.com"
+    initial_lookback_days: 90 # How far back to sync on first run
+    page_size: 100
+    sync_properties: true
+    sync_reservations: true
+    sync_messages: true
+    sync_reviews: true
+    processing_tier_messages: full
+    processing_tier_reviews: full
+    processing_tier_reservations: standard
+    processing_tier_properties: light
 
 services:
   core:

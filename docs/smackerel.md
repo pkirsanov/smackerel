@@ -743,6 +743,9 @@ Each passive source has:
 | Google Maps | Medium | Location context, travel, trails | | ✅ | |
 | Browser History | Medium | Interest detection, deep reading signal | | ✅ | |
 | Photos/Screenshots | Medium | OCR, location context | | ✅ | |
+| Hospitable (STR) | Medium | Reservation knowledge, guest comms, multi-OTA aggregation | | ✅ | |
+| Environmental Alerts | Low | Weather, earthquake, tsunami — contextual safety alerts | | | ✅ |
+| Google Voice | Low | Voicemail transcripts already forwarded to Gmail; SMS via Gmail forward | | | ✅ |
 | Podcasts | Low | Emerging API support | | | ✅ |
 | Notes Apps | Low | Complex sync | | | ✅ |
 | SMS/Notifications | Low | Noisy, needs heavy filtering | | | ✅ |

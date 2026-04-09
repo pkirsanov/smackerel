@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "featureId": "013-guesthost-connector",
+  "featureName": "GuestHost Connector & Hospitality Intelligence",
+  "status": "deferred",
+  "workflowMode": "full",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runEndedAt": "2026-04-09T00:00:00Z",
+        "summary": "Created spec.md with full business analysis: 2 primary actors, 8 use cases, 12 business scenarios, competitive analysis, 5 improvement proposals, 12 functional requirements, 6 NFRs, dedup strategy, 8 edge cases, 6-phase delivery plan."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "plan"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runEndedAt": "2026-04-09T00:00:00Z",
+        "summary": "Created scopes.md with 5 sequential scopes: (1) GH API Client/Types/Config, (2) Connector Implementation/Normalizer, (3) Hospitality Graph Nodes/Linker, (4) Hospitality Digest, (5) Context Enrichment API. 46 Gherkin scenarios, 75+ test entries across unit/integration/e2e. Created report.md and uservalidation.md templates."
+      }
+    ]
+  },
+  "completedPhases": ["analyze", "plan"],
+  "completedScopes": [],
+  "certification": {}
+}

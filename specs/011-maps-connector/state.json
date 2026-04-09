@@ -1,0 +1,57 @@
+{
+  "version": 3,
+  "featureDir": "specs/011-maps-connector",
+  "featureName": "Maps Timeline Connector",
+  "status": "in_progress",
+  "workflowMode": "delivery-lockdown",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "implement",
+    "currentScope": "scope-02",
+    "runStartedAt": "2026-04-09T00:00:00Z",
+    "completedScopes": ["scope-01"],
+    "completedPhaseClaims": ["analyze", "bootstrap", "plan", "implement-scope-01"],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "Created spec.md with full analyst sections: 4 actors, 6 use cases, 12 Gherkin scenarios, 16 requirements, outcome contract, competitive analysis, 4 improvement proposals. Mode: greenfield. Wrapped existing internal/connector/maps package."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "Created design.md: wrapper connector.go over existing maps parsing utilities, normalizer.go for Activity→RawArtifact, patterns.go for commute/trip/temporal-spatial detection. New migration 009_maps.sql for location_clusters table. No new NATS streams. Config section for smackerel.yaml. 4 new files in internal/connector/maps/. Cursor: pipe-delimited processed filenames. Dedup: date+location cluster SHA-256 hash."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap"],
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "3-scope plan created: Scope 1: Connector Implementation & Normalizer, Scope 2: Trail Journal, Dedup & Migration, Scope 3: Commute/Trip Detection & Temporal-Spatial Linking"
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-09T00:00:00Z",
+        "runCompletedAt": "2026-04-09T00:00:00Z",
+        "summary": "Implemented Scope 1: connector.go (411 lines), normalizer.go (135 lines), connector_test.go (392 lines), normalizer_test.go (302 lines). Registered in main.go with auto-start. Config added to smackerel.yaml. All 21 unit tests pass."
+      }
+    ]
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": ["scope-01"],
+    "certifiedCompletedPhases": []
+  }
+}

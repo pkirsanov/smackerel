@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -96,8 +99,106 @@ func (c *Connector) Close() error {
 	return nil
 }
 
+// validateFeedURL checks a feed URL for SSRF risks: scheme must be http(s),
+// hostname must not resolve to private, loopback, or link-local addresses,
+// and known cloud metadata endpoints are blocked.
+func validateFeedURL(feedURL string) error {
+	u, err := url.Parse(feedURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+
+	// Scheme allowlist
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("scheme %q not allowed, only http and https", u.Scheme)
+	}
+
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("empty hostname")
+	}
+
+	// Block known cloud metadata hostnames
+	blockedHosts := []string{
+		"metadata.google.internal",
+		"metadata.google",
+	}
+	for _, blocked := range blockedHosts {
+		if strings.EqualFold(host, blocked) {
+			return fmt.Errorf("hostname %q is blocked (cloud metadata)", host)
+		}
+	}
+
+	// Resolve hostname and check all IPs
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		return fmt.Errorf("DNS resolution failed for %q: %w", host, err)
+	}
+
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			continue
+		}
+		if isPrivateIP(ip) {
+			return fmt.Errorf("resolved IP %s is a private/reserved address", ipStr)
+		}
+	}
+
+	return nil
+}
+
+// isPrivateIP checks if an IP address is private, loopback, link-local,
+// or a known cloud metadata address.
+func isPrivateIP(ip net.IP) bool {
+	// Loopback (127.0.0.0/8, ::1)
+	if ip.IsLoopback() {
+		return true
+	}
+	// Link-local (169.254.0.0/16, fe80::/10)
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	// Unspecified (0.0.0.0, ::)
+	if ip.IsUnspecified() {
+		return true
+	}
+
+	// RFC1918 private ranges
+	privateRanges := []struct {
+		network string
+	}{
+		{"10.0.0.0/8"},
+		{"172.16.0.0/12"},
+		{"192.168.0.0/16"},
+		{"fc00::/7"}, // IPv6 unique local
+	}
+	for _, r := range privateRanges {
+		_, cidr, err := net.ParseCIDR(r.network)
+		if err != nil {
+			continue
+		}
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+
+	// AWS/GCP/Azure metadata IP
+	metadataIP := net.ParseIP("169.254.169.254")
+	if ip.Equal(metadataIP) {
+		return true
+	}
+
+	return false
+}
+
 // FetchFeed fetches and parses an RSS or Atom feed from a URL.
 func FetchFeed(ctx context.Context, feedURL string) ([]FeedItem, error) {
+	if err := validateFeedURL(feedURL); err != nil {
+		return nil, fmt.Errorf("feed URL rejected: %w", err)
+	}
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	if err != nil {

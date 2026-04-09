@@ -2,6 +2,7 @@ package keep
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -21,12 +22,14 @@ const (
 
 // Normalizer converts TakeoutNote structs into connector.RawArtifact.
 type Normalizer struct {
-	config KeepConfig
+	config    KeepConfig
+	parser    *TakeoutParser
+	qualifier *Qualifier
 }
 
 // NewNormalizer creates a new Normalizer with the given config.
 func NewNormalizer(config KeepConfig) *Normalizer {
-	return &Normalizer{config: config}
+	return &Normalizer{config: config, parser: NewTakeoutParser(), qualifier: NewQualifier()}
 }
 
 // Normalize converts a TakeoutNote into a RawArtifact.
@@ -49,8 +52,7 @@ func (n *Normalizer) Normalize(note *TakeoutNote, noteID, sourcePath string) (*c
 	tier := n.assignTier(note)
 	metadata["processing_tier"] = string(tier)
 
-	parser := NewTakeoutParser()
-	capturedAt := parser.CreatedAt(note)
+	capturedAt := n.parser.CreatedAt(note)
 	if capturedAt.IsZero() {
 		capturedAt = time.Now()
 	}
@@ -142,13 +144,31 @@ func (n *Normalizer) classifyNote(note *TakeoutNote) NoteType {
 	return NoteTypeText
 }
 
+// safeAnnotationSchemes is the allowlist of URL schemes permitted in Keep note annotations.
+// URLs with other schemes (e.g. javascript:, data:, vbscript:) are stripped to prevent
+// injection if content is rendered in a web context (CWE-79).
+var safeAnnotationSchemes = map[string]bool{
+	"http":   true,
+	"https":  true,
+	"mailto": true,
+}
+
+// isSafeURL checks that a URL uses an allowed scheme.
+func isSafeURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return safeAnnotationSchemes[strings.ToLower(u.Scheme)]
+}
+
 // buildContent constructs the text content for the artifact.
 func (n *Normalizer) buildContent(note *TakeoutNote) string {
 	var parts []string
 
-	// Annotations as link references
+	// Annotations as link references — only safe URL schemes
 	for _, ann := range note.Annotations {
-		if ann.URL != "" {
+		if ann.URL != "" && isSafeURL(ann.URL) {
 			label := ann.Title
 			if label == "" {
 				label = ann.Description
@@ -176,6 +196,9 @@ func (n *Normalizer) buildContent(note *TakeoutNote) string {
 		if strings.HasPrefix(a.MimeType, "image/") {
 			parts = append(parts, fmt.Sprintf("[Image attached: %s]", a.FilePath))
 		}
+		if strings.HasPrefix(a.MimeType, "audio/") {
+			parts = append(parts, fmt.Sprintf("[Audio attached: %s]", a.FilePath))
+		}
 	}
 
 	return strings.Join(parts, "\n")
@@ -183,7 +206,7 @@ func (n *Normalizer) buildContent(note *TakeoutNote) string {
 
 // buildMetadata constructs the R-005 metadata map.
 func (n *Normalizer) buildMetadata(note *TakeoutNote, noteID, sourcePath string) map[string]interface{} {
-	parser := NewTakeoutParser()
+	parser := n.parser
 
 	labels := make([]string, 0, len(note.Labels))
 	for _, l := range note.Labels {
@@ -250,39 +273,10 @@ func (n *Normalizer) shouldSkip(note *TakeoutNote) bool {
 	return false
 }
 
-// assignTier assigns a processing tier based on note properties.
-// Evaluation order: trashed→skip, pinned→full, labeled→full, images→full,
-// recent(<30d)→standard, archived→light, old(>30d)→light, default→standard.
+// assignTier delegates processing tier assignment to the Qualifier engine
+// to ensure a single source of truth for R-008 evaluation rules.
 func (n *Normalizer) assignTier(note *TakeoutNote) Tier {
-	if note.IsTrashed {
-		return TierSkip
-	}
-	if note.IsPinned {
-		return TierFull
-	}
-	if len(note.Labels) > 0 {
-		return TierFull
-	}
-	for _, a := range note.Attachments {
-		if strings.HasPrefix(a.MimeType, "image/") {
-			return TierFull
-		}
-	}
-
-	parser := NewTakeoutParser()
-	modifiedAt := parser.ModifiedAt(note)
-	daysSinceModified := time.Since(modifiedAt).Hours() / 24
-
-	if daysSinceModified <= 30 {
-		return TierStandard
-	}
-	if note.IsArchived {
-		return TierLight
-	}
-	if daysSinceModified > 30 {
-		return TierLight
-	}
-	return TierStandard
+	return n.qualifier.Evaluate(note).Tier
 }
 
 // Tier represents a processing tier for Keep notes.

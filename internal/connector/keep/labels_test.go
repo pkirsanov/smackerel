@@ -117,3 +117,44 @@ func TestTopicEdgeIdempotent(t *testing.T) {
 		t.Errorf("topic IDs not consistent: %q vs %q", id1, id2)
 	}
 }
+
+func TestUnicodeFuzzyMatch(t *testing.T) {
+	tm := NewTopicMapper()
+
+	// Accented characters — "café" should fuzzy-match "cafe" reasonably
+	matches := tm.MapLabels([]string{"café"}, []string{"cafe latte"})
+	if len(matches) != 1 {
+		t.Fatalf("matches = %d, want 1", len(matches))
+	}
+	// Should produce a match (fuzzy or created), not panic
+	if matches[0].LabelName != "café" {
+		t.Errorf("label = %q, want café", matches[0].LabelName)
+	}
+
+	// CJK characters should not panic and produce valid trigrams
+	matches = tm.MapLabels([]string{"机器学习"}, []string{"Machine Learning"})
+	if len(matches) != 1 {
+		t.Fatalf("matches = %d, want 1", len(matches))
+	}
+
+	// Emoji label should not panic
+	matches = tm.MapLabels([]string{"🚀 Ideas"}, []string{"Rocket Ideas"})
+	if len(matches) != 1 {
+		t.Fatalf("matches = %d, want 1", len(matches))
+	}
+}
+
+func TestTrigramUnicodeSafety(t *testing.T) {
+	// Verify trigrams function produces valid strings for multibyte input
+	result := trigrams("café")
+	if len(result) == 0 {
+		t.Error("trigrams should produce entries for Unicode input")
+	}
+	// Each trigram should be exactly 3 runes
+	for tri := range result {
+		runes := []rune(tri)
+		if len(runes) != 3 {
+			t.Errorf("trigram %q has %d runes, want 3", tri, len(runes))
+		}
+	}
+}

@@ -34,16 +34,12 @@ async def generate_embedding(text: str) -> list[float]:
 
     with _pending_lock:
         if _pending_count >= _MAX_PENDING:
-            raise RuntimeError(
-                f"embedding backpressure: {_pending_count} requests in flight, rejecting"
-            )
+            raise RuntimeError(f"embedding backpressure: {_pending_count} requests in flight, rejecting")
         _pending_count += 1
 
     model = _load_model()
     loop = asyncio.get_event_loop()
-    future = loop.run_in_executor(
-        None, lambda: model.encode(text, normalize_embeddings=True).tolist()
-    )
+    future = loop.run_in_executor(None, lambda: model.encode(text, normalize_embeddings=True).tolist())
     try:
         return await asyncio.wait_for(future, timeout=10.0)
     except asyncio.TimeoutError:

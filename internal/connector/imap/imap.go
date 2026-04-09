@@ -249,8 +249,9 @@ func gmailAPICall(ctx context.Context, client *http.Client, apiURL string, token
 		return nil, fmt.Errorf("gmail API: HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
+	// Limit response body to 10MB to prevent resource exhaustion
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("gmail API: decode response: %w", err)
 	}
 	return result, nil

@@ -40,3 +40,12 @@ func TestAssignTier_Default(t *testing.T) {
 		t.Errorf("default should be standard tier, got %q", tier)
 	}
 }
+
+func TestAssignTier_BrowserHistorySourceID(t *testing.T) {
+	// R001 regression: "browser-history" SourceID must get full-tier processing
+	// just like "browser", "capture", and "telegram".
+	tier := AssignTier(TierSignals{SourceID: "browser-history"})
+	if tier != TierFull {
+		t.Errorf("browser-history source should get full tier, got %q", tier)
+	}
+}
