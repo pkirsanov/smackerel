@@ -7,7 +7,7 @@ Links: [uservalidation.md](uservalidation.md)
 Implementation complete. Multi-dimensional expertise scoring via RunSynthesis with topic_groups query computing capture count, source diversity, and connection density per topic. Expertise tiers (Novice through Expert) mapped via InsightType constants. Blind spot detection through cross-domain cluster analysis. Growth trajectory via time-weighted artifact aggregation.
 
 ### Key Files
-- `internal/intelligence/engine.go` — RunSynthesis, SynthesisInsight, InsightType constants, NATS synthesis.analyze publish (229 lines)
+- `internal/intelligence/engine.go` — RunSynthesis, SynthesisInsight, InsightType constants, synchronous DB CTE query (229 lines)
 - `internal/intelligence/engine_test.go` — TestSynthesisInsight_Fields, TestInsightType_Constants, TestNewEngine_NilPool (157 lines)
 
 ### Test Evidence
