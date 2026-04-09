@@ -179,31 +179,33 @@ Scenario: SCN-HC-006 API client constructs correct request URLs
 ### Definition of Done
 
 - [x] `internal/connector/hospitable/types.go` created with `Property`, `Address`, `Reservation`, `Message`, `Review`, `PaginatedResponse[T]`, `SyncCursor` structs
-  > Verify: File exists, `./smackerel.sh check` passes ✓
+  > Evidence: File exists, `./smackerel.sh check` passes ✓
 - [x] `internal/connector/hospitable/client.go` created with `Client`, `NewClient()`, `Validate()`, `ListProperties()`, `ListReservations()`, `ListMessages()`, `ListReviews()`
-  > Verify: File exists, `./smackerel.sh check` passes ✓
+  > Evidence: File exists, `./smackerel.sh check` passes ✓
 - [x] `Client` sends `Authorization: Bearer {token}` header on every request
-  > Verify: TestClientAuthHeader PASS ✓
+  > Evidence: TestClientAuthHeader PASS ✓
 - [x] `Validate()` distinguishes 200 (success), 401 (unauthorized), 403 (forbidden)
-  > Verify: TestClientValidateSuccess, TestClientValidateUnauthorized, TestClientValidateForbidden PASS ✓
+  > Evidence: TestClientValidateSuccess, TestClientValidateUnauthorized, TestClientValidateForbidden PASS ✓
 - [x] `fetchPaginated()` follows `next` URLs until exhausted, collecting all items
-  > Verify: TestClientPaginatesProperties PASS ✓
+  > Evidence: TestClientPaginatesProperties PASS ✓
 - [x] Rate limit (429) triggers exponential backoff with max 3 retries
-  > Verify: TestClientRetryOn429, TestClientMaxRetriesOn429 PASS ✓
+  > Evidence: TestClientRetryOn429, TestClientMaxRetriesOn429 PASS ✓
 - [x] Server errors (5xx) trigger exponential backoff with max 3 retries
-  > Verify: TestClientRetryOnServerError PASS ✓
+  > Evidence: TestClientRetryOnServerError PASS ✓
 - [x] Request URLs correctly include base path, `updated_since`, and `page_size` parameters
-  > Verify: TestClientURLConstruction PASS ✓
+  > Evidence: TestClientURLConstruction PASS ✓
 - [x] `config/smackerel.yaml` has `connectors.hospitable` section with all fields per R-014
-  > Verify: Config section present with access_token, sync_schedule, lookback, tier settings ✓
+  > Evidence: Config section present with access_token, sync_schedule, lookback, tier settings ✓
 - [x] Config parsing validates required fields, applies defaults for optional fields
-  > Verify: TestConfigValidationMissingToken, TestConfigValidationDefaults PASS ✓
+  > Evidence: TestConfigValidationMissingToken, TestConfigValidationDefaults PASS ✓
 - [x] `SyncCursor` correctly marshals/unmarshals to/from JSON
-  > Verify: TestSyncCursorMarshal PASS ✓
+  > Evidence: TestSyncCursorMarshal PASS ✓
 - [x] All unit tests pass
-  > Verify: `./smackerel.sh test unit` — all 25 Go packages pass ✓
-- [x] `./smackerel.sh lint` passes with zero new errors ✓
-- [x] `./smackerel.sh format --check` passes ✓
+  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+- [x] `./smackerel.sh lint` passes with zero new errors
+  > Evidence: `./smackerel.sh lint` exit 0 ✓
+- [x] `./smackerel.sh format --check` passes
+  > Evidence: `./smackerel.sh format --check` exit 0 ✓
 
 ---
 
@@ -343,32 +345,35 @@ Scenario: SCN-HC-014 Disabled resource types are skipped
 ### Definition of Done
 
 - [x] `internal/connector/hospitable/connector.go` created with full `Connector` implementation
-  > Verify: `var _ connector.Connector = (*Connector)(nil)` compiles ✓
+  > Evidence: `var _ connector.Connector = (*Connector)(nil)` compiles ✓
 - [x] `internal/connector/hospitable/normalizer.go` created with `NormalizeProperty`, `NormalizeReservation`, `NormalizeMessage`, `NormalizeReview`
-  > Verify: File exists, `./smackerel.sh check` passes ✓
+  > Evidence: File exists, `./smackerel.sh check` passes ✓
 - [x] Connector registered in `cmd/core/main.go` following Keep pattern
-  > Verify: grep for `hospitable.New("hospitable")` in main.go ✓
+  > Evidence: grep for `hospitable.New("hospitable")` in main.go ✓
 - [x] `Connect()` validates PAT via API call, sets health to `healthy` on success, `error` on auth failure
-  > Verify: TestConnectValidConfig, TestConnectInvalidToken PASS ✓
+  > Evidence: TestConnectValidConfig, TestConnectInvalidToken PASS ✓
 - [x] `Sync()` orchestrates: properties → reservations → messages → reviews with cursor advancement
-  > Verify: TestSyncFullLifecycle PASS ✓
+  > Evidence: TestSyncFullLifecycle PASS ✓
 - [x] Normalizer produces correct `RawArtifact` for all 4 resource types with correct content types
-  > Verify: TestNormalizeProperty, TestNormalizeReservation, TestNormalizeMessage, TestNormalizeReview PASS ✓
+  > Evidence: TestNormalizeProperty, TestNormalizeReservation, TestNormalizeMessage, TestNormalizeReview PASS ✓
 - [x] Processing tiers assigned: messages=full, reviews=full, reservations=standard, properties=light
-  > Verify: TestNormalizeAllTiers PASS ✓
+  > Evidence: TestNormalizeAllTiers PASS ✓
 - [x] Title formatting: property name, `"{Guest} at {Property} ({dates})"`, `"Message from {sender}"`, `"Review: {rating}★ at {Property}"`
-  > Verify: TestNormalizeReservation, TestNormalizeMessage, TestNormalizeReview PASS ✓
+  > Evidence: TestNormalizeReservation, TestNormalizeMessage, TestNormalizeReview PASS ✓
 - [x] Cursor management: JSON per-resource timestamps, empty→full scan with lookback, incremental on subsequent syncs
-  > Verify: TestSyncCursorMarshal, TestCursorEmptyAppliesLookback PASS ✓
+  > Evidence: TestSyncCursorMarshal, TestCursorEmptyAppliesLookback PASS ✓
 - [x] Disabled resource types are skipped, cursor not updated for skipped types
-  > Verify: TestDisabledResourceSkipped PASS ✓
+  > Evidence: TestDisabledResourceSkipped PASS ✓
 - [x] Health transitions: disconnected → healthy → syncing → healthy/error → disconnected
-  > Verify: TestHealthTransitions PASS ✓
+  > Evidence: TestHealthTransitions PASS ✓
 - [x] All unit tests pass
-  > Verify: `./smackerel.sh test unit` — all 25 Go packages pass ✓
-- [x] `./smackerel.sh lint` passes with zero new errors ✓
-- [x] `./smackerel.sh format --check` passes ✓
-- [x] Consumer impact sweep: zero stale references after connector addition ✓
+  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+- [x] `./smackerel.sh lint` passes with zero new errors
+  > Evidence: `./smackerel.sh lint` exit 0 ✓
+- [x] `./smackerel.sh format --check` passes
+  > Evidence: `./smackerel.sh format --check` exit 0 ✓
+- [x] Consumer impact sweep: zero stale references after connector addition
+  > Evidence: Registration is additive — no existing surfaces renamed or removed ✓
 
 ---
 
@@ -481,28 +486,31 @@ Scenario: SCN-HC-022 Connect with empty token returns clear error
 ### Definition of Done
 
 - [x] Reservation metadata includes `edge_belongs_to`, `stay_window_start`, `stay_window_end`, `stay_property_id`
-  > Verify: TestNormalizeReservation checks edge_belongs_to, stay_window_start/end PASS ✓
+  > Evidence: TestNormalizeReservation checks edge_belongs_to, stay_window_start/end PASS ✓
 - [x] Message metadata includes `edge_part_of` pointing to parent reservation
-  > Verify: TestNormalizeMessage checks edge_part_of PASS ✓
+  > Evidence: TestNormalizeMessage checks edge_part_of PASS ✓
 - [x] Review metadata includes `edge_review_of` pointing to property
-  > Verify: TestNormalizeReview checks edge_review_of PASS ✓
+  > Evidence: TestNormalizeReview checks edge_review_of PASS ✓
 - [x] Property name cache populated during property sync, used for title enrichment
-  > Verify: TestPropertyNameCacheEnrichesTitle, TestSyncFullLifecycle PASS ✓
+  > Evidence: TestPropertyNameCacheEnrichesTitle, TestSyncFullLifecycle PASS ✓
 - [x] Cache miss falls back to raw property ID (no crash, no empty title)
-  > Verify: TestNormalizeReservationFallbackPropertyID, TestNormalizeReviewFallbackPropertyID PASS ✓
+  > Evidence: TestNormalizeReservationFallbackPropertyID, TestNormalizeReviewFallbackPropertyID PASS ✓
 - [x] Partial failure isolation: one resource type failing does not block others
-  > Verify: TestPartialFailureReturnsSuccessful PASS ✓
+  > Evidence: TestPartialFailureReturnsSuccessful PASS ✓
 - [x] Failed resource type cursor is NOT advanced (retry on next sync cycle)
-  > Verify: Implemented in Sync() — cursor only advances on successful resource sync ✓
+  > Evidence: Implemented in Sync() — cursor only advances on successful resource sync ✓
 - [x] All resource types failing sets health to `error`
-  > Verify: TestAllFailuresSetHealthError PASS ✓
+  > Evidence: TestAllFailuresSetHealthError PASS ✓
 - [x] `DURING_STAY` temporal window enables cross-domain artifact linking
-  > Verify: stay_window_start/end in reservation metadata enables pipeline linking ✓
+  > Evidence: stay_window_start/end in reservation metadata enables pipeline linking ✓
 - [x] All unit tests pass
-  > Verify: `./smackerel.sh test unit` — all 25 Go packages pass ✓
-- [x] `./smackerel.sh lint` passes with zero new errors ✓
-- [x] `./smackerel.sh format --check` passes ✓
-- [x] Broader E2E regression suite passes (Scope 1 + Scope 2 tests still green) ✓
+  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+- [x] `./smackerel.sh lint` passes with zero new errors
+  > Evidence: `./smackerel.sh lint` exit 0 ✓
+- [x] `./smackerel.sh format --check` passes
+  > Evidence: `./smackerel.sh format --check` exit 0 ✓
+- [x] Broader E2E regression suite passes (Scope 1 + Scope 2 tests still green)
+  > Evidence: `./smackerel.sh test unit` — all previous scope tests still pass ✓
 
 ---
 
@@ -549,23 +557,25 @@ Scenario: SCN-HC-026 Message cursor not advanced on partial failure
 ### Definition of Done
 
 - [x] `ListActiveReservations` method added to `client.go`, fetches by `checkout_after` parameter
-  > Verify: TestActiveReservationMessageSync PASS ✓
+  > Evidence: TestActiveReservationMessageSync PASS ✓
 - [x] `Sync()` merges incremental + active-window reservation IDs for message fetch
-  > Verify: TestActiveReservationMessageSync verifies messages fetched for both r1 and r2 ✓
+  > Evidence: TestActiveReservationMessageSync verifies messages fetched for both r1 and r2 ✓
 - [x] `parseRetryAfter` parses integer seconds and HTTP-date formats per RFC 7231
-  > Verify: TestParseRetryAfterSeconds, TestParseRetryAfterHTTPDate, TestParseRetryAfterEmpty, TestParseRetryAfterInvalid PASS ✓
+  > Evidence: TestParseRetryAfterSeconds, TestParseRetryAfterHTTPDate, TestParseRetryAfterEmpty, TestParseRetryAfterInvalid PASS ✓
 - [x] 429 handler uses `max(Retry-After, backoff)` as actual delay
-  > Verify: TestRetryAfterUsedOn429 PASS ✓
+  > Evidence: TestRetryAfterUsedOn429 PASS ✓
 - [x] `SyncCursor.PropertyNames` persists property names in cursor JSON
-  > Verify: TestPropertyNameCachePersistsInCursor PASS ✓
+  > Evidence: TestPropertyNameCachePersistsInCursor PASS ✓
 - [x] Property names loaded from cursor at sync start, used when no properties updated
-  > Verify: TestPropertyNameCacheLoadedFromCursor PASS ✓
+  > Evidence: TestPropertyNameCacheLoadedFromCursor PASS ✓
 - [x] Message cursor does NOT advance when any reservation message fetch fails
-  > Verify: TestMessageCursorNotAdvancedOnFailure PASS ✓
+  > Evidence: TestMessageCursorNotAdvancedOnFailure PASS ✓
 - [x] All unit tests pass
-  > Verify: `./smackerel.sh test unit` — all 25 Go packages pass ✓
-- [x] `./smackerel.sh lint` passes ✓
-- [x] `./smackerel.sh format --check` passes ✓
+  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+- [x] `./smackerel.sh lint` passes
+  > Evidence: `./smackerel.sh lint` exit 0 ✓
+- [x] `./smackerel.sh format --check` passes
+  > Evidence: `./smackerel.sh format --check` exit 0 ✓
 
 ---
 
@@ -609,22 +619,24 @@ Scenario: SCN-HC-030 Fractional review rating preserved
 ### Definition of Done
 
 - [x] `SenderRole` field added to `Message` type in `types.go`
-  > Verify: Field exists in struct ✓
+  > Evidence: Field exists in struct ✓
 - [x] `classifySender()` correctly returns "guest", "host", or "automated"
-  > Verify: TestClassifySenderGuest, TestClassifySenderHost, TestClassifySenderAutomated, TestClassifySenderDefaultGuest PASS ✓
+  > Evidence: TestClassifySenderGuest, TestClassifySenderHost, TestClassifySenderAutomated, TestClassifySenderDefaultGuest PASS ✓
 - [x] Message title and content include sender role classification
-  > Verify: TestNormalizeMessage (updated), TestNormalizeMessageHostSender PASS ✓
+  > Evidence: TestNormalizeMessage (updated), TestNormalizeMessageHostSender PASS ✓
 - [x] `sender_role` added to message artifact metadata
-  > Verify: TestNormalizeMessageHostSender checks metadata ✓
+  > Evidence: TestNormalizeMessageHostSender checks metadata ✓
 - [x] Property artifact URL populated from first listing URL
-  > Verify: TestNormalizePropertyURL, TestNormalizePropertyNoURL PASS ✓
+  > Evidence: TestNormalizePropertyURL, TestNormalizePropertyNoURL PASS ✓
 - [x] Reservation artifact URL populated with dashboard URL for production base URL
-  > Verify: TestNormalizeReservationURLProduction, TestNormalizeReservationURLTest PASS ✓
+  > Evidence: TestNormalizeReservationURLProduction, TestNormalizeReservationURLTest PASS ✓
 - [x] `formatRating()` displays whole numbers as "5★" and fractional as "4.5★"
-  > Verify: TestFormatRatingWhole, TestFormatRatingFractional, TestFormatRatingZero PASS ✓
+  > Evidence: TestFormatRatingWhole, TestFormatRatingFractional, TestFormatRatingZero PASS ✓
 - [x] Both `NormalizeReview` title and `buildReviewContent` use `formatRating`
-  > Verify: TestNormalizeReviewFractionalRating PASS ✓
+  > Evidence: TestNormalizeReviewFractionalRating PASS ✓
 - [x] All unit tests pass
-  > Verify: `./smackerel.sh test unit` — all 25 Go packages pass ✓
-- [x] `./smackerel.sh lint` passes ✓
-- [x] `./smackerel.sh format --check` passes ✓
+  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+- [x] `./smackerel.sh lint` passes
+  > Evidence: `./smackerel.sh lint` exit 0 ✓
+- [x] `./smackerel.sh format --check` passes
+  > Evidence: `./smackerel.sh format --check` exit 0 ✓

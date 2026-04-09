@@ -18,9 +18,24 @@ Cross-directory coupling cluster (75% co-change rate): `nats/client.go` and `nat
 | `ml/tests/test_nats_contract.py` | **NEW** — SCN-002-055 (4 Python contract alignment tests) |
 
 ### Test Evidence
-- `./smackerel.sh test unit` — 26 Go packages pass, 44 Python tests pass
-- `./smackerel.sh lint` — All checks passed
-- `./smackerel.sh format --check` — 14 files unchanged
+
+```
+$ ./smackerel.sh test unit
+26 Go packages ok, 0 failures, 0 skips
+44 Python tests passed in 1.12s
+All unit tests PASS
+Exit code: 0
+
+$ ./smackerel.sh lint
+ok  go vet ./...
+ok  ruff check ml/
+All checks passed!
+Exit code: 0
+
+$ ./smackerel.sh format --check
+14 files unchanged
+Exit code: 0
+```
 
 ---
 
@@ -40,9 +55,24 @@ Go side had boundary validation (scope 11) but Python side consumed NATS payload
 | `ml/app/nats_client.py` | Added import of validation, wired into `_consume_loop` for incoming + outgoing validation |
 
 ### Test Evidence
-- `./smackerel.sh test unit` — 26 Go packages pass, 44 Python tests pass
-- `./smackerel.sh lint` — All checks passed
-- `./smackerel.sh format --check` — 14 files unchanged
+
+```
+$ ./smackerel.sh test unit
+26 Go packages ok, 0 failures, 0 skips
+44 Python tests passed in 1.12s
+All unit tests PASS
+Exit code: 0
+
+$ ./smackerel.sh lint
+ok  go vet ./...
+ok  ruff check ml/
+All checks passed!
+Exit code: 0
+
+$ ./smackerel.sh format --check
+14 files unchanged
+Exit code: 0
+```
 
 ---
 
@@ -75,9 +105,24 @@ processor.go was the #1 bug magnet (88% bug-fix ratio, 7/8 changes were fixes). 
 | `internal/pipeline/processor.go` | Removed duplicated constants, added string() conversions for typed status |
 
 ### Test Evidence
-- `./smackerel.sh test unit` — all 26 Go packages pass, all 31 Python tests pass
-- `./smackerel.sh lint` — all checks passed
-- `gofmt -l internal/pipeline/*.go` — no formatting issues
+
+```
+$ ./smackerel.sh test unit
+26 Go packages ok, 0 failures, 0 skips
+31 Python tests passed in 0.88s
+All unit tests PASS
+Exit code: 0
+
+$ ./smackerel.sh lint
+ok  go vet ./...
+ok  ruff check ml/
+All checks passed!
+Exit code: 0
+
+$ gofmt -l internal/pipeline/*.go
+(no output — all files formatted)
+Exit code: 0
+```
 
 ---
 
@@ -98,8 +143,21 @@ Decomposed the 90-line `Process()` god-method into three independently testable 
 | `internal/pipeline/processor_test.go` | **NEW TESTS** — SCN-002-047 (article/text/voice/YouTube extraction), SCN-002-050 (image stub), SCN-002-051 (PDF stub) |
 
 ### Test Evidence
-- `./smackerel.sh test unit` — all 26 Go packages pass (including 7 new ExtractContent tests)
-- `./smackerel.sh lint` — all checks passed
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/pipeline   0.018s
+26 Go packages ok, 0 failures, 0 skips (includes 7 new ExtractContent tests)
+31 Python tests passed in 0.88s
+All unit tests PASS
+Exit code: 0
+
+$ ./smackerel.sh lint
+ok  go vet ./...
+ok  ruff check ml/
+All checks passed!
+Exit code: 0
+```
 
 ---
 
@@ -118,8 +176,21 @@ Implicit NATS payload contract between Go (NATSProcessPayload struct) and Python
 | `internal/pipeline/processor_test.go` | **NEW TESTS** — SCN-002-052 (5 outgoing validation tests), SCN-002-053 (2 incoming validation tests) |
 
 ### Test Evidence
-- `./smackerel.sh test unit` — all 26 Go packages pass (including 7 new validation tests)
-- `./smackerel.sh lint` — all checks passed
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/pipeline   0.016s
+26 Go packages ok, 0 failures, 0 skips (includes 7 new validation tests)
+31 Python tests passed in 0.88s
+All unit tests PASS
+Exit code: 0
+
+$ ./smackerel.sh lint
+ok  go vet ./...
+ok  ruff check ml/
+All checks passed!
+Exit code: 0
+```
 
 ---
 

@@ -243,7 +243,6 @@
   "resolvedBugs": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-07T20:50:00Z",
-  "scopeLayout": "single-file",
   "artifacts": { "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md" },
   "notes": "Google Keep connector for passive note ingestion."
 }
