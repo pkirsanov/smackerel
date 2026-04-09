@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/smackerel/smackerel/internal/connector"
 )
 
@@ -43,6 +44,7 @@ type Connector struct {
 	health connector.HealthStatus
 	mu     sync.RWMutex
 	config MapsConfig
+	pool   *pgxpool.Pool
 
 	// Sync metadata for health reporting
 	lastSyncTime   time.Time
@@ -91,6 +93,17 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		return fmt.Errorf("import directory is not a directory: %s", mapsCfg.ImportDir)
 	}
 
+	// Resolve symlinks to get canonical path, preventing the import directory
+	// from being a symlink that could be retargeted between Connect and Sync.
+	resolved, err := filepath.EvalSymlinks(mapsCfg.ImportDir)
+	if err != nil {
+		c.mu.Lock()
+		c.health = connector.HealthError
+		c.mu.Unlock()
+		return fmt.Errorf("resolve import directory path: %w", err)
+	}
+	mapsCfg.ImportDir = resolved
+
 	c.mu.Lock()
 	c.config = mapsCfg
 	c.health = connector.HealthHealthy
@@ -135,12 +148,38 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		return nil, cursor, nil
 	}
 
+	const largeFileSizeBytes = 50 * 1024 * 1024 // 50MB warning threshold
+	const maxFileSizeBytes = 200 * 1024 * 1024  // 200MB hard limit
+
 	var allArtifacts []connector.RawArtifact
 	var processedThisCycle []string
 	syncErrors := 0
 	trailCount := 0
 
 	for _, file := range newFiles {
+		// Check for context cancellation between files.
+		if err := ctx.Err(); err != nil {
+			slog.Warn("sync cancelled", "processed_so_far", len(processedThisCycle), "error", err)
+			break
+		}
+
+		// Enforce file size limits.
+		if info, statErr := os.Stat(file); statErr == nil {
+			if info.Size() > maxFileSizeBytes {
+				slog.Warn("skipping oversized takeout file",
+					"file", filepath.Base(file),
+					"size_mb", info.Size()/(1024*1024),
+					"limit_mb", maxFileSizeBytes/(1024*1024))
+				syncErrors++
+				continue
+			}
+			if info.Size() > largeFileSizeBytes {
+				slog.Warn("large takeout file detected",
+					"file", filepath.Base(file),
+					"size_mb", info.Size()/(1024*1024))
+			}
+		}
+
 		data, err := os.ReadFile(file)
 		if err != nil {
 			slog.Warn("failed to read takeout file", "file", file, "error", err)
@@ -169,6 +208,16 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 			if IsTrailQualified(activity) {
 				trailCount++
+			}
+
+			// Insert location cluster row for pattern detection.
+			c.mu.RLock()
+			pool := c.pool
+			c.mu.RUnlock()
+			if pool != nil {
+				if err := InsertLocationCluster(ctx, pool, activity, artifact.SourceRef); err != nil {
+					slog.Warn("failed to insert location cluster", "error", err)
+				}
 			}
 		}
 
@@ -200,6 +249,47 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	return allArtifacts, newCursor, nil
 }
 
+// PostSync runs pattern detection and temporal-spatial linking after a sync cycle.
+// Returns any generated pattern/trip artifacts for pipeline publishing.
+// Each step continues on failure — errors are logged but do not block subsequent steps.
+func (c *Connector) PostSync(ctx context.Context, activities []TakeoutActivity) ([]connector.RawArtifact, error) {
+	c.mu.RLock()
+	pool := c.pool
+	c.mu.RUnlock()
+
+	if pool == nil {
+		return nil, nil // no DB pool = skip pattern detection
+	}
+
+	pd := NewPatternDetector(pool, c.config)
+	var allArtifacts []connector.RawArtifact
+
+	commuteArtifacts, err := pd.DetectCommutes(ctx)
+	if err != nil {
+		slog.Warn("commute detection failed", "error", err)
+	} else {
+		allArtifacts = append(allArtifacts, commuteArtifacts...)
+	}
+
+	tripArtifacts, err := pd.DetectTrips(ctx)
+	if err != nil {
+		slog.Warn("trip detection failed", "error", err)
+	} else {
+		allArtifacts = append(allArtifacts, tripArtifacts...)
+	}
+
+	linkedCount, err := pd.LinkTemporalSpatial(ctx, activities)
+	if err != nil {
+		slog.Warn("temporal-spatial linking failed", "error", err)
+	}
+
+	slog.Info("post-sync patterns complete",
+		"commute_patterns", len(commuteArtifacts),
+		"trip_events", len(tripArtifacts),
+		"links_created", linkedCount)
+	return allArtifacts, nil
+}
+
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -211,6 +301,51 @@ func (c *Connector) Close() error {
 	defer c.mu.Unlock()
 	c.health = connector.HealthDisconnected
 	slog.Info("google maps timeline connector closed")
+	return nil
+}
+
+// SetPool sets the database connection pool for location_clusters insertion.
+func (c *Connector) SetPool(pool *pgxpool.Pool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.pool = pool
+}
+
+// InsertLocationCluster inserts a location cluster row for pattern detection.
+func InsertLocationCluster(ctx context.Context, pool *pgxpool.Pool, activity TakeoutActivity, sourceRef string) error {
+	var startLat, startLng, endLat, endLng float64
+	if len(activity.Route) > 0 {
+		startLat = roundToGrid(activity.Route[0].Lat)
+		startLng = roundToGrid(activity.Route[0].Lng)
+		endLat = roundToGrid(activity.Route[len(activity.Route)-1].Lat)
+		endLng = roundToGrid(activity.Route[len(activity.Route)-1].Lng)
+	}
+
+	id := computeDedupHash(activity)
+	dayOfWeek := int(activity.StartTime.Weekday())
+	departureHour := activity.StartTime.Hour()
+	activityDate := activity.StartTime.Format("2006-01-02")
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO location_clusters (
+			id, source_ref,
+			start_cluster_lat, start_cluster_lng,
+			end_cluster_lat, end_cluster_lng,
+			activity_type, activity_date,
+			day_of_week, departure_hour,
+			distance_km, duration_min
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		ON CONFLICT (id) DO NOTHING`,
+		id, sourceRef,
+		startLat, startLng,
+		endLat, endLng,
+		string(activity.Type), activityDate,
+		dayOfWeek, departureHour,
+		activity.DistanceKm, activity.DurationMin,
+	)
+	if err != nil {
+		return fmt.Errorf("insert location cluster: %w", err)
+	}
 	return nil
 }
 
@@ -229,6 +364,11 @@ func (c *Connector) findNewFiles(processedFiles []string) ([]string, error) {
 	var newFiles []string
 	for _, entry := range entries {
 		if entry.IsDir() {
+			continue
+		}
+
+		// Skip symlinks to prevent reading files outside the import directory.
+		if entry.Type()&os.ModeSymlink != 0 {
 			continue
 		}
 

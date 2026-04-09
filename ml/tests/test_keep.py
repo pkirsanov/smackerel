@@ -248,9 +248,7 @@ class TestSecurityOCR:
         """Oversized base64 image data must be rejected."""
         _ocr_cache.clear()
         huge_data = "A" * (10 * 1024 * 1024 + 1)
-        result = asyncio.run(
-            handle_ocr_request({"image_hash": "huge", "image_data": huge_data})
-        )
+        result = asyncio.run(handle_ocr_request({"image_hash": "huge", "image_data": huge_data}))
         assert result["status"] == "error"
         assert "too large" in result["error"]
 

@@ -261,3 +261,100 @@ func TestParseTakeoutJSON_BadTimestamp(t *testing.T) {
 		t.Errorf("expected cycling activity, got %q", activities[0].Type)
 	}
 }
+
+func TestClassifyActivityBoundary5km(t *testing.T) {
+	// Exactly 5.0km WALKING → Walk (threshold is >5.0 for Hike)
+	got := ClassifyActivity("WALKING", 5.0)
+	if got != ActivityWalk {
+		t.Errorf("ClassifyActivity(WALKING, 5.0) = %q, want %q (boundary: <=5km is Walk)", got, ActivityWalk)
+	}
+
+	// Just above 5.0km → Hike
+	got = ClassifyActivity("WALKING", 5.01)
+	if got != ActivityHike {
+		t.Errorf("ClassifyActivity(WALKING, 5.01) = %q, want %q", got, ActivityHike)
+	}
+}
+
+func TestClassifyActivityDRIVINGType(t *testing.T) {
+	// Both "DRIVING" and "IN_VEHICLE" should map to ActivityDrive
+	if got := ClassifyActivity("DRIVING", 10.0); got != ActivityDrive {
+		t.Errorf("ClassifyActivity(DRIVING) = %q, want %q", got, ActivityDrive)
+	}
+	if got := ClassifyActivity("IN_VEHICLE", 10.0); got != ActivityDrive {
+		t.Errorf("ClassifyActivity(IN_VEHICLE) = %q, want %q", got, ActivityDrive)
+	}
+}
+
+func TestClassifyActivityAllTransitTypes(t *testing.T) {
+	for _, tt := range []string{"IN_BUS", "IN_SUBWAY", "IN_TRAIN", "IN_TRAM"} {
+		got := ClassifyActivity(tt, 10.0)
+		if got != ActivityTransit {
+			t.Errorf("ClassifyActivity(%q) = %q, want %q", tt, got, ActivityTransit)
+		}
+	}
+}
+
+func TestIsTrailQualifiedBoundaries(t *testing.T) {
+	// Walk at exactly 2.0km → qualified (>=2.0)
+	if !IsTrailQualified(TakeoutActivity{Type: ActivityWalk, DistanceKm: 2.0}) {
+		t.Error("2.0km walk should qualify at exact boundary")
+	}
+	// Walk at 1.99km, 0 duration → not qualified
+	if IsTrailQualified(TakeoutActivity{Type: ActivityWalk, DistanceKm: 1.99, DurationMin: 0}) {
+		t.Error("1.99km/0min walk should not qualify")
+	}
+	// Walk at exactly 30.0min, 1km → qualified by duration
+	if !IsTrailQualified(TakeoutActivity{Type: ActivityWalk, DistanceKm: 1.0, DurationMin: 30.0}) {
+		t.Error("30min walk should qualify at exact duration boundary")
+	}
+	// Walk at 29.9min, 1km → not qualified
+	if IsTrailQualified(TakeoutActivity{Type: ActivityWalk, DistanceKm: 1.0, DurationMin: 29.9}) {
+		t.Error("1km/29.9min walk should not qualify (below both thresholds)")
+	}
+	// Cycle at exactly 5.0km → qualified
+	if !IsTrailQualified(TakeoutActivity{Type: ActivityCycle, DistanceKm: 5.0}) {
+		t.Error("5.0km cycle should qualify at exact boundary")
+	}
+	// Cycle at 4.99km → not qualified
+	if IsTrailQualified(TakeoutActivity{Type: ActivityCycle, DistanceKm: 4.99}) {
+		t.Error("4.99km cycle should not qualify")
+	}
+	// Run at exactly 2.0km → qualified
+	if !IsTrailQualified(TakeoutActivity{Type: ActivityRun, DistanceKm: 2.0}) {
+		t.Error("2.0km run should qualify at exact boundary")
+	}
+	// Transit never qualifies
+	if IsTrailQualified(TakeoutActivity{Type: ActivityTransit, DistanceKm: 100.0, DurationMin: 120}) {
+		t.Error("transit should never qualify as trail regardless of distance/duration")
+	}
+}
+
+func TestHaversineSamePoint(t *testing.T) {
+	p := LatLng{Lat: 47.37, Lng: 8.54}
+	d := Haversine(p, p)
+	if d != 0 {
+		t.Errorf("distance between same point should be 0, got %f", d)
+	}
+}
+
+func TestHaversineSouthernHemisphere(t *testing.T) {
+	// Sydney to Melbourne: ~714km
+	sydney := LatLng{Lat: -33.8688, Lng: 151.2093}
+	melbourne := LatLng{Lat: -37.8136, Lng: 144.9631}
+	d := Haversine(sydney, melbourne)
+	if math.Abs(d-714) > 50 {
+		t.Errorf("Sydney to Melbourne should be ~714km, got %.0fkm", d)
+	}
+}
+
+func TestToGeoJSONEmpty(t *testing.T) {
+	geojson := ToGeoJSON(nil)
+	if geojson["type"] != "LineString" {
+		t.Errorf("type = %v, want LineString", geojson["type"])
+	}
+	coords := geojson["coordinates"].([][]float64)
+	if len(coords) != 0 {
+		t.Errorf("expected 0 coordinates for nil route, got %d", len(coords))
+	}
+}
