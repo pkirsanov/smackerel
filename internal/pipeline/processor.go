@@ -19,6 +19,24 @@ import (
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
+// Processing status constants — canonical values for artifacts.processing_status.
+// Using constants eliminates magic-string coupling across SQL queries and service boundaries.
+const (
+	StatusPending   = "pending"
+	StatusProcessed = "processed"
+	StatusFailed    = "failed"
+)
+
+// Source ID constants — canonical source identifiers shared across capture API,
+// Telegram bot, connectors, and tier assignment. Formalising these eliminates the
+// magic-string coupling that made processor.go, bot.go, and tier.go co-change.
+const (
+	SourceCapture        = "capture"
+	SourceTelegram       = "telegram"
+	SourceBrowser        = "browser"
+	SourceBrowserHistory = "browser-history"
+)
+
 // ProcessRequest is the input for the processing pipeline.
 type ProcessRequest struct {
 	URL      string `json:"url,omitempty"`
@@ -102,7 +120,8 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 	switch {
 	case req.URL != "":
 		contentType := extract.DetectContentType(req.URL)
-		if contentType == extract.ContentTypeYouTube {
+		switch contentType {
+		case extract.ContentTypeYouTube:
 			// YouTube needs ML sidecar for transcript — create stub and send to ML
 			extracted = &extract.Result{
 				ContentType: extract.ContentTypeYouTube,
@@ -112,7 +131,25 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 				SourceURL:   req.URL,
 				VideoID:     extract.ExtractYouTubeID(req.URL),
 			}
-		} else {
+		case extract.ContentTypeImage:
+			// Image needs ML sidecar for OCR (R-003) — create stub and send to ML
+			extracted = &extract.Result{
+				ContentType: extract.ContentTypeImage,
+				Title:       "Image",
+				Text:        req.URL,
+				ContentHash: extract.HashContent(req.URL),
+				SourceURL:   req.URL,
+			}
+		case extract.ContentTypePDF:
+			// PDF needs ML sidecar for text extraction (R-003) — create stub and send to ML
+			extracted = &extract.Result{
+				ContentType: extract.ContentTypePDF,
+				Title:       "PDF Document",
+				Text:        req.URL,
+				ContentHash: extract.HashContent(req.URL),
+				SourceURL:   req.URL,
+			}
+		default:
 			extracted, err = extract.ExtractArticle(ctx, req.URL)
 			if err != nil {
 				return nil, fmt.Errorf("content extraction failed: %w", err)
@@ -123,7 +160,7 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 	case req.VoiceURL != "":
 		// Voice notes need ML sidecar for Whisper transcription
 		extracted = &extract.Result{
-			ContentType: extract.ContentTypeGeneric,
+			ContentType: extract.ContentTypeVoice,
 			Title:       "Voice Note",
 			Text:        req.VoiceURL,
 			ContentHash: extract.HashContent(req.VoiceURL),
@@ -133,7 +170,10 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 		return nil, fmt.Errorf("at least one of url, text, or voice_url is required")
 	}
 
-	// Step 2: Dedup check — by URL first (R-011), then by content hash
+	// Step 2: Dedup check — by URL first (R-011), then by content hash.
+	// R-011 delta re-processing: if the URL already exists but the content hash
+	// has changed, allow re-processing so updated content (e.g. email thread
+	// with new replies, edited articles) gets captured.
 	dedup := &DedupChecker{Pool: p.DB}
 
 	if req.URL != "" {
@@ -141,20 +181,39 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 		if err != nil {
 			slog.Warn("URL dedup check failed, continuing", "error", err)
 		} else if urlResult != nil && urlResult.IsDuplicate {
-			return nil, &DuplicateError{
-				ExistingID: urlResult.ExistingID,
-				Title:      urlResult.Title,
+			// URL exists — check if content actually changed (delta re-processing, R-011)
+			hashResult, hashErr := dedup.Check(ctx, extracted.ContentHash)
+			if hashErr != nil {
+				slog.Warn("content hash check for delta failed, treating as duplicate", "error", hashErr)
+				return nil, &DuplicateError{
+					ExistingID: urlResult.ExistingID,
+					Title:      urlResult.Title,
+				}
 			}
+			if hashResult != nil && hashResult.IsDuplicate {
+				// Same URL, same content — true duplicate
+				return nil, &DuplicateError{
+					ExistingID: urlResult.ExistingID,
+					Title:      urlResult.Title,
+				}
+			}
+			// Same URL, different content — delta re-processing (R-011).
+			// Mark this as a delta update so the existing artifact gets updated.
+			slog.Info("delta re-processing: URL exists but content changed",
+				"url", req.URL,
+				"existing_id", urlResult.ExistingID,
+			)
 		}
-	}
-
-	dupResult, err := dedup.Check(ctx, extracted.ContentHash)
-	if err != nil {
-		slog.Warn("dedup check failed, continuing", "error", err)
-	} else if dupResult != nil && dupResult.IsDuplicate {
-		return nil, &DuplicateError{
-			ExistingID: dupResult.ExistingID,
-			Title:      dupResult.Title,
+	} else {
+		// No URL — standard content-hash dedup only
+		dupResult, err := dedup.Check(ctx, extracted.ContentHash)
+		if err != nil {
+			slog.Warn("dedup check failed, continuing", "error", err)
+		} else if dupResult != nil && dupResult.IsDuplicate {
+			return nil, &DuplicateError{
+				ExistingID: dupResult.ExistingID,
+				Title:      dupResult.Title,
+			}
 		}
 	}
 
@@ -188,7 +247,7 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 	}
 
 	if req.VoiceURL != "" {
-		payload.ContentType = "voice"
+		payload.ContentType = string(extract.ContentTypeVoice)
 		payload.URL = req.VoiceURL
 	}
 
@@ -221,7 +280,7 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 		Connections:      0,
 		Topics:           nil,
 		ProcessingMs:     time.Since(start).Milliseconds(),
-		ProcessingStatus: "pending",
+		ProcessingStatus: StatusPending,
 	}, nil
 }
 
@@ -229,7 +288,7 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result *extract.Result, req *ProcessRequest, tier string) error {
 	sourceID := req.SourceID
 	if sourceID == "" {
-		sourceID = "capture"
+		sourceID = SourceCapture
 	}
 
 	captureMethod := "active"
@@ -254,7 +313,7 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (content_hash) WHERE content_hash IS NOT NULL DO NOTHING
 	`, id, string(result.ContentType), result.Title, contentRaw, result.ContentHash,
-		sourceID, sourceURL, tier, captureMethod, req.Starred, "pending")
+		sourceID, sourceURL, tier, captureMethod, req.Starred, StatusPending)
 	if err != nil {
 		return fmt.Errorf("insert artifact: %w", err)
 	}
@@ -279,9 +338,9 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 		// Mark artifact as metadata-only on LLM failure and set processing_status
 		// to 'failed' so it can be distinguished from still-pending artifacts.
 		_, err := p.DB.Exec(ctx, `
-			UPDATE artifacts SET processing_tier = 'metadata', processing_status = 'failed', updated_at = NOW()
+			UPDATE artifacts SET processing_tier = 'metadata', processing_status = $2, updated_at = NOW()
 			WHERE id = $1
-		`, payload.ArtifactID)
+		`, payload.ArtifactID, StatusFailed)
 		if err != nil {
 			return fmt.Errorf("update artifact on failure: %w", err)
 		}
@@ -292,11 +351,24 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 		return nil
 	}
 
-	// Update artifact with ML results
-	entitiesJSON, _ := json.Marshal(payload.Result.Entities)
-	keyIdeasJSON, _ := json.Marshal(payload.Result.KeyIdeas)
-	actionItemsJSON, _ := json.Marshal(payload.Result.ActionItems)
-	topicsJSON, _ := json.Marshal(payload.Result.Topics)
+	// Update artifact with ML results — propagate marshal errors instead of
+	// silently storing nil/empty JSON which was a recurring bug-fix trigger.
+	entitiesJSON, err := json.Marshal(payload.Result.Entities)
+	if err != nil {
+		return fmt.Errorf("marshal entities for artifact %s: %w", payload.ArtifactID, err)
+	}
+	keyIdeasJSON, err := json.Marshal(payload.Result.KeyIdeas)
+	if err != nil {
+		return fmt.Errorf("marshal key_ideas for artifact %s: %w", payload.ArtifactID, err)
+	}
+	actionItemsJSON, err := json.Marshal(payload.Result.ActionItems)
+	if err != nil {
+		return fmt.Errorf("marshal action_items for artifact %s: %w", payload.ArtifactID, err)
+	}
+	topicsJSON, err := json.Marshal(payload.Result.Topics)
+	if err != nil {
+		return fmt.Errorf("marshal topics for artifact %s: %w", payload.ArtifactID, err)
+	}
 
 	// Convert embedding to pgvector format
 	embeddingStr := db.FormatEmbedding(payload.Embedding)
@@ -314,14 +386,15 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 			source_quality = $10,
 			embedding = $11,
 			processing_tier = CASE WHEN $12 = '' THEN processing_tier ELSE $12 END,
-			processing_status = 'processed',
+			processing_status = $13,
 			updated_at = NOW()
 		WHERE id = $1
 	`, payload.ArtifactID, payload.Result.ArtifactType, payload.Result.Title,
 		payload.Result.Summary, keyIdeasJSON, entitiesJSON,
 		actionItemsJSON, topicsJSON, payload.Result.Sentiment,
 		payload.Result.SourceQuality, embeddingStr,
-		"") // keep existing tier
+		"", // keep existing tier
+		StatusProcessed)
 
 	if err != nil {
 		return fmt.Errorf("update artifact with ML results: %w", err)
