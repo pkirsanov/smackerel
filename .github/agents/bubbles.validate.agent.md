@@ -24,6 +24,18 @@ handoffs:
 
 **⚠️ Anti-Fabrication for Validation (NON-NEGOTIABLE):** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md) and [state-gates.md](bubbles_shared/state-gates.md).
 
+**⚠️ Execution-Only Validation (NON-NEGOTIABLE — Gate G071):**
+Every validation command in Step 2 (build, lint, test, guard scripts, artifact lint, traceability guard, implementation reality scan, etc.) MUST be executed via `run_in_terminal`. Reading the files that a script would check, performing equivalent pattern matching, and reporting predicted findings is **fabrication** — even if the predictions turn out to be accurate. The value of validation is that it runs the canonical script with its exact logic, not that an agent approximates that logic by reading files.
+
+Specifically FORBIDDEN:
+- Reading source/artifact files and predicting what `artifact-lint.sh` would report
+- Grepping scope files manually and claiming equivalent coverage to `traceability-guard.sh`
+- Analyzing code and inferring what test commands would output without running them
+- Reporting "32 issues found" or "all checks pass" based on file inspection rather than command execution
+- Any validation verdict derived from file analysis instead of terminal command output
+
+If `run_in_terminal` is unavailable or a command fails to execute, report the command as **NOT RUN** with the reason — never substitute file analysis as a fallback.
+
 **Artifact Ownership (this agent creates/modifies ONLY these):**
 - `state.json` certification fields — `certification.*`, promotion state, reopen/invalidate
 - `report.md` — append validation evidence to existing sections

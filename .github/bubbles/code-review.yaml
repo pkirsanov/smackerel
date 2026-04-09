@@ -67,7 +67,7 @@ escalationRules:
   - User asks for product, UX, accessibility, usability, or competitive feedback
   - Review requires live user execution or UI behavior assessment
 followUpTags:
-  directFix: Ready for engineering implementation without new spec work
+  directFix: Fix design is straightforward — no NEW feature-level spec needed, but bug artifacts are STILL required via bubbles.bug before implementation. directFix does NOT exempt findings from the planning-first delivery policy.
   routeToSystemReview: Broader than code-only; escalate to system-review
   documentOnly: Docs/process update only
   monitor: Track but do not act immediately

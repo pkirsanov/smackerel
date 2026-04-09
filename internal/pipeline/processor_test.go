@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -228,6 +229,102 @@ func TestG002_FailurePayload_SetsProcessingStatusFailed(t *testing.T) {
 	}
 }
 
+// SCN-002-052: Valid outgoing payload passes validation.
+func TestSCN002052_ValidateProcessPayload_Valid(t *testing.T) {
+	p := &NATSProcessPayload{
+		ArtifactID:  "test-id",
+		ContentType: "article",
+		RawText:     "some text",
+	}
+	if err := ValidateProcessPayload(p); err != nil {
+		t.Errorf("expected no error for valid payload, got: %v", err)
+	}
+}
+
+// SCN-002-052: Empty artifact_id rejected.
+func TestSCN002052_ValidateProcessPayload_EmptyArtifactID(t *testing.T) {
+	p := &NATSProcessPayload{
+		ArtifactID:  "",
+		ContentType: "article",
+		RawText:     "some text",
+	}
+	err := ValidateProcessPayload(p)
+	if err == nil {
+		t.Fatal("expected error for empty artifact_id")
+	}
+	if !containsStr(err.Error(), "artifact_id") {
+		t.Errorf("error should mention artifact_id, got: %v", err)
+	}
+}
+
+// SCN-002-052: Empty content_type rejected.
+func TestSCN002052_ValidateProcessPayload_EmptyContentType(t *testing.T) {
+	p := &NATSProcessPayload{
+		ArtifactID:  "test-id",
+		ContentType: "",
+		RawText:     "some text",
+	}
+	err := ValidateProcessPayload(p)
+	if err == nil {
+		t.Fatal("expected error for empty content_type")
+	}
+	if !containsStr(err.Error(), "content_type") {
+		t.Errorf("error should mention content_type, got: %v", err)
+	}
+}
+
+// SCN-002-052: Missing both raw_text and url rejected.
+func TestSCN002052_ValidateProcessPayload_NoContent(t *testing.T) {
+	p := &NATSProcessPayload{
+		ArtifactID:  "test-id",
+		ContentType: "article",
+		RawText:     "",
+		URL:         "",
+	}
+	err := ValidateProcessPayload(p)
+	if err == nil {
+		t.Fatal("expected error for missing content")
+	}
+}
+
+// SCN-002-052: URL alone is sufficient (no raw_text needed for stubs).
+func TestSCN002052_ValidateProcessPayload_URLOnly(t *testing.T) {
+	p := &NATSProcessPayload{
+		ArtifactID:  "test-id",
+		ContentType: "image",
+		URL:         "https://example.com/photo.jpg",
+	}
+	if err := ValidateProcessPayload(p); err != nil {
+		t.Errorf("expected no error when URL is present, got: %v", err)
+	}
+}
+
+// SCN-002-053: Valid incoming payload passes validation.
+func TestSCN002053_ValidateProcessedPayload_Valid(t *testing.T) {
+	p := &NATSProcessedPayload{
+		ArtifactID: "test-id",
+		Success:    true,
+	}
+	if err := ValidateProcessedPayload(p); err != nil {
+		t.Errorf("expected no error for valid payload, got: %v", err)
+	}
+}
+
+// SCN-002-053: Empty artifact_id rejected.
+func TestSCN002053_ValidateProcessedPayload_EmptyArtifactID(t *testing.T) {
+	p := &NATSProcessedPayload{
+		ArtifactID: "",
+		Success:    false,
+	}
+	err := ValidateProcessedPayload(p)
+	if err == nil {
+		t.Fatal("expected error for empty artifact_id")
+	}
+	if !containsStr(err.Error(), "artifact_id") {
+		t.Errorf("error should mention artifact_id, got: %v", err)
+	}
+}
+
 func containsStr(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && findSubstr(s, substr))
 }
@@ -239,4 +336,130 @@ func findSubstr(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// SCN-002-047: Content extraction dispatches by type independently.
+func TestSCN002047_ExtractContent_ArticleURL(t *testing.T) {
+	ctx := context.Background()
+	req := &ProcessRequest{URL: "https://example.com/article"}
+	result, err := ExtractContent(ctx, req)
+	if err != nil {
+		// ExtractArticle may fail without HTTP, but the dispatch is correct
+		// (it returns "content extraction failed" which proves the article path ran)
+		if !containsStr(err.Error(), "content extraction failed") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		return
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+}
+
+// SCN-002-047: Plain text extraction.
+func TestSCN002047_ExtractContent_PlainText(t *testing.T) {
+	ctx := context.Background()
+	req := &ProcessRequest{Text: "This is a test note"}
+	result, err := ExtractContent(ctx, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.Text != "This is a test note" {
+		t.Errorf("expected text 'This is a test note', got %q", result.Text)
+	}
+}
+
+// SCN-002-047: Empty request rejected.
+func TestSCN002047_ExtractContent_EmptyRequest(t *testing.T) {
+	ctx := context.Background()
+	req := &ProcessRequest{}
+	_, err := ExtractContent(ctx, req)
+	if err == nil {
+		t.Fatal("expected error for empty request")
+	}
+	if !containsStr(err.Error(), "at least one of url, text, or voice_url is required") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// SCN-002-050: Image URL creates stub for ML OCR (R-003).
+func TestSCN002050_ExtractContent_ImageStub(t *testing.T) {
+	ctx := context.Background()
+	req := &ProcessRequest{URL: "https://example.com/photo.jpg"}
+	result, err := ExtractContent(ctx, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for image URL")
+	}
+	if string(result.ContentType) != "image" {
+		t.Errorf("expected content type 'image', got %q", result.ContentType)
+	}
+	if result.SourceURL != "https://example.com/photo.jpg" {
+		t.Errorf("expected source URL preserved, got %q", result.SourceURL)
+	}
+	if result.ContentHash == "" {
+		t.Error("expected non-empty content hash for image stub")
+	}
+}
+
+// SCN-002-051: PDF URL creates stub for ML extraction (R-003).
+func TestSCN002051_ExtractContent_PDFStub(t *testing.T) {
+	ctx := context.Background()
+	req := &ProcessRequest{URL: "https://example.com/document.pdf"}
+	result, err := ExtractContent(ctx, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for PDF URL")
+	}
+	if string(result.ContentType) != "pdf" {
+		t.Errorf("expected content type 'pdf', got %q", result.ContentType)
+	}
+	if result.SourceURL != "https://example.com/document.pdf" {
+		t.Errorf("expected source URL preserved, got %q", result.SourceURL)
+	}
+	if result.ContentHash == "" {
+		t.Error("expected non-empty content hash for PDF stub")
+	}
+}
+
+// SCN-002-047: Voice URL creates stub for Whisper transcription.
+func TestSCN002047_ExtractContent_VoiceStub(t *testing.T) {
+	ctx := context.Background()
+	req := &ProcessRequest{VoiceURL: "https://example.com/audio.ogg"}
+	result, err := ExtractContent(ctx, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for voice URL")
+	}
+	if string(result.ContentType) != "voice" {
+		t.Errorf("expected content type 'voice', got %q", result.ContentType)
+	}
+}
+
+// SCN-002-047: YouTube URL creates stub with video ID.
+func TestSCN002047_ExtractContent_YouTubeStub(t *testing.T) {
+	ctx := context.Background()
+	req := &ProcessRequest{URL: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+	result, err := ExtractContent(ctx, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result for YouTube URL")
+	}
+	if string(result.ContentType) != "youtube" {
+		t.Errorf("expected content type 'youtube', got %q", result.ContentType)
+	}
+	if result.VideoID == "" {
+		t.Error("expected non-empty video ID for YouTube stub")
+	}
 }

@@ -77,7 +77,7 @@ promotionRules:
   - User requests assessment, prioritization, or discovery only
   - Findings are isolated cleanup items or backlog candidates
 followUpTags:
-  directFix: Ready for implementation without new spec work
+  directFix: Fix design is straightforward — no NEW feature-level spec needed, but bug artifacts are STILL required via bubbles.bug before implementation. directFix does NOT exempt findings from the planning-first delivery policy.
   promoteToSpec: Should be converted into spec/design/scope work
   documentOnly: Docs/process update only
   monitor: Track but do not act immediately

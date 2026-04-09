@@ -24,3 +24,4 @@ Each agent must also satisfy its role-specific validation profile from `validati
 2. Agent-specific checks are additive, not optional.
 3. If any Tier 1 or Tier 2 check fails, the agent must report failure and must not claim completion.
 4. Prompts should reference the matching profile instead of embedding duplicate tables.
+5. **Execution means terminal execution (Gate G071).** Running `artifact-lint.sh`, `traceability-guard.sh`, test commands, or any validation script means invoking it via `run_in_terminal` and recording the real output. Reading the files those scripts would check and predicting findings is analysis-as-execution fabrication — see `evidence-rules.md`. If a command cannot be executed, report it as NOT RUN.

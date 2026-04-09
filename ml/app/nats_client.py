@@ -10,6 +10,12 @@ import nats
 from nats.aio.client import Client as NATSConn
 from nats.js.client import JetStreamContext
 
+from .validation import (
+    PayloadValidationError,
+    validate_process_payload,
+    validate_processed_result,
+)
+
 logger = logging.getLogger("smackerel-ml.nats")
 
 # Subjects this sidecar subscribes to
@@ -157,6 +163,22 @@ class NATSClient:
                     start = time.time()
 
                     if subject == "artifacts.process":
+                        try:
+                            validate_process_payload(data)
+                        except PayloadValidationError as ve:
+                            logger.error("Invalid artifacts.process payload: %s", ve)
+                            result = {
+                                "artifact_id": data.get("artifact_id", ""),
+                                "success": False,
+                                "error": f"Payload validation failed: {ve}",
+                            }
+                            elapsed_ms = int((time.time() - start) * 1000)
+                            result["processing_time_ms"] = elapsed_ms
+                            response_subject = SUBJECT_RESPONSE_MAP.get(subject)
+                            if response_subject:
+                                await self.publish(response_subject, result)
+                            await msg.ack()
+                            continue
                         result = await self._handle_artifact_process(
                             data,
                             llm_provider,
@@ -211,6 +233,12 @@ class NATSClient:
 
                     elapsed_ms = int((time.time() - start) * 1000)
                     result["processing_time_ms"] = elapsed_ms
+
+                    # Validate outgoing result before publishing
+                    try:
+                        validate_processed_result(result)
+                    except PayloadValidationError as ve:
+                        logger.error("Invalid outgoing result on %s: %s", subject, ve)
 
                     response_subject = SUBJECT_RESPONSE_MAP.get(subject)
                     if response_subject:

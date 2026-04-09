@@ -19,23 +19,7 @@ import (
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
-// Processing status constants — canonical values for artifacts.processing_status.
-// Using constants eliminates magic-string coupling across SQL queries and service boundaries.
-const (
-	StatusPending   = "pending"
-	StatusProcessed = "processed"
-	StatusFailed    = "failed"
-)
-
-// Source ID constants — canonical source identifiers shared across capture API,
-// Telegram bot, connectors, and tier assignment. Formalising these eliminates the
-// magic-string coupling that made processor.go, bot.go, and tier.go co-change.
-const (
-	SourceCapture        = "capture"
-	SourceTelegram       = "telegram"
-	SourceBrowser        = "browser"
-	SourceBrowserHistory = "browser-history"
-)
+// Processing status constants and source ID constants are in constants.go.
 
 // ProcessRequest is the input for the processing pipeline.
 type ProcessRequest struct {
@@ -96,6 +80,30 @@ type NATSProcessedPayload struct {
 	TokensUsed   int       `json:"tokens_used"`
 }
 
+// ValidateProcessPayload checks required fields on an outgoing NATS process payload.
+// Catches schema drift at the publish boundary rather than at ML-sidecar runtime.
+func ValidateProcessPayload(p *NATSProcessPayload) error {
+	if p.ArtifactID == "" {
+		return fmt.Errorf("NATSProcessPayload: artifact_id is required")
+	}
+	if p.ContentType == "" {
+		return fmt.Errorf("NATSProcessPayload: content_type is required")
+	}
+	if p.RawText == "" && p.URL == "" {
+		return fmt.Errorf("NATSProcessPayload: at least one of raw_text or url is required")
+	}
+	return nil
+}
+
+// ValidateProcessedPayload checks required fields on an incoming ML result payload.
+// Catches schema drift at the receive boundary.
+func ValidateProcessedPayload(p *NATSProcessedPayload) error {
+	if p.ArtifactID == "" {
+		return fmt.Errorf("NATSProcessedPayload: artifact_id is required")
+	}
+	return nil
+}
+
 // Processor orchestrates the content processing pipeline.
 type Processor struct {
 	DB     *pgxpool.Pool
@@ -113,114 +121,15 @@ func NewProcessor(db *pgxpool.Pool, nats *smacknats.Client) *Processor {
 func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessResult, error) {
 	start := time.Now()
 
-	// Step 1: Extract content
-	var extracted *extract.Result
-	var err error
-
-	switch {
-	case req.URL != "":
-		contentType := extract.DetectContentType(req.URL)
-		switch contentType {
-		case extract.ContentTypeYouTube:
-			// YouTube needs ML sidecar for transcript — create stub and send to ML
-			extracted = &extract.Result{
-				ContentType: extract.ContentTypeYouTube,
-				Title:       "YouTube Video",
-				Text:        req.URL,
-				ContentHash: extract.HashContent(req.URL),
-				SourceURL:   req.URL,
-				VideoID:     extract.ExtractYouTubeID(req.URL),
-			}
-		case extract.ContentTypeImage:
-			// Image needs ML sidecar for OCR (R-003) — create stub and send to ML
-			extracted = &extract.Result{
-				ContentType: extract.ContentTypeImage,
-				Title:       "Image",
-				Text:        req.URL,
-				ContentHash: extract.HashContent(req.URL),
-				SourceURL:   req.URL,
-			}
-		case extract.ContentTypePDF:
-			// PDF needs ML sidecar for text extraction (R-003) — create stub and send to ML
-			extracted = &extract.Result{
-				ContentType: extract.ContentTypePDF,
-				Title:       "PDF Document",
-				Text:        req.URL,
-				ContentHash: extract.HashContent(req.URL),
-				SourceURL:   req.URL,
-			}
-		default:
-			extracted, err = extract.ExtractArticle(ctx, req.URL)
-			if err != nil {
-				return nil, fmt.Errorf("content extraction failed: %w", err)
-			}
-		}
-	case req.Text != "":
-		extracted = extract.ExtractText(req.Text)
-	case req.VoiceURL != "":
-		// Voice notes need ML sidecar for Whisper transcription
-		extracted = &extract.Result{
-			ContentType: extract.ContentTypeVoice,
-			Title:       "Voice Note",
-			Text:        req.VoiceURL,
-			ContentHash: extract.HashContent(req.VoiceURL),
-			SourceURL:   req.VoiceURL,
-		}
-	default:
-		return nil, fmt.Errorf("at least one of url, text, or voice_url is required")
+	extracted, err := ExtractContent(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
-	// Step 2: Dedup check — by URL first (R-011), then by content hash.
-	// R-011 delta re-processing: if the URL already exists but the content hash
-	// has changed, allow re-processing so updated content (e.g. email thread
-	// with new replies, edited articles) gets captured.
-	dedup := &DedupChecker{Pool: p.DB}
-
-	if req.URL != "" {
-		urlResult, err := dedup.CheckURL(ctx, req.URL)
-		if err != nil {
-			slog.Warn("URL dedup check failed, continuing", "error", err)
-		} else if urlResult != nil && urlResult.IsDuplicate {
-			// URL exists — check if content actually changed (delta re-processing, R-011)
-			hashResult, hashErr := dedup.Check(ctx, extracted.ContentHash)
-			if hashErr != nil {
-				slog.Warn("content hash check for delta failed, treating as duplicate", "error", hashErr)
-				return nil, &DuplicateError{
-					ExistingID: urlResult.ExistingID,
-					Title:      urlResult.Title,
-				}
-			}
-			if hashResult != nil && hashResult.IsDuplicate {
-				// Same URL, same content — true duplicate
-				return nil, &DuplicateError{
-					ExistingID: urlResult.ExistingID,
-					Title:      urlResult.Title,
-				}
-			}
-			// Same URL, different content — delta re-processing (R-011).
-			// Mark this as a delta update so the existing artifact gets updated.
-			slog.Info("delta re-processing: URL exists but content changed",
-				"url", req.URL,
-				"existing_id", urlResult.ExistingID,
-			)
-		}
-	} else {
-		// No URL — standard content-hash dedup only
-		dupResult, err := dedup.Check(ctx, extracted.ContentHash)
-		if err != nil {
-			slog.Warn("dedup check failed, continuing", "error", err)
-		} else if dupResult != nil && dupResult.IsDuplicate {
-			return nil, &DuplicateError{
-				ExistingID: dupResult.ExistingID,
-				Title:      dupResult.Title,
-			}
-		}
+	if err := p.DedupCheck(ctx, req, extracted); err != nil {
+		return nil, err
 	}
 
-	// Step 3: Generate artifact ID
-	artifactID := ulid.Make().String()
-
-	// Step 4: Determine processing tier
 	tier := AssignTier(TierSignals{
 		UserStarred: req.Starred,
 		SourceID:    req.SourceID,
@@ -228,12 +137,131 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 		ContentLen:  len(extracted.Text),
 	})
 
-	// Step 5: Store initial artifact record (metadata-only until ML processes)
+	result, err := p.submitForProcessing(ctx, req, extracted, tier)
+	if err != nil {
+		return nil, err
+	}
+
+	result.ProcessingMs = time.Since(start).Milliseconds()
+	return result, nil
+}
+
+// ExtractContent dispatches content extraction based on the request type.
+// Handles URL (article, YouTube, image, PDF), plain text, and voice note inputs.
+// This function has no DB or NATS dependencies and is independently testable.
+func ExtractContent(ctx context.Context, req *ProcessRequest) (*extract.Result, error) {
+	switch {
+	case req.URL != "":
+		contentType := extract.DetectContentType(req.URL)
+		switch contentType {
+		case extract.ContentTypeYouTube:
+			return &extract.Result{
+				ContentType: extract.ContentTypeYouTube,
+				Title:       "YouTube Video",
+				Text:        req.URL,
+				ContentHash: extract.HashContent(req.URL),
+				SourceURL:   req.URL,
+				VideoID:     extract.ExtractYouTubeID(req.URL),
+			}, nil
+		case extract.ContentTypeImage:
+			return &extract.Result{
+				ContentType: extract.ContentTypeImage,
+				Title:       "Image",
+				Text:        req.URL,
+				ContentHash: extract.HashContent(req.URL),
+				SourceURL:   req.URL,
+			}, nil
+		case extract.ContentTypePDF:
+			return &extract.Result{
+				ContentType: extract.ContentTypePDF,
+				Title:       "PDF Document",
+				Text:        req.URL,
+				ContentHash: extract.HashContent(req.URL),
+				SourceURL:   req.URL,
+			}, nil
+		default:
+			result, err := extract.ExtractArticle(ctx, req.URL)
+			if err != nil {
+				return nil, fmt.Errorf("content extraction failed: %w", err)
+			}
+			return result, nil
+		}
+	case req.Text != "":
+		return extract.ExtractText(req.Text), nil
+	case req.VoiceURL != "":
+		return &extract.Result{
+			ContentType: extract.ContentTypeVoice,
+			Title:       "Voice Note",
+			Text:        req.VoiceURL,
+			ContentHash: extract.HashContent(req.VoiceURL),
+			SourceURL:   req.VoiceURL,
+		}, nil
+	default:
+		return nil, fmt.Errorf("at least one of url, text, or voice_url is required")
+	}
+}
+
+// DedupCheck performs deduplication: URL-first (R-011 delta re-processing), then content hash.
+// Returns nil if the content is new or has changed (delta), DuplicateError if it's a true duplicate.
+func (p *Processor) DedupCheck(ctx context.Context, req *ProcessRequest, extracted *extract.Result) error {
+	dedup := &DedupChecker{Pool: p.DB}
+
+	if req.URL != "" {
+		urlResult, err := dedup.CheckURL(ctx, req.URL)
+		if err != nil {
+			slog.Warn("URL dedup check failed, continuing", "error", err)
+			return nil
+		}
+		if urlResult != nil && urlResult.IsDuplicate {
+			// URL exists — check if content actually changed (delta re-processing, R-011)
+			hashResult, hashErr := dedup.Check(ctx, extracted.ContentHash)
+			if hashErr != nil {
+				slog.Warn("content hash check for delta failed, treating as duplicate", "error", hashErr)
+				return &DuplicateError{
+					ExistingID: urlResult.ExistingID,
+					Title:      urlResult.Title,
+				}
+			}
+			if hashResult != nil && hashResult.IsDuplicate {
+				// Same URL, same content — true duplicate
+				return &DuplicateError{
+					ExistingID: urlResult.ExistingID,
+					Title:      urlResult.Title,
+				}
+			}
+			// Same URL, different content — delta re-processing (R-011)
+			slog.Info("delta re-processing: URL exists but content changed",
+				"url", req.URL,
+				"existing_id", urlResult.ExistingID,
+			)
+		}
+		return nil
+	}
+
+	// No URL — standard content-hash dedup only
+	dupResult, err := dedup.Check(ctx, extracted.ContentHash)
+	if err != nil {
+		slog.Warn("dedup check failed, continuing", "error", err)
+		return nil
+	}
+	if dupResult != nil && dupResult.IsDuplicate {
+		return &DuplicateError{
+			ExistingID: dupResult.ExistingID,
+			Title:      dupResult.Title,
+		}
+	}
+	return nil
+}
+
+// submitForProcessing stores the initial artifact and publishes to NATS for ML processing.
+// Cleans up the DB record if NATS publish fails.
+func (p *Processor) submitForProcessing(ctx context.Context, req *ProcessRequest, extracted *extract.Result, tier Tier) (*ProcessResult, error) {
+	artifactID := ulid.Make().String()
+
 	if err := p.storeInitialArtifact(ctx, artifactID, extracted, req, string(tier)); err != nil {
 		return nil, fmt.Errorf("store initial artifact: %w", err)
 	}
 
-	// Step 6: Publish to NATS for ML processing
 	payload := NATSProcessPayload{
 		ArtifactID:     artifactID,
 		ContentType:    string(extracted.ContentType),
@@ -249,6 +277,10 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 	if req.VoiceURL != "" {
 		payload.ContentType = string(extract.ContentTypeVoice)
 		payload.URL = req.VoiceURL
+	}
+
+	if err := ValidateProcessPayload(&payload); err != nil {
+		return nil, fmt.Errorf("validate NATS payload: %w", err)
 	}
 
 	data, err := json.Marshal(payload)
@@ -276,11 +308,10 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 		ArtifactID:       artifactID,
 		Title:            extracted.Title,
 		ArtifactType:     string(extracted.ContentType),
-		Summary:          "", // Will be populated after ML processing
+		Summary:          "",
 		Connections:      0,
 		Topics:           nil,
-		ProcessingMs:     time.Since(start).Milliseconds(),
-		ProcessingStatus: StatusPending,
+		ProcessingStatus: string(StatusPending),
 	}, nil
 }
 
@@ -313,7 +344,7 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (content_hash) WHERE content_hash IS NOT NULL DO NOTHING
 	`, id, string(result.ContentType), result.Title, contentRaw, result.ContentHash,
-		sourceID, sourceURL, tier, captureMethod, req.Starred, StatusPending)
+		sourceID, sourceURL, tier, captureMethod, req.Starred, string(StatusPending))
 	if err != nil {
 		return fmt.Errorf("insert artifact: %w", err)
 	}
@@ -334,13 +365,17 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 
 // HandleProcessedResult processes the result from the ML sidecar (artifacts.processed).
 func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProcessedPayload) error {
+	if err := ValidateProcessedPayload(payload); err != nil {
+		return fmt.Errorf("validate processed payload: %w", err)
+	}
+
 	if !payload.Success {
 		// Mark artifact as metadata-only on LLM failure and set processing_status
 		// to 'failed' so it can be distinguished from still-pending artifacts.
 		_, err := p.DB.Exec(ctx, `
 			UPDATE artifacts SET processing_tier = 'metadata', processing_status = $2, updated_at = NOW()
 			WHERE id = $1
-		`, payload.ArtifactID, StatusFailed)
+		`, payload.ArtifactID, string(StatusFailed))
 		if err != nil {
 			return fmt.Errorf("update artifact on failure: %w", err)
 		}
@@ -394,7 +429,7 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 		actionItemsJSON, topicsJSON, payload.Result.Sentiment,
 		payload.Result.SourceQuality, embeddingStr,
 		"", // keep existing tier
-		StatusProcessed)
+		string(StatusProcessed))
 
 	if err != nil {
 		return fmt.Errorf("update artifact with ML results: %w", err)
