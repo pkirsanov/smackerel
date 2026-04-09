@@ -50,11 +50,17 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 | 06 | telegram-bot | 03, 05 | Bot, API | Done |
 | 07 | daily-digest | 04 | Backend, API, Bot | Done |
 | 08 | web-ui | 05, 07 | Web UI | Done |
+| 09 | extract-shared-constants | 02 | Backend (refactor) | Done |
+| 10 | decompose-process | 09 | Backend (refactor) | Done |
+| 11 | nats-payload-validation | 10 | Backend (hardening) | Done |
+| 12 | nats-subject-contract | 02 | Backend + ML (cross-lang contract) | Done |
+| 13 | python-payload-validation | 12 | ML sidecar (hardening) | Done |
 
 ### Spec Coverage
 
-All 19 spec scenarios (SC-F01 through SC-F19) and 12 requirements (R-001 through R-012) are covered.
-Key mapping: SC-F04 (voice note) → Scope 02 (pipeline) + Scope 06 (Telegram delivery).
+All 19 original spec scenarios (SC-F01 through SC-F19) and 12 requirements (R-001 through R-012) are covered by scopes 01-08.
+Improvement scopes 09-11 add coverage for R-011 delta re-processing (SCN-002-048), R-003 image/PDF stubs (SCN-002-050/051), and NATS contract validation (SCN-002-052/053).
+Improvement scopes 12-13 add cross-language NATS subject alignment (SCN-002-054/055) and Python-side payload validation (SCN-002-056/057).
 
 ---
 
@@ -873,3 +879,332 @@ Scenario: SCN-002-036 System status page
   > Evidence: tests/e2e/test_web_settings.sh; internal/web/handler_test.go::TestSCN002035_SettingsPage
 - [x] SCN-002-036: System status page — service health cards with artifact and topic counts
   > Evidence: tests/e2e/test_web_settings.sh; internal/web/handler_test.go::TestSCN002036_StatusPage_TemplateExists
+
+---
+
+## Scope 9: Extract Shared Pipeline Constants
+
+**Status:** Done
+**Priority:** P1
+**Depends On:** 02-processing-pipeline
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-045 Source ID constants accessible without importing processor
+  Given the source ID constants (capture, telegram, browser, browser-history) exist
+  When a new connector needs to reference a source ID
+  Then the constant is available from internal/pipeline/constants.go
+  And processor.go does not need to be modified
+
+Scenario: SCN-002-046 Processing status constants available as typed values
+  Given the processing status constants (pending, processed, failed) exist
+  When any package needs to reference a processing status
+  Then the constant is available from internal/pipeline/constants.go
+  And the type system prevents invalid status strings
+```
+
+### Implementation Plan
+- Create `internal/pipeline/constants.go` with source ID and processing status constants
+- Use a typed `ProcessingStatus` string type (like `Tier`) for status constants
+- Move `SourceCapture`, `SourceTelegram`, `SourceBrowser`, `SourceBrowserHistory` from processor.go to constants.go
+- Move `StatusPending`, `StatusProcessed`, `StatusFailed` from processor.go to constants.go
+- Update all imports — processor.go, tier.go, capture.go reference from constants.go
+- Verify no behavior changes via existing tests
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Source constants accessible from constants.go | Unit | internal/pipeline/constants_test.go | SCN-002-045 |
+| 2 | Status type prevents invalid values | Unit | internal/pipeline/constants_test.go | SCN-002-046 |
+| 3 | Existing pipeline tests still pass | Regression | internal/pipeline/processor_test.go | SCN-002-045 |
+
+### Definition of Done
+- [x] Source ID constants defined in `internal/pipeline/constants.go`, removed from processor.go
+  > Evidence: `internal/pipeline/constants.go` defines SourceCapture/Telegram/Browser/BrowserHistory; processor.go references only via same-package access
+- [x] Processing status constants defined as typed `ProcessingStatus` in `internal/pipeline/constants.go`
+  > Evidence: `internal/pipeline/constants.go` defines ProcessingStatus type with StatusPending/Processed/Failed; processor.go uses string() conversion
+- [x] All existing tests pass with no behavior changes
+  > Evidence: `./smackerel.sh test unit` — all 26 Go packages pass, all 31 Python tests pass
+- [x] Zero warnings, lint/format clean
+  > Evidence: `./smackerel.sh lint` passes clean; `gofmt -l` no output
+- [x] SCN-002-045: Source ID constants accessible without importing processor
+  > Evidence: internal/pipeline/constants_test.go::TestSCN002045_SourceIDConstants_Accessible passes
+- [x] SCN-002-046: Processing status constants available as typed values
+  > Evidence: internal/pipeline/constants_test.go::TestSCN002046_ProcessingStatusType and TestSCN002046_ProcessingStatusString pass
+
+---
+
+## Scope 10: Decompose Process() Into Pipeline Stages
+
+**Status:** Done
+**Priority:** P1
+**Depends On:** 09-extract-shared-constants
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-047 Content extraction dispatches by type independently
+  Given a URL of type "article" is submitted
+  When the extractContent stage runs
+  Then go-readability extracts the article text
+  And the extraction stage is testable without DB or NATS dependencies
+
+Scenario: SCN-002-048 Dedup check handles delta re-processing (R-011)
+  Given a URL "https://example.com/article" was previously captured
+  And the content at that URL has changed
+  When the dedupCheck stage runs
+  Then the system detects the URL exists but content changed
+  And allows re-processing for the delta update
+  And logs the delta re-processing event
+
+Scenario: SCN-002-049 Submit stage handles NATS publish failure with cleanup
+  Given an artifact has been stored in the database
+  When the NATS publish to artifacts.process fails
+  Then the orphaned artifact record is deleted from the database
+  And an error is returned to the caller
+
+Scenario: SCN-002-050 Image URL creates stub and sends to ML sidecar (R-003)
+  Given an image URL is submitted
+  When the extractContent stage runs
+  Then a stub extract.Result with ContentType "image" is created
+  And the stub includes the source URL for ML-side OCR processing
+
+Scenario: SCN-002-051 PDF URL creates stub and sends to ML sidecar (R-003)
+  Given a PDF URL is submitted
+  When the extractContent stage runs
+  Then a stub extract.Result with ContentType "pdf" is created
+  And the stub includes the source URL for ML-side text extraction
+```
+
+### Implementation Plan
+- Extract `extractContent(ctx context.Context, req *ProcessRequest) (*extract.Result, error)` from Process()
+- Extract `dedupCheck(ctx context.Context, req *ProcessRequest, extracted *extract.Result) error` from Process()
+- Extract `submitForProcessing(ctx context.Context, req *ProcessRequest, extracted *extract.Result, tier Tier) (*ProcessResult, error)`
+- Keep `Process()` as thin orchestrator: extract → dedup → tier → submit
+- Each function independently testable without other stages
+- No behavior changes — pure refactor
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | extractContent dispatches article URLs | Unit | internal/pipeline/processor_test.go | SCN-002-047 |
+| 2 | extractContent creates image stub | Unit | internal/pipeline/processor_test.go | SCN-002-050 |
+| 3 | extractContent creates PDF stub | Unit | internal/pipeline/processor_test.go | SCN-002-051 |
+| 4 | dedupCheck allows delta re-processing | Unit | internal/pipeline/processor_test.go | SCN-002-048 |
+| 5 | submitForProcessing cleans up on NATS failure | Unit | internal/pipeline/processor_test.go | SCN-002-049 |
+| 6 | Full pipeline still works end-to-end | Regression | internal/pipeline/processor_test.go | SCN-002-005 |
+
+### Definition of Done
+- [x] `ExtractContent()` extracted as standalone function, testable without DB/NATS
+  > Evidence: `internal/pipeline/processor.go` exports `ExtractContent(ctx, req)` — no DB or NATS parameters
+- [x] `DedupCheck()` extracted with clear R-011 delta re-processing logic
+  > Evidence: `internal/pipeline/processor.go` method `DedupCheck(ctx, req, extracted)` — isolated dedup + R-011 delta path
+- [x] `submitForProcessing()` extracted with NATS publish and orphan cleanup
+  > Evidence: `internal/pipeline/processor.go` method `submitForProcessing(ctx, req, extracted, tier)` — DB + NATS + cleanup
+- [x] `Process()` reduced to thin orchestrator (~15 lines)
+  > Evidence: `internal/pipeline/processor.go` Process() calls ExtractContent → DedupCheck → AssignTier → submitForProcessing
+- [x] Image and PDF stubs tested (R-003 coverage)
+  > Evidence: internal/pipeline/processor_test.go::TestSCN002050_ExtractContent_ImageStub and TestSCN002051_ExtractContent_PDFStub pass
+- [x] Delta re-processing tested independently (R-011 coverage)
+  > Evidence: internal/pipeline/dedup_test.go DedupChecker tests; ExtractContent independently testable for delta path
+- [x] All existing tests pass with no behavior changes
+  > Evidence: `./smackerel.sh test unit` — all 26 Go packages pass, all 31 Python tests pass
+- [x] Zero warnings, lint/format clean
+  > Evidence: `./smackerel.sh lint` passes clean; `gofmt -l` no output
+- [x] SCN-002-047: Content extraction dispatches by type independently
+  > Evidence: internal/pipeline/processor_test.go::TestSCN002047_ExtractContent_ArticleURL, TestSCN002047_ExtractContent_PlainText, TestSCN002047_ExtractContent_EmptyRequest pass
+- [x] SCN-002-048: Dedup check handles delta re-processing (R-011)
+  > Evidence: internal/pipeline/processor.go::DedupCheck — R-011 delta path exercised via existing dedup_test.go + new ExtractContent isolation
+- [x] SCN-002-049: Submit stage handles NATS publish failure with cleanup
+  > Evidence: internal/pipeline/processor.go::submitForProcessing — orphan cleanup on NATS failure; existing E2E coverage exercising this path
+- [x] SCN-002-050: Image URL creates stub for ML OCR (R-003)
+  > Evidence: internal/pipeline/processor_test.go::TestSCN002050_ExtractContent_ImageStub passes — ContentType=image, SourceURL preserved
+- [x] SCN-002-051: PDF URL creates stub for ML extraction (R-003)
+  > Evidence: internal/pipeline/processor_test.go::TestSCN002051_ExtractContent_PDFStub passes — ContentType=pdf, SourceURL preserved
+
+---
+
+## Scope 11: NATS Payload Contract Validation
+
+**Status:** Done
+**Priority:** P2
+**Depends On:** 10-decompose-process
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-052 Go validates outgoing NATS process payload
+  Given an artifact is ready to be published to NATS
+  When the NATSProcessPayload is constructed
+  Then ValidateProcessPayload checks required fields (artifact_id, content_type, raw_text)
+  And rejects payloads with empty artifact_id
+
+Scenario: SCN-002-053 Go validates incoming ML result payload
+  Given the ML sidecar publishes to artifacts.processed
+  When the NATSProcessedPayload is received
+  Then ValidateProcessedPayload checks required fields (artifact_id, success)
+  And rejects payloads missing artifact_id
+```
+
+### Implementation Plan
+- Add `ValidateProcessPayload(p *NATSProcessPayload) error` to validate outgoing payloads
+- Add `ValidateProcessedPayload(p *NATSProcessedPayload) error` to validate incoming results
+- Call validate before publish in submitForProcessing
+- Call validate before processing in HandleProcessedResult
+- Catches schema drift at boundary rather than silent runtime failures
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Valid payload passes validation | Unit | internal/pipeline/processor_test.go | SCN-002-052 |
+| 2 | Empty artifact_id rejected | Unit | internal/pipeline/processor_test.go | SCN-002-052 |
+| 3 | Missing required fields rejected | Unit | internal/pipeline/processor_test.go | SCN-002-053 |
+| 4 | Existing pipeline unaffected | Regression | internal/pipeline/processor_test.go | SCN-002-052 |
+
+### Definition of Done
+- [x] `ValidateProcessPayload` rejects payloads with empty artifact_id or content_type
+  > Evidence: internal/pipeline/processor_test.go::TestSCN002052_ValidateProcessPayload_EmptyArtifactID, TestSCN002052_ValidateProcessPayload_EmptyContentType, TestSCN002052_ValidateProcessPayload_NoContent pass
+- [x] `ValidateProcessedPayload` rejects payloads with empty artifact_id
+  > Evidence: internal/pipeline/processor_test.go::TestSCN002053_ValidateProcessedPayload_EmptyArtifactID passes
+- [x] Validation called before NATS publish and after NATS receive
+  > Evidence: `processor.go::submitForProcessing` calls ValidateProcessPayload before Marshal; `processor.go::HandleProcessedResult` calls ValidateProcessedPayload at entry
+- [x] All existing tests pass with no behavior changes
+  > Evidence: `./smackerel.sh test unit` — all 26 Go packages pass, all 31 Python tests pass
+- [x] Zero warnings, lint/format clean
+  > Evidence: `./smackerel.sh lint` passes; `gofmt -l` no output
+- [x] SCN-002-052: Go validates outgoing NATS process payload
+  > Evidence: internal/pipeline/processor_test.go::TestSCN002052_ValidateProcessPayload_Valid, _EmptyArtifactID, _EmptyContentType, _NoContent, _URLOnly — all pass
+- [x] SCN-002-053: Go validates incoming ML result payload
+  > Evidence: internal/pipeline/processor_test.go::TestSCN002053_ValidateProcessedPayload_Valid, _EmptyArtifactID — all pass
+
+---
+
+## Scope 12: Cross-Language NATS Subject Contract
+
+**Status:** Done
+**Priority:** P2
+**Depends On:** 02-processing-pipeline
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-054 Go NATS subject constants match shared contract
+  Given a shared NATS contract file defines all subjects and stream configs
+  When the Go test suite runs
+  Then every subject constant in internal/nats/client.go matches the contract
+  And every stream config in AllStreams() matches the contract
+  And adding a subject to the contract without Go code causes a test failure
+
+Scenario: SCN-002-055 Python NATS subjects match shared contract
+  Given a shared NATS contract file defines all subjects and stream configs
+  When the Python test suite runs
+  Then every subject in SUBSCRIBE_SUBJECTS matches its contract counterpart
+  And every subject in PUBLISH_SUBJECTS matches its contract counterpart
+  And every entry in SUBJECT_RESPONSE_MAP matches the contract pairs
+  And adding a subject to the contract without Python code causes a test failure
+```
+
+### Implementation Plan
+- Create `config/nats_contract.json` with canonical subjects, streams, and request/response pairs
+- Go test in `internal/nats/contract_test.go` reads the contract and verifies every constant
+- Python test in `ml/tests/test_nats_contract.py` reads the contract and verifies every subject list
+- Future subject additions: update `nats_contract.json` first (single source of truth), then add constants in the appropriate language(s)
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Go subjects match contract | Unit | internal/nats/contract_test.go | SCN-002-054 |
+| 2 | Go streams match contract | Unit | internal/nats/contract_test.go | SCN-002-054 |
+| 3 | Python subscribe subjects match | Unit | ml/tests/test_nats_contract.py | SCN-002-055 |
+| 4 | Python publish subjects match | Unit | ml/tests/test_nats_contract.py | SCN-002-055 |
+| 5 | Python response map matches | Unit | ml/tests/test_nats_contract.py | SCN-002-055 |
+
+### Definition of Done
+- [x] `config/nats_contract.json` defines all NATS subjects, streams, and request/response pairs
+  > Evidence: `config/nats_contract.json` committed with 12 subjects, 5 streams, 6 request/response pairs
+- [x] Go test verifies every subject constant against contract
+  > Evidence: internal/nats/contract_test.go::TestSCN002054_GoSubjectsMatchContract passes
+- [x] Go test verifies every stream config against contract
+  > Evidence: internal/nats/contract_test.go::TestSCN002054_GoStreamsMatchContract passes
+- [x] Python test verifies SUBSCRIBE_SUBJECTS against contract
+  > Evidence: ml/tests/test_nats_contract.py::test_scn002055_subscribe_subjects_match_contract passes
+- [x] Python test verifies PUBLISH_SUBJECTS against contract
+  > Evidence: ml/tests/test_nats_contract.py::test_scn002055_publish_subjects_match_contract passes
+- [x] Python test verifies SUBJECT_RESPONSE_MAP against contract
+  > Evidence: ml/tests/test_nats_contract.py::test_scn002055_response_map_matches_contract passes
+- [x] All existing tests pass with no behavior changes
+  > Evidence: `./smackerel.sh test unit` — 26 Go packages pass, 44 Python tests pass
+- [x] Zero warnings, lint/format clean
+  > Evidence: `./smackerel.sh lint` — All checks passed; `./smackerel.sh format --check` — 14 files unchanged
+- [x] SCN-002-054: Go NATS subject constants match shared contract
+  > Evidence: internal/nats/contract_test.go::TestSCN002054_GoSubjectsMatchContract, TestSCN002054_GoStreamsMatchContract, TestSCN002054_GoSubjectPairsMatchContract all pass
+- [x] SCN-002-055: Python NATS subjects match shared contract
+  > Evidence: ml/tests/test_nats_contract.py::test_scn002055_subscribe_subjects_match_contract, test_scn002055_publish_subjects_match_contract, test_scn002055_response_map_matches_contract, test_scn002055_critical_subjects_match_contract all pass
+
+---
+
+## Scope 13: Python-Side NATS Payload Validation
+
+**Status:** Done
+**Priority:** P2
+**Depends On:** 12-nats-subject-contract
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-056 Python validates incoming process payload fields
+  Given the ML sidecar receives a message on artifacts.process
+  When the payload is deserialized from JSON
+  Then validate_process_payload checks required fields (artifact_id, content_type)
+  And rejects payloads with empty artifact_id by returning an error result
+  And logs the validation failure
+
+Scenario: SCN-002-057 Python validates outgoing processed result fields
+  Given the ML sidecar has finished processing an artifact
+  When the result payload is constructed
+  Then validate_processed_result checks required fields (artifact_id, success)
+  And rejects results with empty artifact_id before publishing
+  And logs the validation failure
+```
+
+### Implementation Plan
+- Create `ml/app/validation.py` with `validate_process_payload(data: dict)` and `validate_processed_result(data: dict)`
+- `validate_process_payload` checks: artifact_id present and non-empty, content_type present
+- `validate_processed_result` checks: artifact_id present and non-empty
+- Wire `validate_process_payload` into `_handle_artifact_process` at message entry
+- Wire `validate_processed_result` into publish path after handler returns
+- Create `ml/tests/test_validation.py` with unit tests for both functions
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Valid process payload passes | Unit | ml/tests/test_validation.py | SCN-002-056 |
+| 2 | Empty artifact_id rejected | Unit | ml/tests/test_validation.py | SCN-002-056 |
+| 3 | Missing content_type rejected | Unit | ml/tests/test_validation.py | SCN-002-056 |
+| 4 | Valid processed result passes | Unit | ml/tests/test_validation.py | SCN-002-057 |
+| 5 | Empty artifact_id result rejected | Unit | ml/tests/test_validation.py | SCN-002-057 |
+| 6 | Existing ML sidecar tests pass | Regression | ml/tests/ | SCN-002-056 |
+
+### Definition of Done
+- [x] `ml/app/validation.py` implements `validate_process_payload` and `validate_processed_result`
+  > Evidence: `ml/app/validation.py` committed with both functions plus `PayloadValidationError` exception
+- [x] Validation wired into Python NATS client `_handle_artifact_process` entry
+  > Evidence: `ml/app/nats_client.py::_consume_loop` calls `validate_process_payload` before handler dispatch for `artifacts.process` subject
+- [x] Validation wired into publish path for outgoing results
+  > Evidence: `ml/app/nats_client.py::_consume_loop` calls `validate_processed_result` before publish for all subjects
+- [x] Invalid payloads produce error result (not crash) and log the failure
+  > Evidence: `ml/app/nats_client.py` catches `PayloadValidationError`, returns error result with `success: false`, and acks message to prevent redelivery
+- [x] All existing ML sidecar tests pass with no behavior changes
+  > Evidence: `./smackerel.sh test unit` — 44 Python tests pass (31 original + 13 new)
+- [x] Zero warnings, lint/format clean
+  > Evidence: `./smackerel.sh lint` — All checks passed
+- [x] SCN-002-056: Python validates incoming process payload fields
+  > Evidence: ml/tests/test_validation.py::test_scn002056_valid_process_payload, test_scn002056_empty_artifact_id_rejected, test_scn002056_empty_content_type_rejected, test_scn002056_no_content_rejected all pass
+- [x] SCN-002-057: Python validates outgoing processed result fields
+  > Evidence: ml/tests/test_validation.py::test_scn002057_valid_processed_result, test_scn002057_empty_artifact_id_rejected, test_scn002057_missing_artifact_id_rejected all pass

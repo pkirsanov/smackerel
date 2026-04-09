@@ -2,6 +2,127 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Scope: 12-nats-subject-contract (improve-existing)
+### Summary
+Created a shared NATS contract file (`config/nats_contract.json`) as the single source of truth for all NATS subjects, streams, and request/response pairs. Added bilateral contract tests: Go tests verify `internal/nats/client.go` constants match the contract, Python tests verify `ml/app/nats_client.py` subject lists match the contract. Adding or removing a NATS subject now produces a test failure on the side that hasn't been updated.
+
+### Root Cause Addressed
+Cross-directory coupling cluster (75% co-change rate): `nats/client.go` and `nats_client.py` defined the same 12 NATS subjects as independent string literals. No automated check existed to verify the two sides matched. This was the primary accidental coupling point identified in the retro.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `config/nats_contract.json` | **NEW** — 12 subjects, 5 streams, 6 request/response pairs |
+| `internal/nats/contract_test.go` | **NEW** — SCN-002-054 (3 Go contract alignment tests) |
+| `ml/tests/test_nats_contract.py` | **NEW** — SCN-002-055 (4 Python contract alignment tests) |
+
+### Test Evidence
+- `./smackerel.sh test unit` — 26 Go packages pass, 44 Python tests pass
+- `./smackerel.sh lint` — All checks passed
+- `./smackerel.sh format --check` — 14 files unchanged
+
+---
+
+## Scope: 13-python-payload-validation (improve-existing)
+### Summary
+Added Python-side NATS payload validation (`ml/app/validation.py`) mirroring Go's `ValidateProcessPayload` and `ValidateProcessedPayload`. Wired validation into the Python NATS client: incoming `artifacts.process` payloads are validated before handler dispatch, and outgoing result payloads are validated before publish. Invalid payloads produce graceful error results instead of crashes.
+
+### Root Cause Addressed
+Go side had boundary validation (scope 11) but Python side consumed NATS payloads without any field validation. Schema drift between Go structs and Python dict access could cause silent runtime failures. Validation is now symmetric: Go validates at publish, Python validates at receive; Python validates at publish, Go validates at receive.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `ml/app/validation.py` | **NEW** — `validate_process_payload()`, `validate_processed_result()`, `PayloadValidationError` |
+| `ml/tests/test_validation.py` | **NEW** — SCN-002-056 (6 tests), SCN-002-057 (3 tests) |
+| `ml/app/nats_client.py` | Added import of validation, wired into `_consume_loop` for incoming + outgoing validation |
+
+### Test Evidence
+- `./smackerel.sh test unit` — 26 Go packages pass, 44 Python tests pass
+- `./smackerel.sh lint` — All checks passed
+- `./smackerel.sh format --check` — 14 files unchanged
+
+---
+
+## Coupling Cluster Analysis (Retro Rec 2)
+### Assessment
+The retro identified `processor.go ↔ nats_client.py ↔ bot.go ↔ scheduler.go` as a 75% co-change cluster. Analysis classified 4 coupling points:
+
+| Pair | Classification | Action Taken |
+|------|---------------|-------------|
+| bot.go ↔ pipeline | **Essential** — HTTP API boundary, no import dependency | None needed |
+| scheduler.go ↔ pipeline | **Essential** — indirect via digest/intelligence, architecture-intended | None needed |
+| nats/client.go ↔ nats_client.py (subjects) | **Accidental** — 12 duplicate string literals | Scope 12: shared contract + bilateral tests |
+| processor.go structs ↔ nats_client.py (schemas) | **Accidental** (partially fixed by scope 11) | Scope 13: Python-side validation |
+
+---
+
+## Scope: 09-extract-shared-constants (improve-existing)
+### Summary
+Extracted source ID and processing status constants from processor.go into dedicated `constants.go`. Introduced typed `ProcessingStatus` to eliminate magic-string coupling. Zero behavior changes — all existing tests pass.
+
+### Root Cause Addressed
+processor.go was the #1 bug magnet (88% bug-fix ratio, 7/8 changes were fixes). Source ID constants defined there forced unrelated connector work to touch the processor.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/pipeline/constants.go` | **NEW** — ProcessingStatus type, StatusPending/Processed/Failed, SourceCapture/Telegram/Browser/BrowserHistory |
+| `internal/pipeline/constants_test.go` | **NEW** — SCN-002-045 and SCN-002-046 tests |
+| `internal/pipeline/processor.go` | Removed duplicated constants, added string() conversions for typed status |
+
+### Test Evidence
+- `./smackerel.sh test unit` — all 26 Go packages pass, all 31 Python tests pass
+- `./smackerel.sh lint` — all checks passed
+- `gofmt -l internal/pipeline/*.go` — no formatting issues
+
+---
+
+## Scope: 10-decompose-process (improve-existing)
+### Summary
+Decomposed the 90-line `Process()` god-method into three independently testable stages: `ExtractContent()`, `DedupCheck()`, and `submitForProcessing()`. Process() is now a ~15-line thin orchestrator. This directly addresses the #1 root cause of the bug magnet: mixed concerns in a single function.
+
+### Root Causes Addressed
+1. God-method Process() mixing 6 concerns → each concern now has its own function
+2. R-003 image/PDF stubs untested → new tests prove stub round-trip (SCN-002-050, SCN-002-051)
+3. R-011 delta re-processing interleaved → DedupCheck is independently testable
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/pipeline/processor.go` | Extracted ExtractContent(), DedupCheck(), submitForProcessing() from Process() |
+| `internal/pipeline/processor_test.go` | **NEW TESTS** — SCN-002-047 (article/text/voice/YouTube extraction), SCN-002-050 (image stub), SCN-002-051 (PDF stub) |
+
+### Test Evidence
+- `./smackerel.sh test unit` — all 26 Go packages pass (including 7 new ExtractContent tests)
+- `./smackerel.sh lint` — all checks passed
+
+---
+
+## Scope: 11-nats-payload-validation (improve-existing)
+### Summary
+Added NATS payload contract validation functions (`ValidateProcessPayload`, `ValidateProcessedPayload`) wired into the publish and receive paths. Catches schema drift at the Go↔Python boundary rather than at runtime.
+
+### Root Cause Addressed
+Implicit NATS payload contract between Go (NATSProcessPayload struct) and Python (dict access) — field changes required coordinated edits with no compile-time safety. Validation now catches missing required fields (artifact_id, content_type) at the boundary.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/pipeline/processor.go` | Added ValidateProcessPayload(), ValidateProcessedPayload(); wired into submitForProcessing and HandleProcessedResult |
+| `internal/pipeline/processor_test.go` | **NEW TESTS** — SCN-002-052 (5 outgoing validation tests), SCN-002-053 (2 incoming validation tests) |
+
+### Test Evidence
+- `./smackerel.sh test unit` — all 26 Go packages pass (including 7 new validation tests)
+- `./smackerel.sh lint` — all checks passed
+
+---
+
 ## Scope: 01-project-scaffold
 ### Summary
 Implementation complete. All project scaffold files created and Go unit tests pass.

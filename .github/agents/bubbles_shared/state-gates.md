@@ -51,3 +51,21 @@ Blocking phrases (outside quoted historical evidence blocks):
 Enforced by: `artifact-lint.sh` (report.md scan) and `state-transition-guard.sh` (report.md scan).
 
 If any match is found, the transition to `done` is blocked.
+
+## Analysis-As-Execution Gate (G071)
+
+Validation, audit, and test agents must produce evidence from actual terminal command execution, not from reading the files those commands would inspect and predicting findings. Even accurate predictions are fabrication because:
+
+- The canonical script is the source of truth for its own logic.
+- An agent's pattern matching may miss or hallucinate issues the real script wouldn't.
+- File analysis cannot replicate version checks, cross-file correlations, or stateful path resolution in scripts.
+
+Blocked patterns:
+- Reporting lint/guard/test findings without a corresponding `run_in_terminal` invocation
+- Producing a numbered issue list by reading artifacts manually instead of running `artifact-lint.sh`
+- Predicting `traceability-guard.sh` output by manually grepping scenario/test mappings
+- Claiming test pass/fail by reading test source files instead of executing the test runner
+
+When a command cannot be executed, the correct report is `NOT RUN` with reason — never substitute file analysis.
+
+Enforced by: evidence-rules.md (analysis-as-execution section), quality-gates.md (anti-fabrication rules), validation-core.md (rule 5).

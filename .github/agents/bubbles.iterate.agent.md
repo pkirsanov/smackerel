@@ -82,6 +82,8 @@ handoffs:
 - Preserve autonomous behavior by default. Only trigger a Socratic clarification loop when `socratic: true` is explicitly present.
 - Propagate optional execution tags (`socratic`, `socraticQuestions`, `gitIsolation`, `autoCommit`, `maxScopeMinutes`, `maxDodMinutes`, `microFixes`) into specialist invocation prompts.
 - When a failure is narrow and `microFixes` is not false, route through the smallest viable fix loop before escalating to a broader mode rerun.
+- **Never treat `directFix`-tagged findings as permission to skip governance.** `directFix` means the fix design is straightforward — it does NOT exempt findings from bug artifact creation or specialist delegation. Every `directFix` finding MUST be processed through `bubbles.bug` (full 6-artifact bug packet) and delivered via `bugfix-fastlane`. See [workflow-orchestration-core.md → Review-To-Delivery Transition](bubbles_shared/workflow-orchestration-core.md).
+- **Never make code changes directly.** This agent is a DISPATCHER. ALL code changes — regardless of size — MUST be delegated to `bubbles.implement` via `runSubagent`.
 - Mark DoD items `[x]` IMMEDIATELY when validated - never batch
 - Do not accept a failing test change until it has been reconciled against `spec.md`, `design.md`, `scopes.md`, and DoD; fix code to plan unless the plan is corrected first
 - Enforce `execution-core.md`, `test-fidelity.md`, `consumer-trace.md`, `e2e-regression.md`, `evidence-rules.md`, and `state-gates.md` when dispatching work.

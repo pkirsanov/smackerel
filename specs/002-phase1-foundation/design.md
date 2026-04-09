@@ -5,6 +5,58 @@
 
 ---
 
+## Current Truth (2026-04-09 Retro-Driven Improvement)
+
+### Problem: processor.go Is the #1 Bug Magnet
+
+**Evidence:** 88% bug-fix ratio (7 of 8 changes were fixes), highest file churn in the codebase. Hidden cross-directory coupling with `ml/app/nats_client.py` (75%), `internal/telegram/bot.go` (75%), `internal/scheduler/scheduler.go` (75%).
+
+### Root Causes
+
+1. **God-method `Process()`** (~90 lines): Mixes 6 concerns — extraction dispatch, dedup/delta logic, ID generation, tier assignment, DB insert, NATS publish, and error cleanup. Any change to any concern touches this file.
+
+2. **Implicit NATS payload contract**: `NATSProcessPayload` (Go) and `_handle_artifact_process` (Python) share field names via JSON only — no schema validation, no shared contract. Field changes require coordinated edits in both languages.
+
+3. **Source ID constants defined in processor.go but consumed cross-codebase**: `SourceCapture`, `SourceTelegram`, `SourceBrowser`, `SourceBrowserHistory` are imported by `tier.go`, `capture.go`, and matched by `bot.go`'s HTTP calls. Adding a connector means editing processor.go for an unrelated constant.
+
+4. **Processing status constants as magic strings**: `StatusPending/Processed/Failed` defined in processor.go but used as raw SQL strings in multiple UPDATE queries across the codebase.
+
+5. **R-011 delta re-processing logic interleaved in `Process()`**: Complex nested conditionals for URL-exists-but-content-changed embedded inline, hard to test independently, no dedicated Gherkin scenario.
+
+6. **R-003 image/PDF stubs untested**: Image and PDF content types create stub `extract.Result` objects but have no Go-side test proving the stubs round-trip through NATS correctly.
+
+### Improvement Strategy
+
+**Phase 1: Extract shared constants** — Move source IDs and status constants into a dedicated `internal/pipeline/constants.go` file. This breaks the spurious coupling: new connectors add to constants.go, not processor.go.
+
+**Phase 2: Decompose `Process()` into pipeline stages** — Extract three named functions:
+- `extractContent(ctx, req) → (*extract.Result, error)` — content extraction dispatch
+- `dedupCheck(ctx, req, extracted) → (*DedupResult, error)` — dedup + delta re-processing (R-011)
+- `submitForProcessing(ctx, req, extracted, tier) → (*ProcessResult, error)` — DB insert + NATS publish + cleanup
+
+Each stage becomes independently testable, reducing the blast radius of changes.
+
+**Phase 3: Add NATS payload contract validation** — Add a `ValidateProcessPayload` function in Go and a `validate_process_payload` function in Python that verify required fields and types before publish/consume. This catches schema drift at the boundary rather than at runtime.
+
+**Phase 4: Add R-011/R-003 test coverage** — Add dedicated Gherkin scenarios and unit tests for delta re-processing and image/PDF stub round-trips.
+
+### Coupling Cluster Assessment (2026-04-09, Rec 2)
+
+After completing Phases 1-4 (scopes 09-11), the retro's cross-directory coupling cluster (`processor.go ↔ nats_client.py ↔ bot.go ↔ scheduler.go`, 75% co-change rate) was re-analyzed to determine remaining accidental vs essential coupling:
+
+| Coupling Pair | Mechanism | Classification | Action |
+|---|---|---|---|
+| `bot.go ↔ pipeline` | REST API calls only — bot.go does not import `pipeline` | **Essential** — architecture-intended HTTP boundary | No action |
+| `scheduler.go ↔ pipeline` | Indirect via `digest.Generator`, `intelligence.Engine` — scheduler does not import `pipeline` | **Essential** — architecture-intended trigger→workflow chain | No action |
+| `nats/client.go ↔ nats_client.py` | 12 NATS subject strings duplicated as independent constants in Go and Python | **Accidental** — polyglot reality, no automated alignment check | Add shared contract file + bilateral tests |
+| `processor.go structs ↔ nats_client.py` handlers | JSON schema convention — Go has `ValidateProcessPayload` (scope 11), Python has no matching validation | **Accidental** (partially fixed) — Python consumes payloads without field validation | Add Python-side validation mirroring Go |
+
+**Phase 5: NATS Subject Contract Alignment** — Create `config/nats_contract.json` as the single source of truth for NATS subjects, streams, and request/response pairs. Add Go and Python tests that read this contract and verify their local constants match. This makes subject drift between Go and Python a test failure instead of a runtime surprise.
+
+**Phase 6: Python Payload Validation** — Add `ml/app/validation.py` with `validate_process_payload()` and `validate_processed_result()` functions mirroring Go's boundary validation. Wire into Python NATS client message handlers. This completes the boundary validation loop: Go validates before publish, Python validates on receive.
+
+---
+
 ## Overview
 
 Phase 1 establishes the entire runtime foundation: a Go monolith core with a Python ML sidecar communicating via NATS, backed by PostgreSQL + pgvector for unified structured and vector storage. The system deploys via a single `docker compose up` command and provides: a REST API for capture and search, a Telegram bot for mobile interaction, a processing pipeline that extracts structured knowledge from any content type, a knowledge graph linking engine, a daily digest generator, and a minimal web UI for search and settings.

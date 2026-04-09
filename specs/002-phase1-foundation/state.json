@@ -3,28 +3,21 @@
   "featureDir": "specs/002-phase1-foundation",
   "featureName": "Phase 1: Foundation",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "improve-existing",
   "execution": {
-    "activeAgent": "bubbles.iterate",
-    "currentPhase": "validate",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
     "currentScope": null,
-    "runStartedAt": "2026-04-07T08:00:00Z",
+    "runStartedAt": "2026-04-09T12:00:00Z",
     "completedPhaseClaims": [
-      "select",
-      "bootstrap",
+      "analyze",
+      "design",
+      "plan",
       "implement",
       "test",
-      "regression",
-      "simplify",
-      "gaps",
-      "harden",
-      "stabilize",
-      "security",
       "validate",
-      "audit",
-      "chaos",
       "docs",
-      "spec-review"
+      "finalize"
     ],
     "pendingTransitionRequests": []
   },
@@ -38,7 +31,12 @@
       "5",
       "6",
       "7",
-      "8"
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13"
     ],
     "certifiedCompletedPhases": [
       "select",
@@ -145,6 +143,51 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-07T10:50:00Z"
+      },
+      {
+        "scope": 9,
+        "name": "Extract Shared Pipeline Constants",
+        "status": "Done",
+        "dependsOn": [2],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T00:00:00Z"
+      },
+      {
+        "scope": 10,
+        "name": "Decompose Process Into Pipeline Stages",
+        "status": "Done",
+        "dependsOn": [9],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T00:00:00Z"
+      },
+      {
+        "scope": 11,
+        "name": "NATS Payload Contract Validation",
+        "status": "Done",
+        "dependsOn": [10],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T00:00:00Z"
+      },
+      {
+        "scope": 12,
+        "name": "Cross-Language NATS Subject Contract",
+        "status": "Done",
+        "dependsOn": [2],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T12:00:00Z"
+      },
+      {
+        "scope": 13,
+        "name": "Python-Side NATS Payload Validation",
+        "status": "Done",
+        "dependsOn": [12],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T12:00:00Z"
       }
     ],
     "lockdownState": {
