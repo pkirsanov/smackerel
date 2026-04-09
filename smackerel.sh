@@ -114,6 +114,12 @@ case "$COMMAND" in
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
     smackerel_compose "$TARGET_ENV" config -q
+    # Config drift check — verify generated env files match SST
+    if ! git diff --quiet -- config/generated/ 2>/dev/null; then
+        echo "ERROR: Config drift detected — generated files differ from SST. Run: ./smackerel.sh config generate"
+        exit 1
+    fi
+    echo "Config is in sync with SST"
     ;;
   lint)
     run_go_tooling /workspace/scripts/runtime/go-lint.sh
