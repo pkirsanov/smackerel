@@ -124,7 +124,7 @@ Scenario: SCN-019-006 Existing connectors unaffected by new registrations
 - [x] `scripts/commands/config.sh` extracts all new env vars via `yaml_get`
 - [x] `./smackerel.sh config generate` produces env vars for all 5 connectors in `config/generated/dev.env`
 - [x] `./smackerel.sh test unit` passes — all existing + new tests green
-- [ ] Health endpoint lists all 14 connectors
+- [x] Health endpoint lists all 14 connectors
 - [x] No hardcoded fallback defaults anywhere (SST policy)
 - [x] Empty credentials cause `Connect()` to fail with descriptive error, not silent fallback
 - [x] All 5 connectors default to `enabled: false`

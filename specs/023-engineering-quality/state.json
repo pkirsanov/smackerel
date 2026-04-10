@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/023-engineering-quality",
   "featureName": "Engineering Quality",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "implement",
+    "currentPhase": "finalize",
     "currentScope": 3,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [],
@@ -53,7 +53,9 @@
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-10T00:00:00Z",
@@ -62,7 +64,9 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-10T00:00:00Z",
@@ -88,9 +92,31 @@
     "reworkQueue": "rework-queue.json"
   },
   "statusDiscipline": {
-    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "validStatuses": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "specs_hardened",
+      "docs_updated",
+      "validated",
+      "done"
+    ],
     "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
-    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "scopeDoneGates": [
+      "G020",
+      "G021",
+      "G022",
+      "G023",
+      "G024",
+      "G025",
+      "G055",
+      "G056",
+      "G057",
+      "G058",
+      "G059",
+      "G060",
+      "G061"
+    ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
   "notes": "Initialized from engineering review findings. 9 requirements mapped to codebase evidence."
