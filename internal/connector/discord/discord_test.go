@@ -363,7 +363,7 @@ func TestSync_ContextCancellation(t *testing.T) {
 		SourceConfig: map[string]interface{}{
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
-					"server_id":  "s1",
+					"server_id":   "s1",
 					"channel_ids": []interface{}{"ch1", "ch2"},
 				},
 			},
