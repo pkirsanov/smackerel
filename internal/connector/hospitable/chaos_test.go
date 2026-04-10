@@ -294,14 +294,14 @@ func TestChaos_UnicodeMessageBodies(t *testing.T) {
 
 	bodies := []string{
 		"What's the Wi-Fi password? 🤔",
-		"", // empty body
-		strings.Repeat("مرحبا ", 1000),            // Arabic
-		"Привет! Как дела?\nОтлично 👍",           // Russian with emoji
-		"\x00\x01\x02\x03",                        // control chars
-		strings.Repeat("a\u0300", 500),             // combining diacriticals
-		"<script>alert('xss')</script>",            // XSS attempt
-		"'; DROP TABLE messages; --",               // SQL injection attempt
-		string([]byte{0xED, 0xA0, 0x80}),           // invalid UTF-8 (surrogate half)
+		"",                             // empty body
+		strings.Repeat("مرحبا ", 1000), // Arabic
+		"Привет! Как дела?\nОтлично 👍", // Russian with emoji
+		"\x00\x01\x02\x03",               // control chars
+		strings.Repeat("a\u0300", 500),   // combining diacriticals
+		"<script>alert('xss')</script>",  // XSS attempt
+		"'; DROP TABLE messages; --",     // SQL injection attempt
+		string([]byte{0xED, 0xA0, 0x80}), // invalid UTF-8 (surrogate half)
 	}
 
 	for i, body := range bodies {
@@ -554,7 +554,7 @@ func TestChaos_ConcurrentSync(t *testing.T) {
 			})
 		case containsStr(r.URL.Path, "/reviews"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Review]{
-				Data: []Review{{ID: "rev1", PropertyID: "p1", Rating: 5, ReviewText: "Great", SubmittedAt: time.Now()}},
+				Data:  []Review{{ID: "rev1", PropertyID: "p1", Rating: 5, ReviewText: "Great", SubmittedAt: time.Now()}},
 				Total: 1,
 			})
 		default:
@@ -1272,13 +1272,13 @@ func TestChaos_FormatDateEdgeCases(t *testing.T) {
 	cases := []string{
 		"",
 		"not-a-date",
-		"2026-13-45",    // invalid month/day
-		"0000-00-00",    // zero date
-		"9999-12-31",    // far future
-		"2026-04-15T10:00:00Z", // RFC3339 (fallback)
+		"2026-13-45",                // invalid month/day
+		"0000-00-00",                // zero date
+		"9999-12-31",                // far future
+		"2026-04-15T10:00:00Z",      // RFC3339 (fallback)
 		"2026-04-15T10:00:00+05:30", // RFC3339 with offset
-		"04/15/2026",    // US format (unsupported)
-		"15-Apr-2026",   // day-month-year
+		"04/15/2026",                // US format (unsupported)
+		"15-Apr-2026",               // day-month-year
 	}
 
 	for _, c := range cases {
@@ -1296,16 +1296,16 @@ func TestChaos_FormatDateEdgeCases(t *testing.T) {
 
 func TestChaos_ParseLinkNextEdgeCases(t *testing.T) {
 	cases := map[string]string{
-		"empty":               "",
-		"no_angle_brackets":   `http://example.com; rel="next"`,
-		"single_bracket":      `<http://example.com; rel="next"`,
-		"no_semicolon":        `<http://example.com> rel="next"`,
-		"multiple_rels":       `<http://example.com/1>; rel="prev", <http://example.com/2>; rel="next"`,
-		"whitespace":          `  <http://example.com>  ;  rel="next"  `,
-		"unquoted_rel":        `<http://example.com>; rel=next`,
-		"url_with_params":     `<http://example.com?page=2&per_page=10>; rel="next"`,
-		"unicode_url":         `<http://example.com/données?page=2>; rel="next"`,
-		"very_long_url":       fmt.Sprintf(`<%s>; rel="next"`, "http://example.com/"+strings.Repeat("a", 10000)),
+		"empty":             "",
+		"no_angle_brackets": `http://example.com; rel="next"`,
+		"single_bracket":    `<http://example.com; rel="next"`,
+		"no_semicolon":      `<http://example.com> rel="next"`,
+		"multiple_rels":     `<http://example.com/1>; rel="prev", <http://example.com/2>; rel="next"`,
+		"whitespace":        `  <http://example.com>  ;  rel="next"  `,
+		"unquoted_rel":      `<http://example.com>; rel=next`,
+		"url_with_params":   `<http://example.com?page=2&per_page=10>; rel="next"`,
+		"unicode_url":       `<http://example.com/données?page=2>; rel="next"`,
+		"very_long_url":     fmt.Sprintf(`<%s>; rel="next"`, "http://example.com/"+strings.Repeat("a", 10000)),
 	}
 
 	for name, header := range cases {

@@ -278,5 +278,3 @@ func (g *Generator) storeFallbackDigest(ctx context.Context, date string, digest
 	`, id, date, text, wordCount)
 	return err
 }
-
-

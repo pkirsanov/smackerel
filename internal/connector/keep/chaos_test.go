@@ -209,15 +209,15 @@ func TestChaos_MalformedJSON(t *testing.T) {
 	parser := NewTakeoutParser()
 
 	malformedCases := map[string]string{
-		"truncated.json":     `{"title": "Test", "textContent": `,
-		"empty.json":         ``,
-		"binary.json":        string([]byte{0x00, 0x01, 0xFF, 0xFE}),
-		"just-null.json":     `null`,
-		"just-array.json":    `[1,2,3]`,
-		"just-string.json":   `"hello"`,
-		"just-number.json":   `42`,
-		"nested-error.json":  `{"title": null, "isTrashed": "not-a-bool", "labels": "not-an-array"}`,
-		"extra-fields.json":  `{"title": "Extra", "textContent": "ok", "unknownField": 999, "labels": []}`,
+		"truncated.json":      `{"title": "Test", "textContent": `,
+		"empty.json":          ``,
+		"binary.json":         string([]byte{0x00, 0x01, 0xFF, 0xFE}),
+		"just-null.json":      `null`,
+		"just-array.json":     `[1,2,3]`,
+		"just-string.json":    `"hello"`,
+		"just-number.json":    `42`,
+		"nested-error.json":   `{"title": null, "isTrashed": "not-a-bool", "labels": "not-an-array"}`,
+		"extra-fields.json":   `{"title": "Extra", "textContent": "ok", "unknownField": 999, "labels": []}`,
 		"unicode-escape.json": `{"title": "\u0000\u0001\u0002", "textContent": "control chars", "labels": []}`,
 	}
 
@@ -602,16 +602,16 @@ func TestChaos_UnicodeLabels(t *testing.T) {
 	tm := NewTopicMapper()
 
 	unicodeLabels := []string{
-		"",                       // empty
-		"  ",                     // whitespace only
-		"café",                   // accented latin
-		"机器学习",                   // CJK
-		"🚀 Rocket Science",     // emoji prefix
-		"العربية",                 // Arabic RTL
-		"日本語テスト",                 // Japanese
-		"\u200B",                 // zero-width space
+		"",                         // empty
+		"  ",                       // whitespace only
+		"café",                     // accented latin
+		"机器学习",                     // CJK
+		"🚀 Rocket Science",         // emoji prefix
+		"العربية",                  // Arabic RTL
+		"日本語テスト",                   // Japanese
+		"\u200B",                   // zero-width space
 		strings.Repeat("x", 10000), // extremely long label
-		"a\x00b",                // embedded null byte
+		"a\x00b",                   // embedded null byte
 	}
 
 	// Should not panic for any of these

@@ -138,3 +138,125 @@ func ResurfaceScore(relevanceScore float64, daysDormant int, accessCount int) fl
 
 // Note: rand.Seed was removed — since Go 1.20 the global rand source is
 // automatically seeded and rand.Seed is deprecated.
+
+// SerendipityCandidate extends ResurfaceCandidate with context match scoring.
+type SerendipityCandidate struct {
+	ResurfaceCandidate
+	CalendarMatch bool    `json:"calendar_match"`
+	TopicMatch    bool    `json:"topic_match"`
+	ContextScore  float64 `json:"context_score"`
+	ContextReason string  `json:"context_reason"`
+}
+
+// SerendipityPick selects a single context-aware archive item per R-505.
+// This is the full implementation replacing the dormancy-only Resurface for weekly use.
+func (e *Engine) SerendipityPick(ctx context.Context) (*SerendipityCandidate, error) {
+	if e.Pool == nil {
+		return nil, fmt.Errorf("serendipity requires a database connection")
+	}
+
+	// 1. Query candidate pool: 6+ months dormant (or 3+ if pinned), above-average relevance
+	rows, err := e.Pool.Query(ctx, `
+		SELECT a.id, a.title, a.relevance_score,
+		       COALESCE(a.last_accessed, a.created_at) AS last_access,
+		       EXTRACT(DAY FROM NOW() - COALESCE(a.last_accessed, a.created_at))::int AS days_dormant,
+		       COALESCE(a.access_count, 0) AS access_count,
+		       COALESCE(a.pinned, FALSE) AS pinned
+		FROM artifacts a
+		WHERE (
+			(COALESCE(a.last_accessed, a.created_at) < NOW() - INTERVAL '180 days')
+			OR (a.pinned = TRUE AND COALESCE(a.last_accessed, a.created_at) < NOW() - INTERVAL '90 days')
+		)
+		AND a.relevance_score > (SELECT COALESCE(AVG(relevance_score), 0) FROM artifacts)
+		ORDER BY a.relevance_score DESC
+		LIMIT 50
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query serendipity candidates: %w", err)
+	}
+	defer rows.Close()
+
+	type candidate struct {
+		id          string
+		title       string
+		relevance   float64
+		lastAccess  time.Time
+		daysDormant int
+		accessCount int
+		pinned      bool
+	}
+
+	var candidates []candidate
+	for rows.Next() {
+		var c candidate
+		if err := rows.Scan(&c.id, &c.title, &c.relevance, &c.lastAccess, &c.daysDormant, &c.accessCount, &c.pinned); err != nil {
+			slog.Warn("serendipity candidate scan failed", "error", err)
+			continue
+		}
+		candidates = append(candidates, c)
+	}
+
+	if len(candidates) == 0 {
+		return nil, nil // No candidates available
+	}
+
+	// 2. Score each candidate with context matching
+	var best *SerendipityCandidate
+	var bestScore float64
+
+	for _, c := range candidates {
+		sc := &SerendipityCandidate{
+			ResurfaceCandidate: ResurfaceCandidate{
+				ArtifactID:   c.id,
+				Title:        c.title,
+				Score:        c.relevance,
+				LastAccessed: c.lastAccess,
+			},
+		}
+
+		// Base score from relevance
+		score := c.relevance * 0.5
+
+		// Topic match: check if artifact belongs to an active/hot topic
+		var topicMatch bool
+		e.Pool.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM edges e
+				JOIN topics t ON t.id = e.dst_id AND e.dst_type = 'topic'
+				WHERE e.src_id = $1 AND e.edge_type = 'BELONGS_TO'
+				AND t.state IN ('hot', 'active')
+			)
+		`, c.id).Scan(&topicMatch)
+
+		if topicMatch {
+			score += 2.0
+			sc.TopicMatch = true
+			sc.ContextReason = "Connects to a currently active topic"
+		}
+
+		// Quality bonus
+		if c.pinned {
+			score += 1.0
+		}
+
+		sc.ContextScore = score
+
+		if score > bestScore {
+			bestScore = score
+			best = sc
+		}
+	}
+
+	if best == nil {
+		return nil, nil
+	}
+
+	// Format reason
+	if best.ContextReason == "" {
+		best.Reason = fmt.Sprintf("You saved this %d days ago. Still relevant?", int(time.Since(best.LastAccessed).Hours()/24))
+	} else {
+		best.Reason = fmt.Sprintf("Remember this? %s — %s", best.Title, best.ContextReason)
+	}
+
+	return best, nil
+}
