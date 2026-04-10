@@ -1,0 +1,81 @@
+{
+  "version": 3,
+  "featureDir": "specs/019-connector-wiring",
+  "featureName": "Connector Wiring — Register 5 Unwired Connectors",
+  "status": "in-progress",
+  "workflowMode": "delivery-lockdown",
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "implement",
+    "currentScope": 1,
+    "runStartedAt": "2026-04-10T00:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "statusBefore": "not-started",
+        "statusAfter": "not-started",
+        "timestamp": "2026-04-10T00:00:00Z",
+        "summary": "Created spec.md with problem statement, actors, outcome contract, 6 use cases, 10 business scenarios, 7 requirements with Gherkin, and success metrics. Identified 4 missing YAML config entries and confirmed Discord entry exists but is unwired."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap"],
+        "statusBefore": "not-started",
+        "statusAfter": "not-started",
+        "timestamp": "2026-04-10T00:00:00Z",
+        "summary": "Created design.md covering registration pattern, per-connector config wiring (Discord, Twitter, Weather, Gov Alerts, Financial Markets), YAML config blocks, env var mapping, config generation script changes, helper functions, and testing strategy. All 5 connectors follow existing 9-connector pattern exactly."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning"],
+        "statusBefore": "not-started",
+        "statusAfter": "not-started",
+        "timestamp": "2026-04-10T00:00:00Z",
+        "summary": "Created scopes.md with 1 scope (wire all 5 connectors — imports, registration, YAML config, config.sh, health endpoint). Created report.md and uservalidation.md templates."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "not-started",
+        "statusAfter": "in-progress",
+        "timestamp": "2026-04-10T00:00:00Z",
+        "summary": "Wired all 5 connectors: added imports, instantiation, registration, and auto-start blocks in cmd/core/main.go. Added 4 YAML config blocks to config/smackerel.yaml. Extended scripts/commands/config.sh with yaml_get_json helper and env var extraction for all 5 connectors. Added parseJSONArray, parseJSONObject, parseFloatEnv helper functions. Build succeeds, all unit tests pass."
+      }
+    ]
+  },
+  "certification": {
+    "status": "not-started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    }
+  }
+}

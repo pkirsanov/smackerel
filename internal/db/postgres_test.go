@@ -8,7 +8,7 @@ import (
 
 func TestConnect_InvalidURL(t *testing.T) {
 	ctx := context.Background()
-	_, err := Connect(ctx, "not-a-valid-url")
+	_, err := Connect(ctx, "not-a-valid-url", 10, 2)
 	if err == nil {
 		t.Fatal("expected error for invalid database URL")
 	}
@@ -19,7 +19,7 @@ func TestConnect_InvalidURL(t *testing.T) {
 
 func TestConnect_EmptyURL(t *testing.T) {
 	ctx := context.Background()
-	_, err := Connect(ctx, "")
+	_, err := Connect(ctx, "", 10, 2)
 	if err == nil {
 		t.Fatal("expected error for empty database URL")
 	}
@@ -28,7 +28,7 @@ func TestConnect_EmptyURL(t *testing.T) {
 func TestConnect_MalformedPostgresURL(t *testing.T) {
 	ctx := context.Background()
 	// Valid scheme but unreachable host — should fail on connect/ping, not parse
-	_, err := Connect(ctx, "postgres://user:pass@localhost:99999/db")
+	_, err := Connect(ctx, "postgres://user:pass@localhost:99999/db", 10, 2)
 	if err == nil {
 		t.Fatal("expected error for unreachable database")
 	}
@@ -37,7 +37,7 @@ func TestConnect_MalformedPostgresURL(t *testing.T) {
 func TestConnect_CancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
-	_, err := Connect(ctx, "postgres://user:pass@localhost:5432/testdb")
+	_, err := Connect(ctx, "postgres://user:pass@localhost:5432/testdb", 10, 2)
 	if err == nil {
 		t.Fatal("expected error with cancelled context")
 	}

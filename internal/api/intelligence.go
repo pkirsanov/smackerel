@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/smackerel/smackerel/internal/intelligence"
@@ -15,8 +14,7 @@ func ExpertiseHandler(engine *intelligence.Engine) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "expertise_error", "expertise map generation failed")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(expertiseMap)
+		writeJSON(w, http.StatusOK, expertiseMap)
 	}
 }
 
@@ -28,8 +26,7 @@ func LearningPathsHandler(engine *intelligence.Engine) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "learning_error", "learning paths query failed")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(paths)
+		writeJSON(w, http.StatusOK, paths)
 	}
 }
 
@@ -41,8 +38,7 @@ func SubscriptionsHandler(engine *intelligence.Engine) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "subscription_error", "subscription summary failed")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(summary)
+		writeJSON(w, http.StatusOK, summary)
 	}
 }
 
@@ -55,11 +51,11 @@ func SerendipityHandler(engine *intelligence.Engine) http.HandlerFunc {
 			return
 		}
 		if pick == nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message":"No serendipity candidates available yet. Archive items need 6+ months of dormancy."}`))
+			writeJSON(w, http.StatusOK, map[string]string{
+				"message": "No serendipity candidates available yet. Archive items need 6+ months of dormancy.",
+			})
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(pick)
+		writeJSON(w, http.StatusOK, pick)
 	}
 }

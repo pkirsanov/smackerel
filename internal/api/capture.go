@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -50,6 +49,13 @@ type ErrorDetail struct {
 
 // CaptureHandler handles POST /api/capture.
 func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
+	// Check DB health before processing — fail visible on DB outage
+	if d.DB != nil && !d.DB.Healthy(r.Context()) {
+		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE",
+			"Database is temporarily unavailable, please retry")
+		return
+	}
+
 	var req CaptureRequest
 	// Limit request body to 1MB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -65,14 +71,13 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the pipeline processor
-	proc, ok := d.Pipeline.(*pipeline.Processor)
-	if !ok || proc == nil {
+	if d.Pipeline == nil {
 		writeError(w, http.StatusServiceUnavailable, "ML_UNAVAILABLE", "Processing service unavailable")
 		return
 	}
 
 	// Process the capture
-	result, err := proc.Process(r.Context(), &pipeline.ProcessRequest{
+	result, err := d.Pipeline.Process(r.Context(), &pipeline.ProcessRequest{
 		URL:      req.URL,
 		Text:     req.Text,
 		VoiceURL: req.VoiceURL,
@@ -121,25 +126,6 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
-}
-
-// checkAuth validates the Bearer token from the Authorization header.
-func (d *Dependencies) checkAuth(r *http.Request) bool {
-	if d.AuthToken == "" {
-		return true // No auth configured = allow all (development)
-	}
-
-	auth := r.Header.Get("Authorization")
-	if auth == "" {
-		return false
-	}
-
-	parts := strings.SplitN(auth, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-		return false
-	}
-
-	return subtle.ConstantTimeCompare([]byte(parts[1]), []byte(d.AuthToken)) == 1
 }
 
 // writeError writes a standardized error response.

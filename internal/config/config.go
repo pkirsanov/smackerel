@@ -26,6 +26,21 @@ type Config struct {
 	Port             string
 	MLSidecarURL     string
 	CoreAPIURL       string
+
+	// DB pool sizing (SST-compliant — from smackerel.yaml via config generate)
+	DBMaxConns int32
+	DBMinConns int32
+
+	// Shutdown timeout in seconds for graceful shutdown (SST-compliant)
+	ShutdownTimeoutS int
+
+	// ML sidecar health cache TTL in seconds (SST-compliant)
+	MLHealthCacheTTLS int
+
+	// Optional connector path fields (SST-compliant — read from env, sourced from smackerel.yaml)
+	BookmarksImportDir string
+	BrowserHistoryPath string
+	MapsImportDir      string
 }
 
 // Load reads configuration from environment variables.
@@ -47,6 +62,10 @@ func Load() (*Config, error) {
 		Port:             os.Getenv("PORT"),
 		MLSidecarURL:     os.Getenv("ML_SIDECAR_URL"),
 		CoreAPIURL:       os.Getenv("CORE_API_URL"),
+
+		BookmarksImportDir: os.Getenv("BOOKMARKS_IMPORT_DIR"),
+		BrowserHistoryPath: os.Getenv("BROWSER_HISTORY_PATH"),
+		MapsImportDir:      os.Getenv("MAPS_IMPORT_DIR"),
 	}
 
 	if chatIDs := os.Getenv("TELEGRAM_CHAT_IDS"); chatIDs != "" {
@@ -55,6 +74,50 @@ func Load() (*Config, error) {
 
 	if err := cfg.Validate(); err != nil {
 		return nil, err
+	}
+
+	// Parse numeric config after string validation passes
+	dbMaxConnsStr := os.Getenv("DB_MAX_CONNS")
+	dbMinConnsStr := os.Getenv("DB_MIN_CONNS")
+	shutdownTimeoutStr := os.Getenv("SHUTDOWN_TIMEOUT_S")
+	mlHealthCacheTTLStr := os.Getenv("ML_HEALTH_CACHE_TTL_S")
+
+	var parseErrors []string
+
+	if dbMaxConnsStr == "" {
+		parseErrors = append(parseErrors, "DB_MAX_CONNS")
+	} else if v, err := strconv.ParseInt(dbMaxConnsStr, 10, 32); err != nil || v < 1 {
+		parseErrors = append(parseErrors, "DB_MAX_CONNS (must be a positive integer)")
+	} else {
+		cfg.DBMaxConns = int32(v)
+	}
+
+	if dbMinConnsStr == "" {
+		parseErrors = append(parseErrors, "DB_MIN_CONNS")
+	} else if v, err := strconv.ParseInt(dbMinConnsStr, 10, 32); err != nil || v < 0 {
+		parseErrors = append(parseErrors, "DB_MIN_CONNS (must be a non-negative integer)")
+	} else {
+		cfg.DBMinConns = int32(v)
+	}
+
+	if shutdownTimeoutStr == "" {
+		parseErrors = append(parseErrors, "SHUTDOWN_TIMEOUT_S")
+	} else if v, err := strconv.Atoi(shutdownTimeoutStr); err != nil || v < 1 {
+		parseErrors = append(parseErrors, "SHUTDOWN_TIMEOUT_S (must be a positive integer)")
+	} else {
+		cfg.ShutdownTimeoutS = v
+	}
+
+	if mlHealthCacheTTLStr == "" {
+		parseErrors = append(parseErrors, "ML_HEALTH_CACHE_TTL_S")
+	} else if v, err := strconv.Atoi(mlHealthCacheTTLStr); err != nil || v < 1 {
+		parseErrors = append(parseErrors, "ML_HEALTH_CACHE_TTL_S (must be a positive integer)")
+	} else {
+		cfg.MLHealthCacheTTLS = v
+	}
+
+	if len(parseErrors) > 0 {
+		return nil, fmt.Errorf("missing or invalid required configuration: %s", strings.Join(parseErrors, ", "))
 	}
 
 	return cfg, nil

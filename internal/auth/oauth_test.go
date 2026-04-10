@@ -183,16 +183,59 @@ func TestTokenStore_EncryptDecrypt_EmptyValue(t *testing.T) {
 	}
 }
 
-func TestTokenStore_Decrypt_PlaintextFallback(t *testing.T) {
+func TestTokenStore_Decrypt_FailClosed_NotBase64(t *testing.T) {
 	store := NewTokenStore(nil, "test-key")
 
-	// Attempt to decrypt a non-base64 plaintext string — should return it as-is
+	// SCN-020-013: Attempt to decrypt a non-base64 string with encryption key present.
+	// Must return error, NOT silently treat as plaintext.
 	result, err := store.decrypt("not-encrypted-token")
-	if err != nil {
-		t.Fatalf("decrypt plaintext fallback: %v", err)
+	if err == nil {
+		t.Fatalf("expected error for non-base64 input with encryption key, got result: %q", result)
 	}
-	if result != "not-encrypted-token" {
-		t.Errorf("plaintext fallback: expected original, got %q", result)
+	if result != "" {
+		t.Errorf("expected empty string on error, got %q", result)
+	}
+}
+
+func TestTokenStore_Decrypt_FailClosed_TooShort(t *testing.T) {
+	store := NewTokenStore(nil, "test-key")
+
+	// SCN-020-013: Base64-decodable but too short for AES-GCM nonce — must error.
+	shortData := "dGVzdA==" // "test" in base64 — only 4 bytes, less than nonce size
+	result, err := store.decrypt(shortData)
+	if err == nil {
+		t.Fatalf("expected error for too-short encrypted data, got result: %q", result)
+	}
+	if result != "" {
+		t.Errorf("expected empty string on error, got %q", result)
+	}
+}
+
+func TestTokenStore_Decrypt_FailClosed_GCMFailure(t *testing.T) {
+	store := NewTokenStore(nil, "test-key")
+
+	// SCN-020-013: Valid base64 and long enough, but not valid ciphertext — GCM fails.
+	// 32 bytes of base64-encoded garbage (enough to exceed nonce size)
+	badCiphertext := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+	result, err := store.decrypt(badCiphertext)
+	if err == nil {
+		t.Fatalf("expected error for invalid ciphertext, got result: %q", result)
+	}
+	if result != "" {
+		t.Errorf("expected empty string on error, got %q", result)
+	}
+}
+
+func TestTokenStore_Decrypt_NoKey_PlaintextPassthrough(t *testing.T) {
+	// SCN-020-014: No encryption key — plaintext passthrough for dev mode.
+	store := NewTokenStore(nil, "")
+
+	result, err := store.decrypt("any-plaintext-value")
+	if err != nil {
+		t.Fatalf("expected no error for plaintext passthrough: %v", err)
+	}
+	if result != "any-plaintext-value" {
+		t.Errorf("expected passthrough, got %q", result)
 	}
 }
 

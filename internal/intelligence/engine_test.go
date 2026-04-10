@@ -802,3 +802,80 @@ func TestMarkResurfaced_EmptyList(t *testing.T) {
 		t.Error("expected error for nil pool")
 	}
 }
+
+// === Scope 1: MarkAlertDelivered ===
+
+func TestMarkAlertDelivered_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.MarkAlertDelivered(context.Background(), "alert-1")
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	if err.Error() != "alert delivery requires a database connection" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMarkAlertDelivered_EmptyID(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.MarkAlertDelivered(context.Background(), "")
+	if err == nil {
+		t.Error("expected error for empty ID")
+	}
+	if err.Error() != "alert ID is required" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// === Scope 1: ProduceBillAlerts ===
+
+func TestProduceBillAlerts_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.ProduceBillAlerts(context.Background())
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+// === Scope 1: ProduceTripPrepAlerts ===
+
+func TestProduceTripPrepAlerts_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.ProduceTripPrepAlerts(context.Background())
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+// === Scope 1: ProduceReturnWindowAlerts ===
+
+func TestProduceReturnWindowAlerts_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.ProduceReturnWindowAlerts(context.Background())
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+// === Scope 1: ProduceRelationshipCoolingAlerts ===
+
+func TestProduceRelationshipCoolingAlerts_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.ProduceRelationshipCoolingAlerts(context.Background())
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+// === Scope 3: GetLastSynthesisTime ===
+
+func TestGetLastSynthesisTime_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	_, err := engine.GetLastSynthesisTime(context.Background())
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	if err.Error() != "synthesis freshness check requires a database connection" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

@@ -6,7 +6,7 @@ services:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
     ports:
-      - "${POSTGRES_HOST_PORT}:${POSTGRES_CONTAINER_PORT}"
+      - "127.0.0.1:${POSTGRES_HOST_PORT}:${POSTGRES_CONTAINER_PORT}"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -29,14 +29,13 @@ services:
   nats:
     image: nats:2.10-alpine
     restart: unless-stopped
-    # SEC-003: Auth token visible in command args (docker ps). Acceptable for
-    # local-first deployment. For hardened deployment, use nats.conf file mount.
-    command: ["--jetstream", "--store_dir", "/data", "--http_port", "${NATS_MONITOR_PORT}", "--auth", "${SMACKEREL_AUTH_TOKEN}"]
+    command: ["--config", "/etc/nats/nats.conf"]
     ports:
-      - "${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
-      - "${NATS_MONITOR_HOST_PORT}:${NATS_MONITOR_PORT}"
+      - "127.0.0.1:${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
+      - "127.0.0.1:${NATS_MONITOR_HOST_PORT}:${NATS_MONITOR_PORT}"
     volumes:
       - nats-data:/data
+      - ./config/generated/nats.conf:/etc/nats/nats.conf:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${NATS_MONITOR_PORT}/healthz"]
       interval: 5s
@@ -78,6 +77,11 @@ services:
       BOOKMARKS_IMPORT_DIR: ${BOOKMARKS_IMPORT_DIR:+/data/bookmarks-import}
       MAPS_IMPORT_DIR: ${MAPS_IMPORT_DIR:+/data/maps-import}
       BROWSER_HISTORY_PATH: ${BROWSER_HISTORY_PATH:+/data/browser-history/History}
+      DB_MAX_CONNS: ${DB_MAX_CONNS}
+      DB_MIN_CONNS: ${DB_MIN_CONNS}
+      SHUTDOWN_TIMEOUT_S: ${SHUTDOWN_TIMEOUT_S}
+      ML_HEALTH_CACHE_TTL_S: ${ML_HEALTH_CACHE_TTL_S}
+    stop_grace_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -108,7 +112,7 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
     restart: unless-stopped
     ports:
-      - "${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+      - "127.0.0.1:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
     environment:
       NATS_URL: ${NATS_URL}
       LLM_PROVIDER: ${LLM_PROVIDER}
@@ -138,7 +142,7 @@ services:
     image: ollama/ollama:0.6
     restart: unless-stopped
     ports:
-      - "${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
+      - "127.0.0.1:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
     volumes:
       - ollama-data:/root/.ollama
     profiles:

@@ -758,3 +758,289 @@ func assembleWeeklySynthesisText(ws *WeeklySynthesis) string {
 
 	return strings.Join(sections, "\n\n")
 }
+
+// MarkAlertDelivered marks an alert as delivered with a delivery timestamp.
+func (e *Engine) MarkAlertDelivered(ctx context.Context, alertID string) error {
+	if alertID == "" {
+		return fmt.Errorf("alert ID is required")
+	}
+	if e.Pool == nil {
+		return fmt.Errorf("alert delivery requires a database connection")
+	}
+	result, err := e.Pool.Exec(ctx, `
+		UPDATE alerts SET status = 'delivered', delivered_at = NOW()
+		WHERE id = $1 AND status IN ('pending', 'snoozed')
+	`, alertID)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("alert not found or already delivered: %s", alertID)
+	}
+	return nil
+}
+
+// ProduceBillAlerts creates alerts for subscriptions with upcoming billing dates.
+func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
+	if e.Pool == nil {
+		return fmt.Errorf("bill alert production requires a database connection")
+	}
+
+	rows, err := e.Pool.Query(ctx, `
+		SELECT id, service_name, amount, currency, billing_freq, first_seen
+		FROM subscriptions
+		WHERE status = 'active'
+		  AND billing_freq IS NOT NULL
+		  AND NOT EXISTS (
+		    SELECT 1 FROM alerts
+		    WHERE alert_type = 'bill'
+		      AND artifact_id = subscriptions.id
+		      AND status IN ('pending', 'delivered')
+		      AND created_at > NOW() - INTERVAL '30 days'
+		  )
+		LIMIT 20
+	`)
+	if err != nil {
+		return fmt.Errorf("query subscriptions for billing: %w", err)
+	}
+	defer rows.Close()
+
+	var created int
+	for rows.Next() {
+		var id, serviceName, currency, billingFreq string
+		var amount float64
+		var firstSeen time.Time
+		if err := rows.Scan(&id, &serviceName, &amount, &currency, &billingFreq, &firstSeen); err != nil {
+			slog.Warn("bill alert scan failed", "error", err)
+			continue
+		}
+
+		// Estimate next billing: for monthly, check if day-of-month is within 3 days
+		now := time.Now()
+		dayOfMonth := firstSeen.Day()
+		daysUntilBilling := dayOfMonth - now.Day()
+		if daysUntilBilling < 0 {
+			// Already past this month's billing day
+			continue
+		}
+		if billingFreq == "annual" {
+			if firstSeen.Month() != now.Month() || daysUntilBilling > 3 {
+				continue
+			}
+		} else if daysUntilBilling > 3 {
+			continue
+		}
+
+		title := fmt.Sprintf("Upcoming charge: %s", serviceName)
+		if amount > 0 {
+			title = fmt.Sprintf("Upcoming charge: %s (%.2f %s)", serviceName, amount, currency)
+		}
+
+		if err := e.CreateAlert(ctx, &Alert{
+			AlertType:  AlertBill,
+			Title:      title,
+			Body:       fmt.Sprintf("%s billing expected in ~%d days", serviceName, daysUntilBilling),
+			Priority:   2,
+			ArtifactID: id,
+		}); err != nil {
+			slog.Warn("failed to create bill alert", "subscription", serviceName, "error", err)
+		} else {
+			created++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("bill alert row iteration: %w", err)
+	}
+
+	slog.Info("bill alert production complete", "created", created)
+	return nil
+}
+
+// ProduceTripPrepAlerts creates alerts for upcoming trips with departure within 5 days.
+func (e *Engine) ProduceTripPrepAlerts(ctx context.Context) error {
+	if e.Pool == nil {
+		return fmt.Errorf("trip prep alert production requires a database connection")
+	}
+
+	rows, err := e.Pool.Query(ctx, `
+		SELECT id, destination, start_date
+		FROM trips
+		WHERE status = 'upcoming'
+		  AND start_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '5 days'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM alerts
+		    WHERE alert_type = 'trip_prep'
+		      AND artifact_id = trips.id
+		      AND status IN ('pending', 'delivered')
+		  )
+		LIMIT 10
+	`)
+	if err != nil {
+		return fmt.Errorf("query upcoming trips: %w", err)
+	}
+	defer rows.Close()
+
+	var created int
+	for rows.Next() {
+		var id, destination string
+		var startDate time.Time
+		if err := rows.Scan(&id, &destination, &startDate); err != nil {
+			slog.Warn("trip alert scan failed", "error", err)
+			continue
+		}
+
+		daysUntil := int(time.Until(startDate).Hours() / 24)
+		if daysUntil < 0 {
+			daysUntil = 0
+		}
+
+		if err := e.CreateAlert(ctx, &Alert{
+			AlertType:  AlertTripPrep,
+			Title:      fmt.Sprintf("Trip prep: %s in %d days", destination, daysUntil),
+			Body:       fmt.Sprintf("Your trip to %s departs in %d days. Check bookings and packing.", destination, daysUntil),
+			Priority:   2,
+			ArtifactID: id,
+		}); err != nil {
+			slog.Warn("failed to create trip prep alert", "trip", destination, "error", err)
+		} else {
+			created++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("trip alert row iteration: %w", err)
+	}
+
+	slog.Info("trip prep alert production complete", "created", created)
+	return nil
+}
+
+// ProduceReturnWindowAlerts creates alerts for artifacts with return deadlines expiring within 5 days.
+func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
+	if e.Pool == nil {
+		return fmt.Errorf("return window alert production requires a database connection")
+	}
+
+	rows, err := e.Pool.Query(ctx, `
+		SELECT id, title, metadata->>'return_deadline' AS return_deadline
+		FROM artifacts
+		WHERE metadata->>'return_deadline' IS NOT NULL
+		  AND (metadata->>'return_deadline')::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '5 days'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM alerts
+		    WHERE alert_type = 'return_window'
+		      AND artifact_id = artifacts.id
+		      AND status IN ('pending', 'delivered')
+		  )
+		LIMIT 10
+	`)
+	if err != nil {
+		return fmt.Errorf("query return windows: %w", err)
+	}
+	defer rows.Close()
+
+	var created int
+	for rows.Next() {
+		var id, title, deadlineStr string
+		if err := rows.Scan(&id, &title, &deadlineStr); err != nil {
+			slog.Warn("return window scan failed", "error", err)
+			continue
+		}
+
+		if err := e.CreateAlert(ctx, &Alert{
+			AlertType:  AlertReturnWindow,
+			Title:      fmt.Sprintf("Return window closing: %s", title),
+			Body:       fmt.Sprintf("Return deadline for \"%s\" is %s. Act soon.", title, deadlineStr),
+			Priority:   1,
+			ArtifactID: id,
+		}); err != nil {
+			slog.Warn("failed to create return window alert", "artifact", id, "error", err)
+		} else {
+			created++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("return window row iteration: %w", err)
+	}
+
+	slog.Info("return window alert production complete", "created", created)
+	return nil
+}
+
+// ProduceRelationshipCoolingAlerts creates alerts for contacts with fading communication.
+func (e *Engine) ProduceRelationshipCoolingAlerts(ctx context.Context) error {
+	if e.Pool == nil {
+		return fmt.Errorf("relationship cooling alert production requires a database connection")
+	}
+
+	rows, err := e.Pool.Query(ctx, `
+		SELECT p.id, p.name,
+		       EXTRACT(DAY FROM NOW() - MAX(a.created_at))::int AS days_since
+		FROM people p
+		JOIN edges e ON e.dst_id = p.id AND e.dst_type = 'person'
+		JOIN artifacts a ON a.id = e.src_id
+		GROUP BY p.id, p.name
+		HAVING EXTRACT(DAY FROM NOW() - MAX(a.created_at)) > 30
+		   AND COUNT(DISTINCT a.id) FILTER (WHERE a.created_at BETWEEN NOW() - INTERVAL '180 days' AND NOW() - INTERVAL '90 days') >= 4
+		   AND NOT EXISTS (
+		     SELECT 1 FROM alerts
+		     WHERE alert_type = 'relationship_cooling'
+		       AND artifact_id = p.id
+		       AND status IN ('pending', 'delivered')
+		       AND created_at > NOW() - INTERVAL '30 days'
+		   )
+		LIMIT 10
+	`)
+	if err != nil {
+		return fmt.Errorf("query cooling relationships: %w", err)
+	}
+	defer rows.Close()
+
+	var created int
+	for rows.Next() {
+		var id, name string
+		var daysSince int
+		if err := rows.Scan(&id, &name, &daysSince); err != nil {
+			slog.Warn("relationship cooling scan failed", "error", err)
+			continue
+		}
+
+		if err := e.CreateAlert(ctx, &Alert{
+			AlertType:  AlertRelationship,
+			Title:      fmt.Sprintf("Reconnect with %s? Last contact %d days ago", name, daysSince),
+			Body:       fmt.Sprintf("You used to communicate regularly with %s, but it's been %d days since your last interaction.", name, daysSince),
+			Priority:   3,
+			ArtifactID: id,
+		}); err != nil {
+			slog.Warn("failed to create relationship cooling alert", "person", name, "error", err)
+		} else {
+			created++
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("relationship cooling row iteration: %w", err)
+	}
+
+	slog.Info("relationship cooling alert production complete", "created", created)
+	return nil
+}
+
+// GetLastSynthesisTime returns the timestamp of the most recent synthesis insight.
+// Returns epoch time if no synthesis has ever run.
+func (e *Engine) GetLastSynthesisTime(ctx context.Context) (time.Time, error) {
+	if e.Pool == nil {
+		return time.Time{}, fmt.Errorf("synthesis freshness check requires a database connection")
+	}
+
+	var lastSynthesis time.Time
+	err := e.Pool.QueryRow(ctx, `
+		SELECT COALESCE(MAX(created_at), '1970-01-01'::timestamptz) FROM synthesis_insights
+	`).Scan(&lastSynthesis)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("query last synthesis time: %w", err)
+	}
+	return lastSynthesis, nil
+}

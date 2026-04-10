@@ -5,8 +5,9 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 
+from .auth import verify_auth
 from .embedder import _model
 from .nats_client import NATSClient
 
@@ -43,6 +44,12 @@ async def lifespan(app: FastAPI):
 
     config = _check_required_config()
 
+    auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
+    if not auth_token:
+        logger.warning(
+            "SMACKEREL_AUTH_TOKEN is empty — ML sidecar running without authentication"
+        )
+
     nats_url = config["NATS_URL"]
     logger.info("Connecting to NATS at %s", nats_url)
 
@@ -77,3 +84,9 @@ async def health():
         "nats": "connected" if nats_connected else "disconnected",
         "model_loaded": _model is not None,
     }
+
+
+# Authenticated router — all non-health HTTP endpoints go here.
+# This ensures any future HTTP endpoint is protected by default.
+authed_router = APIRouter(dependencies=[Depends(verify_auth)])
+app.include_router(authed_router)

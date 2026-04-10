@@ -15,14 +15,14 @@ type Postgres struct {
 }
 
 // Connect creates a new PostgreSQL connection pool.
-func Connect(ctx context.Context, databaseURL string) (*Postgres, error) {
+func Connect(ctx context.Context, databaseURL string, maxConns, minConns int32) (*Postgres, error) {
 	config, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
 
-	config.MaxConns = 10
-	config.MinConns = 2
+	config.MaxConns = maxConns
+	config.MinConns = minConns
 	config.MaxConnLifetime = 30 * time.Minute
 	config.MaxConnIdleTime = 5 * time.Minute
 

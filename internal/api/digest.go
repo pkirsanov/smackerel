@@ -2,14 +2,11 @@ package api
 
 import (
 	"net/http"
-
-	"github.com/smackerel/smackerel/internal/digest"
 )
 
 // DigestHandler handles GET /api/digest.
 func (d *Dependencies) DigestHandler(w http.ResponseWriter, r *http.Request) {
-	gen, ok := d.DigestGen.(*digest.Generator)
-	if !ok || gen == nil {
+	if d.DigestGen == nil {
 		writeError(w, http.StatusServiceUnavailable, "DIGEST_UNAVAILABLE", "Digest service unavailable")
 		return
 	}
@@ -17,7 +14,7 @@ func (d *Dependencies) DigestHandler(w http.ResponseWriter, r *http.Request) {
 	// Check for date parameter
 	date := r.URL.Query().Get("date")
 
-	result, err := gen.GetLatest(r.Context(), date)
+	result, err := d.DigestGen.GetLatest(r.Context(), date)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "NO_DIGEST", "No digest generated for this date")
 		return

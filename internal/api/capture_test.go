@@ -129,71 +129,59 @@ func TestCaptureHandler_AuthCorrectToken(t *testing.T) {
 	}
 }
 
-func TestCheckAuth_NoTokenConfigured(t *testing.T) {
-	deps := &Dependencies{AuthToken: ""}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+func TestCaptureHandler_DBUnavailable_Returns503(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: false},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  nil,
+	}
 
-	if !deps.checkAuth(req) {
-		t.Error("checkAuth should pass when no token configured")
+	body := `{"url": "https://example.com/article"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for DB unavailable, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "DB_UNAVAILABLE" {
+		t.Errorf("expected error code DB_UNAVAILABLE, got %q", resp.Error.Code)
 	}
 }
 
-func TestCheckAuth_ValidToken(t *testing.T) {
-	deps := &Dependencies{AuthToken: "my-secret"}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer my-secret")
-
-	if !deps.checkAuth(req) {
-		t.Error("checkAuth should pass with valid token")
+func TestCaptureHandler_DBHealthy_ContinuesProcessing(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  nil, // Will hit ML_UNAVAILABLE after passing DB check
 	}
-}
 
-func TestCheckAuth_InvalidToken(t *testing.T) {
-	deps := &Dependencies{AuthToken: "my-secret"}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer wrong-token")
+	body := `{"url": "https://example.com/article"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
 
-	if deps.checkAuth(req) {
-		t.Error("checkAuth should fail with invalid token")
+	deps.CaptureHandler(rec, req)
+
+	// DB is healthy, so it passes DB check and hits ML_UNAVAILABLE (no pipeline)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 ML_UNAVAILABLE (past DB check, no pipeline), got %d", rec.Code)
 	}
-}
-
-func TestCheckAuth_MissingHeader(t *testing.T) {
-	deps := &Dependencies{AuthToken: "my-secret"}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-
-	if deps.checkAuth(req) {
-		t.Error("checkAuth should fail with missing header")
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
 	}
-}
-
-func TestCheckAuth_BasicSchemeRejected(t *testing.T) {
-	deps := &Dependencies{AuthToken: "my-secret"}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Basic my-secret")
-
-	if deps.checkAuth(req) {
-		t.Error("checkAuth should reject Basic auth scheme")
-	}
-}
-
-func TestCheckAuth_BearerNoSpace(t *testing.T) {
-	deps := &Dependencies{AuthToken: "my-secret"}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearermy-secret")
-
-	if deps.checkAuth(req) {
-		t.Error("checkAuth should reject malformed Bearer without space")
-	}
-}
-
-func TestCheckAuth_EmptyBearerToken(t *testing.T) {
-	deps := &Dependencies{AuthToken: "my-secret"}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer ")
-
-	if deps.checkAuth(req) {
-		t.Error("checkAuth should reject empty Bearer token")
+	if resp.Error.Code != "ML_UNAVAILABLE" {
+		t.Errorf("expected ML_UNAVAILABLE (not DB_UNAVAILABLE), got %q", resp.Error.Code)
 	}
 }
 

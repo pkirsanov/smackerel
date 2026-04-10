@@ -1,13 +1,17 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/intelligence"
 )
 
 // mockDB implements DBHealthChecker for testing.
@@ -439,5 +443,307 @@ func TestHealthHandler_InvalidBearerToken(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 with wrong Bearer token, got %d", rec.Code)
+	}
+}
+
+// SCN-023-01: Concurrent health checks are race-free via sync.Once on mlClient.
+func TestMLClient_ConcurrentAccess(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	const goroutines = 50
+	clients := make(chan *http.Client, goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			clients <- deps.mlClient()
+		}()
+	}
+
+	var first *http.Client
+	for i := 0; i < goroutines; i++ {
+		c := <-clients
+		if c == nil {
+			t.Fatal("mlClient() returned nil")
+		}
+		if first == nil {
+			first = c
+		} else if c != first {
+			t.Fatal("mlClient() returned different pointers under concurrent access")
+		}
+	}
+}
+
+// SCN-023-01: mlClient respects pre-set MLClient value.
+func TestMLClient_PreSet(t *testing.T) {
+	preset := &http.Client{Timeout: 99 * time.Second}
+	deps := &Dependencies{
+		MLClient: preset,
+	}
+
+	got := deps.mlClient()
+	if got != preset {
+		t.Fatal("mlClient() should return pre-set MLClient")
+	}
+}
+
+// mockTelegramHealth implements TelegramHealthChecker for testing.
+type mockTelegramHealth struct {
+	healthy bool
+}
+
+func (m *mockTelegramHealth) Healthy() bool { return m.healthy }
+
+// SCN-023-06: Ollama health reflects actual reachability.
+func TestCheckOllama_Healthy(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/tags" {
+			t.Errorf("expected /api/tags, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	status := checkOllama(context.Background(), ts.URL, ts.Client())
+	if status.Status != "up" {
+		t.Errorf("expected up, got %s", status.Status)
+	}
+}
+
+func TestCheckOllama_Down(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	status := checkOllama(context.Background(), ts.URL, ts.Client())
+	if status.Status != "down" {
+		t.Errorf("expected down, got %s", status.Status)
+	}
+}
+
+func TestCheckOllama_NotConfigured(t *testing.T) {
+	status := checkOllama(context.Background(), "", &http.Client{})
+	if status.Status != "not_configured" {
+		t.Errorf("expected not_configured, got %s", status.Status)
+	}
+}
+
+func TestCheckOllama_Unreachable(t *testing.T) {
+	status := checkOllama(context.Background(), "http://127.0.0.1:1", &http.Client{})
+	if status.Status != "down" {
+		t.Errorf("expected down when unreachable, got %s", status.Status)
+	}
+}
+
+// SCN-023-07: Telegram bot health reflects actual connection state.
+func TestHealthHandler_TelegramConnected(t *testing.T) {
+	deps := &Dependencies{
+		DB:          &mockDB{healthy: true},
+		NATS:        &mockNATS{healthy: true},
+		StartTime:   time.Now(),
+		TelegramBot: &mockTelegramHealth{healthy: true},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Services["telegram_bot"].Status != "connected" {
+		t.Errorf("expected connected, got %s", resp.Services["telegram_bot"].Status)
+	}
+}
+
+func TestHealthHandler_TelegramDisconnected(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		// TelegramBot is nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Services["telegram_bot"].Status != "disconnected" {
+		t.Errorf("expected disconnected, got %s", resp.Services["telegram_bot"].Status)
+	}
+}
+
+// SCN-023-06: Health endpoint shows live Ollama status.
+func TestHealthHandler_OllamaUp(t *testing.T) {
+	ollamaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ollamaServer.Close()
+
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		OllamaURL: ollamaServer.URL,
+		MLClient:  ollamaServer.Client(),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Services["ollama"].Status != "up" {
+		t.Errorf("expected ollama up, got %s", resp.Services["ollama"].Status)
+	}
+}
+
+func TestHealthHandler_OllamaNotConfigured(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		// OllamaURL is empty
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Services["ollama"].Status != "not_configured" {
+		t.Errorf("expected not_configured, got %s", resp.Services["ollama"].Status)
+	}
+}
+
+// SCN-023-08: Health check requests excluded from request log.
+func TestStructuredLogger_HealthExcluded(t *testing.T) {
+	// Capture slog output
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	slog.SetDefault(logger)
+	defer slog.SetDefault(slog.Default())
+
+	handler := structuredLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// /api/health should not produce log output
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if buf.Len() > 0 {
+		t.Errorf("expected no log output for /api/health, got: %s", buf.String())
+	}
+}
+
+func TestStructuredLogger_PingExcluded(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	slog.SetDefault(logger)
+	defer slog.SetDefault(slog.Default())
+
+	handler := structuredLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if buf.Len() > 0 {
+		t.Errorf("expected no log output for /ping, got: %s", buf.String())
+	}
+}
+
+func TestStructuredLogger_OtherPathsLogged(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	slog.SetDefault(logger)
+	defer slog.SetDefault(slog.Default())
+
+	handler := structuredLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if buf.Len() == 0 {
+		t.Error("expected log output for /api/capture, got none")
+	}
+}
+
+// SCN-021-012: Health reports stale when synthesis is overdue (>48h)
+func TestHealthHandler_IntelligenceStale(t *testing.T) {
+	// IntelligenceEngine with nil Pool → reported as "down"
+	engine := &intelligence.Engine{Pool: nil}
+	deps := &Dependencies{
+		DB:                 &mockDB{healthy: true},
+		NATS:               &mockNATS{healthy: true},
+		StartTime:          time.Now(),
+		IntelligenceEngine: engine,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Services["intelligence"].Status != "down" {
+		t.Errorf("expected intelligence down when pool is nil, got %s", resp.Services["intelligence"].Status)
+	}
+	if resp.Status != "degraded" {
+		t.Errorf("expected degraded when intelligence is down, got %s", resp.Status)
+	}
+}
+
+// SCN-021-013: Health reports up when IntelligenceEngine is nil (not configured)
+func TestHealthHandler_IntelligenceNilEngine(t *testing.T) {
+	deps := &Dependencies{
+		DB:                 &mockDB{healthy: true},
+		NATS:               &mockNATS{healthy: true},
+		StartTime:          time.Now(),
+		IntelligenceEngine: nil,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Intelligence service should not appear when engine is nil
+	if _, ok := resp.Services["intelligence"]; ok {
+		t.Error("expected no intelligence service when engine is nil")
 	}
 }

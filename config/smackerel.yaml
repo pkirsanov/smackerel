@@ -17,6 +17,7 @@ project:
 runtime:
   log_level: info
   auth_token: "" # REQUIRED: set a secure random token (min 16 chars). Run: openssl rand -hex 24
+  host_bind_address: "127.0.0.1"
   digest_cron: "0 7 * * *"
   embedding_model: all-MiniLM-L6-v2
 
@@ -147,11 +148,51 @@ connectors:
       channel_ids: []
       processing_tier: standard
 
+  twitter:
+    enabled: false
+    sync_mode: archive # archive, api, or hybrid
+    archive_dir: "" # REQUIRED for archive/hybrid mode: path to Twitter data export
+    bearer_token: "" # REQUIRED for api/hybrid mode: Twitter API v2 bearer token
+    sync_schedule: "0 */6 * * *"
+
+  weather:
+    enabled: false
+    sync_schedule: "0 */3 * * *"
+    locations:
+    - name: ""
+      latitude: 0.0
+      longitude: 0.0
+
+  gov-alerts:
+    enabled: false
+    sync_schedule: "*/30 * * * *"
+    min_earthquake_magnitude: 2.5
+    locations:
+    - name: ""
+      latitude: 0.0
+      longitude: 0.0
+      radius_km: 200
+
+  financial-markets:
+    enabled: false
+    sync_schedule: "*/15 * * * *"
+    finnhub_api_key: "" # REQUIRED when enabled: free tier at finnhub.io
+    fred_api_key: "" # Optional: FRED economic data
+    coingecko_enabled: true
+    alert_threshold: 5.0
+    watchlist:
+      stocks: []
+      etfs: []
+      crypto: []
+      forex_pairs: []
+
 services:
   core:
     container_port: 8080
+    shutdown_timeout_s: 25
   ml:
     container_port: 8081
+    health_cache_ttl_s: 30
 
 infrastructure:
   postgres:
@@ -159,6 +200,8 @@ infrastructure:
     password: smackerel
     database: smackerel
     container_port: 5432
+    max_conns: 10
+    min_conns: 2
   nats:
     client_port: 4222
     monitor_port: 8222

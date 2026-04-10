@@ -5,10 +5,51 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
+	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
+	"github.com/smackerel/smackerel/internal/pipeline"
 )
+
+// Pipeliner processes capture requests through the ML pipeline.
+type Pipeliner interface {
+	Process(ctx context.Context, req *pipeline.ProcessRequest) (*pipeline.ProcessResult, error)
+}
+
+// Searcher handles semantic search operations.
+type Searcher interface {
+	Search(ctx context.Context, req SearchRequest) ([]SearchResult, int, string, error)
+}
+
+// DigestGenerator produces daily/weekly digests.
+type DigestGenerator interface {
+	GetLatest(ctx context.Context, date string) (*digest.Digest, error)
+}
+
+// WebUI serves the HTMX web interface routes.
+type WebUI interface {
+	SearchPage(w http.ResponseWriter, r *http.Request)
+	SearchResults(w http.ResponseWriter, r *http.Request)
+	ArtifactDetail(w http.ResponseWriter, r *http.Request)
+	DigestPage(w http.ResponseWriter, r *http.Request)
+	TopicsPage(w http.ResponseWriter, r *http.Request)
+	SettingsPage(w http.ResponseWriter, r *http.Request)
+	StatusPage(w http.ResponseWriter, r *http.Request)
+}
+
+// OAuthFlow handles OAuth2 authorization flows and status.
+type OAuthFlow interface {
+	StartHandler(w http.ResponseWriter, r *http.Request)
+	CallbackHandler(w http.ResponseWriter, r *http.Request)
+	StatusHandler(w http.ResponseWriter, r *http.Request)
+}
+
+// TelegramHealthChecker checks Telegram bot connection health.
+type TelegramHealthChecker interface {
+	Healthy() bool
+}
 
 // Dependencies holds shared service dependencies for API handlers.
 type Dependencies struct {
@@ -18,11 +59,14 @@ type Dependencies struct {
 	StartTime          time.Time
 	MLSidecarURL       string
 	MLClient           *http.Client
-	Pipeline           interface{}
-	SearchEngine       interface{}
-	DigestGen          interface{}
-	WebHandler         interface{}
-	OAuthHandler       interface{}
+	mlClientOnce       sync.Once
+	Pipeline           Pipeliner
+	SearchEngine       Searcher
+	DigestGen          DigestGenerator
+	WebHandler         WebUI
+	OAuthHandler       OAuthFlow
+	TelegramBot        TelegramHealthChecker
+	OllamaURL          string
 	AuthToken          string
 	Version            string
 	CommitHash         string
@@ -88,20 +132,32 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	mlStatus := checkMLSidecar(ctx, d.MLSidecarURL, d.mlClient())
 	services["ml_sidecar"] = mlStatus
 
-	// Intelligence engine status
+	// Intelligence engine status — includes synthesis freshness check
 	if d.IntelligenceEngine != nil {
-		if d.IntelligenceEngine.Pool != nil {
-			services["intelligence"] = ServiceStatus{Status: "up"}
-		} else {
+		if d.IntelligenceEngine.Pool == nil {
 			services["intelligence"] = ServiceStatus{Status: "down"}
+		} else {
+			lastSynthesis, err := d.IntelligenceEngine.GetLastSynthesisTime(ctx)
+			if err != nil {
+				slog.Warn("intelligence freshness check failed", "error", err)
+				services["intelligence"] = ServiceStatus{Status: "up"}
+			} else if time.Since(lastSynthesis) > 48*time.Hour {
+				services["intelligence"] = ServiceStatus{Status: "stale"}
+			} else {
+				services["intelligence"] = ServiceStatus{Status: "up"}
+			}
 		}
 	}
 
-	// Telegram bot (placeholder — not yet wired)
-	services["telegram_bot"] = ServiceStatus{Status: "disconnected"}
+	// Telegram bot health
+	if d.TelegramBot != nil && d.TelegramBot.Healthy() {
+		services["telegram_bot"] = ServiceStatus{Status: "connected"}
+	} else {
+		services["telegram_bot"] = ServiceStatus{Status: "disconnected"}
+	}
 
-	// Ollama (placeholder — optional)
-	services["ollama"] = ServiceStatus{Status: "unavailable"}
+	// Ollama health (live probe)
+	services["ollama"] = checkOllama(ctx, d.OllamaURL, d.mlClient())
 
 	// Aggregate status
 	overall := "healthy"
@@ -109,7 +165,7 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		if name == "telegram_bot" || name == "ollama" {
 			continue // optional services don't affect overall status
 		}
-		if svc.Status == "down" {
+		if svc.Status == "down" || svc.Status == "stale" {
 			overall = "degraded"
 		}
 	}
@@ -129,11 +185,13 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // mlClient returns the shared HTTP client for ML sidecar health checks,
-// initialising it on first use.
+// initialising it on first use. Safe for concurrent access via sync.Once.
 func (d *Dependencies) mlClient() *http.Client {
-	if d.MLClient == nil {
-		d.MLClient = &http.Client{Timeout: 2 * time.Second}
-	}
+	d.mlClientOnce.Do(func() {
+		if d.MLClient == nil {
+			d.MLClient = &http.Client{Timeout: 2 * time.Second}
+		}
+	})
 	return d.MLClient
 }
 
@@ -157,6 +215,32 @@ func checkMLSidecar(ctx context.Context, baseURL string, client *http.Client) Se
 	if resp.StatusCode == http.StatusOK {
 		loaded := true
 		return ServiceStatus{Status: "up", ModelLoaded: &loaded}
+	}
+	return ServiceStatus{Status: "down"}
+}
+
+// checkOllama probes the Ollama health endpoint.
+func checkOllama(ctx context.Context, ollamaURL string, client *http.Client) ServiceStatus {
+	if ollamaURL == "" {
+		return ServiceStatus{Status: "not_configured"}
+	}
+
+	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, ollamaURL+"/api/tags", nil)
+	if err != nil {
+		return ServiceStatus{Status: "down"}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return ServiceStatus{Status: "down"}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		return ServiceStatus{Status: "up"}
 	}
 	return ServiceStatus{Status: "down"}
 }
