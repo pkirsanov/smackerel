@@ -100,13 +100,13 @@ func TestClassifyInteractionTrend(t *testing.T) {
 
 func TestPersonProfile_Struct(t *testing.T) {
 	pp := PersonProfile{
-		Name:             "Sarah",
-		Email:            "sarah@example.com",
+		Name:              "Sarah",
+		Email:             "sarah@example.com",
 		TotalInteractions: 25,
-		DaysSinceContact: 3,
-		InteractionTrend: "warming",
-		SharedTopics:     []string{"product", "strategy"},
-		PendingItems:     []string{"Review proposal"},
+		DaysSinceContact:  3,
+		InteractionTrend:  "warming",
+		SharedTopics:      []string{"product", "strategy"},
+		PendingItems:      []string{"Review proposal"},
 	}
 
 	if pp.InteractionTrend != "warming" {

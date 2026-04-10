@@ -10,17 +10,17 @@ import (
 
 // MonthlyReport is the monthly self-knowledge report per R-506.
 type MonthlyReport struct {
-	Month             string             `json:"month"`
-	ExpertiseShifts   []ExpertiseShift   `json:"expertise_shifts"`
-	InformationDiet   InformationDiet    `json:"information_diet"`
-	InterestEvolution []InterestPeriod   `json:"interest_evolution"`
-	ProductivityPats  []string           `json:"productivity_patterns"`
+	Month             string               `json:"month"`
+	ExpertiseShifts   []ExpertiseShift     `json:"expertise_shifts"`
+	InformationDiet   InformationDiet      `json:"information_diet"`
+	InterestEvolution []InterestPeriod     `json:"interest_evolution"`
+	ProductivityPats  []string             `json:"productivity_patterns"`
 	SubscriptionSum   *SubscriptionSummary `json:"subscription_summary,omitempty"`
-	LearningProgress  []LearningPath     `json:"learning_progress,omitempty"`
-	TopInsights       []SynthesisInsight  `json:"top_insights"`
-	ReportText        string             `json:"report_text"`
-	WordCount         int                `json:"word_count"`
-	GeneratedAt       time.Time          `json:"generated_at"`
+	LearningProgress  []LearningPath       `json:"learning_progress,omitempty"`
+	TopInsights       []SynthesisInsight   `json:"top_insights"`
+	ReportText        string               `json:"report_text"`
+	WordCount         int                  `json:"word_count"`
+	GeneratedAt       time.Time            `json:"generated_at"`
 }
 
 // ExpertiseShift tracks a topic's depth change over the month.
