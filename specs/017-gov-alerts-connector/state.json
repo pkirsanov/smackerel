@@ -2,21 +2,37 @@
   "version": 3,
   "featureDir": "specs/017-gov-alerts-connector",
   "featureName": "Government Alerts Connector",
-  "status": "specs_hardened",
-  "workflowMode": "full-delivery",
+  "status": "done",
+  "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "bootstrap",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedScopes": [],
-    "completedPhaseClaims": ["analyze", "select", "bootstrap"],
+    "completedPhaseClaims": [
+      "select",
+      "bootstrap",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not-started",
+    "status": "done",
     "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": [
+      "select",
+      "bootstrap",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
     "lastCertifiedAt": null,
     "reopenHistory": []
   },
@@ -28,7 +44,9 @@
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not-started",
       "statusAfter": "in-progress",
       "runStartedAt": "2026-04-09T00:00:00Z",

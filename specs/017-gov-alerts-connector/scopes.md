@@ -47,7 +47,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ## Scope 01: Proximity Filter & Alert Types
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** None — foundational scope
 
@@ -94,7 +94,7 @@ Scenario: SCN-GA-LIFE-001 Alert lifecycle transitions
 
 ## Scope 02: USGS Earthquake Source
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scope 1
 
@@ -140,7 +140,7 @@ Scenario: SCN-GA-USGS-002 Earthquake severity classification
 
 ## Scope 03: NWS Weather Alerts Source
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scope 1
 
@@ -162,7 +162,7 @@ Build the NWS Alert API client (`nws.go`) that fetches active severe weather ale
 
 ## Scope 04: Gov Alerts Connector & Config
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scopes 1, 2, 3
 
@@ -199,7 +199,7 @@ Scenario: SCN-GA-CONN-001 Multi-source sync
 
 ## Scope 05: Additional Sources
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Dependencies:** Scope 4
 
@@ -222,7 +222,7 @@ Add remaining data sources: NOAA tsunami (Atom/RSS), USGS volcano (JSON), InciWe
 
 ## Scope 06: Proactive Delivery & Travel Alerts
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Dependencies:** Scope 4
 

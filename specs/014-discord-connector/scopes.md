@@ -47,7 +47,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ## Scope 01: Normalizer & Message Classification
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** None — foundational scope
 
@@ -113,7 +113,7 @@ Scenario: SCN-DC-NRM-002 Assign processing tiers per R-007
 
 ## Scope 02: REST Client & Backfill
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scope 1
 
@@ -158,7 +158,7 @@ Scenario: SCN-DC-REST-002 Per-channel cursor advancement
 
 ## Scope 03: Discord Connector & Config
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scopes 1, 2
 
@@ -205,7 +205,7 @@ Scenario: SCN-DC-CONN-001 Connector lifecycle
 
 ## Scope 04: Gateway Event Handler
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Dependencies:** Scope 3
 
@@ -238,7 +238,7 @@ Scenario: SCN-DC-GW-001 Real-time message capture
 
 ## Scope 05: Thread Ingestion
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Dependencies:** Scope 4
 
@@ -259,7 +259,7 @@ Auto-follow threads in monitored channels. Fetch thread message history via REST
 
 ## Scope 06: Bot Command Capture
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P2
 **Dependencies:** Scope 4
 
