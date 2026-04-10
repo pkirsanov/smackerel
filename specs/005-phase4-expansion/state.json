@@ -2,64 +2,38 @@
   "version": 3,
   "featureDir": "specs/005-phase4-expansion",
   "featureName": "Phase 4: Expansion",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.iterate",
-    "currentPhase": "finalize",
-    "currentScope": null,
-    "runStartedAt": "2026-04-07T15:00:00Z",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "implement",
+    "currentScope": "3",
+    "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [
       "select",
       "bootstrap",
-      "implement",
-      "test",
-      "regression",
-      "simplify",
-      "gaps",
-      "harden",
-      "stabilize",
-      "security",
-      "validate",
-      "audit",
-      "chaos",
-      "docs",
-      "spec-review"
+      "implement"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "1",
       "2",
-      "3",
-      "4",
       "5"
     ],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
-      "implement",
-      "test",
-      "regression",
-      "simplify",
-      "gaps",
-      "harden",
-      "stabilize",
-      "security",
-      "validate",
-      "audit",
-      "chaos",
-      "docs",
-      "spec-review"
+      "implement"
     ],
     "scopeProgress": [
-      { "scope": 1, "name": "Maps Timeline Connector", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T15:18:00Z" },
-      { "scope": 2, "name": "Browser History Connector", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T15:18:00Z" },
-      { "scope": 3, "name": "Trip Dossier", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T15:18:00Z" },
-      { "scope": 4, "name": "People Intelligence", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T15:18:00Z" },
-      { "scope": 5, "name": "Trail Journal", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T15:18:00Z" }
+      { "scope": 1, "name": "Maps Timeline Connector", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
+      { "scope": 2, "name": "Browser History Connector", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
+      { "scope": 3, "name": "Trip Dossier", "status": "In Progress", "dependsOn": [], "scopeDir": null, "evidenceFile": null, "certifiedAt": null },
+      { "scope": 4, "name": "People Intelligence", "status": "In Progress", "dependsOn": [], "scopeDir": null, "evidenceFile": null, "certifiedAt": null },
+      { "scope": 5, "name": "Trail Journal", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" }
     ],
     "lockdownState": { "active": false, "lockedScenarioIds": [] }
   },
