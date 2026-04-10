@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/005-phase4-expansion",
   "featureName": "Phase 4: Expansion",
-  "status": "validated",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "validate",
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [
@@ -21,7 +21,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "validated",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
