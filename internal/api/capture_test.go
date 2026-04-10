@@ -206,6 +206,34 @@ func TestCaptureHandler_OversizedBody(t *testing.T) {
 	}
 }
 
+func TestCaptureHandler_NilDB_Returns503(t *testing.T) {
+	deps := &Dependencies{
+		DB:        nil, // DB not configured — must not bypass health gate
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  nil,
+	}
+
+	body := `{"url": "https://example.com/article"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for nil DB, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "DB_UNAVAILABLE" {
+		t.Errorf("expected DB_UNAVAILABLE, got %q", resp.Error.Code)
+	}
+}
+
 func TestCaptureHandler_TextOnly(t *testing.T) {
 	deps := &Dependencies{
 		DB:        &mockDB{healthy: true},

@@ -68,6 +68,7 @@ Maps Timeline Connector (spec 011) implements a complete Google Takeout Semantic
 | test | PASS | 78 maps tests, 26 Go packages green, 31 Python tests green |
 | regression | PASS | edges schema mismatch fixed during hardening |
 | simplify+gaps+harden | PASS | 6 findings fixed: PostSync returns, ctx cancellation, file size warning |
+| simplify (sweep round) | PASS | 3 dead-code items removed: `withProcessingTier` unused function, `NormalizeActivity` unused config param, `MapsConfig.DefaultTier` dead field |
 | stabilize | PASS | 2 findings fixed: pool exhaustion (rows collected before close), file size limit (200MB hard cap) |
 | security | PASS | 2 findings fixed: symlink follow (EvalSymlinks + entry.Type check), path TOCTOU (canonical path resolution) |
 | lint | PASS | Exit Code: 0 |

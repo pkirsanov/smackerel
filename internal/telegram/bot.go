@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -134,6 +135,10 @@ func (b *Bot) Start(ctx context.Context) {
 
 // handleMessage routes incoming messages to the appropriate handler.
 func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
+	if msg.Chat == nil {
+		slog.Warn("received message with nil Chat, skipping")
+		return
+	}
 	chatID := msg.Chat.ID
 
 	// Check allowlist
@@ -198,7 +203,11 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 
 	// Handle documents/attachments — extract filename and caption as text capture
 	if msg.Document != nil {
-		docText := "Document: " + msg.Document.FileName
+		fileName := msg.Document.FileName
+		if fileName == "" {
+			fileName = "unnamed"
+		}
+		docText := "Document: " + fileName
 		if msg.Caption != "" {
 			docText += ". " + msg.Caption
 		}
@@ -259,6 +268,9 @@ func (b *Bot) handleURLCapture(ctx context.Context, msg *tgbotapi.Message, text 
 
 // handleTextCapture captures plain text as an idea/note.
 func (b *Bot) handleTextCapture(ctx context.Context, msg *tgbotapi.Message, text string) {
+	if len(text) > maxShareTextLen {
+		text = truncateUTF8(text, maxShareTextLen)
+	}
 	result, err := b.callCapture(ctx, map[string]string{"text": text})
 	if err != nil {
 		if errors.Is(err, errDuplicate) {
@@ -316,11 +328,18 @@ func (b *Bot) handleVoice(ctx context.Context, msg *tgbotapi.Message) {
 	b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (note, %d connections)", title, connections))
 }
 
+// maxFindQueryLen is the maximum length for /find search queries.
+const maxFindQueryLen = 500
+
 // handleFind searches for artifacts.
 func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query string) {
 	if query == "" {
 		b.reply(msg.Chat.ID, "? What should I search for? Usage: /find <query>")
 		return
+	}
+
+	if len(query) > maxFindQueryLen {
+		query = truncateUTF8(query, maxFindQueryLen)
 	}
 
 	results, err := b.callSearch(ctx, query)
@@ -380,12 +399,16 @@ func (b *Bot) handleDigest(ctx context.Context, msg *tgbotapi.Message) {
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIResponseBytes)).Decode(&result); err != nil {
 		b.reply(msg.Chat.ID, "? Digest format error")
 		return
 	}
 
 	text, _ := result["text"].(string)
+	if text == "" {
+		b.reply(msg.Chat.ID, "> Digest is empty")
+		return
+	}
 	b.reply(msg.Chat.ID, text)
 }
 
@@ -409,7 +432,7 @@ func (b *Bot) handleStatus(ctx context.Context, msg *tgbotapi.Message) {
 		Status   string                     `json:"status"`
 		Services map[string]json.RawMessage `json:"services"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIResponseBytes)).Decode(&health); err != nil {
 		b.reply(msg.Chat.ID, "? Status parse error")
 		return
 	}
@@ -447,7 +470,7 @@ func (b *Bot) handleRecent(ctx context.Context, msg *tgbotapi.Message) {
 	defer resp.Body.Close()
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIResponseBytes)).Decode(&result); err != nil {
 		b.reply(msg.Chat.ID, "? Response parse error")
 		return
 	}
@@ -460,7 +483,10 @@ func (b *Bot) handleRecent(ctx context.Context, msg *tgbotapi.Message) {
 
 	var lines []string
 	lines = append(lines, "> Recent captures:")
-	for _, item := range items {
+	for i, item := range items {
+		if i >= 10 {
+			break
+		}
 		r, ok := item.(map[string]interface{})
 		if !ok {
 			continue
@@ -488,6 +514,10 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 	b.reply(msg.Chat.ID, help)
 }
 
+// maxAPIResponseBytes limits how much data the bot reads from internal API responses.
+// Prevents memory exhaustion if the internal API returns an unexpectedly large body.
+const maxAPIResponseBytes = 1 << 20 // 1 MB
+
 // errDuplicate is a sentinel error returned when capture API responds with 409.
 var errDuplicate = fmt.Errorf("duplicate")
 
@@ -513,11 +543,14 @@ func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[stri
 	}
 	defer resp.Body.Close()
 
+	// Limit response body to prevent memory exhaustion from oversized responses.
+	limitedBody := io.LimitReader(resp.Body, maxAPIResponseBytes)
+
 	// Check status code before attempting JSON decode — error responses
 	// may not be valid JSON (e.g., HTML from a reverse proxy on 502).
 	if resp.StatusCode == http.StatusConflict {
 		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		if err := json.NewDecoder(limitedBody).Decode(&result); err != nil {
 			slog.Debug("failed to decode duplicate capture response", "error", err)
 		}
 		return result, errDuplicate
@@ -527,7 +560,7 @@ func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[stri
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(limitedBody).Decode(&result); err != nil {
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("capture API error %d (non-JSON response)", resp.StatusCode)
 		}
@@ -566,8 +599,12 @@ func (b *Bot) callSearch(ctx context.Context, query string) (map[string]interfac
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("search API error %d", resp.StatusCode)
+	}
+
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIResponseBytes)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode search response: %w", err)
 	}
 
@@ -616,6 +653,19 @@ func (b *Bot) SendDigest(text string) {
 	}
 }
 
+// SendAlertMessage sends a message to all configured Telegram chats and returns
+// the first send error encountered. This allows callers (e.g. the alert delivery
+// sweep) to detect delivery failures and keep alerts as "pending" for retry.
+func (b *Bot) SendAlertMessage(text string) error {
+	for chatID := range b.allowedChats {
+		msg := tgbotapi.NewMessage(chatID, text)
+		if _, err := b.api.Send(msg); err != nil {
+			return fmt.Errorf("telegram send to chat %d: %w", chatID, err)
+		}
+	}
+	return nil
+}
+
 // handleDone flushes all open assembly buffers for the current chat.
 func (b *Bot) handleDone(ctx context.Context, msg *tgbotapi.Message) {
 	count := 0
@@ -648,10 +698,16 @@ func (b *Bot) Stop() {
 	slog.Info("telegram bot shutdown complete")
 }
 
+// maxCaptureTextLen is the maximum length for text payloads sent to the capture API.
+const maxCaptureTextLen = 32768
+
 // flushConversation is the callback for the ConversationAssembler.
 // It formats the conversation and sends it through the capture API.
 func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) error {
 	text := FormatConversation(buf)
+	if len(text) > maxCaptureTextLen {
+		text = truncateUTF8(text, maxCaptureTextLen)
+	}
 	participants := extractParticipants(buf.Messages)
 
 	contextStr := fmt.Sprintf("Conversation with %d messages from %s",
@@ -676,6 +732,9 @@ func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) er
 // flushMediaGroup is the callback for the MediaGroupAssembler.
 func (b *Bot) flushMediaGroup(ctx context.Context, buf *MediaGroupBuffer) error {
 	text := FormatMediaGroup(buf)
+	if len(text) > maxCaptureTextLen {
+		text = truncateUTF8(text, maxCaptureTextLen)
+	}
 
 	body := map[string]string{
 		"text": text,

@@ -320,6 +320,49 @@ Scenario-first development: Gherkin scenarios defined in scopes.md before implem
 
 ---
 
+## Security Sweep (2026-04-10)
+
+**Trigger:** `security-to-doc` via stochastic-quality-sweep
+**Scope:** Telegram bot (`internal/telegram/`) and capture pipeline (`internal/api/capture.go`)
+
+### Findings & Remediation
+
+| # | Severity | Finding | File | Remediation |
+|---|----------|---------|------|-------------|
+| S1 | MEDIUM | `handleTextCapture` accepted unbounded text input — no length validation before forwarding to capture API | `bot.go:263` | Added `maxShareTextLen` truncation via `truncateUTF8` at entry |
+| S2 | MEDIUM | `/find` command passed unbounded query to search API — no length limit on `CommandArguments()` | `bot.go:325` | Added `maxFindQueryLen` (500 bytes) constant and truncation |
+| S3 | MEDIUM | `captureSingleForward` skipped text truncation — unlike the assembly path which enforces `maxShareTextLen` | `forward.go:120` | Added `maxShareTextLen` truncation matching the assembly path |
+| S4 | LOW | `callCapture`, `callSearch`, `handleDigest`, `handleStatus`, `handleRecent` read API responses without body size limits | `bot.go` (multiple) | Added `maxAPIResponseBytes` (1MB) constant and `io.LimitReader` on all internal API response reads |
+
+### Already Secure (Confirmed)
+
+| Area | Evidence |
+|------|----------|
+| SSRF protection | `validateURLSafety` + `ssrfSafeTransport` with DNS rebinding guard, private IP block, metadata endpoint block, redirect chain validation — in `extract.go` |
+| Auth | Bearer token with `crypto/subtle.ConstantTimeCompare` — in `router.go` |
+| Chat allowlist | `allowedChats` checked before any message handling — in `bot.go:140` |
+| API body limits | `http.MaxBytesReader(w, r.Body, 1<<20)` on capture and search endpoints — in `capture.go:70`, `search.go:86` |
+| Bot token non-leakage | Voice handler passes file ID not Telegram file URL — in `bot.go:295` |
+| Security headers | CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy — in `router.go` |
+| Rate limiting | `httprate.LimitByIP` on OAuth, `middleware.Throttle(100)` on API — in `router.go` |
+| SQL injection | Parameterized queries (`$1` placeholders) throughout — in `capture.go`, `search.go` |
+| Share text truncation | `handleShareCapture` and forward assembly path already enforce `maxShareTextLen` — in `share.go:21`, `forward.go:84` |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit 2>&1 | grep telegram
+ok  github.com/smackerel/smackerel/internal/telegram  15.339s
+```
+
+New security tests added to `bot_test.go`:
+- `TestSecurity_FindQueryLength_Truncated`
+- `TestSecurity_TextCapture_OversizedInput_Truncated`
+- `TestSecurity_MaxFindQueryLen_Value`
+- `TestSecurity_MaxAPIResponseBytes_Value`
+
+---
+
 ## Completion Statement
 
 ```

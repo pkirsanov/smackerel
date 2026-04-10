@@ -115,10 +115,10 @@ ConnectorConfig{
     SyncSchedule: os.Getenv("DISCORD_SYNC_SCHEDULE"),
     SourceConfig: map[string]interface{}{
         "enable_gateway":     os.Getenv("DISCORD_ENABLE_GATEWAY") == "true",
-        "backfill_limit":     parseIntEnv("DISCORD_BACKFILL_LIMIT", 1000),
+        "backfill_limit":     parseFloatEnv("DISCORD_BACKFILL_LIMIT"),
         "include_threads":    os.Getenv("DISCORD_INCLUDE_THREADS") == "true",
         "include_pins":       os.Getenv("DISCORD_INCLUDE_PINS") == "true",
-        "capture_commands":   splitCSV(os.Getenv("DISCORD_CAPTURE_COMMANDS")),
+        "capture_commands":   parseJSONArray(os.Getenv("DISCORD_CAPTURE_COMMANDS")),
         "monitored_channels": parseJSONArray(os.Getenv("DISCORD_MONITORED_CHANNELS")),
     },
 }
@@ -298,6 +298,8 @@ financial-markets:
 | `FINANCIAL_MARKETS_ALERT_THRESHOLD` | `connectors.financial-markets.alert_threshold` | Alert pct |
 | `FINANCIAL_MARKETS_WATCHLIST` | `connectors.financial-markets.watchlist` | JSON object `{stocks, etfs, crypto, forex_pairs}` |
 
+> **SST Gap (documented 2026-04-10):** `connectors.financial-markets.coingecko_enabled` exists in `smackerel.yaml` but is NOT extracted, not in generated env files, and not read by `parseMarketsConfig` — that function hardcodes `CoinGeckoEnabled: true`. This means CoinGecko cannot be disabled via config. Future fix: add `FINANCIAL_MARKETS_COINGECKO_ENABLED` env var to the config pipeline and remove the hardcoded default.
+
 **ConnectorConfig mapping:**
 
 ```go
@@ -406,8 +408,8 @@ The auto-start blocks for Weather, Gov Alerts, and Financial Markets need JSON a
 - `parseJSONArray(s string) []interface{}` — parses a JSON array string, returns nil on empty/error
 - `parseJSONObject(s string) map[string]interface{}` — parses a JSON object string, returns nil on empty/error
 - `parseFloatEnv(key string) float64` — parses env var as float64, returns 0 on empty/error
-- `parseIntEnv(key string, fallback int) int` — parses env var as int (fallback only used when env is empty, not as a hidden default)
-- `splitCSV(s string) []interface{}` — splits comma-separated string into interface slice
+
+**Originally planned but not implemented:** `parseIntEnv` and `splitCSV` were deemed unnecessary — `parseFloatEnv` covers numeric fields (backfill_limit), and `parseJSONArray` covers YAML arrays (capture_commands are serialized as JSON by `yaml_get`).
 
 These are trivial parsing utilities, not business logic. They exist purely to bridge the env-var string representation to the `map[string]interface{}` types that `ConnectorConfig.SourceConfig` expects.
 

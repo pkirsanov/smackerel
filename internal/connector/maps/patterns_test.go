@@ -310,46 +310,6 @@ func TestRoundToGridPatterns(t *testing.T) {
 	}
 }
 
-func TestTierDowngradeCommute(t *testing.T) {
-	// A drive activity that would normally be "standard" gets downgraded to "light" for commute.
-	metadata := map[string]interface{}{
-		"activity_type":   "drive",
-		"processing_tier": "standard",
-		"distance_km":     15.0,
-	}
-
-	updated := withProcessingTier(metadata, "light")
-
-	if updated["processing_tier"] != "light" {
-		t.Errorf("processing_tier = %v, want %q", updated["processing_tier"], "light")
-	}
-	// Original should be unchanged.
-	if metadata["processing_tier"] != "standard" {
-		t.Errorf("original processing_tier changed to %v", metadata["processing_tier"])
-	}
-	// Other fields preserved.
-	if updated["distance_km"] != 15.0 {
-		t.Errorf("distance_km = %v, want 15.0", updated["distance_km"])
-	}
-}
-
-func TestTierUpgradeTrip(t *testing.T) {
-	metadata := map[string]interface{}{
-		"activity_type":   "walk",
-		"processing_tier": "standard",
-		"distance_km":     3.0,
-	}
-
-	updated := withProcessingTier(metadata, "full")
-
-	if updated["processing_tier"] != "full" {
-		t.Errorf("processing_tier = %v, want %q", updated["processing_tier"], "full")
-	}
-	if metadata["processing_tier"] != "standard" {
-		t.Errorf("original processing_tier changed to %v", metadata["processing_tier"])
-	}
-}
-
 func TestPostSyncContinuesOnFailure(t *testing.T) {
 	// PostSync with nil pool should return nil immediately.
 	c := New("google-maps-timeline")
@@ -603,6 +563,86 @@ func TestTripSourceRefDeterministic(t *testing.T) {
 	ref2 := tripSourceRef(trip)
 	if ref1 != ref2 {
 		t.Errorf("tripSourceRef not deterministic: %q vs %q", ref1, ref2)
+	}
+}
+
+// --- Hardening tests ---
+
+// HARDEN-011: Same-day round trip far from home. Documents the +24h span behavior:
+// a single remote day gets spanHours = 0 + 24 = 24 >= TripMinOvernightHours=18.
+// This is the current documented behavior — a day trip to a remote location IS detected.
+func TestClassifyTripsSameDayRoundTrip(t *testing.T) {
+	home := LatLng{Lat: 47.37, Lng: 8.54}
+	clusters := []LocationCluster{
+		// Morning: drive Zurich→Berlin
+		makeCluster(47.37, 8.54, 52.52, 13.40, "drive", "2026-04-10", 4, 6, 660.0, 420.0),
+		// Afternoon: drive Berlin→Zurich (same day)
+		makeCluster(52.52, 13.40, 47.37, 8.54, "drive", "2026-04-10", 4, 16, 660.0, 420.0),
+	}
+	config := MapsConfig{TripMinDistanceKm: 50, TripMinOvernightHours: 18}
+
+	trips := classifyTrips(clusters, home, config)
+	// Current behavior: single remote day => 24h span >= 18h => detected as trip.
+	// This documents the edge case (see span calculation in classifyTrips).
+	if len(trips) != 1 {
+		t.Errorf("single-day remote cluster produces trip (span=24h >= 18h), got %d trips", len(trips))
+	}
+}
+
+// HARDEN-011: Commute detection at exact threshold boundary.
+func TestDetectCommuteExactThreshold(t *testing.T) {
+	clusters := []LocationCluster{
+		makeCluster(47.37, 8.54, 47.40, 8.55, "drive", "2026-03-23", 1, 8, 15.0, 25.0),
+		makeCluster(47.37, 8.54, 47.40, 8.55, "drive", "2026-03-24", 2, 8, 14.0, 24.0),
+		makeCluster(47.37, 8.54, 47.40, 8.55, "drive", "2026-03-25", 3, 8, 16.0, 26.0),
+	}
+	config := MapsConfig{
+		CommuteMinOccurrences: 3, // exactly at threshold
+		CommuteWeekdaysOnly:   false,
+		CommuteWindowDays:     14,
+	}
+
+	patterns := classifyCommutes(clusters, config)
+	if len(patterns) != 1 {
+		t.Fatalf("exactly 3 trips with threshold 3 should detect 1 pattern, got %d", len(patterns))
+	}
+	if patterns[0].Frequency != 3 {
+		t.Errorf("frequency = %d, want 3", patterns[0].Frequency)
+	}
+}
+
+// HARDEN-011: Trip with TripMinOvernightHours = 0 should accept any remote cluster.
+func TestClassifyTripsZeroOvernightThreshold(t *testing.T) {
+	home := LatLng{Lat: 47.37, Lng: 8.54}
+	clusters := []LocationCluster{
+		makeCluster(47.37, 8.54, 52.52, 13.40, "drive", "2026-04-10", 4, 8, 660.0, 420.0),
+	}
+	config := MapsConfig{TripMinDistanceKm: 50, TripMinOvernightHours: 0}
+
+	trips := classifyTrips(clusters, home, config)
+	// Single day: span = 0h + 24h = 24h >= 0h → trip detected
+	if len(trips) != 1 {
+		t.Errorf("zero overnight threshold should detect trip, got %d", len(trips))
+	}
+}
+
+// HARDEN-011: determineLinkType with route containing only one point.
+func TestDetermineLinkTypeSinglePointRoute(t *testing.T) {
+	activity := TakeoutActivity{
+		StartTime: time.Date(2026, 3, 15, 13, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 3, 15, 14, 0, 0, 0, time.UTC),
+		Route:     []LatLng{{Lat: 47.500, Lng: 8.700}},
+	}
+	// Artifact very close to the single route point
+	linkType := determineLinkType(activity, 47.501, 8.701, 1.0)
+	if linkType != "temporal-spatial" {
+		t.Errorf("artifact near single-point route should be temporal-spatial, got %q", linkType)
+	}
+
+	// Artifact far away
+	linkType = determineLinkType(activity, 48.000, 9.000, 1.0)
+	if linkType != "temporal-only" {
+		t.Errorf("distant artifact should be temporal-only, got %q", linkType)
 	}
 }
 

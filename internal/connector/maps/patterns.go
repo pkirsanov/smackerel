@@ -568,12 +568,3 @@ func daysDiff(a, b time.Time) int {
 	return int(math.Abs(diff))
 }
 
-// withProcessingTier returns a shallow copy of metadata with the processing_tier set to tier.
-func withProcessingTier(metadata map[string]interface{}, tier string) map[string]interface{} {
-	updated := make(map[string]interface{}, len(metadata))
-	for k, v := range metadata {
-		updated[k] = v
-	}
-	updated["processing_tier"] = tier
-	return updated
-}

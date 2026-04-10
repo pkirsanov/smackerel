@@ -3,6 +3,7 @@ package intelligence
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -103,10 +104,17 @@ func (e *Engine) CreateQuickReference(ctx context.Context, concept, content stri
 		CreatedAt:         time.Now(),
 	}
 
-	_, err := e.Pool.Exec(ctx, `
+	// Marshal sourceIDs to JSON safely instead of hand-building the JSON string
+	// to prevent injection via crafted artifact IDs containing quotes.
+	sourceJSON, err := json.Marshal(sourceIDs)
+	if err != nil {
+		return nil, fmt.Errorf("marshal source IDs: %w", err)
+	}
+
+	_, err = e.Pool.Exec(ctx, `
 		INSERT INTO quick_references (id, concept, content, source_artifact_ids, lookup_count, pinned, created_at)
 		VALUES ($1, $2, $3, $4::jsonb, 0, $5, $6)
-	`, qr.ID, qr.Concept, qr.Content, fmt.Sprintf(`["%s"]`, strings.Join(sourceIDs, `","`)),
+	`, qr.ID, qr.Concept, qr.Content, string(sourceJSON),
 		qr.Pinned, qr.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert quick reference: %w", err)

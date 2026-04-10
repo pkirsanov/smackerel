@@ -49,6 +49,35 @@
 - `publishToDeadLetter()` routes exhausted messages with metadata headers: `Smackerel-Original-Subject`, `Smackerel-Original-Stream`, `Smackerel-Failed-At`, `Smackerel-Delivery-Count`, `Smackerel-Original-Consumer`
 - NATS contract JSON updated with DEADLETTER stream
 
+## Hardening Pass 2 (harden-to-doc)
+
+**Date:** 2026-04-10
+**Trigger:** Stochastic quality sweep — harden
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File | Fix |
+|----|---------|----------|------|-----|
+| H-001 | Capture handler nil-DB silently bypasses health gate (`if d.DB != nil && ...` lets nil DB through to crash downstream) | High | `internal/api/capture.go` | Changed to `if d.DB == nil \|\| !d.DB.Healthy(...)` — nil DB now returns 503 DB_UNAVAILABLE |
+| H-002 | Dead-letter publish failure causes silent message loss (Ack after failed DL publish) — directly contradicts "zero silent data loss" | Critical | `internal/pipeline/subscriber.go` | `publishToDeadLetter` now returns error; callers Nak on failure to preserve message for retry |
+| H-003 | Hidden `ttl = 30 * time.Second` fallback in `isMLHealthy` violates SST zero-defaults | Medium | `internal/api/search.go` | Removed hidden default; zero TTL returns unhealthy with warning log (fail-visible, triggers text fallback) |
+| H-004 | Thundering herd on concurrent expired TTL health probes against recovering ML sidecar | Medium | `internal/api/search.go` | Added `healthProbeMu` with `TryLock()` — concurrent probes coalesced; losers use stale cache |
+| H-005 | MaxDeliver magic number `5` hardcoded in 4 places (consumer configs + isDeliveryExhausted calls) | Low | `internal/pipeline/subscriber.go` | Extracted `DefaultMaxDeliver` constant; all 4 sites now reference it |
+
+### New Tests
+
+| Test | File | Purpose |
+|------|------|---------|
+| `TestCaptureHandler_NilDB_Returns503` | `internal/api/capture_test.go` | Adversarial: nil DB cannot bypass health gate |
+| `TestIsMLHealthy_ZeroTTL_ReturnsUnhealthy` | `internal/api/search_test.go` | Adversarial: zero TTL triggers fail-visible degradation |
+| `TestIsMLHealthy_ConcurrentProbes_Coalesced` | `internal/api/search_test.go` | Verifies thundering-herd coalescing (<=3 probes from 20 concurrent requests) |
+
+### Evidence
+
+- Build: `./smackerel.sh build` — PASS
+- Unit tests: `./smackerel.sh test unit` — all 31 Go packages PASS, 3 new tests PASS
+- New tests verified: `TestCaptureHandler_NilDB_Returns503`, `TestIsMLHealthy_ZeroTTL_ReturnsUnhealthy`, `TestIsMLHealthy_ConcurrentProbes_Coalesced` all PASS
+
 ## Completion Statement
 
-Feature 022 is complete. All 4 scopes implemented and verified with unit tests. Build passes. Config SST flow verified.
+Feature 022 is complete. All 4 scopes implemented and verified with unit tests. Build passes. Config SST flow verified. Hardening pass 2 addressed 5 findings (1 critical, 1 high, 2 medium, 1 low) with 3 new adversarial tests.

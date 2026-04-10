@@ -744,6 +744,183 @@ func fastBackoff() *connector.Backoff {
 	}
 }
 
+// --- Client: Response Body Size Limit ---
+
+func TestClientResponseBodySizeLimit(t *testing.T) {
+	// Server returns a response body > 10 MiB — client must reject it
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Write 11 MiB of data (exceeds 10 MiB limit)
+		chunk := []byte(`{"data":[`)
+		w.Write(chunk)
+		filler := make([]byte, 11<<20) // 11 MiB
+		for i := range filler {
+			filler[i] = 'x'
+		}
+		w.Write(filler)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 10)
+	_, err := client.ListProperties(context.Background(), time.Time{})
+	if err == nil {
+		t.Fatal("expected error for response body exceeding 10 MiB limit")
+	}
+	if !contains(err.Error(), "exceeds") {
+		t.Errorf("error should mention size limit exceeded: %v", err)
+	}
+}
+
+// --- Client: ListMessages Path Escaping ---
+
+func TestClientListMessagesPathEscaping(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.RawPath
+		if gotPath == "" {
+			gotPath = r.URL.Path
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 10)
+	_, err := client.ListMessages(context.Background(), "res/with spaces&special=chars", time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Verify the reservation ID was properly escaped in the URL path
+	if contains(gotPath, "res/with spaces") {
+		t.Errorf("reservation ID was not path-escaped: %s", gotPath)
+	}
+	if !contains(gotPath, "/messages") {
+		t.Errorf("URL should contain /messages: %s", gotPath)
+	}
+}
+
+// --- Client: ListActiveReservations Parameter ---
+
+func TestClientListActiveReservationsParam(t *testing.T) {
+	var gotURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: []Reservation{}, Total: 0})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 50)
+	cutoff := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	_, err := client.ListActiveReservations(context.Background(), cutoff)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !contains(gotURL, "checkout_after=2026-04-03") {
+		t.Errorf("URL should contain checkout_after=2026-04-03, got: %s", gotURL)
+	}
+	if !contains(gotURL, "per_page=50") {
+		t.Errorf("URL should contain per_page=50, got: %s", gotURL)
+	}
+}
+
+// --- Client: parseLinkNext direct tests ---
+
+func TestParseLinkNextValid(t *testing.T) {
+	next := parseLinkNext(`<https://api.hospitable.com/properties?page=2>; rel="next"`)
+	if next != "https://api.hospitable.com/properties?page=2" {
+		t.Errorf("parseLinkNext = %q", next)
+	}
+}
+
+func TestParseLinkNextNoQuoteRel(t *testing.T) {
+	next := parseLinkNext(`<https://api.hospitable.com/properties?page=2>; rel=next`)
+	if next != "https://api.hospitable.com/properties?page=2" {
+		t.Errorf("parseLinkNext unquoted rel = %q", next)
+	}
+}
+
+func TestParseLinkNextEmpty(t *testing.T) {
+	next := parseLinkNext("")
+	if next != "" {
+		t.Errorf("parseLinkNext empty = %q, want empty", next)
+	}
+}
+
+func TestParseLinkNextPrevOnly(t *testing.T) {
+	next := parseLinkNext(`<https://api.hospitable.com/properties?page=1>; rel="prev"`)
+	if next != "" {
+		t.Errorf("parseLinkNext prev-only = %q, want empty", next)
+	}
+}
+
+func TestParseLinkNextMultipleLinks(t *testing.T) {
+	header := `<https://api.hospitable.com/properties?page=1>; rel="prev", <https://api.hospitable.com/properties?page=3>; rel="next"`
+	next := parseLinkNext(header)
+	if next != "https://api.hospitable.com/properties?page=3" {
+		t.Errorf("parseLinkNext multi = %q", next)
+	}
+}
+
+// --- Config: Processing Tier Overrides ---
+
+func TestConfigProcessingTierOverrides(t *testing.T) {
+	cfg, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"access_token": "test"},
+		SourceConfig: map[string]interface{}{
+			"processing_tier_messages":     "standard",
+			"processing_tier_reviews":      "light",
+			"processing_tier_reservations": "full",
+			"processing_tier_properties":   "metadata",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TierMessages != "standard" {
+		t.Errorf("TierMessages = %q, want standard", cfg.TierMessages)
+	}
+	if cfg.TierReviews != "light" {
+		t.Errorf("TierReviews = %q, want light", cfg.TierReviews)
+	}
+	if cfg.TierReservations != "full" {
+		t.Errorf("TierReservations = %q, want full", cfg.TierReservations)
+	}
+	if cfg.TierProperties != "metadata" {
+		t.Errorf("TierProperties = %q, want metadata", cfg.TierProperties)
+	}
+}
+
+// --- Config: Sync Flag Overrides ---
+
+func TestConfigSyncFlagOverrides(t *testing.T) {
+	cfg, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"access_token": "test"},
+		SourceConfig: map[string]interface{}{
+			"sync_properties":   false,
+			"sync_reservations": false,
+			"sync_messages":     false,
+			"sync_reviews":      false,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SyncProperties {
+		t.Error("SyncProperties should be false")
+	}
+	if cfg.SyncReservations {
+		t.Error("SyncReservations should be false")
+	}
+	if cfg.SyncMessages {
+		t.Error("SyncMessages should be false")
+	}
+	if cfg.SyncReviews {
+		t.Error("SyncReviews should be false")
+	}
+}
+
 // --- R-016: Active Reservation Message Sync ---
 
 func TestActiveReservationMessageSync(t *testing.T) {

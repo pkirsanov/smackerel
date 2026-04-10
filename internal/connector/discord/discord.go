@@ -65,6 +65,7 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		return fmt.Errorf("discord bot_token is required")
 	}
 
+	c.mu.Lock()
 	c.config = cfg
 
 	// Restore cursors from source config
@@ -75,6 +76,7 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	}
 
 	c.health = connector.HealthHealthy
+	c.mu.Unlock()
 	slog.Info("discord connector connected", "id", c.id, "channels", len(cfg.MonitoredChannels))
 	return nil
 }
@@ -89,52 +91,94 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		c.mu.Unlock()
 	}()
 
-	// Parse global cursor into per-channel cursors
+	// Copy cursors under lock so concurrent callers don't race on the map
+	c.mu.RLock()
+	localCursors := make(ChannelCursors, len(c.cursors))
+	for k, v := range c.cursors {
+		localCursors[k] = v
+	}
+	c.mu.RUnlock()
+
+	// Parse global cursor into local copy (overrides stored cursors if provided)
 	if cursor != "" {
-		if err := json.Unmarshal([]byte(cursor), &c.cursors); err != nil {
+		if err := json.Unmarshal([]byte(cursor), &localCursors); err != nil {
 			slog.Debug("failed to unmarshal discord sync cursor", "connector_id", c.id, "error", err)
 		}
 	}
 
 	var allArtifacts []connector.RawArtifact
+	var syncErrors []string
+	seen := make(map[string]struct{})
 
 	// Iterate monitored channels and fetch messages, pins, and threads per channel
 	for _, chCfg := range c.config.MonitoredChannels {
 		for _, chID := range chCfg.ChannelIDs {
-			// Fetch messages since cursor
-			afterID := c.cursors[chID]
-			msgs, err := fetchChannelMessages(ctx, c.config.BotToken, chID, afterID, c.config.BackfillLimit)
-			if err != nil {
-				slog.Warn("discord channel fetch failed", "channel", chID, "error", err)
+			// Check context cancellation between channels
+			if err := ctx.Err(); err != nil {
+				cursorBytes, marshalErr := json.Marshal(localCursors)
+				if marshalErr != nil {
+					slog.Error("discord cursor marshal failed", "connector_id", c.id, "error", marshalErr)
+					return allArtifacts, "", fmt.Errorf("context cancelled and cursor marshal failed: %w", err)
+				}
+				return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled: %w", err)
 			}
-			for _, msg := range msgs {
-				artifact := normalizeMessage(msg, chCfg.ProcessingTier, c.config.CaptureCommands)
-				allArtifacts = append(allArtifacts, artifact)
-				if msg.ID > c.cursors[chID] {
-					c.cursors[chID] = msg.ID
+
+			// Respect rate limiter before each channel fetch
+			if wait := c.limiter.ShouldWait("channels/" + chID + "/messages"); wait > 0 {
+				select {
+				case <-ctx.Done():
+					cursorBytes, _ := json.Marshal(localCursors)
+					return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled during rate wait: %w", ctx.Err())
+				case <-time.After(wait):
 				}
 			}
 
-			// Fetch pinned messages
+			// Fetch messages since cursor
+			afterID := localCursors[chID]
+			msgs, err := fetchChannelMessages(ctx, c.config.BotToken, chID, afterID, c.config.BackfillLimit)
+			if err != nil {
+				slog.Warn("discord channel fetch failed", "channel", chID, "error", err)
+				syncErrors = append(syncErrors, fmt.Sprintf("channel %s: %v", chID, err))
+			}
+			for _, msg := range msgs {
+				seen[msg.ID] = struct{}{}
+				artifact := normalizeMessage(msg, chCfg.ProcessingTier, c.config.CaptureCommands)
+				allArtifacts = append(allArtifacts, artifact)
+				if msg.ID > localCursors[chID] {
+					localCursors[chID] = msg.ID
+				}
+			}
+
+			// Fetch pinned messages (deduplicate against already-seen messages)
 			if c.config.IncludePins {
 				pins, err := fetchPinnedMessages(ctx, c.config.BotToken, chID)
 				if err != nil {
 					slog.Warn("discord pinned fetch failed", "channel", chID, "error", err)
+					syncErrors = append(syncErrors, fmt.Sprintf("pins %s: %v", chID, err))
 				}
 				for _, pin := range pins {
+					if _, dup := seen[pin.ID]; dup {
+						continue
+					}
+					seen[pin.ID] = struct{}{}
 					pin.Pinned = true
 					artifact := normalizeMessage(pin, chCfg.ProcessingTier, c.config.CaptureCommands)
 					allArtifacts = append(allArtifacts, artifact)
 				}
 			}
 
-			// Fetch thread messages
+			// Fetch thread messages (deduplicate against already-seen messages)
 			if c.config.IncludeThreads {
 				threads, err := fetchActiveThreads(ctx, c.config.BotToken, chID)
 				if err != nil {
 					slog.Warn("discord thread fetch failed", "channel", chID, "error", err)
+					syncErrors = append(syncErrors, fmt.Sprintf("threads %s: %v", chID, err))
 				}
 				for _, thread := range threads {
+					if _, dup := seen[thread.ID]; dup {
+						continue
+					}
+					seen[thread.ID] = struct{}{}
 					artifact := normalizeMessage(thread, chCfg.ProcessingTier, c.config.CaptureCommands)
 					allArtifacts = append(allArtifacts, artifact)
 				}
@@ -142,8 +186,23 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 	}
 
+	// Write updated cursors back under lock
+	c.mu.Lock()
+	for k, v := range localCursors {
+		c.cursors[k] = v
+	}
+	c.mu.Unlock()
+
 	// Serialize cursors as global cursor string
-	cursorBytes, _ := json.Marshal(c.cursors)
+	cursorBytes, err := json.Marshal(localCursors)
+	if err != nil {
+		slog.Error("discord cursor marshal failed", "connector_id", c.id, "error", err)
+		return allArtifacts, "", fmt.Errorf("cursor marshal: %w", err)
+	}
+
+	if len(syncErrors) > 0 {
+		return allArtifacts, string(cursorBytes), fmt.Errorf("discord sync partial failure (%d errors): %s", len(syncErrors), strings.Join(syncErrors, "; "))
+	}
 	return allArtifacts, string(cursorBytes), nil
 }
 
@@ -154,7 +213,9 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 }
 
 func (c *Connector) Close() error {
+	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.mu.Unlock()
 	slog.Info("discord connector closed", "id", c.id)
 	return nil
 }
@@ -380,11 +441,11 @@ func buildTitle(msg DiscordMessage) string {
 		}
 		return "Discord message"
 	}
-	title := msg.Content
-	if len(title) > 80 {
-		title = title[:80] + "..."
+	runes := []rune(msg.Content)
+	if len(runes) > 80 {
+		return string(runes[:80]) + "..."
 	}
-	return title
+	return msg.Content
 }
 
 // ParseBotCommand extracts the URL and comment from a bot capture command message.
@@ -469,6 +530,10 @@ func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error)
 		}
 	}
 
+	if cfg.BackfillLimit <= 0 {
+		return DiscordConfig{}, fmt.Errorf("backfill_limit must be positive, got %d", cfg.BackfillLimit)
+	}
+
 	return cfg, nil
 }
 
@@ -507,4 +572,13 @@ func (r *RateLimiter) Update(route string, remaining int, resetAt time.Time) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.buckets[route] = &rateBucket{remaining: remaining, resetAt: resetAt}
+	// Prune expired buckets to prevent unbounded growth
+	if len(r.buckets) > 100 {
+		now := time.Now()
+		for k, b := range r.buckets {
+			if now.After(b.resetAt) {
+				delete(r.buckets, k)
+			}
+		}
+	}
 }

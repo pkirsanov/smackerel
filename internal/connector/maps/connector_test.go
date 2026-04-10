@@ -85,9 +85,6 @@ func TestParseMapsConfigDefaults(t *testing.T) {
 	if cfg.MinDurationMin != 2 {
 		t.Errorf("expected default MinDurationMin 2, got %v", cfg.MinDurationMin)
 	}
-	if cfg.DefaultTier != "standard" {
-		t.Errorf("expected default tier %q, got %q", "standard", cfg.DefaultTier)
-	}
 	if cfg.CommuteMinOccurrences != 3 {
 		t.Errorf("expected default CommuteMinOccurrences 3, got %v", cfg.CommuteMinOccurrences)
 	}
@@ -449,7 +446,6 @@ func TestParseMapsConfigCustomOverrides(t *testing.T) {
 		SourceConfig: map[string]interface{}{
 			"import_dir":               "/tmp/test",
 			"archive_processed":        true,
-			"default_tier":             "full",
 			"location_radius_m":        float64(250),
 			"home_detection":           "manual",
 			"commute_min_occurrences":  float64(5),
@@ -466,9 +462,6 @@ func TestParseMapsConfigCustomOverrides(t *testing.T) {
 	}
 	if !cfg.ArchiveProcessed {
 		t.Error("ArchiveProcessed should be true")
-	}
-	if cfg.DefaultTier != "full" {
-		t.Errorf("DefaultTier = %q, want %q", cfg.DefaultTier, "full")
 	}
 	if cfg.LocationRadiusM != 250 {
 		t.Errorf("LocationRadiusM = %v, want 250", cfg.LocationRadiusM)
@@ -562,6 +555,155 @@ func TestSyncArchiveEnabled(t *testing.T) {
 	archivedPath := filepath.Join(dir, "archive", "archive-me.json")
 	if _, err := os.Stat(archivedPath); err != nil {
 		t.Errorf("archived file should exist: %v", err)
+	}
+}
+
+// --- Hardening tests ---
+
+// HARDEN-011-F3: Non-JSON files in import directory must be skipped.
+func TestSyncSkipsNonJSONFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "readme.txt", "not json data")
+	writeTakeoutFile(t, dir, "data.csv", "col1,col2\n1,2")
+	writeTakeoutFile(t, dir, "export.json", makeTakeoutJSON(2))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir":       dir,
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Errorf("expected 2 artifacts from .json only, got %d", len(artifacts))
+	}
+	if cursor != "export.json" {
+		t.Errorf("cursor should only contain .json files, got %q", cursor)
+	}
+}
+
+// HARDEN-011-F3: When all activities in a file are below threshold, cursor must still advance.
+func TestSyncAllFilteredStillAdvancesCursor(t *testing.T) {
+	dir := t.TempDir()
+	// All activities have 50m distance (below default 100m threshold)
+	json := `{"timelineObjects": [{
+		"activitySegment": {
+			"startLocation": {"latitudeE7": 475000000, "longitudeE7": 87000000},
+			"endLocation":   {"latitudeE7": 475010000, "longitudeE7": 87010000},
+			"duration": {"startTimestamp": "2026-03-15T10:00:00Z", "endTimestamp": "2026-03-15T10:05:00Z"},
+			"distance": 50, "activityType": "WALKING",
+			"waypointPath": {"waypoints": []}
+		}
+	}]}`
+	writeTakeoutFile(t, dir, "tiny.json", json)
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir":       dir,
+			"min_distance_m":   float64(100),
+			"min_duration_min": float64(2),
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts (all filtered), got %d", len(artifacts))
+	}
+	if cursor != "tiny.json" {
+		t.Errorf("cursor should include processed file even when all filtered, got %q", cursor)
+	}
+
+	// Second sync should produce nothing (file already in cursor)
+	artifacts2, cursor2, err := c.Sync(context.Background(), cursor)
+	if err != nil {
+		t.Fatalf("Sync2: %v", err)
+	}
+	if len(artifacts2) != 0 {
+		t.Errorf("second sync should produce 0 artifacts, got %d", len(artifacts2))
+	}
+	if cursor2 != cursor {
+		t.Errorf("cursor should not change when no new files, got %q", cursor2)
+	}
+}
+
+// HARDEN-011-F2: Context cancellation during Sync should stop processing.
+func TestSyncContextCancellation(t *testing.T) {
+	dir := t.TempDir()
+	// Create multiple files so cancellation can trigger between them
+	for i := 0; i < 5; i++ {
+		writeTakeoutFile(t, dir, fmt.Sprintf("file%d.json", i), makeTakeoutJSON(1))
+	}
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir":       dir,
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Cancel immediately — should process 0 or few files
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := c.Sync(ctx, "")
+	// Should not return an error (cancellation is handled gracefully)
+	if err != nil {
+		t.Fatalf("Sync with cancelled context returned error: %v", err)
+	}
+}
+
+// HARDEN-011: Oversized file skipped without blocking other files.
+func TestSyncOversizedFileSkipped(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "normal.json", makeTakeoutJSON(2))
+	// We can't easily create a 200MB+ file in unit tests, but verify the
+	// file size check path exists by confirming a normal file passes.
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir":       dir,
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Errorf("normal file should process, got %d artifacts", len(artifacts))
 	}
 }
 

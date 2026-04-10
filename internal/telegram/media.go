@@ -26,6 +26,7 @@ type MediaGroupBuffer struct {
 	ChatID       int64
 	Items        []MediaItem
 	ForwardMeta  *ForwardedMeta
+	CreatedAt    time.Time
 	timer        *time.Timer
 }
 
@@ -111,12 +112,8 @@ func (m *MediaGroupAssembler) Add(mediaGroupID string, msg *tgbotapi.Message) {
 	} else {
 		// Evict oldest buffer if at capacity
 		if len(m.buffers) >= m.maxBuffers {
-			var oldestID string
-			for id := range m.buffers {
-				oldestID = id
-				break
-			}
-			slog.Warn("media group buffer count at capacity, evicting",
+			oldestID := m.findOldestBufferLocked()
+			slog.Warn("media group buffer count at capacity, evicting oldest",
 				"evicted_group", oldestID,
 				"buffer_count", len(m.buffers),
 			)
@@ -142,6 +139,7 @@ func (m *MediaGroupAssembler) Add(mediaGroupID string, msg *tgbotapi.Message) {
 			MediaGroupID: mediaGroupID,
 			ChatID:       msg.Chat.ID,
 			Items:        []MediaItem{item},
+			CreatedAt:    time.Now(),
 		}
 
 		// Capture forward metadata from first message if forwarded
@@ -191,6 +189,22 @@ func (m *MediaGroupAssembler) timerExpired(mediaGroupID string) {
 			}
 		}()
 	}
+}
+
+// findOldestBufferLocked returns the media group ID of the buffer with the earliest CreatedAt.
+// Caller must hold m.mu.
+func (m *MediaGroupAssembler) findOldestBufferLocked() string {
+	var oldestID string
+	var oldestTime time.Time
+	first := true
+	for id, buf := range m.buffers {
+		if first || buf.CreatedAt.Before(oldestTime) {
+			oldestID = id
+			oldestTime = buf.CreatedAt
+			first = false
+		}
+	}
+	return oldestID
 }
 
 // FlushAll flushes all pending media groups and waits for completion (for shutdown).

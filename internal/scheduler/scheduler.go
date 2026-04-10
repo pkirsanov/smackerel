@@ -27,12 +27,13 @@ type Scheduler struct {
 	digestPendingDate  string     // date of the pending digest for retry
 
 	// Per-group concurrency guards — prevents cron job overlap within each group
-	muDigest   sync.Mutex
-	muHourly   sync.Mutex
-	muDaily    sync.Mutex
-	muWeekly   sync.Mutex
-	muMonthly  sync.Mutex
-	muFrequent sync.Mutex
+	muDigest  sync.Mutex
+	muHourly  sync.Mutex
+	muDaily   sync.Mutex
+	muWeekly  sync.Mutex
+	muMonthly sync.Mutex
+	muBriefs  sync.Mutex // pre-meeting briefs (every 5 min)
+	muAlerts  sync.Mutex // alert delivery sweep (every 15 min)
 }
 
 // New creates a new scheduler.
@@ -210,11 +211,11 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Schedule pre-meeting briefs — every 5 minutes (R-306)
 		if _, err := s.cron.AddFunc("*/5 * * * *", func() {
-			if !s.muFrequent.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "frequent", "job", "pre-meeting-briefs")
+			if !s.muBriefs.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "briefs", "job", "pre-meeting-briefs")
 				return
 			}
-			defer s.muFrequent.Unlock()
+			defer s.muBriefs.Unlock()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancel()
@@ -326,11 +327,11 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Schedule alert delivery sweep — every 15 minutes (R-021-001)
 		if _, err := s.cron.AddFunc("*/15 * * * *", func() {
-			if !s.muFrequent.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "frequent", "job", "alert-delivery")
+			if !s.muAlerts.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "alerts", "job", "alert-delivery")
 				return
 			}
-			defer s.muFrequent.Unlock()
+			defer s.muAlerts.Unlock()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancel()
@@ -362,7 +363,11 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 				msg := fmt.Sprintf("%s %s\n%s", icon, a.Title, a.Body)
 
 				if s.bot != nil {
-					s.bot.SendDigest(msg)
+					if err := s.bot.SendAlertMessage(msg); err != nil {
+						slog.Warn("alert delivery failed, will retry next sweep",
+							"alert_id", a.ID, "error", err)
+						continue
+					}
 				}
 
 				if err := s.engine.MarkAlertDelivered(ctx, a.ID); err != nil {

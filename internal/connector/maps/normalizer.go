@@ -9,7 +9,7 @@ import (
 )
 
 // NormalizeActivity converts a TakeoutActivity into a connector.RawArtifact.
-func NormalizeActivity(activity TakeoutActivity, sourceFile string, config MapsConfig) connector.RawArtifact {
+func NormalizeActivity(activity TakeoutActivity, sourceFile string) connector.RawArtifact {
 	return connector.RawArtifact{
 		SourceID:    "google-maps-timeline",
 		SourceRef:   computeDedupHash(activity),
@@ -93,12 +93,16 @@ func activityGridCoords(activity TakeoutActivity) (startLat, startLng, endLat, e
 	return
 }
 
-// computeDedupHash generates a dedup key from date + rounded start/end coordinates.
+// computeDedupHash generates a dedup key from date + activity type + start hour + rounded coords.
+// Including type and hour prevents hash collision between distinct activities at the same
+// grid location on the same day (e.g., morning jog vs. evening walk, or two routeless drives).
 func computeDedupHash(activity TakeoutActivity) string {
 	date := activity.StartTime.Format("2006-01-02")
+	hour := activity.StartTime.Hour()
 	startLat, startLng, endLat, endLng := activityGridCoords(activity)
 
-	input := fmt.Sprintf("%s:%.3f,%.3f:%.3f,%.3f", date, startLat, startLng, endLat, endLng)
+	input := fmt.Sprintf("%s:%s:%d:%.3f,%.3f:%.3f,%.3f",
+		date, string(activity.Type), hour, startLat, startLng, endLat, endLng)
 	hash := sha256.Sum256([]byte(input))
 	return fmt.Sprintf("%x", hash[:8]) // first 16 hex chars
 }

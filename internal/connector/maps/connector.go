@@ -24,7 +24,6 @@ type MapsConfig struct {
 	ArchiveProcessed bool
 	MinDistanceM     float64
 	MinDurationMin   float64
-	DefaultTier      string
 
 	// Cluster/commute/trip/link config (used by future scopes)
 	LocationRadiusM       float64
@@ -190,7 +189,16 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 
 		filename := filepath.Base(file)
-		for _, activity := range activities {
+		for i, activity := range activities {
+			// Check for context cancellation periodically within large files.
+			if i > 0 && i%500 == 0 {
+				if err := ctx.Err(); err != nil {
+					slog.Warn("sync cancelled during activity processing",
+						"file", filename, "processed", i, "total", len(activities), "error", err)
+					break
+				}
+			}
+
 			if activity.DistanceKm*1000 < c.config.MinDistanceM {
 				continue
 			}
@@ -198,7 +206,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				continue
 			}
 
-			artifact := NormalizeActivity(activity, filename, c.config)
+			artifact := NormalizeActivity(activity, filename)
 			allArtifacts = append(allArtifacts, artifact)
 
 			if IsTrailQualified(activity) {
@@ -409,7 +417,6 @@ func parseMapsConfig(config connector.ConnectorConfig) (MapsConfig, error) {
 		ArchiveProcessed:      false,
 		MinDistanceM:          100,
 		MinDurationMin:        2,
-		DefaultTier:           "standard",
 		LocationRadiusM:       500,
 		HomeDetection:         "frequency",
 		CommuteMinOccurrences: 3,
@@ -474,11 +481,6 @@ func parseMapsConfig(config connector.ConnectorConfig) (MapsConfig, error) {
 			}
 			cfg.MinDurationMin = float64(v)
 		}
-	}
-
-	// Default tier
-	if dt, ok := sc["default_tier"].(string); ok && dt != "" {
-		cfg.DefaultTier = dt
 	}
 
 	// Clustering config

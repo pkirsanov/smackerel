@@ -98,8 +98,10 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		return fmt.Errorf("finnhub_api_key is required")
 	}
 
+	c.mu.Lock()
 	c.config = cfg
 	c.health = connector.HealthHealthy
+	c.mu.Unlock()
 	slog.Info("financial-markets connector connected", "id", c.id,
 		"stocks", len(cfg.Watchlist.Stocks), "crypto", len(cfg.Watchlist.Crypto))
 	return nil
@@ -174,7 +176,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 						"price":           p.CurrentPrice,
 						"change_24h":      p.Change24h,
 						"change_pct_24h":  p.ChangePct24h,
-						"processing_tier": "light",
+						"processing_tier": c.cryptoTier(p.ChangePct24h),
 					},
 					CapturedAt: now,
 				})
@@ -192,7 +194,9 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 }
 
 func (c *Connector) Close() error {
+	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.mu.Unlock()
 	return nil
 }
 
@@ -201,6 +205,8 @@ func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*Stoc
 	if !validSymbolRe.MatchString(symbol) {
 		return nil, fmt.Errorf("invalid symbol format: %q", symbol)
 	}
+
+	c.recordCall("finnhub")
 
 	u, _ := url.Parse("https://finnhub.io/api/v1/quote")
 	q := u.Query()
@@ -229,7 +235,11 @@ func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*Stoc
 	}
 	quote.Symbol = symbol
 
-	c.recordCall("finnhub")
+	// Detect Finnhub "no data" response: all-zero fields indicate unknown/delisted symbol.
+	if quote.CurrentPrice == 0 && quote.High == 0 && quote.Low == 0 && quote.PreviousClose == 0 {
+		return nil, fmt.Errorf("finnhub returned no data for symbol %q (possibly delisted or invalid)", symbol)
+	}
+
 	return &quote, nil
 }
 
@@ -246,6 +256,8 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 	if len(sanitizedIDs) == 0 {
 		return nil, fmt.Errorf("no valid coin IDs provided")
 	}
+
+	c.recordCall("coingecko")
 
 	u, _ := url.Parse("https://api.coingecko.com/api/v3/simple/price")
 	q := u.Query()
@@ -276,15 +288,30 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 
 	var prices []CryptoPrice
 	for id, data := range result {
+		price := data["usd"]
+		changePct := data["usd_24h_change"]
+		// Calculate absolute 24h change from percentage and current price.
+		var change24h float64
+		if changePct != 0 {
+			change24h = price - (price / (1 + changePct/100))
+		}
 		prices = append(prices, CryptoPrice{
 			ID:           id,
-			CurrentPrice: data["usd"],
-			ChangePct24h: data["usd_24h_change"],
+			CurrentPrice: price,
+			Change24h:    change24h,
+			ChangePct24h: changePct,
 		})
 	}
 
-	c.recordCall("coingecko")
 	return prices, nil
+}
+
+// cryptoTier returns the processing tier for a crypto asset based on alert threshold.
+func (c *Connector) cryptoTier(changePct24h float64) string {
+	if c.config.AlertThreshold > 0 && (changePct24h >= c.config.AlertThreshold || changePct24h <= -c.config.AlertThreshold) {
+		return "full"
+	}
+	return "light"
 }
 
 // allowCall checks if a provider call is within rate limits.

@@ -461,14 +461,14 @@ func TestParseEmailMessages_SkipsNonMapEntries(t *testing.T) {
 func TestParseEmailMessages_AllFields(t *testing.T) {
 	msgs, err := parseEmailMessages([]interface{}{
 		map[string]interface{}{
-			"uid":        "msg-1",
-			"message_id": "mid-1",
-			"from":       "sender@test.com",
-			"subject":    "Full Message",
-			"body":       "Body text",
-			"date":       "2026-04-08T10:00:00Z",
-			"labels":     []interface{}{"inbox", "work"},
-			"to":         []interface{}{"recv@test.com"},
+			"uid":         "msg-1",
+			"message_id":  "mid-1",
+			"from":        "sender@test.com",
+			"subject":     "Full Message",
+			"body":        "Body text",
+			"date":        "2026-04-08T10:00:00Z",
+			"labels":      []interface{}{"inbox", "work"},
+			"to":          []interface{}{"recv@test.com"},
 			"in_reply_to": "prev-msg",
 		},
 	})

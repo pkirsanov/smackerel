@@ -114,3 +114,42 @@ Links: [uservalidation.md](uservalidation.md)
 - `./smackerel.sh test unit` — all 31 Go packages pass, 44 Python tests pass
 - `./smackerel.sh check` — SST in sync, clean
 - `./smackerel.sh lint` — all checks passed
+
+---
+
+### Stabilize-To-Doc Sweep — 2026-04-10
+
+**Trigger:** `stabilize` probe via stochastic-quality-sweep
+**Mode:** `stabilize-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Findings (5 stability issues identified)
+
+| # | Finding | Category | Severity | Status |
+|---|---------|----------|----------|--------|
+| ST1 | Data race: `Connect()` sets `c.health` without mutex while `Health()` reads under `RLock` | Race condition | High | Fixed |
+| ST2 | Data race: `Close()` sets `c.health` without mutex while `Health()` reads under `RLock` | Race condition | High | Fixed |
+| ST3 | `Sync()` never checks `ctx.Done()` — context cancellation ignored across entire channel iteration | Resource leak / timeout | Medium | Fixed |
+| ST4 | `Sync()` swallows all fetch errors, returns `nil` even when every channel fails — caller unaware of failures | Error recovery | Medium | Fixed |
+| ST5 | `RateLimiter.buckets` map grows unbounded — expired entries never pruned | Memory leak | Medium | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+- `internal/connector/discord/discord.go`:
+  - ST1/ST2: `Connect()` and `Close()` now hold `c.mu.Lock()` when writing `c.health`. Eliminates data race with concurrent `Health()` readers.
+  - ST3: `Sync()` now checks `ctx.Err()` at the start of each channel iteration. Returns partial results + cursor + error on cancellation.
+  - ST4: `Sync()` now aggregates all fetch errors into `syncErrors` slice. Returns partial artifacts with a descriptive error when any channel fails. Cursor marshal error is also logged and returned instead of silently discarded.
+  - ST5: `RateLimiter.Update()` now prunes expired buckets when the map exceeds 100 entries. Bounded cleanup prevents unbounded growth.
+
+- `internal/connector/discord/discord_test.go`:
+  - Added `TestRateLimiter_PruneExpired` — verifies expired bucket pruning triggers above 100 entries
+  - Added `TestSync_ContextCancellation` — verifies cancelled context returns error
+  - Added `TestConnect_HealthRaceSafe` — concurrent `Health()` reads during `Connect()` with `-race`
+  - Added `TestClose_HealthRaceSafe` — concurrent `Health()` reads during `Close()` with `-race`
+
+#### Validation
+
+- `go test -count=1 -race ./internal/connector/discord/` — 19 tests pass, zero race conditions detected
+- `./smackerel.sh build` — clean
+- All prior tests (gaps G1–G11, simplify S1–S2) remain passing

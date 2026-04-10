@@ -251,10 +251,12 @@ func TestCronConcurrencyGuard_AllGroupsIndependent(t *testing.T) {
 	s.muDaily.Lock()
 	s.muWeekly.Lock()
 	s.muMonthly.Lock()
-	s.muFrequent.Lock()
+	s.muBriefs.Lock()
+	s.muAlerts.Lock()
 
 	// All locked — unlock in any order
-	s.muFrequent.Unlock()
+	s.muAlerts.Unlock()
+	s.muBriefs.Unlock()
 	s.muMonthly.Unlock()
 	s.muWeekly.Unlock()
 	s.muDaily.Unlock()

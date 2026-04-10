@@ -19,7 +19,8 @@
 - 5 new instantiation + 5 registration lines
 - 5 new conditional-start blocks with `ConnectorConfig` assembly
 - 4 new YAML config blocks in `config/smackerel.yaml` (Twitter, Weather, Gov Alerts, Financial Markets)
-- Helper functions in `main.go`: `parseJSONArray`, `parseJSONObject`, `parseFloatEnv`, `parseIntEnv`, `splitCSV`
+- Helper functions in `main.go`: `parseJSONArray`, `parseJSONObject`, `parseFloatEnv`
+  - Note: `parseIntEnv` and `splitCSV` were planned but not needed — `parseFloatEnv` covers numeric parsing, `parseJSONArray` covers Discord capture_commands (YAML arrays serialize as JSON)
 
 ### Validation Checkpoints
 
@@ -83,7 +84,7 @@ Scenario: SCN-019-006 Existing connectors unaffected by new registrations
 
 | File | Change |
 |------|--------|
-| `cmd/core/main.go` | Add 5 imports, 5 instantiations, 5 registrations, 5 auto-start blocks, helper functions (`parseJSONArray`, `parseJSONObject`, `parseFloatEnv`, `parseIntEnv`, `splitCSV`) |
+| `cmd/core/main.go` | Add 5 imports, 5 instantiations, 5 registrations, 5 auto-start blocks, helper functions (`parseJSONArray`, `parseJSONObject`, `parseFloatEnv`) |
 | `config/smackerel.yaml` | Add 4 new YAML config blocks under `connectors:` (twitter, weather, gov-alerts, financial-markets) |
 | `scripts/commands/config.sh` | Add `yaml_get` extractions for all 5 connectors, write env vars to generated env files |
 

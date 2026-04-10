@@ -2,6 +2,7 @@ package discord
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -330,5 +331,138 @@ func TestRateLimiter(t *testing.T) {
 	rl.Update("channels/456/messages", 0, time.Now().Add(-time.Second))
 	if wait := rl.ShouldWait("channels/456/messages"); wait != 0 {
 		t.Errorf("expected 0 wait for expired bucket, got %v", wait)
+	}
+}
+
+func TestRateLimiter_PruneExpired(t *testing.T) {
+	rl := NewRateLimiter()
+
+	// Add 101 expired buckets to trigger pruning on next Update
+	for i := 0; i < 101; i++ {
+		route := "channels/" + time.Now().Format("150405") + "/" + fmt.Sprintf("%d", i)
+		rl.Update(route, 0, time.Now().Add(-time.Minute))
+	}
+
+	// Next Update should trigger pruning of expired entries
+	rl.Update("channels/live/messages", 5, time.Now().Add(time.Minute))
+
+	rl.mu.RLock()
+	count := len(rl.buckets)
+	rl.mu.RUnlock()
+
+	// Only the live bucket should remain (expired ones pruned)
+	if count > 2 {
+		t.Errorf("expected most expired buckets pruned, got %d remaining", count)
+	}
+}
+
+func TestSync_ContextCancellation(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":  "s1",
+					"channel_ids": []interface{}{"ch1", "ch2"},
+				},
+			},
+		},
+	})
+
+	// Cancel context before Sync
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := c.Sync(ctx, "")
+	if err == nil {
+		t.Error("expected error from cancelled context")
+	}
+}
+
+func TestConnect_HealthRaceSafe(t *testing.T) {
+	c := New("discord")
+	done := make(chan struct{})
+
+	// Concurrent health reads while connecting
+	go func() {
+		for i := 0; i < 100; i++ {
+			c.Health(context.Background())
+		}
+		close(done)
+	}()
+
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+	})
+	<-done
+}
+
+func TestClose_HealthRaceSafe(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+	})
+
+	done := make(chan struct{})
+
+	// Concurrent health reads while closing
+	go func() {
+		for i := 0; i < 100; i++ {
+			c.Health(context.Background())
+		}
+		close(done)
+	}()
+
+	c.Close()
+	<-done
+}
+
+func TestBuildTitle_UTF8Safe(t *testing.T) {
+	// 30 four-byte emoji runes = 120 bytes but only 30 runes
+	emoji := ""
+	for i := 0; i < 30; i++ {
+		emoji += "🔥"
+	}
+	// Content is 30 runes; should not be truncated
+	title := buildTitle(DiscordMessage{Content: emoji})
+	if title != emoji {
+		t.Error("30-rune title should not be truncated")
+	}
+
+	// 90 emoji runes = 360 bytes; byte-based [:80] would cut mid-rune
+	longEmoji := ""
+	for i := 0; i < 90; i++ {
+		longEmoji += "🔥"
+	}
+	title = buildTitle(DiscordMessage{Content: longEmoji})
+	runes := []rune(title)
+	// 80 runes + "..." (3 runes) = 83 runes
+	if len(runes) != 83 {
+		t.Errorf("expected 83 runes (80 + ...), got %d", len(runes))
+	}
+}
+
+func TestParseDiscordConfig_NegativeBackfillLimit(t *testing.T) {
+	_, err := parseDiscordConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+		SourceConfig: map[string]interface{}{
+			"backfill_limit": float64(-5),
+		},
+	})
+	if err == nil {
+		t.Error("expected error for negative backfill limit")
+	}
+}
+
+func TestParseDiscordConfig_ZeroBackfillLimit(t *testing.T) {
+	_, err := parseDiscordConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+		SourceConfig: map[string]interface{}{
+			"backfill_limit": float64(0),
+		},
+	})
+	if err == nil {
+		t.Error("expected error for zero backfill limit")
 	}
 }

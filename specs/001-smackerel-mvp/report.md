@@ -199,6 +199,62 @@ Scenario-first red-green TDD methodology was applied: test scenarios written fro
 
 ---
 
+## Regression Verification (2026-04-10)
+
+**Trigger:** Stochastic quality sweep — regression round after 20-round prior sweep, 6 new specs (019-024) delivered, and 12 prior sweep rounds in current cycle.
+
+### Full Test Suite
+
+```
+Go unit tests: 31 packages — ALL PASS (0 failures)
+Python ML sidecar: 51 tests — ALL PASS
+Build: Go core + ML sidecar Docker images — SUCCESS
+Check (SST config sync): PASS
+Lint (Go vet + Python ruff): ALL PASS
+Format: No drift detected
+```
+
+### Cross-Spec Interface Consistency
+
+| Contract | Spec 001 Definition | Current Code | Status |
+|----------|-------------------|--------------|--------|
+| `Connector` interface (5 methods) | `ID`, `Connect`, `Sync`, `Health`, `Close` | All 14 connectors implement all 5 methods | PASS |
+| `HealthStatus` enum | 4 values (healthy, syncing, error, disconnected) | 6 values (+degraded, +failing from specs 019/021/022) | PASS — additive evolution, original contract preserved |
+| `ConnectorConfig` struct | auth, schedule, qualifiers, processing | Unchanged from 001 definition | PASS |
+| `ConnectorRegistry` | thread-safe register/unregister/get | Unchanged + `ListConnectorHealth` added | PASS |
+| `OAuth2Provider` interface | `AuthURL`, `ExchangeCode`, `RefreshToken`, `ProviderName` | Unchanged from 001 definition | PASS |
+| NATS subjects | artifacts.process/processed, search.embed/embedded, digest, keep | All subjects match `config/nats_contract.json` | PASS |
+| SST config | No fallback defaults, `os.Getenv()` + empty check | Config loads 30+ env vars, all fail-loud on missing | PASS |
+| `main.go` wiring | All connectors registered in registry | 14 connectors registered with correct IDs | PASS |
+
+### Design Contradiction Check
+
+| Design Mandate | Compliance |
+|---------------|------------|
+| Chi router (no other HTTP framework) | PASS — `go-chi/chi/v5` |
+| HTMX + Go templates (no JS framework) | PASS — `internal/web/templates.go` |
+| PostgreSQL + pgvector only (no Redis/ES) | PASS |
+| NATS JetStream async boundary | PASS |
+| Monochrome icons, no emoji | PASS — 32 SVG icons, emoji sanitization |
+| Single bearer token auth | PASS |
+| System font stack | PASS |
+| Protocol-level connectors | PASS — IMAP, CalDAV, RSS, webhook abstractions |
+
+### Flow Breakage Check
+
+- Capture → process → embed → link pipeline: no drift in `internal/pipeline/`
+- Search: semantic + rerank path intact via NATS
+- Digest: generator wired through scheduler with cron
+- Telegram bot: capture, search, digest delivery all wired
+- OAuth: start → callback → token store → connector auto-start chain intact
+- Graceful shutdown: explicit sequential shutdown in reverse-dependency order
+
+### Findings
+
+**No regressions detected.** All prior fixes are durable. The HealthStatus enum evolution (4 → 6 values) from specs 019/021 is additive and backward-compatible — all existing code using the original 4 values continues to function. No cross-spec conflicts, no SST violations, no design contradictions, no flow breakage.
+
+---
+
 ### Completion Statement
 
 Spec 001-smackerel-mvp is complete. All 4 scopes (Monochrome Icon System, Design System CSS, Generic Connector Framework, Product-Level Testing) are Done with 55 DoD items checked. All 21 Gherkin scenarios (SCN-001-001 through SCN-001-021) are covered by unit tests and E2E scripts. Build, lint, and unit tests all pass.
