@@ -1,12 +1,12 @@
 {
   "version": 3,
   "featureDir": "specs/019-connector-wiring",
-  "featureName": "Connector Wiring — Register 5 Unwired Connectors",
-  "status": "in-progress",
+  "featureName": "Connector Wiring \u2014 Register 5 Unwired Connectors",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "implement",
+    "currentPhase": "finalize",
     "currentScope": 1,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [],
@@ -14,7 +14,9 @@
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
-        "phasesExecuted": ["analyze"],
+        "phasesExecuted": [
+          "analyze"
+        ],
         "statusBefore": "not-started",
         "statusAfter": "not-started",
         "timestamp": "2026-04-10T00:00:00Z",
@@ -22,7 +24,9 @@
       },
       {
         "agent": "bubbles.design",
-        "phasesExecuted": ["bootstrap"],
+        "phasesExecuted": [
+          "bootstrap"
+        ],
         "statusBefore": "not-started",
         "statusAfter": "not-started",
         "timestamp": "2026-04-10T00:00:00Z",
@@ -30,15 +34,20 @@
       },
       {
         "agent": "bubbles.plan",
-        "phasesExecuted": ["bootstrap", "planning"],
+        "phasesExecuted": [
+          "bootstrap",
+          "planning"
+        ],
         "statusBefore": "not-started",
         "statusAfter": "not-started",
         "timestamp": "2026-04-10T00:00:00Z",
-        "summary": "Created scopes.md with 1 scope (wire all 5 connectors — imports, registration, YAML config, config.sh, health endpoint). Created report.md and uservalidation.md templates."
+        "summary": "Created scopes.md with 1 scope (wire all 5 connectors \u2014 imports, registration, YAML config, config.sh, health endpoint). Created report.md and uservalidation.md templates."
       },
       {
         "agent": "bubbles.implement",
-        "phasesExecuted": ["implement"],
+        "phasesExecuted": [
+          "implement"
+        ],
         "statusBefore": "not-started",
         "statusAfter": "in-progress",
         "timestamp": "2026-04-10T00:00:00Z",

@@ -393,6 +393,7 @@ func run() error {
 		OAuthHandler:       oauthHandler,
 		OllamaURL:          cfg.OllamaURL,
 		AuthToken:          cfg.AuthToken,
+		ConnectorRegistry:  registry,
 		Version:            version,
 		CommitHash:         commitHash,
 	}

@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/021-intelligence-delivery",
   "featureName": "Intelligence Delivery",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "implement",
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-10T12:00:00Z",
     "completedPhaseClaims": [],
@@ -14,8 +14,17 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [1, 2, 3],
-    "certifiedCompletedPhases": ["analyze", "design", "plan", "implement"],
+    "completedScopes": [
+      1,
+      2,
+      3
+    ],
+    "certifiedCompletedPhases": [
+      "analyze",
+      "design",
+      "plan",
+      "implement"
+    ],
     "scopeProgress": [
       {
         "scope": 1,
@@ -30,7 +39,9 @@
         "scope": 2,
         "name": "Alert Producer Wiring",
         "status": "Done",
-        "dependsOn": [1],
+        "dependsOn": [
+          1
+        ],
         "scopeDir": "scopes/02-alert-producer-wiring",
         "evidenceFile": "scopes/02-alert-producer-wiring/report.md",
         "certifiedAt": null
@@ -90,7 +101,9 @@
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-10T12:00:00Z",
@@ -99,7 +112,9 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-10T13:00:00Z",
@@ -108,7 +123,10 @@
     },
     {
       "agent": "bubbles.plan",
-      "phasesExecuted": ["bootstrap", "planning"],
+      "phasesExecuted": [
+        "bootstrap",
+        "planning"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-10T14:00:00Z",
@@ -134,10 +152,32 @@
     "reworkQueue": "rework-queue.json"
   },
   "statusDiscipline": {
-    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "validStatuses": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "specs_hardened",
+      "docs_updated",
+      "validated",
+      "done"
+    ],
     "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
-    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "scopeDoneGates": [
+      "G020",
+      "G021",
+      "G022",
+      "G023",
+      "G024",
+      "G025",
+      "G055",
+      "G056",
+      "G057",
+      "G058",
+      "G059",
+      "G060",
+      "G061"
+    ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Intelligence delivery wiring feature. Core intelligence engine methods all exist — this feature is about scheduling, producing, and delivering intelligence to the user via existing Telegram infrastructure."
+  "notes": "Intelligence delivery wiring feature. Core intelligence engine methods all exist \u2014 this feature is about scheduling, producing, and delivering intelligence to the user via existing Telegram infrastructure."
 }

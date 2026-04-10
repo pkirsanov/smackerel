@@ -51,6 +51,11 @@ type TelegramHealthChecker interface {
 	Healthy() bool
 }
 
+// ConnectorHealthLister reports health for all registered connectors.
+type ConnectorHealthLister interface {
+	ListConnectorHealth(ctx context.Context) map[string]string
+}
+
 // Dependencies holds shared service dependencies for API handlers.
 type Dependencies struct {
 	DB                 DBHealthChecker
@@ -66,6 +71,7 @@ type Dependencies struct {
 	WebHandler         WebUI
 	OAuthHandler       OAuthFlow
 	TelegramBot        TelegramHealthChecker
+	ConnectorRegistry  ConnectorHealthLister
 	OllamaURL          string
 	AuthToken          string
 	Version            string
@@ -158,6 +164,14 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Ollama health (live probe)
 	services["ollama"] = checkOllama(ctx, d.OllamaURL, d.mlClient())
+
+	// Connector health
+	if d.ConnectorRegistry != nil {
+		connectors := d.ConnectorRegistry.ListConnectorHealth(ctx)
+		for id, status := range connectors {
+			services["connector:"+id] = ServiceStatus{Status: status}
+		}
+	}
 
 	// Aggregate status
 	overall := "healthy"
