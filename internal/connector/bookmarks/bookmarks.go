@@ -10,6 +10,15 @@ import (
 	"github.com/smackerel/smackerel/internal/connector"
 )
 
+// maxExtractDepth limits Chrome JSON tree recursion to prevent stack overflow on malformed input.
+const maxExtractDepth = 50
+
+// Pre-compiled regexes for Netscape HTML parsing (F-STAB-005).
+var (
+	netscapeLinkRe   = regexp.MustCompile(`<A HREF="([^"]+)"[^>]*>([^<]+)</A>`)
+	netscapeFolderRe = regexp.MustCompile(`<H3[^>]*>([^<]+)</H3>`)
+)
+
 // Bookmark represents a parsed bookmark.
 type Bookmark struct {
 	Title   string    `json:"title"`
@@ -42,13 +51,8 @@ func ParseChromeJSON(data []byte) ([]Bookmark, error) {
 
 // ParseNetscapeHTML parses the Netscape HTML bookmark format (exported by most browsers).
 func ParseNetscapeHTML(data []byte) ([]Bookmark, error) {
-	// Simplified parser for Netscape bookmark format
 	var bookmarks []Bookmark
 	content := string(data)
-
-	// Extract links with href attributes
-	linkRe := regexp.MustCompile(`<A HREF="([^"]+)"[^>]*>([^<]+)</A>`)
-	folderRe := regexp.MustCompile(`<H3[^>]*>([^<]+)</H3>`)
 
 	currentFolder := ""
 	lines := strings.Split(content, "\n")
@@ -56,12 +60,12 @@ func ParseNetscapeHTML(data []byte) ([]Bookmark, error) {
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
-		if matches := folderRe.FindStringSubmatch(line); len(matches) > 1 {
+		if matches := netscapeFolderRe.FindStringSubmatch(line); len(matches) > 1 {
 			currentFolder = matches[1]
 			continue
 		}
 
-		if matches := linkRe.FindStringSubmatch(line); len(matches) > 2 {
+		if matches := netscapeLinkRe.FindStringSubmatch(line); len(matches) > 2 {
 			bookmarks = append(bookmarks, Bookmark{
 				URL:    matches[1],
 				Title:  matches[2],
@@ -106,6 +110,14 @@ func FolderToTopicMapping(folder string) string {
 }
 
 func extractBookmarks(node map[string]interface{}, folder string, out *[]Bookmark) {
+	extractBookmarksDepth(node, folder, out, 0)
+}
+
+func extractBookmarksDepth(node map[string]interface{}, folder string, out *[]Bookmark, depth int) {
+	if depth > maxExtractDepth {
+		return // prevent stack overflow on malformed input
+	}
+
 	nodeType, _ := node["type"].(string)
 	name, _ := node["name"].(string)
 
@@ -138,7 +150,7 @@ func extractBookmarks(node map[string]interface{}, folder string, out *[]Bookmar
 
 	for _, child := range children {
 		if childNode, ok := child.(map[string]interface{}); ok {
-			extractBookmarks(childNode, currentFolder, out)
+			extractBookmarksDepth(childNode, currentFolder, out, depth+1)
 		}
 	}
 }

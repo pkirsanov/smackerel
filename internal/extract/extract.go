@@ -246,7 +246,7 @@ func ExtractArticle(ctx context.Context, articleURL string) (*Result, error) {
 func ExtractText(text string) *Result {
 	// Use first line as title, capped at 100 chars
 	title := text
-	if idx := strings.IndexByte(text, '\n'); idx > 0 {
+	if idx := strings.IndexByte(text, '\n'); idx >= 0 {
 		title = text[:idx]
 	}
 	if len(title) > 100 {

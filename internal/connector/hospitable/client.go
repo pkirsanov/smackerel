@@ -35,7 +35,11 @@ func NewClient(baseURL, token string, pageSize int) *Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		backoff:  connector.DefaultBackoff(),
+		backoff: &connector.Backoff{
+			BaseDelay:  1 * time.Second,
+			MaxDelay:   16 * time.Second,
+			MaxRetries: 3, // R-009: max 3 retries per request
+		},
 		pageSize: pageSize,
 	}
 }
@@ -139,8 +143,13 @@ func (c *Client) doGet(ctx context.Context, path string, params url.Values) ([]b
 }
 
 // doGetPaginated makes an authenticated GET request, returns body and next link.
+// Each call creates its own backoff state to be safe for concurrent use.
 func (c *Client) doGetPaginated(ctx context.Context, rawURL string) ([]byte, string, error) {
-	c.backoff.Reset()
+	backoff := &connector.Backoff{
+		BaseDelay:  c.backoff.BaseDelay,
+		MaxDelay:   c.backoff.MaxDelay,
+		MaxRetries: c.backoff.MaxRetries,
+	}
 
 	for {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
@@ -174,7 +183,7 @@ func (c *Client) doGetPaginated(ctx context.Context, rawURL string) ([]byte, str
 			return nil, "", fmt.Errorf("forbidden: insufficient permissions")
 
 		case resp.StatusCode == http.StatusTooManyRequests:
-			delay, ok := c.backoff.Next()
+			delay, ok := backoff.Next()
 			if !ok {
 				return nil, "", fmt.Errorf("rate limited: max retries exceeded")
 			}
@@ -183,7 +192,7 @@ func (c *Client) doGetPaginated(ctx context.Context, rawURL string) ([]byte, str
 				delay = retryAfter
 			}
 			slog.Info("hospitable: rate limited, backing off",
-				"delay", delay, "retry_after", retryAfter, "attempt", c.backoff.Attempt())
+				"delay", delay, "retry_after", retryAfter, "attempt", backoff.Attempt())
 			select {
 			case <-ctx.Done():
 				return nil, "", ctx.Err()
@@ -192,12 +201,12 @@ func (c *Client) doGetPaginated(ctx context.Context, rawURL string) ([]byte, str
 			}
 
 		case resp.StatusCode >= 500:
-			delay, ok := c.backoff.Next()
+			delay, ok := backoff.Next()
 			if !ok {
 				return nil, "", fmt.Errorf("server error %d: max retries exceeded", resp.StatusCode)
 			}
 			slog.Warn("hospitable: server error, retrying",
-				"status", resp.StatusCode, "delay", delay, "attempt", c.backoff.Attempt())
+				"status", resp.StatusCode, "delay", delay, "attempt", backoff.Attempt())
 			select {
 			case <-ctx.Done():
 				return nil, "", ctx.Err()

@@ -212,11 +212,32 @@ func TestRegistry_ConcurrentAccess(t *testing.T) {
 // --- HealthStatus enum coverage ---
 
 func TestHealthStatus_AllValues(t *testing.T) {
-	statuses := []HealthStatus{HealthHealthy, HealthSyncing, HealthError, HealthDisconnected}
-	expected := []string{"healthy", "syncing", "error", "disconnected"}
+	statuses := []HealthStatus{HealthHealthy, HealthSyncing, HealthDegraded, HealthFailing, HealthError, HealthDisconnected}
+	expected := []string{"healthy", "syncing", "degraded", "failing", "error", "disconnected"}
 	for i, s := range statuses {
 		if string(s) != expected[i] {
 			t.Errorf("HealthStatus[%d]: expected %q, got %q", i, expected[i], string(s))
+		}
+	}
+}
+
+func TestHealthFromErrorCount(t *testing.T) {
+	tests := []struct {
+		count    int
+		expected HealthStatus
+	}{
+		{0, HealthHealthy},
+		{1, HealthHealthy},
+		{4, HealthHealthy},
+		{5, HealthDegraded},
+		{9, HealthDegraded},
+		{10, HealthFailing},
+		{100, HealthFailing},
+	}
+	for _, tt := range tests {
+		got := HealthFromErrorCount(tt.count)
+		if got != tt.expected {
+			t.Errorf("HealthFromErrorCount(%d) = %q, want %q", tt.count, got, tt.expected)
 		}
 	}
 }

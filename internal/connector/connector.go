@@ -11,9 +11,24 @@ type HealthStatus string
 const (
 	HealthHealthy      HealthStatus = "healthy"
 	HealthSyncing      HealthStatus = "syncing"
+	HealthDegraded     HealthStatus = "degraded"
+	HealthFailing      HealthStatus = "failing"
 	HealthError        HealthStatus = "error"
 	HealthDisconnected HealthStatus = "disconnected"
 )
+
+// HealthFromErrorCount returns a health status based on consecutive error count
+// per the design thresholds: 0-4 healthy, 5-9 degraded, 10+ failing.
+func HealthFromErrorCount(count int) HealthStatus {
+	switch {
+	case count >= 10:
+		return HealthFailing
+	case count >= 5:
+		return HealthDegraded
+	default:
+		return HealthHealthy
+	}
+}
 
 // RawArtifact is the raw data produced by a connector sync.
 type RawArtifact struct {

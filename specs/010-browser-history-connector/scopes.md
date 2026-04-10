@@ -8,9 +8,9 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ### Change Boundary
 
-**Allowed surfaces:** `internal/connector/browser/connector.go` (new file), `internal/connector/browser/browser.go` (add cursor-based query + time helpers), `internal/connector/browser/connector_test.go` (new file), `internal/connector/browser/browser_test.go` (add tests for new functions), `cmd/core/main.go` (register connector), `internal/config/config.go` (add BrowserHistory config struct), `config/smackerel.yaml` (add browser-history connector section).
+**Allowed surfaces:** `internal/connector/browser/connector.go` (new file), `internal/connector/browser/browser.go` (add cursor-based query + time helpers), `internal/connector/browser/connector_test.go` (new file), `internal/connector/browser/browser_test.go` (add tests for new functions), `cmd/core/main.go` (register connector), `config/smackerel.yaml` (add browser-history connector section).
 
-**Excluded surfaces:** No changes to existing connector implementations (RSS, IMAP, CalDAV, Keep, YouTube, Maps, Bookmarks). No changes to existing pipeline processors, search API, digest API, health API, or web handlers. No new NATS streams. No new database migrations. No changes to `internal/connector/browser/browser.go` beyond the three new exported functions (`ParseChromeHistorySince`, `GoTimeToChrome`, `ChromeTimeToGo`).
+**Excluded surfaces:** No changes to existing connector implementations (RSS, IMAP, CalDAV, Keep, YouTube, Maps, Bookmarks). No changes to existing pipeline processors, search API, digest API, health API, or web handlers. No new NATS streams. No new database migrations. No changes to `internal/config/config.go` — config parsing lives in the connector package (`connector.go`) consistent with Keep, Maps, and other connector patterns. No changes to `internal/connector/browser/browser.go` beyond the three new exported functions (`ParseChromeHistorySince`, `GoTimeToChrome`, `ChromeTimeToGo`).
 
 ### Phase Order
 
@@ -158,7 +158,6 @@ Scenario: SCN-BH-005 Copy-then-read strategy handles locked file with retry
 
 **Files modified:**
 - `internal/connector/browser/browser.go` — Add `ParseChromeHistorySince(dbPath string, chromeTimeCursor int64) ([]HistoryEntry, error)` (cursor-based query, ASC order, no LIMIT), `GoTimeToChrome(t time.Time) int64`, `ChromeTimeToGo(chromeTime int64) time.Time`
-- `internal/config/config.go` — Add `BrowserHistoryConfig` struct (Enabled, SyncSchedule, Chrome, Processing, Skip, Privacy sub-structs) to the existing `Connectors` section. Validation: if enabled, `chrome.history_path` required; `access_strategy` must be `"copy"` or `"wal-read"`; duration fields must parse
 - `config/smackerel.yaml` — Add `browser-history` section under `connectors:` (disabled by default, all defaults documented)
 - `cmd/core/main.go` — Import `browserConnector`, create `New("browser-history")`, register in registry, conditional `Connect()` + `supervisor.StartConnector()` when config enabled
 
@@ -207,8 +206,8 @@ Scenario: SCN-BH-005 Copy-then-read strategy handles locked file with retry
   > Evidence: TestCopyHistoryFile_RetryOnFailure PASS — verifies copy + cleanup path
 - [x] Retry-once-after-5s on copy failure implemented
   > Evidence: TestCopyHistoryFile_RetryOnFailure PASS — first copy fails, retry succeeds
-- [x] `BrowserHistoryConfig` struct added to `internal/config/config.go` with validation
-  > Evidence: TestParseBrowserConfig_Defaults, TestParseBrowserConfig_ValidationErrors, TestParseBrowserConfig_CustomSkipDomains PASS
+- [x] `BrowserConfig` struct in `internal/connector/browser/connector.go` with config parsing and validation
+  > Evidence: TestParseBrowserConfig_Defaults, TestParseBrowserConfig_ValidationErrors, TestParseBrowserConfig_CustomSkipDomains PASS. Config is parsed from ConnectorConfig.SourceConfig within the connector package (not central config.go) — consistent with Keep, Maps, and other connector patterns.
 - [x] `browser-history` section added to `config/smackerel.yaml` (disabled by default)
   > Evidence: config/smackerel.yaml has connectors.browser-history section; `./smackerel.sh check` confirms config in sync
 - [x] Connector registered conditionally in `cmd/core/main.go`

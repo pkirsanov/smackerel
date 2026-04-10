@@ -117,13 +117,6 @@ func TestNewLinker_WithNilPool(t *testing.T) {
 	}
 }
 
-func TestConnectionCount_Structure(t *testing.T) {
-	l := NewLinker(nil)
-	if l != nil {
-		t.Error("expected nil linker when pool is nil")
-	}
-}
-
 // SCN-002-016: Vector similarity linking — LinkArtifact is nil-safe with nil linker
 func TestSCN002016_VectorSimilarityLinker_Exists(t *testing.T) {
 	l := NewLinker(nil)

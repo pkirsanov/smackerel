@@ -378,6 +378,9 @@ func getCredential(creds map[string]string, key string) string {
 
 // parseEmailMessages converts interface{} messages from config into EmailMessage structs.
 func parseEmailMessages(raw interface{}) ([]EmailMessage, error) {
+	if raw == nil {
+		return nil, nil
+	}
 	msgs, ok := raw.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("messages must be an array")

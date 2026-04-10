@@ -84,17 +84,22 @@ func buildMetadata(activity TakeoutActivity, sourceFile string) map[string]inter
 	return meta
 }
 
-// computeDedupHash generates a dedup key from date + rounded start/end coordinates.
-func computeDedupHash(activity TakeoutActivity) string {
-	date := activity.StartTime.Format("2006-01-02")
-
-	var startLat, startLng, endLat, endLng float64
+// activityGridCoords returns the start and end route coordinates snapped to a ~500m grid.
+// Returns zeroes when the activity has no route points.
+func activityGridCoords(activity TakeoutActivity) (startLat, startLng, endLat, endLng float64) {
 	if len(activity.Route) > 0 {
 		startLat = roundToGrid(activity.Route[0].Lat)
 		startLng = roundToGrid(activity.Route[0].Lng)
 		endLat = roundToGrid(activity.Route[len(activity.Route)-1].Lat)
 		endLng = roundToGrid(activity.Route[len(activity.Route)-1].Lng)
 	}
+	return
+}
+
+// computeDedupHash generates a dedup key from date + rounded start/end coordinates.
+func computeDedupHash(activity TakeoutActivity) string {
+	date := activity.StartTime.Format("2006-01-02")
+	startLat, startLng, endLat, endLng := activityGridCoords(activity)
 
 	input := fmt.Sprintf("%s:%.3f,%.3f:%.3f,%.3f", date, startLat, startLng, endLat, endLng)
 	hash := sha256.Sum256([]byte(input))

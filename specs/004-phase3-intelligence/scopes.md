@@ -98,7 +98,7 @@ Scenario: SCN-004-003c Synthesis with insufficient data
 
 ### Definition of Done
 - [x] Daily synthesis cron identifies cross-domain artifact clusters
-  > Evidence: `internal/intelligence/engine.go` RunSynthesis queries topic_groups with `COUNT(*) >= 3` and cross-domain filter, `LIMIT 10` cluster cap
+  > Evidence: `internal/intelligence/engine.go` RunSynthesis queries topic_groups with `COUNT(*) >= 3` and `COUNT(DISTINCT a.source_id) >= 2` cross-domain filter (RGR-004-001 fix), `LIMIT 10` cluster cap
 - [x] LLM analysis generates through-lines with source citations
   > Evidence: `internal/intelligence/engine.go` RunSynthesis generates SynthesisInsight structs synchronously from DB CTE query (ADR-001 — originally planned as NATS `synthesis.analyze` publish); `SynthesisInsight` struct stores `ThroughLine` and `SourceArtifactIDs`
 - [x] Surface-level overlaps silently discarded
@@ -108,7 +108,7 @@ Scenario: SCN-004-003c Synthesis with insufficient data
 - [x] Synthesis insights stored as first-class entities
   > Evidence: `internal/intelligence/engine.go` `SynthesisInsight` struct with ID, InsightType, ThroughLine, SourceArtifactIDs, Confidence, CreatedAt
 - [x] SCN-004-001: Cross-domain connection detected — cluster detection query finds artifacts from 3+ different sources converging on theme, generates through-line citing all sources
-  > Evidence: `internal/intelligence/engine.go` RunSynthesis, `internal/intelligence/engine_test.go` TestSynthesisInsight_Fields verifies 3 source artifact IDs and through-line text
+  > Evidence: `internal/intelligence/engine.go` RunSynthesis with `COUNT(DISTINCT a.source_id) >= 2` cross-domain filter (RGR-004-001), `internal/intelligence/engine_test.go` TestSynthesisInsight_Fields verifies 3 source artifact IDs and through-line text
 - [x] SCN-004-002: Surface-level overlap discarded — clusters without genuine connection are not stored as insights
   > Evidence: `internal/intelligence/engine.go` ML sidecar returns `has_genuine_connection=false` for shallow overlap; only genuine connections stored
 - [x] SCN-004-003: Contradiction flagged — conflicting claims detected and both positions stated without taking sides

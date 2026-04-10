@@ -220,3 +220,56 @@ func TestSCN002042_TelegramUnsupportedAttachment(t *testing.T) {
 		t.Errorf("unsupported attachment should use ? marker, got %q", response[:2])
 	}
 }
+
+// --- Chaos-hardening tests ---
+
+func TestChaos_ExtractURL_TrailingPunctuation(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"Visit https://example.com.", "https://example.com"},
+		{"See https://example.com!", "https://example.com"},
+		{"At https://example.com;", "https://example.com"},
+		{"In https://example.com,", "https://example.com"},
+		{"Try https://example.com?", "https://example.com"},
+	}
+	for _, tt := range tests {
+		got := extractURL(tt.input)
+		if got != tt.expected {
+			t.Errorf("extractURL(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestChaos_ExtractURL_ParenthesizedURL(t *testing.T) {
+	got := extractURL("Check (https://example.com/page)")
+	if got != "https://example.com/page" {
+		t.Errorf("expected clean URL from parens, got %q", got)
+	}
+}
+
+func TestChaos_ExtractURL_AngleBracketURL(t *testing.T) {
+	got := extractURL("Link: <https://example.com/page>")
+	if got != "https://example.com/page" {
+		t.Errorf("expected clean URL from angle brackets, got %q", got)
+	}
+}
+
+func TestChaos_ContainsURL_ParenthesizedURL(t *testing.T) {
+	// containsURL uses strings.Contains, so it still finds the prefix
+	if !containsURL("Check (https://example.com)") {
+		t.Error("containsURL should detect URL inside parentheses")
+	}
+}
+
+func TestChaos_IsAuthorized_NegativeChatID(t *testing.T) {
+	// Telegram group chat IDs are negative
+	bot := &Bot{allowedChats: map[int64]bool{-100123: true}}
+	if !bot.IsAuthorized(-100123) {
+		t.Error("negative chat ID should be authorized when in allowlist")
+	}
+	if bot.IsAuthorized(-100999) {
+		t.Error("different negative chat ID should not be authorized")
+	}
+}

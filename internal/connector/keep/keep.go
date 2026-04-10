@@ -230,8 +230,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 func (c *Connector) syncTakeout(ctx context.Context, cursor string) ([]connector.RawArtifact, string, int, error) {
 	importDir := c.config.TakeoutImportDir
 
-	// Check if this export directory was already processed
-	if c.processedExports[importDir] && cursor != "" {
+	// Check if this export directory was already processed (under lock for concurrency safety)
+	c.mu.RLock()
+	alreadyProcessed := c.processedExports[importDir]
+	c.mu.RUnlock()
+	if alreadyProcessed && cursor != "" {
 		// Re-parse to check for new files, but filter by cursor
 	}
 
@@ -299,8 +302,10 @@ func (c *Connector) syncTakeout(ctx context.Context, cursor string) ([]connector
 	}
 	c.mu.Unlock()
 
-	// Mark export as processed
+	// Mark export as processed (under lock for concurrency safety)
+	c.mu.Lock()
 	c.processedExports[importDir] = true
+	c.mu.Unlock()
 
 	return artifacts, newCursor, len(parseErrors), nil
 }
@@ -386,6 +391,30 @@ func parseKeepConfig(config connector.ConnectorConfig) (KeepConfig, error) {
 			return kc, fmt.Errorf("poll_interval must be at least 15m, got %s", interval)
 		}
 		kc.GkeepPollInterval = d
+	}
+
+	if watchInterval, ok := sc["watch_interval"].(string); ok {
+		d, err := time.ParseDuration(watchInterval)
+		if err != nil {
+			return kc, fmt.Errorf("invalid watch_interval: %w", err)
+		}
+		kc.TakeoutWatchInterval = d
+	}
+
+	if archiveProcessed, ok := sc["archive_processed"].(bool); ok {
+		kc.TakeoutArchiveProcessed = archiveProcessed
+	}
+
+	if defaultTier, ok := sc["default_tier"].(string); ok {
+		kc.DefaultTier = defaultTier
+	}
+
+	if labelsRaw, ok := sc["labels_filter"].([]interface{}); ok {
+		for _, l := range labelsRaw {
+			if s, ok := l.(string); ok {
+				kc.LabelsFilter = append(kc.LabelsFilter, s)
+			}
+		}
 	}
 
 	return kc, nil

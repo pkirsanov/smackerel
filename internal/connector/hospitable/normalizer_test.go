@@ -125,6 +125,22 @@ func TestNormalizeReservationFallbackPropertyID(t *testing.T) {
 	}
 }
 
+func TestNormalizeReservationLeadTime(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard"}
+	r := Reservation{
+		ID:         "res-lead",
+		PropertyID: "prop-001",
+		CheckIn:    "2026-04-15",
+		CheckOut:   "2026-04-18",
+		GuestName:  "John Smith",
+		BookedAt:   time.Date(2026, 3, 30, 0, 0, 0, 0, time.UTC),
+	}
+	a := NormalizeReservation(r, "Beach House", cfg)
+	if !containsStr(a.RawContent, "16 days lead time") {
+		t.Errorf("content should contain lead time, got: %s", a.RawContent)
+	}
+}
+
 func TestNormalizeMessage(t *testing.T) {
 	cfg := HospitableConfig{TierMessages: "full"}
 	m := Message{

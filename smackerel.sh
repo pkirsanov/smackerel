@@ -44,13 +44,22 @@ require_docker() {
 run_go_tooling() {
   local script_path="$1"
   shift || true
-  docker run --rm -v "$SCRIPT_DIR:/workspace" -w /workspace golang:1.24.3-bookworm bash "$script_path" "$@"
+  docker run --rm \
+    -v "$SCRIPT_DIR:/workspace" \
+    -v smackerel-gomod-cache:/go/pkg/mod \
+    -v smackerel-gobuild-cache:/root/.cache/go-build \
+    -w /workspace \
+    golang:1.24.3-bookworm bash "$script_path" "$@"
 }
 
 run_python_tooling() {
   local script_path="$1"
   shift || true
-  docker run --rm -v "$SCRIPT_DIR:/workspace" -w /workspace python:3.12-slim bash "$script_path" "$@"
+  docker run --rm \
+    -v "$SCRIPT_DIR:/workspace" \
+    -v smackerel-pip-cache:/root/.cache/pip \
+    -w /workspace \
+    python:3.12-slim bash "$script_path" "$@"
 }
 
 while [[ $# -gt 0 ]]; do

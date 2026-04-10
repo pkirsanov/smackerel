@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/smackerel/smackerel/internal/connector"
+)
+
+const (
+	// maxFileSize is the largest bookmark export file we will read (50 MiB).
+	maxFileSize = 50 << 20
+
+	// maxCursorEntries caps the processed-files cursor list to prevent unbounded growth.
+	maxCursorEntries = 1000
 )
 
 // Compile-time interface check.
@@ -146,6 +155,14 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 	syncErrors := 0
 
 	for _, file := range newFiles {
+		// F-STAB-004: respect context cancellation between files
+		if err := ctx.Err(); err != nil {
+			c.mu.Lock()
+			c.lastSyncErrors = syncErrors + 1
+			c.mu.Unlock()
+			return allArtifacts, encodeProcessedFilesCursor(processedFiles), fmt.Errorf("sync cancelled: %w", err)
+		}
+
 		artifacts, err := c.processFile(ctx, file)
 		if err != nil {
 			slog.Warn("failed to process bookmark export file",
@@ -176,6 +193,9 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 	// Deduplicate by normalized URL against existing artifacts
 	dedupCount := 0
 	if c.deduplicator != nil && len(allArtifacts) > 0 {
+		if err := ctx.Err(); err != nil {
+			return allArtifacts, encodeProcessedFilesCursor(processedFiles), fmt.Errorf("sync cancelled before dedup: %w", err)
+		}
 		var err error
 		allArtifacts, dedupCount, err = c.deduplicator.FilterNew(ctx, allArtifacts)
 		if err != nil {
@@ -284,6 +304,15 @@ func (c *BookmarksConnector) findNewFiles(processedFiles []string) ([]string, er
 
 // processFile reads and parses a bookmark export file, returning RawArtifacts.
 func (c *BookmarksConnector) processFile(ctx context.Context, filePath string) ([]connector.RawArtifact, error) {
+	// F-STAB-001: check file size before reading to prevent memory pressure
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("stat file %s: %w", filePath, err)
+	}
+	if info.Size() > maxFileSize {
+		return nil, fmt.Errorf("file %s exceeds max size (%d > %d bytes)", filepath.Base(filePath), info.Size(), maxFileSize)
+	}
+
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("read file %s: %w", filePath, err)
@@ -310,6 +339,9 @@ func (c *BookmarksConnector) processFile(ctx context.Context, filePath string) (
 
 	// Convert to RawArtifacts
 	artifacts := ToRawArtifacts(bookmarks)
+
+	// F-STAB-007/008: apply domain exclusion and minimum URL length filters
+	artifacts = c.filterArtifacts(artifacts)
 
 	// Enrich metadata
 	fileName := filepath.Base(filePath)
@@ -348,7 +380,16 @@ func (c *BookmarksConnector) archiveFile(filePath string) error {
 		return fmt.Errorf("create archive directory: %w", err)
 	}
 
-	dest := filepath.Join(archiveDir, filepath.Base(filePath))
+	baseName := filepath.Base(filePath)
+	dest := filepath.Join(archiveDir, baseName)
+
+	// F-STAB-006: avoid overwriting previously archived files
+	if _, err := os.Stat(dest); err == nil {
+		ext := filepath.Ext(baseName)
+		name := strings.TrimSuffix(baseName, ext)
+		dest = filepath.Join(archiveDir, fmt.Sprintf("%s_%d%s", name, time.Now().UnixMilli(), ext))
+	}
+
 	if err := os.Rename(filePath, dest); err != nil {
 		return fmt.Errorf("move file to archive: %w", err)
 	}
@@ -433,10 +474,41 @@ func encodeProcessedFilesCursor(files []string) string {
 	if len(files) == 0 {
 		return ""
 	}
+	// F-STAB-002: cap cursor list to prevent unbounded growth
+	if len(files) > maxCursorEntries {
+		files = files[len(files)-maxCursorEntries:]
+	}
 	data, err := json.Marshal(files)
 	if err != nil {
 		slog.Error("failed to encode bookmarks cursor", "error", err)
 		return ""
 	}
 	return string(data)
+}
+
+// filterArtifacts applies ExcludeDomains and MinURLLength filters.
+func (c *BookmarksConnector) filterArtifacts(artifacts []connector.RawArtifact) []connector.RawArtifact {
+	if len(c.config.ExcludeDomains) == 0 && c.config.MinURLLength <= 0 {
+		return artifacts
+	}
+
+	excludeSet := make(map[string]bool, len(c.config.ExcludeDomains))
+	for _, d := range c.config.ExcludeDomains {
+		excludeSet[strings.ToLower(d)] = true
+	}
+
+	filtered := make([]connector.RawArtifact, 0, len(artifacts))
+	for _, a := range artifacts {
+		if c.config.MinURLLength > 0 && len(a.URL) < c.config.MinURLLength {
+			continue
+		}
+		if len(excludeSet) > 0 {
+			u, err := url.Parse(a.URL)
+			if err == nil && excludeSet[strings.ToLower(u.Hostname())] {
+				continue
+			}
+		}
+		filtered = append(filtered, a)
+	}
+	return filtered
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"unicode/utf8"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -18,7 +19,7 @@ const maxShareTextLen = 4096
 // both a URL and descriptive text from the sending app.
 func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, text string) {
 	if len(text) > maxShareTextLen {
-		text = text[:maxShareTextLen]
+		text = truncateUTF8(text, maxShareTextLen)
 	}
 	urls := extractAllURLs(text)
 	if len(urls) == 0 {
@@ -91,8 +92,10 @@ func extractAllURLs(text string) []string {
 	var urls []string
 	seen := make(map[string]bool)
 	for _, word := range strings.Fields(text) {
+		// Strip leading brackets/parens that wrap URLs
+		word = strings.TrimLeft(word, "(<[")
 		// Strip trailing punctuation that's not part of URLs
-		word = strings.TrimRight(word, ".,;:!?\"')")
+		word = strings.TrimRight(word, ".,;:!?\"')>]")
 		if (strings.HasPrefix(word, "http://") || strings.HasPrefix(word, "https://")) && !seen[word] {
 			urls = append(urls, word)
 			seen[word] = true
@@ -110,4 +113,17 @@ func extractContext(text string, urls []string) string {
 	// Collapse multiple whitespace
 	fields := strings.Fields(result)
 	return strings.Join(fields, " ")
+}
+
+// truncateUTF8 truncates text to at most maxBytes bytes without splitting
+// a multi-byte UTF-8 character. The result is always valid UTF-8.
+func truncateUTF8(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	// Walk backwards from maxBytes to find a valid rune boundary
+	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
+		maxBytes--
+	}
+	return s[:maxBytes]
 }

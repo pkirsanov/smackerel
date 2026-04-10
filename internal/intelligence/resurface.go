@@ -54,6 +54,7 @@ func (e *Engine) Resurface(ctx context.Context, limit int) ([]ResurfaceCandidate
 		var c ResurfaceCandidate
 		var daysDormant int
 		if err := rows.Scan(&c.ArtifactID, &c.Title, &c.Score, &c.LastAccessed, &daysDormant); err != nil {
+			slog.Warn("resurface scan failed", "error", err)
 			continue
 		}
 		c.Reason = fmt.Sprintf("High-value artifact dormant for %d days", daysDormant)
@@ -105,6 +106,7 @@ func (e *Engine) serendipityPick(ctx context.Context, limit int) ([]ResurfaceCan
 	for rows.Next() {
 		var c ResurfaceCandidate
 		if err := rows.Scan(&c.ArtifactID, &c.Title, &c.Score, &c.LastAccessed); err != nil {
+			slog.Warn("serendipity scan failed", "error", err)
 			continue
 		}
 		c.Reason = "Serendipity — underexplored content worth revisiting"
