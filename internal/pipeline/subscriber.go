@@ -20,6 +20,7 @@ import (
 // DefaultMaxDeliver is the maximum delivery attempts before dead-letter routing.
 // Must match the MaxDeliver value in consumer configs created by Start().
 const DefaultMaxDeliver = 5
+
 type ResultSubscriber struct {
 	DB        *pgxpool.Pool
 	NATS      *smacknats.Client
