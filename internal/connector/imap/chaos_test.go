@@ -108,9 +108,9 @@ func TestChaos_ParseMessages_MixedValidInvalid(t *testing.T) {
 		AuthType: "oauth2",
 		SourceConfig: map[string]interface{}{
 			"messages": []interface{}{
-				"not-a-map",                                            // invalid
-				42,                                                     // invalid
-				nil,                                                    // invalid
+				"not-a-map", // invalid
+				42,          // invalid
+				nil,         // invalid
 				map[string]interface{}{"uid": "valid", "from": "a@b"}, // valid
 			},
 		},

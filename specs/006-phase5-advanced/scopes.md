@@ -329,7 +329,7 @@ Scenario: SCN-006-012b Dismissed resurface reduces future priority
 
 ## Scope 05: Monthly Report
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P2
 **Depends On:** 01-expertise-mapping, 03-subscription-tracker
 
@@ -461,7 +461,7 @@ Scenario: SCN-006-016b Quick reference for topic with sparse resources
 
 ## Scope 07: Content Creation Fuel
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P2
 **Depends On:** 01-expertise-mapping
 
@@ -538,7 +538,7 @@ Scenario: SCN-006-018b Topic below threshold returns no angles
 
 ## Scope 08: Seasonal Patterns
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P2
 **Depends On:** 01-expertise-mapping, 05-monthly-report
 

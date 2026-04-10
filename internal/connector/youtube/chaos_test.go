@@ -318,9 +318,9 @@ func TestChaos_ConcurrentYouTubeSync(t *testing.T) {
 
 func TestChaos_Sync_VideoURLConstruction(t *testing.T) {
 	specialIDs := []string{
-		"abc-_def123",          // dashes + underscores (valid)
-		"AAAAAAAAAAA",          // all uppercase
-		"12345678901",          // all digits
+		"abc-_def123",  // dashes + underscores (valid)
+		"AAAAAAAAAAA",  // all uppercase
+		"12345678901",  // all digits
 		"a&b=c<d>e\"f", // injection chars — should be preserved in URL as-is per design
 	}
 

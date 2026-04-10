@@ -20,7 +20,14 @@ Browser History Connector delivered under delivery-lockdown mode. 2 scopes compl
 
 ## Completion Statement
 
-All 2 scopes are Done. All DoD items verified with passing tests. `./smackerel.sh test unit` passes all 25 Go packages including `internal/connector/browser` (0.022s). `./smackerel.sh lint` exits 0 ("All checks passed!"). Delivery-lockdown certification maintained after reconciliation fixes.
+```
+$ ./smackerel.sh test unit 2>&1 | grep browser
+ok      github.com/smackerel/smackerel/internal/connector/browser       0.022s
+$ ./smackerel.sh lint 2>&1 | tail -1
+All checks passed!
+$ grep -c 'Status.*Done' specs/010-browser-history-connector/scopes.md
+2
+```
 
 ## Test Evidence
 
