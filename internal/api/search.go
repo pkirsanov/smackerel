@@ -292,7 +292,9 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 
 		// Parse topics
 		var topics []string
-		_ = json.Unmarshal([]byte(topicsStr), &topics)
+		if err := json.Unmarshal([]byte(topicsStr), &topics); err != nil {
+			slog.Debug("failed to unmarshal artifact topics", "artifact_id", r.ArtifactID, "error", err)
+		}
 		r.Topics = topics
 
 		// Set relevance based on similarity score
@@ -544,7 +546,9 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 		r.Explanation = "Text match"
 
 		var topics []string
-		_ = json.Unmarshal([]byte(topicsStr), &topics)
+		if err := json.Unmarshal([]byte(topicsStr), &topics); err != nil {
+			slog.Debug("failed to unmarshal artifact topics", "artifact_id", r.ArtifactID, "error", err)
+		}
 		r.Topics = topics
 
 		results = append(results, r)
@@ -624,7 +628,9 @@ func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) (
 		r.Explanation = "Time-range match"
 
 		var topics []string
-		_ = json.Unmarshal([]byte(topicsStr), &topics)
+		if err := json.Unmarshal([]byte(topicsStr), &topics); err != nil {
+			slog.Debug("failed to unmarshal artifact topics", "artifact_id", r.ArtifactID, "error", err)
+		}
 		r.Topics = topics
 
 		results = append(results, r)

@@ -70,14 +70,20 @@ flatten_yaml() {
         level1 = key
         level2 = ""
         level3 = ""
+        level4 = ""
         path = level1
       } else if (indent == 2) {
         level2 = key
         level3 = ""
+        level4 = ""
         path = level1 "." level2
       } else if (indent == 4) {
         level3 = key
+        level4 = ""
         path = level1 "." level2 "." level3
+      } else if (indent == 6) {
+        level4 = key
+        path = level1 "." level2 "." level3 "." level4
       } else {
         next
       }
@@ -175,6 +181,8 @@ ML_EXTERNAL_URL="http://127.0.0.1:${ML_HOST_PORT}"
 
 # Connector import paths (optional — empty string is valid default)
 BOOKMARKS_IMPORT_DIR="$(yaml_get connectors.bookmarks.import_dir 2>/dev/null)" || BOOKMARKS_IMPORT_DIR=""
+MAPS_IMPORT_DIR="$(yaml_get connectors.google-maps-timeline.import_dir 2>/dev/null)" || MAPS_IMPORT_DIR=""
+BROWSER_HISTORY_PATH="$(yaml_get connectors.browser-history.chrome.history_path 2>/dev/null)" || BROWSER_HISTORY_PATH=""
 
 mkdir -p "$REPO_ROOT/config/generated"
 
@@ -226,6 +234,8 @@ TELEGRAM_CHAT_IDS=${TELEGRAM_CHAT_IDS}
 CORE_EXTERNAL_URL=${CORE_EXTERNAL_URL}
 ML_EXTERNAL_URL=${ML_EXTERNAL_URL}
 BOOKMARKS_IMPORT_DIR=${BOOKMARKS_IMPORT_DIR}
+MAPS_IMPORT_DIR=${MAPS_IMPORT_DIR}
+BROWSER_HISTORY_PATH=${BROWSER_HISTORY_PATH}
 EOF
 
 echo "Generated $OUTPUT_FILE"

@@ -99,20 +99,24 @@ var DefaultSkipDomains = []string{
 // ShouldSkip checks if a URL should be skipped for processing.
 // User-provided skip domains are matched against the extracted domain of the URL
 // (so "private.corp.com" matches "https://private.corp.com/page").
-// Default skip domains use prefix matching (for protocol-prefix entries like "chrome://").
+// Default skip domains use both prefix matching (for protocol-prefix entries like "chrome://")
+// and domain matching (for hostname entries like "localhost" and "127.0.0.1").
 func ShouldSkip(url string, skipDomains []string) bool {
+	domain := extractDomain(url)
+
 	// Match user skip domains against the extracted domain
-	if len(skipDomains) > 0 {
-		domain := extractDomain(url)
-		for _, skip := range skipDomains {
-			if domain == skip {
-				return true
-			}
+	for _, skip := range skipDomains {
+		if domain == skip {
+			return true
 		}
 	}
-	// Default skip domains use prefix matching (protocol-prefix entries)
+	// Default skip domains: prefix matching for protocol-prefix entries,
+	// plus domain matching to catch scheme-prefixed variants (e.g. https://localhost:3000).
 	for _, skip := range DefaultSkipDomains {
 		if len(url) >= len(skip) && url[:len(skip)] == skip {
+			return true
+		}
+		if domain == skip {
 			return true
 		}
 	}
@@ -141,8 +145,8 @@ func ToRawArtifacts(entries []HistoryEntry) []connector.RawArtifact {
 }
 
 // ParseChromeHistorySince reads Chrome history entries with visit_time > cursor.
-// Unlike ParseChromeHistory, this has no row limit and orders ASC for cursor-based
-// incremental sync.
+// Unlike ParseChromeHistory, this orders ASC for cursor-based incremental sync
+// and limits results to 10000 entries per batch to prevent memory exhaustion.
 func ParseChromeHistorySince(dbPath string, chromeTimeCursor int64) ([]HistoryEntry, error) {
 	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
 	if err != nil {
@@ -156,6 +160,7 @@ func ParseChromeHistorySince(dbPath string, chromeTimeCursor int64) ([]HistoryEn
 		JOIN visits v ON v.url = u.id
 		WHERE v.visit_time > ?
 		ORDER BY v.visit_time ASC
+		LIMIT 10000
 	`, chromeTimeCursor)
 	if err != nil {
 		return nil, fmt.Errorf("query history since cursor: %w", err)

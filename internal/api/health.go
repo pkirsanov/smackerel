@@ -12,20 +12,20 @@ import (
 
 // Dependencies holds shared service dependencies for API handlers.
 type Dependencies struct {
-	DB                  DBHealthChecker
-	NATS                NATSHealthChecker
-	IntelligenceEngine  *intelligence.Engine
-	StartTime           time.Time
-	MLSidecarURL        string
-	MLClient            *http.Client
-	Pipeline            interface{}
-	SearchEngine        interface{}
-	DigestGen           interface{}
-	WebHandler          interface{}
-	OAuthHandler        interface{}
-	AuthToken           string
-	Version             string
-	CommitHash          string
+	DB                 DBHealthChecker
+	NATS               NATSHealthChecker
+	IntelligenceEngine *intelligence.Engine
+	StartTime          time.Time
+	MLSidecarURL       string
+	MLClient           *http.Client
+	Pipeline           interface{}
+	SearchEngine       interface{}
+	DigestGen          interface{}
+	WebHandler         interface{}
+	OAuthHandler       interface{}
+	AuthToken          string
+	Version            string
+	CommitHash         string
 }
 
 // DBHealthChecker is the interface for database health checks.
@@ -87,6 +87,15 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	// ML sidecar status
 	mlStatus := checkMLSidecar(ctx, d.MLSidecarURL, d.mlClient())
 	services["ml_sidecar"] = mlStatus
+
+	// Intelligence engine status
+	if d.IntelligenceEngine != nil {
+		if d.IntelligenceEngine.Pool != nil {
+			services["intelligence"] = ServiceStatus{Status: "up"}
+		} else {
+			services["intelligence"] = ServiceStatus{Status: "down"}
+		}
+	}
 
 	// Telegram bot (placeholder — not yet wired)
 	services["telegram_bot"] = ServiceStatus{Status: "disconnected"}

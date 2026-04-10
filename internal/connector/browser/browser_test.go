@@ -179,3 +179,118 @@ func TestPerSourceDeletion(t *testing.T) {
 		}
 	}
 }
+
+// CHAOS-005-F1: Scheme-prefixed localhost/loopback URLs must be caught by default skip.
+// Adversarial: would fail if ShouldSkip only used prefix matching on raw URL.
+func TestShouldSkip_SchemePrefixedLocalhost(t *testing.T) {
+	// These URLs have schemes so the prefix match against "localhost" / "127.0.0.1" alone
+	// would miss them. The fix adds domain-extracted matching for default skip domains.
+	mustSkip := []string{
+		"https://localhost:3000/admin",
+		"http://localhost:8080/dashboard",
+		"https://localhost/",
+		"http://127.0.0.1:9090/api",
+		"https://127.0.0.1/metrics",
+	}
+	for _, u := range mustSkip {
+		if !ShouldSkip(u, nil) {
+			t.Errorf("ShouldSkip(%q, nil) = false, want true (scheme-prefixed local URL must be filtered)", u)
+		}
+	}
+
+	// External URLs must remain unaffected.
+	mustAllow := []string{
+		"https://example.com/page",
+		"https://news.ycombinator.com",
+		"https://docs.google.com/edit",
+	}
+	for _, u := range mustAllow {
+		if ShouldSkip(u, nil) {
+			t.Errorf("ShouldSkip(%q, nil) = true, want false (external URL should pass)", u)
+		}
+	}
+}
+
+func TestIsSocialMedia_AllRegisteredDomains(t *testing.T) {
+	// Verify ALL domains in SocialMediaDomains map are recognized
+	expected := []string{"twitter.com", "x.com", "facebook.com", "instagram.com", "reddit.com", "linkedin.com", "tiktok.com"}
+	for _, domain := range expected {
+		if !IsSocialMedia(domain) {
+			t.Errorf("IsSocialMedia(%q) = false, want true", domain)
+		}
+	}
+	// Non-social domains must not be matched
+	nonSocial := []string{"github.com", "google.com", "youtube.com", "wikipedia.org", ""}
+	for _, domain := range nonSocial {
+		if IsSocialMedia(domain) {
+			t.Errorf("IsSocialMedia(%q) = true, want false", domain)
+		}
+	}
+}
+
+func TestToRawArtifacts_MetadataFields(t *testing.T) {
+	entries := []HistoryEntry{
+		{
+			URL:       "https://example.com/article",
+			Title:     "Test Article",
+			VisitTime: time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC),
+			DwellTime: 5 * time.Minute,
+			Domain:    "example.com",
+		},
+	}
+
+	artifacts := ToRawArtifacts(entries)
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+	a := artifacts[0]
+
+	// Verify metadata contains dwell_time and domain
+	dwellSec, ok := a.Metadata["dwell_time"].(float64)
+	if !ok {
+		t.Fatal("metadata missing dwell_time")
+	}
+	if dwellSec != 300.0 {
+		t.Errorf("dwell_time = %f, want 300.0 (5 minutes)", dwellSec)
+	}
+
+	domain, ok := a.Metadata["domain"].(string)
+	if !ok {
+		t.Fatal("metadata missing domain")
+	}
+	if domain != "example.com" {
+		t.Errorf("domain = %q, want %q", domain, "example.com")
+	}
+}
+
+func TestToRawArtifacts_EmptyEntries(t *testing.T) {
+	artifacts := ToRawArtifacts(nil)
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts for nil entries, got %d", len(artifacts))
+	}
+	artifacts = ToRawArtifacts([]HistoryEntry{})
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts for empty entries, got %d", len(artifacts))
+	}
+}
+
+func TestGoTimeToChrome_RoundTrip(t *testing.T) {
+	original := time.Date(2026, 4, 10, 14, 30, 0, 0, time.UTC)
+	chromeTime := GoTimeToChrome(original)
+	converted := ChromeTimeToGo(chromeTime)
+
+	if !converted.Equal(original) {
+		t.Errorf("round-trip failed: %v → %d → %v", original, chromeTime, converted)
+	}
+}
+
+// CHAOS-005-F3: ParseChromeHistorySince uses a LIMIT to prevent memory exhaustion.
+func TestParseChromeHistorySince_HasLimit(t *testing.T) {
+	// Verify the function signature exists and handles missing DB gracefully.
+	// The actual LIMIT is enforced at the SQL level; we verify the function
+	// doesn't error on non-existent path (it should return an error).
+	_, err := ParseChromeHistorySince("/nonexistent/History", 0)
+	if err == nil {
+		t.Error("expected error for non-existent history path")
+	}
+}

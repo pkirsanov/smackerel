@@ -420,7 +420,9 @@ func (b *Bot) handleStatus(ctx context.Context, msg *tgbotapi.Message) {
 		var svc struct {
 			Status string `json:"status"`
 		}
-		json.Unmarshal(raw, &svc)
+		if err := json.Unmarshal(raw, &svc); err != nil {
+			slog.Debug("failed to unmarshal service status", "service", name, "error", err)
+		}
 		lines = append(lines, fmt.Sprintf("- %s: %s", name, svc.Status))
 	}
 	b.reply(msg.Chat.ID, strings.Join(lines, "\n"))
@@ -515,7 +517,9 @@ func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[stri
 	// may not be valid JSON (e.g., HTML from a reverse proxy on 502).
 	if resp.StatusCode == http.StatusConflict {
 		var result map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&result) // best-effort
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			slog.Debug("failed to decode duplicate capture response", "error", err)
+		}
 		return result, errDuplicate
 	}
 	if resp.StatusCode == http.StatusServiceUnavailable {

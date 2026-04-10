@@ -2,6 +2,7 @@ package markets
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -104,5 +105,111 @@ func TestParseMarketsConfig(t *testing.T) {
 	}
 	if len(cfg.Watchlist.Stocks) != 1 {
 		t.Errorf("expected 1 stock, got %d", len(cfg.Watchlist.Stocks))
+	}
+}
+
+// --- Security Tests ---
+
+func TestParseMarketsConfig_RejectsInjectionSymbol(t *testing.T) {
+	cases := []struct {
+		name  string
+		field string
+		value string
+	}{
+		{"stock with query injection", "stocks", "AAPL&token=evil"},
+		{"stock with path traversal", "stocks", "../../../etc/passwd"},
+		{"stock with URL encoding", "stocks", "AAPL%00"},
+		{"stock with spaces", "stocks", "AA PL"},
+		{"etf with injection", "etfs", "SPY&callback=alert(1)"},
+		{"crypto with slash", "crypto", "bitcoin/../../admin"},
+		{"crypto with uppercase", "crypto", "BITCOIN"},
+		{"crypto too long", "crypto", strings.Repeat("a", 65)},
+		{"stock empty", "stocks", ""},
+		{"stock too long", "stocks", "ABCDEFGHIJK"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseMarketsConfig(connector.ConnectorConfig{
+				Credentials: map[string]string{"finnhub_api_key": "test"},
+				SourceConfig: map[string]interface{}{
+					"watchlist": map[string]interface{}{
+						tc.field: []interface{}{tc.value},
+					},
+				},
+			})
+			if err == nil {
+				t.Errorf("expected error for invalid %s value %q, got nil", tc.field, tc.value)
+			}
+		})
+	}
+}
+
+func TestParseMarketsConfig_AcceptsValidSymbols(t *testing.T) {
+	cases := []struct {
+		name  string
+		field string
+		value string
+	}{
+		{"simple stock", "stocks", "AAPL"},
+		{"stock with dot", "stocks", "BRK.B"},
+		{"stock with hyphen", "stocks", "BF-B"},
+		{"simple etf", "etfs", "SPY"},
+		{"simple crypto", "crypto", "bitcoin"},
+		{"crypto with hyphen", "crypto", "bitcoin-cash"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseMarketsConfig(connector.ConnectorConfig{
+				Credentials: map[string]string{"finnhub_api_key": "test"},
+				SourceConfig: map[string]interface{}{
+					"watchlist": map[string]interface{}{
+						tc.field: []interface{}{tc.value},
+					},
+				},
+			})
+			if err != nil {
+				t.Errorf("unexpected error for valid %s symbol %q: %v", tc.field, tc.value, err)
+			}
+		})
+	}
+}
+
+func TestParseMarketsConfig_WatchlistSizeLimit(t *testing.T) {
+	// Construct a watchlist exceeding the limit
+	tooMany := make([]interface{}, maxWatchlistSymbols+1)
+	for i := range tooMany {
+		tooMany[i] = "AAPL"
+	}
+	_, err := parseMarketsConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "test"},
+		SourceConfig: map[string]interface{}{
+			"watchlist": map[string]interface{}{
+				"stocks": tooMany,
+			},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for watchlist exceeding size limit")
+	}
+}
+
+func TestFetchFinnhubQuote_RejectsInvalidSymbol(t *testing.T) {
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+
+	cases := []string{
+		"AAPL&token=evil",
+		"../etc/passwd",
+		"",
+		strings.Repeat("A", 11),
+		"AA PL",
+	}
+	for _, sym := range cases {
+		_, err := c.fetchFinnhubQuote(context.Background(), sym)
+		if err == nil {
+			t.Errorf("expected error for invalid symbol %q", sym)
+		}
 	}
 }

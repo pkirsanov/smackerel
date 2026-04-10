@@ -94,7 +94,9 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 	// R-301 requires clusters span multiple source_ids (email + article + video = different domains).
 	rows, err := e.Pool.Query(ctx, `
 		WITH topic_groups AS (
-			SELECT t.id as topic_id, t.name, array_agg(e.src_id) as artifact_ids
+			SELECT t.id as topic_id, t.name,
+			       array_agg(e.src_id) as artifact_ids,
+			       COUNT(DISTINCT a.source_id) as source_count
 			FROM edges e
 			JOIN topics t ON t.id = e.dst_id AND e.dst_type = 'topic'
 			JOIN artifacts a ON a.id = e.src_id
@@ -102,7 +104,7 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 			GROUP BY t.id, t.name
 			HAVING COUNT(*) >= 3 AND COUNT(DISTINCT a.source_id) >= 2
 		)
-		SELECT topic_id, name, artifact_ids FROM topic_groups
+		SELECT topic_id, name, artifact_ids, source_count FROM topic_groups
 		ORDER BY array_length(artifact_ids, 1) DESC
 		LIMIT 10
 	`)
@@ -115,7 +117,8 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 	for rows.Next() {
 		var topicID, topicName string
 		var artifactIDs []string
-		if err := rows.Scan(&topicID, &topicName, &artifactIDs); err != nil {
+		var sourceCount int
+		if err := rows.Scan(&topicID, &topicName, &artifactIDs, &sourceCount); err != nil {
 			slog.Warn("synthesis scan failed", "error", err)
 			continue
 		}
@@ -125,12 +128,19 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 			continue
 		}
 
+		// Confidence factors in both artifact count and source diversity.
+		// More distinct sources (email + article + video) = higher confidence
+		// that the connection is genuinely cross-domain, not just volume.
+		volumeSignal := math.Log2(float64(count)) / 5.0
+		diversitySignal := math.Log2(float64(sourceCount)) / 3.0
+		confidence := math.Min(1.0, 0.6*volumeSignal+0.4*diversitySignal)
+
 		insights = append(insights, SynthesisInsight{
 			ID:                ulid.Make().String(),
 			InsightType:       InsightThroughLine,
 			ThroughLine:       topicName,
 			SourceArtifactIDs: artifactIDs,
-			Confidence:        math.Min(1.0, math.Log2(float64(count))/5.0),
+			Confidence:        confidence,
 			CreatedAt:         time.Now(),
 		})
 	}
@@ -142,10 +152,26 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 	return insights, nil
 }
 
+// validAlertTypes is the set of known alert types for input validation.
+var validAlertTypes = map[AlertType]bool{
+	AlertBill:              true,
+	AlertReturnWindow:      true,
+	AlertTripPrep:          true,
+	AlertRelationship:      true,
+	AlertCommitmentOverdue: true,
+	AlertMeetingBrief:      true,
+}
+
 // CreateAlert creates a new contextual alert.
 func (e *Engine) CreateAlert(ctx context.Context, alert *Alert) error {
 	if alert.Title == "" {
 		return fmt.Errorf("alert title is required")
+	}
+	if !validAlertTypes[alert.AlertType] {
+		return fmt.Errorf("unknown alert type: %s", alert.AlertType)
+	}
+	if alert.Priority < 1 || alert.Priority > 3 {
+		return fmt.Errorf("alert priority must be 1 (high), 2 (medium), or 3 (low), got %d", alert.Priority)
 	}
 	if e.Pool == nil {
 		return fmt.Errorf("alert creation requires a database connection")
@@ -165,18 +191,39 @@ func (e *Engine) CreateAlert(ctx context.Context, alert *Alert) error {
 
 // DismissAlert marks an alert as dismissed.
 func (e *Engine) DismissAlert(ctx context.Context, alertID string) error {
-	_, err := e.Pool.Exec(ctx, `
-		UPDATE alerts SET status = 'dismissed' WHERE id = $1
+	if alertID == "" {
+		return fmt.Errorf("alert ID is required")
+	}
+	result, err := e.Pool.Exec(ctx, `
+		UPDATE alerts SET status = 'dismissed' WHERE id = $1 AND status != 'dismissed'
 	`, alertID)
-	return err
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("alert not found: %s", alertID)
+	}
+	return nil
 }
 
 // SnoozeAlert snoozes an alert until a given time.
 func (e *Engine) SnoozeAlert(ctx context.Context, alertID string, until time.Time) error {
-	_, err := e.Pool.Exec(ctx, `
-		UPDATE alerts SET status = 'snoozed', snooze_until = $2 WHERE id = $1
+	if alertID == "" {
+		return fmt.Errorf("alert ID is required")
+	}
+	if !until.After(time.Now()) {
+		return fmt.Errorf("snooze time must be in the future")
+	}
+	result, err := e.Pool.Exec(ctx, `
+		UPDATE alerts SET status = 'snoozed', snooze_until = $2 WHERE id = $1 AND status IN ('pending', 'delivered')
 	`, alertID, until)
-	return err
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("alert not found: %s", alertID)
+	}
+	return nil
 }
 
 // GetPendingAlerts returns alerts ready for delivery (max 2/day).
@@ -220,11 +267,19 @@ func (e *Engine) CheckOverdueCommitments(ctx context.Context) error {
 		return fmt.Errorf("commitment check requires a database connection")
 	}
 
+	// Query overdue items, excluding those that already have a pending/delivered commitment_overdue alert.
+	// This prevents duplicate alerts when CheckOverdueCommitments runs on consecutive days.
 	rows, err := e.Pool.Query(ctx, `
 		SELECT ai.id, ai.text, ai.expected_date, COALESCE(p.name, 'unknown')
 		FROM action_items ai
 		LEFT JOIN people p ON p.id = ai.person_id
 		WHERE ai.status = 'open' AND ai.expected_date < CURRENT_DATE
+		  AND NOT EXISTS (
+		    SELECT 1 FROM alerts al
+		    WHERE al.artifact_id = ai.id
+		      AND al.alert_type = 'commitment_overdue'
+		      AND al.status IN ('pending', 'delivered')
+		  )
 	`)
 	if err != nil {
 		return err
@@ -315,7 +370,9 @@ func (e *Engine) GeneratePreMeetingBriefs(ctx context.Context) ([]MeetingBrief, 
 
 		// Parse attendees
 		var attendeeEmails []string
-		json.Unmarshal([]byte(attendeesJSON), &attendeeEmails)
+		if err := json.Unmarshal([]byte(attendeesJSON), &attendeeEmails); err != nil {
+			slog.Debug("failed to unmarshal meeting attendees", "event_id", eventID, "error", err)
+		}
 
 		brief := MeetingBrief{
 			EventID:    eventID,
@@ -365,13 +422,16 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 	}
 	ab.Name = personName
 
+	// Escape LIKE wildcards in email to prevent unintended pattern matching
+	escapedEmail := escapeLikePattern(email)
+
 	// Recent email threads (last 3)
 	threadRows, err := e.Pool.Query(ctx, `
 		SELECT a.title FROM artifacts a
 		WHERE a.source_id IN ('gmail', 'imap', 'outlook')
-		  AND (a.metadata->>'sender' = $1 OR a.metadata->>'recipients' LIKE '%' || $1 || '%')
+		  AND (a.metadata->>'sender' = $1 OR a.metadata->>'recipients' LIKE '%' || $2 || '%')
 		ORDER BY a.created_at DESC LIMIT 3
-	`, email)
+	`, email, escapedEmail)
 	if err == nil {
 		defer threadRows.Close()
 		for threadRows.Next() {
@@ -387,9 +447,9 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 		SELECT DISTINCT t.name FROM topics t
 		JOIN edges e ON e.dst_id = t.id AND e.dst_type = 'topic' AND e.edge_type = 'BELONGS_TO'
 		JOIN artifacts a ON a.id = e.src_id
-		WHERE a.metadata->>'sender' = $1 OR a.metadata->>'recipients' LIKE '%' || $1 || '%'
+		WHERE a.metadata->>'sender' = $1 OR a.metadata->>'recipients' LIKE '%' || $2 || '%'
 		LIMIT 5
-	`, email)
+	`, email, escapedEmail)
 	if err == nil {
 		defer topicRows.Close()
 		for topicRows.Next() {
@@ -418,6 +478,14 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 	}
 
 	return ab
+}
+
+// escapeLikePattern escapes SQL LIKE wildcard characters (% and _) in a string
+// to prevent unintended pattern matching when used in LIKE clauses.
+func escapeLikePattern(s string) string {
+	s = strings.ReplaceAll(s, "%", "\\%")
+	s = strings.ReplaceAll(s, "_", "\\_")
+	return s
 }
 
 // assembleBriefText generates a 2-3 sentence brief for a meeting.
@@ -567,8 +635,12 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 	// 6. Patterns (capture timing analysis)
 	ws.Patterns = e.detectCapturePatterns(ctx)
 
-	// Assemble synthesis text
+	// Assemble synthesis text and enforce R-302 250-word cap
 	ws.SynthesisText = assembleWeeklySynthesisText(ws)
+	words := strings.Fields(ws.SynthesisText)
+	if len(words) > 250 {
+		ws.SynthesisText = strings.Join(words[:250], " ")
+	}
 	ws.WordCount = len(strings.Fields(ws.SynthesisText))
 
 	return ws, nil

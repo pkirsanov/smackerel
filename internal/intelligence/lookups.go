@@ -145,12 +145,7 @@ func (e *Engine) GetQuickReferences(ctx context.Context) ([]QuickReference, erro
 
 // normalizeQuery prepares a query for hashing: lowercase, trim, collapse spaces.
 func normalizeQuery(q string) string {
-	q = strings.ToLower(strings.TrimSpace(q))
-	// Collapse multiple spaces
-	for strings.Contains(q, "  ") {
-		q = strings.ReplaceAll(q, "  ", " ")
-	}
-	return q
+	return strings.Join(strings.Fields(strings.ToLower(q)), " ")
 }
 
 // hashQuery produces a consistent SHA-256 hash for a normalized query.
