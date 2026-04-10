@@ -1,13 +1,13 @@
 {
   "version": 3,
   "feature": "015-twitter-connector",
-  "status": "validated",
+  "status": "done",
   "certification": {
     "bootstrap": "not_started",
     "artifact_lint": "not_started",
     "traceability": "not_started",
     "regression_baseline": "not_started",
-    "status": "validated",
+    "status": "done",
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
@@ -20,7 +20,7 @@
   },
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "validate",
+    "currentPhase": "finalize",
     "executionHistory": [],
     "completedPhaseClaims": [
       "select",
