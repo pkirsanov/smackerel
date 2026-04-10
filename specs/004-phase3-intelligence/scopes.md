@@ -219,7 +219,7 @@ Scenario: SCN-004-007b False positive commitment rejection
 
 ## Scope 3: Pre-Meeting Briefs
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P0
 **Depends On:** Phase 2 scope 03 (CalDAV connector), 02-commitment-tracking
 
@@ -404,7 +404,7 @@ Scenario: SCN-004-013d Trip prep alert
 
 ## Scope 5: Weekly Synthesis
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P0
 **Depends On:** 01-synthesis-engine, 02-commitment-tracking
 
