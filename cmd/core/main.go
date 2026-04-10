@@ -240,18 +240,19 @@ func run() error {
 
 	// Set up API
 	deps := &api.Dependencies{
-		DB:           pg,
-		NATS:         nc,
-		StartTime:    time.Now(),
-		MLSidecarURL: cfg.MLSidecarURL,
-		Pipeline:     proc,
-		SearchEngine: searchEngine,
-		DigestGen:    digestGen,
-		WebHandler:   webHandler,
-		OAuthHandler: oauthHandler,
-		AuthToken:    cfg.AuthToken,
-		Version:      version,
-		CommitHash:   commitHash,
+		DB:                 pg,
+		NATS:               nc,
+		IntelligenceEngine: intEngine,
+		StartTime:          time.Now(),
+		MLSidecarURL:       cfg.MLSidecarURL,
+		Pipeline:           proc,
+		SearchEngine:       searchEngine,
+		DigestGen:          digestGen,
+		WebHandler:         webHandler,
+		OAuthHandler:       oauthHandler,
+		AuthToken:          cfg.AuthToken,
+		Version:            version,
+		CommitHash:         commitHash,
 	}
 
 	router := api.NewRouter(deps)
