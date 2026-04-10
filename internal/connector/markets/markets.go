@@ -4,12 +4,30 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
+)
+
+const (
+	// maxResponseBodyBytes limits response body reads to 1MB to prevent OOM from malicious servers.
+	maxResponseBodyBytes = 1 * 1024 * 1024
+	// maxWatchlistSymbols limits watchlist entries per category to prevent excessive API calls.
+	maxWatchlistSymbols = 100
+)
+
+var (
+	// validSymbolRe matches standard stock/ETF ticker symbols (1-10 alphanumeric chars, dots, hyphens).
+	validSymbolRe = regexp.MustCompile(`^[A-Za-z0-9.\-]{1,10}$`)
+	// validCoinIDRe matches CoinGecko coin IDs (lowercase alphanumeric, hyphens).
+	validCoinIDRe = regexp.MustCompile(`^[a-z0-9\-]{1,64}$`)
 )
 
 // Connector implements the Financial Markets connector using Finnhub, CoinGecko, and FRED.
@@ -180,9 +198,17 @@ func (c *Connector) Close() error {
 
 // fetchFinnhubQuote gets a stock quote from Finnhub.
 func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*StockQuote, error) {
-	url := fmt.Sprintf("https://finnhub.io/api/v1/quote?symbol=%s&token=%s", symbol, c.config.FinnhubAPIKey)
+	if !validSymbolRe.MatchString(symbol) {
+		return nil, fmt.Errorf("invalid symbol format: %q", symbol)
+	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	u, _ := url.Parse("https://finnhub.io/api/v1/quote")
+	q := u.Query()
+	q.Set("symbol", symbol)
+	q.Set("token", c.config.FinnhubAPIKey)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +224,7 @@ func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*Stoc
 	}
 
 	var quote StockQuote
-	if err := json.NewDecoder(resp.Body).Decode(&quote); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBodyBytes)).Decode(&quote); err != nil {
 		return nil, fmt.Errorf("decode finnhub response: %w", err)
 	}
 	quote.Symbol = symbol
@@ -209,17 +235,26 @@ func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*Stoc
 
 // fetchCoinGeckoPrices gets crypto prices from CoinGecko (no API key needed).
 func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) ([]CryptoPrice, error) {
-	ids := ""
-	for i, id := range coinIDs {
-		if i > 0 {
-			ids += ","
+	var sanitizedIDs []string
+	for _, id := range coinIDs {
+		if !validCoinIDRe.MatchString(id) {
+			slog.Warn("skipping invalid coin ID", "id", id)
+			continue
 		}
-		ids += id
+		sanitizedIDs = append(sanitizedIDs, id)
+	}
+	if len(sanitizedIDs) == 0 {
+		return nil, fmt.Errorf("no valid coin IDs provided")
 	}
 
-	url := fmt.Sprintf("https://api.coingecko.com/api/v3/simple/price?ids=%s&vs_currencies=usd&include_24hr_change=true", ids)
+	u, _ := url.Parse("https://api.coingecko.com/api/v3/simple/price")
+	q := u.Query()
+	q.Set("ids", strings.Join(sanitizedIDs, ","))
+	q.Set("vs_currencies", "usd")
+	q.Set("include_24hr_change", "true")
+	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +270,7 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 	}
 
 	var result map[string]map[string]float64
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBodyBytes)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode coingecko response: %w", err)
 	}
 
@@ -298,22 +333,40 @@ func parseMarketsConfig(config connector.ConnectorConfig) (MarketsConfig, error)
 		if stocks, ok := wl["stocks"].([]interface{}); ok {
 			for _, s := range stocks {
 				if str, ok := s.(string); ok {
+					if !validSymbolRe.MatchString(str) {
+						return MarketsConfig{}, fmt.Errorf("invalid stock symbol: %q", str)
+					}
 					cfg.Watchlist.Stocks = append(cfg.Watchlist.Stocks, str)
 				}
+			}
+			if len(cfg.Watchlist.Stocks) > maxWatchlistSymbols {
+				return MarketsConfig{}, fmt.Errorf("stocks watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
 			}
 		}
 		if etfs, ok := wl["etfs"].([]interface{}); ok {
 			for _, s := range etfs {
 				if str, ok := s.(string); ok {
+					if !validSymbolRe.MatchString(str) {
+						return MarketsConfig{}, fmt.Errorf("invalid ETF symbol: %q", str)
+					}
 					cfg.Watchlist.ETFs = append(cfg.Watchlist.ETFs, str)
 				}
+			}
+			if len(cfg.Watchlist.ETFs) > maxWatchlistSymbols {
+				return MarketsConfig{}, fmt.Errorf("ETFs watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
 			}
 		}
 		if crypto, ok := wl["crypto"].([]interface{}); ok {
 			for _, s := range crypto {
 				if str, ok := s.(string); ok {
+					if !validCoinIDRe.MatchString(str) {
+						return MarketsConfig{}, fmt.Errorf("invalid crypto coin ID: %q", str)
+					}
 					cfg.Watchlist.Crypto = append(cfg.Watchlist.Crypto, str)
 				}
+			}
+			if len(cfg.Watchlist.Crypto) > maxWatchlistSymbols {
+				return MarketsConfig{}, fmt.Errorf("crypto watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
 			}
 		}
 	}

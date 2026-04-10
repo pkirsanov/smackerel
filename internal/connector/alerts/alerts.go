@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -12,6 +13,12 @@ import (
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
+
+// maxResponseBytes limits the size of API response bodies to prevent OOM (10 MB).
+const maxResponseBytes = 10 * 1024 * 1024
+
+// knownEvictionAge is how long alert IDs are retained for dedup before eviction.
+const knownEvictionAge = 7 * 24 * time.Hour
 
 // Connector implements the government alerts connector aggregating USGS, NWS, etc.
 type Connector struct {
@@ -28,7 +35,6 @@ type AlertsConfig struct {
 	Locations        []LocationConfig
 	MinEarthquakeMag float64
 	SourceEarthquake bool
-	SourceWeather    bool
 }
 
 // LocationConfig specifies a monitored location.
@@ -59,8 +65,10 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	if len(cfg.Locations) == 0 {
 		return fmt.Errorf("at least one location must be configured")
 	}
+	c.mu.Lock()
 	c.config = cfg
 	c.health = connector.HealthHealthy
+	c.mu.Unlock()
 	slog.Info("gov-alerts connector connected", "id", c.id, "locations", len(cfg.Locations))
 	return nil
 }
@@ -78,18 +86,39 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var allArtifacts []connector.RawArtifact
 	now := time.Now()
 
+	// Evict old entries from dedup map to prevent unbounded growth.
+	c.mu.Lock()
+	for id, seen := range c.known {
+		if now.Sub(seen) > knownEvictionAge {
+			delete(c.known, id)
+		}
+	}
+	c.mu.Unlock()
+
 	// USGS Earthquake source
 	if c.config.SourceEarthquake {
 		earthquakes, err := c.fetchUSGSEarthquakes(ctx)
 		if err != nil {
 			slog.Warn("USGS earthquake fetch failed", "error", err)
-		} else {
-			for _, eq := range earthquakes {
-				if match := c.findNearestLocation(eq.Latitude, eq.Longitude); match != nil {
-					if _, seen := c.known[eq.ID]; !seen {
-						c.known[eq.ID] = now
-						allArtifacts = append(allArtifacts, normalizeEarthquake(eq, match))
-					}
+			return allArtifacts, now.Format(time.RFC3339), fmt.Errorf("usgs earthquake fetch: %w", err)
+		}
+		for _, eq := range earthquakes {
+			if ctx.Err() != nil {
+				return allArtifacts, now.Format(time.RFC3339), ctx.Err()
+			}
+			if !isFiniteCoord(eq.Latitude, eq.Longitude) {
+				slog.Warn("skipping earthquake with invalid coordinates", "id", eq.ID, "lat", eq.Latitude, "lon", eq.Longitude)
+				continue
+			}
+			if match := c.findNearestLocation(eq.Latitude, eq.Longitude); match != nil {
+				c.mu.Lock()
+				_, seen := c.known[eq.ID]
+				if !seen {
+					c.known[eq.ID] = now
+				}
+				c.mu.Unlock()
+				if !seen {
+					allArtifacts = append(allArtifacts, normalizeEarthquake(eq, match))
 				}
 			}
 		}
@@ -105,7 +134,9 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 }
 
 func (c *Connector) Close() error {
+	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.mu.Unlock()
 	return nil
 }
 
@@ -146,6 +177,8 @@ func (c *Connector) fetchUSGSEarthquakes(ctx context.Context) ([]Earthquake, err
 		return nil, fmt.Errorf("USGS returned status %d", resp.StatusCode)
 	}
 
+	limitedBody := io.LimitReader(resp.Body, maxResponseBytes)
+
 	var result struct {
 		Features []struct {
 			ID         string `json:"id"`
@@ -160,7 +193,7 @@ func (c *Connector) fetchUSGSEarthquakes(ctx context.Context) ([]Earthquake, err
 		} `json:"features"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(limitedBody).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode USGS response: %w", err)
 	}
 
@@ -187,7 +220,7 @@ func (c *Connector) fetchUSGSEarthquakes(ctx context.Context) ([]Earthquake, err
 func (c *Connector) findNearestLocation(lat, lon float64) *ProximityMatch {
 	var best *ProximityMatch
 	for _, loc := range c.config.Locations {
-		d := HaversineKm(lat, lon, loc.Latitude, loc.Longitude)
+		d := haversineKm(lat, lon, loc.Latitude, loc.Longitude)
 		if d <= loc.RadiusKm {
 			if best == nil || d < best.DistanceKm {
 				best = &ProximityMatch{LocationName: loc.Name, DistanceKm: d}
@@ -197,8 +230,8 @@ func (c *Connector) findNearestLocation(lat, lon float64) *ProximityMatch {
 	return best
 }
 
-// HaversineKm calculates great-circle distance in km.
-func HaversineKm(lat1, lon1, lat2, lon2 float64) float64 {
+// haversineKm calculates great-circle distance in km.
+func haversineKm(lat1, lon1, lat2, lon2 float64) float64 {
 	const R = 6371.0
 	dLat := (lat2 - lat1) * math.Pi / 180
 	dLon := (lon2 - lon1) * math.Pi / 180
@@ -240,6 +273,18 @@ func normalizeEarthquake(eq Earthquake, match *ProximityMatch) connector.RawArti
 	}
 }
 
+// isFiniteCoord returns true if both lat and lon are finite (not NaN or Inf)
+// and within valid geographic ranges.
+func isFiniteCoord(lat, lon float64) bool {
+	if math.IsNaN(lat) || math.IsInf(lat, 0) || math.IsNaN(lon) || math.IsInf(lon, 0) {
+		return false
+	}
+	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+		return false
+	}
+	return true
+}
+
 func classifyEarthquakeSeverity(magnitude, distanceKm float64) string {
 	switch {
 	case magnitude >= 7.0:
@@ -257,7 +302,6 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 	cfg := AlertsConfig{
 		MinEarthquakeMag: 2.5,
 		SourceEarthquake: true,
-		SourceWeather:    true,
 	}
 
 	if locs, ok := config.SourceConfig["locations"].([]interface{}); ok {
@@ -276,7 +320,7 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 				if r, ok := lm["radius_km"].(float64); ok {
 					lc.RadiusKm = r
 				}
-				if lc.Name != "" {
+				if lc.Name != "" && isFiniteCoord(lc.Latitude, lc.Longitude) && lc.RadiusKm > 0 {
 					cfg.Locations = append(cfg.Locations, lc)
 				}
 			}

@@ -2,6 +2,25 @@
 
 How to build and integrate a new passive data connector into Smackerel.
 
+## Current Connector Inventory
+
+| Connector | Package | Auth | Data Source | Spec |
+|-----------|---------|------|-------------|------|
+| Gmail | `internal/connector/imap` | OAuth2 (Google) | Gmail REST API | — |
+| Google Calendar | `internal/connector/caldav` | OAuth2 (Google) | Calendar API v3 | — |
+| YouTube | `internal/connector/youtube` | OAuth2 (Google) | Data API v3 | — |
+| RSS / Atom | `internal/connector/rss` | None | Feed URLs | — |
+| Bookmarks | `internal/connector/bookmarks` | None (file import) | Chrome JSON, Netscape HTML | `009-bookmarks-connector` |
+| Browser History | `internal/connector/browser` | None (file-based) | Chrome SQLite | `010-browser-history-connector` |
+| Google Keep | `internal/connector/keep` | OAuth2 / app password | Takeout JSON or gkeepapi | `007-google-keep-connector` |
+| Google Maps | `internal/connector/maps` | None (file import) | Takeout location history | `011-maps-connector` |
+| Hospitable | `internal/connector/hospitable` | API token | Hospitable REST API | `012-hospitable-connector` |
+| Discord | `internal/connector/discord` | Bot token | Discord REST API | `014-discord-connector` |
+| Twitter / X | `internal/connector/twitter` | Bearer token (optional) | Data archive + API v2 | `015-twitter-connector` |
+| Weather | `internal/connector/weather` | None | Open-Meteo API | `016-weather-connector` |
+| Government Alerts | `internal/connector/alerts` | None | USGS Earthquake API | `017-gov-alerts-connector` |
+| Financial Markets | `internal/connector/markets` | Finnhub API key | Finnhub + CoinGecko | `018-financial-markets-connector` |
+
 ## Connector Interface
 
 Every connector implements the `connector.Connector` interface defined in `internal/connector/connector.go`:
@@ -28,12 +47,14 @@ type Connector interface {
 
 ### Health States
 
-Connectors report one of four health states:
+Connectors report one of six health states:
 
 | Status | Meaning |
 |--------|---------|
 | `healthy` | Connected and last sync succeeded |
 | `syncing` | Currently running a sync cycle |
+| `degraded` | Partially functional (some resources unavailable) |
+| `failing` | Repeated sync failures, approaching circuit breaker |
 | `error` | Last sync failed or configuration is invalid |
 | `disconnected` | Not yet initialized (pre-`Connect`) |
 

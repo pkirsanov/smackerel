@@ -177,10 +177,14 @@ func (h *Handler) ArtifactDetail(w http.ResponseWriter, r *http.Request) {
 	connections := graph.ConnectionCount(r.Context(), h.Pool, id)
 
 	var keyIdeasParsed []string
-	json.Unmarshal(keyIdeas, &keyIdeasParsed)
+	if err := json.Unmarshal(keyIdeas, &keyIdeasParsed); err != nil {
+		slog.Debug("failed to unmarshal artifact key_ideas", "artifact_id", id, "error", err)
+	}
 
 	var topicsParsed []string
-	json.Unmarshal(topics, &topicsParsed)
+	if err := json.Unmarshal(topics, &topicsParsed); err != nil {
+		slog.Debug("failed to unmarshal artifact topics", "artifact_id", id, "error", err)
+	}
 
 	h.Templates.ExecuteTemplate(w, "detail.html", map[string]interface{}{
 		"Title":       title,

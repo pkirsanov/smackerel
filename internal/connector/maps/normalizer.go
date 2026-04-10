@@ -75,10 +75,7 @@ func buildMetadata(activity TakeoutActivity, sourceFile string) map[string]inter
 		meta["start_lng"] = 0.0
 		meta["end_lat"] = 0.0
 		meta["end_lng"] = 0.0
-		meta["route_geojson"] = map[string]interface{}{
-			"type":        "LineString",
-			"coordinates": [][]float64{},
-		}
+		meta["route_geojson"] = nil
 	}
 
 	return meta

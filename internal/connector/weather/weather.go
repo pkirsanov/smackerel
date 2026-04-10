@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -12,6 +13,15 @@ import (
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
+
+// maxCacheEntries limits in-memory cache size to prevent unbounded growth.
+const maxCacheEntries = 1024
+
+// maxLocations limits configured locations to prevent upstream API flooding.
+const maxLocations = 50
+
+// maxLocationNameLen limits location name length to prevent log injection and memory abuse.
+const maxLocationNameLen = 100
 
 // Connector implements the Weather enrichment connector using Open-Meteo API.
 type Connector struct {
@@ -73,21 +83,26 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
 	c.mu.Unlock()
-	defer func() {
-		c.mu.Lock()
-		c.health = connector.HealthHealthy
-		c.mu.Unlock()
-	}()
 
 	var artifacts []connector.RawArtifact
+	var failCount int
 	now := time.Now()
 
 	for _, loc := range c.config.Locations {
+		// Check for context cancellation between locations.
+		if err := ctx.Err(); err != nil {
+			c.mu.Lock()
+			c.health = connector.HealthDegraded
+			c.mu.Unlock()
+			return artifacts, cursor, fmt.Errorf("sync cancelled: %w", err)
+		}
+
 		lat, lon := roundCoords(loc.Latitude, loc.Longitude, c.config.Precision)
 
 		// Current conditions
 		current, err := c.fetchCurrent(ctx, lat, lon)
 		if err != nil {
+			failCount++
 			slog.Warn("weather fetch failed", "location", loc.Name, "error", err)
 			continue
 		}
@@ -111,6 +126,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		})
 	}
 
+	// Reflect health based on failure ratio.
+	c.mu.Lock()
+	c.health = connector.HealthFromErrorCount(failCount)
+	c.mu.Unlock()
+
 	return artifacts, now.Format(time.RFC3339), nil
 }
 
@@ -121,7 +141,11 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 }
 
 func (c *Connector) Close() error {
+	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.cache = make(map[string]*cacheEntry)
+	c.mu.Unlock()
+	c.httpClient.CloseIdleConnections()
 	return nil
 }
 
@@ -137,9 +161,14 @@ type CurrentWeather struct {
 // fetchCurrent gets current weather from Open-Meteo API (free, no key needed).
 func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*CurrentWeather, error) {
 	cacheKey := fmt.Sprintf("current-%.2f-%.2f", lat, lon)
+
+	c.mu.RLock()
 	if entry, ok := c.cache[cacheKey]; ok && time.Now().Before(entry.expiresAt) {
-		return entry.data.(*CurrentWeather), nil
+		result := entry.data.(*CurrentWeather)
+		c.mu.RUnlock()
+		return result, nil
 	}
+	c.mu.RUnlock()
 
 	url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code", lat, lon)
 
@@ -155,8 +184,14 @@ func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*Curren
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// Drain body to allow connection reuse.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 		return nil, fmt.Errorf("open-meteo returned status %d", resp.StatusCode)
 	}
+
+	// Limit response body to 1 MiB to prevent OOM from compromised API responses.
+	const maxWeatherResponseSize = 1 << 20
+	limitedBody := io.LimitReader(resp.Body, maxWeatherResponseSize)
 
 	var result struct {
 		Current struct {
@@ -167,7 +202,9 @@ func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*Curren
 		} `json:"current"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(limitedBody).Decode(&result); err != nil {
+		// Drain remaining body to allow HTTP connection reuse.
+		_, _ = io.Copy(io.Discard, limitedBody)
 		return nil, fmt.Errorf("decode open-meteo response: %w", err)
 	}
 
@@ -179,8 +216,45 @@ func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*Curren
 		Description: wmoCodeToDescription(result.Current.WeatherCode),
 	}
 
-	c.cache[cacheKey] = &cacheEntry{data: cw, expiresAt: time.Now().Add(30 * time.Minute)}
+	c.mu.Lock()
+	// Evict expired entries if cache is at capacity.
+	if len(c.cache) >= maxCacheEntries {
+		c.evictExpiredLocked()
+	}
+	// Only cache if there is room after eviction to enforce the size limit.
+	if len(c.cache) < maxCacheEntries {
+		c.cache[cacheKey] = &cacheEntry{data: cw, expiresAt: time.Now().Add(30 * time.Minute)}
+	}
+	c.mu.Unlock()
+
 	return cw, nil
+}
+
+// evictExpiredLocked removes expired cache entries. Must be called with c.mu held.
+func (c *Connector) evictExpiredLocked() {
+	now := time.Now()
+	for key, entry := range c.cache {
+		if now.After(entry.expiresAt) {
+			delete(c.cache, key)
+		}
+	}
+}
+
+// sanitizeLocationName enforces length and character safety on location names.
+func sanitizeLocationName(name string) string {
+	// Strip control characters (including newlines) that enable log injection.
+	cleaned := make([]byte, 0, len(name))
+	for i := 0; i < len(name); i++ {
+		b := name[i]
+		if b >= 0x20 && b != 0x7F {
+			cleaned = append(cleaned, b)
+		}
+	}
+	result := string(cleaned)
+	if len(result) > maxLocationNameLen {
+		result = result[:maxLocationNameLen]
+	}
+	return result
 }
 
 // roundCoords rounds coordinates for privacy.
@@ -192,6 +266,8 @@ func roundCoords(lat, lon float64, precision int) (float64, float64) {
 // wmoCodeToDescription converts WMO weather interpretation codes.
 func wmoCodeToDescription(code int) string {
 	switch {
+	case code < 0:
+		return "Unknown"
 	case code == 0:
 		return "Clear sky"
 	case code <= 3:
@@ -223,23 +299,43 @@ func parseWeatherConfig(config connector.ConnectorConfig) (WeatherConfig, error)
 	}
 
 	if locs, ok := config.SourceConfig["locations"].([]interface{}); ok {
+		if len(locs) > maxLocations {
+			return cfg, fmt.Errorf("too many locations: %d exceeds maximum %d", len(locs), maxLocations)
+		}
 		for _, loc := range locs {
 			if lm, ok := loc.(map[string]interface{}); ok {
 				lc := LocationConfig{}
 				if name, ok := lm["name"].(string); ok {
-					lc.Name = name
+					lc.Name = sanitizeLocationName(name)
 				}
 				if lat, ok := lm["latitude"].(float64); ok {
 					lc.Latitude = lat
+				} else if lc.Name != "" {
+					return cfg, fmt.Errorf("location %q: latitude must be a number", lc.Name)
 				}
 				if lon, ok := lm["longitude"].(float64); ok {
 					lc.Longitude = lon
+				} else if lc.Name != "" {
+					return cfg, fmt.Errorf("location %q: longitude must be a number", lc.Name)
 				}
 				if lc.Name != "" {
+					if lc.Latitude < -90 || lc.Latitude > 90 {
+						return cfg, fmt.Errorf("location %q: latitude %.4f out of range [-90, 90]", lc.Name, lc.Latitude)
+					}
+					if lc.Longitude < -180 || lc.Longitude > 180 {
+						return cfg, fmt.Errorf("location %q: longitude %.4f out of range [-180, 180]", lc.Name, lc.Longitude)
+					}
 					cfg.Locations = append(cfg.Locations, lc)
 				}
 			}
 		}
+	}
+
+	// Clamp precision to safe range to prevent math.Pow overflow.
+	if cfg.Precision < 0 {
+		cfg.Precision = 0
+	} else if cfg.Precision > 6 {
+		cfg.Precision = 6
 	}
 
 	return cfg, nil

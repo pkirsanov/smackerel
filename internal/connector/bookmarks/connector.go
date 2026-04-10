@@ -283,6 +283,11 @@ func (c *BookmarksConnector) findNewFiles(processedFiles []string) ([]string, er
 			continue // skip directories (including archive/)
 		}
 
+		// Skip symlinks to prevent reading files outside the import directory.
+		if entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+
 		name := entry.Name()
 		ext := strings.ToLower(filepath.Ext(name))
 

@@ -344,3 +344,104 @@ Exit code: 0
 
 ### Completion Statement
 Spec 006 is done. All 8 scopes completed with passing unit tests, lint clean, and scenario coverage for 28 Gherkin scenarios.
+
+---
+
+## DevOps Probe (Stochastic Quality Sweep)
+
+**Trigger:** devops
+**Date:** 2026-04-10
+**Scope:** Build, deployment, Docker config, scheduler completeness, health checks, config SST for intelligence subsystem
+
+### Findings & Remediation
+
+#### Finding 1: Missing Monthly Report Scheduler Job (R-506) — FIXED
+`GenerateMonthlyReport` existed in `internal/intelligence/monthly.go` but was never invoked by the scheduler. Monthly self-knowledge reports would never have been generated automatically.
+
+**Fix:** Added cron job `0 3 1 * *` (3 AM on 1st of each month) in `internal/scheduler/scheduler.go` that invokes `engine.GenerateMonthlyReport` with 5-minute timeout and Telegram delivery.
+
+#### Finding 2: Missing Subscription Detection Scheduler Job (R-504) — FIXED
+`DetectSubscriptions` existed in `internal/intelligence/subscriptions.go` but was never scheduled. Subscription detection from email patterns would only trigger when the API endpoint was hit, not proactively.
+
+**Fix:** Added cron job `0 3 * * 1` (3 AM on Mondays) in `internal/scheduler/scheduler.go` that invokes `engine.DetectSubscriptions` with 2-minute timeout.
+
+#### Finding 3: Missing Frequent Lookup Detection Scheduler Job (R-507) — FIXED
+`DetectFrequentLookups` existed in `internal/intelligence/lookups.go` but was never scheduled. Repeated lookup detection (3+ times in 30 days) and automatic quick-reference generation would never fire proactively.
+
+**Fix:** Added cron job `0 4 * * *` (4 AM daily) in `internal/scheduler/scheduler.go` that invokes `engine.DetectFrequentLookups` with 2-minute timeout.
+
+#### Finding 4: Health Check Missing Intelligence Engine Status — FIXED
+`/api/health` reported status for api, postgres, nats, ml_sidecar, telegram_bot, and ollama but did not include intelligence engine readiness. Operators had no visibility into whether the intelligence subsystem was properly initialized.
+
+**Fix:** Added conditional intelligence health indicator in `internal/api/health.go`. Reports "up" when engine and pool are present, "down" when pool is nil. Only included when engine is configured (nil-safe for tests).
+
+### Verification Evidence
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+Exit code: 0
+
+$ ./smackerel.sh build
+[+] Building 2/2
+ ✔ smackerel-core  Built
+ ✔ smackerel-ml    Built
+Exit code: 0
+
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/api          0.068s
+ok  github.com/smackerel/smackerel/internal/scheduler     0.007s
+ok  github.com/smackerel/smackerel/internal/intelligence  (cached)
+31 Go packages ok, 0 failures
+Exit code: 0
+```
+
+### Files Changed
+- `internal/scheduler/scheduler.go` — Added 3 cron jobs: monthly report, subscription detection, lookup detection
+- `internal/api/health.go` — Added intelligence engine health indicator
+
+---
+
+## Simplify Probe (Stochastic Quality Sweep)
+
+**Trigger:** simplify
+**Date:** 2026-04-10
+**Scope:** Code complexity, dead code, unnecessary abstractions, redundant logic, duplicated patterns in `internal/intelligence/`
+
+### Findings & Remediation
+
+#### Finding 1: `normalizeQuery` inefficient space-collapsing loop — FIXED
+`internal/intelligence/lookups.go::normalizeQuery` used an iterative `for strings.Contains(q, "  ") { strings.ReplaceAll }` loop to collapse whitespace. This is O(n²) worst-case and non-idiomatic Go.
+
+**Fix:** Replaced with `strings.Join(strings.Fields(strings.ToLower(q)), " ")` — single-pass, handles all whitespace types (tabs, newlines), and is the standard Go idiom for whitespace normalization. Existing tests (`TestNormalizeQuery`) pass unchanged, confirming behavioral equivalence.
+
+#### Finding 2: Monthly report information diet uses 5 separate DB queries — FIXED
+`internal/intelligence/monthly.go::GenerateMonthlyReport` ran 5 separate `QueryRow` calls to count articles, videos, emails, notes, and total artifacts for the current month. Each query scanned `artifacts` independently.
+
+**Fix:** Consolidated into a single query using PostgreSQL `COUNT(*) FILTER (WHERE ...)` conditional aggregation. Reduces 5 database round-trips to 1 while computing the same values. The `Total` and `Other` derivations remain identical.
+
+#### Finding 3: `ResurfaceScore` unused by production code — NOTED
+`internal/intelligence/resurface.go::ResurfaceScore` is an exported standalone function that is never called by any production code path. `Resurface()` ranks via SQL `ORDER BY`, and `SerendipityPick()` uses inline scoring. The function is only exercised by 8 test functions across `resurface_test.go` and `learning_test.go`. Classified as minor dead code — deferred because it's small (15 lines), well-tested, and part of the intentional public API surface for future caller use.
+
+### Verification Evidence
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+Exit code: 0
+
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence  0.023s
+23 Go packages ok, 0 failures
+11 Python tests passed
+Exit code: 0
+
+$ ./smackerel.sh lint
+ok  go vet ./...
+ok  ruff check ml/
+Exit code: 0
+```
+
+### Files Changed
+- `internal/intelligence/lookups.go` — `normalizeQuery` simplified from 5-line loop to 1-line `strings.Fields` idiom
+- `internal/intelligence/monthly.go` — Information diet queries consolidated from 5 queries to 1 with `COUNT(*) FILTER`

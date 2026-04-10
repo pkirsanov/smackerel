@@ -2,7 +2,9 @@ package twitter
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
@@ -77,8 +79,8 @@ func TestBuildThreads(t *testing.T) {
 	if threads[0].RootID != "100" {
 		t.Errorf("expected root ID 100, got %s", threads[0].RootID)
 	}
-	if len(threads[0].TweetIDs) != 3 {
-		t.Errorf("expected 3 tweets in thread, got %d", len(threads[0].TweetIDs))
+	if len(threads[0].Tweets) != 3 {
+		t.Errorf("expected 3 tweets in thread, got %d", len(threads[0].Tweets))
 	}
 }
 
@@ -154,9 +156,26 @@ func TestNormalizeTweet(t *testing.T) {
 }
 
 func TestParseTweetTime(t *testing.T) {
-	ts := parseTweetTime("Wed Mar 15 14:30:00 +0000 2026")
+	ts, err := parseTweetTime("Wed Mar 15 14:30:00 +0000 2026")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if ts.Year() != 2026 || ts.Month() != 3 || ts.Day() != 15 {
 		t.Errorf("unexpected time: %v", ts)
+	}
+}
+
+func TestParseTweetTime_MalformedReturnsError(t *testing.T) {
+	_, err := parseTweetTime("not a date")
+	if err == nil {
+		t.Error("expected error for malformed timestamp")
+	}
+}
+
+func TestParseTweetTime_EmptyReturnsError(t *testing.T) {
+	_, err := parseTweetTime("")
+	if err == nil {
+		t.Error("expected error for empty timestamp")
 	}
 }
 
@@ -166,5 +185,148 @@ func TestClose(t *testing.T) {
 	c.Close()
 	if c.Health(context.Background()) != connector.HealthDisconnected {
 		t.Error("should be disconnected after close")
+	}
+}
+
+// --- Chaos hardening tests ---
+
+func TestClose_ConcurrentWithHealth(t *testing.T) {
+	c := New("twitter")
+	c.mu.Lock()
+	c.health = connector.HealthHealthy
+	c.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.Health(context.Background())
+		}()
+	}
+	// Close concurrently with health reads — previously a data race
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Close()
+	}()
+	wg.Wait()
+}
+
+func TestConnect_InvalidSyncMode(t *testing.T) {
+	c := New("twitter")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "garbage"},
+	})
+	if err == nil {
+		t.Error("expected error for invalid sync_mode")
+	}
+}
+
+func TestConnect_ConcurrentWithHealth(t *testing.T) {
+	c := New("twitter")
+	dir := t.TempDir()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.Health(context.Background())
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Connect(context.Background(), connector.ConnectorConfig{
+			SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+		})
+	}()
+	wg.Wait()
+}
+
+func TestBuildThreads_BranchingReplies(t *testing.T) {
+	// Two replies to the same parent (branching conversation)
+	tweets := []ArchiveTweet{
+		{ID: "100", FullText: "Thread root", InReplyToStatusID: ""},
+		{ID: "101", FullText: "Branch A reply", InReplyToStatusID: "100"},
+		{ID: "102", FullText: "Branch B reply", InReplyToStatusID: "100"},
+	}
+
+	threads := buildThreads(tweets)
+	if len(threads) != 1 {
+		t.Fatalf("expected 1 thread, got %d", len(threads))
+	}
+	if len(threads[0].Tweets) != 3 {
+		t.Errorf("expected 3 tweets in branching thread, got %d (data loss on branch)", len(threads[0].Tweets))
+	}
+}
+
+func TestBuildThreads_EmptyInput(t *testing.T) {
+	threads := buildThreads(nil)
+	if len(threads) != 0 {
+		t.Errorf("expected 0 threads for nil input, got %d", len(threads))
+	}
+	threads = buildThreads([]ArchiveTweet{})
+	if len(threads) != 0 {
+		t.Errorf("expected 0 threads for empty input, got %d", len(threads))
+	}
+}
+
+func TestBuildThreads_AllStandalone(t *testing.T) {
+	tweets := []ArchiveTweet{
+		{ID: "1", FullText: "Hello"},
+		{ID: "2", FullText: "World"},
+	}
+	threads := buildThreads(tweets)
+	if len(threads) != 0 {
+		t.Errorf("expected 0 threads for all standalone tweets, got %d", len(threads))
+	}
+}
+
+func TestSyncArchive_CancelledContext(t *testing.T) {
+	c := New("twitter")
+	dir := t.TempDir()
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	_, _, err := c.syncArchive(ctx, "")
+	if err == nil {
+		t.Error("expected error for cancelled context")
+	}
+}
+
+func TestNormalizeTweet_EmptyFullText(t *testing.T) {
+	tweet := ArchiveTweet{
+		ID:       "999",
+		FullText: "",
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	if artifact.Title != "" {
+		t.Errorf("expected empty title for empty tweet, got %q", artifact.Title)
+	}
+	if artifact.CapturedAt.After(time.Now()) {
+		t.Error("captured_at should not be in the future for a zero-time fallback")
+	}
+}
+
+func TestParseTweetsJS_EmptyArray(t *testing.T) {
+	data := []byte("window.YTD.tweet.part0 = []")
+	tweets, err := parseTweetsJS(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tweets) != 0 {
+		t.Errorf("expected 0 tweets for empty array, got %d", len(tweets))
+	}
+}
+
+func TestParseTweetsJS_NoArrayBracket(t *testing.T) {
+	data := []byte("window.YTD.tweet.part0 = {}")
+	_, err := parseTweetsJS(data)
+	if err == nil {
+		t.Error("expected error when no JSON array found")
 	}
 }

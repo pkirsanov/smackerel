@@ -6,21 +6,24 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // TripDossier is an assembled trip context package per R-405.
 type TripDossier struct {
-	TripID          string          `json:"trip_id"`
-	Destination     string          `json:"destination"`
-	DepartureDate   time.Time       `json:"departure_date"`
-	ReturnDate      *time.Time      `json:"return_date,omitempty"`
-	State           string          `json:"state"` // upcoming, active, completed
-	FlightArtifacts []string        `json:"flight_artifacts"`
-	HotelArtifacts  []string        `json:"hotel_artifacts"`
-	PlaceArtifacts  []string        `json:"place_artifacts"`
-	RelatedCaptures []string        `json:"related_captures"`
-	DossierText     string          `json:"dossier_text"`
-	GeneratedAt     time.Time       `json:"generated_at"`
+	TripID          string     `json:"trip_id"`
+	Destination     string     `json:"destination"`
+	DepartureDate   time.Time  `json:"departure_date"`
+	ReturnDate      *time.Time `json:"return_date,omitempty"`
+	State           string     `json:"state"` // upcoming, active, completed
+	FlightArtifacts []string   `json:"flight_artifacts"`
+	HotelArtifacts  []string   `json:"hotel_artifacts"`
+	PlaceArtifacts  []string   `json:"place_artifacts"`
+	RelatedCaptures []string   `json:"related_captures"`
+	DossierText     string     `json:"dossier_text"`
+	GeneratedAt     time.Time  `json:"generated_at"`
 }
 
 // DetectTripsFromEmail scans email artifacts for flight/hotel booking patterns per R-405.
@@ -104,9 +107,10 @@ func extractDestination(title, content string) string {
 			// Take first word(s) as destination
 			words := strings.Fields(rest)
 			if len(words) >= 1 {
-				dest := strings.Title(words[0])
+				tc := cases.Title(language.English)
+				dest := tc.String(words[0])
 				if len(words) >= 2 && len(words[1]) > 2 {
-					dest += " " + strings.Title(words[1])
+					dest += " " + tc.String(words[1])
 				}
 				return dest
 			}
@@ -143,15 +147,15 @@ func assembleDossierText(d *TripDossier) string {
 
 // PersonProfile is an assembled person intelligence profile per R-406.
 type PersonProfile struct {
-	PersonID         string    `json:"person_id"`
-	Name             string    `json:"name"`
-	Email            string    `json:"email"`
-	TotalInteractions int      `json:"total_interactions"`
-	LastInteraction  time.Time `json:"last_interaction"`
-	SharedTopics     []string  `json:"shared_topics"`
-	PendingItems     []string  `json:"pending_action_items"`
-	InteractionTrend string    `json:"interaction_trend"` // warming, stable, cooling
-	DaysSinceContact int       `json:"days_since_contact"`
+	PersonID          string    `json:"person_id"`
+	Name              string    `json:"name"`
+	Email             string    `json:"email"`
+	TotalInteractions int       `json:"total_interactions"`
+	LastInteraction   time.Time `json:"last_interaction"`
+	SharedTopics      []string  `json:"shared_topics"`
+	PendingItems      []string  `json:"pending_action_items"`
+	InteractionTrend  string    `json:"interaction_trend"` // warming, stable, cooling
+	DaysSinceContact  int       `json:"days_since_contact"`
 }
 
 // GetPeopleIntelligence returns profiles with interaction analysis per R-406.

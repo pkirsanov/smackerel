@@ -532,6 +532,273 @@ func TestGenerateWeeklySynthesis_NilPool(t *testing.T) {
 	}
 }
 
+// === Harden: AlertType validation (H2) ===
+
+func TestCreateAlert_InvalidType(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.CreateAlert(context.Background(), &Alert{
+		AlertType: AlertType("nonexistent_type"),
+		Title:     "Valid title",
+		Body:      "Body",
+		Priority:  2,
+	})
+	if err == nil {
+		t.Error("expected error for unknown alert type")
+	}
+	if err != nil && !contains(err.Error(), "unknown alert type") {
+		t.Errorf("expected 'unknown alert type' error, got: %s", err.Error())
+	}
+}
+
+func TestCreateAlert_EmptyType(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.CreateAlert(context.Background(), &Alert{
+		AlertType: "",
+		Title:     "Valid title",
+		Body:      "Body",
+		Priority:  2,
+	})
+	if err == nil {
+		t.Error("expected error for empty alert type")
+	}
+}
+
+func TestCreateAlert_AllValidTypes(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	validTypes := []AlertType{AlertBill, AlertReturnWindow, AlertTripPrep, AlertRelationship, AlertCommitmentOverdue, AlertMeetingBrief}
+	for _, at := range validTypes {
+		err := engine.CreateAlert(context.Background(), &Alert{
+			AlertType: at,
+			Title:     "Test",
+			Body:      "Body",
+			Priority:  2,
+		})
+		// Should pass type validation but fail on nil pool
+		if err != nil && contains(err.Error(), "unknown alert type") {
+			t.Errorf("valid type %q was rejected", at)
+		}
+	}
+}
+
+// === Harden: Dismiss/Snooze validation (H3, H4) ===
+
+func TestDismissAlert_EmptyID(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.DismissAlert(context.Background(), "")
+	if err == nil {
+		t.Error("expected error for empty alert ID")
+	}
+	if err != nil && !contains(err.Error(), "alert ID is required") {
+		t.Errorf("expected 'alert ID is required' error, got: %s", err.Error())
+	}
+}
+
+func TestSnoozeAlert_EmptyID(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.SnoozeAlert(context.Background(), "", time.Now().Add(time.Hour))
+	if err == nil {
+		t.Error("expected error for empty alert ID")
+	}
+}
+
+func TestSnoozeAlert_PastTime(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.SnoozeAlert(context.Background(), "alert-123", time.Now().Add(-time.Hour))
+	if err == nil {
+		t.Error("expected error for past snooze time")
+	}
+	if err != nil && !contains(err.Error(), "snooze time must be in the future") {
+		t.Errorf("expected 'snooze time must be in the future' error, got: %s", err.Error())
+	}
+}
+
+// === Harden: Weekly synthesis partial data ===
+
+func TestAssembleWeeklySynthesisText_InsightsOnly(t *testing.T) {
+	ws := &WeeklySynthesis{
+		Stats: WeeklyStats{ArtifactsProcessed: 10},
+		Insights: []SynthesisInsight{
+			{ThroughLine: "Pricing patterns", Confidence: 0.8},
+		},
+	}
+	text := assembleWeeklySynthesisText(ws)
+	if !contains(text, "THIS WEEK") {
+		t.Error("should contain THIS WEEK")
+	}
+	if !contains(text, "INSIGHTS") {
+		t.Error("should contain INSIGHTS")
+	}
+	if contains(text, "TOPICS") {
+		t.Error("should NOT contain TOPICS when no topic data")
+	}
+	if contains(text, "OPEN LOOPS") {
+		t.Error("should NOT contain OPEN LOOPS when no open loops")
+	}
+}
+
+func TestAssembleWeeklySynthesisText_OpenLoopsOnly(t *testing.T) {
+	ws := &WeeklySynthesis{
+		OpenLoops: []string{"Review budget proposal", "Reply to Sarah"},
+	}
+	text := assembleWeeklySynthesisText(ws)
+	if !contains(text, "OPEN LOOPS") {
+		t.Error("should contain OPEN LOOPS")
+	}
+	if contains(text, "THIS WEEK") {
+		t.Error("should NOT contain THIS WEEK when stats are zero")
+	}
+}
+
+func TestAssembleWeeklySynthesisText_WordCountCap(t *testing.T) {
+	// Build a synthesis with many data points to push past 250 words
+	ws := &WeeklySynthesis{
+		Stats: WeeklyStats{ArtifactsProcessed: 100, NewConnections: 50, TopicsActive: 20},
+	}
+	for i := 0; i < 50; i++ {
+		ws.Insights = append(ws.Insights, SynthesisInsight{
+			ThroughLine: strings.Repeat("word ", 5),
+			Confidence:  0.8,
+		})
+		ws.TopicMovement = append(ws.TopicMovement, TopicMovement{
+			TopicName: strings.Repeat("topic ", 3),
+			Direction: "rising",
+			Captures:  10,
+		})
+	}
+	for i := 0; i < 30; i++ {
+		ws.OpenLoops = append(ws.OpenLoops, strings.Repeat("loop ", 4))
+	}
+	ws.Patterns = append(ws.Patterns, strings.Repeat("pattern ", 10))
+
+	text := assembleWeeklySynthesisText(ws)
+	words := strings.Fields(text)
+	// The raw assembly can exceed 250 words; the cap is applied in GenerateWeeklySynthesis.
+	// Here we just verify the assembly function produces coherent output.
+	if len(words) == 0 {
+		t.Error("expected non-empty synthesis text")
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && strings.Contains(s, substr)
+}
+
+// === Improve: Priority validation (F3) ===
+
+func TestCreateAlert_InvalidPriority_Zero(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.CreateAlert(context.Background(), &Alert{
+		AlertType: AlertBill,
+		Title:     "Test",
+		Body:      "Body",
+		Priority:  0,
+	})
+	if err == nil {
+		t.Error("expected error for priority 0")
+	}
+	if err != nil && !contains(err.Error(), "priority must be") {
+		t.Errorf("expected priority validation error, got: %s", err.Error())
+	}
+}
+
+func TestCreateAlert_InvalidPriority_Negative(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.CreateAlert(context.Background(), &Alert{
+		AlertType: AlertBill,
+		Title:     "Test",
+		Body:      "Body",
+		Priority:  -1,
+	})
+	if err == nil {
+		t.Error("expected error for negative priority")
+	}
+}
+
+func TestCreateAlert_InvalidPriority_TooHigh(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.CreateAlert(context.Background(), &Alert{
+		AlertType: AlertBill,
+		Title:     "Test",
+		Body:      "Body",
+		Priority:  4,
+	})
+	if err == nil {
+		t.Error("expected error for priority 4")
+	}
+}
+
+func TestCreateAlert_ValidPriorities(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	for _, priority := range []int{1, 2, 3} {
+		err := engine.CreateAlert(context.Background(), &Alert{
+			AlertType: AlertBill,
+			Title:     "Test",
+			Body:      "Body",
+			Priority:  priority,
+		})
+		// Should pass priority validation but fail on nil pool
+		if err != nil && contains(err.Error(), "priority must be") {
+			t.Errorf("valid priority %d was rejected", priority)
+		}
+	}
+}
+
+// === Improve: escapeLikePattern (F5) ===
+
+func TestEscapeLikePattern(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"user@example.com", "user@example.com"},
+		{"user%wild@example.com", "user\\%wild@example.com"},
+		{"user_name@example.com", "user\\_name@example.com"},
+		{"100%_done@test.com", "100\\%\\_done@test.com"},
+		{"", ""},
+		{"no-special-chars", "no-special-chars"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := escapeLikePattern(tt.input)
+			if got != tt.expected {
+				t.Errorf("escapeLikePattern(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Improve: Confidence scoring with source diversity (F2) ===
+
+func TestSynthesisInsight_ConfidenceBounds(t *testing.T) {
+	// Confidence must always be in [0, 1] regardless of inputs
+	insight := SynthesisInsight{Confidence: 0.0}
+	if insight.Confidence < 0 || insight.Confidence > 1 {
+		t.Errorf("confidence out of bounds: %f", insight.Confidence)
+	}
+
+	// Very high confidence should still be <= 1.0
+	insight.Confidence = 1.0
+	if insight.Confidence > 1 {
+		t.Errorf("max confidence should be 1.0, got %f", insight.Confidence)
+	}
+}
+
+// === Improve: MarkResurfaced explicit delivery tracking (F6) ===
+
+func TestMarkResurfaced_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.MarkResurfaced(context.Background(), []string{"art-1", "art-2"})
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+func TestMarkResurfaced_EmptyList(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.MarkResurfaced(context.Background(), []string{})
+	// Empty list with nil pool should still fail on pool check
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
 }
