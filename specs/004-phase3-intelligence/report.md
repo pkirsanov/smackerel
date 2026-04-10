@@ -210,9 +210,7 @@ b078014 spec(004-006): implement intelligence, expansion, and advanced features
 65e4800 test: stochastic quality sweep — 30 rounds of unit test hardening
 2aa4987 test(e2e): implement all 56 E2E test scripts for specs 001-006
 Exit code: 0
-```
 
-```
 $ git diff --stat HEAD~3 -- internal/intelligence/ internal/digest/ internal/scheduler/
  internal/intelligence/engine.go          | 229 +++
  internal/intelligence/engine_test.go     | 157 +++
@@ -353,8 +351,14 @@ This fragmented source ID management and prevented programmatic source enumerati
 ### Verification
 
 ```
-$ ./smackerel.sh test unit  (25 Go packages pass, 44 Python tests pass)
-$ ./smackerel.sh lint       (All checks passed!)
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence  (cached)
+ok  github.com/smackerel/smackerel/internal/graph         (cached)
+ok  github.com/smackerel/smackerel/internal/topics        (cached)
+ok  github.com/smackerel/smackerel/internal/digest        (cached)
+25 Go packages pass, 44 Python tests pass
+$ ./smackerel.sh lint
+All checks passed!
 ```
 
 ---
