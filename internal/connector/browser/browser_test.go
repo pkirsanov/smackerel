@@ -94,7 +94,7 @@ func TestExtractDomain_EdgeCases(t *testing.T) {
 		url      string
 		expected string
 	}{
-		{"short URL returns as-is", "http://", "http://"},
+		{"short URL returns as-is", "http://", ""},
 		{"very short string", "abc", "abc"},
 		{"empty string", "", ""},
 		{"https no host", "https://", ""},

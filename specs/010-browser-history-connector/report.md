@@ -6,11 +6,21 @@
 
 ## Summary
 
-Browser History Connector delivered under delivery-lockdown mode. 2 scopes completed: (1) Connector Implementation, Config & Registration; (2) Social Media Aggregation, Repeat Visits & Privacy Gate. Implementation: connector.go (540+ lines) with full Connector interface, social media aggregation, repeat visit detection, privacy gate, content fetch failure handling. connector_test.go with 33 tests, browser_test.go with 10 tests — all pass. Lint, format, check clean. Config SST pipeline extended for browser-history connector section. Stochastic quality sweeps fixed pipeline SourceID routing (R001), configurable dwell thresholds dead code (R002), and added 6 additional test quality tests (F001/F003–F007).
+Browser History Connector delivered under delivery-lockdown mode. 2 scopes completed: (1) Connector Implementation, Config & Registration; (2) Social Media Aggregation, Repeat Visits & Privacy Gate. Implementation: connector.go (580+ lines) with full Connector interface, social media aggregation, repeat visit detection, privacy gate, content fetch failure handling, URL+date dedup (R-010), and social aggregate peak page tracking (R-005). connector_test.go with 35 tests, browser_test.go with 10 tests — all pass. Lint, format, check clean. Config SST pipeline extended for browser-history connector section. Stochastic quality sweeps fixed pipeline SourceID routing (R001), configurable dwell thresholds dead code (R002), added 6 additional test quality tests (F001/F003–F007), implemented R-010 URL+date dedup, added R-005 social aggregate peak tracking, and corrected artifact documentation drift (config location claims).
+
+## Reconciliation Pass (stochastic-quality-sweep, validate trigger, April 10 2026)
+
+### Findings Detected
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| F-001 | Medium | R-010 URL+date dedup not implemented — same-URL same-day visits produced separate artifacts instead of merging dwell time | Implemented `dedupByURLDate()` in processEntries; updated 3 tests to multi-day layouts; added `TestDedupByURLDate` and `TestProcessEntries_DedupSameURLSameDay` |
+| F-002 | Low | Scopes.md claimed `BrowserHistoryConfig` in `internal/config/config.go`; actual config is `BrowserConfig` in `connector.go` | Fixed scopes.md Change Boundary and DoD evidence to reflect actual location |
+| F-003 | Low-Medium | R-005 social aggregate missing top-dwell page tracking (spec: "top-dwell-time pages per domain") | Added `peak_page_title` and `peak_page_dwell_seconds` to aggregate metadata; added `RawContent` with human-readable summary; updated `TestBuildSocialAggregate_ArtifactFields` |
+| F-004 | Low | R-012 privacy config fields (`store_full_urls_above_tier`, `aggregate_only_below_tier`) not configurable | Known gap — hardcoded behavior matches documented defaults; configurable privacy thresholds deferred |
 
 ## Completion Statement
 
-All 2 scopes are Done. All DoD items verified with passing tests. `./smackerel.sh test unit` passes all 25 Go packages including `internal/connector/browser` (0.017s). `./smackerel.sh lint` exits 0. `./smackerel.sh check` confirms config in sync. Delivery-lockdown certification complete.
+All 2 scopes are Done. All DoD items verified with passing tests. `./smackerel.sh test unit` passes all 25 Go packages including `internal/connector/browser` (0.022s). `./smackerel.sh lint` exits 0 ("All checks passed!"). Delivery-lockdown certification maintained after reconciliation fixes.
 
 ## Test Evidence
 

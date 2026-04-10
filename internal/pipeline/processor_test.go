@@ -463,3 +463,110 @@ func TestSCN002047_ExtractContent_YouTubeStub(t *testing.T) {
 		t.Error("expected non-empty video ID for YouTube stub")
 	}
 }
+
+func TestValidateDigestGeneratedPayload_Valid(t *testing.T) {
+	p := &NATSDigestGeneratedPayload{
+		DigestDate: "2026-04-10",
+		Text:       "Today's digest summary",
+		WordCount:  3,
+		ModelUsed:  "claude-3-haiku",
+	}
+	if err := ValidateDigestGeneratedPayload(p); err != nil {
+		t.Errorf("expected no error for valid payload, got: %v", err)
+	}
+}
+
+func TestValidateDigestGeneratedPayload_EmptyDate(t *testing.T) {
+	p := &NATSDigestGeneratedPayload{
+		DigestDate: "",
+		Text:       "Some text",
+	}
+	err := ValidateDigestGeneratedPayload(p)
+	if err == nil {
+		t.Fatal("expected error for empty digest_date")
+	}
+	if !containsStr(err.Error(), "digest_date") {
+		t.Errorf("error should mention digest_date, got: %v", err)
+	}
+}
+
+func TestValidateDigestGeneratedPayload_EmptyText(t *testing.T) {
+	p := &NATSDigestGeneratedPayload{
+		DigestDate: "2026-04-10",
+		Text:       "",
+	}
+	err := ValidateDigestGeneratedPayload(p)
+	if err == nil {
+		t.Fatal("expected error for empty text")
+	}
+	if !containsStr(err.Error(), "text") {
+		t.Errorf("error should mention text, got: %v", err)
+	}
+}
+
+func TestValidateDigestGeneratedPayload_BothEmpty(t *testing.T) {
+	p := &NATSDigestGeneratedPayload{}
+	err := ValidateDigestGeneratedPayload(p)
+	if err == nil {
+		t.Fatal("expected error for fully empty payload")
+	}
+}
+
+func TestNATSProcessPayload_NegativeRetryCount(t *testing.T) {
+	payload := NATSProcessPayload{
+		ArtifactID:     "test-id",
+		ContentType:    "article",
+		RawText:        "text",
+		ProcessingTier: "full",
+		RetryCount:     -1,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded NATSProcessPayload
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.RetryCount != -1 {
+		t.Errorf("expected retry_count -1, got %d", decoded.RetryCount)
+	}
+}
+
+func TestNATSProcessedPayload_ZeroTokens(t *testing.T) {
+	payload := NATSProcessedPayload{
+		ArtifactID: "test-id",
+		Success:    true,
+		TokensUsed: 0,
+	}
+	if payload.TokensUsed != 0 {
+		t.Errorf("expected 0 tokens, got %d", payload.TokensUsed)
+	}
+}
+
+func TestValidateProcessPayload_WhitespaceOnlyArtifactID(t *testing.T) {
+	p := &NATSProcessPayload{
+		ArtifactID:  "   ",
+		ContentType: "article",
+		RawText:     "some text",
+	}
+	// Current validation only checks empty string — whitespace-only passes.
+	// This test documents the current behavior.
+	if err := ValidateProcessPayload(p); err != nil {
+		t.Errorf("whitespace artifact_id currently passes validation: %v", err)
+	}
+}
+
+func TestValidateProcessedPayload_FailureWithError(t *testing.T) {
+	p := &NATSProcessedPayload{
+		ArtifactID: "fail-id",
+		Success:    false,
+		Error:      "model rate limited",
+	}
+	if err := ValidateProcessedPayload(p); err != nil {
+		t.Errorf("failure payload with artifact_id should pass validation: %v", err)
+	}
+	if p.Error != "model rate limited" {
+		t.Errorf("expected error message preserved, got %q", p.Error)
+	}
+}

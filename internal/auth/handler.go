@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"html"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -92,7 +93,7 @@ func (h *OAuthHandler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	if errParam != "" {
 		slog.Error("OAuth callback error", "error", errParam, "description", r.URL.Query().Get("error_description"))
-		http.Error(w, "OAuth error: "+errParam, http.StatusBadRequest)
+		http.Error(w, "OAuth authorization failed", http.StatusBadRequest)
 		return
 	}
 
@@ -142,11 +143,11 @@ func (h *OAuthHandler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		"expires_at", token.ExpiresAt,
 	)
 
-	// Return success page
+	// Return success page — use html.EscapeString to prevent XSS
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(`<!DOCTYPE html><html><body>
 		<h2>Authorization successful</h2>
-		<p>` + providerName + ` connected. You can close this window.</p>
+		<p>` + html.EscapeString(providerName) + ` connected. You can close this window.</p>
 		<script>setTimeout(function(){window.close()}, 3000)</script>
 	</body></html>`))
 }

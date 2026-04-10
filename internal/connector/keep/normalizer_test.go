@@ -106,10 +106,10 @@ func TestMetadataMapping(t *testing.T) {
 		t.Fatal("artifact should not be nil")
 	}
 
-	// Check all 13 R-005 metadata fields
+	// Check all 14 R-005 metadata fields (13 spec fields + processing_tier)
 	requiredFields := []string{
 		"keep_note_id", "pinned", "archived", "trashed", "labels",
-		"color", "collaborators", "annotations", "attachments",
+		"color", "collaborators", "reminder_time", "annotations", "attachments",
 		"source_path", "created_at", "modified_at", "processing_tier",
 	}
 	for _, field := range requiredFields {
@@ -328,5 +328,86 @@ func TestIsSafeURL(t *testing.T) {
 				t.Errorf("isSafeURL(%q) = %v, want %v", tt.url, got, tt.safe)
 			}
 		})
+	}
+}
+
+func TestNormalizeGkeepNote(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	gNote := &GkeepNote{
+		NoteID:        "gkeep-abc-123",
+		Title:         "Quick Idea",
+		TextContent:   "This is a quick idea from gkeepapi",
+		IsPinned:      true,
+		IsArchived:    false,
+		IsTrashed:     false,
+		Color:         "YELLOW",
+		Labels:        []string{"Ideas", "ML"},
+		Collaborators: []string{"bob@example.com"},
+		ListItems: []struct {
+			Text      string `json:"text"`
+			IsChecked bool   `json:"is_checked"`
+		}{
+			{Text: "Research topic", IsChecked: false},
+			{Text: "Draft outline", IsChecked: true},
+		},
+		ModifiedUsec: time.Now().UnixMicro(),
+		CreatedUsec:  time.Now().Add(-48 * time.Hour).UnixMicro(),
+	}
+
+	artifact, err := n.NormalizeGkeep(gNote)
+	if err != nil {
+		t.Fatalf("NormalizeGkeep: %v", err)
+	}
+	if artifact == nil {
+		t.Fatal("artifact should not be nil")
+	}
+	if artifact.SourceID != "google-keep" {
+		t.Errorf("SourceID = %q, want google-keep", artifact.SourceID)
+	}
+	if artifact.SourceRef != "gkeep-abc-123" {
+		t.Errorf("SourceRef = %q, want gkeep-abc-123", artifact.SourceRef)
+	}
+	if artifact.ContentType != "note/mixed" {
+		t.Errorf("ContentType = %q, want note/mixed (has text + list)", artifact.ContentType)
+	}
+	if !strings.Contains(artifact.RawContent, "quick idea") {
+		t.Error("missing text content from gkeep note")
+	}
+	if !strings.Contains(artifact.RawContent, "- [x] Draft outline") {
+		t.Error("missing checked list item from gkeep note")
+	}
+	if !strings.Contains(artifact.RawContent, "- [ ] Research topic") {
+		t.Error("missing unchecked list item from gkeep note")
+	}
+	if artifact.Metadata["source_path"] != "gkeepapi" {
+		t.Errorf("source_path = %v, want gkeepapi", artifact.Metadata["source_path"])
+	}
+	labels, ok := artifact.Metadata["labels"].([]string)
+	if !ok || len(labels) != 2 {
+		t.Errorf("labels = %v, want [Ideas ML]", artifact.Metadata["labels"])
+	}
+	collabs, ok := artifact.Metadata["collaborators"].([]string)
+	if !ok || len(collabs) != 1 || collabs[0] != "bob@example.com" {
+		t.Errorf("collaborators = %v, want [bob@example.com]", artifact.Metadata["collaborators"])
+	}
+}
+
+func TestNormalizeGkeepTrashedSkipped(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	gNote := &GkeepNote{
+		NoteID:       "gkeep-trash-1",
+		Title:        "Trashed Note",
+		TextContent:  "Should be skipped",
+		IsTrashed:    true,
+		ModifiedUsec: time.Now().UnixMicro(),
+		CreatedUsec:  time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.NormalizeGkeep(gNote)
+	if err != nil {
+		t.Fatalf("NormalizeGkeep: %v", err)
+	}
+	if artifact != nil {
+		t.Error("trashed gkeep note should return nil artifact")
 	}
 }

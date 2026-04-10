@@ -504,12 +504,9 @@ func TestProcessEntries_SocialMediaAggregation(t *testing.T) {
 			if totalDwell != 255.0 {
 				t.Errorf("expected reddit total_dwell_seconds 255, got %v", totalDwell)
 			}
-			urls, ok := a.Metadata["urls"].([]string)
-			if !ok {
-				t.Fatal("urls not []string")
-			}
-			if len(urls) != 3 {
-				t.Errorf("expected 3 reddit URLs, got %d", len(urls))
+			// Privacy: individual URLs must NOT be stored in social media aggregates
+			if _, hasURLs := a.Metadata["urls"]; hasURLs {
+				t.Error("social media aggregate must not store individual URLs (privacy requirement R-402)")
 			}
 		}
 	}
@@ -575,16 +572,22 @@ func TestDetectRepeatVisits_TierEscalation(t *testing.T) {
 		SocialMediaIndividualThreshold: 5 * time.Minute,
 	}
 
-	baseTime := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
-	// URL repeated 5 times with 90s dwell (normally "light")
+	// URL repeated across 5 different days with 90s dwell each (normally "light").
+	// Multi-day layout exercises both repeat detection and R-010 dedup correctly:
+	// repeat detection sees 5 raw visits; dedup produces 5 entries (one per day).
+	day1 := time.Date(2025, 3, 11, 10, 0, 0, 0, time.UTC)
+	day2 := time.Date(2025, 3, 12, 10, 0, 0, 0, time.UTC)
+	day3 := time.Date(2025, 3, 13, 10, 0, 0, 0, time.UTC)
+	day4 := time.Date(2025, 3, 14, 10, 0, 0, 0, time.UTC)
+	day5 := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
 	entries := []HistoryEntry{
-		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: baseTime, DwellTime: 90 * time.Second, Domain: "docs.example.com"},
-		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: baseTime.Add(time.Hour), DwellTime: 90 * time.Second, Domain: "docs.example.com"},
-		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: baseTime.Add(2 * time.Hour), DwellTime: 90 * time.Second, Domain: "docs.example.com"},
-		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: baseTime.Add(3 * time.Hour), DwellTime: 90 * time.Second, Domain: "docs.example.com"},
-		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: baseTime.Add(4 * time.Hour), DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: day1, DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: day2, DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: day3, DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: day4, DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api-ref", Title: "API Ref", VisitTime: day5, DwellTime: 90 * time.Second, Domain: "docs.example.com"},
 		// A unique URL for comparison
-		{URL: "https://example.com/once", Title: "Once", VisitTime: baseTime, DwellTime: 90 * time.Second, Domain: "example.com"},
+		{URL: "https://example.com/once", Title: "Once", VisitTime: day1, DwellTime: 90 * time.Second, Domain: "example.com"},
 	}
 
 	artifacts, _, stats := c.processEntries(entries, 0)
@@ -741,12 +744,28 @@ func TestBuildSocialAggregate_ArtifactFields(t *testing.T) {
 	if totalDwell != 210.0 {
 		t.Errorf("expected total_dwell_seconds 210, got %v", totalDwell)
 	}
-	urls, ok := agg.Metadata["urls"].([]string)
-	if !ok {
-		t.Fatal("urls not []string")
+	// Peak page tracking (R-005)
+	peakTitle, ok := agg.Metadata["peak_page_title"].(string)
+	if !ok || peakTitle == "" {
+		t.Error("expected peak_page_title in aggregate metadata")
 	}
-	if len(urls) != 2 {
-		t.Errorf("expected 2 URLs, got %d", len(urls))
+	if peakTitle != "Post 1" {
+		t.Errorf("expected peak_page_title 'Post 1' (2m dwell), got %q", peakTitle)
+	}
+	peakDwell, ok := agg.Metadata["peak_page_dwell_seconds"].(float64)
+	if !ok {
+		t.Fatal("peak_page_dwell_seconds not float64")
+	}
+	if peakDwell != 120.0 {
+		t.Errorf("expected peak_page_dwell_seconds 120, got %v", peakDwell)
+	}
+	// Aggregate should have human-readable content (R-005)
+	if agg.RawContent == "" {
+		t.Error("expected non-empty RawContent in social aggregate")
+	}
+	// Privacy: individual URLs must NOT be stored in social media aggregates (R-402)
+	if _, hasURLs := agg.Metadata["urls"]; hasURLs {
+		t.Error("social media aggregate must not store individual URLs (privacy requirement R-402)")
 	}
 	if !agg.CapturedAt.Equal(day) {
 		t.Errorf("expected captured_at %v, got %v", day, agg.CapturedAt)
@@ -760,12 +779,14 @@ func TestDetectRepeatVisits_BelowThreshold_NoEscalation(t *testing.T) {
 		SocialMediaIndividualThreshold: 5 * time.Minute,
 	}
 
-	baseTime := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
-	// URL visited only 2 times (below threshold of 3)
+	// URL visited only 2 times across different days (below threshold of 3).
+	// Multi-day layout prevents R-010 dedup from merging them.
+	day1 := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
+	day2 := time.Date(2025, 3, 16, 10, 0, 0, 0, time.UTC)
 	entries := []HistoryEntry{
-		{URL: "https://example.com/page", Title: "Page", VisitTime: baseTime, DwellTime: 90 * time.Second, Domain: "example.com"},
-		{URL: "https://example.com/page", Title: "Page", VisitTime: baseTime.Add(time.Hour), DwellTime: 90 * time.Second, Domain: "example.com"},
-		{URL: "https://example.com/other", Title: "Other", VisitTime: baseTime, DwellTime: 45 * time.Second, Domain: "example.com"},
+		{URL: "https://example.com/page", Title: "Page", VisitTime: day1, DwellTime: 90 * time.Second, Domain: "example.com"},
+		{URL: "https://example.com/page", Title: "Page", VisitTime: day2, DwellTime: 90 * time.Second, Domain: "example.com"},
+		{URL: "https://example.com/other", Title: "Other", VisitTime: day1, DwellTime: 45 * time.Second, Domain: "example.com"},
 	}
 
 	artifacts, _, stats := c.processEntries(entries, 0)
@@ -880,16 +901,21 @@ func TestProcessEntries_RepeatEscalation_MetadataToLight_SurvivesPrivacyGate(t *
 		SocialMediaIndividualThreshold: 5 * time.Minute,
 	}
 
-	baseTime := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
-	// URL visited 4 times with 10s dwell (normally "metadata" → privacy gate excludes)
-	// But repeat escalation should bump metadata→light, which survives the gate
+	// URL visited once per day across 4 different days with 10s dwell each
+	// (normally "metadata" → privacy gate excludes). Multi-day layout prevents
+	// R-010 dedup from merging. Repeat detection sees 4 raw visits → escalation
+	// bumps metadata→light, which survives the privacy gate.
+	day1 := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
+	day2 := time.Date(2025, 3, 16, 10, 0, 0, 0, time.UTC)
+	day3 := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	day4 := time.Date(2025, 3, 18, 10, 0, 0, 0, time.UTC)
 	entries := []HistoryEntry{
-		{URL: "https://docs.example.com/faq", Title: "FAQ", VisitTime: baseTime, DwellTime: 10 * time.Second, Domain: "docs.example.com"},
-		{URL: "https://docs.example.com/faq", Title: "FAQ", VisitTime: baseTime.Add(time.Hour), DwellTime: 10 * time.Second, Domain: "docs.example.com"},
-		{URL: "https://docs.example.com/faq", Title: "FAQ", VisitTime: baseTime.Add(2 * time.Hour), DwellTime: 10 * time.Second, Domain: "docs.example.com"},
-		{URL: "https://docs.example.com/faq", Title: "FAQ", VisitTime: baseTime.Add(3 * time.Hour), DwellTime: 10 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/faq", Title: "FAQ", VisitTime: day1, DwellTime: 10 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/faq", Title: "FAQ", VisitTime: day2, DwellTime: 10 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/faq", Title: "FAQ", VisitTime: day3, DwellTime: 10 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/faq", Title: "FAQ", VisitTime: day4, DwellTime: 10 * time.Second, Domain: "docs.example.com"},
 		// Control: single-visit metadata-tier URL should be excluded by privacy gate
-		{URL: "https://clickbait.com/bait", Title: "Bait", VisitTime: baseTime, DwellTime: 5 * time.Second, Domain: "clickbait.com"},
+		{URL: "https://clickbait.com/bait", Title: "Bait", VisitTime: day1, DwellTime: 5 * time.Second, Domain: "clickbait.com"},
 	}
 
 	artifacts, _, stats := c.processEntries(entries, 0)
@@ -1085,4 +1111,93 @@ func TestParseBrowserConfig_DwellTimeThresholds_Invalid(t *testing.T) {
 	if !contains(err.Error(), "invalid dwell_time_thresholds.full_min") {
 		t.Errorf("expected error about full_min, got: %v", err)
 	}
+}
+
+// --- R-010: URL+Date Dedup ---
+
+func TestDedupByURLDate(t *testing.T) {
+	day1 := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
+	day1Later := time.Date(2025, 3, 15, 14, 0, 0, 0, time.UTC)
+	day2 := time.Date(2025, 3, 16, 10, 0, 0, 0, time.UTC)
+
+	entries := []HistoryEntry{
+		{URL: "https://example.com/page", Title: "Page v1", VisitTime: day1, DwellTime: 90 * time.Second, Domain: "example.com"},
+		{URL: "https://example.com/page", Title: "Page v2", VisitTime: day1Later, DwellTime: 3 * time.Minute, Domain: "example.com"},
+		{URL: "https://example.com/page", Title: "Page day2", VisitTime: day2, DwellTime: 45 * time.Second, Domain: "example.com"},
+		{URL: "https://other.com/x", Title: "Other", VisitTime: day1, DwellTime: time.Minute, Domain: "other.com"},
+	}
+
+	result := dedupByURLDate(entries)
+
+	if len(result) != 3 {
+		t.Fatalf("expected 3 deduped entries, got %d", len(result))
+	}
+
+	// First entry: page on day1 — merged (90s + 3m = 4.5m), latest time, best title
+	if result[0].URL != "https://example.com/page" {
+		t.Errorf("entry 0 URL = %s, want example.com/page", result[0].URL)
+	}
+	if result[0].DwellTime != 90*time.Second+3*time.Minute {
+		t.Errorf("entry 0 dwell = %v, want 4m30s (merged)", result[0].DwellTime)
+	}
+	if !result[0].VisitTime.Equal(day1Later) {
+		t.Errorf("entry 0 visit_time = %v, want latest %v", result[0].VisitTime, day1Later)
+	}
+	if result[0].Title != "Page v2" {
+		t.Errorf("entry 0 title = %q, want 'Page v2' (from longest dwell)", result[0].Title)
+	}
+
+	// Second entry: page on day2 — not merged with day1
+	if result[1].URL != "https://example.com/page" {
+		t.Errorf("entry 1 URL = %s, want example.com/page", result[1].URL)
+	}
+	if result[1].DwellTime != 45*time.Second {
+		t.Errorf("entry 1 dwell = %v, want 45s (unmerged)", result[1].DwellTime)
+	}
+
+	// Third entry: other URL — unchanged
+	if result[2].URL != "https://other.com/x" {
+		t.Errorf("entry 2 URL = %s, want other.com/x", result[2].URL)
+	}
+}
+
+func TestProcessEntries_DedupSameURLSameDay(t *testing.T) {
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		DwellFullMin:                   5 * time.Minute,
+		DwellStandardMin:               2 * time.Minute,
+		DwellLightMin:                  30 * time.Second,
+		SocialMediaIndividualThreshold: 5 * time.Minute,
+	}
+
+	baseTime := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
+	// Three visits to the same URL on the same day: 2m + 2m + 2m = 6m total.
+	// Individually each is "standard" (2-5m), but merged is "full" (≥5m).
+	entries := []HistoryEntry{
+		{URL: "https://example.com/article", Title: "Article", VisitTime: baseTime, DwellTime: 2 * time.Minute, Domain: "example.com"},
+		{URL: "https://example.com/article", Title: "Article", VisitTime: baseTime.Add(2 * time.Hour), DwellTime: 2 * time.Minute, Domain: "example.com"},
+		{URL: "https://example.com/article", Title: "Article", VisitTime: baseTime.Add(4 * time.Hour), DwellTime: 2 * time.Minute, Domain: "example.com"},
+		// Different URL on same day — unaffected by dedup
+		{URL: "https://example.com/other", Title: "Other", VisitTime: baseTime, DwellTime: 3 * time.Minute, Domain: "example.com"},
+	}
+
+	artifacts, _, stats := c.processEntries(entries, 0)
+
+	// Dedup merges 3 article visits into 1 (6m → "full") + 1 other (3m → "standard") = 2 artifacts
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts after dedup, got %d", len(artifacts))
+	}
+
+	tiers := make(map[string]string)
+	for _, a := range artifacts {
+		tier, _ := a.Metadata["processing_tier"].(string)
+		tiers[a.URL] = tier
+	}
+	if tiers["https://example.com/article"] != "full" {
+		t.Errorf("merged article (6m) expected 'full', got %q", tiers["https://example.com/article"])
+	}
+	if tiers["https://example.com/other"] != "standard" {
+		t.Errorf("other (3m) expected 'standard', got %q", tiers["https://example.com/other"])
+	}
+	_ = stats
 }

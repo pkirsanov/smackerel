@@ -299,6 +299,121 @@ func TestExtractParticipants_Deduplication(t *testing.T) {
 	}
 }
 
+// --- Chaos-hardening tests ---
+
+func TestChaos_FlushChat_ReturnsCount(t *testing.T) {
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error { return nil }, nil)
+
+	// Add buffers for two different source chats but same chatID
+	a.Add(assemblyKey{chatID: 1, sourceName: "src1"},
+		ConversationMessage{SenderName: "A", Text: "hi", Timestamp: time.Now()},
+		ForwardedMeta{})
+	a.Add(assemblyKey{chatID: 1, sourceName: "src2"},
+		ConversationMessage{SenderName: "B", Text: "hi", Timestamp: time.Now()},
+		ForwardedMeta{})
+
+	count := a.FlushChat(1)
+	if count != 2 {
+		t.Errorf("expected FlushChat to return 2, got %d", count)
+	}
+}
+
+func TestChaos_FlushChat_ReturnsZero_NoBuffers(t *testing.T) {
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error { return nil }, nil)
+
+	count := a.FlushChat(999)
+	if count != 0 {
+		t.Errorf("expected FlushChat to return 0 for empty assembler, got %d", count)
+	}
+}
+
+func TestChaos_FlushChat_OnlyFlushesTargetChat(t *testing.T) {
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error { return nil }, nil)
+
+	a.Add(assemblyKey{chatID: 1, sourceName: "src"},
+		ConversationMessage{SenderName: "A", Text: "hi", Timestamp: time.Now()},
+		ForwardedMeta{})
+	a.Add(assemblyKey{chatID: 2, sourceName: "src"},
+		ConversationMessage{SenderName: "B", Text: "hi", Timestamp: time.Now()},
+		ForwardedMeta{})
+
+	count := a.FlushChat(1)
+	if count != 1 {
+		t.Errorf("expected 1 flush, got %d", count)
+	}
+	if a.BufferCount() != 1 {
+		t.Errorf("expected 1 remaining buffer, got %d", a.BufferCount())
+	}
+}
+
+func TestChaos_Assembly_ConcurrentAddAndFlush(t *testing.T) {
+	var flushed []*ConversationBuffer
+	var mu sync.Mutex
+
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error {
+			mu.Lock()
+			flushed = append(flushed, buf)
+			mu.Unlock()
+			return nil
+		}, nil)
+
+	key := assemblyKey{chatID: 1, sourceName: "race-test"}
+
+	// Concurrent adds and flushes to test mutex safety
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			a.Add(key, ConversationMessage{
+				SenderName: "User",
+				Text:       "msg",
+				Timestamp:  time.Now(),
+			}, ForwardedMeta{})
+			if n%5 == 0 {
+				a.FlushChat(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// Final flush to clean up
+	a.FlushAll()
+	time.Sleep(200 * time.Millisecond)
+	// No panic = success. This tests concurrent safety.
+}
+
+func TestChaos_FormatConversation_EmptyMessages(t *testing.T) {
+	buf := &ConversationBuffer{
+		SourceChat: "Test Chat",
+		Messages:   []ConversationMessage{},
+	}
+	text := FormatConversation(buf)
+	if text == "" {
+		t.Error("expected non-empty output even with no messages")
+	}
+	if !contains(text, "Messages: 0") {
+		t.Error("expected zero message count")
+	}
+}
+
+func TestChaos_FormatConversation_EmptySourceChat(t *testing.T) {
+	buf := &ConversationBuffer{
+		SourceChat: "",
+		Messages: []ConversationMessage{
+			{SenderName: "Alice", Text: "hello", Timestamp: time.Now()},
+		},
+	}
+	text := FormatConversation(buf)
+	if !contains(text, "Forwarded conversation") {
+		t.Error("expected fallback header for empty source chat")
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && containsSubstring(s, substr)
 }
@@ -310,4 +425,126 @@ func containsSubstring(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// --- Stabilization tests ---
+
+func TestStability_ConversationAssembler_BufferCapEviction(t *testing.T) {
+	var flushed []*ConversationBuffer
+	var mu sync.Mutex
+
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error {
+			mu.Lock()
+			flushed = append(flushed, buf)
+			mu.Unlock()
+			return nil
+		}, nil)
+
+	// Override maxBuffers to a small value for testing
+	a.maxBuffers = 3
+
+	// Add 3 buffers — should all fit
+	for i := int64(1); i <= 3; i++ {
+		a.Add(assemblyKey{chatID: i, sourceName: "src"},
+			ConversationMessage{SenderName: "User", Text: "hi", Timestamp: time.Now()},
+			ForwardedMeta{})
+	}
+
+	if a.BufferCount() != 3 {
+		t.Fatalf("expected 3 buffers, got %d", a.BufferCount())
+	}
+
+	// Adding a 4th should evict one
+	a.Add(assemblyKey{chatID: 4, sourceName: "src"},
+		ConversationMessage{SenderName: "User", Text: "hi", Timestamp: time.Now()},
+		ForwardedMeta{})
+
+	// Wait for eviction flush goroutine
+	time.Sleep(200 * time.Millisecond)
+
+	if a.BufferCount() != 3 {
+		t.Errorf("expected 3 buffers after eviction, got %d", a.BufferCount())
+	}
+
+	mu.Lock()
+	if len(flushed) != 1 {
+		t.Errorf("expected 1 eviction flush, got %d", len(flushed))
+	}
+	mu.Unlock()
+
+	a.FlushAll()
+}
+
+func TestStability_ConversationAssembler_FlushAllWaitsForGoroutines(t *testing.T) {
+	flushStarted := make(chan struct{})
+	flushDone := make(chan struct{})
+
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error {
+			close(flushStarted)
+			<-flushDone // block until test says continue
+			return nil
+		}, nil)
+
+	a.Add(assemblyKey{chatID: 1, sourceName: "src"},
+		ConversationMessage{SenderName: "User", Text: "hi", Timestamp: time.Now()},
+		ForwardedMeta{})
+
+	// FlushAll in background — should block until flush goroutine finishes
+	done := make(chan struct{})
+	go func() {
+		a.FlushAll()
+		close(done)
+	}()
+
+	// Wait for flush to start
+	<-flushStarted
+
+	// FlushAll should NOT have returned yet
+	select {
+	case <-done:
+		t.Fatal("FlushAll returned before flush goroutine finished")
+	case <-time.After(100 * time.Millisecond):
+		// good — still waiting
+	}
+
+	// Unblock the flush
+	close(flushDone)
+
+	// Now FlushAll should complete
+	select {
+	case <-done:
+		// success
+	case <-time.After(5 * time.Second):
+		t.Fatal("FlushAll did not return after flush goroutine finished")
+	}
+}
+
+func TestStability_ConversationAssembler_NotifyGoroutineTracked(t *testing.T) {
+	notifyCh := make(chan struct{}, 1)
+
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error { return nil },
+		func(chatID int64, count int) {
+			notifyCh <- struct{}{}
+		},
+	)
+
+	key := assemblyKey{chatID: 1, sourceName: "src"}
+	// First message — no notification
+	a.Add(key, ConversationMessage{SenderName: "A", Text: "one", Timestamp: time.Now()}, ForwardedMeta{})
+	// Second message — triggers notification goroutine
+	a.Add(key, ConversationMessage{SenderName: "B", Text: "two", Timestamp: time.Now()}, ForwardedMeta{})
+
+	// Notification should fire
+	select {
+	case <-notifyCh:
+		// good
+	case <-time.After(2 * time.Second):
+		t.Fatal("notification callback not invoked")
+	}
+
+	// FlushAll should wait for all goroutines including the notify
+	a.FlushAll()
 }

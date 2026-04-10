@@ -511,22 +511,29 @@ func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[stri
 	}
 	defer resp.Body.Close()
 
+	// Check status code before attempting JSON decode — error responses
+	// may not be valid JSON (e.g., HTML from a reverse proxy on 502).
+	if resp.StatusCode == http.StatusConflict {
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result) // best-effort
+		return result, errDuplicate
+	}
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		return nil, errServiceUnavailable
+	}
+
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("capture API error %d (non-JSON response)", resp.StatusCode)
+		}
 		return nil, fmt.Errorf("decode capture response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		switch resp.StatusCode {
-		case http.StatusConflict:
-			return result, errDuplicate
-		case http.StatusServiceUnavailable:
-			return nil, errServiceUnavailable
-		default:
-			errDetail, _ := result["error"].(map[string]interface{})
-			msg, _ := errDetail["message"].(string)
-			return nil, fmt.Errorf("capture API error %d: %s", resp.StatusCode, msg)
-		}
+		errDetail, _ := result["error"].(map[string]interface{})
+		msg, _ := errDetail["message"].(string)
+		return nil, fmt.Errorf("capture API error %d: %s", resp.StatusCode, msg)
 	}
 
 	return result, nil
@@ -579,6 +586,10 @@ func containsURL(text string) bool {
 // extractURL extracts the first URL from text.
 func extractURL(text string) string {
 	for _, word := range strings.Fields(text) {
+		// Strip leading brackets/parens
+		word = strings.TrimLeft(word, "(<[")
+		// Strip trailing punctuation
+		word = strings.TrimRight(word, ".,;:!?\"')>]")
 		if strings.HasPrefix(word, "http://") || strings.HasPrefix(word, "https://") {
 			return word
 		}
@@ -603,20 +614,29 @@ func (b *Bot) SendDigest(text string) {
 
 // handleDone flushes all open assembly buffers for the current chat.
 func (b *Bot) handleDone(ctx context.Context, msg *tgbotapi.Message) {
+	count := 0
 	if b.assembler != nil {
-		b.assembler.FlushChat(msg.Chat.ID)
+		count = b.assembler.FlushChat(msg.Chat.ID)
 	}
-	b.reply(msg.Chat.ID, ". Conversation assembly finalized")
+	if count > 0 {
+		b.reply(msg.Chat.ID, ". Conversation assembly finalized")
+	} else {
+		b.reply(msg.Chat.ID, "> No active conversation assembly")
+	}
 }
 
-// Stop flushes all open buffers and stops the bot gracefully.
+// Stop flushes all open buffers and waits for in-flight flushes to complete.
+// It blocks until all background flush goroutines have finished or their
+// individual timeouts fire, ensuring no data is silently lost on shutdown.
 func (b *Bot) Stop() {
+	slog.Info("telegram bot shutting down, flushing buffers")
 	if b.assembler != nil {
 		b.assembler.FlushAll()
 	}
 	if b.mediaAssembler != nil {
 		b.mediaAssembler.FlushAll()
 	}
+	slog.Info("telegram bot shutdown complete")
 }
 
 // flushConversation is the callback for the ConversationAssembler.

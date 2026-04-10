@@ -49,3 +49,56 @@ func TestAssignTier_BrowserHistorySourceID(t *testing.T) {
 		t.Errorf("browser-history source should get full tier, got %q", tier)
 	}
 }
+
+func TestAssignTier_ExactBoundary200(t *testing.T) {
+	// Content of exactly 200 characters should get standard tier (>=200 threshold)
+	tier := AssignTier(TierSignals{ContentLen: 200, SourceID: "gmail"})
+	if tier != TierStandard {
+		t.Errorf("exactly 200-char content should get standard tier, got %q", tier)
+	}
+}
+
+func TestAssignTier_Boundary199(t *testing.T) {
+	// Content of 199 characters should get light tier (<200 threshold)
+	tier := AssignTier(TierSignals{ContentLen: 199, SourceID: "gmail"})
+	if tier != TierLight {
+		t.Errorf("199-char content should get light tier, got %q", tier)
+	}
+}
+
+func TestAssignTier_ZeroContentLength(t *testing.T) {
+	tier := AssignTier(TierSignals{ContentLen: 0, SourceID: "gmail"})
+	if tier != TierLight {
+		t.Errorf("zero-length content should get light tier, got %q", tier)
+	}
+}
+
+func TestAssignTier_UnknownSourceID(t *testing.T) {
+	// Unknown source IDs should not get full tier privilege
+	tier := AssignTier(TierSignals{ContentLen: 500, SourceID: "unknown-source"})
+	if tier != TierStandard {
+		t.Errorf("unknown source ID should get standard tier, got %q", tier)
+	}
+}
+
+func TestAssignTier_EmptySourceID(t *testing.T) {
+	tier := AssignTier(TierSignals{ContentLen: 500, SourceID: ""})
+	if tier != TierStandard {
+		t.Errorf("empty source ID should get standard tier, got %q", tier)
+	}
+}
+
+func TestAssignTier_PriorityOrder_StarredOverridesShortContent(t *testing.T) {
+	// Starred flag should override content length, producing full tier
+	tier := AssignTier(TierSignals{UserStarred: true, ContentLen: 10, SourceID: "gmail"})
+	if tier != TierFull {
+		t.Errorf("starred short content should get full tier, got %q", tier)
+	}
+}
+
+func TestAssignTier_LargeContent(t *testing.T) {
+	tier := AssignTier(TierSignals{ContentLen: 100000, SourceID: "gmail"})
+	if tier != TierStandard {
+		t.Errorf("large content from passive source should get standard tier, got %q", tier)
+	}
+}

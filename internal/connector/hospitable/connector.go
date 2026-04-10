@@ -90,6 +90,10 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.mu.Lock()
+	if c.client == nil {
+		c.mu.Unlock()
+		return nil, cursor, fmt.Errorf("hospitable connector not connected")
+	}
 	c.health = connector.HealthSyncing
 	c.lastSyncErrors = 0
 	c.lastSyncCounts = make(map[string]int)
@@ -236,16 +240,20 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	} else {
 		c.health = connector.HealthHealthy
 	}
+	logProperties := c.lastSyncCounts["properties"]
+	logReservations := c.lastSyncCounts["reservations"]
+	logMessages := c.lastSyncCounts["messages"]
+	logReviews := c.lastSyncCounts["reviews"]
 	c.mu.Unlock()
 
 	slog.Info("Hospitable sync complete",
 		"id", c.id,
 		"artifacts", len(allArtifacts),
 		"errors", syncErrors,
-		"properties", c.lastSyncCounts["properties"],
-		"reservations", c.lastSyncCounts["reservations"],
-		"messages", c.lastSyncCounts["messages"],
-		"reviews", c.lastSyncCounts["reviews"],
+		"properties", logProperties,
+		"reservations", logReservations,
+		"messages", logMessages,
+		"reviews", logReviews,
 	)
 
 	return allArtifacts, newCursor, nil
@@ -298,6 +306,9 @@ func parseHospitableConfig(config connector.ConnectorConfig) (HospitableConfig, 
 		cfg.SyncSchedule = v
 	}
 	if v, ok := sc["initial_lookback_days"].(float64); ok {
+		if int(v) < 0 {
+			return cfg, fmt.Errorf("initial_lookback_days must not be negative")
+		}
 		cfg.InitialLookbackDays = int(v)
 	}
 	if v, ok := sc["page_size"].(float64); ok && v > 0 {

@@ -3,6 +3,7 @@ package keep
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
@@ -280,5 +281,61 @@ func TestSyncSameTitleDifferentFiles(t *testing.T) {
 	// NoteIDs must be unique despite same title
 	if artifacts[0].SourceRef == artifacts[1].SourceRef {
 		t.Errorf("NoteIDs collide: both are %q — filenames should produce unique IDs", artifacts[0].SourceRef)
+	}
+}
+
+func TestParseKeepConfigAllFields(t *testing.T) {
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":            "hybrid",
+			"import_dir":           "/tmp/keep",
+			"gkeep_enabled":        true,
+			"warning_acknowledged": true,
+			"include_archived":     true,
+			"min_content_length":   float64(10),
+			"poll_interval":        "30m",
+			"watch_interval":       "10m",
+			"archive_processed":    true,
+			"default_tier":         "full",
+			"labels_filter":        []interface{}{"Work", "Personal"},
+		},
+	}
+
+	kc, err := parseKeepConfig(cfg)
+	if err != nil {
+		t.Fatalf("parseKeepConfig: %v", err)
+	}
+	if kc.SyncMode != SyncModeHybrid {
+		t.Errorf("SyncMode = %q, want hybrid", kc.SyncMode)
+	}
+	if kc.TakeoutImportDir != "/tmp/keep" {
+		t.Errorf("TakeoutImportDir = %q, want /tmp/keep", kc.TakeoutImportDir)
+	}
+	if !kc.GkeepEnabled {
+		t.Error("GkeepEnabled should be true")
+	}
+	if !kc.GkeepWarningAck {
+		t.Error("GkeepWarningAck should be true")
+	}
+	if !kc.IncludeArchived {
+		t.Error("IncludeArchived should be true")
+	}
+	if kc.MinContentLength != 10 {
+		t.Errorf("MinContentLength = %d, want 10", kc.MinContentLength)
+	}
+	if kc.GkeepPollInterval != 30*time.Minute {
+		t.Errorf("GkeepPollInterval = %v, want 30m", kc.GkeepPollInterval)
+	}
+	if kc.TakeoutWatchInterval != 10*time.Minute {
+		t.Errorf("TakeoutWatchInterval = %v, want 10m", kc.TakeoutWatchInterval)
+	}
+	if !kc.TakeoutArchiveProcessed {
+		t.Error("TakeoutArchiveProcessed should be true")
+	}
+	if kc.DefaultTier != "full" {
+		t.Errorf("DefaultTier = %q, want full", kc.DefaultTier)
+	}
+	if len(kc.LabelsFilter) != 2 || kc.LabelsFilter[0] != "Work" || kc.LabelsFilter[1] != "Personal" {
+		t.Errorf("LabelsFilter = %v, want [Work Personal]", kc.LabelsFilter)
 	}
 }

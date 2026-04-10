@@ -208,6 +208,85 @@ func TestValidate_DigestCronInvalid(t *testing.T) {
 	}
 }
 
+func TestValidate_TelegramChatIDs_Empty(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("TELEGRAM_CHAT_IDS", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.TelegramChatIDs) != 0 {
+		t.Errorf("expected 0 chat IDs for empty env, got %d", len(cfg.TelegramChatIDs))
+	}
+}
+
+func TestValidate_TelegramChatIDs_SingleID(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("TELEGRAM_CHAT_IDS", "12345")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.TelegramChatIDs) != 1 {
+		t.Errorf("expected 1 chat ID, got %d", len(cfg.TelegramChatIDs))
+	}
+	if cfg.TelegramChatIDs[0] != "12345" {
+		t.Errorf("expected '12345', got %q", cfg.TelegramChatIDs[0])
+	}
+}
+
+func TestValidate_OllamaProvider_LLMAPIKeyNotRequired(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("LLM_PROVIDER", "ollama")
+	t.Setenv("OLLAMA_URL", "http://ollama:11434")
+	t.Setenv("OLLAMA_MODEL", "llama3.2")
+	t.Setenv("LLM_API_KEY", "") // Should not be required for Ollama
+	_, err := Load()
+	if err != nil {
+		t.Fatalf("ollama provider should not require LLM_API_KEY: %v", err)
+	}
+}
+
+func TestValidate_AuthTokenExactly16Chars(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("SMACKEREL_AUTH_TOKEN", "exactly16chars!!")
+	_, err := Load()
+	if err != nil {
+		t.Errorf("16-char auth token should be valid: %v", err)
+	}
+}
+
+func TestValidate_AuthTokenAllPlaceholdersRejected(t *testing.T) {
+	setRequiredEnv(t)
+	placeholders := []string{
+		"development-change-me",
+		"changeme",
+		"change-me",
+		"placeholder",
+		"test-token",
+		"default",
+	}
+	for _, p := range placeholders {
+		t.Setenv("SMACKEREL_AUTH_TOKEN", p)
+		_, err := Load()
+		if err == nil {
+			t.Errorf("placeholder %q should be rejected", p)
+		}
+	}
+}
+
+func TestValidate_AuthTokenCaseInsensitivePlaceholder(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("SMACKEREL_AUTH_TOKEN", "DEVELOPMENT-CHANGE-ME")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("uppercase placeholder should also be rejected")
+	}
+	if !strings.Contains(err.Error(), "placeholder") {
+		t.Errorf("error should mention placeholder, got: %v", err)
+	}
+}
+
 // setRequiredEnv sets all required env vars with test values.
 func setRequiredEnv(t *testing.T) {
 	t.Helper()

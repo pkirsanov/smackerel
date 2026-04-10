@@ -342,3 +342,34 @@ func TestCheckOverdueCommitments_NilPool(t *testing.T) {
 		t.Error("expected error when checking overdue commitments with nil pool")
 	}
 }
+
+func TestCreateAlert_EmptyTitle(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.CreateAlert(context.Background(), &Alert{
+		AlertType: AlertBill,
+		Title:     "",
+		Body:      "Some body",
+		Priority:  2,
+	})
+	if err == nil {
+		t.Error("expected error for empty alert title")
+	}
+}
+
+func TestCreateAlert_ValidTitle(t *testing.T) {
+	// With nil pool, CreateAlert should fail at the DB layer, not at validation
+	engine := NewEngine(nil, nil)
+	err := engine.CreateAlert(context.Background(), &Alert{
+		AlertType: AlertBill,
+		Title:     "AWS Invoice",
+		Body:      "Monthly bill",
+		Priority:  2,
+	})
+	// Should get past validation but fail because pool is nil
+	if err == nil {
+		t.Error("expected error with nil pool")
+	}
+	if err != nil && err.Error() == "alert title is required" {
+		t.Error("should have passed title validation")
+	}
+}

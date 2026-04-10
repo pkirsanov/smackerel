@@ -365,6 +365,9 @@ func getCredential(creds map[string]string, key string) string {
 
 // parseVideoItems converts interface{} video data into VideoItem structs.
 func parseVideoItems(raw interface{}) ([]VideoItem, error) {
+	if raw == nil {
+		return nil, nil
+	}
 	vids, ok := raw.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("videos must be an array")

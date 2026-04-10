@@ -168,6 +168,31 @@ func TestClientMaxRetriesOn429(t *testing.T) {
 	}
 }
 
+func TestDefaultClientMaxRetries3(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	// Use production client (no SetBackoff override) — should fail after 3 retries per R-009
+	client := NewClient(srv.URL, "token", 10)
+	// Override delays to be tiny for fast test, but keep MaxRetries from constructor
+	client.backoff.BaseDelay = 1 * time.Millisecond
+	client.backoff.MaxDelay = 10 * time.Millisecond
+	_, err := client.ListProperties(context.Background(), time.Time{})
+	if err == nil {
+		t.Fatal("expected error after max retries")
+	}
+	// Should have attempted exactly 1 initial + 3 retries = 4 total calls,
+	// but backoff.Next() is called first so attempts = MaxRetries + 1 won't happen;
+	// it stops at exactly MaxRetries attempts through the retry loop
+	if attempts != 4 {
+		t.Errorf("expected 4 attempts (1 initial + 3 retries), got %d", attempts)
+	}
+}
+
 func TestClientRetryOnServerError(t *testing.T) {
 	attempts := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -288,6 +313,19 @@ func TestConfigValidationMissingToken(t *testing.T) {
 	}
 	if !contains(err.Error(), "access_token") {
 		t.Errorf("error should mention access_token: %v", err)
+	}
+}
+
+func TestConfigValidationNegativeLookback(t *testing.T) {
+	_, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "test"},
+		SourceConfig: map[string]interface{}{"initial_lookback_days": float64(-10)},
+	})
+	if err == nil {
+		t.Fatal("expected error for negative lookback days")
+	}
+	if !contains(err.Error(), "initial_lookback_days") {
+		t.Errorf("error should mention initial_lookback_days: %v", err)
 	}
 }
 

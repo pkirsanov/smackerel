@@ -89,3 +89,35 @@ func TestParseTemporalIntent_LastMonth(t *testing.T) {
 		t.Errorf("expected ~30 days ago, got %.1f days", daysDiff)
 	}
 }
+
+func TestParseTemporalIntent_EmptyString(t *testing.T) {
+	f := parseTemporalIntent("")
+	if f != nil {
+		t.Errorf("expected nil filter for empty string, got %+v", f)
+	}
+}
+
+func TestParseTemporalIntent_TemporalWordOnly(t *testing.T) {
+	// "yesterday" alone should still produce a temporal filter
+	f := parseTemporalIntent("yesterday")
+	if f == nil {
+		t.Fatal("expected temporal filter for bare 'yesterday'")
+	}
+}
+
+func TestParseTemporalIntent_DateFromIsRFC3339(t *testing.T) {
+	f := parseTemporalIntent("articles from last week")
+	if f == nil {
+		t.Fatal("expected temporal filter")
+	}
+	_, err := time.Parse(time.RFC3339, f.DateFrom)
+	if err != nil {
+		t.Errorf("DateFrom should be valid RFC3339, got %q: %v", f.DateFrom, err)
+	}
+	if f.DateTo != "" {
+		_, err := time.Parse(time.RFC3339, f.DateTo)
+		if err != nil {
+			t.Errorf("DateTo should be valid RFC3339, got %q: %v", f.DateTo, err)
+		}
+	}
+}
