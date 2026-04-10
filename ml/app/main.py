@@ -46,9 +46,7 @@ async def lifespan(app: FastAPI):
 
     auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
     if not auth_token:
-        logger.warning(
-            "SMACKEREL_AUTH_TOKEN is empty — ML sidecar running without authentication"
-        )
+        logger.warning("SMACKEREL_AUTH_TOKEN is empty — ML sidecar running without authentication")
 
     nats_url = config["NATS_URL"]
     logger.info("Connecting to NATS at %s", nats_url)

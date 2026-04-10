@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 import pytest
-from fastapi import FastAPI, APIRouter, Depends
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.testclient import TestClient
 
 
@@ -49,24 +49,18 @@ class TestMLSidecarAuthWithToken:
 
     def test_accept_bearer_token(self):
         """SCN-020-006: Valid Bearer token is accepted."""
-        resp = self.client.get(
-            "/process", headers={"Authorization": "Bearer test-secret"}
-        )
+        resp = self.client.get("/process", headers={"Authorization": "Bearer test-secret"})
         assert resp.status_code == 200
         assert resp.json()["result"] == "ok"
 
     def test_accept_x_auth_token_header(self):
         """SCN-020-006: Valid X-Auth-Token header is accepted."""
-        resp = self.client.get(
-            "/process", headers={"X-Auth-Token": "test-secret"}
-        )
+        resp = self.client.get("/process", headers={"X-Auth-Token": "test-secret"})
         assert resp.status_code == 200
 
     def test_reject_wrong_token(self):
         """SCN-020-005: Wrong token returns 401."""
-        resp = self.client.get(
-            "/process", headers={"Authorization": "Bearer wrong-token"}
-        )
+        resp = self.client.get("/process", headers={"Authorization": "Bearer wrong-token"})
         assert resp.status_code == 401
 
     def test_health_unauthenticated(self):

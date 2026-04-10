@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -66,6 +67,15 @@ type SearchEngine struct {
 
 	mlHealthy  atomic.Bool
 	mlHealthAt atomic.Int64 // unix nanos of last health check
+
+	// healthClient is a dedicated HTTP client for ML sidecar health probes.
+	// Short timeouts prevent health checks from blocking search requests.
+	healthClient     *http.Client
+	healthClientOnce sync.Once
+
+	// healthProbeMu coalesces concurrent TTL-expired health probes
+	// to prevent thundering-herd against a recovering ML sidecar.
+	healthProbeMu sync.Mutex
 }
 
 // SearchHandler handles POST /api/search.
@@ -115,15 +125,18 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		resp.Message = "I don't have anything about that yet"
 	}
 
-	// Log search for frequency tracking (non-blocking — failures don't affect response)
+	// Log search for frequency tracking (non-blocking — failures don't affect response).
+	// Use a detached context so the log insert completes even if the client disconnects.
 	if d.IntelligenceEngine != nil {
 		topResultID := ""
 		if len(results) > 0 {
 			topResultID = results[0].ArtifactID
 		}
-		if err := d.IntelligenceEngine.LogSearch(r.Context(), req.Query, len(results), topResultID); err != nil {
+		logCtx, logCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := d.IntelligenceEngine.LogSearch(logCtx, req.Query, len(results), topResultID); err != nil {
 			slog.Warn("search logging failed", "error", err, "query", req.Query)
 		}
+		logCancel()
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -247,26 +260,41 @@ func (s *SearchEngine) waitForEmbeddingOnInbox(ctx context.Context, sub *nats.Su
 
 // isMLHealthy returns cached ML sidecar health status.
 // Refreshes the cache when TTL has expired via a quick HTTP health check.
+// Concurrent probe requests are coalesced to prevent thundering-herd.
 func (s *SearchEngine) isMLHealthy(ctx context.Context) bool {
 	if s.MLSidecarURL == "" {
 		return false
 	}
 
-	now := time.Now().UnixNano()
-	lastCheck := s.mlHealthAt.Load()
-	ttl := s.HealthCacheTTL
-	if ttl == 0 {
-		ttl = 30 * time.Second
+	// A zero TTL means SST config was not wired — treat as unhealthy (fail-visible,
+	// triggers text fallback) rather than using a hidden default.
+	if s.HealthCacheTTL == 0 {
+		slog.Warn("ML health cache TTL is zero — SST config ML_HEALTH_CACHE_TTL_S may be missing")
+		return false
 	}
 
-	if now-lastCheck < int64(ttl) {
+	now := time.Now().UnixNano()
+	lastCheck := s.mlHealthAt.Load()
+
+	if now-lastCheck < int64(s.HealthCacheTTL) {
 		return s.mlHealthy.Load()
 	}
 
-	// TTL expired — refresh
+	// TTL expired — coalesce concurrent probes via mutex.
+	// If another goroutine is already probing, use the stale cached value.
+	if !s.healthProbeMu.TryLock() {
+		return s.mlHealthy.Load()
+	}
+	defer s.healthProbeMu.Unlock()
+
+	// Re-check after acquiring lock — another goroutine may have refreshed.
+	if time.Now().UnixNano()-s.mlHealthAt.Load() < int64(s.HealthCacheTTL) {
+		return s.mlHealthy.Load()
+	}
+
 	healthy := s.probeMLHealth(ctx)
 	s.mlHealthy.Store(healthy)
-	s.mlHealthAt.Store(now)
+	s.mlHealthAt.Store(time.Now().UnixNano())
 	return healthy
 }
 
@@ -280,12 +308,28 @@ func (s *SearchEngine) probeMLHealth(ctx context.Context) bool {
 		return false
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := s.getHealthClient()
+	resp, err := client.Do(req)
 	if err != nil {
 		return false
 	}
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); resp.Body.Close() }()
 	return resp.StatusCode == http.StatusOK
+}
+
+// getHealthClient returns the dedicated health-check HTTP client, creating it lazily.
+func (s *SearchEngine) getHealthClient() *http.Client {
+	s.healthClientOnce.Do(func() {
+		s.healthClient = &http.Client{
+			Timeout: 2 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        2,
+				MaxIdleConnsPerHost: 1,
+				IdleConnTimeout:     30 * time.Second,
+			},
+		}
+	})
+	return s.healthClient
 }
 
 // vectorSearch performs pgvector cosine similarity search.

@@ -534,3 +534,105 @@ Exit code: 0
 | `engine_test.go` hardening tests | 0 | 9 | +9 new edge-case tests |
 | Duplicate alert generation risk | Unbounded | Prevented by dedup query | Critical fix |
 | R-302 250-word cap compliance | Unguarded | Enforced in `GenerateWeeklySynthesis` | Spec alignment |
+
+---
+
+## Reconciliation Pass — 2026-04-10
+
+**Trigger:** Stochastic quality sweep round (reconcile-to-doc, validate trigger)
+**Focus:** Verify artifact claims vs actual implementation reality; detect drift between scopes.md DoD evidence and codebase
+
+### Validation Commands
+
+```
+$ ./smackerel.sh test unit
+30 Go packages ok, 0 failures (all cached)
+Python tests passed
+Exit code: 0
+
+$ ./smackerel.sh check
+Config is in sync with SST
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+Exit code: 0
+```
+
+### Claims Verified As Accurate
+
+| Claim | Verification |
+|-------|--------------|
+| SynthesisInsight struct with ID, InsightType, ThroughLine, SourceArtifactIDs, Confidence, CreatedAt | Confirmed in `internal/intelligence/engine.go` lines 29-39 |
+| RunSynthesis cross-domain filter: `COUNT(*) >= 3 AND COUNT(DISTINCT a.source_id) >= 2` | Confirmed in `engine.go` RunSynthesis CTE query (RGR-004-001 fix applied) |
+| 6 AlertType constants (bill, return_window, trip_prep, relationship_cooling, commitment_overdue, meeting_brief) | Confirmed in `engine.go` lines 44-51 |
+| CreateAlert validates type against known set, validates priority 1-3, validates non-empty title | Confirmed in `engine.go` CreateAlert with validAlertTypes map, priority range check, title check |
+| GetPendingAlerts enforces 2/day cap via `GREATEST(0, 2 - delivered_today)` LIMIT | Confirmed in `engine.go` GetPendingAlerts single-query approach |
+| DismissAlert checks empty ID + RowsAffected | Confirmed in `engine.go` DismissAlert |
+| SnoozeAlert validates future-time + empty ID | Confirmed in `engine.go` SnoozeAlert |
+| CheckOverdueCommitments dedup via NOT EXISTS subquery | Confirmed in `engine.go` CheckOverdueCommitments (HDN-004-001 fix applied) |
+| MeetingBrief with AttendeeBrief, 25-35 minute window, event dedup | Confirmed in `engine.go` GeneratePreMeetingBriefs |
+| GenerateWeeklySynthesis 250-word cap truncation | Confirmed in `engine.go` — post-assembly `strings.Fields` + truncate (HDN-004-005 fix) |
+| synthesisConfidence pure function capped at 1.0 | Confirmed in `engine.go` — uses `math.Min(1.0, ...)` |
+| escapeLikePattern for SQL LIKE wildcard escaping | Confirmed in `engine.go` — escapes `%` and `_` characters |
+| Resurface dormancy-based + serendipity strategies | Confirmed in `resurface.go` — Strategy 1 (30-day dormant) + Strategy 2 (serendipityPick) |
+| ResurfaceScore combines relevance, dormancy bonus (capped at 1.0), access penalty (capped at 1.0) | Confirmed in `resurface.go` ResurfaceScore function |
+| MarkResurfaced updates last_accessed + access_count | Confirmed in `resurface.go` with batch UPDATE using ANY($1) |
+| Digest Generator: getPendingActionItems, getOvernightArtifacts, getHotTopics, storeQuietDigest | Confirmed in `internal/digest/generator.go` |
+| ProduceBillAlerts, ProduceTripPrepAlerts, ProduceReturnWindowAlerts, ProduceRelationshipCoolingAlerts | Confirmed in `engine.go` — all 4 producer functions with dedup NOT EXISTS subqueries |
+| Scheduler wires synthesis, briefs, alerts, and weekly crons | Confirmed in `internal/scheduler/scheduler.go` — muDaily, muWeekly, muBriefs, muAlerts mutexes |
+| E2E test scripts exist for all 6 scopes | Confirmed in `tests/e2e/`: test_synthesis.sh, test_commitments.sh, test_premeeting.sh, test_alerts.sh, test_weekly_synthesis.sh, test_enhanced_digest.sh |
+| DB migrations for synthesis_insights and alerts tables | Confirmed in `internal/db/migrations/002_intelligence.sql` |
+
+### Drift Findings
+
+#### RECON-004-001: Phase 3 REST API Endpoints Listed But Not Wired (INFORMATIONAL)
+
+**Severity:** Low — documentation drift, not a functional regression
+**Affected Artifact:** `scopes.md` — "New Types & Signatures" section
+
+**Description:** scopes.md lists these REST endpoints under "New Types & Signatures":
+- `GET /api/synthesis`
+- `GET /api/alerts`
+- `POST /api/alerts/:id/dismiss`
+- `POST /api/alerts/:id/snooze`
+
+**Reality:** The router in `internal/api/router.go` does NOT include these routes. The router has Phase 5 intelligence endpoints (`/expertise`, `/learning-paths`, `/subscriptions`, `/serendipity`) but no Phase 3 alert or synthesis endpoints.
+
+**Assessment:** The business logic exists (RunSynthesis, GetPendingAlerts, DismissAlert, SnoozeAlert in `engine.go`), and the scheduler/cron layer invokes these methods directly. Alert delivery flows through Telegram, not via REST polling. The listed endpoints appear to be planned API surface that was not needed for the cron-driven architecture. The NATS subjects in the same section are correctly struck-through to indicate design change, but the REST endpoints were not similarly annotated.
+
+**Recommendation:** Strike through or annotate the four endpoints in scopes.md to reflect that the intelligence layer is scheduler-driven, not REST-driven, for Phase 3 operations.
+
+#### RECON-004-002: Scope 3 DoD Evidence Citations Are Design-Referential (COSMETIC)
+
+**Severity:** Low — evidence quality, not functional
+**Affected Artifact:** `scopes.md` — Scope 3 Definition of Done
+
+**Description:** Several Scope 3 DoD items reference "Design specifies..." rather than pointing to concrete code or test evidence:
+- "Design specifies calendar check cron every 5 minutes"
+- "Design specifies fallback for unknown attendees"
+- "Design specifies new contact fallback path"
+
+**Reality:** The code DOES implement these behaviors — `GeneratePreMeetingBriefs` queries the 25-35 minute window, `buildAttendeeBrief` returns `IsNewContact: true` for unknown contacts, and `assembleBriefText` outputs "New contact" messages. Tests exist in `engine_test.go`: `TestMeetingBrief_Struct`, `TestAssembleBriefText_NewContact`, `TestGeneratePreMeetingBriefs_NilPool`.
+
+**Assessment:** The evidence text is weaker than other scopes but the implementation is real and tested.
+
+#### RECON-004-003: Test Count Claims Vary Across Scopes (COSMETIC)
+
+**Severity:** Informational
+**Affected Artifact:** `scopes.md` — multiple scope DoD items
+
+**Description:** Early scopes claim "all 23 Go packages pass" while Scope 4 claims "all 31 Go packages pass." Current test output shows 30 Go packages with test files. The count grew over time as connectors were added during the sweep.
+
+**Assessment:** The counts were accurate at time of writing. Current canonical count is 30 Go packages with test files (cmd/core has no test files).
+
+### Reconciliation Summary
+
+| Category | Count | Verdict |
+|----------|-------|---------|
+| DoD claims verified accurate | 17 major claims | All match code |
+| Functional drift findings | 0 | No broken behavior |
+| Documentation drift findings | 1 (RECON-004-001) | REST endpoints listed but not wired — informational |
+| Evidence quality findings | 1 (RECON-004-002) | Scope 3 design-referential DoD — cosmetic |
+| Test/build/lint | All green | 30 Go packages pass, check clean, lint clean |
+| Prior sweep fixes verified in place | RGR-004-001 (cross-domain filter), HDN-004-001 (dedup), HDN-004-002 (type validation), HDN-004-005 (250-word cap) | All confirmed present in current code |

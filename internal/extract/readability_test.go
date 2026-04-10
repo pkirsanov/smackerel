@@ -18,6 +18,14 @@ func TestDetectContentType(t *testing.T) {
 		{"recipe site", "https://www.allrecipes.com/recipe/123", ContentTypeRecipe},
 		{"generic article", "https://example.com/some-article", ContentTypeArticle},
 		{"empty url", "", ContentTypeGeneric},
+		{"jpeg image", "https://example.com/photo.jpg", ContentTypeImage},
+		{"png image", "https://cdn.example.com/assets/logo.png", ContentTypeImage},
+		{"webp image", "https://images.example.com/hero.webp", ContentTypeImage},
+		{"image with query params", "https://example.com/photo.jpeg?w=800&h=600", ContentTypeImage},
+		{"pdf document", "https://example.com/report.pdf", ContentTypePDF},
+		{"pdf with query params", "https://example.com/paper.pdf?download=true", ContentTypePDF},
+		{"ebay product", "https://www.ebay.com/itm/123456", ContentTypeProduct},
+		{"shopify product", "https://mystore.shopify.com/product/item-1", ContentTypeProduct},
 	}
 
 	for _, tt := range tests {

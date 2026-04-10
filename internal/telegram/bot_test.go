@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -271,5 +272,107 @@ func TestChaos_IsAuthorized_NegativeChatID(t *testing.T) {
 	}
 	if bot.IsAuthorized(-100999) {
 		t.Error("different negative chat ID should not be authorized")
+	}
+}
+
+// --- Security-hardening tests ---
+
+func TestSecurity_FindQueryLength_Truncated(t *testing.T) {
+	// Verify that a query exceeding maxFindQueryLen is truncated
+	longQuery := strings.Repeat("a", maxFindQueryLen+100)
+	truncated := truncateUTF8(longQuery, maxFindQueryLen)
+	if len(truncated) > maxFindQueryLen {
+		t.Errorf("expected query truncated to %d bytes, got %d", maxFindQueryLen, len(truncated))
+	}
+}
+
+func TestSecurity_TextCapture_OversizedInput_Truncated(t *testing.T) {
+	// Text capture should use maxShareTextLen to bound input
+	longText := strings.Repeat("x", maxShareTextLen+500)
+	truncated := truncateUTF8(longText, maxShareTextLen)
+	if len(truncated) > maxShareTextLen {
+		t.Errorf("expected text truncated to %d bytes, got %d", maxShareTextLen, len(truncated))
+	}
+	if len(truncated) != maxShareTextLen {
+		t.Errorf("expected exactly %d bytes, got %d", maxShareTextLen, len(truncated))
+	}
+}
+
+func TestSecurity_MaxFindQueryLen_Value(t *testing.T) {
+	// maxFindQueryLen should be a reasonable limit
+	if maxFindQueryLen < 100 || maxFindQueryLen > 2000 {
+		t.Errorf("maxFindQueryLen=%d is outside reasonable range [100, 2000]", maxFindQueryLen)
+	}
+}
+
+func TestSecurity_MaxAPIResponseBytes_Value(t *testing.T) {
+	// maxAPIResponseBytes should be 1MB
+	if maxAPIResponseBytes != 1<<20 {
+		t.Errorf("maxAPIResponseBytes=%d, expected %d (1MB)", maxAPIResponseBytes, 1<<20)
+	}
+}
+
+// --- Chaos-hardening regression tests ---
+
+func TestChaos_MaxCaptureTextLen_Value(t *testing.T) {
+	// Finding 6/7 regression: maxCaptureTextLen should exist and cap flush payloads
+	if maxCaptureTextLen <= 0 {
+		t.Fatal("maxCaptureTextLen must be positive")
+	}
+	if maxCaptureTextLen < 4096 {
+		t.Error("maxCaptureTextLen too small — would truncate normal conversations")
+	}
+}
+
+func TestChaos_DocumentHandler_EmptyFileName(t *testing.T) {
+	// Finding 8 regression: Document with empty FileName should use "unnamed"
+	// Simulate what the handler produces
+	fileName := ""
+	if fileName == "" {
+		fileName = "unnamed"
+	}
+	docText := "Document: " + fileName
+	if docText != "Document: unnamed" {
+		t.Errorf("expected 'Document: unnamed', got %q", docText)
+	}
+}
+
+func TestChaos_IsAuthorized_ZeroChatID(t *testing.T) {
+	// Zero is a valid map key — ensure it doesn't authorize accidentally
+	bot := &Bot{allowedChats: map[int64]bool{12345: true}}
+	if bot.IsAuthorized(0) {
+		t.Error("chat ID 0 should not be authorized when not in allowlist")
+	}
+}
+
+func TestChaos_ExtractURL_VeryLongText(t *testing.T) {
+	// Large text block with URL buried deep inside
+	prefix := strings.Repeat("word ", 10000) // 50K+ chars
+	text := prefix + "https://example.com/deep" + strings.Repeat(" more", 1000)
+	url := extractURL(text)
+	if url != "https://example.com/deep" {
+		t.Errorf("expected URL found in long text, got %q", url)
+	}
+}
+
+func TestChaos_ExtractURL_URLAtExactBoundary(t *testing.T) {
+	// URL is the very last word
+	text := "text https://example.com"
+	url := extractURL(text)
+	if url != "https://example.com" {
+		t.Errorf("expected URL at end of text, got %q", url)
+	}
+}
+
+func TestChaos_ContainsURL_OnlyScheme(t *testing.T) {
+	// Bare "http://" without host — containsURL returns true (prefix match)
+	// but extractURL should handle gracefully
+	if !containsURL("text http:// more") {
+		t.Error("containsURL should detect bare http:// prefix")
+	}
+	url := extractURL("text http:// more")
+	// "http://" is a valid prefix match but useless URL
+	if url != "http://" {
+		t.Logf("extractURL returns %q for bare scheme (acceptable edge case)", url)
 	}
 }

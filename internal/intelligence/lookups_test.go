@@ -1,6 +1,7 @@
 package intelligence
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -73,6 +74,44 @@ func TestCreateQuickReference_NilPool(t *testing.T) {
 func TestGetQuickReferences_NilPool(t *testing.T) {
 	engine := &Engine{Pool: nil}
 	_, err := engine.GetQuickReferences(nil)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+// === Stabilize: CreateQuickReference JSON safety ===
+
+func TestCreateQuickReference_SourceIDsWithSpecialChars(t *testing.T) {
+	// Verify that source IDs containing JSON-dangerous characters are safely
+	// marshalled rather than injected via fmt.Sprintf.
+	dangerous := []string{`art-1"`, `art-2\`, `art-3']`}
+
+	// Without a real pool we can't INSERT, but the function should marshal
+	// the JSON before hitting the pool. Since pool is nil, the function
+	// should return the nil-pool error — not panic on JSON building.
+	engine := &Engine{Pool: nil}
+	_, err := engine.CreateQuickReference(nil, "test", "content", dangerous)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	// The error should be the pool check, not a JSON/SQL error —
+	// meaning the JSON marshalling path had no issues.
+	if !strings.Contains(err.Error(), "requires a database connection") {
+		t.Errorf("expected pool error, got: %s", err.Error())
+	}
+}
+
+func TestCreateQuickReference_EmptySourceIDs(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	_, err := engine.CreateQuickReference(nil, "test", "content", []string{})
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+func TestCreateQuickReference_NilSourceIDs(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	_, err := engine.CreateQuickReference(nil, "test", "content", nil)
 	if err == nil {
 		t.Error("expected error for nil pool")
 	}

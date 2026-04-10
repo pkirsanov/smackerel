@@ -2,9 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -297,6 +301,187 @@ func TestCaptureResponse_JSON(t *testing.T) {
 	}
 	if decoded.ProcessingMs != 100 {
 		t.Errorf("expected 100ms, got %d", decoded.ProcessingMs)
+	}
+}
+
+// mockSearchEngine implements the Searcher interface for testing.
+type mockSearchEngine struct {
+	results   []SearchResult
+	total     int
+	mode      string
+	err       error
+	lastReq   SearchRequest
+	callCount int
+}
+
+func (m *mockSearchEngine) Search(_ context.Context, req SearchRequest) ([]SearchResult, int, string, error) {
+	m.lastReq = req
+	m.callCount++
+	return m.results, m.total, m.mode, m.err
+}
+
+// mockIntelligenceEngine tracks LogSearch calls for testing.
+type mockLogSearchEngine struct {
+	loggedQuery  string
+	loggedCount  int
+	loggedTopID  string
+	logSearchErr error
+	callCount    int
+}
+
+func TestSearchHandler_SuccessWithResults(t *testing.T) {
+	se := &mockSearchEngine{
+		results: []SearchResult{
+			{ArtifactID: "art-1", Title: "Pricing Video", Relevance: "high"},
+			{ArtifactID: "art-2", Title: "SaaS Article", Relevance: "medium"},
+		},
+		total: 2,
+		mode:  "semantic",
+	}
+
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		SearchEngine: se,
+	}
+
+	body := `{"query": "pricing strategy", "limit": 5}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp SearchResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Results) != 2 {
+		t.Errorf("expected 2 results, got %d", len(resp.Results))
+	}
+	if resp.TotalCandidates != 2 {
+		t.Errorf("expected total_candidates 2, got %d", resp.TotalCandidates)
+	}
+	if resp.SearchMode != "semantic" {
+		t.Errorf("expected search_mode 'semantic', got %q", resp.SearchMode)
+	}
+	if resp.Message != "" {
+		t.Errorf("expected no message for non-empty results, got %q", resp.Message)
+	}
+	if resp.SearchTimeMs < 0 {
+		t.Errorf("expected non-negative search time, got %d", resp.SearchTimeMs)
+	}
+	// Verify limit was passed through to engine
+	if se.lastReq.Limit != 5 {
+		t.Errorf("expected limit 5 passed to engine, got %d", se.lastReq.Limit)
+	}
+}
+
+func TestSearchHandler_EmptyResultsMessage(t *testing.T) {
+	se := &mockSearchEngine{
+		results: []SearchResult{},
+		total:   0,
+		mode:    "semantic",
+	}
+
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		SearchEngine: se,
+	}
+
+	body := `{"query": "nonexistent topic"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp SearchResponse
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Message != "I don't have anything about that yet" {
+		t.Errorf("expected empty results message, got %q", resp.Message)
+	}
+}
+
+func TestSearchHandler_LimitClampedToDefault(t *testing.T) {
+	se := &mockSearchEngine{results: []SearchResult{}, mode: "semantic"}
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		SearchEngine: se,
+	}
+
+	tests := []struct {
+		name     string
+		body     string
+		expected int
+	}{
+		{"zero limit", `{"query": "test", "limit": 0}`, 10},
+		{"negative limit", `{"query": "test", "limit": -5}`, 10},
+		{"over 50", `{"query": "test", "limit": 100}`, 10},
+		{"omitted", `{"query": "test"}`, 10},
+		{"valid limit", `{"query": "test", "limit": 25}`, 25},
+		{"boundary 50", `{"query": "test", "limit": 50}`, 50},
+		{"boundary 1", `{"query": "test", "limit": 1}`, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			deps.SearchHandler(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", rec.Code)
+			}
+			if se.lastReq.Limit != tt.expected {
+				t.Errorf("expected limit %d, got %d", tt.expected, se.lastReq.Limit)
+			}
+		})
+	}
+}
+
+func TestSearchHandler_SearchError(t *testing.T) {
+	se := &mockSearchEngine{
+		err: fmt.Errorf("embedding service unavailable"),
+	}
+
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		SearchEngine: se,
+	}
+
+	body := `{"query": "test query"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Error.Code != "SEARCH_FAILED" {
+		t.Errorf("expected SEARCH_FAILED, got %q", resp.Error.Code)
 	}
 }
 
@@ -719,6 +904,53 @@ func TestIsMLHealthy_NoURL(t *testing.T) {
 	}
 }
 
+func TestIsMLHealthy_ZeroTTL_ReturnsUnhealthy(t *testing.T) {
+	engine := &SearchEngine{
+		MLSidecarURL:   "http://localhost:9999",
+		HealthCacheTTL: 0, // SST misconfiguration — zero TTL must fail-visible
+	}
+	if engine.isMLHealthy(t.Context()) {
+		t.Error("expected unhealthy when HealthCacheTTL is zero (SST misconfiguration)")
+	}
+}
+
+func TestIsMLHealthy_ConcurrentProbes_Coalesced(t *testing.T) {
+	// Start a test HTTP server that counts how many probes it receives
+	var probeCount atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		probeCount.Add(1)
+		// Simulate slow health check
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   ts.URL,
+		HealthCacheTTL: 100 * time.Millisecond,
+	}
+	// Set mlHealthAt to 0 to force TTL expiration for all goroutines
+	engine.mlHealthAt.Store(0)
+
+	// Launch many concurrent probes
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			engine.isMLHealthy(context.Background())
+		}()
+	}
+	wg.Wait()
+
+	// With coalescing, only 1-2 probes should have been issued (one winner, possibly
+	// one more after the first completes if others re-check). Without coalescing all 20 would probe.
+	count := probeCount.Load()
+	if count > 3 {
+		t.Errorf("expected coalesced probes (<=3), but got %d", count)
+	}
+}
+
 func TestIsMLHealthy_CachedWithinTTL(t *testing.T) {
 	engine := &SearchEngine{
 		MLSidecarURL:   "http://localhost:9999",
@@ -803,4 +1035,97 @@ func TestIsMLHealthy_Recovery(t *testing.T) {
 	if !engine.isMLHealthy(t.Context()) {
 		t.Error("expected healthy after recovery")
 	}
+}
+
+// SCN-022-07: ML sidecar returning 500 Internal Server Error is treated as unhealthy
+func TestIsMLHealthy_ServerError500(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   srv.URL,
+		HealthCacheTTL: 1 * time.Millisecond,
+	}
+	engine.mlHealthAt.Store(0) // force probe
+	if engine.isMLHealthy(t.Context()) {
+		t.Error("expected unhealthy when sidecar returns 500")
+	}
+}
+
+// SCN-022-07: ML sidecar returning 502 Bad Gateway is treated as unhealthy
+func TestIsMLHealthy_ServerError502(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   srv.URL,
+		HealthCacheTTL: 1 * time.Millisecond,
+	}
+	engine.mlHealthAt.Store(0)
+	if engine.isMLHealthy(t.Context()) {
+		t.Error("expected unhealthy when sidecar returns 502")
+	}
+}
+
+// SCN-022-07: Unreachable ML sidecar (connection refused) is treated as unhealthy
+func TestIsMLHealthy_ConnectionRefused(t *testing.T) {
+	engine := &SearchEngine{
+		MLSidecarURL:   "http://127.0.0.1:1", // port 1 is almost certainly refused
+		HealthCacheTTL: 1 * time.Millisecond,
+	}
+	engine.mlHealthAt.Store(0)
+	if engine.isMLHealthy(t.Context()) {
+		t.Error("expected unhealthy when sidecar is unreachable")
+	}
+}
+
+// SCN-022-07: Health probe uses dedicated client, not http.DefaultClient
+func TestIsMLHealthy_UsesDedicatedClient(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   srv.URL,
+		HealthCacheTTL: 1 * time.Millisecond,
+	}
+	engine.mlHealthAt.Store(0)
+	_ = engine.isMLHealthy(t.Context())
+
+	// After first probe, healthClient should be initialized
+	if engine.healthClient == nil {
+		t.Error("expected healthClient to be initialized after probe")
+	}
+	if engine.healthClient.Timeout != 2*time.Second {
+		t.Errorf("expected healthClient timeout 2s, got %v", engine.healthClient.Timeout)
+	}
+}
+
+// SCN-022-07: Concurrent health probes don't panic (race detector clean)
+func TestIsMLHealthy_ConcurrentProbes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   srv.URL,
+		HealthCacheTTL: 1 * time.Millisecond,
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			engine.mlHealthAt.Store(0) // force refresh each time
+			_ = engine.isMLHealthy(t.Context())
+		}()
+	}
+	wg.Wait()
 }

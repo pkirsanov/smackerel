@@ -2,6 +2,9 @@ package twitter
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -328,5 +331,162 @@ func TestParseTweetsJS_NoArrayBracket(t *testing.T) {
 	_, err := parseTweetsJS(data)
 	if err == nil {
 		t.Error("expected error when no JSON array found")
+	}
+}
+
+// --- Security hardening tests ---
+
+func TestConnect_ArchiveDirSymlinkResolution(t *testing.T) {
+	// Create a real directory and a symlink to it
+	realDir := t.TempDir()
+	symlinkDir := filepath.Join(t.TempDir(), "symlink")
+	if err := os.Symlink(realDir, symlinkDir); err != nil {
+		t.Skipf("cannot create symlinks on this OS: %v", err)
+	}
+
+	c := New("twitter")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":   "archive",
+			"archive_dir": symlinkDir,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected connect to succeed with symlink dir: %v", err)
+	}
+
+	// After connect, the config should hold the resolved (real) path
+	c.mu.RLock()
+	resolved := c.config.ArchiveDir
+	c.mu.RUnlock()
+	if resolved != realDir {
+		t.Errorf("archive_dir should be resolved to %s, got %s", realDir, resolved)
+	}
+}
+
+func TestConnect_ArchiveDirNotADirectory(t *testing.T) {
+	// Point archive_dir at a regular file, not a directory
+	tmpFile := filepath.Join(t.TempDir(), "not_a_dir")
+	if err := os.WriteFile(tmpFile, []byte("nope"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	c := New("twitter")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":   "archive",
+			"archive_dir": tmpFile,
+		},
+	})
+	if err == nil {
+		t.Error("expected error when archive_dir is a file, not a directory")
+	}
+}
+
+func TestSyncArchive_FileSizeLimit(t *testing.T) {
+	// Verify that the file size limit constant is enforced.
+	// We cannot easily create a 500MB file in a unit test, so verify
+	// the constant is set to a sane value.
+	if maxArchiveFileSize != 500*1024*1024 {
+		t.Errorf("maxArchiveFileSize should be 500 MiB, got %d", maxArchiveFileSize)
+	}
+}
+
+func TestSyncArchive_SymlinkTraversal(t *testing.T) {
+	// Create archive dir structure where data/tweets.js is a symlink
+	// pointing outside the archive directory.
+	archiveDir := t.TempDir()
+	dataDir := filepath.Join(archiveDir, "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a file outside the archive directory
+	outsideDir := t.TempDir()
+	outsideFile := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("secret data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink data/tweets.js → outside file
+	symlinkPath := filepath.Join(dataDir, "tweets.js")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("cannot create symlinks on this OS: %v", err)
+	}
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: archiveDir}
+
+	_, _, err := c.syncArchive(context.Background(), "")
+	if err == nil {
+		t.Error("expected error when tweets.js is a symlink escaping archive directory")
+	}
+	if err != nil && !strings.Contains(err.Error(), "escapes archive directory") {
+		t.Errorf("expected 'escapes archive directory' error, got: %v", err)
+	}
+}
+
+func TestNormalizeTweet_InvalidIDNoURL(t *testing.T) {
+	// A tweet ID with non-digit characters should not produce a URL
+	tweet := ArchiveTweet{
+		ID:       "abc/../../../etc/passwd",
+		FullText: "Malicious tweet",
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	if artifact.URL != "" {
+		t.Errorf("expected empty URL for non-numeric tweet ID, got %q", artifact.URL)
+	}
+}
+
+func TestNormalizeTweet_ValidIDProducesURL(t *testing.T) {
+	tweet := ArchiveTweet{
+		ID:       "1234567890",
+		FullText: "Normal tweet",
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	expected := "https://x.com/i/status/1234567890"
+	if artifact.URL != expected {
+		t.Errorf("expected URL %q, got %q", expected, artifact.URL)
+	}
+}
+
+func TestTwitterConfig_StringRedactsToken(t *testing.T) {
+	cfg := TwitterConfig{
+		SyncMode:    SyncModeAPI,
+		BearerToken: "super-secret-token-123",
+		APIEnabled:  true,
+	}
+	s := cfg.String()
+	if strings.Contains(s, "super-secret-token-123") {
+		t.Error("String() must not contain the bearer token")
+	}
+	if !strings.Contains(s, "<redacted>") {
+		t.Error("String() should show <redacted> for set token")
+	}
+}
+
+func TestTwitterConfig_StringNoToken(t *testing.T) {
+	cfg := TwitterConfig{
+		SyncMode: SyncModeArchive,
+	}
+	s := cfg.String()
+	if !strings.Contains(s, "<not set>") {
+		t.Error("String() should show <not set> for empty token")
+	}
+}
+
+func TestParseTwitterConfig_CleansDirPath(t *testing.T) {
+	cfg, err := parseTwitterConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":   "archive",
+			"archive_dir": "/some/path/../other/./dir",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := filepath.Clean("/some/path/../other/./dir")
+	if cfg.ArchiveDir != expected {
+		t.Errorf("expected cleaned path %q, got %q", expected, cfg.ArchiveDir)
 	}
 }

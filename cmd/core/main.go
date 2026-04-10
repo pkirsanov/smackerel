@@ -463,7 +463,7 @@ func run() error {
 
 // shutdownAll performs explicit sequential shutdown in reverse-dependency order.
 // Sequence: scheduler → HTTP → Telegram → result subscribers → connectors → NATS → DB.
-// Each step gets a portion of the total timeout budget.
+// Each step gets a timeout budget; if a step hangs, a warning is logged and shutdown proceeds.
 func shutdownAll(
 	timeoutS int,
 	sched *scheduler.Scheduler,
@@ -477,43 +477,79 @@ func shutdownAll(
 	totalTimeout := time.Duration(timeoutS) * time.Second
 	slog.Info("starting graceful shutdown", "timeout_s", timeoutS)
 
-	// Step 1: Stop scheduler (no new cron jobs fire)
-	slog.Info("shutdown: stopping scheduler")
-	sched.Stop()
+	// Step 1: Stop scheduler (no new cron jobs fire) — 2s budget
+	runWithTimeout("scheduler", 2*time.Second, func() {
+		if sched != nil {
+			sched.Stop()
+		}
+	})
 
 	// Step 2: Drain HTTP server — allocate most of the budget here
 	httpTimeout := totalTimeout - 10*time.Second
 	if httpTimeout < 5*time.Second {
 		httpTimeout = 5 * time.Second
 	}
-	slog.Info("shutdown: draining HTTP server", "timeout", httpTimeout)
-	httpCtx, httpCancel := context.WithTimeout(context.Background(), httpTimeout)
-	defer httpCancel()
-	if err := srv.Shutdown(httpCtx); err != nil {
-		slog.Warn("shutdown: HTTP server drain error", "error", err)
+	runWithTimeout("HTTP server", httpTimeout, func() {
+		if srv != nil {
+			httpCtx, httpCancel := context.WithTimeout(context.Background(), httpTimeout)
+			defer httpCancel()
+			if err := srv.Shutdown(httpCtx); err != nil {
+				slog.Warn("shutdown: HTTP server drain error", "error", err)
+			}
+		}
+	})
+
+	// Step 3: Stop Telegram bot (cancel long-poll) — 2s budget
+	runWithTimeout("Telegram bot", 2*time.Second, func() {
+		if tgBot != nil {
+			tgBot.Stop()
+		}
+	})
+
+	// Step 4: Stop result subscribers (NATS consumer drain) — 2s budget
+	runWithTimeout("result subscribers", 2*time.Second, func() {
+		if resultSub != nil {
+			resultSub.Stop()
+		}
+	})
+
+	// Step 5: Stop connector supervisor (all connectors) — 2s budget
+	runWithTimeout("connectors", 2*time.Second, func() {
+		if supervisor != nil {
+			supervisor.StopAll()
+		}
+	})
+
+	// Step 6: Drain NATS connection (after all NATS consumers are stopped) — 2s budget
+	runWithTimeout("NATS", 2*time.Second, func() {
+		if nc != nil {
+			nc.Close()
+		}
+	})
+
+	// Step 7: Close DB pool (last — all DB consumers are already stopped) — 1s budget
+	runWithTimeout("database pool", 1*time.Second, func() {
+		if pg != nil {
+			pg.Close()
+		}
+	})
+}
+
+// runWithTimeout runs fn with a timeout. If fn doesn't complete within budget,
+// a warning is logged and control returns immediately so shutdown can proceed.
+func runWithTimeout(step string, budget time.Duration, fn func()) {
+	slog.Info("shutdown: stopping "+step, "budget", budget)
+	done := make(chan struct{})
+	go func() {
+		fn()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// completed within budget
+	case <-time.After(budget):
+		slog.Warn("shutdown: step exceeded timeout, proceeding", "step", step, "budget", budget)
 	}
-
-	// Step 3: Stop Telegram bot (cancel long-poll)
-	if tgBot != nil {
-		slog.Info("shutdown: stopping Telegram bot")
-		tgBot.Stop()
-	}
-
-	// Step 4: Stop result subscribers (NATS consumer drain)
-	slog.Info("shutdown: stopping result subscribers")
-	resultSub.Stop()
-
-	// Step 5: Stop connector supervisor (all connectors)
-	slog.Info("shutdown: stopping connectors")
-	supervisor.StopAll()
-
-	// Step 6: Drain NATS connection (after all NATS consumers are stopped)
-	slog.Info("shutdown: draining NATS")
-	nc.Close()
-
-	// Step 7: Close DB pool (last — all DB consumers are already stopped)
-	slog.Info("shutdown: closing database pool")
-	pg.Close()
 }
 
 // parseJSONArray parses a JSON array string into []interface{}.
