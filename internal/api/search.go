@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,8 +59,13 @@ type SearchResult struct {
 
 // SearchEngine handles semantic search operations.
 type SearchEngine struct {
-	Pool *pgxpool.Pool
-	NATS *smacknats.Client
+	Pool           *pgxpool.Pool
+	NATS           *smacknats.Client
+	MLSidecarURL   string
+	HealthCacheTTL time.Duration
+
+	mlHealthy  atomic.Bool
+	mlHealthAt atomic.Int64 // unix nanos of last health check
 }
 
 // SearchHandler handles POST /api/search.
@@ -83,13 +90,12 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
 	// Get the search engine from dependencies
-	engine, ok := d.SearchEngine.(*SearchEngine)
-	if !ok || engine == nil {
+	if d.SearchEngine == nil {
 		writeError(w, http.StatusServiceUnavailable, "ML_UNAVAILABLE", "Search sidecar is not responding")
 		return
 	}
 
-	results, totalCandidates, searchMode, err := engine.Search(r.Context(), req)
+	results, totalCandidates, searchMode, err := d.SearchEngine.Search(r.Context(), req)
 	if err != nil {
 		slog.Error("search failed", "error", err, "query", req.Query)
 		writeError(w, http.StatusInternalServerError, "SEARCH_FAILED", "Search processing error")
@@ -107,6 +113,17 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(results) == 0 {
 		resp.Message = "I don't have anything about that yet"
+	}
+
+	// Log search for frequency tracking (non-blocking — failures don't affect response)
+	if d.IntelligenceEngine != nil {
+		topResultID := ""
+		if len(results) > 0 {
+			topResultID = results[0].ArtifactID
+		}
+		if err := d.IntelligenceEngine.LogSearch(r.Context(), req.Query, len(results), topResultID); err != nil {
+			slog.Warn("search logging failed", "error", err, "query", req.Query)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -136,6 +153,13 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	if req.Query == "" {
 		results, total, err := s.timeRangeSearch(ctx, req)
 		return results, total, "time_range", err
+	}
+
+	// Check ML sidecar health cache — skip NATS embed if sidecar is down
+	if !s.isMLHealthy(ctx) {
+		slog.Info("ML sidecar unhealthy, using text fallback", "query", req.Query)
+		results, total, err := s.textSearch(ctx, req)
+		return results, total, "text_fallback", err
 	}
 
 	// Step 1: Create a unique inbox for this query to avoid shared-subject races
@@ -219,6 +243,49 @@ func (s *SearchEngine) waitForEmbeddingOnInbox(ctx context.Context, sub *nats.Su
 		return nil, fmt.Errorf("unmarshal embedding response: %w", err)
 	}
 	return resp.Embedding, nil
+}
+
+// isMLHealthy returns cached ML sidecar health status.
+// Refreshes the cache when TTL has expired via a quick HTTP health check.
+func (s *SearchEngine) isMLHealthy(ctx context.Context) bool {
+	if s.MLSidecarURL == "" {
+		return false
+	}
+
+	now := time.Now().UnixNano()
+	lastCheck := s.mlHealthAt.Load()
+	ttl := s.HealthCacheTTL
+	if ttl == 0 {
+		ttl = 30 * time.Second
+	}
+
+	if now-lastCheck < int64(ttl) {
+		return s.mlHealthy.Load()
+	}
+
+	// TTL expired — refresh
+	healthy := s.probeMLHealth(ctx)
+	s.mlHealthy.Store(healthy)
+	s.mlHealthAt.Store(now)
+	return healthy
+}
+
+// probeMLHealth performs a quick HTTP GET to the ML sidecar health endpoint.
+func (s *SearchEngine) probeMLHealth(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.MLSidecarURL+"/health", nil)
+	if err != nil {
+		return false
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); resp.Body.Close() }()
+	return resp.StatusCode == http.StatusOK
 }
 
 // vectorSearch performs pgvector cosine similarity search.

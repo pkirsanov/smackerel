@@ -11,7 +11,7 @@
 > **Status:** Draft
 > **Version:** 2.0
 > **Internal Codename:** Smackerel
-> **Runtime Platform:** OpenClaw
+> **Runtime Platform:** Go + Docker Compose (self-hosted)
 
 ---
 
@@ -127,8 +127,8 @@ Smackerel is **not** a to-do app, not a note-taking app, not a bookmarking tool,
 | 6 | **One graph, many views** | All artifacts live in one knowledge graph. Views (by topic, by person, by time, by place) are projections, not separate stores. |
 | 7 | **Invisible by default** | No notifications unless actionable. No "I processed 47 items today!" noise. The system is felt, not heard. |
 | 8 | **Small, frequent, actionable** | Digests fit a phone screen. Insights are one sentence. Actions are concrete. Never a 2,000-word analysis. |
-| 9 | **Own your data** | Everything runs locally on your devices via OpenClaw. No cloud dependency for core functionality. Your knowledge graph is yours. |
-| 10 | **Platform, not product** | Built on OpenClaw's swappable architecture. Any channel, any LLM, any storage backend. Skills are modular and replaceable. |
+| 9 | **Own your data** | Everything runs locally on your devices via Docker Compose. No cloud dependency for core functionality. Your knowledge graph is yours. |
+| 10 | **Platform, not product** | Modular architecture with swappable components. Any LLM backend (Ollama, Claude, GPT), any channel (Telegram, Discord, web). Connectors are pluggable. |
 | 11 | **Trust through transparency** | Every filing decision is logged. Every connection is explainable. Every synthesis cites sources. |
 | 12 | **Design for restart, not perfection** | Miss a week? The system kept ingesting passively. Just ask "what did I miss?" No backlog guilt. |
 | 13 | **Compound value** | The system gets more valuable every day. Day 1 is useful. Day 365 is indispensable. |
@@ -393,6 +393,8 @@ sequenceDiagram
 ---
 
 ## 4. OpenClaw Integration Strategy
+
+> **⚠️ SUPERSEDED:** This section describes the original design intent to use OpenClaw as the runtime platform. The actual implementation uses a **standalone Go monolith + Python ML sidecar + Docker Compose** architecture, as described in §3 and §23. This section is retained as historical context for the design evolution. All subsections below reflect the original OpenClaw design, not the current implementation.
 
 ### 4.1 Why OpenClaw
 
@@ -756,17 +758,17 @@ Each passive source has:
 
 ### 6.1 Capture Channels
 
-The user can actively capture artifacts through any OpenClaw-connected channel:
+The user can actively capture artifacts through any connected channel:
 
 | Channel | How | Friction |
 |---------|-----|---------|
 | **WhatsApp / Telegram / Signal** | Send message to Smackerel bot | < 5 sec |
 | **Slack / Discord** | Message in dedicated channel or DM the bot | < 5 sec |
-| **Mobile share sheet** | Share any URL/text to OpenClaw app (iOS/Android) | 1 tap |
+| **Mobile share sheet** | Share any URL/text via Telegram bot (iOS/Android) | 1 tap |
 | **Browser extension** | Click extension icon on any page | 1 click |
-| **Voice** | "Hey Smackerel, save this..." (Voice Wake) | < 5 sec |
+| **Voice** | "Hey Smackerel, save this..." (via Telegram voice note) | < 5 sec |
 | **Email forward** | Forward email to capture@your-smackerel-domain | 1 click |
-| **WebChat** | Paste into OpenClaw WebChat | < 5 sec |
+| **WebChat** | Paste into Smackerel Web UI | < 5 sec |
 | **Clipboard** | Copy + trigger (configurable hotkey on desktop) | 2 keys |
 
 ### 6.2 Capture Input Types
@@ -837,7 +839,7 @@ flowchart TD
 
 #### Stage 2: Content Extraction
 
-- **URLs**: Fetch page content (OpenClaw browser control), extract main text (readability algorithm), capture metadata (title, author, date, images)
+- **URLs**: Fetch page content (go-readability), extract main text (readability algorithm), capture metadata (title, author, date, images)
 - **YouTube**: Fetch transcript via YouTube Transcript API, fallback to Whisper
 - **Email**: Parse MIME, extract body text, attachment metadata, sender/recipient, thread context
 - **Images**: OCR (Tesseract or cloud OCR), EXIF metadata
@@ -865,9 +867,9 @@ Single LLM call per artifact with the Universal Processing Prompt (see §15.1):
 #### Stage 4: Embedding Generation
 
 - Generate vector embedding from: `title + summary + key_ideas.join(' ')`
-- Model: `text-embedding-3-small` (OpenAI) or local `nomic-embed-text`
-- Store in LanceDB (local vector database, no server required)
-- Embedding dimensions: 1536 (OpenAI) or 768 (nomic)
+- Model: `all-MiniLM-L6-v2` (local) or `text-embedding-3-small` (OpenAI)
+- Store in PostgreSQL via pgvector extension
+- Embedding dimensions: 384 (all-MiniLM-L6-v2) or 1536 (OpenAI)
 
 #### Stage 5: Knowledge Graph Linking
 
@@ -906,30 +908,29 @@ Not all artifacts deserve the same depth of processing. Tier is determined by so
 
 ```mermaid
 graph TD
-    subgraph "Primary Store: SQLite"
-        ART[(artifacts table)]
-        PEOPLE[(people table)]
-        TOPICS[(topics table)]
-        EDGES[(edges table)]
-        SOURCES[(sources table)]
-        SYNC[(sync_state table)]
+    subgraph "PostgreSQL + pgvector"
+        ART[(artifacts + embedding vector)]
+        PEOPLE[(people)]
+        TOPICS[(topics)]
+        EDGES[(edges)]
+        SYNC[(sync_state)]
+        INSIGHTS[(synthesis_insights)]
+        ALERTS[(alerts)]
+        TRIPS[(trips)]
+        TRAILS[(trails)]
     end
 
-    subgraph "Vector Store: LanceDB"
-        EMB[(embeddings)]
+    subgraph "Config Store"
+        CONF[config/smackerel.yaml]
+        GEN[config/generated/*.env]
     end
 
-    subgraph "File Store: Workspace"
-        MEM[memory/ files]
-        LOGS[daily-log/ files]
-        CONF[config/ files]
-    end
-
-    ART -->|artifact_id| EMB
     ART -->|edges| EDGES
     ART -->|topic_id| TOPICS
     ART -->|person_id| PEOPLE
     EDGES -->|src, dst| ART
+    INSIGHTS -->|source_artifact_ids| ART
+    ALERTS -->|artifact_id| ART
 ```
 
 ### 8.2 Knowledge Graph Model
@@ -1334,139 +1335,151 @@ Through any connected channel:
 
 ## 14. Data Models & Schemas
 
-### 14.1 Artifact Table (SQLite)
+### 14.1 Artifact Table (PostgreSQL + pgvector)
 
 ```sql
-CREATE TABLE artifacts (
-    id              TEXT PRIMARY KEY,        -- ULID
-    artifact_type   TEXT NOT NULL,           -- article, video, email, product, person, idea, place, book, recipe, bill, trip, trail, note, media, event
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE TABLE IF NOT EXISTS artifacts (
+    id              TEXT PRIMARY KEY,           -- ULID
+    artifact_type   TEXT NOT NULL,              -- article, video, email, product, person, idea, place, book, recipe, bill, trip, trail, note, media, event
     title           TEXT NOT NULL,
     summary         TEXT,
-    content_raw     TEXT,                    -- Original content (can be large)
-    content_hash    TEXT,                    -- For dedup
-    key_ideas       TEXT,                    -- JSON array of strings
-    entities        TEXT,                    -- JSON: {people: [], orgs: [], places: [], products: [], dates: []}
-    action_items    TEXT,                    -- JSON array of strings
-    topics          TEXT,                    -- JSON array of topic_ids
-    sentiment       TEXT,                    -- positive/neutral/negative/mixed
-    source_id       TEXT NOT NULL,           -- gmail, youtube, capture, browser, maps, etc.
-    source_ref      TEXT,                    -- Source-specific ID (email ID, video ID, URL)
-    source_url      TEXT,                    -- Original URL if applicable
-    source_quality  TEXT,                    -- high/medium/low
-    source_qualifiers TEXT,                  -- JSON: source-specific metadata (labels, watch%, playlist, etc.)
-    processing_tier TEXT DEFAULT 'standard', -- full/standard/light/metadata
+    content_raw     TEXT,                       -- Original content (can be large)
+    content_hash    TEXT NOT NULL,              -- For dedup
+    key_ideas       JSONB,                      -- Array of key insight strings
+    entities        JSONB,                      -- {people: [], orgs: [], places: [], products: [], dates: []}
+    action_items    JSONB,                      -- Array of action item strings
+    topics          JSONB,                      -- Array of topic_ids
+    sentiment       TEXT,                       -- positive/neutral/negative/mixed
+    source_id       TEXT NOT NULL,              -- gmail, youtube, capture, browser, maps, etc.
+    source_ref      TEXT,                       -- Source-specific ID (email ID, video ID, URL)
+    source_url      TEXT,                       -- Original URL if applicable
+    source_quality  TEXT,                       -- high/medium/low
+    source_qualifiers JSONB,                    -- Source-specific metadata (labels, watch%, playlist, etc.)
+    processing_tier TEXT DEFAULT 'standard',    -- full/standard/light/metadata
     relevance_score REAL DEFAULT 0.0,
-    user_starred    INTEGER DEFAULT 0,
-    capture_method  TEXT,                    -- passive/active
-    location        TEXT,                    -- JSON: {lat, lng, name} if available
-    temporal_relevance TEXT,                 -- JSON: {relevant_from, relevant_until}
-    created_at      TEXT NOT NULL,           -- ISO 8601
-    updated_at      TEXT NOT NULL,
-    last_accessed   TEXT,
+    user_starred    BOOLEAN DEFAULT FALSE,
+    capture_method  TEXT,                       -- passive/active
+    location        JSONB,                      -- {lat, lng, name} if available
+    temporal_relevance JSONB,                   -- {relevant_from, relevant_until}
+    embedding       vector(384),               -- all-MiniLM-L6-v2 sentence embedding
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_accessed   TIMESTAMPTZ,
     access_count    INTEGER DEFAULT 0
 );
 
-CREATE INDEX idx_artifacts_type ON artifacts(artifact_type);
-CREATE INDEX idx_artifacts_source ON artifacts(source_id, source_ref);
-CREATE INDEX idx_artifacts_created ON artifacts(created_at);
-CREATE INDEX idx_artifacts_relevance ON artifacts(relevance_score DESC);
-CREATE INDEX idx_artifacts_hash ON artifacts(content_hash);
+CREATE INDEX IF NOT EXISTS idx_artifacts_type ON artifacts(artifact_type);
+CREATE INDEX IF NOT EXISTS idx_artifacts_source ON artifacts(source_id, source_ref);
+CREATE INDEX IF NOT EXISTS idx_artifacts_created ON artifacts(created_at);
+CREATE INDEX IF NOT EXISTS idx_artifacts_relevance ON artifacts(relevance_score DESC);
+CREATE INDEX IF NOT EXISTS idx_artifacts_hash ON artifacts(content_hash);
+CREATE INDEX IF NOT EXISTS idx_artifacts_embedding ON artifacts
+    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+CREATE INDEX IF NOT EXISTS idx_artifacts_title_trgm ON artifacts
+    USING gin (title gin_trgm_ops);
 ```
 
 ### 14.2 People Table
 
 ```sql
-CREATE TABLE people (
-    id              TEXT PRIMARY KEY,        -- ULID
+CREATE TABLE IF NOT EXISTS people (
+    id              TEXT PRIMARY KEY,           -- ULID
     name            TEXT NOT NULL,
-    aliases         TEXT,                    -- JSON array of alternate names/emails
-    context         TEXT,                    -- How user knows them
+    aliases         JSONB,                      -- Array of alternate names/emails
+    context         TEXT,                       -- How user knows them
     organization    TEXT,
     email           TEXT,
     phone           TEXT,
-    notes           TEXT,                    -- Ongoing notes
-    follow_ups      TEXT,                    -- JSON array of pending follow-ups
-    interests       TEXT,                    -- JSON array of known interests
+    notes           TEXT,                       -- Ongoing notes
+    follow_ups      JSONB,                      -- Array of pending follow-ups
+    interests       JSONB,                      -- Array of known interests
     interaction_count INTEGER DEFAULT 0,
-    last_interaction TEXT,                   -- ISO 8601
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
+    last_interaction TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
 ### 14.3 Topics Table
 
 ```sql
-CREATE TABLE topics (
-    id              TEXT PRIMARY KEY,        -- ULID
+CREATE TABLE IF NOT EXISTS topics (
+    id              TEXT PRIMARY KEY,           -- ULID
     name            TEXT NOT NULL UNIQUE,
-    parent_id       TEXT,                    -- Hierarchical topics
+    parent_id       TEXT REFERENCES topics(id), -- Hierarchical topics
     description     TEXT,
-    state           TEXT DEFAULT 'emerging', -- emerging/active/hot/cooling/dormant/archived
+    state           TEXT DEFAULT 'emerging',    -- emerging/active/hot/cooling/dormant/archived
     momentum_score  REAL DEFAULT 0.0,
     capture_count_total INTEGER DEFAULT 0,
     capture_count_30d   INTEGER DEFAULT 0,
     capture_count_90d   INTEGER DEFAULT 0,
     search_hit_count_30d INTEGER DEFAULT 0,
-    last_active     TEXT,                    -- ISO 8601
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL,
-    FOREIGN KEY (parent_id) REFERENCES topics(id)
+    last_active     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
 ### 14.4 Edges Table (Knowledge Graph)
 
 ```sql
-CREATE TABLE edges (
+CREATE TABLE IF NOT EXISTS edges (
     id          TEXT PRIMARY KEY,
-    src_type    TEXT NOT NULL,               -- artifact, person, topic, place, trip
+    src_type    TEXT NOT NULL,                  -- artifact, person, topic, place, trip
     src_id      TEXT NOT NULL,
     dst_type    TEXT NOT NULL,
     dst_id      TEXT NOT NULL,
-    edge_type   TEXT NOT NULL,               -- RELATED_TO, MENTIONS, BELONGS_TO, LOCATED_AT, PART_OF, RECOMMENDED, etc.
-    weight      REAL DEFAULT 1.0,            -- Similarity/strength score
-    metadata    TEXT,                        -- JSON: additional edge context
-    created_at  TEXT NOT NULL,
+    edge_type   TEXT NOT NULL,                  -- RELATED_TO, MENTIONS, BELONGS_TO, LOCATED_AT, PART_OF, RECOMMENDED, etc.
+    weight      REAL DEFAULT 1.0,               -- Similarity/strength score
+    metadata    JSONB,                          -- Additional edge context
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(src_type, src_id, dst_type, dst_id, edge_type)
 );
 
-CREATE INDEX idx_edges_src ON edges(src_type, src_id);
-CREATE INDEX idx_edges_dst ON edges(dst_type, dst_id);
-CREATE INDEX idx_edges_type ON edges(edge_type);
+CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src_type, src_id);
+CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst_type, dst_id);
+CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(edge_type);
 ```
 
 ### 14.5 Sync State Table
 
 ```sql
-CREATE TABLE sync_state (
+CREATE TABLE IF NOT EXISTS sync_state (
     source_id       TEXT PRIMARY KEY,
-    enabled         INTEGER DEFAULT 1,
-    last_sync       TEXT,                    -- ISO 8601
-    sync_cursor     TEXT,                    -- Source-specific cursor/token
+    enabled         BOOLEAN DEFAULT TRUE,
+    last_sync       TIMESTAMPTZ,
+    sync_cursor     TEXT,                      -- Source-specific cursor/token
     items_synced    INTEGER DEFAULT 0,
     errors_count    INTEGER DEFAULT 0,
     last_error      TEXT,
-    config          TEXT,                    -- JSON: source-specific config (qualifiers, rules)
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
+    config          JSONB,                     -- Source-specific config (qualifiers, rules)
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
 ### 14.6 Trips Table
 
 ```sql
-CREATE TABLE trips (
-    id              TEXT PRIMARY KEY,
-    name            TEXT NOT NULL,
-    destination     TEXT,
-    start_date      TEXT,
-    end_date        TEXT,
-    status          TEXT DEFAULT 'upcoming', -- upcoming/active/completed
-    dossier         TEXT,                    -- JSON: aggregated trip info (flights, hotel, places, etc.)
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS trips (
+    id           TEXT PRIMARY KEY,
+    name         TEXT NOT NULL,
+    destination  TEXT,
+    start_date   DATE,
+    end_date     DATE,
+    status       TEXT DEFAULT 'upcoming',      -- upcoming/active/completed
+    dossier      JSONB,                        -- Assembled trip context
+    artifact_ids TEXT[],                       -- Related artifacts
+    delivered_at TIMESTAMPTZ,                  -- When proactive dossier was sent
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
+CREATE INDEX IF NOT EXISTS idx_trips_dates ON trips(start_date, end_date);
 ```
 
 ---
@@ -1653,7 +1666,7 @@ OUTPUT:
 
 | Scenario | User Action | System Response | Time |
 |---|---|---|---|
-| Found interesting article on phone | Share → OpenClaw app | Fetches full text, summarizes, tags, connects. Optional confirmation: "Saved: 'SaaS Metrics That Matter' (3 connections)" | <5 sec user time |
+| Found interesting article on phone | Share → Telegram bot | Fetches full text, summarizes, tags, connects. Optional confirmation: "Saved: 'SaaS Metrics That Matter' (3 connections)" | <5 sec user time |
 | Had an idea in the shower | Voice: "Hey Smackerel, save this — what if we organized the team by customer segment instead of function?" | Transcribes, classifies as idea, connects to recent "team structure" captures | <10 sec user time |
 | Someone recommended a book | Type in WhatsApp: "book: Thinking in Systems by Donella Meadows, recommended by Sarah for systems thinking" | Creates book artifact, links to Sarah (person), fetches book summary from web, adds to reading queue | <10 sec user time |
 | Product worth remembering | Share product URL from browser | Extracts product name, price, specs, image. Tags with "wishlist" topic. | 1 tap |
@@ -1754,10 +1767,10 @@ OUTPUT:
 
 | Layer | Protection | Implementation |
 |---|---|---|
-| **Access control** | Only authorized users interact with Smackerel | OpenClaw DM pairing + allowlists |
-| **Data at rest** | All data stays on user's devices | SQLite + LanceDB in OpenClaw workspace, no cloud sync |
+| **Access control** | Only authorized users interact with Smackerel | Bearer token auth + allowlists |
+| **Data at rest** | All data stays on user's devices | PostgreSQL + pgvector in Docker volume, no cloud sync |
 | **Data in transit** | API calls to LLM providers are stateless | No fine-tuning on user data. Content sent only for processing. |
-| **API key management** | All API keys in OpenClaw credential store | Encrypted at rest, never in prompts or logs |
+| **API key management** | All API keys in smackerel.yaml / environment variables | Encrypted at rest, never in prompts or logs |
 | **Prompt injection defense** | Strict output schemas for all LLM calls. JSON validation before storage. | Malformed responses logged and discarded. |
 | **Source system access** | OAuth2 with minimal scopes | Gmail: read-only. Calendar: read-only. YouTube: read-only. Maps: read-only. |
 | **No exfiltration** | System never sends data to external services beyond LLM processing | No outbound email, no posting, no external API writes |
@@ -1814,7 +1827,7 @@ With local LLM (Ollama):
 | Source enable/disable | Gmail: on, YouTube: on, Calendar: on, Maps: off, Browser: off, Photos: off | Per-source toggle |
 | LLM routing | Cloud API | Cloud, local (Ollama), hybrid (sensitive → local, general → cloud) |
 | Data retention | Indefinite | Configurable auto-purge by age |
-| Export | Always available | Full SQLite + LanceDB export, Notion export, Obsidian export |
+| Export | Always available | Full PostgreSQL pg_dump export, Notion export, Obsidian export |
 | Delete | Per-artifact, per-topic, per-source, full wipe | Immediate, irreversible |
 
 ---
@@ -1830,8 +1843,8 @@ gantt
     axisFormat  %b %d
 
     section Phase 1: Foundation
-    OpenClaw workspace setup        :p1a, 2026-04-07, 2d
-    SQLite + LanceDB setup          :p1b, 2026-04-07, 2d
+    Docker Compose + config setup   :p1a, 2026-04-07, 2d
+    PostgreSQL + pgvector setup     :p1b, 2026-04-07, 2d
     Universal processing prompt     :p1c, after p1b, 2d
     Active capture skill            :p1d, after p1c, 3d
     Semantic search skill           :p1e, after p1d, 3d
@@ -1865,27 +1878,28 @@ gantt
     Serendipity engine              :p5e, after p5c, 1d
 ```
 
-### Phase 1: Foundation (MVP)
+### Phase 1: Foundation (MVP) ✅ Delivered
 
-**Goal:** Active capture + search + basic digest via OpenClaw.
+**Goal:** Active capture + search + basic digest via Go core + Docker Compose.
 
 | Step | Task | Details |
 |------|------|---------|
-| 1.1 | Set up OpenClaw workspace | Workspace structure per §4.2 |
-| 1.2 | Create SQLite schema | Tables per §14 |
-| 1.3 | Set up LanceDB | Local vector store |
-| 1.4 | Write SOUL.md | Smackerel personality per §13.1 |
-| 1.5 | Write AGENTS.md | Agent behavior definition |
-| 1.6 | Build `smackerel-capture` skill | Active capture from any channel, URL detection, content extraction |
-| 1.7 | Build `smackerel-process` skill | Universal processing pipeline (§7) |
-| 1.8 | Build `smackerel-search` skill | Semantic search with vector similarity + re-ranking |
-| 1.9 | Build `smackerel-digest` skill | Basic daily digest |
+| 1.1 | Set up Docker Compose stack | Go core + PostgreSQL + NATS + Python ML sidecar |
+| 1.2 | Create PostgreSQL schema | Tables per §14, pgvector + pg_trgm extensions |
+| 1.3 | Build config pipeline | smackerel.yaml → config/generated/*.env |
+| 1.4 | Build capture API | Active capture from Telegram + Web UI |
+| 1.5 | Build processing pipeline | Universal processing via NATS → ML sidecar |
+| 1.6 | Build semantic search | Vector similarity via pgvector + LLM re-ranking |
+| 1.7 | Build daily digest | Digest generation + Telegram delivery |
+| 1.8 | Connect Telegram bot | Primary active capture + delivery channel |
+| 1.9 | Build repo CLI | `./smackerel.sh` for all runtime operations |
+| 1.10 | Test with 50 captures | Verify processing, search, digest quality |
 | 1.10 | Connect 1-2 channels | WhatsApp or Telegram (user's preferred) |
 | 1.11 | Test with 50 captures | Verify processing, search, digest quality |
 
 **Exit criteria:** Can capture URLs/text from a chat channel. Can find them later with vague queries. Gets a useful daily digest.
 
-### Phase 2: Passive Ingestion
+### Phase 2: Passive Ingestion ✅ Delivered
 
 **Goal:** Background ingestion from Gmail, YouTube, Calendar. Knowledge graph connections forming.
 
@@ -1901,7 +1915,7 @@ gantt
 
 **Exit criteria:** System is silently ingesting emails, videos, and calendar events. Topics are forming, connections are linking. User can search across all source types.
 
-### Phase 3: Intelligence
+### Phase 3: Intelligence 🔜 In Progress
 
 **Goal:** System generates insights the user wouldn't produce on their own.
 
@@ -1916,7 +1930,7 @@ gantt
 
 **Exit criteria:** Weekly synthesis surfaces genuine cross-domain insights. Pre-meeting briefs are useful. Bill reminders are accurate.
 
-### Phase 4: Expansion
+### Phase 4: Expansion ✅ Delivered
 
 **Goal:** Location intelligence, browser integration, trip assembly, people intelligence.
 
@@ -1930,7 +1944,7 @@ gantt
 
 **Exit criteria:** Trip dossiers auto-assemble from email + calendar + saved places. Hike/drive routes are searchable. People context includes interaction patterns.
 
-### Phase 5: Advanced Intelligence
+### Phase 5: Advanced Intelligence ✅ Delivered
 
 **Goal:** Deep self-knowledge, content creation support, advanced patterns.
 
@@ -2078,14 +2092,14 @@ After a lapse of any duration:
 | Knowledge graph | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ (manual) |
 | Topic lifecycle (hot/cooling/dormant) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Cross-domain synthesis | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Daily/weekly digest | ✅ | Recap | ❌ | ❌ | ❌ | ❌ |
-| Pre-meeting briefs | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Daily/weekly digest | ✅ Daily / 🔜 Weekly | Recap | ❌ | ❌ | ❌ | ❌ |
+| Pre-meeting briefs | 🔜 | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Self-hostable (Docker) | ✅ | ❌ | ❌ | ❌ | ✅ | Local files |
 | Local-first / own your data | ✅ | ❌ | ❌ | Partial | ✅ | ✅ |
 | Compiled / high-performance | ✅ (Go) | ❌ | ❌ | ❌ | ❌ (Python) | ❌ |
 | Semantic search | ✅ | ✅ | ✅ | ✅ | ✅ | Plugin |
-| Location/travel intelligence | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Multi-channel delivery | ✅ | Web/mobile | Web/mobile | Web/ext | Web | Desktop |
+| Location/travel intelligence | ✅ Maps / 🔜 Trip dossiers | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Multi-channel delivery | ✅ Telegram + Web / 🔜 Slack, Discord | Web/mobile | Web/mobile | Web/ext | Web | Desktop |
 | Spaced repetition | ❌ (future) | ❌ | ❌ | ✅ | ❌ | Plugin |
 
 ### 21.4 Unique Value Proposition
@@ -2108,36 +2122,37 @@ All connectors are built from **proven, well-maintained open-source libraries** 
 
 ### 22.2 Email Connectors
 
-| Source | Library | Language | License | Stars/Maturity | Notes |
-|--------|---------|----------|---------|----------------|-------|
-| Gmail | `google.golang.org/api/gmail/v1` | Go | Apache 2.0 | Official Google SDK | OAuth2, label filtering, Pub/Sub push support |
-| Outlook / O365 | `github.com/microsoftgraph/msgraph-sdk-go` | Go | MIT | Official Microsoft SDK | Covers mail + calendar + Teams in one SDK |
-| Generic IMAP | `github.com/emersion/go-imap` (v2) | Go | MIT | 2.1k stars, active | Works with Fastmail, ProtonMail Bridge, self-hosted |
+| Source | Library | Language | License | Stars/Maturity | Notes | Status |
+|--------|---------|----------|---------|----------------|-------|--------|
+| Generic IMAP | `github.com/emersion/go-imap` (v2) | Go | MIT | 2.1k stars, active | Works with Gmail, Fastmail, ProtonMail Bridge, self-hosted. Primary email connector. | ✅ Committed |
+| Gmail | `google.golang.org/api/gmail/v1` | Go | Apache 2.0 | Official Google SDK | OAuth2, label filtering, Pub/Sub push support. Currently served by IMAP connector. | 🔜 Planned (SDK upgrade) |
+| Outlook / O365 | `github.com/microsoftgraph/msgraph-sdk-go` | Go | MIT | Official Microsoft SDK | Covers mail + calendar + Teams in one SDK | 🔜 Planned |
 
 ### 22.3 Calendar Connectors
 
-| Source | Library | Language | License | Stars/Maturity | Notes |
-|--------|---------|----------|---------|----------------|-------|
-| Google Calendar | `google.golang.org/api/calendar/v3` | Go | Apache 2.0 | Official Google SDK | Same SDK as Gmail, different service |
-| Outlook Calendar | `msgraph-sdk-go` (same as above) | Go | MIT | Official Microsoft SDK | Calendar endpoints via Graph API |
-| CalDAV (Nextcloud, iCloud, self-hosted) | `github.com/emersion/go-webdav` | Go | MIT | Active, same author as go-imap | RFC4791-compliant, covers any CalDAV server |
+| Source | Library | Language | License | Stars/Maturity | Notes | Status |
+|--------|---------|----------|---------|----------------|-------|--------|
+| CalDAV (Nextcloud, iCloud, Google, self-hosted) | `github.com/emersion/go-webdav` | Go | MIT | Active, same author as go-imap | RFC4791-compliant, covers any CalDAV server including Google Calendar | ✅ Committed |
+| Google Calendar | `google.golang.org/api/calendar/v3` | Go | Apache 2.0 | Official Google SDK | Currently served by CalDAV connector | 🔜 Planned (SDK upgrade) |
+| Outlook Calendar | `msgraph-sdk-go` (same as above) | Go | MIT | Official Microsoft SDK | Calendar endpoints via Graph API | 🔜 Planned |
 
 ### 22.4 Chat & Messaging Connectors
 
-| Source | Library | Language | License | Stars/Maturity | Notes |
-|--------|---------|----------|---------|----------------|-------|
-| Slack | `github.com/slack-go/slack` | Go | MIT | 5k stars, very active | Web API, Socket Mode, Events API |
-| Microsoft Teams | `msgraph-sdk-go` (same SDK) | Go | MIT | Official Microsoft SDK | Teams messages via Graph API, no separate lib |
-| Telegram | `github.com/go-telegram-bot-api/telegram-bot-api` | Go | MIT | 6k stars, active | Async, doubles as capture + delivery bot |
-| Discord | `github.com/bwmarrin/discordgo` | Go | BSD-3 | 5k stars, active | Read channels, threads, attachments |
+| Source | Library | Language | License | Stars/Maturity | Notes | Status |
+|--------|---------|----------|---------|----------------|-------|--------|
+| Telegram | `github.com/go-telegram-bot-api/telegram-bot-api` | Go | MIT | 6k stars, active | Async, doubles as capture + delivery bot | ✅ Committed |
+| Discord | `github.com/bwmarrin/discordgo` | Go | BSD-3 | 5k stars, active | Read channels, threads, attachments | ✅ Committed |
+| Slack | `github.com/slack-go/slack` | Go | MIT | 5k stars, very active | Web API, Socket Mode, Events API | 🔜 Planned |
+| Microsoft Teams | `msgraph-sdk-go` (same SDK) | Go | MIT | Official Microsoft SDK | Teams messages via Graph API, no separate lib | 🔜 Planned |
 
 ### 22.5 Notes & Knowledge Source Connectors
 
-| Source | Library | Language | License | Stars/Maturity | Notes |
-|--------|---------|----------|---------|----------------|-------|
-| Notion | `github.com/jomei/notionapi` | Go | MIT | 500+ stars | Full Notion API coverage |
-| Obsidian | Filesystem read (Go `os` package) | Go | N/A | Native | Mount vault as Docker volume, parse `.md` files. Obsidian vaults are just Markdown on disk. |
-| Apple Notes | ❌ Not viable | — | — | — | No public API. Locked to macOS SQLite DB. Recommend users export to Obsidian or Notion. |
+| Source | Library | Language | License | Stars/Maturity | Notes | Status |
+|--------|---------|----------|---------|----------------|-------|--------|
+| Google Keep | Custom Go connector | Go | N/A | Internal implementation | API client for Keep notes, labels, sync | ✅ Committed |
+| Notion | `github.com/jomei/notionapi` | Go | MIT | 500+ stars | Full Notion API coverage | 🔜 Planned |
+| Obsidian | Filesystem read (Go `os` package) | Go | N/A | Native | Mount vault as Docker volume, parse `.md` files | 🔜 Planned |
+| Apple Notes | ❌ Not viable | — | — | — | No public API. Locked to macOS SQLite DB. Recommend users export to Obsidian or Notion. | N/A |
 
 ### 22.6 Content Extraction
 
@@ -2149,7 +2164,28 @@ All connectors are built from **proven, well-maintained open-source libraries** 
 | RSS / Podcasts | `github.com/mmcdole/gofeed` | Go | MIT | 2.5k stars | Universal RSS/Atom/JSON Feed parser. Pair with Whisper for audio. |
 | PDF text | `github.com/ledongthuc/pdf` or `pdfcpu` | Go | MIT | Active | Extract text from PDFs natively in Go |
 
-### 22.7 Connector Framework Assessment
+### 22.7 Committed Connector Inventory (14 connectors)
+
+All 14 connectors are implemented under `internal/connector/` in Go:
+
+| # | Connector | Directory | Category | Description |
+|---|-----------|-----------|----------|-------------|
+| 1 | Government Alerts | `alerts/` | Environmental | Weather, earthquake, tsunami — contextual safety alerts |
+| 2 | Bookmarks | `bookmarks/` | Web | Browser bookmark ingestion and sync |
+| 3 | Browser History | `browser/` | Web | Browsing history with dwell-time-based processing |
+| 4 | CalDAV | `caldav/` | Calendar | RFC4791-compliant calendar sync (Google, iCloud, Nextcloud) |
+| 5 | Discord | `discord/` | Chat | Channel/thread/attachment ingestion via discordgo |
+| 6 | Hospitable | `hospitable/` | STR | Short-term rental reservation knowledge, guest communications, multi-OTA aggregation |
+| 7 | IMAP | `imap/` | Email | Generic email ingestion via go-imap v2 (Gmail, Fastmail, self-hosted) |
+| 8 | Google Keep | `keep/` | Notes | Notes, labels, and sync state from Google Keep |
+| 9 | Google Maps | `maps/` | Location | Timeline, saved places, routes, activity tracking |
+| 10 | Financial Markets | `markets/` | Finance | Market data, watchlist items, price tracking |
+| 11 | RSS / Podcasts | `rss/` | Content | RSS/Atom/JSON Feed parsing via gofeed |
+| 12 | Twitter / X | `twitter/` | Social | Tweet and thread ingestion |
+| 13 | Weather | `weather/` | Environmental | Local weather data for location context and trail enrichment |
+| 14 | YouTube | `youtube/` | Video | Watch history, liked videos, transcript fetching |
+
+### 22.8 Connector Framework Assessment
 
 We evaluated four connector frameworks for potential reuse:
 
@@ -2162,7 +2198,7 @@ We evaluated four connector frameworks for potential reuse:
 
 **Decision:** Use individual Go/Python libraries directly. The Go ecosystem has official SDKs from Google, Microsoft, and community libraries for every source we need. No framework dependency required.
 
-### 22.8 Reference: Khoj Architecture
+### 22.9 Reference: Khoj Architecture
 
 **Khoj** (33.9k GitHub stars, AGPL-3.0) is the closest existing open-source project. Key architecture observations:
 
@@ -2365,9 +2401,9 @@ When the MVP outgrows the monolith:
 | **Lifecycle** | The automatic promotion/demotion cycle: Emerging → Active → Hot → Cooling → Dormant → Archived |
 | **Dossier** | An aggregated view (e.g., trip dossier with all travel-related artifacts) |
 | **Serendipity** | Weekly resurface of a random old archived item to prevent good ideas from being buried forever |
-| **Smackerel Agent** | The main user-facing OpenClaw agent |
-| **Ingestion Agent** | Background OpenClaw agent that polls and processes source systems |
-| **Synthesis Agent** | Background OpenClaw agent that detects patterns and generates insights |
+| **Smackerel Core** | The main Go runtime service (`smackerel-core`) — API, connectors, scheduler, knowledge graph |
+| **Ingestion Layer** | Background connector subsystem that polls and processes source systems on a cron schedule |
+| **Synthesis Engine** | Intelligence subsystem that detects patterns and generates cross-domain insights |
 
 ### D. Migration from v1 Design
 
@@ -2375,9 +2411,9 @@ When the MVP outgrows the monolith:
 |---|---|---|
 | 4 fixed buckets (people/project/idea/admin) | Open artifact type system (15+ types) | Flexible instead of rigid |
 | Raw text filing | Processed artifacts with summary, entities, connections | Knowledge, not data |
-| Slack-only capture | Any OpenClaw channel + passive ingestion | Capture everything, not just thoughts |
-| Zapier automation | OpenClaw cron + webhooks + skills | More powerful, local, no third-party dependency |
-| Notion storage | SQLite + LanceDB (local) | Own your data, semantic search |
+| Slack-only capture | Multi-channel capture (Telegram, Discord, Web UI) + passive ingestion | Capture everything, not just thoughts |
+| Zapier automation | Go cron scheduler + NATS async processing | More powerful, local, no third-party dependency |
+| Notion storage | PostgreSQL + pgvector (local, Docker volume) | Own your data, semantic search |
 | Keyword search | Vector semantic search + knowledge graph | Find things with vague queries |
 | Daily digest | Daily smackerel + contextual alerts + pre-meeting briefs | Right info at right time, not just scheduled dumps |
 | Classification prompt | Universal processing prompt | Handles any content type |

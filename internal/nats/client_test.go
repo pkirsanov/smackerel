@@ -8,15 +8,16 @@ import (
 
 func TestAllStreams_Coverage(t *testing.T) {
 	streams := AllStreams()
-	if len(streams) != 4 {
-		t.Fatalf("expected 4 streams, got %d", len(streams))
+	if len(streams) != 5 {
+		t.Fatalf("expected 5 streams, got %d", len(streams))
 	}
 
 	expected := map[string][]string{
-		"ARTIFACTS": {"artifacts.>"},
-		"SEARCH":    {"search.>"},
-		"DIGEST":    {"digest.>"},
-		"KEEP":      {"keep.>"},
+		"ARTIFACTS":  {"artifacts.>"},
+		"SEARCH":     {"search.>"},
+		"DIGEST":     {"digest.>"},
+		"KEEP":       {"keep.>"},
+		"DEADLETTER": {"deadletter.>"},
 	}
 
 	for _, s := range streams {

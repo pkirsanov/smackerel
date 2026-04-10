@@ -1,0 +1,134 @@
+{
+  "version": 3,
+  "featureDir": "specs/024-design-doc-reconciliation",
+  "featureName": "Design Document Reconciliation",
+  "status": "done",
+  "workflowMode": "delivery-lockdown",
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-10T12:00:00Z",
+    "completedPhaseClaims": ["analyze", "design", "plan", "implement", "docs", "validate"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [1, 2, 3, 4],
+    "certifiedCompletedPhases": ["analyze", "design", "plan", "implement", "docs", "validate"],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "OpenClaw Reconciliation",
+        "status": "done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-10T14:00:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "Storage Layer Update",
+        "status": "done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-10T14:00:00Z"
+      },
+      {
+        "scope": 3,
+        "name": "Competitive Matrix Audit",
+        "status": "done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-10T14:30:00Z"
+      },
+      {
+        "scope": 4,
+        "name": "Phased Plan and Connector Accuracy",
+        "status": "done",
+        "dependsOn": [1, 2],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-10T14:30:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-10T12:00:00Z",
+      "runEndedAt": "2026-04-10T12:00:00Z",
+      "summary": "Created spec.md with full analysis of design doc drift: 3 priority findings (OpenClaw fictional integration, wrong storage layer, inflated competitive claims), 6 requirements, 5 business scenarios, 5 Gherkin scenarios, 4 scopes."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-10T00:00:00Z",
+      "runEndedAt": "2026-04-10T00:00:00Z",
+      "summary": "Created design.md with section-by-section edit plan for docs/smackerel.md: 15 edit groups covering header metadata, §2 principles, §4 OpenClaw superseded header, §6 capture channels, §7 processing pipeline, §8 storage diagram, §14 DDL rewrite (SQLite→PostgreSQL), §17 security, §18 privacy, §19 phased plan, §21.3 competitive matrix audit, §22 connector accuracy (14 committed connectors), §24 glossary. Implementation sequence and verification checklist defined."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-10T12:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Docs-only feature: reconcile design document drift. No code changes."
+}

@@ -632,6 +632,11 @@ func (b *Bot) handleDone(ctx context.Context, msg *tgbotapi.Message) {
 // Stop flushes all open buffers and waits for in-flight flushes to complete.
 // It blocks until all background flush goroutines have finished or their
 // individual timeouts fire, ensuring no data is silently lost on shutdown.
+// Healthy reports whether the Telegram bot has an active API connection.
+func (b *Bot) Healthy() bool {
+	return b != nil && b.api != nil
+}
+
 func (b *Bot) Stop() {
 	slog.Info("telegram bot shutting down, flushing buffers")
 	if b.assembler != nil {

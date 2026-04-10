@@ -7,6 +7,9 @@ config/generated/
 # Runtime data directories (user import data)
 data/
 
+# Database backups (contain full DB content including tokens)
+backups/
+
 # Secrets and credentials
 *.key
 *.pem

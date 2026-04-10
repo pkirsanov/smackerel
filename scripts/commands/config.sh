@@ -128,6 +128,114 @@ required_value() {
   printf '%s' "$value"
 }
 
+# Extract a complex YAML value (array or object) as JSON using Python3.
+# Returns empty string if the path is not found or python3 is unavailable.
+yaml_get_json() {
+  local key="$1"
+  python3 - "$CONFIG_FILE" "$key" <<'PYEOF' 2>/dev/null || echo ""
+import sys, json
+
+def extract(filepath, dotpath):
+    with open(filepath) as f:
+        lines = f.readlines()
+    parts = dotpath.split('.')
+    depth = 0
+    target_line = -1
+    target_indent = 0
+    for i, raw in enumerate(lines):
+        text = raw.rstrip('\n')
+        stripped = text.lstrip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        indent = len(text) - len(stripped)
+        expected = depth * 2
+        if indent == expected and stripped.startswith(parts[0] + ':'):
+            if len(parts) == 1:
+                val = stripped.split(':', 1)[1].strip()
+                if val:
+                    print(val)
+                    return
+                target_line = i
+                target_indent = -1
+                break
+            parts.pop(0)
+            depth += 1
+    if target_line < 0:
+        return
+    block = []
+    for i in range(target_line + 1, len(lines)):
+        text = lines[i].rstrip('\n')
+        stripped = text.lstrip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        indent = len(text) - len(stripped)
+        if target_indent < 0:
+            target_indent = indent
+        if indent < target_indent:
+            break
+        block.append(text[target_indent:])
+    if not block:
+        return
+    if block[0].lstrip().startswith('- '):
+        result = parse_array(block)
+    else:
+        result = parse_object(block)
+    print(json.dumps(result))
+
+def parse_array(lines):
+    arr, cur = [], {}
+    for ln in lines:
+        s = ln.lstrip()
+        if s.startswith('- '):
+            if cur:
+                arr.append(cur)
+            cur = {}
+            kv = s[2:]
+            if ':' in kv:
+                k, v = kv.split(':', 1)
+                cur[k.strip()] = scalar(v.strip())
+        elif ':' in s:
+            k, v = s.split(':', 1)
+            cur[k.strip()] = scalar(v.strip())
+    if cur:
+        arr.append(cur)
+    return arr
+
+def parse_object(lines):
+    obj = {}
+    for ln in lines:
+        s = ln.lstrip()
+        if ':' in s:
+            k, v = s.split(':', 1)
+            obj[k.strip()] = scalar(v.strip())
+    return obj
+
+def scalar(v):
+    if v in ('', '""', "''"):
+        return ''
+    if v == '[]':
+        return []
+    if v == '{}':
+        return {}
+    if v == 'true':
+        return True
+    if v == 'false':
+        return False
+    if v.startswith('[') and v.endswith(']'):
+        inner = v[1:-1].strip()
+        return [s.strip().strip('"').strip("'") for s in inner.split(',')] if inner else []
+    try:
+        return float(v) if '.' in v else int(v)
+    except ValueError:
+        pass
+    if len(v) >= 2 and v[0] in ('"', "'") and v[-1] == v[0]:
+        return v[1:-1]
+    return v
+
+extract(sys.argv[1], sys.argv[2])
+PYEOF
+}
+
 case "$TARGET_ENV" in
   dev|test)
     ;;
@@ -139,11 +247,15 @@ esac
 
 PROJECT_NAME="$(required_value project.name)"
 CORE_CONTAINER_PORT="$(required_value services.core.container_port)"
+SHUTDOWN_TIMEOUT_S="$(required_value services.core.shutdown_timeout_s)"
 ML_CONTAINER_PORT="$(required_value services.ml.container_port)"
+ML_HEALTH_CACHE_TTL_S="$(required_value services.ml.health_cache_ttl_s)"
 POSTGRES_USER="$(required_value infrastructure.postgres.user)"
 POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"
 POSTGRES_DB="$(required_value infrastructure.postgres.database)"
 POSTGRES_CONTAINER_PORT="$(required_value infrastructure.postgres.container_port)"
+DB_MAX_CONNS="$(required_value infrastructure.postgres.max_conns)"
+DB_MIN_CONNS="$(required_value infrastructure.postgres.min_conns)"
 NATS_CLIENT_PORT="$(required_value infrastructure.nats.client_port)"
 NATS_MONITOR_PORT="$(required_value infrastructure.nats.monitor_port)"
 OLLAMA_ENABLED="$(required_value infrastructure.ollama.enabled)"
@@ -155,6 +267,7 @@ OLLAMA_URL="$(required_value llm.ollama_url)"
 OLLAMA_MODEL="$(required_value llm.ollama_model)"
 OLLAMA_VISION_MODEL="$(required_value llm.ollama_vision_model)"
 SMACKEREL_AUTH_TOKEN="$(required_value runtime.auth_token)"
+HOST_BIND_ADDRESS="$(required_value runtime.host_bind_address)"
 DIGEST_CRON="$(required_value runtime.digest_cron)"
 EMBEDDING_MODEL="$(required_value runtime.embedding_model)"
 LOG_LEVEL="$(required_value runtime.log_level)"
@@ -183,6 +296,43 @@ ML_EXTERNAL_URL="http://127.0.0.1:${ML_HOST_PORT}"
 BOOKMARKS_IMPORT_DIR="$(yaml_get connectors.bookmarks.import_dir 2>/dev/null)" || BOOKMARKS_IMPORT_DIR=""
 MAPS_IMPORT_DIR="$(yaml_get connectors.google-maps-timeline.import_dir 2>/dev/null)" || MAPS_IMPORT_DIR=""
 BROWSER_HISTORY_PATH="$(yaml_get connectors.browser-history.chrome.history_path 2>/dev/null)" || BROWSER_HISTORY_PATH=""
+
+# Discord connector
+DISCORD_ENABLED="$(yaml_get connectors.discord.enabled 2>/dev/null)" || DISCORD_ENABLED="false"
+DISCORD_BOT_TOKEN="$(yaml_get connectors.discord.bot_token 2>/dev/null)" || DISCORD_BOT_TOKEN=""
+DISCORD_SYNC_SCHEDULE="$(yaml_get connectors.discord.sync_schedule 2>/dev/null)" || DISCORD_SYNC_SCHEDULE=""
+DISCORD_ENABLE_GATEWAY="$(yaml_get connectors.discord.enable_gateway 2>/dev/null)" || DISCORD_ENABLE_GATEWAY=""
+DISCORD_BACKFILL_LIMIT="$(yaml_get connectors.discord.backfill_limit 2>/dev/null)" || DISCORD_BACKFILL_LIMIT=""
+DISCORD_INCLUDE_THREADS="$(yaml_get connectors.discord.include_threads 2>/dev/null)" || DISCORD_INCLUDE_THREADS=""
+DISCORD_INCLUDE_PINS="$(yaml_get connectors.discord.include_pins 2>/dev/null)" || DISCORD_INCLUDE_PINS=""
+DISCORD_CAPTURE_COMMANDS="$(yaml_get connectors.discord.capture_commands 2>/dev/null)" || DISCORD_CAPTURE_COMMANDS=""
+DISCORD_MONITORED_CHANNELS="$(yaml_get_json connectors.discord.monitored_channels 2>/dev/null)" || DISCORD_MONITORED_CHANNELS=""
+
+# Twitter connector
+TWITTER_ENABLED="$(yaml_get connectors.twitter.enabled 2>/dev/null)" || TWITTER_ENABLED="false"
+TWITTER_SYNC_MODE="$(yaml_get connectors.twitter.sync_mode 2>/dev/null)" || TWITTER_SYNC_MODE=""
+TWITTER_ARCHIVE_DIR="$(yaml_get connectors.twitter.archive_dir 2>/dev/null)" || TWITTER_ARCHIVE_DIR=""
+TWITTER_BEARER_TOKEN="$(yaml_get connectors.twitter.bearer_token 2>/dev/null)" || TWITTER_BEARER_TOKEN=""
+TWITTER_SYNC_SCHEDULE="$(yaml_get connectors.twitter.sync_schedule 2>/dev/null)" || TWITTER_SYNC_SCHEDULE=""
+
+# Weather connector
+WEATHER_ENABLED="$(yaml_get connectors.weather.enabled 2>/dev/null)" || WEATHER_ENABLED="false"
+WEATHER_SYNC_SCHEDULE="$(yaml_get connectors.weather.sync_schedule 2>/dev/null)" || WEATHER_SYNC_SCHEDULE=""
+WEATHER_LOCATIONS="$(yaml_get_json connectors.weather.locations 2>/dev/null)" || WEATHER_LOCATIONS=""
+
+# Gov Alerts connector
+GOV_ALERTS_ENABLED="$(yaml_get connectors.gov-alerts.enabled 2>/dev/null)" || GOV_ALERTS_ENABLED="false"
+GOV_ALERTS_SYNC_SCHEDULE="$(yaml_get connectors.gov-alerts.sync_schedule 2>/dev/null)" || GOV_ALERTS_SYNC_SCHEDULE=""
+GOV_ALERTS_MIN_EARTHQUAKE_MAG="$(yaml_get connectors.gov-alerts.min_earthquake_magnitude 2>/dev/null)" || GOV_ALERTS_MIN_EARTHQUAKE_MAG=""
+GOV_ALERTS_LOCATIONS="$(yaml_get_json connectors.gov-alerts.locations 2>/dev/null)" || GOV_ALERTS_LOCATIONS=""
+
+# Financial Markets connector
+FINANCIAL_MARKETS_ENABLED="$(yaml_get connectors.financial-markets.enabled 2>/dev/null)" || FINANCIAL_MARKETS_ENABLED="false"
+FINANCIAL_MARKETS_SYNC_SCHEDULE="$(yaml_get connectors.financial-markets.sync_schedule 2>/dev/null)" || FINANCIAL_MARKETS_SYNC_SCHEDULE=""
+FINANCIAL_MARKETS_FINNHUB_API_KEY="$(yaml_get connectors.financial-markets.finnhub_api_key 2>/dev/null)" || FINANCIAL_MARKETS_FINNHUB_API_KEY=""
+FINANCIAL_MARKETS_FRED_API_KEY="$(yaml_get connectors.financial-markets.fred_api_key 2>/dev/null)" || FINANCIAL_MARKETS_FRED_API_KEY=""
+FINANCIAL_MARKETS_ALERT_THRESHOLD="$(yaml_get connectors.financial-markets.alert_threshold 2>/dev/null)" || FINANCIAL_MARKETS_ALERT_THRESHOLD=""
+FINANCIAL_MARKETS_WATCHLIST="$(yaml_get_json connectors.financial-markets.watchlist 2>/dev/null)" || FINANCIAL_MARKETS_WATCHLIST=""
 
 mkdir -p "$REPO_ROOT/config/generated"
 
@@ -220,6 +370,7 @@ LLM_PROVIDER=${LLM_PROVIDER}
 LLM_MODEL=${LLM_MODEL}
 LLM_API_KEY=${LLM_API_KEY}
 SMACKEREL_AUTH_TOKEN=${SMACKEREL_AUTH_TOKEN}
+HOST_BIND_ADDRESS=${HOST_BIND_ADDRESS}
 OLLAMA_URL=${OLLAMA_URL}
 OLLAMA_MODEL=${OLLAMA_MODEL}
 OLLAMA_VISION_MODEL=${OLLAMA_VISION_MODEL}
@@ -236,6 +387,58 @@ ML_EXTERNAL_URL=${ML_EXTERNAL_URL}
 BOOKMARKS_IMPORT_DIR=${BOOKMARKS_IMPORT_DIR}
 MAPS_IMPORT_DIR=${MAPS_IMPORT_DIR}
 BROWSER_HISTORY_PATH=${BROWSER_HISTORY_PATH}
+DISCORD_ENABLED=${DISCORD_ENABLED}
+DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+DISCORD_SYNC_SCHEDULE=${DISCORD_SYNC_SCHEDULE}
+DISCORD_ENABLE_GATEWAY=${DISCORD_ENABLE_GATEWAY}
+DISCORD_BACKFILL_LIMIT=${DISCORD_BACKFILL_LIMIT}
+DISCORD_INCLUDE_THREADS=${DISCORD_INCLUDE_THREADS}
+DISCORD_INCLUDE_PINS=${DISCORD_INCLUDE_PINS}
+DISCORD_CAPTURE_COMMANDS=${DISCORD_CAPTURE_COMMANDS}
+DISCORD_MONITORED_CHANNELS=${DISCORD_MONITORED_CHANNELS}
+TWITTER_ENABLED=${TWITTER_ENABLED}
+TWITTER_SYNC_MODE=${TWITTER_SYNC_MODE}
+TWITTER_ARCHIVE_DIR=${TWITTER_ARCHIVE_DIR}
+TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
+TWITTER_SYNC_SCHEDULE=${TWITTER_SYNC_SCHEDULE}
+WEATHER_ENABLED=${WEATHER_ENABLED}
+WEATHER_SYNC_SCHEDULE=${WEATHER_SYNC_SCHEDULE}
+WEATHER_LOCATIONS=${WEATHER_LOCATIONS}
+GOV_ALERTS_ENABLED=${GOV_ALERTS_ENABLED}
+GOV_ALERTS_SYNC_SCHEDULE=${GOV_ALERTS_SYNC_SCHEDULE}
+GOV_ALERTS_MIN_EARTHQUAKE_MAG=${GOV_ALERTS_MIN_EARTHQUAKE_MAG}
+GOV_ALERTS_LOCATIONS=${GOV_ALERTS_LOCATIONS}
+FINANCIAL_MARKETS_ENABLED=${FINANCIAL_MARKETS_ENABLED}
+FINANCIAL_MARKETS_SYNC_SCHEDULE=${FINANCIAL_MARKETS_SYNC_SCHEDULE}
+FINANCIAL_MARKETS_FINNHUB_API_KEY=${FINANCIAL_MARKETS_FINNHUB_API_KEY}
+FINANCIAL_MARKETS_FRED_API_KEY=${FINANCIAL_MARKETS_FRED_API_KEY}
+FINANCIAL_MARKETS_ALERT_THRESHOLD=${FINANCIAL_MARKETS_ALERT_THRESHOLD}
+FINANCIAL_MARKETS_WATCHLIST=${FINANCIAL_MARKETS_WATCHLIST}
+DB_MAX_CONNS=${DB_MAX_CONNS}
+DB_MIN_CONNS=${DB_MIN_CONNS}
+SHUTDOWN_TIMEOUT_S=${SHUTDOWN_TIMEOUT_S}
+ML_HEALTH_CACHE_TTL_S=${ML_HEALTH_CACHE_TTL_S}
 EOF
 
 echo "Generated $OUTPUT_FILE"
+
+# Generate NATS config file with resolved auth token and monitor port.
+# NATS does not support env var substitution in config files, so values
+# are resolved from the SST at generation time.
+NATS_CONF_FILE="$REPO_ROOT/config/generated/nats.conf"
+NATS_CONF_CONTENT="# Auto-generated from config/smackerel.yaml — DO NOT EDIT DIRECTLY
+# Regenerate: ./smackerel.sh config generate
+
+jetstream {
+  store_dir: /data
+}
+
+http_port: ${NATS_MONITOR_PORT}
+
+authorization {
+  token: ${SMACKEREL_AUTH_TOKEN}
+}"
+
+printf '%s\n' "$NATS_CONF_CONTENT" > "$NATS_CONF_FILE"
+
+echo "Generated $NATS_CONF_FILE"

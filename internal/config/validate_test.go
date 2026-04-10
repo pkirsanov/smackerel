@@ -287,6 +287,47 @@ func TestValidate_AuthTokenCaseInsensitivePlaceholder(t *testing.T) {
 	}
 }
 
+// SCN-023-04: Connector paths flow through config.Config (SST).
+func TestLoad_ConnectorPathFields(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("BOOKMARKS_IMPORT_DIR", "/data/bookmarks")
+	t.Setenv("BROWSER_HISTORY_PATH", "/home/user/.config/google-chrome/Default/History")
+	t.Setenv("MAPS_IMPORT_DIR", "/data/maps-takeout")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BookmarksImportDir != "/data/bookmarks" {
+		t.Errorf("expected BookmarksImportDir=/data/bookmarks, got %q", cfg.BookmarksImportDir)
+	}
+	if cfg.BrowserHistoryPath != "/home/user/.config/google-chrome/Default/History" {
+		t.Errorf("expected BrowserHistoryPath, got %q", cfg.BrowserHistoryPath)
+	}
+	if cfg.MapsImportDir != "/data/maps-takeout" {
+		t.Errorf("expected MapsImportDir=/data/maps-takeout, got %q", cfg.MapsImportDir)
+	}
+}
+
+func TestLoad_ConnectorPathFieldsOptional(t *testing.T) {
+	setRequiredEnv(t)
+	// Not setting connector env vars — should still load successfully
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BookmarksImportDir != "" {
+		t.Errorf("expected empty BookmarksImportDir, got %q", cfg.BookmarksImportDir)
+	}
+	if cfg.BrowserHistoryPath != "" {
+		t.Errorf("expected empty BrowserHistoryPath, got %q", cfg.BrowserHistoryPath)
+	}
+	if cfg.MapsImportDir != "" {
+		t.Errorf("expected empty MapsImportDir, got %q", cfg.MapsImportDir)
+	}
+}
+
 // setRequiredEnv sets all required env vars with test values.
 func setRequiredEnv(t *testing.T) {
 	t.Helper()
@@ -304,4 +345,84 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("PORT", "8080")
 	t.Setenv("ML_SIDECAR_URL", "http://smackerel-ml:8081")
 	t.Setenv("CORE_API_URL", "http://smackerel-core:8080")
+	t.Setenv("DB_MAX_CONNS", "10")
+	t.Setenv("DB_MIN_CONNS", "2")
+	t.Setenv("SHUTDOWN_TIMEOUT_S", "25")
+	t.Setenv("ML_HEALTH_CACHE_TTL_S", "30")
+}
+
+func TestValidate_DBMaxConns_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("DB_MAX_CONNS", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing DB_MAX_CONNS")
+	}
+	if !strings.Contains(err.Error(), "DB_MAX_CONNS") {
+		t.Errorf("error should name DB_MAX_CONNS, got: %v", err)
+	}
+}
+
+func TestValidate_DBMinConns_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("DB_MIN_CONNS", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing DB_MIN_CONNS")
+	}
+	if !strings.Contains(err.Error(), "DB_MIN_CONNS") {
+		t.Errorf("error should name DB_MIN_CONNS, got: %v", err)
+	}
+}
+
+func TestValidate_ShutdownTimeoutS_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("SHUTDOWN_TIMEOUT_S", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing SHUTDOWN_TIMEOUT_S")
+	}
+	if !strings.Contains(err.Error(), "SHUTDOWN_TIMEOUT_S") {
+		t.Errorf("error should name SHUTDOWN_TIMEOUT_S, got: %v", err)
+	}
+}
+
+func TestValidate_MLHealthCacheTTLS_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("ML_HEALTH_CACHE_TTL_S", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing ML_HEALTH_CACHE_TTL_S")
+	}
+	if !strings.Contains(err.Error(), "ML_HEALTH_CACHE_TTL_S") {
+		t.Errorf("error should name ML_HEALTH_CACHE_TTL_S, got: %v", err)
+	}
+}
+
+func TestValidate_DBPoolConfig_Valid(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("DB_MAX_CONNS", "20")
+	t.Setenv("DB_MIN_CONNS", "5")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DBMaxConns != 20 {
+		t.Errorf("expected DBMaxConns=20, got %d", cfg.DBMaxConns)
+	}
+	if cfg.DBMinConns != 5 {
+		t.Errorf("expected DBMinConns=5, got %d", cfg.DBMinConns)
+	}
+}
+
+func TestValidate_DBMaxConns_Invalid(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("DB_MAX_CONNS", "abc")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid DB_MAX_CONNS")
+	}
+	if !strings.Contains(err.Error(), "DB_MAX_CONNS") {
+		t.Errorf("error should name DB_MAX_CONNS, got: %v", err)
+	}
 }

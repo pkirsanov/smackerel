@@ -11,8 +11,10 @@ defaultLenses:
 - simplify
 - trust
 - validation
+- audit
 - engineering
 - docs
+- spec-freshness
 dispatch:
   product:
     primaryAgent: bubbles.analyst
@@ -47,6 +49,9 @@ dispatch:
   docs:
     primaryAgent: bubbles.docs
     purpose: Documentation drift, missing docs, stale docs
+  spec-freshness:
+    primaryAgent: bubbles.spec-review
+    purpose: Spec trust classification, drift detection, stale spec identification
 modes:
   product:
     description: Product, UX, simplification, and engineering coherence review
@@ -58,11 +63,11 @@ modes:
     top: 12
   trust:
     description: Security, validation, audit, and UX trust review
-    lenses: [ ux, trust, validation, audit, engineering, docs ]
+    lenses: [ ux, trust, validation, audit, engineering, docs, spec-freshness ]
     top: 12
   full:
     description: Complete cross-domain system review
-    lenses: [ product, ux, runtime, stability, devops, simplify, trust, validation, engineering, docs ]
+    lenses: [ product, ux, runtime, stability, devops, simplify, trust, validation, audit, engineering, docs, spec-freshness ]
     top: 15
 promotionRules:
   createSpecWhen:
