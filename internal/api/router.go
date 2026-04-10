@@ -38,6 +38,14 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Get("/artifact/{id}", deps.ArtifactDetailHandler)
 			r.Get("/export", deps.ExportHandler)
 
+			// Phase 5 intelligence endpoints (R-501..R-505)
+			if deps.IntelligenceEngine != nil {
+				r.Get("/expertise", ExpertiseHandler(deps.IntelligenceEngine))
+				r.Get("/learning-paths", LearningPathsHandler(deps.IntelligenceEngine))
+				r.Get("/subscriptions", SubscriptionsHandler(deps.IntelligenceEngine))
+				r.Get("/serendipity", SerendipityHandler(deps.IntelligenceEngine))
+			}
+
 			// OAuth status requires authentication (token-bearing callers)
 			if deps.OAuthHandler != nil {
 				type oauthStatusRouter interface {
