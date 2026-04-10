@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/006-phase5-advanced",
   "featureName": "Phase 5: Advanced Intelligence",
-  "status": "validated",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "validate",
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [
@@ -21,7 +21,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "validated",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",

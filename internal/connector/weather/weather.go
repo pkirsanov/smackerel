@@ -159,6 +159,7 @@ type CurrentWeather struct {
 }
 
 // fetchCurrent gets current weather from Open-Meteo API (free, no key needed).
+// Retries transient failures with exponential backoff.
 func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*CurrentWeather, error) {
 	cacheKey := fmt.Sprintf("current-%.2f-%.2f", lat, lon)
 
@@ -172,6 +173,30 @@ func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*Curren
 
 	url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code", lat, lon)
 
+	backoff := connector.DefaultBackoff()
+	var lastErr error
+	for {
+		resp, err := c.doFetch(ctx, url)
+		if err == nil {
+			return c.decodeCurrent(resp, cacheKey)
+		}
+		lastErr = err
+		delay, ok := backoff.Next()
+		if !ok {
+			break
+		}
+		slog.Debug("weather fetch retry", "lat", lat, "lon", lon, "attempt", backoff.Attempt(), "delay", delay, "error", err)
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("weather fetch cancelled: %w", ctx.Err())
+		case <-time.After(delay):
+		}
+	}
+	return nil, fmt.Errorf("open-meteo request failed after %d attempts: %w", backoff.Attempt(), lastErr)
+}
+
+// doFetch performs a single HTTP request. Returns the response body reader on success.
+func (c *Connector) doFetch(ctx context.Context, url string) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -181,17 +206,28 @@ func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*Curren
 	if err != nil {
 		return nil, fmt.Errorf("open-meteo request failed: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		// Drain body to allow connection reuse.
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		resp.Body.Close()
+		// Retry on server errors and rate limits; fail permanently on client errors.
+		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
+			return nil, fmt.Errorf("open-meteo returned retryable status %d", resp.StatusCode)
+		}
 		return nil, fmt.Errorf("open-meteo returned status %d", resp.StatusCode)
 	}
 
+	return resp.Body, nil
+}
+
+// decodeCurrent parses the Open-Meteo response and populates the cache.
+func (c *Connector) decodeCurrent(body io.ReadCloser, cacheKey string) (*CurrentWeather, error) {
+	defer body.Close()
+
 	// Limit response body to 1 MiB to prevent OOM from compromised API responses.
 	const maxWeatherResponseSize = 1 << 20
-	limitedBody := io.LimitReader(resp.Body, maxWeatherResponseSize)
+	limitedBody := io.LimitReader(body, maxWeatherResponseSize)
 
 	var result struct {
 		Current struct {
