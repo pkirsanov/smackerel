@@ -72,7 +72,8 @@
 
 Connectors (passive ingestion):
   Gmail · Calendar · YouTube · RSS · Bookmarks · Browser History
-  Google Keep · Google Maps Timeline · Hospitable
+  Google Keep · Google Maps Timeline · Hospitable · Discord
+  Twitter/X · Weather · Gov Alerts · Financial Markets
 ```
 
 ## Docs
@@ -234,6 +235,11 @@ Connectors run on 5-minute sync cycles via the supervisor and sync data incremen
 | Google Keep | Notes via Takeout export or gkeepapi bridge | None (Takeout) / app password | Implemented |
 | Google Maps Timeline | Location history via Takeout export | None (file import) | Implemented |
 | Hospitable | Reservations, messages, reviews from Hospitable API | API token | Implemented |
+| Discord | Channel messages via Discord REST API | Bot token | Implemented |
+| Twitter / X | Tweet archive parsing + thread reconstruction | Bearer token (optional) | Implemented |
+| Weather | Real-time weather via Open-Meteo API | None | Implemented |
+| Government Alerts | USGS earthquakes by location proximity | None | Implemented |
+| Financial Markets | Stock/ETF/crypto quotes via Finnhub + CoinGecko | Finnhub API key | Implemented |
 | GuestHost | Direct bookings, property ops, guest messaging | API token | Planned — see `specs/013-guesthost-connector/` |
 
 #### Google OAuth Setup (Gmail + Calendar + YouTube)
@@ -388,8 +394,6 @@ connectors:
 
 Syncs reservations, guest messages, property details, and reviews from [Hospitable](https://hospitable.com/) into Smackerel. Hospitable aggregates Airbnb, VRBO, Booking.com, and direct bookings — one connector covers all your OTA channels.
 
-**Status:** Spec complete, implementation pending. See `specs/012-hospitable-connector/`.
-
 1. Sign up or log in at [Hospitable](https://hospitable.com/)
 2. Generate a Personal Access Token from your Hospitable dashboard (see [developer docs](https://developer.hospitable.com/))
 3. Configure in `config/smackerel.yaml`:
@@ -438,41 +442,121 @@ Google Voice transcribes voicemails and forwards them to your Gmail. If Gmail in
 4. Voicemail audio files can be captured via the voice note API endpoint for Whisper transcription
 5. SMS/call logs can be captured as text artifacts via the capture API
 
-### Weather & Government Alerts — Future Connectors
+#### Discord
 
-The following public APIs are candidates for a future **environmental alerts** connector. All are free, require no API keys, and follow standard REST patterns that fit the existing connector architecture.
+Monitors Discord channels via the REST API. Requires a Discord bot token with message read permissions.
 
-#### NWS Weather Alerts (NOAA)
+```yaml
+connectors:
+  discord:
+    enabled: true
+    source_config:
+      bot_token: "your-discord-bot-token"
+      monitored_channels:
+        - server_id: "123456789"
+          channel_ids: ["111111111", "222222222"]
+      backfill_limit: 1000
+      include_threads: true
+      include_pins: true
+```
 
-The [National Weather Service API](https://api.weather.gov) provides weather alerts (watches, warnings, advisories) for any US location. No API key required — only a `User-Agent` header identifying your app.
+**What gets synced:**
+- Messages from monitored channels with per-channel cursor tracking
+- Content classified as: `discord/embed`, `discord/link`, `discord/code`, `discord/message`
+- Processing tiers: pinned → full, has links → full, has embeds → standard, short messages → metadata
 
-- **Endpoint:** `GET https://api.weather.gov/alerts/active?point={lat},{lng}`
-- **Data:** Severe weather warnings, flood watches, winter storm advisories, heat alerts, tornado warnings
-- **Auth:** None (User-Agent header only)
-- **Format:** GeoJSON / JSON-LD
-- **Sync pattern:** Poll every 15-30 minutes for active alerts in the user's area
+#### Twitter / X
 
-#### USGS Earthquake Catalog
+Syncs tweets from a Twitter data archive export. Reconstructs tweet threads via reply chains. Optional API mode via bearer token.
 
-The [USGS Earthquake Hazards API](https://earthquake.usgs.gov/fdsnws/event/1/) provides real-time earthquake data globally. No API key required.
+```yaml
+connectors:
+  twitter:
+    enabled: true
+    source_config:
+      sync_mode: "archive"              # archive | api | hybrid
+      archive_dir: "/path/to/twitter-export"
+```
 
-- **Endpoint:** `GET https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&latitude={lat}&longitude={lng}&maxradiuskm=500&minmagnitude=3`
-- **Data:** Earthquake events with magnitude, depth, location, PAGER alert level, tsunami flag
-- **Auth:** None
-- **Format:** GeoJSON
-- **Sync pattern:** Poll every 5-10 minutes; filter by configurable radius and minimum magnitude
+**What gets synced:**
+- Tweets parsed from `data/tweets.js` in the archive
+- Thread reconstruction via self-reply chains
+- Entities extracted: URLs, hashtags, mentions
+- Content classified as: `tweet/thread`, `tweet/retweet`, `tweet/link`, `tweet/text`
+- Processing tiers: bookmarked/liked → full, threads → full, has URLs → full, retweets → light
 
-#### NOAA Tsunami Warning Center
+#### Weather
 
-- **Endpoint:** `GET https://api.weather.gov/alerts/active?event=Tsunami` (via NWS alerts API)
-- **Data:** Tsunami watches, warnings, advisories, and information statements
-- **Sync pattern:** Covered by the NWS alerts connector above (tsunami is an alert event type)
+Provides real-time weather data for configured locations via the [Open-Meteo API](https://open-meteo.com/) (free, no API key required). Results are cached for 30 minutes per location.
 
-#### Potential Design
+```yaml
+connectors:
+  weather:
+    enabled: true
+    source_config:
+      locations:
+        - name: "Home"
+          latitude: 37.77
+          longitude: -122.42
+        - name: "Office"
+          latitude: 37.39
+          longitude: -122.08
+      enable_alerts: true
+      precision: 2                      # coordinate decimal places (privacy)
+```
 
-A single `environmental-alerts` connector could aggregate NWS weather alerts + USGS earthquakes + tsunami warnings based on the user's configured home location and travel destinations (from Maps data or reservation locations from Hospitable). Alerts would produce `alert/weather`, `alert/earthquake`, and `alert/tsunami` artifact types and automatically link to active reservations or upcoming trips via temporal-spatial edges.
+**What gets synced:**
+- Temperature (°C), humidity (%), wind speed (km/h), WMO weather code
+- Coordinates rounded to configured precision for privacy
+- All weather artifacts assigned tier: standard
 
-This is not yet specced. If you'd like it prioritized, it would follow the same pattern as the other connectors: `specs/013-environmental-alerts-connector/`.
+#### Government Alerts (USGS Earthquakes)
+
+Monitors earthquake activity near configured locations via the [USGS Earthquake Hazards API](https://earthquake.usgs.gov/fdsnws/event/1/) (free, no API key required). Uses haversine distance for proximity matching.
+
+```yaml
+connectors:
+  gov-alerts:
+    enabled: true
+    source_config:
+      locations:
+        - name: "San Francisco"
+          latitude: 37.7749
+          longitude: -122.4194
+          radius_km: 500
+      min_earthquake_magnitude: 2.5
+```
+
+**What gets synced:**
+- Earthquake events with magnitude, depth, and coordinates
+- Proximity-matched to configured locations within their radius
+- Severity classification: extreme (M ≥ 7.0), severe (M ≥ 5.0 within 100 km), moderate (M ≥ 3.0 within 50 km), minor
+- Processing tiers: extreme/severe → full, others → standard
+- Deduplicated by alert ID
+
+#### Financial Markets
+
+Tracks stock, ETF, and cryptocurrency prices via [Finnhub](https://finnhub.io/) and [CoinGecko](https://www.coingecko.com/) APIs. Built-in rate limiting per provider.
+
+```yaml
+connectors:
+  financial-markets:
+    enabled: true
+    source_config:
+      finnhub_api_key: "your-finnhub-api-key"
+      coingecko_enabled: true
+      alert_threshold: 5.0              # % change to trigger full processing
+      watchlist:
+        stocks: ["AAPL", "GOOGL", "MSFT"]
+        etfs: ["SPY", "QQQ"]
+        crypto: ["bitcoin", "ethereum"]
+```
+
+**What gets synced:**
+- Stock/ETF quotes: current price, change ($/%),  high, low, open, previous close
+- Crypto prices: current price, 24h change
+- Rate limits: Finnhub 55/min, CoinGecko 25/min
+- Processing tiers: price change ≥ alert threshold → full, others → light
 
 ## API Reference
 
@@ -656,7 +740,7 @@ The web search uses the same semantic search engine as the API (pgvector + embed
 
 ## Runtime Standards
 
-Smackerel has a complete runtime with a repo CLI, YAML-backed config generation, a Go core (51 source files, 40 test files), a Python ML sidecar (11 files), and Docker Compose orchestration. The operational surface is standardized:
+Smackerel has a complete runtime with a repo CLI, YAML-backed config generation, a Go core (76 source files, 70 test files), a Python ML sidecar (11 files), and Docker Compose orchestration. The operational surface is standardized:
 
 - Docker-only runtime and test execution
 - One repo CLI for build, test, config generation, stack lifecycle, logs, and cleanup: `./smackerel.sh`

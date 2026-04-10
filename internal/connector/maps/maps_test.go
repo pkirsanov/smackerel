@@ -338,6 +338,55 @@ func TestHaversineSamePoint(t *testing.T) {
 	}
 }
 
+// CHAOS-005-F2: ToGeoJSON must produce valid GeoJSON for all route lengths.
+// Adversarial: would fail if ToGeoJSON always emitted LineString regardless of point count.
+func TestToGeoJSON_EmptyRoute(t *testing.T) {
+	result := ToGeoJSON(nil)
+	if result != nil {
+		t.Errorf("ToGeoJSON(nil) should return nil for empty route, got %v", result)
+	}
+
+	result = ToGeoJSON([]LatLng{})
+	if result != nil {
+		t.Errorf("ToGeoJSON([]) should return nil for empty route, got %v", result)
+	}
+}
+
+func TestToGeoJSON_SinglePoint(t *testing.T) {
+	result := ToGeoJSON([]LatLng{{Lat: 47.37, Lng: 8.54}})
+	if result == nil {
+		t.Fatal("ToGeoJSON with 1 point should return a Point geometry, got nil")
+	}
+	if result["type"] != "Point" {
+		t.Errorf("single-point route should produce Point, got %v", result["type"])
+	}
+	coords, ok := result["coordinates"].([]float64)
+	if !ok || len(coords) != 2 {
+		t.Fatalf("Point coordinates should be [lng, lat], got %v", result["coordinates"])
+	}
+	if coords[0] != 8.54 || coords[1] != 47.37 {
+		t.Errorf("coordinates = [%f, %f], want [8.54, 47.37]", coords[0], coords[1])
+	}
+}
+
+func TestToGeoJSON_TwoPoints_ValidLineString(t *testing.T) {
+	route := []LatLng{
+		{Lat: 47.37, Lng: 8.54},
+		{Lat: 47.38, Lng: 8.55},
+	}
+	result := ToGeoJSON(route)
+	if result == nil {
+		t.Fatal("ToGeoJSON with 2 points should return a LineString, got nil")
+	}
+	if result["type"] != "LineString" {
+		t.Errorf("two-point route should produce LineString, got %v", result["type"])
+	}
+	coords, ok := result["coordinates"].([][]float64)
+	if !ok || len(coords) != 2 {
+		t.Fatalf("LineString should have 2 coordinate pairs, got %v", result["coordinates"])
+	}
+}
+
 func TestHaversineSouthernHemisphere(t *testing.T) {
 	// Sydney to Melbourne: ~714km
 	sydney := LatLng{Lat: -33.8688, Lng: 151.2093}
@@ -349,12 +398,71 @@ func TestHaversineSouthernHemisphere(t *testing.T) {
 }
 
 func TestToGeoJSONEmpty(t *testing.T) {
+	// CHAOS-005-F2: nil route produces nil (no valid GeoJSON geometry for zero points)
 	geojson := ToGeoJSON(nil)
-	if geojson["type"] != "LineString" {
-		t.Errorf("type = %v, want LineString", geojson["type"])
+	if geojson != nil {
+		t.Errorf("ToGeoJSON(nil) should return nil, got %v", geojson)
 	}
-	coords := geojson["coordinates"].([][]float64)
-	if len(coords) != 0 {
-		t.Errorf("expected 0 coordinates for nil route, got %d", len(coords))
+}
+
+func TestParseTakeoutJSON_NullActivitySegments(t *testing.T) {
+	// Some Takeout exports contain timeline objects with null activitySegments
+	// (e.g. placeVisit objects). Parser must skip them gracefully.
+	input := `{
+		"timelineObjects": [
+			{"activitySegment": null},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:00:00Z"
+					},
+					"distance": 3000,
+					"activityType": "CYCLING",
+					"waypointPath": {"waypoints": []}
+				}
+			},
+			{"activitySegment": null}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (null segments skipped), got %d", len(activities))
+	}
+	if activities[0].Type != ActivityCycle {
+		t.Errorf("expected cycling, got %q", activities[0].Type)
+	}
+}
+
+func TestClassifyActivity_ZeroDistance(t *testing.T) {
+	// Zero-distance WALKING should classify as Walk, not Hike
+	got := ClassifyActivity("WALKING", 0)
+	if got != ActivityWalk {
+		t.Errorf("ClassifyActivity(WALKING, 0) = %q, want %q", got, ActivityWalk)
+	}
+	// Zero-distance RUNNING should classify as Run
+	got = ClassifyActivity("RUNNING", 0)
+	if got != ActivityRun {
+		t.Errorf("ClassifyActivity(RUNNING, 0) = %q, want %q", got, ActivityRun)
+	}
+}
+
+func TestIsTrailQualified_RunDurationBased(t *testing.T) {
+	// A run under 2km but over 30 minutes should qualify by duration (R-404)
+	longRun := TakeoutActivity{Type: ActivityRun, DistanceKm: 1.5, DurationMin: 35.0}
+	if !IsTrailQualified(longRun) {
+		t.Error("1.5km / 35min run should qualify as trail by duration (R-404: >=30 min)")
+	}
+
+	// A run under 2km and under 30 minutes should not qualify
+	shortRun := TakeoutActivity{Type: ActivityRun, DistanceKm: 1.0, DurationMin: 15.0}
+	if IsTrailQualified(shortRun) {
+		t.Error("1.0km / 15min run should not qualify (below both thresholds)")
 	}
 }

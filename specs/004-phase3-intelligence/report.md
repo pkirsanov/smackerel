@@ -441,3 +441,96 @@ Exit code: 0
 | `graph/linker.go` lines | ~480 | ~470 | -10 |
 | `graph/linker_test.go` tests | 14 | 13 | -1 dead test |
 | Copy-pasted edge normalization blocks | 3 | 0 | -3 (1 shared helper) |
+
+---
+
+## Hardening Pass — 2026-04-10
+
+**Trigger:** Stochastic quality sweep round (harden-to-doc)
+**Focus:** Input validation gaps, duplicate alert generation, spec compliance enforcement, missing edge-case test coverage in the intelligence layer
+
+### Findings & Changes
+
+#### HDN-004-001: CheckOverdueCommitments Creates Duplicate Alerts (FIXED)
+
+**Severity:** High — correctness bug
+**Affected File:** `internal/intelligence/engine.go` — `CheckOverdueCommitments()`
+
+**Description:** Each invocation of `CheckOverdueCommitments` queried all open items past `expected_date` and created a new `commitment_overdue` alert for each. Running this daily for 10 days on the same overdue item would create 10 alerts — violating the max-2/day batching intent and spamming the user.
+
+**Fix:** Added `NOT EXISTS` subquery to exclude action items that already have a pending or delivered `commitment_overdue` alert. Only action items without an existing active alert now generate new alerts.
+
+#### HDN-004-002: CreateAlert Accepts Invalid AlertType Values (FIXED)
+
+**Severity:** Medium — defense in depth
+**Affected File:** `internal/intelligence/engine.go` — `CreateAlert()`
+
+**Description:** `CreateAlert` validated title-not-empty and pool-not-nil but silently accepted any `AlertType` string including empty strings and typos. Invalid types would be stored in the database, potentially breaking downstream queries and delivery logic.
+
+**Fix:** Added `validAlertTypes` lookup map and pre-insertion check. Unknown or empty types now return a descriptive error before reaching the DB layer.
+
+**Tests:** `TestCreateAlert_InvalidType`, `TestCreateAlert_EmptyType`, `TestCreateAlert_AllValidTypes`
+
+#### HDN-004-003: DismissAlert/SnoozeAlert Silent No-Op on Missing IDs (FIXED)
+
+**Severity:** Medium — silent failure
+**Affected File:** `internal/intelligence/engine.go` — `DismissAlert()`, `SnoozeAlert()`
+
+**Description:** Both functions executed an `UPDATE` without checking affected rows. Dismissing or snoozing a nonexistent alert ID returned no error — callers could not distinguish success from a no-op on a stale/invalid ID. Additionally, neither validated empty string IDs.
+
+**Fix:** Added empty-ID validation with descriptive error. Added `RowsAffected()` check — returns "alert not found" error when no rows are updated.
+
+**Tests:** `TestDismissAlert_EmptyID`, `TestSnoozeAlert_EmptyID`
+
+#### HDN-004-004: SnoozeAlert Accepts Past Snooze Times (FIXED)
+
+**Severity:** Medium — logic bug
+**Affected File:** `internal/intelligence/engine.go` — `SnoozeAlert()`
+
+**Description:** `SnoozeAlert` accepted any `time.Time` value including times in the past. A past snooze time would immediately trigger re-delivery on the next `GetPendingAlerts` cycle (which queries `snooze_until <= NOW()`), creating a functionally invisible snooze that burns a delivery slot.
+
+**Fix:** Added `until.After(time.Now())` validation — past times now return a descriptive error.
+
+**Tests:** `TestSnoozeAlert_PastTime`
+
+#### HDN-004-005: Weekly Synthesis Text 250-Word Cap Not Enforced (FIXED)
+
+**Severity:** Medium — spec non-compliance (R-302)
+**Affected File:** `internal/intelligence/engine.go` — `GenerateWeeklySynthesis()`
+
+**Description:** R-302 specifies "Under 250 words, plain text." The `assembleWeeklySynthesisText` function builds text from all available sections without a length guard. With a busy week (50+ insights, 10 topics, 30 open loops), the output could easily exceed 250 words. The truncation relied entirely on the downstream LLM prompt, but the `assembleWeeklySynthesisText` function also serves as a fallback when LLM is unavailable.
+
+**Fix:** Added post-assembly word-count check in `GenerateWeeklySynthesis`: if `len(words) > 250`, truncate to the first 250 words before storing.
+
+**Tests:** `TestAssembleWeeklySynthesisText_WordCountCap` (verifies assembly produces output; cap applied at GenerateWeeklySynthesis level)
+
+#### HDN-004-006: Missing Partial-Data Tests for Weekly Synthesis Text (FIXED)
+
+**Severity:** Low — test coverage gap
+**Affected File:** `internal/intelligence/engine_test.go`
+
+**Description:** `assembleWeeklySynthesisText` was tested only for fully-populated and fully-empty input. No test covered partial data: insights present but no topics, open loops present but no stats. These partial combinations exercise different section-skip paths.
+
+**Fix:** Added `TestAssembleWeeklySynthesisText_InsightsOnly` and `TestAssembleWeeklySynthesisText_OpenLoopsOnly` — both verify correct section inclusion/exclusion.
+
+### Verification
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence    0.019s
+31 Go packages pass, 0 failures
+$ ./smackerel.sh lint
+Exit code: 0
+$ ./smackerel.sh check
+Config is in sync with SST
+Exit code: 0
+```
+
+### Net Impact
+
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| Input validation checks in `engine.go` | 3 | 8 | +5 (AlertType, empty IDs, future-time, row-count) |
+| `engine_test.go` hardening tests | 0 | 9 | +9 new edge-case tests |
+| Duplicate alert generation risk | Unbounded | Prevented by dedup query | Critical fix |
+| R-302 250-word cap compliance | Unguarded | Enforced in `GenerateWeeklySynthesis` | Spec alignment |

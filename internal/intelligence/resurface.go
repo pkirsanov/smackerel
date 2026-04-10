@@ -71,16 +71,31 @@ func (e *Engine) Resurface(ctx context.Context, limit int) ([]ResurfaceCandidate
 		}
 	}
 
-	// Update last_accessed for resurfaced artifacts
-	for _, c := range candidates {
-		if _, err := e.Pool.Exec(ctx, `
-			UPDATE artifacts SET last_accessed = NOW(), access_count = access_count + 1 WHERE id = $1
-		`, c.ArtifactID); err != nil {
-			slog.Warn("failed to update artifact access count", "artifact_id", c.ArtifactID, "error", err)
-		}
-	}
+	// Note: We deliberately do NOT update last_accessed here. Generating
+	// candidates for a digest or weekly report is not the same as the user
+	// actually viewing the content. Updating last_accessed as a side effect
+	// of candidate generation would taint dormancy scores for future runs.
+	// The caller (e.g., the delivery layer) should call MarkResurfaced()
+	// after the user has actually been shown the content.
 
 	return candidates, nil
+}
+
+// MarkResurfaced updates last_accessed and access_count for artifacts that
+// have been delivered to the user. Call this after the user has actually
+// been shown resurfaced content, not during candidate generation.
+func (e *Engine) MarkResurfaced(ctx context.Context, artifactIDs []string) error {
+	if e.Pool == nil {
+		return fmt.Errorf("mark resurfaced requires a database connection")
+	}
+	for _, id := range artifactIDs {
+		if _, err := e.Pool.Exec(ctx, `
+			UPDATE artifacts SET last_accessed = NOW(), access_count = access_count + 1 WHERE id = $1
+		`, id); err != nil {
+			slog.Warn("failed to update artifact access count", "artifact_id", id, "error", err)
+		}
+	}
+	return nil
 }
 
 // serendipityPick selects random artifacts from underexplored topics.

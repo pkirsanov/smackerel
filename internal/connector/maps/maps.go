@@ -147,15 +147,27 @@ func IsTrailQualified(activity TakeoutActivity) bool {
 	}
 }
 
-// ToGeoJSON converts a route to GeoJSON LineString format.
+// ToGeoJSON converts a route to GeoJSON format.
+// Returns a LineString for routes with ≥2 points (per RFC 7946 §3.1.4),
+// a Point for single-point routes, or nil for empty routes.
 func ToGeoJSON(route []LatLng) map[string]interface{} {
-	coords := make([][]float64, len(route))
-	for i, p := range route {
-		coords[i] = []float64{p.Lng, p.Lat}
-	}
-	return map[string]interface{}{
-		"type":        "LineString",
-		"coordinates": coords,
+	switch {
+	case len(route) == 0:
+		return nil
+	case len(route) == 1:
+		return map[string]interface{}{
+			"type":        "Point",
+			"coordinates": []float64{route[0].Lng, route[0].Lat},
+		}
+	default:
+		coords := make([][]float64, len(route))
+		for i, p := range route {
+			coords[i] = []float64{p.Lng, p.Lat}
+		}
+		return map[string]interface{}{
+			"type":        "LineString",
+			"coordinates": coords,
+		}
 	}
 }
 

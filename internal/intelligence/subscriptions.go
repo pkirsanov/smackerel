@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Subscription represents a detected recurring service charge.
@@ -208,7 +210,7 @@ func extractServiceName(sender, title string) string {
 		// Use domain without TLD as service name
 		parts := strings.Split(domain, ".")
 		if len(parts) >= 2 {
-			return strings.Title(parts[len(parts)-2])
+			return cases.Title(language.English).String(parts[len(parts)-2])
 		}
 	}
 	return ""

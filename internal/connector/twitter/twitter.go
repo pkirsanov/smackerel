@@ -67,9 +67,8 @@ type TweetMention struct {
 
 // Thread represents a reconstructed tweet thread.
 type Thread struct {
-	RootID   string
-	TweetIDs []string
-	Tweets   []ArchiveTweet
+	RootID string
+	Tweets []ArchiveTweet
 }
 
 // Connector implements the Twitter/X connector.
@@ -103,8 +102,10 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		}
 	}
 
+	c.mu.Lock()
 	c.config = cfg
 	c.health = connector.HealthHealthy
+	c.mu.Unlock()
 	slog.Info("twitter connector connected", "id", c.id, "mode", string(cfg.SyncMode))
 	return nil
 }
@@ -145,15 +146,21 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 }
 
 func (c *Connector) Close() error {
+	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.mu.Unlock()
 	return nil
 }
 
 // syncArchive parses the Twitter data export directory.
-func (c *Connector) syncArchive(_ context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	tweetsFile := filepath.Join(c.config.ArchiveDir, "data", "tweets.js")
 	if _, err := os.Stat(tweetsFile); os.IsNotExist(err) {
 		return nil, cursor, fmt.Errorf("tweets.js not found in archive: %s", tweetsFile)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, cursor, fmt.Errorf("context cancelled before reading archive: %w", err)
 	}
 
 	data, err := os.ReadFile(tweetsFile)
@@ -170,16 +177,27 @@ func (c *Connector) syncArchive(_ context.Context, cursor string) ([]connector.R
 	threads := buildThreads(tweets)
 	threadMap := make(map[string]*Thread)
 	for i := range threads {
-		for _, tid := range threads[i].TweetIDs {
-			threadMap[tid] = &threads[i]
+		for _, tw := range threads[i].Tweets {
+			threadMap[tw.ID] = &threads[i]
 		}
 	}
 
 	var artifacts []connector.RawArtifact
+	var skippedTimestamps int
 	newCursor := cursor
 
 	for _, tweet := range tweets {
-		ts := parseTweetTime(tweet.CreatedAt)
+		if err := ctx.Err(); err != nil {
+			return nil, cursor, fmt.Errorf("context cancelled during archive processing: %w", err)
+		}
+
+		ts, err := parseTweetTime(tweet.CreatedAt)
+		if err != nil {
+			slog.Warn("skipping tweet with unparseable timestamp",
+				"tweet_id", tweet.ID, "created_at", tweet.CreatedAt, "error", err)
+			skippedTimestamps++
+			continue
+		}
 		tsCursor := ts.Format(time.RFC3339)
 		if tsCursor <= cursor && cursor != "" {
 			continue
@@ -190,6 +208,10 @@ func (c *Connector) syncArchive(_ context.Context, cursor string) ([]connector.R
 
 		artifact := normalizeTweet(tweet, false, false, threadMap[tweet.ID])
 		artifacts = append(artifacts, artifact)
+	}
+
+	if skippedTimestamps > 0 {
+		slog.Warn("tweets skipped due to unparseable timestamps", "count", skippedTimestamps)
 	}
 
 	return artifacts, newCursor, nil
@@ -218,10 +240,16 @@ func parseTweetsJS(data []byte) ([]ArchiveTweet, error) {
 }
 
 // buildThreads groups tweets into threads by self-reply chains.
+// Handles branching replies (multiple children per parent) by collecting
+// all children and visiting every branch.
 func buildThreads(tweets []ArchiveTweet) []Thread {
 	tweetMap := make(map[string]ArchiveTweet)
+	childrenOf := make(map[string][]ArchiveTweet) // parent ID → child tweets
 	for _, t := range tweets {
 		tweetMap[t.ID] = t
+		if t.InReplyToStatusID != "" {
+			childrenOf[t.InReplyToStatusID] = append(childrenOf[t.InReplyToStatusID], t)
+		}
 	}
 
 	visited := make(map[string]bool)
@@ -241,32 +269,30 @@ func buildThreads(tweets []ArchiveTweet) []Thread {
 			root = parent
 		}
 
-		// Build chain from root
+		if visited[root.ID] {
+			continue
+		}
+
+		// Collect the full tree from root using BFS
 		thread := Thread{RootID: root.ID}
-		current := root
-		for {
+		queue := []ArchiveTweet{root}
+		for len(queue) > 0 {
+			current := queue[0]
+			queue = queue[1:]
 			if visited[current.ID] {
-				break
+				continue
 			}
 			visited[current.ID] = true
-			thread.TweetIDs = append(thread.TweetIDs, current.ID)
 			thread.Tweets = append(thread.Tweets, current)
 
-			// Find reply to this tweet
-			found := false
-			for _, candidate := range tweets {
-				if candidate.InReplyToStatusID == current.ID && !visited[candidate.ID] {
-					current = candidate
-					found = true
-					break
+			for _, child := range childrenOf[current.ID] {
+				if !visited[child.ID] {
+					queue = append(queue, child)
 				}
-			}
-			if !found {
-				break
 			}
 		}
 
-		if len(thread.TweetIDs) >= 2 {
+		if len(thread.Tweets) >= 2 {
 			threads = append(threads, thread)
 		}
 	}
@@ -309,7 +335,11 @@ func normalizeTweet(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread) 
 		metadata["in_reply_to"] = tweet.InReplyToStatusID
 	}
 
-	ts := parseTweetTime(tweet.CreatedAt)
+	ts, err := parseTweetTime(tweet.CreatedAt)
+	if err != nil {
+		slog.Warn("tweet has unparseable timestamp, using zero time",
+			"tweet_id", tweet.ID, "created_at", tweet.CreatedAt, "error", err)
+	}
 
 	return connector.RawArtifact{
 		SourceID:    "twitter",
@@ -366,14 +396,23 @@ func buildTweetTitle(tweet ArchiveTweet) string {
 	return title
 }
 
-// parseTweetTime parses Twitter's date format.
-func parseTweetTime(s string) time.Time {
+// parseTweetTime parses Twitter's date format. Returns an error if the
+// timestamp cannot be parsed so callers can handle malformed data explicitly
+// rather than silently falling back to time.Now().
+func parseTweetTime(s string) (time.Time, error) {
 	// Twitter format: "Wed Mar 15 14:30:00 +0000 2026"
 	t, err := time.Parse("Mon Jan 02 15:04:05 -0700 2006", s)
 	if err != nil {
-		return time.Now()
+		return time.Time{}, fmt.Errorf("parse tweet time %q: %w", s, err)
 	}
-	return t
+	return t, nil
+}
+
+// validSyncModes enumerates the accepted SyncMode values.
+var validSyncModes = map[SyncMode]bool{
+	SyncModeArchive: true,
+	SyncModeAPI:     true,
+	SyncModeHybrid:  true,
 }
 
 func parseTwitterConfig(config connector.ConnectorConfig) (TwitterConfig, error) {
@@ -382,7 +421,11 @@ func parseTwitterConfig(config connector.ConnectorConfig) (TwitterConfig, error)
 	}
 
 	if mode, ok := config.SourceConfig["sync_mode"].(string); ok {
-		cfg.SyncMode = SyncMode(mode)
+		m := SyncMode(mode)
+		if !validSyncModes[m] {
+			return TwitterConfig{}, fmt.Errorf("invalid sync_mode %q: must be archive, api, or hybrid", mode)
+		}
+		cfg.SyncMode = m
 	}
 	if dir, ok := config.SourceConfig["archive_dir"].(string); ok {
 		cfg.ArchiveDir = dir

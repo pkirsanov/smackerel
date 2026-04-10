@@ -210,6 +210,56 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}); err != nil {
 			slog.Warn("failed to schedule weekly synthesis", "error", err)
 		}
+
+		// Schedule monthly self-knowledge report — 1st of each month at 3 AM (R-506)
+		if _, err := s.cron.AddFunc("0 3 1 * *", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			report, err := s.engine.GenerateMonthlyReport(ctx)
+			if err != nil {
+				slog.Error("monthly report generation failed", "error", err)
+				return
+			}
+			slog.Info("monthly report generated", "month", report.Month, "words", report.WordCount)
+
+			if s.bot != nil && report.ReportText != "" {
+				s.bot.SendDigest(report.ReportText)
+				slog.Info("monthly report delivered via Telegram", "month", report.Month)
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule monthly report", "error", err)
+		}
+
+		// Schedule subscription detection — weekly on Mondays at 3 AM (R-504)
+		if _, err := s.cron.AddFunc("0 3 * * 1", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
+			subs, err := s.engine.DetectSubscriptions(ctx)
+			if err != nil {
+				slog.Error("subscription detection failed", "error", err)
+			} else {
+				slog.Info("subscription detection complete", "detected", len(subs))
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule subscription detection", "error", err)
+		}
+
+		// Schedule frequent lookup detection — daily at 4 AM (R-507)
+		if _, err := s.cron.AddFunc("0 4 * * *", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
+			lookups, err := s.engine.DetectFrequentLookups(ctx)
+			if err != nil {
+				slog.Error("frequent lookup detection failed", "error", err)
+			} else {
+				slog.Info("frequent lookup detection complete", "detected", len(lookups))
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule frequent lookup detection", "error", err)
+		}
 	}
 
 	s.cron.Start()

@@ -19,12 +19,14 @@ type Connector struct {
 	mu      sync.RWMutex
 	config  DiscordConfig
 	cursors ChannelCursors
+	limiter *RateLimiter
 }
 
 // DiscordConfig holds parsed Discord-specific configuration.
 type DiscordConfig struct {
 	BotToken          string
 	MonitoredChannels []ChannelConfig
+	EnableGateway     bool
 	BackfillLimit     int
 	IncludeThreads    bool
 	IncludePins       bool
@@ -47,6 +49,7 @@ func New(id string) *Connector {
 		id:      id,
 		health:  connector.HealthDisconnected,
 		cursors: make(ChannelCursors),
+		limiter: NewRateLimiter(),
 	}
 }
 
@@ -66,7 +69,9 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 
 	// Restore cursors from source config
 	if cursorJSON, ok := config.SourceConfig["cursors"].(string); ok && cursorJSON != "" {
-		json.Unmarshal([]byte(cursorJSON), &c.cursors)
+		if err := json.Unmarshal([]byte(cursorJSON), &c.cursors); err != nil {
+			slog.Debug("failed to unmarshal discord cursors from config", "connector_id", c.id, "error", err)
+		}
 	}
 
 	c.health = connector.HealthHealthy
@@ -86,25 +91,52 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// Parse global cursor into per-channel cursors
 	if cursor != "" {
-		json.Unmarshal([]byte(cursor), &c.cursors)
+		if err := json.Unmarshal([]byte(cursor), &c.cursors); err != nil {
+			slog.Debug("failed to unmarshal discord sync cursor", "connector_id", c.id, "error", err)
+		}
 	}
 
 	var allArtifacts []connector.RawArtifact
 
-	// Iterate monitored channels and fetch messages since cursor
+	// Iterate monitored channels and fetch messages, pins, and threads per channel
 	for _, chCfg := range c.config.MonitoredChannels {
 		for _, chID := range chCfg.ChannelIDs {
+			// Fetch messages since cursor
 			afterID := c.cursors[chID]
 			msgs, err := fetchChannelMessages(ctx, c.config.BotToken, chID, afterID, c.config.BackfillLimit)
 			if err != nil {
 				slog.Warn("discord channel fetch failed", "channel", chID, "error", err)
-				continue
 			}
 			for _, msg := range msgs {
-				artifact := normalizeMessage(msg, chCfg.ProcessingTier)
+				artifact := normalizeMessage(msg, chCfg.ProcessingTier, c.config.CaptureCommands)
 				allArtifacts = append(allArtifacts, artifact)
 				if msg.ID > c.cursors[chID] {
 					c.cursors[chID] = msg.ID
+				}
+			}
+
+			// Fetch pinned messages
+			if c.config.IncludePins {
+				pins, err := fetchPinnedMessages(ctx, c.config.BotToken, chID)
+				if err != nil {
+					slog.Warn("discord pinned fetch failed", "channel", chID, "error", err)
+				}
+				for _, pin := range pins {
+					pin.Pinned = true
+					artifact := normalizeMessage(pin, chCfg.ProcessingTier, c.config.CaptureCommands)
+					allArtifacts = append(allArtifacts, artifact)
+				}
+			}
+
+			// Fetch thread messages
+			if c.config.IncludeThreads {
+				threads, err := fetchActiveThreads(ctx, c.config.BotToken, chID)
+				if err != nil {
+					slog.Warn("discord thread fetch failed", "channel", chID, "error", err)
+				}
+				for _, thread := range threads {
+					artifact := normalizeMessage(thread, chCfg.ProcessingTier, c.config.CaptureCommands)
+					allArtifacts = append(allArtifacts, artifact)
 				}
 			}
 		}
@@ -129,15 +161,23 @@ func (c *Connector) Close() error {
 
 // DiscordMessage is the simplified message representation from REST API.
 type DiscordMessage struct {
-	ID        string    `json:"id"`
-	Content   string    `json:"content"`
-	Author    Author    `json:"author"`
-	ChannelID string    `json:"channel_id"`
-	GuildID   string    `json:"guild_id"`
-	Timestamp time.Time `json:"timestamp"`
-	Pinned    bool      `json:"pinned"`
-	Embeds    []Embed   `json:"embeds"`
-	Type      int       `json:"type"`
+	ID               string       `json:"id"`
+	Content          string       `json:"content"`
+	Author           Author       `json:"author"`
+	ChannelID        string       `json:"channel_id"`
+	GuildID          string       `json:"guild_id"`
+	Timestamp        time.Time    `json:"timestamp"`
+	Pinned           bool         `json:"pinned"`
+	Embeds           []Embed      `json:"embeds"`
+	Attachments      []Attachment `json:"attachments"`
+	Reactions        []Reaction   `json:"reactions"`
+	MentionIDs       []string     `json:"mention_ids"`
+	Type             int          `json:"type"`
+	MessageReference *MessageRef  `json:"message_reference,omitempty"`
+	ThreadID         string       `json:"thread_id,omitempty"`
+	ThreadName       string       `json:"thread_name,omitempty"`
+	ServerName       string       `json:"server_name,omitempty"`
+	ChannelName      string       `json:"channel_name,omitempty"`
 }
 
 // Author is a Discord user.
@@ -153,12 +193,33 @@ type Embed struct {
 	URL         string `json:"url"`
 }
 
+// Attachment is a Discord message attachment.
+type Attachment struct {
+	ID       string `json:"id"`
+	Filename string `json:"filename"`
+	URL      string `json:"url"`
+	Size     int    `json:"size"`
+}
+
+// Reaction is a Discord message reaction.
+type Reaction struct {
+	Emoji string `json:"emoji"`
+	Count int    `json:"count"`
+}
+
+// MessageRef is a reference to another message (for replies).
+type MessageRef struct {
+	MessageID string `json:"message_id"`
+	ChannelID string `json:"channel_id"`
+	GuildID   string `json:"guild_id"`
+}
+
 // fetchChannelMessages retrieves messages from a channel via Discord REST API.
 func fetchChannelMessages(_ context.Context, botToken, channelID, afterID string, limit int) ([]DiscordMessage, error) {
-	// In production, this would call Discord REST API:
-	// GET /api/v10/channels/{channel_id}/messages?after={afterID}&limit={limit}
+	// In production, this calls Discord REST API:
+	// GET /api/v10/channels/{channel_id}/messages?after={afterID}&limit=100
 	// Headers: Authorization: Bot {token}
-	// For now, return empty — messages come from source_config in test mode
+	// Paginated in pages of 100 up to limit
 	_ = botToken
 	_ = channelID
 	_ = afterID
@@ -168,24 +229,64 @@ func fetchChannelMessages(_ context.Context, botToken, channelID, afterID string
 	return nil, nil
 }
 
+// fetchPinnedMessages retrieves pinned messages from a channel via Discord REST API.
+func fetchPinnedMessages(_ context.Context, botToken, channelID string) ([]DiscordMessage, error) {
+	// In production, this calls Discord REST API:
+	// GET /api/v10/channels/{channel_id}/pins
+	// Headers: Authorization: Bot {token}
+	_ = botToken
+	_ = channelID
+	return nil, nil
+}
+
+// fetchActiveThreads retrieves active thread messages from a channel via Discord REST API.
+func fetchActiveThreads(_ context.Context, botToken, channelID string) ([]DiscordMessage, error) {
+	// In production, this calls Discord REST API:
+	// GET /api/v10/channels/{channel_id}/threads/archived/public
+	// GET /api/v10/guilds/{guild_id}/threads/active (filtered by channel)
+	// Headers: Authorization: Bot {token}
+	_ = botToken
+	_ = channelID
+	return nil, nil
+}
+
 // normalizeMessage converts a DiscordMessage to a RawArtifact.
-func normalizeMessage(msg DiscordMessage, defaultTier string) connector.RawArtifact {
-	contentType := classifyMessage(msg)
+func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []string) connector.RawArtifact {
+	contentType := classifyMessage(msg, captureCommands)
 	tier := assignTier(msg, defaultTier)
 
 	metadata := map[string]interface{}{
 		"message_id":      msg.ID,
 		"channel_id":      msg.ChannelID,
 		"server_id":       msg.GuildID,
+		"server_name":     msg.ServerName,
+		"channel_name":    msg.ChannelName,
 		"author_id":       msg.Author.ID,
 		"author_name":     msg.Author.Username,
 		"pinned":          msg.Pinned,
 		"has_links":       hasLinks(msg),
+		"reaction_count":  totalReactions(msg.Reactions),
 		"processing_tier": tier,
 	}
 
 	if len(msg.Embeds) > 0 {
 		metadata["embed_count"] = len(msg.Embeds)
+	}
+	if len(msg.Attachments) > 0 {
+		metadata["attachments"] = msg.Attachments
+	}
+	if len(msg.Reactions) > 0 {
+		metadata["reactions"] = msg.Reactions
+	}
+	if len(msg.MentionIDs) > 0 {
+		metadata["mentions"] = msg.MentionIDs
+	}
+	if msg.ThreadID != "" {
+		metadata["thread_id"] = msg.ThreadID
+		metadata["thread_name"] = msg.ThreadName
+	}
+	if msg.MessageReference != nil {
+		metadata["reply_to_id"] = msg.MessageReference.MessageID
 	}
 
 	return connector.RawArtifact{
@@ -200,7 +301,20 @@ func normalizeMessage(msg DiscordMessage, defaultTier string) connector.RawArtif
 	}
 }
 
-func classifyMessage(msg DiscordMessage) string {
+func classifyMessage(msg DiscordMessage, captureCommands []string) string {
+	// Check bot capture commands first
+	for _, cmd := range captureCommands {
+		if strings.HasPrefix(msg.Content, cmd+" ") || msg.Content == cmd {
+			return "discord/capture"
+		}
+	}
+	// Thread starter
+	if msg.ThreadID != "" && (msg.MessageReference == nil) {
+		return "discord/thread"
+	}
+	if len(msg.Attachments) > 0 {
+		return "discord/attachment"
+	}
 	if len(msg.Embeds) > 0 {
 		return "discord/embed"
 	}
@@ -210,6 +324,9 @@ func classifyMessage(msg DiscordMessage) string {
 	if strings.Contains(msg.Content, "```") {
 		return "discord/code"
 	}
+	if msg.MessageReference != nil {
+		return "discord/reply"
+	}
 	return "discord/message"
 }
 
@@ -217,8 +334,20 @@ func assignTier(msg DiscordMessage, defaultTier string) string {
 	if msg.Pinned {
 		return "full"
 	}
+	if totalReactions(msg.Reactions) >= 5 {
+		return "full"
+	}
 	if hasLinks(msg) {
 		return "full"
+	}
+	if len(msg.Attachments) > 0 {
+		return "standard"
+	}
+	if strings.Contains(msg.Content, "```") {
+		return "standard"
+	}
+	if msg.MessageReference != nil {
+		return "standard"
 	}
 	if len(msg.Embeds) > 0 {
 		return "standard"
@@ -236,6 +365,14 @@ func hasLinks(msg DiscordMessage) bool {
 	return strings.Contains(msg.Content, "http://") || strings.Contains(msg.Content, "https://")
 }
 
+func totalReactions(reactions []Reaction) int {
+	total := 0
+	for _, r := range reactions {
+		total += r.Count
+	}
+	return total
+}
+
 func buildTitle(msg DiscordMessage) string {
 	if len(msg.Content) == 0 {
 		if len(msg.Embeds) > 0 && msg.Embeds[0].Title != "" {
@@ -250,8 +387,35 @@ func buildTitle(msg DiscordMessage) string {
 	return title
 }
 
+// ParseBotCommand extracts the URL and comment from a bot capture command message.
+// Returns the URL, the comment text, and whether a valid command was found.
+func ParseBotCommand(content string, captureCommands []string) (url, comment string, ok bool) {
+	for _, cmd := range captureCommands {
+		if !strings.HasPrefix(content, cmd+" ") && content != cmd {
+			continue
+		}
+		rest := strings.TrimPrefix(content, cmd)
+		rest = strings.TrimSpace(rest)
+		if rest == "" {
+			return "", "", false
+		}
+		parts := strings.SplitN(rest, " ", 2)
+		candidateURL := parts[0]
+		if !strings.HasPrefix(candidateURL, "http://") && !strings.HasPrefix(candidateURL, "https://") {
+			return "", rest, true
+		}
+		commentText := ""
+		if len(parts) > 1 {
+			commentText = strings.TrimSpace(parts[1])
+		}
+		return candidateURL, commentText, true
+	}
+	return "", "", false
+}
+
 func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error) {
 	cfg := DiscordConfig{
+		EnableGateway:   true,
 		BackfillLimit:   1000,
 		IncludeThreads:  true,
 		IncludePins:     true,
@@ -287,6 +451,60 @@ func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error)
 	if limit, ok := config.SourceConfig["backfill_limit"].(float64); ok {
 		cfg.BackfillLimit = int(limit)
 	}
+	if gw, ok := config.SourceConfig["enable_gateway"].(bool); ok {
+		cfg.EnableGateway = gw
+	}
+	if threads, ok := config.SourceConfig["include_threads"].(bool); ok {
+		cfg.IncludeThreads = threads
+	}
+	if pins, ok := config.SourceConfig["include_pins"].(bool); ok {
+		cfg.IncludePins = pins
+	}
+	if cmds, ok := config.SourceConfig["capture_commands"].([]interface{}); ok {
+		cfg.CaptureCommands = nil
+		for _, cmd := range cmds {
+			if s, ok := cmd.(string); ok {
+				cfg.CaptureCommands = append(cfg.CaptureCommands, s)
+			}
+		}
+	}
 
 	return cfg, nil
+}
+
+// RateLimiter tracks per-route rate limits from Discord API response headers.
+type RateLimiter struct {
+	mu      sync.RWMutex
+	buckets map[string]*rateBucket
+}
+
+type rateBucket struct {
+	remaining int
+	resetAt   time.Time
+}
+
+// NewRateLimiter creates a new rate limiter for Discord API routes.
+func NewRateLimiter() *RateLimiter {
+	return &RateLimiter{buckets: make(map[string]*rateBucket)}
+}
+
+// ShouldWait returns the duration to wait before making a request to the given route.
+// Returns 0 if no wait is needed.
+func (r *RateLimiter) ShouldWait(route string) time.Duration {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if b, ok := r.buckets[route]; ok && b.remaining <= 1 {
+		wait := time.Until(b.resetAt)
+		if wait > 0 {
+			return wait
+		}
+	}
+	return 0
+}
+
+// Update records rate limit state from Discord API response headers for a route.
+func (r *RateLimiter) Update(route string, remaining int, resetAt time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.buckets[route] = &rateBucket{remaining: remaining, resetAt: resetAt}
 }

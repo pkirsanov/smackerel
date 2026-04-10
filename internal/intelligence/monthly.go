@@ -104,14 +104,24 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 		}
 	}
 
-	// 2. Information diet — content types consumed this month
-	e.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM artifacts WHERE content_type LIKE '%article%' AND created_at > DATE_TRUNC('month', NOW())`).Scan(&report.InformationDiet.Articles)
-	e.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM artifacts WHERE content_type LIKE '%youtube%' AND created_at > DATE_TRUNC('month', NOW())`).Scan(&report.InformationDiet.Videos)
-	e.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM artifacts WHERE source_id IN ('gmail','imap','outlook') AND created_at > DATE_TRUNC('month', NOW())`).Scan(&report.InformationDiet.Emails)
-	e.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM artifacts WHERE content_type LIKE '%note%' AND created_at > DATE_TRUNC('month', NOW())`).Scan(&report.InformationDiet.Notes)
+	// 2. Information diet — content types consumed this month (single query)
+	e.Pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE content_type LIKE '%article%'),
+			COUNT(*) FILTER (WHERE content_type LIKE '%youtube%'),
+			COUNT(*) FILTER (WHERE source_id IN ('gmail','imap','outlook')),
+			COUNT(*) FILTER (WHERE content_type LIKE '%note%'),
+			COUNT(*)
+		FROM artifacts WHERE created_at > DATE_TRUNC('month', NOW())
+	`).Scan(
+		&report.InformationDiet.Articles,
+		&report.InformationDiet.Videos,
+		&report.InformationDiet.Emails,
+		&report.InformationDiet.Notes,
+		&report.InformationDiet.Other,
+	)
 	report.InformationDiet.Total = report.InformationDiet.Articles + report.InformationDiet.Videos +
 		report.InformationDiet.Emails + report.InformationDiet.Notes
-	e.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM artifacts WHERE created_at > DATE_TRUNC('month', NOW())`).Scan(&report.InformationDiet.Other)
 	report.InformationDiet.Other -= report.InformationDiet.Total
 
 	// 3. Interest evolution (last 6 months, bi-monthly periods)

@@ -195,7 +195,7 @@ Scenario: SCN-004-007b False positive commitment rejection
 - [x] Reply-thread emails trigger auto-resolve prompts
   > Evidence: Design specifies reply-thread detection triggers prompt for resolution confirmation; integrated into email processing pipeline
 - [x] Overdue commitments generate contextual alerts
-  > Evidence: `internal/intelligence/engine.go` CheckOverdueCommitments creates `AlertCommitmentOverdue` alerts with days-overdue context and person name
+  > Evidence: `internal/intelligence/engine.go` CheckOverdueCommitments creates `AlertCommitmentOverdue` alerts with days-overdue context and person name; dedup via NOT EXISTS subquery prevents duplicate alerts for already-alerting overdue items
 - [x] Action items surfaced in daily digest under TOP ACTIONS
   > Evidence: `internal/digest/generator.go` getPendingActionItems queries open action_items sorted by created_at; DigestContext includes ActionItems with Person and DaysWaiting
 - [x] SCN-004-004: User promise detected — email containing "I'll send you the report by Friday" creates action_item with type=user-promise and deadline
@@ -380,13 +380,13 @@ Scenario: SCN-004-013d Trip prep alert
 - [x] Alerts batched to maximum 2 per day
   > Evidence: `internal/intelligence/engine.go` GetPendingAlerts checks `deliveredToday >= 2` and returns nil if at max; `remaining := 2 - deliveredToday` caps query LIMIT
 - [x] Dismiss/snooze actions respected
-  > Evidence: `internal/intelligence/engine.go` DismissAlert sets status='dismissed'; SnoozeAlert sets status='snoozed' with snooze_until; GetPendingAlerts includes snoozed alerts past their snooze_until
+  > Evidence: `internal/intelligence/engine.go` DismissAlert sets status='dismissed' with existence validation (returns error if alert not found); SnoozeAlert sets status='snoozed' with snooze_until and validates future-time constraint; GetPendingAlerts includes snoozed alerts past their snooze_until; CreateAlert validates AlertType against known constants
 - [x] SCN-004-011: Bill reminder — electric bill $142 due in 3 days generates alert with amount and due date
   > Evidence: `internal/intelligence/engine.go` CreateAlert with AlertBill type; `engine_test.go` TestAlertType_Constants verifies AlertBill
 - [x] SCN-004-012: Alert batching — 3 pending alerts batched into max 2 deliveries per day
   > Evidence: `internal/intelligence/engine.go` GetPendingAlerts enforces `deliveredToday >= 2` cap; `engine_test.go` TestAlertPriority validates priority ordering
 - [x] SCN-004-013: Alert dismissal — dismissed alert not re-sent on subsequent delivery runs
-  > Evidence: `internal/intelligence/engine.go` DismissAlert updates status to 'dismissed'; GetPendingAlerts only queries status='pending' or expired snooze
+  > Evidence: `internal/intelligence/engine.go` DismissAlert updates status to 'dismissed' with row-count existence check; GetPendingAlerts only queries status='pending' or expired snooze; `engine_test.go` TestDismissAlert_EmptyID, TestSnoozeAlert_EmptyID, TestSnoozeAlert_PastTime verify input validation
 - [x] SCN-004-013b: Return window closing alert — purchase with 30-day return policy generates alert 4 days before closing
   > Evidence: `internal/intelligence/engine.go` AlertReturnWindow type; detection from purchase emails with return policy language
 - [x] SCN-004-013c: Relationship cooling alert — contact silent for 6 weeks generates alert respecting max 2/day limit
@@ -394,9 +394,9 @@ Scenario: SCN-004-013d Trip prep alert
 - [x] SCN-004-013d: Trip prep alert — trip detected from email 5 days away generates prep alert with destination and key artifacts
   > Evidence: `internal/intelligence/engine.go` AlertTripPrep type; date proximity check for departure window
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-  > Evidence: Scenarios mapped to unit tests in `internal/intelligence/engine_test.go`; `engine_test.go` covers alert lifecycle, priority, type constants
+  > Evidence: Scenarios mapped to unit tests in `internal/intelligence/engine_test.go`; `engine_test.go` covers alert lifecycle, priority, type constants, input validation (TestCreateAlert_InvalidType, TestCreateAlert_EmptyType, TestCreateAlert_AllValidTypes, TestDismissAlert_EmptyID, TestSnoozeAlert_EmptyID, TestSnoozeAlert_PastTime)
 - [x] Broader E2E regression suite passes
-  > Evidence: `./smackerel.sh test unit` — all 23 Go packages pass, 0 failures
+  > Evidence: `./smackerel.sh test unit` — all 31 Go packages pass, 0 failures
 - [x] Zero warnings, lint/format clean
   > Evidence: `./smackerel.sh lint` exits 0; `./smackerel.sh check` exits 0
 
@@ -461,7 +461,7 @@ Scenario: SCN-004-016b Pattern observation in weekly synthesis
 
 ### Definition of Done
 - [x] Weekly synthesis generated under 250 words with required sections
-  > Evidence: Design specifies 250-word cap; weekly context assembled synchronously by digest.Generator and intelligence.Resurface (ADR-001 — originally planned as NATS `smk.weekly.generate`)
+  > Evidence: `internal/intelligence/engine.go` GenerateWeeklySynthesis enforces 250-word cap by truncating assembled text to 250 words before storing; weekly context assembled synchronously by digest.Generator and intelligence.Resurface (ADR-001)
 - [x] Cross-domain connections cited with source artifacts
   > Evidence: `internal/intelligence/engine.go` SynthesisInsight stores SourceArtifactIDs; weekly context assembly aggregates synthesis insights with artifact references
 - [x] Topic momentum reported with trends

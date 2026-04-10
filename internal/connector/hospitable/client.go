@@ -164,10 +164,15 @@ func (c *Client) doGetPaginated(ctx context.Context, rawURL string) ([]byte, str
 			return nil, "", fmt.Errorf("http request: %w", err)
 		}
 
-		body, err := io.ReadAll(resp.Body)
+		// Limit response body to 10 MiB to prevent OOM from malicious/compromised API.
+		const maxResponseSize = 10 << 20
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
 		resp.Body.Close()
 		if err != nil {
 			return nil, "", fmt.Errorf("read response: %w", err)
+		}
+		if int64(len(body)) > maxResponseSize {
+			return nil, "", fmt.Errorf("response body exceeds %d bytes limit", maxResponseSize)
 		}
 
 		switch {

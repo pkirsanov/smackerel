@@ -6,7 +6,7 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 
 | Language | Packages/Files | Test Count | Type |
 |----------|---------------|------------|------|
-| Go | 25 packages | 450+ test functions | Unit (behavioral + structural) |
+| Go | 30 packages | 450+ test functions | Unit (behavioral + structural) |
 | Python | 2 test files | 20+ tests | Unit |
 | Shell (E2E) | 57 scripts | End-to-end | Live-stack |
 | Shell (Stress) | 2 scripts | Stress | Live-stack |
@@ -15,7 +15,7 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 
 - **Security tests**: auth token validation (placeholder rejection, min length), SSRF URL blocking (private IPs, IPv6, metadata), ILIKE wildcard escaping, config validation (PORT, CRON)
 - **Search tests**: temporal intent parsing (8 patterns), search request handling
-- **Connector tests**: IMAP tier assignment, CalDAV event parsing, YouTube engagement tiers, RSS/Atom parsing, bookmarks parsing, browser dwell time, Keep takeout parsing + label mapping + qualifiers, Hospitable PAT auth + pagination + rate-limit retry + multi-resource sync + cursor management + sender classification + rating precision
+- **Connector tests**: IMAP tier assignment, CalDAV event parsing, YouTube engagement tiers, RSS/Atom parsing, bookmarks parsing, browser dwell time, Keep takeout parsing + label mapping + qualifiers, Hospitable PAT auth + pagination + rate-limit retry + multi-resource sync + cursor management + sender classification + rating precision, Discord channel monitoring + token validation + message classification, Twitter archive parsing + thread reconstruction + entity extraction, Weather location config + coordinate rounding + WMO code mapping, Government Alerts haversine proximity + magnitude filtering + deduplication, Financial Markets watchlist parsing + rate limiting + alert threshold
 - **Telegram tests**: share capture, forward metadata, conversation assembly (timer/overflow/concurrent), media group assembly
 - **Intelligence tests**: synthesis insights, alert lifecycle, resurfacing scoring
 - **Pipeline tests**: dedup, processing, embedding format, tier assignment
@@ -51,7 +51,7 @@ The current CLI-owned runtime surface exposes these categories today:
 
 ### Go Package Coverage
 
-All 25 Go packages have tests:
+All 30 Go packages have tests:
 
 - `internal/api` — capture, search, health, digest, recent handlers
 - `internal/auth` — OAuth2 provider, token exchange
@@ -60,11 +60,16 @@ All 25 Go packages have tests:
 - `internal/connector/bookmarks` — Chrome/Netscape parsing
 - `internal/connector/browser` — dwell time, skip list, privacy
 - `internal/connector/caldav` — event sync, attendee extraction, tier assignment
+- `internal/connector/discord` — channel monitoring, token validation, message classification
 - `internal/connector/imap` — email sync, tier qualification, action item extraction
 - `internal/connector/keep` — Takeout parsing, normalization, labels, qualifiers
 - `internal/connector/hospitable` — PAT auth, pagination, Retry-After, active reservation sync, normalizer (4 types), cursor round-trip, partial failure, sender classification, URL population, rating precision
 - `internal/connector/maps` — activity classification, trail detection, GeoJSON
+- `internal/connector/markets` — watchlist parsing, rate limiting, alert threshold
 - `internal/connector/rss` — RSS + Atom feed parsing
+- `internal/connector/alerts` — haversine proximity, magnitude filtering, deduplication
+- `internal/connector/twitter` — archive parsing, thread reconstruction, entity extraction
+- `internal/connector/weather` — location config, coordinate rounding, WMO code mapping
 - `internal/connector/youtube` — video sync, engagement tiers
 - `internal/db` — migration system
 - `internal/digest` — generation, formatting

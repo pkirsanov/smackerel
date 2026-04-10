@@ -52,6 +52,17 @@
       "runStartedAt": "2026-04-09T00:00:00Z",
       "runFinishedAt": null,
       "summary": "Initial business analysis and spec.md creation for government alerts connector"
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "statusBefore": "validated",
+      "statusAfter": "validated",
+      "runStartedAt": "2026-04-10T00:00:00Z",
+      "runFinishedAt": "2026-04-10T00:00:00Z",
+      "summary": "Chaos-hardening: found and fixed 8 issues (3 race conditions, 1 memory leak, 2 input validation gaps, 1 error handling gap, 1 context handling gap). Added 8 chaos tests."
     }
   ]
 }

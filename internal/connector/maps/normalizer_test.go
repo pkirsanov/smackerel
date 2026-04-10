@@ -414,7 +414,7 @@ func TestGeoJSONRouteStorage(t *testing.T) {
 }
 
 func TestGeoJSONFallbackTwoPoint(t *testing.T) {
-	// 0 waypoints → GeoJSON LineString with empty coordinates (no start/end in TakeoutActivity without route)
+	// 0 waypoints → route_geojson is nil (no valid GeoJSON for empty route)
 	activity := TakeoutActivity{
 		Type:        ActivityDrive,
 		StartTime:   time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC),
@@ -427,21 +427,8 @@ func TestGeoJSONFallbackTwoPoint(t *testing.T) {
 	cfg := MapsConfig{DefaultTier: "standard"}
 	artifact := NormalizeActivity(activity, "drives.json", cfg)
 
-	geojson, ok := artifact.Metadata["route_geojson"].(map[string]interface{})
-	if !ok {
-		t.Fatal("route_geojson missing or wrong type")
-	}
-	if geojson["type"] != "LineString" {
-		t.Errorf("type = %v, want LineString", geojson["type"])
-	}
-	// Fallback produces empty coords when no route data available
-	coords, ok := geojson["coordinates"].([][]float64)
-	if !ok {
-		t.Fatal("coordinates missing or wrong type")
-	}
-	// No waypoints and no separate start/end fields → empty coordinates
-	if len(coords) != 0 {
-		t.Errorf("expected 0 fallback coordinates for routeless activity, got %d", len(coords))
+	if artifact.Metadata["route_geojson"] != nil {
+		t.Errorf("route_geojson should be nil for routeless activity, got %v", artifact.Metadata["route_geojson"])
 	}
 }
 
