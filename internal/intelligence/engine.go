@@ -2,9 +2,11 @@ package intelligence
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -254,4 +256,433 @@ func (e *Engine) CheckOverdueCommitments(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// MeetingBrief is a pre-meeting context brief per R-306.
+type MeetingBrief struct {
+	EventID    string          `json:"event_id"`
+	EventTitle string          `json:"event_title"`
+	StartsAt   time.Time       `json:"starts_at"`
+	Attendees  []AttendeeBrief `json:"attendees"`
+	BriefText  string          `json:"brief_text"`
+}
+
+// AttendeeBrief summarizes context for one meeting attendee.
+type AttendeeBrief struct {
+	Name          string   `json:"name"`
+	Email         string   `json:"email"`
+	RecentThreads []string `json:"recent_threads"`
+	SharedTopics  []string `json:"shared_topics"`
+	PendingItems  []string `json:"pending_action_items"`
+	IsNewContact  bool     `json:"is_new_contact"`
+}
+
+// GeneratePreMeetingBriefs checks for upcoming meetings and generates context briefs per R-306.
+// Queries calendar events 25-35 minutes from now, deduplicates by event ID, and assembles
+// per-attendee context from email threads, shared topics, and pending commitments.
+func (e *Engine) GeneratePreMeetingBriefs(ctx context.Context) ([]MeetingBrief, error) {
+	if e.Pool == nil {
+		return nil, fmt.Errorf("pre-meeting briefs require a database connection")
+	}
+
+	// 1. Find calendar events starting in 25-35 minutes
+	rows, err := e.Pool.Query(ctx, `
+		SELECT a.id, a.title, a.captured_at,
+		       COALESCE(a.metadata->>'attendees', '[]') AS attendees
+		FROM artifacts a
+		WHERE a.source_id IN ('caldav', 'google-calendar', 'outlook-calendar')
+		  AND a.captured_at BETWEEN NOW() + INTERVAL '25 minutes' AND NOW() + INTERVAL '35 minutes'
+		  AND NOT EXISTS (
+			SELECT 1 FROM alerts al
+			WHERE al.alert_type = 'meeting_brief' AND al.artifact_id = a.id
+		  )
+		ORDER BY a.captured_at ASC
+		LIMIT 5
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query upcoming meetings: %w", err)
+	}
+	defer rows.Close()
+
+	var briefs []MeetingBrief
+	for rows.Next() {
+		var eventID, title, attendeesJSON string
+		var startsAt time.Time
+		if err := rows.Scan(&eventID, &title, &startsAt, &attendeesJSON); err != nil {
+			slog.Warn("meeting scan failed", "error", err)
+			continue
+		}
+
+		// Parse attendees
+		var attendeeEmails []string
+		json.Unmarshal([]byte(attendeesJSON), &attendeeEmails)
+
+		brief := MeetingBrief{
+			EventID:    eventID,
+			EventTitle: title,
+			StartsAt:   startsAt,
+		}
+
+		// 2. Build per-attendee context
+		for _, email := range attendeeEmails {
+			ab := e.buildAttendeeBrief(ctx, email)
+			brief.Attendees = append(brief.Attendees, ab)
+		}
+
+		// 3. Assemble brief text
+		brief.BriefText = assembleBriefText(brief)
+
+		// 4. Create alert to prevent duplicate briefs
+		if err := e.CreateAlert(ctx, &Alert{
+			AlertType:  AlertMeetingBrief,
+			Title:      fmt.Sprintf("Meeting brief: %s", title),
+			Body:       brief.BriefText,
+			Priority:   1,
+			ArtifactID: eventID,
+		}); err != nil {
+			slog.Warn("failed to create meeting brief alert", "event", eventID, "error", err)
+		}
+
+		briefs = append(briefs, brief)
+	}
+
+	return briefs, rows.Err()
+}
+
+// buildAttendeeBrief assembles context for a single meeting attendee.
+func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeBrief {
+	ab := AttendeeBrief{Email: email}
+
+	// Check if known contact
+	var personName string
+	err := e.Pool.QueryRow(ctx, `
+		SELECT name FROM people WHERE email = $1 LIMIT 1
+	`, email).Scan(&personName)
+	if err != nil {
+		ab.IsNewContact = true
+		ab.Name = email
+		return ab
+	}
+	ab.Name = personName
+
+	// Recent email threads (last 3)
+	threadRows, err := e.Pool.Query(ctx, `
+		SELECT a.title FROM artifacts a
+		WHERE a.source_id IN ('gmail', 'imap', 'outlook')
+		  AND (a.metadata->>'sender' = $1 OR a.metadata->>'recipients' LIKE '%' || $1 || '%')
+		ORDER BY a.created_at DESC LIMIT 3
+	`, email)
+	if err == nil {
+		defer threadRows.Close()
+		for threadRows.Next() {
+			var t string
+			if threadRows.Scan(&t) == nil {
+				ab.RecentThreads = append(ab.RecentThreads, t)
+			}
+		}
+	}
+
+	// Shared topics
+	topicRows, err := e.Pool.Query(ctx, `
+		SELECT DISTINCT t.name FROM topics t
+		JOIN edges e ON e.dst_id = t.id AND e.dst_type = 'topic' AND e.edge_type = 'BELONGS_TO'
+		JOIN artifacts a ON a.id = e.src_id
+		WHERE a.metadata->>'sender' = $1 OR a.metadata->>'recipients' LIKE '%' || $1 || '%'
+		LIMIT 5
+	`, email)
+	if err == nil {
+		defer topicRows.Close()
+		for topicRows.Next() {
+			var t string
+			if topicRows.Scan(&t) == nil {
+				ab.SharedTopics = append(ab.SharedTopics, t)
+			}
+		}
+	}
+
+	// Pending action items from/to this person
+	aiRows, err := e.Pool.Query(ctx, `
+		SELECT text FROM action_items
+		WHERE person_id IN (SELECT id FROM people WHERE email = $1)
+		  AND status = 'open'
+		LIMIT 3
+	`, email)
+	if err == nil {
+		defer aiRows.Close()
+		for aiRows.Next() {
+			var t string
+			if aiRows.Scan(&t) == nil {
+				ab.PendingItems = append(ab.PendingItems, t)
+			}
+		}
+	}
+
+	return ab
+}
+
+// assembleBriefText generates a 2-3 sentence brief for a meeting.
+func assembleBriefText(brief MeetingBrief) string {
+	var parts []string
+	parts = append(parts, fmt.Sprintf("Meeting: %s", brief.EventTitle))
+
+	for _, a := range brief.Attendees {
+		if a.IsNewContact {
+			parts = append(parts, fmt.Sprintf("• %s — No prior context. New contact.", a.Email))
+			continue
+		}
+		var context []string
+		if len(a.RecentThreads) > 0 {
+			context = append(context, fmt.Sprintf("%d recent threads", len(a.RecentThreads)))
+		}
+		if len(a.SharedTopics) > 0 {
+			context = append(context, fmt.Sprintf("shared topics: %s", strings.Join(a.SharedTopics, ", ")))
+		}
+		if len(a.PendingItems) > 0 {
+			context = append(context, fmt.Sprintf("%d pending items", len(a.PendingItems)))
+		}
+		if len(context) > 0 {
+			parts = append(parts, fmt.Sprintf("• %s — %s", a.Name, strings.Join(context, "; ")))
+		}
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+// WeeklySynthesis is the weekly knowledge synthesis per R-307.
+type WeeklySynthesis struct {
+	WeekOf           string               `json:"week_of"`
+	Stats            WeeklyStats          `json:"stats"`
+	Insights         []SynthesisInsight   `json:"insights"`
+	TopicMovement    []TopicMovement      `json:"topic_movement"`
+	OpenLoops        []string             `json:"open_loops"`
+	SerendipityPicks []ResurfaceCandidate `json:"serendipity_picks"`
+	Patterns         []string             `json:"patterns"`
+	WordCount        int                  `json:"word_count"`
+	SynthesisText    string               `json:"synthesis_text"`
+}
+
+// WeeklyStats summarizes the week's activity.
+type WeeklyStats struct {
+	ArtifactsProcessed int `json:"artifacts_processed"`
+	NewConnections     int `json:"new_connections"`
+	TopicsActive       int `json:"topics_active"`
+	SearchesPerformed  int `json:"searches_performed"`
+}
+
+// TopicMovement shows how a topic's momentum changed this week.
+type TopicMovement struct {
+	TopicName string `json:"topic_name"`
+	Direction string `json:"direction"` // rising, falling, stable
+	Captures  int    `json:"captures_this_week"`
+}
+
+// GenerateWeeklySynthesis assembles and generates the weekly knowledge synthesis per R-307.
+func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis, error) {
+	if e.Pool == nil {
+		return nil, fmt.Errorf("weekly synthesis requires a database connection")
+	}
+
+	ws := &WeeklySynthesis{
+		WeekOf: time.Now().Format("2006-01-02"),
+	}
+
+	// 1. Weekly stats
+	e.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM artifacts WHERE created_at > NOW() - INTERVAL '7 days'
+	`).Scan(&ws.Stats.ArtifactsProcessed)
+
+	e.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM edges WHERE created_at > NOW() - INTERVAL '7 days'
+	`).Scan(&ws.Stats.NewConnections)
+
+	e.Pool.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT dst_id) FROM edges
+		WHERE edge_type = 'BELONGS_TO' AND dst_type = 'topic'
+		  AND created_at > NOW() - INTERVAL '7 days'
+	`).Scan(&ws.Stats.TopicsActive)
+
+	e.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM search_log WHERE created_at > NOW() - INTERVAL '7 days'
+	`).Scan(&ws.Stats.SearchesPerformed)
+
+	// 2. Synthesis insights from this week
+	insights, err := e.RunSynthesis(ctx)
+	if err == nil {
+		ws.Insights = insights
+	}
+
+	// 3. Topic movement
+	topicRows, err := e.Pool.Query(ctx, `
+		SELECT t.name,
+		       COUNT(DISTINCT CASE WHEN a.created_at > NOW() - INTERVAL '7 days' THEN a.id END) AS this_week,
+		       COUNT(DISTINCT CASE WHEN a.created_at BETWEEN NOW() - INTERVAL '14 days' AND NOW() - INTERVAL '7 days' THEN a.id END) AS last_week
+		FROM topics t
+		JOIN edges e ON e.dst_id = t.id AND e.dst_type = 'topic' AND e.edge_type = 'BELONGS_TO'
+		JOIN artifacts a ON a.id = e.src_id
+		WHERE a.created_at > NOW() - INTERVAL '14 days'
+		GROUP BY t.name
+		HAVING COUNT(DISTINCT CASE WHEN a.created_at > NOW() - INTERVAL '7 days' THEN a.id END) > 0
+		ORDER BY this_week DESC
+		LIMIT 10
+	`)
+	if err == nil {
+		defer topicRows.Close()
+		for topicRows.Next() {
+			var tm TopicMovement
+			var lastWeek int
+			if topicRows.Scan(&tm.TopicName, &tm.Captures, &lastWeek) == nil {
+				if tm.Captures > lastWeek+1 {
+					tm.Direction = "rising"
+				} else if tm.Captures < lastWeek-1 {
+					tm.Direction = "falling"
+				} else {
+					tm.Direction = "stable"
+				}
+				ws.TopicMovement = append(ws.TopicMovement, tm)
+			}
+		}
+	}
+
+	// 4. Open loops (overdue action items)
+	loopRows, err := e.Pool.Query(ctx, `
+		SELECT text FROM action_items WHERE status = 'open' AND expected_date < CURRENT_DATE
+		ORDER BY expected_date ASC LIMIT 5
+	`)
+	if err == nil {
+		defer loopRows.Close()
+		for loopRows.Next() {
+			var t string
+			if loopRows.Scan(&t) == nil {
+				ws.OpenLoops = append(ws.OpenLoops, t)
+			}
+		}
+	}
+
+	// 5. Serendipity pick
+	candidates, err := e.Resurface(ctx, 1)
+	if err == nil {
+		ws.SerendipityPicks = candidates
+	}
+
+	// 6. Patterns (capture timing analysis)
+	ws.Patterns = e.detectCapturePatterns(ctx)
+
+	// Assemble synthesis text
+	ws.SynthesisText = assembleWeeklySynthesisText(ws)
+	ws.WordCount = len(strings.Fields(ws.SynthesisText))
+
+	return ws, nil
+}
+
+// detectCapturePatterns analyzes timestamp patterns in user captures.
+func (e *Engine) detectCapturePatterns(ctx context.Context) []string {
+	var patterns []string
+
+	// Day-of-week pattern
+	rows, err := e.Pool.Query(ctx, `
+		SELECT EXTRACT(DOW FROM created_at)::int AS dow, COUNT(*) AS cnt
+		FROM artifacts
+		WHERE created_at > NOW() - INTERVAL '30 days'
+		GROUP BY dow
+		ORDER BY cnt DESC
+		LIMIT 1
+	`)
+	if err == nil {
+		defer rows.Close()
+		dayNames := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+		for rows.Next() {
+			var dow, cnt int
+			if rows.Scan(&dow, &cnt) == nil && dow >= 0 && dow < 7 {
+				patterns = append(patterns, fmt.Sprintf("You save the most content on %ss (%d captures in the last 30 days)", dayNames[dow], cnt))
+			}
+		}
+	}
+
+	// Hour-of-day pattern
+	rows2, err := e.Pool.Query(ctx, `
+		SELECT EXTRACT(HOUR FROM created_at)::int AS hr, COUNT(*) AS cnt
+		FROM artifacts
+		WHERE created_at > NOW() - INTERVAL '30 days'
+		GROUP BY hr
+		ORDER BY cnt DESC
+		LIMIT 1
+	`)
+	if err == nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var hr, cnt int
+			if rows2.Scan(&hr, &cnt) == nil {
+				period := "morning"
+				if hr >= 12 && hr < 17 {
+					period = "afternoon"
+				} else if hr >= 17 {
+					period = "evening"
+				}
+				patterns = append(patterns, fmt.Sprintf("Your peak capture time is %s (%d:00, %d captures in 30 days)", period, hr, cnt))
+			}
+		}
+	}
+
+	return patterns
+}
+
+// assembleWeeklySynthesisText generates the week-in-review text.
+func assembleWeeklySynthesisText(ws *WeeklySynthesis) string {
+	var sections []string
+
+	// STATS
+	if ws.Stats.ArtifactsProcessed > 0 {
+		sections = append(sections, fmt.Sprintf("THIS WEEK: %d artifacts processed, %d new connections, %d active topics.",
+			ws.Stats.ArtifactsProcessed, ws.Stats.NewConnections, ws.Stats.TopicsActive))
+	}
+
+	// INSIGHTS
+	if len(ws.Insights) > 0 {
+		var lines []string
+		for _, i := range ws.Insights {
+			lines = append(lines, fmt.Sprintf("• %s (confidence: %.0f%%)", i.ThroughLine, i.Confidence*100))
+		}
+		sections = append(sections, "INSIGHTS:\n"+strings.Join(lines, "\n"))
+	}
+
+	// TOPICS
+	if len(ws.TopicMovement) > 0 {
+		var lines []string
+		for _, tm := range ws.TopicMovement {
+			arrow := "→"
+			if tm.Direction == "rising" {
+				arrow = "↑"
+			} else if tm.Direction == "falling" {
+				arrow = "↓"
+			}
+			lines = append(lines, fmt.Sprintf("• %s %s (%d this week)", arrow, tm.TopicName, tm.Captures))
+		}
+		sections = append(sections, "TOPICS:\n"+strings.Join(lines, "\n"))
+	}
+
+	// OPEN LOOPS
+	if len(ws.OpenLoops) > 0 {
+		var lines []string
+		for _, l := range ws.OpenLoops {
+			lines = append(lines, "• "+l)
+		}
+		sections = append(sections, "OPEN LOOPS:\n"+strings.Join(lines, "\n"))
+	}
+
+	// SERENDIPITY
+	if len(ws.SerendipityPicks) > 0 {
+		pick := ws.SerendipityPicks[0]
+		sections = append(sections, fmt.Sprintf("FROM THE ARCHIVE: %s — %s", pick.Title, pick.Reason))
+	}
+
+	// PATTERNS
+	if len(ws.Patterns) > 0 {
+		sections = append(sections, "PATTERNS NOTICED:\n"+strings.Join(ws.Patterns, "\n"))
+	}
+
+	if len(sections) == 0 {
+		return "Quiet week — not much to report. Keep exploring!"
+	}
+
+	return strings.Join(sections, "\n\n")
 }
