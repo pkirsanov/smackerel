@@ -44,7 +44,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ## Scope 01: Open-Meteo Client & Cache
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** None — foundational scope
 
@@ -91,7 +91,7 @@ Scenario: SCN-WX-OM-003 Historical weather lookup
 
 ## Scope 02: Normalizer & Weather Types
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scope 1
 
@@ -113,7 +113,7 @@ Build the normalizer that converts weather API responses into `connector.RawArti
 
 ## Scope 03: Weather Connector & Config
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scopes 1, 2
 
@@ -135,7 +135,7 @@ Implement the full `Connector` interface, location configuration, and sync orche
 
 ## Scope 04: NWS Alert Integration
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Dependencies:** Scope 3
 
@@ -157,7 +157,7 @@ Add NWS severe weather alert fetching for US locations. Alerts are classified by
 
 ## Scope 05: Historical Weather Enrichment
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P2
 **Dependencies:** Scope 3
 

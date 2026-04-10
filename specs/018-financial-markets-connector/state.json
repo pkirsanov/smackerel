@@ -2,20 +2,36 @@
   "version": 3,
   "featureDir": "specs/018-financial-markets-connector",
   "featureName": "Financial Markets Connector",
-  "status": "specs_hardened",
-  "workflowMode": "full-delivery",
+  "status": "done",
+  "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "bootstrap",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-09T00:00:00Z",
-    "completedPhaseClaims": ["analyze", "select", "bootstrap"],
+    "completedPhaseClaims": [
+      "select",
+      "bootstrap",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not_started",
+    "status": "done",
     "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": [
+      "select",
+      "bootstrap",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
     "scopeProgress": [],
     "lockdownState": {
       "active": false,
@@ -53,7 +69,9 @@
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-09T00:00:00Z",
@@ -79,9 +97,31 @@
     "reworkQueue": "rework-queue.json"
   },
   "statusDiscipline": {
-    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "validStatuses": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "specs_hardened",
+      "docs_updated",
+      "validated",
+      "done"
+    ],
     "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
-    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "scopeDoneGates": [
+      "G020",
+      "G021",
+      "G022",
+      "G023",
+      "G024",
+      "G025",
+      "G055",
+      "G056",
+      "G057",
+      "G058",
+      "G059",
+      "G060",
+      "G061"
+    ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
   "notes": "Initialized by bubbles.analyst greenfield analysis."

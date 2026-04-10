@@ -47,7 +47,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ## Scope 01: Archive Parser
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** None — foundational scope
 
@@ -93,7 +93,7 @@ Scenario: SCN-TW-ARC-002 Parse like.js and bookmark.js
 
 ## Scope 02: Thread Reconstruction
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scope 1
 
@@ -135,7 +135,7 @@ Scenario: SCN-TW-THR-002 Ignore replies to other users
 
 ## Scope 03: Normalizer & Tier Assignment
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scopes 1, 2
 
@@ -157,7 +157,7 @@ Build the normalizer (`normalizer.go`) that converts parsed tweets and thread me
 
 ## Scope 04: Twitter Connector & Config
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scopes 1, 2, 3
 
@@ -198,7 +198,7 @@ Scenario: SCN-TW-CONN-002 Dedup on re-import
 
 ## Scope 05: Tweet Link Extraction
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Dependencies:** Scope 4
 
@@ -219,7 +219,7 @@ Extract URLs from tweet entities and create child artifacts for content extracti
 
 ## Scope 06: API Client (Opt-In)
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P2
 **Dependencies:** Scope 4
 

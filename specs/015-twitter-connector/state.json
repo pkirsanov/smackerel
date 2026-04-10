@@ -1,16 +1,36 @@
 {
   "version": 3,
   "feature": "015-twitter-connector",
-  "status": "specs_hardened",
+  "status": "done",
   "certification": {
     "bootstrap": "not_started",
     "artifact_lint": "not_started",
     "traceability": "not_started",
-    "regression_baseline": "not_started"
+    "regression_baseline": "not_started",
+    "status": "done",
+    "certifiedCompletedPhases": [
+      "select",
+      "bootstrap",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ]
   },
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "bootstrap",
-    "executionHistory": []
-  }
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "executionHistory": [],
+    "completedPhaseClaims": [
+      "select",
+      "bootstrap",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ]
+  },
+  "workflowMode": "delivery-lockdown"
 }

@@ -47,7 +47,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ## Scope 01: Finnhub Client & Rate Limiter
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** None — foundational scope
 
@@ -89,7 +89,7 @@ Scenario: SCN-FM-RL-001 Rate limiter prevents exceeding budget
 
 ## Scope 02: CoinGecko & FRED Clients
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scope 1 (shares rate limiter)
 
@@ -126,7 +126,7 @@ Scenario: SCN-FM-FRED-001 Fetch latest economic indicators
 
 ## Scope 03: Normalizer & Market Types
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scopes 1, 2
 
@@ -149,7 +149,7 @@ Build the normalizer that converts provider responses to `connector.RawArtifact`
 
 ## Scope 04: Financial Markets Connector & Config
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scopes 1, 2, 3
 
@@ -185,7 +185,7 @@ Scenario: SCN-FM-CONN-001 Watchlist-driven sync
 
 ## Scope 05: Alert Detection & Daily Summary
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Dependencies:** Scope 4
 
@@ -207,7 +207,7 @@ Detect significant price movements that exceed the configured threshold and gene
 
 ## Scope 06: Cross-Artifact Symbol Linking
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P2
 **Dependencies:** Scope 4
 

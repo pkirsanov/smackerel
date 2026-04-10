@@ -30,7 +30,7 @@ func TestAssembleMonthlyReportText_NonEmpty(t *testing.T) {
 		ExpertiseShifts: []ExpertiseShift{
 			{TopicName: "Go", PrevDepth: 30, CurrentDepth: 45, Direction: "gained"},
 		},
-		InformationDiet: InformationDiet{Articles: 10, Videos: 5, Emails: 20, Notes: 3, Total: 38},
+		InformationDiet:  InformationDiet{Articles: 10, Videos: 5, Emails: 20, Notes: 3, Total: 38},
 		ProductivityPats: []string{"Peak capture at 9am"},
 	}
 
