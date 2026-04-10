@@ -131,6 +131,9 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 	if text == "" && msg.Caption != "" {
 		text = msg.Caption
 	}
+	if len(text) > maxShareTextLen {
+		text = truncateUTF8(text, maxShareTextLen)
+	}
 
 	forwardContext := fmt.Sprintf("Forwarded from %s", meta.SenderName)
 	if meta.SourceChat != "" {

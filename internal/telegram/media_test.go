@@ -408,3 +408,90 @@ func TestStability_MediaGroupAssembler_ShutdownUsesBackgroundContext(t *testing.
 		t.Fatal("flush was not called during shutdown with cancelled parent context")
 	}
 }
+
+// --- Chaos-hardening: Finding 1 regression ---
+
+func TestChaos_MediaGroupAssembler_EvictionPicksOldest(t *testing.T) {
+	// Regression: eviction used to pick an arbitrary buffer (Go map iteration order).
+	// After fix, it must pick the buffer with the earliest CreatedAt.
+	var evicted []*MediaGroupBuffer
+	var mu sync.Mutex
+
+	m := NewMediaGroupAssembler(context.Background(), 60,
+		func(_ context.Context, buf *MediaGroupBuffer) error {
+			mu.Lock()
+			evicted = append(evicted, buf)
+			mu.Unlock()
+			return nil
+		})
+
+	m.maxBuffers = 3
+
+	// Add 3 groups with deliberate spacing so timestamps differ
+	m.Add("oldest", &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 1}, Photo: []tgbotapi.PhotoSize{{FileID: "p0", FileSize: 100}}, MediaGroupID: "oldest",
+	})
+	time.Sleep(10 * time.Millisecond)
+	m.Add("middle", &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 1}, Photo: []tgbotapi.PhotoSize{{FileID: "p1", FileSize: 100}}, MediaGroupID: "middle",
+	})
+	time.Sleep(10 * time.Millisecond)
+	m.Add("newest", &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 1}, Photo: []tgbotapi.PhotoSize{{FileID: "p2", FileSize: 100}}, MediaGroupID: "newest",
+	})
+
+	// This 4th add should evict "oldest"
+	m.Add("trigger", &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 1}, Photo: []tgbotapi.PhotoSize{{FileID: "p3", FileSize: 100}}, MediaGroupID: "trigger",
+	})
+
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	evictedCount := len(evicted)
+	var evictedID string
+	if evictedCount > 0 {
+		evictedID = evicted[0].MediaGroupID
+	}
+	mu.Unlock()
+
+	if evictedCount != 1 {
+		t.Fatalf("expected 1 eviction, got %d", evictedCount)
+	}
+	if evictedID != "oldest" {
+		t.Errorf("expected oldest buffer evicted, got %q", evictedID)
+	}
+
+	m.FlushAll()
+}
+
+func TestChaos_MediaGroupAssembler_ConcurrentAddAndFlush(t *testing.T) {
+	var mu sync.Mutex
+	var flushed int
+
+	m := NewMediaGroupAssembler(context.Background(), 1,
+		func(_ context.Context, buf *MediaGroupBuffer) error {
+			mu.Lock()
+			flushed++
+			mu.Unlock()
+			return nil
+		})
+
+	// Concurrent adds to different groups + FlushAll to stress mutex safety
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			m.Add(fmt.Sprintf("group-%d", n), &tgbotapi.Message{
+				Chat:         &tgbotapi.Chat{ID: 1},
+				Photo:        []tgbotapi.PhotoSize{{FileID: fmt.Sprintf("p%d", n), FileSize: 100}},
+				MediaGroupID: fmt.Sprintf("group-%d", n),
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	m.FlushAll()
+	// No panic = success
+}

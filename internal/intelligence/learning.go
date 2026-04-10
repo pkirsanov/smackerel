@@ -148,7 +148,7 @@ func (e *Engine) MarkLearningResourceCompleted(ctx context.Context, topicID, art
 	_, err := e.Pool.Exec(ctx, `
 		INSERT INTO learning_progress (id, topic_id, artifact_id, completed, completed_at, created_at)
 		VALUES ($1, $2, $3, TRUE, $4, $4)
-		ON CONFLICT (id) DO UPDATE SET completed = TRUE, completed_at = $4
+		ON CONFLICT (topic_id, artifact_id) DO UPDATE SET completed = TRUE, completed_at = $4
 	`, ulid.Make().String(), topicID, artifactID, now)
 	return err
 }

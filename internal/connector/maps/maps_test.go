@@ -466,3 +466,100 @@ func TestIsTrailQualified_RunDurationBased(t *testing.T) {
 		t.Error("1.0km / 15min run should not qualify (below both thresholds)")
 	}
 }
+
+// --- Hardening tests ---
+
+// HARDEN-011: ParseTakeoutJSON with only placeVisit entries (no activitySegments).
+func TestParseTakeoutJSON_PlaceVisitsOnly(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{"placeVisit": {"location": {"latitudeE7": 407128000}}},
+			{"placeVisit": {"location": {"latitudeE7": 408000000}}}
+		]
+	}`
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 0 {
+		t.Errorf("expected 0 activities from placeVisit-only input, got %d", len(activities))
+	}
+}
+
+// HARDEN-011: ParseTakeoutJSON with mixed placeVisit and activitySegment entries.
+func TestParseTakeoutJSON_MixedPlaceVisitAndActivity(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{"placeVisit": {"location": {"latitudeE7": 407128000}}},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:00:00Z"
+					},
+					"distance": 3000,
+					"activityType": "CYCLING",
+					"waypointPath": {"waypoints": []}
+				}
+			},
+			{"placeVisit": {"location": {"latitudeE7": 408000000}}}
+		]
+	}`
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (placeVisits skipped), got %d", len(activities))
+	}
+	if activities[0].Type != ActivityCycle {
+		t.Errorf("expected cycling, got %q", activities[0].Type)
+	}
+}
+
+// HARDEN-011: ParseTakeoutJSON with both timestamps invalid → skipped entirely.
+func TestParseTakeoutJSON_BothTimestampsInvalid(t *testing.T) {
+	input := `{
+		"timelineObjects": [{
+			"activitySegment": {
+				"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+				"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+				"duration": {
+					"startTimestamp": "bad-start",
+					"endTimestamp":   "bad-end"
+				},
+				"distance": 5000,
+				"activityType": "WALKING",
+				"waypointPath": {"waypoints": []}
+			}
+		}]
+	}`
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 0 {
+		t.Errorf("expected 0 activities (both timestamps invalid), got %d", len(activities))
+	}
+}
+
+// HARDEN-011: ClassifyActivity with negative distance falls to walk (no panic, no crash).
+func TestClassifyActivity_NegativeDistance(t *testing.T) {
+	got := ClassifyActivity("WALKING", -5.0)
+	if got != ActivityWalk {
+		t.Errorf("ClassifyActivity(WALKING, -5) = %q, want %q", got, ActivityWalk)
+	}
+}
+
+// HARDEN-011: Haversine with antipodal points (max possible distance ~20015km).
+func TestHaversine_AntipodalPoints(t *testing.T) {
+	north := LatLng{Lat: 90, Lng: 0}
+	south := LatLng{Lat: -90, Lng: 0}
+	d := Haversine(north, south)
+	// Half the Earth's circumference ≈ 20015km
+	if math.Abs(d-20015) > 100 {
+		t.Errorf("North to South pole should be ~20015km, got %.0fkm", d)
+	}
+}

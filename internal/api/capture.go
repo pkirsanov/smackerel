@@ -49,8 +49,9 @@ type ErrorDetail struct {
 
 // CaptureHandler handles POST /api/capture.
 func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
-	// Check DB health before processing — fail visible on DB outage
-	if d.DB != nil && !d.DB.Healthy(r.Context()) {
+	// Check DB health before processing — fail visible on DB outage.
+	// A nil DB is treated as unavailable (misconfiguration or startup race).
+	if d.DB == nil || !d.DB.Healthy(r.Context()) {
 		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE",
 			"Database is temporarily unavailable, please retry")
 		return

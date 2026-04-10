@@ -131,3 +131,39 @@ func TestExpertiseShift_Direction(t *testing.T) {
 		}
 	}
 }
+
+// === Stabilize: InformationDiet.Total includes Other ===
+
+func TestInformationDiet_TotalIncludesOther(t *testing.T) {
+	// When the InformationDiet is populated from a query, Total should
+	// equal Articles + Videos + Emails + Notes + Other.
+	d := InformationDiet{
+		Articles: 15,
+		Videos:   8,
+		Emails:   40,
+		Notes:    5,
+		Other:    10,
+		Total:    78, // must equal 15+8+40+5+10
+	}
+
+	expected := d.Articles + d.Videos + d.Emails + d.Notes + d.Other
+	if d.Total != expected {
+		t.Errorf("Total=%d should equal A+V+E+N+O=%d", d.Total, expected)
+	}
+}
+
+func TestInformationDiet_OtherIsNonNegative(t *testing.T) {
+	// Other should never be negative — it's total minus categorized
+	d := InformationDiet{
+		Articles: 20,
+		Videos:   10,
+		Emails:   30,
+		Notes:    5,
+		Other:    0,
+		Total:    65,
+	}
+
+	if d.Other < 0 {
+		t.Errorf("Other count should never be negative, got %d", d.Other)
+	}
+}

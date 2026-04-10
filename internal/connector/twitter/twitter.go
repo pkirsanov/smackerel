@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,15 @@ const (
 	SyncModeAPI     SyncMode = "api"
 	SyncModeHybrid  SyncMode = "hybrid"
 )
+
+const (
+	// maxArchiveFileSize is the maximum size of a tweets.js file we will read (500 MiB).
+	// Prevents OOM from crafted or corrupt archives.
+	maxArchiveFileSize = 500 * 1024 * 1024
+)
+
+// tweetIDPattern validates that a tweet ID contains only digits.
+var tweetIDPattern = regexp.MustCompile(`^[0-9]+$`)
 
 // TwitterConfig holds parsed Twitter-specific configuration.
 type TwitterConfig struct {
@@ -97,9 +107,26 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		if cfg.ArchiveDir == "" {
 			return fmt.Errorf("archive_dir is required for sync_mode %s", cfg.SyncMode)
 		}
-		if _, err := os.Stat(cfg.ArchiveDir); os.IsNotExist(err) {
+		// Canonicalize archive path and resolve symlinks to prevent traversal (CWE-22).
+		absDir, err := filepath.Abs(cfg.ArchiveDir)
+		if err != nil {
+			return fmt.Errorf("resolve archive directory %s: %w", cfg.ArchiveDir, err)
+		}
+		resolvedDir, err := filepath.EvalSymlinks(absDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("archive directory does not exist: %s", cfg.ArchiveDir)
+			}
+			return fmt.Errorf("resolve archive directory symlinks %s: %w", absDir, err)
+		}
+		info, err := os.Stat(resolvedDir)
+		if err != nil {
 			return fmt.Errorf("archive directory does not exist: %s", cfg.ArchiveDir)
 		}
+		if !info.IsDir() {
+			return fmt.Errorf("archive path is not a directory: %s", cfg.ArchiveDir)
+		}
+		cfg.ArchiveDir = resolvedDir
 	}
 
 	c.mu.Lock()
@@ -155,15 +182,33 @@ func (c *Connector) Close() error {
 // syncArchive parses the Twitter data export directory.
 func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	tweetsFile := filepath.Join(c.config.ArchiveDir, "data", "tweets.js")
-	if _, err := os.Stat(tweetsFile); os.IsNotExist(err) {
-		return nil, cursor, fmt.Errorf("tweets.js not found in archive: %s", tweetsFile)
+
+	// Verify the resolved file path stays within the archive directory boundary (CWE-22).
+	resolvedFile, err := filepath.EvalSymlinks(tweetsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, cursor, fmt.Errorf("tweets.js not found in archive: %s", tweetsFile)
+		}
+		return nil, cursor, fmt.Errorf("resolve tweets.js path: %w", err)
+	}
+	if !strings.HasPrefix(resolvedFile, c.config.ArchiveDir+string(filepath.Separator)) {
+		return nil, cursor, fmt.Errorf("tweets.js path escapes archive directory")
 	}
 
 	if err := ctx.Err(); err != nil {
 		return nil, cursor, fmt.Errorf("context cancelled before reading archive: %w", err)
 	}
 
-	data, err := os.ReadFile(tweetsFile)
+	// Enforce file size limit before reading to prevent OOM (CWE-400).
+	info, err := os.Stat(resolvedFile)
+	if err != nil {
+		return nil, cursor, fmt.Errorf("stat tweets.js: %w", err)
+	}
+	if info.Size() > maxArchiveFileSize {
+		return nil, cursor, fmt.Errorf("tweets.js exceeds max size (%d > %d bytes)", info.Size(), maxArchiveFileSize)
+	}
+
+	data, err := os.ReadFile(resolvedFile)
 	if err != nil {
 		return nil, cursor, fmt.Errorf("read tweets.js: %w", err)
 	}
@@ -341,13 +386,19 @@ func normalizeTweet(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread) 
 			"tweet_id", tweet.ID, "created_at", tweet.CreatedAt, "error", err)
 	}
 
+	// Build URL only for validated tweet IDs to prevent URL injection.
+	var tweetURL string
+	if tweetIDPattern.MatchString(tweet.ID) {
+		tweetURL = fmt.Sprintf("https://x.com/i/status/%s", tweet.ID)
+	}
+
 	return connector.RawArtifact{
 		SourceID:    "twitter",
 		SourceRef:   tweet.ID,
 		ContentType: contentType,
 		Title:       buildTweetTitle(tweet),
 		RawContent:  tweet.FullText,
-		URL:         fmt.Sprintf("https://x.com/i/status/%s", tweet.ID),
+		URL:         tweetURL,
 		Metadata:    metadata,
 		CapturedAt:  ts,
 	}
@@ -427,8 +478,8 @@ func parseTwitterConfig(config connector.ConnectorConfig) (TwitterConfig, error)
 		}
 		cfg.SyncMode = m
 	}
-	if dir, ok := config.SourceConfig["archive_dir"].(string); ok {
-		cfg.ArchiveDir = dir
+	if dir, ok := config.SourceConfig["archive_dir"].(string); ok && dir != "" {
+		cfg.ArchiveDir = filepath.Clean(dir)
 	}
 	if token, ok := config.Credentials["bearer_token"]; ok {
 		cfg.BearerToken = token
@@ -436,4 +487,15 @@ func parseTwitterConfig(config connector.ConnectorConfig) (TwitterConfig, error)
 	}
 
 	return cfg, nil
+}
+
+// String implements fmt.Stringer with bearer token redaction to prevent
+// accidental credential exposure in logs or error messages.
+func (c TwitterConfig) String() string {
+	token := "<not set>"
+	if c.BearerToken != "" {
+		token = "<redacted>"
+	}
+	return fmt.Sprintf("TwitterConfig{SyncMode:%s, ArchiveDir:%s, BearerToken:%s, APIEnabled:%t}",
+		c.SyncMode, c.ArchiveDir, token, c.APIEnabled)
 }

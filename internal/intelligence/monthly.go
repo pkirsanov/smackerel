@@ -105,7 +105,8 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 	}
 
 	// 2. Information diet — content types consumed this month (single query)
-	e.Pool.QueryRow(ctx, `
+	var allCount int
+	if err := e.Pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*) FILTER (WHERE content_type LIKE '%article%'),
 			COUNT(*) FILTER (WHERE content_type LIKE '%youtube%'),
@@ -118,11 +119,14 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 		&report.InformationDiet.Videos,
 		&report.InformationDiet.Emails,
 		&report.InformationDiet.Notes,
-		&report.InformationDiet.Other,
-	)
-	report.InformationDiet.Total = report.InformationDiet.Articles + report.InformationDiet.Videos +
+		&allCount,
+	); err != nil {
+		slog.Warn("failed to query information diet", "error", err)
+	}
+	categorized := report.InformationDiet.Articles + report.InformationDiet.Videos +
 		report.InformationDiet.Emails + report.InformationDiet.Notes
-	report.InformationDiet.Other -= report.InformationDiet.Total
+	report.InformationDiet.Other = allCount - categorized
+	report.InformationDiet.Total = allCount
 
 	// 3. Interest evolution (last 6 months, bi-monthly periods)
 	for i := 0; i < 3; i++ {
@@ -319,9 +323,11 @@ func (e *Engine) DetectSeasonalPatterns(ctx context.Context) ([]SeasonalPattern,
 
 	// Check data maturity (need 6+ months)
 	var dataDays int
-	e.Pool.QueryRow(ctx, `
+	if err := e.Pool.QueryRow(ctx, `
 		SELECT COALESCE(EXTRACT(DAY FROM NOW() - MIN(created_at))::int, 0) FROM artifacts
-	`).Scan(&dataDays)
+	`).Scan(&dataDays); err != nil {
+		return nil, fmt.Errorf("check data maturity: %w", err)
+	}
 
 	if dataDays < 180 {
 		return nil, nil // Not enough data
@@ -329,15 +335,18 @@ func (e *Engine) DetectSeasonalPatterns(ctx context.Context) ([]SeasonalPattern,
 
 	var patterns []SeasonalPattern
 
-	// Volume pattern: compare current month to same month last year
+	// Volume pattern: compare current month to same month last year — single query
 	var thisMonthCount, lastYearSameMonthCount int
 	currentMonth := time.Now().Month()
-	e.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM artifacts WHERE EXTRACT(MONTH FROM created_at) = $1 AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())
-	`, int(currentMonth)).Scan(&thisMonthCount)
-	e.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM artifacts WHERE EXTRACT(MONTH FROM created_at) = $1 AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW()) - 1
-	`, int(currentMonth)).Scan(&lastYearSameMonthCount)
+	if err := e.Pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())),
+			COUNT(*) FILTER (WHERE EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW()) - 1)
+		FROM artifacts
+		WHERE EXTRACT(MONTH FROM created_at) = $1
+	`, int(currentMonth)).Scan(&thisMonthCount, &lastYearSameMonthCount); err != nil {
+		slog.Warn("failed to query seasonal volume", "error", err)
+	}
 
 	if lastYearSameMonthCount > 0 {
 		ratio := float64(thisMonthCount) / float64(lastYearSameMonthCount)

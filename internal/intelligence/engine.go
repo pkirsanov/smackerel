@@ -128,12 +128,7 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 			continue
 		}
 
-		// Confidence factors in both artifact count and source diversity.
-		// More distinct sources (email + article + video) = higher confidence
-		// that the connection is genuinely cross-domain, not just volume.
-		volumeSignal := math.Log2(float64(count)) / 5.0
-		diversitySignal := math.Log2(float64(sourceCount)) / 3.0
-		confidence := math.Min(1.0, 0.6*volumeSignal+0.4*diversitySignal)
+		confidence := synthesisConfidence(count, sourceCount)
 
 		insights = append(insights, SynthesisInsight{
 			ID:                ulid.Make().String(),
@@ -150,6 +145,19 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 	}
 
 	return insights, nil
+}
+
+// synthesisConfidence computes insight confidence from artifact count and source diversity.
+// More distinct sources (email + article + video) = higher confidence that
+// the connection is genuinely cross-domain, not just volume.
+// Returns a value in [0, 1].
+func synthesisConfidence(artifactCount, sourceCount int) float64 {
+	if artifactCount <= 0 || sourceCount <= 0 {
+		return 0
+	}
+	volumeSignal := math.Log2(float64(artifactCount)) / 5.0
+	diversitySignal := math.Log2(float64(sourceCount)) / 3.0
+	return math.Min(1.0, 0.6*volumeSignal+0.4*diversitySignal)
 }
 
 // validAlertTypes is the set of known alert types for input validation.
@@ -554,24 +562,22 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 		WeekOf: time.Now().Format("2006-01-02"),
 	}
 
-	// 1. Weekly stats
-	e.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM artifacts WHERE created_at > NOW() - INTERVAL '7 days'
-	`).Scan(&ws.Stats.ArtifactsProcessed)
+	// 1. Weekly stats — single query to reduce round-trips and honour context cancellation
+	if err := e.Pool.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM artifacts WHERE created_at > NOW() - INTERVAL '7 days'),
+			(SELECT COUNT(*) FROM edges WHERE created_at > NOW() - INTERVAL '7 days'),
+			(SELECT COUNT(DISTINCT dst_id) FROM edges WHERE edge_type = 'BELONGS_TO' AND dst_type = 'topic' AND created_at > NOW() - INTERVAL '7 days'),
+			(SELECT COUNT(*) FROM search_log WHERE created_at > NOW() - INTERVAL '7 days')
+	`).Scan(&ws.Stats.ArtifactsProcessed, &ws.Stats.NewConnections,
+		&ws.Stats.TopicsActive, &ws.Stats.SearchesPerformed); err != nil {
+		slog.Warn("failed to query weekly stats", "error", err)
+	}
 
-	e.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM edges WHERE created_at > NOW() - INTERVAL '7 days'
-	`).Scan(&ws.Stats.NewConnections)
-
-	e.Pool.QueryRow(ctx, `
-		SELECT COUNT(DISTINCT dst_id) FROM edges
-		WHERE edge_type = 'BELONGS_TO' AND dst_type = 'topic'
-		  AND created_at > NOW() - INTERVAL '7 days'
-	`).Scan(&ws.Stats.TopicsActive)
-
-	e.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM search_log WHERE created_at > NOW() - INTERVAL '7 days'
-	`).Scan(&ws.Stats.SearchesPerformed)
+	// Check context between heavy operations to abort early on cancellation
+	if ctx.Err() != nil {
+		return ws, ctx.Err()
+	}
 
 	// 2. Synthesis insights from this week
 	insights, err := e.RunSynthesis(ctx)
@@ -624,6 +630,10 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 				ws.OpenLoops = append(ws.OpenLoops, t)
 			}
 		}
+	}
+
+	if ctx.Err() != nil {
+		return ws, ctx.Err()
 	}
 
 	// 5. Serendipity pick
@@ -815,19 +825,35 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 			continue
 		}
 
-		// Estimate next billing: for monthly, check if day-of-month is within 3 days
+		// Estimate next billing date using proper date arithmetic.
+		// For monthly: same day-of-month in the current month (clamped to month length).
+		// For annual: same month and day as first_seen.
 		now := time.Now()
-		dayOfMonth := firstSeen.Day()
-		daysUntilBilling := dayOfMonth - now.Day()
-		if daysUntilBilling < 0 {
-			// Already past this month's billing day
-			continue
-		}
+		billingDay := firstSeen.Day()
+
+		var nextBilling time.Time
 		if billingFreq == "annual" {
-			if firstSeen.Month() != now.Month() || daysUntilBilling > 3 {
-				continue
+			// Try this year first, then next year
+			nextBilling = clampDay(now.Year(), firstSeen.Month(), billingDay)
+			if nextBilling.Before(now.Truncate(24 * time.Hour)) {
+				nextBilling = clampDay(now.Year()+1, firstSeen.Month(), billingDay)
 			}
-		} else if daysUntilBilling > 3 {
+		} else {
+			// Monthly: try current month, then next month
+			nextBilling = clampDay(now.Year(), now.Month(), billingDay)
+			if nextBilling.Before(now.Truncate(24 * time.Hour)) {
+				nextMonth := now.Month() + 1
+				nextYear := now.Year()
+				if nextMonth > 12 {
+					nextMonth = 1
+					nextYear++
+				}
+				nextBilling = clampDay(nextYear, nextMonth, billingDay)
+			}
+		}
+
+		daysUntilBilling := int(time.Until(nextBilling).Hours()/24) + 1
+		if daysUntilBilling < 0 || daysUntilBilling > 3 {
 			continue
 		}
 
@@ -1043,4 +1069,16 @@ func (e *Engine) GetLastSynthesisTime(ctx context.Context) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("query last synthesis time: %w", err)
 	}
 	return lastSynthesis, nil
+}
+
+// clampDay returns the date for (year, month, day) clamped to the last day
+// of the given month. E.g. clampDay(2026, time.February, 31) → Feb 28.
+func clampDay(year int, month time.Month, day int) time.Time {
+	// time.Date normalises overflow: Feb 31 → Mar 3, so instead compute
+	// the last day of the month and clamp.
+	lastDay := time.Date(year, month+1, 0, 0, 0, 0, 0, time.Local).Day()
+	if day > lastDay {
+		day = lastDay
+	}
+	return time.Date(year, month, day, 0, 0, 0, 0, time.Local)
 }

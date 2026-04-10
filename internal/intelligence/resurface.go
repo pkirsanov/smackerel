@@ -85,15 +85,18 @@ func (e *Engine) Resurface(ctx context.Context, limit int) ([]ResurfaceCandidate
 // have been delivered to the user. Call this after the user has actually
 // been shown resurfaced content, not during candidate generation.
 func (e *Engine) MarkResurfaced(ctx context.Context, artifactIDs []string) error {
+	if len(artifactIDs) == 0 {
+		return nil
+	}
 	if e.Pool == nil {
 		return fmt.Errorf("mark resurfaced requires a database connection")
 	}
-	for _, id := range artifactIDs {
-		if _, err := e.Pool.Exec(ctx, `
-			UPDATE artifacts SET last_accessed = NOW(), access_count = access_count + 1 WHERE id = $1
-		`, id); err != nil {
-			slog.Warn("failed to update artifact access count", "artifact_id", id, "error", err)
-		}
+	_, err := e.Pool.Exec(ctx, `
+		UPDATE artifacts SET last_accessed = NOW(), access_count = access_count + 1
+		WHERE id = ANY($1)
+	`, artifactIDs)
+	if err != nil {
+		return fmt.Errorf("batch update resurfaced artifacts: %w", err)
 	}
 	return nil
 }

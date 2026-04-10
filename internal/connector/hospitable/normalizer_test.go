@@ -397,3 +397,208 @@ func TestNormalizeReviewFractionalRating(t *testing.T) {
 		t.Errorf("Content should contain 4.5★, got: %s", a.RawContent)
 	}
 }
+
+// --- formatAddress: Partial Field Combos ---
+
+func TestFormatAddressFull(t *testing.T) {
+	a := Address{Street: "123 Ocean Dr", City: "Malibu", State: "CA", Country: "US", Zip: "90265"}
+	got := formatAddress(a)
+	if got != "123 Ocean Dr, Malibu, CA, US, 90265" {
+		t.Errorf("formatAddress full = %q", got)
+	}
+}
+
+func TestFormatAddressCityOnly(t *testing.T) {
+	a := Address{City: "Paris"}
+	got := formatAddress(a)
+	if got != "Paris" {
+		t.Errorf("formatAddress city-only = %q", got)
+	}
+}
+
+func TestFormatAddressStateOnly(t *testing.T) {
+	a := Address{State: "CA"}
+	got := formatAddress(a)
+	if got != "CA" {
+		t.Errorf("formatAddress state-only = %q", got)
+	}
+}
+
+func TestFormatAddressCityState(t *testing.T) {
+	a := Address{City: "Malibu", State: "CA"}
+	got := formatAddress(a)
+	if got != "Malibu, CA" {
+		t.Errorf("formatAddress city+state = %q", got)
+	}
+}
+
+func TestFormatAddressEmpty(t *testing.T) {
+	a := Address{}
+	got := formatAddress(a)
+	if got != "" {
+		t.Errorf("formatAddress empty = %q, want empty", got)
+	}
+}
+
+func TestFormatAddressStreetCountryOnly(t *testing.T) {
+	a := Address{Street: "123 Main St", Country: "UK"}
+	got := formatAddress(a)
+	if got != "123 Main St, UK" {
+		t.Errorf("formatAddress street+country = %q", got)
+	}
+}
+
+// --- formatDate: RFC3339 Fallback ---
+
+func TestFormatDateStandard(t *testing.T) {
+	got := formatDate("2026-04-15")
+	if got != "Apr 15" {
+		t.Errorf("formatDate standard = %q, want Apr 15", got)
+	}
+}
+
+func TestFormatDateRFC3339Fallback(t *testing.T) {
+	got := formatDate("2026-04-15T10:30:00Z")
+	if got != "Apr 15" {
+		t.Errorf("formatDate RFC3339 = %q, want Apr 15", got)
+	}
+}
+
+func TestFormatDateInvalidReturnsOriginal(t *testing.T) {
+	got := formatDate("not-a-date")
+	if got != "not-a-date" {
+		t.Errorf("formatDate invalid = %q, want original string", got)
+	}
+}
+
+func TestFormatDateEmptyString(t *testing.T) {
+	got := formatDate("")
+	if got != "" {
+		t.Errorf("formatDate empty = %q, want empty", got)
+	}
+}
+
+// --- Reservation: Zero BookedAt (no lead time) ---
+
+func TestNormalizeReservationZeroBookedAt(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard"}
+	r := Reservation{
+		ID:         "res-nobooked",
+		PropertyID: "prop-001",
+		CheckIn:    "2026-04-15",
+		CheckOut:   "2026-04-18",
+		GuestName:  "John Smith",
+		CreatedAt:  time.Date(2026, 3, 25, 0, 0, 0, 0, time.UTC),
+		// BookedAt zero — should fallback to CreatedAt for CapturedAt and skip lead time line
+	}
+	a := NormalizeReservation(r, "Beach House", cfg)
+
+	if !a.CapturedAt.Equal(r.CreatedAt) {
+		t.Errorf("CapturedAt = %v, want CreatedAt %v (BookedAt is zero)", a.CapturedAt, r.CreatedAt)
+	}
+	if containsStr(a.RawContent, "lead time") {
+		t.Errorf("content should NOT contain lead time when BookedAt is zero: %s", a.RawContent)
+	}
+	if containsStr(a.RawContent, "Booked:") {
+		t.Errorf("content should NOT contain Booked line when BookedAt is zero: %s", a.RawContent)
+	}
+}
+
+// --- Review: No Host Response ---
+
+func TestNormalizeReviewNoHostResponse(t *testing.T) {
+	cfg := HospitableConfig{TierReviews: "full"}
+	r := Review{
+		ID:          "rev-noresp",
+		PropertyID:  "prop-001",
+		Rating:      4,
+		ReviewText:  "Nice place, well maintained.",
+		HostResponse: "",
+		Channel:     "VRBO",
+		SubmittedAt: time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC),
+	}
+	a := NormalizeReview(r, "Beach House", cfg)
+
+	if containsStr(a.RawContent, "Host Response") {
+		t.Errorf("content should NOT contain 'Host Response' when empty: %s", a.RawContent)
+	}
+	if !containsStr(a.RawContent, "Nice place") {
+		t.Error("content should contain review text")
+	}
+	if !containsStr(a.RawContent, "VRBO") {
+		t.Error("content should contain channel")
+	}
+}
+
+// --- Property: CapturedAt Fallback Chain ---
+
+func TestNormalizePropertyCapturedAtCreatedAt(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:        "p-fallback",
+		Name:      "Fallback House",
+		CreatedAt: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+		// UpdatedAt zero — should fallback to CreatedAt
+	}
+	a := NormalizeProperty(p, cfg)
+
+	if !a.CapturedAt.Equal(p.CreatedAt) {
+		t.Errorf("CapturedAt = %v, want CreatedAt %v (UpdatedAt is zero)", a.CapturedAt, p.CreatedAt)
+	}
+}
+
+func TestNormalizePropertyCapturedAtFallbackNow(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	before := time.Now().Add(-time.Second)
+	p := Property{
+		ID:   "p-now",
+		Name: "Now House",
+		// Both UpdatedAt and CreatedAt zero — should fallback to now
+	}
+	a := NormalizeProperty(p, cfg)
+
+	if a.CapturedAt.Before(before) {
+		t.Errorf("CapturedAt = %v, should be ~now", a.CapturedAt)
+	}
+}
+
+// --- Message: CapturedAt Fallback ---
+
+func TestNormalizeMessageCapturedAtFallbackNow(t *testing.T) {
+	cfg := HospitableConfig{TierMessages: "full"}
+	before := time.Now().Add(-time.Second)
+	m := Message{
+		ID:     "msg-notime",
+		Sender: "Test",
+		Body:   "Hello",
+		// SentAt zero — should fallback to now
+	}
+	a := NormalizeMessage(m, "res-1", cfg)
+
+	if a.CapturedAt.Before(before) {
+		t.Errorf("CapturedAt = %v, should be ~now when SentAt is zero", a.CapturedAt)
+	}
+}
+
+// --- firstNonEmpty ---
+
+func TestFirstNonEmptyMultiple(t *testing.T) {
+	got := firstNonEmpty([]string{"", "", "third", "fourth"})
+	if got != "third" {
+		t.Errorf("firstNonEmpty = %q, want third", got)
+	}
+}
+
+func TestFirstNonEmptyAllEmpty(t *testing.T) {
+	got := firstNonEmpty([]string{"", ""})
+	if got != "" {
+		t.Errorf("firstNonEmpty all-empty = %q, want empty", got)
+	}
+}
+
+func TestFirstNonEmptyNil(t *testing.T) {
+	got := firstNonEmpty(nil)
+	if got != "" {
+		t.Errorf("firstNonEmpty nil = %q, want empty", got)
+	}
+}

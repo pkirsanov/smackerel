@@ -17,7 +17,9 @@ import (
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
-// ResultSubscriber listens for ML processing results on NATS and stores them.
+// DefaultMaxDeliver is the maximum delivery attempts before dead-letter routing.
+// Must match the MaxDeliver value in consumer configs created by Start().
+const DefaultMaxDeliver = 5
 type ResultSubscriber struct {
 	DB        *pgxpool.Pool
 	NATS      *smacknats.Client
@@ -60,7 +62,7 @@ func (rs *ResultSubscriber) Start(ctx context.Context) error {
 		Durable:       "smackerel-core-processed",
 		FilterSubject: smacknats.SubjectArtifactsProcessed,
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		MaxDeliver:    5,
+		MaxDeliver:    DefaultMaxDeliver,
 		AckWait:       30 * time.Second,
 	})
 	if err != nil {
@@ -105,7 +107,7 @@ func (rs *ResultSubscriber) Start(ctx context.Context) error {
 		Durable:       "smackerel-core-digest",
 		FilterSubject: smacknats.SubjectDigestGenerated,
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		MaxDeliver:    5,
+		MaxDeliver:    DefaultMaxDeliver,
 		AckWait:       30 * time.Second,
 	})
 	if err != nil {
@@ -163,8 +165,13 @@ func (rs *ResultSubscriber) Stop() {
 // handleMessage processes a single artifacts.processed message.
 func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg) {
 	// Check if message has exhausted MaxDeliver — route to dead-letter
-	if rs.isDeliveryExhausted(msg, 5) {
-		rs.publishToDeadLetter(ctx, msg, "artifacts.processed", "ARTIFACTS")
+	if rs.isDeliveryExhausted(msg, DefaultMaxDeliver) {
+		if err := rs.publishToDeadLetter(ctx, msg, "artifacts.processed", "ARTIFACTS", "MaxDeliver exhausted"); err != nil {
+			// Dead-letter publish failed — Nak so NATS retries rather than silently losing the message.
+			slog.Error("dead-letter publish failed, Nak to preserve message", "error", err)
+			_ = msg.Nak()
+			return
+		}
 		_ = msg.Ack()
 		return
 	}
@@ -193,8 +200,12 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 // handleDigestMessage processes a single digest.generated message.
 func (rs *ResultSubscriber) handleDigestMessage(ctx context.Context, msg jetstream.Msg) {
 	// Check if message has exhausted MaxDeliver — route to dead-letter
-	if rs.isDeliveryExhausted(msg, 5) {
-		rs.publishToDeadLetter(ctx, msg, "digest.generated", "DIGEST")
+	if rs.isDeliveryExhausted(msg, DefaultMaxDeliver) {
+		if err := rs.publishToDeadLetter(ctx, msg, "digest.generated", "DIGEST", "MaxDeliver exhausted"); err != nil {
+			slog.Error("dead-letter publish failed, Nak to preserve message", "error", err)
+			_ = msg.Nak()
+			return
+		}
 		_ = msg.Ack()
 		return
 	}
@@ -232,11 +243,15 @@ func (rs *ResultSubscriber) isDeliveryExhausted(msg jetstream.Msg, maxDeliver in
 }
 
 // publishToDeadLetter routes an exhausted message to the DEADLETTER stream.
-func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstream.Msg, originalSubject, originalStream string) {
+// Returns an error if the publish fails so callers can Nak instead of Ack.
+func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstream.Msg, originalSubject, originalStream, lastError string) error {
 	headers := nats.Header{}
 	headers.Set("Smackerel-Original-Subject", originalSubject)
 	headers.Set("Smackerel-Original-Stream", originalStream)
 	headers.Set("Smackerel-Failed-At", time.Now().UTC().Format(time.RFC3339))
+	if lastError != "" {
+		headers.Set("Smackerel-Last-Error", lastError)
+	}
 
 	md, err := msg.Metadata()
 	if err == nil {
@@ -258,11 +273,12 @@ func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstre
 			"subject", dlSubject,
 			"error", err,
 		)
-		return
+		return fmt.Errorf("publish to dead-letter %s: %w", dlSubject, err)
 	}
 
 	slog.Warn("message routed to dead-letter",
 		"subject", dlSubject,
 		"original_subject", originalSubject,
 	)
+	return nil
 }

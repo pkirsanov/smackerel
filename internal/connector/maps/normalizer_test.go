@@ -28,8 +28,7 @@ func TestNormalizeActivityMetadata(t *testing.T) {
 		},
 	}
 
-	cfg := MapsConfig{DefaultTier: "standard"}
-	artifact := NormalizeActivity(activity, "march-2026.json", cfg)
+	artifact := NormalizeActivity(activity, "march-2026.json")
 
 	if artifact.SourceID != "google-maps-timeline" {
 		t.Errorf("SourceID = %q, want %q", artifact.SourceID, "google-maps-timeline")
@@ -113,7 +112,6 @@ func TestNormalizeAllActivityTypes(t *testing.T) {
 		{ActivityRun, "activity/run"},
 	}
 
-	cfg := MapsConfig{DefaultTier: "standard"}
 	for _, tt := range types {
 		activity := TakeoutActivity{
 			Type:        tt.actType,
@@ -123,7 +121,7 @@ func TestNormalizeAllActivityTypes(t *testing.T) {
 			DurationMin: 30,
 			Route:       []LatLng{{Lat: 47.5, Lng: 8.7}, {Lat: 47.52, Lng: 8.75}},
 		}
-		artifact := NormalizeActivity(activity, "test.json", cfg)
+		artifact := NormalizeActivity(activity, "test.json")
 		if artifact.ContentType != tt.wantContent {
 			t.Errorf("NormalizeActivity(%s).ContentType = %q, want %q", tt.actType, artifact.ContentType, tt.wantContent)
 		}
@@ -262,8 +260,7 @@ func TestNormalizeActivityNoRoute(t *testing.T) {
 		Route:       nil,
 	}
 
-	cfg := MapsConfig{DefaultTier: "standard"}
-	artifact := NormalizeActivity(activity, "test.json", cfg)
+	artifact := NormalizeActivity(activity, "test.json")
 
 	if artifact.Metadata["start_lat"] != 0.0 {
 		t.Errorf("expected start_lat 0 for no-route, got %v", artifact.Metadata["start_lat"])
@@ -310,8 +307,7 @@ func TestTrailQualifiedEnrichment(t *testing.T) {
 		},
 	}
 
-	cfg := MapsConfig{DefaultTier: "standard"}
-	artifact := NormalizeActivity(activity, "trails.json", cfg)
+	artifact := NormalizeActivity(activity, "trails.json")
 
 	if artifact.Metadata["trail_qualified"] != true {
 		t.Errorf("trail_qualified = %v, want true", artifact.Metadata["trail_qualified"])
@@ -360,8 +356,7 @@ func TestNonTrailNotEnriched(t *testing.T) {
 		},
 	}
 
-	cfg := MapsConfig{DefaultTier: "standard"}
-	artifact := NormalizeActivity(activity, "walks.json", cfg)
+	artifact := NormalizeActivity(activity, "walks.json")
 
 	if artifact.Metadata["trail_qualified"] != false {
 		t.Errorf("trail_qualified = %v, want false", artifact.Metadata["trail_qualified"])
@@ -387,8 +382,7 @@ func TestGeoJSONRouteStorage(t *testing.T) {
 		Route:       route,
 	}
 
-	cfg := MapsConfig{DefaultTier: "standard"}
-	artifact := NormalizeActivity(activity, "routes.json", cfg)
+	artifact := NormalizeActivity(activity, "routes.json")
 
 	geojson, ok := artifact.Metadata["route_geojson"].(map[string]interface{})
 	if !ok {
@@ -424,8 +418,7 @@ func TestGeoJSONFallbackTwoPoint(t *testing.T) {
 		Route:       nil,
 	}
 
-	cfg := MapsConfig{DefaultTier: "standard"}
-	artifact := NormalizeActivity(activity, "drives.json", cfg)
+	artifact := NormalizeActivity(activity, "drives.json")
 
 	if artifact.Metadata["route_geojson"] != nil {
 		t.Errorf("route_geojson should be nil for routeless activity, got %v", artifact.Metadata["route_geojson"])
@@ -506,6 +499,104 @@ func TestActivityDisplayNameUnknown(t *testing.T) {
 	got := activityDisplayName(ActivityType("teleport"))
 	if got != "Activity" {
 		t.Errorf("activityDisplayName(unknown) = %q, want %q", got, "Activity")
+	}
+}
+
+// --- Hardening: dedup hash collision tests ---
+
+// HARDEN-011-F1: Would fail if computeDedupHash only used date+grid (pre-fix behavior).
+// Two different activity types at the same grid on the same day must produce different hashes.
+func TestDedupHashDistinguishesTypesAtSameLocation(t *testing.T) {
+	walk := TakeoutActivity{
+		Type:      ActivityWalk,
+		StartTime: time.Date(2026, 3, 15, 8, 0, 0, 0, time.UTC),
+		Route:     []LatLng{{Lat: 47.500, Lng: 8.700}, {Lat: 47.520, Lng: 8.750}},
+	}
+	drive := TakeoutActivity{
+		Type:      ActivityDrive,
+		StartTime: time.Date(2026, 3, 15, 8, 0, 0, 0, time.UTC),
+		Route:     []LatLng{{Lat: 47.500, Lng: 8.700}, {Lat: 47.520, Lng: 8.750}},
+	}
+	if computeDedupHash(walk) == computeDedupHash(drive) {
+		t.Error("walk and drive at same location/time should produce different hashes")
+	}
+}
+
+// HARDEN-011-F1: Would fail if computeDedupHash only used date+grid (pre-fix behavior).
+// Morning vs evening activity at same grid location must produce different hashes.
+func TestDedupHashDistinguishesHoursAtSameLocation(t *testing.T) {
+	morning := TakeoutActivity{
+		Type:      ActivityRun,
+		StartTime: time.Date(2026, 3, 15, 7, 0, 0, 0, time.UTC),
+		Route:     []LatLng{{Lat: 47.500, Lng: 8.700}, {Lat: 47.500, Lng: 8.700}},
+	}
+	evening := TakeoutActivity{
+		Type:      ActivityRun,
+		StartTime: time.Date(2026, 3, 15, 19, 0, 0, 0, time.UTC),
+		Route:     []LatLng{{Lat: 47.500, Lng: 8.700}, {Lat: 47.500, Lng: 8.700}},
+	}
+	if computeDedupHash(morning) == computeDedupHash(evening) {
+		t.Error("morning and evening runs at same location should produce different hashes")
+	}
+}
+
+// HARDEN-011-F1: Would fail if computeDedupHash only used date+grid (pre-fix behavior).
+// Two routeless activities with different types on the same day must not collide.
+func TestDedupHashRoutelessDistinguishesTypes(t *testing.T) {
+	routelessWalk := TakeoutActivity{
+		Type:      ActivityWalk,
+		StartTime: time.Date(2026, 3, 15, 9, 0, 0, 0, time.UTC),
+		Route:     nil,
+	}
+	routelessDrive := TakeoutActivity{
+		Type:      ActivityDrive,
+		StartTime: time.Date(2026, 3, 15, 9, 0, 0, 0, time.UTC),
+		Route:     nil,
+	}
+	if computeDedupHash(routelessWalk) == computeDedupHash(routelessDrive) {
+		t.Error("routeless walk and drive on same day should produce different dedup hashes")
+	}
+}
+
+// HARDEN-011-F3: Negative duration (EndTime < StartTime) must not panic.
+func TestNormalizeActivityNegativeDuration(t *testing.T) {
+	activity := TakeoutActivity{
+		Type:        ActivityDrive,
+		StartTime:   time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 3, 15, 11, 0, 0, 0, time.UTC), // before start
+		DistanceKm:  10.0,
+		DurationMin: -60, // as ParseTakeoutJSON would produce
+		Route:       []LatLng{{Lat: 47.5, Lng: 8.7}, {Lat: 47.52, Lng: 8.75}},
+	}
+	// Must not panic
+	artifact := NormalizeActivity(activity, "badtime.json")
+	if artifact.SourceID != "google-maps-timeline" {
+		t.Errorf("SourceID = %q after negative duration", artifact.SourceID)
+	}
+	if artifact.ContentType != "activity/drive" {
+		t.Errorf("ContentType = %q after negative duration", artifact.ContentType)
+	}
+	if len(artifact.SourceRef) != 16 {
+		t.Errorf("SourceRef length = %d, want 16 hex chars", len(artifact.SourceRef))
+	}
+}
+
+// HARDEN-011: Zero-distance, zero-duration activity should still normalize without panic.
+func TestNormalizeActivityZeroValues(t *testing.T) {
+	activity := TakeoutActivity{
+		Type:        ActivityWalk,
+		StartTime:   time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC),
+		DistanceKm:  0,
+		DurationMin: 0,
+		Route:       nil,
+	}
+	artifact := NormalizeActivity(activity, "zeros.json")
+	if artifact.Title == "" {
+		t.Error("title should not be empty for zero-value activity")
+	}
+	if artifact.Metadata["distance_km"] != 0.0 {
+		t.Errorf("distance_km = %v, want 0", artifact.Metadata["distance_km"])
 	}
 }
 
