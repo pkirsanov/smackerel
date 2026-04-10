@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/005-phase4-expansion",
   "featureName": "Phase 4: Expansion",
-  "status": "done",
+  "status": "validated",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "finalize",
+    "currentPhase": "validate",
     "currentScope": null,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [
@@ -21,7 +21,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "validated",
     "completedScopes": [
       "1",
       "2",
@@ -39,21 +39,84 @@
       "docs"
     ],
     "scopeProgress": [
-      { "scope": 1, "name": "Maps Timeline Connector", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
-      { "scope": 2, "name": "Browser History Connector", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
-      { "scope": 3, "name": "Trip Dossier", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
-      { "scope": 4, "name": "People Intelligence", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
-      { "scope": 5, "name": "Trail Journal", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" }
+      {
+        "scope": 1,
+        "name": "Maps Timeline Connector",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-10T00:00:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "Browser History Connector",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-10T00:00:00Z"
+      },
+      {
+        "scope": 3,
+        "name": "Trip Dossier",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-10T00:00:00Z"
+      },
+      {
+        "scope": 4,
+        "name": "People Intelligence",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-10T00:00:00Z"
+      },
+      {
+        "scope": 5,
+        "name": "Trail Journal",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-10T00:00:00Z"
+      }
     ],
-    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
   },
   "policySnapshot": {
-    "grill": { "mode": "off", "source": "repo-default" },
-    "tdd": { "mode": "scenario-first", "source": "repo-default" },
-    "autoCommit": { "mode": "off", "source": "repo-default" },
-    "lockdown": { "mode": "off", "source": "repo-default" },
-    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
-    "validation": { "mode": "certification-required", "source": "repo-default" }
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
@@ -66,7 +129,10 @@
       "completedAt": "2026-04-07T15:04:00Z",
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["select", "bootstrap"],
+      "phasesExecuted": [
+        "select",
+        "bootstrap"
+      ],
       "scopesCompleted": [],
       "summary": "Initial delivery-lockdown pass: verified existing expansion code in maps.go (159 lines), browser.go (158 lines), intelligence engine.go, graph linker.go. All 5 scopes identified with 23 Gherkin scenarios and DoD."
     },
@@ -78,7 +144,9 @@
       "completedAt": "2026-04-07T15:07:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["select"],
+      "phasesExecuted": [
+        "select"
+      ],
       "scopesCompleted": [],
       "summary": "Scope selection: all 5 scopes have existing implementations. Maps connector (maps.go 159 lines), Browser connector (browser.go 158 lines), Trip dossier via AlertTripPrep, People intelligence via AlertRelationship, Trail journal via IsTrailQualified/ToGeoJSON."
     },
@@ -90,7 +158,9 @@
       "completedAt": "2026-04-07T15:10:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "scopesCompleted": [],
       "summary": "Bootstrap verified: design.md and scopes.md exist with all 5 scopes. Each scope has Gherkin scenarios (23 total), test plans, and DoD checklists."
     },
@@ -102,8 +172,16 @@
       "completedAt": "2026-04-07T15:18:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["implement"],
-      "scopesCompleted": [1, 2, 3, 4, 5],
+      "phasesExecuted": [
+        "implement"
+      ],
+      "scopesCompleted": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
       "summary": "Implementation verified: Takeout parser with activity classification and GeoJSON routes, Chrome SQLite reader with dwell-time tiers and social media aggregation, AlertTripPrep for trip dossier, AlertRelationship for people intelligence, IsTrailQualified for trail journal."
     },
     {
@@ -114,7 +192,9 @@
       "completedAt": "2026-04-07T15:23:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "scopesCompleted": [],
       "summary": "Full test execution: 23 Go packages PASS, 11 Python tests PASS. Maps: 4 tests (classify, trail, geojson, haversine). Browser: 5 tests (dwell, social, skip, domain, chrome-time). Intelligence: 10 tests. Graph: linker tests."
     },
@@ -126,7 +206,9 @@
       "completedAt": "2026-04-07T15:26:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["regression"],
+      "phasesExecuted": [
+        "regression"
+      ],
       "scopesCompleted": [],
       "summary": "Regression check: no test count decrease from spec 003/004 baseline. All 23 Go test packages pass. No previously-passing tests now failing."
     },
@@ -138,7 +220,9 @@
       "completedAt": "2026-04-07T15:29:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["simplify"],
+      "phasesExecuted": [
+        "simplify"
+      ],
       "scopesCompleted": [],
       "summary": "Simplification pass: code well-structured. Maps parser uses clean struct extraction. Browser connector uses tidy tier classification. No dead code detected."
     },
@@ -150,7 +234,9 @@
       "completedAt": "2026-04-07T15:32:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["gaps"],
+      "phasesExecuted": [
+        "gaps"
+      ],
       "scopesCompleted": [],
       "summary": "Gap analysis: all 5 scopes have real implementations. Activity types cover all spec requirements. Social media domains list comprehensive. Skip list covers Chrome internal URLs."
     },
@@ -162,7 +248,9 @@
       "completedAt": "2026-04-07T15:35:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["harden"],
+      "phasesExecuted": [
+        "harden"
+      ],
       "scopesCompleted": [],
       "summary": "Hardening pass: all 23 Gherkin scenarios have faithful DoD items with evidence blocks. Scope headings standardized. All scope statuses canonical Done. No deferral language."
     },
@@ -174,7 +262,9 @@
       "completedAt": "2026-04-07T15:38:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["stabilize"],
+      "phasesExecuted": [
+        "stabilize"
+      ],
       "scopesCompleted": [],
       "summary": "Stability check: ParseTakeoutJSON handles empty input gracefully. ClassifyActivity defaults unknown types to walk. DwellTimeTier boundary values correctly classified. ShouldSkip with nil skip list checks defaults."
     },
@@ -186,7 +276,9 @@
       "completedAt": "2026-04-07T15:41:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["security"],
+      "phasesExecuted": [
+        "security"
+      ],
       "scopesCompleted": [],
       "summary": "Security review: all SQL queries use parameterized placeholders. Location data opt-in enforced. Browser data opt-in enforced. No sensitive URLs in logs. No external location sharing."
     },
@@ -198,7 +290,9 @@
       "completedAt": "2026-04-07T15:44:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["validate"],
+      "phasesExecuted": [
+        "validate"
+      ],
       "scopesCompleted": [],
       "summary": "Validation pass: build PASS (./smackerel.sh check exit 0), lint PASS (go vet + ruff), 23 Go + 11 Python unit tests PASS. All 5 scopes verified real implementations. 23 scenarios mapped to DoD."
     },
@@ -210,7 +304,9 @@
       "completedAt": "2026-04-07T15:47:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["audit"],
+      "phasesExecuted": [
+        "audit"
+      ],
       "scopesCompleted": [],
       "summary": "Audit pass: all DoD items verified with evidence blocks. scenario-manifest.json has 23 entries. Build/lint/test green. No fabrication. No deferral language. Code matches design.md."
     },
@@ -222,7 +318,9 @@
       "completedAt": "2026-04-07T15:50:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["chaos"],
+      "phasesExecuted": [
+        "chaos"
+      ],
       "scopesCompleted": [],
       "summary": "Chaos round: ParseTakeoutJSON with empty input returns nil. ClassifyActivity with unknown type defaults safely. IsTrailQualified driving rejection. DwellTimeTier boundary values. ShouldSkip nil skip list. Haversine same point returns 0."
     },
@@ -234,7 +332,9 @@
       "completedAt": "2026-04-07T15:53:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["docs"],
+      "phasesExecuted": [
+        "docs"
+      ],
       "scopesCompleted": [],
       "summary": "Documentation sync: created scenario-manifest.json with 23 scenarios. Updated report.md with per-scope evidence, Code Diff Evidence, git log/diff output, TDD evidence, validation/audit/chaos sections."
     },
@@ -246,7 +346,9 @@
       "completedAt": "2026-04-07T15:55:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "done",
-      "phasesExecuted": ["spec-review"],
+      "phasesExecuted": [
+        "spec-review"
+      ],
       "scopesCompleted": [],
       "summary": "Spec review: verified spec.md, design.md, scopes.md aligned with implementation. All 23 scenarios mapped. 5/5 scopes Done. Transition guard and artifact lint pass."
     }
@@ -256,6 +358,12 @@
   "failures": [],
   "lastUpdatedAt": "2026-04-07T15:55:00Z",
   "scopeLayout": "single-file",
-  "artifacts": { "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md" },
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  },
   "notes": "Phase 4: Maps timeline, browser history, trip dossiers, people intelligence, trail journal. All 5 scopes delivered with passing tests."
 }
