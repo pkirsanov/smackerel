@@ -3,6 +3,7 @@ package intelligence
 import (
 	"context"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -372,4 +373,165 @@ func TestCreateAlert_ValidTitle(t *testing.T) {
 	if err != nil && err.Error() == "alert title is required" {
 		t.Error("should have passed title validation")
 	}
+}
+
+// === Pre-Meeting Briefs Tests (Scope 3) ===
+
+func TestMeetingBrief_Struct(t *testing.T) {
+	brief := MeetingBrief{
+		EventID:    "evt-001",
+		EventTitle: "1:1 with David",
+		StartsAt:   time.Now().Add(30 * time.Minute),
+		Attendees: []AttendeeBrief{
+			{Name: "David Kim", Email: "david@example.com", RecentThreads: []string{"Q4 Planning"}, SharedTopics: []string{"strategy"}, IsNewContact: false},
+			{Name: "unknown@new.com", Email: "unknown@new.com", IsNewContact: true},
+		},
+	}
+
+	if len(brief.Attendees) != 2 {
+		t.Errorf("expected 2 attendees, got %d", len(brief.Attendees))
+	}
+	if brief.Attendees[0].IsNewContact {
+		t.Error("David Kim should not be a new contact")
+	}
+	if !brief.Attendees[1].IsNewContact {
+		t.Error("unknown should be a new contact")
+	}
+}
+
+func TestAssembleBriefText_FullContext(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Strategy Review",
+		Attendees: []AttendeeBrief{
+			{
+				Name:          "Sarah",
+				Email:         "sarah@example.com",
+				RecentThreads: []string{"Budget thread", "Roadmap"},
+				SharedTopics:  []string{"strategy", "product"},
+				PendingItems:  []string{"Review proposal"},
+			},
+		},
+	}
+
+	text := assembleBriefText(brief)
+	if text == "" {
+		t.Error("expected non-empty brief text")
+	}
+	if !contains(text, "Strategy Review") {
+		t.Error("brief should contain meeting title")
+	}
+	if !contains(text, "Sarah") {
+		t.Error("brief should contain attendee name")
+	}
+	if !contains(text, "shared topics") {
+		t.Error("brief should contain shared topics")
+	}
+}
+
+func TestAssembleBriefText_NewContact(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Intro Call",
+		Attendees: []AttendeeBrief{
+			{Email: "newperson@example.com", IsNewContact: true},
+		},
+	}
+
+	text := assembleBriefText(brief)
+	if !contains(text, "New contact") {
+		t.Error("brief should indicate new contact")
+	}
+}
+
+func TestGeneratePreMeetingBriefs_NilPool(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	_, err := engine.GeneratePreMeetingBriefs(context.Background())
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+// === Weekly Synthesis Tests (Scope 5) ===
+
+func TestWeeklySynthesis_Struct(t *testing.T) {
+	ws := &WeeklySynthesis{
+		WeekOf: "2026-04-06",
+		Stats: WeeklyStats{
+			ArtifactsProcessed: 47,
+			NewConnections:     12,
+			TopicsActive:       8,
+		},
+		Insights: []SynthesisInsight{
+			{ThroughLine: "Both articles discuss caching patterns", Confidence: 0.8},
+		},
+		TopicMovement: []TopicMovement{
+			{TopicName: "Go", Direction: "rising", Captures: 15},
+		},
+		OpenLoops: []string{"Review budget proposal"},
+		Patterns:  []string{"You save the most on Wednesdays"},
+	}
+
+	if ws.Stats.ArtifactsProcessed != 47 {
+		t.Errorf("expected 47 artifacts, got %d", ws.Stats.ArtifactsProcessed)
+	}
+	if len(ws.TopicMovement) != 1 {
+		t.Errorf("expected 1 topic movement, got %d", len(ws.TopicMovement))
+	}
+}
+
+func TestAssembleWeeklySynthesisText_FullWeek(t *testing.T) {
+	ws := &WeeklySynthesis{
+		Stats: WeeklyStats{ArtifactsProcessed: 47, NewConnections: 5, TopicsActive: 8},
+		Insights: []SynthesisInsight{
+			{ThroughLine: "Caching patterns", Confidence: 0.75},
+		},
+		TopicMovement: []TopicMovement{
+			{TopicName: "Go", Direction: "rising", Captures: 12},
+		},
+		OpenLoops:        []string{"Review Q4 budget"},
+		SerendipityPicks: []ResurfaceCandidate{{Title: "Old Article", Reason: "matching topic"}},
+		Patterns:         []string{"Peak capture at 9am"},
+	}
+
+	text := assembleWeeklySynthesisText(ws)
+	if text == "" {
+		t.Error("expected non-empty synthesis text")
+	}
+	if !contains(text, "THIS WEEK") {
+		t.Error("text should contain THIS WEEK section")
+	}
+	if !contains(text, "INSIGHTS") {
+		t.Error("text should contain INSIGHTS section")
+	}
+	if !contains(text, "TOPICS") {
+		t.Error("text should contain TOPICS section")
+	}
+	if !contains(text, "OPEN LOOPS") {
+		t.Error("text should contain OPEN LOOPS section")
+	}
+	if !contains(text, "FROM THE ARCHIVE") {
+		t.Error("text should contain FROM THE ARCHIVE section")
+	}
+	if !contains(text, "PATTERNS NOTICED") {
+		t.Error("text should contain PATTERNS NOTICED section")
+	}
+}
+
+func TestAssembleWeeklySynthesisText_QuietWeek(t *testing.T) {
+	ws := &WeeklySynthesis{}
+	text := assembleWeeklySynthesisText(ws)
+	if !contains(text, "Quiet week") {
+		t.Error("empty synthesis should say quiet week")
+	}
+}
+
+func TestGenerateWeeklySynthesis_NilPool(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	_, err := engine.GenerateWeeklySynthesis(context.Background())
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) > 0 && len(substr) > 0 && strings.Contains(s, substr)
 }

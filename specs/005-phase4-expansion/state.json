@@ -2,37 +2,47 @@
   "version": 3,
   "featureDir": "specs/005-phase4-expansion",
   "featureName": "Phase 4: Expansion",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.validate",
-    "currentPhase": "implement",
-    "currentScope": "3",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "currentScope": null,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [
       "select",
       "bootstrap",
-      "implement"
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
+      "3",
+      "4",
       "5"
     ],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
-      "implement"
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
     ],
     "scopeProgress": [
       { "scope": 1, "name": "Maps Timeline Connector", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
       { "scope": 2, "name": "Browser History Connector", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
-      { "scope": 3, "name": "Trip Dossier", "status": "In Progress", "dependsOn": [], "scopeDir": null, "evidenceFile": null, "certifiedAt": null },
-      { "scope": 4, "name": "People Intelligence", "status": "In Progress", "dependsOn": [], "scopeDir": null, "evidenceFile": null, "certifiedAt": null },
+      { "scope": 3, "name": "Trip Dossier", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
+      { "scope": 4, "name": "People Intelligence", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" },
       { "scope": 5, "name": "Trail Journal", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-10T00:00:00Z" }
     ],
     "lockdownState": { "active": false, "lockedScenarioIds": [] }
