@@ -281,3 +281,49 @@ Refactor phase: supervisor extracted from registry. Backoff made standalone. Top
 
 ### Completion Statement
 Spec 003 delivery-lockdown complete. All 7 scopes verified Done with real implementations and passing tests. 23 Go packages PASS, 11 Python tests PASS. 67 DoD items checked. 36 scenarios mapped.
+
+---
+
+## Gaps-to-Doc Sweep (April 9, 2026)
+
+**Trigger:** Stochastic quality sweep — gaps trigger
+**Agent:** bubbles.workflow (gaps-to-doc mode)
+
+### Findings
+
+| # | Finding | Severity | Resolution |
+|---|---------|----------|------------|
+| G1 | CalDAV date range: spec R-204 says past 30d + future 14d, implementation used past 7d + future 30d | Medium | **Fixed** — `internal/connector/caldav/caldav.go` updated to 30d past + 14d future |
+| G2 | Momentum decay factor: spec R-208 says 0.02, implementation used 0.1 | Medium | **Fixed** — `internal/topics/lifecycle.go` `DefaultMomentumConfig.DecayFactor` changed to 0.02 |
+| G3 | Momentum formula missing `star_count × 5.0` and `connection_count × 0.5` from spec R-208 | Medium | **Fixed** — `CalculateMomentum` now accepts `starCount` and `connectionCount` params; `UpdateAllMomentum` queries star_count and connection edges |
+| G4 | Topic transition threshold: spec says Hot at momentum >50, implementation used >=15 | Medium | **Fixed** — `TransitionState` thresholds updated: Hot >50, Active >=10 |
+| G5 | Health degradation thresholds from design (5-9 degraded, 10+ failing) not implemented | Low | **Fixed** — Added `HealthDegraded`, `HealthFailing` statuses and `HealthFromErrorCount()` to connector package |
+| G6 | IMAP connector uses Gmail REST API instead of IMAP protocol (go-imap v2) per design mandate | Informational | **Documented** — Pragmatic implementation choice; REST API is functional. Protocol-first migration is future work. |
+| G7 | CalDAV connector uses Google Calendar REST API v3 instead of CalDAV protocol (go-webdav) per design | Informational | **Documented** — Same pragmatic choice as G6. Protocol-first migration to go-webdav is future work. |
+| G8 | Per-connector cron scheduling (R-206: Gmail 15min, YouTube 4h, Calendar 2h) not wired into scheduler | Low | **Documented** — Scheduler handles digest and topic lifecycle crons but not per-connector sync schedules. Supervisor manages connector loops but without cron-frequency control. Future work. |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/caldav/caldav.go` | Date range: 7d→30d past, 30d→14d future (G1) |
+| `internal/topics/lifecycle.go` | Momentum formula: added star_count, connection_count params; decay 0.1→0.02; Hot threshold 15→50; Active threshold 8→10 (G2, G3, G4) |
+| `internal/topics/lifecycle_test.go` | Updated all momentum and transition tests for new signatures and thresholds; added `TestCalculateMomentum_StarsAndConnections` (G2, G3, G4) |
+| `internal/connector/connector.go` | Added `HealthDegraded`, `HealthFailing` statuses and `HealthFromErrorCount()` (G5) |
+| `internal/connector/connector_test.go` | Added `TestHealthFromErrorCount`, updated `TestHealthStatus_AllValues` (G5) |
+
+### Verification
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+Exit code: 0
+
+$ ./smackerel.sh lint
+Go lint: PASS, Python lint: PASS
+Exit code: 0
+
+$ ./smackerel.sh test unit
+25 Go packages PASS, 11 Python tests PASS
+Exit code: 0
+```

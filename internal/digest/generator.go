@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -175,6 +176,7 @@ func (g *Generator) getPendingActionItems(ctx context.Context) ([]ActionItem, er
 	for rows.Next() {
 		var item ActionItem
 		if err := rows.Scan(&item.Text, &item.Person, &item.DaysWaiting); err != nil {
+			slog.Warn("action item scan failed", "error", err)
 			continue
 		}
 		items = append(items, item)
@@ -201,6 +203,7 @@ func (g *Generator) getOvernightArtifacts(ctx context.Context) ([]ArtifactBrief,
 	for rows.Next() {
 		var a ArtifactBrief
 		if err := rows.Scan(&a.Title, &a.Type); err != nil {
+			slog.Warn("overnight artifact scan failed", "error", err)
 			continue
 		}
 		artifacts = append(artifacts, a)
@@ -227,6 +230,7 @@ func (g *Generator) getHotTopics(ctx context.Context) ([]TopicBrief, error) {
 	for rows.Next() {
 		var t TopicBrief
 		if err := rows.Scan(&t.Name, &t.CapturesThisWeek); err != nil {
+			slog.Warn("hot topic scan failed", "error", err)
 			continue
 		}
 		topics = append(topics, t)
@@ -260,11 +264,11 @@ func (g *Generator) storeFallbackDigest(ctx context.Context, date string, digest
 		for _, t := range digestCtx.HotTopics {
 			topicNames = append(topicNames, t.Name)
 		}
-		lines = append(lines, fmt.Sprintf("> Hot topics: %s", joinStrings(topicNames, ", ")))
+		lines = append(lines, fmt.Sprintf("> Hot topics: %s", strings.Join(topicNames, ", ")))
 	}
 
-	text := joinStrings(lines, "\n")
-	wordCount := len(splitWords(text))
+	text := strings.Join(lines, "\n")
+	wordCount := len(strings.Fields(text))
 
 	id := ulid.Make().String()
 	_, err := g.Pool.Exec(ctx, `
@@ -275,32 +279,4 @@ func (g *Generator) storeFallbackDigest(ctx context.Context, date string, digest
 	return err
 }
 
-func joinStrings(strs []string, sep string) string {
-	result := ""
-	for i, s := range strs {
-		if i > 0 {
-			result += sep
-		}
-		result += s
-	}
-	return result
-}
 
-func splitWords(s string) []string {
-	var words []string
-	word := ""
-	for _, c := range s {
-		if c == ' ' || c == '\n' || c == '\t' {
-			if word != "" {
-				words = append(words, word)
-				word = ""
-			}
-		} else {
-			word += string(c)
-		}
-	}
-	if word != "" {
-		words = append(words, word)
-	}
-	return words
-}

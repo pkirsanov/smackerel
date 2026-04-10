@@ -279,3 +279,132 @@ func TestMediaGroupAssembler_CapFlush(t *testing.T) {
 		t.Errorf("expected 1 remaining buffer for overflow items, got %d", remaining)
 	}
 }
+
+// --- Stabilization tests ---
+
+func TestStability_MediaGroupAssembler_FlushAllWaitsForGoroutines(t *testing.T) {
+	flushStarted := make(chan struct{})
+	flushDone := make(chan struct{})
+
+	m := NewMediaGroupAssembler(context.Background(), 60,
+		func(_ context.Context, buf *MediaGroupBuffer) error {
+			close(flushStarted)
+			<-flushDone
+			return nil
+		})
+
+	m.Add("g1", &tgbotapi.Message{
+		Chat:         &tgbotapi.Chat{ID: 1},
+		Photo:        []tgbotapi.PhotoSize{{FileID: "p1", FileSize: 100}},
+		MediaGroupID: "g1",
+	})
+
+	done := make(chan struct{})
+	go func() {
+		m.FlushAll()
+		close(done)
+	}()
+
+	<-flushStarted
+
+	select {
+	case <-done:
+		t.Fatal("FlushAll returned before flush goroutine finished")
+	case <-time.After(100 * time.Millisecond):
+		// expected — still waiting
+	}
+
+	close(flushDone)
+
+	select {
+	case <-done:
+		// success
+	case <-time.After(5 * time.Second):
+		t.Fatal("FlushAll did not return after flush goroutine finished")
+	}
+}
+
+func TestStability_MediaGroupAssembler_BufferCapEviction(t *testing.T) {
+	var flushed []*MediaGroupBuffer
+	var mu sync.Mutex
+
+	m := NewMediaGroupAssembler(context.Background(), 60,
+		func(_ context.Context, buf *MediaGroupBuffer) error {
+			mu.Lock()
+			flushed = append(flushed, buf)
+			mu.Unlock()
+			return nil
+		})
+
+	// Override maxBuffers to a small value for testing
+	m.maxBuffers = 3
+
+	// Add 3 different media groups
+	for i := 0; i < 3; i++ {
+		m.Add(fmt.Sprintf("group-%d", i), &tgbotapi.Message{
+			Chat:         &tgbotapi.Chat{ID: 1},
+			Photo:        []tgbotapi.PhotoSize{{FileID: fmt.Sprintf("p%d", i), FileSize: 100}},
+			MediaGroupID: fmt.Sprintf("group-%d", i),
+		})
+	}
+
+	if m.BufferCount() != 3 {
+		t.Fatalf("expected 3 buffers, got %d", m.BufferCount())
+	}
+
+	// Add a 4th — should evict one
+	m.Add("group-3", &tgbotapi.Message{
+		Chat:         &tgbotapi.Chat{ID: 1},
+		Photo:        []tgbotapi.PhotoSize{{FileID: "p3", FileSize: 100}},
+		MediaGroupID: "group-3",
+	})
+
+	time.Sleep(200 * time.Millisecond)
+
+	if m.BufferCount() != 3 {
+		t.Errorf("expected 3 buffers after eviction, got %d", m.BufferCount())
+	}
+
+	mu.Lock()
+	if len(flushed) != 1 {
+		t.Errorf("expected 1 eviction flush, got %d", len(flushed))
+	}
+	mu.Unlock()
+
+	m.FlushAll()
+}
+
+func TestStability_MediaGroupAssembler_ShutdownUsesBackgroundContext(t *testing.T) {
+	// Create assembler with an already-cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	flushed := make(chan struct{}, 1)
+
+	m := NewMediaGroupAssembler(ctx, 60,
+		func(flushCtx context.Context, buf *MediaGroupBuffer) error {
+			// The flush context should NOT be cancelled even though the
+			// assembler's own context was cancelled
+			if flushCtx.Err() != nil {
+				t.Error("flush context was cancelled — should use background context for shutdown")
+				return flushCtx.Err()
+			}
+			flushed <- struct{}{}
+			return nil
+		})
+
+	m.Add("g1", &tgbotapi.Message{
+		Chat:         &tgbotapi.Chat{ID: 1},
+		Photo:        []tgbotapi.PhotoSize{{FileID: "p1", FileSize: 100}},
+		MediaGroupID: "g1",
+	})
+
+	m.FlushAll()
+
+	select {
+	case <-flushed:
+		// success — flush ran despite cancelled parent context
+	case <-time.After(2 * time.Second):
+		t.Fatal("flush was not called during shutdown with cancelled parent context")
+	}
+}

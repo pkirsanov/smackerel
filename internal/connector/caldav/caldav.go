@@ -185,9 +185,9 @@ func (c *Connector) fetchGoogleCalendarEvents(ctx context.Context, token string,
 			params.Set("syncToken", cursor)
 		}
 	} else {
-		// Default: events from the last 7 days + next 30 days
-		params.Set("timeMin", time.Now().AddDate(0, 0, -7).Format(time.RFC3339))
-		params.Set("timeMax", time.Now().AddDate(0, 0, 30).Format(time.RFC3339))
+		// Default: events from the past 30 days + future 14 days (R-204)
+		params.Set("timeMin", time.Now().AddDate(0, 0, -30).Format(time.RFC3339))
+		params.Set("timeMax", time.Now().AddDate(0, 0, 14).Format(time.RFC3339))
 	}
 
 	apiURL := "https://www.googleapis.com/calendar/v3/calendars/primary/events?" + params.Encode()
@@ -326,6 +326,9 @@ func getCredential(creds map[string]string, key string) string {
 
 // parseCalendarEvents converts interface{} events from config into CalendarEvent structs.
 func parseCalendarEvents(raw interface{}) ([]CalendarEvent, error) {
+	if raw == nil {
+		return nil, nil
+	}
 	evts, ok := raw.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("events must be an array")

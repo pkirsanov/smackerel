@@ -39,15 +39,24 @@ type ConversationBuffer struct {
 	timer        *time.Timer
 }
 
+// maxAssemblyBuffers is the hard ceiling on concurrent assembly buffers.
+// Beyond this, the oldest buffer is force-flushed to reclaim memory.
+const maxAssemblyBuffers = 500
+
+// flushTimeout is the deadline for individual flush operations.
+const flushTimeout = 30 * time.Second
+
 // ConversationAssembler manages all active assembly buffers.
 type ConversationAssembler struct {
 	mu          sync.Mutex
 	buffers     map[assemblyKey]*ConversationBuffer
 	windowSecs  int
 	maxMessages int
+	maxBuffers  int
 	flushFn     func(ctx context.Context, buf *ConversationBuffer) error
 	notifyFn    func(chatID int64, msgCount int)
 	ctx         context.Context
+	wg          sync.WaitGroup
 }
 
 // NewConversationAssembler creates an assembler with config-driven parameters.
@@ -68,6 +77,7 @@ func NewConversationAssembler(
 		buffers:     make(map[assemblyKey]*ConversationBuffer),
 		windowSecs:  windowSecs,
 		maxMessages: maxMessages,
+		maxBuffers:  maxAssemblyBuffers,
 		flushFn:     flushFn,
 		notifyFn:    notifyFn,
 		ctx:         ctx,
@@ -104,13 +114,30 @@ func (a *ConversationAssembler) Add(key assemblyKey, cmsg ConversationMessage, m
 
 		// Notify after 2nd message
 		if len(buf.Messages) == 2 && a.notifyFn != nil {
-			go a.notifyFn(key.chatID, 2)
+			notifyFn := a.notifyFn
+			chatID := key.chatID
+			a.wg.Add(1)
+			go func() {
+				defer a.wg.Done()
+				notifyFn(chatID, 2)
+			}()
 		}
 
 		buf.timer = time.AfterFunc(time.Duration(a.windowSecs)*time.Second, func() {
 			a.timerExpired(key)
 		})
 	} else {
+		// Evict oldest buffer if at capacity
+		if len(a.buffers) >= a.maxBuffers {
+			oldestKey := a.findOldestBufferLocked()
+			slog.Warn("assembly buffer count at capacity, evicting oldest",
+				"evicted_source", oldestKey.sourceName,
+				"evicted_chat", oldestKey.chatID,
+				"buffer_count", len(a.buffers),
+			)
+			a.flushBufferLocked(oldestKey)
+		}
+
 		buf = &ConversationBuffer{
 			Key:          key,
 			Messages:     []ConversationMessage{cmsg},
@@ -165,8 +192,10 @@ func (a *ConversationAssembler) flushBufferLocked(key assemblyKey) {
 	})
 
 	if a.flushFn != nil {
+		a.wg.Add(1)
 		go func() {
-			flushCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer a.wg.Done()
+			flushCtx, cancel := context.WithTimeout(context.Background(), flushTimeout)
 			defer cancel()
 			if err := a.flushFn(flushCtx, buf); err != nil {
 				slog.Error("assembly flush failed",
@@ -180,25 +209,47 @@ func (a *ConversationAssembler) flushBufferLocked(key assemblyKey) {
 }
 
 // FlushChat flushes all buffers for a specific chat ID (triggered by /done).
-func (a *ConversationAssembler) FlushChat(chatID int64) {
+// Returns the number of buffers that were flushed.
+func (a *ConversationAssembler) FlushChat(chatID int64) int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	count := 0
 	for key := range a.buffers {
 		if key.chatID == chatID {
 			a.flushBufferLocked(key)
+			count++
 		}
 	}
+	return count
 }
 
-// FlushAll flushes all open buffers (triggered on shutdown).
+// FlushAll flushes all open buffers and waits for in-flight flushes (triggered on shutdown).
 func (a *ConversationAssembler) FlushAll() {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	for key := range a.buffers {
 		a.flushBufferLocked(key)
 	}
+	a.mu.Unlock()
+
+	// Wait for all in-flight flush and notify goroutines to complete.
+	a.wg.Wait()
+}
+
+// findOldestBufferLocked returns the key of the buffer with the earliest FirstMsgTime.
+// Caller must hold a.mu.
+func (a *ConversationAssembler) findOldestBufferLocked() assemblyKey {
+	var oldest assemblyKey
+	var oldestTime time.Time
+	first := true
+	for k, buf := range a.buffers {
+		if first || buf.FirstMsgTime.Before(oldestTime) {
+			oldest = k
+			oldestTime = buf.FirstMsgTime
+			first = false
+		}
+	}
+	return oldest
 }
 
 // BufferCount returns the number of active buffers (for testing).

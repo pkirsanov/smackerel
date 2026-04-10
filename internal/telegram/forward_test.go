@@ -162,3 +162,81 @@ func TestSCN008005b_MalformedForward(t *testing.T) {
 	}
 	// Should not panic
 }
+
+// --- Chaos-hardening tests ---
+
+func TestChaos_ExtractForwardMeta_FirstNameOnly(t *testing.T) {
+	msg := &tgbotapi.Message{
+		ForwardFrom: &tgbotapi.User{
+			ID:        1,
+			FirstName: "Alice",
+			LastName:  "", // Empty last name
+		},
+		ForwardDate: int(time.Now().Unix()),
+	}
+	meta := extractForwardMeta(msg)
+	if meta.SenderName != "Alice" {
+		t.Errorf("expected 'Alice', got %q", meta.SenderName)
+	}
+}
+
+func TestChaos_ExtractForwardMeta_UnicodeNames(t *testing.T) {
+	msg := &tgbotapi.Message{
+		ForwardFrom: &tgbotapi.User{
+			ID:        2,
+			FirstName: "Дмитрий",
+			LastName:  "Иванов",
+		},
+		ForwardDate: int(time.Now().Unix()),
+	}
+	meta := extractForwardMeta(msg)
+	expected := "Дмитрий Иванов"
+	if meta.SenderName != expected {
+		t.Errorf("expected %q, got %q", expected, meta.SenderName)
+	}
+}
+
+func TestChaos_ExtractForwardMeta_EmojiInName(t *testing.T) {
+	msg := &tgbotapi.Message{
+		ForwardFrom: &tgbotapi.User{
+			ID:        3,
+			FirstName: "Alice 🌟",
+		},
+		ForwardDate: int(time.Now().Unix()),
+	}
+	meta := extractForwardMeta(msg)
+	if meta.SenderName != "Alice 🌟" {
+		t.Errorf("expected name with emoji preserved, got %q", meta.SenderName)
+	}
+}
+
+func TestChaos_ExtractForwardMeta_VeryLongName(t *testing.T) {
+	longName := "A"
+	for len(longName) < 1000 {
+		longName += "A"
+	}
+	msg := &tgbotapi.Message{
+		ForwardFrom: &tgbotapi.User{
+			ID:        4,
+			FirstName: longName,
+		},
+		ForwardDate: int(time.Now().Unix()),
+	}
+	meta := extractForwardMeta(msg)
+	// Should not panic, name preserved
+	if meta.SenderName != longName {
+		t.Error("long name should be preserved in metadata")
+	}
+}
+
+func TestChaos_ExtractForwardMeta_NegativeForwardDate(t *testing.T) {
+	msg := &tgbotapi.Message{
+		ForwardSenderName: "TestUser",
+		ForwardDate:       -1,
+	}
+	meta := extractForwardMeta(msg)
+	// Should not panic — negative timestamp produces 1969 date
+	if meta.OriginalDate.IsZero() {
+		t.Error("expected non-zero original date even with negative timestamp")
+	}
+}

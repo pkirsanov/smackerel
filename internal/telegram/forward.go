@@ -82,7 +82,15 @@ func (b *Bot) handleForwardedMessage(ctx context.Context, msg *tgbotapi.Message)
 			text = msg.Caption
 		}
 		if len(text) > maxShareTextLen {
-			text = text[:maxShareTextLen]
+			text = truncateUTF8(text, maxShareTextLen)
+		}
+
+		// Detect media before building the message
+		hasMedia := msg.Photo != nil || msg.Video != nil || msg.Document != nil
+
+		// Use placeholder for text-less forwarded messages (stickers, contacts, etc.)
+		if text == "" && !hasMedia {
+			text = "[non-text message]"
 		}
 
 		cmsg := ConversationMessage{

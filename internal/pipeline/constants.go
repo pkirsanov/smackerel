@@ -22,4 +22,9 @@ const (
 	SourceTelegram       = "telegram"
 	SourceBrowser        = "browser"
 	SourceBrowserHistory = "browser-history"
+	SourceRSS            = "rss"
+	SourceBookmarks      = "bookmarks"
+	SourceGoogleKeep     = "google-keep"
+	SourceGoogleMaps     = "google-maps-timeline"
+	SourceHospitable     = "hospitable"
 )

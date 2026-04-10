@@ -208,7 +208,13 @@ func buildReservationContent(r Reservation, propertyName string) string {
 	b.WriteString(fmt.Sprintf("Guests: %d | Nightly Rate: $%.0f | Total: $%.0f\n", r.GuestCount, r.NightlyRate, r.TotalPayout))
 
 	if !r.BookedAt.IsZero() {
-		b.WriteString(fmt.Sprintf("Booked: %s\n", r.BookedAt.Format("Jan 2, 2006")))
+		checkIn, err := time.Parse("2006-01-02", r.CheckIn)
+		if err == nil && checkIn.After(r.BookedAt) {
+			leadDays := int(checkIn.Sub(r.BookedAt).Hours() / 24)
+			b.WriteString(fmt.Sprintf("Booked: %s (%d days lead time)\n", r.BookedAt.Format("Jan 2, 2006"), leadDays))
+		} else {
+			b.WriteString(fmt.Sprintf("Booked: %s\n", r.BookedAt.Format("Jan 2, 2006")))
+		}
 	}
 
 	return b.String()

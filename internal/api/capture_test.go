@@ -166,3 +166,95 @@ func TestCheckAuth_MissingHeader(t *testing.T) {
 		t.Error("checkAuth should fail with missing header")
 	}
 }
+
+func TestCheckAuth_BasicSchemeRejected(t *testing.T) {
+	deps := &Dependencies{AuthToken: "my-secret"}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Basic my-secret")
+
+	if deps.checkAuth(req) {
+		t.Error("checkAuth should reject Basic auth scheme")
+	}
+}
+
+func TestCheckAuth_BearerNoSpace(t *testing.T) {
+	deps := &Dependencies{AuthToken: "my-secret"}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearermy-secret")
+
+	if deps.checkAuth(req) {
+		t.Error("checkAuth should reject malformed Bearer without space")
+	}
+}
+
+func TestCheckAuth_EmptyBearerToken(t *testing.T) {
+	deps := &Dependencies{AuthToken: "my-secret"}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer ")
+
+	if deps.checkAuth(req) {
+		t.Error("checkAuth should reject empty Bearer token")
+	}
+}
+
+func TestCaptureHandler_OversizedBody(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  nil,
+	}
+
+	// Create body larger than 1MB limit
+	bigBody := bytes.Repeat([]byte("x"), 2<<20)
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewReader(bigBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d", rec.Code)
+	}
+}
+
+func TestCaptureHandler_TextOnly(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  nil,
+	}
+
+	body := `{"text": "my quick note about pricing"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	// No pipeline → 503, but should pass input validation
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 (past validation, no pipeline), got %d", rec.Code)
+	}
+}
+
+func TestCaptureHandler_VoiceURLOnly(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  nil,
+	}
+
+	body := `{"voice_url": "https://example.com/audio.ogg"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 (past validation, no pipeline), got %d", rec.Code)
+	}
+}

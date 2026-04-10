@@ -1,6 +1,8 @@
 package nats
 
 import (
+	"context"
+	"strings"
 	"testing"
 )
 
@@ -48,6 +50,10 @@ func TestSubjectConstants(t *testing.T) {
 		{"SubjectSearchReranked", SubjectSearchReranked},
 		{"SubjectDigestGenerate", SubjectDigestGenerate},
 		{"SubjectDigestGenerated", SubjectDigestGenerated},
+		{"SubjectKeepSyncRequest", SubjectKeepSyncRequest},
+		{"SubjectKeepSyncResponse", SubjectKeepSyncResponse},
+		{"SubjectKeepOCRRequest", SubjectKeepOCRRequest},
+		{"SubjectKeepOCRResponse", SubjectKeepOCRResponse},
 	}
 
 	for _, s := range subjects {
@@ -78,6 +84,8 @@ func TestSubjectPairs(t *testing.T) {
 		{SubjectSearchEmbed, SubjectSearchEmbedded},
 		{SubjectSearchRerank, SubjectSearchReranked},
 		{SubjectDigestGenerate, SubjectDigestGenerated},
+		{SubjectKeepSyncRequest, SubjectKeepSyncResponse},
+		{SubjectKeepOCRRequest, SubjectKeepOCRResponse},
 	}
 
 	for _, p := range pairs {
@@ -92,12 +100,14 @@ func TestSubjectPairs(t *testing.T) {
 }
 
 func TestSubjectNaming_Convention(t *testing.T) {
-	// All subjects should follow domain.action pattern
+	// All subjects should follow domain.action or domain.sub.action pattern
 	subjects := []string{
 		SubjectArtifactsProcess, SubjectArtifactsProcessed,
 		SubjectSearchEmbed, SubjectSearchEmbedded,
 		SubjectSearchRerank, SubjectSearchReranked,
 		SubjectDigestGenerate, SubjectDigestGenerated,
+		SubjectKeepSyncRequest, SubjectKeepSyncResponse,
+		SubjectKeepOCRRequest, SubjectKeepOCRResponse,
 	}
 
 	for _, s := range subjects {
@@ -107,8 +117,8 @@ func TestSubjectNaming_Convention(t *testing.T) {
 				dotCount++
 			}
 		}
-		if dotCount != 1 {
-			t.Errorf("subject %q should have exactly 1 dot separator, got %d", s, dotCount)
+		if dotCount < 1 || dotCount > 2 {
+			t.Errorf("subject %q should have 1 or 2 dot separators, got %d", s, dotCount)
 		}
 	}
 }
@@ -131,6 +141,8 @@ func TestStreamSubjects_CoverAllSubjects(t *testing.T) {
 		SubjectSearchEmbed, SubjectSearchEmbedded,
 		SubjectSearchRerank, SubjectSearchReranked,
 		SubjectDigestGenerate, SubjectDigestGenerated,
+		SubjectKeepSyncRequest, SubjectKeepSyncResponse,
+		SubjectKeepOCRRequest, SubjectKeepOCRResponse,
 	}
 
 	streams := AllStreams()
@@ -195,4 +207,55 @@ func indexByte(s string, c byte) int {
 		}
 	}
 	return -1
+}
+
+func TestConnect_InvalidURL(t *testing.T) {
+	// NATS Connect with an unreachable URL should fail
+	ctx := context.Background()
+	_, err := Connect(ctx, "nats://127.0.0.1:1", "")
+	if err == nil {
+		t.Fatal("expected error connecting to unreachable NATS")
+	}
+	if !strings.Contains(err.Error(), "connect to NATS") {
+		t.Errorf("expected wrapped connect error, got: %v", err)
+	}
+}
+
+func TestConnect_EmptyURL(t *testing.T) {
+	ctx := context.Background()
+	_, err := Connect(ctx, "", "")
+	if err == nil {
+		t.Fatal("expected error for empty NATS URL")
+	}
+}
+
+func TestAllStreams_NoDuplicateSubjects(t *testing.T) {
+	// Verify no two streams claim the same subject wildcard
+	seen := make(map[string]string) // subject -> stream name
+	for _, s := range AllStreams() {
+		for _, subj := range s.Subjects {
+			if prev, ok := seen[subj]; ok {
+				t.Errorf("subject %q claimed by both %s and %s", subj, prev, s.Name)
+			}
+			seen[subj] = s.Name
+		}
+	}
+}
+
+func TestAllStreams_RetentionAndStorage(t *testing.T) {
+	// Verify the AllStreams function returns configs that are suitable
+	// for stream creation — names and subjects are non-empty
+	for _, s := range AllStreams() {
+		if s.Name == "" {
+			t.Error("stream config has empty name")
+		}
+		if len(s.Subjects) == 0 {
+			t.Errorf("stream %s has no subjects", s.Name)
+		}
+		for _, subj := range s.Subjects {
+			if subj == "" {
+				t.Errorf("stream %s has empty subject", s.Name)
+			}
+		}
+	}
 }

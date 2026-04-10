@@ -568,22 +568,12 @@ func daysDiff(a, b time.Time) int {
 	return int(math.Abs(diff))
 }
 
-// updateTierForCommute returns "light" for commute-classified activities.
-func updateTierForCommute(metadata map[string]interface{}) map[string]interface{} {
+// withProcessingTier returns a shallow copy of metadata with the processing_tier set to tier.
+func withProcessingTier(metadata map[string]interface{}, tier string) map[string]interface{} {
 	updated := make(map[string]interface{}, len(metadata))
 	for k, v := range metadata {
 		updated[k] = v
 	}
-	updated["processing_tier"] = "light"
-	return updated
-}
-
-// updateTierForTrip returns "full" for trip-associated activities.
-func updateTierForTrip(metadata map[string]interface{}) map[string]interface{} {
-	updated := make(map[string]interface{}, len(metadata))
-	for k, v := range metadata {
-		updated[k] = v
-	}
-	updated["processing_tier"] = "full"
+	updated["processing_tier"] = tier
 	return updated
 }

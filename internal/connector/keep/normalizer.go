@@ -43,8 +43,9 @@ func (n *Normalizer) Normalize(note *TakeoutNote, noteID, sourcePath string) (*c
 	title := note.Title
 	if title == "" && len(content) > 0 {
 		title = content
-		if len(title) > 50 {
-			title = title[:50]
+		runes := []rune(title)
+		if len(runes) > 50 {
+			title = string(runes[:50])
 		}
 	}
 
@@ -53,7 +54,7 @@ func (n *Normalizer) Normalize(note *TakeoutNote, noteID, sourcePath string) (*c
 	metadata["processing_tier"] = string(tier)
 
 	capturedAt := n.parser.CreatedAt(note)
-	if capturedAt.IsZero() {
+	if capturedAt.IsZero() || capturedAt.Equal(time.Unix(0, 0)) {
 		capturedAt = time.Now()
 	}
 
@@ -240,6 +241,15 @@ func (n *Normalizer) buildMetadata(note *TakeoutNote, noteID, sourcePath string)
 	modifiedAt := parser.ModifiedAt(note)
 	createdAt := parser.CreatedAt(note)
 
+	// Guard against epoch timestamps from missing/zero fields
+	now := time.Now().UTC()
+	if modifiedAt.Equal(time.Unix(0, 0)) || modifiedAt.IsZero() {
+		modifiedAt = now
+	}
+	if createdAt.Equal(time.Unix(0, 0)) || createdAt.IsZero() {
+		createdAt = now
+	}
+
 	metadata := map[string]interface{}{
 		"keep_note_id":  noteID,
 		"pinned":        note.IsPinned,
@@ -248,6 +258,7 @@ func (n *Normalizer) buildMetadata(note *TakeoutNote, noteID, sourcePath string)
 		"labels":        labels,
 		"color":         note.Color,
 		"collaborators": collaborators,
+		"reminder_time": "", // R-005: not present in Takeout JSON, placeholder for gkeepapi path
 		"annotations":   annotations,
 		"attachments":   attachments,
 		"source_path":   sourcePath,
@@ -267,6 +278,10 @@ func (n *Normalizer) shouldSkip(note *TakeoutNote) bool {
 		return true
 	}
 	content := n.buildContent(note)
+	// Skip completely empty notes (no text, no list, no attachments, no annotations, no title)
+	if content == "" && note.Title == "" {
+		return true
+	}
 	if n.config.MinContentLength > 0 && len(content) < n.config.MinContentLength {
 		return true
 	}

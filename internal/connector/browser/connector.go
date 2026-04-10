@@ -218,10 +218,53 @@ func (c *Connector) copyHistoryFile() (string, error) {
 	return tmp.Name(), nil
 }
 
-// processEntries applies skip filtering, social media aggregation, repeat visit
-// detection with tier escalation, dwell-time tiering, and the privacy gate.
-// Social media entries are aggregated by domain+day; metadata-tier entries produce
-// no individual artifacts (privacy gate).
+// dedupByURLDate merges entries with the same URL on the same UTC date (R-010).
+// Dwell times are summed, the latest VisitTime is kept, and the Title from the
+// longest individual visit is preserved. Stable insertion order is maintained.
+func dedupByURLDate(entries []HistoryEntry) []HistoryEntry {
+	type urlDate struct {
+		url  string
+		date string
+	}
+	type mergeState struct {
+		entry    HistoryEntry
+		maxDwell time.Duration
+	}
+
+	groups := make(map[urlDate]*mergeState)
+	var order []urlDate
+
+	for _, e := range entries {
+		k := urlDate{url: e.URL, date: e.VisitTime.UTC().Format("2006-01-02")}
+		if m, ok := groups[k]; ok {
+			m.entry.DwellTime += e.DwellTime
+			if e.VisitTime.After(m.entry.VisitTime) {
+				m.entry.VisitTime = e.VisitTime
+			}
+			if e.DwellTime > m.maxDwell {
+				m.maxDwell = e.DwellTime
+				m.entry.Title = e.Title
+			}
+		} else {
+			groups[k] = &mergeState{
+				entry:    e,
+				maxDwell: e.DwellTime,
+			}
+			order = append(order, k)
+		}
+	}
+
+	result := make([]HistoryEntry, 0, len(order))
+	for _, k := range order {
+		result = append(result, groups[k].entry)
+	}
+	return result
+}
+
+// processEntries applies skip filtering, URL+date dedup (R-010), social media
+// aggregation, repeat visit detection with tier escalation, dwell-time tiering,
+// and the privacy gate. Social media entries are aggregated by domain+day;
+// metadata-tier entries produce no individual artifacts (privacy gate).
 func (c *Connector) processEntries(entries []HistoryEntry, prevCursor int64) ([]connector.RawArtifact, string, syncStats) {
 	stats := syncStats{
 		byTier: make(map[string]int),
@@ -245,8 +288,11 @@ func (c *Connector) processEntries(entries []HistoryEntry, prevCursor int64) ([]
 		qualifying = append(qualifying, e)
 	}
 
-	// Step 2: Detect repeat visits (social media excluded from frequency map)
+	// Step 2: Detect repeat visits on raw entries (social media excluded)
 	repeatVisits := c.detectRepeatVisits(qualifying)
+
+	// Step 2.5: Dedup by URL+date — merge same-URL same-day entries (R-010)
+	qualifying = dedupByURLDate(qualifying)
 
 	// Step 3: Split into social media vs content tracks
 	var socialEntries []HistoryEntry
@@ -409,22 +455,32 @@ func (c *Connector) escalateTier(tier string) string {
 // domain on a given day.
 func (c *Connector) buildSocialAggregate(domain string, entries []HistoryEntry, day time.Time) connector.RawArtifact {
 	var totalDwell time.Duration
-	var urls []string
+	var peakTitle string
+	var peakDwell time.Duration
 	for _, e := range entries {
 		totalDwell += e.DwellTime
-		urls = append(urls, e.URL)
+		if e.DwellTime > peakDwell {
+			peakDwell = e.DwellTime
+			peakTitle = e.Title
+		}
 	}
+
+	content := fmt.Sprintf("%d visits to %s (total dwell: %s, peak: %s — %s)",
+		len(entries), domain, totalDwell.Round(time.Second), peakTitle, peakDwell.Round(time.Second))
+
 	return connector.RawArtifact{
 		SourceID:    "browser-history",
 		SourceRef:   fmt.Sprintf("social-aggregate:%s:%s", domain, day.Format("2006-01-02")),
 		ContentType: "browsing/social-aggregate",
 		Title:       fmt.Sprintf("%s activity on %s", domain, day.Format("2006-01-02")),
+		RawContent:  content,
 		Metadata: map[string]interface{}{
-			"domain":              domain,
-			"date":                day.Format("2006-01-02"),
-			"visit_count":         len(entries),
-			"total_dwell_seconds": totalDwell.Seconds(),
-			"urls":                urls,
+			"domain":                  domain,
+			"date":                    day.Format("2006-01-02"),
+			"visit_count":             len(entries),
+			"total_dwell_seconds":     totalDwell.Seconds(),
+			"peak_page_title":         peakTitle,
+			"peak_page_dwell_seconds": peakDwell.Seconds(),
 		},
 		CapturedAt: day,
 	}

@@ -169,7 +169,14 @@ func (p *TakeoutParser) CreatedAt(note *TakeoutNote) time.Time {
 
 // NoteID derives a stable note ID from the file path.
 // Uses the filename without extension as the ID.
+// Returns a fallback ID if the path is empty.
 func (p *TakeoutParser) NoteID(note *TakeoutNote, filePath string) string {
+	if filePath == "" {
+		if note.Title != "" {
+			return note.Title
+		}
+		return "unknown"
+	}
 	base := filepath.Base(filePath)
 	ext := filepath.Ext(base)
 	return strings.TrimSuffix(base, ext)

@@ -300,3 +300,140 @@ Exit code: 0
 
 ### Completion Statement
 Spec 004 delivery-lockdown validated. All 6 scopes have full implementation with passing unit tests (23 Go packages + 11 Python tests), clean build, clean lint, clean format. 27 Gherkin scenarios mapped to DoD items with evidence. Scenario manifest (27 entries) created. Code diff evidence with git log and git diff output included.
+
+---
+
+## Regression Sweep — 2026-04-10
+
+**Trigger:** Stochastic quality sweep round (regression-to-doc)
+**Focus:** Cross-spec interface regressions between intelligence components and newer connectors
+
+### Findings
+
+#### RGR-004-001: Missing Cross-Domain Source Filter in Synthesis Query (FIXED)
+
+**Severity:** High — spec drift, R-301 non-compliance
+**Affected File:** `internal/intelligence/engine.go` — `RunSynthesis()`
+
+**Description:** Spec requirement R-301 states synthesis must identify clusters of artifacts "from different sources (email + article + video = different domains)." Scopes.md Scope 1 implementation plan specified "Filter to cross-domain only (different source_ids required)." The DoD evidence claimed "cluster detection query requires COUNT(*) >= 3 and cross-domain filter."
+
+However, the actual SQL query only grouped artifacts by topic with `HAVING COUNT(*) >= 3` — no cross-domain filter existed. Three articles from the same RSS feed sharing a topic would produce a false "cross-domain" insight.
+
+**Root Cause:** The cross-domain filter was omitted during ADR-001 pivot from async NATS pipeline to synchronous DB queries. The LLM evaluation of `has_genuine_connection` (which would have caught same-source clusters) was deferred, and the SQL-level guard was never added.
+
+**Fix:** Added `JOIN artifacts a ON a.id = e.src_id` and `HAVING COUNT(*) >= 3 AND COUNT(DISTINCT a.source_id) >= 2` to the synthesis CTE query, ensuring clusters span at least 2 distinct source origins.
+
+#### RGR-004-002: Source ID Constants Not Centralized for Post-Phase-2 Connectors (FIXED)
+
+**Severity:** Medium — maintenance risk, intelligence quality impact
+**Affected File:** `internal/pipeline/constants.go`
+
+**Description:** `pipeline/constants.go` defined only 4 source constants from Phase 2: `capture`, `telegram`, `browser`, `browser-history`. Five connectors added in later specs used hardcoded string literals:
+- `"bookmarks"` (spec 009)
+- `"google-keep"` (spec 007)
+- `"google-maps-timeline"` (spec 011)
+- `"hospitable"` (spec 012)
+- `"rss"` (phase 2 RSS)
+
+This fragmented source ID management and prevented programmatic source enumeration by the intelligence layer.
+
+**Fix:** Added `SourceRSS`, `SourceBookmarks`, `SourceGoogleKeep`, `SourceGoogleMaps`, `SourceHospitable` constants to `pipeline/constants.go` with corresponding test cases in `constants_test.go`.
+
+**Note:** Connectors still use string literals internally rather than importing these constants. A follow-up improvement task could update connectors to use the centralized constants, but this is not a regression — it's incremental centralization.
+
+#### RGR-004-003: Tier Assignment Does Not Cover Newer Connector Source IDs (NOT FIXED — by design)
+
+**Severity:** Low — deliberate design decision
+**Affected File:** `internal/pipeline/tier.go` — `AssignTier()`
+
+**Description:** `AssignTier()` only gives `TierFull` processing to `capture`, `telegram`, `browser`, `browser-history` sources. Artifacts from newer connectors (bookmarks, keep, maps, hospitable, rss) receive `TierStandard` or `TierLight` by default. This means they miss action item extraction and graph connection creation.
+
+**Assessment:** This is a deliberate cost-performance tradeoff, not a regression. Passive connectors import bulk data; full processing for every RSS article or bookmark would be expensive. Entities and embeddings (present at Standard tier) are sufficient for synthesis clustering. User-starred items from any source still get Full.
+
+### Verification
+
+```
+$ ./smackerel.sh test unit  (25 Go packages pass, 44 Python tests pass)
+$ ./smackerel.sh lint       (All checks passed!)
+```
+
+---
+
+## Simplification Pass — 2026-04-10
+
+**Trigger:** Stochastic quality sweep round (simplify-to-doc)
+**Focus:** Code complexity, duplication, and dead code in the intelligence layer (intelligence, graph, digest packages)
+
+### Findings & Changes
+
+#### SIMP-004-001: Dead Wrapper Functions `joinStrings`/`splitWords` Removed (FIXED)
+
+**Severity:** Low — dead code, unnecessary indirection
+**Affected Files:** `internal/digest/generator.go`, `internal/digest/generator_test.go`
+
+**Description:** `joinStrings(strs []string, sep string)` was a one-line wrapper around `strings.Join()`. `splitWords(s string)` was a one-line wrapper around `strings.Fields()`. Both added zero value — no error handling, no transformation, no domain logic. They also had 8 dedicated test functions testing stdlib behavior.
+
+**Fix:** Replaced all call sites with direct `strings.Join`/`strings.Fields` calls. Removed the 2 wrapper functions and 8 associated tests that only verified stdlib.
+
+#### SIMP-004-002: Unused `Linker.ConnectionCount` Method Removed (FIXED)
+
+**Severity:** Low — dead code
+**Affected File:** `internal/graph/linker.go`, `internal/graph/linker_test.go`
+
+**Description:** Two `ConnectionCount` variants existed:
+- `(l *Linker) ConnectionCount(ctx, artifactID) (int, error)` — method, zero callers
+- `ConnectionCount(ctx, pool, artifactID) int` — package-level function, used by `web/handler.go`
+
+The method was never called by any code in the repository.
+
+**Fix:** Removed the unused method and its test (`TestConnectionCount_Structure`). The package-level function remains as the sole API.
+
+#### SIMP-004-003: Edge Direction Normalization Extracted to Helper (FIXED)
+
+**Severity:** Low — copy-paste duplication
+**Affected File:** `internal/graph/linker.go`
+
+**Description:** The pattern `srcID, dstID := a, b; if srcID > dstID { srcID, dstID = dstID, srcID }` was copy-pasted in 3 locations: `linkBySimilarity`, `linkByTemporal`, and `linkBySource`. All three instances served identical purpose — preventing bidirectional edge duplicates.
+
+**Fix:** Extracted `normalizeEdgeDir(a, b string) (string, string)` helper. All 3 call sites now use the shared function.
+
+#### SIMP-004-004: `findOrCreatePeople`/`findOrCreateTopics` Share Structure (NOT FIXED — cost exceeds benefit)
+
+**Severity:** Informational
+**Affected File:** `internal/graph/linker.go`
+
+**Description:** Both batch-upsert functions follow the same pattern (generate ULIDs, INSERT with unnest, ON CONFLICT, RETURNING name/id). However, they differ in table name, conflict target, and extra columns (topics has `state`). Abstracting into a generic function would require an interface or reflection, adding complexity for marginal deduplication of ~30 lines.
+
+**Assessment:** Not worth abstracting. The functions are stable, tested via integration paths, and the duplication is tolerable.
+
+#### SIMP-004-005: Repeated nil-Pool Guards Across Engine Methods (NOT FIXED — valid boundary checks)
+
+**Severity:** Informational
+**Affected File:** `internal/intelligence/engine.go`, `internal/intelligence/resurface.go`
+
+**Description:** Five methods start with `if e.Pool == nil { return ..., fmt.Errorf("... requires a database connection") }`. This is a repeated pattern but represents defensive boundary validation that should remain explicit per-method for nil-safety.
+
+**Assessment:** Not worth abstracting. Each guard gives a method-specific error message and maintains independent nil-safety.
+
+### Verification
+
+```
+$ ./smackerel.sh lint
+All checks passed!
+
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/digest       (25 packages, 0 failures)
+ok  github.com/smackerel/smackerel/internal/graph
+ok  github.com/smackerel/smackerel/internal/intelligence
+Exit code: 0
+```
+
+### Net Impact
+
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| `digest/generator.go` lines | ~290 | ~283 | -7 |
+| `digest/generator_test.go` tests | 15 | 7 | -8 dead tests |
+| `graph/linker.go` lines | ~480 | ~470 | -10 |
+| `graph/linker_test.go` tests | 14 | 13 | -1 dead test |
+| Copy-pasted edge normalization blocks | 3 | 0 | -3 (1 shared helper) |

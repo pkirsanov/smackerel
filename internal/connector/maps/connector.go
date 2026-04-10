@@ -61,35 +61,34 @@ func New(id string) *Connector {
 	}
 }
 
+// setHealth sets the connector's health status under lock.
+func (c *Connector) setHealth(status connector.HealthStatus) {
+	c.mu.Lock()
+	c.health = status
+	c.mu.Unlock()
+}
+
 func (c *Connector) ID() string { return c.id }
 
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
 	mapsCfg, err := parseMapsConfig(config)
 	if err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return err
 	}
 
 	// Validate import directory exists and is readable.
 	info, err := os.Stat(mapsCfg.ImportDir)
 	if os.IsNotExist(err) {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("import directory does not exist: %s", mapsCfg.ImportDir)
 	}
 	if err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("import directory stat error: %w", err)
 	}
 	if !info.IsDir() {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("import directory is not a directory: %s", mapsCfg.ImportDir)
 	}
 
@@ -97,9 +96,7 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	// from being a symlink that could be retargeted between Connect and Sync.
 	resolved, err := filepath.EvalSymlinks(mapsCfg.ImportDir)
 	if err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("resolve import directory path: %w", err)
 	}
 	mapsCfg.ImportDir = resolved
@@ -119,9 +116,7 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
-	c.mu.Lock()
-	c.health = connector.HealthSyncing
-	c.mu.Unlock()
+	c.setHealth(connector.HealthSyncing)
 
 	defer func() {
 		c.mu.Lock()
@@ -313,13 +308,7 @@ func (c *Connector) SetPool(pool *pgxpool.Pool) {
 
 // InsertLocationCluster inserts a location cluster row for pattern detection.
 func InsertLocationCluster(ctx context.Context, pool *pgxpool.Pool, activity TakeoutActivity, sourceRef string) error {
-	var startLat, startLng, endLat, endLng float64
-	if len(activity.Route) > 0 {
-		startLat = roundToGrid(activity.Route[0].Lat)
-		startLng = roundToGrid(activity.Route[0].Lng)
-		endLat = roundToGrid(activity.Route[len(activity.Route)-1].Lat)
-		endLng = roundToGrid(activity.Route[len(activity.Route)-1].Lng)
-	}
+	startLat, startLng, endLat, endLng := activityGridCoords(activity)
 
 	id := computeDedupHash(activity)
 	dayOfWeek := int(activity.StartTime.Weekday())

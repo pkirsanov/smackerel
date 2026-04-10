@@ -20,7 +20,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 	r.Use(structuredLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
-	r.Use(cspMiddleware)
+	r.Use(securityHeadersMiddleware)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.Throttle(100))
@@ -111,10 +111,15 @@ func structuredLogger(next http.Handler) http.Handler {
 	})
 }
 
-// cspMiddleware sets Content-Security-Policy header on all responses.
-func cspMiddleware(next http.Handler) http.Handler {
+// securityHeadersMiddleware sets security headers on all responses.
+// Covers OWASP recommended headers: CSP, clickjacking, MIME sniffing, referrer leakage.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://unpkg.com; img-src 'self' data:; connect-src 'self'")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		next.ServeHTTP(w, r)
 	})
 }

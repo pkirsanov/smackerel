@@ -3,6 +3,7 @@ package intelligence
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
 
@@ -87,15 +88,17 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 		return nil, fmt.Errorf("synthesis requires a database connection")
 	}
 
-	// Find clusters: artifacts sharing topics that also have high embedding similarity
+	// Find clusters: artifacts sharing topics from different sources (cross-domain).
+	// R-301 requires clusters span multiple source_ids (email + article + video = different domains).
 	rows, err := e.Pool.Query(ctx, `
 		WITH topic_groups AS (
 			SELECT t.id as topic_id, t.name, array_agg(e.src_id) as artifact_ids
 			FROM edges e
 			JOIN topics t ON t.id = e.dst_id AND e.dst_type = 'topic'
+			JOIN artifacts a ON a.id = e.src_id
 			WHERE e.edge_type = 'BELONGS_TO' AND e.src_type = 'artifact'
 			GROUP BY t.id, t.name
-			HAVING COUNT(*) >= 3
+			HAVING COUNT(*) >= 3 AND COUNT(DISTINCT a.source_id) >= 2
 		)
 		SELECT topic_id, name, artifact_ids FROM topic_groups
 		ORDER BY array_length(artifact_ids, 1) DESC
@@ -111,6 +114,7 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 		var topicID, topicName string
 		var artifactIDs []string
 		if err := rows.Scan(&topicID, &topicName, &artifactIDs); err != nil {
+			slog.Warn("synthesis scan failed", "error", err)
 			continue
 		}
 
@@ -138,6 +142,13 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 
 // CreateAlert creates a new contextual alert.
 func (e *Engine) CreateAlert(ctx context.Context, alert *Alert) error {
+	if alert.Title == "" {
+		return fmt.Errorf("alert title is required")
+	}
+	if e.Pool == nil {
+		return fmt.Errorf("alert creation requires a database connection")
+	}
+
 	alert.ID = ulid.Make().String()
 	alert.Status = AlertPending
 	alert.CreatedAt = time.Now()
@@ -168,30 +179,20 @@ func (e *Engine) SnoozeAlert(ctx context.Context, alertID string, until time.Tim
 
 // GetPendingAlerts returns alerts ready for delivery (max 2/day).
 func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
-	// Check delivery count today
-	var deliveredToday int
-	if err := e.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM alerts
-		WHERE status = 'delivered' AND delivered_at >= CURRENT_DATE
-	`).Scan(&deliveredToday); err != nil {
-		return nil, fmt.Errorf("query delivered today: %w", err)
-	}
-
-	if deliveredToday >= 2 {
-		return nil, nil // Max 2 alerts per day
-	}
-
-	remaining := 2 - deliveredToday
+	// Single query: compute remaining delivery slots and fetch pending alerts in one round-trip
 	rows, err := e.Pool.Query(ctx, `
 		SELECT id, alert_type, title, body, priority, status, artifact_id, created_at
 		FROM alerts
 		WHERE status = 'pending'
 		   OR (status = 'snoozed' AND snooze_until <= NOW())
 		ORDER BY priority, created_at
-		LIMIT $1
-	`, remaining)
+		LIMIT GREATEST(0, 2 - (
+			SELECT COUNT(*) FROM alerts
+			WHERE status = 'delivered' AND delivered_at >= CURRENT_DATE
+		))
+	`)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query pending alerts: %w", err)
 	}
 	defer rows.Close()
 
@@ -200,6 +201,7 @@ func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
 		var a Alert
 		if err := rows.Scan(&a.ID, &a.AlertType, &a.Title, &a.Body,
 			&a.Priority, &a.Status, &a.ArtifactID, &a.CreatedAt); err != nil {
+			slog.Warn("alert scan failed", "error", err)
 			continue
 		}
 		alerts = append(alerts, a)
@@ -231,17 +233,20 @@ func (e *Engine) CheckOverdueCommitments(ctx context.Context) error {
 		var id, text, person string
 		var expectedDate time.Time
 		if err := rows.Scan(&id, &text, &expectedDate, &person); err != nil {
+			slog.Warn("overdue commitment scan failed", "error", err)
 			continue
 		}
 
 		daysOverdue := int(time.Since(expectedDate).Hours() / 24)
-		e.CreateAlert(ctx, &Alert{
+		if err := e.CreateAlert(ctx, &Alert{
 			AlertType:  AlertCommitmentOverdue,
 			Title:      fmt.Sprintf("Overdue: %s", text),
 			Body:       fmt.Sprintf("%s — %d days overdue (from %s)", text, daysOverdue, person),
 			Priority:   1,
 			ArtifactID: id,
-		})
+		}); err != nil {
+			slog.Warn("failed to create overdue alert", "action_item_id", id, "error", err)
+		}
 	}
 
 	if err := rows.Err(); err != nil {

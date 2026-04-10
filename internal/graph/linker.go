@@ -129,10 +129,7 @@ func (l *Linker) linkBySimilarity(ctx context.Context, artifactID string) (int, 
 		}
 
 		// Normalize direction to prevent bidirectional duplicates
-		srcID, dstID := artifactID, relatedID
-		if srcID > dstID {
-			srcID, dstID = dstID, srcID
-		}
+		srcID, dstID := normalizeEdgeDir(artifactID, relatedID)
 
 		if err := l.createEdge(ctx, "artifact", srcID, "artifact", dstID, "RELATED_TO", float32(similarity)); err != nil {
 			slog.Debug("edge creation failed", "src", srcID, "dst", dstID, "error", err)
@@ -309,10 +306,7 @@ func (l *Linker) linkByTemporal(ctx context.Context, artifactID string) (int, er
 		}
 
 		// Normalize direction to prevent bidirectional duplicates
-		srcID, dstID := artifactID, relatedID
-		if srcID > dstID {
-			srcID, dstID = dstID, srcID
-		}
+		srcID, dstID := normalizeEdgeDir(artifactID, relatedID)
 
 		metadata := fmt.Sprintf(`{"proximity": "same_day", "date": "%s"}`, createdDate.Format("2006-01-02"))
 		if err := l.createEdgeWithMetadata(ctx, "artifact", srcID, "artifact", dstID, "RELATED_TO", 0.5, metadata); err != nil {
@@ -354,10 +348,7 @@ func (l *Linker) linkBySource(ctx context.Context, artifactID string) (int, erro
 		}
 
 		// Normalize direction to prevent bidirectional duplicates
-		srcID, dstID := artifactID, relatedID
-		if srcID > dstID {
-			srcID, dstID = dstID, srcID
-		}
+		srcID, dstID := normalizeEdgeDir(artifactID, relatedID)
 
 		if err := l.createEdge(ctx, "artifact", srcID, "artifact", dstID, "SAME_SOURCE", 0.7); err != nil {
 			continue
@@ -370,6 +361,14 @@ func (l *Linker) linkBySource(ctx context.Context, artifactID string) (int, erro
 	}
 
 	return count, nil
+}
+
+// normalizeEdgeDir orders two IDs lexicographically to prevent bidirectional duplicates.
+func normalizeEdgeDir(a, b string) (string, string) {
+	if a > b {
+		return b, a
+	}
+	return a, b
 }
 
 // createEdge creates a graph edge, ignoring duplicates.
@@ -448,17 +447,6 @@ func (l *Linker) findOrCreateTopics(ctx context.Context, names []string) (map[st
 		return result, fmt.Errorf("batch upsert topics rows: %w", err)
 	}
 	return result, nil
-}
-
-// ConnectionCount returns the number of edges connected to an artifact.
-func (l *Linker) ConnectionCount(ctx context.Context, artifactID string) (int, error) {
-	var count int
-	err := l.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM edges
-		WHERE (src_type = 'artifact' AND src_id = $1)
-		   OR (dst_type = 'artifact' AND dst_id = $1)
-	`, artifactID).Scan(&count)
-	return count, err
 }
 
 // ConnectionCount returns the number of graph edges connected to an artifact.

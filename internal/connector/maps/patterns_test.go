@@ -318,7 +318,7 @@ func TestTierDowngradeCommute(t *testing.T) {
 		"distance_km":     15.0,
 	}
 
-	updated := updateTierForCommute(metadata)
+	updated := withProcessingTier(metadata, "light")
 
 	if updated["processing_tier"] != "light" {
 		t.Errorf("processing_tier = %v, want %q", updated["processing_tier"], "light")
@@ -340,7 +340,7 @@ func TestTierUpgradeTrip(t *testing.T) {
 		"distance_km":     3.0,
 	}
 
-	updated := updateTierForTrip(metadata)
+	updated := withProcessingTier(metadata, "full")
 
 	if updated["processing_tier"] != "full" {
 		t.Errorf("processing_tier = %v, want %q", updated["processing_tier"], "full")

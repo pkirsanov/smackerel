@@ -29,14 +29,22 @@ type MediaGroupBuffer struct {
 	timer        *time.Timer
 }
 
+// maxMediaGroupBuffers is the hard ceiling on concurrent media group buffers.
+const maxMediaGroupBuffers = 200
+
+// mediaFlushTimeout is the deadline for individual media group flush operations.
+const mediaFlushTimeout = 30 * time.Second
+
 // MediaGroupAssembler manages media group buffers.
 type MediaGroupAssembler struct {
 	mu         sync.Mutex
 	buffers    map[string]*MediaGroupBuffer
 	windowSecs int
 	maxItems   int
+	maxBuffers int
 	flushFn    func(ctx context.Context, buf *MediaGroupBuffer) error
 	ctx        context.Context
+	wg         sync.WaitGroup
 }
 
 // NewMediaGroupAssembler creates a media group assembler.
@@ -52,6 +60,7 @@ func NewMediaGroupAssembler(
 		buffers:    make(map[string]*MediaGroupBuffer),
 		windowSecs: windowSecs,
 		maxItems:   20,
+		maxBuffers: maxMediaGroupBuffers,
 		flushFn:    flushFn,
 		ctx:        ctx,
 	}
@@ -78,8 +87,12 @@ func (m *MediaGroupAssembler) Add(mediaGroupID string, msg *tgbotapi.Message) {
 				"item_count", len(buf.Items),
 			)
 			if m.flushFn != nil {
+				m.wg.Add(1)
 				go func() {
-					if err := m.flushFn(m.ctx, buf); err != nil {
+					defer m.wg.Done()
+					flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
+					defer cancel()
+					if err := m.flushFn(flushCtx, buf); err != nil {
 						slog.Error("media group cap flush failed",
 							"media_group_id", mediaGroupID,
 							"error", err,
@@ -96,6 +109,35 @@ func (m *MediaGroupAssembler) Add(mediaGroupID string, msg *tgbotapi.Message) {
 			m.timerExpired(mediaGroupID)
 		})
 	} else {
+		// Evict oldest buffer if at capacity
+		if len(m.buffers) >= m.maxBuffers {
+			var oldestID string
+			for id := range m.buffers {
+				oldestID = id
+				break
+			}
+			slog.Warn("media group buffer count at capacity, evicting",
+				"evicted_group", oldestID,
+				"buffer_count", len(m.buffers),
+			)
+			obuf := m.buffers[oldestID]
+			if obuf.timer != nil {
+				obuf.timer.Stop()
+			}
+			delete(m.buffers, oldestID)
+			if m.flushFn != nil {
+				m.wg.Add(1)
+				go func() {
+					defer m.wg.Done()
+					flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
+					defer cancel()
+					if err := m.flushFn(flushCtx, obuf); err != nil {
+						slog.Error("media group eviction flush failed", "error", err)
+					}
+				}()
+			}
+		}
+
 		buf = &MediaGroupBuffer{
 			MediaGroupID: mediaGroupID,
 			ChatID:       msg.Chat.ID,
@@ -136,8 +178,12 @@ func (m *MediaGroupAssembler) timerExpired(mediaGroupID string) {
 	)
 
 	if m.flushFn != nil {
+		m.wg.Add(1)
 		go func() {
-			if err := m.flushFn(m.ctx, buf); err != nil {
+			defer m.wg.Done()
+			flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
+			defer cancel()
+			if err := m.flushFn(flushCtx, buf); err != nil {
 				slog.Error("media group flush failed",
 					"media_group_id", mediaGroupID,
 					"error", err,
@@ -147,11 +193,9 @@ func (m *MediaGroupAssembler) timerExpired(mediaGroupID string) {
 	}
 }
 
-// FlushAll flushes all pending media groups (for shutdown).
+// FlushAll flushes all pending media groups and waits for completion (for shutdown).
 func (m *MediaGroupAssembler) FlushAll() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	for id, buf := range m.buffers {
 		if buf.timer != nil {
 			buf.timer.Stop()
@@ -159,13 +203,20 @@ func (m *MediaGroupAssembler) FlushAll() {
 		delete(m.buffers, id)
 
 		if m.flushFn != nil {
+			m.wg.Add(1)
 			go func(b *MediaGroupBuffer) {
-				if err := m.flushFn(m.ctx, b); err != nil {
+				defer m.wg.Done()
+				flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
+				defer cancel()
+				if err := m.flushFn(flushCtx, b); err != nil {
 					slog.Error("media group shutdown flush failed", "error", err)
 				}
 			}(buf)
 		}
 	}
+	m.mu.Unlock()
+
+	m.wg.Wait()
 }
 
 // BufferCount returns the number of active buffers (for testing).

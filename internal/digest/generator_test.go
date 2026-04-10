@@ -1,37 +1,10 @@
 package digest
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
-
-func TestJoinStrings(t *testing.T) {
-	result := joinStrings([]string{"a", "b", "c"}, ", ")
-	if result != "a, b, c" {
-		t.Errorf("expected 'a, b, c', got %q", result)
-	}
-}
-
-func TestJoinStrings_Empty(t *testing.T) {
-	result := joinStrings(nil, ", ")
-	if result != "" {
-		t.Errorf("expected empty string, got %q", result)
-	}
-}
-
-func TestSplitWords(t *testing.T) {
-	words := splitWords("hello world  test")
-	if len(words) != 3 {
-		t.Errorf("expected 3 words, got %d", len(words))
-	}
-}
-
-func TestSplitWords_Empty(t *testing.T) {
-	words := splitWords("")
-	if len(words) != 0 {
-		t.Errorf("expected 0 words, got %d", len(words))
-	}
-}
 
 func TestDigestContext_QuietDay(t *testing.T) {
 	ctx := &DigestContext{
@@ -74,29 +47,8 @@ func TestDigestContext_WithItems(t *testing.T) {
 	}
 }
 
-func TestJoinStrings_SingleItem(t *testing.T) {
-	result := joinStrings([]string{"only"}, ", ")
-	if result != "only" {
-		t.Errorf("expected 'only', got %q", result)
-	}
-}
-
-func TestJoinStrings_Newlines(t *testing.T) {
-	result := joinStrings([]string{"line1", "line2"}, "\n")
-	if result != "line1\nline2" {
-		t.Errorf("expected lines joined by newline, got %q", result)
-	}
-}
-
-func TestSplitWords_TabsAndNewlines(t *testing.T) {
-	words := splitWords("hello\tworld\ntest")
-	if len(words) != 3 {
-		t.Errorf("expected 3 words, got %d: %v", len(words), words)
-	}
-}
-
 func TestSplitWords_LeadingTrailingSpaces(t *testing.T) {
-	words := splitWords("  hello  ")
+	words := strings.Fields("  hello  ")
 	if len(words) != 1 {
 		t.Errorf("expected 1 word, got %d: %v", len(words), words)
 	}
@@ -223,7 +175,7 @@ func TestSCN002031_QuietDayDigest(t *testing.T) {
 
 // SCN-002-043: Digest LLM failure fallback — generates plain-text from metadata
 func TestSCN002043_DigestLLMFailureFallback(t *testing.T) {
-	// Simulate fallback digest generation using joinStrings/splitWords (the same
+	// Simulate fallback digest generation using strings.Join/strings.Fields (the same
 	// logic used by storeFallbackDigest)
 	ctx := &DigestContext{
 		DigestDate: "2026-04-06",
@@ -253,14 +205,14 @@ func TestSCN002043_DigestLLMFailureFallback(t *testing.T) {
 		for _, t := range ctx.HotTopics {
 			topicNames = append(topicNames, t.Name)
 		}
-		lines = append(lines, "> Hot topics: "+joinStrings(topicNames, ", "))
+		lines = append(lines, "> Hot topics: "+strings.Join(topicNames, ", "))
 	}
 
-	text := joinStrings(lines, "\n")
+	text := strings.Join(lines, "\n")
 	if text == "" {
 		t.Fatal("fallback digest should not be empty")
 	}
-	words := splitWords(text)
+	words := strings.Fields(text)
 	if len(words) == 0 {
 		t.Error("fallback digest should have words")
 	}

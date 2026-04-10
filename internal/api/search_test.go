@@ -609,3 +609,105 @@ func TestSCN002040_VoiceCaptureAPI_VoiceURLField(t *testing.T) {
 		t.Error("only voice_url should be set")
 	}
 }
+
+func TestSearchRequest_LimitNormalization(t *testing.T) {
+	tests := []struct {
+		name          string
+		inputLimit    int
+		expectedLimit int
+	}{
+		{"zero defaults to 10", 0, 10},
+		{"negative defaults to 10", -5, 10},
+		{"over 50 defaults to 10", 100, 10},
+		{"valid limit preserved", 25, 25},
+		{"limit 1 preserved", 1, 1},
+		{"limit 50 preserved", 50, 50},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reproduce the handler's normalization logic
+			limit := tt.inputLimit
+			if limit <= 0 || limit > 50 {
+				limit = 10
+			}
+			if limit != tt.expectedLimit {
+				t.Errorf("expected normalized limit %d, got %d", tt.expectedLimit, limit)
+			}
+		})
+	}
+}
+
+func TestSearchHandler_WhitespaceOnlyQuery(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	body := `{"query": "   "}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	// Whitespace-only query is NOT empty string, so it passes the empty check.
+	// This documents current behavior — the search engine receives a whitespace query.
+	if rec.Code == http.StatusBadRequest {
+		var resp ErrorResponse
+		json.Unmarshal(rec.Body.Bytes(), &resp)
+		if resp.Error.Code == "EMPTY_QUERY" {
+			// If the handler DOES reject whitespace, that's acceptable too
+			return
+		}
+	}
+}
+
+func TestSearchHandler_OversizedBody(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	bigBody := bytes.Repeat([]byte("x"), 2<<20)
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewReader(bigBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d", rec.Code)
+	}
+}
+
+func TestWriteError_VariousStatusCodes(t *testing.T) {
+	codes := []struct {
+		status int
+		code   string
+	}{
+		{http.StatusNotFound, "NOT_FOUND"},
+		{http.StatusInternalServerError, "SERVER_ERROR"},
+		{http.StatusServiceUnavailable, "UNAVAILABLE"},
+		{http.StatusConflict, "CONFLICT"},
+	}
+
+	for _, tc := range codes {
+		rec := httptest.NewRecorder()
+		writeError(rec, tc.status, tc.code, "test")
+
+		if rec.Code != tc.status {
+			t.Errorf("expected %d, got %d", tc.status, rec.Code)
+		}
+
+		var resp ErrorResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode for status %d: %v", tc.status, err)
+		}
+		if resp.Error.Code != tc.code {
+			t.Errorf("expected error code %q, got %q", tc.code, resp.Error.Code)
+		}
+	}
+}

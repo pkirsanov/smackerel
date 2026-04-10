@@ -1,0 +1,39 @@
+# Build context exclusions for smackerel Docker builds
+# Keeps build context small and prevents secrets/metadata from leaking into images
+
+# Version control
+.git
+.gitignore
+
+# Specs and governance artifacts
+specs/
+.specify/
+.github/
+
+# Documentation
+docs/
+README.md
+LICENSE
+
+# Generated config (may contain resolved secrets)
+config/generated/
+
+# Runtime data directories
+data/
+
+# Test suites (not needed in production images)
+tests/
+
+# ML sidecar (has its own Dockerfile and build context)
+# Excluded from the Go core build context
+ml/
+
+# Editor and IDE files
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS artifacts
+.DS_Store
+Thumbs.db

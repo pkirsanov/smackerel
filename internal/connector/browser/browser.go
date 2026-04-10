@@ -199,15 +199,15 @@ func chromeTimeToGo(chromeTime int64) time.Time {
 }
 
 func extractDomain(url string) string {
-	// Simple domain extraction
-	if len(url) < 8 {
-		return url
-	}
+	// Simple domain extraction with safe bounds checks
 	start := 0
-	if url[:8] == "https://" {
+	if len(url) >= 8 && url[:8] == "https://" {
 		start = 8
-	} else if url[:7] == "http://" {
+	} else if len(url) >= 7 && url[:7] == "http://" {
 		start = 7
+	}
+	if start >= len(url) {
+		return ""
 	}
 	end := start
 	for end < len(url) && url[end] != '/' && url[end] != ':' {
