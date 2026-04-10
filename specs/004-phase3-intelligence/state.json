@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/004-phase3-intelligence",
   "featureName": "Phase 3: Intelligence",
-  "status": "done",
+  "status": "validated",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "finalize",
+    "currentPhase": "validate",
     "currentScope": null,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [
@@ -21,7 +21,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "validated",
     "completedScopes": [
       "1",
       "2",
@@ -62,7 +62,9 @@
         "scope": 3,
         "name": "Pre-Meeting Briefs",
         "status": "Done",
-        "dependsOn": [2],
+        "dependsOn": [
+          2
+        ],
         "scopeDir": null,
         "evidenceFile": null,
         "certifiedAt": null
@@ -71,7 +73,9 @@
         "scope": 4,
         "name": "Contextual Alerts",
         "status": "Done",
-        "dependsOn": [2],
+        "dependsOn": [
+          2
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-10T00:00:00Z"
@@ -80,7 +84,10 @@
         "scope": 5,
         "name": "Weekly Synthesis",
         "status": "Done",
-        "dependsOn": [1, 2],
+        "dependsOn": [
+          1,
+          2
+        ],
         "scopeDir": null,
         "evidenceFile": null,
         "certifiedAt": null
@@ -89,7 +96,10 @@
         "scope": 6,
         "name": "Enhanced Daily Digest",
         "status": "Done",
-        "dependsOn": [1, 2],
+        "dependsOn": [
+          1,
+          2
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-07T14:35:00Z"
