@@ -174,6 +174,42 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}); err != nil {
 			slog.Warn("failed to schedule resurfacing", "error", err)
 		}
+
+		// Schedule pre-meeting briefs — every 5 minutes (R-306)
+		if _, err := s.cron.AddFunc("*/5 * * * *", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+			defer cancel()
+
+			briefs, err := s.engine.GeneratePreMeetingBriefs(ctx)
+			if err != nil {
+				slog.Error("pre-meeting brief generation failed", "error", err)
+			} else if len(briefs) > 0 {
+				for _, b := range briefs {
+					if s.bot != nil {
+						s.bot.SendDigest(b.BriefText)
+					}
+				}
+				slog.Info("pre-meeting briefs delivered", "count", len(briefs))
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule pre-meeting briefs", "error", err)
+		}
+
+		// Schedule weekly synthesis — Sunday at 4 PM (R-307)
+		if _, err := s.cron.AddFunc("0 16 * * 0", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			ws, err := s.engine.GenerateWeeklySynthesis(ctx)
+			if err != nil {
+				slog.Error("weekly synthesis failed", "error", err)
+			} else if s.bot != nil && ws.SynthesisText != "" {
+				s.bot.SendDigest(ws.SynthesisText)
+				slog.Info("weekly synthesis delivered", "words", ws.WordCount)
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule weekly synthesis", "error", err)
+		}
 	}
 
 	s.cron.Start()

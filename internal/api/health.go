@@ -6,23 +6,26 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/intelligence"
 )
 
 // Dependencies holds shared service dependencies for API handlers.
 type Dependencies struct {
-	DB           DBHealthChecker
-	NATS         NATSHealthChecker
-	StartTime    time.Time
-	MLSidecarURL string
-	MLClient     *http.Client
-	Pipeline     interface{}
-	SearchEngine interface{}
-	DigestGen    interface{}
-	WebHandler   interface{}
-	OAuthHandler interface{}
-	AuthToken    string
-	Version      string
-	CommitHash   string
+	DB                  DBHealthChecker
+	NATS                NATSHealthChecker
+	IntelligenceEngine  *intelligence.Engine
+	StartTime           time.Time
+	MLSidecarURL        string
+	MLClient            *http.Client
+	Pipeline            interface{}
+	SearchEngine        interface{}
+	DigestGen           interface{}
+	WebHandler          interface{}
+	OAuthHandler        interface{}
+	AuthToken           string
+	Version             string
+	CommitHash          string
 }
 
 // DBHealthChecker is the interface for database health checks.
