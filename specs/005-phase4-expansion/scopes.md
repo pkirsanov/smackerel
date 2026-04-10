@@ -169,7 +169,7 @@ Scenario: SCN-005-005c Per-source data deletion
 
 ## Scope 03: Trip Dossier
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P1
 **Depends On:** Phase 2 connectors (IMAP, CalDAV)
 
@@ -255,7 +255,7 @@ Scenario: SCN-005-008d Trip detection with incomplete signals
 
 ## Scope 04: People Intelligence
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P1
 **Depends On:** Phase 2 connectors (IMAP, CalDAV)
 
