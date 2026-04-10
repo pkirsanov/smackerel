@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"context"
 	"fmt"
 	"sync"
 )
@@ -76,4 +77,15 @@ func (r *Registry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.connectors)
+}
+
+// ListConnectorHealth returns a map of connector ID → health status string.
+func (r *Registry) ListConnectorHealth(ctx context.Context) map[string]string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make(map[string]string, len(r.connectors))
+	for id, c := range r.connectors {
+		result[id] = string(c.Health(ctx))
+	}
+	return result
 }
