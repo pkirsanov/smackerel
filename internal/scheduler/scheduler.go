@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -24,6 +25,14 @@ type Scheduler struct {
 	mu                 sync.Mutex // protects digestPendingRetry and digestPendingDate
 	digestPendingRetry bool       // true when last digest was generated but delivery failed
 	digestPendingDate  string     // date of the pending digest for retry
+
+	// Per-group concurrency guards — prevents cron job overlap within each group
+	muDigest   sync.Mutex
+	muHourly   sync.Mutex
+	muDaily    sync.Mutex
+	muWeekly   sync.Mutex
+	muMonthly  sync.Mutex
+	muFrequent sync.Mutex
 }
 
 // New creates a new scheduler.
@@ -40,6 +49,12 @@ func New(digestGen *digest.Generator, bot *telegram.Bot, engine *intelligence.En
 // Start begins running scheduled tasks.
 func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	_, err := s.cron.AddFunc(cronExpr, func() {
+		if !s.muDigest.TryLock() {
+			slog.Warn("skipping overlapping job", "group", "digest", "job", "digest")
+			return
+		}
+		defer s.muDigest.Unlock()
+
 		slog.Info("digest cron triggered")
 		if s.digestGen == nil {
 			slog.Warn("digest generator not configured")
@@ -122,6 +137,12 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	// Schedule topic momentum updates — hourly
 	if s.lifecycle != nil {
 		if _, err := s.cron.AddFunc("0 * * * *", func() {
+			if !s.muHourly.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "hourly", "job", "topic-momentum")
+				return
+			}
+			defer s.muHourly.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 			if err := s.lifecycle.UpdateAllMomentum(ctx); err != nil {
@@ -137,6 +158,12 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	// Schedule intelligence synthesis — daily at 2 AM
 	if s.engine != nil {
 		if _, err := s.cron.AddFunc("0 2 * * *", func() {
+			if !s.muDaily.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "daily", "job", "synthesis")
+				return
+			}
+			defer s.muDaily.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
@@ -156,6 +183,12 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Schedule resurfacing — daily at 8 AM (after digest)
 		if _, err := s.cron.AddFunc("0 8 * * *", func() {
+			if !s.muDaily.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "daily", "job", "resurfacing")
+				return
+			}
+			defer s.muDaily.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 
@@ -177,6 +210,12 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Schedule pre-meeting briefs — every 5 minutes (R-306)
 		if _, err := s.cron.AddFunc("*/5 * * * *", func() {
+			if !s.muFrequent.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "frequent", "job", "pre-meeting-briefs")
+				return
+			}
+			defer s.muFrequent.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancel()
 
@@ -197,6 +236,12 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Schedule weekly synthesis — Sunday at 4 PM (R-307)
 		if _, err := s.cron.AddFunc("0 16 * * 0", func() {
+			if !s.muWeekly.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "weekly", "job", "weekly-synthesis")
+				return
+			}
+			defer s.muWeekly.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
@@ -213,6 +258,12 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Schedule monthly self-knowledge report — 1st of each month at 3 AM (R-506)
 		if _, err := s.cron.AddFunc("0 3 1 * *", func() {
+			if !s.muMonthly.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "monthly", "job", "monthly-report")
+				return
+			}
+			defer s.muMonthly.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
@@ -233,6 +284,12 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Schedule subscription detection — weekly on Mondays at 3 AM (R-504)
 		if _, err := s.cron.AddFunc("0 3 * * 1", func() {
+			if !s.muWeekly.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "weekly", "job", "subscription-detection")
+				return
+			}
+			defer s.muWeekly.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 
@@ -248,6 +305,12 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 		// Schedule frequent lookup detection — daily at 4 AM (R-507)
 		if _, err := s.cron.AddFunc("0 4 * * *", func() {
+			if !s.muDaily.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "daily", "job", "frequent-lookups")
+				return
+			}
+			defer s.muDaily.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 
@@ -259,6 +322,130 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 		}); err != nil {
 			slog.Warn("failed to schedule frequent lookup detection", "error", err)
+		}
+
+		// Schedule alert delivery sweep — every 15 minutes (R-021-001)
+		if _, err := s.cron.AddFunc("*/15 * * * *", func() {
+			if !s.muFrequent.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "frequent", "job", "alert-delivery")
+				return
+			}
+			defer s.muFrequent.Unlock()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+			defer cancel()
+
+			alerts, err := s.engine.GetPendingAlerts(ctx)
+			if err != nil {
+				slog.Error("alert delivery sweep failed", "error", err)
+				return
+			}
+
+			if len(alerts) == 0 {
+				return
+			}
+
+			typeIcons := map[string]string{
+				"bill":                 "💰",
+				"return_window":        "📦",
+				"trip_prep":            "✈️",
+				"relationship_cooling": "👋",
+				"commitment_overdue":   "⏰",
+				"meeting_brief":        "📋",
+			}
+
+			for _, a := range alerts {
+				icon := typeIcons[string(a.AlertType)]
+				if icon == "" {
+					icon = "🔔"
+				}
+				msg := fmt.Sprintf("%s %s\n%s", icon, a.Title, a.Body)
+
+				if s.bot != nil {
+					s.bot.SendDigest(msg)
+				}
+
+				if err := s.engine.MarkAlertDelivered(ctx, a.ID); err != nil {
+					slog.Warn("failed to mark alert delivered", "alert_id", a.ID, "error", err)
+					continue
+				}
+
+				slog.Info("alert delivered", "alert_id", a.ID, "type", a.AlertType, "title", a.Title)
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule alert delivery sweep", "error", err)
+		}
+
+		// Schedule bill alert production — daily at 6 AM (R-021-002)
+		if _, err := s.cron.AddFunc("0 6 * * *", func() {
+			if !s.muDaily.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "daily", "job", "bill-alerts")
+				return
+			}
+			defer s.muDaily.Unlock()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
+			if err := s.engine.ProduceBillAlerts(ctx); err != nil {
+				slog.Error("bill alert production failed", "error", err)
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule bill alert production", "error", err)
+		}
+
+		// Schedule trip prep alert production — daily at 6 AM (R-021-003)
+		if _, err := s.cron.AddFunc("0 6 * * *", func() {
+			if !s.muDaily.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "daily", "job", "trip-prep-alerts")
+				return
+			}
+			defer s.muDaily.Unlock()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
+			if err := s.engine.ProduceTripPrepAlerts(ctx); err != nil {
+				slog.Error("trip prep alert production failed", "error", err)
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule trip prep alert production", "error", err)
+		}
+
+		// Schedule return window alert production — daily at 6 AM (R-021-004)
+		if _, err := s.cron.AddFunc("0 6 * * *", func() {
+			if !s.muDaily.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "daily", "job", "return-window-alerts")
+				return
+			}
+			defer s.muDaily.Unlock()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
+			if err := s.engine.ProduceReturnWindowAlerts(ctx); err != nil {
+				slog.Error("return window alert production failed", "error", err)
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule return window alert production", "error", err)
+		}
+
+		// Schedule relationship cooling alert production — weekly Monday 7 AM (R-021-005)
+		if _, err := s.cron.AddFunc("0 7 * * 1", func() {
+			if !s.muWeekly.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "weekly", "job", "relationship-cooling-alerts")
+				return
+			}
+			defer s.muWeekly.Unlock()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
+			if err := s.engine.ProduceRelationshipCoolingAlerts(ctx); err != nil {
+				slog.Error("relationship cooling alert production failed", "error", err)
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule relationship cooling alert production", "error", err)
 		}
 	}
 

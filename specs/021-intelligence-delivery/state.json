@@ -1,0 +1,143 @@
+{
+  "version": 3,
+  "featureDir": "specs/021-intelligence-delivery",
+  "featureName": "Intelligence Delivery",
+  "status": "in_progress",
+  "workflowMode": "delivery-lockdown",
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "implement",
+    "currentScope": null,
+    "runStartedAt": "2026-04-10T12:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [1, 2, 3],
+    "certifiedCompletedPhases": ["analyze", "design", "plan", "implement"],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Alert Delivery Pipeline",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": "scopes/01-alert-delivery-pipeline",
+        "evidenceFile": "scopes/01-alert-delivery-pipeline/report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 2,
+        "name": "Alert Producer Wiring",
+        "status": "Done",
+        "dependsOn": [1],
+        "scopeDir": "scopes/02-alert-producer-wiring",
+        "evidenceFile": "scopes/02-alert-producer-wiring/report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "name": "Search Intelligence Loop",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": "scopes/03-search-intelligence-loop",
+        "evidenceFile": "scopes/03-search-intelligence-loop/report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 4,
+        "name": "Intelligence Health Freshness",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": "scopes/04-intelligence-health-freshness",
+        "evidenceFile": "scopes/04-intelligence-health-freshness/report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-10T12:00:00Z",
+      "runEndedAt": "2026-04-10T12:00:00Z",
+      "summary": "Greenfield spec created from codebase audit findings. Confirmed 5 genuine intelligence delivery gaps: (1) no alert delivery sweep job despite GetPendingAlerts() existing, (2) 4/6 alert types have no automated producer, (3) LogSearch() never called in search handler, (4) daily synthesis results not surfaced to user, (5) intelligence freshness not tracked in health endpoint. 15 Gherkin scenarios, 7 requirements, 4 improvement proposals. Weekly synthesis, pre-meeting briefs, and monthly report delivery are already wired in scheduler."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-10T13:00:00Z",
+      "runEndedAt": "2026-04-10T13:00:00Z",
+      "summary": "Design created for intelligence delivery wiring. 6 new Engine methods (MarkAlertDelivered, ProduceBillAlerts, ProduceTripPrepAlerts, ProduceReturnWindowAlerts, ProduceRelationshipCoolingAlerts, GetLastSynthesisTime), 5 new cron jobs in scheduler, 1-line LogSearch call in search handler, freshness check in health handler. No schema changes, no new packages, no new dependencies. All work uses existing tables and delivery infrastructure."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["bootstrap", "planning"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-10T14:00:00Z",
+      "runEndedAt": "2026-04-10T14:00:00Z",
+      "summary": "Created scopes.md with 3 scopes: (1) Alert delivery sweep + alert producers (5 new engine methods, 5 cron jobs), (2) Search logging (LogSearch call in search handler), (3) Intelligence health freshness (GetLastSynthesisTime + stale detection). Created report.md and uservalidation.md templates."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-10T12:00:00Z",
+  "scopeLayout": "per-scope-directory",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes/_index.md",
+    "report": "scopes/NN-name/report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Intelligence delivery wiring feature. Core intelligence engine methods all exist — this feature is about scheduling, producing, and delivering intelligence to the user via existing Telegram infrastructure."
+}

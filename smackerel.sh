@@ -16,6 +16,7 @@ Usage: ./smackerel.sh [--env dev|test] <command> [options]
 Commands:
   config generate             Generate config/generated/<env>.env from config/smackerel.yaml
   build [--no-cache]          Build docker images for the current environment
+  backup                      Create a compressed pg_dump backup in backups/
   check                       Validate generated config and docker-compose wiring
   lint                        Run Go vet and Python ruff inside containers
   format [--check]            Format Go and Python files, or check formatting
@@ -118,6 +119,11 @@ case "$COMMAND" in
       build_args+=(--no-cache)
     fi
     smackerel_compose "$TARGET_ENV" "${build_args[@]}"
+    ;;
+  backup)
+    require_docker
+    smackerel_generate_config "$TARGET_ENV" >/dev/null
+    bash "$SCRIPT_DIR/scripts/commands/backup.sh" --env "$TARGET_ENV"
     ;;
   check)
     require_docker

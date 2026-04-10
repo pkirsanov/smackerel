@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
 )
 
 // NewRouter creates the Chi router with all routes and middleware.
@@ -59,43 +60,26 @@ func NewRouter(deps *Dependencies) http.Handler {
 
 	// OAuth routes — no Bearer auth (browser redirect flow)
 	if deps.OAuthHandler != nil {
-		type oauthRouter interface {
-			StartHandler(w http.ResponseWriter, r *http.Request)
-			CallbackHandler(w http.ResponseWriter, r *http.Request)
-		}
-		oh := deps.OAuthHandler.(oauthRouter)
-		r.Get("/auth/{provider}/start", oh.StartHandler)
-		r.Get("/auth/{provider}/callback", oh.CallbackHandler)
+		r.Group(func(r chi.Router) {
+			r.Use(httprate.LimitByIP(10, 1*time.Minute))
+			r.Get("/auth/{provider}/start", deps.OAuthHandler.StartHandler)
+		})
+		r.Get("/auth/{provider}/callback", deps.OAuthHandler.CallbackHandler)
 	}
 
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes
 	if deps.WebHandler != nil {
-		type webRouter interface {
-			SearchPage(w http.ResponseWriter, r *http.Request)
-			SearchResults(w http.ResponseWriter, r *http.Request)
-			ArtifactDetail(w http.ResponseWriter, r *http.Request)
-			DigestPage(w http.ResponseWriter, r *http.Request)
-			TopicsPage(w http.ResponseWriter, r *http.Request)
-			SettingsPage(w http.ResponseWriter, r *http.Request)
-			StatusPage(w http.ResponseWriter, r *http.Request)
-		}
-
-		wh := deps.WebHandler.(webRouter)
-
-		// Web UI group — no auth required (local-first self-hosted).
-		// Security note: webAuthMiddleware exists but is intentionally NOT applied
-		// here. Smackerel is designed as a local-first, self-hosted tool — the Web
-		// UI is served on localhost and does not require token authentication.
-		// API routes are the programmatic boundary and carry their own auth when
-		// AuthToken is configured.
+		// Web UI group — auth required when AuthToken is configured.
+		// When AuthToken is empty, webAuthMiddleware passes all requests (dev mode).
 		r.Group(func(r chi.Router) {
-			r.Get("/", wh.SearchPage)
-			r.Post("/search", wh.SearchResults)
-			r.Get("/artifact/{id}", wh.ArtifactDetail)
-			r.Get("/digest", wh.DigestPage)
-			r.Get("/topics", wh.TopicsPage)
-			r.Get("/settings", wh.SettingsPage)
-			r.Get("/status", wh.StatusPage)
+			r.Use(deps.webAuthMiddleware)
+			r.Get("/", deps.WebHandler.SearchPage)
+			r.Post("/search", deps.WebHandler.SearchResults)
+			r.Get("/artifact/{id}", deps.WebHandler.ArtifactDetail)
+			r.Get("/digest", deps.WebHandler.DigestPage)
+			r.Get("/topics", deps.WebHandler.TopicsPage)
+			r.Get("/settings", deps.WebHandler.SettingsPage)
+			r.Get("/status", deps.WebHandler.StatusPage)
 		})
 	}
 
@@ -103,8 +87,15 @@ func NewRouter(deps *Dependencies) http.Handler {
 }
 
 // structuredLogger is a middleware that logs requests with slog.
+// Health check and heartbeat endpoints are excluded to reduce log noise.
 func structuredLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip logging for health check and heartbeat endpoints
+		if r.URL.Path == "/api/health" || r.URL.Path == "/ping" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		start := time.Now()
 		reqID := middleware.GetReqID(r.Context())
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)

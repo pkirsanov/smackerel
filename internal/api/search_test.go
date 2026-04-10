@@ -711,3 +711,96 @@ func TestWriteError_VariousStatusCodes(t *testing.T) {
 		}
 	}
 }
+
+func TestIsMLHealthy_NoURL(t *testing.T) {
+	engine := &SearchEngine{}
+	if engine.isMLHealthy(t.Context()) {
+		t.Error("expected unhealthy when MLSidecarURL is empty")
+	}
+}
+
+func TestIsMLHealthy_CachedWithinTTL(t *testing.T) {
+	engine := &SearchEngine{
+		MLSidecarURL:   "http://localhost:9999",
+		HealthCacheTTL: 60 * time.Second,
+	}
+	// Pre-seed cache as healthy with recent timestamp
+	engine.mlHealthy.Store(true)
+	engine.mlHealthAt.Store(time.Now().UnixNano())
+
+	// Should return cached value without making HTTP request
+	if !engine.isMLHealthy(t.Context()) {
+		t.Error("expected cached healthy result within TTL")
+	}
+}
+
+func TestIsMLHealthy_CachedUnhealthyWithinTTL(t *testing.T) {
+	engine := &SearchEngine{
+		MLSidecarURL:   "http://localhost:9999",
+		HealthCacheTTL: 60 * time.Second,
+	}
+	// Pre-seed cache as unhealthy with recent timestamp
+	engine.mlHealthy.Store(false)
+	engine.mlHealthAt.Store(time.Now().UnixNano())
+
+	if engine.isMLHealthy(t.Context()) {
+		t.Error("expected cached unhealthy result within TTL")
+	}
+}
+
+func TestIsMLHealthy_ExpiredTTL_ProbesServer(t *testing.T) {
+	// Start a test server that returns 200
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   srv.URL,
+		HealthCacheTTL: 1 * time.Millisecond,
+	}
+	// Seed expired cache
+	engine.mlHealthy.Store(false)
+	engine.mlHealthAt.Store(time.Now().Add(-1 * time.Second).UnixNano())
+
+	if !engine.isMLHealthy(t.Context()) {
+		t.Error("expected healthy after probe succeeds")
+	}
+}
+
+func TestIsMLHealthy_Recovery(t *testing.T) {
+	healthy := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if healthy {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+	}))
+	defer srv.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   srv.URL,
+		HealthCacheTTL: 1 * time.Millisecond,
+	}
+
+	// First check: healthy
+	engine.mlHealthAt.Store(0)
+	if !engine.isMLHealthy(t.Context()) {
+		t.Error("expected healthy on first probe")
+	}
+
+	// Server goes down
+	healthy = false
+	engine.mlHealthAt.Store(0) // force refresh
+	if engine.isMLHealthy(t.Context()) {
+		t.Error("expected unhealthy when server returns 503")
+	}
+
+	// Server recovers
+	healthy = true
+	engine.mlHealthAt.Store(0) // force refresh
+	if !engine.isMLHealthy(t.Context()) {
+		t.Error("expected healthy after recovery")
+	}
+}

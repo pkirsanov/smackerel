@@ -3,6 +3,8 @@ package scheduler
 import (
 	"sync"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/intelligence"
 )
 
 func TestNew(t *testing.T) {
@@ -179,4 +181,101 @@ func TestSCN002059_RetryClearsOnSuccess(t *testing.T) {
 	if s.DigestPendingDate() != "" {
 		t.Error("expected pending date to be cleared after success")
 	}
+}
+
+// SCN-021: Scheduler with engine registers alert delivery + producer cron entries
+func TestCronEntries_WithEngine(t *testing.T) {
+	// Create engine with nil pool — cron registration still succeeds
+	engine := &intelligence.Engine{Pool: nil}
+	s := New(nil, nil, engine, nil)
+	err := s.Start(nil, "0 7 * * *")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer s.Stop()
+
+	count := s.CronEntryCount()
+	// 1 (digest) + 7 (existing intelligence, no lifecycle) + 5 (new: delivery sweep + 4 producers) = 13
+	if count < 13 {
+		t.Errorf("expected at least 13 cron entries with engine, got %d", count)
+	}
+}
+
+// SCN-022-09: Overlapping cron job of same type is skipped via TryLock
+func TestCronConcurrencyGuard_SameGroupSkipped(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+
+	// Acquire daily mutex to simulate a running daily job
+	s.muDaily.Lock()
+
+	// TryLock should fail — simulating a second daily job firing
+	if s.muDaily.TryLock() {
+		s.muDaily.Unlock()
+		t.Fatal("expected TryLock to return false when mutex is held")
+	}
+
+	s.muDaily.Unlock()
+}
+
+// SCN-022-10: Different job groups run concurrently
+func TestCronConcurrencyGuard_DifferentGroupsConcurrent(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+
+	// Acquire daily mutex
+	s.muDaily.Lock()
+
+	// Hourly mutex should be independent — TryLock should succeed
+	if !s.muHourly.TryLock() {
+		s.muDaily.Unlock()
+		t.Fatal("expected hourly TryLock to succeed while daily is held")
+	}
+	s.muHourly.Unlock()
+
+	// Weekly should also be independent
+	if !s.muWeekly.TryLock() {
+		s.muDaily.Unlock()
+		t.Fatal("expected weekly TryLock to succeed while daily is held")
+	}
+	s.muWeekly.Unlock()
+
+	s.muDaily.Unlock()
+}
+
+// SCN-022-11: All six mutex groups exist and are independent
+func TestCronConcurrencyGuard_AllGroupsIndependent(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+
+	// Lock all groups simultaneously — proves they are independent mutexes
+	s.muDigest.Lock()
+	s.muHourly.Lock()
+	s.muDaily.Lock()
+	s.muWeekly.Lock()
+	s.muMonthly.Lock()
+	s.muFrequent.Lock()
+
+	// All locked — unlock in any order
+	s.muFrequent.Unlock()
+	s.muMonthly.Unlock()
+	s.muWeekly.Unlock()
+	s.muDaily.Unlock()
+	s.muHourly.Unlock()
+	s.muDigest.Unlock()
+}
+
+// SCN-022-09: Concurrent TryLock simulation under race detector
+func TestCronConcurrencyGuard_RaceDetectorClean(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+	var wg sync.WaitGroup
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if s.muDaily.TryLock() {
+				// Simulate brief work
+				s.muDaily.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
 }

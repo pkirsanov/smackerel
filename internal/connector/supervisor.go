@@ -4,19 +4,22 @@ import (
 	"context"
 	"log/slog"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
 // Supervisor manages connector goroutines with crash recovery.
 type Supervisor struct {
-	registry     *Registry
-	stateStore   *StateStore
-	mu           sync.Mutex
-	running      map[string]context.CancelFunc
-	panicCounts  map[string]int       // circuit breaker: panic count per connector
-	panicResetAt map[string]time.Time // time when panic count was first incremented
-	stopped      bool                 // set by StopAll to prevent panic-recovery restarts
+	registry         *Registry
+	stateStore       *StateStore
+	mu               sync.Mutex
+	running          map[string]context.CancelFunc
+	panicCounts      map[string]int             // circuit breaker: panic count per connector
+	panicResetAt     map[string]time.Time       // time when panic count was first incremented
+	stopped          bool                       // set by StopAll to prevent panic-recovery restarts
+	connectorConfigs map[string]ConnectorConfig // per-connector config for schedule lookup
 }
 
 const (
@@ -27,12 +30,20 @@ const (
 // NewSupervisor creates a new connector supervisor.
 func NewSupervisor(registry *Registry, stateStore *StateStore) *Supervisor {
 	return &Supervisor{
-		registry:     registry,
-		stateStore:   stateStore,
-		running:      make(map[string]context.CancelFunc),
-		panicCounts:  make(map[string]int),
-		panicResetAt: make(map[string]time.Time),
+		registry:         registry,
+		stateStore:       stateStore,
+		running:          make(map[string]context.CancelFunc),
+		panicCounts:      make(map[string]int),
+		panicResetAt:     make(map[string]time.Time),
+		connectorConfigs: make(map[string]ConnectorConfig),
 	}
+}
+
+// SetConfig records a connector's configuration for schedule lookup.
+func (s *Supervisor) SetConfig(id string, cfg ConnectorConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.connectorConfigs[id] = cfg
 }
 
 // StartConnector starts a connector's sync loop in a supervised goroutine.
@@ -230,11 +241,85 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 			"cursor", newCursor,
 		)
 
-		// Wait for next cycle (connector-specific schedule)
+		// Wait for next cycle using configured sync interval
+		interval := s.getSyncInterval(id)
+		slog.Debug("connector waiting for next sync cycle",
+			"connector", id,
+			"interval", interval,
+		)
 		select {
 		case <-connCtx.Done():
 			return
-		case <-time.After(5 * time.Minute):
+		case <-time.After(interval):
 		}
 	}
+}
+
+// defaultSyncInterval is used when no per-connector schedule is configured.
+const defaultSyncInterval = 5 * time.Minute
+
+// getSyncInterval returns the sync interval for a connector from its config.
+// Falls back to defaultSyncInterval when no schedule is configured.
+func (s *Supervisor) getSyncInterval(id string) time.Duration {
+	s.mu.Lock()
+	cfg, ok := s.connectorConfigs[id]
+	s.mu.Unlock()
+
+	if !ok {
+		return defaultSyncInterval
+	}
+
+	// Try SyncSchedule field first
+	if cfg.SyncSchedule != "" {
+		if d := parseSyncInterval(cfg.SyncSchedule); d > 0 {
+			return d
+		}
+	}
+
+	// Try sync_interval from SourceConfig
+	if cfg.SourceConfig != nil {
+		if v, ok := cfg.SourceConfig["sync_interval"]; ok {
+			if s, ok := v.(string); ok {
+				if d := parseSyncInterval(s); d > 0 {
+					return d
+				}
+			}
+		}
+	}
+
+	return defaultSyncInterval
+}
+
+// parseSyncInterval parses a duration string or simplistic cron expression.
+// Supported formats:
+//   - Go duration: "30m", "4h", "1h30m"
+//   - Cron minutes: "*/30 * * * *" → 30 minutes
+//   - Cron hours: "0 */4 * * *" → 4 hours
+func parseSyncInterval(s string) time.Duration {
+	// Try Go duration first
+	if d, err := time.ParseDuration(s); err == nil && d > 0 {
+		return d
+	}
+
+	// Try simplistic cron parsing
+	fields := strings.Fields(s)
+	if len(fields) != 5 {
+		return 0
+	}
+
+	// Pattern: */N * * * * → every N minutes
+	if strings.HasPrefix(fields[0], "*/") && fields[1] == "*" && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
+		if n, err := strconv.Atoi(fields[0][2:]); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute
+		}
+	}
+
+	// Pattern: 0 */N * * * → every N hours
+	if fields[0] == "0" && strings.HasPrefix(fields[1], "*/") && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
+		if n, err := strconv.Atoi(fields[1][2:]); err == nil && n > 0 {
+			return time.Duration(n) * time.Hour
+		}
+	}
+
+	return 0
 }

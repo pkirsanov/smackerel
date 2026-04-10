@@ -41,6 +41,7 @@ func AllStreams() []StreamConfig {
 		{Name: "SEARCH", Subjects: []string{"search.>"}},
 		{Name: "DIGEST", Subjects: []string{"digest.>"}},
 		{Name: "KEEP", Subjects: []string{"keep.>"}},
+		{Name: "DEADLETTER", Subjects: []string{"deadletter.>"}},
 	}
 }
 
@@ -93,6 +94,13 @@ func (c *Client) EnsureStreams(ctx context.Context) error {
 			Retention: jetstream.WorkQueuePolicy,
 			MaxAge:    7 * 24 * time.Hour, // 7 days — prevent message loss during extended ML outages
 			Storage:   jetstream.FileStorage,
+		}
+
+		// DEADLETTER stream uses LimitsPolicy (inspectable, not consumed-and-deleted)
+		if sc.Name == "DEADLETTER" {
+			cfg.Retention = jetstream.LimitsPolicy
+			cfg.MaxAge = 30 * 24 * time.Hour // 30 days retention for forensic inspection
+			cfg.MaxMsgs = 10000              // prevent unbounded growth
 		}
 
 		_, err := c.JetStream.CreateOrUpdateStream(ctx, cfg)

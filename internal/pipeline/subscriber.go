@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/smackerel/smackerel/internal/digest"
@@ -160,6 +162,13 @@ func (rs *ResultSubscriber) Stop() {
 
 // handleMessage processes a single artifacts.processed message.
 func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg) {
+	// Check if message has exhausted MaxDeliver — route to dead-letter
+	if rs.isDeliveryExhausted(msg, 5) {
+		rs.publishToDeadLetter(ctx, msg, "artifacts.processed", "ARTIFACTS")
+		_ = msg.Ack()
+		return
+	}
+
 	var payload NATSProcessedPayload
 	if err := json.Unmarshal(msg.Data(), &payload); err != nil {
 		slog.Error("invalid artifacts.processed payload", "error", err)
@@ -183,6 +192,13 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 
 // handleDigestMessage processes a single digest.generated message.
 func (rs *ResultSubscriber) handleDigestMessage(ctx context.Context, msg jetstream.Msg) {
+	// Check if message has exhausted MaxDeliver — route to dead-letter
+	if rs.isDeliveryExhausted(msg, 5) {
+		rs.publishToDeadLetter(ctx, msg, "digest.generated", "DIGEST")
+		_ = msg.Ack()
+		return
+	}
+
 	var payload NATSDigestGeneratedPayload
 	if err := json.Unmarshal(msg.Data(), &payload); err != nil {
 		slog.Error("invalid digest.generated payload", "error", err)
@@ -204,4 +220,49 @@ func (rs *ResultSubscriber) handleDigestMessage(ctx context.Context, msg jetstre
 
 	_ = msg.Ack()
 	slog.Debug("digest result stored")
+}
+
+// isDeliveryExhausted checks if a message's delivery count has reached maxDeliver.
+func (rs *ResultSubscriber) isDeliveryExhausted(msg jetstream.Msg, maxDeliver int) bool {
+	md, err := msg.Metadata()
+	if err != nil {
+		return false
+	}
+	return int(md.NumDelivered) >= maxDeliver
+}
+
+// publishToDeadLetter routes an exhausted message to the DEADLETTER stream.
+func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstream.Msg, originalSubject, originalStream string) {
+	headers := nats.Header{}
+	headers.Set("Smackerel-Original-Subject", originalSubject)
+	headers.Set("Smackerel-Original-Stream", originalStream)
+	headers.Set("Smackerel-Failed-At", time.Now().UTC().Format(time.RFC3339))
+
+	md, err := msg.Metadata()
+	if err == nil {
+		headers.Set("Smackerel-Delivery-Count", strconv.FormatUint(md.NumDelivered, 10))
+		if md.Consumer != "" {
+			headers.Set("Smackerel-Original-Consumer", md.Consumer)
+		}
+	}
+
+	dlSubject := "deadletter." + originalSubject
+	dlMsg := &nats.Msg{
+		Subject: dlSubject,
+		Data:    msg.Data(),
+		Header:  headers,
+	}
+
+	if _, err := rs.NATS.JetStream.PublishMsg(ctx, dlMsg); err != nil {
+		slog.Error("failed to publish to dead-letter",
+			"subject", dlSubject,
+			"error", err,
+		)
+		return
+	}
+
+	slog.Warn("message routed to dead-letter",
+		"subject", dlSubject,
+		"original_subject", originalSubject,
+	)
 }

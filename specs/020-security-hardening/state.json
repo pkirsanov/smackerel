@@ -1,0 +1,85 @@
+{
+  "version": 3,
+  "featureDir": "specs/020-security-hardening",
+  "featureName": "Security Hardening — Docker Binding, Auth Enforcement, Crypto Hygiene",
+  "status": "done",
+  "workflowMode": "delivery-lockdown",
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "currentScope": 3,
+    "runStartedAt": "2026-04-10T00:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "statusBefore": "not-started",
+        "statusAfter": "not-started",
+        "timestamp": "2026-04-10T00:00:00Z",
+        "summary": "Created spec.md with problem statement, threat model for 6 attack surfaces, 7 actors/personas, 7 requirements with 23 Gherkin scenarios, outcome contract, non-functional requirements, success metrics, and 3 deferred improvement proposals. All findings SEC-001 through SEC-021 addressed."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap"],
+        "statusBefore": "not-started",
+        "statusAfter": "not-started",
+        "timestamp": "2026-04-10T00:00:00Z",
+        "summary": "Created design.md covering all 7 requirements (R-001 through R-007): Docker 127.0.0.1 port binding for 5 services, ML sidecar FastAPI auth dependency with hmac.compare_digest, webAuthMiddleware insertion in router.go Web UI group, httprate OAuth rate limiter (10 req/min/IP), NATS config file generation replacing --auth CLI arg, decrypt() fail-closed logic removing 3 plaintext fallback paths, startup auth warnings for core and ML sidecar. Config SST pipeline extended with host_bind_address and nats.conf generation. 20-row scenario-to-test mapping table. Zero open questions."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning"],
+        "statusBefore": "not-started",
+        "statusAfter": "not-started",
+        "timestamp": "2026-04-10T00:00:00Z",
+        "summary": "Created scopes.md with 3 scopes: (1) Docker port binding + NATS config file, (2) ML sidecar auth + Web UI auth + OAuth rate limiting, (3) Decrypt fail-closed + startup auth warning. Created report.md and uservalidation.md templates."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement", "test"],
+        "statusBefore": "not-started",
+        "statusAfter": "done",
+        "timestamp": "2026-04-10T12:00:00Z",
+        "summary": "Implemented all 3 scopes. Scope 1: Bound all 5 Docker service ports to 127.0.0.1, replaced NATS --auth CLI arg with config file mount, added host_bind_address to SST pipeline, generated nats.conf. Scope 2: Created ml/app/auth.py with verify_auth() FastAPI dependency using hmac.compare_digest, applied webAuthMiddleware to Web UI routes, added httprate.LimitByIP(10, 1min) to OAuth start endpoint, added go-chi/httprate dependency. Scope 3: Changed decrypt() to return errors on all 3 failure paths when encKey is non-nil, added startup WARN log for empty auth_token in cmd/core/main.go and ml/app/main.py. Updated 1 existing test (PlaintextFallback → FailClosed) and added 4 new Go tests + 7 new Python tests. All 51 unit tests pass (Go + Python)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [1, 2, 3],
+    "certifiedCompletedPhases": ["implement", "test"],
+    "scopeProgress": [
+      {"scope": 1, "status": "done", "dodChecked": 11, "dodTotal": 11},
+      {"scope": 2, "status": "done", "dodChecked": 12, "dodTotal": 12},
+      {"scope": 3, "status": "done", "dodChecked": 9, "dodTotal": 9}
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    }
+  }
+}

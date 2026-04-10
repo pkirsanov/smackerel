@@ -194,6 +194,7 @@ Every run MUST produce the same structure, in this order:
 ### Validation / Claims vs Reality
 ### Engineering / Code Signals
 ### Documentation / User Guidance
+### Spec Freshness / Trust Classification
 
 For each finding use:
 - `ID`
@@ -262,6 +263,7 @@ Dispatch each requested lens to the mapped specialist from `bubbles/system-revie
 | audit | `bubbles.audit` | policy and ship-readiness concerns |
 | engineering | `bubbles.code-review` | engineering-only code findings that affect the system |
 | docs | `bubbles.docs` | stale or missing docs affecting comprehension or operation |
+| spec-freshness | `bubbles.spec-review` | spec trust classification, drift detection, stale spec identification |
 
 When dispatching, explicitly tell the specialist it is contributing to a holistic system review rather than a standalone spec-completion flow.
 
