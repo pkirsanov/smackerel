@@ -567,4 +567,3 @@ func daysDiff(a, b time.Time) int {
 	diff := t2.Sub(t1).Hours() / 24
 	return int(math.Abs(diff))
 }
-

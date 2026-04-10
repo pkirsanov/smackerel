@@ -509,13 +509,13 @@ func TestNormalizeReservationZeroBookedAt(t *testing.T) {
 func TestNormalizeReviewNoHostResponse(t *testing.T) {
 	cfg := HospitableConfig{TierReviews: "full"}
 	r := Review{
-		ID:          "rev-noresp",
-		PropertyID:  "prop-001",
-		Rating:      4,
-		ReviewText:  "Nice place, well maintained.",
+		ID:           "rev-noresp",
+		PropertyID:   "prop-001",
+		Rating:       4,
+		ReviewText:   "Nice place, well maintained.",
 		HostResponse: "",
-		Channel:     "VRBO",
-		SubmittedAt: time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC),
+		Channel:      "VRBO",
+		SubmittedAt:  time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC),
 	}
 	a := NormalizeReview(r, "Beach House", cfg)
 
