@@ -98,17 +98,17 @@ func (h *ContextHandler) HandleContextFor(w http.ResponseWriter, r *http.Request
 
 | # | Scope | Surfaces | Key Tests | DoD Summary | Status |
 |---|---|---|---|---|---|
-| 1 | GH Connector: API Client, Types & Config | Go core, Config | 10 unit + 2 integration | Client builds correct requests, paginates hasMore, retries 429, config validates | Not started |
-| 2 | GH Connector: Implementation & Normalizer | Go core, Config | 14 unit + 3 integration + 2 e2e | Connector lifecycle, normalizer maps all 11 event types, cursor management | Not started |
-| 3 | Hospitality Graph Nodes & Linker | Go core, DB migration | 12 unit + 4 integration + 2 e2e | Guest/property tables, hospitality linker, edge types, topic seeds | Not started |
-| 4 | Hospitality Digest | Go core | 10 unit + 3 integration + 1 e2e | Arrivals/departures/tasks/revenue/alerts in digest, empty-day handling | Not started |
-| 5 | Context Enrichment API | Go core, API | 12 unit + 3 integration + 2 e2e | POST /api/context-for, guest/property/booking responses, communication hints | Not started |
+| 1 | GH Connector: API Client, Types & Config | Go core, Config | 10 unit + 2 integration | Client builds correct requests, paginates hasMore, retries 429, config validates | Not Started |
+| 2 | GH Connector: Implementation & Normalizer | Go core, Config | 14 unit + 3 integration + 2 e2e | Connector lifecycle, normalizer maps all 11 event types, cursor management | Not Started |
+| 3 | Hospitality Graph Nodes & Linker | Go core, DB migration | 12 unit + 4 integration + 2 e2e | Guest/property tables, hospitality linker, edge types, topic seeds | Not Started |
+| 4 | Hospitality Digest | Go core | 10 unit + 3 integration + 1 e2e | Arrivals/departures/tasks/revenue/alerts in digest, empty-day handling | Not Started |
+| 5 | Context Enrichment API | Go core, API | 12 unit + 3 integration + 2 e2e | POST /api/context-for, guest/property/booking responses, communication hints | Not Started |
 
 ---
 
 ## Scope 01: GH Connector — API Client, Types & Config
 
-**Status:** Not started
+**Status:** Not Started
 **Priority:** P0
 **Dependencies:** None — foundational scope
 
@@ -247,7 +247,7 @@ Scenario: SCN-GH-007 API client omits since param on first sync
 
 ## Scope 02: GH Connector — Implementation & Normalizer
 
-**Status:** Not started
+**Status:** Not Started
 **Priority:** P0
 **Dependencies:** Scope 1 (API Client, Types & Config)
 
@@ -437,7 +437,7 @@ Scenario: SCN-GH-018 Normalizer maps all remaining event types
 
 ## Scope 03: Hospitality Graph Nodes & Linker
 
-**Status:** Not started
+**Status:** Not Started
 **Priority:** P0
 **Dependencies:** Scope 2 (GH Connector — Implementation & Normalizer)
 
@@ -610,7 +610,7 @@ Scenario: SCN-GH-028 Property metrics update from review artifact
 
 ## Scope 04: Hospitality Digest
 
-**Status:** Not started
+**Status:** Not Started
 **Priority:** P1
 **Dependencies:** Scope 3 (Hospitality Graph Nodes & Linker)
 
@@ -761,7 +761,7 @@ Scenario: SCN-GH-036 No hospitality connectors active generates standard digest
 
 ## Scope 05: Context Enrichment API
 
-**Status:** Not started
+**Status:** Not Started
 **Priority:** P1
 **Dependencies:** Scope 3 (Hospitality Graph Nodes & Linker)
 
