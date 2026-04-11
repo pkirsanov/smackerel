@@ -2,8 +2,8 @@
   "version": 3,
   "featureDir": "specs/013-guesthost-connector",
   "featureName": "GuestHost Connector & Hospitality Intelligence",
-  "status": "deferred",
-  "workflowMode": "full",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.plan",
     "currentPhase": "plan",
@@ -33,9 +33,16 @@
     ]
   },
   "certification": {
-    "status": "deferred",
+    "status": "in_progress",
     "completedScopes": [],
-    "certifiedCompletedPhases": []
+    "certifiedCompletedPhases": ["analyze", "plan"],
+    "scopeProgress": [],
+    "lockdownState": {
+      "roundNumber": 1,
+      "lastRoundResult": "implement_in_progress",
+      "findingsResolved": 0,
+      "findingsTotal": 0
+    }
   },
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
@@ -49,5 +56,5 @@
   "reworkQueue": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-09T00:00:00Z",
-  "notes": "Deferred — planning complete, no implementation started."
+  "notes": "Implementation in progress — all 5 scopes have code delivered, awaiting test execution and evidence."
 }
