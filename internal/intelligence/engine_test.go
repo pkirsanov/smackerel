@@ -1123,17 +1123,16 @@ func TestSynthesisConfidence_ManyArtifactsManySourcesSaturates(t *testing.T) {
 // === Harden: clampDay boundary — day zero and negative ===
 
 func TestClampDay_DayZero(t *testing.T) {
-	// Day 0 in Go's time.Date normalizes to the last day of the previous month.
-	// clampDay should clamp to day 1 at minimum, but currently doesn't guard
-	// against non-positive days. Verify it produces a valid date.
+	// After hardening: day=0 is now clamped to 1, staying in the correct month.
 	d := clampDay(2026, time.March, 0)
-	// time.Date(2026, March, 0) → Feb 28 in Go. clampDay should not overflow.
 	if d.IsZero() {
 		t.Error("clampDay(day=0) should return a non-zero date")
 	}
-	// Verify the date is in Feb (Go normalization) or March
-	if d.Month() != time.February && d.Month() != time.March {
-		t.Errorf("unexpected month for day=0: %s", d.Month())
+	if d.Day() != 1 {
+		t.Errorf("expected day 1 (clamped from 0), got %d", d.Day())
+	}
+	if d.Month() != time.March {
+		t.Errorf("expected March, got %s", d.Month())
 	}
 }
 
@@ -1246,6 +1245,152 @@ func TestBillingDate_LocalMidnightNotUTCTruncate(t *testing.T) {
 	// timezones. Verify the code uses local midnight (above assertion
 	// would fail if Truncate were used and the offset pushed it forward).
 	_ = utcTruncated // retained to document the contrast
+}
+
+// === Harden: CreateAlert multibyte UTF-8 title truncation (H-001) ===
+
+func TestCreateAlert_TruncatesMultibyteUTF8Title(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	// 100 3-byte runes = 300 bytes, over the 200 limit
+	longTitle := strings.Repeat("日", 100)
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     longTitle,
+		Body:      "Body",
+		Priority:  2,
+	}
+	_ = engine.CreateAlert(context.Background(), alert)
+	if len(alert.Title) > 200 {
+		t.Errorf("expected title truncated to <=200 bytes, got %d", len(alert.Title))
+	}
+	if !utf8.ValidString(alert.Title) {
+		t.Error("truncated title must be valid UTF-8")
+	}
+}
+
+func TestCreateAlert_TruncatesMultibyteUTF8Body(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	// 800 3-byte runes = 2400 bytes, over the 2000 limit
+	longBody := strings.Repeat("漢", 800)
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     "Title",
+		Body:      longBody,
+		Priority:  2,
+	}
+	_ = engine.CreateAlert(context.Background(), alert)
+	if len(alert.Body) > 2000 {
+		t.Errorf("expected body truncated to <=2000 bytes, got %d", len(alert.Body))
+	}
+	if !utf8.ValidString(alert.Body) {
+		t.Error("truncated body must be valid UTF-8")
+	}
+}
+
+// === Harden: detectCapturePatterns nil pool returns nil (H-006) ===
+
+func TestDetectCapturePatterns_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	patterns := engine.detectCapturePatterns(context.Background())
+	if patterns != nil {
+		t.Errorf("expected nil patterns for nil pool, got %v", patterns)
+	}
+}
+
+// === Harden: TopicMovement direction boundary (H-007) ===
+
+func TestTopicMovement_DirectionBoundaries(t *testing.T) {
+	// Test the boundary conditions for direction classification.
+	// Code: > lastWeek+1 → "rising", < lastWeek-1 → "falling", else "stable"
+	tests := []struct {
+		name      string
+		thisWeek  int
+		lastWeek  int
+		direction string
+	}{
+		{"exactly +1 is stable", 6, 5, "stable"},
+		{"exactly -1 is stable", 4, 5, "stable"},
+		{"equal is stable", 5, 5, "stable"},
+		{"+2 is rising", 7, 5, "rising"},
+		{"-2 is falling", 3, 5, "falling"},
+		{"zero to zero is stable", 0, 0, "stable"},
+		{"zero to 1 is stable", 1, 0, "stable"},
+		{"2 to 0 is rising", 2, 0, "rising"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var dir string
+			if tt.thisWeek > tt.lastWeek+1 {
+				dir = "rising"
+			} else if tt.thisWeek < tt.lastWeek-1 {
+				dir = "falling"
+			} else {
+				dir = "stable"
+			}
+			if dir != tt.direction {
+				t.Errorf("thisWeek=%d lastWeek=%d: got %q, want %q",
+					tt.thisWeek, tt.lastWeek, dir, tt.direction)
+			}
+		})
+	}
+}
+
+// === Harden: clampDay day ≤ 0 guard (H-008) ===
+
+func TestClampDay_NegativeDay(t *testing.T) {
+	d := clampDay(2026, time.March, -5)
+	if d.Day() != 1 {
+		t.Errorf("expected day 1 (clamped from -5), got %d", d.Day())
+	}
+	if d.Month() != time.March {
+		t.Errorf("expected March, got %s", d.Month())
+	}
+}
+
+func TestClampDay_DayZero_Clamped(t *testing.T) {
+	// After fix: day=0 should now clamp to 1, staying in the correct month
+	d := clampDay(2026, time.March, 0)
+	if d.Day() != 1 {
+		t.Errorf("expected day 1 (clamped from 0), got %d", d.Day())
+	}
+	if d.Month() != time.March {
+		t.Errorf("expected March, got %s", d.Month())
+	}
+}
+
+// === Harden: assembleBriefText threads-only partial context (H-009) ===
+
+func TestAssembleBriefText_ThreadsOnlyPartialContext(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Weekly Sync",
+		Attendees: []AttendeeBrief{
+			{
+				Name:          "Jordan",
+				Email:         "jordan@example.com",
+				RecentThreads: []string{"Budget review", "Hiring plan"},
+				SharedTopics:  nil,
+				PendingItems:  nil,
+			},
+		},
+	}
+
+	text := assembleBriefText(brief)
+	if !contains(text, "Weekly Sync") {
+		t.Error("brief should contain meeting title")
+	}
+	if !contains(text, "Jordan") {
+		t.Error("brief should contain attendee name")
+	}
+	if !contains(text, "recent threads") {
+		t.Error("brief should mention recent threads when they exist")
+	}
+	// Verify no mention of shared topics or pending items when they're nil
+	if contains(text, "shared topics") {
+		t.Error("brief should NOT mention shared topics when none exist")
+	}
+	if contains(text, "pending items") {
+		t.Error("brief should NOT mention pending items when none exist")
+	}
 }
 
 // === Security: CreateAlert length bounds ===

@@ -139,9 +139,23 @@ func (c *Client) Healthy() bool {
 	return c.Conn.IsConnected()
 }
 
-// Close drains and closes the NATS connection.
+// Close drains and closes the NATS connection with a timeout
+// to prevent shutdown from hanging if drain cannot complete.
 func (c *Client) Close() {
-	if err := c.Conn.Drain(); err != nil {
-		slog.Warn("NATS drain error", "error", err)
+	// Start drain in background; if it doesn't complete within 5 seconds,
+	// force-close the connection so shutdown can proceed.
+	done := make(chan struct{})
+	go func() {
+		if err := c.Conn.Drain(); err != nil {
+			slog.Warn("NATS drain error", "error", err)
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+		// Drain completed
+	case <-time.After(5 * time.Second):
+		slog.Warn("NATS drain timed out after 5s, force-closing connection")
+		c.Conn.Close()
 	}
 }

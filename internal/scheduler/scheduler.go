@@ -26,6 +26,11 @@ type Scheduler struct {
 	digestPendingRetry bool       // true when last digest was generated but delivery failed
 	digestPendingDate  string     // date of the pending digest for retry
 
+	// done is closed by Stop() to cancel background goroutines spawned by cron jobs
+	// (e.g., digest polling). Prevents goroutine leaks during graceful shutdown.
+	done chan struct{}
+	wg   sync.WaitGroup // tracks background goroutines for clean shutdown
+
 	// Per-group concurrency guards — prevents cron job overlap within each group
 	muDigest  sync.Mutex
 	muHourly  sync.Mutex
@@ -44,6 +49,7 @@ func New(digestGen *digest.Generator, bot *telegram.Bot, engine *intelligence.En
 		bot:       bot,
 		engine:    engine,
 		lifecycle: lifecycle,
+		done:      make(chan struct{}),
 	}
 }
 
@@ -102,8 +108,11 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		if s.bot != nil {
 			today := digestCtx.DigestDate
 			// Fire a background goroutine to poll for the ML-processed digest result
-			// so we don't block the cron callback
+			// so we don't block the cron callback.
+			// Tracked via s.wg and cancellable via s.done to prevent goroutine leaks on shutdown.
+			s.wg.Add(1)
 			go func() {
+				defer s.wg.Done()
 				pollCtx, pollCancel := context.WithTimeout(context.Background(), 60*time.Second)
 				defer pollCancel()
 
@@ -112,6 +121,9 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 
 				for {
 					select {
+					case <-s.done:
+						slog.Info("digest delivery cancelled by shutdown", "date", today)
+						return
 					case <-pollCtx.Done():
 						slog.Warn("digest delivery timed out — will retry next cycle", "date", today)
 						s.mu.Lock()
@@ -407,10 +419,15 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	return nil
 }
 
-// Stop halts all scheduled tasks.
+// Stop halts all scheduled tasks and waits for background goroutines to finish.
 func (s *Scheduler) Stop() {
+	// Signal background goroutines (e.g., digest polling) to exit.
+	close(s.done)
+	// Stop the cron scheduler and wait for running callbacks to finish.
 	ctx := s.cron.Stop()
 	<-ctx.Done()
+	// Wait for tracked background goroutines to drain.
+	s.wg.Wait()
 }
 
 // DigestPendingRetry returns the current retry state (thread-safe).

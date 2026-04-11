@@ -525,8 +525,17 @@ func parseMapsConfig(config connector.ConnectorConfig) (MapsConfig, error) {
 
 	// Clustering config
 	if lr, ok := sc["location_radius_m"]; ok {
-		if v, ok := lr.(float64); ok {
+		switch v := lr.(type) {
+		case float64:
+			if v < 0 {
+				return MapsConfig{}, fmt.Errorf("location_radius_m must be non-negative, got %v", v)
+			}
 			cfg.LocationRadiusM = v
+		case int:
+			if v < 0 {
+				return MapsConfig{}, fmt.Errorf("location_radius_m must be non-negative, got %v", v)
+			}
+			cfg.LocationRadiusM = float64(v)
 		}
 	}
 	if hd, ok := sc["home_detection"].(string); ok && hd != "" {
@@ -568,31 +577,61 @@ func parseMapsConfig(config connector.ConnectorConfig) (MapsConfig, error) {
 
 	// Trip config
 	if tmd, ok := sc["trip_min_distance_km"]; ok {
-		if v, ok := tmd.(float64); ok {
+		switch v := tmd.(type) {
+		case float64:
 			if v <= 0 {
 				return MapsConfig{}, fmt.Errorf("trip_min_distance_km must be positive, got %v", v)
 			}
 			cfg.TripMinDistanceKm = v
+		case int:
+			if v <= 0 {
+				return MapsConfig{}, fmt.Errorf("trip_min_distance_km must be positive, got %v", v)
+			}
+			cfg.TripMinDistanceKm = float64(v)
 		}
 	}
 	if tmo, ok := sc["trip_min_overnight_hours"]; ok {
-		if v, ok := tmo.(float64); ok {
+		switch v := tmo.(type) {
+		case float64:
 			if v <= 0 {
 				return MapsConfig{}, fmt.Errorf("trip_min_overnight_hours must be positive, got %v", v)
 			}
 			cfg.TripMinOvernightHours = v
+		case int:
+			if v <= 0 {
+				return MapsConfig{}, fmt.Errorf("trip_min_overnight_hours must be positive, got %v", v)
+			}
+			cfg.TripMinOvernightHours = float64(v)
 		}
 	}
 
 	// Link config
 	if lte, ok := sc["link_time_extend_min"]; ok {
-		if v, ok := lte.(float64); ok {
+		switch v := lte.(type) {
+		case float64:
+			if v < 0 {
+				return MapsConfig{}, fmt.Errorf("link_time_extend_min must be non-negative, got %v", v)
+			}
 			cfg.LinkTimeExtendMin = v
+		case int:
+			if v < 0 {
+				return MapsConfig{}, fmt.Errorf("link_time_extend_min must be non-negative, got %v", v)
+			}
+			cfg.LinkTimeExtendMin = float64(v)
 		}
 	}
 	if lpr, ok := sc["link_proximity_radius_m"]; ok {
-		if v, ok := lpr.(float64); ok {
+		switch v := lpr.(type) {
+		case float64:
+			if v <= 0 {
+				return MapsConfig{}, fmt.Errorf("link_proximity_radius_m must be positive, got %v", v)
+			}
 			cfg.LinkProximityRadiusM = v
+		case int:
+			if v <= 0 {
+				return MapsConfig{}, fmt.Errorf("link_proximity_radius_m must be positive, got %v", v)
+			}
+			cfg.LinkProximityRadiusM = float64(v)
 		}
 	}
 
