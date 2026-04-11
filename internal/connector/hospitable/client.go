@@ -264,74 +264,20 @@ func parseLinkNext(header string) string {
 	if header == "" {
 		return ""
 	}
-	// Simple parser for Link: <url>; rel="next"
-	for _, part := range splitLinks(header) {
-		if len(part) < 2 {
+	for _, entry := range strings.Split(header, ",") {
+		parts := strings.SplitN(entry, ";", 2)
+		if len(parts) < 2 {
 			continue
 		}
-		urlPart := part[0]
-		relPart := part[1]
+		urlPart := strings.TrimSpace(parts[0])
+		relPart := strings.TrimSpace(parts[1])
 		if relPart == `rel="next"` || relPart == `rel=next` {
-			// Strip angle brackets
 			if len(urlPart) > 2 && urlPart[0] == '<' && urlPart[len(urlPart)-1] == '>' {
 				return urlPart[1 : len(urlPart)-1]
 			}
 		}
 	}
 	return ""
-}
-
-// splitLinks parses a Link header into [url, rel] pairs.
-func splitLinks(header string) [][]string {
-	var result [][]string
-	start := 0
-	for i := 0; i < len(header); i++ {
-		if header[i] == ',' {
-			link := parseOneLink(header[start:i])
-			if link != nil {
-				result = append(result, link)
-			}
-			start = i + 1
-		}
-	}
-	link := parseOneLink(header[start:])
-	if link != nil {
-		result = append(result, link)
-	}
-	return result
-}
-
-func parseOneLink(s string) []string {
-	parts := splitSemicolon(s)
-	if len(parts) < 2 {
-		return nil
-	}
-	return []string{trimSpace(parts[0]), trimSpace(parts[1])}
-}
-
-func splitSemicolon(s string) []string {
-	var result []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == ';' {
-			result = append(result, s[start:i])
-			start = i + 1
-		}
-	}
-	result = append(result, s[start:])
-	return result
-}
-
-func trimSpace(s string) string {
-	start := 0
-	end := len(s)
-	for start < end && (s[start] == ' ' || s[start] == '\t') {
-		start++
-	}
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
-		end--
-	}
-	return s[start:end]
 }
 
 // parseRetryAfter parses a Retry-After header value per RFC 7231 §7.1.3.

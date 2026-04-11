@@ -1,6 +1,7 @@
 package hospitable
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -44,10 +45,10 @@ func TestNormalizeProperty(t *testing.T) {
 	}
 
 	// Content should contain property details
-	if !containsStr(a.RawContent, "Beach House") {
+	if !strings.Contains(a.RawContent, "Beach House") {
 		t.Error("content should contain property name")
 	}
-	if !containsStr(a.RawContent, "Pool") {
+	if !strings.Contains(a.RawContent, "Pool") {
 		t.Error("content should contain amenities")
 	}
 }
@@ -99,10 +100,10 @@ func TestNormalizeReservation(t *testing.T) {
 	}
 
 	// Content
-	if !containsStr(a.RawContent, "Airbnb") {
+	if !strings.Contains(a.RawContent, "Airbnb") {
 		t.Error("content should contain channel")
 	}
-	if !containsStr(a.RawContent, "$750") {
+	if !strings.Contains(a.RawContent, "$750") {
 		t.Error("content should contain total payout")
 	}
 }
@@ -120,7 +121,7 @@ func TestNormalizeReservationFallbackPropertyID(t *testing.T) {
 
 	// Pass empty property name — should fall back to property ID
 	a := NormalizeReservation(r, "", cfg)
-	if !containsStr(a.Title, "prop-xyz") {
+	if !strings.Contains(a.Title, "prop-xyz") {
 		t.Errorf("Title should fall back to property ID when name is empty: %s", a.Title)
 	}
 }
@@ -136,7 +137,7 @@ func TestNormalizeReservationLeadTime(t *testing.T) {
 		BookedAt:   time.Date(2026, 3, 30, 0, 0, 0, 0, time.UTC),
 	}
 	a := NormalizeReservation(r, "Beach House", cfg)
-	if !containsStr(a.RawContent, "16 days lead time") {
+	if !strings.Contains(a.RawContent, "16 days lead time") {
 		t.Errorf("content should contain lead time, got: %s", a.RawContent)
 	}
 }
@@ -169,7 +170,7 @@ func TestNormalizeMessage(t *testing.T) {
 	if a.Metadata["edge_part_of"] != "reservation:res-001" {
 		t.Errorf("edge_part_of = %v", a.Metadata["edge_part_of"])
 	}
-	if !containsStr(a.RawContent, "Wi-Fi password") {
+	if !strings.Contains(a.RawContent, "Wi-Fi password") {
 		t.Error("content should contain message body")
 	}
 }
@@ -204,10 +205,10 @@ func TestNormalizeReview(t *testing.T) {
 	if a.Metadata["edge_review_of"] != "property:prop-001" {
 		t.Errorf("edge_review_of = %v", a.Metadata["edge_review_of"])
 	}
-	if !containsStr(a.RawContent, "Amazing stay!") {
+	if !strings.Contains(a.RawContent, "Amazing stay!") {
 		t.Error("content should contain review text")
 	}
-	if !containsStr(a.RawContent, "Thank you!") {
+	if !strings.Contains(a.RawContent, "Thank you!") {
 		t.Error("content should contain host response")
 	}
 }
@@ -223,7 +224,7 @@ func TestNormalizeReviewFallbackPropertyID(t *testing.T) {
 	}
 
 	a := NormalizeReview(r, "", cfg)
-	if !containsStr(a.Title, "prop-abc") {
+	if !strings.Contains(a.Title, "prop-abc") {
 		t.Errorf("Title should fall back to property ID: %s", a.Title)
 	}
 }
@@ -253,17 +254,6 @@ func TestNormalizeAllTiers(t *testing.T) {
 	if revA.Metadata["processing_tier"] != "full" {
 		t.Errorf("review tier = %v, want full", revA.Metadata["processing_tier"])
 	}
-}
-
-// --- helper ---
-
-func containsStr(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
 
 // --- R-019: Sender Classification ---
@@ -312,7 +302,7 @@ func TestNormalizeMessageHostSender(t *testing.T) {
 	if a.Metadata["sender_role"] != "host" {
 		t.Errorf("sender_role = %v, want host", a.Metadata["sender_role"])
 	}
-	if !containsStr(a.RawContent, "(host)") {
+	if !strings.Contains(a.RawContent, "(host)") {
 		t.Error("content should contain (host) sender type")
 	}
 }
@@ -393,7 +383,7 @@ func TestNormalizeReviewFractionalRating(t *testing.T) {
 	if a.Title != "Review: 4.5★ at Beach House" {
 		t.Errorf("Title = %q, want fractional rating", a.Title)
 	}
-	if !containsStr(a.RawContent, "4.5★") {
+	if !strings.Contains(a.RawContent, "4.5★") {
 		t.Errorf("Content should contain 4.5★, got: %s", a.RawContent)
 	}
 }
@@ -496,10 +486,10 @@ func TestNormalizeReservationZeroBookedAt(t *testing.T) {
 	if !a.CapturedAt.Equal(r.CreatedAt) {
 		t.Errorf("CapturedAt = %v, want CreatedAt %v (BookedAt is zero)", a.CapturedAt, r.CreatedAt)
 	}
-	if containsStr(a.RawContent, "lead time") {
+	if strings.Contains(a.RawContent, "lead time") {
 		t.Errorf("content should NOT contain lead time when BookedAt is zero: %s", a.RawContent)
 	}
-	if containsStr(a.RawContent, "Booked:") {
+	if strings.Contains(a.RawContent, "Booked:") {
 		t.Errorf("content should NOT contain Booked line when BookedAt is zero: %s", a.RawContent)
 	}
 }
@@ -519,13 +509,13 @@ func TestNormalizeReviewNoHostResponse(t *testing.T) {
 	}
 	a := NormalizeReview(r, "Beach House", cfg)
 
-	if containsStr(a.RawContent, "Host Response") {
+	if strings.Contains(a.RawContent, "Host Response") {
 		t.Errorf("content should NOT contain 'Host Response' when empty: %s", a.RawContent)
 	}
-	if !containsStr(a.RawContent, "Nice place") {
+	if !strings.Contains(a.RawContent, "Nice place") {
 		t.Error("content should contain review text")
 	}
-	if !containsStr(a.RawContent, "VRBO") {
+	if !strings.Contains(a.RawContent, "VRBO") {
 		t.Error("content should contain channel")
 	}
 }

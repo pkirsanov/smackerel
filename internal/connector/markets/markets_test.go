@@ -52,27 +52,29 @@ func TestConnect_Valid(t *testing.T) {
 	}
 }
 
-func TestAllowCall_RateLimit(t *testing.T) {
+func TestTryRecordCall_RateLimit(t *testing.T) {
 	c := New("financial-markets")
 	c.config.FinnhubAPIKey = "test"
 
 	// Should allow first call
-	if !c.allowCall("finnhub") {
+	if !c.tryRecordCall("finnhub") {
 		t.Error("first call should be allowed")
 	}
 
-	// Record 55 calls
-	for i := 0; i < 55; i++ {
-		c.recordCall("finnhub")
+	// Record remaining 54 calls (55 total)
+	for i := 0; i < 54; i++ {
+		if !c.tryRecordCall("finnhub") {
+			t.Errorf("call %d should be allowed", i+2)
+		}
 	}
 
 	// Should deny 56th call (limit is 55)
-	if c.allowCall("finnhub") {
+	if c.tryRecordCall("finnhub") {
 		t.Error("should deny call at rate limit")
 	}
 
 	// Unknown provider always allowed
-	if !c.allowCall("unknown") {
+	if !c.tryRecordCall("unknown") {
 		t.Error("unknown provider should always be allowed")
 	}
 }
@@ -268,59 +270,47 @@ func TestFetchFinnhubQuote_RejectsZeroPriceResponse(t *testing.T) {
 	c := New("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
 
-	// Patch fetchFinnhubQuote to use test server by testing through Sync
-	// Instead, test via the helper directly using a custom URL approach
-	// We verify the zero-price detection logic directly:
-	quote := StockQuote{Symbol: "INVALID", CurrentPrice: 0, High: 0, Low: 0, PreviousClose: 0}
-	if quote.CurrentPrice == 0 && quote.High == 0 && quote.Low == 0 && quote.PreviousClose == 0 {
-		// This is the condition that should trigger the error
-		t.Log("zero-price detection would correctly reject this response")
-	} else {
-		t.Error("zero-price detection logic is wrong")
+	_, err := c.fetchFinnhubQuote(context.Background(), "INVALID")
+	if err == nil {
+		t.Fatal("expected error for zero-price response")
 	}
-
-	// Verify a valid quote passes the check
-	validQuote := StockQuote{Symbol: "AAPL", CurrentPrice: 150.0, High: 152.0, Low: 148.0, PreviousClose: 149.0}
-	if validQuote.CurrentPrice == 0 && validQuote.High == 0 && validQuote.Low == 0 && validQuote.PreviousClose == 0 {
-		t.Error("valid quote should not trigger zero-price detection")
+	if !strings.Contains(err.Error(), "no data") {
+		t.Errorf("error should mention no data, got: %v", err)
 	}
 }
 
-func TestCryptoTier(t *testing.T) {
-	c := New("financial-markets")
-	c.config.AlertThreshold = 5.0
-
+func TestClassifyTier(t *testing.T) {
 	cases := []struct {
 		name      string
+		threshold float64
 		changePct float64
-		wantTier  string
+		want      string
 	}{
-		{"small positive", 2.0, "light"},
-		{"small negative", -2.0, "light"},
-		{"zero change", 0.0, "light"},
-		{"at threshold positive", 5.0, "full"},
-		{"at threshold negative", -5.0, "full"},
-		{"above threshold", 10.5, "full"},
-		{"below negative threshold", -12.3, "full"},
-		{"just below threshold", 4.99, "light"},
+		{"small change below threshold", 5.0, 2.0, "light"},
+		{"at positive threshold", 5.0, 5.0, "full"},
+		{"at negative threshold", 5.0, -5.0, "full"},
+		{"zero threshold always light", 0, 99.0, "light"},
+		{"above threshold", 5.0, 10.5, "full"},
+		{"small positive", 5.0, 2.0, "light"},
+		{"small negative", 5.0, -2.0, "light"},
+		{"zero change", 5.0, 0.0, "light"},
+		{"below negative threshold", 5.0, -12.3, "full"},
+		{"just below threshold", 5.0, 4.99, "light"},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := c.cryptoTier(tc.changePct)
-			if got != tc.wantTier {
-				t.Errorf("cryptoTier(%v) = %q, want %q", tc.changePct, got, tc.wantTier)
+			got := classifyTier(tc.threshold, tc.changePct)
+			if got != tc.want {
+				t.Errorf("classifyTier(%v, %v) = %q, want %q", tc.threshold, tc.changePct, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestCryptoTier_ZeroThresholdAlwaysLight(t *testing.T) {
-	c := New("financial-markets")
-	c.config.AlertThreshold = 0
-
-	if tier := c.cryptoTier(99.0); tier != "light" {
+func TestClassifyTier_ZeroThresholdAlwaysLight(t *testing.T) {
+	if tier := classifyTier(0, 99.0); tier != "light" {
 		t.Errorf("expected light when threshold=0, got %q", tier)
 	}
 }
@@ -388,19 +378,20 @@ func TestConnect_ThreadSafety(t *testing.T) {
 	<-done
 }
 
-func TestRateLimit_RecordBeforeFetch(t *testing.T) {
-	// Verify that recordCall is invoked before the HTTP call
-	// by checking that even when we hit exactly the limit, the next allowCall returns false.
+func TestRateLimit_AtBoundary(t *testing.T) {
+	// Verify that filling to exactly the limit denies the next call.
 	c := New("financial-markets")
 	c.config.FinnhubAPIKey = "test"
 
 	// Fill to exactly the limit (55 for finnhub)
 	for i := 0; i < 55; i++ {
-		c.recordCall("finnhub")
+		if !c.tryRecordCall("finnhub") {
+			t.Fatalf("call %d should be allowed", i+1)
+		}
 	}
 
 	// Should not allow the 56th
-	if c.allowCall("finnhub") {
+	if c.tryRecordCall("finnhub") {
 		t.Error("should deny call when at rate limit")
 	}
 }
@@ -432,9 +423,8 @@ func TestTryRecordCall_Atomic(t *testing.T) {
 }
 
 func TestSyncContextCancellation(t *testing.T) {
-	// Start a test server that delays responses
+	// Start a test server that returns valid data
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Return valid data so the connector proceeds
 		json.NewEncoder(w).Encode(map[string]float64{
 			"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
 		})
@@ -443,6 +433,7 @@ func TestSyncContextCancellation(t *testing.T) {
 
 	c := New("financial-markets")
 	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
 	c.config = MarketsConfig{
 		FinnhubAPIKey: "test-key",
 		Watchlist: WatchlistConfig{
@@ -493,29 +484,6 @@ func TestSyncConfigSnapshotSafety(t *testing.T) {
 	}
 }
 
-func TestClassifyTier(t *testing.T) {
-	cases := []struct {
-		name      string
-		threshold float64
-		changePct float64
-		want      string
-	}{
-		{"small change below threshold", 5.0, 2.0, "light"},
-		{"at positive threshold", 5.0, 5.0, "full"},
-		{"at negative threshold", 5.0, -5.0, "full"},
-		{"zero threshold always light", 0, 99.0, "light"},
-		{"above threshold", 5.0, 10.5, "full"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := classifyTier(tc.threshold, tc.changePct)
-			if got != tc.want {
-				t.Errorf("classifyTier(%v, %v) = %q, want %q", tc.threshold, tc.changePct, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestHTTPErrorResponseDrain(t *testing.T) {
 	// Verify non-OK responses are handled without leaking connections.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -527,10 +495,18 @@ func TestHTTPErrorResponseDrain(t *testing.T) {
 	c := New("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
 
-	// fetchFinnhubQuote should return error, not panic or leak.
-	// We can't test the actual URL override, but verify the error path returns cleanly.
-	// The real coverage is that the body drain prevents transport warnings under load.
+	_, err := c.fetchFinnhubQuote(context.Background(), "AAPL")
+	if err == nil {
+		t.Fatal("expected error for 429 response")
+	}
+	if !strings.Contains(err.Error(), "429") {
+		t.Errorf("error should mention status 429, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "rate limited") {
+		t.Errorf("error should include response body snippet, got: %v", err)
+	}
 }
 
 func TestCloseCleanup(t *testing.T) {
@@ -680,14 +656,14 @@ func TestCloseResetsCallCounts(t *testing.T) {
 
 	// Record some calls
 	for i := 0; i < 10; i++ {
-		c.recordCall("finnhub")
+		c.tryRecordCall("finnhub")
 	}
 
 	c.Close()
 
 	// After Close + fresh state, all calls should be allowed again
-	if !c.allowCall("finnhub") {
-		t.Error("allowCall should succeed after Close resets callCounts")
+	if !c.tryRecordCall("finnhub") {
+		t.Error("tryRecordCall should succeed after Close resets callCounts")
 	}
 }
 
@@ -701,10 +677,18 @@ func TestFinnhubErrorResponseIncludesBody(t *testing.T) {
 	c := New("financial-markets")
 	c.config.FinnhubAPIKey = "bad-key"
 	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
 
-	// We can't override the URL directly, but verify the error format through
-	// the response handler integration: the function reads a snippet on non-200.
-	// Test the error message construction logic directly via canned data.
+	_, err := c.fetchFinnhubQuote(context.Background(), "AAPL")
+	if err == nil {
+		t.Fatal("expected error for 403 response")
+	}
+	if !strings.Contains(err.Error(), "403") {
+		t.Errorf("error should mention status 403, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "API key invalid") {
+		t.Errorf("error should include body snippet, got: %v", err)
+	}
 }
 
 func TestCoinGeckoBatchTruncation(t *testing.T) {
@@ -770,9 +754,7 @@ func TestClassifyTier_NegativeThresholdTreatedAsDisabled(t *testing.T) {
 
 func TestSyncRateLimitExhaustion(t *testing.T) {
 	// Verify Sync gracefully handles rate limit exhaustion mid-watchlist.
-	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
 		json.NewEncoder(w).Encode(map[string]float64{
 			"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
 		})
@@ -781,11 +763,12 @@ func TestSyncRateLimitExhaustion(t *testing.T) {
 
 	c := New("financial-markets")
 	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
 
 	// Build a watchlist larger than the rate limit.
 	stocks := make([]string, 60)
 	for i := range stocks {
-		stocks[i] = "SYM" + strings.Repeat("A", 1)
+		stocks[i] = "SYMA"
 	}
 
 	c.config = MarketsConfig{
@@ -794,16 +777,201 @@ func TestSyncRateLimitExhaustion(t *testing.T) {
 		Watchlist:      WatchlistConfig{Stocks: stocks},
 	}
 
-	// Note: Sync uses tryRecordCall which caps at 55. The test server won't
-	// really be called for each symbol since fetchFinnhubQuote constructs
-	// a URL to real finnhub.io, not the test server. But the rate limiter
-	// logic is what we're testing: after 55 symbols, it should stop.
-	// Directly verify via tryRecordCall exhaustion.
-	for i := 0; i < 55; i++ {
-		c.tryRecordCall("finnhub")
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if c.tryRecordCall("finnhub") {
-		t.Error("56th call should be denied after rate exhaustion")
+	// Should produce at most 55 artifacts (rate limit), not 60.
+	if len(artifacts) > 55 {
+		t.Errorf("expected at most 55 artifacts due to rate limit, got %d", len(artifacts))
+	}
+	if len(artifacts) == 0 {
+		t.Error("expected some artifacts before rate limit exhaustion")
+	}
+	if cursor == "" {
+		t.Error("cursor should be set")
+	}
+}
+
+func TestSyncDegradedHealthOnTotalFailure(t *testing.T) {
+	// When all provider calls fail, health should be degraded.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"server error"}`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL", "GOOGL"}},
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected degraded health after total failure, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSyncHealthyOnPartialFailure(t *testing.T) {
+	// When some calls succeed, health should be healthy.
+	callNum := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callNum++
+		if callNum == 1 {
+			// First call succeeds
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
+			})
+		} else {
+			// Subsequent calls fail
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"error":"server error"}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL", "GOOGL"}},
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Partial failure — some symbols succeeded, health stays healthy.
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected healthy on partial failure, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSyncFinnhubIntegrationViaHTTPTest(t *testing.T) {
+	// Full integration test: Sync fetches from httptest, normalizes, returns artifacts.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		symbol := r.URL.Query().Get("symbol")
+		token := r.URL.Query().Get("token")
+		if token != "test-key" {
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"bad token"}`))
+			return
+		}
+		switch symbol {
+		case "AAPL":
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 175.50, "d": 2.30, "dp": 1.3, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.20,
+			})
+		case "TSLA":
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 250.0, "d": 15.0, "dp": 6.5, "h": 255.0, "l": 240.0, "o": 242.0, "pc": 235.0,
+			})
+		default:
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 0, "d": 0, "dp": 0, "h": 0, "l": 0, "o": 0, "pc": 0,
+			})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL", "TSLA"}},
+	}
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cursor == "" {
+		t.Error("cursor should be set")
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts, got %d", len(artifacts))
+	}
+
+	// Verify AAPL artifact
+	aapl := artifacts[0]
+	if aapl.ContentType != "market/quote" {
+		t.Errorf("expected market/quote, got %s", aapl.ContentType)
+	}
+	if aapl.Metadata["symbol"] != "AAPL" {
+		t.Errorf("expected AAPL, got %v", aapl.Metadata["symbol"])
+	}
+	if aapl.Metadata["processing_tier"] != "light" {
+		t.Errorf("AAPL 1.3%% change should be light tier, got %v", aapl.Metadata["processing_tier"])
+	}
+
+	// Verify TSLA artifact (6.5% > 5.0% threshold → full tier)
+	tsla := artifacts[1]
+	if tsla.Metadata["symbol"] != "TSLA" {
+		t.Errorf("expected TSLA, got %v", tsla.Metadata["symbol"])
+	}
+	if tsla.Metadata["processing_tier"] != "full" {
+		t.Errorf("TSLA 6.5%% change should be full tier, got %v", tsla.Metadata["processing_tier"])
+	}
+}
+
+func TestSyncCoinGeckoIntegrationViaHTTPTest(t *testing.T) {
+	// Full CoinGecko integration via httptest.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]map[string]float64{
+			"bitcoin":  {"usd": 67000.0, "usd_24h_change": 3.2},
+			"ethereum": {"usd": 3500.0, "usd_24h_change": -6.0},
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.coingeckoBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:    "test-key",
+		CoinGeckoEnabled: true,
+		AlertThreshold:   5.0,
+		Watchlist:        WatchlistConfig{Crypto: []string{"bitcoin", "ethereum"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 crypto artifacts, got %d", len(artifacts))
+	}
+
+	// Find ethereum artifact (order from map iteration is non-deterministic)
+	var ethFound bool
+	for _, a := range artifacts {
+		if a.Metadata["symbol"] == "ethereum" {
+			ethFound = true
+			if a.Metadata["processing_tier"] != "full" {
+				t.Errorf("ethereum -6%% should be full tier, got %v", a.Metadata["processing_tier"])
+			}
+			if a.Metadata["asset_type"] != "crypto" {
+				t.Errorf("expected crypto asset_type, got %v", a.Metadata["asset_type"])
+			}
+		}
+	}
+	if !ethFound {
+		t.Error("ethereum artifact not found")
 	}
 }
 
@@ -823,7 +991,7 @@ func TestConnectThenCloseAndReconnect(t *testing.T) {
 		t.Fatalf("first Connect failed: %v", err)
 	}
 	for i := 0; i < 50; i++ {
-		c.recordCall("finnhub")
+		c.tryRecordCall("finnhub")
 	}
 	c.Close()
 
@@ -831,7 +999,7 @@ func TestConnectThenCloseAndReconnect(t *testing.T) {
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("second Connect failed: %v", err)
 	}
-	if !c.allowCall("finnhub") {
+	if !c.tryRecordCall("finnhub") {
 		t.Error("rate limits should be fresh after Close + reconnect")
 	}
 }

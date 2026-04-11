@@ -342,10 +342,10 @@ func TestChaos_UnicodeReviewText(t *testing.T) {
 	if !utf8.ValidString(a.RawContent) {
 		t.Errorf("CHAOS: review content invalid UTF-8")
 	}
-	if !containsStr(a.RawContent, "素晴らしい") {
+	if !strings.Contains(a.RawContent, "素晴らしい") {
 		t.Errorf("CHAOS: review text not preserved in content")
 	}
-	if !containsStr(a.RawContent, "ありがとう") {
+	if !strings.Contains(a.RawContent, "ありがとう") {
 		t.Errorf("CHAOS: host response not preserved in content")
 	}
 }
@@ -456,7 +456,7 @@ func TestChaos_TokenExpiryMidSync(t *testing.T) {
 		reqCount++
 		w.Header().Set("Content-Type", "application/json")
 
-		if containsStr(r.URL.Path, "/properties") {
+		if strings.Contains(r.URL.Path, "/properties") {
 			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
 				Data: []Property{{ID: "p1", Name: "House"}}, Total: 1,
 			})
@@ -538,13 +538,13 @@ func TestChaos_ConcurrentSync(t *testing.T) {
 		reqCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case containsStr(r.URL.Path, "/properties"):
+		case strings.Contains(r.URL.Path, "/properties"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
 				Data: []Property{{ID: "p1", Name: "House"}}, Total: 1,
 			})
-		case containsStr(r.URL.Path, "/messages"):
+		case strings.Contains(r.URL.Path, "/messages"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
-		case containsStr(r.URL.Path, "/reservations"):
+		case strings.Contains(r.URL.Path, "/reservations"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{
 				Data: []Reservation{{
 					ID: "r1", PropertyID: "p1", GuestName: "Test",
@@ -552,7 +552,7 @@ func TestChaos_ConcurrentSync(t *testing.T) {
 				}},
 				Total: 1,
 			})
-		case containsStr(r.URL.Path, "/reviews"):
+		case strings.Contains(r.URL.Path, "/reviews"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Review]{
 				Data:  []Review{{ID: "rev1", PropertyID: "p1", Rating: 5, ReviewText: "Great", SubmittedAt: time.Now()}},
 				Total: 1,
@@ -884,7 +884,7 @@ func TestChaos_ContextCancelledDuringSync(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case containsStr(r.URL.Path, "/properties"):
+		case strings.Contains(r.URL.Path, "/properties"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
 				Data: []Property{{ID: "p1", Name: "House"}}, Total: 1,
 			})
@@ -1071,7 +1071,7 @@ func TestChaos_SyncBeforeConnect(t *testing.T) {
 	if err == nil {
 		t.Error("CHAOS: Sync before Connect should return error")
 	}
-	if err != nil && !containsStr(err.Error(), "not connected") {
+	if err != nil && !strings.Contains(err.Error(), "not connected") {
 		t.Errorf("CHAOS: error should mention not connected: %v", err)
 	}
 }
@@ -1098,7 +1098,7 @@ func TestChaos_SyncAfterClose(t *testing.T) {
 	if err == nil {
 		t.Error("CHAOS: Sync after Close should return error")
 	}
-	if err != nil && !containsStr(err.Error(), "not connected") {
+	if err != nil && !strings.Contains(err.Error(), "not connected") {
 		t.Errorf("CHAOS: error should mention not connected: %v", err)
 	}
 }
@@ -1154,7 +1154,7 @@ func TestChaos_ManyReservationsForMessageSync(t *testing.T) {
 				})
 			}
 			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: reservations, Total: 500})
-		case containsStr(r.URL.Path, "/messages"):
+		case strings.Contains(r.URL.Path, "/messages"):
 			msgFetches.Add(1)
 			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
 		case r.URL.Path == "/reviews":
@@ -1216,7 +1216,7 @@ func TestChaos_PropertyNameCacheWithDuplicateIDs(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case containsStr(r.URL.Path, "/properties"):
+		case strings.Contains(r.URL.Path, "/properties"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
 				Data: []Property{
 					{ID: "p1", Name: "Name Version 1", UpdatedAt: time.Now()},
@@ -1224,7 +1224,7 @@ func TestChaos_PropertyNameCacheWithDuplicateIDs(t *testing.T) {
 				},
 				Total: 2,
 			})
-		case containsStr(r.URL.Path, "/reservations"):
+		case strings.Contains(r.URL.Path, "/reservations"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{
 				Data: []Reservation{{
 					ID: "r1", PropertyID: "p1", GuestName: "John",
@@ -1259,7 +1259,7 @@ func TestChaos_PropertyNameCacheWithDuplicateIDs(t *testing.T) {
 	// Reservation should use the last-seen property name (Version 2)
 	for _, a := range artifacts {
 		if a.ContentType == "reservation/str-booking" {
-			if !containsStr(a.Title, "Name Version 2") {
+			if !strings.Contains(a.Title, "Name Version 2") {
 				t.Errorf("CHAOS: reservation should use latest property name, got title: %s", a.Title)
 			}
 		}
