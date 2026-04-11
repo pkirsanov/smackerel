@@ -414,6 +414,7 @@ func run() error {
 		WebHandler:         webHandler,
 		OAuthHandler:       oauthHandler,
 		ContextHandler:     contextHandler,
+		ArtifactStore:      pg,
 		OllamaURL:          cfg.OllamaURL,
 		AuthToken:          cfg.AuthToken,
 		ConnectorRegistry:  registry,

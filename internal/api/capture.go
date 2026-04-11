@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
 
@@ -147,8 +145,7 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 
 // RecentHandler handles GET /api/recent.
 func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
-	engine, ok := d.SearchEngine.(*SearchEngine)
-	if !ok || engine == nil {
+	if d.ArtifactStore == nil {
 		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "Service unavailable")
 		return
 	}
@@ -163,16 +160,12 @@ func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 
-	rows, err := engine.Pool.Query(r.Context(), `
-		SELECT id, title, artifact_type, COALESCE(summary, ''), created_at
-		FROM artifacts ORDER BY created_at DESC LIMIT $1
-	`, limit)
+	items, err := d.ArtifactStore.RecentArtifacts(r.Context(), limit)
 	if err != nil {
 		slog.Error("recent query failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_FAILED", "Failed to fetch recent artifacts")
 		return
 	}
-	defer rows.Close()
 
 	type RecentItem struct {
 		ID           string `json:"artifact_id"`
@@ -182,23 +175,19 @@ func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt    string `json:"created_at"`
 	}
 
-	var items []RecentItem
-	for rows.Next() {
-		var item RecentItem
-		var createdAt time.Time
-		if err := rows.Scan(&item.ID, &item.Title, &item.ArtifactType, &item.Summary, &createdAt); err != nil {
-			continue
-		}
-		item.CreatedAt = createdAt.Format(time.RFC3339)
-		items = append(items, item)
-	}
-
-	if err := rows.Err(); err != nil {
-		slog.Error("recent items row iteration error", "error", err)
+	var results []RecentItem
+	for _, a := range items {
+		results = append(results, RecentItem{
+			ID:           a.ID,
+			Title:        a.Title,
+			ArtifactType: a.ArtifactType,
+			Summary:      a.Summary,
+			CreatedAt:    a.CreatedAt.Format(time.RFC3339),
+		})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"results": items,
+		"results": results,
 	})
 }
 
@@ -210,40 +199,28 @@ func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	engine, ok := d.SearchEngine.(*SearchEngine)
-	if !ok || engine == nil {
+	if d.ArtifactStore == nil {
 		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "Service unavailable")
 		return
 	}
 
-	var (
-		id, title, artifactType, summary, sourceURL, sentiment, sourceQuality, processingTier string
-		createdAt, updatedAt                                                                  time.Time
-	)
-	err := engine.Pool.QueryRow(r.Context(), `
-		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
-		       COALESCE(sentiment, ''), COALESCE(source_quality, ''), COALESCE(processing_tier, ''),
-		       created_at, updated_at
-		FROM artifacts WHERE id = $1
-	`, artifactID).Scan(&id, &title, &artifactType, &summary, &sourceURL,
-		&sentiment, &sourceQuality, &processingTier,
-		&createdAt, &updatedAt)
+	a, err := d.ArtifactStore.GetArtifact(r.Context(), artifactID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "Artifact not found")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"artifact_id":     id,
-		"title":           title,
-		"artifact_type":   artifactType,
-		"summary":         summary,
-		"source_url":      sourceURL,
-		"sentiment":       sentiment,
-		"source_quality":  sourceQuality,
-		"processing_tier": processingTier,
-		"created_at":      createdAt.Format(time.RFC3339),
-		"updated_at":      updatedAt.Format(time.RFC3339),
+		"artifact_id":     a.ID,
+		"title":           a.Title,
+		"artifact_type":   a.ArtifactType,
+		"summary":         a.Summary,
+		"source_url":      a.SourceURL,
+		"sentiment":       a.Sentiment,
+		"source_quality":  a.SourceQuality,
+		"processing_tier": a.ProcessingTier,
+		"created_at":      a.CreatedAt.Format(time.RFC3339),
+		"updated_at":      a.UpdatedAt.Format(time.RFC3339),
 	})
 }
 
@@ -271,17 +248,12 @@ func (d *Dependencies) ExportHandler(w http.ResponseWriter, r *http.Request) {
 		limit = 10000
 	}
 
-	// Get query capability from DB
-	type querier interface {
-		ExportArtifacts(ctx context.Context, cursor time.Time, limit int) (*db.ExportResult, error)
-	}
-	exporter, ok := d.DB.(querier)
-	if !ok {
+	if d.ArtifactStore == nil {
 		writeError(w, http.StatusServiceUnavailable, "EXPORT_UNAVAILABLE", "Export not supported")
 		return
 	}
 
-	result, err := exporter.ExportArtifacts(r.Context(), cursor, limit)
+	result, err := d.ArtifactStore.ExportArtifacts(r.Context(), cursor, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "EXPORT_FAILED", "Failed to export artifacts")
 		return

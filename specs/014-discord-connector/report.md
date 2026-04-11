@@ -386,3 +386,33 @@ Hardening pass on the Discord connector after 5 stability, 5 improve, 11 gaps, 2
 
 - `./smackerel.sh test unit` — all packages pass (discord: 1.730s, ran fresh)
 - Zero regressions across all prior gap, simplify, stabilize, and security fixes
+
+---
+
+### Simplify-To-Doc Sweep 2 — 2026-04-11
+
+**Trigger:** `simplify` probe via stochastic-quality-sweep
+**Mode:** `simplify-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Findings (3 simplification opportunities identified)
+
+| # | Finding | Severity | Status |
+|---|---------|----------|--------|
+| S3 | `sanitizeEmbedURL()` redundant empty-string guard — `isSafeURL("")` already returns false (empty scheme ≠ http/https), making the `rawURL == ""` pre-check dead code | Low | Fixed |
+| S4 | Metadata capping in `normalizeMessage()` uses a `cap` variable that shadows Go's builtin `cap()` function + verbose 3-line if-blocks — replaceable with `min()` builtin (Go 1.21+) at 3 sites (embeds, attachments, mentions) | Low | Fixed |
+| S5 | `EnableGateway` config field parsed and stored but never consumed by runtime logic — missing TODO annotation for planned gateway implementation | Info | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+- `internal/connector/discord/discord.go`:
+  - S3: Removed redundant `rawURL == ""` guard from `sanitizeEmbedURL()`, now falls through to `isSafeURL()` which rejects empty strings via scheme check
+  - S4: Replaced `cap` variable + if-block pattern with `min()` builtin at 3 metadata capping sites (embeds, attachments, mentions). Variable renamed from `cap` to `limit` to avoid shadowing Go builtin. Net reduction: 9 lines of boilerplate
+  - S5: Added TODO comment on `EnableGateway` field documenting it as parsed-but-unused until gateway implementation
+
+#### Validation
+
+- `./smackerel.sh test unit` — all tests pass (discord package: 0.520s, ran fresh)
+- `./smackerel.sh check` — SST in sync, clean
+- All 43 security/hardening tests continue to pass unchanged

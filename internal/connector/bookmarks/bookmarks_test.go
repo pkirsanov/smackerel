@@ -196,3 +196,177 @@ func TestFolderToTopicMapping_Backslash(t *testing.T) {
 		t.Errorf("FolderToTopicMapping(\"Tech\\\\Go\") = %q, want \"tech go\"", got)
 	}
 }
+
+// T-CHAOS-004: Chrome date_added field (microseconds since 1601-01-01) is parsed correctly.
+func TestParseChromeJSON_DateAdded(t *testing.T) {
+	// 13349961600000000 = 2023-06-01T00:00:00Z in Chrome epoch microseconds.
+	// Chrome epoch: microseconds since 1601-01-01T00:00:00Z.
+	data := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Bar",
+				"children": [
+					{
+						"type": "url",
+						"name": "Dated Bookmark",
+						"url": "https://example.com",
+						"date_added": "13349961600000000"
+					}
+				]
+			}
+		}
+	}`)
+
+	bookmarks, err := ParseChromeJSON(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
+	}
+
+	b := bookmarks[0]
+	if b.AddedAt.IsZero() {
+		t.Fatal("AddedAt is zero, expected a parsed date")
+	}
+	// Verify the year is reasonable
+	if b.AddedAt.Year() < 2000 || b.AddedAt.Year() > 2100 {
+		t.Errorf("AddedAt.Year() = %d, expected between 2000 and 2100", b.AddedAt.Year())
+	}
+}
+
+// T-CHAOS-004b: Invalid and zero date_added values produce zero time.
+func TestParseChromeJSON_DateAddedEdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		dateAdded string
+		wantZero  bool
+	}{
+		{"zero value", "0", true},
+		{"negative value", "-100", true},
+		{"non-numeric", "not-a-number", true},
+		{"empty string", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dateField := ""
+			if tt.dateAdded != "" {
+				dateField = `"date_added": "` + tt.dateAdded + `",`
+			}
+			data := []byte(`{
+				"roots": {
+					"bookmark_bar": {
+						"type": "folder",
+						"name": "Bar",
+						"children": [
+							{
+								"type": "url",
+								"name": "Test",
+								` + dateField + `
+								"url": "https://example.com"
+							}
+						]
+					}
+				}
+			}`)
+
+			bookmarks, err := ParseChromeJSON(data)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if len(bookmarks) != 1 {
+				t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
+			}
+
+			if tt.wantZero && !bookmarks[0].AddedAt.IsZero() {
+				t.Errorf("AddedAt = %v, want zero", bookmarks[0].AddedAt)
+			}
+		})
+	}
+}
+
+// T-CHAOS-005: Netscape HTML entity-encoded folder and link names are decoded.
+func TestParseNetscapeHTML_HTMLEntities(t *testing.T) {
+	data := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL>
+<DT><H3>Work &amp; Life</H3>
+<DL>
+<DT><A HREF="https://example.com/article">Bob&#39;s &quot;Best&quot; Article</A>
+</DL>
+</DL>`)
+
+	bookmarks, err := ParseNetscapeHTML(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
+	}
+
+	if bookmarks[0].Folder != "Work & Life" {
+		t.Errorf("Folder = %q, want %q", bookmarks[0].Folder, "Work & Life")
+	}
+	if bookmarks[0].Title != "Bob's \"Best\" Article" {
+		t.Errorf("Title = %q, want %q", bookmarks[0].Title, `Bob's "Best" Article`)
+	}
+}
+
+// T-PARSE-001: Chrome JSON with multiple root bars (e.g., bookmark_bar + other).
+func TestParseChromeJSON_MultipleRoots(t *testing.T) {
+	data := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Bookmarks Bar",
+				"children": [
+					{"type": "url", "name": "A", "url": "https://a.com"}
+				]
+			},
+			"other": {
+				"type": "folder",
+				"name": "Other Bookmarks",
+				"children": [
+					{"type": "url", "name": "B", "url": "https://b.com"}
+				]
+			}
+		}
+	}`)
+
+	bookmarks, err := ParseChromeJSON(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 2 {
+		t.Fatalf("expected 2 bookmarks from 2 roots, got %d", len(bookmarks))
+	}
+}
+
+// T-PARSE-002: Netscape HTML with nested folders preserves folder context.
+func TestParseNetscapeHTML_NestedFolders(t *testing.T) {
+	data := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL>
+<DT><H3>Outer</H3>
+<DL>
+<DT><H3>Inner</H3>
+<DL>
+<DT><A HREF="https://example.com/deep">Deep Link</A>
+</DL>
+</DL>
+</DL>`)
+
+	bookmarks, err := ParseNetscapeHTML(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
+	}
+
+	// The folder should reflect the innermost H3 encountered before the link.
+	// Current implementation sets folder to the most recent H3 — "Inner".
+	if bookmarks[0].Folder != "Inner" {
+		t.Errorf("Folder = %q, want %q", bookmarks[0].Folder, "Inner")
+	}
+}

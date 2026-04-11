@@ -1439,3 +1439,82 @@ func TestSynthesisConfidence_EdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// === Test: GetPendingAlerts nil pool guard (bug fix) ===
+
+func TestGetPendingAlerts_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	_, err := engine.GetPendingAlerts(context.Background())
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	if !contains(err.Error(), "alert delivery requires a database connection") {
+		t.Errorf("expected database connection error, got: %s", err.Error())
+	}
+}
+
+// === Test: CreateAlert exact boundary lengths ===
+
+func TestCreateAlert_TitleExactBoundary(t *testing.T) {
+	engine := NewEngine(nil, nil)
+
+	// Exactly 200 bytes — should pass validation without truncation
+	title200 := strings.Repeat("a", 200)
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     title200,
+		Body:      "body",
+		Priority:  2,
+	}
+	err := engine.CreateAlert(context.Background(), alert)
+	// Should fail on nil pool, not on title validation
+	if err == nil {
+		t.Fatal("expected error from nil pool")
+	}
+	if len(alert.Title) != 200 {
+		t.Errorf("exactly 200-byte title should not be truncated, got %d", len(alert.Title))
+	}
+
+	// 201 bytes — should be truncated to 200
+	title201 := strings.Repeat("b", 201)
+	alert2 := &Alert{
+		AlertType: AlertBill,
+		Title:     title201,
+		Body:      "body",
+		Priority:  2,
+	}
+	_ = engine.CreateAlert(context.Background(), alert2)
+	if len(alert2.Title) != 200 {
+		t.Errorf("201-byte title should be truncated to 200, got %d", len(alert2.Title))
+	}
+}
+
+func TestCreateAlert_BodyExactBoundary(t *testing.T) {
+	engine := NewEngine(nil, nil)
+
+	// Exactly 2000 bytes — should pass without truncation
+	body2000 := strings.Repeat("c", 2000)
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     "title",
+		Body:      body2000,
+		Priority:  1,
+	}
+	_ = engine.CreateAlert(context.Background(), alert)
+	if len(alert.Body) != 2000 {
+		t.Errorf("exactly 2000-byte body should not be truncated, got %d", len(alert.Body))
+	}
+
+	// 2001 bytes — should be truncated to 2000
+	body2001 := strings.Repeat("d", 2001)
+	alert2 := &Alert{
+		AlertType: AlertBill,
+		Title:     "title",
+		Body:      body2001,
+		Priority:  1,
+	}
+	_ = engine.CreateAlert(context.Background(), alert2)
+	if len(alert2.Body) != 2000 {
+		t.Errorf("2001-byte body should be truncated to 2000, got %d", len(alert2.Body))
+	}
+}

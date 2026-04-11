@@ -19,7 +19,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - `cmd/core/main.go` (register GH connector, wire hospitality linker, register context API route)
 - `tests/` (new integration and e2e test files)
 
-**Excluded surfaces:** No changes to existing connector implementations (RSS, IMAP, CalDAV, YouTube, Browser, Bookmarks, Keep, Maps, Hospitable). No changes to existing NATS stream configurations. No changes to the ML sidecar (it processes hospitality artifacts through the existing pipeline). No changes to existing search API or web handlers (except adding the new context route). Module 5 (Hospitable MCP mode) is out of scope — it extends spec 012 and will be handled there.
+**Excluded surfaces:** No changes to existing connector implementations (RSS, IMAP, CalDAV, YouTube, Browser, Bookmarks, Keep, Maps, Hospitable). No changes to existing NATS stream configurations. No changes to the ML sidecar (it processes hospitality artifacts through the existing pipeline). No changes to existing search API or web handlers (except adding the new context route). Module 5 (Hospitable MCP mode) is excluded — it extends spec 012 and lives in that spec's scope.
 
 ### Phase Order
 
@@ -98,17 +98,17 @@ func (h *ContextHandler) HandleContextFor(w http.ResponseWriter, r *http.Request
 
 | # | Scope | Surfaces | Key Tests | DoD Summary | Status |
 |---|---|---|---|---|---|
-| 1 | GH Connector: API Client, Types & Config | Go core, Config | 10 unit + 2 integration | Client builds correct requests, paginates hasMore, retries 429, config validates | Not Started |
-| 2 | GH Connector: Implementation & Normalizer | Go core, Config | 14 unit + 3 integration + 2 e2e | Connector lifecycle, normalizer maps all 11 event types, cursor management | Not Started |
-| 3 | Hospitality Graph Nodes & Linker | Go core, DB migration | 12 unit + 4 integration + 2 e2e | Guest/property tables, hospitality linker, edge types, topic seeds | Not Started |
-| 4 | Hospitality Digest | Go core | 10 unit + 3 integration + 1 e2e | Arrivals/departures/tasks/revenue/alerts in digest, empty-day handling | Not Started |
-| 5 | Context Enrichment API | Go core, API | 12 unit + 3 integration + 2 e2e | POST /api/context-for, guest/property/booking responses, communication hints | Not Started |
+| 1 | GH Connector: API Client, Types & Config | Go core, Config | 10 unit + 2 integration | Client builds correct requests, paginates hasMore, retries 429, config validates | In Progress |
+| 2 | GH Connector: Implementation & Normalizer | Go core, Config | 14 unit + 3 integration + 2 e2e | Connector lifecycle, normalizer maps all 11 event types, cursor management | In Progress |
+| 3 | Hospitality Graph Nodes & Linker | Go core, DB migration | 12 unit + 4 integration + 2 e2e | Guest/property tables, hospitality linker, edge types, topic seeds | In Progress |
+| 4 | Hospitality Digest | Go core | 10 unit + 3 integration + 1 e2e | Arrivals/departures/tasks/revenue/alerts in digest, empty-day handling | In Progress |
+| 5 | Context Enrichment API | Go core, API | 12 unit + 3 integration + 2 e2e | POST /api/context-for, guest/property/booking responses, communication hints | In Progress |
 
 ---
 
 ## Scope 01: GH Connector — API Client, Types & Config
 
-**Status:** Not Started
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** None — foundational scope
 
@@ -208,6 +208,7 @@ Scenario: SCN-GH-007 API client omits since param on first sync
 | T-1-11 | TestFetchActivityEmptyCursorOmitsSince | unit | `internal/connector/guesthost/client_test.go` | Empty since → URL lacks since param | SCN-GH-007 |
 | T-1-12 | TestFetchActivityFullPaginationFlow | integration | `tests/integration/guesthost_test.go` | Mock HTTP server with 2 pages → all events collected, final cursor correct | SCN-GH-003 |
 | T-1-13 | TestClientRateLimitRecovery | integration | `tests/integration/guesthost_test.go` | Mock server returns 429 then 200 → client recovers | SCN-GH-004 |
+| T-1-14 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
@@ -235,6 +236,8 @@ Scenario: SCN-GH-007 API client omits since param on first sync
   > Verify: Config section present in YAML
 - [ ] Config parsing validates required fields when enabled, returns clear errors
   > Verify: T-1-10 TestConfigValidation PASS
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass → Evidence: [report.md#scope1-e2e-regression]
+- [ ] Broader E2E regression suite passes with zero regressions → Evidence: [report.md#scope1-e2e-suite]
 
 #### Build Quality Gate
 
@@ -247,7 +250,7 @@ Scenario: SCN-GH-007 API client omits since param on first sync
 
 ## Scope 02: GH Connector — Implementation & Normalizer
 
-**Status:** Not Started
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** Scope 1 (API Client, Types & Config)
 
@@ -391,6 +394,7 @@ Scenario: SCN-GH-018 Normalizer maps all remaining event types
 | T-2-17 | TestSyncWithEventTypeFilter | integration | `tests/integration/guesthost_test.go` | Configured types → only matching events returned | SCN-GH-016 |
 | T-2-18 | E2E: GH connector registration | e2e | `tests/e2e/guesthost_test.go` | Registry contains "guesthost" after startup | SCN-GH-008 |
 | T-2-19 | E2E: Full sync pipeline | e2e | `tests/e2e/guesthost_test.go` | Mock API → sync → artifacts in DB with correct content types and metadata | SCN-GH-008 thru SCN-GH-018 |
+| T-2-20 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
@@ -424,6 +428,8 @@ Scenario: SCN-GH-018 Normalizer maps all remaining event types
   > Verify: T-2-18, T-2-19 PASS
 - [ ] Regression: Scope 1 tests still pass
   > Verify: T-1-* all PASS
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass → Evidence: [report.md#scope2-e2e-regression]
+- [ ] Broader E2E regression suite passes with zero regressions → Evidence: [report.md#scope2-e2e-suite]
 
 #### Build Quality Gate
 
@@ -437,7 +443,7 @@ Scenario: SCN-GH-018 Normalizer maps all remaining event types
 
 ## Scope 03: Hospitality Graph Nodes & Linker
 
-**Status:** Not Started
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** Scope 2 (GH Connector — Implementation & Normalizer)
 
@@ -562,6 +568,7 @@ Scenario: SCN-GH-028 Property metrics update from review artifact
 | T-3-16 | TestDuringStayTemporalLinking | integration | `tests/integration/guesthost_graph_test.go` | Booking + artifact within window → DURING_STAY edge in DB | SCN-GH-025 |
 | T-3-17 | E2E: Graph nodes created from GH sync | e2e | `tests/e2e/guesthost_test.go` | Full sync → guest and property nodes in DB with correct metrics | SCN-GH-019, SCN-GH-021 |
 | T-3-18 | E2E: Hospitality edges in graph | e2e | `tests/e2e/guesthost_test.go` | Full sync → STAYED_AT, REVIEWED, ISSUE_AT edges in DB | SCN-GH-022 thru SCN-GH-024 |
+| T-3-19 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
@@ -597,6 +604,8 @@ Scenario: SCN-GH-028 Property metrics update from review artifact
   > Verify: T-3-17, T-3-18 PASS
 - [ ] Regression: Scope 1 + Scope 2 tests still pass
   > Verify: T-1-*, T-2-* all PASS
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass → Evidence: [report.md#scope3-e2e-regression]
+- [ ] Broader E2E regression suite passes with zero regressions → Evidence: [report.md#scope3-e2e-suite]
 
 #### Build Quality Gate
 
@@ -610,7 +619,7 @@ Scenario: SCN-GH-028 Property metrics update from review artifact
 
 ## Scope 04: Hospitality Digest
 
-**Status:** Not Started
+**Status:** In Progress
 **Priority:** P1
 **Dependencies:** Scope 3 (Hospitality Graph Nodes & Linker)
 
@@ -717,6 +726,7 @@ Scenario: SCN-GH-036 No hospitality connectors active generates standard digest
 | T-4-12 | TestDigestGeneratorWithHospitality | integration | `tests/integration/guesthost_digest_test.go` | Active GH connector + seeded data → digest includes hospitality sections | SCN-GH-029 |
 | T-4-13 | TestDigestGeneratorWithoutHospitality | integration | `tests/integration/guesthost_digest_test.go` | No active connectors → standard digest, no hospitality sections | SCN-GH-036 |
 | T-4-14 | E2E: Hospitality digest end-to-end | e2e | `tests/e2e/guesthost_test.go` | Full sync + digest run → hospitality sections in output | SCN-GH-029 thru SCN-GH-035 |
+| T-4-15 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
@@ -748,6 +758,8 @@ Scenario: SCN-GH-036 No hospitality connectors active generates standard digest
   > Verify: T-4-14 PASS
 - [ ] Regression: Scope 1 + Scope 2 + Scope 3 tests still pass
   > Verify: T-1-*, T-2-*, T-3-* all PASS
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass → Evidence: [report.md#scope4-e2e-regression]
+- [ ] Broader E2E regression suite passes with zero regressions → Evidence: [report.md#scope4-e2e-suite]
 
 #### Build Quality Gate
 
@@ -761,7 +773,7 @@ Scenario: SCN-GH-036 No hospitality connectors active generates standard digest
 
 ## Scope 05: Context Enrichment API
 
-**Status:** Not Started
+**Status:** In Progress
 **Priority:** P1
 **Dependencies:** Scope 3 (Hospitality Graph Nodes & Linker)
 
@@ -887,6 +899,7 @@ Scenario: SCN-GH-046 Context API disabled returns 404 for all requests
 | T-5-15 | TestSentimentTrajectoryComputation | integration | `tests/integration/guesthost_context_test.go` | Multiple message artifacts → correct sentiment trajectory | SCN-GH-037 |
 | T-5-16 | E2E: Guest context from synced data | e2e | `tests/e2e/guesthost_test.go` | Full sync → POST /api/context-for guest → correct response | SCN-GH-037 |
 | T-5-17 | E2E: Property context from synced data | e2e | `tests/e2e/guesthost_test.go` | Full sync → POST /api/context-for property → correct response | SCN-GH-038 |
+| T-5-18 | Regression E2E: existing connectors + search + digest still function | e2e | `tests/e2e/regression_test.go` | No regressions in existing functionality | — |
 
 ### Definition of Done
 
@@ -924,6 +937,8 @@ Scenario: SCN-GH-046 Context API disabled returns 404 for all requests
   > Verify: T-5-16, T-5-17 PASS
 - [ ] Regression: Scope 1 + Scope 2 + Scope 3 tests still pass
   > Verify: T-1-*, T-2-*, T-3-* all PASS
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass → Evidence: [report.md#scope5-e2e-regression]
+- [ ] Broader E2E regression suite passes with zero regressions → Evidence: [report.md#scope5-e2e-suite]
 
 #### Build Quality Gate
 

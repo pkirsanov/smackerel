@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,7 +60,7 @@ func TestClientValidateUnauthorized(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 401")
 	}
-	if got := err.Error(); !contains(got, "unauthorized") {
+	if got := err.Error(); !strings.Contains(got, "unauthorized") {
 		t.Errorf("error should contain 'unauthorized', got: %s", got)
 	}
 }
@@ -76,7 +77,7 @@ func TestClientValidateForbidden(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 403")
 	}
-	if got := err.Error(); !contains(got, "forbidden") {
+	if got := err.Error(); !strings.Contains(got, "forbidden") {
 		t.Errorf("error should contain 'forbidden', got: %s", got)
 	}
 }
@@ -163,7 +164,7 @@ func TestClientMaxRetriesOn429(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error after max retries")
 	}
-	if !contains(err.Error(), "rate limited") {
+	if !strings.Contains(err.Error(), "rate limited") {
 		t.Errorf("error should mention rate limiting: %v", err)
 	}
 }
@@ -233,10 +234,10 @@ func TestClientURLConstruction(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !contains(gotURL, "per_page=50") {
+	if !strings.Contains(gotURL, "per_page=50") {
 		t.Errorf("URL should contain per_page=50, got: %s", gotURL)
 	}
-	if !contains(gotURL, "updated_since=") {
+	if !strings.Contains(gotURL, "updated_since=") {
 		t.Errorf("URL should contain updated_since, got: %s", gotURL)
 	}
 }
@@ -311,7 +312,7 @@ func TestConfigValidationMissingToken(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing access_token")
 	}
-	if !contains(err.Error(), "access_token") {
+	if !strings.Contains(err.Error(), "access_token") {
 		t.Errorf("error should mention access_token: %v", err)
 	}
 }
@@ -324,7 +325,7 @@ func TestConfigValidationNegativeLookback(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for negative lookback days")
 	}
-	if !contains(err.Error(), "initial_lookback_days") {
+	if !strings.Contains(err.Error(), "initial_lookback_days") {
 		t.Errorf("error should mention initial_lookback_days: %v", err)
 	}
 }
@@ -456,7 +457,7 @@ func TestDisabledResourceSkipped(t *testing.T) {
 
 	// Only properties should have been fetched
 	for _, path := range requestPaths {
-		if contains(path, "reservations") || contains(path, "reviews") || contains(path, "messages") {
+		if strings.Contains(path, "reservations") || strings.Contains(path, "reviews") || strings.Contains(path, "messages") {
 			t.Errorf("disabled resource was fetched: %s", path)
 		}
 	}
@@ -473,12 +474,12 @@ func TestSyncFullLifecycle(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case contains(r.URL.Path, "/properties"):
+		case strings.Contains(r.URL.Path, "/properties"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
 				Data:  []Property{{ID: "p1", Name: "Beach House", Bedrooms: 3, Bathrooms: 2, MaxGuests: 6}},
 				Total: 1,
 			})
-		case contains(r.URL.Path, "/messages"):
+		case strings.Contains(r.URL.Path, "/messages"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Message]{
 				Data: []Message{{
 					ID: "m1", ReservationID: "r1", Sender: "John",
@@ -486,7 +487,7 @@ func TestSyncFullLifecycle(t *testing.T) {
 				}},
 				Total: 1,
 			})
-		case contains(r.URL.Path, "/reservations"):
+		case strings.Contains(r.URL.Path, "/reservations"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{
 				Data: []Reservation{{
 					ID: "r1", PropertyID: "p1", Channel: "Airbnb", Status: "confirmed",
@@ -496,7 +497,7 @@ func TestSyncFullLifecycle(t *testing.T) {
 				}},
 				Total: 1,
 			})
-		case contains(r.URL.Path, "/reviews"):
+		case strings.Contains(r.URL.Path, "/reviews"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Review]{
 				Data: []Review{{
 					ID: "rev1", PropertyID: "p1", ReservationID: "r1", Rating: 5,
@@ -553,12 +554,12 @@ func TestSyncFullLifecycle(t *testing.T) {
 	// Verify property name cache enriched reservation title
 	for _, a := range artifacts {
 		if a.ContentType == "reservation/str-booking" {
-			if !contains(a.Title, "Beach House") {
+			if !strings.Contains(a.Title, "Beach House") {
 				t.Errorf("reservation title should contain property name: %s", a.Title)
 			}
 		}
 		if a.ContentType == "review/str-guest" {
-			if !contains(a.Title, "Beach House") {
+			if !strings.Contains(a.Title, "Beach House") {
 				t.Errorf("review title should contain property name: %s", a.Title)
 			}
 		}
@@ -570,7 +571,7 @@ func TestPartialFailureReturnsSuccessful(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		path := r.URL.Path
 		switch {
-		case contains(path, "/messages"):
+		case strings.Contains(path, "/messages"):
 			// Messages fail (this catches /reservations/{id}/messages)
 			w.WriteHeader(http.StatusInternalServerError)
 		case path == "/properties":
@@ -657,11 +658,11 @@ func TestPropertyNameCacheEnrichesTitle(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case contains(r.URL.Path, "/properties"):
+		case strings.Contains(r.URL.Path, "/properties"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
 				Data: []Property{{ID: "p1", Name: "Mountain Cabin"}}, Total: 1,
 			})
-		case contains(r.URL.Path, "/reservations"):
+		case strings.Contains(r.URL.Path, "/reservations"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{
 				Data: []Reservation{{
 					ID: "r1", PropertyID: "p1", GuestName: "Alice",
@@ -691,10 +692,10 @@ func TestPropertyNameCacheEnrichesTitle(t *testing.T) {
 
 	for _, a := range artifacts {
 		if a.ContentType == "reservation/str-booking" {
-			if !contains(a.Title, "Mountain Cabin") {
+			if !strings.Contains(a.Title, "Mountain Cabin") {
 				t.Errorf("reservation title should contain cached property name 'Mountain Cabin', got: %s", a.Title)
 			}
-			if contains(a.Title, "p1") {
+			if strings.Contains(a.Title, "p1") {
 				t.Errorf("reservation title should NOT contain raw prop ID: %s", a.Title)
 			}
 		}
@@ -712,7 +713,7 @@ func TestConnectEmptyToken(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty token")
 	}
-	if !contains(err.Error(), "access_token") {
+	if !strings.Contains(err.Error(), "access_token") {
 		t.Errorf("error should mention access_token: %v", err)
 	}
 	if c.Health(context.Background()) != connector.HealthError {
@@ -728,7 +729,7 @@ func TestSyncNotConnected(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when Sync is called without Connect")
 	}
-	if !contains(err.Error(), "not connected") {
+	if !strings.Contains(err.Error(), "not connected") {
 		t.Errorf("error should mention not connected: %v", err)
 	}
 }
@@ -749,21 +750,6 @@ func TestCloseIdempotent(t *testing.T) {
 	if err := c.Close(); err != nil {
 		t.Fatalf("second Close() error: %v", err)
 	}
-}
-
-// --- helper ---
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
 
 // fastBackoff returns a backoff with tiny delays for fast tests.
@@ -798,7 +784,7 @@ func TestClientResponseBodySizeLimit(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for response body exceeding 10 MiB limit")
 	}
-	if !contains(err.Error(), "exceeds") {
+	if !strings.Contains(err.Error(), "exceeds") {
 		t.Errorf("error should mention size limit exceeded: %v", err)
 	}
 }
@@ -823,10 +809,10 @@ func TestClientListMessagesPathEscaping(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// Verify the reservation ID was properly escaped in the URL path
-	if contains(gotPath, "res/with spaces") {
+	if strings.Contains(gotPath, "res/with spaces") {
 		t.Errorf("reservation ID was not path-escaped: %s", gotPath)
 	}
-	if !contains(gotPath, "/messages") {
+	if !strings.Contains(gotPath, "/messages") {
 		t.Errorf("URL should contain /messages: %s", gotPath)
 	}
 }
@@ -848,10 +834,10 @@ func TestClientListActiveReservationsParam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !contains(gotURL, "checkout_after=2026-04-03") {
+	if !strings.Contains(gotURL, "checkout_after=2026-04-03") {
 		t.Errorf("URL should contain checkout_after=2026-04-03, got: %s", gotURL)
 	}
-	if !contains(gotURL, "per_page=50") {
+	if !strings.Contains(gotURL, "per_page=50") {
 		t.Errorf("URL should contain per_page=50, got: %s", gotURL)
 	}
 }
@@ -982,7 +968,7 @@ func TestActiveReservationMessageSync(t *testing.T) {
 				},
 				Total: 1,
 			})
-		case contains(path, "/messages"):
+		case strings.Contains(path, "/messages"):
 			messagePaths = append(messagePaths, path)
 			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
 		case path == "/reviews":
@@ -1013,10 +999,10 @@ func TestActiveReservationMessageSync(t *testing.T) {
 	// Verify both r1 and r2 were queried
 	hasR1, hasR2 := false, false
 	for _, p := range messagePaths {
-		if contains(p, "r1") {
+		if strings.Contains(p, "r1") {
 			hasR1 = true
 		}
-		if contains(p, "r2") {
+		if strings.Contains(p, "r2") {
 			hasR2 = true
 		}
 	}
@@ -1091,7 +1077,7 @@ func TestPropertyNameCachePersistsInCursor(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case contains(r.URL.Path, "/properties"):
+		case strings.Contains(r.URL.Path, "/properties"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
 				Data: []Property{{ID: "p1", Name: "Beach House"}}, Total: 1,
 			})
@@ -1128,11 +1114,11 @@ func TestPropertyNameCacheLoadedFromCursor(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
-		case contains(r.URL.Path, "/properties"):
+		case strings.Contains(r.URL.Path, "/properties"):
 			callCount++
 			// Second sync returns NO updated properties
 			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
-		case contains(r.URL.Path, "/reservations"):
+		case strings.Contains(r.URL.Path, "/reservations"):
 			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{
 				Data: []Reservation{{
 					ID: "r1", PropertyID: "p1", GuestName: "Alice",
@@ -1173,7 +1159,7 @@ func TestPropertyNameCacheLoadedFromCursor(t *testing.T) {
 	// Reservation title should use property name from cursor, not raw ID
 	for _, a := range artifacts {
 		if a.ContentType == "reservation/str-booking" {
-			if !contains(a.Title, "Beach House") {
+			if !strings.Contains(a.Title, "Beach House") {
 				t.Errorf("reservation title should use cached name from cursor: %s", a.Title)
 			}
 		}
@@ -1198,7 +1184,7 @@ func TestMessageCursorNotAdvancedOnFailure(t *testing.T) {
 				},
 				Total: 1,
 			})
-		case contains(path, "/messages"):
+		case strings.Contains(path, "/messages"):
 			// Messages fail for all reservations
 			w.WriteHeader(http.StatusInternalServerError)
 		case path == "/reviews":

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/pipeline"
@@ -57,6 +58,13 @@ type ConnectorHealthLister interface {
 	ListConnectorHealth(ctx context.Context) map[string]string
 }
 
+// ArtifactQuerier provides typed access to artifact CRUD operations.
+type ArtifactQuerier interface {
+	RecentArtifacts(ctx context.Context, limit int) ([]db.RecentArtifact, error)
+	GetArtifact(ctx context.Context, id string) (*db.ArtifactDetail, error)
+	ExportArtifacts(ctx context.Context, cursor time.Time, limit int) (*db.ExportResult, error)
+}
+
 // Dependencies holds shared service dependencies for API handlers.
 type Dependencies struct {
 	DB                 DBHealthChecker
@@ -73,6 +81,7 @@ type Dependencies struct {
 	OAuthHandler       OAuthFlow
 	TelegramBot        TelegramHealthChecker
 	ConnectorRegistry  ConnectorHealthLister
+	ArtifactStore      ArtifactQuerier
 	ContextHandler     *ContextHandler
 	OllamaURL          string
 	AuthToken          string

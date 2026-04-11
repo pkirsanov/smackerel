@@ -124,6 +124,33 @@ func TestNormalizeURL_Regression_NoPanic(t *testing.T) {
 	}
 }
 
+// T-2-09: Fragment is stripped from normalized URLs.
+func TestNormalizeURL_StripFragment(t *testing.T) {
+	got := NormalizeURL("https://example.com/page#section-2")
+	want := "https://example.com/page"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q (fragment stripped)", got, want)
+	}
+}
+
+// T-2-10: Combination of all normalizations applied together.
+func TestNormalizeURL_CombinedNormalization(t *testing.T) {
+	got := NormalizeURL("HTTPS://Example.COM/Page/?utm_source=twitter&id=5#footer")
+	want := "https://example.com/Page?id=5"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q", got, want)
+	}
+}
+
+// T-2-11: Root path "/" is preserved (not stripped to empty).
+func TestNormalizeURL_RootPath(t *testing.T) {
+	got := NormalizeURL("https://example.com/")
+	want := "https://example.com/"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q (root path preserved)", got, want)
+	}
+}
+
 // T-2-06 through T-2-08 test FilterNew which requires a DB pool.
 // These are tested as integration tests (they need postgres).
 // Here we test the nil-pool graceful handling.

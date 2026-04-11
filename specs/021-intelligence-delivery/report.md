@@ -58,6 +58,41 @@
 | Billing date fix | `engine.go` — `ProduceBillAlerts()` uses `clampDay()` with `time.Local` midnight, not `Truncate(24h)` | `internal/intelligence/engine.go:830-855` | Intact |
 | SendAlertMessage error handling | `bot.go` — `SendAlertMessage()` returns error; scheduler continues on failure with `continue` | `internal/telegram/bot.go:659-668`, `internal/scheduler/scheduler.go:370-376` | Intact |
 | Combined daily producers | `scheduler.go` — 3 daily producers (`ProduceBillAlerts`, `ProduceTripPrepAlerts`, `ProduceReturnWindowAlerts`) run sequentially in single `0 6 * * *` job under `muDaily` | `internal/scheduler/scheduler.go:395-415` | Intact |
+
+## Test Coverage Sweep (2026-04-11, test-to-doc)
+
+### Bug Fixed
+
+| Bug | File | Description |
+|-----|------|-------------|
+| Missing nil pool guard in `GetPendingAlerts()` | `internal/intelligence/engine.go` | Every other Engine method guards against nil pool. `GetPendingAlerts()` called `e.Pool.Query()` without checking, causing nil-pointer panic if Pool was nil. Added `if e.Pool == nil` guard matching all other methods. |
+
+### Code Improvements
+
+| Change | File | Description |
+|--------|------|-------------|
+| Extracted `deliverPendingAlerts()` | `internal/scheduler/scheduler.go` | Moved alert delivery sweep logic from inline cron callback into exported-for-package method for testability. |
+| Extracted `FormatAlertMessage()` | `internal/scheduler/scheduler.go` | Pure function for alert type→icon mapping and message formatting. Enables direct unit testing of formatting without bot/engine dependencies. |
+| Exported `AlertTypeIcons` map | `internal/scheduler/scheduler.go` | Package-level map of alert type→emoji icon for validation and testing. |
+
+### Tests Added
+
+| Test | File | Covers |
+|------|------|--------|
+| `TestGetPendingAlerts_NilPool` | `engine_test.go` | Verifies new nil pool guard returns error, not panic |
+| `TestCreateAlert_TitleExactBoundary` | `engine_test.go` | 200-byte title passes; 201-byte truncated to 200 |
+| `TestCreateAlert_BodyExactBoundary` | `engine_test.go` | 2000-byte body passes; 2001-byte truncated to 2000 |
+| `TestFormatAlertMessage_AllKnownTypes` | `scheduler_test.go` | All 6 alert types map to correct emoji icons and preserve title/body |
+| `TestFormatAlertMessage_UnknownType` | `scheduler_test.go` | Unknown type uses fallback 🔔 icon |
+| `TestFormatAlertMessage_EmptyType` | `scheduler_test.go` | Empty string type uses fallback 🔔 icon |
+| `TestFormatAlertMessage_Format` | `scheduler_test.go` | Exact string format: "icon title\nbody" |
+| `TestDeliverPendingAlerts_NilEngine` | `scheduler_test.go` | Nil engine field does not panic |
+| `TestDeliverPendingAlerts_NilPoolEngine` | `scheduler_test.go` | Engine with nil pool → GetPendingAlerts error → clean return |
+| `TestDeliverPendingAlerts_NilBot` | `scheduler_test.go` | Nil bot with nil pool engine → no panic |
+| `TestAlertTypeIcons_AllSixTypes` | `scheduler_test.go` | All 6 types present in icon map, no extras |
+| `TestLogSearch_QueryTruncation` | `lookups_test.go` | 600-char query reaches pool check without panic |
+| `TestLogSearch_ExactTruncationBoundary` | `lookups_test.go` | 500-char passes, 501-char truncated, both reach pool check |
+| `TestLogSearch_EmptyQuery` | `lookups_test.go` | Empty query reaches pool check without panic |
 | Timezone-safe billing | `engine.go` — `localToday` uses `time.Date(..., time.Local)` not `Truncate`; `clampDay` uses `time.Local` | `internal/intelligence/engine.go:1079-1085` | Intact |
 | Deferred cancel | `search.go` — LogSearch uses detached `context.Background()` with 5s timeout via `defer logCancel()` | `internal/api/search.go:133-139` | Intact |
 

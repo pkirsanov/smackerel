@@ -151,3 +151,71 @@ func (p *Postgres) ExportArtifacts(ctx context.Context, cursor time.Time, limit 
 	}
 	return &ExportResult{Artifacts: results, NextCursor: lastCreatedAt}, nil
 }
+
+// RecentArtifact is a summary of a recently captured artifact.
+type RecentArtifact struct {
+	ID           string
+	Title        string
+	ArtifactType string
+	Summary      string
+	CreatedAt    time.Time
+}
+
+// RecentArtifacts returns the most recently captured artifacts, ordered newest first.
+func (p *Postgres) RecentArtifacts(ctx context.Context, limit int) ([]RecentArtifact, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	rows, err := p.Pool.Query(ctx, `
+		SELECT id, title, artifact_type, COALESCE(summary, ''), created_at
+		FROM artifacts ORDER BY created_at DESC LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("recent artifacts query: %w", err)
+	}
+	defer rows.Close()
+
+	var items []RecentArtifact
+	for rows.Next() {
+		var a RecentArtifact
+		if err := rows.Scan(&a.ID, &a.Title, &a.ArtifactType, &a.Summary, &a.CreatedAt); err != nil {
+			continue
+		}
+		items = append(items, a)
+	}
+	if err := rows.Err(); err != nil {
+		return items, fmt.Errorf("recent artifacts iteration: %w", err)
+	}
+	return items, nil
+}
+
+// ArtifactDetail is the full detail of a single artifact.
+type ArtifactDetail struct {
+	ID             string
+	Title          string
+	ArtifactType   string
+	Summary        string
+	SourceURL      string
+	Sentiment      string
+	SourceQuality  string
+	ProcessingTier string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// GetArtifact retrieves a single artifact by ID.
+func (p *Postgres) GetArtifact(ctx context.Context, id string) (*ArtifactDetail, error) {
+	var a ArtifactDetail
+	err := p.Pool.QueryRow(ctx, `
+		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
+		       COALESCE(sentiment, ''), COALESCE(source_quality, ''), COALESCE(processing_tier, ''),
+		       created_at, updated_at
+		FROM artifacts WHERE id = $1
+	`, id).Scan(&a.ID, &a.Title, &a.ArtifactType, &a.Summary, &a.SourceURL,
+		&a.Sentiment, &a.SourceQuality, &a.ProcessingTier,
+		&a.CreatedAt, &a.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("get artifact: %w", err)
+	}
+	return &a, nil
+}
