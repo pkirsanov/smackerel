@@ -25,6 +25,7 @@ func Connect(ctx context.Context, databaseURL string, maxConns, minConns int32) 
 	config.MinConns = minConns
 	config.MaxConnLifetime = 30 * time.Minute
 	config.MaxConnIdleTime = 5 * time.Minute
+	config.HealthCheckPeriod = 30 * time.Second // proactively detect stale connections
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {

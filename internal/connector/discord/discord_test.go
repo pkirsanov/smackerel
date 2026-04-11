@@ -1268,3 +1268,123 @@ func TestNormalizeMessage_AttachmentFilenameSanitized(t *testing.T) {
 		t.Errorf("expected sanitized filename, got %q", attachments[0].Filename)
 	}
 }
+
+func TestNormalizeMessage_AttachmentFilenamePathTraversalStripped(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+		Attachments: []Attachment{
+			{ID: "a1", Filename: "../../etc/passwd", URL: "https://cdn.discordapp.com/f.txt", Size: 10},
+			{ID: "a2", Filename: "../secret/keys.pem", URL: "https://cdn.discordapp.com/k.pem", Size: 20},
+			{ID: "a3", Filename: "normal.png", URL: "https://cdn.discordapp.com/n.png", Size: 30},
+		},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	attachments := artifact.Metadata["attachments"].([]Attachment)
+	if attachments[0].Filename != "passwd" {
+		t.Errorf("expected path traversal stripped to basename 'passwd', got %q", attachments[0].Filename)
+	}
+	if attachments[1].Filename != "keys.pem" {
+		t.Errorf("expected path traversal stripped to basename 'keys.pem', got %q", attachments[1].Filename)
+	}
+	if attachments[2].Filename != "normal.png" {
+		t.Errorf("expected normal filename preserved, got %q", attachments[2].Filename)
+	}
+}
+
+func TestNormalizeMessage_EmbedTitleTruncated(t *testing.T) {
+	longTitle := ""
+	for len(longTitle) < 500 {
+		longTitle += "abcdefghij"
+	}
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+		Embeds:    []Embed{{Title: longTitle, URL: "https://example.com"}},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	embeds := artifact.Metadata["embeds"].([]Embed)
+	if len(embeds[0].Title) > maxEmbedTitleLen {
+		t.Errorf("embed title should be truncated to %d bytes, got %d", maxEmbedTitleLen, len(embeds[0].Title))
+	}
+}
+
+func TestNormalizeMessage_EmbedDescriptionTruncated(t *testing.T) {
+	longDesc := ""
+	for len(longDesc) < 6000 {
+		longDesc += "abcdefghij"
+	}
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+		Embeds:    []Embed{{Description: longDesc, URL: "https://example.com"}},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	embeds := artifact.Metadata["embeds"].([]Embed)
+	if len(embeds[0].Description) > maxEmbedDescLen {
+		t.Errorf("embed description should be truncated to %d bytes, got %d", maxEmbedDescLen, len(embeds[0].Description))
+	}
+}
+
+func TestNormalizeMessage_ReactionEmojiSanitized(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+		Reactions: []Reaction{
+			{Emoji: "👍\x00injected", Count: 3},
+			{Emoji: "❤️", Count: 2},
+		},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	reactions := artifact.Metadata["reactions"].([]Reaction)
+	if reactions[0].Emoji != "👍injected" {
+		t.Errorf("expected control chars stripped from emoji, got %q", reactions[0].Emoji)
+	}
+	if reactions[0].Count != 3 {
+		t.Errorf("expected reaction count preserved, got %d", reactions[0].Count)
+	}
+	if reactions[1].Emoji != "❤️" {
+		t.Errorf("expected normal emoji preserved, got %q", reactions[1].Emoji)
+	}
+}
+
+func TestConnect_CursorRestorationValidatesSnowflakes(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"cursors": `{"100000000000000001":"200000000000000001","../etc/passwd":"300000000000000001","400000000000000001":"not-a-snowflake"}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Valid cursor should be restored
+	if v, ok := c.cursors["100000000000000001"]; !ok || v != "200000000000000001" {
+		t.Errorf("expected valid cursor restored, got %v", c.cursors)
+	}
+	// Invalid channel ID should be rejected
+	if _, ok := c.cursors["../etc/passwd"]; ok {
+		t.Error("invalid channel ID should not be restored into cursors")
+	}
+	// Invalid value should be rejected
+	if _, ok := c.cursors["400000000000000001"]; ok {
+		t.Error("cursor with invalid snowflake value should not be restored")
+	}
+}

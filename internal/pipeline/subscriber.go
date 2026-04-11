@@ -86,6 +86,14 @@ func (rs *ResultSubscriber) Start(ctx context.Context) error {
 				default:
 				}
 				slog.Debug("fetch artifacts.processed batch", "error", err)
+				// Backoff before retry to prevent tight spin on transient NATS errors
+				select {
+				case <-rs.done:
+					return
+				case <-ctx.Done():
+					return
+				case <-time.After(1 * time.Second):
+				}
 				continue
 			}
 
@@ -131,6 +139,14 @@ func (rs *ResultSubscriber) Start(ctx context.Context) error {
 				default:
 				}
 				slog.Debug("fetch digest.generated batch", "error", err)
+				// Backoff before retry to prevent tight spin on transient NATS errors
+				select {
+				case <-rs.done:
+					return
+				case <-ctx.Done():
+					return
+				case <-time.After(1 * time.Second):
+				}
 				continue
 			}
 
