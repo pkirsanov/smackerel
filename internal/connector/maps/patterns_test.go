@@ -430,30 +430,25 @@ func TestDetermineLinkTypeSpatial(t *testing.T) {
 
 func TestTypicalHour(t *testing.T) {
 	tests := []struct {
+		name  string
 		hours []int
 		want  int
 	}{
-		{[]int{8, 8, 9, 8, 7}, 8},
-		{[]int{7, 7, 8, 8}, 7}, // tie: either is acceptable
-		{[]int{}, 0},
-		{[]int{14}, 14},
+		{"clear_winner", []int{8, 8, 9, 8, 7}, 8},
+		{"tie_picks_lower", []int{7, 7, 8, 8}, 7}, // IMPROVE-011: deterministic tie → lower hour
+		{"tie_picks_lower_reversed", []int{8, 8, 7, 7}, 7},
+		{"empty", []int{}, 0},
+		{"single", []int{14}, 14},
+		{"three_way_tie", []int{6, 7, 8}, 6}, // IMPROVE-011: all equal freq → lowest hour
 	}
 
 	for _, tt := range tests {
-		got := typicalHour(tt.hours)
-		// For ties allow either.
-		if len(tt.hours) > 0 && got != tt.want {
-			// Check if it's a valid tie.
-			freq := make(map[int]int)
-			for _, h := range tt.hours {
-				freq[h]++
-			}
-			if freq[got] < freq[tt.want] {
+		t.Run(tt.name, func(t *testing.T) {
+			got := typicalHour(tt.hours)
+			if got != tt.want {
 				t.Errorf("typicalHour(%v) = %d, want %d", tt.hours, got, tt.want)
 			}
-		} else if len(tt.hours) == 0 && got != 0 {
-			t.Errorf("typicalHour(empty) = %d, want 0", got)
-		}
+		})
 	}
 }
 

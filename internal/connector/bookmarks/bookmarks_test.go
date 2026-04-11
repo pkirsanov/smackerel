@@ -3,6 +3,7 @@ package bookmarks
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestParseChromeJSON(t *testing.T) {
@@ -96,6 +97,66 @@ func TestToRawArtifacts(t *testing.T) {
 	}
 	if artifacts[0].SourceID != "bookmarks" {
 		t.Errorf("expected source_id 'bookmarks', got %q", artifacts[0].SourceID)
+	}
+}
+
+// T-IMP-01: ToRawArtifacts normalizes SourceRef to canonical URL form.
+func TestToRawArtifacts_NormalizedSourceRef(t *testing.T) {
+	bookmarks := []Bookmark{
+		{Title: "Tracked", URL: "https://Example.COM/page/?utm_source=twitter&id=5"},
+		{Title: "Trailing", URL: "https://example.com/path/"},
+		{Title: "Clean", URL: "https://example.com/clean"},
+	}
+
+	artifacts := ToRawArtifacts(bookmarks)
+	if len(artifacts) != 3 {
+		t.Fatalf("expected 3 artifacts, got %d", len(artifacts))
+	}
+
+	// SourceRef should be normalized; URL should remain raw
+	if artifacts[0].SourceRef != "https://example.com/page?id=5" {
+		t.Errorf("SourceRef = %q, want normalized", artifacts[0].SourceRef)
+	}
+	if artifacts[0].URL != "https://Example.COM/page/?utm_source=twitter&id=5" {
+		t.Errorf("URL should remain raw, got %q", artifacts[0].URL)
+	}
+	if artifacts[1].SourceRef != "https://example.com/path" {
+		t.Errorf("SourceRef = %q, want trailing slash stripped", artifacts[1].SourceRef)
+	}
+	if artifacts[2].SourceRef != "https://example.com/clean" {
+		t.Errorf("SourceRef = %q, want unchanged clean URL", artifacts[2].SourceRef)
+	}
+}
+
+// T-IMP-02: ParseNetscapeHTML extracts ADD_DATE timestamps.
+func TestParseNetscapeHTML_AddDate(t *testing.T) {
+	data := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL>
+<DT><H3>Reading</H3>
+<DL>
+<DT><A HREF="https://example.com/article" ADD_DATE="1700000000">Timestamped</A>
+<DT><A HREF="https://example.com/nodate">No Date</A>
+</DL>
+</DL>`)
+
+	bookmarks, err := ParseNetscapeHTML(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if len(bookmarks) != 2 {
+		t.Fatalf("expected 2 bookmarks, got %d", len(bookmarks))
+	}
+
+	// First bookmark should have ADD_DATE parsed
+	expected := time.Unix(1700000000, 0)
+	if !bookmarks[0].AddedAt.Equal(expected) {
+		t.Errorf("AddedAt = %v, want %v", bookmarks[0].AddedAt, expected)
+	}
+
+	// Second bookmark should have zero time
+	if !bookmarks[1].AddedAt.IsZero() {
+		t.Errorf("AddedAt = %v, want zero for bookmark without ADD_DATE", bookmarks[1].AddedAt)
 	}
 }
 

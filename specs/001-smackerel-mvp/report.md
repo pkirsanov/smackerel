@@ -199,6 +199,44 @@ Scenario-first red-green TDD methodology was applied: test scenarios written fro
 
 ---
 
+## Test-to-Doc Sweep (2026-04-11)
+
+**Trigger:** test (stochastic quality sweep)
+**Target:** Cross-cutting concerns — main.go wiring, config validation, end-to-end flow paths
+
+### Baseline
+
+All 34 Go packages pass, 53 Python tests pass. No regressions.
+
+### Finding: `cmd/core` had zero test files
+
+The Go test output showed `? github.com/smackerel/smackerel/cmd/core [no test files]` — the central integration backbone (~620 lines) had no unit test coverage at all. Three pure/near-pure helper functions (`parseJSONArray`, `parseJSONObject`, `parseFloatEnv`) were completely untested.
+
+### Remediation
+
+Created `cmd/core/main_test.go` with 22 tests covering:
+- `parseJSONArray`: valid array, empty string, empty array, invalid JSON, mixed types, nested arrays, non-array input (7 tests)
+- `parseJSONObject`: valid object, empty string, empty object, invalid JSON, non-object input, nested object (6 tests)
+- `parseFloatEnv`: valid float, integer, empty string, unset var, invalid float, negative, zero, scientific notation (8 tests)
+
+### Post-Remediation Evidence
+
+```
+$ ./smackerel.sh test unit 2>&1 | grep 'cmd/core'
+ok      github.com/smackerel/smackerel/cmd/core 0.200s
+
+$ ./smackerel.sh check
+Config is in sync with SST
+
+$ ./smackerel.sh lint 2>&1 | grep -v 'Downloading\|Installing\|Building\|Collecting\|Stored\|Successfully\|WARNING\|notice'
+All checks passed!
+```
+
+### Files Changed
+- `cmd/core/main_test.go` — NEW: 22 unit tests for helper functions
+
+---
+
 ## Regression Verification (2026-04-10)
 
 **Trigger:** Stochastic quality sweep — regression round after 20-round prior sweep, 6 new specs (019-024) delivered, and 12 prior sweep rounds in current cycle.
