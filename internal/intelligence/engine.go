@@ -1107,6 +1107,9 @@ func (e *Engine) GetLastSynthesisTime(ctx context.Context) (time.Time, error) {
 func clampDay(year int, month time.Month, day int) time.Time {
 	// time.Date normalises overflow: Feb 31 → Mar 3, so instead compute
 	// the last day of the month and clamp.
+	if day < 1 {
+		day = 1
+	}
 	lastDay := time.Date(year, month+1, 0, 0, 0, 0, 0, time.Local).Day()
 	if day > lastDay {
 		day = lastDay

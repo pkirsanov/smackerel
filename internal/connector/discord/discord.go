@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +44,15 @@ const (
 	maxMetadataMentions = 100
 	// maxBotCommandCommentLen caps the comment text from bot capture commands.
 	maxBotCommandCommentLen = 2000
+	// maxEmbedTitleLen caps stored embed title length (Discord API limit is 256).
+	maxEmbedTitleLen = 256
+	// maxEmbedDescLen caps stored embed description length (Discord API limit is 4096).
+	maxEmbedDescLen = 4096
+	// maxSyncArtifacts caps the total number of artifacts returned per Sync call
+	// to prevent memory exhaustion with many channels × large backfill limits.
+	maxSyncArtifacts = 50000
+	// maxReactionEmojiLen caps stored reaction emoji string length.
+	maxReactionEmojiLen = 100
 )
 
 // Connector implements the Discord connector using REST API for message history.
@@ -155,10 +165,23 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	c.mu.Lock()
 	c.config = cfg
 
-	// Restore cursors from source config
+	// Restore cursors from source config, validating snowflake IDs
 	if cursorJSON, ok := config.SourceConfig["cursors"].(string); ok && cursorJSON != "" {
-		if err := json.Unmarshal([]byte(cursorJSON), &c.cursors); err != nil {
+		var restored ChannelCursors
+		if err := json.Unmarshal([]byte(cursorJSON), &restored); err != nil {
 			slog.Debug("failed to unmarshal discord cursors from config", "connector_id", c.id, "error", err)
+		} else {
+			for k, v := range restored {
+				if !isValidSnowflake(k) {
+					slog.Warn("discord stored cursor has invalid channel ID, skipping", "connector_id", c.id, "channel_id", k)
+					continue
+				}
+				if v != "" && !isValidSnowflake(v) {
+					slog.Warn("discord stored cursor has invalid snowflake value, skipping", "connector_id", c.id, "channel_id", k, "value", v)
+					continue
+				}
+				c.cursors[k] = v
+			}
 		}
 	}
 
@@ -229,8 +252,19 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	seen := make(map[string]struct{})
 
 	// Iterate monitored channels and fetch messages, pins, and threads per channel
+	capReached := false
 	for _, chCfg := range c.config.MonitoredChannels {
+		if capReached {
+			break
+		}
 		for _, chID := range chCfg.ChannelIDs {
+			// Enforce total artifact cap to prevent memory exhaustion
+			if len(allArtifacts) >= maxSyncArtifacts {
+				slog.Warn("discord sync artifact cap reached", "connector_id", c.id, "cap", maxSyncArtifacts)
+				capReached = true
+				break
+			}
+
 			// Check context cancellation between channels
 			if err := ctx.Err(); err != nil {
 				cursorBytes, marshalErr := json.Marshal(localCursors)
@@ -465,8 +499,8 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 		for i := 0; i < limit; i++ {
 			e := msg.Embeds[i]
 			e.URL = sanitizeEmbedURL(e.URL)
-			e.Title = sanitizeControlChars(e.Title)
-			e.Description = sanitizeControlChars(e.Description)
+			e.Title = stringutil.TruncateUTF8(sanitizeControlChars(e.Title), maxEmbedTitleLen)
+			e.Description = stringutil.TruncateUTF8(sanitizeControlChars(e.Description), maxEmbedDescLen)
 			safeEmbeds = append(safeEmbeds, e)
 		}
 		metadata["embeds"] = safeEmbeds
@@ -478,18 +512,26 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 		for i := 0; i < limit; i++ {
 			a := msg.Attachments[i]
 			a.URL = sanitizeEmbedURL(a.URL)
-			a.Filename = sanitizeControlChars(a.Filename)
+			// Strip to basename to prevent path traversal in metadata
+			a.Filename = sanitizeControlChars(filepath.Base(a.Filename))
 			safe = append(safe, a)
 		}
 		metadata["attachments"] = safe
 	}
-	// Cap reactions
+	// Sanitize and cap reactions
 	if len(msg.Reactions) > 0 {
 		r := msg.Reactions
 		if len(r) > maxMetadataReactions {
 			r = r[:maxMetadataReactions]
 		}
-		metadata["reactions"] = r
+		safeReactions := make([]Reaction, len(r))
+		for i, rx := range r {
+			safeReactions[i] = Reaction{
+				Emoji: stringutil.TruncateUTF8(sanitizeControlChars(rx.Emoji), maxReactionEmojiLen),
+				Count: rx.Count,
+			}
+		}
+		metadata["reactions"] = safeReactions
 	}
 	// Validate and cap mention IDs (must be valid snowflakes)
 	if len(msg.MentionIDs) > 0 {

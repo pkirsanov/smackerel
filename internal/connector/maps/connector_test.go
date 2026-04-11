@@ -815,6 +815,100 @@ func TestSyncCursorPrunedAfterArchive(t *testing.T) {
 	}
 }
 
+// IMPROVE-011-R09: parseMapsConfig int-type handling for trip/link/location fields.
+func TestParseMapsConfigIntTypesExtended(t *testing.T) {
+	cfg, err := parseMapsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":               "/tmp/test",
+			"location_radius_m":        int(250),
+			"trip_min_distance_km":     int(100),
+			"trip_min_overnight_hours": int(24),
+			"link_time_extend_min":     int(60),
+			"link_proximity_radius_m":  int(2000),
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.LocationRadiusM != 250 {
+		t.Errorf("LocationRadiusM = %v, want 250", cfg.LocationRadiusM)
+	}
+	if cfg.TripMinDistanceKm != 100 {
+		t.Errorf("TripMinDistanceKm = %v, want 100", cfg.TripMinDistanceKm)
+	}
+	if cfg.TripMinOvernightHours != 24 {
+		t.Errorf("TripMinOvernightHours = %v, want 24", cfg.TripMinOvernightHours)
+	}
+	if cfg.LinkTimeExtendMin != 60 {
+		t.Errorf("LinkTimeExtendMin = %v, want 60", cfg.LinkTimeExtendMin)
+	}
+	if cfg.LinkProximityRadiusM != 2000 {
+		t.Errorf("LinkProximityRadiusM = %v, want 2000", cfg.LinkProximityRadiusM)
+	}
+}
+
+// IMPROVE-011-R09: validation rejects negative/zero values for location/link fields.
+func TestParseMapsConfigValidationLocationLink(t *testing.T) {
+	tests := []struct {
+		name   string
+		config map[string]interface{}
+	}{
+		{"negative_location_radius_m_float", map[string]interface{}{"import_dir": "/tmp/test", "location_radius_m": float64(-1)}},
+		{"negative_location_radius_m_int", map[string]interface{}{"import_dir": "/tmp/test", "location_radius_m": int(-1)}},
+		{"negative_trip_min_distance_km_int", map[string]interface{}{"import_dir": "/tmp/test", "trip_min_distance_km": int(-10)}},
+		{"zero_trip_min_distance_km_int", map[string]interface{}{"import_dir": "/tmp/test", "trip_min_distance_km": int(0)}},
+		{"negative_trip_min_overnight_hours_int", map[string]interface{}{"import_dir": "/tmp/test", "trip_min_overnight_hours": int(-1)}},
+		{"zero_trip_min_overnight_hours_int", map[string]interface{}{"import_dir": "/tmp/test", "trip_min_overnight_hours": int(0)}},
+		{"negative_link_time_extend_min_float", map[string]interface{}{"import_dir": "/tmp/test", "link_time_extend_min": float64(-5)}},
+		{"negative_link_time_extend_min_int", map[string]interface{}{"import_dir": "/tmp/test", "link_time_extend_min": int(-5)}},
+		{"negative_link_proximity_radius_m_float", map[string]interface{}{"import_dir": "/tmp/test", "link_proximity_radius_m": float64(-100)}},
+		{"zero_link_proximity_radius_m_float", map[string]interface{}{"import_dir": "/tmp/test", "link_proximity_radius_m": float64(0)}},
+		{"negative_link_proximity_radius_m_int", map[string]interface{}{"import_dir": "/tmp/test", "link_proximity_radius_m": int(-100)}},
+		{"zero_link_proximity_radius_m_int", map[string]interface{}{"import_dir": "/tmp/test", "link_proximity_radius_m": int(0)}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseMapsConfig(connector.ConnectorConfig{SourceConfig: tt.config})
+			if err == nil {
+				t.Errorf("expected validation error for %s", tt.name)
+			}
+		})
+	}
+}
+
+// IMPROVE-011-R09: zero location_radius_m is accepted (non-negative, not positive).
+func TestParseMapsConfigZeroLocationRadiusAllowed(t *testing.T) {
+	cfg, err := parseMapsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":        "/tmp/test",
+			"location_radius_m": float64(0),
+		},
+	})
+	if err != nil {
+		t.Fatalf("zero location_radius_m should be accepted: %v", err)
+	}
+	if cfg.LocationRadiusM != 0 {
+		t.Errorf("LocationRadiusM = %v, want 0", cfg.LocationRadiusM)
+	}
+}
+
+// IMPROVE-011-R09: zero link_time_extend_min is accepted (non-negative, not positive).
+func TestParseMapsConfigZeroLinkTimeExtendAllowed(t *testing.T) {
+	cfg, err := parseMapsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":           "/tmp/test",
+			"link_time_extend_min": float64(0),
+		},
+	})
+	if err != nil {
+		t.Fatalf("zero link_time_extend_min should be accepted: %v", err)
+	}
+	if cfg.LinkTimeExtendMin != 0 {
+		t.Errorf("LinkTimeExtendMin = %v, want 0", cfg.LinkTimeExtendMin)
+	}
+}
+
 func makeTakeoutJSON(n int) string {
 	base := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)
 	objects := ""
