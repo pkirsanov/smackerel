@@ -190,12 +190,14 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 
 		filename := filepath.Base(file)
+		fileCancelled := false
 		for i, activity := range activities {
 			// Check for context cancellation periodically within large files.
 			if i > 0 && i%500 == 0 {
 				if err := ctx.Err(); err != nil {
 					slog.Warn("sync cancelled during activity processing",
 						"file", filename, "processed", i, "total", len(activities), "error", err)
+					fileCancelled = true
 					break
 				}
 			}
@@ -223,6 +225,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					slog.Warn("failed to insert location cluster", "error", err)
 				}
 			}
+		}
+
+		// Only mark the file as processed if all activities were processed.
+		// If context was cancelled mid-file, the file must be re-processed
+		// on the next sync to avoid permanently losing unprocessed activities.
+		if fileCancelled {
+			break
 		}
 
 		processedThisCycle = append(processedThisCycle, filename)
@@ -528,16 +537,28 @@ func parseMapsConfig(config connector.ConnectorConfig) (MapsConfig, error) {
 	if cmo, ok := sc["commute_min_occurrences"]; ok {
 		switch v := cmo.(type) {
 		case float64:
+			if v < 1 {
+				return MapsConfig{}, fmt.Errorf("commute_min_occurrences must be >= 1, got %v", v)
+			}
 			cfg.CommuteMinOccurrences = int(v)
 		case int:
+			if v < 1 {
+				return MapsConfig{}, fmt.Errorf("commute_min_occurrences must be >= 1, got %v", v)
+			}
 			cfg.CommuteMinOccurrences = v
 		}
 	}
 	if cwd, ok := sc["commute_window_days"]; ok {
 		switch v := cwd.(type) {
 		case float64:
+			if v < 1 {
+				return MapsConfig{}, fmt.Errorf("commute_window_days must be >= 1, got %v", v)
+			}
 			cfg.CommuteWindowDays = int(v)
 		case int:
+			if v < 1 {
+				return MapsConfig{}, fmt.Errorf("commute_window_days must be >= 1, got %v", v)
+			}
 			cfg.CommuteWindowDays = v
 		}
 	}
@@ -548,11 +569,17 @@ func parseMapsConfig(config connector.ConnectorConfig) (MapsConfig, error) {
 	// Trip config
 	if tmd, ok := sc["trip_min_distance_km"]; ok {
 		if v, ok := tmd.(float64); ok {
+			if v <= 0 {
+				return MapsConfig{}, fmt.Errorf("trip_min_distance_km must be positive, got %v", v)
+			}
 			cfg.TripMinDistanceKm = v
 		}
 	}
 	if tmo, ok := sc["trip_min_overnight_hours"]; ok {
 		if v, ok := tmo.(float64); ok {
+			if v <= 0 {
+				return MapsConfig{}, fmt.Errorf("trip_min_overnight_hours must be positive, got %v", v)
+			}
 			cfg.TripMinOvernightHours = v
 		}
 	}

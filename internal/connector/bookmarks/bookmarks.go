@@ -17,8 +17,9 @@ const maxExtractDepth = 50
 
 // Pre-compiled regexes for Netscape HTML parsing (F-STAB-005).
 var (
-	netscapeLinkRe   = regexp.MustCompile(`<A HREF="([^"]+)"[^>]*>([^<]+)</A>`)
-	netscapeFolderRe = regexp.MustCompile(`<H3[^>]*>([^<]+)</H3>`)
+	netscapeLinkRe    = regexp.MustCompile(`<A HREF="([^"]+)"[^>]*>([^<]+)</A>`)
+	netscapeFolderRe  = regexp.MustCompile(`<H3[^>]*>([^<]+)</H3>`)
+	netscapeAddDateRe = regexp.MustCompile(`ADD_DATE="(\d+)"`)
 )
 
 // Bookmark represents a parsed bookmark.
@@ -69,11 +70,18 @@ func ParseNetscapeHTML(data []byte) ([]Bookmark, error) {
 		}
 
 		if matches := netscapeLinkRe.FindStringSubmatch(line); len(matches) > 2 {
-			bookmarks = append(bookmarks, Bookmark{
+			b := Bookmark{
 				URL:    html.UnescapeString(matches[1]),
 				Title:  html.UnescapeString(matches[2]),
 				Folder: currentFolder,
-			})
+			}
+			// Parse ADD_DATE attribute (unix timestamp) when present.
+			if dateMatch := netscapeAddDateRe.FindStringSubmatch(line); len(dateMatch) > 1 {
+				if ts, err := strconv.ParseInt(dateMatch[1], 10, 64); err == nil && ts > 0 {
+					b.AddedAt = time.Unix(ts, 0)
+				}
+			}
+			bookmarks = append(bookmarks, b)
 		}
 	}
 
@@ -81,12 +89,14 @@ func ParseNetscapeHTML(data []byte) ([]Bookmark, error) {
 }
 
 // ToRawArtifacts converts bookmarks to raw artifacts for pipeline processing.
+// SourceRef is set to the normalized URL for consistent identity regardless of
+// whether URL deduplication is enabled.
 func ToRawArtifacts(bookmarks []Bookmark) []connector.RawArtifact {
 	var artifacts []connector.RawArtifact
 	for _, b := range bookmarks {
 		artifacts = append(artifacts, connector.RawArtifact{
 			SourceID:    "bookmarks",
-			SourceRef:   b.URL,
+			SourceRef:   NormalizeURL(b.URL),
 			ContentType: "url",
 			Title:       b.Title,
 			RawContent:  b.URL,
