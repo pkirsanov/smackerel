@@ -720,6 +720,37 @@ func TestConnectEmptyToken(t *testing.T) {
 	}
 }
 
+func TestSyncNotConnected(t *testing.T) {
+	c := New("hospitable")
+	// No Connect() call — client is nil
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error when Sync is called without Connect")
+	}
+	if !contains(err.Error(), "not connected") {
+		t.Errorf("error should mention not connected: %v", err)
+	}
+}
+
+func TestCloseIdempotent(t *testing.T) {
+	c := New("hospitable")
+	ctx := context.Background()
+
+	// Close without Connect should not panic
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close() on unconnected connector error: %v", err)
+	}
+	if c.Health(ctx) != connector.HealthDisconnected {
+		t.Errorf("expected disconnected after Close, got %v", c.Health(ctx))
+	}
+
+	// Double close should not panic
+	if err := c.Close(); err != nil {
+		t.Fatalf("second Close() error: %v", err)
+	}
+}
+
 // --- helper ---
 
 func contains(s, substr string) bool {
@@ -1206,5 +1237,216 @@ func TestMessageCursorNotAdvancedOnFailure(t *testing.T) {
 	// But reservation cursor SHOULD have advanced (reservations succeeded)
 	if newCursor.Reservations.Equal(time.Time{}) || newCursor.Reservations.Before(originalMsgTime) {
 		t.Errorf("reservation cursor should have advanced: %v", newCursor.Reservations)
+	}
+}
+
+// --- Security: SSRF protection via same-origin pagination validation ---
+
+func TestPaginationRejectsCrossOriginNextURL(t *testing.T) {
+	// Server returns a NextURL pointing to a different host (SSRF attempt).
+	// The client must NOT follow it.
+	crossOriginHit := false
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		crossOriginHit = true
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"data":[],"total":0}`))
+	}))
+	defer attacker.Close()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := PaginatedResponse[Property]{
+			Data:    []Property{{ID: "p1", Name: "House 1"}},
+			NextURL: attacker.URL + "/steal-creds", // SSRF: redirect to attacker
+			Total:   100,
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "secret-token", 10)
+	props, err := client.ListProperties(context.Background(), time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if crossOriginHit {
+		t.Fatal("SECURITY: client followed cross-origin pagination URL (SSRF vulnerability)")
+	}
+	// Should have the first page only
+	if len(props) != 1 {
+		t.Errorf("expected 1 property (first page only), got %d", len(props))
+	}
+}
+
+func TestPaginationRejectsCrossOriginLinkHeader(t *testing.T) {
+	crossOriginHit := false
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		crossOriginHit = true
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"data":[],"total":0}`))
+	}))
+	defer attacker.Close()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// SSRF via Link header pointing to attacker
+		w.Header().Set("Link", fmt.Sprintf(`<%s/internal-metadata>; rel="next"`, attacker.URL))
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+			Data:  []Property{{ID: "p1", Name: "House"}},
+			Total: 50,
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "secret-token", 10)
+	props, err := client.ListProperties(context.Background(), time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if crossOriginHit {
+		t.Fatal("SECURITY: client followed cross-origin Link header URL (SSRF vulnerability)")
+	}
+	if len(props) != 1 {
+		t.Errorf("expected 1 property (first page only), got %d", len(props))
+	}
+}
+
+func TestPaginationRejectsMetadataEndpoint(t *testing.T) {
+	// Simulate redirect to cloud metadata endpoint (common SSRF target)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := PaginatedResponse[Property]{
+			Data:    []Property{{ID: "p1", Name: "House"}},
+			NextURL: "http://169.254.169.254/latest/meta-data/", // AWS metadata SSRF
+			Total:   100,
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 10)
+	props, err := client.ListProperties(context.Background(), time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Must stop at page 1, never follow the metadata URL
+	if len(props) != 1 {
+		t.Errorf("expected 1 property, got %d", len(props))
+	}
+}
+
+func TestPaginationAllowsSameOriginNextURL(t *testing.T) {
+	page := 0
+	var srvURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/json")
+		if page == 1 {
+			resp := PaginatedResponse[Property]{
+				Data:    []Property{{ID: "p1", Name: "House 1"}},
+				NextURL: srvURL + "/properties?page=2",
+				Total:   2,
+			}
+			json.NewEncoder(w).Encode(resp)
+		} else {
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data:  []Property{{ID: "p2", Name: "House 2"}},
+				Total: 2,
+			})
+		}
+	}))
+	defer srv.Close()
+	srvURL = srv.URL
+
+	client := NewClient(srv.URL, "token", 10)
+	props, err := client.ListProperties(context.Background(), time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(props) != 2 {
+		t.Errorf("expected 2 properties (same-origin pagination should work), got %d", len(props))
+	}
+}
+
+// --- Security: Pagination max page limit ---
+
+func TestPaginationMaxPageLimit(t *testing.T) {
+	callCount := 0
+	var srvURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		// Always return a next page — infinite pagination
+		resp := PaginatedResponse[Property]{
+			Data:    []Property{{ID: fmt.Sprintf("p%d", callCount)}},
+			NextURL: fmt.Sprintf("%s/properties?page=%d", srvURL, callCount+1),
+			Total:   999999,
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+	srvURL = srv.URL
+
+	client := NewClient(srv.URL, "token", 10)
+	props, err := client.ListProperties(context.Background(), time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should stop at maxPaginationPages (1000), not loop forever
+	if callCount > 1001 {
+		t.Errorf("SECURITY: pagination exceeded max page limit: %d calls", callCount)
+	}
+	if len(props) != maxPaginationPages {
+		t.Errorf("expected exactly %d properties (max page limit), got %d", maxPaginationPages, len(props))
+	}
+}
+
+// --- Security: base_url validation ---
+
+func TestConfigRejectsInvalidBaseURLScheme(t *testing.T) {
+	cases := map[string]string{
+		"file_scheme": "file:///etc/passwd",
+		"ftp_scheme":  "ftp://internal.server/data",
+		"no_scheme":   "just-a-hostname",
+		"empty_host":  "http://",
+		"javascript":  "javascript:alert(1)",
+	}
+
+	for name, baseURL := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := parseHospitableConfig(connector.ConnectorConfig{
+				Credentials:  map[string]string{"access_token": "test"},
+				SourceConfig: map[string]interface{}{"base_url": baseURL},
+			})
+			if err == nil {
+				t.Errorf("SECURITY: accepted invalid base_url %q — should reject non-HTTP(S) URLs", baseURL)
+			}
+		})
+	}
+}
+
+func TestConfigAcceptsValidBaseURL(t *testing.T) {
+	cases := map[string]string{
+		"https":     "https://api.hospitable.com",
+		"http":      "http://localhost:8080",
+		"with_path": "https://api.hospitable.com/v2",
+	}
+
+	for name, baseURL := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg, err := parseHospitableConfig(connector.ConnectorConfig{
+				Credentials:  map[string]string{"access_token": "test"},
+				SourceConfig: map[string]interface{}{"base_url": baseURL},
+			})
+			if err != nil {
+				t.Errorf("rejected valid base_url %q: %v", baseURL, err)
+			}
+			if cfg.BaseURL != baseURL {
+				t.Errorf("BaseURL = %q, want %q", cfg.BaseURL, baseURL)
+			}
+		})
 	}
 }

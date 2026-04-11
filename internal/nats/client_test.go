@@ -8,16 +8,17 @@ import (
 
 func TestAllStreams_Coverage(t *testing.T) {
 	streams := AllStreams()
-	if len(streams) != 5 {
-		t.Fatalf("expected 5 streams, got %d", len(streams))
+	if len(streams) != 6 {
+		t.Fatalf("expected 6 streams, got %d", len(streams))
 	}
 
 	expected := map[string][]string{
-		"ARTIFACTS":  {"artifacts.>"},
-		"SEARCH":     {"search.>"},
-		"DIGEST":     {"digest.>"},
-		"KEEP":       {"keep.>"},
-		"DEADLETTER": {"deadletter.>"},
+		"ARTIFACTS":    {"artifacts.>"},
+		"SEARCH":       {"search.>"},
+		"DIGEST":       {"digest.>"},
+		"KEEP":         {"keep.>"},
+		"INTELLIGENCE": {"learning.>", "content.>", "monthly.>", "quickref.>", "seasonal.>"},
+		"DEADLETTER":   {"deadletter.>"},
 	}
 
 	for _, s := range streams {
@@ -55,6 +56,16 @@ func TestSubjectConstants(t *testing.T) {
 		{"SubjectKeepSyncResponse", SubjectKeepSyncResponse},
 		{"SubjectKeepOCRRequest", SubjectKeepOCRRequest},
 		{"SubjectKeepOCRResponse", SubjectKeepOCRResponse},
+		{"SubjectLearningClassify", SubjectLearningClassify},
+		{"SubjectLearningClassified", SubjectLearningClassified},
+		{"SubjectContentAnalyze", SubjectContentAnalyze},
+		{"SubjectContentAnalyzed", SubjectContentAnalyzed},
+		{"SubjectMonthlyGenerate", SubjectMonthlyGenerate},
+		{"SubjectMonthlyGenerated", SubjectMonthlyGenerated},
+		{"SubjectQuickrefGenerate", SubjectQuickrefGenerate},
+		{"SubjectQuickrefGenerated", SubjectQuickrefGenerated},
+		{"SubjectSeasonalAnalyze", SubjectSeasonalAnalyze},
+		{"SubjectSeasonalAnalyzed", SubjectSeasonalAnalyzed},
 	}
 
 	for _, s := range subjects {
@@ -87,6 +98,11 @@ func TestSubjectPairs(t *testing.T) {
 		{SubjectDigestGenerate, SubjectDigestGenerated},
 		{SubjectKeepSyncRequest, SubjectKeepSyncResponse},
 		{SubjectKeepOCRRequest, SubjectKeepOCRResponse},
+		{SubjectLearningClassify, SubjectLearningClassified},
+		{SubjectContentAnalyze, SubjectContentAnalyzed},
+		{SubjectMonthlyGenerate, SubjectMonthlyGenerated},
+		{SubjectQuickrefGenerate, SubjectQuickrefGenerated},
+		{SubjectSeasonalAnalyze, SubjectSeasonalAnalyzed},
 	}
 
 	for _, p := range pairs {

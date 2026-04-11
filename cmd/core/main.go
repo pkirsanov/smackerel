@@ -21,6 +21,7 @@ import (
 	browserConnector "github.com/smackerel/smackerel/internal/connector/browser"
 	caldavConnector "github.com/smackerel/smackerel/internal/connector/caldav"
 	discordConnector "github.com/smackerel/smackerel/internal/connector/discord"
+	guesthostConnector "github.com/smackerel/smackerel/internal/connector/guesthost"
 	hospitableConnector "github.com/smackerel/smackerel/internal/connector/hospitable"
 	imapConnector "github.com/smackerel/smackerel/internal/connector/imap"
 	keepConnector "github.com/smackerel/smackerel/internal/connector/keep"
@@ -32,6 +33,7 @@ import (
 	youtubeConnector "github.com/smackerel/smackerel/internal/connector/youtube"
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
+	"github.com/smackerel/smackerel/internal/graph"
 	"github.com/smackerel/smackerel/internal/intelligence"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/pipeline"
@@ -110,14 +112,29 @@ func run() error {
 	}
 	slog.Info("NATS JetStream streams configured")
 
+	// Create hospitality graph repositories and linker
+	guestRepo := db.NewGuestRepository(pg.Pool)
+	propertyRepo := db.NewPropertyRepository(pg.Pool)
+	hospitalityLinker := graph.NewHospitalityLinker(guestRepo, propertyRepo, pg.Pool, graph.NewLinker(pg.Pool))
+
+	// Seed hospitality topics (idempotent — safe to call on every startup)
+	if err := graph.SeedHospitalityTopics(ctx, pg.Pool); err != nil {
+		slog.Warn("failed to seed hospitality topics", "error", err)
+	}
+
+	// Create connector registry (used by digest generator for hospitality detection)
+	registry := connector.NewRegistry()
+
 	// Start result subscriber for ML processing results
-	resultSub := pipeline.NewResultSubscriber(pg.Pool, nc)
+	resultSub := pipeline.NewResultSubscriber(pg.Pool, nc, registry)
+	resultSub.Processor.HospitalityLinker = hospitalityLinker
 	if err := resultSub.Start(ctx); err != nil {
 		return fmt.Errorf("start result subscriber: %w", err)
 	}
 
 	// Create pipeline processor
 	proc := pipeline.NewProcessor(pg.Pool, nc)
+	proc.HospitalityLinker = hospitalityLinker
 
 	// Create search engine
 	searchEngine := &api.SearchEngine{
@@ -128,7 +145,7 @@ func run() error {
 	}
 
 	// Create digest generator
-	digestGen := digest.NewGenerator(pg.Pool, nc)
+	digestGen := digest.NewGenerator(pg.Pool, nc, registry)
 
 	// Create intelligence engine for synthesis, alerts, and resurfacing
 	intEngine := intelligence.NewEngine(pg.Pool, nc)
@@ -137,7 +154,6 @@ func run() error {
 	topicLifecycle := topics.NewLifecycle(pg.Pool)
 
 	// Create and start connector supervisor
-	registry := connector.NewRegistry()
 	stateStore := connector.NewStateStore(pg.Pool)
 	supervisor := connector.NewSupervisor(registry, stateStore)
 
@@ -151,6 +167,7 @@ func run() error {
 	browserHistConn := browserConnector.New("browser-history")
 	mapsConn := mapsConnector.New("google-maps-timeline")
 	hospitableConn := hospitableConnector.New("hospitable")
+	guesthostConn := guesthostConnector.New()
 	discordConn := discordConnector.New("discord")
 	twitterConn := twitterConnector.New("twitter")
 	weatherConn := weatherConnector.New("weather")
@@ -165,6 +182,7 @@ func run() error {
 	registry.Register(browserHistConn)
 	registry.Register(mapsConn)
 	registry.Register(hospitableConn)
+	registry.Register(guesthostConn)
 	registry.Register(discordConn)
 	registry.Register(twitterConn)
 	registry.Register(weatherConn)
@@ -328,7 +346,7 @@ func run() error {
 			SourceConfig: map[string]interface{}{
 				"watchlist":         parseJSONObject(os.Getenv("FINANCIAL_MARKETS_WATCHLIST")),
 				"alert_threshold":   parseFloatEnv("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
-				"coingecko_enabled": os.Getenv("FINANCIAL_MARKETS_COINGECKO_ENABLED") != "false",
+				"coingecko_enabled": os.Getenv("FINANCIAL_MARKETS_COINGECKO_ENABLED") == "true",
 			},
 		}
 		if err := marketsConn.Connect(ctx, marketsCfg); err == nil {
@@ -380,6 +398,9 @@ func run() error {
 	// Create web UI handler
 	webHandler := web.NewHandler(pg.Pool, nc, time.Now())
 
+	// Create context enrichment handler for GuestHost connector
+	contextHandler := api.NewContextHandler(guestRepo, propertyRepo, pg.Pool)
+
 	// Set up API
 	deps := &api.Dependencies{
 		DB:                 pg,
@@ -392,6 +413,7 @@ func run() error {
 		DigestGen:          digestGen,
 		WebHandler:         webHandler,
 		OAuthHandler:       oauthHandler,
+		ContextHandler:     contextHandler,
 		OllamaURL:          cfg.OllamaURL,
 		AuthToken:          cfg.AuthToken,
 		ConnectorRegistry:  registry,
@@ -554,33 +576,35 @@ func runWithTimeout(step string, budget time.Duration, fn func()) {
 }
 
 // parseJSONArray parses a JSON array string into []interface{}.
-// Returns nil on empty string or parse error.
+// Returns nil on empty string. Logs a warning and returns nil on parse error.
 func parseJSONArray(s string) []interface{} {
 	if s == "" {
 		return nil
 	}
 	var result []interface{}
 	if err := json.Unmarshal([]byte(s), &result); err != nil {
+		slog.Warn("failed to parse JSON array from env var — using empty value", "error", err, "input_length", len(s))
 		return nil
 	}
 	return result
 }
 
 // parseJSONObject parses a JSON object string into map[string]interface{}.
-// Returns nil on empty string or parse error.
+// Returns nil on empty string. Logs a warning and returns nil on parse error.
 func parseJSONObject(s string) map[string]interface{} {
 	if s == "" {
 		return nil
 	}
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(s), &result); err != nil {
+		slog.Warn("failed to parse JSON object from env var — using empty value", "error", err, "input_length", len(s))
 		return nil
 	}
 	return result
 }
 
 // parseFloatEnv reads an environment variable and parses it as float64.
-// Returns 0 on empty string or parse error.
+// Returns 0 on empty string. Logs a warning and returns 0 on parse error.
 func parseFloatEnv(key string) float64 {
 	s := os.Getenv(key)
 	if s == "" {
@@ -588,6 +612,7 @@ func parseFloatEnv(key string) float64 {
 	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
+		slog.Warn("failed to parse float from env var — using 0", "key", key, "error", err)
 		return 0
 	}
 	return f

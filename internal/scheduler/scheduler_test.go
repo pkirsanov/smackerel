@@ -241,7 +241,7 @@ func TestCronConcurrencyGuard_DifferentGroupsConcurrent(t *testing.T) {
 	s.muDaily.Unlock()
 }
 
-// SCN-022-11: All six mutex groups exist and are independent
+// SCN-022-11: All seven mutex groups exist and are independent
 func TestCronConcurrencyGuard_AllGroupsIndependent(t *testing.T) {
 	s := New(nil, nil, nil, nil)
 

@@ -31,7 +31,11 @@ func Connect(ctx context.Context, databaseURL string, maxConns, minConns int32) 
 		return nil, fmt.Errorf("create connection pool: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
+	// Use an explicit timeout for the initial ping so startup doesn't hang
+	// when the database is unresponsive (the caller's ctx may have no deadline).
+	pingCtx, pingCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer pingCancel()
+	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
@@ -64,8 +68,23 @@ func (p *Postgres) Healthy(ctx context.Context) bool {
 
 // ExportResult holds exported artifacts and a cursor for pagination.
 type ExportResult struct {
-	Artifacts  []map[string]interface{}
+	Artifacts  []ExportedArtifact
 	NextCursor time.Time // last created_at value; zero if no results
+}
+
+// ExportedArtifact is a type-safe representation of an exported artifact row.
+type ExportedArtifact struct {
+	ArtifactID   string `json:"artifact_id"`
+	Title        string `json:"title"`
+	ArtifactType string `json:"artifact_type"`
+	Summary      string `json:"summary"`
+	SourceURL    string `json:"source_url"`
+	Content      string `json:"content"`
+	Topics       string `json:"topics"`
+	Entities     string `json:"entities"`
+	KeyIdeas     string `json:"key_ideas"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
 }
 
 // ExportArtifacts returns processed artifacts for data export with cursor-based pagination.
@@ -93,7 +112,7 @@ func (p *Postgres) ExportArtifacts(ctx context.Context, cursor time.Time, limit 
 	}
 	defer rows.Close()
 
-	var results []map[string]interface{}
+	var results []ExportedArtifact
 	var lastCreatedAt time.Time
 	var scanErrors int
 	for rows.Next() {
@@ -110,18 +129,18 @@ func (p *Postgres) ExportArtifacts(ctx context.Context, cursor time.Time, limit 
 		}
 
 		lastCreatedAt = createdAt
-		results = append(results, map[string]interface{}{
-			"artifact_id":   id,
-			"title":         title,
-			"artifact_type": artType,
-			"summary":       summary,
-			"source_url":    sourceURL,
-			"content":       content,
-			"topics":        topicsStr,
-			"entities":      entitiesStr,
-			"key_ideas":     keyIdeasStr,
-			"created_at":    createdAt.Format(time.RFC3339),
-			"updated_at":    updatedAt.Format(time.RFC3339),
+		results = append(results, ExportedArtifact{
+			ArtifactID:   id,
+			Title:        title,
+			ArtifactType: artType,
+			Summary:      summary,
+			SourceURL:    sourceURL,
+			Content:      content,
+			Topics:       topicsStr,
+			Entities:     entitiesStr,
+			KeyIdeas:     keyIdeasStr,
+			CreatedAt:    createdAt.Format(time.RFC3339),
+			UpdatedAt:    updatedAt.Format(time.RFC3339),
 		})
 	}
 	if err := rows.Err(); err != nil {

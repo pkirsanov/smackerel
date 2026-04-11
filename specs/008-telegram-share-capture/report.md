@@ -363,6 +363,65 @@ New security tests added to `bot_test.go`:
 
 ---
 
+## Security Pass 2 (Stochastic Sweep — security-to-doc)
+
+**Date:** 2026-04-11
+**Trigger:** Stochastic quality sweep, security trigger
+
+### OWASP Deep Scan Findings
+
+| ID | Severity | OWASP Category | Description | Status |
+|----|----------|----------------|-------------|--------|
+| SEC-01 | Medium | A04 Insecure Design | `handleDigest`: unchecked `NewRequestWithContext` error — nil pointer panic if URL malformed | Fixed |
+| SEC-02 | Low | A04 Insecure Design | `handleStatus`: fragile `healthURL` via string manipulation instead of struct field | Fixed |
+| SEC-03 | Low | A05 Security Misconfiguration | No startup warning when chat allowlist is empty — bot open to all Telegram users | Fixed |
+| SEC-04 | Low | A03 Injection (data integrity) | `handleFind`: `summary[:100]` byte-slicing can split multi-byte UTF-8 runes | Fixed |
+
+### Remediation Details
+
+**SEC-01:** Added error check on `http.NewRequestWithContext` in `handleDigest`. Now returns early with user-facing error reply instead of nil-pointer panic.
+
+**SEC-02:** Added `healthURL` as a `Bot` struct field initialized alongside other API URLs in `NewBot`. Removed ad-hoc `strings.TrimSuffix` derivation in `handleStatus`.
+
+**SEC-03:** Added `slog.Warn` at startup when `allowedChats` is empty, alerting operators that the bot is accessible to all Telegram users until `TELEGRAM_CHAT_IDS` is configured.
+
+**SEC-04:** Replaced `summary[:100]` with `truncateUTF8(summary, 100)` to produce valid UTF-8 output.
+
+### Items Verified Clean (No Fix Required)
+
+| Area | OWASP | Assessment |
+|------|-------|------------|
+| Auth token in HTTP headers | A02 | Bearer token on internal API calls only, never logged |
+| Bot token handling | A02 | Token passed to tgbotapi.NewBotAPI only, voice handler uses file ID not token URL |
+| SSRF | A10 | All HTTP targets are config-derived struct fields, no user input in URLs |
+| Input bounds | A04 | maxShareTextLen (4096), maxFindQueryLen (500), maxCaptureTextLen (32768) all enforced |
+| Response body limits | A04 | io.LimitReader(1MB) on all API response decoders |
+| Buffer exhaustion | A04 | maxAssemblyBuffers (500), maxMediaGroupBuffers (200), overflow flush |
+| JSON decode safety | A08 | json.NewDecoder with LimitReader, no unsafe deserialization |
+| Structured logging | A09 | slog with typed fields, no user-controlled format strings |
+| Command injection | A03 | No OS exec, no shell commands, no SQL — all data passed as JSON body |
+| Concurrency | N/A | Mutex-protected assemblers, WaitGroup-gated shutdown |
+
+### New Security Tests
+
+| Test | Covers |
+|------|--------|
+| `TestSecurity_BotHealthURL_SetAtInit` | SEC-02 regression |
+| `TestSecurity_SummaryTruncation_UTF8Safe` | SEC-04 regression |
+| `TestSecurity_EmptyAllowlist_AllowsAll` | SEC-03 behavior documentation |
+| `TestSecurity_AllowlistEnforced_RejectsUnknown` | SEC-03 enforcement verification |
+| `TestSecurity_InternalAPIURLs_NotUserControlled` | SSRF defense verification |
+
+### Test Evidence
+
+```
+./smackerel.sh test unit → ok smackerel/internal/telegram 15.680s
+./smackerel.sh lint → All checks passed!
+./smackerel.sh check → Config is in sync with SST
+```
+
+---
+
 ## Completion Statement
 
 ```
@@ -379,4 +438,28 @@ $ ./smackerel.sh test unit 2>&1 | grep -c '^ok'
 $ echo "24 tests passed"
 24 tests passed
 exit code: 0
+```
+
+---
+
+## Stabilization Pass (Stochastic Sweep R-stabilize, 2026-04-11)
+
+### Findings
+
+| # | Severity | Issue | File | Fix |
+|---|----------|-------|------|-----|
+| S1 | CRITICAL | Shutdown race: `Stop()` flushes assembler buffers while `Start()` goroutine may still be adding new messages — data loss on shutdown | `bot.go` | Added `done chan struct{}` closed when update goroutine exits; `Stop()` waits on it before flushing |
+| S2 | HIGH | Tight loop on closed updates channel: `select` reads without `ok` check — CPU burn if library closes channel | `bot.go` | Added `ok` check: `case update, ok := <-updates:` with early return on `!ok` |
+| S3 | HIGH | No panic recovery: malformed message panics kill the entire update goroutine silently | `bot.go` | Added `safeHandleMessage()` wrapper with `defer recover()` |
+| S4 | LOW | HTTP idle connections never released on shutdown | `bot.go` | Added `b.httpClient.CloseIdleConnections()` in `Stop()` |
+
+### Changes
+
+- `internal/telegram/bot.go`: Added `done` field, `safeHandleMessage`, updated `Start()` and `Stop()` shutdown coordination
+- `internal/telegram/bot_test.go`: Added `TestStabilize_SafeHandleMessage_PanicRecovery`, `TestStabilize_StopWaitsDoneBeforeFlush`, `TestStabilize_StopTimesOutWhenGoroutineStuck`
+
+### Evidence
+
+```
+./smackerel.sh test unit → all packages pass (telegram: 20.978s)
 ```

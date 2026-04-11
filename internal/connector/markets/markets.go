@@ -21,6 +21,10 @@ const (
 	maxResponseBodyBytes = 1 * 1024 * 1024
 	// maxWatchlistSymbols limits watchlist entries per category to prevent excessive API calls.
 	maxWatchlistSymbols = 100
+	// maxCoinGeckoBatchSize caps coin IDs per CoinGecko request to avoid URL length rejection.
+	maxCoinGeckoBatchSize = 50
+	// maxErrorBodySnippet limits error response body read for diagnostic logging.
+	maxErrorBodySnippet = 512
 )
 
 var (
@@ -28,6 +32,11 @@ var (
 	validSymbolRe = regexp.MustCompile(`^[A-Za-z0-9.\-]{1,10}$`)
 	// validCoinIDRe matches CoinGecko coin IDs (lowercase alphanumeric, hyphens).
 	validCoinIDRe = regexp.MustCompile(`^[a-z0-9\-]{1,64}$`)
+	// validForexPairRe matches forex pair format like USD/JPY, EUR/USD (3-letter/3-letter).
+	validForexPairRe = regexp.MustCompile(`^[A-Z]{3}/[A-Z]{3}$`)
+
+	// providerRateLimits is the single source of truth for per-provider rate limits (calls/minute).
+	providerRateLimits = map[string]int{"finnhub": 55, "coingecko": 25, "fred": 100}
 )
 
 // Connector implements the Financial Markets connector using Finnhub, CoinGecko, and FRED.
@@ -108,8 +117,10 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	// Snapshot config under lock to prevent data race with concurrent Connect().
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
+	cfg := c.config
 	c.mu.Unlock()
 	defer func() {
 		c.mu.Lock()
@@ -120,10 +131,24 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var artifacts []connector.RawArtifact
 	now := time.Now()
 
-	// Fetch stock/ETF quotes via Finnhub
-	allSymbols := append(c.config.Watchlist.Stocks, c.config.Watchlist.ETFs...)
+	// Warn if the entire watchlist is empty — likely misconfiguration.
+	if len(cfg.Watchlist.Stocks) == 0 && len(cfg.Watchlist.ETFs) == 0 &&
+		len(cfg.Watchlist.Crypto) == 0 && len(cfg.Watchlist.ForexPairs) == 0 {
+		slog.Warn("financial-markets sync: watchlist is empty, no symbols to fetch")
+	}
+
+	// Safe copy — avoid append to cfg.Watchlist.Stocks backing array.
+	allSymbols := make([]string, 0, len(cfg.Watchlist.Stocks)+len(cfg.Watchlist.ETFs))
+	allSymbols = append(allSymbols, cfg.Watchlist.Stocks...)
+	allSymbols = append(allSymbols, cfg.Watchlist.ETFs...)
 	for _, symbol := range allSymbols {
-		if !c.allowCall("finnhub") {
+		// Check context between HTTP calls for prompt cancellation.
+		select {
+		case <-ctx.Done():
+			return artifacts, cursor, ctx.Err()
+		default:
+		}
+		if !c.tryRecordCall("finnhub") {
 			slog.Warn("finnhub rate limit reached, skipping remaining symbols")
 			break
 		}
@@ -133,10 +158,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			continue
 		}
 
-		tier := "light"
-		if c.config.AlertThreshold > 0 && (quote.ChangePercent >= c.config.AlertThreshold || quote.ChangePercent <= -c.config.AlertThreshold) {
-			tier = "full"
-		}
+		tier := classifyTier(cfg.AlertThreshold, quote.ChangePercent)
 
 		artifacts = append(artifacts, connector.RawArtifact{
 			SourceID:    "financial-markets",
@@ -158,28 +180,35 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	// Fetch crypto prices via CoinGecko
-	if c.config.CoinGeckoEnabled && len(c.config.Watchlist.Crypto) > 0 && c.allowCall("coingecko") {
-		prices, err := c.fetchCoinGeckoPrices(ctx, c.config.Watchlist.Crypto)
-		if err != nil {
-			slog.Warn("coingecko fetch failed", "error", err)
-		} else {
-			for _, p := range prices {
-				artifacts = append(artifacts, connector.RawArtifact{
-					SourceID:    "financial-markets",
-					SourceRef:   fmt.Sprintf("crypto-%s-%s", p.ID, now.Format("2006-01-02")),
-					ContentType: "market/quote",
-					Title:       fmt.Sprintf("%s: $%.2f (%+.1f%%)", p.ID, p.CurrentPrice, p.ChangePct24h),
-					RawContent:  fmt.Sprintf("%s: $%.2f (24h change: %+.1f%%)", p.ID, p.CurrentPrice, p.ChangePct24h),
-					Metadata: map[string]interface{}{
-						"symbol":          p.ID,
-						"asset_type":      "crypto",
-						"price":           p.CurrentPrice,
-						"change_24h":      p.Change24h,
-						"change_pct_24h":  p.ChangePct24h,
-						"processing_tier": c.cryptoTier(p.ChangePct24h),
-					},
-					CapturedAt: now,
-				})
+	if cfg.CoinGeckoEnabled && len(cfg.Watchlist.Crypto) > 0 {
+		select {
+		case <-ctx.Done():
+			return artifacts, cursor, ctx.Err()
+		default:
+		}
+		if c.tryRecordCall("coingecko") {
+			prices, err := c.fetchCoinGeckoPrices(ctx, cfg.Watchlist.Crypto)
+			if err != nil {
+				slog.Warn("coingecko fetch failed", "error", err)
+			} else {
+				for _, p := range prices {
+					artifacts = append(artifacts, connector.RawArtifact{
+						SourceID:    "financial-markets",
+						SourceRef:   fmt.Sprintf("crypto-%s-%s", p.ID, now.Format("2006-01-02")),
+						ContentType: "market/quote",
+						Title:       fmt.Sprintf("%s: $%.2f (%+.1f%%)", p.ID, p.CurrentPrice, p.ChangePct24h),
+						RawContent:  fmt.Sprintf("%s: $%.2f (24h change: %+.1f%%)", p.ID, p.CurrentPrice, p.ChangePct24h),
+						Metadata: map[string]interface{}{
+							"symbol":          p.ID,
+							"asset_type":      "crypto",
+							"price":           p.CurrentPrice,
+							"change_24h":      p.Change24h,
+							"change_pct_24h":  p.ChangePct24h,
+							"processing_tier": classifyTier(cfg.AlertThreshold, p.ChangePct24h),
+						},
+						CapturedAt: now,
+					})
+				}
 			}
 		}
 	}
@@ -196,7 +225,11 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 func (c *Connector) Close() error {
 	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	// Reset rate limit tracking so a subsequent Connect() starts fresh.
+	c.callCounts = make(map[string][]time.Time)
 	c.mu.Unlock()
+	// Release HTTP transport idle connections to prevent resource leak.
+	c.httpClient.CloseIdleConnections()
 	return nil
 }
 
@@ -205,8 +238,6 @@ func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*Stoc
 	if !validSymbolRe.MatchString(symbol) {
 		return nil, fmt.Errorf("invalid symbol format: %q", symbol)
 	}
-
-	c.recordCall("finnhub")
 
 	u, _ := url.Parse("https://finnhub.io/api/v1/quote")
 	q := u.Query()
@@ -226,7 +257,11 @@ func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*Stoc
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("finnhub returned status %d", resp.StatusCode)
+		// Read a small snippet for diagnostic logging, then drain remainder.
+		snippet := make([]byte, maxErrorBodySnippet)
+		n, _ := io.ReadFull(resp.Body, snippet)
+		io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
+		return nil, fmt.Errorf("finnhub returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
 	}
 
 	var quote StockQuote
@@ -256,8 +291,10 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 	if len(sanitizedIDs) == 0 {
 		return nil, fmt.Errorf("no valid coin IDs provided")
 	}
-
-	c.recordCall("coingecko")
+	if len(sanitizedIDs) > maxCoinGeckoBatchSize {
+		slog.Warn("coingecko batch truncated to max size", "requested", len(sanitizedIDs), "max", maxCoinGeckoBatchSize)
+		sanitizedIDs = sanitizedIDs[:maxCoinGeckoBatchSize]
+	}
 
 	u, _ := url.Parse("https://api.coingecko.com/api/v3/simple/price")
 	q := u.Query()
@@ -278,7 +315,11 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("coingecko returned status %d", resp.StatusCode)
+		// Read a small snippet for diagnostic logging, then drain remainder.
+		snippet := make([]byte, maxErrorBodySnippet)
+		n, _ := io.ReadFull(resp.Body, snippet)
+		io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
+		return nil, fmt.Errorf("coingecko returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
 	}
 
 	var result map[string]map[string]float64
@@ -306,12 +347,20 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 	return prices, nil
 }
 
-// cryptoTier returns the processing tier for a crypto asset based on alert threshold.
-func (c *Connector) cryptoTier(changePct24h float64) string {
-	if c.config.AlertThreshold > 0 && (changePct24h >= c.config.AlertThreshold || changePct24h <= -c.config.AlertThreshold) {
+// classifyTier returns the processing tier based on threshold and change percent.
+func classifyTier(threshold, changePct float64) string {
+	if threshold > 0 && (changePct >= threshold || changePct <= -threshold) {
 		return "full"
 	}
 	return "light"
+}
+
+// cryptoTier returns the processing tier for a crypto asset based on alert threshold.
+func (c *Connector) cryptoTier(changePct24h float64) string {
+	c.mu.RLock()
+	threshold := c.config.AlertThreshold
+	c.mu.RUnlock()
+	return classifyTier(threshold, changePct24h)
 }
 
 // allowCall checks if a provider call is within rate limits.
@@ -319,8 +368,7 @@ func (c *Connector) allowCall(provider string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	limits := map[string]int{"finnhub": 55, "coingecko": 25, "fred": 100}
-	maxPerMin := limits[provider]
+	maxPerMin := providerRateLimits[provider]
 	if maxPerMin == 0 {
 		return true
 	}
@@ -343,13 +391,42 @@ func (c *Connector) recordCall(provider string) {
 	c.callCounts[provider] = append(c.callCounts[provider], time.Now())
 }
 
+// tryRecordCall atomically checks the rate limit and records the call if allowed.
+// This prevents the TOCTOU race between separate allowCall/recordCall calls.
+func (c *Connector) tryRecordCall(provider string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	maxPerMin := providerRateLimits[provider]
+	if maxPerMin == 0 {
+		return true
+	}
+
+	cutoff := time.Now().Add(-time.Minute)
+	valid := c.callCounts[provider][:0]
+	for _, t := range c.callCounts[provider] {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+
+	if len(valid) >= maxPerMin {
+		c.callCounts[provider] = valid
+		return false
+	}
+
+	valid = append(valid, time.Now())
+	c.callCounts[provider] = valid
+	return true
+}
+
 func parseMarketsConfig(config connector.ConnectorConfig) (MarketsConfig, error) {
 	cfg := MarketsConfig{
-		CoinGeckoEnabled: true,
+		CoinGeckoEnabled: false,
 		AlertThreshold:   5.0,
 	}
 
-	// Read coingecko_enabled from config — defaults to true if not provided
+	// Read coingecko_enabled from config — defaults to false (explicit opt-in)
 	if cgEnabled, ok := config.SourceConfig["coingecko_enabled"].(bool); ok {
 		cfg.CoinGeckoEnabled = cgEnabled
 	}
@@ -401,9 +478,25 @@ func parseMarketsConfig(config connector.ConnectorConfig) (MarketsConfig, error)
 				return MarketsConfig{}, fmt.Errorf("crypto watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
 			}
 		}
+		if pairs, ok := wl["forex_pairs"].([]interface{}); ok {
+			for _, s := range pairs {
+				if str, ok := s.(string); ok {
+					if !validForexPairRe.MatchString(str) {
+						return MarketsConfig{}, fmt.Errorf("invalid forex pair: %q (expected format: USD/JPY)", str)
+					}
+					cfg.Watchlist.ForexPairs = append(cfg.Watchlist.ForexPairs, str)
+				}
+			}
+			if len(cfg.Watchlist.ForexPairs) > maxWatchlistSymbols {
+				return MarketsConfig{}, fmt.Errorf("forex pairs watchlist exceeds maximum of %d entries", maxWatchlistSymbols)
+			}
+		}
 	}
 
 	if threshold, ok := config.SourceConfig["alert_threshold"].(float64); ok {
+		if threshold < 0 {
+			return MarketsConfig{}, fmt.Errorf("alert_threshold must be non-negative, got %v", threshold)
+		}
 		cfg.AlertThreshold = threshold
 	}
 

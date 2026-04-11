@@ -47,6 +47,12 @@ func (e *Engine) LogSearch(ctx context.Context, query string, resultsCount int, 
 		return fmt.Errorf("search logging requires a database connection")
 	}
 
+	// Truncate query to prevent unbounded storage from large request bodies.
+	const maxQueryLen = 500
+	if len(query) > maxQueryLen {
+		query = query[:maxQueryLen]
+	}
+
 	normalizedQuery := normalizeQuery(query)
 	queryHash := hashQuery(normalizedQuery)
 

@@ -58,6 +58,37 @@ func TestIsSocialMedia(t *testing.T) {
 	}
 }
 
+// H1 hardening: subdomain variants of social media must be aggregated per SCN-005-004.
+// Adversarial: would fail if IsSocialMedia only used exact map lookup.
+func TestIsSocialMedia_Subdomains(t *testing.T) {
+	subdomainCases := []struct {
+		domain string
+		want   bool
+	}{
+		{"m.twitter.com", true},
+		{"mobile.twitter.com", true},
+		{"www.facebook.com", true},
+		{"m.facebook.com", true},
+		{"www.instagram.com", true},
+		{"www.reddit.com", true},
+		{"old.reddit.com", true},
+		{"www.linkedin.com", true},
+		{"www.tiktok.com", true},
+		{"m.x.com", true},
+		// Must NOT match domains that merely contain the social domain as substring
+		{"nottwitter.com", false},
+		{"myreddit.com", false},
+		{"example.com", false},
+		{"twitter.com.evil.com", false},
+	}
+	for _, tt := range subdomainCases {
+		got := IsSocialMedia(tt.domain)
+		if got != tt.want {
+			t.Errorf("IsSocialMedia(%q) = %v, want %v", tt.domain, got, tt.want)
+		}
+	}
+}
+
 func TestShouldSkip(t *testing.T) {
 	if !ShouldSkip("chrome://settings", nil) {
 		t.Error("chrome:// should be skipped")

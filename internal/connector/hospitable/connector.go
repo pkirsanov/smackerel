@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"sync"
 	"time"
 
@@ -300,6 +301,10 @@ func parseHospitableConfig(config connector.ConnectorConfig) (HospitableConfig, 
 	sc := config.SourceConfig
 
 	if v, ok := sc["base_url"].(string); ok && v != "" {
+		parsed, err := url.Parse(v)
+		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" {
+			return cfg, fmt.Errorf("base_url must be a valid HTTP(S) URL: %q", v)
+		}
 		cfg.BaseURL = v
 	}
 	if v, ok := sc["sync_schedule"].(string); ok && v != "" {

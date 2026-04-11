@@ -426,3 +426,28 @@ func TestValidate_DBMaxConns_Invalid(t *testing.T) {
 		t.Errorf("error should name DB_MAX_CONNS, got: %v", err)
 	}
 }
+
+func TestValidate_LogLevel_Invalid(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("LOG_LEVEL", "verbose")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid LOG_LEVEL")
+	}
+	if !strings.Contains(err.Error(), "LOG_LEVEL") {
+		t.Errorf("error should name LOG_LEVEL, got: %v", err)
+	}
+}
+
+func TestValidate_LogLevel_ValidValues(t *testing.T) {
+	for _, level := range []string{"debug", "info", "warn", "error"} {
+		t.Run(level, func(t *testing.T) {
+			setRequiredEnv(t)
+			t.Setenv("LOG_LEVEL", level)
+			_, err := Load()
+			if err != nil {
+				t.Fatalf("expected no error for LOG_LEVEL=%s, got: %v", level, err)
+			}
+		})
+	}
+}

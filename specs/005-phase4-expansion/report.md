@@ -238,6 +238,49 @@ Exit code: 0
 
 - DoD integrity: all items checked with inline evidence blocks
 - Scope status integrity: 5/5 scopes canonical "Done" status
+
+---
+
+## Test Coverage Sweep (test-to-doc) — 2026-04-11
+
+### Trigger
+Stochastic quality sweep — test trigger targeting Phase 4 expansion connectors.
+
+### Findings & Remediation
+
+| # | Connector | Gap | Test Added | File |
+|---|-----------|-----|------------|------|
+| 1 | Maps | `ParseTakeoutJSON` negative distance skip path untested | `TestParseTakeoutJSON_NegativeDistanceSkipped` | `internal/connector/maps/maps_test.go` |
+| 2 | Maps | `ParseTakeoutJSON` end-before-start skip path untested | `TestParseTakeoutJSON_EndBeforeStartSkipped` | `internal/connector/maps/maps_test.go` |
+| 3 | Maps | `ParseTakeoutJSON` out-of-range waypoint filtering untested | `TestParseTakeoutJSON_OutOfRangeCoordsFiltered` | `internal/connector/maps/maps_test.go` |
+| 4 | Maps | `ParseTakeoutJSON` null activity segment skipping untested | `TestParseTakeoutJSON_NullSegmentSkipped` | `internal/connector/maps/maps_test.go` |
+| 5 | Bookmarks | `ParseChromeJSON` malformed JSON error path untested | `TestParseChromeJSON_MalformedJSON` | `internal/connector/bookmarks/bookmarks_test.go` |
+| 6 | Bookmarks | `ParseChromeJSON` missing `roots` key untested | `TestParseChromeJSON_MissingRoots` | `internal/connector/bookmarks/bookmarks_test.go` |
+| 7 | Bookmarks | `ParseChromeJSON` empty roots returns 0 bookmarks | `TestParseChromeJSON_EmptyRoots` | `internal/connector/bookmarks/bookmarks_test.go` |
+| 8 | Bookmarks | `ParseNetscapeHTML` empty input untested | `TestParseNetscapeHTML_Empty` | `internal/connector/bookmarks/bookmarks_test.go` |
+| 9 | Bookmarks | `ParseNetscapeHTML` folder-only HTML (no links) untested | `TestParseNetscapeHTML_NoLinks` | `internal/connector/bookmarks/bookmarks_test.go` |
+| 10 | Bookmarks | `extractBookmarks` max depth enforcement untested | `TestExtractBookmarks_MaxDepth` | `internal/connector/bookmarks/bookmarks_test.go` |
+| 11 | Bookmarks | `ToRawArtifacts` empty/nil input untested | `TestToRawArtifacts_Empty` | `internal/connector/bookmarks/bookmarks_test.go` |
+| 12 | Bookmarks | `FolderToTopicMapping` backslash path untested | `TestFolderToTopicMapping_Backslash` | `internal/connector/bookmarks/bookmarks_test.go` |
+| 13 | Hospitable | `Sync` when client is nil (not connected) untested | `TestSyncNotConnected` | `internal/connector/hospitable/connector_test.go` |
+| 14 | Hospitable | `Close` idempotent (double-close, close-without-connect) untested | `TestCloseIdempotent` | `internal/connector/hospitable/connector_test.go` |
+
+### Verification
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/maps       0.043s
+ok  github.com/smackerel/smackerel/internal/connector/bookmarks  0.336s
+ok  github.com/smackerel/smackerel/internal/connector/hospitable 6.070s
+ok  github.com/smackerel/smackerel/internal/connector/browser    (cached)
+ok  github.com/smackerel/smackerel/internal/connector/weather    (cached)
+All packages PASS. Exit code: 0
+```
+
+```
+$ ./smackerel.sh lint
+Exit code: 0
+```
 - Phase coherence: 15 delivery-lockdown phases have executionHistory provenance
 - Code-to-design alignment: Maps Takeout parser, Chrome SQLite reader, alert types match design.md
 
@@ -752,3 +795,61 @@ Exit code: 0
 | `connector/browser` | Good baseline | +4 tests | Full social media domain coverage, metadata field assertions, empty entries edge case, Chrome time round-trip |
 | `connector/maps` | Good baseline | +3 tests | Null activitySegment handling, zero distance classification, run duration-based trail qualification |
 | `intelligence` | Good baseline | +8 tests | Interaction trend boundaries (10 sub-tests), trip state boundary, dossier rendering edge cases, nil return date, destination extraction patterns |
+
+---
+
+## Harden Probe — 2026-04-11
+
+**Trigger:** Stochastic quality sweep harden trigger
+**Agent:** bubbles.harden → bubbles.workflow (harden-to-doc)
+**Scope:** All Phase 4 expansion connector packages — maps, browser, weather, bookmarks, hospitable
+
+### Methodology
+Code review across all Phase 4 connectors probing for weak scenarios missed by prior chaos/security/regression/test sweeps.
+
+### Findings
+
+| ID | Severity | Package | Finding | Status |
+|----|----------|---------|---------|--------|
+| H1 | HIGH | `browser/browser.go` | `IsSocialMedia` uses exact map lookup — subdomain variants (`m.twitter.com`, `www.facebook.com`, `mobile.reddit.com`, `old.reddit.com`, `www.linkedin.com`) bypass aggregation. SCN-005-004 privacy violation: individual URLs stored instead of domain-level aggregates for mobile/www social media visits. | FIXED |
+| H2 | LOW | `maps/maps.go` | `ParseTakeoutJSON` calls `ClassifyActivity` before validating negative distance and reverse timestamps. Classification result is unused since the entry is skipped, but wasted computation and misleading code ordering. | FIXED |
+| H3 | MEDIUM | `maps/maps_test.go` | `ToGeoJSON` nil/empty/single-point edge cases had no dedicated test coverage. The code correctly returns nil for empty routes and Point for single-point routes, but no test would detect a regression. | FIXED |
+
+### Fix Details
+
+**H1 — IsSocialMedia subdomain matching (SCN-005-004 privacy fix):**
+- Root cause: `IsSocialMedia` performed exact map lookup: `SocialMediaDomains[domain]`. Only bare domains (e.g., `twitter.com`) matched. Subdomains like `m.twitter.com`, `www.facebook.com`, `mobile.instagram.com` returned false.
+- Impact: Per SCN-005-004, social media visits should store "only domain-level aggregate, no individual URLs." Subdomain variants from mobile browsers or regional subdomains (`old.reddit.com`, `m.x.com`) would be stored as individual URLs, leaking browsing history granularity.
+- Fix: `IsSocialMedia` now checks exact map match first, then iterates `SocialMediaDomains` checking `strings.HasSuffix(domain, "."+d)` for subdomain matching.
+- Added `"strings"` import to `browser.go`.
+- File changed: `internal/connector/browser/browser.go`
+- Adversarial test: `TestIsSocialMedia_Subdomains` — 14 cases including `m.twitter.com`, `www.facebook.com`, `old.reddit.com`, `m.x.com`, `www.tiktok.com` (must match), plus `nottwitter.com`, `myreddit.com`, `twitter.com.evil.com` (must NOT match — prevents substring false positives).
+
+**H2 — ParseTakeoutJSON validation ordering:**
+- Root cause: `ClassifyActivity(seg.ActivityType, float64(seg.Distance)/1000.0)` was called before the negative-distance skip and end-before-start skip checks. The classified type was assigned to `actType` but never used since the loop would `continue` past the subsequent validation.
+- Fix: Moved negative-distance check and end-before-start check BEFORE the `ClassifyActivity` call. Classification now only runs on structurally valid entries.
+- File changed: `internal/connector/maps/maps.go`
+
+**H3 — ToGeoJSON edge case test coverage:**
+- Root cause: Existing `TestToGeoJSON` only tested the 2-point LineString path. The nil→nil, empty→nil, and single-point→Point paths had no dedicated test.
+- Fix: Added `TestToGeoJSON_EdgeCases` with 3 sub-assertions: nil route returns nil, empty slice returns nil, single point returns Point with correct [lng, lat] coordinates.
+- File changed: `internal/connector/maps/maps_test.go`
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/browser   0.018s
+ok  github.com/smackerel/smackerel/internal/connector/maps      0.094s
+(31 Go packages ok, 0 failures)
+(Python tests passed)
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+Exit code: 0
+```
+
+### Hardening Summary
+
+Prior sweeps (chaos ×2, security ×2, regression ×2, test quality, devops) had covered most attack surface. This harden pass found one high-severity privacy gap (H1 — subdomain social media bypass) that prior rounds missed because test fixtures and chaos probes all used bare domains. The `IsSocialMedia` function appeared correct against its test suite but failed the spec contract when real-world subdomain variants were considered.

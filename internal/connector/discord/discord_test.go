@@ -2,12 +2,18 @@ package discord
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
+
+// testBotToken is a fake token for tests that need to pass length validation.
+// Uses a format that won't trigger GitHub secret scanning push protection.
+const testBotToken = "test-discord-bot-token-placeholder-that-is-long-enough-for-validation"
 
 func TestNew(t *testing.T) {
 	c := New("discord")
@@ -35,7 +41,7 @@ func TestConnect_MissingToken(t *testing.T) {
 func TestConnect_ValidConfig(t *testing.T) {
 	c := New("discord")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"backfill_limit":   float64(500),
 			"enable_gateway":   false,
@@ -70,7 +76,7 @@ func TestConnect_ValidConfig(t *testing.T) {
 func TestSync_EmptyChannels(t *testing.T) {
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 	})
 	artifacts, cursor, err := c.Sync(context.Background(), "")
 	if err != nil {
@@ -87,7 +93,7 @@ func TestSync_EmptyChannels(t *testing.T) {
 func TestClose(t *testing.T) {
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 	})
 	err := c.Close()
 	if err != nil {
@@ -146,7 +152,7 @@ func TestIsSafeURL(t *testing.T) {
 func TestConnect_InvalidSnowflakeServerID(t *testing.T) {
 	c := New("discord")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
@@ -164,7 +170,7 @@ func TestConnect_InvalidSnowflakeServerID(t *testing.T) {
 func TestConnect_InvalidSnowflakeChannelID(t *testing.T) {
 	c := New("discord")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
@@ -182,7 +188,7 @@ func TestConnect_InvalidSnowflakeChannelID(t *testing.T) {
 func TestConnect_InvalidProcessingTier(t *testing.T) {
 	c := New("discord")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
@@ -201,7 +207,7 @@ func TestConnect_InvalidProcessingTier(t *testing.T) {
 func TestConnect_BackfillLimitUpperBound(t *testing.T) {
 	c := New("discord")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"backfill_limit": float64(999999),
 		},
@@ -218,7 +224,7 @@ func TestConnect_CaptureCommandTooLong(t *testing.T) {
 		longCmd += "x"
 	}
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"capture_commands": []interface{}{longCmd},
 		},
@@ -231,7 +237,7 @@ func TestConnect_CaptureCommandTooLong(t *testing.T) {
 func TestConnect_CaptureCommandEmpty(t *testing.T) {
 	c := New("discord")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"capture_commands": []interface{}{""},
 		},
@@ -307,7 +313,7 @@ func TestBuildTitle_ControlCharsSanitized(t *testing.T) {
 func TestSyncCursor_InvalidSnowflakeIgnored(t *testing.T) {
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 	})
 	// Provide a cursor with an invalid channel ID — should not crash
 	_, cursor, err := c.Sync(context.Background(), `{"../etc/passwd":"999","valid_but_not_configured":"111"}`)
@@ -381,14 +387,14 @@ func TestNormalizeMessage(t *testing.T) {
 	msg := DiscordMessage{
 		ID:          "123456789",
 		Content:     "Check this article https://example.com/go-tips",
-		Author:      Author{ID: "user1", Username: "gopher"},
+		Author:      Author{ID: "100000000000000001", Username: "gopher"},
 		ChannelID:   "ch1",
 		GuildID:     "guild1",
 		Timestamp:   time.Now(),
 		Pinned:      true,
 		ServerName:  "GoLang Community",
 		ChannelName: "#resources",
-		MentionIDs:  []string{"user2"},
+		MentionIDs:  []string{"200000000000000001"},
 		Reactions:   []Reaction{{Emoji: "👍", Count: 3}},
 	}
 
@@ -415,8 +421,8 @@ func TestNormalizeMessage(t *testing.T) {
 		t.Errorf("expected reaction_count 3, got %v", artifact.Metadata["reaction_count"])
 	}
 	mentions, ok := artifact.Metadata["mentions"].([]string)
-	if !ok || len(mentions) != 1 || mentions[0] != "user2" {
-		t.Errorf("expected mentions [user2], got %v", artifact.Metadata["mentions"])
+	if !ok || len(mentions) != 1 || mentions[0] != "200000000000000001" {
+		t.Errorf("expected mentions [200000000000000001], got %v", artifact.Metadata["mentions"])
 	}
 }
 
@@ -424,17 +430,17 @@ func TestNormalizeMessage_ThreadMetadata(t *testing.T) {
 	msg := DiscordMessage{
 		ID:         "111",
 		Content:    "Thread discussion",
-		Author:     Author{ID: "u1", Username: "alice"},
+		Author:     Author{ID: "100000000000000001", Username: "alice"},
 		ChannelID:  "ch1",
 		GuildID:    "g1",
 		Timestamp:  time.Now(),
-		ThreadID:   "thread-1",
+		ThreadID:   "300000000000000001",
 		ThreadName: "Go Generics Discussion",
 	}
 
 	artifact := normalizeMessage(msg, "standard", nil)
-	if artifact.Metadata["thread_id"] != "thread-1" {
-		t.Errorf("expected thread_id thread-1, got %v", artifact.Metadata["thread_id"])
+	if artifact.Metadata["thread_id"] != "300000000000000001" {
+		t.Errorf("expected thread_id 300000000000000001, got %v", artifact.Metadata["thread_id"])
 	}
 	if artifact.Metadata["thread_name"] != "Go Generics Discussion" {
 		t.Errorf("expected thread_name, got %v", artifact.Metadata["thread_name"])
@@ -448,7 +454,7 @@ func TestNormalizeMessage_ReplyMetadata(t *testing.T) {
 	msg := DiscordMessage{
 		ID:               "222",
 		Content:          "I agree with that point",
-		Author:           Author{ID: "u2", Username: "bob"},
+		Author:           Author{ID: "200000000000000001", Username: "bob"},
 		ChannelID:        "ch2",
 		GuildID:          "g1",
 		Timestamp:        time.Now(),
@@ -580,7 +586,7 @@ func TestRateLimiter_PruneExpired(t *testing.T) {
 func TestSync_ContextCancellation(t *testing.T) {
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
@@ -614,7 +620,7 @@ func TestConnect_HealthRaceSafe(t *testing.T) {
 	}()
 
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 	})
 	<-done
 }
@@ -622,7 +628,7 @@ func TestConnect_HealthRaceSafe(t *testing.T) {
 func TestClose_HealthRaceSafe(t *testing.T) {
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 	})
 
 	done := make(chan struct{})
@@ -666,7 +672,7 @@ func TestBuildTitle_UTF8Safe(t *testing.T) {
 
 func TestParseDiscordConfig_NegativeBackfillLimit(t *testing.T) {
 	_, err := parseDiscordConfig(connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"backfill_limit": float64(-5),
 		},
@@ -678,12 +684,587 @@ func TestParseDiscordConfig_NegativeBackfillLimit(t *testing.T) {
 
 func TestParseDiscordConfig_ZeroBackfillLimit(t *testing.T) {
 	_, err := parseDiscordConfig(connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": "test-token"},
+		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"backfill_limit": float64(0),
 		},
 	})
 	if err == nil {
 		t.Error("expected error for zero backfill limit")
+	}
+}
+
+// --- Security Pass 2 Tests ---
+
+func TestIsSafeURL_RejectsNonHTTPSchemes(t *testing.T) {
+	dangerous := []string{
+		"file:///etc/passwd",
+		"gopher://evil.com/1",
+		"ftp://internal.host/data",
+		"javascript:alert(1)",
+		"data:text/html,<script>alert(1)</script>",
+		"",
+	}
+	for _, u := range dangerous {
+		if isSafeURL(u) {
+			t.Errorf("expected %q to be rejected (non-http scheme)", u)
+		}
+	}
+}
+
+func TestSyncCursor_UnconfiguredChannelRejected(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+
+	// Provide cursor with a valid snowflake channel ID that is NOT in monitored_channels
+	_, cursorOut, err := c.Sync(context.Background(), `{"200000000000000001":"300000000000000001","999000000000000001":"400000000000000001"}`)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Parse output cursor — unconfigured channel 999000000000000001 must NOT appear
+	var outputCursors map[string]string
+	if err := json.Unmarshal([]byte(cursorOut), &outputCursors); err != nil {
+		t.Fatalf("failed to parse output cursor: %v", err)
+	}
+	if _, found := outputCursors["999000000000000001"]; found {
+		t.Error("cursor scope enforcement failed: unconfigured channel ID leaked into output cursor")
+	}
+	// Configured channel should still be accepted
+	if _, found := outputCursors["200000000000000001"]; !found {
+		t.Error("configured channel cursor was incorrectly rejected")
+	}
+}
+
+func TestBuildTitle_NewlinesStripped(t *testing.T) {
+	msg := DiscordMessage{
+		Content: "line1\r\nline2\nline3\ttab",
+	}
+	title := buildTitle(msg)
+	if title != "line1line2line3tab" {
+		t.Errorf("expected newlines and tabs stripped from title, got %q", title)
+	}
+}
+
+func TestBuildTitle_EmbedTitleNewlinesStripped(t *testing.T) {
+	msg := DiscordMessage{
+		Embeds: []Embed{{Title: "embed\r\ntitle\twith\ncontrol"}},
+	}
+	title := buildTitle(msg)
+	if title != "embedtitlewithcontrol" {
+		t.Errorf("expected newlines stripped from embed title, got %q", title)
+	}
+}
+
+func TestConnect_MonitoredChannelsLimit(t *testing.T) {
+	channels := make([]interface{}, 201)
+	for i := range channels {
+		channels[i] = map[string]interface{}{
+			"server_id":   fmt.Sprintf("%018d", i+100000000000000001),
+			"channel_ids": []interface{}{fmt.Sprintf("%018d", i+200000000000000001)},
+		}
+	}
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": channels,
+		},
+	})
+	if err == nil {
+		t.Error("expected error for monitored_channels exceeding maximum")
+	}
+}
+
+func TestConnect_BotTokenTooShort(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "short"},
+	})
+	if err == nil {
+		t.Error("expected error for bot token shorter than minimum length")
+	}
+}
+
+func TestConnect_BotTokenControlChars(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "valid-length-token-with\x00null-byte-injected"},
+	})
+	if err == nil {
+		t.Error("expected error for bot token containing control characters")
+	}
+}
+
+func TestSanitizeSingleLine(t *testing.T) {
+	input := "hello\x00\x07\n\r\tworld"
+	got := sanitizeSingleLine(input)
+	if got != "helloworld" {
+		t.Errorf("sanitizeSingleLine: expected %q, got %q", "helloworld", got)
+	}
+}
+
+func TestSanitizeControlChars_PreservesNewlines(t *testing.T) {
+	input := "hello\x00\x07\n\r\tworld"
+	got := sanitizeControlChars(input)
+	if got != "hello\n\r\tworld" {
+		t.Errorf("sanitizeControlChars: expected newlines preserved, got %q", got)
+	}
+}
+
+// --- Security Pass 3 Tests ---
+
+func TestNormalizeMessage_RawContentSanitized(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "hello\x00world\x07injected\x1bnull",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if artifact.RawContent != "helloworldinjectednull" {
+		t.Errorf("expected control chars stripped from RawContent, got %q", artifact.RawContent)
+	}
+}
+
+func TestNormalizeMessage_RawContentTruncated(t *testing.T) {
+	// Build content larger than maxRawContentLen (8192 bytes)
+	long := ""
+	for len(long) < 10000 {
+		long += "abcdefghij"
+	}
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   long,
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if len(artifact.RawContent) > 8192 {
+		t.Errorf("expected RawContent truncated to 8192 bytes, got %d", len(artifact.RawContent))
+	}
+}
+
+func TestNormalizeMessage_RawContentTruncateUTF8Safe(t *testing.T) {
+	// 3000 four-byte emoji runes = 12000 bytes; truncation must not split a rune
+	content := ""
+	for i := 0; i < 3000; i++ {
+		content += "🔥"
+	}
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   content,
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if len(artifact.RawContent) > 8192 {
+		t.Errorf("expected truncation to 8192 bytes, got %d", len(artifact.RawContent))
+	}
+	// Must be valid UTF-8 after truncation
+	for i, r := range artifact.RawContent {
+		if r == 65533 { // utf8.RuneError
+			t.Errorf("invalid UTF-8 at byte %d after truncation", i)
+			break
+		}
+	}
+}
+
+func TestNormalizeMessage_MetadataStringSanitized(t *testing.T) {
+	msg := DiscordMessage{
+		ID:          "111111111111111111",
+		Content:     "test",
+		Author:      Author{ID: "u1", Username: "alice\x00inject"},
+		ChannelID:   "222222222222222222",
+		GuildID:     "333333333333333333",
+		Timestamp:   time.Now(),
+		ServerName:  "Server\x07Name",
+		ChannelName: "#chan\x1bnel",
+		ThreadID:    "444444444444444444",
+		ThreadName:  "Thread\x00Name",
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if got := artifact.Metadata["author_name"]; got != "aliceinject" {
+		t.Errorf("expected sanitized author_name, got %q", got)
+	}
+	if got := artifact.Metadata["server_name"]; got != "ServerName" {
+		t.Errorf("expected sanitized server_name, got %q", got)
+	}
+	if got := artifact.Metadata["channel_name"]; got != "#channel" {
+		t.Errorf("expected sanitized channel_name, got %q", got)
+	}
+	if got := artifact.Metadata["thread_name"]; got != "ThreadName" {
+		t.Errorf("expected sanitized thread_name, got %q", got)
+	}
+}
+
+func TestNormalizeMessage_AttachmentURLSchemeSanitized(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+		Attachments: []Attachment{
+			{ID: "a1", Filename: "safe.png", URL: "https://cdn.discordapp.com/safe.png", Size: 100},
+			{ID: "a2", Filename: "evil.txt", URL: "file:///etc/passwd", Size: 50},
+			{ID: "a3", Filename: "data.html", URL: "javascript:alert(1)", Size: 10},
+		},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	attachments, ok := artifact.Metadata["attachments"].([]Attachment)
+	if !ok {
+		t.Fatal("expected attachments in metadata")
+	}
+	if len(attachments) != 3 {
+		t.Fatalf("expected 3 attachments, got %d", len(attachments))
+	}
+	if attachments[0].URL != "https://cdn.discordapp.com/safe.png" {
+		t.Errorf("expected safe URL preserved, got %q", attachments[0].URL)
+	}
+	if attachments[1].URL != "" {
+		t.Errorf("expected file:// URL stripped, got %q", attachments[1].URL)
+	}
+	if attachments[2].URL != "" {
+		t.Errorf("expected javascript: URL stripped, got %q", attachments[2].URL)
+	}
+}
+
+func TestSanitizeEmbedURL(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"https://example.com/img.png", "https://example.com/img.png"},
+		{"http://example.com/file", "http://example.com/file"},
+		{"file:///etc/passwd", ""},
+		{"javascript:alert(1)", ""},
+		{"data:text/html,test", ""},
+		{"ftp://evil.com/data", ""},
+		{"gopher://evil.com/1", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := sanitizeEmbedURL(tt.input)
+		if got != tt.want {
+			t.Errorf("sanitizeEmbedURL(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestTruncateUTF8(t *testing.T) {
+	// Short string — no truncation
+	if got := stringutil.TruncateUTF8("hello", 10); got != "hello" {
+		t.Errorf("expected no truncation, got %q", got)
+	}
+	// Exact fit
+	if got := stringutil.TruncateUTF8("hello", 5); got != "hello" {
+		t.Errorf("expected exact fit, got %q", got)
+	}
+	// ASCII truncation
+	if got := stringutil.TruncateUTF8("hello world", 5); got != "hello" {
+		t.Errorf("expected 'hello', got %q", got)
+	}
+	// UTF-8 boundary: 🔥 is 4 bytes; maxBytes=5 should yield one emoji (4 bytes)
+	emoji := "🔥🔥"
+	got := stringutil.TruncateUTF8(emoji, 5)
+	if got != "🔥" {
+		t.Errorf("expected single emoji, got %q (len=%d)", got, len(got))
+	}
+}
+
+// --- Hardening Pass Tests ---
+
+func TestSanitizeEmbedURL_SSRFProtection(t *testing.T) {
+	// sanitizeEmbedURL now delegates to isSafeURL — must reject private/metadata endpoints
+	ssrfTargets := []string{
+		"http://169.254.169.254/latest/meta-data/",
+		"http://localhost/admin",
+		"http://127.0.0.1:8080/secret",
+		"http://10.0.0.1/internal",
+		"http://192.168.1.1/router",
+		"http://metadata.google.internal/computeMetadata/",
+	}
+	for _, u := range ssrfTargets {
+		if got := sanitizeEmbedURL(u); got != "" {
+			t.Errorf("sanitizeEmbedURL(%q) should reject SSRF target, got %q", u, got)
+		}
+	}
+	// Safe URLs must still pass
+	if got := sanitizeEmbedURL("https://cdn.discordapp.com/img.png"); got == "" {
+		t.Error("sanitizeEmbedURL should allow safe https URL")
+	}
+}
+
+func TestNormalizeMessage_EmbedURLsSanitized(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "check this",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+		Embeds: []Embed{
+			{Title: "Safe Embed", URL: "https://example.com/article", Description: "Good content"},
+			{Title: "SSRF Embed", URL: "http://169.254.169.254/meta", Description: "Metadata steal"},
+			{Title: "Scheme Inject", URL: "javascript:alert(1)", Description: "XSS"},
+		},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	embeds, ok := artifact.Metadata["embeds"].([]Embed)
+	if !ok {
+		t.Fatal("expected embeds in metadata")
+	}
+	if len(embeds) != 3 {
+		t.Fatalf("expected 3 embeds, got %d", len(embeds))
+	}
+	if embeds[0].URL != "https://example.com/article" {
+		t.Errorf("safe embed URL should be preserved, got %q", embeds[0].URL)
+	}
+	if embeds[1].URL != "" {
+		t.Errorf("SSRF embed URL should be stripped, got %q", embeds[1].URL)
+	}
+	if embeds[2].URL != "" {
+		t.Errorf("scheme-inject embed URL should be stripped, got %q", embeds[2].URL)
+	}
+}
+
+func TestNormalizeMessage_AttachmentURLSSRF(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+		Attachments: []Attachment{
+			{ID: "a1", Filename: "safe.png", URL: "https://cdn.discordapp.com/safe.png", Size: 100},
+			{ID: "a2", Filename: "ssrf.txt", URL: "http://169.254.169.254/latest/meta-data/", Size: 50},
+			{ID: "a3", Filename: "priv.txt", URL: "http://10.0.0.1/internal", Size: 30},
+		},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	attachments, ok := artifact.Metadata["attachments"].([]Attachment)
+	if !ok {
+		t.Fatal("expected attachments in metadata")
+	}
+	if attachments[0].URL != "https://cdn.discordapp.com/safe.png" {
+		t.Errorf("safe attachment URL should be preserved, got %q", attachments[0].URL)
+	}
+	if attachments[1].URL != "" {
+		t.Errorf("SSRF attachment URL should be stripped, got %q", attachments[1].URL)
+	}
+	if attachments[2].URL != "" {
+		t.Errorf("private-IP attachment URL should be stripped, got %q", attachments[2].URL)
+	}
+}
+
+func TestNormalizeMessage_InvalidMentionIDsFiltered(t *testing.T) {
+	msg := DiscordMessage{
+		ID:         "111111111111111111",
+		Content:    "test mentions",
+		ChannelID:  "222222222222222222",
+		GuildID:    "333333333333333333",
+		Author:     Author{ID: "444444444444444444", Username: "alice"},
+		Timestamp:  time.Now(),
+		MentionIDs: []string{"555555555555555555", "../etc/passwd", "not-a-snowflake", "666666666666666666"},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	mentions, ok := artifact.Metadata["mentions"].([]string)
+	if !ok {
+		t.Fatal("expected mentions in metadata")
+	}
+	if len(mentions) != 2 {
+		t.Errorf("expected 2 valid mention IDs, got %d: %v", len(mentions), mentions)
+	}
+	if mentions[0] != "555555555555555555" || mentions[1] != "666666666666666666" {
+		t.Errorf("unexpected valid mentions: %v", mentions)
+	}
+}
+
+func TestNormalizeMessage_InvalidThreadIDOmitted(t *testing.T) {
+	msg := DiscordMessage{
+		ID:         "111111111111111111",
+		Content:    "thread test",
+		ChannelID:  "222222222222222222",
+		GuildID:    "333333333333333333",
+		Timestamp:  time.Now(),
+		ThreadID:   "not-a-snowflake",
+		ThreadName: "Injected Thread",
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if _, found := artifact.Metadata["thread_id"]; found {
+		t.Error("invalid thread_id should not be stored in metadata")
+	}
+}
+
+func TestNormalizeMessage_InvalidReplyToIDOmitted(t *testing.T) {
+	msg := DiscordMessage{
+		ID:               "111111111111111111",
+		Content:          "reply test",
+		ChannelID:        "222222222222222222",
+		GuildID:          "333333333333333333",
+		Timestamp:        time.Now(),
+		MessageReference: &MessageRef{MessageID: "../inject", ChannelID: "222222222222222222", GuildID: "333333333333333333"},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if _, found := artifact.Metadata["reply_to_id"]; found {
+		t.Error("invalid reply_to_id should not be stored in metadata")
+	}
+}
+
+func TestNormalizeMessage_InvalidAuthorIDOmitted(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Author:    Author{ID: "not-a-snowflake", Username: "bob"},
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if _, found := artifact.Metadata["author_id"]; found {
+		t.Error("invalid author_id should not be stored in metadata")
+	}
+	// author_name should still be stored
+	if artifact.Metadata["author_name"] != "bob" {
+		t.Errorf("author_name should still be stored, got %v", artifact.Metadata["author_name"])
+	}
+}
+
+func TestNormalizeMessage_MetadataArraysCapped(t *testing.T) {
+	// Build message with oversized arrays
+	mentions := make([]string, 150)
+	for i := range mentions {
+		mentions[i] = fmt.Sprintf("%018d", i+100000000000000001)
+	}
+	reactions := make([]Reaction, 150)
+	for i := range reactions {
+		reactions[i] = Reaction{Emoji: "👍", Count: 1}
+	}
+	attachments := make([]Attachment, 60)
+	for i := range attachments {
+		attachments[i] = Attachment{ID: fmt.Sprintf("a%d", i), Filename: "f.txt", URL: "https://cdn.discordapp.com/f.txt", Size: 10}
+	}
+	embeds := make([]Embed, 30)
+	for i := range embeds {
+		embeds[i] = Embed{Title: fmt.Sprintf("Embed %d", i), URL: "https://example.com"}
+	}
+	msg := DiscordMessage{
+		ID:          "111111111111111111",
+		Content:     "test caps",
+		ChannelID:   "222222222222222222",
+		GuildID:     "333333333333333333",
+		Timestamp:   time.Now(),
+		MentionIDs:  mentions,
+		Reactions:   reactions,
+		Attachments: attachments,
+		Embeds:      embeds,
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+
+	storedMentions := artifact.Metadata["mentions"].([]string)
+	if len(storedMentions) > 100 {
+		t.Errorf("mentions should be capped at 100, got %d", len(storedMentions))
+	}
+	storedReactions := artifact.Metadata["reactions"].([]Reaction)
+	if len(storedReactions) > 100 {
+		t.Errorf("reactions should be capped at 100, got %d", len(storedReactions))
+	}
+	storedAttachments := artifact.Metadata["attachments"].([]Attachment)
+	if len(storedAttachments) > 50 {
+		t.Errorf("attachments should be capped at 50, got %d", len(storedAttachments))
+	}
+	storedEmbeds := artifact.Metadata["embeds"].([]Embed)
+	if len(storedEmbeds) > 25 {
+		t.Errorf("embeds should be capped at 25, got %d", len(storedEmbeds))
+	}
+	// Embed count should reflect the original count, not the capped count
+	if artifact.Metadata["embed_count"] != 30 {
+		t.Errorf("embed_count should reflect original count 30, got %v", artifact.Metadata["embed_count"])
+	}
+}
+
+func TestParseBotCommand_CommentTruncated(t *testing.T) {
+	cmds := []string{"!save"}
+	// Build a comment longer than maxBotCommandCommentLen (2000 bytes)
+	longComment := ""
+	for len(longComment) < 3000 {
+		longComment += "abcdefghij"
+	}
+	content := "!save " + longComment
+
+	_, comment, ok := ParseBotCommand(content, cmds)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if len(comment) > maxBotCommandCommentLen {
+		t.Errorf("comment should be truncated to %d bytes, got %d", maxBotCommandCommentLen, len(comment))
+	}
+}
+
+func TestParseBotCommand_CommentWithURLTruncated(t *testing.T) {
+	cmds := []string{"!save"}
+	longComment := ""
+	for len(longComment) < 3000 {
+		longComment += "abcdefghij"
+	}
+	content := "!save https://example.com " + longComment
+
+	parsedURL, comment, ok := ParseBotCommand(content, cmds)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if parsedURL != "https://example.com" {
+		t.Errorf("expected URL preserved, got %q", parsedURL)
+	}
+	if len(comment) > maxBotCommandCommentLen {
+		t.Errorf("comment should be truncated to %d bytes, got %d", maxBotCommandCommentLen, len(comment))
+	}
+}
+
+func TestNormalizeMessage_EmbedFieldsSanitized(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+		Embeds:    []Embed{{Title: "Title\x00Inject", Description: "Desc\x07Bell", URL: "https://example.com"}},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	embeds := artifact.Metadata["embeds"].([]Embed)
+	if embeds[0].Title != "TitleInject" {
+		t.Errorf("expected sanitized embed title, got %q", embeds[0].Title)
+	}
+	if embeds[0].Description != "DescBell" {
+		t.Errorf("expected sanitized embed description, got %q", embeds[0].Description)
+	}
+}
+
+func TestNormalizeMessage_AttachmentFilenameSanitized(t *testing.T) {
+	msg := DiscordMessage{
+		ID:          "111111111111111111",
+		Content:     "test",
+		ChannelID:   "222222222222222222",
+		GuildID:     "333333333333333333",
+		Timestamp:   time.Now(),
+		Attachments: []Attachment{{ID: "a1", Filename: "file\x00name.txt", URL: "https://cdn.discordapp.com/f.txt", Size: 10}},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	attachments := artifact.Metadata["attachments"].([]Attachment)
+	if attachments[0].Filename != "filename.txt" {
+		t.Errorf("expected sanitized filename, got %q", attachments[0].Filename)
 	}
 }

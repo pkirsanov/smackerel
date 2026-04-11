@@ -6,7 +6,7 @@
 
 1. **Scope 1 — Backup Command + DB Pool SST Config:** Add `./smackerel.sh backup` CLI command and make DB pool MaxConns/MinConns configurable via SST. These are low-risk, foundational changes that extend the config pipeline and CLI surface without touching hot paths.
 2. **Scope 2 — Capture Resilience + ML Health Cache:** Add DB health gate to capture (503 on DB down) and ML sidecar health cache for fast search fallback. Both are safety-net changes on critical read/write paths.
-3. **Scope 3 — Cron Concurrency Guards:** Add per-group `sync.Mutex` to the scheduler's 9 cron jobs. Isolated scheduler change with no API surface impact.
+3. **Scope 3 — Cron Concurrency Guards:** Add per-group `sync.Mutex` to the scheduler's cron jobs. Isolated scheduler change with no API surface impact.
 4. **Scope 4 — Graceful Shutdown + Docker stop_grace_period + NATS Dead-Letter:** Rewrite shutdown sequence, align Docker timeout, and add NATS dead-letter routing. Highest-risk scope — touches main.go lifecycle, NATS streams, and Docker Compose.
 
 ### New Types & Signatures
@@ -16,7 +16,7 @@
 - `db.Connect(ctx, url, maxConns, minConns)` — updated signature (was hardcoded)
 - `SearchEngine.mlHealthy atomic.Bool`, `mlHealthAt atomic.Int64` — ML health cache fields
 - `SearchEngine.isMLHealthy(ctx) bool` — health cache method
-- `Scheduler.muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muFrequent` — per-group mutexes
+- `Scheduler.muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muBriefs`, `muAlerts` — per-group mutexes
 - NATS `DEADLETTER` stream — new JetStream stream in `AllStreams()`
 - `shutdownAll(ctx, ...)` — explicit sequential shutdown function replacing defer-based cleanup
 
@@ -33,7 +33,7 @@
 |---|------|----------|-----------|-------------|--------|
 | 1 | Backup Command + DB Pool SST | CLI, config, db | E2E backup, unit config validation | Backup works, pool SST-driven | [x] Done |
 | 2 | Capture Resilience + ML Health Cache | API (capture, search), config | Integration 503, integration text_fallback | Capture fails visible, search degrades fast | [x] Done |
-| 3 | Cron Concurrency Guards | Scheduler | Unit mutex TryLock, race detector | 9 jobs overlap-protected | [x] Done |
+| 3 | Cron Concurrency Guards | Scheduler | Unit mutex TryLock, race detector | All jobs overlap-protected | [x] Done |
 | 4 | Graceful Shutdown + Docker + Dead-Letter | main.go, NATS, docker-compose | E2E shutdown timing, integration dead-letter | Clean shutdown in order, no message loss | [x] Done |
 
 ---
@@ -204,7 +204,7 @@ Scenario: SCN-022-10 Different job groups run concurrently
   Then the momentum job acquires its own mutex and runs concurrently with synthesis
 
 Scenario: SCN-022-11 All nine cron jobs are protected from self-overlap
-  Given 9 cron jobs are registered (digest, momentum, synthesis, resurfacing, pre-meeting briefs, weekly synthesis, monthly report, subscription detection, frequent lookups)
+  Given all cron jobs are registered (digest, momentum, synthesis, resurfacing, pre-meeting briefs, weekly synthesis, monthly report, subscription detection, frequent lookups, alert delivery, alert production, relationship cooling)
   When any job fires while a previous instance of the same type is still running
   Then the new invocation is skipped and a warning is logged
 ```
@@ -212,7 +212,7 @@ Scenario: SCN-022-11 All nine cron jobs are protected from self-overlap
 ### Implementation Plan
 
 **Files touched:**
-- `internal/scheduler/scheduler.go` — add 6 `sync.Mutex` fields to `Scheduler` struct: `muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muFrequent`; wrap each cron callback in `TryLock`/`Unlock` guard
+- `internal/scheduler/scheduler.go` — add 7 `sync.Mutex` fields to `Scheduler` struct: `muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muBriefs`, `muAlerts`; wrap each cron callback in `TryLock`/`Unlock` guard
 
 **Job group classification:**
 
@@ -223,7 +223,8 @@ Scenario: SCN-022-11 All nine cron jobs are protected from self-overlap
 | daily | `muDaily` | Synthesis, resurfacing, frequent lookups |
 | weekly | `muWeekly` | Weekly synthesis, subscription detection |
 | monthly | `muMonthly` | Monthly report |
-| frequent | `muFrequent` | Pre-meeting briefs |
+| briefs | `muBriefs` | Pre-meeting briefs |
+| alerts | `muAlerts` | Alert delivery sweep |
 
 **Guard pattern:** `sync.Mutex.TryLock()` (Go 1.18+) — returns immediately without blocking. If lock held, skip invocation with `slog.Warn("skipping overlapping job", "group", group, "job", jobName)`.
 
@@ -239,8 +240,8 @@ Scenario: SCN-022-11 All nine cron jobs are protected from self-overlap
 
 ### Definition of Done
 
-- [x] 6 per-group `sync.Mutex` fields added to `Scheduler` struct
-- [x] All 9 cron job callbacks wrapped in `TryLock`/`Unlock` guards
+- [x] 7 per-group `sync.Mutex` fields added to `Scheduler` struct
+- [x] All cron job callbacks wrapped in `TryLock`/`Unlock` guards
 - [x] Overlapping same-group job invocations are skipped with warning log
 - [x] Different-group jobs run concurrently without interference
 - [x] Race detector clean: `go test -race ./internal/scheduler/...`

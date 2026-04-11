@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -92,6 +93,11 @@ func (e *Engine) DetectTripsFromEmail(ctx context.Context) ([]TripDossier, error
 		d.DossierText = assembleDossierText(d)
 		dossiers = append(dossiers, *d)
 	}
+
+	// Sort for deterministic output — map iteration order is non-deterministic.
+	sort.Slice(dossiers, func(i, j int) bool {
+		return dossiers[i].Destination < dossiers[j].Destination
+	})
 
 	return dossiers, rows.Err()
 }
@@ -192,53 +198,84 @@ func (e *Engine) GetPeopleIntelligence(ctx context.Context) ([]PersonProfile, er
 
 		// Interaction trend: cooling if >42 days since last contact
 		pp.InteractionTrend = classifyInteractionTrend(pp.DaysSinceContact, pp.TotalInteractions)
-
-		// Abort early if context is cancelled to avoid wasting DB connections
-		if ctx.Err() != nil {
-			return profiles, ctx.Err()
-		}
-
-		// Shared topics
-		topicRows, err := e.Pool.Query(ctx, `
-			SELECT DISTINCT t.name FROM topics t
-			JOIN edges e1 ON e1.dst_id = t.id AND e1.dst_type = 'topic' AND e1.edge_type = 'BELONGS_TO'
-			JOIN edges e2 ON e2.src_id = e1.src_id AND e2.dst_id = $1 AND e2.dst_type = 'person'
-			LIMIT 5
-		`, pp.PersonID)
-		if err == nil {
-			for topicRows.Next() {
-				var t string
-				if topicRows.Scan(&t) == nil {
-					pp.SharedTopics = append(pp.SharedTopics, t)
-				}
-			}
-			if err := topicRows.Err(); err != nil {
-				slog.Warn("shared topics row iteration failed", "person", pp.PersonID, "error", err)
-			}
-			topicRows.Close()
-		}
-
-		// Pending action items
-		aiRows, err := e.Pool.Query(ctx, `
-			SELECT text FROM action_items WHERE person_id = $1 AND status = 'open' LIMIT 3
-		`, pp.PersonID)
-		if err == nil {
-			for aiRows.Next() {
-				var t string
-				if aiRows.Scan(&t) == nil {
-					pp.PendingItems = append(pp.PendingItems, t)
-				}
-			}
-			if err := aiRows.Err(); err != nil {
-				slog.Warn("action items row iteration failed", "person", pp.PersonID, "error", err)
-			}
-			aiRows.Close()
-		}
-
 		profiles = append(profiles, pp)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("people profile row iteration: %w", err)
+	}
 
-	return profiles, rows.Err()
+	if len(profiles) == 0 {
+		return profiles, nil
+	}
+
+	// Batch-fetch shared topics for all people in a single query
+	personIDs := make([]string, len(profiles))
+	personIdx := make(map[string]int, len(profiles))
+	for i, pp := range profiles {
+		personIDs[i] = pp.PersonID
+		personIdx[pp.PersonID] = i
+	}
+
+	topicRows, err := e.Pool.Query(ctx, `
+		SELECT e2.dst_id AS person_id, t.name
+		FROM edges e1
+		JOIN topics t ON t.id = e1.dst_id AND e1.dst_type = 'topic' AND e1.edge_type = 'BELONGS_TO'
+		JOIN edges e2 ON e2.src_id = e1.src_id AND e2.dst_type = 'person'
+		WHERE e2.dst_id = ANY($1)
+		GROUP BY e2.dst_id, t.name
+		ORDER BY e2.dst_id, COUNT(*) DESC
+	`, personIDs)
+	if err != nil {
+		slog.Warn("batch shared topics query failed", "error", err)
+	} else {
+		defer topicRows.Close()
+		topicCount := make(map[string]int)
+		for topicRows.Next() {
+			var personID, topicName string
+			if topicRows.Scan(&personID, &topicName) == nil {
+				key := personID
+				if topicCount[key] < 5 {
+					if idx, ok := personIdx[personID]; ok {
+						profiles[idx].SharedTopics = append(profiles[idx].SharedTopics, topicName)
+					}
+					topicCount[key]++
+				}
+			}
+		}
+		if err := topicRows.Err(); err != nil {
+			slog.Warn("batch shared topics iteration failed", "error", err)
+		}
+	}
+
+	// Batch-fetch pending action items for all people in a single query
+	aiRows, err := e.Pool.Query(ctx, `
+		SELECT person_id, text
+		FROM (
+			SELECT person_id, text,
+			       ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY created_at DESC) AS rn
+			FROM action_items
+			WHERE person_id = ANY($1) AND status = 'open'
+		) ranked
+		WHERE rn <= 3
+	`, personIDs)
+	if err != nil {
+		slog.Warn("batch action items query failed", "error", err)
+	} else {
+		defer aiRows.Close()
+		for aiRows.Next() {
+			var personID, text string
+			if aiRows.Scan(&personID, &text) == nil {
+				if idx, ok := personIdx[personID]; ok {
+					profiles[idx].PendingItems = append(profiles[idx].PendingItems, text)
+				}
+			}
+		}
+		if err := aiRows.Err(); err != nil {
+			slog.Warn("batch action items iteration failed", "error", err)
+		}
+	}
+
+	return profiles, nil
 }
 
 // classifyInteractionTrend determines if a relationship is warming, stable, or cooling.

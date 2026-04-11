@@ -28,7 +28,9 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if err != nil {
 		return fmt.Errorf("acquire migration lock: %w", err)
 	}
-	defer conn.Exec(ctx, "SELECT pg_advisory_unlock(42)")
+	// Release advisory lock on a background context — the caller's ctx
+	// may be cancelled, and we must ensure the lock is released cleanly.
+	defer conn.Exec(context.Background(), "SELECT pg_advisory_unlock(42)")
 
 	// Create migrations tracking table
 	_, err = conn.Exec(ctx, `

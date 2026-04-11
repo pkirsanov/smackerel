@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 const (
@@ -23,6 +24,25 @@ const (
 	maxCaptureCommands = 20
 	// maxCaptureCommandLen caps individual capture command prefix length.
 	maxCaptureCommandLen = 50
+	// maxMonitoredChannels caps the total number of monitored channel entries
+	// to prevent resource exhaustion via config injection.
+	maxMonitoredChannels = 200
+	// minBotTokenLen is the minimum acceptable length for a Discord bot token.
+	// Real tokens are ~59-72 chars; this catches obviously invalid values.
+	minBotTokenLen = 30
+	// maxRawContentLen caps stored content size (bytes) to prevent resource exhaustion.
+	// 2x Discord Nitro's 4000-char limit to allow for multi-byte UTF-8.
+	maxRawContentLen = 8192
+	// maxMetadataAttachments caps stored attachment entries per message.
+	maxMetadataAttachments = 50
+	// maxMetadataEmbeds caps stored embed entries per message.
+	maxMetadataEmbeds = 25
+	// maxMetadataReactions caps stored reaction entries per message.
+	maxMetadataReactions = 100
+	// maxMetadataMentions caps stored mention entries per message.
+	maxMetadataMentions = 100
+	// maxBotCommandCommentLen caps the comment text from bot capture commands.
+	maxBotCommandCommentLen = 2000
 )
 
 // Connector implements the Discord connector using REST API for message history.
@@ -30,6 +50,7 @@ type Connector struct {
 	id      string
 	health  connector.HealthStatus
 	mu      sync.RWMutex
+	syncMu  sync.Mutex // serializes Sync calls to prevent cursor regression
 	config  DiscordConfig
 	cursors ChannelCursors
 	limiter *RateLimiter
@@ -77,9 +98,14 @@ func isValidSnowflake(s string) bool {
 }
 
 // isSafeURL checks that a URL is not targeting internal/metadata endpoints (SSRF protection).
+// Only http and https schemes are permitted; file://, gopher://, ftp://, etc. are rejected.
 func isSafeURL(rawURL string) bool {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
+		return false
+	}
+	// Scheme enforcement: only http(s) allowed to prevent file://, gopher://, ftp:// bypass
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return false
 	}
 	host := parsed.Hostname()
@@ -115,6 +141,17 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		return fmt.Errorf("discord bot_token is required")
 	}
 
+	// Basic bot token format validation: minimum length and no control characters.
+	// Prevents obviously invalid tokens and control-char injection via credentials.
+	if len(cfg.BotToken) < minBotTokenLen {
+		return fmt.Errorf("discord bot_token is too short (minimum %d characters)", minBotTokenLen)
+	}
+	for _, r := range cfg.BotToken {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("discord bot_token contains invalid control characters")
+		}
+	}
+
 	c.mu.Lock()
 	c.config = cfg
 
@@ -132,6 +169,10 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	// Serialize Sync calls to prevent concurrent cursor write-back regression
+	c.syncMu.Lock()
+	defer c.syncMu.Unlock()
+
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
 	c.mu.Unlock()
@@ -149,6 +190,14 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 	c.mu.RUnlock()
 
+	// Build set of configured channel IDs for cursor scope enforcement
+	configuredChannels := make(map[string]struct{})
+	for _, chCfg := range c.config.MonitoredChannels {
+		for _, chID := range chCfg.ChannelIDs {
+			configuredChannels[chID] = struct{}{}
+		}
+	}
+
 	// Parse global cursor into local copy (overrides stored cursors if provided)
 	if cursor != "" {
 		var parsedCursors ChannelCursors
@@ -165,16 +214,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					slog.Warn("discord cursor contains invalid snowflake value, skipping", "connector_id", c.id, "channel_id", k, "value", v)
 					continue
 				}
+				// Cursor scope enforcement: only accept cursors for configured channels
+				if _, ok := configuredChannels[k]; !ok {
+					slog.Warn("discord cursor references unconfigured channel, skipping", "connector_id", c.id, "channel_id", k)
+					continue
+				}
 				localCursors[k] = v
 			}
-		}
-	}
-
-	// Build set of configured channel IDs for cursor scope enforcement
-	configuredChannels := make(map[string]struct{})
-	for _, chCfg := range c.config.MonitoredChannels {
-		for _, chID := range chCfg.ChannelIDs {
-			configuredChannels[chID] = struct{}{}
 		}
 	}
 
@@ -388,37 +434,92 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 	contentType := classifyMessage(msg, captureCommands)
 	tier := assignTier(msg, defaultTier)
 
+	// Sanitize content: strip control chars and enforce size limit to prevent
+	// null-byte injection into storage and resource exhaustion from oversized content.
+	sanitizedContent := sanitizeControlChars(msg.Content)
+	sanitizedContent = stringutil.TruncateUTF8(sanitizedContent, maxRawContentLen)
+
 	metadata := map[string]interface{}{
 		"message_id":      msg.ID,
 		"channel_id":      msg.ChannelID,
 		"server_id":       msg.GuildID,
-		"server_name":     msg.ServerName,
-		"channel_name":    msg.ChannelName,
-		"author_id":       msg.Author.ID,
-		"author_name":     msg.Author.Username,
+		"server_name":     sanitizeControlChars(msg.ServerName),
+		"channel_name":    sanitizeControlChars(msg.ChannelName),
 		"pinned":          msg.Pinned,
 		"has_links":       hasLinks(msg),
 		"reaction_count":  totalReactions(msg.Reactions),
 		"processing_tier": tier,
 	}
+	// Only store author_id if it is a valid snowflake
+	if isValidSnowflake(msg.Author.ID) {
+		metadata["author_id"] = msg.Author.ID
+	}
+	metadata["author_name"] = sanitizeControlChars(msg.Author.Username)
 
+	// Sanitize and cap embeds
 	if len(msg.Embeds) > 0 {
-		metadata["embed_count"] = len(msg.Embeds)
+		embedCount := len(msg.Embeds)
+		metadata["embed_count"] = embedCount
+		cap := embedCount
+		if cap > maxMetadataEmbeds {
+			cap = maxMetadataEmbeds
+		}
+		safeEmbeds := make([]Embed, 0, cap)
+		for i := 0; i < cap; i++ {
+			e := msg.Embeds[i]
+			e.URL = sanitizeEmbedURL(e.URL)
+			e.Title = sanitizeControlChars(e.Title)
+			e.Description = sanitizeControlChars(e.Description)
+			safeEmbeds = append(safeEmbeds, e)
+		}
+		metadata["embeds"] = safeEmbeds
 	}
+	// Sanitize attachment URLs with full SSRF check; cap count.
 	if len(msg.Attachments) > 0 {
-		metadata["attachments"] = msg.Attachments
+		cap := len(msg.Attachments)
+		if cap > maxMetadataAttachments {
+			cap = maxMetadataAttachments
+		}
+		safe := make([]Attachment, 0, cap)
+		for i := 0; i < cap; i++ {
+			a := msg.Attachments[i]
+			a.URL = sanitizeEmbedURL(a.URL)
+			a.Filename = sanitizeControlChars(a.Filename)
+			safe = append(safe, a)
+		}
+		metadata["attachments"] = safe
 	}
+	// Cap reactions
 	if len(msg.Reactions) > 0 {
-		metadata["reactions"] = msg.Reactions
+		r := msg.Reactions
+		if len(r) > maxMetadataReactions {
+			r = r[:maxMetadataReactions]
+		}
+		metadata["reactions"] = r
 	}
+	// Validate and cap mention IDs (must be valid snowflakes)
 	if len(msg.MentionIDs) > 0 {
-		metadata["mentions"] = msg.MentionIDs
+		cap := len(msg.MentionIDs)
+		if cap > maxMetadataMentions {
+			cap = maxMetadataMentions
+		}
+		validMentions := make([]string, 0, cap)
+		for i := 0; i < cap; i++ {
+			if isValidSnowflake(msg.MentionIDs[i]) {
+				validMentions = append(validMentions, msg.MentionIDs[i])
+			}
+		}
+		if len(validMentions) > 0 {
+			metadata["mentions"] = validMentions
+		}
 	}
-	if msg.ThreadID != "" {
+	// Validate thread ID is a snowflake before storing
+	if msg.ThreadID != "" && isValidSnowflake(msg.ThreadID) {
 		metadata["thread_id"] = msg.ThreadID
-		metadata["thread_name"] = msg.ThreadName
+		metadata["thread_name"] = sanitizeControlChars(msg.ThreadName)
 	}
-	if msg.MessageReference != nil {
+	// Validate reply reference ID is a snowflake before storing
+	if msg.MessageReference != nil && isValidSnowflake(msg.MessageReference.MessageID) {
 		metadata["reply_to_id"] = msg.MessageReference.MessageID
 	}
 
@@ -433,7 +534,7 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 		SourceRef:   msg.ID,
 		ContentType: contentType,
 		Title:       buildTitle(msg),
-		RawContent:  msg.Content,
+		RawContent:  sanitizedContent,
 		URL:         artifactURL,
 		Metadata:    metadata,
 		CapturedAt:  msg.Timestamp,
@@ -513,10 +614,10 @@ func totalReactions(reactions []Reaction) int {
 }
 
 func buildTitle(msg DiscordMessage) string {
-	content := sanitizeControlChars(msg.Content)
+	content := sanitizeSingleLine(msg.Content)
 	if len(content) == 0 {
 		if len(msg.Embeds) > 0 && msg.Embeds[0].Title != "" {
-			return sanitizeControlChars(msg.Embeds[0].Title)
+			return sanitizeSingleLine(msg.Embeds[0].Title)
 		}
 		return "Discord message"
 	}
@@ -527,11 +628,35 @@ func buildTitle(msg DiscordMessage) string {
 	return content
 }
 
+// sanitizeEmbedURL returns the URL unchanged if it passes full SSRF validation
+// (http/https scheme + no private/loopback/metadata targets), or empty string otherwise.
+func sanitizeEmbedURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	if !isSafeURL(rawURL) {
+		return ""
+	}
+	return rawURL
+}
+
 // sanitizeControlChars removes ASCII control characters (except \n, \r, \t) to prevent
 // log injection and downstream rendering issues.
 func sanitizeControlChars(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// sanitizeSingleLine removes ALL control characters including \n, \r, \t to produce
+// a safe single-line string for titles and HTTP-header-safe contexts.
+// Prevents HTTP response splitting (\r\n injection) in downstream consumers.
+func sanitizeSingleLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 {
 			return -1
 		}
 		return r
@@ -554,16 +679,27 @@ func ParseBotCommand(content string, captureCommands []string) (parsedURL, comme
 		parts := strings.SplitN(rest, " ", 2)
 		candidateURL := parts[0]
 		if !strings.HasPrefix(candidateURL, "http://") && !strings.HasPrefix(candidateURL, "https://") {
+			// Truncate non-URL text to prevent unbounded comment storage
+			if len(rest) > maxBotCommandCommentLen {
+				rest = stringutil.TruncateUTF8(rest, maxBotCommandCommentLen)
+			}
 			return "", rest, true
 		}
 		// SSRF protection: reject URLs targeting private/internal endpoints
 		if !isSafeURL(candidateURL) {
 			slog.Warn("discord bot command rejected unsafe URL", "url", candidateURL)
-			return "", rest, true
+			commentText := rest
+			if len(commentText) > maxBotCommandCommentLen {
+				commentText = stringutil.TruncateUTF8(commentText, maxBotCommandCommentLen)
+			}
+			return "", commentText, true
 		}
 		commentText := ""
 		if len(parts) > 1 {
 			commentText = strings.TrimSpace(parts[1])
+			if len(commentText) > maxBotCommandCommentLen {
+				commentText = stringutil.TruncateUTF8(commentText, maxBotCommandCommentLen)
+			}
 		}
 		return candidateURL, commentText, true
 	}
@@ -584,6 +720,9 @@ func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error)
 	}
 
 	if channels, ok := config.SourceConfig["monitored_channels"].([]interface{}); ok {
+		if len(channels) > maxMonitoredChannels {
+			return DiscordConfig{}, fmt.Errorf("monitored_channels exceeds maximum of %d, got %d", maxMonitoredChannels, len(channels))
+		}
 		for _, ch := range channels {
 			if chMap, ok := ch.(map[string]interface{}); ok {
 				cc := ChannelConfig{}

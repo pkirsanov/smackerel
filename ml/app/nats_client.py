@@ -26,6 +26,11 @@ SUBSCRIBE_SUBJECTS = [
     "digest.generate",
     "keep.sync.request",
     "keep.ocr.request",
+    "learning.classify",
+    "content.analyze",
+    "monthly.generate",
+    "quickref.generate",
+    "seasonal.analyze",
 ]
 
 # Subjects this sidecar publishes to
@@ -36,6 +41,11 @@ PUBLISH_SUBJECTS = [
     "digest.generated",
     "keep.sync.response",
     "keep.ocr.response",
+    "learning.classified",
+    "content.analyzed",
+    "monthly.generated",
+    "quickref.generated",
+    "seasonal.analyzed",
 ]
 
 # Map of subscribe subject -> publish response subject
@@ -46,6 +56,11 @@ SUBJECT_RESPONSE_MAP = {
     "digest.generate": "digest.generated",
     "keep.sync.request": "keep.sync.response",
     "keep.ocr.request": "keep.ocr.response",
+    "learning.classify": "learning.classified",
+    "content.analyze": "content.analyzed",
+    "monthly.generate": "monthly.generated",
+    "quickref.generate": "quickref.generated",
+    "seasonal.analyze": "seasonal.analyzed",
 }
 
 

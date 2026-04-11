@@ -39,12 +39,21 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Get("/artifact/{id}", deps.ArtifactDetailHandler)
 			r.Get("/export", deps.ExportHandler)
 
-			// Phase 5 intelligence endpoints (R-501..R-505)
+			// Context enrichment endpoint (GuestHost connector)
+			if deps.ContextHandler != nil {
+				r.Post("/context-for", deps.ContextHandler.HandleContextFor)
+			}
+
+			// Phase 5 intelligence endpoints (R-501..R-508)
 			if deps.IntelligenceEngine != nil {
 				r.Get("/expertise", ExpertiseHandler(deps.IntelligenceEngine))
 				r.Get("/learning-paths", LearningPathsHandler(deps.IntelligenceEngine))
 				r.Get("/subscriptions", SubscriptionsHandler(deps.IntelligenceEngine))
 				r.Get("/serendipity", SerendipityHandler(deps.IntelligenceEngine))
+				r.Get("/content-fuel", ContentFuelHandler(deps.IntelligenceEngine))
+				r.Get("/quick-references", QuickReferencesHandler(deps.IntelligenceEngine))
+				r.Get("/monthly-report", MonthlyReportHandler(deps.IntelligenceEngine))
+				r.Get("/seasonal-patterns", SeasonalPatternsHandler(deps.IntelligenceEngine))
 			}
 
 			// OAuth status requires authentication (token-bearing callers)
@@ -119,6 +128,30 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// extractBearerToken extracts the token from an "Authorization: Bearer <token>" header.
+// Returns the token string, or empty string if the header is missing or malformed.
+func extractBearerToken(r *http.Request) string {
+	auth := r.Header.Get("Authorization")
+	if auth == "" {
+		return ""
+	}
+	parts := strings.SplitN(auth, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+		return ""
+	}
+	return parts[1]
+}
+
+// matchBearerToken returns true if the request carries a Bearer token that
+// matches expected using constant-time comparison.
+func matchBearerToken(r *http.Request, expected string) bool {
+	token := extractBearerToken(r)
+	if token == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
+}
+
 // webAuthMiddleware checks authentication for web UI routes.
 // Accepts Bearer token in Authorization header or auth_token cookie.
 // If no AuthToken is configured, all requests are allowed (dev mode).
@@ -130,14 +163,9 @@ func (d *Dependencies) webAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Check Authorization header (Bearer token)
-		if auth := r.Header.Get("Authorization"); auth != "" {
-			parts := strings.SplitN(auth, " ", 2)
-			if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
-				if subtle.ConstantTimeCompare([]byte(parts[1]), []byte(d.AuthToken)) == 1 {
-					next.ServeHTTP(w, r)
-					return
-				}
-			}
+		if matchBearerToken(r, d.AuthToken) {
+			next.ServeHTTP(w, r)
+			return
 		}
 
 		// Check auth_token cookie (for browser sessions)
@@ -148,6 +176,7 @@ func (d *Dependencies) webAuthMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
+		slog.Warn("web auth failure", "path", r.URL.Path, "remote_addr", r.RemoteAddr)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	})
 }
@@ -161,19 +190,19 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		auth := r.Header.Get("Authorization")
-		if auth == "" {
+		token := extractBearerToken(r)
+		if token == "" {
+			reason := "missing header"
+			if r.Header.Get("Authorization") != "" {
+				reason = "invalid format"
+			}
+			slog.Warn("bearer auth failure", "path", r.URL.Path, "remote_addr", r.RemoteAddr, "reason", reason)
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 			return
 		}
 
-		parts := strings.SplitN(auth, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
-			return
-		}
-
-		if subtle.ConstantTimeCompare([]byte(parts[1]), []byte(d.AuthToken)) != 1 {
+		if !matchBearerToken(r, d.AuthToken) {
+			slog.Warn("bearer auth failure", "path", r.URL.Path, "remote_addr", r.RemoteAddr, "reason", "invalid token")
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 			return
 		}

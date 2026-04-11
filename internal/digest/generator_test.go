@@ -119,7 +119,7 @@ func TestDigest_Fields(t *testing.T) {
 }
 
 func TestNewGenerator(t *testing.T) {
-	g := NewGenerator(nil, nil)
+	g := NewGenerator(nil, nil, nil)
 	if g == nil {
 		t.Fatal("expected non-nil generator")
 	}

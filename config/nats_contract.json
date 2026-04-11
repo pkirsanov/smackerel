@@ -72,6 +72,66 @@
       "request": "keep.ocr.request",
       "stream": "KEEP",
       "critical": false
+    },
+    "learning.classify": {
+      "direction": "core_to_ml",
+      "response": "learning.classified",
+      "stream": "INTELLIGENCE",
+      "critical": false
+    },
+    "learning.classified": {
+      "direction": "ml_to_core",
+      "request": "learning.classify",
+      "stream": "INTELLIGENCE",
+      "critical": false
+    },
+    "content.analyze": {
+      "direction": "core_to_ml",
+      "response": "content.analyzed",
+      "stream": "INTELLIGENCE",
+      "critical": false
+    },
+    "content.analyzed": {
+      "direction": "ml_to_core",
+      "request": "content.analyze",
+      "stream": "INTELLIGENCE",
+      "critical": false
+    },
+    "monthly.generate": {
+      "direction": "core_to_ml",
+      "response": "monthly.generated",
+      "stream": "INTELLIGENCE",
+      "critical": false
+    },
+    "monthly.generated": {
+      "direction": "ml_to_core",
+      "request": "monthly.generate",
+      "stream": "INTELLIGENCE",
+      "critical": false
+    },
+    "quickref.generate": {
+      "direction": "core_to_ml",
+      "response": "quickref.generated",
+      "stream": "INTELLIGENCE",
+      "critical": false
+    },
+    "quickref.generated": {
+      "direction": "ml_to_core",
+      "request": "quickref.generate",
+      "stream": "INTELLIGENCE",
+      "critical": false
+    },
+    "seasonal.analyze": {
+      "direction": "core_to_ml",
+      "response": "seasonal.analyzed",
+      "stream": "INTELLIGENCE",
+      "critical": false
+    },
+    "seasonal.analyzed": {
+      "direction": "ml_to_core",
+      "request": "seasonal.analyze",
+      "stream": "INTELLIGENCE",
+      "critical": false
     }
   },
   "streams": {
@@ -79,6 +139,7 @@
     "SEARCH": { "subjects_pattern": "search.>" },
     "DIGEST": { "subjects_pattern": "digest.>" },
     "KEEP": { "subjects_pattern": "keep.>" },
+    "INTELLIGENCE": { "subjects_pattern": "learning.>", "additional_subjects": ["content.>", "monthly.>", "quickref.>", "seasonal.>"] },
     "DEADLETTER": { "subjects_pattern": "deadletter.>" }
   },
   "request_response_pairs": [
@@ -87,6 +148,11 @@
     { "request": "search.rerank", "response": "search.reranked" },
     { "request": "digest.generate", "response": "digest.generated" },
     { "request": "keep.sync.request", "response": "keep.sync.response" },
-    { "request": "keep.ocr.request", "response": "keep.ocr.response" }
+    { "request": "keep.ocr.request", "response": "keep.ocr.response" },
+    { "request": "learning.classify", "response": "learning.classified" },
+    { "request": "content.analyze", "response": "content.analyzed" },
+    { "request": "monthly.generate", "response": "monthly.generated" },
+    { "request": "quickref.generate", "response": "quickref.generated" },
+    { "request": "seasonal.analyze", "response": "seasonal.analyzed" }
   ]
 }

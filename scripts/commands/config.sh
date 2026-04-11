@@ -299,6 +299,13 @@ BROWSER_HISTORY_PATH="$(yaml_get connectors.browser-history.chrome.history_path 
 
 # Discord connector
 DISCORD_ENABLED="$(yaml_get connectors.discord.enabled 2>/dev/null)" || DISCORD_ENABLED="false"
+
+# GuestHost connector
+GUESTHOST_ENABLED="$(yaml_get connectors.guesthost.enabled 2>/dev/null)" || GUESTHOST_ENABLED="false"
+GUESTHOST_BASE_URL="$(yaml_get connectors.guesthost.base_url 2>/dev/null)" || GUESTHOST_BASE_URL=""
+GUESTHOST_API_KEY="$(yaml_get connectors.guesthost.api_key 2>/dev/null)" || GUESTHOST_API_KEY=""
+GUESTHOST_SYNC_SCHEDULE="$(yaml_get connectors.guesthost.sync_schedule 2>/dev/null)" || GUESTHOST_SYNC_SCHEDULE=""
+GUESTHOST_EVENT_TYPES="$(yaml_get connectors.guesthost.event_types 2>/dev/null)" || GUESTHOST_EVENT_TYPES=""
 DISCORD_BOT_TOKEN="$(yaml_get connectors.discord.bot_token 2>/dev/null)" || DISCORD_BOT_TOKEN=""
 DISCORD_SYNC_SCHEDULE="$(yaml_get connectors.discord.sync_schedule 2>/dev/null)" || DISCORD_SYNC_SCHEDULE=""
 DISCORD_ENABLE_GATEWAY="$(yaml_get connectors.discord.enable_gateway 2>/dev/null)" || DISCORD_ENABLE_GATEWAY=""
@@ -416,6 +423,11 @@ FINANCIAL_MARKETS_FRED_API_KEY=${FINANCIAL_MARKETS_FRED_API_KEY}
 FINANCIAL_MARKETS_COINGECKO_ENABLED=${FINANCIAL_MARKETS_COINGECKO_ENABLED}
 FINANCIAL_MARKETS_ALERT_THRESHOLD=${FINANCIAL_MARKETS_ALERT_THRESHOLD}
 FINANCIAL_MARKETS_WATCHLIST=${FINANCIAL_MARKETS_WATCHLIST}
+GUESTHOST_ENABLED=${GUESTHOST_ENABLED}
+GUESTHOST_BASE_URL=${GUESTHOST_BASE_URL}
+GUESTHOST_API_KEY=${GUESTHOST_API_KEY}
+GUESTHOST_SYNC_SCHEDULE=${GUESTHOST_SYNC_SCHEDULE}
+GUESTHOST_EVENT_TYPES=${GUESTHOST_EVENT_TYPES}
 DB_MAX_CONNS=${DB_MAX_CONNS}
 DB_MIN_CONNS=${DB_MIN_CONNS}
 SHUTDOWN_TIMEOUT_S=${SHUTDOWN_TIMEOUT_S}

@@ -11,26 +11,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
+	"github.com/smackerel/smackerel/internal/connector"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
 // Generator assembles and generates daily digests.
 type Generator struct {
-	Pool *pgxpool.Pool
-	NATS *smacknats.Client
+	Pool     *pgxpool.Pool
+	NATS     *smacknats.Client
+	Registry *connector.Registry
 }
 
 // NewGenerator creates a new digest generator.
-func NewGenerator(pool *pgxpool.Pool, nats *smacknats.Client) *Generator {
-	return &Generator{Pool: pool, NATS: nats}
+func NewGenerator(pool *pgxpool.Pool, nats *smacknats.Client, registry *connector.Registry) *Generator {
+	return &Generator{Pool: pool, NATS: nats, Registry: registry}
 }
 
 // DigestContext is the context payload sent to the ML sidecar for digest generation.
 type DigestContext struct {
-	DigestDate         string          `json:"digest_date"`
-	ActionItems        []ActionItem    `json:"action_items"`
-	OvernightArtifacts []ArtifactBrief `json:"overnight_artifacts"`
-	HotTopics          []TopicBrief    `json:"hot_topics"`
+	DigestDate         string                    `json:"digest_date"`
+	ActionItems        []ActionItem              `json:"action_items"`
+	OvernightArtifacts []ArtifactBrief           `json:"overnight_artifacts"`
+	HotTopics          []TopicBrief              `json:"hot_topics"`
+	Hospitality        *HospitalityDigestContext `json:"hospitality,omitempty"`
 }
 
 // ActionItem is a pending action item for the digest.
@@ -94,8 +97,19 @@ func (g *Generator) Generate(ctx context.Context) (*DigestContext, error) {
 		HotTopics:          hotTopics,
 	}
 
+	// Assemble hospitality context if GuestHost connector is active
+	if g.isGuestHostActive() {
+		hCtx, hErr := AssembleHospitalityContext(ctx, g.Pool)
+		if hErr != nil {
+			slog.Warn("failed to assemble hospitality digest context", "error", hErr)
+		} else if !hCtx.IsEmpty() {
+			digestCtx.Hospitality = hCtx
+		}
+	}
+
 	// Check for quiet day
-	if len(actionItems) == 0 && len(overnight) == 0 && len(hotTopics) == 0 {
+	hasHospitality := digestCtx.Hospitality != nil
+	if len(actionItems) == 0 && len(overnight) == 0 && len(hotTopics) == 0 && !hasHospitality {
 		return digestCtx, g.storeQuietDigest(ctx, today)
 	}
 
@@ -266,6 +280,9 @@ func (g *Generator) storeFallbackDigest(ctx context.Context, date string, digest
 		}
 		lines = append(lines, fmt.Sprintf("> Hot topics: %s", strings.Join(topicNames, ", ")))
 	}
+	if digestCtx.Hospitality != nil {
+		lines = append(lines, formatHospitalityFallback(digestCtx.Hospitality))
+	}
 
 	text := strings.Join(lines, "\n")
 	wordCount := len(strings.Fields(text))
@@ -277,4 +294,45 @@ func (g *Generator) storeFallbackDigest(ctx context.Context, date string, digest
 		ON CONFLICT (digest_date) DO UPDATE SET digest_text = $3, word_count = $4, model_used = 'fallback'
 	`, id, date, text, wordCount)
 	return err
+}
+
+// isGuestHostActive checks whether the GuestHost connector is registered.
+func (g *Generator) isGuestHostActive() bool {
+	if g.Registry == nil {
+		return false
+	}
+	_, ok := g.Registry.Get("guesthost")
+	return ok
+}
+
+// formatHospitalityFallback produces a plain-text hospitality section for the
+// fallback digest (used when the ML sidecar is unreachable).
+func formatHospitalityFallback(h *HospitalityDigestContext) string {
+	var parts []string
+	parts = append(parts, "--- Hospitality ---")
+	if len(h.TodayArrivals) > 0 {
+		parts = append(parts, fmt.Sprintf("Arrivals today: %d", len(h.TodayArrivals)))
+		for _, a := range h.TodayArrivals {
+			parts = append(parts, fmt.Sprintf("  • %s at %s", a.GuestName, a.PropertyName))
+		}
+	}
+	if len(h.TodayDepartures) > 0 {
+		parts = append(parts, fmt.Sprintf("Departures today: %d", len(h.TodayDepartures)))
+		for _, d := range h.TodayDepartures {
+			parts = append(parts, fmt.Sprintf("  • %s from %s", d.GuestName, d.PropertyName))
+		}
+	}
+	if len(h.PendingTasks) > 0 {
+		parts = append(parts, fmt.Sprintf("Pending tasks: %d", len(h.PendingTasks)))
+	}
+	if h.Revenue.WeekRevenue > 0 || h.Revenue.MonthRevenue > 0 {
+		parts = append(parts, fmt.Sprintf("Revenue — week: $%.2f, month: $%.2f", h.Revenue.WeekRevenue, h.Revenue.MonthRevenue))
+	}
+	if len(h.GuestAlerts) > 0 {
+		parts = append(parts, fmt.Sprintf("Guest alerts: %d", len(h.GuestAlerts)))
+	}
+	if len(h.PropertyAlerts) > 0 {
+		parts = append(parts, fmt.Sprintf("Property alerts: %d", len(h.PropertyAlerts)))
+	}
+	return strings.Join(parts, "\n")
 }

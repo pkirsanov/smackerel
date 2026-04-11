@@ -67,6 +67,16 @@ func TestSCN002054_GoSubjectsMatchContract(t *testing.T) {
 		"SubjectKeepSyncResponse":   SubjectKeepSyncResponse,
 		"SubjectKeepOCRRequest":     SubjectKeepOCRRequest,
 		"SubjectKeepOCRResponse":    SubjectKeepOCRResponse,
+		"SubjectLearningClassify":   SubjectLearningClassify,
+		"SubjectLearningClassified": SubjectLearningClassified,
+		"SubjectContentAnalyze":     SubjectContentAnalyze,
+		"SubjectContentAnalyzed":    SubjectContentAnalyzed,
+		"SubjectMonthlyGenerate":    SubjectMonthlyGenerate,
+		"SubjectMonthlyGenerated":   SubjectMonthlyGenerated,
+		"SubjectQuickrefGenerate":   SubjectQuickrefGenerate,
+		"SubjectQuickrefGenerated":  SubjectQuickrefGenerated,
+		"SubjectSeasonalAnalyze":    SubjectSeasonalAnalyze,
+		"SubjectSeasonalAnalyzed":   SubjectSeasonalAnalyzed,
 	}
 
 	// Every Go constant must exist in the contract
@@ -141,6 +151,11 @@ func TestSCN002054_GoSubjectPairsMatchContract(t *testing.T) {
 		{SubjectDigestGenerate, SubjectDigestGenerated},
 		{SubjectKeepSyncRequest, SubjectKeepSyncResponse},
 		{SubjectKeepOCRRequest, SubjectKeepOCRResponse},
+		{SubjectLearningClassify, SubjectLearningClassified},
+		{SubjectContentAnalyze, SubjectContentAnalyzed},
+		{SubjectMonthlyGenerate, SubjectMonthlyGenerated},
+		{SubjectQuickrefGenerate, SubjectQuickrefGenerated},
+		{SubjectSeasonalAnalyze, SubjectSeasonalAnalyzed},
 	}
 
 	if len(contract.RequestResponsePairs) != len(goPairs) {

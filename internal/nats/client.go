@@ -26,6 +26,18 @@ const (
 	SubjectKeepSyncResponse   = "keep.sync.response"
 	SubjectKeepOCRRequest     = "keep.ocr.request"
 	SubjectKeepOCRResponse    = "keep.ocr.response"
+
+	// Phase 5: Advanced Intelligence subjects
+	SubjectLearningClassify   = "learning.classify"
+	SubjectLearningClassified = "learning.classified"
+	SubjectContentAnalyze     = "content.analyze"
+	SubjectContentAnalyzed    = "content.analyzed"
+	SubjectMonthlyGenerate    = "monthly.generate"
+	SubjectMonthlyGenerated   = "monthly.generated"
+	SubjectQuickrefGenerate   = "quickref.generate"
+	SubjectQuickrefGenerated  = "quickref.generated"
+	SubjectSeasonalAnalyze    = "seasonal.analyze"
+	SubjectSeasonalAnalyzed   = "seasonal.analyzed"
 )
 
 // StreamConfig defines a JetStream stream and its subjects.
@@ -41,6 +53,7 @@ func AllStreams() []StreamConfig {
 		{Name: "SEARCH", Subjects: []string{"search.>"}},
 		{Name: "DIGEST", Subjects: []string{"digest.>"}},
 		{Name: "KEEP", Subjects: []string{"keep.>"}},
+		{Name: "INTELLIGENCE", Subjects: []string{"learning.>", "content.>", "monthly.>", "quickref.>", "seasonal.>"}},
 		{Name: "DEADLETTER", Subjects: []string{"deadletter.>"}},
 	}
 }
