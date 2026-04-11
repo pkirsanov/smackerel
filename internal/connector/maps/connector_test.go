@@ -716,6 +716,105 @@ func writeTakeoutFile(t *testing.T, dir, name, content string) {
 	}
 }
 
+// IMPROVE-011: findNewFiles returns files in sorted order for deterministic processing
+func TestFindNewFilesSorted(t *testing.T) {
+	dir := t.TempDir()
+	// Create files in reverse-alpha order to detect non-determinism
+	writeTakeoutFile(t, dir, "z-export.json", makeTakeoutJSON(1))
+	writeTakeoutFile(t, dir, "a-export.json", makeTakeoutJSON(1))
+	writeTakeoutFile(t, dir, "m-export.json", makeTakeoutJSON(1))
+
+	c := New("google-maps-timeline")
+	c.config = MapsConfig{ImportDir: dir}
+
+	files, err := c.findNewFiles(nil)
+	if err != nil {
+		t.Fatalf("findNewFiles: %v", err)
+	}
+	if len(files) != 3 {
+		t.Fatalf("expected 3 files, got %d", len(files))
+	}
+
+	// Verify sorted order
+	for i := 1; i < len(files); i++ {
+		if files[i] < files[i-1] {
+			t.Errorf("files not sorted: %q appears after %q", files[i], files[i-1])
+		}
+	}
+
+	expectedOrder := []string{"a-export.json", "m-export.json", "z-export.json"}
+	for i, f := range files {
+		base := filepath.Base(f)
+		if base != expectedOrder[i] {
+			t.Errorf("files[%d] = %q, want %q", i, base, expectedOrder[i])
+		}
+	}
+}
+
+// IMPROVE-011: Cursor pruning removes entries for archived/deleted files
+func TestCursorPruningRemovesArchivedFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "current.json", makeTakeoutJSON(1))
+	// "old.json" is in cursor but not on disk (was archived)
+
+	c := New("google-maps-timeline")
+	c.config = MapsConfig{ImportDir: dir}
+
+	pruned := c.pruneCursor([]string{"old.json", "current.json", "deleted.json"})
+	if len(pruned) != 1 {
+		t.Fatalf("expected 1 pruned entry, got %d: %v", len(pruned), pruned)
+	}
+	if pruned[0] != "current.json" {
+		t.Errorf("expected %q, got %q", "current.json", pruned[0])
+	}
+}
+
+// IMPROVE-011: Cursor pruning keeps all entries when import dir can't be read
+func TestCursorPruningFallbackOnError(t *testing.T) {
+	c := New("google-maps-timeline")
+	c.config = MapsConfig{ImportDir: "/nonexistent/path/that/does/not/exist"}
+
+	files := []string{"a.json", "b.json"}
+	pruned := c.pruneCursor(files)
+	if len(pruned) != 2 {
+		t.Errorf("expected all entries preserved on error, got %d", len(pruned))
+	}
+}
+
+// IMPROVE-011: Sync with archiving produces a cursor that doesn't contain archived files
+func TestSyncCursorPrunedAfterArchive(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "batch1.json", makeTakeoutJSON(1))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir":        dir,
+			"archive_processed": true,
+			"min_distance_m":    float64(0),
+			"min_duration_min":  float64(0),
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	_, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// After archive, batch1.json is moved to archive subdir. Cursor should be pruned.
+	parsed := parseCursor(cursor)
+	for _, f := range parsed {
+		if f == "batch1.json" {
+			t.Error("cursor should not contain archived file batch1.json")
+		}
+	}
+}
+
 func makeTakeoutJSON(n int) string {
 	base := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)
 	objects := ""

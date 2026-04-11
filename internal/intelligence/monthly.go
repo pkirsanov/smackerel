@@ -102,6 +102,14 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 				report.ExpertiseShifts = append(report.ExpertiseShifts, es)
 			}
 		}
+		if err := shiftRows.Err(); err != nil {
+			slog.Warn("expertise shifts row iteration failed", "error", err)
+		}
+	}
+
+	// Check context between heavy operations to abort early on cancellation
+	if ctx.Err() != nil {
+		return report, ctx.Err()
 	}
 
 	// 2. Information diet — content types consumed this month (single query)
@@ -129,6 +137,9 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 	report.InformationDiet.Total = allCount
 
 	// 3. Interest evolution (last 6 months, bi-monthly periods)
+	if ctx.Err() != nil {
+		return report, ctx.Err()
+	}
 	for i := 0; i < 3; i++ {
 		start := time.Now().AddDate(0, -(i+1)*2, 0)
 		end := time.Now().AddDate(0, -i*2, 0)
@@ -150,11 +161,18 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 					ip.TopTopics = append(ip.TopTopics, t)
 				}
 			}
+			if err := topRows.Err(); err != nil {
+				slog.Warn("interest evolution row iteration failed", "period", period, "error", err)
+			}
 			topRows.Close()
 			if len(ip.TopTopics) > 0 {
 				report.InterestEvolution = append(report.InterestEvolution, ip)
 			}
 		}
+	}
+
+	if ctx.Err() != nil {
+		return report, ctx.Err()
 	}
 
 	// 4. Productivity patterns (from weekly synthesis)
@@ -170,6 +188,10 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 	paths, err := e.GetLearningPaths(ctx)
 	if err == nil {
 		report.LearningProgress = paths
+	}
+
+	if ctx.Err() != nil {
+		return report, ctx.Err()
 	}
 
 	// 7. Top synthesis insights
@@ -392,6 +414,9 @@ func (e *Engine) DetectSeasonalPatterns(ctx context.Context) ([]SeasonalPattern,
 					Actionable:  false,
 				})
 			}
+		}
+		if err := topicRows.Err(); err != nil {
+			slog.Warn("seasonal topic row iteration failed", "error", err)
 		}
 	}
 

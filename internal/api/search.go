@@ -133,10 +133,10 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 			topResultID = results[0].ArtifactID
 		}
 		logCtx, logCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer logCancel()
 		if err := d.IntelligenceEngine.LogSearch(logCtx, req.Query, len(results), topResultID); err != nil {
 			slog.Warn("search logging failed", "error", err, "query", req.Query)
 		}
-		logCancel()
 	}
 
 	writeJSON(w, http.StatusOK, resp)

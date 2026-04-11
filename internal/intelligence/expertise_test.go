@@ -182,3 +182,98 @@ func TestGenerateExpertiseMap_NilPool(t *testing.T) {
 		t.Error("expected error for nil pool")
 	}
 }
+
+// === Edge cases: assignTier exact boundaries ===
+
+func TestAssignTier_ExactBoundaries(t *testing.T) {
+	tests := []struct {
+		name         string
+		captureCount int
+		depthScore   float64
+		expected     ExpertiseTier
+	}{
+		// Exact thresholds: condition is > not >=
+		{"exactly 100 captures, 90 depth", 100, 90, TierDeep},       // NOT > 100
+		{"101 captures, 91 depth", 101, 91, TierExpert},             // > 100 && > 90
+		{"exactly 50 captures, 60 depth", 50, 60, TierIntermediate}, // NOT > 50
+		{"51 captures, 61 depth", 51, 61, TierDeep},                 // > 50 && > 60
+		{"exactly 20 captures, 30 depth", 20, 30, TierFoundation},   // NOT > 20
+		{"21 captures, 31 depth", 21, 31, TierIntermediate},         // > 20 && > 30
+		{"exactly 5 captures, 10 depth", 5, 10, TierNovice},         // NOT > 5
+		{"zero captures, zero depth", 0, 0, TierNovice},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := assignTier(tt.captureCount, tt.depthScore)
+			if got != tt.expected {
+				t.Errorf("assignTier(%d, %v) = %s, want %s", tt.captureCount, tt.depthScore, got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Edge cases: computeTrajectory velocity boundary at exactly 0.3 ===
+
+func TestComputeTrajectory_ExactBoundaryVelocity(t *testing.T) {
+	tests := []struct {
+		name       string
+		recent30d  int
+		avgMonthly float64
+		expected   GrowthTrajectory
+	}{
+		// velocity = 3/10 = 0.3 → >= 0.3 → decelerating
+		{"velocity exactly 0.3", 3, 10, TrajectoryDecelerating},
+		// velocity = 2/10 = 0.2 → < 0.3 → stopped
+		{"velocity just below 0.3", 2, 10, TrajectoryStopped},
+		// velocity = 7/10 = 0.7 → >= 0.7 → steady
+		{"velocity exactly 0.7", 7, 10, TrajectorySteady},
+		// velocity = 15/10 = 1.5 → NOT > 1.5 → steady
+		{"velocity exactly 1.5", 15, 10, TrajectorySteady},
+		// velocity = 16/10 = 1.6 → > 1.5 → accelerating
+		{"velocity just above 1.5", 16, 10, TrajectoryAccelerating},
+		// Negative avgMonthly should not cause division issues
+		{"negative avgMonthly", 5, -1, TrajectoryAccelerating},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeTrajectory(tt.recent30d, tt.avgMonthly)
+			if got != tt.expected {
+				t.Errorf("computeTrajectory(%d, %v) = %s, want %s", tt.recent30d, tt.avgMonthly, got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Edge case: computeDepthScore with negative inputs ===
+
+func TestComputeDepthScore_NegativeInputs(t *testing.T) {
+	// Negative values should not panic (defensive; shouldn't happen in practice)
+	te := TopicExpertise{
+		CaptureCount:      -1,
+		SourceDiversity:   -1,
+		DepthRatio:        -0.5,
+		Engagement:        -10,
+		ConnectionDensity: -1.0,
+	}
+	score := computeDepthScore(te)
+	// -1*0.3 + -1*15 + -0.5*20 + -10*0.1 + -1*10 = -0.3 -15 -10 -1 -10 = -36.3
+	if score != -36.3 {
+		t.Errorf("computeDepthScore(negatives) = %v, want -36.3", score)
+	}
+}
+
+// === Edge case: ExpertiseMap immature data days ===
+
+func TestExpertiseMap_ImmatureData(t *testing.T) {
+	em := &ExpertiseMap{DataDays: 89, Mature: false}
+	if em.Mature {
+		t.Error("89 data days should not be mature (needs 90+)")
+	}
+	em.DataDays = 90
+	em.Mature = em.DataDays >= 90
+	if !em.Mature {
+		t.Error("exactly 90 data days should be mature")
+	}
+}

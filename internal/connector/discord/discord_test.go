@@ -98,6 +98,227 @@ func TestClose(t *testing.T) {
 	}
 }
 
+// --- Security Tests ---
+
+func TestIsValidSnowflake(t *testing.T) {
+	valid := []string{"123456789012345678", "0", "18446744073709551615"}
+	for _, s := range valid {
+		if !isValidSnowflake(s) {
+			t.Errorf("expected %q to be a valid snowflake", s)
+		}
+	}
+	invalid := []string{"", "abc", "-1", "12345678901234567890123", "../etc/passwd", "123 456", "123\n456"}
+	for _, s := range invalid {
+		if isValidSnowflake(s) {
+			t.Errorf("expected %q to be an invalid snowflake", s)
+		}
+	}
+}
+
+func TestIsSafeURL(t *testing.T) {
+	safe := []string{
+		"https://example.com/page",
+		"https://discord.com/channels/123/456/789",
+		"http://public-site.org",
+	}
+	for _, u := range safe {
+		if !isSafeURL(u) {
+			t.Errorf("expected %q to be safe", u)
+		}
+	}
+	unsafe := []string{
+		"http://169.254.169.254/latest/meta-data/",
+		"http://localhost/admin",
+		"http://127.0.0.1:8080/secret",
+		"http://[::1]/secret",
+		"http://0.0.0.0/",
+		"http://192.168.1.1/internal",
+		"http://10.0.0.1/internal",
+		"http://metadata.google.internal/computeMetadata/",
+	}
+	for _, u := range unsafe {
+		if isSafeURL(u) {
+			t.Errorf("expected %q to be unsafe (SSRF)", u)
+		}
+	}
+}
+
+func TestConnect_InvalidSnowflakeServerID(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "not-a-snowflake",
+					"channel_ids": []interface{}{"123456789012345678"},
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for invalid server_id snowflake")
+	}
+}
+
+func TestConnect_InvalidSnowflakeChannelID(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "123456789012345678",
+					"channel_ids": []interface{}{"../etc/passwd"},
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for invalid channel_id snowflake")
+	}
+}
+
+func TestConnect_InvalidProcessingTier(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":       "123456789012345678",
+					"channel_ids":     []interface{}{"123456789012345678"},
+					"processing_tier": "evil_tier",
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for invalid processing_tier")
+	}
+}
+
+func TestConnect_BackfillLimitUpperBound(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+		SourceConfig: map[string]interface{}{
+			"backfill_limit": float64(999999),
+		},
+	})
+	if err == nil {
+		t.Error("expected error for backfill_limit exceeding maximum")
+	}
+}
+
+func TestConnect_CaptureCommandTooLong(t *testing.T) {
+	c := New("discord")
+	longCmd := ""
+	for i := 0; i < 100; i++ {
+		longCmd += "x"
+	}
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+		SourceConfig: map[string]interface{}{
+			"capture_commands": []interface{}{longCmd},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for capture_command exceeding max length")
+	}
+}
+
+func TestConnect_CaptureCommandEmpty(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+		SourceConfig: map[string]interface{}{
+			"capture_commands": []interface{}{""},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for empty capture_command")
+	}
+}
+
+func TestParseBotCommand_SSRFProtection(t *testing.T) {
+	cmds := []string{"!save"}
+	tests := []struct {
+		content string
+		wantURL string
+	}{
+		{"!save http://169.254.169.254/latest/meta-data/", ""},
+		{"!save http://localhost/admin", ""},
+		{"!save http://127.0.0.1:8080/secret", ""},
+		{"!save http://10.0.0.1/internal", ""},
+		{"!save https://example.com/safe", "https://example.com/safe"},
+	}
+	for _, tt := range tests {
+		gotURL, _, ok := ParseBotCommand(tt.content, cmds)
+		if !ok {
+			t.Errorf("ParseBotCommand(%q): expected ok=true", tt.content)
+			continue
+		}
+		if gotURL != tt.wantURL {
+			t.Errorf("ParseBotCommand(%q): got URL %q, want %q", tt.content, gotURL, tt.wantURL)
+		}
+	}
+}
+
+func TestNormalizeMessage_InvalidSnowflakeOmitsURL(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "not-valid",
+		Content:   "test",
+		GuildID:   "also-not-valid",
+		ChannelID: "nope",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if artifact.URL != "" {
+		t.Errorf("expected empty URL for invalid snowflake IDs, got %q", artifact.URL)
+	}
+}
+
+func TestNormalizeMessage_ValidSnowflakeBuildsURL(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		GuildID:   "222222222222222222",
+		ChannelID: "333333333333333333",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	expected := "https://discord.com/channels/222222222222222222/333333333333333333/111111111111111111"
+	if artifact.URL != expected {
+		t.Errorf("expected URL %q, got %q", expected, artifact.URL)
+	}
+}
+
+func TestBuildTitle_ControlCharsSanitized(t *testing.T) {
+	msg := DiscordMessage{
+		Content: "hello\x00world\x07test",
+	}
+	title := buildTitle(msg)
+	if title != "helloworldtest" {
+		t.Errorf("expected control chars stripped, got %q", title)
+	}
+}
+
+func TestSyncCursor_InvalidSnowflakeIgnored(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "test-token"},
+	})
+	// Provide a cursor with an invalid channel ID — should not crash
+	_, cursor, err := c.Sync(context.Background(), `{"../etc/passwd":"999","valid_but_not_configured":"111"}`)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if cursor == "" {
+		t.Error("cursor should not be empty")
+	}
+}
+
 func TestClassifyMessage(t *testing.T) {
 	cmds := []string{"!save", "!capture"}
 	tests := []struct {
@@ -363,8 +584,8 @@ func TestSync_ContextCancellation(t *testing.T) {
 		SourceConfig: map[string]interface{}{
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
-					"server_id":   "s1",
-					"channel_ids": []interface{}{"ch1", "ch2"},
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001", "200000000000000002"},
 				},
 			},
 		},

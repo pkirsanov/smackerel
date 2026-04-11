@@ -195,9 +195,9 @@ func TestCronEntries_WithEngine(t *testing.T) {
 	defer s.Stop()
 
 	count := s.CronEntryCount()
-	// 1 (digest) + 7 (existing intelligence, no lifecycle) + 5 (new: delivery sweep + 4 producers) = 13
-	if count < 13 {
-		t.Errorf("expected at least 13 cron entries with engine, got %d", count)
+	// 1 (digest) + 7 (existing intelligence, no lifecycle) + 3 (delivery sweep + batched daily producers + weekly relationship cooling) = 11
+	if count < 11 {
+		t.Errorf("expected at least 11 cron entries with engine, got %d", count)
 	}
 }
 

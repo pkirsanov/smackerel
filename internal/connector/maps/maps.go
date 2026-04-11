@@ -92,11 +92,33 @@ func ParseTakeoutJSON(data []byte) ([]TakeoutActivity, error) {
 
 		actType := ClassifyActivity(seg.ActivityType, float64(seg.Distance)/1000.0)
 
+		// Validate: skip activities with negative distance.
+		if seg.Distance < 0 {
+			slog.Warn("skipping activity with negative distance",
+				"distance", seg.Distance)
+			continue
+		}
+
+		// Validate: skip activities where end is before start.
+		if endTime.Before(startTime) {
+			slog.Warn("skipping activity with end time before start time",
+				"start", seg.Duration.StartTimestamp, "end", seg.Duration.EndTimestamp)
+			continue
+		}
+
 		var route []LatLng
 		for _, wp := range seg.WaypointPath.Waypoints {
+			lat := float64(wp.LatE7) / 1e7
+			lng := float64(wp.LngE7) / 1e7
+			// Skip waypoints with out-of-range coordinates.
+			if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+				slog.Warn("skipping waypoint with out-of-range coordinates",
+					"lat", lat, "lng", lng)
+				continue
+			}
 			route = append(route, LatLng{
-				Lat: float64(wp.LatE7) / 1e7,
-				Lng: float64(wp.LngE7) / 1e7,
+				Lat: lat,
+				Lng: lng,
 			})
 		}
 

@@ -193,6 +193,11 @@ func (e *Engine) GetPeopleIntelligence(ctx context.Context) ([]PersonProfile, er
 		// Interaction trend: cooling if >42 days since last contact
 		pp.InteractionTrend = classifyInteractionTrend(pp.DaysSinceContact, pp.TotalInteractions)
 
+		// Abort early if context is cancelled to avoid wasting DB connections
+		if ctx.Err() != nil {
+			return profiles, ctx.Err()
+		}
+
 		// Shared topics
 		topicRows, err := e.Pool.Query(ctx, `
 			SELECT DISTINCT t.name FROM topics t
@@ -207,6 +212,9 @@ func (e *Engine) GetPeopleIntelligence(ctx context.Context) ([]PersonProfile, er
 					pp.SharedTopics = append(pp.SharedTopics, t)
 				}
 			}
+			if err := topicRows.Err(); err != nil {
+				slog.Warn("shared topics row iteration failed", "person", pp.PersonID, "error", err)
+			}
 			topicRows.Close()
 		}
 
@@ -220,6 +228,9 @@ func (e *Engine) GetPeopleIntelligence(ctx context.Context) ([]PersonProfile, er
 				if aiRows.Scan(&t) == nil {
 					pp.PendingItems = append(pp.PendingItems, t)
 				}
+			}
+			if err := aiRows.Err(); err != nil {
+				slog.Warn("action items row iteration failed", "person", pp.PersonID, "error", err)
 			}
 			aiRows.Close()
 		}

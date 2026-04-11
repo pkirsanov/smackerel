@@ -153,3 +153,53 @@ Links: [uservalidation.md](uservalidation.md)
 - `go test -count=1 -race ./internal/connector/discord/` — 19 tests pass, zero race conditions detected
 - `./smackerel.sh build` — clean
 - All prior tests (gaps G1–G11, simplify S1–S2) remain passing
+
+---
+
+### Security-To-Doc Sweep — 2026-04-11
+
+**Trigger:** `security` probe via stochastic-quality-sweep
+**Mode:** `security-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Findings (6 security issues identified)
+
+| # | Finding | OWASP | Severity | Status |
+|---|---------|-------|----------|--------|
+| SEC-1 | No snowflake ID validation on server/channel IDs — allows path traversal in API URLs and metadata injection | A03 Injection | High | Fixed |
+| SEC-2 | No BackfillLimit upper bound — config value of MAX_INT causes unbounded API calls (resource exhaustion) | A05 Misconfig | Medium | Fixed |
+| SEC-3 | Cursor deserialization accepts arbitrary channel IDs — attacker-controlled cursor could inject queries to unconfigured channels, values not validated as snowflakes | A08 Integrity | Medium | Fixed |
+| SEC-4 | URL construction from unvalidated GuildID/ChannelID/MessageID — malformed IDs produce crafted or misleading discord.com URLs | A03 Injection | High | Fixed |
+| SEC-5 | `ParseBotCommand` accepts SSRF-prone URLs (169.254.x.x, localhost, private ranges) — if captured URL is later fetched by the system, internal services are exposed | A10 SSRF | Medium | Fixed |
+| SEC-6 | No CaptureCommands length/count validation — unbounded empty or oversized command prefixes accepted | A05 Misconfig | Low | Fixed |
+
+#### Additional Hardening
+
+| # | Improvement | Category | Status |
+|---|-------------|----------|--------|
+| H-1 | Processing tier validated against known values (full/standard/light/metadata) — rejects arbitrary strings | Input validation | Done |
+| H-2 | `buildTitle()` strips ASCII control characters (except \n/\r/\t) — prevents log injection and downstream rendering issues | Output sanitization | Done |
+
+#### Remediation Summary
+
+**Files modified:**
+
+- `internal/connector/discord/discord.go`:
+  - Added `isValidSnowflake()` — validates Discord snowflake IDs as numeric uint64 strings
+  - Added `isSafeURL()` — SSRF protection rejecting localhost, loopback, RFC 1918 private, link-local, and cloud metadata endpoints
+  - Added `sanitizeControlChars()` — strips ASCII control chars from title output
+  - Added constants: `maxBackfillLimit=10000`, `maxCaptureCommands=20`, `maxCaptureCommandLen=50`
+  - `parseDiscordConfig()`: server_id and channel_id validated via `isValidSnowflake()`, processing_tier allowlisted, backfill_limit capped, capture_commands validated for UTF-8/length/count
+  - `Sync()` cursor parsing: each key and value validated as valid snowflake before merging
+  - `normalizeMessage()`: URL constructed only when all three IDs pass snowflake validation
+  - `ParseBotCommand()`: extracted URLs checked via `isSafeURL()`
+  - `buildTitle()`: strips control characters via `sanitizeControlChars()`
+
+- `internal/connector/discord/discord_test.go`:
+  - 13 new security tests: snowflake validation, SSRF protection, config bounds, URL safety, cursor injection, control char sanitization
+  - Fixed `TestSync_ContextCancellation` to use valid snowflake IDs
+
+#### Validation
+
+- `./smackerel.sh build` — clean
+- `./smackerel.sh test unit` — all packages pass (discord: 0.129s)

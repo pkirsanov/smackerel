@@ -5,11 +5,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/smackerel/smackerel/internal/connector"
+)
+
+const (
+	// maxBackfillLimit caps per-sync message retrieval to prevent resource exhaustion.
+	maxBackfillLimit = 10000
+	// maxCaptureCommands caps the number of capture command prefixes.
+	maxCaptureCommands = 20
+	// maxCaptureCommandLen caps individual capture command prefix length.
+	maxCaptureCommandLen = 50
 )
 
 // Connector implements the Discord connector using REST API for message history.
@@ -51,6 +64,43 @@ func New(id string) *Connector {
 		cursors: make(ChannelCursors),
 		limiter: NewRateLimiter(),
 	}
+}
+
+// isValidSnowflake checks that a string is a valid Discord snowflake ID
+// (numeric string representing a uint64, which encodes timestamp+worker+sequence).
+func isValidSnowflake(s string) bool {
+	if s == "" || len(s) > 20 {
+		return false
+	}
+	_, err := strconv.ParseUint(s, 10, 64)
+	return err == nil
+}
+
+// isSafeURL checks that a URL is not targeting internal/metadata endpoints (SSRF protection).
+func isSafeURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+	if host == "" {
+		return false
+	}
+	// Block localhost and loopback
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]" || host == "0.0.0.0" {
+		return false
+	}
+	// Block cloud metadata endpoints (AWS, GCP, Azure)
+	if host == "169.254.169.254" || host == "metadata.google.internal" {
+		return false
+	}
+	// Block RFC 1918 private ranges and link-local
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Connector) ID() string { return c.id }
@@ -101,8 +151,30 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// Parse global cursor into local copy (overrides stored cursors if provided)
 	if cursor != "" {
-		if err := json.Unmarshal([]byte(cursor), &localCursors); err != nil {
+		var parsedCursors ChannelCursors
+		if err := json.Unmarshal([]byte(cursor), &parsedCursors); err != nil {
 			slog.Debug("failed to unmarshal discord sync cursor", "connector_id", c.id, "error", err)
+		} else {
+			// Validate cursor keys are valid snowflake IDs and values are valid snowflakes
+			for k, v := range parsedCursors {
+				if !isValidSnowflake(k) {
+					slog.Warn("discord cursor contains invalid channel ID, skipping", "connector_id", c.id, "channel_id", k)
+					continue
+				}
+				if v != "" && !isValidSnowflake(v) {
+					slog.Warn("discord cursor contains invalid snowflake value, skipping", "connector_id", c.id, "channel_id", k, "value", v)
+					continue
+				}
+				localCursors[k] = v
+			}
+		}
+	}
+
+	// Build set of configured channel IDs for cursor scope enforcement
+	configuredChannels := make(map[string]struct{})
+	for _, chCfg := range c.config.MonitoredChannels {
+		for _, chID := range chCfg.ChannelIDs {
+			configuredChannels[chID] = struct{}{}
 		}
 	}
 
@@ -350,13 +422,19 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 		metadata["reply_to_id"] = msg.MessageReference.MessageID
 	}
 
+	// Construct URL only from validated snowflake components to prevent injection
+	var artifactURL string
+	if isValidSnowflake(msg.GuildID) && isValidSnowflake(msg.ChannelID) && isValidSnowflake(msg.ID) {
+		artifactURL = fmt.Sprintf("https://discord.com/channels/%s/%s/%s", msg.GuildID, msg.ChannelID, msg.ID)
+	}
+
 	return connector.RawArtifact{
 		SourceID:    "discord",
 		SourceRef:   msg.ID,
 		ContentType: contentType,
 		Title:       buildTitle(msg),
 		RawContent:  msg.Content,
-		URL:         fmt.Sprintf("https://discord.com/channels/%s/%s/%s", msg.GuildID, msg.ChannelID, msg.ID),
+		URL:         artifactURL,
 		Metadata:    metadata,
 		CapturedAt:  msg.Timestamp,
 	}
@@ -435,22 +513,35 @@ func totalReactions(reactions []Reaction) int {
 }
 
 func buildTitle(msg DiscordMessage) string {
-	if len(msg.Content) == 0 {
+	content := sanitizeControlChars(msg.Content)
+	if len(content) == 0 {
 		if len(msg.Embeds) > 0 && msg.Embeds[0].Title != "" {
-			return msg.Embeds[0].Title
+			return sanitizeControlChars(msg.Embeds[0].Title)
 		}
 		return "Discord message"
 	}
-	runes := []rune(msg.Content)
+	runes := []rune(content)
 	if len(runes) > 80 {
 		return string(runes[:80]) + "..."
 	}
-	return msg.Content
+	return content
+}
+
+// sanitizeControlChars removes ASCII control characters (except \n, \r, \t) to prevent
+// log injection and downstream rendering issues.
+func sanitizeControlChars(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // ParseBotCommand extracts the URL and comment from a bot capture command message.
 // Returns the URL, the comment text, and whether a valid command was found.
-func ParseBotCommand(content string, captureCommands []string) (url, comment string, ok bool) {
+// URLs targeting internal/private endpoints are rejected (SSRF protection).
+func ParseBotCommand(content string, captureCommands []string) (parsedURL, comment string, ok bool) {
 	for _, cmd := range captureCommands {
 		if !strings.HasPrefix(content, cmd+" ") && content != cmd {
 			continue
@@ -463,6 +554,11 @@ func ParseBotCommand(content string, captureCommands []string) (url, comment str
 		parts := strings.SplitN(rest, " ", 2)
 		candidateURL := parts[0]
 		if !strings.HasPrefix(candidateURL, "http://") && !strings.HasPrefix(candidateURL, "https://") {
+			return "", rest, true
+		}
+		// SSRF protection: reject URLs targeting private/internal endpoints
+		if !isSafeURL(candidateURL) {
+			slog.Warn("discord bot command rejected unsafe URL", "url", candidateURL)
 			return "", rest, true
 		}
 		commentText := ""
@@ -492,17 +588,28 @@ func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error)
 			if chMap, ok := ch.(map[string]interface{}); ok {
 				cc := ChannelConfig{}
 				if sid, ok := chMap["server_id"].(string); ok {
+					if !isValidSnowflake(sid) {
+						return DiscordConfig{}, fmt.Errorf("invalid server_id %q: must be a valid snowflake ID", sid)
+					}
 					cc.ServerID = sid
 				}
 				if cids, ok := chMap["channel_ids"].([]interface{}); ok {
 					for _, cid := range cids {
 						if s, ok := cid.(string); ok {
+							if !isValidSnowflake(s) {
+								return DiscordConfig{}, fmt.Errorf("invalid channel_id %q: must be a valid snowflake ID", s)
+							}
 							cc.ChannelIDs = append(cc.ChannelIDs, s)
 						}
 					}
 				}
 				if tier, ok := chMap["processing_tier"].(string); ok {
-					cc.ProcessingTier = tier
+					switch tier {
+					case "full", "standard", "light", "metadata", "":
+						cc.ProcessingTier = tier
+					default:
+						return DiscordConfig{}, fmt.Errorf("invalid processing_tier %q: must be full, standard, light, or metadata", tier)
+					}
 				}
 				cfg.MonitoredChannels = append(cfg.MonitoredChannels, cc)
 			}
@@ -523,8 +630,17 @@ func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error)
 	}
 	if cmds, ok := config.SourceConfig["capture_commands"].([]interface{}); ok {
 		cfg.CaptureCommands = nil
+		if len(cmds) > maxCaptureCommands {
+			return DiscordConfig{}, fmt.Errorf("capture_commands exceeds maximum of %d", maxCaptureCommands)
+		}
 		for _, cmd := range cmds {
 			if s, ok := cmd.(string); ok {
+				if !utf8.ValidString(s) {
+					return DiscordConfig{}, fmt.Errorf("capture_command contains invalid UTF-8")
+				}
+				if len(s) == 0 || len(s) > maxCaptureCommandLen {
+					return DiscordConfig{}, fmt.Errorf("capture_command must be 1-%d characters, got %d", maxCaptureCommandLen, len(s))
+				}
 				cfg.CaptureCommands = append(cfg.CaptureCommands, s)
 			}
 		}
@@ -532,6 +648,9 @@ func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error)
 
 	if cfg.BackfillLimit <= 0 {
 		return DiscordConfig{}, fmt.Errorf("backfill_limit must be positive, got %d", cfg.BackfillLimit)
+	}
+	if cfg.BackfillLimit > maxBackfillLimit {
+		return DiscordConfig{}, fmt.Errorf("backfill_limit must not exceed %d, got %d", maxBackfillLimit, cfg.BackfillLimit)
 	}
 
 	return cfg, nil

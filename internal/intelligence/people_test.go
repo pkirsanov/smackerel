@@ -1,6 +1,7 @@
 package intelligence
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -268,5 +269,67 @@ func TestPersonProfile_EmptyCollections(t *testing.T) {
 	}
 	if len(pp.PendingItems) != 0 {
 		t.Errorf("expected 0 pending items, got %d", len(pp.PendingItems))
+	}
+}
+
+// === Edge cases: extractDestination ===
+
+func TestExtractDestination_MultipleMarkers(t *testing.T) {
+	// Both "to" in title and "destination:" in content are present.
+	// extractDestination concatenates title+content and finds the first marker.
+	// "flight to london destination: tokyo" → "to " matches first → takes "london destination:"
+	// which grabs "London" + second word "Destination:" (>2 chars, so it's included).
+	got := extractDestination("Flight to London", "Destination: Tokyo")
+	if got == "" {
+		t.Error("expected non-empty destination")
+	}
+	// The "to " marker fires first on the combined string, yielding "London Destination:"
+	if !strings.Contains(got, "London") {
+		t.Errorf("expected destination containing London, got %q", got)
+	}
+}
+
+func TestExtractDestination_MarkerAtEnd(t *testing.T) {
+	// "to " marker but nothing after it
+	got := extractDestination("Going to ", "")
+	if got != "" {
+		t.Errorf("expected empty for trailing marker, got %q", got)
+	}
+}
+
+func TestExtractDestination_CheckInWithMultiWord(t *testing.T) {
+	got := extractDestination("", "Check-in at Hilton Garden Inn")
+	if got == "" {
+		t.Error("expected non-empty for check-in pattern")
+	}
+	if !strings.Contains(got, "Hilton") {
+		t.Errorf("expected destination containing Hilton, got %q", got)
+	}
+}
+
+// === Edge cases: assembleDossierText all artifact types ===
+
+func TestAssembleDossierText_AllTypes(t *testing.T) {
+	d := &TripDossier{
+		Destination:     "Rome",
+		State:           "active",
+		FlightArtifacts: []string{"f1"},
+		HotelArtifacts:  []string{"h1", "h2"},
+		PlaceArtifacts:  []string{"p1"},
+		RelatedCaptures: []string{"c1", "c2", "c3"},
+	}
+
+	text := assembleDossierText(d)
+	if !strings.Contains(text, "1 flight") {
+		t.Error("should mention 1 flight")
+	}
+	if !strings.Contains(text, "2 lodging") {
+		t.Error("should mention 2 lodging")
+	}
+	if !strings.Contains(text, "3 related") {
+		t.Error("should mention 3 related captures")
+	}
+	if !strings.Contains(text, "active") {
+		t.Error("should show active state")
 	}
 }

@@ -349,6 +349,11 @@ func parseMarketsConfig(config connector.ConnectorConfig) (MarketsConfig, error)
 		AlertThreshold:   5.0,
 	}
 
+	// Read coingecko_enabled from config — defaults to true if not provided
+	if cgEnabled, ok := config.SourceConfig["coingecko_enabled"].(bool); ok {
+		cfg.CoinGeckoEnabled = cgEnabled
+	}
+
 	if key, ok := config.Credentials["finnhub_api_key"]; ok {
 		cfg.FinnhubAPIKey = key
 	}

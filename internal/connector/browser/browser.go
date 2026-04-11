@@ -3,6 +3,7 @@ package browser
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -19,7 +20,7 @@ type HistoryEntry struct {
 
 // ParseChromeHistory reads Chrome's SQLite history database.
 func ParseChromeHistory(dbPath string) ([]HistoryEntry, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
 	if err != nil {
 		return nil, fmt.Errorf("open Chrome history: %w", err)
 	}
@@ -44,13 +45,22 @@ func ParseChromeHistory(dbPath string) ([]HistoryEntry, error) {
 		var visitTime int64
 		var duration int64
 		if err := rows.Scan(&e.URL, &e.Title, &visitTime, &duration); err != nil {
+			slog.Warn("skipping malformed chrome history row", "error", err)
 			continue
 		}
 		// Chrome stores time as microseconds since 1601-01-01
 		e.VisitTime = chromeTimeToGo(visitTime)
+		// CHAOS-F4: Clamp negative durations from corrupted SQLite data.
+		if duration < 0 {
+			duration = 0
+		}
 		e.DwellTime = time.Duration(duration) * time.Microsecond
 		e.Domain = extractDomain(e.URL)
 		entries = append(entries, e)
+	}
+
+	if err := rows.Err(); err != nil {
+		return entries, fmt.Errorf("iterate history rows: %w", err)
 	}
 
 	return entries, nil
@@ -128,7 +138,7 @@ func ToRawArtifacts(entries []HistoryEntry) []connector.RawArtifact {
 	var artifacts []connector.RawArtifact
 	for _, e := range entries {
 		artifacts = append(artifacts, connector.RawArtifact{
-			SourceID:    "browser",
+			SourceID:    "browser-history",
 			SourceRef:   e.URL,
 			ContentType: "url",
 			Title:       e.Title,
@@ -173,12 +183,21 @@ func ParseChromeHistorySince(dbPath string, chromeTimeCursor int64) ([]HistoryEn
 		var visitTime int64
 		var duration int64
 		if err := rows.Scan(&e.URL, &e.Title, &visitTime, &duration); err != nil {
+			slog.Warn("skipping malformed chrome history row", "error", err)
 			continue
 		}
 		e.VisitTime = chromeTimeToGo(visitTime)
+		// CHAOS-F4: Clamp negative durations from corrupted SQLite data.
+		if duration < 0 {
+			duration = 0
+		}
 		e.DwellTime = time.Duration(duration) * time.Microsecond
 		e.Domain = extractDomain(e.URL)
 		entries = append(entries, e)
+	}
+
+	if err := rows.Err(); err != nil {
+		return entries, fmt.Errorf("iterate history rows: %w", err)
 	}
 
 	return entries, nil
@@ -204,12 +223,21 @@ func chromeTimeToGo(chromeTime int64) time.Time {
 }
 
 func extractDomain(url string) string {
-	// Simple domain extraction with safe bounds checks
+	// Simple domain extraction with safe bounds checks.
+	// CHAOS-F6: Handle arbitrary schemes (ftp://, ws://, etc.) by finding "://".
 	start := 0
 	if len(url) >= 8 && url[:8] == "https://" {
 		start = 8
 	} else if len(url) >= 7 && url[:7] == "http://" {
 		start = 7
+	} else {
+		// Check for any other scheme with "://"
+		for i := 0; i < len(url)-2 && i < 32; i++ {
+			if url[i] == ':' && i+2 < len(url) && url[i+1] == '/' && url[i+2] == '/' {
+				start = i + 3
+				break
+			}
+		}
 	}
 	if start >= len(url) {
 		return ""

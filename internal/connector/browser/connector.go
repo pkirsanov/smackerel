@@ -105,6 +105,8 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
+	// CHAOS-F1: Snapshot config under lock to avoid data race with concurrent Connect.
+	cfg := c.config
 	c.mu.Unlock()
 
 	defer func() {
@@ -118,12 +120,27 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		c.mu.Unlock()
 	}()
 
+	// CHAOS-F5: Check context before expensive I/O.
+	if err := ctx.Err(); err != nil {
+		c.mu.Lock()
+		c.lastSyncErrors = 1
+		c.mu.Unlock()
+		return nil, cursor, err
+	}
+
 	// Step 1: Copy History file to temp location
-	tmpPath, err := c.copyHistoryFile()
+	tmpPath, err := c.copyHistoryFileFrom(cfg.HistoryPath)
 	if err != nil {
 		// Retry once after 5 seconds (Chrome may be writing)
-		time.Sleep(5 * time.Second)
-		tmpPath, err = c.copyHistoryFile()
+		select {
+		case <-ctx.Done():
+			c.mu.Lock()
+			c.lastSyncErrors = 1
+			c.mu.Unlock()
+			return nil, cursor, ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+		tmpPath, err = c.copyHistoryFileFrom(cfg.HistoryPath)
 		if err != nil {
 			c.mu.Lock()
 			c.lastSyncErrors = 1
@@ -133,13 +150,29 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 	defer os.Remove(tmpPath)
 
+	// CHAOS-F5: Check context before expensive parse.
+	if err := ctx.Err(); err != nil {
+		c.mu.Lock()
+		c.lastSyncErrors = 1
+		c.mu.Unlock()
+		return nil, cursor, err
+	}
+
 	// Step 2: Parse entries since cursor
 	var chromeTimeCursor int64
 	if cursor != "" {
-		chromeTimeCursor = parseCursorToChrome(cursor)
+		var parseErr error
+		chromeTimeCursor, parseErr = parseCursorToChromeSafe(cursor)
+		if parseErr != nil {
+			// CHAOS-F2: Corrupted cursor — fall back to lookback window instead of epoch 0.
+			slog.Warn("corrupted sync cursor, falling back to lookback window",
+				"cursor", cursor, "error", parseErr)
+			lookback := time.Now().AddDate(0, 0, -cfg.InitialLookbackDays)
+			chromeTimeCursor = GoTimeToChrome(lookback)
+		}
 	} else {
 		// Initial sync: lookback window
-		lookback := time.Now().AddDate(0, 0, -c.config.InitialLookbackDays)
+		lookback := time.Now().AddDate(0, 0, -cfg.InitialLookbackDays)
 		chromeTimeCursor = GoTimeToChrome(lookback)
 	}
 
@@ -149,6 +182,14 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		c.lastSyncErrors = 1
 		c.mu.Unlock()
 		return nil, cursor, fmt.Errorf("parse chrome history: %w", err)
+	}
+
+	// CHAOS-F5: Check context before expensive processing.
+	if err := ctx.Err(); err != nil {
+		c.mu.Lock()
+		c.lastSyncErrors = 1
+		c.mu.Unlock()
+		return nil, cursor, err
 	}
 
 	// Step 3: Filter, classify, convert
@@ -190,10 +231,10 @@ func (c *Connector) Close() error {
 	return nil
 }
 
-// copyHistoryFile copies the Chrome History SQLite file to a temp location
-// so we can read it without conflicts from Chrome's lock.
-func (c *Connector) copyHistoryFile() (string, error) {
-	src, err := os.Open(c.config.HistoryPath)
+// copyHistoryFileFrom copies a Chrome History SQLite file from the given path
+// to a temp location so we can read it without conflicts from Chrome's lock.
+func (c *Connector) copyHistoryFileFrom(historyPath string) (string, error) {
+	src, err := os.Open(historyPath)
 	if err != nil {
 		return "", fmt.Errorf("open history file: %w", err)
 	}
@@ -216,6 +257,12 @@ func (c *Connector) copyHistoryFile() (string, error) {
 	}
 
 	return tmp.Name(), nil
+}
+
+// copyHistoryFile copies the Chrome History SQLite file to a temp location
+// using the connector's configured HistoryPath. Retained for backward compatibility.
+func (c *Connector) copyHistoryFile() (string, error) {
+	return c.copyHistoryFileFrom(c.config.HistoryPath)
 }
 
 // dedupByURLDate merges entries with the same URL on the same UTC date (R-010).
@@ -400,12 +447,21 @@ func (c *Connector) processEntries(entries []HistoryEntry, prevCursor int64) ([]
 	return artifacts, newCursor, stats
 }
 
-// detectRepeatVisits builds a URL frequency map from entries.
-// Social media URLs are excluded since they are handled by aggregation.
+// detectRepeatVisits builds a URL frequency map from entries within the
+// configured RepeatVisitWindow. Only visits whose VisitTime falls within
+// the window (measured back from now) are counted. Social media URLs are
+// excluded since they are handled by aggregation.
 func (c *Connector) detectRepeatVisits(entries []HistoryEntry) map[string]int {
 	freq := make(map[string]int)
+	windowStart := time.Time{}
+	if c.config.RepeatVisitWindow > 0 {
+		windowStart = time.Now().Add(-c.config.RepeatVisitWindow)
+	}
 	for _, e := range entries {
 		if IsSocialMedia(e.Domain) {
+			continue
+		}
+		if !windowStart.IsZero() && e.VisitTime.Before(windowStart) {
 			continue
 		}
 		freq[e.URL]++
@@ -623,12 +679,27 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 }
 
 // parseCursorToChrome converts a cursor string (Chrome visit_time integer) to int64.
+// Retained for backward compatibility with tests.
 func parseCursorToChrome(cursor string) int64 {
 	v, err := strconv.ParseInt(cursor, 10, 64)
 	if err != nil {
 		return 0
 	}
 	return v
+}
+
+// parseCursorToChromeSafe converts a cursor string to Chrome visit_time int64.
+// CHAOS-F2: Returns an error for malformed cursors instead of silently returning 0
+// (which would cause a full history re-sync from epoch 1601).
+func parseCursorToChromeSafe(cursor string) (int64, error) {
+	v, err := strconv.ParseInt(cursor, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("malformed cursor %q: %w", cursor, err)
+	}
+	if v < 0 {
+		return 0, fmt.Errorf("negative cursor value %d", v)
+	}
+	return v, nil
 }
 
 // parseDurationWithDays extends time.ParseDuration with support for "d" suffix (days).

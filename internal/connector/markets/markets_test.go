@@ -198,6 +198,44 @@ func TestParseMarketsConfig_WatchlistSizeLimit(t *testing.T) {
 	}
 }
 
+func TestParseMarketsConfig_CoinGeckoEnabled(t *testing.T) {
+	cases := []struct {
+		name         string
+		sourceConfig map[string]interface{}
+		want         bool
+	}{
+		{
+			name:         "defaults to true when not provided",
+			sourceConfig: map[string]interface{}{},
+			want:         true,
+		},
+		{
+			name:         "explicitly true",
+			sourceConfig: map[string]interface{}{"coingecko_enabled": true},
+			want:         true,
+		},
+		{
+			name:         "explicitly false",
+			sourceConfig: map[string]interface{}{"coingecko_enabled": false},
+			want:         false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := parseMarketsConfig(connector.ConnectorConfig{
+				Credentials:  map[string]string{"finnhub_api_key": "test"},
+				SourceConfig: tc.sourceConfig,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.CoinGeckoEnabled != tc.want {
+				t.Errorf("CoinGeckoEnabled = %v, want %v", cfg.CoinGeckoEnabled, tc.want)
+			}
+		})
+	}
+}
+
 func TestFetchFinnhubQuote_RejectsInvalidSymbol(t *testing.T) {
 	c := New("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"

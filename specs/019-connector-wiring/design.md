@@ -298,7 +298,7 @@ financial-markets:
 | `FINANCIAL_MARKETS_ALERT_THRESHOLD` | `connectors.financial-markets.alert_threshold` | Alert pct |
 | `FINANCIAL_MARKETS_WATCHLIST` | `connectors.financial-markets.watchlist` | JSON object `{stocks, etfs, crypto, forex_pairs}` |
 
-> **SST Gap (documented 2026-04-10):** `connectors.financial-markets.coingecko_enabled` exists in `smackerel.yaml` but is NOT extracted, not in generated env files, and not read by `parseMarketsConfig` — that function hardcodes `CoinGeckoEnabled: true`. This means CoinGecko cannot be disabled via config. Future fix: add `FINANCIAL_MARKETS_COINGECKO_ENABLED` env var to the config pipeline and remove the hardcoded default.
+> **SST Gap (fixed 2026-04-10):** `connectors.financial-markets.coingecko_enabled` is now extracted as `FINANCIAL_MARKETS_COINGECKO_ENABLED` in the config pipeline, passed via `SourceConfig["coingecko_enabled"]` in main.go, and read by `parseMarketsConfig` instead of hardcoding `true`.
 
 **ConnectorConfig mapping:**
 
