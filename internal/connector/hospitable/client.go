@@ -19,6 +19,11 @@ import (
 // infinite loops from a misbehaving or malicious API server.
 const maxPaginationPages = 1000
 
+// maxRetryAfterCap is the upper bound on Retry-After delays accepted from the
+// server. A malicious or misconfigured server cannot force arbitrarily long
+// sleeps beyond this cap.
+const maxRetryAfterCap = 60 * time.Second
+
 // Client wraps the Hospitable Public API.
 type Client struct {
 	baseURL    string
@@ -226,6 +231,11 @@ func (c *Client) doGetPaginated(ctx context.Context, rawURL string) ([]byte, str
 				return nil, "", fmt.Errorf("rate limited: max retries exceeded")
 			}
 			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
+			// Cap Retry-After to prevent malicious servers from forcing
+			// arbitrarily long sleeps.
+			if retryAfter > maxRetryAfterCap {
+				retryAfter = maxRetryAfterCap
+			}
 			if retryAfter > delay {
 				delay = retryAfter
 			}

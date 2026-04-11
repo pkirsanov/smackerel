@@ -26,10 +26,17 @@ type Scheduler struct {
 	digestPendingRetry bool       // true when last digest was generated but delivery failed
 	digestPendingDate  string     // date of the pending digest for retry
 
+	// baseCtx is cancelled by Stop() so in-flight cron callbacks that derive their
+	// context from it are interrupted cleanly instead of racing with DB/NATS close.
+	baseCtx    context.Context
+	baseCancel context.CancelFunc
+
 	// done is closed by Stop() to cancel background goroutines spawned by cron jobs
 	// (e.g., digest polling). Prevents goroutine leaks during graceful shutdown.
 	done chan struct{}
 	wg   sync.WaitGroup // tracks background goroutines for clean shutdown
+
+	stopOnce sync.Once // guards Stop() against double-close panic on done channel
 
 	// Per-group concurrency guards — prevents cron job overlap within each group
 	muDigest  sync.Mutex
@@ -43,13 +50,16 @@ type Scheduler struct {
 
 // New creates a new scheduler.
 func New(digestGen *digest.Generator, bot *telegram.Bot, engine *intelligence.Engine, lifecycle *topics.Lifecycle) *Scheduler {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Scheduler{
-		cron:      cron.New(),
-		digestGen: digestGen,
-		bot:       bot,
-		engine:    engine,
-		lifecycle: lifecycle,
-		done:      make(chan struct{}),
+		cron:       cron.New(),
+		digestGen:  digestGen,
+		bot:        bot,
+		engine:     engine,
+		lifecycle:  lifecycle,
+		baseCtx:    ctx,
+		baseCancel: cancel,
+		done:       make(chan struct{}),
 	}
 }
 
@@ -67,8 +77,8 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			slog.Warn("digest generator not configured")
 			return
 		}
-		// Create a fresh context per cron invocation with a timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		// Derive from baseCtx so shutdown cancellation propagates to in-flight work
+		ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 		defer cancel()
 
 		// Retry delivery of a previously generated but undelivered digest
@@ -113,7 +123,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			s.wg.Add(1)
 			go func() {
 				defer s.wg.Done()
-				pollCtx, pollCancel := context.WithTimeout(context.Background(), 60*time.Second)
+				pollCtx, pollCancel := context.WithTimeout(s.baseCtx, 60*time.Second)
 				defer pollCancel()
 
 				ticker := time.NewTicker(500 * time.Millisecond)
@@ -156,7 +166,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muHourly.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 			defer cancel()
 			if err := s.lifecycle.UpdateAllMomentum(ctx); err != nil {
 				slog.Error("topic momentum update failed", "error", err)
@@ -177,7 +187,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muDaily.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 			defer cancel()
 
 			insights, err := s.engine.RunSynthesis(ctx)
@@ -202,7 +212,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muDaily.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 			defer cancel()
 
 			candidates, err := s.engine.Resurface(ctx, 5)
@@ -229,7 +239,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muBriefs.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 1*time.Minute)
 			defer cancel()
 
 			briefs, err := s.engine.GeneratePreMeetingBriefs(ctx)
@@ -255,7 +265,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muWeekly.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 			defer cancel()
 
 			ws, err := s.engine.GenerateWeeklySynthesis(ctx)
@@ -277,7 +287,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muMonthly.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 			defer cancel()
 
 			report, err := s.engine.GenerateMonthlyReport(ctx)
@@ -303,7 +313,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muWeekly.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 			defer cancel()
 
 			subs, err := s.engine.DetectSubscriptions(ctx)
@@ -324,7 +334,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muDaily.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 			defer cancel()
 
 			lookups, err := s.engine.DetectFrequentLookups(ctx)
@@ -362,7 +372,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muAlerts.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 1*time.Minute)
 			defer cancel()
 
 			s.deliverPendingAlerts(ctx)
@@ -379,7 +389,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muDaily.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 			defer cancel()
 
 			if err := s.engine.ProduceBillAlerts(ctx); err != nil {
@@ -403,7 +413,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 			defer s.muWeekly.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 			defer cancel()
 
 			if err := s.engine.ProduceRelationshipCoolingAlerts(ctx); err != nil {
@@ -420,14 +430,20 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 }
 
 // Stop halts all scheduled tasks and waits for background goroutines to finish.
+// Safe to call multiple times — second and subsequent calls are no-ops.
 func (s *Scheduler) Stop() {
-	// Signal background goroutines (e.g., digest polling) to exit.
-	close(s.done)
-	// Stop the cron scheduler and wait for running callbacks to finish.
-	ctx := s.cron.Stop()
-	<-ctx.Done()
-	// Wait for tracked background goroutines to drain.
-	s.wg.Wait()
+	s.stopOnce.Do(func() {
+		// Cancel the base context so in-flight cron callbacks abort promptly
+		// instead of running to their full timeout while DB/NATS are closing.
+		s.baseCancel()
+		// Signal background goroutines (e.g., digest polling) to exit.
+		close(s.done)
+		// Stop the cron scheduler and wait for running callbacks to finish.
+		ctx := s.cron.Stop()
+		<-ctx.Done()
+		// Wait for tracked background goroutines to drain.
+		s.wg.Wait()
+	})
 }
 
 // DigestPendingRetry returns the current retry state (thread-safe).
@@ -489,10 +505,10 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		return
 	}
 
-	for _, a := range alerts {
+	for i, a := range alerts {
 		if ctx.Err() != nil {
 			slog.Warn("alert delivery sweep context expired, remaining alerts deferred",
-				"remaining", len(alerts))
+				"remaining", len(alerts)-i)
 			break
 		}
 

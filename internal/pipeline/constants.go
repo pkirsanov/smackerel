@@ -22,4 +22,7 @@ const (
 	SourceGoogleKeep     = "google-keep"
 	SourceGoogleMaps     = "google-maps-timeline"
 	SourceHospitable     = "hospitable"
+	SourceGmail          = "gmail"
+	SourceGoogleCalendar = "google-calendar"
+	SourceYouTube        = "youtube"
 )

@@ -59,6 +59,54 @@ A stochastic quality sweep (trigger: gaps) identified 3 remaining runtime type a
 - Connector supervisor uses `getSyncInterval()` with `parseSyncInterval()` — handles cron and duration formats
 - Default fallback to 5 minutes when no schedule configured
 
+## Reconciliation Pass (2026-04-11, validate trigger)
+
+A stochastic quality sweep (trigger: validate, mode: reconcile-to-doc) verified every DoD claim against the live codebase. Method: code inspection of all touched files + `./smackerel.sh check` + `./smackerel.sh test unit`.
+
+### Scope 1 Reconciliation
+
+| DoD Claim | Verified | Evidence |
+|-----------|----------|----------|
+| `mlClient()` guarded by `sync.Once` | Yes | `health.go` — `d.mlClientOnce.Do(func(){...})` |
+| 5 `interface{}` fields → typed interfaces | Yes | `Pipeliner`, `Searcher`, `DigestGenerator`, `WebUI`, `OAuthFlow` on `Dependencies` |
+| All type assertions in router/capture/digest replaced | Yes | `grep` for type assertions in `internal/api/*.go` — zero hits |
+| Dead `checkAuth` removed | Yes | `grep -rn "checkAuth" internal/api/` — zero hits |
+| `go build ./...` succeeds | Yes | `./smackerel.sh check` — pass |
+| No new `interface{}` fields | Yes | `grep "interface{}" internal/api/health.go` — zero hits |
+
+### Scope 2 Reconciliation
+
+| DoD Claim | Verified | Evidence |
+|-----------|----------|----------|
+| Zero `os.Getenv()` for connector paths in `cmd/` | Yes | `grep` for BOOKMARKS/BROWSER_HISTORY/MAPS_IMPORT os.Getenv in `cmd/` — zero hits |
+| Paths read from `cfg.BookmarksImportDir` etc. | Yes | `config.go` fields + `main.go` reads `cfg.` fields |
+| All 4 intelligence handlers use `writeJSON` | Yes | `grep "json.NewEncoder" internal/api/intelligence.go` — zero hits |
+| Ollama probed live via `GET /api/tags` | Yes | `checkOllama()` in `health.go` — HTTP probe with 2s timeout |
+| Telegram health from `Healthy()` method | Yes | `d.TelegramBot.Healthy()` check in HealthHandler |
+| Health JSON shape backward-compatible | Yes | Same `HealthResponse`/`ServiceStatus` structs; only status values change |
+
+### Scope 3 Reconciliation
+
+| DoD Claim | Verified | Evidence |
+|-----------|----------|----------|
+| `/api/health` and `/ping` excluded from logging | Yes | `structuredLogger` early return for both paths in `router.go` |
+| Supervisor uses `getSyncInterval()` | Yes | `supervisor.go` — `interval := s.getSyncInterval(id)` replaces hardcoded wait |
+| No hardcoded `time.After(5 * time.Minute)` in sync loop | Yes | `grep` — zero hits |
+| `parseSyncInterval()` handles cron + duration | Yes | Function in `supervisor.go` + 7 unit tests in `sync_interval_test.go` |
+| Default 5m fallback | Yes | `defaultSyncInterval = 5 * time.Minute` |
+
+### Cross-Cutting
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh check` | Pass |
+| `./smackerel.sh test unit` (all packages) | Pass |
+| `ArtifactQuerier` interface (gaps sweep fix) | Wired in `main.go`, used by `RecentHandler`, `ArtifactDetailHandler`, `ExportHandler` — zero type assertions |
+
+### Drift Found
+
+**None.** All 27 DoD items across 3 scopes match the implemented code. No claim-vs-reality drift detected.
+
 ## Completion Statement
 
-Feature 023 is complete. All 3 scopes are done. A gaps sweep on 2026-04-11 found and fixed 3 remaining runtime type assertions in capture.go that had been missed by the original implementation. All unit tests pass.
+Feature 023 is complete. All 3 scopes are done. A gaps sweep on 2026-04-11 found and fixed 3 remaining runtime type assertions in capture.go that had been missed by the original implementation. A reconciliation pass on 2026-04-11 verified all DoD claims against live code with zero drift. All unit tests pass.

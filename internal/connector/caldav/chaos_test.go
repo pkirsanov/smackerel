@@ -336,11 +336,11 @@ func TestChaos_Tier_RecurringWithAttendees(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}
-	// Recurring overrides attendee presence → light tier
-	// This is debatable: a recurring 1:1 with your manager probably deserves higher tier
+	// Attendees take priority over recurring — a weekly 1:1 with your manager
+	// deserves full-tier processing.
 	tier := artifacts[0].Metadata["processing_tier"]
-	if tier != "light" {
-		t.Errorf("current logic: recurring override → light tier, but got %v", tier)
+	if tier != "full" {
+		t.Errorf("recurring event with attendees should get full tier, got %v", tier)
 	}
 }
 

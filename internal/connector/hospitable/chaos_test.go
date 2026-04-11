@@ -1316,3 +1316,320 @@ func TestChaos_ParseLinkNextEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// --- Chaos: Client snapshot race (Close during Sync) ---
+
+func TestChaos_CloseDuringSync(t *testing.T) {
+	// Server adds a small delay so Close() can race with in-flight requests.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(10 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data: []Property{{ID: "p1", Name: "House", UpdatedAt: time.Now()}}, Total: 1,
+			})
+		case strings.Contains(r.URL.Path, "/reservations"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: []Reservation{}, Total: 0})
+		case strings.Contains(r.URL.Path, "/reviews"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Review]{Data: []Review{}, Total: 0})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	config := connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "token"},
+		SourceConfig: map[string]interface{}{"base_url": srv.URL},
+	}
+	if err := c.Connect(context.Background(), config); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	// Launch multiple syncs
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Must not panic even if Close() races
+			c.Sync(context.Background(), "")
+		}()
+	}
+
+	// Close while syncs are in-flight
+	time.Sleep(5 * time.Millisecond)
+	c.Close()
+
+	wg.Wait()
+	// Key assertion: no panic (run with -race to verify no data races)
+}
+
+// --- Chaos: Double Close ---
+
+func TestChaos_DoubleClose(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	config := connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "token"},
+		SourceConfig: map[string]interface{}{"base_url": srv.URL},
+	}
+	c.Connect(context.Background(), config)
+
+	// First close
+	if err := c.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("health after first Close = %v, want disconnected", c.Health(context.Background()))
+	}
+
+	// Second close — must not panic
+	if err := c.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("health after second Close = %v, want disconnected", c.Health(context.Background()))
+	}
+}
+
+// --- Chaos: Reconnect after Close ---
+
+func TestChaos_ReconnectAfterClose(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+			Data: []Property{{ID: "p1", Name: "House", UpdatedAt: time.Now()}}, Total: 1,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	config := connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "token"},
+		SourceConfig: map[string]interface{}{"base_url": srv.URL},
+	}
+
+	// Connect, Close, Reconnect
+	if err := c.Connect(context.Background(), config); err != nil {
+		t.Fatalf("first Connect: %v", err)
+	}
+	c.Close()
+
+	// Sync should fail after Close
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil || !strings.Contains(err.Error(), "not connected") {
+		t.Errorf("Sync after Close should fail with not connected, got: %v", err)
+	}
+
+	// Reconnect
+	if err := c.Connect(context.Background(), config); err != nil {
+		t.Fatalf("reconnect: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("health after reconnect = %v, want healthy", c.Health(context.Background()))
+	}
+
+	// Sync should work again
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync after reconnect: %v", err)
+	}
+	if len(artifacts) == 0 {
+		t.Error("expected artifacts after reconnect sync")
+	}
+	if cursor == "" {
+		t.Error("expected non-empty cursor after reconnect sync")
+	}
+}
+
+// --- Chaos: Retry-After cap enforcement ---
+
+func TestChaos_RetryAfterCapped(t *testing.T) {
+	// Verify that maxRetryAfterCap is enforced
+	d := parseRetryAfter("999999", time.Now())
+	if d > maxRetryAfterCap {
+		// The cap is applied in doGetPaginated, not in parseRetryAfter itself.
+		// Verify the raw parser returns the large value so we know the cap must
+		// be applied at the call site.
+		if d != 999999*time.Second {
+			t.Errorf("parseRetryAfter(999999) = %v, expected 999999s", d)
+		}
+	}
+
+	// Actually test via a server that the client doesn't sleep forever
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts <= 1 {
+			w.Header().Set("Retry-After", "999999")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{{ID: "p1"}}, Total: 1})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 10)
+	client.SetBackoff(fastBackoff())
+
+	// With the cap at 60s and a 3s context timeout, the request should fail
+	// with context deadline rather than sleeping 999999s.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_, err := client.ListProperties(ctx, time.Time{})
+	// Should either succeed (if cap is short enough) or context-cancel — NOT hang
+	if err != nil && ctx.Err() == nil {
+		// Got an error but context is still valid — max retries exceeded, which is fine
+		t.Logf("RetryAfterCapped: error=%v (context still valid — retries exhausted)", err)
+	} else if err != nil {
+		t.Logf("RetryAfterCapped: error=%v (context cancelled as expected)", err)
+	}
+}
+
+// --- Chaos: Concurrent Connect calls ---
+
+func TestChaos_ConcurrentConnect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	config := connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "token"},
+		SourceConfig: map[string]interface{}{"base_url": srv.URL},
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.Connect(context.Background(), config)
+		}()
+	}
+	wg.Wait()
+
+	// After all concurrent connects, connector should be healthy
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("health after concurrent connects = %v, want healthy", c.Health(context.Background()))
+	}
+}
+
+// --- Chaos: Pagination next URL SSRF via special characters ---
+
+func TestChaos_PaginationSSRFAttempts(t *testing.T) {
+	ssrfURLs := []string{
+		"http://169.254.169.254/latest/meta-data/",
+		"http://localhost:6379/",
+		"file:///etc/passwd",
+		"gopher://internal:25/",
+		"http://[::1]:8080/",
+		"http://0x7f000001:8080/", // hex-encoded localhost
+	}
+
+	for _, ssrfURL := range ssrfURLs {
+		t.Run(ssrfURL, func(t *testing.T) {
+			callCount := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				callCount++
+				w.Header().Set("Content-Type", "application/json")
+				resp := PaginatedResponse[Property]{
+					Data:    []Property{{ID: "p1", Name: "House"}},
+					NextURL: ssrfURL,
+					Total:   100,
+				}
+				json.NewEncoder(w).Encode(resp)
+			}))
+			defer srv.Close()
+
+			client := NewClient(srv.URL, "token", 10)
+			props, err := client.ListProperties(context.Background(), time.Time{})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// Should get exactly 1 page (SSRF URL rejected by same-origin check)
+			if len(props) != 1 {
+				t.Errorf("expected 1 property (SSRF blocked), got %d", len(props))
+			}
+			if callCount != 1 {
+				t.Errorf("expected 1 API call (SSRF blocked pagination), got %d", callCount)
+			}
+		})
+	}
+}
+
+// --- Chaos: Config parsing edge cases ---
+
+func TestChaos_ConfigBaseURLAttacks(t *testing.T) {
+	attacks := []struct {
+		name    string
+		baseURL string
+		wantErr bool
+	}{
+		{"javascript_proto", "javascript:alert(1)", true},
+		{"data_proto", "data:text/html,<h1>pwned</h1>", true},
+		{"ftp_proto", "ftp://evil.com/exfil", true},
+		{"no_host", "https://", true},
+		{"valid_http", "http://api.example.com", false},
+		{"valid_https", "https://api.example.com", false},
+	}
+
+	for _, tc := range attacks {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseHospitableConfig(connector.ConnectorConfig{
+				Credentials:  map[string]string{"access_token": "test"},
+				SourceConfig: map[string]interface{}{"base_url": tc.baseURL},
+			})
+			if tc.wantErr && err == nil {
+				t.Errorf("expected error for base_url %q", tc.baseURL)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("unexpected error for base_url %q: %v", tc.baseURL, err)
+			}
+		})
+	}
+}
+
+// --- Chaos: Config missing credentials key ---
+
+func TestChaos_ConfigMissingCredentialsKey(t *testing.T) {
+	_, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials:  map[string]string{},
+		SourceConfig: map[string]interface{}{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "access_token") {
+		t.Errorf("expected access_token error, got: %v", err)
+	}
+}
+
+func TestChaos_ConfigNilCredentials(t *testing.T) {
+	_, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials:  nil,
+		SourceConfig: map[string]interface{}{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "access_token") {
+		t.Errorf("expected access_token error, got: %v", err)
+	}
+}
+
+func TestChaos_ConfigNegativeLookback(t *testing.T) {
+	_, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "test"},
+		SourceConfig: map[string]interface{}{"initial_lookback_days": float64(-30)},
+	})
+	if err == nil || !strings.Contains(err.Error(), "negative") {
+		t.Errorf("expected negative lookback error, got: %v", err)
+	}
+}

@@ -95,16 +95,17 @@ type ProcessResult struct {
 
 // NATSProcessPayload is what core publishes to artifacts.process.
 type NATSProcessPayload struct {
-	ArtifactID     string `json:"artifact_id"`
-	ContentType    string `json:"content_type"`
-	URL            string `json:"url,omitempty"`
-	RawText        string `json:"raw_text"`
-	Transcript     string `json:"transcript,omitempty"`
-	ProcessingTier string `json:"processing_tier"`
-	UserContext    string `json:"user_context,omitempty"`
-	SourceID       string `json:"source_id"`
-	RetryCount     int    `json:"retry_count"`
-	TraceID        string `json:"trace_id,omitempty"`
+	ArtifactID     string                 `json:"artifact_id"`
+	ContentType    string                 `json:"content_type"`
+	URL            string                 `json:"url,omitempty"`
+	RawText        string                 `json:"raw_text"`
+	Transcript     string                 `json:"transcript,omitempty"`
+	ProcessingTier string                 `json:"processing_tier"`
+	UserContext    string                 `json:"user_context,omitempty"`
+	SourceID       string                 `json:"source_id"`
+	RetryCount     int                    `json:"retry_count"`
+	TraceID        string                 `json:"trace_id,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // NATSProcessedPayload is what ML sidecar publishes to artifacts.processed.
