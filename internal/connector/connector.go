@@ -78,3 +78,12 @@ type ConnectorConfig struct {
 	// Source-specific configuration
 	SourceConfig map[string]interface{} `json:"source_config"`
 }
+
+// ArtifactPublisher bridges connector-produced RawArtifacts into the processing
+// pipeline. Implementations store the initial artifact in PostgreSQL and publish
+// to NATS for ML sidecar processing.
+type ArtifactPublisher interface {
+	// PublishRawArtifact converts a RawArtifact into the processing pipeline.
+	// Returns the generated artifact ID or an error.
+	PublishRawArtifact(ctx context.Context, artifact RawArtifact) (string, error)
+}

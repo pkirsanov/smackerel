@@ -249,3 +249,31 @@ Spec 021 (Intelligence Delivery) added 3 cron jobs (alert delivery sweep, daily 
 ## Completion Statement
 
 Feature 022 is complete. All 4 scopes implemented and verified with unit tests. Build passes. Config SST flow verified. Hardening pass 2 addressed 5 findings (1 critical, 1 high, 2 medium, 1 low) with 3 new adversarial tests. Gaps-to-doc pass 1 addressed 3 findings (1 medium, 2 low) with 12 new tests covering dead-letter routing logic. Regression pass confirmed all fixes durable with zero regressions across 31 Go packages (race-detected) and 53 Python tests. Gaps-to-doc pass 2 reconciled 4 documentation drift items in design.md, scopes.md, and a test comment where cron job/mutex counts were stale after spec 021 added alert jobs. All 13 requirements verified against implementation with zero functional gaps.
+
+## Stabilize-to-Doc Pass (stochastic sweep)
+
+**Date:** 2026-04-11
+**Trigger:** Stochastic quality sweep — stabilize (child workflow)
+**Scope:** Runtime stability audit of scheduler shutdown lifecycle, resource race conditions, and defensive coding
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File | Fix |
+|----|---------|----------|------|-----|
+| STAB-001 | Scheduler cron callbacks derive contexts from `context.Background()` — running jobs ignore shutdown signal and race with DB/NATS close. When `shutdownAll` gives 2s for scheduler stop and a 5-minute synthesis job is active, shutdown proceeds to close DB and NATS while the job is still using them. | High | `internal/scheduler/scheduler.go` | Added `baseCtx`/`baseCancel` lifecycle context pair to Scheduler. All 12 cron callbacks now derive their timeout contexts from `s.baseCtx`. `Stop()` cancels `baseCtx` first so in-flight jobs abort promptly instead of running to their full timeout. |
+| STAB-002 | `Scheduler.Stop()` calls `close(s.done)` without double-close guard. If `Stop()` is called twice, the process panics. `ResultSubscriber.Stop()` has proper `started`/`stopped` guards — Scheduler did not. | Medium | `internal/scheduler/scheduler.go` | Wrapped `Stop()` body in `sync.Once` — second and subsequent calls are safe no-ops. |
+| STAB-003 | `deliverPendingAlerts` logs `len(alerts)` as "remaining" when context expires mid-loop — reports total instead of actual remaining count. | Low | `internal/scheduler/scheduler.go` | Changed loop to index-based iteration; remaining count is `len(alerts) - i`. |
+
+### New Tests
+
+| Test | File | Purpose |
+|------|------|---------|
+| `TestStop_CancelsBaseCtx` | `internal/scheduler/scheduler_test.go` | Adversarial: verifies `Stop()` cancels `baseCtx` — if it doesn't, in-flight cron jobs would not be interrupted during shutdown |
+| `TestStop_DoubleStopSafe` | `internal/scheduler/scheduler_test.go` | Adversarial: calling `Stop()` twice must not panic (would crash the process during shutdown retries) |
+
+### Evidence
+
+- Build: `./smackerel.sh test unit` — all 33 Go packages PASS, 53 Python tests PASS
+- Lint: `./smackerel.sh lint` — all checks passed
+- New tests verified: `TestStop_CancelsBaseCtx` PASS (baseCtx.Err() != nil after Stop), `TestStop_DoubleStopSafe` PASS (no panic)
+- Zero `context.Background()` remaining in cron callbacks (only in `New()` constructor for the lifecycle root context)

@@ -157,6 +157,10 @@ func run() error {
 	stateStore := connector.NewStateStore(pg.Pool)
 	supervisor := connector.NewSupervisor(registry, stateStore)
 
+	// Wire artifact publisher so connector-produced RawArtifacts flow into the NATS pipeline
+	artifactPublisher := pipeline.NewRawArtifactPublisher(pg.Pool, nc)
+	supervisor.SetPublisher(artifactPublisher)
+
 	// Register connectors and start those with valid OAuth tokens
 	imapConn := imapConnector.New("gmail")
 	caldavConn := caldavConnector.New("google-calendar")

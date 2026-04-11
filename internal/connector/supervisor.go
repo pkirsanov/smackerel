@@ -14,6 +14,7 @@ import (
 type Supervisor struct {
 	registry         *Registry
 	stateStore       *StateStore
+	publisher        ArtifactPublisher // optional: bridges RawArtifacts to NATS pipeline
 	mu               sync.Mutex
 	running          map[string]context.CancelFunc
 	panicCounts      map[string]int             // circuit breaker: panic count per connector
@@ -28,6 +29,8 @@ const (
 )
 
 // NewSupervisor creates a new connector supervisor.
+// The optional publisher bridges connector-produced RawArtifacts into the
+// processing pipeline. If nil, returned artifacts are counted but not published.
 func NewSupervisor(registry *Registry, stateStore *StateStore) *Supervisor {
 	return &Supervisor{
 		registry:         registry,
@@ -37,6 +40,13 @@ func NewSupervisor(registry *Registry, stateStore *StateStore) *Supervisor {
 		panicResetAt:     make(map[string]time.Time),
 		connectorConfigs: make(map[string]ConnectorConfig),
 	}
+}
+
+// SetPublisher sets the artifact publisher for bridging connector output to NATS.
+func (s *Supervisor) SetPublisher(pub ArtifactPublisher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.publisher = pub
 }
 
 // SetConfig records a connector's configuration for schedule lookup.
@@ -181,10 +191,8 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 			}
 		}
 
-		// Run sync.
-		// Contract: connectors are responsible for publishing artifacts to NATS
-		// during Sync(). The supervisor tracks item count for health/observability
-		// but does not republish.
+		// Run sync. Connectors return RawArtifacts; the supervisor publishes
+		// them to the NATS processing pipeline via the ArtifactPublisher.
 		items, newCursor, err := conn.Sync(connCtx, cursor)
 		if err != nil {
 			slog.Error("connector sync failed",
@@ -223,6 +231,29 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 
 		// Success — reset backoff
 		backoff.Reset()
+
+		// Publish returned artifacts to the processing pipeline
+		if s.publisher != nil && len(items) > 0 {
+			published := 0
+			for _, item := range items {
+				if _, pubErr := s.publisher.PublishRawArtifact(connCtx, item); pubErr != nil {
+					slog.Warn("failed to publish connector artifact",
+						"connector", id,
+						"source_ref", item.SourceRef,
+						"error", pubErr,
+					)
+				} else {
+					published++
+				}
+			}
+			if published > 0 {
+				slog.Info("connector artifacts published to pipeline",
+					"connector", id,
+					"published", published,
+					"total", len(items),
+				)
+			}
+		}
 
 		if s.stateStore != nil && len(items) > 0 {
 			if err := s.stateStore.Save(connCtx, &SyncState{
