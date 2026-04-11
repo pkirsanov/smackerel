@@ -41,6 +41,11 @@ type Config struct {
 	BookmarksImportDir string
 	BrowserHistoryPath string
 	MapsImportDir      string
+
+	// Telegram assembly config (SST-compliant — from smackerel.yaml via config generate)
+	TelegramAssemblyWindowSeconds   int
+	TelegramAssemblyMaxMessages     int
+	TelegramMediaGroupWindowSeconds int
 }
 
 // Load reads configuration from environment variables.
@@ -118,6 +123,29 @@ func Load() (*Config, error) {
 
 	if len(parseErrors) > 0 {
 		return nil, fmt.Errorf("missing or invalid required configuration: %s", strings.Join(parseErrors, ", "))
+	}
+
+	// Parse optional telegram assembly config (SST-compliant — defaults in smackerel.yaml)
+	if v := os.Getenv("TELEGRAM_ASSEMBLY_WINDOW_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 5 && n <= 60 {
+			cfg.TelegramAssemblyWindowSeconds = n
+		} else {
+			return nil, fmt.Errorf("TELEGRAM_ASSEMBLY_WINDOW_SECONDS must be an integer in range [5, 60] (got %q)", v)
+		}
+	}
+	if v := os.Getenv("TELEGRAM_ASSEMBLY_MAX_MESSAGES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 10 && n <= 500 {
+			cfg.TelegramAssemblyMaxMessages = n
+		} else {
+			return nil, fmt.Errorf("TELEGRAM_ASSEMBLY_MAX_MESSAGES must be an integer in range [10, 500] (got %q)", v)
+		}
+	}
+	if v := os.Getenv("TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 2 && n <= 10 {
+			cfg.TelegramMediaGroupWindowSeconds = n
+		} else {
+			return nil, fmt.Errorf("TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS must be an integer in range [2, 10] (got %q)", v)
+		}
 	}
 
 	return cfg, nil

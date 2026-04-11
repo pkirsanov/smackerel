@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,12 +24,61 @@ import (
 
 // ProcessRequest is the input for the processing pipeline.
 type ProcessRequest struct {
-	URL      string `json:"url,omitempty"`
-	Text     string `json:"text,omitempty"`
-	VoiceURL string `json:"voice_url,omitempty"`
-	Context  string `json:"context,omitempty"`
-	SourceID string `json:"source_id"`
-	Starred  bool   `json:"starred,omitempty"`
+	URL          string               `json:"url,omitempty"`
+	Text         string               `json:"text,omitempty"`
+	VoiceURL     string               `json:"voice_url,omitempty"`
+	Context      string               `json:"context,omitempty"`
+	SourceID     string               `json:"source_id"`
+	Starred      bool                 `json:"starred,omitempty"`
+	Conversation *ConversationPayload `json:"conversation,omitempty"`
+	MediaGroup   *MediaGroupPayload   `json:"media_group,omitempty"`
+	ForwardMeta  *ForwardMetaPayload  `json:"forward_meta,omitempty"`
+}
+
+// ConversationPayload carries structured conversation data.
+type ConversationPayload struct {
+	Participants []string                 `json:"participants"`
+	MessageCount int                      `json:"message_count"`
+	SourceChat   string                   `json:"source_chat"`
+	IsChannel    bool                     `json:"is_channel"`
+	Timeline     TimelinePayload          `json:"timeline"`
+	Messages     []ConversationMsgPayload `json:"messages"`
+}
+
+// TimelinePayload holds conversation time boundaries.
+type TimelinePayload struct {
+	FirstMessage time.Time `json:"first_message"`
+	LastMessage  time.Time `json:"last_message"`
+}
+
+// ConversationMsgPayload is a single message within a conversation.
+type ConversationMsgPayload struct {
+	Sender    string    `json:"sender"`
+	Timestamp time.Time `json:"timestamp"`
+	Text      string    `json:"text"`
+	HasMedia  bool      `json:"has_media,omitempty"`
+}
+
+// MediaGroupPayload carries assembled media group data.
+type MediaGroupPayload struct {
+	Items    []MediaItemPayload `json:"items"`
+	Captions string             `json:"captions,omitempty"`
+}
+
+// MediaItemPayload represents one item in a media group.
+type MediaItemPayload struct {
+	Type     string `json:"type"`
+	FileID   string `json:"file_id"`
+	FileSize int64  `json:"file_size,omitempty"`
+	MimeType string `json:"mime_type,omitempty"`
+}
+
+// ForwardMetaPayload carries forwarding metadata.
+type ForwardMetaPayload struct {
+	SenderName   string    `json:"sender_name"`
+	SourceChat   string    `json:"source_chat,omitempty"`
+	OriginalDate time.Time `json:"original_date"`
+	IsChannel    bool      `json:"is_channel,omitempty"`
 }
 
 // ProcessResult is the output after full pipeline processing.
@@ -167,9 +217,41 @@ func (p *Processor) Process(ctx context.Context, req *ProcessRequest) (*ProcessR
 }
 
 // ExtractContent dispatches content extraction based on the request type.
-// Handles URL (article, YouTube, image, PDF), plain text, and voice note inputs.
+// Handles URL (article, YouTube, image, PDF), plain text, voice note,
+// conversation, and media group inputs.
 // This function has no DB or NATS dependencies and is independently testable.
 func ExtractContent(ctx context.Context, req *ProcessRequest) (*extract.Result, error) {
+	// Conversation takes priority — structured data available
+	if req.Conversation != nil {
+		text := req.Text
+		if text == "" {
+			text = formatConversationText(req.Conversation)
+		}
+		return &extract.Result{
+			ContentType: extract.ContentTypeConversation,
+			Title:       conversationTitle(req.Conversation),
+			Text:        text,
+			ContentHash: extract.HashContent(text),
+		}, nil
+	}
+
+	// Media group
+	if req.MediaGroup != nil {
+		text := req.Text
+		if text == "" {
+			text = req.MediaGroup.Captions
+		}
+		if text == "" {
+			text = fmt.Sprintf("Media group: %d items", len(req.MediaGroup.Items))
+		}
+		return &extract.Result{
+			ContentType: extract.ContentTypeMediaGroup,
+			Title:       fmt.Sprintf("Media group (%d items)", len(req.MediaGroup.Items)),
+			Text:        text,
+			ContentHash: extract.HashContent(text),
+		}, nil
+	}
+
 	switch {
 	case req.URL != "":
 		contentType := extract.DetectContentType(req.URL)
@@ -219,6 +301,38 @@ func ExtractContent(ctx context.Context, req *ProcessRequest) (*extract.Result, 
 	default:
 		return nil, fmt.Errorf("at least one of url, text, or voice_url is required")
 	}
+}
+
+// formatConversationText builds a human-readable text representation from conversation payload.
+func formatConversationText(c *ConversationPayload) string {
+	var parts []string
+	header := "Conversation"
+	if c.SourceChat != "" {
+		header += " from " + c.SourceChat
+	}
+	parts = append(parts, header)
+	if len(c.Participants) > 0 {
+		parts = append(parts, fmt.Sprintf("Participants: %s", strings.Join(c.Participants, ", ")))
+	}
+	parts = append(parts, fmt.Sprintf("Messages: %d", c.MessageCount))
+	parts = append(parts, "---")
+	for _, m := range c.Messages {
+		ts := m.Timestamp.Format("15:04")
+		line := fmt.Sprintf("[%s] %s: %s", ts, m.Sender, m.Text)
+		parts = append(parts, line)
+	}
+	return strings.Join(parts, "\n")
+}
+
+// conversationTitle generates a title for a conversation artifact.
+func conversationTitle(c *ConversationPayload) string {
+	if c.SourceChat != "" {
+		return fmt.Sprintf("Conversation from %s (%d messages)", c.SourceChat, c.MessageCount)
+	}
+	if len(c.Participants) > 0 && len(c.Participants) <= 3 {
+		return fmt.Sprintf("Conversation with %s", strings.Join(c.Participants, ", "))
+	}
+	return fmt.Sprintf("Conversation (%d messages, %d participants)", c.MessageCount, len(c.Participants))
 }
 
 // DedupCheck performs deduplication: URL-first (R-011 delta re-processing), then content hash.
@@ -360,11 +474,13 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 	// inserted the same content_hash, this INSERT becomes a no-op and we return
 	// a DuplicateError consistent with the explicit dedup check path.
 	ct, err := p.DB.Exec(ctx, `
-		INSERT INTO artifacts (id, artifact_type, title, content_raw, content_hash, source_id, source_url, processing_tier, capture_method, user_starred, processing_status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO artifacts (id, artifact_type, title, content_raw, content_hash, source_id, source_url, processing_tier, capture_method, user_starred, processing_status, participants, message_count, source_chat, timeline)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		ON CONFLICT (content_hash) WHERE content_hash IS NOT NULL DO NOTHING
 	`, id, string(result.ContentType), result.Title, contentRaw, result.ContentHash,
-		sourceID, sourceURL, tier, captureMethod, req.Starred, string(StatusPending))
+		sourceID, sourceURL, tier, captureMethod, req.Starred, string(StatusPending),
+		conversationParticipantsJSON(req), conversationMessageCount(req),
+		conversationSourceChat(req), conversationTimelineJSON(req))
 	if err != nil {
 		return fmt.Errorf("insert artifact: %w", err)
 	}
@@ -381,6 +497,48 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 		return &DuplicateError{ExistingID: existingID, Title: existingTitle}
 	}
 	return nil
+}
+
+// conversationParticipantsJSON returns the participants as a JSON byte slice for JSONB storage,
+// or nil when the request is not a conversation.
+func conversationParticipantsJSON(req *ProcessRequest) []byte {
+	if req.Conversation == nil || len(req.Conversation.Participants) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(req.Conversation.Participants)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+// conversationMessageCount returns the message count, or nil when not a conversation.
+func conversationMessageCount(req *ProcessRequest) *int {
+	if req.Conversation == nil {
+		return nil
+	}
+	return &req.Conversation.MessageCount
+}
+
+// conversationSourceChat returns the source chat name, or nil when not a conversation.
+func conversationSourceChat(req *ProcessRequest) *string {
+	if req.Conversation == nil || req.Conversation.SourceChat == "" {
+		return nil
+	}
+	return &req.Conversation.SourceChat
+}
+
+// conversationTimelineJSON returns timeline data as JSON for JSONB storage,
+// or nil when the request is not a conversation.
+func conversationTimelineJSON(req *ProcessRequest) []byte {
+	if req.Conversation == nil {
+		return nil
+	}
+	data, err := json.Marshal(req.Conversation.Timeline)
+	if err != nil {
+		return nil
+	}
+	return data
 }
 
 // HandleProcessedResult processes the result from the ML sidecar (artifacts.processed).

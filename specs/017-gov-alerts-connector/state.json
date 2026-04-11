@@ -2,8 +2,8 @@
   "version": 3,
   "featureDir": "specs/017-gov-alerts-connector",
   "featureName": "Government Alerts Connector",
-  "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "status": "in-progress",
+  "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.workflow",
     "currentPhase": "finalize",
@@ -22,16 +22,11 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in-progress",
     "completedScopes": [],
     "certifiedCompletedPhases": [
       "select",
-      "bootstrap",
-      "implement",
-      "test",
-      "validate",
-      "audit",
-      "docs"
+      "bootstrap"
     ],
     "lastCertifiedAt": null,
     "reopenHistory": []

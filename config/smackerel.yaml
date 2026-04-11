@@ -32,6 +32,9 @@ llm:
 telegram:
   bot_token: ""
   chat_ids: ""
+  assembly_window_seconds: 10
+  assembly_max_messages: 100
+  media_group_window_seconds: 3
 
 connectors:
   google-keep:
