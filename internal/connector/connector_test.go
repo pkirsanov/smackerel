@@ -288,6 +288,28 @@ func TestSupervisor_NewSupervisor(t *testing.T) {
 	}
 }
 
+func TestSupervisor_SetPublisher(t *testing.T) {
+	reg := NewRegistry()
+	sup := NewSupervisor(reg, nil)
+	if sup.publisher != nil {
+		t.Error("publisher should be nil by default")
+	}
+	mp := &mockPublisher{}
+	sup.SetPublisher(mp)
+	if sup.publisher == nil {
+		t.Error("publisher should be set after SetPublisher")
+	}
+}
+
+type mockPublisher struct {
+	published []RawArtifact
+}
+
+func (m *mockPublisher) PublishRawArtifact(_ context.Context, a RawArtifact) (string, error) {
+	m.published = append(m.published, a)
+	return "mock-id", nil
+}
+
 func TestSupervisor_StartConnector_NotInRegistry(t *testing.T) {
 	reg := NewRegistry()
 	sup := NewSupervisor(reg, nil)

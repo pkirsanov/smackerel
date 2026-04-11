@@ -95,12 +95,16 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		c.mu.Unlock()
 		return nil, cursor, fmt.Errorf("hospitable connector not connected")
 	}
+	// Snapshot client and config under lock so concurrent Close() cannot
+	// nil-dereference the client pointer mid-sync.
+	client := c.client
+	config := c.config
 	c.health = connector.HealthSyncing
 	c.lastSyncErrors = 0
 	c.lastSyncCounts = make(map[string]int)
 	c.mu.Unlock()
 
-	syncCursor := parseCursor(cursor, c.config.InitialLookbackDays)
+	syncCursor := parseCursor(cursor, config.InitialLookbackDays)
 	var allArtifacts []connector.RawArtifact
 	var syncErrors int
 
@@ -114,8 +118,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	// 1. Sync properties (needed first for name cache)
-	if c.config.SyncProperties {
-		props, err := c.client.ListProperties(ctx, syncCursor.Properties)
+	if config.SyncProperties {
+		props, err := client.ListProperties(ctx, syncCursor.Properties)
 		if err != nil {
 			slog.Error("hospitable: property sync failed", "error", err)
 			syncErrors++
@@ -124,7 +128,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				c.mu.Lock()
 				c.propertyNames[p.ID] = p.Name
 				c.mu.Unlock()
-				allArtifacts = append(allArtifacts, NormalizeProperty(p, c.config))
+				allArtifacts = append(allArtifacts, NormalizeProperty(p, config))
 			}
 			syncCursor.Properties = time.Now().UTC()
 			c.mu.Lock()
@@ -135,8 +139,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// 2. Sync reservations
 	var reservationIDs []string
-	if c.config.SyncReservations {
-		reservations, err := c.client.ListReservations(ctx, syncCursor.Reservations)
+	if config.SyncReservations {
+		reservations, err := client.ListReservations(ctx, syncCursor.Reservations)
 		if err != nil {
 			slog.Error("hospitable: reservation sync failed", "error", err)
 			syncErrors++
@@ -145,7 +149,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				c.mu.RLock()
 				propName := c.propertyNames[r.PropertyID]
 				c.mu.RUnlock()
-				allArtifacts = append(allArtifacts, NormalizeReservation(r, propName, c.config))
+				allArtifacts = append(allArtifacts, NormalizeReservation(r, propName, config))
 				reservationIDs = append(reservationIDs, r.ID)
 			}
 			syncCursor.Reservations = time.Now().UTC()
@@ -156,8 +160,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	// 2b. Fetch active reservations for message sync coverage (R-016)
-	if c.config.SyncMessages {
-		activeRes, err := c.client.ListActiveReservations(ctx, time.Now().UTC().AddDate(0, 0, -7))
+	if config.SyncMessages {
+		activeRes, err := client.ListActiveReservations(ctx, time.Now().UTC().AddDate(0, 0, -7))
 		if err != nil {
 			slog.Warn("hospitable: active reservation fetch failed", "error", err)
 		} else {
@@ -175,11 +179,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	// 3. Sync messages per reservation (R-021: isolated cursor advancement)
-	if c.config.SyncMessages {
+	if config.SyncMessages {
 		var msgAnyFailed bool
 		var msgCount int
 		for _, resID := range reservationIDs {
-			messages, err := c.client.ListMessages(ctx, resID, syncCursor.Messages)
+			messages, err := client.ListMessages(ctx, resID, syncCursor.Messages)
 			if err != nil {
 				slog.Warn("hospitable: message sync failed for reservation",
 					"reservation_id", resID, "error", err)
@@ -188,7 +192,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				continue
 			}
 			for _, m := range messages {
-				allArtifacts = append(allArtifacts, NormalizeMessage(m, resID, c.config))
+				allArtifacts = append(allArtifacts, NormalizeMessage(m, resID, config))
 				msgCount++
 			}
 		}
@@ -201,8 +205,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	// 4. Sync reviews
-	if c.config.SyncReviews {
-		reviews, err := c.client.ListReviews(ctx, syncCursor.Reviews)
+	if config.SyncReviews {
+		reviews, err := client.ListReviews(ctx, syncCursor.Reviews)
 		if err != nil {
 			slog.Error("hospitable: review sync failed", "error", err)
 			syncErrors++
@@ -211,7 +215,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				c.mu.RLock()
 				propName := c.propertyNames[r.PropertyID]
 				c.mu.RUnlock()
-				allArtifacts = append(allArtifacts, NormalizeReview(r, propName, c.config))
+				allArtifacts = append(allArtifacts, NormalizeReview(r, propName, config))
 			}
 			syncCursor.Reviews = time.Now().UTC()
 			c.mu.Lock()

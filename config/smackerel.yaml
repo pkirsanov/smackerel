@@ -16,15 +16,15 @@ project:
 
 runtime:
   log_level: info
-  auth_token: "" # REQUIRED: set a secure random token (min 16 chars). Run: openssl rand -hex 24
+  auth_token: "dev-token-smackerel-2026" # REQUIRED: set a secure random token (min 16 chars). Run: openssl rand -hex 24
   host_bind_address: "127.0.0.1"
   digest_cron: "0 7 * * *"
   embedding_model: all-MiniLM-L6-v2
 
 llm:
-  provider: "" # REQUIRED: set to ollama, openai, or anthropic
+  provider: "ollama" # REQUIRED: set to ollama, openai, or anthropic
   model: llama3.2
-  api_key: ""
+  api_key: "dev-not-needed-for-ollama"
   ollama_url: http://ollama:11434
   ollama_model: llama3.2
   ollama_vision_model: llava # Vision model used for OCR fallback on Keep image notes

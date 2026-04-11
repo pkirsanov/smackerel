@@ -416,3 +416,67 @@ func searchStr(s, sub string) bool {
 	}
 	return false
 }
+
+// Regression: recurring events WITH attendees must keep "full" tier.
+// Previously, recurring unconditionally overrode attendee-based tier to "light".
+func TestSync_RecurringWithAttendees_FullTier(t *testing.T) {
+	c := New("cal")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"events": []interface{}{
+				map[string]interface{}{
+					"uid":       "evt-weekly-1on1",
+					"summary":   "Weekly 1:1 with Sarah",
+					"attendees": []interface{}{"sarah@company.com"},
+					"recurring": true,
+					"start":     "2026-04-10T10:00:00Z",
+					"updated":   "2026-04-09T08:00:00Z",
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+	tier := artifacts[0].Metadata["processing_tier"]
+	if tier != "full" {
+		t.Errorf("recurring event with attendees should get full tier, got %v", tier)
+	}
+}
+
+// Regression: recurring events WITHOUT attendees should get "light" tier.
+func TestSync_RecurringNoAttendees_LightTier(t *testing.T) {
+	c := New("cal")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"events": []interface{}{
+				map[string]interface{}{
+					"uid":       "evt-daily-block",
+					"summary":   "Focus Time",
+					"recurring": true,
+					"start":     "2026-04-10T14:00:00Z",
+					"updated":   "2026-04-09T12:00:00Z",
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+	tier := artifacts[0].Metadata["processing_tier"]
+	if tier != "light" {
+		t.Errorf("recurring event without attendees should get light tier, got %v", tier)
+	}
+}

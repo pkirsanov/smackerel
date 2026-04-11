@@ -447,6 +447,16 @@ echo "Generated $OUTPUT_FILE"
 # NATS does not support env var substitution in config files, so values
 # are resolved from the SST at generation time.
 NATS_CONF_FILE="$REPO_ROOT/config/generated/nats.conf"
+
+# Build NATS auth section only when a token is set
+NATS_AUTH_SECTION=""
+if [[ -n "$SMACKEREL_AUTH_TOKEN" ]]; then
+  NATS_AUTH_SECTION="
+authorization {
+  token: ${SMACKEREL_AUTH_TOKEN}
+}"
+fi
+
 NATS_CONF_CONTENT="# Auto-generated from config/smackerel.yaml — DO NOT EDIT DIRECTLY
 # Regenerate: ./smackerel.sh config generate
 
@@ -454,11 +464,7 @@ jetstream {
   store_dir: /data
 }
 
-http_port: ${NATS_MONITOR_PORT}
-
-authorization {
-  token: ${SMACKEREL_AUTH_TOKEN}
-}"
+http_port: ${NATS_MONITOR_PORT}${NATS_AUTH_SECTION}"
 
 printf '%s\n' "$NATS_CONF_CONTENT" > "$NATS_CONF_FILE"
 chmod 0600 "$NATS_CONF_FILE"

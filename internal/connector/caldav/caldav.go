@@ -102,13 +102,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 		content := strings.Join(contentParts, "\n")
 
-		// Determine tier: meetings with attendees get full processing
+		// Determine tier: meetings with attendees get full processing,
+		// recurring events without attendees get lighter treatment.
 		tier := "standard"
 		if len(evt.Attendees) > 0 {
 			tier = "full"
-		}
-		if evt.Recurring {
-			tier = "light" // recurring events get lighter treatment
+		} else if evt.Recurring {
+			tier = "light"
 		}
 
 		metadata := map[string]interface{}{

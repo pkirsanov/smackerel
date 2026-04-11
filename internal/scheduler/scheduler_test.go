@@ -328,6 +328,40 @@ func TestFormatAlertMessage_EmptyType(t *testing.T) {
 	}
 }
 
+// STAB-001: Stop cancels baseCtx so in-flight cron callbacks abort
+func TestStop_CancelsBaseCtx(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+	if err := s.Start(nil, "0 0 * * *"); err != nil {
+		t.Fatalf("unexpected start error: %v", err)
+	}
+
+	// baseCtx should be alive before Stop
+	if s.baseCtx.Err() != nil {
+		t.Fatal("baseCtx should not be cancelled before Stop")
+	}
+
+	s.Stop()
+
+	// baseCtx should be cancelled after Stop
+	if s.baseCtx.Err() == nil {
+		t.Error("baseCtx should be cancelled after Stop — in-flight cron jobs would not be interrupted")
+	}
+}
+
+// STAB-002: Double-stop must not panic
+func TestStop_DoubleStopSafe(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+	if err := s.Start(nil, "0 0 * * *"); err != nil {
+		t.Fatalf("unexpected start error: %v", err)
+	}
+
+	// First stop
+	s.Stop()
+
+	// Second stop should be a no-op — must not panic
+	s.Stop()
+}
+
 func TestFormatAlertMessage_Format(t *testing.T) {
 	msg := FormatAlertMessage("bill", "AWS Invoice", "Monthly charge of $99")
 	expected := "💰 AWS Invoice\nMonthly charge of $99"
