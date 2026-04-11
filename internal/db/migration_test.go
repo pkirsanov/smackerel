@@ -155,8 +155,8 @@ func TestFormatEmbedding_MultipleElements(t *testing.T) {
 
 func TestFormatEmbedding_ZeroValues(t *testing.T) {
 	result := FormatEmbedding([]float32{0.0, 0.0})
-	if !contains(result, "0.") {
-		t.Errorf("expected zero values, got %q", result)
+	if result != "[0,0]" {
+		t.Errorf("expected [0,0], got %q", result)
 	}
 }
 

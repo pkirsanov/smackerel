@@ -9,11 +9,6 @@ const (
 	StatusFailed    ProcessingStatus = "failed"
 )
 
-// String returns the string representation of the processing status.
-func (s ProcessingStatus) String() string {
-	return string(s)
-}
-
 // Source ID constants — canonical source identifiers shared across capture API,
 // Telegram bot, connectors, and tier assignment. Defined here (not in processor.go)
 // so adding a new connector does not require editing the processor.

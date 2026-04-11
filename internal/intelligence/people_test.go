@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 func TestTripDossier_Struct(t *testing.T) {
@@ -331,5 +333,78 @@ func TestAssembleDossierText_AllTypes(t *testing.T) {
 	}
 	if !strings.Contains(text, "active") {
 		t.Error("should show active state")
+	}
+}
+
+// === Chaos: escapeLikePattern edge cases ===
+
+func TestEscapeLikePattern_ChaosEdgeCases(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"user@example.com", "user@example.com"},
+		{"user%40@example.com", "user\\%40@example.com"},
+		{"under_score@mail.com", "under\\_score@mail.com"},
+		{"back\\slash@mail.com", "back\\\\slash@mail.com"},
+		{"all%_\\chars", "all\\%\\_\\\\chars"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := stringutil.EscapeLikePattern(tt.input)
+			if got != tt.expected {
+				t.Errorf("EscapeLikePattern(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Chaos: classifyInteractionTrend with extreme values ===
+
+func TestClassifyInteractionTrend_ExtremeValues(t *testing.T) {
+	// Very large interactions should not panic or produce incorrect results
+	got := classifyInteractionTrend(0, 999999)
+	if got != "warming" {
+		t.Errorf("0 days, huge interactions should be warming, got %s", got)
+	}
+
+	// Large days_since should always be cooling regardless of interactions
+	got = classifyInteractionTrend(9999, 999999)
+	if got != "cooling" {
+		t.Errorf("huge days should be cooling, got %s", got)
+	}
+}
+
+// === Chaos: assembleBriefText with empty attendees ===
+
+func TestAssembleBriefText_EmptyAttendees(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Strategy session",
+		Attendees:  nil,
+	}
+	text := assembleBriefText(brief)
+	if text == "" {
+		t.Error("expected non-empty brief even with no attendees")
+	}
+	if !strings.Contains(text, "Strategy session") {
+		t.Error("brief should contain the event title")
+	}
+}
+
+func TestAssembleBriefText_MixedNewAndKnownContacts(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Sync",
+		Attendees: []AttendeeBrief{
+			{Name: "alice@co.com", Email: "alice@co.com", IsNewContact: true},
+			{Name: "Bob", Email: "bob@co.com", IsNewContact: false, RecentThreads: []string{"thread1"}, SharedTopics: []string{"go"}},
+		},
+	}
+	text := assembleBriefText(brief)
+	if !strings.Contains(text, "No prior context") {
+		t.Error("new contact should show 'No prior context'")
+	}
+	if !strings.Contains(text, "Bob") {
+		t.Error("known contact should show name")
 	}
 }

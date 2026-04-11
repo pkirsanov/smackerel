@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -134,6 +135,11 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 		path.Gaps = detectGaps(path.Resources)
 		paths = append(paths, *path)
 	}
+
+	// Sort for deterministic output — map iteration order is non-deterministic.
+	sort.Slice(paths, func(i, j int) bool {
+		return paths[i].TopicID < paths[j].TopicID
+	})
 
 	return paths, nil
 }

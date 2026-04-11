@@ -24,6 +24,6 @@
 - [x] Processing tiers: properties=light, reservations=standard, messages=full, reviews=full
 - [x] Config section in smackerel.yaml with SST pipeline integration
 - [x] Connector registered in main.go following Keep pattern
-- [x] All 52 unit tests pass across connector_test.go and normalizer_test.go
+- [x] All 138 unit tests pass across connector_test.go (53), normalizer_test.go (39), and chaos_test.go (46)
 - [x] ./smackerel.sh lint passes
 - [x] ./smackerel.sh check passes

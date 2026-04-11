@@ -1,6 +1,7 @@
 package bookmarks
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -95,5 +96,103 @@ func TestToRawArtifacts(t *testing.T) {
 	}
 	if artifacts[0].SourceID != "bookmarks" {
 		t.Errorf("expected source_id 'bookmarks', got %q", artifacts[0].SourceID)
+	}
+}
+
+func TestToRawArtifacts_Empty(t *testing.T) {
+	artifacts := ToRawArtifacts(nil)
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts for nil, got %d", len(artifacts))
+	}
+	artifacts = ToRawArtifacts([]Bookmark{})
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts for empty slice, got %d", len(artifacts))
+	}
+}
+
+func TestParseChromeJSON_MalformedJSON(t *testing.T) {
+	_, err := ParseChromeJSON([]byte(`{not valid json`))
+	if err == nil {
+		t.Error("expected error for malformed JSON")
+	}
+}
+
+func TestParseChromeJSON_MissingRoots(t *testing.T) {
+	_, err := ParseChromeJSON([]byte(`{"bookmarks": "no roots key"}`))
+	if err == nil {
+		t.Error("expected error for missing 'roots' key")
+	}
+}
+
+func TestParseChromeJSON_EmptyRoots(t *testing.T) {
+	bookmarks, err := ParseChromeJSON([]byte(`{"roots": {}}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(bookmarks) != 0 {
+		t.Errorf("expected 0 bookmarks from empty roots, got %d", len(bookmarks))
+	}
+}
+
+func TestParseNetscapeHTML_Empty(t *testing.T) {
+	bookmarks, err := ParseNetscapeHTML([]byte(""))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(bookmarks) != 0 {
+		t.Errorf("expected 0 bookmarks from empty input, got %d", len(bookmarks))
+	}
+}
+
+func TestParseNetscapeHTML_NoLinks(t *testing.T) {
+	data := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL>
+<DT><H3>Empty Folder</H3>
+</DL>`)
+	bookmarks, err := ParseNetscapeHTML(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(bookmarks) != 0 {
+		t.Errorf("expected 0 bookmarks from folder-only HTML, got %d", len(bookmarks))
+	}
+}
+
+func TestExtractBookmarks_MaxDepth(t *testing.T) {
+	// Build a deeply nested Chrome JSON structure exceeding maxExtractDepth (50)
+	inner := map[string]interface{}{
+		"type": "url",
+		"name": "Deep Bookmark",
+		"url":  "https://example.com/deep",
+	}
+	for i := 0; i < maxExtractDepth+5; i++ {
+		inner = map[string]interface{}{
+			"type":     "folder",
+			"name":     "level",
+			"children": []interface{}{inner},
+		}
+	}
+
+	data := map[string]interface{}{
+		"roots": map[string]interface{}{
+			"bookmark_bar": inner,
+		},
+	}
+
+	jsonData, _ := json.Marshal(data)
+	bookmarks, err := ParseChromeJSON(jsonData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The bookmark at depth > maxExtractDepth should be unreachable
+	if len(bookmarks) != 0 {
+		t.Errorf("expected 0 bookmarks (depth exceeded), got %d", len(bookmarks))
+	}
+}
+
+func TestFolderToTopicMapping_Backslash(t *testing.T) {
+	got := FolderToTopicMapping("Tech\\Go")
+	if got != "tech go" {
+		t.Errorf("FolderToTopicMapping(\"Tech\\\\Go\") = %q, want \"tech go\"", got)
 	}
 }

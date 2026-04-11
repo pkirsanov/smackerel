@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/db"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // SearchRequest is the JSON body for POST /api/search.
@@ -624,7 +624,7 @@ func (s *SearchEngine) graphExpand(ctx context.Context, primaryResults []SearchR
 // textSearch is a fallback when embedding is unavailable — uses trigram text search.
 func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]SearchResult, int, error) {
 	// Escape ILIKE metacharacters in user query to prevent wildcard injection
-	safeQuery := escapeLikePattern(req.Query)
+	safeQuery := stringutil.EscapeLikePattern(req.Query)
 
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
@@ -752,15 +752,4 @@ func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) (
 	}
 
 	return results, len(results), nil
-}
-
-// escapeLikePattern escapes ILIKE metacharacters (%, _) in user input
-// to prevent wildcard injection in text search fallback queries.
-func escapeLikePattern(s string) string {
-	r := strings.NewReplacer(
-		`%`, `\%`,
-		`_`, `\_`,
-		`\`, `\\`,
-	)
-	return r.Replace(s)
 }

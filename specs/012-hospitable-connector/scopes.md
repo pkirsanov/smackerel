@@ -70,11 +70,12 @@ func NormalizeReview(review Review, propertyName string, config HospitableConfig
 
 | # | Scope | Surfaces | Key Tests | DoD Summary | Status |
 |---|---|---|---|---|---|
-| 1 | API Client, Types & Config | Go core, Config | 12 unit + 2 integration | Client builds correct requests, paginates, retries on 429, config validates | Done |
-| 2 | Connector Implementation & Normalizer | Go core, Config | 14 unit + 3 integration + 2 e2e | Connector lifecycle complete, normalizer maps all resource types, cursor incremental sync works | Done |
-| 3 | Edge Hints, Cross-Domain Linking & Hardening | Go core | 8 unit + 4 integration + 2 e2e | Edge hints in metadata, partial failure isolation, property name cache, DURING_STAY temporal linking | Done |
-| 4 | Message Sync Reliability & Client Hardening | Go core | 10 unit | Active reservation message sync, Retry-After parsing, persistent property name cache, message cursor isolation | Done |
-| 5 | Normalizer Quality Fixes | Go core | 12 unit | Sender classification, URL population, review rating precision | Done |
+| 1 | API Client, Types & Config | Go core, Config | 53 unit (connector_test.go) | Client builds correct requests, paginates, retries on 429, config validates | Done |
+| 2 | Connector Implementation & Normalizer | Go core, Config | 39 unit (normalizer_test.go) + shared connector tests | Connector lifecycle complete, normalizer maps all resource types, cursor incremental sync works | Done |
+| 3 | Edge Hints, Cross-Domain Linking & Hardening | Go core | Covered in connector/normalizer unit tests | Edge hints in metadata, partial failure isolation, property name cache, DURING_STAY temporal linking | Done |
+| 4 | Message Sync Reliability & Client Hardening | Go core | Covered in connector unit tests | Active reservation message sync, Retry-After parsing, persistent property name cache, message cursor isolation | Done |
+| 5 | Normalizer Quality Fixes | Go core | Covered in normalizer unit tests | Sender classification, URL population, review rating precision | Done |
+| — | Chaos & Resilience | Go core | 46 unit (chaos_test.go) | Malformed responses, concurrency, edge cases, extreme values | Done |
 
 ---
 
@@ -201,7 +202,7 @@ Scenario: SCN-HC-006 API client constructs correct request URLs
 - [x] `SyncCursor` correctly marshals/unmarshals to/from JSON
   > Evidence: TestSyncCursorMarshal PASS ✓
 - [x] All unit tests pass
-  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+  > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes with zero new errors
   > Evidence: `./smackerel.sh lint` exit 0 ✓
 - [x] `./smackerel.sh format --check` passes
@@ -367,7 +368,7 @@ Scenario: SCN-HC-014 Disabled resource types are skipped
 - [x] Health transitions: disconnected → healthy → syncing → healthy/error → disconnected
   > Evidence: TestHealthTransitions PASS ✓
 - [x] All unit tests pass
-  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+  > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes with zero new errors
   > Evidence: `./smackerel.sh lint` exit 0 ✓
 - [x] `./smackerel.sh format --check` passes
@@ -504,7 +505,7 @@ Scenario: SCN-HC-022 Connect with empty token returns clear error
 - [x] `DURING_STAY` temporal window enables cross-domain artifact linking
   > Evidence: stay_window_start/end in reservation metadata enables pipeline linking ✓
 - [x] All unit tests pass
-  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+  > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes with zero new errors
   > Evidence: `./smackerel.sh lint` exit 0 ✓
 - [x] `./smackerel.sh format --check` passes
@@ -571,7 +572,7 @@ Scenario: SCN-HC-026 Message cursor not advanced on partial failure
 - [x] Message cursor does NOT advance when any reservation message fetch fails
   > Evidence: TestMessageCursorNotAdvancedOnFailure PASS ✓
 - [x] All unit tests pass
-  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+  > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes
   > Evidence: `./smackerel.sh lint` exit 0 ✓
 - [x] `./smackerel.sh format --check` passes
@@ -635,7 +636,7 @@ Scenario: SCN-HC-030 Fractional review rating preserved
 - [x] Both `NormalizeReview` title and `buildReviewContent` use `formatRating`
   > Evidence: TestNormalizeReviewFractionalRating PASS ✓
 - [x] All unit tests pass
-  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, hospitable 2.952s ✓
+  > Evidence: `./smackerel.sh test unit` — all Go packages pass, hospitable package included ✓
 - [x] `./smackerel.sh lint` passes
   > Evidence: `./smackerel.sh lint` exit 0 ✓
 - [x] `./smackerel.sh format --check` passes

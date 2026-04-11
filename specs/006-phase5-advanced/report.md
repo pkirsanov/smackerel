@@ -445,3 +445,47 @@ Exit code: 0
 ### Files Changed
 - `internal/intelligence/lookups.go` — `normalizeQuery` simplified from 5-line loop to 1-line `strings.Fields` idiom
 - `internal/intelligence/monthly.go` — Information diet queries consolidated from 5 queries to 1 with `COUNT(*) FILTER`
+
+---
+
+## Stochastic Sweep R14: Simplify-To-Doc
+
+### Summary
+Simplification sweep targeting dead code, N+1 query patterns, and redundant loop queries across the Phase 5 intelligence package.
+
+### Findings & Remediation
+
+#### Finding 1: `ResurfaceScore` dead production code — REMOVED
+`internal/intelligence/resurface.go::ResurfaceScore` was an exported standalone function never called by any production code path. Previously deferred as "intentional public API surface for future use" but no caller ever materialized. `Resurface()` ranks via SQL `ORDER BY` and `SerendipityPick()` uses inline context scoring — neither calls `ResurfaceScore`. Removed the function (15 lines) and 11 associated test functions across `resurface_test.go` and `learning_test.go`.
+
+#### Finding 2: N+1 queries in `GetPeopleIntelligence` — FIXED
+`internal/intelligence/people.go::GetPeopleIntelligence` ran 2 additional queries per person in a loop (shared topics + pending action items), creating O(N) database round-trips for N people (up to 50). With 50 people, this was 100+ queries instead of 2.
+
+**Fix:** Replaced with batch queries using `ANY($1)` on the collected person IDs. Shared topics fetched in a single query with `GROUP BY` per person (capped at 5 per person via application-level counting). Action items fetched in a single query using `ROW_NUMBER() OVER (PARTITION BY person_id)` to get top 3 per person. Reduces from 2N+1 queries to 3 total queries.
+
+#### Finding 3: Interest evolution 3-query loop in monthly report — FIXED
+`internal/intelligence/monthly.go::GenerateMonthlyReport` ran 3 separate queries in a loop to fetch top topics for each bi-monthly period. Each query scanned the full topics/edges/artifacts join independently.
+
+**Fix:** Consolidated into a single query using a `CASE` expression to bucket artifacts into period indices (0, 1, 2) and `ROW_NUMBER() OVER (PARTITION BY period_idx)` to rank top 3 topics per period. Reduces 3 database round-trips to 1.
+
+### Verification Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence  0.347s
+ok  github.com/smackerel/smackerel/internal/scheduler     0.274s
+31 Go packages ok, 0 failures
+11 Python tests passed
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+Exit code: 0
+```
+
+### Files Changed
+- `internal/intelligence/resurface.go` — Removed dead `ResurfaceScore` function (15 lines)
+- `internal/intelligence/resurface_test.go` — Removed 11 `ResurfaceScore` test functions (~100 lines)
+- `internal/intelligence/learning_test.go` — Removed `TestResurfaceScore_Phase5` cross-reference test
+- `internal/intelligence/people.go` — Replaced N+1 loop queries with 2 batch queries using `ANY($1)` and window functions
+- `internal/intelligence/monthly.go` — Consolidated 3 interest-evolution queries into 1 using `CASE`/`ROW_NUMBER` windowing

@@ -806,3 +806,92 @@ func TestHealthHandler_IntelligenceNilEngine(t *testing.T) {
 		t.Error("expected no intelligence service when engine is nil")
 	}
 }
+
+// === Security: Health endpoint fingerprinting prevention ===
+
+func TestHealthHandler_UnauthenticatedHidesVersionAndCommit(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		Version:    "1.2.3",
+		CommitHash: "abc123",
+		AuthToken:  "secret-token",
+	}
+
+	// Request WITHOUT auth header — should not expose version/commit
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Version != "" {
+		t.Errorf("unauthenticated health must not expose version, got %q", resp.Version)
+	}
+	if resp.CommitHash != "" {
+		t.Errorf("unauthenticated health must not expose commit hash, got %q", resp.CommitHash)
+	}
+}
+
+func TestHealthHandler_AuthenticatedShowsVersionAndCommit(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		Version:    "1.2.3",
+		CommitHash: "abc123",
+		AuthToken:  "secret-token",
+	}
+
+	// Request WITH valid Bearer token — should expose version/commit
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Version != "1.2.3" {
+		t.Errorf("authenticated health should show version, got %q", resp.Version)
+	}
+	if resp.CommitHash != "abc123" {
+		t.Errorf("authenticated health should show commit hash, got %q", resp.CommitHash)
+	}
+}
+
+func TestHealthHandler_DevModeShowsVersionAndCommit(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		Version:    "dev",
+		CommitHash: "dev123",
+		AuthToken:  "", // dev mode — no auth required
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Version != "dev" {
+		t.Errorf("dev mode health should show version, got %q", resp.Version)
+	}
+	if resp.CommitHash != "dev123" {
+		t.Errorf("dev mode health should show commit hash, got %q", resp.CommitHash)
+	}
+}

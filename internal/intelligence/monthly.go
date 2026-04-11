@@ -2,10 +2,13 @@ package intelligence
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
+
+	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
 // MonthlyReport is the monthly self-knowledge report per R-506.
@@ -18,6 +21,7 @@ type MonthlyReport struct {
 	SubscriptionSum   *SubscriptionSummary `json:"subscription_summary,omitempty"`
 	LearningProgress  []LearningPath       `json:"learning_progress,omitempty"`
 	TopInsights       []SynthesisInsight   `json:"top_insights"`
+	SeasonalPatterns  []SeasonalPattern    `json:"seasonal_patterns,omitempty"`
 	ReportText        string               `json:"report_text"`
 	WordCount         int                  `json:"word_count"`
 	GeneratedAt       time.Time            `json:"generated_at"`
@@ -136,37 +140,55 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 	report.InformationDiet.Other = allCount - categorized
 	report.InformationDiet.Total = allCount
 
-	// 3. Interest evolution (last 6 months, bi-monthly periods)
+	// 3. Interest evolution (last 6 months, bi-monthly periods — single query)
 	if ctx.Err() != nil {
 		return report, ctx.Err()
 	}
-	for i := 0; i < 3; i++ {
-		start := time.Now().AddDate(0, -(i+1)*2, 0)
-		end := time.Now().AddDate(0, -i*2, 0)
-		period := start.Format("Jan") + "-" + end.Format("Jan")
-
-		topRows, err := e.Pool.Query(ctx, `
-			SELECT t.name FROM topics t
+	periodStart := time.Now().AddDate(0, -6, 0)
+	evoRows, err := e.Pool.Query(ctx, `
+		WITH period_topics AS (
+			SELECT
+				CASE
+					WHEN a.created_at >= NOW() - INTERVAL '2 months' THEN 0
+					WHEN a.created_at >= NOW() - INTERVAL '4 months' THEN 1
+					ELSE 2
+				END AS period_idx,
+				t.name,
+				COUNT(*) AS cnt
+			FROM topics t
 			JOIN edges e ON e.dst_id = t.id AND e.dst_type = 'topic' AND e.edge_type = 'BELONGS_TO'
-			JOIN artifacts a ON a.id = e.src_id AND a.created_at BETWEEN $1 AND $2
-			GROUP BY t.name
-			ORDER BY COUNT(*) DESC
-			LIMIT 3
-		`, start, end)
-		if err == nil {
-			ip := InterestPeriod{Period: period}
-			for topRows.Next() {
-				var t string
-				if topRows.Scan(&t) == nil {
-					ip.TopTopics = append(ip.TopTopics, t)
-				}
+			JOIN artifacts a ON a.id = e.src_id AND a.created_at >= $1
+			GROUP BY period_idx, t.name
+		),
+		ranked AS (
+			SELECT period_idx, name, cnt,
+			       ROW_NUMBER() OVER (PARTITION BY period_idx ORDER BY cnt DESC) AS rn
+			FROM period_topics
+		)
+		SELECT period_idx, name FROM ranked WHERE rn <= 3
+		ORDER BY period_idx, rn
+	`, periodStart)
+	if err == nil {
+		defer evoRows.Close()
+		periodTopics := make(map[int][]string)
+		for evoRows.Next() {
+			var idx int
+			var name string
+			if evoRows.Scan(&idx, &name) == nil {
+				periodTopics[idx] = append(periodTopics[idx], name)
 			}
-			if err := topRows.Err(); err != nil {
-				slog.Warn("interest evolution row iteration failed", "period", period, "error", err)
-			}
-			topRows.Close()
-			if len(ip.TopTopics) > 0 {
-				report.InterestEvolution = append(report.InterestEvolution, ip)
+		}
+		if err := evoRows.Err(); err != nil {
+			slog.Warn("interest evolution row iteration failed", "error", err)
+		}
+		for i := 0; i < 3; i++ {
+			if topics, ok := periodTopics[i]; ok && len(topics) > 0 {
+				start := time.Now().AddDate(0, -(i+1)*2, 0)
+				end := time.Now().AddDate(0, -i*2, 0)
+				report.InterestEvolution = append(report.InterestEvolution, InterestPeriod{
+					Period:    start.Format("Jan") + "-" + end.Format("Jan"),
+					TopTopics: topics,
+				})
 			}
 		}
 	}
@@ -201,7 +223,27 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 	}
 	report.TopInsights = insights
 
-	// Assemble report text
+	// 8. Seasonal patterns (R-508 — requires 6+ months)
+	seasonalPatterns, err := e.DetectSeasonalPatterns(ctx)
+	if err != nil {
+		slog.Warn("seasonal pattern detection failed", "error", err)
+	} else if len(seasonalPatterns) > 0 {
+		// Cap at 2 seasonal observations per monthly report per design
+		if len(seasonalPatterns) > 2 {
+			seasonalPatterns = seasonalPatterns[:2]
+		}
+		report.SeasonalPatterns = seasonalPatterns
+	}
+
+	// Assemble report text — try NATS LLM generation first, fall back to local
+	if e.NATS != nil {
+		data, err := json.Marshal(report)
+		if err == nil {
+			if pubErr := e.NATS.Publish(ctx, smacknats.SubjectMonthlyGenerate, data); pubErr != nil {
+				slog.Warn("NATS monthly report publish failed, using local assembly", "error", pubErr)
+			}
+		}
+	}
 	report.ReportText = assembleMonthlyReportText(report)
 	report.WordCount = len(strings.Fields(report.ReportText))
 
@@ -243,6 +285,15 @@ func assembleMonthlyReportText(r *MonthlyReport) string {
 	// Patterns
 	if len(r.ProductivityPats) > 0 {
 		sections = append(sections, "PATTERNS:\n"+strings.Join(r.ProductivityPats, "\n"))
+	}
+
+	// Seasonal patterns (R-508)
+	if len(r.SeasonalPatterns) > 0 {
+		var lines []string
+		for _, sp := range r.SeasonalPatterns {
+			lines = append(lines, fmt.Sprintf("  %s: %s", sp.Month, sp.Observation))
+		}
+		sections = append(sections, "SEASONAL INSIGHTS:\n"+strings.Join(lines, "\n"))
 	}
 
 	if len(sections) <= 1 {
@@ -293,6 +344,10 @@ func (e *Engine) GenerateContentFuel(ctx context.Context) ([]ContentAngle, error
 		}
 
 		// Get supporting artifacts (highest relevance)
+		if ctx.Err() != nil {
+			return angles, ctx.Err()
+		}
+
 		var supportingIDs []string
 		artRows, err := e.Pool.Query(ctx, `
 			SELECT a.id FROM artifacts a
@@ -307,10 +362,29 @@ func (e *Engine) GenerateContentFuel(ctx context.Context) ([]ContentAngle, error
 					supportingIDs = append(supportingIDs, id)
 				}
 			}
+			if iterErr := artRows.Err(); iterErr != nil {
+				slog.Warn("content fuel supporting artifacts iteration failed", "topic", topicName, "error", iterErr)
+			}
 			artRows.Close()
 		}
 
-		// Generate angles based on depth
+		// Publish to NATS for LLM-enhanced angle generation (R-503)
+		if e.NATS != nil {
+			payload := map[string]interface{}{
+				"topic_id":         topicID,
+				"topic_name":       topicName,
+				"capture_count":    captureCount,
+				"source_diversity": sourceDiversity,
+				"supporting_ids":   supportingIDs,
+			}
+			if data, err := json.Marshal(payload); err == nil {
+				if pubErr := e.NATS.Publish(ctx, smacknats.SubjectContentAnalyze, data); pubErr != nil {
+					slog.Warn("NATS content analyze publish failed, using local generation", "topic", topicName, "error", pubErr)
+				}
+			}
+		}
+
+		// Local fallback angle generation
 		format := "blog post"
 		if captureCount > 100 {
 			format = "long-form essay"

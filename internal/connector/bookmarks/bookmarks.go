@@ -3,7 +3,9 @@ package bookmarks
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,14 +63,15 @@ func ParseNetscapeHTML(data []byte) ([]Bookmark, error) {
 		line = strings.TrimSpace(line)
 
 		if matches := netscapeFolderRe.FindStringSubmatch(line); len(matches) > 1 {
-			currentFolder = matches[1]
+			// F-CHAOS-005: Decode HTML entities in folder names.
+			currentFolder = html.UnescapeString(matches[1])
 			continue
 		}
 
 		if matches := netscapeLinkRe.FindStringSubmatch(line); len(matches) > 2 {
 			bookmarks = append(bookmarks, Bookmark{
-				URL:    matches[1],
-				Title:  matches[2],
+				URL:    html.UnescapeString(matches[1]),
+				Title:  html.UnescapeString(matches[2]),
 				Folder: currentFolder,
 			})
 		}
@@ -124,11 +127,24 @@ func extractBookmarksDepth(node map[string]interface{}, folder string, out *[]Bo
 	if nodeType == "url" {
 		url, _ := node["url"].(string)
 		if url != "" {
-			*out = append(*out, Bookmark{
+			b := Bookmark{
 				Title:  name,
 				URL:    url,
 				Folder: folder,
-			})
+			}
+			// F-CHAOS-004: Parse Chrome's date_added field (microseconds since 1601-01-01 UTC).
+			if dateStr, ok := node["date_added"].(string); ok && dateStr != "" {
+				if us, err := strconv.ParseInt(dateStr, 10, 64); err == nil && us > 0 {
+					// Chrome epoch offset: seconds between 1601-01-01 and 1970-01-01.
+					const chromeEpochOffset int64 = 11644473600
+					unixSec := (us / 1_000_000) - chromeEpochOffset
+					unixNsec := (us % 1_000_000) * 1000
+					if unixSec > 0 { // sanity: only accept post-Unix-epoch dates
+						b.AddedAt = time.Unix(unixSec, unixNsec)
+					}
+				}
+			}
+			*out = append(*out, b)
 		}
 		return
 	}

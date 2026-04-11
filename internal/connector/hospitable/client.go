@@ -15,9 +15,14 @@ import (
 	"github.com/smackerel/smackerel/internal/connector"
 )
 
+// maxPaginationPages is the upper bound on pagination requests to prevent
+// infinite loops from a misbehaving or malicious API server.
+const maxPaginationPages = 1000
+
 // Client wraps the Hospitable Public API.
 type Client struct {
 	baseURL    string
+	baseOrigin string // scheme+host for same-origin pagination checks
 	token      string
 	httpClient *http.Client
 	backoff    *connector.Backoff
@@ -29,9 +34,15 @@ func NewClient(baseURL, token string, pageSize int) *Client {
 	if pageSize <= 0 {
 		pageSize = 100
 	}
+	// Extract scheme+host for same-origin pagination validation (SSRF defence).
+	origin := ""
+	if parsed, err := url.Parse(baseURL); err == nil {
+		origin = parsed.Scheme + "://" + parsed.Host
+	}
 	return &Client{
-		baseURL: baseURL,
-		token:   token,
+		baseURL:    baseURL,
+		baseOrigin: origin,
+		token:      token,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -104,32 +115,54 @@ func (c *Client) ListReviews(ctx context.Context, since time.Time) ([]Review, er
 }
 
 // fetchPaginated is a generic helper that follows pagination links.
+// It enforces same-origin validation on pagination URLs (SSRF defence)
+// and caps the number of pages to prevent infinite loops.
 func fetchPaginated[T any](c *Client, ctx context.Context, path string, params url.Values) ([]T, error) {
 	var all []T
 
 	currentURL := c.baseURL + path + "?" + params.Encode()
 
-	for currentURL != "" {
+	for page := 0; currentURL != "" && page < maxPaginationPages; page++ {
 		body, nextURL, err := c.doGetPaginated(ctx, currentURL)
 		if err != nil {
 			return all, err
 		}
 
-		var page PaginatedResponse[T]
-		if err := json.Unmarshal(body, &page); err != nil {
+		var resp PaginatedResponse[T]
+		if err := json.Unmarshal(body, &resp); err != nil {
 			return all, fmt.Errorf("decode response: %w", err)
 		}
 
-		all = append(all, page.Data...)
+		all = append(all, resp.Data...)
 
-		if page.NextURL != "" {
-			currentURL = page.NextURL
-		} else {
-			currentURL = nextURL
+		candidateURL := resp.NextURL
+		if candidateURL == "" {
+			candidateURL = nextURL
 		}
+
+		// Validate pagination URL stays on the same origin to prevent SSRF.
+		if candidateURL != "" && !c.isSameOrigin(candidateURL) {
+			slog.Warn("hospitable: pagination URL rejected (different origin)",
+				"url", candidateURL, "expected_origin", c.baseOrigin)
+			break
+		}
+		currentURL = candidateURL
 	}
 
 	return all, nil
+}
+
+// isSameOrigin checks that a URL shares the same scheme+host as the client's base URL.
+func (c *Client) isSameOrigin(rawURL string) bool {
+	if c.baseOrigin == "" {
+		return false
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	candidate := parsed.Scheme + "://" + parsed.Host
+	return strings.EqualFold(candidate, c.baseOrigin)
 }
 
 // doGet makes an authenticated GET request and returns the response body.

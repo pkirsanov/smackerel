@@ -43,19 +43,6 @@ func TestSCN002046_ProcessingStatusType(t *testing.T) {
 	}
 }
 
-// SCN-002-046: ProcessingStatus.String() returns the expected value.
-func TestSCN002046_ProcessingStatusString(t *testing.T) {
-	if StatusPending.String() != "pending" {
-		t.Errorf("StatusPending.String() = %q, want %q", StatusPending.String(), "pending")
-	}
-	if StatusProcessed.String() != "processed" {
-		t.Errorf("StatusProcessed.String() = %q, want %q", StatusProcessed.String(), "processed")
-	}
-	if StatusFailed.String() != "failed" {
-		t.Errorf("StatusFailed.String() = %q, want %q", StatusFailed.String(), "failed")
-	}
-}
-
 // Verify the type system distinguishes ProcessingStatus from plain string.
 func TestProcessingStatusType_NotPlainString(t *testing.T) {
 	var ps ProcessingStatus = StatusPending

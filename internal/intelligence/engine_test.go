@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
+
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 func TestInsightType_Constants(t *testing.T) {
@@ -756,13 +759,16 @@ func TestEscapeLikePattern(t *testing.T) {
 		{"100%_done@test.com", "100\\%\\_done@test.com"},
 		{"", ""},
 		{"no-special-chars", "no-special-chars"},
+		// Backslash must be escaped to prevent LIKE escape-char bypass
+		{"back\\slash@test.com", "back\\\\slash@test.com"},
+		{"pct\\%inject@test.com", "pct\\\\\\%inject@test.com"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got := escapeLikePattern(tt.input)
+			got := stringutil.EscapeLikePattern(tt.input)
 			if got != tt.expected {
-				t.Errorf("escapeLikePattern(%q) = %q, want %q", tt.input, got, tt.expected)
+				t.Errorf("EscapeLikePattern(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}
@@ -1149,12 +1155,13 @@ func TestMarkAlertDelivered_ValidatesIDBeforePool(t *testing.T) {
 
 func TestCreateAlert_NilAlert(t *testing.T) {
 	engine := NewEngine(nil, nil)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic for nil alert, got none")
-		}
-	}()
-	_ = engine.CreateAlert(context.Background(), nil)
+	err := engine.CreateAlert(context.Background(), nil)
+	if err == nil {
+		t.Error("expected error for nil alert, got nil")
+	}
+	if !contains(err.Error(), "alert must not be nil") {
+		t.Errorf("expected nil alert error, got: %s", err.Error())
+	}
 }
 
 // === Harden: GetLastSynthesisTime validation order ===
@@ -1239,4 +1246,196 @@ func TestBillingDate_LocalMidnightNotUTCTruncate(t *testing.T) {
 	// timezones. Verify the code uses local midnight (above assertion
 	// would fail if Truncate were used and the offset pushed it forward).
 	_ = utcTruncated // retained to document the contrast
+}
+
+// === Security: CreateAlert length bounds ===
+
+func TestCreateAlert_TitleTruncation(t *testing.T) {
+	// CreateAlert should truncate title at 200 chars, not reject it
+	longTitle := strings.Repeat("x", 300)
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     longTitle,
+		Body:      "short body",
+		Priority:  2,
+	}
+
+	// We can't call CreateAlert without a pool, so test the truncation
+	// indirectly by verifying the validation logic via a nil-pool error
+	engine := NewEngine(nil, nil)
+	err := engine.CreateAlert(context.Background(), alert)
+	// Should fail on pool-nil, not on title length
+	if err == nil {
+		t.Fatal("expected error from nil pool")
+	}
+	if strings.Contains(err.Error(), "title") {
+		t.Errorf("title should be truncated not rejected, got error: %v", err)
+	}
+	if len(alert.Title) != 200 {
+		t.Errorf("expected title truncated to 200, got %d", len(alert.Title))
+	}
+}
+
+func TestCreateAlert_BodyTruncation(t *testing.T) {
+	longBody := strings.Repeat("y", 3000)
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     "Normal title",
+		Body:      longBody,
+		Priority:  1,
+	}
+
+	engine := NewEngine(nil, nil)
+	_ = engine.CreateAlert(context.Background(), alert)
+
+	if len(alert.Body) != 2000 {
+		t.Errorf("expected body truncated to 2000, got %d", len(alert.Body))
+	}
+}
+
+// === Chaos: UTF-8 safe truncation ===
+
+func TestCreateAlert_TitleTruncation_UTF8(t *testing.T) {
+	// Build a title where the 200-byte boundary falls inside a multi-byte rune.
+	// "é" is 2 bytes in UTF-8 (0xC3 0xA9). A string of 199 ASCII bytes + "é"
+	// is 201 bytes total. Naive s[:200] would split the "é".
+	title := strings.Repeat("a", 199) + "é"
+	if len(title) != 201 {
+		t.Fatalf("precondition: expected 201 bytes, got %d", len(title))
+	}
+
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     title,
+		Body:      "body",
+		Priority:  2,
+	}
+
+	engine := NewEngine(nil, nil)
+	_ = engine.CreateAlert(context.Background(), alert)
+
+	// Must be valid UTF-8 and not exceed 200 bytes
+	if len(alert.Title) > 200 {
+		t.Errorf("title should be <= 200 bytes, got %d", len(alert.Title))
+	}
+	// The safe truncation should back off to 199 (removing the split rune)
+	if len(alert.Title) != 199 {
+		t.Errorf("expected 199 bytes (before split rune), got %d", len(alert.Title))
+	}
+	// Verify no trailing garbage — every byte must form valid UTF-8
+	for i := 0; i < len(alert.Title); {
+		_, size := utf8.DecodeRuneInString(alert.Title[i:])
+		if size == 0 {
+			t.Fatalf("invalid UTF-8 at byte %d", i)
+		}
+		i += size
+	}
+}
+
+func TestCreateAlert_BodyTruncation_UTF8(t *testing.T) {
+	// "日" is 3 bytes in UTF-8. 1999 ASCII bytes + "日" = 2002 bytes.
+	// Naive s[:2000] would split the 3-byte rune.
+	body := strings.Repeat("b", 1999) + "日"
+	if len(body) != 2002 {
+		t.Fatalf("precondition: expected 2002 bytes, got %d", len(body))
+	}
+
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     "title",
+		Body:      body,
+		Priority:  1,
+	}
+
+	engine := NewEngine(nil, nil)
+	_ = engine.CreateAlert(context.Background(), alert)
+
+	if len(alert.Body) > 2000 {
+		t.Errorf("body should be <= 2000 bytes, got %d", len(alert.Body))
+	}
+	// Should back off to 1999
+	if len(alert.Body) != 1999 {
+		t.Errorf("expected 1999 bytes (before split rune), got %d", len(alert.Body))
+	}
+}
+
+func TestTruncateUTF8(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxBytes int
+		wantLen  int
+	}{
+		{"ascii under limit", "hello", 10, 5},
+		{"ascii at limit", "hello", 5, 5},
+		{"ascii over limit", "hello world", 5, 5},
+		{"split 2-byte rune", "aé", 2, 1},           // "a"(1) + "é"(2) = 3 bytes; cut at 2 splits é → back to 1
+		{"split 3-byte rune", "a日b", 3, 1},          // "a"(1) + "日"(3) = 4; cut at 3 splits 日 → back to 1
+		{"split 4-byte rune", "a\U0001F600b", 3, 1}, // "a"(1) + emoji(4); cut at 3 splits emoji → back to 1
+		{"empty string", "", 10, 0},
+		{"zero max", "hello", 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stringutil.TruncateUTF8(tt.input, tt.maxBytes)
+			if len(got) != tt.wantLen {
+				t.Errorf("TruncateUTF8(%q, %d) len = %d, want %d", tt.input, tt.maxBytes, len(got), tt.wantLen)
+			}
+		})
+	}
+}
+
+// === Chaos: DismissAlert nil pool ===
+
+func TestDismissAlert_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.DismissAlert(context.Background(), "alert-1")
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	if !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected pool error, got: %s", err)
+	}
+}
+
+// === Chaos: SnoozeAlert nil pool ===
+
+func TestSnoozeAlert_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	err := engine.SnoozeAlert(context.Background(), "alert-1", time.Now().Add(time.Hour))
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	if !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected pool error, got: %s", err)
+	}
+}
+
+// === Chaos: synthesisConfidence edge cases ===
+
+func TestSynthesisConfidence_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name          string
+		artifactCount int
+		sourceCount   int
+		wantZero      bool
+	}{
+		{"both zero", 0, 0, true},
+		{"negative artifact", -1, 3, true},
+		{"negative source", 3, -1, true},
+		{"both negative", -5, -3, true},
+		{"valid small", 3, 2, false},
+		{"valid large", 1000, 10, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := synthesisConfidence(tt.artifactCount, tt.sourceCount)
+			if tt.wantZero && got != 0 {
+				t.Errorf("expected 0, got %f", got)
+			}
+			if !tt.wantZero && (got <= 0 || got > 1) {
+				t.Errorf("expected (0,1], got %f", got)
+			}
+		})
+	}
 }

@@ -1,9 +1,12 @@
 """Authentication dependency for the ML sidecar."""
 
 import hmac
+import logging
 import os
 
 from fastapi import HTTPException, Request
+
+logger = logging.getLogger("smackerel-ml.auth")
 
 _AUTH_TOKEN = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
 
@@ -28,4 +31,6 @@ async def verify_auth(request: Request) -> None:
         token = request.headers.get("x-auth-token")
 
     if token is None or not hmac.compare_digest(token, _AUTH_TOKEN):
+        client_host = request.client.host if request.client else "unknown"
+        logger.warning("Auth failure: %s %s from %s", request.method, request.url.path, client_host)
         raise HTTPException(status_code=401, detail="Unauthorized")

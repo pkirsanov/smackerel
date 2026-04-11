@@ -22,8 +22,8 @@ func TestFormatEmbedding_Empty(t *testing.T) {
 
 func TestFormatEmbedding_SingleValue(t *testing.T) {
 	result := db.FormatEmbedding([]float32{0.5})
-	if result != "[0.500000]" {
-		t.Errorf("expected [0.500000], got %q", result)
+	if result != "[0.5]" {
+		t.Errorf("expected [0.5], got %q", result)
 	}
 }
 
