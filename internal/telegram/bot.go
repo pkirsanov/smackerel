@@ -513,7 +513,7 @@ func (b *Bot) captureErrorReply(chatID int64, err error, logMsg string, logArgs 
 }
 
 // callCapture calls the internal capture API.
-func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[string]interface{}, error) {
+func (b *Bot) callCapture(ctx context.Context, body interface{}) (map[string]interface{}, error) {
 	data, _ := json.Marshal(body)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.captureURL, bytes.NewReader(data))
@@ -707,12 +707,42 @@ func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) er
 	}
 	participants := extractParticipants(buf.Messages)
 
-	contextStr := fmt.Sprintf("Conversation with %d messages from %s",
-		len(buf.Messages), strings.Join(participants, ", "))
+	// Build structured conversation payload for capture API
+	msgs := make([]map[string]interface{}, len(buf.Messages))
+	for i, m := range buf.Messages {
+		msg := map[string]interface{}{
+			"sender":    m.SenderName,
+			"timestamp": m.Timestamp,
+			"text":      m.Text,
+		}
+		if m.HasMedia {
+			msg["has_media"] = true
+		}
+		msgs[i] = msg
+	}
 
-	body := map[string]string{
-		"text":    text,
-		"context": contextStr,
+	// Determine timeline from sorted messages
+	var firstMsg, lastMsg time.Time
+	if len(buf.Messages) > 0 {
+		firstMsg = buf.Messages[0].Timestamp
+		lastMsg = buf.Messages[len(buf.Messages)-1].Timestamp
+	}
+
+	body := map[string]interface{}{
+		"text": text,
+		"context": fmt.Sprintf("Conversation with %d messages from %s",
+			len(buf.Messages), strings.Join(participants, ", ")),
+		"conversation": map[string]interface{}{
+			"participants":  participants,
+			"message_count": len(buf.Messages),
+			"source_chat":   buf.SourceChat,
+			"is_channel":    buf.IsChannel,
+			"timeline": map[string]interface{}{
+				"first_message": firstMsg,
+				"last_message":  lastMsg,
+			},
+			"messages": msgs,
+		},
 	}
 	result, err := b.callCapture(ctx, body)
 	if err != nil {
@@ -721,8 +751,10 @@ func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) er
 	}
 
 	title, _ := result["title"].(string)
-	b.reply(buf.Key.chatID, fmt.Sprintf(". Saved conversation: \"%s\" (%d messages, %d participants)",
-		title, len(buf.Messages), len(participants)))
+	participantList := strings.Join(participants, ", ")
+	b.reply(buf.Key.chatID, fmt.Sprintf(". Saved: conversation with %s (%d messages, %d participants)",
+		participantList, len(buf.Messages), len(participants)))
+	_ = title // title available but spec R-006 prescribes participant-based confirmation
 	return nil
 }
 
@@ -733,11 +765,36 @@ func (b *Bot) flushMediaGroup(ctx context.Context, buf *MediaGroupBuffer) error 
 		text = stringutil.TruncateUTF8(text, maxCaptureTextLen)
 	}
 
-	body := map[string]string{
+	// Build structured media group payload
+	items := make([]map[string]interface{}, len(buf.Items))
+	for i, it := range buf.Items {
+		items[i] = map[string]interface{}{
+			"type":    it.Type,
+			"file_id": it.FileID,
+		}
+		if it.FileSize > 0 {
+			items[i]["file_size"] = it.FileSize
+		}
+		if it.MimeType != "" {
+			items[i]["mime_type"] = it.MimeType
+		}
+	}
+
+	body := map[string]interface{}{
 		"text": text,
+		"media_group": map[string]interface{}{
+			"items":    items,
+			"captions": collectCaptions(buf.Items),
+		},
 	}
 	if buf.ForwardMeta != nil {
 		body["context"] = fmt.Sprintf("Forwarded media group from %s", buf.ForwardMeta.SenderName)
+		body["forward_meta"] = map[string]interface{}{
+			"sender_name":   buf.ForwardMeta.SenderName,
+			"source_chat":   buf.ForwardMeta.SourceChat,
+			"original_date": buf.ForwardMeta.OriginalDate,
+			"is_channel":    buf.ForwardMeta.IsFromChannel,
+		}
 	}
 
 	result, err := b.callCapture(ctx, body)
@@ -747,6 +804,7 @@ func (b *Bot) flushMediaGroup(ctx context.Context, buf *MediaGroupBuffer) error 
 	}
 
 	title, _ := result["title"].(string)
-	b.reply(buf.ChatID, fmt.Sprintf(". Saved media group: \"%s\" (%d items)", title, len(buf.Items)))
+	_ = title
+	b.reply(buf.ChatID, fmt.Sprintf(". Saved: %d items (media group)", len(buf.Items)))
 	return nil
 }

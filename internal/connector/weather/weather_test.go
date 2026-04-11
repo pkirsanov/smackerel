@@ -472,3 +472,52 @@ func TestCoordFmt(t *testing.T) {
 		}
 	}
 }
+
+func TestHealthFromFailureRatio(t *testing.T) {
+	tests := []struct {
+		failures int
+		total    int
+		expected connector.HealthStatus
+	}{
+		{0, 3, connector.HealthHealthy},
+		{1, 3, connector.HealthDegraded}, // 33% — degraded
+		{1, 2, connector.HealthFailing},  // 50% — failing
+		{2, 3, connector.HealthFailing},  // 67% — failing
+		{3, 3, connector.HealthError},    // 100% — error
+		{1, 1, connector.HealthError},    // 100% — error
+		{0, 0, connector.HealthHealthy},  // degenerate — no failures
+		{0, 1, connector.HealthHealthy},
+		{1, 10, connector.HealthDegraded}, // 10% — degraded
+		{5, 10, connector.HealthFailing},  // 50% — failing
+		{10, 10, connector.HealthError},   // 100% — error
+		{3, 10, connector.HealthDegraded}, // 30% — degraded
+		{4, 10, connector.HealthDegraded}, // 40% — degraded
+	}
+	for _, tt := range tests {
+		got := healthFromFailureRatio(tt.failures, tt.total)
+		if got != tt.expected {
+			t.Errorf("healthFromFailureRatio(%d, %d) = %q, want %q", tt.failures, tt.total, got, tt.expected)
+		}
+	}
+}
+
+func TestSync_RespectsTimeout(t *testing.T) {
+	c := New("weather")
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "A", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+
+	// Use an already-expired context — Sync must respect the deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	time.Sleep(time.Millisecond) // ensure the deadline has passed
+
+	_, _, err := c.Sync(ctx, "")
+	if err == nil {
+		t.Error("expected error from expired context")
+	}
+}

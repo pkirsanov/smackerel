@@ -143,12 +143,20 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 	}
 	forwardContext += fmt.Sprintf(" (originally sent %s)", meta.OriginalDate.Format("2006-01-02 15:04"))
 
+	fwdMeta := map[string]interface{}{
+		"sender_name":   meta.SenderName,
+		"source_chat":   meta.SourceChat,
+		"original_date": meta.OriginalDate,
+		"is_channel":    meta.IsFromChannel,
+	}
+
 	// Check if the forwarded message contains a URL
 	if containsURL(text) {
 		url := extractURL(text)
-		body := map[string]string{
-			"url":     url,
-			"context": forwardContext,
+		body := map[string]interface{}{
+			"url":          url,
+			"context":      forwardContext,
+			"forward_meta": fwdMeta,
 		}
 		result, err := b.callCapture(ctx, body)
 		if err != nil {
@@ -156,15 +164,16 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 			return
 		}
 		title, _ := result["title"].(string)
-		b.reply(msg.Chat.ID, fmt.Sprintf(". Saved forwarded link: \"%s\"", title))
+		b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: forwarded from %s (\"%s\")", meta.SenderName, title))
 		return
 	}
 
 	// Plain text forwarded message
 	if text != "" {
-		body := map[string]string{
-			"text":    text,
-			"context": forwardContext,
+		body := map[string]interface{}{
+			"text":         text,
+			"context":      forwardContext,
+			"forward_meta": fwdMeta,
 		}
 		result, err := b.callCapture(ctx, body)
 		if err != nil {
@@ -172,7 +181,7 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 			return
 		}
 		title, _ := result["title"].(string)
-		b.reply(msg.Chat.ID, fmt.Sprintf(". Saved forwarded message: \"%s\"", title))
+		b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: forwarded from %s (\"%s\")", meta.SenderName, title))
 		return
 	}
 

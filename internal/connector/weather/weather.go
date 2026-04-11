@@ -20,6 +20,10 @@ const maxCacheEntries = 1024
 // maxLocations limits configured locations to prevent upstream API flooding.
 const maxLocations = 50
 
+// maxSyncDuration bounds total sync time to prevent unbounded blocking
+// when the upstream API is degraded (50 locations × 5 retries × backoff).
+const maxSyncDuration = 5 * time.Minute
+
 // maxLocationNameLen limits location name length to prevent log injection and memory abuse.
 const maxLocationNameLen = 100
 
@@ -84,13 +88,17 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.health = connector.HealthSyncing
 	c.mu.Unlock()
 
+	// Bound total sync duration to prevent unbounded blocking under API failures.
+	syncCtx, syncCancel := context.WithTimeout(ctx, maxSyncDuration)
+	defer syncCancel()
+
 	var artifacts []connector.RawArtifact
 	var failCount int
 	now := time.Now()
 
 	for _, loc := range c.config.Locations {
 		// Check for context cancellation between locations.
-		if err := ctx.Err(); err != nil {
+		if err := syncCtx.Err(); err != nil {
 			c.mu.Lock()
 			c.health = connector.HealthDegraded
 			c.mu.Unlock()
@@ -100,7 +108,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		lat, lon := roundCoords(loc.Latitude, loc.Longitude, c.config.Precision)
 
 		// Current conditions
-		current, err := c.fetchCurrent(ctx, lat, lon)
+		current, err := c.fetchCurrent(syncCtx, lat, lon)
 		if err != nil {
 			failCount++
 			slog.Warn("weather fetch failed", "location", loc.Name, "error", err)
@@ -126,9 +134,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		})
 	}
 
-	// Reflect health based on failure ratio.
+	// Reflect health based on failure ratio relative to total locations.
 	c.mu.Lock()
-	c.health = connector.HealthFromErrorCount(failCount)
+	c.health = healthFromFailureRatio(failCount, len(c.config.Locations))
 	c.mu.Unlock()
 
 	return artifacts, now.Format(time.RFC3339), nil
@@ -245,6 +253,9 @@ func (c *Connector) decodeCurrent(body io.ReadCloser, cacheKey string) (*Current
 		return nil, fmt.Errorf("decode open-meteo response: %w", err)
 	}
 
+	// Drain remaining body after successful decode to allow HTTP connection reuse.
+	_, _ = io.Copy(io.Discard, limitedBody)
+
 	cw := &CurrentWeather{
 		Temperature: result.Current.Temperature,
 		Humidity:    int(result.Current.Humidity),
@@ -275,6 +286,22 @@ func (c *Connector) evictExpiredLocked() {
 			delete(c.cache, key)
 		}
 	}
+}
+
+// healthFromFailureRatio computes health from the proportion of failed locations
+// rather than an absolute count, giving an accurate signal for small location sets.
+func healthFromFailureRatio(failures, total int) connector.HealthStatus {
+	if failures == 0 {
+		return connector.HealthHealthy
+	}
+	if total == 0 || failures >= total {
+		return connector.HealthError
+	}
+	// More than half failed → failing; otherwise degraded.
+	if failures*2 >= total {
+		return connector.HealthFailing
+	}
+	return connector.HealthDegraded
 }
 
 // sanitizeLocationName enforces length and character safety on location names.

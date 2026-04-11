@@ -28,40 +28,23 @@
     "scopeProgress": [
       {
         "scope": 1,
-        "name": "Alert Delivery Pipeline",
+        "name": "Alert Delivery Sweep + Alert Producers",
         "status": "Done",
         "dependsOn": [],
-        "scopeDir": "scopes/01-alert-delivery-pipeline",
-        "evidenceFile": "scopes/01-alert-delivery-pipeline/report.md",
         "certifiedAt": null
       },
       {
         "scope": 2,
-        "name": "Alert Producer Wiring",
+        "name": "Search Logging (LogSearch Call)",
         "status": "Done",
-        "dependsOn": [
-          1
-        ],
-        "scopeDir": "scopes/02-alert-producer-wiring",
-        "evidenceFile": "scopes/02-alert-producer-wiring/report.md",
+        "dependsOn": [],
         "certifiedAt": null
       },
       {
         "scope": 3,
-        "name": "Search Intelligence Loop",
-        "status": "Done",
-        "dependsOn": [],
-        "scopeDir": "scopes/03-search-intelligence-loop",
-        "evidenceFile": "scopes/03-search-intelligence-loop/report.md",
-        "certifiedAt": null
-      },
-      {
-        "scope": 4,
         "name": "Intelligence Health Freshness",
         "status": "Done",
         "dependsOn": [],
-        "scopeDir": "scopes/04-intelligence-health-freshness",
-        "evidenceFile": "scopes/04-intelligence-health-freshness/report.md",
         "certifiedAt": null
       }
     ],
