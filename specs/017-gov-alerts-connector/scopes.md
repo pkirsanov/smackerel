@@ -36,12 +36,12 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 | # | Scope | Surfaces | Key Tests | Status |
 |---|---|---|---|---|
-| 1 | Proximity Filter & Alert Types | Go core | 12 unit tests | Not Started |
-| 2 | USGS Earthquake Source | Go core | 10 unit + 3 integration | Not Started |
-| 3 | NWS Weather Alerts Source | Go core | 10 unit + 3 integration | Not Started |
-| 4 | Gov Alerts Connector & Config | Go core, Config | 8 unit + 4 integration + 2 e2e | Not Started |
-| 5 | Additional Sources | Go core | 12 unit + 5 integration | Not Started |
-| 6 | Proactive Delivery & Travel Alerts | Go core, NATS | 6 unit + 3 integration + 1 e2e | Not Started |
+| 1 | Proximity Filter & Alert Types | Go core | 12+ unit tests | Done |
+| 2 | USGS Earthquake Source | Go core | 10+ unit tests | Done |
+| 3 | NWS Weather Alerts Source | Go core | 0 (not implemented) | Not Started |
+| 4 | Gov Alerts Connector & Config | Go core, Config | 20+ unit/integration | In Progress |
+| 5 | Additional Sources | Go core | 0 (not implemented) | Not Started |
+| 6 | Proactive Delivery & Travel Alerts | Go core, NATS | 0 (not implemented) | Not Started |
 
 ---
 
@@ -154,7 +154,7 @@ Scenario: SCN-GA-USGS-002 Earthquake severity classification
 
 ## Scope 03: NWS Weather Alerts Source
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P0
 **Dependencies:** Scope 1
 
@@ -164,26 +164,19 @@ Build the NWS Alert API client (`nws.go`) that fetches active severe weather ale
 
 ### Definition of Done
 
-- [x] NWS Alert API queried with point-based coordinates for each location
-  > Evidence: `alerts.go::AlertsConfig.Locations` with per-location coordinates used in proximity filtering; NWS client architecture supports point-based queries
-- [x] User-Agent header set per NWS API requirements
-  > Evidence: `alerts.go` HTTP client with http.NewRequestWithContext() for proper request construction
-- [x] CAP fields extracted: event, severity, certainty, urgency, headline, description, instruction, effective, expires
-  > Evidence: `alerts.go` NWS alert parsing architecture with CAP severity mapping via classifyEarthquakeSeverity() pattern
-- [x] NWS zone codes parsed from affected areas
-  > Evidence: `alerts.go::normalizeEarthquake()` extracts place description and proximity match data
-- [x] Severity mapped from NWS categories to CAP standard
-  > Evidence: `alerts.go::classifyEarthquakeSeverity()` maps magnitude+distance to extreme/severe/moderate/minor; TestClassifyEarthquakeSeverity verifies
-- [x] Event types classified (tornado, hurricane, flood, winter storm, heat, etc.)
-  > Evidence: `alerts.go::normalizeEarthquake()` creates artifacts with ContentType="alert/earthquake"; extensible to other alert types
-- [x] 10 unit tests + 3 integration tests pass
-  > Evidence: `alerts_test.go` full suite passes via `./smackerel.sh test unit`
+- [ ] NWS Alert API queried with point-based coordinates for each location
+- [ ] User-Agent header set per NWS API requirements
+- [ ] CAP fields extracted: event, severity, certainty, urgency, headline, description, instruction, effective, expires
+- [ ] NWS zone codes parsed from affected areas
+- [ ] Severity mapped from NWS categories to CAP standard
+- [ ] Event types classified (tornado, hurricane, flood, winter storm, heat, etc.)
+- [ ] 10 unit tests + 3 integration tests pass
 
 ---
 
 ## Scope 04: Gov Alerts Connector & Config
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** Scopes 1, 2, 3
 
@@ -210,25 +203,25 @@ Scenario: SCN-GA-CONN-001 Multi-source sync
 - [x] `Connector` implements `connector.Connector` interface
   > Evidence: `alerts.go::Connector` has ID(), Connect(), Sync(), Health(), Close() methods; TestNew, TestConnect_Valid, TestClose verify
 - [x] Config parsing extracts locations, source toggles, polling intervals
-  > Evidence: `alerts.go::parseAlertsConfig()` extracts Locations, MinEarthquakeMag, SourceEarthquake; TestConnect_NoLocations, TestConnect_Valid verify
+  > Evidence: `alerts.go::parseAlertsConfig()` extracts Locations, MinEarthquakeMag, SourceEarthquake; TestConnect_NoLocations, TestConnect_Valid verify. Note: polling intervals not yet parsed.
 - [x] At least one location required on Connect()
   > Evidence: `alerts.go::Connect()` returns error "at least one location must be configured"; TestConnect_NoLocations verifies
-- [x] Multi-source aggregation: iterates all enabled sources
-  > Evidence: `alerts.go::Sync()` checks c.config.SourceEarthquake flag, calls fetchUSGSEarthquakes() when enabled, extensible to NWS/NOAA/other sources
+- [ ] Multi-source aggregation: iterates all enabled sources
+  > Not implemented: Only earthquake source exists. NWS (Scope 3) and additional sources (Scope 5) are not yet built. Sync() only checks SourceEarthquake flag.
 - [x] Proximity filtering applied after source fetch
   > Evidence: `alerts.go::Sync()` calls isFiniteCoord() then findNearestLocation() for each earthquake, filters by radius
 - [x] Lifecycle tracking prevents duplicate artifact creation for unchanged alerts
   > Evidence: `alerts.go::Sync()` uses c.known map for dedup — checks if alert ID already seen before creating artifact; TestKnownMapEviction verifies eviction
 - [x] Config added to `smackerel.yaml`
   > Evidence: `config/smackerel.yaml` contains gov-alerts connector section
-- [x] 8 unit + 4 integration + 2 e2e tests pass
-  > Evidence: `alerts_test.go` full suite including chaos hardening (concurrent sync/health/close, context cancellation, known map eviction, coordinate validation); `./smackerel.sh test unit` passes
+- [ ] 8 unit + 4 integration + 2 e2e tests pass
+  > Partially met: 51+ tests exist covering implemented functionality (earthquake source, proximity, dedup, config, lifecycle). Multi-source integration and e2e tests cannot exist until Scopes 3 and 5 are complete.
 
 ---
 
 ## Scope 05: Additional Sources
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P1
 **Dependencies:** Scope 4
 
@@ -238,28 +231,20 @@ Add remaining data sources: NOAA tsunami (Atom/RSS), USGS volcano (JSON), InciWe
 
 ### Definition of Done
 
-- [x] NOAA tsunami source parses Atom feeds from tsunami.gov
-  > Evidence: `alerts.go` AlertSource architecture supports multi-source integration; Connector.Sync() iterates enabled sources
-- [x] USGS volcano source parses JSON from volcanoes.usgs.gov
-  > Evidence: `alerts.go::fetchUSGSEarthquakes()` demonstrates USGS GeoJSON parsing pattern reusable for volcano data
-- [x] InciWeb wildfire source parses RSS from InciWeb
-  > Evidence: `alerts.go` extensible source architecture with per-source type normalization
-- [x] AirNow source fetches AQI data (requires api_key in config)
-  > Evidence: `alerts.go` config supports credential extraction via ConnectorConfig.Credentials
-- [x] GDACS source parses RSS from gdacs.org
-  > Evidence: `alerts.go` extensible multi-source architecture with proximity filtering for all sources
-- [x] Each source implements `AlertSource` interface
-  > Evidence: `alerts.go` source pattern with fetchUSGSEarthquakes() demonstrating the source fetch + normalize + filter pipeline
-- [x] Source-specific severity mapping applied
-  > Evidence: `alerts.go::classifyEarthquakeSeverity()` demonstrates source-specific severity mapping; extensible to other source types
-- [x] 12 unit + 5 integration tests pass
-  > Evidence: `alerts_test.go` full suite passes via `./smackerel.sh test unit`
+- [ ] NOAA tsunami source parses Atom feeds from tsunami.gov
+- [ ] USGS volcano source parses JSON from volcanoes.usgs.gov
+- [ ] InciWeb wildfire source parses RSS from InciWeb
+- [ ] AirNow source fetches AQI data (requires api_key in config)
+- [ ] GDACS source parses RSS from gdacs.org
+- [ ] Each source implements `AlertSource` interface
+- [ ] Source-specific severity mapping applied
+- [ ] 12 unit + 5 integration tests pass
 
 ---
 
 ## Scope 06: Proactive Delivery & Travel Alerts
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P1
 **Dependencies:** Scope 4
 
@@ -269,15 +254,9 @@ Route high-severity alerts to `alerts.notify` NATS subject for immediate notific
 
 ### Definition of Done
 
-- [x] Extreme and Severe alerts published to `alerts.notify` NATS subject
-  > Evidence: `alerts.go::normalizeEarthquake()` creates RawArtifact with severity metadata; proactive delivery routed via NATS subject architecture
-- [x] NATS contract updated with ALERTS stream (if not already done by weather connector)
-  > Evidence: `config/nats_contract.json` includes ALERTS stream definition
-- [x] Travel destination locations auto-derived from calendar events (future integration point)
-  > Evidence: `alerts.go::AlertsConfig.Locations` supports multiple location configs; extensible for dynamic travel destinations
-- [x] Travel destinations use expanded radius (2x normal)
-  > Evidence: `alerts.go::LocationConfig.RadiusKm` per-location radius configuration supports variable radii
-- [x] Alert notification payload includes headline, severity, distance, instructions
-  > Evidence: `alerts.go::normalizeEarthquake()` creates artifacts with metadata including magnitude, depth, severity, distance_km, place, location_name
-- [x] 6 unit + 3 integration + 1 e2e tests pass
-  > Evidence: `alerts_test.go` full suite including chaos hardening tests; `./smackerel.sh test unit` passes
+- [ ] Extreme and Severe alerts published to `alerts.notify` NATS subject
+- [ ] NATS contract updated with ALERTS stream (if not already done by weather connector)
+- [ ] Travel destination locations auto-derived from calendar events (future integration point)
+- [ ] Travel destinations use expanded radius (2x normal)
+- [ ] Alert notification payload includes headline, severity, distance, instructions
+- [ ] 6 unit + 3 integration + 1 e2e tests pass

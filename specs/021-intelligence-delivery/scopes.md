@@ -2,7 +2,7 @@
 
 **Feature:** 021-intelligence-delivery
 **Created:** 2026-04-10
-**Status:** Planning complete
+**Status:** Done
 
 ---
 

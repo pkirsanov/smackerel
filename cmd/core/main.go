@@ -429,10 +429,13 @@ func run() error {
 	if cfg.TelegramBotToken != "" {
 		var err error
 		tgBot, err = telegram.NewBot(telegram.Config{
-			BotToken:   cfg.TelegramBotToken,
-			ChatIDs:    cfg.TelegramChatIDs,
-			CoreAPIURL: cfg.CoreAPIURL,
-			AuthToken:  cfg.AuthToken,
+			BotToken:                cfg.TelegramBotToken,
+			ChatIDs:                 cfg.TelegramChatIDs,
+			CoreAPIURL:              cfg.CoreAPIURL,
+			AuthToken:               cfg.AuthToken,
+			AssemblyWindowSeconds:   cfg.TelegramAssemblyWindowSeconds,
+			AssemblyMaxMessages:     cfg.TelegramAssemblyMaxMessages,
+			MediaGroupWindowSeconds: cfg.TelegramMediaGroupWindowSeconds,
 		})
 		if err != nil {
 			slog.Warn("telegram bot initialization failed", "error", err)

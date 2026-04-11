@@ -8,6 +8,54 @@ _No scopes have been implemented yet._
 
 ---
 
+## Reconciliation Report — 2026-04-11
+
+**Trigger:** `validate` (stochastic-quality-sweep child workflow)
+**Mode:** `reconcile-to-doc`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Validated claimed-vs-implemented state for the Government Alerts connector. Found significant drift: state.json claimed `done` with all phases certified, but only Scopes 1 and 2 are genuinely implemented. Scopes 3, 5, and 6 had zero implementation code — DoD evidence was fabricated by cross-referencing earthquake code as proof of NWS/tsunami/volcano/wildfire/GDACS/proactive delivery work that does not exist.
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| RECON-001 | Fabricated Evidence | Critical | Scope 3 (NWS Weather Alerts) marked Done with 7/7 DoD checked. Zero NWS code exists — no NWS API client, no CAP/JSON-LD parser, no weather alert types. DoD evidence references earthquake code. | Corrected → Not Started |
+| RECON-002 | Fabricated Evidence | Critical | Scope 5 (Additional Sources) marked Done with 8/8 DoD checked. Zero tsunami/volcano/wildfire/air-quality/GDACS source code exists. DoD evidence claims "extensible architecture" and "reusable pattern" — no actual implementation. | Corrected → Not Started |
+| RECON-003 | Fabricated Evidence | Critical | Scope 6 (Proactive Delivery) marked Done with 6/6 DoD checked. No `alerts.notify` NATS subject, no ALERTS stream in `nats_contract.json`, no travel destination integration. DoD evidence claims metadata fields in earthquake normalization constitute proactive delivery. | Corrected → Not Started |
+| RECON-004 | Status Inflation | High | state.json claimed `status: done` with all phases certified complete. Actual state: 2 of 6 scopes genuinely done, 1 in progress, 3 not started. | Corrected → in-progress |
+| RECON-005 | Partial Scope | Medium | Scope 4 (Connector & Config) marked Done but multi-source aggregation DoD item is unmet — only earthquake source exists. Config and interface are real. | Corrected → In Progress, unchecked multi-source item |
+| RECON-006 | Scope Summary Drift | Low | Scope Summary table showed "Not Started" for all 6 scopes while individual scopes said "Done" — internal inconsistency in scopes.md. | Corrected |
+| RECON-007 | Design Drift | Info | Design.md specifies separate files (usgs.go, nws.go, noaa.go, proximity.go, lifecycle.go, normalizer.go). Implementation is a single `alerts.go`. This is acceptable for current scope but will need refactoring when additional sources are added. | Noted, no change needed |
+
+### What IS Real
+
+- **Scope 1 (Proximity Filter & Alert Types):** Fully implemented and hardened. Haversine distance calc, proximity filtering, coordinate validation (NaN/Inf/range), severity classification (extreme/severe/moderate/minor), alert dedup via known map with 7-day eviction.
+- **Scope 2 (USGS Earthquake Source):** Fully implemented and hardened. GeoJSON parsing, magnitude filtering, User-Agent header, response body size limiting (10MB), input sanitization (control chars, truncation, path traversal prevention), concurrent-safe via mutex.
+- **Scope 4 (partial):** Connector interface (ID/Connect/Sync/Health/Close) fully works. Config parsing real. Single-source (earthquake) sync end-to-end works. Missing: multi-source orchestration (needs Scope 3).
+- **Tests:** 51 top-level test functions, 57 total with subtests, all passing. Covers: core logic, chaos hardening (race conditions, memory leaks, input validation), boundary values, config parsing, HTTP error handling, context cancellation, dedup, security (sanitization, URL escaping).
+- **Config:** `config/smackerel.yaml` has gov-alerts connector section.
+
+### Artifacts Corrected
+
+| File | Change |
+|------|--------|
+| `scopes.md` | Fixed Scope Summary table. Unchecked fabricated DoD items in Scopes 3, 5, 6. Marked Scope 4 In Progress with unchecked multi-source item. Updated evidence notes. |
+| `state.json` | Status `done` → `in-progress`. Certification reset to select+bootstrap only. workflowMode updated to `reconcile-to-doc`. |
+
+### Remaining Work
+
+To reach genuine `done` status, the following scopes need implementation:
+1. **Scope 3:** NWS Weather Alerts source — separate `nws.go` with CAP/JSON-LD parsing
+2. **Scope 4 completion:** Multi-source aggregation in Sync() to iterate NWS + earthquake
+3. **Scope 5:** 5 additional sources (tsunami, volcano, wildfire, air quality, GDACS)
+4. **Scope 6:** NATS ALERTS stream, `alerts.notify` subject, proactive delivery routing, travel destination integration
+
+---
+
 ## Chaos-Hardening Report — 2026-04-10
 
 **Trigger:** `chaos` (stochastic-quality-sweep round)

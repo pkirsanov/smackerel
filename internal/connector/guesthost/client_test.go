@@ -261,9 +261,9 @@ func TestFetchActivityEmptyCursorOmitsSince(t *testing.T) {
 
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {
-		name        string
-		cfg         map[string]interface{}
-		wantErr     string
+		name    string
+		cfg     map[string]interface{}
+		wantErr string
 	}{
 		{
 			name:    "missing api_key",
