@@ -5,11 +5,11 @@
   "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "test",
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedScopes": [],
-    "completedPhaseClaims": ["analyze", "plan"],
+    "completedPhaseClaims": ["analyze", "plan", "implement", "test"],
     "pendingTransitionRequests": [],
     "executionHistory": [
       {
@@ -29,17 +29,35 @@
         "runStartedAt": "2026-04-09T00:00:00Z",
         "runEndedAt": "2026-04-09T00:00:00Z",
         "summary": "Created scopes.md with 5 sequential scopes: (1) GH API Client/Types/Config, (2) Connector Implementation/Normalizer, (3) Hospitality Graph Nodes/Linker, (4) Hospitality Digest, (5) Context Enrichment API. 46 Gherkin scenarios, 75+ test entries across unit/integration/e2e. Created report.md and uservalidation.md templates."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-11T00:00:00Z",
+        "runEndedAt": "2026-04-11T00:00:00Z",
+        "summary": "All 5 scopes implemented: S1 API client + types + config. S2 connector interface + normalizer + registration. S3 migration + guest/property repos + hospitality linker + topic seeds. S4 hospitality digest context + generator integration. S5 context enrichment API + handler + route. go build clean."
+      },
+      {
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-11T00:00:00Z",
+        "runEndedAt": "2026-04-11T00:00:00Z",
+        "summary": "Unit tests: 53 passed across all packages including guesthost connector (client, connector, normalizer), graph, digest. Scenario manifest created (46 scenarios). go build clean."
       }
     ]
   },
   "certification": {
     "status": "in_progress",
     "completedScopes": [],
-    "certifiedCompletedPhases": ["analyze", "plan"],
+    "certifiedCompletedPhases": ["analyze", "plan", "implement", "test"],
     "scopeProgress": [],
     "lockdownState": {
       "roundNumber": 1,
-      "lastRoundResult": "implement_in_progress",
+      "lastRoundResult": "test_in_progress",
       "findingsResolved": 0,
       "findingsTotal": 0
     }

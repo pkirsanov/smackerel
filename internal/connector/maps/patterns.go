@@ -538,6 +538,7 @@ func tripSourceRef(t TripEvent) string {
 }
 
 // typicalHour finds the most frequent hour among departure hours.
+// On frequency ties, the earlier hour wins for deterministic output.
 func typicalHour(hours []int) int {
 	if len(hours) == 0 {
 		return 0
@@ -549,7 +550,7 @@ func typicalHour(hours []int) int {
 	bestHour := hours[0]
 	bestCount := 0
 	for h, c := range freq {
-		if c > bestCount {
+		if c > bestCount || (c == bestCount && h < bestHour) {
 			bestHour = h
 			bestCount = c
 		}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -113,7 +114,7 @@ func TestConnectMissingImportDir(t *testing.T) {
 	if err == nil {
 		t.Fatal("Connect() expected error for non-existent dir, got nil")
 	}
-	if got := err.Error(); !contains(got, "does not exist") {
+	if got := err.Error(); !strings.Contains(got, "does not exist") {
 		t.Errorf("error = %q, want containing 'does not exist'", got)
 	}
 	if h := c.Health(ctx); h != connector.HealthError {
@@ -138,7 +139,7 @@ func TestConnectEmptyImportDir(t *testing.T) {
 	if err == nil {
 		t.Fatal("Connect() expected error for empty import_dir, got nil")
 	}
-	if got := err.Error(); !contains(got, "import directory") {
+	if got := err.Error(); !strings.Contains(got, "import directory") {
 		t.Errorf("error = %q, want containing 'import directory'", got)
 	}
 }
@@ -512,19 +513,6 @@ func TestSyncCorruptedExportNoPanic(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && containsSubstr(s, substr)
-}
-
-func containsSubstr(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
-}
-
 // T-STAB-001: File size limit prevents reading oversized exports.
 func TestSyncRejectsOversizedFile(t *testing.T) {
 	// Create a file that exceeds maxFileSize (we use a small override isn't possible,
@@ -606,7 +594,7 @@ func TestSyncRespectsContextCancel(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from cancelled context")
 	}
-	if !contains(err.Error(), "cancelled") {
+	if !strings.Contains(err.Error(), "cancelled") {
 		t.Errorf("error = %q, want containing 'cancelled'", err.Error())
 	}
 }
@@ -690,7 +678,7 @@ func TestFilterExcludeDomains(t *testing.T) {
 		t.Errorf("got %d artifacts, want 2 (spam.com excluded)", len(artifacts))
 	}
 	for _, a := range artifacts {
-		if contains(a.URL, "spam.com") {
+		if strings.Contains(a.URL, "spam.com") {
 			t.Errorf("excluded domain artifact leaked through: %s", a.URL)
 		}
 	}
@@ -827,7 +815,7 @@ func TestFilterRejectsDangerousSchemes(t *testing.T) {
 
 	for _, a := range artifacts {
 		scheme := ""
-		if idx := indexOf(a.URL, "://"); idx > 0 {
+		if idx := strings.Index(a.URL, "://"); idx > 0 {
 			scheme = a.URL[:idx]
 		}
 		switch scheme {
@@ -857,7 +845,7 @@ func TestProcessFileRejectsPathTraversal(t *testing.T) {
 	if err == nil {
 		t.Fatal("SECURITY: processFile should reject files outside import directory")
 	}
-	if !contains(err.Error(), "outside import directory") {
+	if !strings.Contains(err.Error(), "outside import directory") {
 		t.Errorf("error = %q, want containing 'outside import directory'", err.Error())
 	}
 }
@@ -962,7 +950,7 @@ func TestParseConfigInvalidWatchInterval(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid watch_interval")
 	}
-	if !contains(err.Error(), "watch_interval") {
+	if !strings.Contains(err.Error(), "watch_interval") {
 		t.Errorf("error = %q, want containing 'watch_interval'", err.Error())
 	}
 }
@@ -1018,16 +1006,7 @@ func TestParseConfigMissingImportDir(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing import_dir")
 	}
-	if !contains(err.Error(), "import directory") {
+	if !strings.Contains(err.Error(), "import directory") {
 		t.Errorf("error = %q, want containing 'import directory'", err.Error())
 	}
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }
