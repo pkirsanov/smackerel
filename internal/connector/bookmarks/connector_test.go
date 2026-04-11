@@ -790,3 +790,244 @@ func TestSyncSkipsSymlinks(t *testing.T) {
 		}
 	}
 }
+
+// T-CHAOS-003: Dangerous URL schemes (javascript:, data:, file:) are rejected.
+func TestFilterRejectsDangerousSchemes(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"mixed.html": []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL>
+<DT><A HREF="https://safe.com/page">Safe HTTPS</A>
+<DT><A HREF="http://also-safe.com/page">Safe HTTP</A>
+<DT><A HREF="javascript:alert(1)">XSS Payload</A>
+<DT><A HREF="data:text/html,<script>alert(1)</script>">Data URI</A>
+<DT><A HREF="file:///etc/passwd">Local File</A>
+<DT><A HREF="ftp://files.example.com/readme.txt">FTP Link</A>
+</DL>`),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// Only https, http, and ftp are allowed
+	if len(artifacts) != 3 {
+		urls := make([]string, len(artifacts))
+		for i, a := range artifacts {
+			urls[i] = a.URL
+		}
+		t.Fatalf("got %d artifacts %v, want 3 (https + http + ftp only)", len(artifacts), urls)
+	}
+
+	for _, a := range artifacts {
+		scheme := ""
+		if idx := indexOf(a.URL, "://"); idx > 0 {
+			scheme = a.URL[:idx]
+		}
+		switch scheme {
+		case "https", "http", "ftp":
+			// allowed
+		default:
+			t.Errorf("SECURITY: dangerous scheme %q leaked through: %s", scheme, a.URL)
+		}
+	}
+}
+
+// T-CHAOS-006: processFile rejects path traversal attempts.
+func TestProcessFileRejectsPathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Attempt to read a file outside the import directory
+	outsideFile := filepath.Join(os.TempDir(), "outside.json")
+	_ = os.WriteFile(outsideFile, chromeJSONFixture(), 0o644)
+	defer os.Remove(outsideFile)
+
+	_, err := c.processFile(ctx, outsideFile)
+	if err == nil {
+		t.Fatal("SECURITY: processFile should reject files outside import directory")
+	}
+	if !contains(err.Error(), "outside import directory") {
+		t.Errorf("error = %q, want containing 'outside import directory'", err.Error())
+	}
+}
+
+// T-SYNC-001: All-files-fail sync transitions health to HealthError.
+func TestSyncAllFailsHealthError(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"bad1.json": []byte(`{invalid`),
+		"bad2.json": []byte(`not json either`),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("got %d artifacts, want 0 (all files corrupt)", len(artifacts))
+	}
+
+	// Health should be error because all files failed (syncErrors > 0, lastSyncCount == 0)
+	if h := c.Health(ctx); h != connector.HealthError {
+		t.Errorf("Health() = %q after all-fail sync, want %q", h, connector.HealthError)
+	}
+}
+
+// T-SYNC-002: Empty directory sync returns no artifacts and stays healthy.
+func TestSyncEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, cursor, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("got %d artifacts, want 0", len(artifacts))
+	}
+	if cursor != "" {
+		t.Errorf("cursor = %q, want empty for no new files", cursor)
+	}
+	if h := c.Health(ctx); h != connector.HealthHealthy {
+		t.Errorf("Health() = %q, want healthy", h)
+	}
+}
+
+// T-SYNC-003: archiveProcessed moves files to archive/ subdirectory.
+func TestSyncArchivesProcessedFiles(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"export.json": chromeJSONFixture(),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	cfg := makeConfig(dir)
+	cfg.SourceConfig["archive_processed"] = true
+	if err := c.Connect(ctx, cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	_, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// Original file should be gone
+	if _, err := os.Stat(filepath.Join(dir, "export.json")); !os.IsNotExist(err) {
+		t.Error("export.json still exists after archive sync")
+	}
+
+	// Archived copy should exist
+	archiveDir := filepath.Join(dir, "archive")
+	entries, err := os.ReadDir(archiveDir)
+	if err != nil {
+		t.Fatalf("read archive dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("archive has %d files, want 1", len(entries))
+	}
+}
+
+// T-CFG-001: Invalid watch_interval returns error.
+func TestParseConfigInvalidWatchInterval(t *testing.T) {
+	dir := t.TempDir()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":     dir,
+			"watch_interval": "not-a-duration",
+		},
+	}
+
+	_, err := parseConfig(cfg)
+	if err == nil {
+		t.Fatal("expected error for invalid watch_interval")
+	}
+	if !contains(err.Error(), "watch_interval") {
+		t.Errorf("error = %q, want containing 'watch_interval'", err.Error())
+	}
+}
+
+// T-CFG-002: min_url_length accepts int type from config.
+func TestParseConfigMinURLLengthInt(t *testing.T) {
+	dir := t.TempDir()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":     dir,
+			"min_url_length": 25,
+		},
+	}
+
+	parsed, err := parseConfig(cfg)
+	if err != nil {
+		t.Fatalf("parseConfig: %v", err)
+	}
+	if parsed.MinURLLength != 25 {
+		t.Errorf("MinURLLength = %d, want 25", parsed.MinURLLength)
+	}
+}
+
+// T-CFG-003: exclude_domains parses correctly.
+func TestParseConfigExcludeDomains(t *testing.T) {
+	dir := t.TempDir()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":      dir,
+			"exclude_domains": []interface{}{"spam.com", "ads.net"},
+		},
+	}
+
+	parsed, err := parseConfig(cfg)
+	if err != nil {
+		t.Fatalf("parseConfig: %v", err)
+	}
+	if len(parsed.ExcludeDomains) != 2 {
+		t.Fatalf("ExcludeDomains len = %d, want 2", len(parsed.ExcludeDomains))
+	}
+	if parsed.ExcludeDomains[0] != "spam.com" || parsed.ExcludeDomains[1] != "ads.net" {
+		t.Errorf("ExcludeDomains = %v, want [spam.com ads.net]", parsed.ExcludeDomains)
+	}
+}
+
+// T-CFG-004: Missing import_dir returns clear error.
+func TestParseConfigMissingImportDir(t *testing.T) {
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{},
+	}
+
+	_, err := parseConfig(cfg)
+	if err == nil {
+		t.Fatal("expected error for missing import_dir")
+	}
+	if !contains(err.Error(), "import directory") {
+		t.Errorf("error = %q, want containing 'import directory'", err.Error())
+	}
+}
+
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}

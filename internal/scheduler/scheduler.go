@@ -353,53 +353,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancel()
 
-			alerts, err := s.engine.GetPendingAlerts(ctx)
-			if err != nil {
-				slog.Error("alert delivery sweep failed", "error", err)
-				return
-			}
-
-			if len(alerts) == 0 {
-				return
-			}
-
-			typeIcons := map[string]string{
-				"bill":                 "💰",
-				"return_window":        "📦",
-				"trip_prep":            "✈️",
-				"relationship_cooling": "👋",
-				"commitment_overdue":   "⏰",
-				"meeting_brief":        "📋",
-			}
-
-			for _, a := range alerts {
-				if ctx.Err() != nil {
-					slog.Warn("alert delivery sweep context expired, remaining alerts deferred",
-						"remaining", len(alerts))
-					break
-				}
-
-				icon := typeIcons[string(a.AlertType)]
-				if icon == "" {
-					icon = "🔔"
-				}
-				msg := fmt.Sprintf("%s %s\n%s", icon, a.Title, a.Body)
-
-				if s.bot != nil {
-					if err := s.bot.SendAlertMessage(msg); err != nil {
-						slog.Warn("alert delivery failed, will retry next sweep",
-							"alert_id", a.ID, "error", err)
-						continue
-					}
-				}
-
-				if err := s.engine.MarkAlertDelivered(ctx, a.ID); err != nil {
-					slog.Warn("failed to mark alert delivered", "alert_id", a.ID, "error", err)
-					continue
-				}
-
-				slog.Info("alert delivered", "alert_id", a.ID, "type", a.AlertType, "title", a.Title)
-			}
+			s.deliverPendingAlerts(ctx)
 		}); err != nil {
 			slog.Warn("failed to schedule alert delivery sweep", "error", err)
 		}
@@ -484,4 +438,62 @@ func (s *Scheduler) SetDigestPending(retry bool, date string) {
 // CronEntryCount returns the number of registered cron entries.
 func (s *Scheduler) CronEntryCount() int {
 	return len(s.cron.Entries())
+}
+
+// AlertTypeIcons maps alert types to emoji icons for Telegram formatting.
+var AlertTypeIcons = map[string]string{
+	"bill":                 "💰",
+	"return_window":        "📦",
+	"trip_prep":            "✈️",
+	"relationship_cooling": "👋",
+	"commitment_overdue":   "⏰",
+	"meeting_brief":        "📋",
+}
+
+// FormatAlertMessage formats an alert for Telegram delivery with type icon.
+func FormatAlertMessage(alertType string, title string, body string) string {
+	icon := AlertTypeIcons[alertType]
+	if icon == "" {
+		icon = "🔔"
+	}
+	return fmt.Sprintf("%s %s\n%s", icon, title, body)
+}
+
+// deliverPendingAlerts fetches pending alerts and delivers them via Telegram.
+// Extracted from the cron callback for testability.
+func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
+	alerts, err := s.engine.GetPendingAlerts(ctx)
+	if err != nil {
+		slog.Error("alert delivery sweep failed", "error", err)
+		return
+	}
+
+	if len(alerts) == 0 {
+		return
+	}
+
+	for _, a := range alerts {
+		if ctx.Err() != nil {
+			slog.Warn("alert delivery sweep context expired, remaining alerts deferred",
+				"remaining", len(alerts))
+			break
+		}
+
+		msg := FormatAlertMessage(string(a.AlertType), a.Title, a.Body)
+
+		if s.bot != nil {
+			if err := s.bot.SendAlertMessage(msg); err != nil {
+				slog.Warn("alert delivery failed, will retry next sweep",
+					"alert_id", a.ID, "error", err)
+				continue
+			}
+		}
+
+		if err := s.engine.MarkAlertDelivered(ctx, a.ID); err != nil {
+			slog.Warn("failed to mark alert delivered", "alert_id", a.ID, "error", err)
+			continue
+		}
+
+		slog.Info("alert delivered", "alert_id", a.ID, "type", a.AlertType, "title", a.Title)
+	}
 }

@@ -47,6 +47,10 @@ type Connector struct {
 	config     MarketsConfig
 	httpClient *http.Client
 	callCounts map[string][]time.Time // per-provider rate tracking
+
+	// Base URLs for API providers — overridable for testing via httptest.
+	finnhubBaseURL   string
+	coingeckoBaseURL string
 }
 
 // MarketsConfig holds parsed markets-specific configuration.
@@ -89,10 +93,12 @@ type CryptoPrice struct {
 // New creates a new Financial Markets connector.
 func New(id string) *Connector {
 	return &Connector{
-		id:         id,
-		health:     connector.HealthDisconnected,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		callCounts: make(map[string][]time.Time),
+		id:               id,
+		health:           connector.HealthDisconnected,
+		httpClient:       &http.Client{Timeout: 10 * time.Second},
+		callCounts:       make(map[string][]time.Time),
+		finnhubBaseURL:   "https://finnhub.io",
+		coingeckoBaseURL: "https://api.coingecko.com",
 	}
 }
 
@@ -122,9 +128,16 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.health = connector.HealthSyncing
 	cfg := c.config
 	c.mu.Unlock()
+
+	var failCount int
+	var totalProviders int
 	defer func() {
 		c.mu.Lock()
-		c.health = connector.HealthHealthy
+		if failCount > 0 && failCount >= totalProviders {
+			c.health = connector.HealthDegraded
+		} else {
+			c.health = connector.HealthHealthy
+		}
 		c.mu.Unlock()
 	}()
 
@@ -141,6 +154,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	allSymbols := make([]string, 0, len(cfg.Watchlist.Stocks)+len(cfg.Watchlist.ETFs))
 	allSymbols = append(allSymbols, cfg.Watchlist.Stocks...)
 	allSymbols = append(allSymbols, cfg.Watchlist.ETFs...)
+	if len(allSymbols) > 0 {
+		totalProviders++
+	}
+	var finnhubFails int
 	for _, symbol := range allSymbols {
 		// Check context between HTTP calls for prompt cancellation.
 		select {
@@ -155,6 +172,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		quote, err := c.fetchFinnhubQuote(ctx, symbol)
 		if err != nil {
 			slog.Warn("finnhub quote failed", "symbol", symbol, "error", err)
+			finnhubFails++
 			continue
 		}
 
@@ -179,8 +197,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		})
 	}
 
+	if finnhubFails > 0 && finnhubFails >= len(allSymbols) {
+		failCount++
+	}
+
 	// Fetch crypto prices via CoinGecko
 	if cfg.CoinGeckoEnabled && len(cfg.Watchlist.Crypto) > 0 {
+		totalProviders++
 		select {
 		case <-ctx.Done():
 			return artifacts, cursor, ctx.Err()
@@ -190,6 +213,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			prices, err := c.fetchCoinGeckoPrices(ctx, cfg.Watchlist.Crypto)
 			if err != nil {
 				slog.Warn("coingecko fetch failed", "error", err)
+				failCount++
 			} else {
 				for _, p := range prices {
 					artifacts = append(artifacts, connector.RawArtifact{
@@ -239,7 +263,7 @@ func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*Stoc
 		return nil, fmt.Errorf("invalid symbol format: %q", symbol)
 	}
 
-	u, _ := url.Parse("https://finnhub.io/api/v1/quote")
+	u, _ := url.Parse(c.finnhubBaseURL + "/api/v1/quote")
 	q := u.Query()
 	q.Set("symbol", symbol)
 	q.Set("token", c.config.FinnhubAPIKey)
@@ -296,7 +320,7 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 		sanitizedIDs = sanitizedIDs[:maxCoinGeckoBatchSize]
 	}
 
-	u, _ := url.Parse("https://api.coingecko.com/api/v3/simple/price")
+	u, _ := url.Parse(c.coingeckoBaseURL + "/api/v3/simple/price")
 	q := u.Query()
 	q.Set("ids", strings.Join(sanitizedIDs, ","))
 	q.Set("vs_currencies", "usd")
@@ -355,44 +379,8 @@ func classifyTier(threshold, changePct float64) string {
 	return "light"
 }
 
-// cryptoTier returns the processing tier for a crypto asset based on alert threshold.
-func (c *Connector) cryptoTier(changePct24h float64) string {
-	c.mu.RLock()
-	threshold := c.config.AlertThreshold
-	c.mu.RUnlock()
-	return classifyTier(threshold, changePct24h)
-}
-
-// allowCall checks if a provider call is within rate limits.
-func (c *Connector) allowCall(provider string) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	maxPerMin := providerRateLimits[provider]
-	if maxPerMin == 0 {
-		return true
-	}
-
-	cutoff := time.Now().Add(-time.Minute)
-	valid := c.callCounts[provider][:0]
-	for _, t := range c.callCounts[provider] {
-		if t.After(cutoff) {
-			valid = append(valid, t)
-		}
-	}
-	c.callCounts[provider] = valid
-
-	return len(valid) < maxPerMin
-}
-
-func (c *Connector) recordCall(provider string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.callCounts[provider] = append(c.callCounts[provider], time.Now())
-}
-
 // tryRecordCall atomically checks the rate limit and records the call if allowed.
-// This prevents the TOCTOU race between separate allowCall/recordCall calls.
+// This prevents the TOCTOU race between separate check/record calls.
 func (c *Connector) tryRecordCall(provider string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()

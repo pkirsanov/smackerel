@@ -1,0 +1,476 @@
+{
+  "version": 1,
+  "specId": "013-guesthost-connector",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-GH-001",
+      "title": "API client authenticates with GuestHost tenant API key",
+      "scope": 1,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/client_test.go"],
+      "evidenceRefs": ["report.md#scope1-client"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-002",
+      "title": "API client fetches activity feed with cursor and type filter",
+      "scope": 1,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/client_test.go"],
+      "evidenceRefs": ["report.md#scope1-client"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-003",
+      "title": "API client handles hasMore pagination",
+      "scope": 1,
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/connector/guesthost/client_test.go",
+        "tests/integration/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope1-client", "report.md#scope1-integration"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-004",
+      "title": "API client retries on rate limit (429)",
+      "scope": 1,
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/connector/guesthost/client_test.go",
+        "tests/integration/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope1-client", "report.md#scope1-integration"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-005",
+      "title": "API client handles server errors with retry",
+      "scope": 1,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/client_test.go"],
+      "evidenceRefs": ["report.md#scope1-client"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-006",
+      "title": "Config validation rejects invalid settings",
+      "scope": 1,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/connector_test.go"],
+      "evidenceRefs": ["report.md#scope1-config"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-007",
+      "title": "API client omits since param on first sync",
+      "scope": 1,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/client_test.go"],
+      "evidenceRefs": ["report.md#scope1-client"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-008",
+      "title": "Connector implements standard lifecycle",
+      "scope": 2,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/connector/guesthost/connector_test.go",
+        "tests/integration/guesthost_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope2-connector", "report.md#scope2-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-009",
+      "title": "Normalizer maps booking.created to booking artifact",
+      "scope": 2,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/normalizer_test.go"],
+      "evidenceRefs": ["report.md#scope2-normalizer"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-010",
+      "title": "Normalizer maps review.received to review artifact",
+      "scope": 2,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/normalizer_test.go"],
+      "evidenceRefs": ["report.md#scope2-normalizer"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-011",
+      "title": "Normalizer maps message.received to guest_message artifact",
+      "scope": 2,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/normalizer_test.go"],
+      "evidenceRefs": ["report.md#scope2-normalizer"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-012",
+      "title": "Normalizer maps task.created to task artifact",
+      "scope": 2,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/normalizer_test.go"],
+      "evidenceRefs": ["report.md#scope2-normalizer"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-013",
+      "title": "Normalizer maps expense.created to financial artifact",
+      "scope": 2,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/normalizer_test.go"],
+      "evidenceRefs": ["report.md#scope2-normalizer"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-014",
+      "title": "Incremental sync advances cursor",
+      "scope": 2,
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/connector/guesthost/connector_test.go",
+        "tests/integration/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope2-connector", "report.md#scope2-integration"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-015",
+      "title": "Sync handles no new events gracefully",
+      "scope": 2,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/connector_test.go"],
+      "evidenceRefs": ["report.md#scope2-connector"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-016",
+      "title": "Event type filter restricts sync",
+      "scope": 2,
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/connector/guesthost/connector_test.go",
+        "tests/integration/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope2-connector", "report.md#scope2-integration"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-017",
+      "title": "Content hash dedup prevents re-ingestion",
+      "scope": 2,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/normalizer_test.go"],
+      "evidenceRefs": ["report.md#scope2-normalizer"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-018",
+      "title": "Normalizer maps all remaining event types",
+      "scope": 2,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/connector/guesthost/normalizer_test.go"],
+      "evidenceRefs": ["report.md#scope2-normalizer"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-019",
+      "title": "Guest node created from booking artifact",
+      "scope": 3,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/db/guest_repo_test.go",
+        "tests/integration/guesthost_graph_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope3-guest-repo", "report.md#scope3-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-020",
+      "title": "Returning guest detected and tagged",
+      "scope": 3,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/db/guest_repo_test.go"],
+      "evidenceRefs": ["report.md#scope3-guest-repo"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-021",
+      "title": "Property node created from booking artifact",
+      "scope": 3,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/db/property_repo_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope3-property-repo", "report.md#scope3-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-022",
+      "title": "STAYED_AT edge created between guest and property",
+      "scope": 3,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/graph/hospitality_linker_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope3-linker", "report.md#scope3-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-023",
+      "title": "REVIEWED edge created from review artifact",
+      "scope": 3,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/graph/hospitality_linker_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope3-linker", "report.md#scope3-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-024",
+      "title": "ISSUE_AT edge created from negative task/review",
+      "scope": 3,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/graph/hospitality_linker_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope3-linker", "report.md#scope3-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-025",
+      "title": "DURING_STAY edge links temporal artifacts to bookings",
+      "scope": 3,
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/graph/hospitality_linker_test.go",
+        "tests/integration/guesthost_graph_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope3-linker", "report.md#scope3-integration"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-026",
+      "title": "Hospitality topic seeds created on first sync",
+      "scope": 3,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/graph/hospitality_linker_test.go"],
+      "evidenceRefs": ["report.md#scope3-linker"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-027",
+      "title": "Guest node merges data from multiple sources",
+      "scope": 3,
+      "requiredTestType": "integration",
+      "linkedTests": ["tests/integration/guesthost_graph_test.go"],
+      "evidenceRefs": ["report.md#scope3-integration"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-028",
+      "title": "Property metrics update from review artifact",
+      "scope": 3,
+      "requiredTestType": "integration",
+      "linkedTests": ["tests/integration/guesthost_graph_test.go"],
+      "evidenceRefs": ["report.md#scope3-integration"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-029",
+      "title": "Digest includes today's arrivals",
+      "scope": 4,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/digest/hospitality_test.go",
+        "tests/integration/guesthost_digest_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope4-digest", "report.md#scope4-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-030",
+      "title": "Digest includes today's departures",
+      "scope": 4,
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/digest/hospitality_test.go",
+        "tests/integration/guesthost_digest_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope4-digest", "report.md#scope4-integration"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-031",
+      "title": "Digest includes pending tasks",
+      "scope": 4,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/digest/hospitality_test.go"],
+      "evidenceRefs": ["report.md#scope4-digest"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-032",
+      "title": "Digest includes revenue snapshot",
+      "scope": 4,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/digest/hospitality_test.go"],
+      "evidenceRefs": ["report.md#scope4-digest"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-033",
+      "title": "Digest includes guest alerts for returning guests arriving",
+      "scope": 4,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/digest/hospitality_test.go"],
+      "evidenceRefs": ["report.md#scope4-digest"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-034",
+      "title": "Digest includes property alerts for rising issues",
+      "scope": 4,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/digest/hospitality_test.go"],
+      "evidenceRefs": ["report.md#scope4-digest"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-035",
+      "title": "Empty day omits hospitality sections",
+      "scope": 4,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/digest/hospitality_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope4-digest", "report.md#scope4-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-036",
+      "title": "No hospitality connectors active generates standard digest",
+      "scope": 4,
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/digest/hospitality_test.go",
+        "tests/integration/guesthost_digest_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope4-digest", "report.md#scope4-integration"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-037",
+      "title": "Guest context returns full history and hints",
+      "scope": 5,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/api/context_test.go",
+        "tests/integration/guesthost_context_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope5-context-api", "report.md#scope5-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-038",
+      "title": "Property context returns performance and operational hints",
+      "scope": 5,
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "internal/api/context_test.go",
+        "tests/integration/guesthost_context_test.go",
+        "tests/e2e/guesthost_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope5-context-api", "report.md#scope5-e2e-regression"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-039",
+      "title": "Booking context returns booking details with guest context",
+      "scope": 5,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/api/context_test.go"],
+      "evidenceRefs": ["report.md#scope5-context-api"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-040",
+      "title": "Unknown guest returns 404",
+      "scope": 5,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/api/context_test.go"],
+      "evidenceRefs": ["report.md#scope5-context-api"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-041",
+      "title": "Unknown property returns 404",
+      "scope": 5,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/api/context_test.go"],
+      "evidenceRefs": ["report.md#scope5-context-api"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-042",
+      "title": "Communication hints are rule-based and deterministic",
+      "scope": 5,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/api/context_test.go"],
+      "evidenceRefs": ["report.md#scope5-context-api"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-043",
+      "title": "API key authentication required",
+      "scope": 5,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/api/context_test.go"],
+      "evidenceRefs": ["report.md#scope5-context-api"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-044",
+      "title": "Include parameter controls response sections",
+      "scope": 5,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/api/context_test.go"],
+      "evidenceRefs": ["report.md#scope5-context-api"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-045",
+      "title": "Invalid entity_type returns 400",
+      "scope": 5,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/api/context_test.go"],
+      "evidenceRefs": ["report.md#scope5-context-api"],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-GH-046",
+      "title": "Context API disabled returns 404 for all requests",
+      "scope": 5,
+      "requiredTestType": "unit",
+      "linkedTests": ["internal/api/context_test.go"],
+      "evidenceRefs": ["report.md#scope5-context-api"],
+      "regressionProtected": true
+    }
+  ]
+}

@@ -4,28 +4,61 @@
 
 **Feature:** 023-engineering-quality
 **Scopes:** 3
-**Status:** Not started
+**Status:** Done
 
 | Scope | Name | Status |
 |-------|------|--------|
-| 1 | mlClient Race + Typed Deps + Dead Code | Not started |
-| 2 | SST Connectors + writeJSON + Health Probes | Not started |
-| 3 | Health Logging + Sync Schedule | Not started |
+| 1 | mlClient Race + Typed Deps + Dead Code | Done |
+| 2 | SST Connectors + writeJSON + Health Probes | Done |
+| 3 | Health Logging + Sync Schedule | Done |
+
+## Gaps Sweep (2026-04-11)
+
+A stochastic quality sweep (trigger: gaps) identified 3 remaining runtime type assertions in `internal/api/capture.go` that violated R-ENG-009 and Scope 1 DoD ("All runtime type assertions in `router.go`, `capture.go`, `digest.go` replaced with direct interface calls"):
+
+| Gap | Location | Assertion | Root Cause |
+|-----|----------|-----------|------------|
+| GAP-1 | `capture.go` RecentHandler | `d.SearchEngine.(*SearchEngine)` | Handler directly accessed `Pool` for DB queries via SearchEngine cast |
+| GAP-2 | `capture.go` ArtifactDetailHandler | `d.SearchEngine.(*SearchEngine)` | Same pattern — direct pool access for artifact detail query |
+| GAP-3 | `capture.go` ExportHandler | `d.DB.(querier)` local anonymous interface | Bypassed typed interface to reach `ExportArtifacts` method |
+
+### Remediation
+
+1. Added `RecentArtifacts()` and `GetArtifact()` methods to `db.Postgres` — proper data-access layer encapsulation
+2. Added `ArtifactQuerier` typed interface in `internal/api/health.go` with `RecentArtifacts`, `GetArtifact`, `ExportArtifacts`
+3. Added `ArtifactStore ArtifactQuerier` field to `Dependencies` struct
+4. Rewrote `RecentHandler`, `ArtifactDetailHandler`, and `ExportHandler` to use `d.ArtifactStore` — zero type assertions
+5. Wired `pg` (satisfies `ArtifactQuerier`) to `ArtifactStore` in `cmd/core/main.go`
+
+### Verification
+
+- `./smackerel.sh check` — passes (config SST + go vet/build)
+- `./smackerel.sh test unit` — all packages pass, `internal/api` re-ran (not cached) at 2.446s
+- `grep '\.(' internal/api/*.go` — zero runtime type assertions in api package
+- All DoD items from scopes.md remain satisfied
 
 ## Test Evidence
 
 ### Scope 1: mlClient Race + Typed Deps + Dead Code
 
-_No evidence yet._
+- `sync.Once` guards `mlClient()` — race detector clean
+- 5 typed interfaces (`Pipeliner`, `Searcher`, `DigestGenerator`, `WebUI`, `OAuthFlow`) replace `interface{}`
+- `ArtifactQuerier` interface eliminates remaining 3 type assertions (gaps sweep)
+- Dead `checkAuth` removed — zero grep hits
+- `go build ./...` succeeds; `go test -race ./internal/api/...` passes
 
 ### Scope 2: SST Connectors + writeJSON + Health Probes
 
-_No evidence yet._
+- Connector paths (`BookmarksImportDir`, `BrowserHistoryPath`, `MapsImportDir`) flow through `config.Config`
+- All 4 intelligence handlers use `writeJSON`/`writeError` — zero manual `json.NewEncoder` in intelligence.go
+- Ollama probed live via `checkOllama()`; Telegram via `TelegramHealthChecker.Healthy()`
 
 ### Scope 3: Health Logging + Sync Schedule
 
-_No evidence yet._
+- `/api/health` and `/ping` excluded from `structuredLogger`
+- Connector supervisor uses `getSyncInterval()` with `parseSyncInterval()` — handles cron and duration formats
+- Default fallback to 5 minutes when no schedule configured
 
 ## Completion Statement
 
-Feature 023 is not yet started. All 3 scopes are pending implementation.
+Feature 023 is complete. All 3 scopes are done. A gaps sweep on 2026-04-11 found and fixed 3 remaining runtime type assertions in capture.go that had been missed by the original implementation. All unit tests pass.

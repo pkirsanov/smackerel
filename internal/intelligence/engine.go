@@ -254,6 +254,9 @@ func (e *Engine) SnoozeAlert(ctx context.Context, alertID string, until time.Tim
 
 // GetPendingAlerts returns alerts ready for delivery (max 2/day).
 func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
+	if e.Pool == nil {
+		return nil, fmt.Errorf("alert delivery requires a database connection")
+	}
 	// Single query: compute remaining delivery slots and fetch pending alerts in one round-trip
 	rows, err := e.Pool.Query(ctx, `
 		SELECT id, alert_type, title, body, priority, status, artifact_id, created_at

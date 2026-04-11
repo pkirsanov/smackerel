@@ -60,7 +60,7 @@ type Connector struct {
 type DiscordConfig struct {
 	BotToken          string
 	MonitoredChannels []ChannelConfig
-	EnableGateway     bool
+	EnableGateway     bool // TODO: parsed but unused until gateway implementation
 	BackfillLimit     int
 	IncludeThreads    bool
 	IncludePins       bool
@@ -460,12 +460,9 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 	if len(msg.Embeds) > 0 {
 		embedCount := len(msg.Embeds)
 		metadata["embed_count"] = embedCount
-		cap := embedCount
-		if cap > maxMetadataEmbeds {
-			cap = maxMetadataEmbeds
-		}
-		safeEmbeds := make([]Embed, 0, cap)
-		for i := 0; i < cap; i++ {
+		limit := min(embedCount, maxMetadataEmbeds)
+		safeEmbeds := make([]Embed, 0, limit)
+		for i := 0; i < limit; i++ {
 			e := msg.Embeds[i]
 			e.URL = sanitizeEmbedURL(e.URL)
 			e.Title = sanitizeControlChars(e.Title)
@@ -476,12 +473,9 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 	}
 	// Sanitize attachment URLs with full SSRF check; cap count.
 	if len(msg.Attachments) > 0 {
-		cap := len(msg.Attachments)
-		if cap > maxMetadataAttachments {
-			cap = maxMetadataAttachments
-		}
-		safe := make([]Attachment, 0, cap)
-		for i := 0; i < cap; i++ {
+		limit := min(len(msg.Attachments), maxMetadataAttachments)
+		safe := make([]Attachment, 0, limit)
+		for i := 0; i < limit; i++ {
 			a := msg.Attachments[i]
 			a.URL = sanitizeEmbedURL(a.URL)
 			a.Filename = sanitizeControlChars(a.Filename)
@@ -499,12 +493,9 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 	}
 	// Validate and cap mention IDs (must be valid snowflakes)
 	if len(msg.MentionIDs) > 0 {
-		cap := len(msg.MentionIDs)
-		if cap > maxMetadataMentions {
-			cap = maxMetadataMentions
-		}
-		validMentions := make([]string, 0, cap)
-		for i := 0; i < cap; i++ {
+		limit := min(len(msg.MentionIDs), maxMetadataMentions)
+		validMentions := make([]string, 0, limit)
+		for i := 0; i < limit; i++ {
 			if isValidSnowflake(msg.MentionIDs[i]) {
 				validMentions = append(validMentions, msg.MentionIDs[i])
 			}
@@ -631,9 +622,6 @@ func buildTitle(msg DiscordMessage) string {
 // sanitizeEmbedURL returns the URL unchanged if it passes full SSRF validation
 // (http/https scheme + no private/loopback/metadata targets), or empty string otherwise.
 func sanitizeEmbedURL(rawURL string) string {
-	if rawURL == "" {
-		return ""
-	}
 	if !isSafeURL(rawURL) {
 		return ""
 	}
