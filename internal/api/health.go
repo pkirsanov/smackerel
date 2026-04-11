@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -224,7 +225,10 @@ func checkMLSidecar(ctx context.Context, baseURL string, client *http.Client) Se
 	if err != nil {
 		return ServiceStatus{Status: "down"}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode == http.StatusOK {
 		loaded := true
@@ -251,7 +255,10 @@ func checkOllama(ctx context.Context, ollamaURL string, client *http.Client) Ser
 	if err != nil {
 		return ServiceStatus{Status: "down"}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode == http.StatusOK {
 		return ServiceStatus{Status: "up"}

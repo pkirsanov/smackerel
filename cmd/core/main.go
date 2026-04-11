@@ -326,8 +326,9 @@ func run() error {
 			Enabled:      true,
 			SyncSchedule: os.Getenv("FINANCIAL_MARKETS_SYNC_SCHEDULE"),
 			SourceConfig: map[string]interface{}{
-				"watchlist":       parseJSONObject(os.Getenv("FINANCIAL_MARKETS_WATCHLIST")),
-				"alert_threshold": parseFloatEnv("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
+				"watchlist":         parseJSONObject(os.Getenv("FINANCIAL_MARKETS_WATCHLIST")),
+				"alert_threshold":   parseFloatEnv("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
+				"coingecko_enabled": os.Getenv("FINANCIAL_MARKETS_COINGECKO_ENABLED") != "false",
 			},
 		}
 		if err := marketsConn.Connect(ctx, marketsCfg); err == nil {

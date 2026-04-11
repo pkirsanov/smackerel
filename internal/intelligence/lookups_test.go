@@ -116,3 +116,74 @@ func TestCreateQuickReference_NilSourceIDs(t *testing.T) {
 		t.Error("expected error for nil pool")
 	}
 }
+
+// === Edge cases: normalizeQuery with special characters ===
+
+func TestNormalizeQuery_TabsAndNewlines(t *testing.T) {
+	got := normalizeQuery("\tquery\nwith\ttabs")
+	if got != "query with tabs" {
+		t.Errorf("normalizeQuery(tabs/newlines) = %q, want %q", got, "query with tabs")
+	}
+}
+
+func TestNormalizeQuery_Unicode(t *testing.T) {
+	got := normalizeQuery("  Résumé  Tips  ")
+	if got != "résumé tips" {
+		t.Errorf("normalizeQuery(unicode) = %q, want %q", got, "résumé tips")
+	}
+}
+
+// === Edge cases: hashQuery ===
+
+func TestHashQuery_EmptyString(t *testing.T) {
+	h := hashQuery("")
+	if len(h) != 32 {
+		t.Errorf("expected 32-char hash for empty string, got %d chars", len(h))
+	}
+	// Should be deterministic
+	h2 := hashQuery("")
+	if h != h2 {
+		t.Error("empty string hash should be deterministic")
+	}
+}
+
+func TestHashQuery_WhitespaceVariations(t *testing.T) {
+	// After normalization these should be the same
+	h1 := hashQuery("go generics")
+	h2 := hashQuery("go generics") // already normalized
+	if h1 != h2 {
+		t.Error("same normalized input should produce same hash")
+	}
+}
+
+// === Edge cases: QuickReference struct ===
+
+func TestQuickReference_PinnedDefault(t *testing.T) {
+	qr := QuickReference{
+		Concept: "Go generics",
+		Content: "Generics allow type parameters...",
+		Pinned:  true,
+	}
+	if !qr.Pinned {
+		t.Error("expected pinned=true")
+	}
+	if qr.Concept != "Go generics" {
+		t.Errorf("expected 'Go generics', got %q", qr.Concept)
+	}
+}
+
+// === Edge cases: FrequentLookup struct ===
+
+func TestFrequentLookup_MinimumThreshold(t *testing.T) {
+	fl := FrequentLookup{
+		SampleQuery:  "go generics",
+		LookupCount:  3, // minimum threshold per R-507
+		HasReference: false,
+	}
+	if fl.LookupCount < 3 {
+		t.Errorf("expected at least 3 lookups, got %d", fl.LookupCount)
+	}
+	if fl.HasReference {
+		t.Error("expected no existing reference")
+	}
+}

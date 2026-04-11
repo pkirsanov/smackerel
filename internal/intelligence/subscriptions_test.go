@@ -159,3 +159,105 @@ func TestGetSubscriptionSummary_NilPool(t *testing.T) {
 		t.Error("expected error for nil pool")
 	}
 }
+
+// === Edge cases: containsAny ===
+
+func TestContainsAny(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		terms    []string
+		expected bool
+	}{
+		{"match first term", "this is a subscription email", []string{"subscription"}, true},
+		{"match second term", "renewal notice", []string{"charge", "renewal"}, true},
+		{"no match", "random text", []string{"subscription", "billing"}, false},
+		{"empty text", "", []string{"subscription"}, false},
+		{"empty terms", "some text", []string{}, false},
+		{"both empty", "", []string{}, false},
+		{"partial match", "sub", []string{"subscription"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := containsAny(tt.text, tt.terms)
+			if got != tt.expected {
+				t.Errorf("containsAny(%q, %v) = %v, want %v", tt.text, tt.terms, got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Edge cases: parseSubscription active happy path ===
+
+func TestParseSubscription_ActiveHappyPath(t *testing.T) {
+	sub := parseSubscription("aid1", "Your monthly charge $9.99", "Thank you for your payment", "billing@netflix.com")
+	if sub == nil {
+		t.Fatal("expected non-nil subscription")
+	}
+	if sub.Status != "active" {
+		t.Errorf("expected status=active, got %s", sub.Status)
+	}
+	if sub.ServiceName != "Netflix" {
+		t.Errorf("expected Netflix, got %s", sub.ServiceName)
+	}
+	if sub.Amount != 9.99 {
+		t.Errorf("expected amount 9.99, got %v", sub.Amount)
+	}
+	if sub.BillingFreq != "monthly" {
+		t.Errorf("expected monthly, got %s", sub.BillingFreq)
+	}
+	if sub.Category != "entertainment" {
+		t.Errorf("expected entertainment, got %s", sub.Category)
+	}
+}
+
+// === Edge cases: extractAmount with no valid amounts ===
+
+func TestExtractAmount_EmptyString(t *testing.T) {
+	got := extractAmount("")
+	if got != 0 {
+		t.Errorf("expected 0 for empty string, got %v", got)
+	}
+}
+
+// === Edge cases: extractServiceName ===
+
+func TestExtractServiceName_SinglePartDomain(t *testing.T) {
+	// Domain without TLD (e.g., localhost or malformed)
+	got := extractServiceName("user@localhost", "Title")
+	if got != "" {
+		t.Errorf("expected empty for single-part domain, got %q", got)
+	}
+}
+
+func TestExtractServiceName_EmptySender(t *testing.T) {
+	got := extractServiceName("", "Title")
+	if got != "" {
+		t.Errorf("expected empty for empty sender, got %q", got)
+	}
+}
+
+// === Edge cases: toMonthly unknown frequency ===
+
+func TestToMonthly_QuarterlyDefaultsToMonthly(t *testing.T) {
+	// "quarterly" is not a recognized frequency, should default (monthly)
+	got := toMonthly(30.0, "quarterly")
+	if got != 30.0 {
+		t.Errorf("expected 30.0 for unknown freq, got %v", got)
+	}
+}
+
+// === Edge cases: categorizeService ===
+
+func TestCategorizeService_CaseInsensitive(t *testing.T) {
+	if categorizeService("NETFLIX") != "entertainment" {
+		t.Error("NETFLIX should be entertainment")
+	}
+	if categorizeService("Slack") != "productivity" {
+		t.Error("Slack should be productivity")
+	}
+	if categorizeService("COURSERA") != "learning" {
+		t.Error("COURSERA should be learning")
+	}
+}

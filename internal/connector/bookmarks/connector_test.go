@@ -731,3 +731,62 @@ func TestFilterMinURLLength(t *testing.T) {
 		t.Errorf("got %d artifacts, want 1 (short URL filtered)", len(artifacts))
 	}
 }
+
+// T-SEC-R1 Regression: symlink path traversal protection in findNewFiles.
+// Verifies that symlinks inside the import directory are silently skipped,
+// preventing an attacker from reading files outside the import boundary.
+func TestSyncSkipsSymlinks(t *testing.T) {
+	// Create a real import directory with one legitimate export file
+	dir := setupImportDir(t, map[string][]byte{
+		"legit.json": chromeJSONFixture(),
+	})
+
+	// Create a "secret" file outside the import directory
+	secretDir := t.TempDir()
+	secretFile := filepath.Join(secretDir, "stolen_creds.json")
+	if err := os.WriteFile(secretFile, chromeJSONFixture(), 0o644); err != nil {
+		t.Fatalf("write secret: %v", err)
+	}
+
+	// Create a symlink inside the import directory pointing to the secret file
+	symPath := filepath.Join(dir, "evil_link.json")
+	if err := os.Symlink(secretFile, symPath); err != nil {
+		t.Skipf("cannot create symlink (OS restriction): %v", err)
+	}
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, cursor, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// Only legit.json should produce artifacts (2 bookmarks from fixture)
+	if len(artifacts) != 2 {
+		t.Errorf("got %d artifacts, want 2 (only from legit.json); symlink was not skipped", len(artifacts))
+	}
+
+	// Cursor must NOT contain the symlink target
+	var files []string
+	if cursor != "" {
+		if err := json.Unmarshal([]byte(cursor), &files); err != nil {
+			t.Fatalf("cursor unmarshal: %v", err)
+		}
+	}
+	for _, f := range files {
+		if f == "evil_link.json" {
+			t.Fatal("SECURITY: symlink target appeared in cursor — directory traversal protection is broken")
+		}
+	}
+
+	// Verify the symlink file was NOT processed by checking artifact metadata
+	for _, a := range artifacts {
+		if a.Metadata["import_file"] == "evil_link.json" {
+			t.Fatal("SECURITY: symlink-targeted file was parsed as bookmark export — path traversal is possible")
+		}
+	}
+}

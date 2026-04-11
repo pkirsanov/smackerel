@@ -5,6 +5,8 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT}:${POSTGRES_CONTAINER_PORT}"
     environment:
@@ -29,6 +31,8 @@ services:
   nats:
     image: nats:2.10-alpine
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     command: ["--config", "/etc/nats/nats.conf"]
     ports:
       - "127.0.0.1:${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
@@ -55,6 +59,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
     environment:
@@ -111,6 +117,8 @@ services:
       dockerfile: Dockerfile
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
     environment:
@@ -141,6 +149,8 @@ services:
   ollama:
     image: ollama/ollama:0.6
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
     volumes:

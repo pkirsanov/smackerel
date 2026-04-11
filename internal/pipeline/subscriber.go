@@ -251,6 +251,10 @@ func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstre
 	headers.Set("Smackerel-Original-Stream", originalStream)
 	headers.Set("Smackerel-Failed-At", time.Now().UTC().Format(time.RFC3339))
 	if lastError != "" {
+		// Truncate to 256 bytes per design contract to prevent oversized headers
+		if len(lastError) > 256 {
+			lastError = lastError[:256]
+		}
 		headers.Set("Smackerel-Last-Error", lastError)
 	}
 

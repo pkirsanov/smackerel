@@ -49,11 +49,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 
 			// OAuth status requires authentication (token-bearing callers)
 			if deps.OAuthHandler != nil {
-				type oauthStatusRouter interface {
-					StatusHandler(w http.ResponseWriter, r *http.Request)
-				}
-				oh := deps.OAuthHandler.(oauthStatusRouter)
-				r.Get("/auth/status", oh.StatusHandler)
+				r.Get("/auth/status", deps.OAuthHandler.StatusHandler)
 			}
 		})
 	})

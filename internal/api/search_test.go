@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/intelligence"
 )
 
 func TestSearchHandler_EmptyQuery(t *testing.T) {
@@ -1128,4 +1130,111 @@ func TestIsMLHealthy_ConcurrentProbes(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// SCN-021-011: LogSearch failure does not break search response.
+// Engine with nil pool causes LogSearch to return an error, but search should succeed.
+func TestSearchHandler_LogSearchFailureNonBlocking(t *testing.T) {
+	se := &mockSearchEngine{
+		results: []SearchResult{
+			{ArtifactID: "art-1", Title: "Result", Relevance: "high"},
+		},
+		total: 1,
+		mode:  "semantic",
+	}
+
+	deps := &Dependencies{
+		DB:                 &mockDB{healthy: true},
+		NATS:               &mockNATS{healthy: true},
+		StartTime:          time.Now(),
+		SearchEngine:       se,
+		IntelligenceEngine: intelligence.NewEngine(nil, nil), // nil pool → LogSearch fails
+	}
+
+	body := `{"query": "test query"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 despite LogSearch failure, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp SearchResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Results) != 1 {
+		t.Errorf("expected 1 result, got %d", len(resp.Results))
+	}
+}
+
+// SCN-021-009: LogSearch is skipped when IntelligenceEngine is nil (no panic, no error).
+func TestSearchHandler_LogSearchSkippedWhenEngineNil(t *testing.T) {
+	se := &mockSearchEngine{
+		results: []SearchResult{
+			{ArtifactID: "art-1", Title: "Result", Relevance: "high"},
+		},
+		total: 1,
+		mode:  "semantic",
+	}
+
+	deps := &Dependencies{
+		DB:                 &mockDB{healthy: true},
+		NATS:               &mockNATS{healthy: true},
+		StartTime:          time.Now(),
+		SearchEngine:       se,
+		IntelligenceEngine: nil, // nil engine → LogSearch not called
+	}
+
+	body := `{"query": "test query"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with nil engine, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// SCN-021-009: LogSearch receives correct arguments when engine is available.
+// Validates zero-result searches are also logged.
+func TestSearchHandler_LogSearchCalledWithZeroResults(t *testing.T) {
+	se := &mockSearchEngine{
+		results: []SearchResult{},
+		total:   0,
+		mode:    "semantic",
+	}
+
+	deps := &Dependencies{
+		DB:                 &mockDB{healthy: true},
+		NATS:               &mockNATS{healthy: true},
+		StartTime:          time.Now(),
+		SearchEngine:       se,
+		IntelligenceEngine: intelligence.NewEngine(nil, nil), // nil pool → LogSearch returns error but is still called
+	}
+
+	body := `{"query": "nonexistent"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	// Search succeeds despite LogSearch error (nil pool)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp SearchResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Message != "I don't have anything about that yet" {
+		t.Errorf("expected empty results message, got %q", resp.Message)
+	}
 }

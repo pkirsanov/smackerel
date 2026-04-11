@@ -46,20 +46,14 @@
 | ID | Severity | Description | Status |
 |----|----------|-------------|--------|
 | DRIFT-001 | Low | `parseIntEnv`/`splitCSV` listed in scopes "New Types & Signatures" and design but never implemented. Code uses `parseFloatEnv` for `DISCORD_BACKFILL_LIMIT` and `parseJSONArray` for `DISCORD_CAPTURE_COMMANDS` instead. Implementation works correctly. | Fixed in design.md + scopes.md |
-| DRIFT-002 | Medium | `coingecko_enabled` field exists in `smackerel.yaml` under `financial-markets` but is never extracted in `config.sh`, not in `dev.env`, and `parseMarketsConfig` hardcodes `CoinGeckoEnabled: true`. Config field is dead — cannot be toggled via config. | Documented — SST gap for future fix |
-| DRIFT-003 | Low | `parseMarketsConfig` has hardcoded `AlertThreshold: 5.0` fallback and `CoinGeckoEnabled: true`. The AlertThreshold default is dead code (env var always overrides via SourceConfig). CoinGeckoEnabled is not controllable. | Related to DRIFT-002 |
-| DRIFT-004 | Info | `DISCORD_CAPTURE_COMMANDS` uses `yaml_get` (not `yaml_get_json`) in config.sh, yielding `[ "!save", "!capture" ]` which happens to be valid JSON. Fragile but functional. | Documented |
+| DRIFT-002 | Medium | `coingecko_enabled` field exists in `smackerel.yaml` under `financial-markets` but was never extracted in `config.sh`, not in `dev.env`, and `parseMarketsConfig` hardcoded `CoinGeckoEnabled: true`. | **Fixed** — env var `FINANCIAL_MARKETS_COINGECKO_ENABLED` added to config.sh extraction, generated env files, main.go SourceConfig, and parseMarketsConfig. Test added. |
+| DRIFT-003 | Low | `parseMarketsConfig` has hardcoded `AlertThreshold: 5.0` fallback and `CoinGeckoEnabled: true`. The AlertThreshold default is dead code (env var always overrides via SourceConfig). CoinGeckoEnabled now reads from SourceConfig. | Fixed — CoinGeckoEnabled now config-driven. AlertThreshold default is harmless dead code (always overridden). |
+| DRIFT-004 | Low | `DISCORD_CAPTURE_COMMANDS` used `yaml_get` (not `yaml_get_json`) in config.sh, yielding inline YAML array as JSON. Fragile with multi-line YAML. | **Fixed** — switched to `yaml_get_json` |
 
-### Open SST Gap
+### Open SST Gaps
 
-`connectors.financial-markets.coingecko_enabled` exists in `smackerel.yaml` but needs:
-1. Extraction in `scripts/commands/config.sh` as `FINANCIAL_MARKETS_COINGECKO_ENABLED`
-2. Writing to generated env files
-3. Passing through `SourceConfig` in `main.go` auto-start block
-4. Reading in `parseMarketsConfig` instead of hardcoded `true`
-
-This is a future fix, not a blocker for the wiring scope (CoinGecko is a supplemental free API).
+None — all SST gaps have been remediated.
 
 ## Completion Statement
 
-Scope 1 implementation is complete. All 14 connectors are imported, instantiated, registered, and conditionally startable. Config generation produces correct env vars. One SST gap (`coingecko_enabled` dead config) documented for follow-up.
+Scope 1 implementation is complete. All 14 connectors are imported, instantiated, registered, and conditionally startable. Config generation produces correct env vars. CoinGecko SST gap (DRIFT-002) and DISCORD_CAPTURE_COMMANDS fragility (DRIFT-004) remediated. All unit tests pass.

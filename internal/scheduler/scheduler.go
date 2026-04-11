@@ -356,6 +356,12 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			}
 
 			for _, a := range alerts {
+				if ctx.Err() != nil {
+					slog.Warn("alert delivery sweep context expired, remaining alerts deferred",
+						"remaining", len(alerts))
+					break
+				}
+
 				icon := typeIcons[string(a.AlertType)]
 				if icon == "" {
 					icon = "🔔"
@@ -381,58 +387,29 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			slog.Warn("failed to schedule alert delivery sweep", "error", err)
 		}
 
-		// Schedule bill alert production — daily at 6 AM (R-021-002)
+		// Schedule daily alert production — 6 AM (R-021-002, R-021-003, R-021-004)
+		// All three producers run sequentially in one job to avoid muDaily contention.
 		if _, err := s.cron.AddFunc("0 6 * * *", func() {
 			if !s.muDaily.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "daily", "job", "bill-alerts")
+				slog.Warn("skipping overlapping job", "group", "daily", "job", "alert-producers")
 				return
 			}
 			defer s.muDaily.Unlock()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
 			if err := s.engine.ProduceBillAlerts(ctx); err != nil {
 				slog.Error("bill alert production failed", "error", err)
 			}
-		}); err != nil {
-			slog.Warn("failed to schedule bill alert production", "error", err)
-		}
-
-		// Schedule trip prep alert production — daily at 6 AM (R-021-003)
-		if _, err := s.cron.AddFunc("0 6 * * *", func() {
-			if !s.muDaily.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "daily", "job", "trip-prep-alerts")
-				return
-			}
-			defer s.muDaily.Unlock()
-
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
-
 			if err := s.engine.ProduceTripPrepAlerts(ctx); err != nil {
 				slog.Error("trip prep alert production failed", "error", err)
 			}
-		}); err != nil {
-			slog.Warn("failed to schedule trip prep alert production", "error", err)
-		}
-
-		// Schedule return window alert production — daily at 6 AM (R-021-004)
-		if _, err := s.cron.AddFunc("0 6 * * *", func() {
-			if !s.muDaily.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "daily", "job", "return-window-alerts")
-				return
-			}
-			defer s.muDaily.Unlock()
-
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
-
 			if err := s.engine.ProduceReturnWindowAlerts(ctx); err != nil {
 				slog.Error("return window alert production failed", "error", err)
 			}
 		}); err != nil {
-			slog.Warn("failed to schedule return window alert production", "error", err)
+			slog.Warn("failed to schedule daily alert production", "error", err)
 		}
 
 		// Schedule relationship cooling alert production — weekly Monday 7 AM (R-021-005)
