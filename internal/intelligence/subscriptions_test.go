@@ -261,3 +261,65 @@ func TestCategorizeService_CaseInsensitive(t *testing.T) {
 		t.Error("COURSERA should be learning")
 	}
 }
+
+// === Chaos: extractAmount edge cases ===
+
+func TestExtractAmount_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		expected float64
+	}{
+		{"zero dollar", "$0", 0},
+		{"zero point zero", "$0.00", 0},
+		{"large amount", "$99999.99", 99999.99},
+		{"dollar sign only", "$", 0},
+		{"multiple amounts picks first", "First $5.00 then $10.00", 5.00},
+		{"amount in parentheses", "($12.50)", 12.50},
+		{"amount with spaces", "$ 9.99", 9.99},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractAmount(tt.text)
+			diff := got - tt.expected
+			if diff > 0.01 || diff < -0.01 {
+				t.Errorf("extractAmount(%q) = %v, want %v", tt.text, got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Chaos: extractServiceName edge cases ===
+
+func TestExtractServiceName_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		sender   string
+		title    string
+		expected string
+	}{
+		{"empty sender", "", "Some title", ""},
+		{"at sign only", "@", "Title", ""},
+		{"single-part domain", "user@localhost", "Title", ""},
+		{"deeply nested subdomain", "noreply.billing.payments@sub.domain.netflix.com", "Receipt", "Netflix"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractServiceName(tt.sender, tt.title)
+			if got != tt.expected {
+				t.Errorf("extractServiceName(%q, %q) = %q, want %q", tt.sender, tt.title, got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Chaos: toMonthly boundary ===
+
+func TestToMonthly_ZeroAmount(t *testing.T) {
+	if got := toMonthly(0, "annual"); got != 0 {
+		t.Errorf("expected 0 for zero annual, got %v", got)
+	}
+	if got := toMonthly(0, "weekly"); got != 0 {
+		t.Errorf("expected 0 for zero weekly, got %v", got)
+	}
+}

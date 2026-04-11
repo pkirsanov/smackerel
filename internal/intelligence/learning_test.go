@@ -187,25 +187,38 @@ func TestClassifyDifficultyHeuristic_EmptyInputs(t *testing.T) {
 	}
 }
 
-func TestResurfaceScore_Phase5(t *testing.T) {
-	// Verify the existing ResurfaceScore function still works as Phase 5 serendipity scoring foundation
-	score := ResurfaceScore(0.8, 200, 1)
-	if score <= 0 {
-		t.Errorf("expected positive score, got %v", score)
-	}
-
-	// Higher dormancy = higher score
-	lowDormancy := ResurfaceScore(0.8, 31, 1)
-	highDormancy := ResurfaceScore(0.8, 200, 1)
-	if highDormancy <= lowDormancy {
-		t.Errorf("expected higher dormancy to increase score: low=%v high=%v", lowDormancy, highDormancy)
-	}
-}
-
 func TestSerendipityPick_NilPool(t *testing.T) {
 	engine := &Engine{Pool: nil}
 	_, err := engine.SerendipityPick(nil)
 	if err == nil {
 		t.Error("expected error for nil pool")
+	}
+}
+
+// === Chaos: Resurface limit edge cases ===
+
+func TestResurface_NilPool(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	_, err := engine.Resurface(nil, 5)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+func TestResurface_ZeroLimit(t *testing.T) {
+	// limit=0 should be normalized to 5, then fail on nil pool
+	engine := &Engine{Pool: nil}
+	_, err := engine.Resurface(nil, 0)
+	if err == nil {
+		t.Error("expected error for nil pool even with limit=0")
+	}
+}
+
+func TestResurface_NegativeLimit(t *testing.T) {
+	// negative limit should be normalized to 5, then fail on nil pool
+	engine := &Engine{Pool: nil}
+	_, err := engine.Resurface(nil, -10)
+	if err == nil {
+		t.Error("expected error for nil pool even with negative limit")
 	}
 }

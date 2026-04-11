@@ -8,8 +8,11 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
@@ -19,6 +22,18 @@ const maxResponseBytes = 10 * 1024 * 1024
 
 // knownEvictionAge is how long alert IDs are retained for dedup before eviction.
 const knownEvictionAge = 7 * 24 * time.Hour
+
+// userAgent identifies outbound requests to government APIs.
+const userAgent = "Smackerel/1.0 (gov-alerts-connector)"
+
+// maxStringFieldLen caps untrusted string fields from external APIs to prevent memory abuse.
+const maxStringFieldLen = 1024
+
+// minMagnitudeLower is the floor for configured minimum earthquake magnitude.
+const minMagnitudeLower = 0.0
+
+// minMagnitudeUpper is the ceiling for configured minimum earthquake magnitude.
+const minMagnitudeUpper = 10.0
 
 // Connector implements the government alerts connector aggregating USGS, NWS, etc.
 type Connector struct {
@@ -177,6 +192,7 @@ func (c *Connector) fetchUSGSEarthquakes(ctx context.Context, minMag float64) ([
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -213,14 +229,19 @@ func (c *Connector) fetchUSGSEarthquakes(ctx context.Context, minMag float64) ([
 		if len(f.Geometry.Coordinates) < 3 {
 			continue
 		}
+		sanitizedID, valid := sanitizeAlertID(f.ID)
+		if !valid {
+			slog.Warn("skipping earthquake with empty or invalid ID")
+			continue
+		}
 		earthquakes = append(earthquakes, Earthquake{
-			ID:        f.ID,
+			ID:        sanitizedID,
 			Magnitude: f.Properties.Mag,
 			Longitude: f.Geometry.Coordinates[0],
 			Latitude:  f.Geometry.Coordinates[1],
 			DepthKm:   f.Geometry.Coordinates[2],
 			Time:      time.UnixMilli(f.Properties.Time),
-			Place:     f.Properties.Place,
+			Place:     sanitizeStringField(f.Properties.Place),
 		})
 	}
 
@@ -266,7 +287,7 @@ func normalizeEarthquake(eq Earthquake, match *ProximityMatch) connector.RawArti
 		ContentType: "alert/earthquake",
 		Title:       fmt.Sprintf("M%.1f Earthquake — %s (%.0f km from %s)", eq.Magnitude, eq.Place, match.DistanceKm, match.LocationName),
 		RawContent:  fmt.Sprintf("Magnitude %.1f earthquake at depth %.1f km. %s. %.0f km from %s.", eq.Magnitude, eq.DepthKm, eq.Place, match.DistanceKm, match.LocationName),
-		URL:         fmt.Sprintf("https://earthquake.usgs.gov/earthquakes/eventpage/%s", eq.ID),
+		URL:         safeEventPageURL(eq.ID),
 		Metadata: map[string]interface{}{
 			"alert_id":         eq.ID,
 			"source":           "usgs",
@@ -294,6 +315,39 @@ func isFiniteCoord(lat, lon float64) bool {
 		return false
 	}
 	return true
+}
+
+// sanitizeStringField strips control characters and truncates to maxStringFieldLen
+// to prevent log injection and memory abuse from untrusted API responses.
+func sanitizeStringField(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsControl(r) && r != ' ' {
+			continue // strip control characters except space
+		}
+		if b.Len() >= maxStringFieldLen {
+			break
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// sanitizeAlertID validates and sanitizes an alert ID from an external API.
+// Returns the sanitized ID and whether it is valid (non-empty after sanitization).
+func sanitizeAlertID(id string) (string, bool) {
+	s := sanitizeStringField(id)
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", false
+	}
+	// Path-encode the ID to prevent URL path traversal in generated links.
+	return s, true
+}
+
+// safeEventPageURL builds a safe USGS event page URL with proper path escaping.
+func safeEventPageURL(id string) string {
+	return "https://earthquake.usgs.gov/earthquakes/eventpage/" + url.PathEscape(id)
 }
 
 func classifyEarthquakeSeverity(magnitude, distanceKm float64) string {
@@ -342,6 +396,9 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 	}
 
 	if mag, ok := config.SourceConfig["min_earthquake_magnitude"].(float64); ok {
+		if math.IsNaN(mag) || math.IsInf(mag, 0) || mag < minMagnitudeLower || mag > minMagnitudeUpper {
+			return AlertsConfig{}, fmt.Errorf("min_earthquake_magnitude %.1f out of valid range [%.0f, %.0f]", mag, minMagnitudeLower, minMagnitudeUpper)
+		}
 		cfg.MinEarthquakeMag = mag
 	}
 

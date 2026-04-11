@@ -90,21 +90,19 @@ func ParseTakeoutJSON(data []byte) ([]TakeoutActivity, error) {
 			continue
 		}
 
-		actType := ClassifyActivity(seg.ActivityType, float64(seg.Distance)/1000.0)
-
-		// Validate: skip activities with negative distance.
+		// Validate before classifying: skip structurally invalid entries early.
 		if seg.Distance < 0 {
 			slog.Warn("skipping activity with negative distance",
 				"distance", seg.Distance)
 			continue
 		}
-
-		// Validate: skip activities where end is before start.
 		if endTime.Before(startTime) {
 			slog.Warn("skipping activity with end time before start time",
 				"start", seg.Duration.StartTimestamp, "end", seg.Duration.EndTimestamp)
 			continue
 		}
+
+		actType := ClassifyActivity(seg.ActivityType, float64(seg.Distance)/1000.0)
 
 		var route []LatLng
 		for _, wp := range seg.WaypointPath.Waypoints {

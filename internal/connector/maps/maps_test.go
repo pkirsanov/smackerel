@@ -89,6 +89,36 @@ func TestToGeoJSON(t *testing.T) {
 	}
 }
 
+// H3 hardening: edge cases for nil, empty, and single-point routes.
+func TestToGeoJSON_EdgeCases(t *testing.T) {
+	// Nil route returns nil
+	if got := ToGeoJSON(nil); got != nil {
+		t.Errorf("ToGeoJSON(nil) = %v, want nil", got)
+	}
+
+	// Empty route returns nil
+	if got := ToGeoJSON([]LatLng{}); got != nil {
+		t.Errorf("ToGeoJSON(empty) = %v, want nil", got)
+	}
+
+	// Single point returns Point per RFC 7946
+	single := []LatLng{{Lat: 40.7128, Lng: -74.0060}}
+	got := ToGeoJSON(single)
+	if got == nil {
+		t.Fatal("ToGeoJSON(single point) returned nil")
+	}
+	if got["type"] != "Point" {
+		t.Errorf("ToGeoJSON(single point) type = %v, want Point", got["type"])
+	}
+	coords, ok := got["coordinates"].([]float64)
+	if !ok || len(coords) != 2 {
+		t.Fatalf("expected [lng, lat] coordinates, got %v", got["coordinates"])
+	}
+	if coords[0] != -74.0060 || coords[1] != 40.7128 {
+		t.Errorf("coordinates = %v, want [-74.0060, 40.7128]", coords)
+	}
+}
+
 func TestHaversine(t *testing.T) {
 	nyc := LatLng{Lat: 40.7128, Lng: -74.0060}
 	la := LatLng{Lat: 34.0522, Lng: -118.2437}
@@ -335,6 +365,165 @@ func TestHaversineSamePoint(t *testing.T) {
 	d := Haversine(p, p)
 	if d != 0 {
 		t.Errorf("distance between same point should be 0, got %f", d)
+	}
+}
+
+// --- ParseTakeoutJSON validation path tests ---
+
+func TestParseTakeoutJSON_NegativeDistanceSkipped(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:00:00Z"
+					},
+					"distance": -5000,
+					"activityType": "WALKING",
+					"waypointPath": {"waypoints": []}
+				}
+			},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T12:00:00Z",
+						"endTimestamp":   "2026-03-15T13:00:00Z"
+					},
+					"distance": 3000,
+					"activityType": "WALKING",
+					"waypointPath": {"waypoints": []}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (negative distance skipped), got %d", len(activities))
+	}
+	if activities[0].DistanceKm != 3.0 {
+		t.Errorf("expected surviving activity to have 3.0km, got %.1f", activities[0].DistanceKm)
+	}
+}
+
+func TestParseTakeoutJSON_EndBeforeStartSkipped(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T14:00:00Z",
+						"endTimestamp":   "2026-03-15T10:00:00Z"
+					},
+					"distance": 5000,
+					"activityType": "WALKING",
+					"waypointPath": {"waypoints": []}
+				}
+			},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T15:00:00Z",
+						"endTimestamp":   "2026-03-15T16:00:00Z"
+					},
+					"distance": 2000,
+					"activityType": "CYCLING",
+					"waypointPath": {"waypoints": []}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (end-before-start skipped), got %d", len(activities))
+	}
+	if activities[0].Type != ActivityCycle {
+		t.Errorf("expected surviving activity to be cycling, got %q", activities[0].Type)
+	}
+}
+
+func TestParseTakeoutJSON_OutOfRangeCoordsFiltered(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:00:00Z"
+					},
+					"distance": 5000,
+					"activityType": "WALKING",
+					"waypointPath": {
+						"waypoints": [
+							{"latE7": 407128000, "lngE7": -740060000},
+							{"latE7": 9500000000, "lngE7": -740060000},
+							{"latE7": 407580000, "lngE7": -739855000}
+						]
+					}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity, got %d", len(activities))
+	}
+	// Out-of-range waypoint (latitude 950°) should be filtered, leaving 2 valid points
+	if len(activities[0].Route) != 2 {
+		t.Errorf("expected 2 waypoints (1 out-of-range filtered), got %d", len(activities[0].Route))
+	}
+}
+
+func TestParseTakeoutJSON_NullSegmentSkipped(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{
+				"placeVisit": {"location": {"latitudeE7": 407128000}}
+			},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:00:00Z"
+					},
+					"distance": 3000,
+					"activityType": "WALKING",
+					"waypointPath": {"waypoints": []}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (null segment skipped), got %d", len(activities))
 	}
 }
 

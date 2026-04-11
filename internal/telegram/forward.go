@@ -2,12 +2,13 @@ package telegram
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // ForwardedMeta holds metadata extracted from a forwarded Telegram message.
@@ -18,6 +19,19 @@ type ForwardedMeta struct {
 	SourceChatID  int64     `json:"source_chat_id,omitempty"`
 	OriginalDate  time.Time `json:"original_date"`
 	IsFromChannel bool      `json:"is_from_channel,omitempty"`
+}
+
+// msgTextTruncated returns the message's text (or caption as fallback),
+// truncated to maxShareTextLen bytes.
+func msgTextTruncated(msg *tgbotapi.Message) string {
+	text := msg.Text
+	if text == "" && msg.Caption != "" {
+		text = msg.Caption
+	}
+	if len(text) > maxShareTextLen {
+		text = stringutil.TruncateUTF8(text, maxShareTextLen)
+	}
+	return text
 }
 
 // extractForwardMeta extracts forwarding metadata from a Telegram message.
@@ -77,13 +91,7 @@ func (b *Bot) handleForwardedMessage(ctx context.Context, msg *tgbotapi.Message)
 			key.sourceName = meta.SenderName
 		}
 
-		text := msg.Text
-		if text == "" && msg.Caption != "" {
-			text = msg.Caption
-		}
-		if len(text) > maxShareTextLen {
-			text = truncateUTF8(text, maxShareTextLen)
-		}
+		text := msgTextTruncated(msg)
 
 		// Detect media before building the message
 		hasMedia := msg.Photo != nil || msg.Video != nil || msg.Document != nil
@@ -127,13 +135,7 @@ func (b *Bot) handleForwardedMessage(ctx context.Context, msg *tgbotapi.Message)
 
 // captureSingleForward captures a single forwarded message as an artifact.
 func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, meta ForwardedMeta) {
-	text := msg.Text
-	if text == "" && msg.Caption != "" {
-		text = msg.Caption
-	}
-	if len(text) > maxShareTextLen {
-		text = truncateUTF8(text, maxShareTextLen)
-	}
+	text := msgTextTruncated(msg)
 
 	forwardContext := fmt.Sprintf("Forwarded from %s", meta.SenderName)
 	if meta.SourceChat != "" {
@@ -150,16 +152,7 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 		}
 		result, err := b.callCapture(ctx, body)
 		if err != nil {
-			if errors.Is(err, errDuplicate) {
-				b.reply(msg.Chat.ID, ". Already saved")
-				return
-			}
-			if errors.Is(err, errServiceUnavailable) {
-				b.reply(msg.Chat.ID, "? Service temporarily unavailable")
-				return
-			}
-			slog.Error("forward URL capture failed", "error", err)
-			b.reply(msg.Chat.ID, "? Failed to save forwarded message. Try again in a moment.")
+			b.captureErrorReply(msg.Chat.ID, err, "forward URL capture failed")
 			return
 		}
 		title, _ := result["title"].(string)
@@ -175,16 +168,7 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 		}
 		result, err := b.callCapture(ctx, body)
 		if err != nil {
-			if errors.Is(err, errDuplicate) {
-				b.reply(msg.Chat.ID, ". Already saved")
-				return
-			}
-			if errors.Is(err, errServiceUnavailable) {
-				b.reply(msg.Chat.ID, "? Service temporarily unavailable")
-				return
-			}
-			slog.Error("forward text capture failed", "error", err)
-			b.reply(msg.Chat.ID, "? Failed to save forwarded message. Try again in a moment.")
+			b.captureErrorReply(msg.Chat.ID, err, "forward text capture failed")
 			return
 		}
 		title, _ := result["title"].(string)

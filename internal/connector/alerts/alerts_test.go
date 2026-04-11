@@ -1059,7 +1059,7 @@ func TestParseAlertsConfig_WrongFieldTypes(t *testing.T) {
 	}
 }
 
-// TestSync_EmptyEarthquakeID verifies that earthquakes with empty IDs still get deduped correctly.
+// TestSync_EmptyEarthquakeID verifies that earthquakes with empty IDs are rejected (security: prevents dedup collision).
 func TestSync_EmptyEarthquakeID(t *testing.T) {
 	features := []map[string]interface{}{
 		makeFeature("", 4.0, -122.42, 37.77, 10, "No ID 1"),
@@ -1079,9 +1079,9 @@ func TestSync_EmptyEarthquakeID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync error: %v", err)
 	}
-	// Both have empty ID, so only the first should be created (second is deduped).
-	if len(arts) != 1 {
-		t.Errorf("expected 1 artifact (empty ID collision dedup), got %d", len(arts))
+	// Both have empty ID → both should be rejected (not silently deduped).
+	if len(arts) != 0 {
+		t.Errorf("expected 0 artifacts (empty IDs rejected), got %d", len(arts))
 	}
 }
 
@@ -1224,4 +1224,227 @@ func TestConnect_OverwritesPreviousConfig(t *testing.T) {
 		t.Errorf("expected Second location after reconnect, got %s", c.config.Locations[0].Name)
 	}
 	c.mu.RUnlock()
+}
+
+// --- Security hardening tests ---
+
+// TestSanitizeStringField verifies control character stripping and length truncation.
+func TestSanitizeStringField(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"normal string", "10km NW of San Jose", "10km NW of San Jose"},
+		{"control chars stripped", "Hello\x00World\x07Test", "HelloWorldTest"},
+		{"newlines stripped", "Line1\nLine2\rLine3", "Line1Line2Line3"},
+		{"tabs stripped", "Col1\tCol2", "Col1Col2"},
+		{"spaces preserved", "Hello World", "Hello World"},
+		{"empty string", "", ""},
+		{"unicode preserved", "地震 café résumé", "地震 café résumé"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeStringField(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeStringField(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSanitizeStringField_Truncation verifies strings are capped at maxStringFieldLen.
+func TestSanitizeStringField_Truncation(t *testing.T) {
+	long := strings.Repeat("x", maxStringFieldLen+500)
+	got := sanitizeStringField(long)
+	if len(got) > maxStringFieldLen {
+		t.Errorf("expected max length %d, got %d", maxStringFieldLen, len(got))
+	}
+}
+
+// TestSanitizeAlertID verifies ID sanitization and empty rejection.
+func TestSanitizeAlertID(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		wantID string
+		wantOK bool
+	}{
+		{"normal ID", "us7000abc", "us7000abc", true},
+		{"whitespace-only rejected", "   ", "", false},
+		{"empty rejected", "", "", false},
+		{"control chars stripped valid", "us\x00700", "us700", true},
+		{"trimmed", "  us123  ", "us123", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotID, gotOK := sanitizeAlertID(tt.input)
+			if gotOK != tt.wantOK || gotID != tt.wantID {
+				t.Errorf("sanitizeAlertID(%q) = (%q, %v), want (%q, %v)", tt.input, gotID, gotOK, tt.wantID, tt.wantOK)
+			}
+		})
+	}
+}
+
+// TestSafeEventPageURL verifies URL path escaping for untrusted IDs.
+func TestSafeEventPageURL(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		want string
+	}{
+		{"normal ID", "us7000abc", "https://earthquake.usgs.gov/earthquakes/eventpage/us7000abc"},
+		{"ID with slash", "us/../../etc/passwd", "https://earthquake.usgs.gov/earthquakes/eventpage/us%2F..%2F..%2Fetc%2Fpasswd"},
+		{"ID with spaces", "us 7000", "https://earthquake.usgs.gov/earthquakes/eventpage/us%207000"},
+		{"ID with special chars", "us<script>alert(1)</script>", "https://earthquake.usgs.gov/earthquakes/eventpage/us%3Cscript%3Ealert%281%29%3C%2Fscript%3E"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := safeEventPageURL(tt.id)
+			if got != tt.want {
+				t.Errorf("safeEventPageURL(%q) = %q, want %q", tt.id, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSync_UserAgentHeader verifies outbound requests include the User-Agent header.
+func TestSync_UserAgentHeader(t *testing.T) {
+	var gotUA string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(usgsResponse(nil))
+	}))
+	defer ts.Close()
+
+	c := newTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+
+	_, _, _ = c.Sync(context.Background(), "")
+	if gotUA != userAgent {
+		t.Errorf("expected User-Agent %q, got %q", userAgent, gotUA)
+	}
+}
+
+// TestSync_ControlCharsInPlaceSanitized verifies Place field is sanitized from API responses.
+func TestSync_ControlCharsInPlaceSanitized(t *testing.T) {
+	features := []map[string]interface{}{
+		makeFeature("eq-inject-1", 4.0, -122.42, 37.77, 10, "10km NW\x00of\nSan\tJose"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(usgsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := newTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(arts))
+	}
+	// The Title/RawContent should not contain control characters.
+	if strings.ContainsAny(arts[0].Title, "\x00\n\t\r") {
+		t.Errorf("Title contains control chars: %q", arts[0].Title)
+	}
+	if strings.ContainsAny(arts[0].RawContent, "\x00\n\t\r") {
+		t.Errorf("RawContent contains control chars: %q", arts[0].RawContent)
+	}
+}
+
+// TestSync_PathTraversalInID verifies path traversal in ID is safely escaped in URL.
+func TestSync_PathTraversalInID(t *testing.T) {
+	features := []map[string]interface{}{
+		makeFeature("../../etc/passwd", 4.0, -122.42, 37.77, 10, "Test"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(usgsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := newTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(arts))
+	}
+	// URL must be properly escaped, not containing raw path traversal.
+	if strings.Contains(arts[0].URL, "../") {
+		t.Errorf("URL contains unescaped path traversal: %q", arts[0].URL)
+	}
+	if !strings.Contains(arts[0].URL, "%2F") {
+		t.Errorf("URL should contain escaped slashes: %q", arts[0].URL)
+	}
+}
+
+// TestParseAlertsConfig_InvalidMagnitude verifies out-of-range magnitudes are rejected.
+func TestParseAlertsConfig_InvalidMagnitude(t *testing.T) {
+	tests := []struct {
+		name string
+		mag  interface{}
+		err  bool
+	}{
+		{"negative magnitude", -1.0, true},
+		{"too high magnitude", 11.0, true},
+		{"NaN magnitude", math.NaN(), true},
+		{"Inf magnitude", math.Inf(1), true},
+		{"valid magnitude", 5.0, false},
+		{"zero magnitude (valid floor)", 0.0, false},
+		{"ten magnitude (valid ceiling)", 10.0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseAlertsConfig(connector.ConnectorConfig{
+				SourceConfig: map[string]interface{}{
+					"locations": []interface{}{
+						map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+					},
+					"min_earthquake_magnitude": tt.mag,
+				},
+			})
+			if tt.err && err == nil {
+				t.Error("expected error for invalid magnitude")
+			}
+			if !tt.err && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestSync_WhitespaceOnlyID verifies whitespace-only IDs are rejected.
+func TestSync_WhitespaceOnlyID(t *testing.T) {
+	features := []map[string]interface{}{
+		makeFeature("   ", 4.0, -122.42, 37.77, 10, "Blank ID"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(usgsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := newTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 0 {
+		t.Errorf("expected 0 artifacts (whitespace-only ID rejected), got %d", len(arts))
+	}
 }

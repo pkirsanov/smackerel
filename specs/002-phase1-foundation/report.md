@@ -2,6 +2,34 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Scope: simplify-to-doc (stochastic-quality-sweep)
+### Summary
+Simplification pass across the Phase 1 foundation layer. Two findings remediated:
+
+1. **Triple-duplicated Bearer token parsing** — `bearerAuthMiddleware`, `webAuthMiddleware`, and `isAuthenticated` each independently implemented the same `Authorization: Bearer <token>` extraction and constant-time comparison. Extracted `extractBearerToken()` and `matchBearerToken()` helpers in `router.go`, consolidated all three call sites, and removed the now-unnecessary `crypto/subtle` and `strings` imports from `health.go`.
+
+2. **Dead `ProcessingStatus.String()` method** — The method `func (s ProcessingStatus) String() string { return string(s) }` was never called in production code (all callers use `string(StatusPending)` etc. directly). Removed the method and its dedicated test.
+
+### Findings Addressed
+- SIMPLIFY-001 (LOW): Redundant Bearer token parsing in 3 independent locations
+- SIMPLIFY-002 (LOW): Dead `ProcessingStatus.String()` method with no production callers
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/api/router.go` | Added `extractBearerToken()` and `matchBearerToken()` helpers; simplified `bearerAuthMiddleware` and `webAuthMiddleware` to use them |
+| `internal/api/health.go` | Simplified `isAuthenticated()` to use `matchBearerToken()`; removed unused `crypto/subtle` and `strings` imports |
+| `internal/pipeline/constants.go` | Removed dead `ProcessingStatus.String()` method |
+| `internal/pipeline/constants_test.go` | Removed `TestSCN002046_ProcessingStatusString` test for the removed method |
+
+### Items Reviewed But Not Changed
+- `DedupChecker` struct (only used within pipeline package, could be inlined, but clean separation of concerns  — net benefit too small)
+- Dual ML sidecar HTTP health clients in `Dependencies` vs `SearchEngine` (serve different contexts with different timeout semantics — intentional isolation)
+- NATS subject declarations for Phase 5 intelligence (all actively used by `intelligence/` package — no dead infrastructure)
+
+---
+
 ## Scope: 19-supervisor-sleep-context (improve-existing)
 ### Summary
 Replaced blocking `time.Sleep(5 * time.Second)` in supervisor panic recovery with a context-aware `select` statement. The supervisor now exits immediately when the parent context is cancelled during the restart delay, preventing blocked goroutines during shutdown.

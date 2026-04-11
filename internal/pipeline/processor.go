@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
@@ -17,6 +16,7 @@ import (
 	"github.com/smackerel/smackerel/internal/extract"
 	"github.com/smackerel/smackerel/internal/graph"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // Processing status constants and source ID constants are in constants.go.
@@ -125,9 +125,10 @@ func ValidateDigestGeneratedPayload(p *NATSDigestGeneratedPayload) error {
 
 // Processor orchestrates the content processing pipeline.
 type Processor struct {
-	DB     *pgxpool.Pool
-	NATS   *smacknats.Client
-	Linker *graph.Linker
+	DB                *pgxpool.Pool
+	NATS              *smacknats.Client
+	Linker            *graph.Linker
+	HospitalityLinker *graph.HospitalityLinker
 }
 
 // NewProcessor creates a new pipeline processor.
@@ -352,7 +353,7 @@ func (p *Processor) storeInitialArtifact(ctx context.Context, id string, result 
 	contentRaw := result.Text
 	const maxContentRaw = 500 * 1024
 	if len(contentRaw) > maxContentRaw {
-		contentRaw = truncateUTF8(contentRaw, maxContentRaw)
+		contentRaw = stringutil.TruncateUTF8(contentRaw, maxContentRaw)
 	}
 
 	// Use ON CONFLICT to handle the TOCTOU race: if a concurrent request already
@@ -482,6 +483,16 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 		}
 	}
 
+	// Hospitality-specific graph linking for GuestHost connector artifacts
+	if p.HospitalityLinker != nil {
+		if err := p.HospitalityLinker.LinkArtifact(ctx, payload.ArtifactID); err != nil {
+			slog.Warn("hospitality graph linking failed",
+				"artifact_id", payload.ArtifactID,
+				"error", err,
+			)
+		}
+	}
+
 	return nil
 }
 
@@ -493,17 +504,4 @@ type DuplicateError struct {
 
 func (e *DuplicateError) Error() string {
 	return fmt.Sprintf("duplicate content: existing artifact %s (%s)", e.ExistingID, e.Title)
-}
-
-// truncateUTF8 truncates s to at most maxBytes, ensuring the cut falls on a
-// valid UTF-8 rune boundary.
-func truncateUTF8(s string, maxBytes int) string {
-	if len(s) <= maxBytes {
-		return s
-	}
-	// Walk backwards from maxBytes to find the start of the last valid rune.
-	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
-		maxBytes--
-	}
-	return s[:maxBytes]
 }

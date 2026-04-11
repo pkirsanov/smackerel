@@ -134,6 +134,13 @@ connectors:
     processing_tier_reservations: standard
     processing_tier_properties: light
 
+  guesthost:
+    enabled: false
+    base_url: "" # REQUIRED when enabled: GuestHost instance base URL (e.g. https://myhost.example.com)
+    api_key: "" # REQUIRED when enabled: GuestHost API key
+    sync_schedule: "*/5 * * * *"
+    event_types: "booking.created,booking.updated,booking.cancelled,guest.created,guest.updated,review.received,message.received,task.created,task.completed,expense.created,property.updated"
+
   discord:
     enabled: false
     bot_token: "" # REQUIRED when enabled: Discord bot token from Developer Portal

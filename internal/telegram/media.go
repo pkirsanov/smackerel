@@ -67,6 +67,22 @@ func NewMediaGroupAssembler(
 	}
 }
 
+// asyncFlush runs the flush callback for a media group buffer in a background goroutine.
+func (m *MediaGroupAssembler) asyncFlush(buf *MediaGroupBuffer, logMsg string, logArgs ...any) {
+	if m.flushFn == nil {
+		return
+	}
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
+		defer cancel()
+		if err := m.flushFn(flushCtx, buf); err != nil {
+			slog.Error(logMsg, append([]any{"error", err}, logArgs...)...)
+		}
+	}()
+}
+
 // Add adds a media item to the buffer for the given media_group_id.
 func (m *MediaGroupAssembler) Add(mediaGroupID string, msg *tgbotapi.Message) {
 	m.mu.Lock()
@@ -87,20 +103,7 @@ func (m *MediaGroupAssembler) Add(mediaGroupID string, msg *tgbotapi.Message) {
 				"media_group_id", mediaGroupID,
 				"item_count", len(buf.Items),
 			)
-			if m.flushFn != nil {
-				m.wg.Add(1)
-				go func() {
-					defer m.wg.Done()
-					flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
-					defer cancel()
-					if err := m.flushFn(flushCtx, buf); err != nil {
-						slog.Error("media group cap flush failed",
-							"media_group_id", mediaGroupID,
-							"error", err,
-						)
-					}
-				}()
-			}
+			m.asyncFlush(buf, "media group cap flush failed", "media_group_id", mediaGroupID)
 			return
 		}
 		if buf.timer != nil {
@@ -122,17 +125,7 @@ func (m *MediaGroupAssembler) Add(mediaGroupID string, msg *tgbotapi.Message) {
 				obuf.timer.Stop()
 			}
 			delete(m.buffers, oldestID)
-			if m.flushFn != nil {
-				m.wg.Add(1)
-				go func() {
-					defer m.wg.Done()
-					flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
-					defer cancel()
-					if err := m.flushFn(flushCtx, obuf); err != nil {
-						slog.Error("media group eviction flush failed", "error", err)
-					}
-				}()
-			}
+			m.asyncFlush(obuf, "media group eviction flush failed")
 		}
 
 		buf = &MediaGroupBuffer{
@@ -175,20 +168,7 @@ func (m *MediaGroupAssembler) timerExpired(mediaGroupID string) {
 		"item_count", len(buf.Items),
 	)
 
-	if m.flushFn != nil {
-		m.wg.Add(1)
-		go func() {
-			defer m.wg.Done()
-			flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
-			defer cancel()
-			if err := m.flushFn(flushCtx, buf); err != nil {
-				slog.Error("media group flush failed",
-					"media_group_id", mediaGroupID,
-					"error", err,
-				)
-			}
-		}()
-	}
+	m.asyncFlush(buf, "media group flush failed", "media_group_id", mediaGroupID)
 }
 
 // findOldestBufferLocked returns the media group ID of the buffer with the earliest CreatedAt.
@@ -215,18 +195,7 @@ func (m *MediaGroupAssembler) FlushAll() {
 			buf.timer.Stop()
 		}
 		delete(m.buffers, id)
-
-		if m.flushFn != nil {
-			m.wg.Add(1)
-			go func(b *MediaGroupBuffer) {
-				defer m.wg.Done()
-				flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
-				defer cancel()
-				if err := m.flushFn(flushCtx, b); err != nil {
-					slog.Error("media group shutdown flush failed", "error", err)
-				}
-			}(buf)
-		}
+		m.asyncFlush(buf, "media group shutdown flush failed")
 	}
 	m.mu.Unlock()
 

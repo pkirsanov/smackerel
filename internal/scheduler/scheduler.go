@@ -320,6 +320,23 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 				slog.Error("frequent lookup detection failed", "error", err)
 			} else {
 				slog.Info("frequent lookup detection complete", "detected", len(lookups))
+				// Auto-create quick references for frequent lookups that don't have one yet (R-507)
+				for _, fl := range lookups {
+					if fl.HasReference {
+						continue
+					}
+					content := fmt.Sprintf("Quick reference for: %s (looked up %d times in 30 days)", fl.SampleQuery, fl.LookupCount)
+					qr, err := s.engine.CreateQuickReference(ctx, fl.SampleQuery, content, nil)
+					if err != nil {
+						slog.Warn("quick reference creation failed", "query", fl.SampleQuery, "error", err)
+						continue
+					}
+					slog.Info("quick reference auto-created", "concept", qr.Concept, "lookups", fl.LookupCount)
+					if s.bot != nil {
+						msg := fmt.Sprintf("📌 You've looked up \"%s\" %d times. Created a pinned quick reference.", fl.SampleQuery, fl.LookupCount)
+						s.bot.SendDigest(msg)
+					}
+				}
 			}
 		}); err != nil {
 			slog.Warn("failed to schedule frequent lookup detection", "error", err)

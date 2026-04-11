@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -92,8 +93,19 @@ var SocialMediaDomains = map[string]bool{
 }
 
 // IsSocialMedia checks if a domain is a social media site.
+// Matches both exact domains and subdomains (e.g. m.twitter.com, www.facebook.com)
+// to ensure SCN-005-004 aggregation applies regardless of subdomain variant.
 func IsSocialMedia(domain string) bool {
-	return SocialMediaDomains[domain]
+	if SocialMediaDomains[domain] {
+		return true
+	}
+	// Match subdomains: m.twitter.com, www.facebook.com, mobile.reddit.com, etc.
+	for d := range SocialMediaDomains {
+		if strings.HasSuffix(domain, "."+d) {
+			return true
+		}
+	}
+	return false
 }
 
 // DefaultSkipDomains are domains that should never be processed.

@@ -13,6 +13,7 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // InsightType represents the type of synthesis insight.
@@ -172,8 +173,19 @@ var validAlertTypes = map[AlertType]bool{
 
 // CreateAlert creates a new contextual alert.
 func (e *Engine) CreateAlert(ctx context.Context, alert *Alert) error {
+	if alert == nil {
+		return fmt.Errorf("alert must not be nil")
+	}
 	if alert.Title == "" {
 		return fmt.Errorf("alert title is required")
+	}
+	const maxTitleLen = 200
+	const maxBodyLen = 2000
+	if len(alert.Title) > maxTitleLen {
+		alert.Title = stringutil.TruncateUTF8(alert.Title, maxTitleLen)
+	}
+	if len(alert.Body) > maxBodyLen {
+		alert.Body = stringutil.TruncateUTF8(alert.Body, maxBodyLen)
 	}
 	if !validAlertTypes[alert.AlertType] {
 		return fmt.Errorf("unknown alert type: %s", alert.AlertType)
@@ -202,6 +214,9 @@ func (e *Engine) DismissAlert(ctx context.Context, alertID string) error {
 	if alertID == "" {
 		return fmt.Errorf("alert ID is required")
 	}
+	if e.Pool == nil {
+		return fmt.Errorf("alert dismissal requires a database connection")
+	}
 	result, err := e.Pool.Exec(ctx, `
 		UPDATE alerts SET status = 'dismissed' WHERE id = $1 AND status != 'dismissed'
 	`, alertID)
@@ -221,6 +236,9 @@ func (e *Engine) SnoozeAlert(ctx context.Context, alertID string, until time.Tim
 	}
 	if !until.After(time.Now()) {
 		return fmt.Errorf("snooze time must be in the future")
+	}
+	if e.Pool == nil {
+		return fmt.Errorf("alert snooze requires a database connection")
 	}
 	result, err := e.Pool.Exec(ctx, `
 		UPDATE alerts SET status = 'snoozed', snooze_until = $2 WHERE id = $1 AND status IN ('pending', 'delivered')
@@ -431,7 +449,7 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 	ab.Name = personName
 
 	// Escape LIKE wildcards in email to prevent unintended pattern matching
-	escapedEmail := escapeLikePattern(email)
+	escapedEmail := stringutil.EscapeLikePattern(email)
 
 	// Recent email threads (last 3)
 	threadRows, err := e.Pool.Query(ctx, `
@@ -486,14 +504,6 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 	}
 
 	return ab
-}
-
-// escapeLikePattern escapes SQL LIKE wildcard characters (% and _) in a string
-// to prevent unintended pattern matching when used in LIKE clauses.
-func escapeLikePattern(s string) string {
-	s = strings.ReplaceAll(s, "%", "\\%")
-	s = strings.ReplaceAll(s, "_", "\\_")
-	return s
 }
 
 // assembleBriefText generates a 2-3 sentence brief for a meeting.
@@ -615,6 +625,9 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 				ws.TopicMovement = append(ws.TopicMovement, tm)
 			}
 		}
+		if err := topicRows.Err(); err != nil {
+			slog.Warn("weekly synthesis topic movement iteration failed", "error", err)
+		}
 	}
 
 	// 4. Open loops (overdue action items)
@@ -629,6 +642,9 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 			if loopRows.Scan(&t) == nil {
 				ws.OpenLoops = append(ws.OpenLoops, t)
 			}
+		}
+		if err := loopRows.Err(); err != nil {
+			slog.Warn("weekly synthesis open loops iteration failed", "error", err)
 		}
 	}
 
@@ -658,6 +674,9 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 
 // detectCapturePatterns analyzes timestamp patterns in user captures.
 func (e *Engine) detectCapturePatterns(ctx context.Context) []string {
+	if e.Pool == nil {
+		return nil
+	}
 	var patterns []string
 
 	// Day-of-week pattern
@@ -677,6 +696,9 @@ func (e *Engine) detectCapturePatterns(ctx context.Context) []string {
 			if rows.Scan(&dow, &cnt) == nil && dow >= 0 && dow < 7 {
 				patterns = append(patterns, fmt.Sprintf("You save the most content on %ss (%d captures in the last 30 days)", dayNames[dow], cnt))
 			}
+		}
+		if err := rows.Err(); err != nil {
+			slog.Warn("capture pattern day-of-week iteration failed", "error", err)
 		}
 	}
 
@@ -702,6 +724,9 @@ func (e *Engine) detectCapturePatterns(ctx context.Context) []string {
 				}
 				patterns = append(patterns, fmt.Sprintf("Your peak capture time is %s (%d:00, %d captures in 30 days)", period, hr, cnt))
 			}
+		}
+		if err := rows2.Err(); err != nil {
+			slog.Warn("capture pattern hour-of-day iteration failed", "error", err)
 		}
 	}
 

@@ -60,6 +60,9 @@ func (e *Engine) Resurface(ctx context.Context, limit int) ([]ResurfaceCandidate
 		c.Reason = fmt.Sprintf("High-value artifact dormant for %d days", daysDormant)
 		candidates = append(candidates, c)
 	}
+	if err := rows.Err(); err != nil {
+		return candidates, fmt.Errorf("resurface row iteration: %w", err)
+	}
 
 	// Strategy 2: Serendipity — random artifact from underexplored topics
 	if len(candidates) < limit {
@@ -88,13 +91,23 @@ func (e *Engine) MarkResurfaced(ctx context.Context, artifactIDs []string) error
 	if len(artifactIDs) == 0 {
 		return nil
 	}
+	// Filter out empty-string IDs that would match rows with empty id columns.
+	var filtered []string
+	for _, id := range artifactIDs {
+		if id != "" {
+			filtered = append(filtered, id)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
 	if e.Pool == nil {
 		return fmt.Errorf("mark resurfaced requires a database connection")
 	}
 	_, err := e.Pool.Exec(ctx, `
 		UPDATE artifacts SET last_accessed = NOW(), access_count = access_count + 1
 		WHERE id = ANY($1)
-	`, artifactIDs)
+	`, filtered)
 	if err != nil {
 		return fmt.Errorf("batch update resurfaced artifacts: %w", err)
 	}
@@ -130,28 +143,7 @@ func (e *Engine) serendipityPick(ctx context.Context, limit int) ([]ResurfaceCan
 		c.Reason = "Serendipity — underexplored content worth revisiting"
 		candidates = append(candidates, c)
 	}
-	return candidates, nil
-}
-
-// ResurfaceScore combines signals to compute a resurfacing priority.
-func ResurfaceScore(relevanceScore float64, daysDormant int, accessCount int) float64 {
-	// Higher relevance = more worth resurfacing
-	// More dormant = more worth resurfacing (up to a point)
-	// Low access count = more worth resurfacing
-	dormancyBonus := 0.0
-	if daysDormant > 30 {
-		dormancyBonus = float64(daysDormant-30) * 0.01
-		if dormancyBonus > 1.0 {
-			dormancyBonus = 1.0
-		}
-	}
-
-	accessPenalty := float64(accessCount) * 0.1
-	if accessPenalty > 1.0 {
-		accessPenalty = 1.0
-	}
-
-	return (relevanceScore + dormancyBonus) * (1.0 - accessPenalty)
+	return candidates, rows.Err()
 }
 
 // Note: rand.Seed was removed — since Go 1.20 the global rand source is

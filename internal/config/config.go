@@ -198,6 +198,16 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Semantic validation: LOG_LEVEL must be a recognized value
+	if c.LogLevel != "" {
+		switch strings.ToLower(c.LogLevel) {
+		case "debug", "info", "warn", "error":
+			// valid
+		default:
+			return fmt.Errorf("LOG_LEVEL must be one of debug, info, warn, error (got %q)", c.LogLevel)
+		}
+	}
+
 	// Semantic validation: DIGEST_CRON must look like a valid 5-field cron expression
 	if c.DigestCron != "" {
 		if !isValidCronExpr(c.DigestCron) {

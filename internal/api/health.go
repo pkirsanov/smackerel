@@ -73,6 +73,7 @@ type Dependencies struct {
 	OAuthHandler       OAuthFlow
 	TelegramBot        TelegramHealthChecker
 	ConnectorRegistry  ConnectorHealthLister
+	ContextHandler     *ContextHandler
 	OllamaURL          string
 	AuthToken          string
 	Version            string
@@ -186,10 +187,14 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := HealthResponse{
-		Status:     overall,
-		Version:    d.Version,
-		CommitHash: d.CommitHash,
-		Services:   services,
+		Status:   overall,
+		Services: services,
+	}
+
+	// Only expose version/commit to authenticated callers to prevent fingerprinting.
+	if d.isAuthenticated(r) {
+		resp.Version = d.Version
+		resp.CommitHash = d.CommitHash
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -197,6 +202,15 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.Error("failed to encode health response", "error", err)
 	}
+}
+
+// isAuthenticated checks whether the request carries a valid Bearer token.
+// Returns false when no AuthToken is configured (dev mode allows all).
+func (d *Dependencies) isAuthenticated(r *http.Request) bool {
+	if d.AuthToken == "" {
+		return true // dev mode — no auth required
+	}
+	return matchBearerToken(r, d.AuthToken)
 }
 
 // mlClient returns the shared HTTP client for ML sidecar health checks,

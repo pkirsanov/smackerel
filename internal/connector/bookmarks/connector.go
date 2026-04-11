@@ -122,6 +122,10 @@ func (c *BookmarksConnector) Connect(ctx context.Context, config connector.Conne
 func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
+	// F-CHAOS-002: Reset sync counters to avoid stale values from previous sync
+	// affecting the deferred health decision.
+	c.lastSyncCount = 0
+	c.lastSyncErrors = 0
 	c.mu.Unlock()
 
 	defer func() {
@@ -309,13 +313,33 @@ func (c *BookmarksConnector) findNewFiles(processedFiles []string) ([]string, er
 
 // processFile reads and parses a bookmark export file, returning RawArtifacts.
 func (c *BookmarksConnector) processFile(ctx context.Context, filePath string) ([]connector.RawArtifact, error) {
-	// F-STAB-001: check file size before reading to prevent memory pressure
-	info, err := os.Stat(filePath)
+	// F-CHAOS-006: Verify the resolved path stays within the import directory boundary.
+	resolved, err := filepath.Abs(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("stat file %s: %w", filePath, err)
+		return nil, fmt.Errorf("resolve path %s: %w", filePath, err)
 	}
-	if info.Size() > maxFileSize {
-		return nil, fmt.Errorf("file %s exceeds max size (%d > %d bytes)", filepath.Base(filePath), info.Size(), maxFileSize)
+	importAbs, err := filepath.Abs(c.config.ImportDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve import dir: %w", err)
+	}
+	if !strings.HasPrefix(resolved, importAbs+string(os.PathSeparator)) {
+		return nil, fmt.Errorf("file %s is outside import directory boundary", filepath.Base(filePath))
+	}
+
+	// F-CHAOS-001: Lstat guard to close TOCTOU symlink race window.
+	// findNewFiles filters symlinks via DirEntry.Type(), but a regular file
+	// could be replaced with a symlink between that check and this read.
+	linfo, err := os.Lstat(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("lstat file %s: %w", filePath, err)
+	}
+	if linfo.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("file %s is a symlink, skipping for security", filepath.Base(filePath))
+	}
+
+	// F-STAB-001: check file size before reading to prevent memory pressure
+	if linfo.Size() > maxFileSize {
+		return nil, fmt.Errorf("file %s exceeds max size (%d > %d bytes)", filepath.Base(filePath), linfo.Size(), maxFileSize)
 	}
 
 	data, err := os.ReadFile(filePath)
@@ -491,12 +515,15 @@ func encodeProcessedFilesCursor(files []string) string {
 	return string(data)
 }
 
-// filterArtifacts applies ExcludeDomains and MinURLLength filters.
-func (c *BookmarksConnector) filterArtifacts(artifacts []connector.RawArtifact) []connector.RawArtifact {
-	if len(c.config.ExcludeDomains) == 0 && c.config.MinURLLength <= 0 {
-		return artifacts
-	}
+// allowedSchemes lists the URL schemes accepted for bookmark artifacts.
+var allowedSchemes = map[string]bool{
+	"http":  true,
+	"https": true,
+	"ftp":   true,
+}
 
+// filterArtifacts applies ExcludeDomains, MinURLLength, and URL-scheme safety filters.
+func (c *BookmarksConnector) filterArtifacts(artifacts []connector.RawArtifact) []connector.RawArtifact {
 	excludeSet := make(map[string]bool, len(c.config.ExcludeDomains))
 	for _, d := range c.config.ExcludeDomains {
 		excludeSet[strings.ToLower(d)] = true
@@ -504,14 +531,17 @@ func (c *BookmarksConnector) filterArtifacts(artifacts []connector.RawArtifact) 
 
 	filtered := make([]connector.RawArtifact, 0, len(artifacts))
 	for _, a := range artifacts {
+		// F-CHAOS-003: Reject dangerous URL schemes (javascript:, data:, file:, etc.)
+		u, err := url.Parse(a.URL)
+		if err != nil || !allowedSchemes[strings.ToLower(u.Scheme)] {
+			continue
+		}
+
 		if c.config.MinURLLength > 0 && len(a.URL) < c.config.MinURLLength {
 			continue
 		}
-		if len(excludeSet) > 0 {
-			u, err := url.Parse(a.URL)
-			if err == nil && excludeSet[strings.ToLower(u.Hostname())] {
-				continue
-			}
+		if len(excludeSet) > 0 && excludeSet[strings.ToLower(u.Hostname())] {
+			continue
 		}
 		filtered = append(filtered, a)
 	}

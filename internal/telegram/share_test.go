@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 func TestExtractAllURLs_SingleURL(t *testing.T) {
@@ -114,9 +116,9 @@ func TestChaos_TruncateUTF8_MultiByteAtBoundary(t *testing.T) {
 	prefix := strings.Repeat("a", 4094) // 4094 ASCII bytes
 	text := prefix + "你好"               // 4094 + 3 + 3 = 4100 bytes
 
-	result := truncateUTF8(text, 4096)
+	result := stringutil.TruncateUTF8(text, 4096)
 	if !utf8.ValidString(result) {
-		t.Errorf("truncateUTF8 produced invalid UTF-8: %q", result)
+		t.Errorf("TruncateUTF8 produced invalid UTF-8: %q", result)
 	}
 	if len(result) > 4096 {
 		t.Errorf("result exceeds maxBytes: got %d", len(result))
@@ -130,7 +132,7 @@ func TestChaos_TruncateUTF8_MultiByteAtBoundary(t *testing.T) {
 func TestChaos_TruncateUTF8_ExactBoundary(t *testing.T) {
 	// String that is exactly maxShareTextLen — no truncation needed
 	text := strings.Repeat("x", maxShareTextLen)
-	result := truncateUTF8(text, maxShareTextLen)
+	result := stringutil.TruncateUTF8(text, maxShareTextLen)
 	if result != text {
 		t.Error("exact-length string should not be modified")
 	}
@@ -138,7 +140,7 @@ func TestChaos_TruncateUTF8_ExactBoundary(t *testing.T) {
 
 func TestChaos_TruncateUTF8_ShortString(t *testing.T) {
 	text := "short"
-	result := truncateUTF8(text, maxShareTextLen)
+	result := stringutil.TruncateUTF8(text, maxShareTextLen)
 	if result != text {
 		t.Errorf("short string modified: %q", result)
 	}
@@ -149,9 +151,9 @@ func TestChaos_TruncateUTF8_EmojiAtBoundary(t *testing.T) {
 	prefix := strings.Repeat("a", 4093) // 4093 ASCII bytes
 	text := prefix + "😀"                // 4093 + 4 = 4097 bytes
 
-	result := truncateUTF8(text, 4096)
+	result := stringutil.TruncateUTF8(text, 4096)
 	if !utf8.ValidString(result) {
-		t.Errorf("truncateUTF8 produced invalid UTF-8 with emoji")
+		t.Errorf("TruncateUTF8 produced invalid UTF-8 with emoji")
 	}
 	// Emoji can't fit, so we get just the prefix
 	if len(result) != 4093 {
@@ -162,9 +164,9 @@ func TestChaos_TruncateUTF8_EmojiAtBoundary(t *testing.T) {
 func TestChaos_TruncateUTF8_AllMultiByte(t *testing.T) {
 	// String of 2-byte UTF-8 chars (Cyrillic Д = 0xD0 0x94)
 	text := strings.Repeat("Д", 3000) // 6000 bytes
-	result := truncateUTF8(text, 4096)
+	result := stringutil.TruncateUTF8(text, 4096)
 	if !utf8.ValidString(result) {
-		t.Errorf("truncateUTF8 produced invalid UTF-8 for Cyrillic")
+		t.Errorf("TruncateUTF8 produced invalid UTF-8 for Cyrillic")
 	}
 	// 4096 / 2 = 2048 chars = 4096 bytes exactly
 	if len(result) != 4096 {

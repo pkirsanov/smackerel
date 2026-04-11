@@ -13,6 +13,8 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // Bot manages the Telegram bot lifecycle and message handling.
@@ -23,10 +25,12 @@ type Bot struct {
 	searchURL      string // internal API URL for search
 	digestURL      string // internal API URL for digest
 	recentURL      string // internal API URL for recent
+	healthURL      string // internal API URL for health check
 	authToken      string
 	httpClient     *http.Client
 	assembler      *ConversationAssembler
 	mediaAssembler *MediaGroupAssembler
+	done           chan struct{} // closed when the update goroutine exits
 }
 
 // Config holds Telegram bot configuration.
@@ -64,6 +68,10 @@ func NewBot(cfg Config) (*Bot, error) {
 		return nil, fmt.Errorf("CoreAPIURL is required: set PORT env var via config generate")
 	}
 
+	if len(allowed) == 0 {
+		slog.Warn("telegram bot started with empty allowlist — all chats are authorized; set TELEGRAM_CHAT_IDS to restrict access")
+	}
+
 	bot := &Bot{
 		api:          api,
 		allowedChats: allowed,
@@ -71,8 +79,10 @@ func NewBot(cfg Config) (*Bot, error) {
 		searchURL:    baseURL + "/api/search",
 		digestURL:    baseURL + "/api/digest",
 		recentURL:    baseURL + "/api/recent",
+		healthURL:    baseURL + "/api/health",
 		authToken:    cfg.AuthToken,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		done:         make(chan struct{}),
 	}
 
 	// Initialize assemblers with config-driven parameters
@@ -118,19 +128,34 @@ func (b *Bot) Start(ctx context.Context) {
 	slog.Info("telegram bot started", "bot_name", b.api.Self.UserName)
 
 	go func() {
+		defer close(b.done)
 		for {
 			select {
 			case <-ctx.Done():
 				b.api.StopReceivingUpdates()
 				return
-			case update := <-updates:
+			case update, ok := <-updates:
+				if !ok {
+					return // channel closed
+				}
 				if update.Message == nil {
 					continue
 				}
-				b.handleMessage(ctx, update.Message)
+				b.safeHandleMessage(ctx, update.Message)
 			}
 		}
 	}()
+}
+
+// safeHandleMessage wraps handleMessage with panic recovery to prevent a single
+// malformed message from crashing the update processing goroutine.
+func (b *Bot) safeHandleMessage(ctx context.Context, msg *tgbotapi.Message) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("telegram message handler panic recovered", "panic", r)
+		}
+	}()
+	b.handleMessage(ctx, msg)
 }
 
 // handleMessage routes incoming messages to the appropriate handler.
@@ -228,61 +253,14 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	}
 }
 
-// handleURLCapture captures a URL through the pipeline.
-func (b *Bot) handleURLCapture(ctx context.Context, msg *tgbotapi.Message, text string) {
-	url := extractURL(text)
-	if url == "" {
-		b.reply(msg.Chat.ID, "? Couldn't find a URL in your message")
-		return
-	}
-
-	result, err := b.callCapture(ctx, map[string]string{"url": url})
-	if err != nil {
-		if errors.Is(err, errDuplicate) {
-			b.reply(msg.Chat.ID, ". Already saved")
-			return
-		}
-		if errors.Is(err, errServiceUnavailable) {
-			b.reply(msg.Chat.ID, "? Service temporarily unavailable")
-			return
-		}
-		slog.Error("telegram capture failed", "error", err)
-		b.reply(msg.Chat.ID, "? Failed to save. Try again in a moment.")
-		return
-	}
-
-	artType, _ := result["artifact_type"].(string)
-	title, _ := result["title"].(string)
-	connections := 0
-	if c, ok := result["connections"].(float64); ok {
-		connections = int(c)
-	}
-
-	suffix := ""
-	if ps, _ := result["processing_status"].(string); ps == "pending" {
-		suffix = " (processing pending)"
-	}
-
-	b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections)%s", title, artType, connections, suffix))
-}
-
 // handleTextCapture captures plain text as an idea/note.
 func (b *Bot) handleTextCapture(ctx context.Context, msg *tgbotapi.Message, text string) {
 	if len(text) > maxShareTextLen {
-		text = truncateUTF8(text, maxShareTextLen)
+		text = stringutil.TruncateUTF8(text, maxShareTextLen)
 	}
 	result, err := b.callCapture(ctx, map[string]string{"text": text})
 	if err != nil {
-		if errors.Is(err, errDuplicate) {
-			b.reply(msg.Chat.ID, ". Already saved")
-			return
-		}
-		if errors.Is(err, errServiceUnavailable) {
-			b.reply(msg.Chat.ID, "? Service temporarily unavailable")
-			return
-		}
-		slog.Error("telegram text capture failed", "error", err)
-		b.reply(msg.Chat.ID, "? Failed to save. Try again in a moment.")
+		b.captureErrorReply(msg.Chat.ID, err, "telegram text capture failed")
 		return
 	}
 
@@ -306,16 +284,7 @@ func (b *Bot) handleVoice(ctx context.Context, msg *tgbotapi.Message) {
 		"context": "telegram_voice_file_id:" + msg.Voice.FileID,
 	})
 	if err != nil {
-		if errors.Is(err, errDuplicate) {
-			b.reply(msg.Chat.ID, ". Already saved")
-			return
-		}
-		if errors.Is(err, errServiceUnavailable) {
-			b.reply(msg.Chat.ID, "? Service temporarily unavailable")
-			return
-		}
-		slog.Error("telegram voice capture failed", "error", err)
-		b.reply(msg.Chat.ID, "? Failed to process voice note. Try again in a moment.")
+		b.captureErrorReply(msg.Chat.ID, err, "telegram voice capture failed")
 		return
 	}
 
@@ -339,7 +308,7 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 	}
 
 	if len(query) > maxFindQueryLen {
-		query = truncateUTF8(query, maxFindQueryLen)
+		query = stringutil.TruncateUTF8(query, maxFindQueryLen)
 	}
 
 	results, err := b.callSearch(ctx, query)
@@ -371,7 +340,7 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 		artType, _ := result["artifact_type"].(string)
 		summary, _ := result["summary"].(string)
 		if len(summary) > 100 {
-			summary = summary[:100] + "..."
+			summary = stringutil.TruncateUTF8(summary, 100) + "..."
 		}
 		lines = append(lines, fmt.Sprintf("> %s (%s)\n- %s", title, artType, summary))
 	}
@@ -381,7 +350,11 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 
 // handleDigest returns today's digest.
 func (b *Bot) handleDigest(ctx context.Context, msg *tgbotapi.Message) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, b.digestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.digestURL, nil)
+	if err != nil {
+		b.reply(msg.Chat.ID, "? Couldn't get today's digest")
+		return
+	}
 	if b.authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+b.authToken)
 	}
@@ -414,8 +387,7 @@ func (b *Bot) handleDigest(ctx context.Context, msg *tgbotapi.Message) {
 
 // handleStatus returns system stats from the health endpoint.
 func (b *Bot) handleStatus(ctx context.Context, msg *tgbotapi.Message) {
-	healthURL := strings.TrimSuffix(b.captureURL, "/capture") + "/health"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.healthURL, nil)
 	if err != nil {
 		b.reply(msg.Chat.ID, "? Couldn't fetch status")
 		return
@@ -524,6 +496,22 @@ var errDuplicate = fmt.Errorf("duplicate")
 // errServiceUnavailable is a sentinel error returned when capture API responds with 503.
 var errServiceUnavailable = fmt.Errorf("service temporarily unavailable")
 
+// captureErrorReply handles the common error response pattern for capture API calls.
+// It replies with a standard message for duplicates and service-unavailable errors,
+// and logs + replies with a generic failure for all other errors.
+func (b *Bot) captureErrorReply(chatID int64, err error, logMsg string, logArgs ...any) {
+	if errors.Is(err, errDuplicate) {
+		b.reply(chatID, ". Already saved")
+		return
+	}
+	if errors.Is(err, errServiceUnavailable) {
+		b.reply(chatID, "? Service temporarily unavailable")
+		return
+	}
+	slog.Error(logMsg, append([]any{"error", err}, logArgs...)...)
+	b.reply(chatID, "? Failed to save. Try again in a moment.")
+}
+
 // callCapture calls the internal capture API.
 func (b *Bot) callCapture(ctx context.Context, body map[string]string) (map[string]interface{}, error) {
 	data, _ := json.Marshal(body)
@@ -626,16 +614,11 @@ func containsURL(text string) bool {
 
 // extractURL extracts the first URL from text.
 func extractURL(text string) string {
-	for _, word := range strings.Fields(text) {
-		// Strip leading brackets/parens
-		word = strings.TrimLeft(word, "(<[")
-		// Strip trailing punctuation
-		word = strings.TrimRight(word, ".,;:!?\"')>]")
-		if strings.HasPrefix(word, "http://") || strings.HasPrefix(word, "https://") {
-			return word
-		}
+	urls := extractAllURLs(text)
+	if len(urls) == 0 {
+		return ""
 	}
-	return ""
+	return urls[0]
 }
 
 // IsAuthorized checks if a chat ID is in the allowlist.
@@ -688,13 +671,27 @@ func (b *Bot) Healthy() bool {
 }
 
 func (b *Bot) Stop() {
-	slog.Info("telegram bot shutting down, flushing buffers")
+	slog.Info("telegram bot shutting down, waiting for update goroutine")
+
+	// Wait for the update processing goroutine to exit before flushing
+	// so no new messages arrive after buffers are drained.
+	select {
+	case <-b.done:
+	case <-time.After(5 * time.Second):
+		slog.Warn("telegram bot update goroutine did not stop within 5s timeout")
+	}
+
+	slog.Info("telegram bot flushing buffers")
 	if b.assembler != nil {
 		b.assembler.FlushAll()
 	}
 	if b.mediaAssembler != nil {
 		b.mediaAssembler.FlushAll()
 	}
+
+	// Release idle HTTP connections
+	b.httpClient.CloseIdleConnections()
+
 	slog.Info("telegram bot shutdown complete")
 }
 
@@ -706,7 +703,7 @@ const maxCaptureTextLen = 32768
 func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) error {
 	text := FormatConversation(buf)
 	if len(text) > maxCaptureTextLen {
-		text = truncateUTF8(text, maxCaptureTextLen)
+		text = stringutil.TruncateUTF8(text, maxCaptureTextLen)
 	}
 	participants := extractParticipants(buf.Messages)
 
@@ -733,7 +730,7 @@ func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) er
 func (b *Bot) flushMediaGroup(ctx context.Context, buf *MediaGroupBuffer) error {
 	text := FormatMediaGroup(buf)
 	if len(text) > maxCaptureTextLen {
-		text = truncateUTF8(text, maxCaptureTextLen)
+		text = stringutil.TruncateUTF8(text, maxCaptureTextLen)
 	}
 
 	body := map[string]string{

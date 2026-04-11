@@ -2,24 +2,24 @@ package telegram
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
-	"unicode/utf8"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // maxShareTextLen is the maximum accepted length for share/forward text input.
 const maxShareTextLen = 4096
 
 // handleShareCapture handles messages containing URLs with optional context text.
-// This replaces the simple handleURLCapture for share-sheet payloads that include
-// both a URL and descriptive text from the sending app.
+// It supports share-sheet payloads that include both a URL and descriptive text
+// from the sending app.
 func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, text string) {
 	if len(text) > maxShareTextLen {
-		text = truncateUTF8(text, maxShareTextLen)
+		text = stringutil.TruncateUTF8(text, maxShareTextLen)
 	}
 	urls := extractAllURLs(text)
 	if len(urls) == 0 {
@@ -37,16 +37,7 @@ func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, tex
 
 		result, err := b.callCapture(ctx, body)
 		if err != nil {
-			if errors.Is(err, errDuplicate) {
-				b.reply(msg.Chat.ID, ". Already saved")
-				return
-			}
-			if errors.Is(err, errServiceUnavailable) {
-				b.reply(msg.Chat.ID, "? Service temporarily unavailable")
-				return
-			}
-			slog.Error("share capture failed", "error", err, "url", urls[0])
-			b.reply(msg.Chat.ID, "? Failed to save. Try again in a moment.")
+			b.captureErrorReply(msg.Chat.ID, err, "share capture failed", "url", urls[0])
 			return
 		}
 
@@ -113,17 +104,4 @@ func extractContext(text string, urls []string) string {
 	// Collapse multiple whitespace
 	fields := strings.Fields(result)
 	return strings.Join(fields, " ")
-}
-
-// truncateUTF8 truncates text to at most maxBytes bytes without splitting
-// a multi-byte UTF-8 character. The result is always valid UTF-8.
-func truncateUTF8(s string, maxBytes int) string {
-	if len(s) <= maxBytes {
-		return s
-	}
-	// Walk backwards from maxBytes to find a valid rune boundary
-	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
-		maxBytes--
-	}
-	return s[:maxBytes]
 }

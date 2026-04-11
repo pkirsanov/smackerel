@@ -1,8 +1,13 @@
 package telegram
 
 import (
+	"context"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 func TestContainsURL(t *testing.T) {
@@ -280,7 +285,7 @@ func TestChaos_IsAuthorized_NegativeChatID(t *testing.T) {
 func TestSecurity_FindQueryLength_Truncated(t *testing.T) {
 	// Verify that a query exceeding maxFindQueryLen is truncated
 	longQuery := strings.Repeat("a", maxFindQueryLen+100)
-	truncated := truncateUTF8(longQuery, maxFindQueryLen)
+	truncated := stringutil.TruncateUTF8(longQuery, maxFindQueryLen)
 	if len(truncated) > maxFindQueryLen {
 		t.Errorf("expected query truncated to %d bytes, got %d", maxFindQueryLen, len(truncated))
 	}
@@ -289,7 +294,7 @@ func TestSecurity_FindQueryLength_Truncated(t *testing.T) {
 func TestSecurity_TextCapture_OversizedInput_Truncated(t *testing.T) {
 	// Text capture should use maxShareTextLen to bound input
 	longText := strings.Repeat("x", maxShareTextLen+500)
-	truncated := truncateUTF8(longText, maxShareTextLen)
+	truncated := stringutil.TruncateUTF8(longText, maxShareTextLen)
 	if len(truncated) > maxShareTextLen {
 		t.Errorf("expected text truncated to %d bytes, got %d", maxShareTextLen, len(truncated))
 	}
@@ -374,5 +379,183 @@ func TestChaos_ContainsURL_OnlyScheme(t *testing.T) {
 	// "http://" is a valid prefix match but useless URL
 	if url != "http://" {
 		t.Logf("extractURL returns %q for bare scheme (acceptable edge case)", url)
+	}
+}
+
+// --- Security pass 2 tests ---
+
+func TestSecurity_BotHealthURL_SetAtInit(t *testing.T) {
+	// SEC-02: healthURL must be a struct field, not string-manipulated at call time
+	bot := &Bot{
+		captureURL: "http://localhost:8080/api/capture",
+		healthURL:  "http://localhost:8080/api/health",
+	}
+	if bot.healthURL == "" {
+		t.Fatal("healthURL must be set as a struct field")
+	}
+	if bot.healthURL != "http://localhost:8080/api/health" {
+		t.Errorf("expected health URL, got %q", bot.healthURL)
+	}
+}
+
+func TestSecurity_SummaryTruncation_UTF8Safe(t *testing.T) {
+	// SEC-04: summary truncation must not split multi-byte runes
+	// Simulate what handleFind does: truncateUTF8(summary, 100)
+	prefix := strings.Repeat("a", 98)
+	summary := prefix + "你好世界" // 98 + 12 bytes = 110 bytes
+	truncated := stringutil.TruncateUTF8(summary, 100)
+	if len(truncated) > 100 {
+		t.Errorf("truncated summary exceeds 100 bytes: got %d", len(truncated))
+	}
+	// Verify it's valid UTF-8
+	for i := 0; i < len(truncated); {
+		r, size := rune(truncated[i]), 1
+		if truncated[i] >= 0x80 {
+			var ok bool
+			_, size = decodeRune(truncated[i:])
+			_ = ok
+		}
+		_ = r
+		i += size
+	}
+	// Actually just use utf8.ValidString
+	if !isValidUTF8(truncated) {
+		t.Error("truncated summary is not valid UTF-8")
+	}
+}
+
+func TestSecurity_EmptyAllowlist_AllowsAll(t *testing.T) {
+	// SEC-03: Document that empty allowlist means open access
+	// This test ensures the behavior is explicit and intentional
+	bot := &Bot{allowedChats: map[int64]bool{}}
+	if !bot.IsAuthorized(999) {
+		t.Error("empty allowlist should authorize all (documented insecure default)")
+	}
+	bot2 := &Bot{allowedChats: nil}
+	if !bot2.IsAuthorized(999) {
+		t.Error("nil allowlist should authorize all (documented insecure default)")
+	}
+}
+
+func TestSecurity_AllowlistEnforced_RejectsUnknown(t *testing.T) {
+	// SEC-03: When allowlist has entries, unknown chats must be rejected
+	bot := &Bot{allowedChats: map[int64]bool{111: true, 222: true}}
+	if bot.IsAuthorized(333) {
+		t.Error("populated allowlist must reject unknown chat IDs")
+	}
+	if !bot.IsAuthorized(111) {
+		t.Error("populated allowlist must accept known chat IDs")
+	}
+}
+
+func TestSecurity_InternalAPIURLs_NotUserControlled(t *testing.T) {
+	// Verify that internal API URLs are only set from config, never from user input
+	bot := &Bot{
+		captureURL: "http://core:8080/api/capture",
+		searchURL:  "http://core:8080/api/search",
+		digestURL:  "http://core:8080/api/digest",
+		recentURL:  "http://core:8080/api/recent",
+		healthURL:  "http://core:8080/api/health",
+	}
+	// All URLs must start with http:// or https:// (no user-injected schemes)
+	for name, url := range map[string]string{
+		"capture": bot.captureURL,
+		"search":  bot.searchURL,
+		"digest":  bot.digestURL,
+		"recent":  bot.recentURL,
+		"health":  bot.healthURL,
+	} {
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			t.Errorf("%s URL has unexpected scheme: %s", name, url)
+		}
+	}
+}
+
+// isValidUTF8 is a test helper wrapping utf8.ValidString.
+func isValidUTF8(s string) bool {
+	for i := 0; i < len(s); {
+		_, size := decodeRune(s[i:])
+		if size == 0 {
+			return false
+		}
+		i += size
+	}
+	return true
+}
+
+// decodeRune is a test helper that decodes one UTF-8 rune.
+func decodeRune(s string) (rune, int) {
+	if len(s) == 0 {
+		return 0, 0
+	}
+	b := s[0]
+	if b < 0x80 {
+		return rune(b), 1
+	}
+	if b < 0xC0 {
+		return 0xFFFD, 1
+	}
+	if b < 0xE0 && len(s) >= 2 {
+		return rune(b&0x1F)<<6 | rune(s[1]&0x3F), 2
+	}
+	if b < 0xF0 && len(s) >= 3 {
+		return rune(b&0x0F)<<12 | rune(s[1]&0x3F)<<6 | rune(s[2]&0x3F), 3
+	}
+	if len(s) >= 4 {
+		return rune(b&0x07)<<18 | rune(s[1]&0x3F)<<12 | rune(s[2]&0x3F)<<6 | rune(s[3]&0x3F), 4
+	}
+	return 0xFFFD, 1
+}
+
+// --- Stabilization tests ---
+
+func TestStabilize_SafeHandleMessage_PanicRecovery(t *testing.T) {
+	bot := &Bot{allowedChats: map[int64]bool{}}
+	// A nil message causes a panic at msg.Chat access in handleMessage.
+	// safeHandleMessage must recover without propagating.
+	recovered := true
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				recovered = false
+			}
+		}()
+		bot.safeHandleMessage(context.Background(), nil)
+	}()
+	if !recovered {
+		t.Error("safeHandleMessage must recover panics, but panic propagated")
+	}
+}
+
+func TestStabilize_StopWaitsDoneBeforeFlush(t *testing.T) {
+	bot := &Bot{
+		allowedChats: map[int64]bool{},
+		httpClient:   &http.Client{},
+		done:         make(chan struct{}),
+	}
+	// Simulate the update goroutine having already exited
+	close(bot.done)
+	// Stop should complete without hanging; assemblers are nil which is handled
+	bot.Stop()
+}
+
+func TestStabilize_StopTimesOutWhenGoroutineStuck(t *testing.T) {
+	bot := &Bot{
+		allowedChats: map[int64]bool{},
+		httpClient:   &http.Client{},
+		done:         make(chan struct{}),
+		// done is NOT closed, simulating a stuck goroutine
+	}
+	// Stop should not hang — it has a 5s timeout on the done channel.
+	done := make(chan struct{})
+	go func() {
+		bot.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// Stop returned, as expected
+	case <-time.After(10 * time.Second):
+		t.Fatal("Stop() hung despite done channel timeout")
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/digest"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
@@ -34,12 +35,12 @@ type ResultSubscriber struct {
 }
 
 // NewResultSubscriber creates a subscriber for artifacts.processed messages.
-func NewResultSubscriber(db *pgxpool.Pool, nc *smacknats.Client) *ResultSubscriber {
+func NewResultSubscriber(db *pgxpool.Pool, nc *smacknats.Client, registry *connector.Registry) *ResultSubscriber {
 	return &ResultSubscriber{
 		DB:        db,
 		NATS:      nc,
 		Processor: NewProcessor(db, nc),
-		DigestGen: digest.NewGenerator(db, nc),
+		DigestGen: digest.NewGenerator(db, nc, registry),
 	}
 }
 

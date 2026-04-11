@@ -222,16 +222,17 @@ if !d.DB.Healthy(r.Context()) {
 
 ### 6.1 Job Group Classification
 
-The 9 existing cron jobs are classified into 5 mutex groups based on execution frequency and resource contention patterns:
+The 12 cron jobs are classified into 7 mutex groups based on execution frequency and resource contention patterns:
 
 | Group | Mutex Name | Jobs | Schedule |
 |-------|-----------|------|----------|
 | `digest` | `muDigest` | Digest generation + retry | User-configured cron |
 | `hourly` | `muHourly` | Topic momentum | `0 * * * *` |
-| `daily` | `muDaily` | Synthesis + overdue, Resurfacing, Frequent lookups | `0 2 * * *`, `0 8 * * *`, `0 4 * * *` |
-| `weekly` | `muWeekly` | Weekly synthesis, Subscription detection | `0 16 * * 0`, `0 3 * * 1` |
+| `daily` | `muDaily` | Synthesis + overdue, Resurfacing, Frequent lookups, Alert producers | `0 2 * * *`, `0 8 * * *`, `0 4 * * *`, `0 6 * * *` |
+| `weekly` | `muWeekly` | Weekly synthesis, Subscription detection, Relationship cooling alerts | `0 16 * * 0`, `0 3 * * 1`, `0 7 * * 1` |
 | `monthly` | `muMonthly` | Monthly report | `0 3 1 * *` |
-| `frequent` | `muFrequent` | Pre-meeting briefs | `*/5 * * * *` |
+| `briefs` | `muBriefs` | Pre-meeting briefs | `*/5 * * * *` |
+| `alerts` | `muAlerts` | Alert delivery sweep | `*/15 * * * *` |
 
 **Rationale for grouping:** Jobs within the same group share resource affinity (e.g., daily jobs all hit the intelligence engine heavily). Grouping prevents intra-group contention while allowing inter-group concurrency. The digest job gets its own mutex because it has a user-configured schedule and a unique retry mechanism.
 
@@ -250,7 +251,8 @@ type Scheduler struct {
     muDaily    sync.Mutex
     muWeekly   sync.Mutex
     muMonthly  sync.Mutex
-    muFrequent sync.Mutex
+    muBriefs   sync.Mutex // pre-meeting briefs (every 5 min)
+    muAlerts   sync.Mutex // alert delivery sweep (every 15 min)
 }
 ```
 
