@@ -490,6 +490,63 @@ func TestMLClient_PreSet(t *testing.T) {
 	}
 }
 
+// SCN-023-01: Concurrent HealthHandler calls are race-free.
+// Exercises the full handler path (DB, NATS, ML, Ollama, Telegram) under
+// parallel access to catch races deeper than the mlClient() pointer test.
+func TestHealthHandler_ConcurrentAccess(t *testing.T) {
+	ollamaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ollamaServer.Close()
+
+	mlServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mlServer.Close()
+
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true, artifactCount: 5},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now().Add(-30 * time.Second),
+		MLSidecarURL: mlServer.URL,
+		OllamaURL:    ollamaServer.URL,
+		TelegramBot:  &mockTelegramHealth{healthy: true},
+	}
+
+	const goroutines = 50
+	errs := make(chan error, goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+			rec := httptest.NewRecorder()
+			deps.HealthHandler(rec, req)
+
+			if rec.Code != http.StatusOK {
+				errs <- fmt.Errorf("expected 200, got %d", rec.Code)
+				return
+			}
+
+			var resp HealthResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				errs <- fmt.Errorf("decode: %v", err)
+				return
+			}
+			if resp.Status != "healthy" {
+				errs <- fmt.Errorf("expected healthy, got %s", resp.Status)
+				return
+			}
+			errs <- nil
+		}()
+	}
+
+	for i := 0; i < goroutines; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // mockTelegramHealth implements TelegramHealthChecker for testing.
 type mockTelegramHealth struct {
 	healthy bool
@@ -694,8 +751,10 @@ func TestStructuredLogger_OtherPathsLogged(t *testing.T) {
 	}
 }
 
-// SCN-021-012: Health reports stale when synthesis is overdue (>48h)
-func TestHealthHandler_IntelligenceStale(t *testing.T) {
+// SCN-021-012: Health reports down (and degraded) when intelligence pool is nil.
+// Note: the stale path (Pool non-nil, synthesis >48h) requires a real DB connection
+// and is covered by integration tests, since GetLastSynthesisTime queries the DB.
+func TestHealthHandler_IntelligenceDown(t *testing.T) {
 	// IntelligenceEngine with nil Pool → reported as "down"
 	engine := &intelligence.Engine{Pool: nil}
 	deps := &Dependencies{

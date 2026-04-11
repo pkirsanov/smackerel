@@ -305,7 +305,7 @@ DISCORD_ENABLE_GATEWAY="$(yaml_get connectors.discord.enable_gateway 2>/dev/null
 DISCORD_BACKFILL_LIMIT="$(yaml_get connectors.discord.backfill_limit 2>/dev/null)" || DISCORD_BACKFILL_LIMIT=""
 DISCORD_INCLUDE_THREADS="$(yaml_get connectors.discord.include_threads 2>/dev/null)" || DISCORD_INCLUDE_THREADS=""
 DISCORD_INCLUDE_PINS="$(yaml_get connectors.discord.include_pins 2>/dev/null)" || DISCORD_INCLUDE_PINS=""
-DISCORD_CAPTURE_COMMANDS="$(yaml_get connectors.discord.capture_commands 2>/dev/null)" || DISCORD_CAPTURE_COMMANDS=""
+DISCORD_CAPTURE_COMMANDS="$(yaml_get_json connectors.discord.capture_commands 2>/dev/null)" || DISCORD_CAPTURE_COMMANDS=""
 DISCORD_MONITORED_CHANNELS="$(yaml_get_json connectors.discord.monitored_channels 2>/dev/null)" || DISCORD_MONITORED_CHANNELS=""
 
 # Twitter connector
@@ -331,6 +331,7 @@ FINANCIAL_MARKETS_ENABLED="$(yaml_get connectors.financial-markets.enabled 2>/de
 FINANCIAL_MARKETS_SYNC_SCHEDULE="$(yaml_get connectors.financial-markets.sync_schedule 2>/dev/null)" || FINANCIAL_MARKETS_SYNC_SCHEDULE=""
 FINANCIAL_MARKETS_FINNHUB_API_KEY="$(yaml_get connectors.financial-markets.finnhub_api_key 2>/dev/null)" || FINANCIAL_MARKETS_FINNHUB_API_KEY=""
 FINANCIAL_MARKETS_FRED_API_KEY="$(yaml_get connectors.financial-markets.fred_api_key 2>/dev/null)" || FINANCIAL_MARKETS_FRED_API_KEY=""
+FINANCIAL_MARKETS_COINGECKO_ENABLED="$(yaml_get connectors.financial-markets.coingecko_enabled 2>/dev/null)" || FINANCIAL_MARKETS_COINGECKO_ENABLED=""
 FINANCIAL_MARKETS_ALERT_THRESHOLD="$(yaml_get connectors.financial-markets.alert_threshold 2>/dev/null)" || FINANCIAL_MARKETS_ALERT_THRESHOLD=""
 FINANCIAL_MARKETS_WATCHLIST="$(yaml_get_json connectors.financial-markets.watchlist 2>/dev/null)" || FINANCIAL_MARKETS_WATCHLIST=""
 
@@ -412,6 +413,7 @@ FINANCIAL_MARKETS_ENABLED=${FINANCIAL_MARKETS_ENABLED}
 FINANCIAL_MARKETS_SYNC_SCHEDULE=${FINANCIAL_MARKETS_SYNC_SCHEDULE}
 FINANCIAL_MARKETS_FINNHUB_API_KEY=${FINANCIAL_MARKETS_FINNHUB_API_KEY}
 FINANCIAL_MARKETS_FRED_API_KEY=${FINANCIAL_MARKETS_FRED_API_KEY}
+FINANCIAL_MARKETS_COINGECKO_ENABLED=${FINANCIAL_MARKETS_COINGECKO_ENABLED}
 FINANCIAL_MARKETS_ALERT_THRESHOLD=${FINANCIAL_MARKETS_ALERT_THRESHOLD}
 FINANCIAL_MARKETS_WATCHLIST=${FINANCIAL_MARKETS_WATCHLIST}
 DB_MAX_CONNS=${DB_MAX_CONNS}
@@ -420,6 +422,7 @@ SHUTDOWN_TIMEOUT_S=${SHUTDOWN_TIMEOUT_S}
 ML_HEALTH_CACHE_TTL_S=${ML_HEALTH_CACHE_TTL_S}
 EOF
 
+chmod 0600 "$OUTPUT_FILE"
 echo "Generated $OUTPUT_FILE"
 
 # Generate NATS config file with resolved auth token and monitor port.
@@ -440,5 +443,6 @@ authorization {
 }"
 
 printf '%s\n' "$NATS_CONF_CONTENT" > "$NATS_CONF_FILE"
+chmod 0600 "$NATS_CONF_FILE"
 
 echo "Generated $NATS_CONF_FILE"

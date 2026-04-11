@@ -271,6 +271,27 @@ func TestTokenStore_EncryptDecrypt_SameKeyDifferentNonces(t *testing.T) {
 	}
 }
 
+func TestTokenStore_Decrypt_WrongKey_FailClosed(t *testing.T) {
+	// SCN-020-013 adversarial: encrypt with key A, decrypt with key B.
+	// Must return error — not silently return garbage or plaintext.
+	storeA := NewTokenStore(nil, "key-alpha-encrypt")
+	storeB := NewTokenStore(nil, "key-beta-decrypt")
+
+	original := "sensitive-access-token"
+	encrypted, err := storeA.encrypt(original)
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
+
+	result, err := storeB.decrypt(encrypted)
+	if err == nil {
+		t.Fatalf("expected error decrypting with wrong key, got result: %q", result)
+	}
+	if result != "" {
+		t.Errorf("expected empty string on wrong-key decrypt, got %q", result)
+	}
+}
+
 // --- OAuthHandler tests ---
 
 func TestOAuthHandler_NewOAuthHandler(t *testing.T) {

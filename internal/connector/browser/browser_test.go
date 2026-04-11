@@ -171,8 +171,8 @@ func TestPerSourceDeletion(t *testing.T) {
 		t.Fatalf("expected 2 artifacts, got %d", len(artifacts))
 	}
 	for i, a := range artifacts {
-		if a.SourceID != "browser" {
-			t.Errorf("artifact[%d].SourceID = %q, want \"browser\"", i, a.SourceID)
+		if a.SourceID != "browser-history" {
+			t.Errorf("artifact[%d].SourceID = %q, want \"browser-history\"", i, a.SourceID)
 		}
 		if a.SourceRef != entries[i].URL {
 			t.Errorf("artifact[%d].SourceRef = %q, want %q", i, a.SourceRef, entries[i].URL)
@@ -292,5 +292,55 @@ func TestParseChromeHistorySince_HasLimit(t *testing.T) {
 	_, err := ParseChromeHistorySince("/nonexistent/History", 0)
 	if err == nil {
 		t.Error("expected error for non-existent history path")
+	}
+}
+
+// --- CHAOS-HARDENING R3: Adversarial tests ---
+
+// CHAOS-F3: ToRawArtifacts must use "browser-history" SourceID consistently with processEntries.
+// Adversarial: would fail if ToRawArtifacts used a different SourceID.
+func TestToRawArtifacts_SourceIDConsistency(t *testing.T) {
+	entries := []HistoryEntry{
+		{URL: "https://example.com", Title: "E", VisitTime: time.Now(), Domain: "example.com"},
+	}
+	artifacts := ToRawArtifacts(entries)
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+	// Must match the SourceID used by processEntries ("browser-history")
+	if artifacts[0].SourceID != "browser-history" {
+		t.Errorf("SourceID = %q, want \"browser-history\" (must match processEntries)", artifacts[0].SourceID)
+	}
+}
+
+// CHAOS-F6: extractDomain must handle non-http/https scheme URLs correctly.
+// Adversarial: would fail if extractDomain only stripped http:// and https://.
+func TestExtractDomain_NonHTTPSchemes(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		{"ftp scheme", "ftp://files.example.com/data", "files.example.com"},
+		{"ws scheme", "ws://realtime.example.com/feed", "realtime.example.com"},
+		{"wss scheme", "wss://secure.example.com:443/ws", "secure.example.com"},
+		{"custom scheme", "myapp://settings/foo", "settings"},
+		{"no scheme with host", "example.com/path", "example.com"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractDomain(tt.url)
+			if got != tt.expected {
+				t.Errorf("extractDomain(%q) = %q, want %q", tt.url, got, tt.expected)
+			}
+		})
+	}
+}
+
+// CHAOS-F4: DwellTimeTier must handle negative dwell gracefully (treated as metadata).
+func TestDwellTimeTier_NegativeDwell(t *testing.T) {
+	got := DwellTimeTier(-5 * time.Minute)
+	if got != "metadata" {
+		t.Errorf("DwellTimeTier(-5m) = %q, want \"metadata\" (negative dwell must not escalate)", got)
 	}
 }

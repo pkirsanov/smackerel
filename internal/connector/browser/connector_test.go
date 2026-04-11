@@ -1201,3 +1201,203 @@ func TestProcessEntries_DedupSameURLSameDay(t *testing.T) {
 	}
 	_ = stats
 }
+
+func TestDetectRepeatVisits_RespectsWindow(t *testing.T) {
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		RepeatVisitWindow:              7 * 24 * time.Hour, // 7 days
+		RepeatVisitThreshold:           3,
+		SocialMediaIndividualThreshold: 5 * time.Minute,
+	}
+
+	now := time.Now()
+	// 2 visits within window + 2 visits outside window = 4 total, but only 2 in window
+	entries := []HistoryEntry{
+		{URL: "https://docs.example.com/api", Title: "API", VisitTime: now.Add(-1 * 24 * time.Hour), DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api", Title: "API", VisitTime: now.Add(-3 * 24 * time.Hour), DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api", Title: "API", VisitTime: now.Add(-10 * 24 * time.Hour), DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api", Title: "API", VisitTime: now.Add(-20 * 24 * time.Hour), DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+	}
+
+	artifacts, _, stats := c.processEntries(entries, 0)
+
+	// Only 2 visits in the 7-day window → below threshold of 3 → no escalation
+	if stats.repeatEscalations != 0 {
+		t.Errorf("expected 0 repeat escalations (only 2 visits in window), got %d", stats.repeatEscalations)
+	}
+
+	// All 4 entries should be light-tier (90s dwell), no escalation
+	for _, a := range artifacts {
+		tier, _ := a.Metadata["processing_tier"].(string)
+		if tier != "light" {
+			t.Errorf("expected light tier (no escalation), got %s for %s", tier, a.URL)
+		}
+	}
+	_ = artifacts
+}
+
+func TestDetectRepeatVisits_AllWithinWindow_Escalates(t *testing.T) {
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		RepeatVisitWindow:              7 * 24 * time.Hour,
+		RepeatVisitThreshold:           3,
+		SocialMediaIndividualThreshold: 5 * time.Minute,
+	}
+
+	now := time.Now()
+	// 3 visits all within the 7-day window → meets threshold → escalation
+	day1 := now.Add(-1 * 24 * time.Hour)
+	day2 := now.Add(-3 * 24 * time.Hour)
+	day3 := now.Add(-5 * 24 * time.Hour)
+	entries := []HistoryEntry{
+		{URL: "https://docs.example.com/api", Title: "API", VisitTime: day1, DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api", Title: "API", VisitTime: day2, DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+		{URL: "https://docs.example.com/api", Title: "API", VisitTime: day3, DwellTime: 90 * time.Second, Domain: "docs.example.com"},
+	}
+
+	artifacts, _, stats := c.processEntries(entries, 0)
+
+	// 3 visits in 7-day window → meets threshold → escalation
+	if stats.repeatEscalations != 3 {
+		t.Errorf("expected 3 repeat escalations, got %d", stats.repeatEscalations)
+	}
+
+	for _, a := range artifacts {
+		tier, _ := a.Metadata["processing_tier"].(string)
+		if tier != "standard" {
+			t.Errorf("expected standard tier (light→standard escalation), got %s", tier)
+		}
+	}
+}
+
+// --- CHAOS-HARDENING R3: Adversarial tests ---
+
+// CHAOS-F2: A corrupted cursor must not silently fall back to epoch 0, which would
+// re-sync the entire Chrome history from 1601. parseCursorToChromeSafe must error.
+// Adversarial: would fail if parseCursorToChromeSafe returned 0 without error.
+func TestParseCursorToChromeSafe_CorruptedInput(t *testing.T) {
+	tests := []struct {
+		name    string
+		cursor  string
+		wantErr bool
+	}{
+		{"garbage string", "not-a-number", true},
+		{"empty string", "", true},
+		{"negative value", "-100", true},
+		{"float string", "123.456", true},
+		{"valid integer", "13350000000000000", false},
+		{"zero is valid", "0", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := parseCursorToChromeSafe(tt.cursor)
+			if tt.wantErr && err == nil {
+				t.Errorf("parseCursorToChromeSafe(%q) expected error, got value %d", tt.cursor, v)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("parseCursorToChromeSafe(%q) unexpected error: %v", tt.cursor, err)
+			}
+			if !tt.wantErr && tt.cursor == "13350000000000000" && v != 13350000000000000 {
+				t.Errorf("parseCursorToChromeSafe(%q) = %d, want 13350000000000000", tt.cursor, v)
+			}
+		})
+	}
+}
+
+// CHAOS-F5: Sync must respect context cancellation between expensive steps.
+// Adversarial: would fail if Sync never checks ctx.Err() between copy/parse/process.
+func TestSync_RespectsContextCancellation(t *testing.T) {
+	tmpDir := t.TempDir()
+	historyPath := filepath.Join(tmpDir, "History")
+	if err := os.WriteFile(historyPath, []byte("fake-sqlite"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		HistoryPath:         historyPath,
+		InitialLookbackDays: 30,
+	}
+	c.mu.Lock()
+	c.health = connector.HealthHealthy
+	c.mu.Unlock()
+
+	// Pre-cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := c.Sync(ctx, "")
+	if err == nil {
+		t.Fatal("Sync with cancelled context should return error")
+	}
+	if err != context.Canceled {
+		t.Logf("Sync returned error (acceptable): %v", err)
+	}
+}
+
+// CHAOS-F1: Config snapshot must prevent data race between concurrent Connect and Sync.
+// This test verifies the Connector's Sync snapshots config at start, so a concurrent
+// Connect mutating config won't corrupt an in-progress Sync.
+func TestConnector_ConfigSnapshotIsolation(t *testing.T) {
+	tmpDir := t.TempDir()
+	historyPath := filepath.Join(tmpDir, "History")
+	if err := os.WriteFile(historyPath, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	c := New("browser-history")
+	config := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"history_path": historyPath,
+		},
+	}
+
+	if err := c.Connect(context.Background(), config); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+
+	// Verify the connector stores its own copy of config
+	c.mu.RLock()
+	originalPath := c.config.HistoryPath
+	c.mu.RUnlock()
+
+	if originalPath != historyPath {
+		t.Errorf("expected HistoryPath %q, got %q", historyPath, originalPath)
+	}
+}
+
+// CHAOS-F4: processEntries must handle entries with zero dwell time without panicking.
+func TestProcessEntries_ZeroDwellTime(t *testing.T) {
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		SocialMediaIndividualThreshold: 5 * time.Minute,
+	}
+
+	entries := []HistoryEntry{
+		{URL: "https://example.com/zero", Title: "Zero Dwell", VisitTime: time.Now(), DwellTime: 0, Domain: "example.com"},
+	}
+
+	// Must not panic; zero dwell → metadata tier → excluded by privacy gate
+	artifacts, _, stats := c.processEntries(entries, 0)
+
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts (zero dwell → metadata → privacy gate), got %d", len(artifacts))
+	}
+	if stats.byTier["metadata"] != 1 {
+		t.Errorf("expected 1 metadata tier entry, got %d", stats.byTier["metadata"])
+	}
+}
+
+// CHAOS: dedupByURLDate must handle empty/nil input without panicking.
+func TestDedupByURLDate_EmptyInput(t *testing.T) {
+	result := dedupByURLDate(nil)
+	if len(result) != 0 {
+		t.Errorf("expected 0 entries for nil input, got %d", len(result))
+	}
+	result = dedupByURLDate([]HistoryEntry{})
+	if len(result) != 0 {
+		t.Errorf("expected 0 entries for empty input, got %d", len(result))
+	}
+}

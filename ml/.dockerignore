@@ -1,0 +1,14 @@
+# Build context exclusions for smackerel-ml Docker builds
+# Keeps build context small and prevents test/cache artifacts from leaking into images
+
+# Test suite (not needed in production image)
+tests/
+
+# Python caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Development config
+pyproject.toml

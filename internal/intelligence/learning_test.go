@@ -109,6 +109,84 @@ func TestMarkLearningResourceCompleted_NilPool(t *testing.T) {
 	}
 }
 
+// === Edge cases: detectGaps additional scenarios ===
+
+func TestDetectGaps_OnlyAdvanced(t *testing.T) {
+	resources := []LearningResource{
+		{Difficulty: DifficultyAdvanced},
+		{Difficulty: DifficultyAdvanced},
+	}
+	gaps := detectGaps(resources)
+	// Missing beginner (has advanced but no beginner)
+	if len(gaps) != 1 {
+		t.Errorf("expected 1 gap (missing beginner), got %d: %v", len(gaps), gaps)
+	}
+}
+
+func TestDetectGaps_OnlyBeginner(t *testing.T) {
+	resources := []LearningResource{
+		{Difficulty: DifficultyBeginner},
+		{Difficulty: DifficultyBeginner},
+	}
+	gaps := detectGaps(resources)
+	// Only beginner: no gap triggered (the gap rules require specific combos)
+	if len(gaps) != 0 {
+		t.Errorf("expected 0 gaps for only-beginner, got %d: %v", len(gaps), gaps)
+	}
+}
+
+func TestDetectGaps_BeginnerAndIntermediate(t *testing.T) {
+	resources := []LearningResource{
+		{Difficulty: DifficultyBeginner},
+		{Difficulty: DifficultyIntermediate},
+	}
+	gaps := detectGaps(resources)
+	if len(gaps) != 0 {
+		t.Errorf("expected 0 gaps for beginner+intermediate, got %d: %v", len(gaps), gaps)
+	}
+}
+
+func TestDetectGaps_IntermediateOnly(t *testing.T) {
+	// Has intermediate but no beginner → gap
+	resources := []LearningResource{
+		{Difficulty: DifficultyIntermediate},
+	}
+	gaps := detectGaps(resources)
+	if len(gaps) != 1 {
+		t.Errorf("expected 1 gap (missing beginner), got %d: %v", len(gaps), gaps)
+	}
+}
+
+// === Edge cases: classifyDifficultyHeuristic ===
+
+func TestClassifyDifficultyHeuristic_ContentTypeInfluence(t *testing.T) {
+	// contentType is concatenated with title for matching
+	got := classifyDifficultyHeuristic("Some Title", "introduction", 0)
+	if got != DifficultyBeginner {
+		t.Errorf("contentType 'introduction' should classify as beginner, got %s", got)
+	}
+
+	got = classifyDifficultyHeuristic("Some Title", "advanced", 0)
+	if got != DifficultyAdvanced {
+		t.Errorf("contentType 'advanced' should classify as advanced, got %s", got)
+	}
+}
+
+func TestClassifyDifficultyHeuristic_AdvancedPrecedesBeginner(t *testing.T) {
+	// Title contains both advanced and beginner terms — advanced checked first
+	got := classifyDifficultyHeuristic("Advanced Introduction to Go", "article", 0)
+	if got != DifficultyAdvanced {
+		t.Errorf("advanced keyword should take precedence over beginner, got %s", got)
+	}
+}
+
+func TestClassifyDifficultyHeuristic_EmptyInputs(t *testing.T) {
+	got := classifyDifficultyHeuristic("", "", 0)
+	if got != DifficultyIntermediate {
+		t.Errorf("empty inputs should default to intermediate, got %s", got)
+	}
+}
+
 func TestResurfaceScore_Phase5(t *testing.T) {
 	// Verify the existing ResurfaceScore function still works as Phase 5 serendipity scoring foundation
 	score := ResurfaceScore(0.8, 200, 1)

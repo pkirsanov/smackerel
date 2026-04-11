@@ -105,6 +105,7 @@ func TestNormalizeCommutePattern(t *testing.T) {
 		TypicalDepartureHour: 8,
 		AvgDurationMin:       25.0,
 		AvgDistanceKm:        15.0,
+		LatestActivityDate:   time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC),
 	}
 
 	artifact := normalizeCommutePattern(p)
@@ -144,6 +145,59 @@ func TestNormalizeCommutePattern(t *testing.T) {
 	expectedTitle := "Commute: 47.370,8.540→47.400,8.550 (4 trips)"
 	if artifact.Title != expectedTitle {
 		t.Errorf("Title = %q, want %q", artifact.Title, expectedTitle)
+	}
+}
+
+// IMPROVE-011: Commute CapturedAt uses deterministic LatestActivityDate, not time.Now()
+func TestNormalizeCommutePatternDeterministicCapturedAt(t *testing.T) {
+	latestDate := time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC)
+	p := CommutePattern{
+		StartClusterID:       "47.370,8.540",
+		EndClusterID:         "47.400,8.550",
+		StartLat:             47.370,
+		StartLng:             8.540,
+		EndLat:               47.400,
+		EndLng:               8.550,
+		Frequency:            4,
+		TypicalDepartureHour: 8,
+		AvgDurationMin:       25.0,
+		AvgDistanceKm:        15.0,
+		LatestActivityDate:   latestDate,
+	}
+
+	artifact1 := normalizeCommutePattern(p)
+	artifact2 := normalizeCommutePattern(p)
+
+	if !artifact1.CapturedAt.Equal(latestDate) {
+		t.Errorf("CapturedAt = %v, want %v (deterministic from LatestActivityDate)", artifact1.CapturedAt, latestDate)
+	}
+	if !artifact1.CapturedAt.Equal(artifact2.CapturedAt) {
+		t.Errorf("CapturedAt not deterministic across calls: %v vs %v", artifact1.CapturedAt, artifact2.CapturedAt)
+	}
+}
+
+// IMPROVE-011: classifyCommutes propagates LatestActivityDate correctly
+func TestClassifyCommutesTracksLatestDate(t *testing.T) {
+	clusters := []LocationCluster{
+		makeCluster(47.37, 8.54, 47.40, 8.55, "drive", "2026-03-23", 1, 8, 15.0, 25.0),
+		makeCluster(47.37, 8.54, 47.40, 8.55, "drive", "2026-03-24", 2, 8, 14.0, 24.0),
+		makeCluster(47.37, 8.54, 47.40, 8.55, "drive", "2026-03-26", 4, 8, 16.0, 26.0),
+	}
+
+	config := MapsConfig{
+		CommuteMinOccurrences: 3,
+		CommuteWeekdaysOnly:   false,
+		CommuteWindowDays:     14,
+	}
+
+	patterns := classifyCommutes(clusters, config)
+	if len(patterns) != 1 {
+		t.Fatalf("expected 1 pattern, got %d", len(patterns))
+	}
+
+	expectedDate := time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC)
+	if !patterns[0].LatestActivityDate.Equal(expectedDate) {
+		t.Errorf("LatestActivityDate = %v, want %v", patterns[0].LatestActivityDate, expectedDate)
 	}
 }
 

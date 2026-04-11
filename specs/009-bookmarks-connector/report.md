@@ -149,3 +149,44 @@ exit code 0
 $ ./smackerel.sh test unit
 all 25 Go packages pass (including internal/connector/bookmarks at 0.083s), 0 failures
 ```
+
+### Regression Quality Sweep (Stochastic Quality Sweep)
+
+**Date:** 2026-04-11
+**Trigger:** regression
+**Mode:** regression-to-doc
+
+#### Pre-Sweep Assessment
+
+- **Prior security fix:** Symlink path traversal protection added to `findNewFiles()` at line 286-287 of `connector.go`
+- **Protection mechanism:** `entry.Type()&os.ModeSymlink != 0` check silently skips symlinks in the import directory
+- **Cross-spec pattern:** Same symlink guard exists in `internal/connector/keep/takeout.go` (line 101) and `internal/connector/maps/connector.go` (line 368)
+
+#### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| R001 | Regression Coverage | High | Symlink path traversal protection (connector.go L286-287) had NO adversarial regression test. If the guard were removed, no test would detect the security regression. Keep connector has `TestParseExportRejectsSymlinks` covering the same pattern — bookmarks lacked parity. | Fixed |
+
+#### Fixes Applied
+
+**R001 — Symlink Path Traversal Regression Test** (`internal/connector/bookmarks/connector_test.go`):
+- Added `TestSyncSkipsSymlinks` (T-SEC-R1): creates a legitimate export in the import dir, a secret file in a separate temp dir, a symlink inside the import dir pointing to the secret, then verifies Sync() only processes the real file
+- 3-layer adversarial verification: (1) artifact count matches only the real file, (2) cursor does NOT contain symlink filename, (3) no artifact metadata references the symlink filename
+- Test uses `t.Skipf` when OS-level symlink creation fails (CI permission edge case)
+
+#### Cross-Spec Conflict Analysis
+
+- No shared mutable state between bookmarks connector and other file-scanning connectors (keep, maps, browser) — each connector uses its own configured `ImportDir`
+- The bookmarks connector does not modify any shared tables during Sync (only inserts via dedup/topic mapper, which are behind nil-pool guards in unit tests)
+- Registration in `cmd/core/main.go` uses unique connector ID `"bookmarks"` — no collision with other connectors
+- Config SST key `connectors.bookmarks.import_dir` is unique — no overlap with other connector config keys
+
+#### Full Test Suite Evidence
+
+```
+$ ./smackerel.sh test unit (2026-04-11)
+Go: 31/31 packages ok (bookmarks 0.184s — fresh run with new test)
+Python: 53/53 passed (0.84s)
+No regressions across any package.
+```

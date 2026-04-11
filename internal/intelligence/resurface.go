@@ -213,12 +213,43 @@ func (e *Engine) SerendipityPick(ctx context.Context) (*SerendipityCandidate, er
 		}
 		candidates = append(candidates, c)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("serendipity candidate iteration: %w", err)
+	}
 
 	if len(candidates) == 0 {
 		return nil, nil // No candidates available
 	}
 
-	// 2. Score each candidate with context matching
+	// 2. Batch-fetch topic matches in a single query instead of N+1 per-candidate
+	candidateIDs := make([]string, len(candidates))
+	for i, c := range candidates {
+		candidateIDs[i] = c.id
+	}
+	topicMatchSet := make(map[string]bool)
+	tmRows, err := e.Pool.Query(ctx, `
+		SELECT DISTINCT e.src_id
+		FROM edges e
+		JOIN topics t ON t.id = e.dst_id AND e.dst_type = 'topic'
+		WHERE e.src_id = ANY($1) AND e.edge_type = 'BELONGS_TO'
+		AND t.state IN ('hot', 'active')
+	`, candidateIDs)
+	if err != nil {
+		slog.Warn("batch topic match query failed", "error", err)
+	} else {
+		defer tmRows.Close()
+		for tmRows.Next() {
+			var id string
+			if tmRows.Scan(&id) == nil {
+				topicMatchSet[id] = true
+			}
+		}
+		if err := tmRows.Err(); err != nil {
+			slog.Warn("batch topic match iteration failed", "error", err)
+		}
+	}
+
+	// Score each candidate with context matching
 	var best *SerendipityCandidate
 	var bestScore float64
 
@@ -235,18 +266,8 @@ func (e *Engine) SerendipityPick(ctx context.Context) (*SerendipityCandidate, er
 		// Base score from relevance
 		score := c.relevance * 0.5
 
-		// Topic match: check if artifact belongs to an active/hot topic
-		var topicMatch bool
-		e.Pool.QueryRow(ctx, `
-			SELECT EXISTS(
-				SELECT 1 FROM edges e
-				JOIN topics t ON t.id = e.dst_id AND e.dst_type = 'topic'
-				WHERE e.src_id = $1 AND e.edge_type = 'BELONGS_TO'
-				AND t.state IN ('hot', 'active')
-			)
-		`, c.id).Scan(&topicMatch)
-
-		if topicMatch {
+		// Topic match from batch query
+		if topicMatchSet[c.id] {
 			score += 2.0
 			sc.TopicMatch = true
 			sc.ContextReason = "Connects to a currently active topic"

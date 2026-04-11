@@ -78,15 +78,18 @@
 |---------|--------|-----------|
 | `./smackerel.sh check` | PASS — config in sync with SST | 2026-04-10 |
 | `./smackerel.sh test unit` | PASS — 51 tests (Go 31 packages + Python 51 pytest) | 2026-04-10 |
+| `./smackerel.sh test unit` | PASS — 53 tests (Go 31 packages + Python 53 pytest) | 2026-04-11 |
 
-## Test Coverage Gaps
+## Test Coverage Gaps (Resolved)
 
-| Gap | Scenario(s) | Severity | Notes |
-|-----|-------------|----------|-------|
-| No Web UI auth unit test | SCN-020-009, SCN-020-010 | Medium | `webAuthMiddleware` IS applied (code-verified), but `router_test.go` has no explicit test for the Web UI group |
-| No OAuth rate limit unit test | SCN-020-011, SCN-020-012 | Medium | `httprate.LimitByIP` IS wired (code-verified), but no test exercises the 429 response |
-| No ML startup warning test | SCN-020-017, SCN-020-018 | Low | Warning IS emitted (code-verified), scopes.md references `test_startup_warning.py` which does not exist |
+All 3 test coverage gaps identified in the 2026-04-10 reconciliation have been closed:
+
+| Gap | Scenario(s) | Resolution | Evidence |
+|-----|-------------|------------|----------|
+| ~~No Web UI auth unit test~~ | SCN-020-009, SCN-020-010 | Created `internal/api/router_test.go` with 6 subtests: auth required on all 6 Web UI routes, Bearer token accepted, cookie accepted, wrong token rejected, dev mode passthrough on all 6 routes | `TestWebUI_RequiresAuth_WhenTokenConfigured`, `TestWebUI_AcceptsBearerToken`, `TestWebUI_AcceptsCookie`, `TestWebUI_RejectsWrongToken`, `TestWebUI_AllowsAll_WhenTokenEmpty` |
+| ~~No OAuth rate limit unit test~~ | SCN-020-011, SCN-020-012 | Created rate limit tests in `internal/api/router_test.go`: fires 15 requests and asserts 429, fires 5 within limit and asserts all 200, verifies callback is NOT rate-limited | `TestOAuthStart_RateLimited`, `TestOAuthStart_AllowsWithinLimit`, `TestOAuthCallback_NotRateLimited` |
+| ~~No ML startup warning test~~ | SCN-020-017, SCN-020-018 | Created `ml/tests/test_startup_warning.py` with 2 tests: lifespan emits WARNING when token empty, no warning when token set | `TestMLStartupWarningEmptyToken`, `TestMLStartupNoWarningWithToken` |
 
 ## Completion Statement
 
-All 3 scopes implemented and code-verified. All security controls are correctly in place. 51 unit tests pass. Three test coverage gaps identified (Medium/Low severity) where documented test plans reference tests that were not created, though the underlying security controls are verified at the code level.
+All 3 scopes implemented and code-verified. All security controls are correctly in place. All 3 test coverage gaps from prior reconciliation have been closed with targeted unit tests. 53 unit tests pass (Go 31 packages all green + Python 53 pytest all green).

@@ -3,6 +3,7 @@ package weather
 import (
 	"context"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -392,6 +393,82 @@ func TestWmoCodeBoundaries(t *testing.T) {
 		got := wmoCodeToDescription(tt.code)
 		if got != tt.expected {
 			t.Errorf("wmoCodeToDescription(%d) = %q, want %q", tt.code, got, tt.expected)
+		}
+	}
+}
+
+func TestConnect_NaNLatitude(t *testing.T) {
+	c := New("weather")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "NaN", "latitude": math.NaN(), "longitude": 10.0},
+			},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for NaN latitude")
+	}
+}
+
+func TestConnect_NaNLongitude(t *testing.T) {
+	c := New("weather")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "NaN", "latitude": 10.0, "longitude": math.NaN()},
+			},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for NaN longitude")
+	}
+}
+
+func TestConnect_InfLatitude(t *testing.T) {
+	c := New("weather")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Inf", "latitude": math.Inf(1), "longitude": 10.0},
+			},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for Inf latitude")
+	}
+}
+
+func TestConnect_NegInfLongitude(t *testing.T) {
+	c := New("weather")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "NegInf", "latitude": 10.0, "longitude": math.Inf(-1)},
+			},
+		},
+	})
+	if err == nil {
+		t.Error("expected error for -Inf longitude")
+	}
+}
+
+func TestCoordFmt(t *testing.T) {
+	tests := []struct {
+		precision int
+		lat, lon  float64
+		expected  string
+	}{
+		{0, 37.7749, -122.4194, "current-38--122"},
+		{2, 37.7749, -122.4194, "current-37.77--122.42"},
+		{4, 37.7749, -122.4194, "current-37.7749--122.4194"},
+		{6, 0.123456, -0.654321, "current-0.123456--0.654321"},
+	}
+	for _, tt := range tests {
+		cf := coordFmt(tt.precision)
+		got := fmt.Sprintf("current-"+cf+"-"+cf, tt.lat, tt.lon)
+		if got != tt.expected {
+			t.Errorf("precision=%d: got %q, want %q", tt.precision, got, tt.expected)
 		}
 	}
 }

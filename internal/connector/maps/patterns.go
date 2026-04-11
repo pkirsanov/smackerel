@@ -33,6 +33,7 @@ type CommutePattern struct {
 	TypicalDepartureHour int
 	AvgDurationMin       float64
 	AvgDistanceKm        float64
+	LatestActivityDate   time.Time
 }
 
 // TripEvent represents a detected trip away from home.
@@ -267,6 +268,7 @@ func classifyCommutes(clusters []LocationCluster, config MapsConfig) []CommutePa
 		totalDuration  float64
 		totalDistance  float64
 		departureHours []int
+		latestDate     time.Time
 	}
 
 	routes := make(map[string]*routeStats)
@@ -292,6 +294,9 @@ func classifyCommutes(clusters []LocationCluster, config MapsConfig) []CommutePa
 		rs.totalDuration += c.DurationMin
 		rs.totalDistance += c.DistanceKm
 		rs.departureHours = append(rs.departureHours, c.DepartureHour)
+		if c.ActivityDate.After(rs.latestDate) {
+			rs.latestDate = c.ActivityDate
+		}
 	}
 
 	var patterns []CommutePattern
@@ -311,6 +316,7 @@ func classifyCommutes(clusters []LocationCluster, config MapsConfig) []CommutePa
 			TypicalDepartureHour: typicalHour(rs.departureHours),
 			AvgDurationMin:       rs.totalDuration / float64(rs.count),
 			AvgDistanceKm:        rs.totalDistance / float64(rs.count),
+			LatestActivityDate:   rs.latestDate,
 		})
 	}
 
@@ -476,7 +482,7 @@ func normalizeCommutePattern(p CommutePattern) connector.RawArtifact {
 			"end_lng":                p.EndLng,
 			"processing_tier":        "light",
 		},
-		CapturedAt: time.Now(),
+		CapturedAt: p.LatestActivityDate,
 	}
 }
 

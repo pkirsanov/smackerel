@@ -830,18 +830,21 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 		// For annual: same month and day as first_seen.
 		now := time.Now()
 		billingDay := firstSeen.Day()
+		// Use local midnight (not now.Truncate which aligns to UTC boundaries)
+		// to ensure consistent comparison with clampDay's time.Local dates.
+		localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 
 		var nextBilling time.Time
 		if billingFreq == "annual" {
 			// Try this year first, then next year
 			nextBilling = clampDay(now.Year(), firstSeen.Month(), billingDay)
-			if nextBilling.Before(now.Truncate(24 * time.Hour)) {
+			if nextBilling.Before(localToday) {
 				nextBilling = clampDay(now.Year()+1, firstSeen.Month(), billingDay)
 			}
 		} else {
 			// Monthly: try current month, then next month
 			nextBilling = clampDay(now.Year(), now.Month(), billingDay)
-			if nextBilling.Before(now.Truncate(24 * time.Hour)) {
+			if nextBilling.Before(localToday) {
 				nextMonth := now.Month() + 1
 				nextYear := now.Year()
 				if nextMonth > 12 {

@@ -58,6 +58,71 @@ _No scopes have been implemented yet._
 
 ---
 
+## Test-to-Doc Report — 2026-04-11
+
+**Trigger:** `test` (stochastic-quality-sweep child workflow)
+**Target:** `internal/connector/alerts/`
+**Agent:** `bubbles.workflow` (test-to-doc child)
+
+### Analysis
+
+Prior state: 16 tests (8 core + 8 chaos). Coverage gaps in:
+- Severity classification boundary values (exact thresholds untested)
+- Tier assignment in `normalizeEarthquake` (full vs standard dispatch)
+- `findNearestLocation` multi-candidate selection and edge cases
+- `haversineKm` extreme distances (poles, antipodal, date line)
+- `parseAlertsConfig` defaults and custom magnitude paths
+- `Sync` end-to-end with HTTP mocking (dedup, error handling, malformed JSON, coordinate filtering)
+- `Sync` health state transitions
+- Reconnection lifecycle
+
+### Code Issue Remediated
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| RACE-004 | Race Condition | High | `Sync()` reads `c.config` fields (SourceEarthquake, Locations, MinEarthquakeMag) without holding lock after releasing it for health update — data race with concurrent `Connect()` writes | Fixed |
+
+**Fix:** Snapshot `c.config` under the same mutex acquisition that sets health to syncing. Refactored `findNearestLocation` to accept locations parameter and `fetchUSGSEarthquakes` to accept `minMag` parameter. Added `baseURL` field for HTTP test injection.
+
+### New Tests (21 tests added, 37 total)
+
+| Test | Category | What It Verifies |
+|------|----------|------------------|
+| `TestClassifyEarthquakeSeverity_Boundaries` (12 sub) | Edge case | Exact threshold values: 7.0, 5.0@100km, 3.0@50km, just-outside boundaries, negative/zero mag |
+| `TestNormalizeEarthquake_TierAssignment` (4 sub) | Edge case | "full" tier for extreme/severe, "standard" for moderate/minor |
+| `TestFindNearestLocation_MultipleCandidates` | Edge case | Closest location wins when multiple are in range |
+| `TestFindNearestLocation_EmptyLocations` | Edge case | Nil locations returns nil match |
+| `TestFindNearestLocation_ExactBoundary` | Edge case | Zero-distance match at exact location |
+| `TestHaversineKm_ExtremeDistances` (5 sub) | Edge case | Poles, antipodal, date line crossing, equator quarter |
+| `TestParseAlertsConfig_Defaults` | Config | Default magnitude 2.5, SourceEarthquake true, default radius 200 |
+| `TestParseAlertsConfig_CustomMagnitude` | Config | `min_earthquake_magnitude` config key works |
+| `TestParseAlertsConfig_NilSourceConfig` | Defensive | Nil SourceConfig does not panic |
+| `TestSync_Deduplication` | Integration | Second sync with same alert IDs produces 0 artifacts |
+| `TestSync_HTTPError` | Error handling | HTTP 500 propagates as error from Sync |
+| `TestSync_MalformedJSON` | Error handling | Truncated JSON propagates as decode error |
+| `TestSync_EmptyFeatures` | Edge case | Empty USGS response produces 0 artifacts, no error |
+| `TestSync_InsufficientCoordinates` | Defensive | Features with <3 coordinates skipped, valid ones pass |
+| `TestSync_InvalidCoordSkipped` | Defensive | Out-of-range coordinates rejected by isFiniteCoord |
+| `TestSync_OutOfRangeFiltered` | Proximity | Far-away earthquake filtered by proximity |
+| `TestSync_PassesMinMagnitudeToURL` | Integration | Custom magnitude appears in USGS API URL |
+| `TestConnect_ThenClose_ThenReconnect` | Lifecycle | Connect → Close → reconnect transitions work |
+| `TestSync_HealthTransitions` | State | Health returns to healthy after sync completes |
+| `TestSync_ContextCancelledMidEarthquakeLoop` | Resilience | Cancelled context mid-loop does not panic |
+| `TestNormalizeEarthquake_MetadataFields` | Completeness | All 11 metadata fields + artifact-level fields verified |
+
+### Files Changed
+
+- `internal/connector/alerts/alerts.go` — config race fix (snapshot in Sync), baseURL field, refactored findNearestLocation/fetchUSGSEarthquakes signatures
+- `internal/connector/alerts/alerts_test.go` — 21 new tests, test helpers (usgsResponse, makeFeature, newTestConnector)
+
+### Validation
+
+- `./smackerel.sh build` — build passes
+- `./smackerel.sh test unit` — 37/37 alerts tests pass, all other packages green
+- `go test -race ./internal/connector/alerts/...` — clean under race detector
+
+---
+
 ## Simplification Report — 2026-04-10
 
 **Trigger:** `simplify` (stochastic-quality-sweep round)

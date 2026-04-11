@@ -27,6 +27,7 @@ type Connector struct {
 	mu         sync.RWMutex
 	config     AlertsConfig
 	httpClient *http.Client
+	baseURL    string
 	known      map[string]time.Time // alert_id → first-seen time for dedup
 }
 
@@ -51,6 +52,7 @@ func New(id string) *Connector {
 		id:         id,
 		health:     connector.HealthDisconnected,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
+		baseURL:    "https://earthquake.usgs.gov",
 		known:      make(map[string]time.Time),
 	}
 }
@@ -76,10 +78,17 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
+	cfg := c.config
 	c.mu.Unlock()
+
+	var syncErr error
 	defer func() {
 		c.mu.Lock()
-		c.health = connector.HealthHealthy
+		if syncErr != nil {
+			c.health = connector.HealthDegraded
+		} else {
+			c.health = connector.HealthHealthy
+		}
 		c.mu.Unlock()
 	}()
 
@@ -96,21 +105,23 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.mu.Unlock()
 
 	// USGS Earthquake source
-	if c.config.SourceEarthquake {
-		earthquakes, err := c.fetchUSGSEarthquakes(ctx)
+	if cfg.SourceEarthquake {
+		earthquakes, err := c.fetchUSGSEarthquakes(ctx, cfg.MinEarthquakeMag)
 		if err != nil {
 			slog.Warn("USGS earthquake fetch failed", "error", err)
-			return allArtifacts, now.Format(time.RFC3339), fmt.Errorf("usgs earthquake fetch: %w", err)
+			syncErr = fmt.Errorf("usgs earthquake fetch: %w", err)
+			return allArtifacts, now.Format(time.RFC3339), syncErr
 		}
 		for _, eq := range earthquakes {
 			if ctx.Err() != nil {
-				return allArtifacts, now.Format(time.RFC3339), ctx.Err()
+				syncErr = ctx.Err()
+				return allArtifacts, now.Format(time.RFC3339), syncErr
 			}
 			if !isFiniteCoord(eq.Latitude, eq.Longitude) {
 				slog.Warn("skipping earthquake with invalid coordinates", "id", eq.ID, "lat", eq.Latitude, "lon", eq.Longitude)
 				continue
 			}
-			if match := c.findNearestLocation(eq.Latitude, eq.Longitude); match != nil {
+			if match := findNearestLocation(eq.Latitude, eq.Longitude, cfg.Locations); match != nil {
 				c.mu.Lock()
 				_, seen := c.known[eq.ID]
 				if !seen {
@@ -158,9 +169,9 @@ type ProximityMatch struct {
 }
 
 // fetchUSGSEarthquakes fetches recent earthquakes from the USGS API.
-func (c *Connector) fetchUSGSEarthquakes(ctx context.Context) ([]Earthquake, error) {
-	url := fmt.Sprintf("https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=%.1f&orderby=time&limit=20",
-		c.config.MinEarthquakeMag)
+func (c *Connector) fetchUSGSEarthquakes(ctx context.Context, minMag float64) ([]Earthquake, error) {
+	url := fmt.Sprintf("%s/fdsnws/event/1/query?format=geojson&minmagnitude=%.1f&orderby=time&limit=20",
+		c.baseURL, minMag)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -217,9 +228,9 @@ func (c *Connector) fetchUSGSEarthquakes(ctx context.Context) ([]Earthquake, err
 }
 
 // findNearestLocation returns the closest user location within its radius, or nil.
-func (c *Connector) findNearestLocation(lat, lon float64) *ProximityMatch {
+func findNearestLocation(lat, lon float64, locations []LocationConfig) *ProximityMatch {
 	var best *ProximityMatch
-	for _, loc := range c.config.Locations {
+	for _, loc := range locations {
 		d := haversineKm(lat, lon, loc.Latitude, loc.Longitude)
 		if d <= loc.RadiusKm {
 			if best == nil || d < best.DistanceKm {
@@ -311,16 +322,19 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 				if name, ok := lm["name"].(string); ok {
 					lc.Name = name
 				}
+				latOK, lonOK := false, false
 				if lat, ok := lm["latitude"].(float64); ok {
 					lc.Latitude = lat
+					latOK = true
 				}
 				if lon, ok := lm["longitude"].(float64); ok {
 					lc.Longitude = lon
+					lonOK = true
 				}
 				if r, ok := lm["radius_km"].(float64); ok {
 					lc.RadiusKm = r
 				}
-				if lc.Name != "" && isFiniteCoord(lc.Latitude, lc.Longitude) && lc.RadiusKm > 0 {
+				if lc.Name != "" && latOK && lonOK && isFiniteCoord(lc.Latitude, lc.Longitude) && lc.RadiusKm > 0 {
 					cfg.Locations = append(cfg.Locations, lc)
 				}
 			}

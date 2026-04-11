@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -234,7 +235,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	allProcessed := append(processedFiles, processedThisCycle...)
-	newCursor := encodeCursor(allProcessed)
+	pruned := c.pruneCursor(allProcessed)
+	newCursor := encodeCursor(pruned)
 
 	c.mu.Lock()
 	c.lastSyncCount = len(allArtifacts)
@@ -380,6 +382,8 @@ func (c *Connector) findNewFiles(processedFiles []string) ([]string, error) {
 
 		newFiles = append(newFiles, filepath.Join(c.config.ImportDir, name))
 	}
+
+	sort.Strings(newFiles)
 	return newFiles, nil
 }
 
@@ -408,6 +412,33 @@ func parseCursor(cursor string) []string {
 // encodeCursor joins processed filenames into a pipe-delimited cursor string.
 func encodeCursor(files []string) string {
 	return strings.Join(files, "|")
+}
+
+// pruneCursor removes cursor entries for files that no longer exist in the import directory.
+// This prevents the cursor from growing unboundedly after files are archived or deleted.
+func (c *Connector) pruneCursor(files []string) []string {
+	if len(files) == 0 {
+		return files
+	}
+
+	// Build a set of files currently present in the import directory.
+	entries, err := os.ReadDir(c.config.ImportDir)
+	if err != nil {
+		// On read error, keep all entries to avoid losing track of processed files.
+		return files
+	}
+	present := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		present[e.Name()] = true
+	}
+
+	pruned := make([]string, 0, len(files))
+	for _, f := range files {
+		if present[f] {
+			pruned = append(pruned, f)
+		}
+	}
+	return pruned
 }
 
 // parseMapsConfig extracts Maps-specific fields from ConnectorConfig.SourceConfig.

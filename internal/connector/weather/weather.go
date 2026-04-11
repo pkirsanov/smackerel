@@ -161,7 +161,8 @@ type CurrentWeather struct {
 // fetchCurrent gets current weather from Open-Meteo API (free, no key needed).
 // Retries transient failures with exponential backoff.
 func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*CurrentWeather, error) {
-	cacheKey := fmt.Sprintf("current-%.2f-%.2f", lat, lon)
+	cf := coordFmt(c.config.Precision)
+	cacheKey := fmt.Sprintf("current-"+cf+"-"+cf, lat, lon)
 
 	c.mu.RLock()
 	if entry, ok := c.cache[cacheKey]; ok && time.Now().Before(entry.expiresAt) {
@@ -171,7 +172,7 @@ func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*Curren
 	}
 	c.mu.RUnlock()
 
-	url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code", lat, lon)
+	url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude="+cf+"&longitude="+cf+"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code", lat, lon)
 
 	backoff := connector.DefaultBackoff()
 	var lastErr error
@@ -299,6 +300,11 @@ func roundCoords(lat, lon float64, precision int) (float64, float64) {
 	return math.Round(lat*factor) / factor, math.Round(lon*factor) / factor
 }
 
+// coordFmt returns a printf format verb for coordinates at the given decimal precision.
+func coordFmt(precision int) string {
+	return fmt.Sprintf("%%.%df", precision)
+}
+
 // wmoCodeToDescription converts WMO weather interpretation codes.
 func wmoCodeToDescription(code int) string {
 	switch {
@@ -343,6 +349,9 @@ func parseWeatherConfig(config connector.ConnectorConfig) (WeatherConfig, error)
 				lc := LocationConfig{}
 				if name, ok := lm["name"].(string); ok {
 					lc.Name = sanitizeLocationName(name)
+					if lc.Name == "" && name != "" {
+						slog.Warn("weather location name contained only control characters, skipping", "original_length", len(name))
+					}
 				}
 				if lat, ok := lm["latitude"].(float64); ok {
 					lc.Latitude = lat
@@ -355,6 +364,12 @@ func parseWeatherConfig(config connector.ConnectorConfig) (WeatherConfig, error)
 					return cfg, fmt.Errorf("location %q: longitude must be a number", lc.Name)
 				}
 				if lc.Name != "" {
+					if math.IsNaN(lc.Latitude) || math.IsInf(lc.Latitude, 0) {
+						return cfg, fmt.Errorf("location %q: latitude must be a finite number", lc.Name)
+					}
+					if math.IsNaN(lc.Longitude) || math.IsInf(lc.Longitude, 0) {
+						return cfg, fmt.Errorf("location %q: longitude must be a finite number", lc.Name)
+					}
 					if lc.Latitude < -90 || lc.Latitude > 90 {
 						return cfg, fmt.Errorf("location %q: latitude %.4f out of range [-90, 90]", lc.Name, lc.Latitude)
 					}

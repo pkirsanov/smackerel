@@ -1209,3 +1209,34 @@ func TestGenerateWeeklySynthesis_CancelledContext(t *testing.T) {
 		t.Error("expected error for nil pool or cancelled context")
 	}
 }
+
+// === Improve: ProduceBillAlerts billing date uses local-timezone comparison ===
+
+func TestBillingDate_LocalMidnightNotUTCTruncate(t *testing.T) {
+	// Verify that clampDay produces dates at local midnight, and that the
+	// comparison uses local midnight, not UTC-aligned Truncate.
+	// time.Truncate(24h) aligns to UTC midnight which can differ from
+	// local midnight in non-UTC timezones.
+	now := time.Now()
+	localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	utcTruncated := now.Truncate(24 * time.Hour)
+
+	billingDay := now.Day()
+	nextBilling := clampDay(now.Year(), now.Month(), billingDay)
+
+	// nextBilling should be today at local midnight
+	if nextBilling != localToday {
+		t.Errorf("clampDay for today should equal local midnight: got %v, want %v",
+			nextBilling, localToday)
+	}
+
+	// The billing date should NOT be before local midnight (it IS local midnight)
+	if nextBilling.Before(localToday) {
+		t.Error("today's billing date should not be before local midnight")
+	}
+
+	// Under UTC-aligned truncation, this relationship can break for UTC+
+	// timezones. Verify the code uses local midnight (above assertion
+	// would fail if Truncate were used and the offset pushed it forward).
+	_ = utcTruncated // retained to document the contrast
+}

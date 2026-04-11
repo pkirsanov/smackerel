@@ -563,3 +563,130 @@ func TestHaversine_AntipodalPoints(t *testing.T) {
 		t.Errorf("North to South pole should be ~20015km, got %.0fkm", d)
 	}
 }
+
+// IMPROVE-011: ParseTakeoutJSON skips activities with negative distance
+func TestParseTakeoutJSON_NegativeDistance(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:00:00Z"
+					},
+					"distance": -500,
+					"activityType": "WALKING",
+					"waypointPath": {"waypoints": []}
+				}
+			},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T12:00:00Z",
+						"endTimestamp":   "2026-03-15T12:45:00Z"
+					},
+					"distance": 3000,
+					"activityType": "CYCLING",
+					"waypointPath": {"waypoints": []}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (negative distance skipped), got %d", len(activities))
+	}
+	if activities[0].Type != ActivityCycle {
+		t.Errorf("expected cycling activity, got %q", activities[0].Type)
+	}
+}
+
+// IMPROVE-011: ParseTakeoutJSON skips activities where end time is before start time
+func TestParseTakeoutJSON_EndBeforeStart(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T11:00:00Z",
+						"endTimestamp":   "2026-03-15T10:00:00Z"
+					},
+					"distance": 5000,
+					"activityType": "WALKING",
+					"waypointPath": {"waypoints": []}
+				}
+			},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T12:00:00Z",
+						"endTimestamp":   "2026-03-15T12:30:00Z"
+					},
+					"distance": 2000,
+					"activityType": "RUNNING",
+					"waypointPath": {"waypoints": []}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (end-before-start skipped), got %d", len(activities))
+	}
+	if activities[0].Type != ActivityRun {
+		t.Errorf("expected run activity, got %q", activities[0].Type)
+	}
+}
+
+// IMPROVE-011: ParseTakeoutJSON skips waypoints with out-of-range coordinates
+func TestParseTakeoutJSON_OutOfRangeWaypoints(t *testing.T) {
+	input := `{
+		"timelineObjects": [{
+			"activitySegment": {
+				"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+				"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+				"duration": {
+					"startTimestamp": "2026-03-15T10:00:00Z",
+					"endTimestamp":   "2026-03-15T11:00:00Z"
+				},
+				"distance": 5000,
+				"activityType": "WALKING",
+				"waypointPath": {
+					"waypoints": [
+						{"latE7": 407128000, "lngE7": -740060000},
+						{"latE7": 950000000, "lngE7": 87000000},
+						{"latE7": 407580000, "lngE7": -739855000}
+					]
+				}
+			}
+		}]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity, got %d", len(activities))
+	}
+	// Out-of-range waypoint (lat 95) should be filtered, leaving only 2 valid waypoints
+	if len(activities[0].Route) != 2 {
+		t.Errorf("expected 2 valid waypoints (1 out-of-range filtered), got %d", len(activities[0].Route))
+	}
+}
