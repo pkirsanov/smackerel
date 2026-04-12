@@ -189,6 +189,11 @@ connectors:
       latitude: 0.0
       longitude: 0.0
       radius_km: 200
+    travel_locations: [] # Auto-derived from calendar events (future); manually configured for now
+    # - name: "Trip Destination"
+    #   latitude: 0.0
+    #   longitude: 0.0
+    #   radius_km: 200  # Will be doubled at query time for travel safety margin
 
   financial-markets:
     enabled: false

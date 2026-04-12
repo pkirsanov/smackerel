@@ -132,6 +132,11 @@
       "request": "seasonal.analyze",
       "stream": "INTELLIGENCE",
       "critical": false
+    },
+    "alerts.notify": {
+      "direction": "core_to_external",
+      "stream": "ALERTS",
+      "critical": true
     }
   },
   "streams": {
@@ -140,6 +145,7 @@
     "DIGEST": { "subjects_pattern": "digest.>" },
     "KEEP": { "subjects_pattern": "keep.>" },
     "INTELLIGENCE": { "subjects_pattern": "learning.>", "additional_subjects": ["content.>", "monthly.>", "quickref.>", "seasonal.>"] },
+    "ALERTS": { "subjects_pattern": "alerts.>" },
     "DEADLETTER": { "subjects_pattern": "deadletter.>" }
   },
   "request_response_pairs": [

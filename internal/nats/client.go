@@ -38,6 +38,9 @@ const (
 	SubjectQuickrefGenerated  = "quickref.generated"
 	SubjectSeasonalAnalyze    = "seasonal.analyze"
 	SubjectSeasonalAnalyzed   = "seasonal.analyzed"
+
+	// Proactive alert notification subject
+	SubjectAlertsNotify = "alerts.notify"
 )
 
 // StreamConfig defines a JetStream stream and its subjects.
@@ -54,6 +57,7 @@ func AllStreams() []StreamConfig {
 		{Name: "DIGEST", Subjects: []string{"digest.>"}},
 		{Name: "KEEP", Subjects: []string{"keep.>"}},
 		{Name: "INTELLIGENCE", Subjects: []string{"learning.>", "content.>", "monthly.>", "quickref.>", "seasonal.>"}},
+		{Name: "ALERTS", Subjects: []string{"alerts.>"}},
 		{Name: "DEADLETTER", Subjects: []string{"deadletter.>"}},
 	}
 }
