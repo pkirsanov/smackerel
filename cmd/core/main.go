@@ -319,6 +319,12 @@ func run() error {
 
 	// Auto-start Gov Alerts connector (no auth — USGS/NWS are free)
 	if os.Getenv("GOV_ALERTS_ENABLED") == "true" {
+		// Wire proactive alert notifier to publish extreme/severe alerts to NATS
+		alertsConn.Notifier = &alertsConnector.NATSAlertNotifier{
+			PublishFn: nc.Publish,
+			Subject:   smacknats.SubjectAlertsNotify,
+		}
+
 		alertsCfg := connector.ConnectorConfig{
 			AuthType:     "none",
 			Enabled:      true,
@@ -326,6 +332,7 @@ func run() error {
 			SourceConfig: map[string]interface{}{
 				"locations":                parseJSONArray(os.Getenv("GOV_ALERTS_LOCATIONS")),
 				"min_earthquake_magnitude": parseFloatEnv("GOV_ALERTS_MIN_EARTHQUAKE_MAG"),
+				"travel_locations":         parseJSONArray(os.Getenv("GOV_ALERTS_TRAVEL_LOCATIONS")),
 			},
 		}
 		if err := alertsConn.Connect(ctx, alertsCfg); err == nil {

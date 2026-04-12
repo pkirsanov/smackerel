@@ -77,6 +77,7 @@ func TestSCN002054_GoSubjectsMatchContract(t *testing.T) {
 		"SubjectQuickrefGenerated":  SubjectQuickrefGenerated,
 		"SubjectSeasonalAnalyze":    SubjectSeasonalAnalyze,
 		"SubjectSeasonalAnalyzed":   SubjectSeasonalAnalyzed,
+		"SubjectAlertsNotify":       SubjectAlertsNotify,
 	}
 
 	// Every Go constant must exist in the contract

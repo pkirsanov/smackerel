@@ -51,12 +51,15 @@ type Connector struct {
 	wildfireBaseURL string
 	airnowBaseURL   string
 	gdacsBaseURL    string
-	known           map[string]time.Time // alert_id → first-seen time for dedup
+	known           map[string]time.Time   // alert_id → first-seen time for dedup
+	Notifier        AlertNotifier          // optional: publishes extreme/severe alerts
+	TravelProvider  TravelLocationProvider // optional: provides travel destination locations
 }
 
 // AlertsConfig holds parsed alerts-specific configuration.
 type AlertsConfig struct {
 	Locations        []LocationConfig
+	TravelLocations  []LocationConfig
 	MinEarthquakeMag float64
 	SourceEarthquake bool
 	SourceWeather    bool
@@ -74,6 +77,31 @@ type LocationConfig struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 	RadiusKm  float64 `json:"radius_km"`
+	IsTravel  bool    `json:"is_travel,omitempty"` // true for travel destinations (expanded radius)
+}
+
+// AlertNotifier publishes high-severity alert notifications.
+type AlertNotifier interface {
+	NotifyAlert(ctx context.Context, payload AlertNotification) error
+}
+
+// AlertNotification is the payload published for extreme/severe alerts.
+type AlertNotification struct {
+	AlertID      string                 `json:"alert_id"`
+	Headline     string                 `json:"headline"`
+	Severity     string                 `json:"severity"`
+	Source       string                 `json:"source"`
+	DistanceKm   float64                `json:"distance_km"`
+	LocationName string                 `json:"location_name"`
+	Instructions string                 `json:"instructions,omitempty"`
+	ContentType  string                 `json:"content_type"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// TravelLocationProvider returns travel destination locations derived from
+// external sources such as calendar events. This is a future integration point.
+type TravelLocationProvider interface {
+	GetTravelLocations(ctx context.Context) ([]LocationConfig, error)
 }
 
 // New creates a new Government Alerts connector.
@@ -131,6 +159,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var allArtifacts []connector.RawArtifact
 	now := time.Now()
 
+	// Compute merged locations (regular + travel destinations with 2x radius).
+	allLocations := c.mergedLocations(ctx, cfg)
+
 	// Evict old entries from dedup map to prevent unbounded growth.
 	c.mu.Lock()
 	for id, seen := range c.known {
@@ -157,7 +188,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				slog.Warn("skipping earthquake with invalid coordinates", "id", eq.ID, "lat", eq.Latitude, "lon", eq.Longitude)
 				continue
 			}
-			if match := findNearestLocation(eq.Latitude, eq.Longitude, cfg.Locations); match != nil {
+			if match := findNearestLocation(eq.Latitude, eq.Longitude, allLocations); match != nil {
 				c.mu.Lock()
 				_, seen := c.known[eq.ID]
 				if !seen {
@@ -165,7 +196,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				}
 				c.mu.Unlock()
 				if !seen {
-					allArtifacts = append(allArtifacts, normalizeEarthquake(eq, match))
+					art := normalizeEarthquake(eq, match)
+					allArtifacts = append(allArtifacts, art)
+					c.maybeNotify(ctx, art)
 				}
 			}
 		}
@@ -173,7 +206,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// NWS Weather Alerts source
 	if cfg.SourceWeather {
-		for _, loc := range cfg.Locations {
+		for _, loc := range allLocations {
 			if ctx.Err() != nil {
 				syncErr = ctx.Err()
 				return allArtifacts, now.Format(time.RFC3339), syncErr
@@ -189,7 +222,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					syncErr = ctx.Err()
 					return allArtifacts, now.Format(time.RFC3339), syncErr
 				}
-				if match := findNearestLocation(loc.Latitude, loc.Longitude, cfg.Locations); match != nil {
+				if match := findNearestLocation(loc.Latitude, loc.Longitude, allLocations); match != nil {
 					c.mu.Lock()
 					_, seen := c.known[alert.ID]
 					if !seen {
@@ -197,7 +230,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					}
 					c.mu.Unlock()
 					if !seen {
-						allArtifacts = append(allArtifacts, normalizeNWSAlert(alert, match))
+						art := normalizeNWSAlert(alert, match)
+						allArtifacts = append(allArtifacts, art)
+						c.maybeNotify(ctx, art)
 					}
 				}
 			}
@@ -257,7 +292,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			}
 			c.mu.Unlock()
 			if !seen {
-				allArtifacts = append(allArtifacts, normalizeVolcanoAlert(v))
+				art := normalizeVolcanoAlert(v)
+				allArtifacts = append(allArtifacts, art)
+				c.maybeNotify(ctx, art)
 			}
 		}
 	}
@@ -286,14 +323,16 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			}
 			c.mu.Unlock()
 			if !seen {
-				allArtifacts = append(allArtifacts, normalizeWildfireAlert(w))
+				art := normalizeWildfireAlert(w)
+				allArtifacts = append(allArtifacts, art)
+				c.maybeNotify(ctx, art)
 			}
 		}
 	}
 
 	// AirNow AQI source (requires API key)
 	if cfg.SourceAirNow && cfg.AirNowAPIKey != "" {
-		for _, loc := range cfg.Locations {
+		for _, loc := range allLocations {
 			if ctx.Err() != nil {
 				syncErr = ctx.Err()
 				return allArtifacts, now.Format(time.RFC3339), syncErr
@@ -316,7 +355,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				}
 				c.mu.Unlock()
 				if !seen {
-					allArtifacts = append(allArtifacts, normalizeAirNowAlert(obs, &ProximityMatch{LocationName: loc.Name, DistanceKm: 0}))
+					art := normalizeAirNowAlert(obs, &ProximityMatch{LocationName: loc.Name, DistanceKm: 0})
+					allArtifacts = append(allArtifacts, art)
+					c.maybeNotify(ctx, art)
 				}
 			}
 		}
@@ -346,7 +387,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			}
 			c.mu.Unlock()
 			if !seen {
-				allArtifacts = append(allArtifacts, normalizeGDACSAlert(d))
+				art := normalizeGDACSAlert(d)
+				allArtifacts = append(allArtifacts, art)
+				c.maybeNotify(ctx, art)
 			}
 		}
 	}
@@ -637,6 +680,34 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 		cfg.AirNowAPIKey = key
 	}
 
+	// Parse travel locations (future calendar integration — manually configured for now).
+	// Travel locations use their configured radius; it is doubled at query time by mergedLocations.
+	if travelLocs, ok := config.SourceConfig["travel_locations"].([]interface{}); ok {
+		for _, loc := range travelLocs {
+			if lm, ok := loc.(map[string]interface{}); ok {
+				lc := LocationConfig{RadiusKm: 200, IsTravel: true}
+				if name, ok := lm["name"].(string); ok {
+					lc.Name = name
+				}
+				latOK, lonOK := false, false
+				if lat, ok := lm["latitude"].(float64); ok {
+					lc.Latitude = lat
+					latOK = true
+				}
+				if lon, ok := lm["longitude"].(float64); ok {
+					lc.Longitude = lon
+					lonOK = true
+				}
+				if r, ok := lm["radius_km"].(float64); ok {
+					lc.RadiusKm = r
+				}
+				if lc.Name != "" && latOK && lonOK && isFiniteCoord(lc.Latitude, lc.Longitude) && lc.RadiusKm > 0 {
+					cfg.TravelLocations = append(cfg.TravelLocations, lc)
+				}
+			}
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -835,17 +906,17 @@ type TsunamiAlert struct {
 
 // tsunamiAtomFeed represents the Atom XML structure from tsunami.gov.
 type tsunamiAtomFeed struct {
-	XMLName xml.Name            `xml:"feed"`
-	Entries []tsunamiAtomEntry  `xml:"entry"`
+	XMLName xml.Name           `xml:"feed"`
+	Entries []tsunamiAtomEntry `xml:"entry"`
 }
 
 type tsunamiAtomEntry struct {
-	ID        string           `xml:"id"`
-	Title     string           `xml:"title"`
-	Summary   string           `xml:"summary"`
-	Link      tsunamiAtomLink  `xml:"link"`
-	Published string           `xml:"published"`
-	Updated   string           `xml:"updated"`
+	ID        string          `xml:"id"`
+	Title     string          `xml:"title"`
+	Summary   string          `xml:"summary"`
+	Link      tsunamiAtomLink `xml:"link"`
+	Published string          `xml:"published"`
+	Updated   string          `xml:"updated"`
 }
 
 type tsunamiAtomLink struct {
@@ -1091,8 +1162,8 @@ type WildfireAlert struct {
 
 // wildfireRSSFeed represents the RSS XML structure from InciWeb.
 type wildfireRSSFeed struct {
-	XMLName xml.Name             `xml:"rss"`
-	Channel wildfireRSSChannel   `xml:"channel"`
+	XMLName xml.Name           `xml:"rss"`
+	Channel wildfireRSSChannel `xml:"channel"`
 }
 
 type wildfireRSSChannel struct {
@@ -1212,12 +1283,12 @@ func normalizeWildfireAlert(alert WildfireAlert) connector.RawArtifact {
 
 // AirNowObservation represents a parsed AirNow air quality observation.
 type AirNowObservation struct {
-	ID             string
-	AQI            int
-	Category       string
-	Pollutant      string
-	ReportingArea  string
-	Severity       string
+	ID              string
+	AQI             int
+	Category        string
+	Pollutant       string
+	ReportingArea   string
+	Severity        string
 	ObservationTime time.Time
 }
 
@@ -1351,8 +1422,8 @@ type GDACSAlert struct {
 
 // gdacsRSSFeed represents the RSS XML structure from GDACS.
 type gdacsRSSFeed struct {
-	XMLName xml.Name          `xml:"rss"`
-	Channel gdacsRSSChannel   `xml:"channel"`
+	XMLName xml.Name        `xml:"rss"`
+	Channel gdacsRSSChannel `xml:"channel"`
 }
 
 type gdacsRSSChannel struct {
@@ -1484,4 +1555,98 @@ func normalizeGDACSAlert(alert GDACSAlert) connector.RawArtifact {
 		Metadata:    metadata,
 		CapturedAt:  capturedAt,
 	}
+}
+
+// mergedLocations returns cfg.Locations combined with travel locations (2x radius).
+// Travel locations come from TravelProvider (if set) or cfg.TravelLocations.
+func (c *Connector) mergedLocations(ctx context.Context, cfg AlertsConfig) []LocationConfig {
+	merged := make([]LocationConfig, len(cfg.Locations))
+	copy(merged, cfg.Locations)
+
+	var travelLocs []LocationConfig
+	if c.TravelProvider != nil {
+		locs, err := c.TravelProvider.GetTravelLocations(ctx)
+		if err != nil {
+			slog.Warn("travel location provider failed, falling back to config", "error", err)
+			travelLocs = cfg.TravelLocations
+		} else {
+			travelLocs = locs
+		}
+	} else {
+		travelLocs = cfg.TravelLocations
+	}
+
+	for _, loc := range travelLocs {
+		expanded := LocationConfig{
+			Name:      loc.Name,
+			Latitude:  loc.Latitude,
+			Longitude: loc.Longitude,
+			RadiusKm:  loc.RadiusKm * 2, // travel destinations use expanded radius
+			IsTravel:  true,
+		}
+		merged = append(merged, expanded)
+	}
+	return merged
+}
+
+// maybeNotify sends an alert notification if severity is extreme or severe and Notifier is set.
+func (c *Connector) maybeNotify(ctx context.Context, art connector.RawArtifact) {
+	if c.Notifier == nil {
+		return
+	}
+	meta := art.Metadata
+	if meta == nil {
+		return
+	}
+	severity, _ := meta["severity"].(string)
+	if severity != "extreme" && severity != "severe" {
+		return
+	}
+
+	source, _ := meta["source"].(string)
+	distanceKm, _ := meta["distance_km"].(float64)
+	locationName, _ := meta["nearest_location"].(string)
+
+	notification := AlertNotification{
+		AlertID:      art.SourceRef,
+		Headline:     art.Title,
+		Severity:     severity,
+		Source:       source,
+		DistanceKm:   distanceKm,
+		LocationName: locationName,
+		Instructions: extractInstructions(art.RawContent),
+		ContentType:  art.ContentType,
+		Metadata:     meta,
+	}
+	if err := c.Notifier.NotifyAlert(ctx, notification); err != nil {
+		slog.Warn("alert notification failed", "alert_id", art.SourceRef, "error", err)
+	}
+}
+
+// extractInstructions attempts to extract instruction text from raw content.
+func extractInstructions(rawContent string) string {
+	const prefix = "Instruction: "
+	if idx := strings.Index(rawContent, prefix); idx >= 0 {
+		instr := rawContent[idx+len(prefix):]
+		if end := strings.Index(instr, "\n"); end >= 0 {
+			return instr[:end]
+		}
+		return instr
+	}
+	return ""
+}
+
+// NATSAlertNotifier publishes alert notifications to a NATS subject.
+type NATSAlertNotifier struct {
+	PublishFn func(ctx context.Context, subject string, data []byte) error
+	Subject   string
+}
+
+// NotifyAlert publishes the alert notification as JSON to the configured NATS subject.
+func (n *NATSAlertNotifier) NotifyAlert(ctx context.Context, payload AlertNotification) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal alert notification: %w", err)
+	}
+	return n.PublishFn(ctx, n.Subject, data)
 }

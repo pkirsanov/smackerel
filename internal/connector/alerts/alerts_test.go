@@ -3004,3 +3004,435 @@ func TestParseAlertsConfig_NewSourceDefaults(t *testing.T) {
 		t.Errorf("expected empty AirNowAPIKey, got %q", cfg.AirNowAPIKey)
 	}
 }
+
+// --- Scope 6: Proactive Delivery & Travel Alerts Tests ---
+
+// mockNotifier records notifications for test verification.
+type mockNotifier struct {
+	mu            sync.Mutex
+	notifications []AlertNotification
+}
+
+func (m *mockNotifier) NotifyAlert(_ context.Context, payload AlertNotification) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.notifications = append(m.notifications, payload)
+	return nil
+}
+
+func (m *mockNotifier) count() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.notifications)
+}
+
+func (m *mockNotifier) last() AlertNotification {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.notifications[len(m.notifications)-1]
+}
+
+// Unit Test 1: Extreme severity triggers notification
+func TestMaybeNotify_Extreme(t *testing.T) {
+	mn := &mockNotifier{}
+	c := New("test")
+	c.Notifier = mn
+
+	art := connector.RawArtifact{
+		SourceRef:   "eq-extreme-1",
+		ContentType: "alert/earthquake",
+		Title:       "M7.5 Earthquake — Offshore (50 km from Home)",
+		RawContent:  "Magnitude 7.5 earthquake at depth 10 km.",
+		Metadata: map[string]interface{}{
+			"severity":         "extreme",
+			"source":           "usgs",
+			"distance_km":      50.0,
+			"nearest_location": "Home",
+		},
+	}
+
+	c.maybeNotify(context.Background(), art)
+
+	if mn.count() != 1 {
+		t.Fatalf("expected 1 notification, got %d", mn.count())
+	}
+	n := mn.last()
+	if n.Severity != "extreme" {
+		t.Errorf("expected severity extreme, got %s", n.Severity)
+	}
+	if n.AlertID != "eq-extreme-1" {
+		t.Errorf("expected alert_id eq-extreme-1, got %s", n.AlertID)
+	}
+}
+
+// Unit Test 2: Severe severity triggers notification
+func TestMaybeNotify_Severe(t *testing.T) {
+	mn := &mockNotifier{}
+	c := New("test")
+	c.Notifier = mn
+
+	art := connector.RawArtifact{
+		SourceRef:   "nws-severe-1",
+		ContentType: "alert/weather",
+		Title:       "Tornado Warning — Oklahoma County",
+		RawContent:  "Tornado Warning\n\nInstruction: Take shelter immediately",
+		Metadata: map[string]interface{}{
+			"severity":         "severe",
+			"source":           "nws",
+			"distance_km":      10.0,
+			"nearest_location": "Home",
+		},
+	}
+
+	c.maybeNotify(context.Background(), art)
+
+	if mn.count() != 1 {
+		t.Fatalf("expected 1 notification, got %d", mn.count())
+	}
+	n := mn.last()
+	if n.Severity != "severe" {
+		t.Errorf("expected severity severe, got %s", n.Severity)
+	}
+	if n.Instructions != "Take shelter immediately" {
+		t.Errorf("expected instructions extraction, got %q", n.Instructions)
+	}
+}
+
+// Unit Test 3: Moderate severity does NOT trigger notification
+func TestMaybeNotify_Moderate_NoNotification(t *testing.T) {
+	mn := &mockNotifier{}
+	c := New("test")
+	c.Notifier = mn
+
+	art := connector.RawArtifact{
+		SourceRef: "eq-moderate-1",
+		Metadata: map[string]interface{}{
+			"severity": "moderate",
+			"source":   "usgs",
+		},
+	}
+
+	c.maybeNotify(context.Background(), art)
+
+	if mn.count() != 0 {
+		t.Errorf("expected 0 notifications for moderate severity, got %d", mn.count())
+	}
+}
+
+// Unit Test 4: Nil notifier does not panic
+func TestMaybeNotify_NilNotifier(t *testing.T) {
+	c := New("test")
+	// c.Notifier is nil
+
+	art := connector.RawArtifact{
+		SourceRef: "eq-extreme-1",
+		Metadata: map[string]interface{}{
+			"severity": "extreme",
+		},
+	}
+
+	// Should not panic
+	c.maybeNotify(context.Background(), art)
+}
+
+// Unit Test 5: Travel locations use doubled radius in merged locations
+func TestTravelLocations_DoubleRadius(t *testing.T) {
+	c := New("test")
+	cfg := AlertsConfig{
+		Locations: []LocationConfig{
+			{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+		},
+		TravelLocations: []LocationConfig{
+			{Name: "Trip-NYC", Latitude: 40.71, Longitude: -74.01, RadiusKm: 100},
+		},
+	}
+
+	merged := c.mergedLocations(context.Background(), cfg)
+
+	if len(merged) != 2 {
+		t.Fatalf("expected 2 merged locations, got %d", len(merged))
+	}
+
+	// Home location keeps original radius
+	if merged[0].RadiusKm != 200 {
+		t.Errorf("home radius should be 200, got %.0f", merged[0].RadiusKm)
+	}
+
+	// Travel location should have doubled radius
+	if merged[1].RadiusKm != 200 { // 100 * 2 = 200
+		t.Errorf("travel radius should be doubled to 200, got %.0f", merged[1].RadiusKm)
+	}
+	if !merged[1].IsTravel {
+		t.Error("travel location should have IsTravel=true")
+	}
+}
+
+// Unit Test 6: Alert notification payload structure
+func TestAlertNotificationPayload(t *testing.T) {
+	mn := &mockNotifier{}
+	c := New("test")
+	c.Notifier = mn
+
+	art := connector.RawArtifact{
+		SourceRef:   "gdacs-red-1",
+		ContentType: "alert/disaster",
+		Title:       "GDACS Red: Cyclone in Indian Ocean",
+		RawContent:  "Category 5 cyclone.\n\nInstruction: Evacuate coastal areas",
+		Metadata: map[string]interface{}{
+			"severity":         "extreme",
+			"source":           "gdacs",
+			"distance_km":      75.5,
+			"nearest_location": "Beach House",
+		},
+	}
+
+	c.maybeNotify(context.Background(), art)
+
+	if mn.count() != 1 {
+		t.Fatalf("expected 1 notification, got %d", mn.count())
+	}
+	n := mn.last()
+	if n.AlertID != "gdacs-red-1" {
+		t.Errorf("AlertID = %q, want gdacs-red-1", n.AlertID)
+	}
+	if n.Headline != "GDACS Red: Cyclone in Indian Ocean" {
+		t.Errorf("Headline = %q", n.Headline)
+	}
+	if n.Severity != "extreme" {
+		t.Errorf("Severity = %q, want extreme", n.Severity)
+	}
+	if n.Source != "gdacs" {
+		t.Errorf("Source = %q, want gdacs", n.Source)
+	}
+	if n.DistanceKm != 75.5 {
+		t.Errorf("DistanceKm = %f, want 75.5", n.DistanceKm)
+	}
+	if n.LocationName != "Beach House" {
+		t.Errorf("LocationName = %q, want Beach House", n.LocationName)
+	}
+	if n.Instructions != "Evacuate coastal areas" {
+		t.Errorf("Instructions = %q, want 'Evacuate coastal areas'", n.Instructions)
+	}
+	if n.ContentType != "alert/disaster" {
+		t.Errorf("ContentType = %q, want alert/disaster", n.ContentType)
+	}
+}
+
+// Integration Test 1: Full sync with extreme earthquake triggers notification
+func TestSync_ExtremeEarthquake_NotifiesAlert(t *testing.T) {
+	// Serve a M7.5 earthquake close to Home
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"type":"FeatureCollection","features":[{
+			"id":"us7000extreme",
+			"properties":{"mag":7.5,"place":"10km SE of Home","time":1700000000000},
+			"geometry":{"type":"Point","coordinates":[-122.30,37.70,10.0]}
+		}]}`)
+	}))
+	defer ts.Close()
+
+	mn := &mockNotifier{}
+	c := New("test")
+	c.baseURL = ts.URL
+	c.Notifier = mn
+
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+			"source_weather": false,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+
+	if mn.count() != 1 {
+		t.Fatalf("expected 1 notification for extreme earthquake, got %d", mn.count())
+	}
+	n := mn.last()
+	if n.Severity != "extreme" {
+		t.Errorf("notification severity = %q, want extreme", n.Severity)
+	}
+	if n.AlertID != "us7000extreme" {
+		t.Errorf("notification alert_id = %q, want us7000extreme", n.AlertID)
+	}
+}
+
+// Integration Test 2: Moderate weather does NOT trigger notification
+func TestSync_ModerateWeather_NoNotification(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"type":"FeatureCollection","features":[{
+			"properties":{
+				"id":"NWS-moderate-1",
+				"event":"Wind Advisory",
+				"severity":"Moderate",
+				"certainty":"Likely",
+				"urgency":"Expected",
+				"headline":"Wind Advisory for County",
+				"description":"Winds 30-40 mph",
+				"instruction":"Secure loose objects",
+				"areaDesc":"Test County",
+				"effective":"2025-01-01T00:00:00Z",
+				"expires":"2025-01-02T00:00:00Z"
+			}
+		}]}`)
+	}))
+	defer ts.Close()
+
+	mn := &mockNotifier{}
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+	c.Notifier = mn
+
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+			"source_weather": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	// Override source_earthquake to false
+	c.config.SourceEarthquake = false
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+
+	if mn.count() != 0 {
+		t.Errorf("expected 0 notifications for moderate weather, got %d", mn.count())
+	}
+}
+
+// Integration Test 3: Travel location with expanded radius picks up distant alerts
+func TestSync_TravelLocation_ExpandedRadius(t *testing.T) {
+	// Earthquake at ~400km from travel location (within 2x radius of 300km = 600km, outside normal 300km)
+	// Travel destination: NYC (40.71, -74.01) with radius 300km
+	// Earthquake at ~400km from NYC (approximately Washington DC area: 38.90, -77.04)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"type":"FeatureCollection","features":[{
+			"id":"us7000travel",
+			"properties":{"mag":6.0,"place":"Near Washington DC","time":1700000000000},
+			"geometry":{"type":"Point","coordinates":[-77.04,38.90,10.0]}
+		}]}`)
+	}))
+	defer ts.Close()
+
+	mn := &mockNotifier{}
+	c := New("test")
+	c.baseURL = ts.URL
+	c.Notifier = mn
+
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home-SF", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+			"travel_locations": []interface{}{
+				map[string]interface{}{"name": "Trip-NYC", "latitude": 40.71, "longitude": -74.01, "radius_km": 300.0},
+			},
+			"source_weather": false,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// The earthquake at Washington DC (~330km from NYC) should be within 2x travel radius (600km)
+	// but NOT within home radius (SF is ~3900km away from DC) or normal travel radius (300km)
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact from expanded travel radius, got %d", len(artifacts))
+	}
+
+	// Verify it matched the travel location
+	meta := artifacts[0].Metadata
+	if loc, ok := meta["nearest_location"].(string); ok {
+		if loc != "Trip-NYC" {
+			t.Errorf("expected nearest_location Trip-NYC, got %s", loc)
+		}
+	}
+}
+
+// E2E Test: NATSAlertNotifier publishes correctly structured JSON
+func TestNATSAlertNotifier_PublishesJSON(t *testing.T) {
+	var published struct {
+		subject string
+		data    []byte
+	}
+
+	notifier := &NATSAlertNotifier{
+		PublishFn: func(_ context.Context, subject string, data []byte) error {
+			published.subject = subject
+			published.data = data
+			return nil
+		},
+		Subject: "alerts.notify",
+	}
+
+	payload := AlertNotification{
+		AlertID:      "eq-test-001",
+		Headline:     "M8.0 Earthquake — Pacific Ocean",
+		Severity:     "extreme",
+		Source:       "usgs",
+		DistanceKm:   150.0,
+		LocationName: "Coastal Home",
+		Instructions: "Move to higher ground",
+		ContentType:  "alert/earthquake",
+		Metadata: map[string]interface{}{
+			"magnitude": 8.0,
+		},
+	}
+
+	err := notifier.NotifyAlert(context.Background(), payload)
+	if err != nil {
+		t.Fatalf("NotifyAlert: %v", err)
+	}
+
+	if published.subject != "alerts.notify" {
+		t.Errorf("published to %q, want alerts.notify", published.subject)
+	}
+
+	// Verify JSON structure
+	var decoded AlertNotification
+	if err := json.Unmarshal(published.data, &decoded); err != nil {
+		t.Fatalf("unmarshal published data: %v", err)
+	}
+	if decoded.AlertID != "eq-test-001" {
+		t.Errorf("decoded AlertID = %q, want eq-test-001", decoded.AlertID)
+	}
+	if decoded.Severity != "extreme" {
+		t.Errorf("decoded Severity = %q, want extreme", decoded.Severity)
+	}
+	if decoded.DistanceKm != 150.0 {
+		t.Errorf("decoded DistanceKm = %f, want 150.0", decoded.DistanceKm)
+	}
+	if decoded.Instructions != "Move to higher ground" {
+		t.Errorf("decoded Instructions = %q", decoded.Instructions)
+	}
+}

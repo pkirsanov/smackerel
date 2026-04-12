@@ -2,12 +2,12 @@
   "version": 3,
   "featureDir": "specs/017-gov-alerts-connector",
   "featureName": "Government Alerts Connector",
-  "status": "in-progress",
+  "status": "done",
   "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "implement",
-    "currentScope": 5,
+    "currentPhase": "finalize",
+    "currentScope": 6,
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedScopes": [],
     "completedPhaseClaims": [

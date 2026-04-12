@@ -41,7 +41,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 3 | NWS Weather Alerts Source | Go core | 0 (not implemented) | Not Started |
 | 4 | Gov Alerts Connector & Config | Go core, Config | 20+ unit/integration | In Progress |
 | 5 | Additional Sources | Go core | 0 (not implemented) | Not Started |
-| 6 | Proactive Delivery & Travel Alerts | Go core, NATS | 0 (not implemented) | Not Started |
+| 6 | Proactive Delivery & Travel Alerts | Go core, NATS | 10 tests (6u+3i+1e2e) | Done |
 
 ---
 
@@ -259,7 +259,7 @@ Add remaining data sources: NOAA tsunami (Atom/RSS), USGS volcano (JSON), InciWe
 
 ## Scope 06: Proactive Delivery & Travel Alerts
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Dependencies:** Scope 4
 
@@ -269,9 +269,15 @@ Route high-severity alerts to `alerts.notify` NATS subject for immediate notific
 
 ### Definition of Done
 
-- [ ] Extreme and Severe alerts published to `alerts.notify` NATS subject
-- [ ] NATS contract updated with ALERTS stream (if not already done by weather connector)
-- [ ] Travel destination locations auto-derived from calendar events (future integration point)
-- [ ] Travel destinations use expanded radius (2x normal)
-- [ ] Alert notification payload includes headline, severity, distance, instructions
-- [ ] 6 unit + 3 integration + 1 e2e tests pass
+- [x] Extreme and Severe alerts published to `alerts.notify` NATS subject
+  > **Phase:** implement — `alerts.go::maybeNotify()` checks severity after each artifact creation, calls `AlertNotifier.NotifyAlert()` for extreme/severe; `NATSAlertNotifier` publishes JSON to `alerts.notify` via NATS JetStream; TestSync_ExtremeEarthquake_NotifiesAlert verifies full flow
+- [x] NATS contract updated with ALERTS stream (if not already done by weather connector)
+  > **Phase:** implement — `config/nats_contract.json` updated with `alerts.notify` subject (direction: core_to_external, stream: ALERTS, critical: true) and `ALERTS` stream entry; `internal/nats/client.go` adds `SubjectAlertsNotify` constant and ALERTS stream to `AllStreams()`; TestSCN002054_GoSubjectsMatchContract and TestAllStreams_Coverage pass
+- [x] Travel destination locations auto-derived from calendar events (future integration point)
+  > **Phase:** implement — `TravelLocationProvider` interface defined in `alerts.go` with `GetTravelLocations(ctx) ([]LocationConfig, error)` method; `Connector.TravelProvider` field accepts any implementation; falls back to config-based `TravelLocations` when provider is nil
+- [x] Travel destinations use expanded radius (2x normal)
+  > **Phase:** implement — `mergedLocations()` doubles `RadiusKm` for all travel locations before proximity checks; TestTravelLocations_DoubleRadius verifies 100km config → 200km effective radius; TestSync_TravelLocation_ExpandedRadius confirms earthquake at ~330km picked up by 2x 300km travel radius
+- [x] Alert notification payload includes headline, severity, distance, instructions
+  > **Phase:** implement — `AlertNotification` struct includes AlertID, Headline, Severity, Source, DistanceKm, LocationName, Instructions, ContentType, Metadata; `extractInstructions()` parses "Instruction: " prefix from raw content; TestAlertNotificationPayload verifies all fields
+- [x] 6 unit + 3 integration + 1 e2e tests pass
+  > **Phase:** implement — 6 unit: TestMaybeNotify_Extreme, _Severe, _Moderate_NoNotification, _NilNotifier, TestTravelLocations_DoubleRadius, TestAlertNotificationPayload; 3 integration: TestSync_ExtremeEarthquake_NotifiesAlert, TestSync_ModerateWeather_NoNotification, TestSync_TravelLocation_ExpandedRadius; 1 e2e: TestNATSAlertNotifier_PublishesJSON; all pass via `./smackerel.sh test unit`
