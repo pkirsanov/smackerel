@@ -22,6 +22,12 @@ func TestSCN002045_SourceIDConstants_Accessible(t *testing.T) {
 		{"SourceGmail", SourceGmail, "gmail"},
 		{"SourceGoogleCalendar", SourceGoogleCalendar, "google-calendar"},
 		{"SourceYouTube", SourceYouTube, "youtube"},
+		{"SourceDiscord", SourceDiscord, "discord"},
+		{"SourceTwitter", SourceTwitter, "twitter"},
+		{"SourceWeather", SourceWeather, "weather"},
+		{"SourceGovAlerts", SourceGovAlerts, "gov-alerts"},
+		{"SourceFinancialMarkets", SourceFinancialMarkets, "financial-markets"},
+		{"SourceGuestHost", SourceGuestHost, "guesthost"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

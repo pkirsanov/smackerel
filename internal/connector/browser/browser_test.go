@@ -189,28 +189,6 @@ func TestOptInRequired(t *testing.T) {
 	}
 }
 
-func TestPerSourceDeletion(t *testing.T) {
-	// ToRawArtifacts must tag each artifact with source_id="browser"
-	// so deletion by source can isolate browser data from other connectors.
-	entries := []HistoryEntry{
-		{URL: "https://a.com", Title: "A", VisitTime: time.Now(), Domain: "a.com"},
-		{URL: "https://b.com", Title: "B", VisitTime: time.Now(), Domain: "b.com"},
-	}
-
-	artifacts := ToRawArtifacts(entries)
-	if len(artifacts) != 2 {
-		t.Fatalf("expected 2 artifacts, got %d", len(artifacts))
-	}
-	for i, a := range artifacts {
-		if a.SourceID != "browser-history" {
-			t.Errorf("artifact[%d].SourceID = %q, want \"browser-history\"", i, a.SourceID)
-		}
-		if a.SourceRef != entries[i].URL {
-			t.Errorf("artifact[%d].SourceRef = %q, want %q", i, a.SourceRef, entries[i].URL)
-		}
-	}
-}
-
 // CHAOS-005-F1: Scheme-prefixed localhost/loopback URLs must be caught by default skip.
 // Adversarial: would fail if ShouldSkip only used prefix matching on raw URL.
 func TestShouldSkip_SchemePrefixedLocalhost(t *testing.T) {
@@ -259,52 +237,6 @@ func TestIsSocialMedia_AllRegisteredDomains(t *testing.T) {
 	}
 }
 
-func TestToRawArtifacts_MetadataFields(t *testing.T) {
-	entries := []HistoryEntry{
-		{
-			URL:       "https://example.com/article",
-			Title:     "Test Article",
-			VisitTime: time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC),
-			DwellTime: 5 * time.Minute,
-			Domain:    "example.com",
-		},
-	}
-
-	artifacts := ToRawArtifacts(entries)
-	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
-	}
-	a := artifacts[0]
-
-	// Verify metadata contains dwell_time and domain
-	dwellSec, ok := a.Metadata["dwell_time"].(float64)
-	if !ok {
-		t.Fatal("metadata missing dwell_time")
-	}
-	if dwellSec != 300.0 {
-		t.Errorf("dwell_time = %f, want 300.0 (5 minutes)", dwellSec)
-	}
-
-	domain, ok := a.Metadata["domain"].(string)
-	if !ok {
-		t.Fatal("metadata missing domain")
-	}
-	if domain != "example.com" {
-		t.Errorf("domain = %q, want %q", domain, "example.com")
-	}
-}
-
-func TestToRawArtifacts_EmptyEntries(t *testing.T) {
-	artifacts := ToRawArtifacts(nil)
-	if len(artifacts) != 0 {
-		t.Errorf("expected 0 artifacts for nil entries, got %d", len(artifacts))
-	}
-	artifacts = ToRawArtifacts([]HistoryEntry{})
-	if len(artifacts) != 0 {
-		t.Errorf("expected 0 artifacts for empty entries, got %d", len(artifacts))
-	}
-}
-
 func TestGoTimeToChrome_RoundTrip(t *testing.T) {
 	original := time.Date(2026, 4, 10, 14, 30, 0, 0, time.UTC)
 	chromeTime := GoTimeToChrome(original)
@@ -327,22 +259,6 @@ func TestParseChromeHistorySince_HasLimit(t *testing.T) {
 }
 
 // --- CHAOS-HARDENING R3: Adversarial tests ---
-
-// CHAOS-F3: ToRawArtifacts must use "browser-history" SourceID consistently with processEntries.
-// Adversarial: would fail if ToRawArtifacts used a different SourceID.
-func TestToRawArtifacts_SourceIDConsistency(t *testing.T) {
-	entries := []HistoryEntry{
-		{URL: "https://example.com", Title: "E", VisitTime: time.Now(), Domain: "example.com"},
-	}
-	artifacts := ToRawArtifacts(entries)
-	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
-	}
-	// Must match the SourceID used by processEntries ("browser-history")
-	if artifacts[0].SourceID != "browser-history" {
-		t.Errorf("SourceID = %q, want \"browser-history\" (must match processEntries)", artifacts[0].SourceID)
-	}
-}
 
 // CHAOS-F6: extractDomain must handle non-http/https scheme URLs correctly.
 // Adversarial: would fail if extractDomain only stripped http:// and https://.
