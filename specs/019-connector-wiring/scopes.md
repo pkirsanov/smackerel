@@ -2,7 +2,7 @@
 
 **Feature:** 019-connector-wiring
 **Created:** 2026-04-10
-**Status:** Planning complete
+**Status:** Done
 
 ---
 
@@ -38,7 +38,7 @@
 
 ## Scope 1: Wire All 5 Connectors
 
-**Status:** [x] In Progress
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
