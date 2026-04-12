@@ -2141,3 +2141,866 @@ func TestFetchNWSAlerts_PointInURL(t *testing.T) {
 		t.Errorf("expected point=35.4700,-97.5200 in URL, got: %s", requestedURL)
 	}
 }
+
+// =====================================================
+// NOAA Tsunami Source Tests
+// =====================================================
+
+func tsunamiAtomXML(entries []string) string {
+	xml := `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">`
+	for _, e := range entries {
+		xml += e
+	}
+	xml += `</feed>`
+	return xml
+}
+
+func makeTsunamiEntry(id, title, summary, link, published string) string {
+	return fmt.Sprintf(`<entry><id>%s</id><title>%s</title><summary>%s</summary><link href="%s"/><published>%s</published></entry>`,
+		id, title, summary, link, published)
+}
+
+func TestFetchTsunamiAlerts_ValidResponse(t *testing.T) {
+	entries := []string{
+		makeTsunamiEntry(
+			"tsunami-001",
+			"Tsunami Warning — Pacific Coast",
+			"A tsunami warning has been issued following M7.8 earthquake.",
+			"https://www.tsunami.gov/events/tsunami-001",
+			"2024-03-15T10:30:00Z",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, tsunamiAtomXML(entries))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.tsunamiBaseURL = ts.URL
+
+	alerts, err := c.fetchTsunamiAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+	if alerts[0].ID != "tsunami-001" {
+		t.Errorf("ID = %q", alerts[0].ID)
+	}
+	if alerts[0].Title != "Tsunami Warning — Pacific Coast" {
+		t.Errorf("Title = %q", alerts[0].Title)
+	}
+	if alerts[0].Severity != "severe" {
+		t.Errorf("Severity = %q, want severe", alerts[0].Severity)
+	}
+	if alerts[0].Published.IsZero() {
+		t.Error("Published should be parsed")
+	}
+}
+
+func TestFetchTsunamiAlerts_EmptyResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, tsunamiAtomXML(nil))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.tsunamiBaseURL = ts.URL
+
+	alerts, err := c.fetchTsunamiAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts, got %d", len(alerts))
+	}
+}
+
+func TestFetchTsunamiAlerts_HTTPError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.tsunamiBaseURL = ts.URL
+
+	_, err := c.fetchTsunamiAlerts(context.Background())
+	if err == nil {
+		t.Error("expected error for HTTP 503")
+	}
+	if !strings.Contains(err.Error(), "status 503") {
+		t.Errorf("expected status 503 in error, got: %v", err)
+	}
+}
+
+func TestClassifyTsunamiSeverity(t *testing.T) {
+	tests := []struct {
+		title string
+		want  string
+	}{
+		{"Tsunami Warning — Pacific Coast", "severe"},
+		{"Tsunami Watch issued for Hawaii", "moderate"},
+		{"Tsunami Advisory for coastal areas", "minor"},
+		{"Tsunami Information Statement", "info"},
+		{"", "info"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			got := classifyTsunamiSeverity(tt.title)
+			if got != tt.want {
+				t.Errorf("classifyTsunamiSeverity(%q) = %q, want %q", tt.title, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeTsunamiAlert(t *testing.T) {
+	alert := TsunamiAlert{
+		ID:        "tsunami-test-001",
+		Title:     "Tsunami Warning — Alaska",
+		Summary:   "Major tsunami warning following M8.0 earthquake.",
+		Link:      "https://www.tsunami.gov/events/tsunami-test-001",
+		Published: time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC),
+		Severity:  "severe",
+	}
+
+	artifact := normalizeTsunamiAlert(alert)
+	if artifact.SourceID != "gov-alerts" {
+		t.Errorf("SourceID = %q", artifact.SourceID)
+	}
+	if artifact.ContentType != "alert/tsunami" {
+		t.Errorf("ContentType = %q", artifact.ContentType)
+	}
+	if artifact.Metadata["source"] != "noaa_tsunami" {
+		t.Errorf("source = %v", artifact.Metadata["source"])
+	}
+	if artifact.Metadata["severity"] != "severe" {
+		t.Errorf("severity = %v", artifact.Metadata["severity"])
+	}
+	if artifact.Metadata["processing_tier"] != "full" {
+		t.Errorf("processing_tier = %v", artifact.Metadata["processing_tier"])
+	}
+}
+
+func TestSync_TsunamiSource(t *testing.T) {
+	entries := []string{
+		makeTsunamiEntry("tsunami-sync-1", "Tsunami Watch — West Coast", "Watch issued.", "https://example.com/1", "2024-03-15T10:30:00Z"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, tsunamiAtomXML(entries))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.tsunamiBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:     []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceTsunami: true,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 1 {
+		t.Errorf("expected 1 artifact, got %d", len(arts))
+	}
+}
+
+// =====================================================
+// USGS Volcano Source Tests
+// =====================================================
+
+func volcanoJSON(entries []map[string]interface{}) []byte {
+	b, _ := json.Marshal(entries)
+	return b
+}
+
+func TestFetchVolcanoAlerts_ValidResponse(t *testing.T) {
+	entries := []map[string]interface{}{
+		{"id": "vol-001", "volcanoName": "Mount Rainier", "alertLevel": "WATCH", "colorCode": "ORANGE", "issuedDate": "2024-04-01T12:00:00Z"},
+		{"id": "vol-002", "volcanoName": "Kilauea", "alertLevel": "WARNING", "colorCode": "RED", "issuedDate": "2024-04-01T14:00:00Z"},
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(volcanoJSON(entries))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.volcanoBaseURL = ts.URL
+
+	alerts, err := c.fetchVolcanoAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 2 {
+		t.Fatalf("expected 2 alerts, got %d", len(alerts))
+	}
+	if alerts[0].Volcano != "Mount Rainier" {
+		t.Errorf("Volcano = %q", alerts[0].Volcano)
+	}
+	if alerts[0].Severity != "moderate" {
+		t.Errorf("Severity = %q, want moderate", alerts[0].Severity)
+	}
+	if alerts[1].Severity != "severe" {
+		t.Errorf("Severity = %q, want severe", alerts[1].Severity)
+	}
+}
+
+func TestFetchVolcanoAlerts_EmptyResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.volcanoBaseURL = ts.URL
+
+	alerts, err := c.fetchVolcanoAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts, got %d", len(alerts))
+	}
+}
+
+func TestFetchVolcanoAlerts_HTTPError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.volcanoBaseURL = ts.URL
+
+	_, err := c.fetchVolcanoAlerts(context.Background())
+	if err == nil {
+		t.Error("expected error for HTTP 502")
+	}
+	if !strings.Contains(err.Error(), "status 502") {
+		t.Errorf("expected status 502 in error, got: %v", err)
+	}
+}
+
+func TestClassifyVolcanoSeverity(t *testing.T) {
+	tests := []struct {
+		level string
+		want  string
+	}{
+		{"WARNING", "severe"},
+		{"WATCH", "moderate"},
+		{"ADVISORY", "minor"},
+		{"NORMAL", "info"},
+		{"warning", "severe"},
+		{"Watch", "moderate"},
+		{"", "info"},
+		{"UNKNOWN", "info"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.level, func(t *testing.T) {
+			got := classifyVolcanoSeverity(tt.level)
+			if got != tt.want {
+				t.Errorf("classifyVolcanoSeverity(%q) = %q, want %q", tt.level, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeVolcanoAlert(t *testing.T) {
+	alert := VolcanoAlert{
+		ID:         "vol-test-001",
+		Volcano:    "Mount St. Helens",
+		AlertLevel: "WARNING",
+		ColorCode:  "RED",
+		Issued:     time.Date(2024, 4, 1, 12, 0, 0, 0, time.UTC),
+		Severity:   "severe",
+	}
+
+	artifact := normalizeVolcanoAlert(alert)
+	if artifact.ContentType != "alert/volcano" {
+		t.Errorf("ContentType = %q", artifact.ContentType)
+	}
+	if artifact.Metadata["source"] != "usgs_volcano" {
+		t.Errorf("source = %v", artifact.Metadata["source"])
+	}
+	if artifact.Metadata["volcano_name"] != "Mount St. Helens" {
+		t.Errorf("volcano_name = %v", artifact.Metadata["volcano_name"])
+	}
+	if artifact.Metadata["alert_level"] != "WARNING" {
+		t.Errorf("alert_level = %v", artifact.Metadata["alert_level"])
+	}
+	if artifact.Metadata["color_code"] != "RED" {
+		t.Errorf("color_code = %v", artifact.Metadata["color_code"])
+	}
+	if !strings.Contains(artifact.Title, "Mount St. Helens") {
+		t.Errorf("Title missing volcano name: %q", artifact.Title)
+	}
+}
+
+// =====================================================
+// InciWeb Wildfire Source Tests
+// =====================================================
+
+func wildfireRSSXML(items []string) string {
+	xml := `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>`
+	for _, item := range items {
+		xml += item
+	}
+	xml += `</channel></rss>`
+	return xml
+}
+
+func makeWildfireItem(guid, title, description, link, pubDate string) string {
+	return fmt.Sprintf(`<item><guid>%s</guid><title>%s</title><description>%s</description><link>%s</link><pubDate>%s</pubDate></item>`,
+		guid, title, description, link, pubDate)
+}
+
+func TestFetchWildfireAlerts_ValidResponse(t *testing.T) {
+	items := []string{
+		makeWildfireItem(
+			"fire-001",
+			"Caldor Fire",
+			"Wildfire burning in El Dorado County. Evacuation orders in effect.",
+			"https://inciweb.wildfire.gov/incident/fire-001",
+			"Mon, 15 Jul 2024 10:30:00 +0000",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, wildfireRSSXML(items))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.wildfireBaseURL = ts.URL
+
+	alerts, err := c.fetchWildfireAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+	if alerts[0].Title != "Caldor Fire" {
+		t.Errorf("Title = %q", alerts[0].Title)
+	}
+	if alerts[0].Severity != "extreme" {
+		t.Errorf("Severity = %q, want extreme (evacuation keyword)", alerts[0].Severity)
+	}
+}
+
+func TestFetchWildfireAlerts_EmptyResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, wildfireRSSXML(nil))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.wildfireBaseURL = ts.URL
+
+	alerts, err := c.fetchWildfireAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts, got %d", len(alerts))
+	}
+}
+
+func TestFetchWildfireAlerts_HTTPError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.wildfireBaseURL = ts.URL
+
+	_, err := c.fetchWildfireAlerts(context.Background())
+	if err == nil {
+		t.Error("expected error for HTTP 404")
+	}
+	if !strings.Contains(err.Error(), "status 404") {
+		t.Errorf("expected status 404 in error, got: %v", err)
+	}
+}
+
+func TestClassifyWildfireSeverity(t *testing.T) {
+	tests := []struct {
+		title       string
+		description string
+		want        string
+	}{
+		{"Caldor Fire", "Evacuation orders in effect.", "extreme"},
+		{"Oak Fire", "Mandatory evacuate all residents.", "extreme"},
+		{"Creek Fire", "Fire warning in effect for area.", "severe"},
+		{"Dixie Fire", "Large fire burning in remote area.", "moderate"},
+		{"", "", "moderate"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			got := classifyWildfireSeverity(tt.title, tt.description)
+			if got != tt.want {
+				t.Errorf("classifyWildfireSeverity(%q, %q) = %q, want %q", tt.title, tt.description, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeWildfireAlert(t *testing.T) {
+	alert := WildfireAlert{
+		ID:          "fire-test-001",
+		Title:       "Park Fire",
+		Description: "Wildfire burning 5000 acres. Warning issued.",
+		Link:        "https://inciweb.wildfire.gov/incident/fire-test-001",
+		PubDate:     time.Date(2024, 7, 15, 10, 30, 0, 0, time.UTC),
+		Severity:    "severe",
+	}
+
+	artifact := normalizeWildfireAlert(alert)
+	if artifact.ContentType != "alert/wildfire" {
+		t.Errorf("ContentType = %q", artifact.ContentType)
+	}
+	if artifact.Metadata["source"] != "inciweb" {
+		t.Errorf("source = %v", artifact.Metadata["source"])
+	}
+	if artifact.Metadata["event_type"] != "wildfire" {
+		t.Errorf("event_type = %v", artifact.Metadata["event_type"])
+	}
+	if artifact.URL != "https://inciweb.wildfire.gov/incident/fire-test-001" {
+		t.Errorf("URL = %q", artifact.URL)
+	}
+	if artifact.Metadata["processing_tier"] != "full" {
+		t.Errorf("processing_tier = %v (severe should be full)", artifact.Metadata["processing_tier"])
+	}
+}
+
+// =====================================================
+// AirNow AQI Source Tests
+// =====================================================
+
+func airnowJSON(entries []map[string]interface{}) []byte {
+	b, _ := json.Marshal(entries)
+	return b
+}
+
+func TestFetchAirNowAQI_ValidResponse(t *testing.T) {
+	entries := []map[string]interface{}{
+		{
+			"DateObserved":  "2024-07-15 ",
+			"HourObserved":  14,
+			"AQI":           165,
+			"ParameterName": "PM2.5",
+			"ReportingArea": "San Francisco",
+			"Category":      map[string]interface{}{"Name": "Unhealthy"},
+		},
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(airnowJSON(entries))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.airnowBaseURL = ts.URL
+
+	obs, err := c.fetchAirNowAQI(context.Background(), 37.77, -122.42, "test-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obs) != 1 {
+		t.Fatalf("expected 1 observation, got %d", len(obs))
+	}
+	if obs[0].AQI != 165 {
+		t.Errorf("AQI = %d", obs[0].AQI)
+	}
+	if obs[0].Severity != "moderate" {
+		t.Errorf("Severity = %q, want moderate (AQI 165)", obs[0].Severity)
+	}
+	if obs[0].Category != "Unhealthy" {
+		t.Errorf("Category = %q", obs[0].Category)
+	}
+}
+
+func TestFetchAirNowAQI_EmptyResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.airnowBaseURL = ts.URL
+
+	obs, err := c.fetchAirNowAQI(context.Background(), 37.77, -122.42, "test-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obs) != 0 {
+		t.Errorf("expected 0 observations, got %d", len(obs))
+	}
+}
+
+func TestFetchAirNowAQI_HTTPError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.airnowBaseURL = ts.URL
+
+	_, err := c.fetchAirNowAQI(context.Background(), 37.77, -122.42, "bad-key")
+	if err == nil {
+		t.Error("expected error for HTTP 403")
+	}
+	if !strings.Contains(err.Error(), "status 403") {
+		t.Errorf("expected status 403 in error, got: %v", err)
+	}
+}
+
+func TestClassifyAQISeverity(t *testing.T) {
+	tests := []struct {
+		aqi  int
+		want string
+	}{
+		{350, "extreme"},
+		{301, "extreme"},
+		{250, "severe"},
+		{201, "severe"},
+		{175, "moderate"},
+		{151, "moderate"},
+		{120, "minor"},
+		{101, "minor"},
+		{50, "info"},
+		{100, "info"},
+		{0, "info"},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("AQI_%d", tt.aqi), func(t *testing.T) {
+			got := classifyAQISeverity(tt.aqi)
+			if got != tt.want {
+				t.Errorf("classifyAQISeverity(%d) = %q, want %q", tt.aqi, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeAirNowAlert(t *testing.T) {
+	obs := AirNowObservation{
+		ID:              "airnow-SF-PM2.5-165",
+		AQI:             165,
+		Category:        "Unhealthy",
+		Pollutant:       "PM2.5",
+		ReportingArea:   "San Francisco",
+		Severity:        "moderate",
+		ObservationTime: time.Date(2024, 7, 15, 14, 0, 0, 0, time.UTC),
+	}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 5}
+
+	artifact := normalizeAirNowAlert(obs, match)
+	if artifact.ContentType != "alert/air_quality" {
+		t.Errorf("ContentType = %q", artifact.ContentType)
+	}
+	if artifact.Metadata["source"] != "airnow" {
+		t.Errorf("source = %v", artifact.Metadata["source"])
+	}
+	if artifact.Metadata["aqi"] != 165 {
+		t.Errorf("aqi = %v", artifact.Metadata["aqi"])
+	}
+	if artifact.Metadata["pollutant"] != "PM2.5" {
+		t.Errorf("pollutant = %v", artifact.Metadata["pollutant"])
+	}
+	if !strings.Contains(artifact.Title, "AQI 165") {
+		t.Errorf("Title missing AQI: %q", artifact.Title)
+	}
+	if !strings.Contains(artifact.Title, "Home") {
+		t.Errorf("Title missing location: %q", artifact.Title)
+	}
+}
+
+func TestSync_AirNowDisabledWithoutKey(t *testing.T) {
+	called := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[]`))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.airnowBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:    []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceAirNow: true,
+		AirNowAPIKey: "", // empty key → source skipped
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if called {
+		t.Error("AirNow API should not be called when API key is empty")
+	}
+}
+
+// =====================================================
+// GDACS Global Disasters Source Tests
+// =====================================================
+
+func gdacsRSSXML(items []string) string {
+	xml := `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>`
+	for _, item := range items {
+		xml += item
+	}
+	xml += `</channel></rss>`
+	return xml
+}
+
+func makeGDACSItem(guid, title, description, link, pubDate, alertLevel, geoPoint string) string {
+	return fmt.Sprintf(`<item><guid>%s</guid><title>%s</title><description>%s</description><link>%s</link><pubDate>%s</pubDate><alertlevel>%s</alertlevel><point>%s</point></item>`,
+		guid, title, description, link, pubDate, alertLevel, geoPoint)
+}
+
+func TestFetchGDACSAlerts_ValidResponse(t *testing.T) {
+	items := []string{
+		makeGDACSItem(
+			"gdacs-001",
+			"Earthquake M7.2 — Indonesia",
+			"Major earthquake in Java region.",
+			"https://www.gdacs.org/report/gdacs-001",
+			"Mon, 15 Jul 2024 10:30:00 +0000",
+			"Red",
+			"-6.5 110.4",
+		),
+		makeGDACSItem(
+			"gdacs-002",
+			"Tropical Cyclone TC-2024-001",
+			"Category 3 cyclone approaching coast.",
+			"https://www.gdacs.org/report/gdacs-002",
+			"Mon, 15 Jul 2024 12:00:00 +0000",
+			"Orange",
+			"15.2 -88.3",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, gdacsRSSXML(items))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.gdacsBaseURL = ts.URL
+
+	alerts, err := c.fetchGDACSAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 2 {
+		t.Fatalf("expected 2 alerts, got %d", len(alerts))
+	}
+	if alerts[0].Severity != "extreme" {
+		t.Errorf("alert[0] Severity = %q, want extreme (Red)", alerts[0].Severity)
+	}
+	if alerts[1].Severity != "severe" {
+		t.Errorf("alert[1] Severity = %q, want severe (Orange)", alerts[1].Severity)
+	}
+	if alerts[0].GeoPoint != "-6.5 110.4" {
+		t.Errorf("GeoPoint = %q", alerts[0].GeoPoint)
+	}
+}
+
+func TestFetchGDACSAlerts_EmptyResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, gdacsRSSXML(nil))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.gdacsBaseURL = ts.URL
+
+	alerts, err := c.fetchGDACSAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts, got %d", len(alerts))
+	}
+}
+
+func TestFetchGDACSAlerts_HTTPError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusGatewayTimeout)
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.gdacsBaseURL = ts.URL
+
+	_, err := c.fetchGDACSAlerts(context.Background())
+	if err == nil {
+		t.Error("expected error for HTTP 504")
+	}
+	if !strings.Contains(err.Error(), "status 504") {
+		t.Errorf("expected status 504 in error, got: %v", err)
+	}
+}
+
+func TestClassifyGDACSAlertLevel(t *testing.T) {
+	tests := []struct {
+		level string
+		want  string
+	}{
+		{"Red", "extreme"},
+		{"red", "extreme"},
+		{"RED", "extreme"},
+		{"Orange", "severe"},
+		{"ORANGE", "severe"},
+		{"Green", "moderate"},
+		{"green", "moderate"},
+		{"", "info"},
+		{"Yellow", "info"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.level, func(t *testing.T) {
+			got := classifyGDACSAlertLevel(tt.level)
+			if got != tt.want {
+				t.Errorf("classifyGDACSAlertLevel(%q) = %q, want %q", tt.level, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeGDACSAlert(t *testing.T) {
+	alert := GDACSAlert{
+		ID:          "gdacs-test-001",
+		Title:       "Earthquake M7.2 — Indonesia",
+		Description: "Strong earthquake detected.",
+		Link:        "https://www.gdacs.org/report/gdacs-test-001",
+		PubDate:     time.Date(2024, 7, 15, 10, 30, 0, 0, time.UTC),
+		GeoPoint:    "-6.5 110.4",
+		Severity:    "extreme",
+	}
+
+	artifact := normalizeGDACSAlert(alert)
+	if artifact.ContentType != "alert/disaster" {
+		t.Errorf("ContentType = %q", artifact.ContentType)
+	}
+	if artifact.Metadata["source"] != "gdacs" {
+		t.Errorf("source = %v", artifact.Metadata["source"])
+	}
+	if artifact.Metadata["severity"] != "extreme" {
+		t.Errorf("severity = %v", artifact.Metadata["severity"])
+	}
+	if artifact.Metadata["processing_tier"] != "full" {
+		t.Errorf("processing_tier = %v", artifact.Metadata["processing_tier"])
+	}
+	if artifact.Metadata["geo_point"] != "-6.5 110.4" {
+		t.Errorf("geo_point = %v", artifact.Metadata["geo_point"])
+	}
+	if artifact.Metadata["latitude"] != -6.5 {
+		t.Errorf("latitude = %v", artifact.Metadata["latitude"])
+	}
+	if artifact.Metadata["longitude"] != 110.4 {
+		t.Errorf("longitude = %v", artifact.Metadata["longitude"])
+	}
+}
+
+func TestNormalizeGDACSAlert_NoGeoPoint(t *testing.T) {
+	alert := GDACSAlert{
+		ID:       "gdacs-no-geo",
+		Title:    "Flood Alert",
+		Severity: "moderate",
+	}
+
+	artifact := normalizeGDACSAlert(alert)
+	if _, exists := artifact.Metadata["geo_point"]; exists {
+		t.Error("geo_point should not be present when GeoPoint is empty")
+	}
+	if _, exists := artifact.Metadata["latitude"]; exists {
+		t.Error("latitude should not be present when GeoPoint is empty")
+	}
+}
+
+// =====================================================
+// Config Parsing Tests for New Sources
+// =====================================================
+
+func TestParseAlertsConfig_NewSourceFlags(t *testing.T) {
+	cfg, err := parseAlertsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+			"source_tsunami":  true,
+			"source_volcano":  true,
+			"source_wildfire": true,
+			"source_airnow":   true,
+			"source_gdacs":    true,
+			"airnow_api_key":  "test-key-123",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.SourceTsunami {
+		t.Error("expected SourceTsunami true")
+	}
+	if !cfg.SourceVolcano {
+		t.Error("expected SourceVolcano true")
+	}
+	if !cfg.SourceWildfire {
+		t.Error("expected SourceWildfire true")
+	}
+	if !cfg.SourceAirNow {
+		t.Error("expected SourceAirNow true")
+	}
+	if !cfg.SourceGDACS {
+		t.Error("expected SourceGDACS true")
+	}
+	if cfg.AirNowAPIKey != "test-key-123" {
+		t.Errorf("AirNowAPIKey = %q", cfg.AirNowAPIKey)
+	}
+}
+
+func TestParseAlertsConfig_NewSourceDefaults(t *testing.T) {
+	cfg, err := parseAlertsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SourceTsunami {
+		t.Error("expected SourceTsunami false by default")
+	}
+	if cfg.SourceVolcano {
+		t.Error("expected SourceVolcano false by default")
+	}
+	if cfg.SourceWildfire {
+		t.Error("expected SourceWildfire false by default")
+	}
+	if cfg.SourceAirNow {
+		t.Error("expected SourceAirNow false by default")
+	}
+	if cfg.SourceGDACS {
+		t.Error("expected SourceGDACS false by default")
+	}
+	if cfg.AirNowAPIKey != "" {
+		t.Errorf("expected empty AirNowAPIKey, got %q", cfg.AirNowAPIKey)
+	}
+}
