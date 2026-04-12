@@ -895,3 +895,93 @@ func TestHealthHandler_DevModeShowsVersionAndCommit(t *testing.T) {
 		t.Errorf("dev mode health should show commit hash, got %q", resp.CommitHash)
 	}
 }
+
+// SCN-023-07: TelegramBot non-nil but Healthy() returns false → "disconnected".
+func TestHealthHandler_TelegramNotHealthy(t *testing.T) {
+	deps := &Dependencies{
+		DB:          &mockDB{healthy: true},
+		NATS:        &mockNATS{healthy: true},
+		StartTime:   time.Now(),
+		TelegramBot: &mockTelegramHealth{healthy: false},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Services["telegram_bot"].Status != "disconnected" {
+		t.Errorf("expected disconnected when Healthy() returns false, got %s", resp.Services["telegram_bot"].Status)
+	}
+}
+
+// mockConnectorHealth implements ConnectorHealthLister for testing.
+type mockConnectorHealth struct {
+	health map[string]string
+}
+
+func (m *mockConnectorHealth) ListConnectorHealth(_ context.Context) map[string]string {
+	return m.health
+}
+
+// SCN-023-02: Connector health appears in health response via typed ConnectorHealthLister.
+func TestHealthHandler_ConnectorHealth(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		ConnectorRegistry: &mockConnectorHealth{
+			health: map[string]string{
+				"rss":     "syncing",
+				"weather": "idle",
+				"discord": "error",
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	connectorTests := map[string]string{
+		"connector:rss":     "syncing",
+		"connector:weather": "idle",
+		"connector:discord": "error",
+	}
+	for key, expected := range connectorTests {
+		svc, ok := resp.Services[key]
+		if !ok {
+			t.Errorf("missing service %s in health response", key)
+			continue
+		}
+		if svc.Status != expected {
+			t.Errorf("expected %s status %q, got %q", key, expected, svc.Status)
+		}
+	}
+}
+
+// SCN-023-02: Nil ConnectorRegistry does not panic in health handler.
+func TestHealthHandler_NilConnectorRegistry(t *testing.T) {
+	deps := &Dependencies{
+		DB:                &mockDB{healthy: true},
+		NATS:              &mockNATS{healthy: true},
+		StartTime:         time.Now(),
+		ConnectorRegistry: nil,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with nil ConnectorRegistry, got %d", rec.Code)
+	}
+}

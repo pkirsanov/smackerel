@@ -259,12 +259,6 @@ func (c *Connector) copyHistoryFileFrom(historyPath string) (string, error) {
 	return tmp.Name(), nil
 }
 
-// copyHistoryFile copies the Chrome History SQLite file to a temp location
-// using the connector's configured HistoryPath. Retained for backward compatibility.
-func (c *Connector) copyHistoryFile() (string, error) {
-	return c.copyHistoryFileFrom(c.config.HistoryPath)
-}
-
 // dedupByURLDate merges entries with the same URL on the same UTC date (R-010).
 // Dwell times are summed, the latest VisitTime is kept, and the Title from the
 // longest individual visit is preserved. Stable insertion order is maintained.
@@ -676,16 +670,6 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 	}
 
 	return cfg, nil
-}
-
-// parseCursorToChrome converts a cursor string (Chrome visit_time integer) to int64.
-// Retained for backward compatibility with tests.
-func parseCursorToChrome(cursor string) int64 {
-	v, err := strconv.ParseInt(cursor, 10, 64)
-	if err != nil {
-		return 0
-	}
-	return v
 }
 
 // parseCursorToChromeSafe converts a cursor string to Chrome visit_time int64.

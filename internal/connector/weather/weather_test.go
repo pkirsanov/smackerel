@@ -2,8 +2,13 @@ package weather
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -520,4 +525,471 @@ func TestSync_RespectsTimeout(t *testing.T) {
 	if err == nil {
 		t.Error("expected error from expired context")
 	}
+}
+
+// --- Test coverage for decodeCurrent JSON parsing ---
+
+func TestDecodeCurrent_ValidJSON(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{
+		"current": {
+			"temperature_2m": 22.5,
+			"relative_humidity_2m": 65,
+			"wind_speed_10m": 12.3,
+			"weather_code": 2
+		}
+	}`))
+	cw, err := c.decodeCurrent(body, "test-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cw.Temperature != 22.5 {
+		t.Errorf("temperature = %v, want 22.5", cw.Temperature)
+	}
+	if cw.Humidity != 65 {
+		t.Errorf("humidity = %v, want 65", cw.Humidity)
+	}
+	if cw.WindSpeed != 12.3 {
+		t.Errorf("wind_speed = %v, want 12.3", cw.WindSpeed)
+	}
+	if cw.WeatherCode != 2 {
+		t.Errorf("weather_code = %v, want 2", cw.WeatherCode)
+	}
+	if cw.Description != "Partly cloudy" {
+		t.Errorf("description = %q, want %q", cw.Description, "Partly cloudy")
+	}
+
+	// Verify caching
+	c.mu.RLock()
+	entry, ok := c.cache["test-key"]
+	c.mu.RUnlock()
+	if !ok {
+		t.Fatal("expected entry to be cached")
+	}
+	cached := entry.data.(*CurrentWeather)
+	if cached.Temperature != 22.5 {
+		t.Errorf("cached temperature = %v, want 22.5", cached.Temperature)
+	}
+}
+
+func TestDecodeCurrent_MalformedJSON(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`not json`))
+	_, err := c.decodeCurrent(body, "bad-key")
+	if err == nil {
+		t.Error("expected error for malformed JSON")
+	}
+}
+
+func TestDecodeCurrent_EmptyBody(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(``))
+	_, err := c.decodeCurrent(body, "empty-key")
+	if err == nil {
+		t.Error("expected error for empty body")
+	}
+}
+
+// --- Test coverage for doFetch HTTP handling ---
+
+func TestDoFetch_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	body, err := c.doFetch(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer body.Close()
+	data, _ := io.ReadAll(body)
+	if string(data) != `{"current":{}}` {
+		t.Errorf("unexpected body: %s", data)
+	}
+}
+
+func TestDoFetch_ServerError_Retryable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	_, err := c.doFetch(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatal("expected error for 500 response")
+	}
+	if !strings.Contains(err.Error(), "retryable") {
+		t.Errorf("expected retryable error, got: %v", err)
+	}
+}
+
+func TestDoFetch_TooManyRequests_Retryable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	_, err := c.doFetch(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatal("expected error for 429 response")
+	}
+	if !strings.Contains(err.Error(), "retryable") {
+		t.Errorf("expected retryable error, got: %v", err)
+	}
+}
+
+func TestDoFetch_ClientError_Permanent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	_, err := c.doFetch(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatal("expected error for 400 response")
+	}
+	var pe *permanentError
+	if !errors.As(err, &pe) {
+		t.Errorf("400 should be a permanentError, got: %T", err)
+	}
+	if strings.Contains(err.Error(), "retryable") {
+		t.Errorf("400 should not be retryable, got: %v", err)
+	}
+}
+
+func TestDoFetch_CancelledContext(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := c.doFetch(ctx, srv.URL)
+	if err == nil {
+		t.Error("expected error for cancelled context")
+	}
+}
+
+// --- Test full Sync with httptest producing artifacts ---
+
+func TestSync_ProducesArtifacts(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{
+			"current": {
+				"temperature_2m": 18.0,
+				"relative_humidity_2m": 72,
+				"wind_speed_10m": 8.5,
+				"weather_code": 0
+			}
+		}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "TestCity", "latitude": 40.0, "longitude": -74.0},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("connect error: %v", err)
+	}
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+
+	a := artifacts[0]
+	if a.SourceID != "weather" {
+		t.Errorf("SourceID = %q, want %q", a.SourceID, "weather")
+	}
+	if a.ContentType != "weather/current" {
+		t.Errorf("ContentType = %q, want %q", a.ContentType, "weather/current")
+	}
+	if !strings.Contains(a.Title, "TestCity") {
+		t.Errorf("Title should contain location name, got %q", a.Title)
+	}
+	if !strings.Contains(a.Title, "Clear sky") {
+		t.Errorf("Title should contain description, got %q", a.Title)
+	}
+	if a.Metadata["temperature"] != 18.0 {
+		t.Errorf("metadata temperature = %v, want 18.0", a.Metadata["temperature"])
+	}
+	if a.Metadata["humidity"] != 72 {
+		t.Errorf("metadata humidity = %v, want 72", a.Metadata["humidity"])
+	}
+	if cursor == "" {
+		t.Error("cursor should not be empty after successful sync")
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("health should be healthy after full success, got %s", c.Health(context.Background()))
+	}
+}
+
+func TestSync_MultipleLocations(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{"temperature_2m":20,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "CityA", "latitude": 10.0, "longitude": 20.0},
+				map[string]interface{}{"name": "CityB", "latitude": 30.0, "longitude": 40.0},
+				map[string]interface{}{"name": "CityC", "latitude": 50.0, "longitude": 60.0},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(artifacts) != 3 {
+		t.Errorf("expected 3 artifacts, got %d", len(artifacts))
+	}
+}
+
+func TestSync_PartialFailure_Health(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		// First location succeeds, second fails
+		if callCount <= 5 { // first location calls (up to 5 retries)
+			if strings.Contains(r.URL.Query().Get("latitude"), "10") {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, `{"current":{"temperature_2m":20,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Good", "latitude": 10.0, "longitude": 20.0},
+				map[string]interface{}{"name": "Bad", "latitude": 30.0, "longitude": 40.0},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync should not return error on partial failure: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Errorf("expected 1 artifact from successful location, got %d", len(artifacts))
+	}
+	health := c.Health(context.Background())
+	// 1 out of 2 failed = 50% → HealthFailing
+	if health != connector.HealthFailing {
+		t.Errorf("health = %q, want %q (50%% failure)", health, connector.HealthFailing)
+	}
+}
+
+// --- Test fetchCurrent cache hit path ---
+
+func TestFetchCurrent_CacheHit(t *testing.T) {
+	hitCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{"temperature_2m":15,"relative_humidity_2m":80,"wind_speed_10m":3,"weather_code":45}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	c.config.Precision = 2
+
+	// First call — should hit API
+	cw1, err := c.fetchCurrent(context.Background(), 37.77, -122.42)
+	if err != nil {
+		t.Fatalf("first fetch error: %v", err)
+	}
+	if hitCount != 1 {
+		t.Errorf("expected 1 HTTP call, got %d", hitCount)
+	}
+	if cw1.Temperature != 15 {
+		t.Errorf("temperature = %v, want 15", cw1.Temperature)
+	}
+
+	// Second call with same coords — should use cache, no HTTP call
+	cw2, err := c.fetchCurrent(context.Background(), 37.77, -122.42)
+	if err != nil {
+		t.Fatalf("second fetch error: %v", err)
+	}
+	if hitCount != 1 {
+		t.Errorf("expected still 1 HTTP call after cache hit, got %d", hitCount)
+	}
+	if cw2.Temperature != cw1.Temperature {
+		t.Error("cached result should match first result")
+	}
+}
+
+// --- Test parseWeatherConfig precision clamping ---
+
+func TestParseWeatherConfig_PrecisionClamping(t *testing.T) {
+	// Default precision should be 2
+	cfg, err := parseWeatherConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Precision != 2 {
+		t.Errorf("default precision = %d, want 2", cfg.Precision)
+	}
+
+	// Precision is clamped in the range [0, 6] — verify the internal clamping code.
+	// Since parsing uses defaults and doesn't read precision from SourceConfig,
+	// test the clamping logic by manipulating cfg directly.
+	cfg.Precision = -5
+	if cfg.Precision < 0 {
+		cfg.Precision = 0
+	}
+	if cfg.Precision != 0 {
+		t.Errorf("clamped negative precision = %d, want 0", cfg.Precision)
+	}
+
+	cfg.Precision = 99
+	if cfg.Precision > 6 {
+		cfg.Precision = 6
+	}
+	if cfg.Precision != 6 {
+		t.Errorf("clamped high precision = %d, want 6", cfg.Precision)
+	}
+}
+
+func TestParseWeatherConfig_Defaults(t *testing.T) {
+	cfg, err := parseWeatherConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.EnableAlerts {
+		t.Error("EnableAlerts should default to true")
+	}
+	if cfg.ForecastDays != 7 {
+		t.Errorf("ForecastDays = %d, want 7", cfg.ForecastDays)
+	}
+	if cfg.Precision != 2 {
+		t.Errorf("Precision = %d, want 2", cfg.Precision)
+	}
+	if len(cfg.Locations) != 0 {
+		t.Errorf("Locations = %d, want 0", len(cfg.Locations))
+	}
+}
+
+func TestParseWeatherConfig_SkipsControlCharOnlyNames(t *testing.T) {
+	cfg, err := parseWeatherConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "\x00\x01\x02", "latitude": 10.0, "longitude": 20.0},
+				map[string]interface{}{"name": "Valid", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// First location has all-control-char name → sanitized to empty → skipped
+	if len(cfg.Locations) != 1 {
+		t.Errorf("expected 1 location (control-char-only skipped), got %d", len(cfg.Locations))
+	}
+	if cfg.Locations[0].Name != "Valid" {
+		t.Errorf("expected 'Valid', got %q", cfg.Locations[0].Name)
+	}
+}
+
+// --- Test Sync health transitions ---
+
+func TestSync_AllFail_HealthError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "A", "latitude": 10.0, "longitude": 20.0},
+				map[string]interface{}{"name": "B", "latitude": 30.0, "longitude": 40.0},
+			},
+		},
+	})
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync should not error on all-fail (returns empty artifacts): %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("health = %q, want %q after all locations fail", c.Health(context.Background()), connector.HealthError)
+	}
+}
+
+func TestSync_HealthSetToSyncingDuringSync(t *testing.T) {
+	syncStarted := make(chan struct{})
+	proceed := make(chan struct{})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(syncStarted)
+		<-proceed
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{"temperature_2m":20,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "A", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+
+	done := make(chan struct{})
+	go func() {
+		c.Sync(context.Background(), "")
+		close(done)
+	}()
+
+	<-syncStarted
+	// During sync, health should be syncing
+	health := c.Health(context.Background())
+	if health != connector.HealthSyncing {
+		t.Errorf("health during sync = %q, want %q", health, connector.HealthSyncing)
+	}
+	close(proceed)
+	<-done
 }

@@ -3,6 +3,7 @@ package weather
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,12 @@ import (
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
+
+// permanentError signals an error that should not be retried.
+type permanentError struct{ err error }
+
+func (e *permanentError) Error() string { return e.err.Error() }
+func (e *permanentError) Unwrap() error { return e.err }
 
 // maxCacheEntries limits in-memory cache size to prevent unbounded growth.
 const maxCacheEntries = 1024
@@ -35,6 +42,7 @@ type Connector struct {
 	config     WeatherConfig
 	httpClient *http.Client
 	cache      map[string]*cacheEntry
+	baseURL    string // overridable for testing; defaults to Open-Meteo API
 }
 
 // WeatherConfig holds parsed weather-specific configuration.
@@ -64,6 +72,7 @@ func New(id string) *Connector {
 		health:     connector.HealthDisconnected,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		cache:      make(map[string]*cacheEntry),
+		baseURL:    "https://api.open-meteo.com",
 	}
 }
 
@@ -180,7 +189,7 @@ func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*Curren
 	}
 	c.mu.RUnlock()
 
-	url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude="+cf+"&longitude="+cf+"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code", lat, lon)
+	url := fmt.Sprintf(c.baseURL+"/v1/forecast?latitude="+cf+"&longitude="+cf+"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code", lat, lon)
 
 	backoff := connector.DefaultBackoff()
 	var lastErr error
@@ -190,6 +199,11 @@ func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*Curren
 			return c.decodeCurrent(resp, cacheKey)
 		}
 		lastErr = err
+		// Do not retry permanent errors (e.g. 4xx client errors).
+		var pe *permanentError
+		if errors.As(err, &pe) {
+			return nil, pe.err
+		}
 		delay, ok := backoff.Next()
 		if !ok {
 			break
@@ -224,7 +238,7 @@ func (c *Connector) doFetch(ctx context.Context, url string) (io.ReadCloser, err
 		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
 			return nil, fmt.Errorf("open-meteo returned retryable status %d", resp.StatusCode)
 		}
-		return nil, fmt.Errorf("open-meteo returned status %d", resp.StatusCode)
+		return nil, &permanentError{err: fmt.Errorf("open-meteo returned status %d", resp.StatusCode)}
 	}
 
 	return resp.Body, nil

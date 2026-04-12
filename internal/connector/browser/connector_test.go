@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,7 +110,7 @@ func TestConnect_HistoryFileNotFound(t *testing.T) {
 	}
 }
 
-func TestCopyHistoryFile_RetryOnFailure(t *testing.T) {
+func TestCopyHistoryFileFrom_RetryOnFailure(t *testing.T) {
 	// Create a temp file to simulate a Chrome History file
 	tmpDir := t.TempDir()
 	historyPath := filepath.Join(tmpDir, "History")
@@ -118,12 +119,11 @@ func TestCopyHistoryFile_RetryOnFailure(t *testing.T) {
 	}
 
 	c := New("browser-history")
-	c.config = BrowserConfig{HistoryPath: historyPath}
 
 	// Success case
-	tmpPath, err := c.copyHistoryFile()
+	tmpPath, err := c.copyHistoryFileFrom(historyPath)
 	if err != nil {
-		t.Fatalf("copyHistoryFile failed: %v", err)
+		t.Fatalf("copyHistoryFileFrom failed: %v", err)
 	}
 	defer os.Remove(tmpPath)
 
@@ -136,8 +136,7 @@ func TestCopyHistoryFile_RetryOnFailure(t *testing.T) {
 	}
 
 	// Failure case: non-existent source
-	c.config.HistoryPath = "/nonexistent/path/History"
-	_, err = c.copyHistoryFile()
+	_, err = c.copyHistoryFileFrom("/nonexistent/path/History")
 	if err == nil {
 		t.Error("expected error for nonexistent source")
 	}
@@ -240,15 +239,6 @@ func TestParseBrowserConfig_ValidationErrors(t *testing.T) {
 }
 
 func TestCursorConversion_RoundTrip(t *testing.T) {
-	// Test a known Chrome timestamp
-	chromeTime := int64(13350000000000000)
-	cursor := strconv.FormatInt(chromeTime, 10)
-
-	parsed := parseCursorToChrome(cursor)
-	if parsed != chromeTime {
-		t.Errorf("expected %d, got %d", chromeTime, parsed)
-	}
-
 	// Test GoTimeToChrome / ChromeTimeToGo round trip
 	now := time.Now().Truncate(time.Microsecond)
 	chrome := GoTimeToChrome(now)
@@ -439,16 +429,7 @@ func TestParseBrowserConfig_CustomSkipDomains(t *testing.T) {
 
 // contains checks if s contains substr.
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(s, substr)
 }
 
 // --- Scope 2: Social Media Aggregation, Repeat Visits & Privacy Gate ---
@@ -980,28 +961,6 @@ func TestProcessEntries_SocialMediaAggregation_MultiDay(t *testing.T) {
 	}
 	if dates["2025-03-16"] != 1 {
 		t.Errorf("expected 1 visit on 2025-03-16, got %d", dates["2025-03-16"])
-	}
-}
-
-func TestParseCursorToChrome_BadInput(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected int64
-	}{
-		{"garbage string returns 0", "not-a-number", 0},
-		{"empty string returns 0", "", 0},
-		{"float string returns 0", "123.456", 0},
-		{"valid integer", "13350000000000000", 13350000000000000},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := parseCursorToChrome(tt.input)
-			if got != tt.expected {
-				t.Errorf("parseCursorToChrome(%q) = %d, want %d", tt.input, got, tt.expected)
-			}
-		})
 	}
 }
 

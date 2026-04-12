@@ -612,9 +612,9 @@ func TestPartialFailureReturnsSuccessful(t *testing.T) {
 		t.Errorf("expected 3 artifacts (messages failed), got %d", len(artifacts))
 	}
 
-	// Health should still be healthy since we got some artifacts
-	if c.Health(context.Background()) != connector.HealthHealthy {
-		t.Errorf("expected healthy (partial success), got %v", c.Health(context.Background()))
+	// Health should be degraded since partial failure occurred
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected degraded (partial success), got %v", c.Health(context.Background()))
 	}
 }
 
@@ -1434,5 +1434,101 @@ func TestConfigAcceptsValidBaseURL(t *testing.T) {
 				t.Errorf("BaseURL = %q, want %q", cfg.BaseURL, baseURL)
 			}
 		})
+	}
+}
+
+// --- Improvement: HealthDegraded on partial sync failure ---
+
+func TestPartialFailureSetsHealthDegraded(t *testing.T) {
+	// Properties succeed, reviews fail → health should be degraded, not healthy
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data: []Property{{ID: "p1", Name: "House"}}, Total: 1,
+			})
+		case strings.Contains(r.URL.Path, "/reviews"):
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: []Reservation{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken:         "token",
+		BaseURL:             srv.URL,
+		PageSize:            10,
+		SyncProperties:      true,
+		SyncReservations:    false,
+		SyncMessages:        false,
+		SyncReviews:         true,
+		TierProperties:      "light",
+		TierReviews:         "full",
+		InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.client.SetBackoff(fastBackoff())
+	c.health = connector.HealthHealthy
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync should not return error on partial failure: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Errorf("expected 1 artifact (properties only), got %d", len(artifacts))
+	}
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected degraded health on partial failure, got %v", c.Health(context.Background()))
+	}
+}
+
+// --- Improvement: Context cancellation between resource type syncs ---
+
+func TestSyncRespectsContextCancellation(t *testing.T) {
+	requestCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+			Data: []Property{{ID: "p1", Name: "House"}}, Total: 1,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken:         "token",
+		BaseURL:             srv.URL,
+		PageSize:            10,
+		SyncProperties:      true,
+		SyncReservations:    true,
+		SyncMessages:        true,
+		SyncReviews:         true,
+		TierProperties:      "light",
+		TierReservations:    "standard",
+		TierMessages:        "full",
+		TierReviews:         "full",
+		InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	// Cancel context immediately after creation
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := c.Sync(ctx, "")
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+	if !strings.Contains(err.Error(), "cancelled") && !strings.Contains(err.Error(), "canceled") {
+		t.Errorf("error should indicate cancellation: %v", err)
+	}
+	// Should NOT have made all 4 resource type requests
+	if requestCount > 1 {
+		t.Errorf("expected at most 1 request with cancelled context, got %d", requestCount)
 	}
 }

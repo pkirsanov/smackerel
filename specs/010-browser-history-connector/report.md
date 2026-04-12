@@ -61,10 +61,10 @@ ok      github.com/smackerel/smackerel/internal/web/icons       0.005s
 44 passed in 0.79s
 ```
 
-Browser-specific tests (43 tests across 2 files):
+Browser-specific tests (55 tests across 2 files):
 
-- `connector_test.go` (33 tests): TestProcessEntries_DwellTimeTiering, TestProcessEntries_SkipFiltering, TestConnect_HistoryFileNotFound, TestCopyHistoryFile_RetryOnFailure, TestParseBrowserConfig_Defaults, TestParseBrowserConfig_ValidationErrors, TestCursorConversion_RoundTrip, TestConnector_HealthLifecycle, TestClose_SetsDisconnected, TestSync_EmptyCursor_UsesLookback, TestGoTimeToChrome_ChromeTimeToGo_RoundTrip, TestProcessEntries_CursorAdvances, TestProcessEntries_SourceID, TestParseDurationWithDays, TestParseBrowserConfig_CustomSkipDomains, TestProcessEntries_SocialMediaAggregation, TestProcessEntries_SocialMediaHighDwellIndividual, TestDetectRepeatVisits_TierEscalation, TestEscalateTier_AllTransitions, TestProcessEntries_PrivacyGate_MetadataTierNoArtifact, TestProcessEntries_ContentFetchFailure, TestBuildSocialAggregate_ArtifactFields, TestDetectRepeatVisits_BelowThreshold_NoEscalation, TestDetectRepeatVisits_SocialMediaExcluded, TestProcessEntries_PrivacyGate_LightTierStoresURL, TestProcessEntries_ContentFetchSuccess, TestProcessEntries_RepeatEscalation_MetadataToLight_SurvivesPrivacyGate, TestProcessEntries_SocialMediaAggregation_MultiDay, TestParseCursorToChrome_BadInput, TestProcessEntries_CustomDwellThresholds, TestParseBrowserConfig_DwellTimeThresholds, TestParseBrowserConfig_DwellTimeThresholds_Invalid, TestConnectorID (inline in HealthLifecycle)
-- `browser_test.go` (10 tests): TestDwellTimeTier, TestDwellTimeTier_BoundaryValues, TestIsSocialMedia, TestShouldSkip, TestExtractDomain, TestExtractDomain_EdgeCases, TestChromeTimeToGo, TestOptInRequired, TestPerSourceDeletion, (inline subtests)
+- `connector_test.go` (40 tests): TestProcessEntries_DwellTimeTiering, TestProcessEntries_SkipFiltering, TestConnect_HistoryFileNotFound, TestCopyHistoryFileFrom_RetryOnFailure, TestParseBrowserConfig_Defaults, TestParseBrowserConfig_ValidationErrors, TestCursorConversion_RoundTrip, TestConnector_HealthLifecycle, TestClose_SetsDisconnected, TestSync_EmptyCursor_UsesLookback, TestGoTimeToChrome_ChromeTimeToGo_RoundTrip, TestProcessEntries_CursorAdvances, TestProcessEntries_SourceID, TestParseDurationWithDays, TestParseBrowserConfig_CustomSkipDomains, TestProcessEntries_SocialMediaAggregation, TestProcessEntries_SocialMediaHighDwellIndividual, TestDetectRepeatVisits_TierEscalation, TestEscalateTier_AllTransitions, TestProcessEntries_PrivacyGate_MetadataTierNoArtifact, TestProcessEntries_ContentFetchFailure, TestBuildSocialAggregate_ArtifactFields, TestDetectRepeatVisits_BelowThreshold_NoEscalation, TestDetectRepeatVisits_SocialMediaExcluded, TestProcessEntries_PrivacyGate_LightTierStoresURL, TestProcessEntries_ContentFetchSuccess, TestProcessEntries_RepeatEscalation_MetadataToLight_SurvivesPrivacyGate, TestProcessEntries_SocialMediaAggregation_MultiDay, TestProcessEntries_CustomDwellThresholds, TestParseBrowserConfig_DwellTimeThresholds, TestParseBrowserConfig_DwellTimeThresholds_Invalid, TestDedupByURLDate, TestProcessEntries_DedupSameURLSameDay, TestDetectRepeatVisits_RespectsWindow, TestDetectRepeatVisits_AllWithinWindow_Escalates, TestParseCursorToChromeSafe_CorruptedInput, TestSync_RespectsContextCancellation, TestConnector_ConfigSnapshotIsolation, TestProcessEntries_ZeroDwellTime, TestDedupByURLDate_EmptyInput
+- `browser_test.go` (15 tests): TestDwellTimeTier, TestDwellTimeTier_BoundaryValues, TestIsSocialMedia, TestIsSocialMedia_Subdomains, TestShouldSkip, TestExtractDomain, TestExtractDomain_EdgeCases, TestChromeTimeToGo, TestOptInRequired, TestShouldSkip_SchemePrefixedLocalhost, TestIsSocialMedia_AllRegisteredDomains, TestGoTimeToChrome_RoundTrip, TestParseChromeHistorySince_HasLimit, TestExtractDomain_NonHTTPSchemes, TestDwellTimeTier_NegativeDwell
 
 ### Validation Evidence
 
@@ -200,3 +200,99 @@ ok      github.com/smackerel/smackerel/internal/pipeline        0.086s
 #### Residual Finding (Deferred)
 
 **F002: ParseChromeHistorySince requires SQLite driver dependency.** The function calls `sql.Open("sqlite3", ...)` but no SQLite driver is registered in `go.mod`. This means `ParseChromeHistory` and `ParseChromeHistorySince` will fail at runtime with "unknown driver" error. Adding the driver and writing the 3 planned SQLite-backed tests (T-02, T-11, T-12) requires an implementation-scope change, not just test additions. This should be addressed in a future delivery round targeting spec 010.
+
+---
+
+### Stochastic Quality Sweep — Regression Trigger (2026-04-11)
+
+**Trigger:** `regression` via `bubbles.workflow mode: regression-to-doc`
+**Scope:** Durability verification of all prior fixes from delivery-lockdown, R02 improve (5 fixes), R06 chaos (6 fixes), and earlier sweep rounds.
+
+#### Regression Durability Audit
+
+| Fix ID | Origin | Description | Code Present | Test Present | Test Outcome |
+|--------|--------|-------------|:---:|:---:|:---:|
+| R001 | Regression R1 | Pipeline `tier.go` SourceID `browser-history` routing | `SourceBrowserHistory` in tier.go:29 | `TestAssignTier_BrowserHistorySourceID` | PASS |
+| R002 | Regression R1 | Configurable dwell thresholds (was dead code) | `dwellTimeTier()` method in connector.go:474 | `TestProcessEntries_CustomDwellThresholds`, `TestParseBrowserConfig_DwellTimeThresholds`, `TestParseBrowserConfig_DwellTimeThresholds_Invalid` | PASS |
+| F-001 | Validate R4 | URL+date dedup (R-010) | `dedupByURLDate()` in connector.go:271 | `TestDedupByURLDate`, `TestProcessEntries_DedupSameURLSameDay`, `TestDedupByURLDate_EmptyInput` | PASS |
+| F-003 | Validate R4 | Social aggregate peak page tracking (R-005) | `peak_page_title` in connector.go:538 | `TestBuildSocialAggregate_ArtifactFields` | PASS |
+| F001 | Test R3 | Dwell boundary values | N/A (utility fn) | `TestDwellTimeTier_BoundaryValues` (7 subtests) | PASS |
+| F003 | Test R3 | Content fetch success path | in processEntries | `TestProcessEntries_ContentFetchSuccess` | PASS |
+| F004 | Test R3 | Repeat escalation metadata→light privacy gate | in processEntries | `TestProcessEntries_RepeatEscalation_MetadataToLight_SurvivesPrivacyGate` | PASS |
+| F005 | Test R3 | Multi-day social aggregation split | in buildSocialAggregates | `TestProcessEntries_SocialMediaAggregation_MultiDay` | PASS |
+| F006 | Test R3 | Bad cursor input handling | parseCursorToChrome | `TestParseCursorToChrome_BadInput` (4 subtests) | PASS |
+| F007 | Test R3 | Domain extraction edge cases | extractDomain | `TestExtractDomain_EdgeCases` (5 subtests) | PASS |
+| R02-improve | Improve R2 | Repeat visit window/escalation hardening | detectRepeatVisits | `TestDetectRepeatVisits_RespectsWindow`, `TestDetectRepeatVisits_AllWithinWindow_Escalates` | PASS |
+| R02-improve | Improve R2 | Corrupted cursor safe parsing | parseCursorToChromeSafe | `TestParseCursorToChromeSafe_CorruptedInput` (6 subtests) | PASS |
+| R02-improve | Improve R2 | Context cancellation in Sync | Sync() ctx check | `TestSync_RespectsContextCancellation` | PASS |
+| R02-improve | Improve R2 | Config snapshot isolation | Connect() snapshot | `TestConnector_ConfigSnapshotIsolation` | PASS |
+| R02-improve | Improve R2 | Zero dwell time handling | processEntries | `TestProcessEntries_ZeroDwellTime` | PASS |
+| R06-chaos | Chaos R6 | Same tests from R02 hardening verified under chaos trigger | all above | all above | PASS |
+
+#### Fresh Test Execution (no cache)
+
+```
+$ go test -count=1 -v ./internal/connector/browser/...
+55 tests — all PASS
+ok      github.com/smackerel/smackerel/internal/connector/browser       0.065s
+
+$ go test -count=1 -v -run TestAssignTier ./internal/pipeline/...
+13 tests — all PASS
+ok      github.com/smackerel/smackerel/internal/pipeline        0.051s
+```
+
+#### Full Suite Verification
+
+```
+$ ./smackerel.sh test unit — 33 packages, all ok
+$ ./smackerel.sh lint — All checks passed!
+$ ./smackerel.sh check — Config is in sync with SST
+```
+
+---
+
+### Stochastic Quality Sweep — Simplify Trigger (2026-04-12)
+
+**Trigger:** `simplify` via `bubbles.workflow mode: simplify-to-doc`
+**Scope:** Dead code, redundancy, unnecessary complexity in browser history connector.
+
+#### Simplification Findings
+
+| ID | Type | Location | Finding | Resolution |
+|----|------|----------|---------|------------|
+| S1 | Dead code | `browser.go` | `ParseChromeHistory` — original LIMIT-1000 function superseded by `ParseChromeHistorySince`. Zero production callers. | **REMOVED** (40 lines) |
+| S2 | Dead code | `browser.go` | `ToRawArtifacts` — simple converter superseded by richer inline artifact construction in `processEntries`. Zero production callers. | **REMOVED** (18 lines), unused `connector` import removed |
+| S3 | Dead code | `connector.go` | `parseCursorToChrome` — old unsafe cursor parser (silently returns 0) superseded by `parseCursorToChromeSafe`. Zero production callers. | **REMOVED** (8 lines) |
+| S4 | Dead code | `connector.go` | `copyHistoryFile` — backward-compat wrapper delegating to `copyHistoryFileFrom`. Zero production callers. | **REMOVED** (4 lines) |
+| S5 | Redundancy | `connector_test.go` | `contains`/`searchSubstring` — hand-rolled substring search reimplementing `strings.Contains`. | **REPLACED** with `strings.Contains` delegation |
+
+#### Test Updates
+
+| Test | Change | Reason |
+|------|--------|--------|
+| `TestParseCursorToChrome_BadInput` | Removed | Tested dead `parseCursorToChrome`; covered by `TestParseCursorToChromeSafe_CorruptedInput` |
+| `TestPerSourceDeletion` | Removed | Tested dead `ToRawArtifacts`; covered by `TestProcessEntries_SourceID` |
+| `TestToRawArtifacts_MetadataFields` | Removed | Tested dead `ToRawArtifacts` |
+| `TestToRawArtifacts_EmptyEntries` | Removed | Tested dead `ToRawArtifacts` |
+| `TestToRawArtifacts_SourceIDConsistency` | Removed | Tested dead `ToRawArtifacts`; covered by `TestProcessEntries_SourceID` |
+| `TestCopyHistoryFile_RetryOnFailure` | Renamed → `TestCopyHistoryFileFrom_RetryOnFailure` | Tests `copyHistoryFileFrom` directly |
+| `TestCursorConversion_RoundTrip` | Trimmed | Removed `parseCursorToChrome` portion; kept `GoTimeToChrome`/`ChromeTimeToGo` round-trip |
+
+#### Net Change: -142 lines (147 removed, 5 added)
+
+#### Verification
+
+```
+$ go clean -testcache && ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/browser  0.226s
+33 Go packages — all ok
+55 top-level browser tests — all PASS
+```
+
+#### Regression Verdict
+
+**All prior fixes are DURABLE.** No regressions detected. 55 browser tests + 13 pipeline tier tests pass fresh (no cache). Lint and config SST clean.
+
+#### Residual Finding (Pre-existing, Deferred — unchanged)
+
+**R003 / F002: ParseChromeHistorySince requires SQLite driver dependency.** First documented in Round 3 (test-to-doc). Requires implementation-scope change, not regression scope.

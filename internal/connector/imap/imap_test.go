@@ -516,3 +516,23 @@ func TestSync_ErrorOnInvalidMessages(t *testing.T) {
 		t.Fatal("expected error for invalid messages format")
 	}
 }
+
+func TestSync_HealthStaysErrorOnFailure(t *testing.T) {
+	c := New("imap-health")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"messages": "not-an-array", // triggers parse error
+		},
+	})
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected sync error for invalid messages")
+	}
+
+	// Health must remain at Error, not reset to Healthy by the defer
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("health should be Error after failed sync, got %v", c.Health(context.Background()))
+	}
+}

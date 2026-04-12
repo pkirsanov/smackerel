@@ -53,7 +53,11 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.health = connector.HealthSyncing
-	defer func() { c.health = connector.HealthHealthy }()
+	defer func() {
+		if c.health == connector.HealthSyncing {
+			c.health = connector.HealthHealthy
+		}
+	}()
 
 	var artifacts []connector.RawArtifact
 	latestTime := cursor

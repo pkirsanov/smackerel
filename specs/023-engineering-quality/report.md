@@ -110,3 +110,41 @@ A stochastic quality sweep (trigger: validate, mode: reconcile-to-doc) verified 
 ## Completion Statement
 
 Feature 023 is complete. All 3 scopes are done. A gaps sweep on 2026-04-11 found and fixed 3 remaining runtime type assertions in capture.go that had been missed by the original implementation. A reconciliation pass on 2026-04-11 verified all DoD claims against live code with zero drift. All unit tests pass.
+
+## Test Coverage Sweep (2026-04-11, test trigger)
+
+A stochastic quality sweep (trigger: test, mode: test-to-doc) analyzed unit test coverage for all code surfaces touched by spec 023 and identified 3 gaps.
+
+### Gaps Found
+
+| Gap | Location | Missing Coverage | Scenario |
+|-----|----------|-----------------|----------|
+| T-GAP-1 | `capture_test.go` | Zero tests for `RecentHandler`, `ArtifactDetailHandler`, `ExportHandler` — handlers rewritten during gaps sweep to use typed `ArtifactQuerier` were untested | SCN-023-02 |
+| T-GAP-2 | `health_test.go` | TelegramBot non-nil but `Healthy() == false` edge case untested (only nil and healthy tested) | SCN-023-07 |
+| T-GAP-3 | `health_test.go` | `ConnectorHealthLister` path in HealthHandler untested — no mock for connector registry | SCN-023-02 |
+
+### Tests Added
+
+**capture_test.go** (12 new tests):
+- `TestRecentHandler_NilArtifactStore_Returns503` — nil guard
+- `TestRecentHandler_Success` — success path with mock ArtifactQuerier, validates JSON + Content-Type
+- `TestRecentHandler_QueryError` — DB query failure → 500
+- `TestRecentHandler_LimitCapped` — limit >50 capped, still returns 200
+- `TestArtifactDetailHandler_NilArtifactStore_Returns503` — nil guard with Chi router context
+- `TestArtifactDetailHandler_Success` — success path, validates response fields
+- `TestArtifactDetailHandler_NotFound` — GetArtifact error → 404 NOT_FOUND
+- `TestExportHandler_NilArtifactStore_Returns503` — nil guard
+- `TestExportHandler_Success` — validates NDJSON Content-Type + X-Next-Cursor header
+- `TestExportHandler_InvalidCursor` — bad cursor → 400
+- `TestExportHandler_QueryError` — export failure → 500
+
+**health_test.go** (4 new tests):
+- `TestHealthHandler_TelegramNotHealthy` — non-nil bot, Healthy()=false → "disconnected"
+- `TestHealthHandler_ConnectorHealth` — mock ConnectorHealthLister with 3 connectors
+- `TestHealthHandler_NilConnectorRegistry` — nil registry does not panic
+
+### Verification
+
+- `./smackerel.sh check` — pass (config SST + go vet/build)
+- `./smackerel.sh test unit` — all packages pass, `internal/api` re-ran (not cached) at 0.930s
+- Total test functions: `capture_test.go` 22, `health_test.go` 40

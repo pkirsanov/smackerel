@@ -480,3 +480,23 @@ func TestSync_RecurringNoAttendees_LightTier(t *testing.T) {
 		t.Errorf("recurring event without attendees should get light tier, got %v", tier)
 	}
 }
+
+func TestSync_HealthStaysErrorOnFailure(t *testing.T) {
+	c := New("cal-err")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"events": "not-an-array", // triggers parse error
+		},
+	})
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected sync error for invalid events")
+	}
+
+	// Health must remain at Error, not reset to Healthy by the defer
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("health should be Error after failed sync, got %v", c.Health(context.Background()))
+	}
+}

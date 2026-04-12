@@ -6,8 +6,6 @@ import (
 	"log/slog"
 	"strings"
 	"time"
-
-	"github.com/smackerel/smackerel/internal/connector"
 )
 
 // HistoryEntry represents a parsed browser history entry.
@@ -17,54 +15,6 @@ type HistoryEntry struct {
 	VisitTime time.Time     `json:"visit_time"`
 	DwellTime time.Duration `json:"dwell_time"`
 	Domain    string        `json:"domain"`
-}
-
-// ParseChromeHistory reads Chrome's SQLite history database.
-func ParseChromeHistory(dbPath string) ([]HistoryEntry, error) {
-	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
-	if err != nil {
-		return nil, fmt.Errorf("open Chrome history: %w", err)
-	}
-	defer db.Close()
-
-	rows, err := db.Query(`
-		SELECT u.url, u.title, v.visit_time, v.visit_duration
-		FROM urls u
-		JOIN visits v ON v.url = u.id
-		WHERE v.visit_time > 0
-		ORDER BY v.visit_time DESC
-		LIMIT 1000
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("query history: %w", err)
-	}
-	defer rows.Close()
-
-	var entries []HistoryEntry
-	for rows.Next() {
-		var e HistoryEntry
-		var visitTime int64
-		var duration int64
-		if err := rows.Scan(&e.URL, &e.Title, &visitTime, &duration); err != nil {
-			slog.Warn("skipping malformed chrome history row", "error", err)
-			continue
-		}
-		// Chrome stores time as microseconds since 1601-01-01
-		e.VisitTime = chromeTimeToGo(visitTime)
-		// CHAOS-F4: Clamp negative durations from corrupted SQLite data.
-		if duration < 0 {
-			duration = 0
-		}
-		e.DwellTime = time.Duration(duration) * time.Microsecond
-		e.Domain = extractDomain(e.URL)
-		entries = append(entries, e)
-	}
-
-	if err := rows.Err(); err != nil {
-		return entries, fmt.Errorf("iterate history rows: %w", err)
-	}
-
-	return entries, nil
 }
 
 // DwellTimeTier assigns processing tier based on dwell time.
@@ -143,27 +93,6 @@ func ShouldSkip(url string, skipDomains []string) bool {
 		}
 	}
 	return false
-}
-
-// ToRawArtifacts converts history entries to raw artifacts.
-func ToRawArtifacts(entries []HistoryEntry) []connector.RawArtifact {
-	var artifacts []connector.RawArtifact
-	for _, e := range entries {
-		artifacts = append(artifacts, connector.RawArtifact{
-			SourceID:    "browser-history",
-			SourceRef:   e.URL,
-			ContentType: "url",
-			Title:       e.Title,
-			RawContent:  e.URL,
-			URL:         e.URL,
-			Metadata: map[string]interface{}{
-				"domain":     e.Domain,
-				"dwell_time": e.DwellTime.Seconds(),
-			},
-			CapturedAt: e.VisitTime,
-		})
-	}
-	return artifacts
 }
 
 // ParseChromeHistorySince reads Chrome history entries with visit_time > cursor.
