@@ -3,12 +3,14 @@ package alerts
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,14 +39,19 @@ const minMagnitudeUpper = 10.0
 
 // Connector implements the government alerts connector aggregating USGS, NWS, etc.
 type Connector struct {
-	id         string
-	health     connector.HealthStatus
-	mu         sync.RWMutex
-	config     AlertsConfig
-	httpClient *http.Client
-	baseURL    string
-	nwsBaseURL string
-	known      map[string]time.Time // alert_id → first-seen time for dedup
+	id              string
+	health          connector.HealthStatus
+	mu              sync.RWMutex
+	config          AlertsConfig
+	httpClient      *http.Client
+	baseURL         string
+	nwsBaseURL      string
+	tsunamiBaseURL  string
+	volcanoBaseURL  string
+	wildfireBaseURL string
+	airnowBaseURL   string
+	gdacsBaseURL    string
+	known           map[string]time.Time // alert_id → first-seen time for dedup
 }
 
 // AlertsConfig holds parsed alerts-specific configuration.
@@ -53,6 +60,12 @@ type AlertsConfig struct {
 	MinEarthquakeMag float64
 	SourceEarthquake bool
 	SourceWeather    bool
+	SourceTsunami    bool
+	SourceVolcano    bool
+	SourceWildfire   bool
+	SourceAirNow     bool
+	SourceGDACS      bool
+	AirNowAPIKey     string
 }
 
 // LocationConfig specifies a monitored location.
@@ -66,12 +79,17 @@ type LocationConfig struct {
 // New creates a new Government Alerts connector.
 func New(id string) *Connector {
 	return &Connector{
-		id:         id,
-		health:     connector.HealthDisconnected,
-		httpClient: &http.Client{Timeout: 15 * time.Second},
-		baseURL:    "https://earthquake.usgs.gov",
-		nwsBaseURL: "https://api.weather.gov",
-		known:      make(map[string]time.Time),
+		id:              id,
+		health:          connector.HealthDisconnected,
+		httpClient:      &http.Client{Timeout: 15 * time.Second},
+		baseURL:         "https://earthquake.usgs.gov",
+		nwsBaseURL:      "https://api.weather.gov",
+		tsunamiBaseURL:  "https://www.tsunami.gov",
+		volcanoBaseURL:  "https://volcanoes.usgs.gov",
+		wildfireBaseURL: "https://inciweb.wildfire.gov",
+		airnowBaseURL:   "https://www.airnowapi.org",
+		gdacsBaseURL:    "https://www.gdacs.org",
+		known:           make(map[string]time.Time),
 	}
 }
 
@@ -182,6 +200,153 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 						allArtifacts = append(allArtifacts, normalizeNWSAlert(alert, match))
 					}
 				}
+			}
+		}
+	}
+
+	// NOAA Tsunami source
+	if cfg.SourceTsunami {
+		if ctx.Err() != nil {
+			syncErr = ctx.Err()
+			return allArtifacts, now.Format(time.RFC3339), syncErr
+		}
+		tsunamis, err := c.fetchTsunamiAlerts(ctx)
+		if err != nil {
+			slog.Warn("NOAA tsunami fetch failed", "error", err)
+			syncErr = fmt.Errorf("noaa tsunami fetch: %w", err)
+			return allArtifacts, now.Format(time.RFC3339), syncErr
+		}
+		for _, t := range tsunamis {
+			if ctx.Err() != nil {
+				syncErr = ctx.Err()
+				return allArtifacts, now.Format(time.RFC3339), syncErr
+			}
+			c.mu.Lock()
+			_, seen := c.known[t.ID]
+			if !seen {
+				c.known[t.ID] = now
+			}
+			c.mu.Unlock()
+			if !seen {
+				allArtifacts = append(allArtifacts, normalizeTsunamiAlert(t))
+			}
+		}
+	}
+
+	// USGS Volcano source
+	if cfg.SourceVolcano {
+		if ctx.Err() != nil {
+			syncErr = ctx.Err()
+			return allArtifacts, now.Format(time.RFC3339), syncErr
+		}
+		volcanoes, err := c.fetchVolcanoAlerts(ctx)
+		if err != nil {
+			slog.Warn("USGS volcano fetch failed", "error", err)
+			syncErr = fmt.Errorf("usgs volcano fetch: %w", err)
+			return allArtifacts, now.Format(time.RFC3339), syncErr
+		}
+		for _, v := range volcanoes {
+			if ctx.Err() != nil {
+				syncErr = ctx.Err()
+				return allArtifacts, now.Format(time.RFC3339), syncErr
+			}
+			c.mu.Lock()
+			_, seen := c.known[v.ID]
+			if !seen {
+				c.known[v.ID] = now
+			}
+			c.mu.Unlock()
+			if !seen {
+				allArtifacts = append(allArtifacts, normalizeVolcanoAlert(v))
+			}
+		}
+	}
+
+	// InciWeb Wildfire source
+	if cfg.SourceWildfire {
+		if ctx.Err() != nil {
+			syncErr = ctx.Err()
+			return allArtifacts, now.Format(time.RFC3339), syncErr
+		}
+		wildfires, err := c.fetchWildfireAlerts(ctx)
+		if err != nil {
+			slog.Warn("InciWeb wildfire fetch failed", "error", err)
+			syncErr = fmt.Errorf("inciweb wildfire fetch: %w", err)
+			return allArtifacts, now.Format(time.RFC3339), syncErr
+		}
+		for _, w := range wildfires {
+			if ctx.Err() != nil {
+				syncErr = ctx.Err()
+				return allArtifacts, now.Format(time.RFC3339), syncErr
+			}
+			c.mu.Lock()
+			_, seen := c.known[w.ID]
+			if !seen {
+				c.known[w.ID] = now
+			}
+			c.mu.Unlock()
+			if !seen {
+				allArtifacts = append(allArtifacts, normalizeWildfireAlert(w))
+			}
+		}
+	}
+
+	// AirNow AQI source (requires API key)
+	if cfg.SourceAirNow && cfg.AirNowAPIKey != "" {
+		for _, loc := range cfg.Locations {
+			if ctx.Err() != nil {
+				syncErr = ctx.Err()
+				return allArtifacts, now.Format(time.RFC3339), syncErr
+			}
+			observations, err := c.fetchAirNowAQI(ctx, loc.Latitude, loc.Longitude, cfg.AirNowAPIKey)
+			if err != nil {
+				slog.Warn("AirNow AQI fetch failed", "error", err, "location", loc.Name)
+				syncErr = fmt.Errorf("airnow fetch for %s: %w", loc.Name, err)
+				return allArtifacts, now.Format(time.RFC3339), syncErr
+			}
+			for _, obs := range observations {
+				if ctx.Err() != nil {
+					syncErr = ctx.Err()
+					return allArtifacts, now.Format(time.RFC3339), syncErr
+				}
+				c.mu.Lock()
+				_, seen := c.known[obs.ID]
+				if !seen {
+					c.known[obs.ID] = now
+				}
+				c.mu.Unlock()
+				if !seen {
+					allArtifacts = append(allArtifacts, normalizeAirNowAlert(obs, &ProximityMatch{LocationName: loc.Name, DistanceKm: 0}))
+				}
+			}
+		}
+	}
+
+	// GDACS Global Disasters source
+	if cfg.SourceGDACS {
+		if ctx.Err() != nil {
+			syncErr = ctx.Err()
+			return allArtifacts, now.Format(time.RFC3339), syncErr
+		}
+		disasters, err := c.fetchGDACSAlerts(ctx)
+		if err != nil {
+			slog.Warn("GDACS fetch failed", "error", err)
+			syncErr = fmt.Errorf("gdacs fetch: %w", err)
+			return allArtifacts, now.Format(time.RFC3339), syncErr
+		}
+		for _, d := range disasters {
+			if ctx.Err() != nil {
+				syncErr = ctx.Err()
+				return allArtifacts, now.Format(time.RFC3339), syncErr
+			}
+			c.mu.Lock()
+			_, seen := c.known[d.ID]
+			if !seen {
+				c.known[d.ID] = now
+			}
+			c.mu.Unlock()
+			if !seen {
+				allArtifacts = append(allArtifacts, normalizeGDACSAlert(d))
 			}
 		}
 	}
@@ -404,6 +569,11 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 		MinEarthquakeMag: 2.5,
 		SourceEarthquake: true,
 		SourceWeather:    true,
+		SourceTsunami:    false,
+		SourceVolcano:    false,
+		SourceWildfire:   false,
+		SourceAirNow:     false,
+		SourceGDACS:      false,
 	}
 
 	if locs, ok := config.SourceConfig["locations"].([]interface{}); ok {
@@ -441,6 +611,30 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 
 	if sw, ok := config.SourceConfig["source_weather"].(bool); ok {
 		cfg.SourceWeather = sw
+	}
+
+	if st, ok := config.SourceConfig["source_tsunami"].(bool); ok {
+		cfg.SourceTsunami = st
+	}
+
+	if sv, ok := config.SourceConfig["source_volcano"].(bool); ok {
+		cfg.SourceVolcano = sv
+	}
+
+	if swf, ok := config.SourceConfig["source_wildfire"].(bool); ok {
+		cfg.SourceWildfire = swf
+	}
+
+	if sa, ok := config.SourceConfig["source_airnow"].(bool); ok {
+		cfg.SourceAirNow = sa
+	}
+
+	if sg, ok := config.SourceConfig["source_gdacs"].(bool); ok {
+		cfg.SourceGDACS = sg
+	}
+
+	if key, ok := config.SourceConfig["airnow_api_key"].(string); ok {
+		cfg.AirNowAPIKey = key
 	}
 
 	return cfg, nil
@@ -624,5 +818,670 @@ func normalizeNWSAlert(alert NWSAlert, match *ProximityMatch) connector.RawArtif
 			"processing_tier":  tier,
 		},
 		CapturedAt: capturedAt,
+	}
+}
+
+// --- NOAA Tsunami Source ---
+
+// TsunamiAlert represents a parsed NOAA tsunami alert from Atom feed.
+type TsunamiAlert struct {
+	ID        string
+	Title     string
+	Summary   string
+	Link      string
+	Published time.Time
+	Severity  string
+}
+
+// tsunamiAtomFeed represents the Atom XML structure from tsunami.gov.
+type tsunamiAtomFeed struct {
+	XMLName xml.Name            `xml:"feed"`
+	Entries []tsunamiAtomEntry  `xml:"entry"`
+}
+
+type tsunamiAtomEntry struct {
+	ID        string           `xml:"id"`
+	Title     string           `xml:"title"`
+	Summary   string           `xml:"summary"`
+	Link      tsunamiAtomLink  `xml:"link"`
+	Published string           `xml:"published"`
+	Updated   string           `xml:"updated"`
+}
+
+type tsunamiAtomLink struct {
+	Href string `xml:"href,attr"`
+}
+
+// fetchTsunamiAlerts fetches tsunami alerts from the NOAA Atom feed.
+func (c *Connector) fetchTsunamiAlerts(ctx context.Context) ([]TsunamiAlert, error) {
+	reqURL := fmt.Sprintf("%s/events/xml/PAAQAtom.xml", c.tsunamiBaseURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("tsunami request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("tsunami.gov returned status %d", resp.StatusCode)
+	}
+
+	limitedBody := io.LimitReader(resp.Body, maxResponseBytes)
+
+	var feed tsunamiAtomFeed
+	if err := xml.NewDecoder(limitedBody).Decode(&feed); err != nil {
+		return nil, fmt.Errorf("decode tsunami Atom feed: %w", err)
+	}
+
+	var alerts []TsunamiAlert
+	for _, entry := range feed.Entries {
+		sanitizedID, valid := sanitizeAlertID(entry.ID)
+		if !valid {
+			slog.Warn("skipping tsunami alert with empty or invalid ID")
+			continue
+		}
+
+		alert := TsunamiAlert{
+			ID:       sanitizedID,
+			Title:    sanitizeStringField(entry.Title),
+			Summary:  sanitizeStringField(entry.Summary),
+			Link:     sanitizeStringField(entry.Link.Href),
+			Severity: classifyTsunamiSeverity(entry.Title),
+		}
+
+		if t, err := time.Parse(time.RFC3339, entry.Published); err == nil {
+			alert.Published = t
+		} else if t, err := time.Parse(time.RFC3339, entry.Updated); err == nil {
+			alert.Published = t
+		}
+
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
+// classifyTsunamiSeverity maps tsunami alert titles to severity levels.
+func classifyTsunamiSeverity(title string) string {
+	lower := strings.ToLower(title)
+	switch {
+	case strings.Contains(lower, "warning"):
+		return "severe"
+	case strings.Contains(lower, "watch"):
+		return "moderate"
+	case strings.Contains(lower, "advisory"):
+		return "minor"
+	default:
+		return "info"
+	}
+}
+
+func normalizeTsunamiAlert(alert TsunamiAlert) connector.RawArtifact {
+	tier := "standard"
+	if alert.Severity == "severe" || alert.Severity == "extreme" {
+		tier = "full"
+	}
+
+	capturedAt := alert.Published
+	if capturedAt.IsZero() {
+		capturedAt = time.Now()
+	}
+
+	return connector.RawArtifact{
+		SourceID:    "gov-alerts",
+		SourceRef:   alert.ID,
+		ContentType: "alert/tsunami",
+		Title:       alert.Title,
+		RawContent:  alert.Summary,
+		URL:         alert.Link,
+		Metadata: map[string]interface{}{
+			"alert_id":        alert.ID,
+			"source":          "noaa_tsunami",
+			"event_type":      "tsunami",
+			"severity":        alert.Severity,
+			"processing_tier": tier,
+		},
+		CapturedAt: capturedAt,
+	}
+}
+
+// --- USGS Volcano Source ---
+
+// VolcanoAlert represents a parsed USGS volcano alert.
+type VolcanoAlert struct {
+	ID         string
+	Volcano    string
+	AlertLevel string
+	ColorCode  string
+	Issued     time.Time
+	Severity   string
+}
+
+// fetchVolcanoAlerts fetches volcano alerts from the USGS HANS2 API.
+func (c *Connector) fetchVolcanoAlerts(ctx context.Context) ([]VolcanoAlert, error) {
+	reqURL := fmt.Sprintf("%s/hans2/api/volcanoAlerts", c.volcanoBaseURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("volcano request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("volcanoes.usgs.gov returned status %d", resp.StatusCode)
+	}
+
+	limitedBody := io.LimitReader(resp.Body, maxResponseBytes)
+
+	var entries []struct {
+		ID            string `json:"id"`
+		VolcanoName   string `json:"volcanoName"`
+		AlertLevel    string `json:"alertLevel"`
+		ColorCode     string `json:"colorCode"`
+		IssuedDateStr string `json:"issuedDate"`
+	}
+
+	if err := json.NewDecoder(limitedBody).Decode(&entries); err != nil {
+		return nil, fmt.Errorf("decode volcano response: %w", err)
+	}
+
+	var alerts []VolcanoAlert
+	for _, e := range entries {
+		sanitizedID, valid := sanitizeAlertID(e.ID)
+		if !valid {
+			// Fall back to volcano name as ID if missing.
+			sanitizedID, valid = sanitizeAlertID(e.VolcanoName)
+			if !valid {
+				slog.Warn("skipping volcano alert with empty or invalid ID")
+				continue
+			}
+		}
+
+		alert := VolcanoAlert{
+			ID:         sanitizedID,
+			Volcano:    sanitizeStringField(e.VolcanoName),
+			AlertLevel: sanitizeStringField(e.AlertLevel),
+			ColorCode:  sanitizeStringField(e.ColorCode),
+			Severity:   classifyVolcanoSeverity(e.AlertLevel),
+		}
+
+		if t, err := time.Parse(time.RFC3339, e.IssuedDateStr); err == nil {
+			alert.Issued = t
+		} else if t, err := time.Parse("2006-01-02T15:04:05", e.IssuedDateStr); err == nil {
+			alert.Issued = t
+		}
+
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
+// classifyVolcanoSeverity maps USGS volcano alert levels to severity.
+func classifyVolcanoSeverity(alertLevel string) string {
+	switch strings.ToUpper(alertLevel) {
+	case "WARNING":
+		return "severe"
+	case "WATCH":
+		return "moderate"
+	case "ADVISORY":
+		return "minor"
+	case "NORMAL":
+		return "info"
+	default:
+		return "info"
+	}
+}
+
+func normalizeVolcanoAlert(alert VolcanoAlert) connector.RawArtifact {
+	tier := "standard"
+	if alert.Severity == "severe" || alert.Severity == "extreme" {
+		tier = "full"
+	}
+
+	capturedAt := alert.Issued
+	if capturedAt.IsZero() {
+		capturedAt = time.Now()
+	}
+
+	return connector.RawArtifact{
+		SourceID:    "gov-alerts",
+		SourceRef:   alert.ID,
+		ContentType: "alert/volcano",
+		Title:       fmt.Sprintf("Volcano Alert: %s — %s (Color: %s)", alert.Volcano, alert.AlertLevel, alert.ColorCode),
+		RawContent:  fmt.Sprintf("Volcano %s has alert level %s with aviation color code %s.", alert.Volcano, alert.AlertLevel, alert.ColorCode),
+		URL:         "",
+		Metadata: map[string]interface{}{
+			"alert_id":        alert.ID,
+			"source":          "usgs_volcano",
+			"event_type":      "volcano",
+			"volcano_name":    alert.Volcano,
+			"alert_level":     alert.AlertLevel,
+			"color_code":      alert.ColorCode,
+			"severity":        alert.Severity,
+			"processing_tier": tier,
+		},
+		CapturedAt: capturedAt,
+	}
+}
+
+// --- InciWeb Wildfire Source ---
+
+// WildfireAlert represents a parsed InciWeb wildfire incident.
+type WildfireAlert struct {
+	ID          string
+	Title       string
+	Description string
+	Link        string
+	PubDate     time.Time
+	Severity    string
+}
+
+// wildfireRSSFeed represents the RSS XML structure from InciWeb.
+type wildfireRSSFeed struct {
+	XMLName xml.Name             `xml:"rss"`
+	Channel wildfireRSSChannel   `xml:"channel"`
+}
+
+type wildfireRSSChannel struct {
+	Items []wildfireRSSItem `xml:"item"`
+}
+
+type wildfireRSSItem struct {
+	Title       string `xml:"title"`
+	Description string `xml:"description"`
+	Link        string `xml:"link"`
+	GUID        string `xml:"guid"`
+	PubDate     string `xml:"pubDate"`
+}
+
+// fetchWildfireAlerts fetches wildfire incidents from InciWeb RSS feed.
+func (c *Connector) fetchWildfireAlerts(ctx context.Context) ([]WildfireAlert, error) {
+	reqURL := fmt.Sprintf("%s/incidents/rss", c.wildfireBaseURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("wildfire request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("inciweb returned status %d", resp.StatusCode)
+	}
+
+	limitedBody := io.LimitReader(resp.Body, maxResponseBytes)
+
+	var feed wildfireRSSFeed
+	if err := xml.NewDecoder(limitedBody).Decode(&feed); err != nil {
+		return nil, fmt.Errorf("decode wildfire RSS feed: %w", err)
+	}
+
+	var alerts []WildfireAlert
+	for _, item := range feed.Channel.Items {
+		id := item.GUID
+		if id == "" {
+			id = item.Link
+		}
+		sanitizedID, valid := sanitizeAlertID(id)
+		if !valid {
+			slog.Warn("skipping wildfire alert with empty or invalid ID")
+			continue
+		}
+
+		alert := WildfireAlert{
+			ID:          sanitizedID,
+			Title:       sanitizeStringField(item.Title),
+			Description: sanitizeStringField(item.Description),
+			Link:        sanitizeStringField(item.Link),
+			Severity:    classifyWildfireSeverity(item.Title, item.Description),
+		}
+
+		if t, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
+			alert.PubDate = t
+		} else if t, err := time.Parse(time.RFC1123, item.PubDate); err == nil {
+			alert.PubDate = t
+		}
+
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
+// classifyWildfireSeverity classifies wildfire severity from title/description keywords.
+func classifyWildfireSeverity(title, description string) string {
+	combined := strings.ToLower(title + " " + description)
+	switch {
+	case strings.Contains(combined, "evacuate") || strings.Contains(combined, "evacuation"):
+		return "extreme"
+	case strings.Contains(combined, "warning"):
+		return "severe"
+	default:
+		return "moderate"
+	}
+}
+
+func normalizeWildfireAlert(alert WildfireAlert) connector.RawArtifact {
+	tier := "standard"
+	if alert.Severity == "extreme" || alert.Severity == "severe" {
+		tier = "full"
+	}
+
+	capturedAt := alert.PubDate
+	if capturedAt.IsZero() {
+		capturedAt = time.Now()
+	}
+
+	return connector.RawArtifact{
+		SourceID:    "gov-alerts",
+		SourceRef:   alert.ID,
+		ContentType: "alert/wildfire",
+		Title:       alert.Title,
+		RawContent:  alert.Description,
+		URL:         alert.Link,
+		Metadata: map[string]interface{}{
+			"alert_id":        alert.ID,
+			"source":          "inciweb",
+			"event_type":      "wildfire",
+			"severity":        alert.Severity,
+			"processing_tier": tier,
+		},
+		CapturedAt: capturedAt,
+	}
+}
+
+// --- AirNow AQI Source ---
+
+// AirNowObservation represents a parsed AirNow air quality observation.
+type AirNowObservation struct {
+	ID             string
+	AQI            int
+	Category       string
+	Pollutant      string
+	ReportingArea  string
+	Severity       string
+	ObservationTime time.Time
+}
+
+// fetchAirNowAQI fetches air quality observations from AirNow API.
+func (c *Connector) fetchAirNowAQI(ctx context.Context, lat, lon float64, apiKey string) ([]AirNowObservation, error) {
+	reqURL := fmt.Sprintf("%s/aq/observation/latLong/current/?format=application/json&latitude=%.4f&longitude=%.4f&distance=50&API_KEY=%s",
+		c.airnowBaseURL, lat, lon, url.QueryEscape(apiKey))
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("AirNow request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("AirNow returned status %d", resp.StatusCode)
+	}
+
+	limitedBody := io.LimitReader(resp.Body, maxResponseBytes)
+
+	var entries []struct {
+		DateObserved  string `json:"DateObserved"`
+		HourObserved  int    `json:"HourObserved"`
+		AQI           int    `json:"AQI"`
+		ParameterName string `json:"ParameterName"`
+		ReportingArea string `json:"ReportingArea"`
+		Category      struct {
+			Name string `json:"Name"`
+		} `json:"Category"`
+	}
+
+	if err := json.NewDecoder(limitedBody).Decode(&entries); err != nil {
+		return nil, fmt.Errorf("decode AirNow response: %w", err)
+	}
+
+	var observations []AirNowObservation
+	for _, e := range entries {
+		id := fmt.Sprintf("airnow-%s-%s-%d", sanitizeStringField(e.ReportingArea), sanitizeStringField(e.ParameterName), e.AQI)
+		sanitizedID, valid := sanitizeAlertID(id)
+		if !valid {
+			continue
+		}
+
+		obs := AirNowObservation{
+			ID:            sanitizedID,
+			AQI:           e.AQI,
+			Category:      sanitizeStringField(e.Category.Name),
+			Pollutant:     sanitizeStringField(e.ParameterName),
+			ReportingArea: sanitizeStringField(e.ReportingArea),
+			Severity:      classifyAQISeverity(e.AQI),
+		}
+
+		if t, err := time.Parse("2006-01-02 ", e.DateObserved); err == nil {
+			obs.ObservationTime = t.Add(time.Duration(e.HourObserved) * time.Hour)
+		}
+
+		observations = append(observations, obs)
+	}
+
+	return observations, nil
+}
+
+// classifyAQISeverity maps AQI values to severity levels.
+func classifyAQISeverity(aqi int) string {
+	switch {
+	case aqi > 300:
+		return "extreme"
+	case aqi > 200:
+		return "severe"
+	case aqi > 150:
+		return "moderate"
+	case aqi > 100:
+		return "minor"
+	default:
+		return "info"
+	}
+}
+
+func normalizeAirNowAlert(obs AirNowObservation, match *ProximityMatch) connector.RawArtifact {
+	tier := "standard"
+	if obs.Severity == "extreme" || obs.Severity == "severe" {
+		tier = "full"
+	}
+
+	capturedAt := obs.ObservationTime
+	if capturedAt.IsZero() {
+		capturedAt = time.Now()
+	}
+
+	return connector.RawArtifact{
+		SourceID:    "gov-alerts",
+		SourceRef:   obs.ID,
+		ContentType: "alert/air_quality",
+		Title:       fmt.Sprintf("Air Quality: %s — AQI %d (%s) near %s", obs.Pollutant, obs.AQI, obs.Category, match.LocationName),
+		RawContent:  fmt.Sprintf("AQI %d (%s) for %s in %s. Pollutant: %s.", obs.AQI, obs.Category, match.LocationName, obs.ReportingArea, obs.Pollutant),
+		URL:         "",
+		Metadata: map[string]interface{}{
+			"alert_id":         obs.ID,
+			"source":           "airnow",
+			"event_type":       "air_quality",
+			"aqi":              obs.AQI,
+			"category":         obs.Category,
+			"pollutant":        obs.Pollutant,
+			"reporting_area":   obs.ReportingArea,
+			"severity":         obs.Severity,
+			"nearest_location": match.LocationName,
+			"processing_tier":  tier,
+		},
+		CapturedAt: capturedAt,
+	}
+}
+
+// --- GDACS Global Disasters Source ---
+
+// GDACSAlert represents a parsed GDACS disaster alert.
+type GDACSAlert struct {
+	ID          string
+	Title       string
+	Description string
+	Link        string
+	PubDate     time.Time
+	GeoPoint    string
+	Severity    string
+}
+
+// gdacsRSSFeed represents the RSS XML structure from GDACS.
+type gdacsRSSFeed struct {
+	XMLName xml.Name          `xml:"rss"`
+	Channel gdacsRSSChannel   `xml:"channel"`
+}
+
+type gdacsRSSChannel struct {
+	Items []gdacsRSSItem `xml:"item"`
+}
+
+type gdacsRSSItem struct {
+	Title       string `xml:"title"`
+	Description string `xml:"description"`
+	Link        string `xml:"link"`
+	GUID        string `xml:"guid"`
+	PubDate     string `xml:"pubDate"`
+	GeoPoint    string `xml:"point"`
+	AlertLevel  string `xml:"alertlevel"`
+}
+
+// fetchGDACSAlerts fetches global disaster alerts from GDACS RSS feed.
+func (c *Connector) fetchGDACSAlerts(ctx context.Context) ([]GDACSAlert, error) {
+	reqURL := fmt.Sprintf("%s/xml/rss.xml", c.gdacsBaseURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GDACS request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GDACS returned status %d", resp.StatusCode)
+	}
+
+	limitedBody := io.LimitReader(resp.Body, maxResponseBytes)
+
+	var feed gdacsRSSFeed
+	if err := xml.NewDecoder(limitedBody).Decode(&feed); err != nil {
+		return nil, fmt.Errorf("decode GDACS RSS feed: %w", err)
+	}
+
+	var alerts []GDACSAlert
+	for _, item := range feed.Channel.Items {
+		id := item.GUID
+		if id == "" {
+			id = item.Link
+		}
+		sanitizedID, valid := sanitizeAlertID(id)
+		if !valid {
+			slog.Warn("skipping GDACS alert with empty or invalid ID")
+			continue
+		}
+
+		alert := GDACSAlert{
+			ID:          sanitizedID,
+			Title:       sanitizeStringField(item.Title),
+			Description: sanitizeStringField(item.Description),
+			Link:        sanitizeStringField(item.Link),
+			GeoPoint:    sanitizeStringField(item.GeoPoint),
+			Severity:    classifyGDACSAlertLevel(item.AlertLevel),
+		}
+
+		if t, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
+			alert.PubDate = t
+		} else if t, err := time.Parse(time.RFC1123, item.PubDate); err == nil {
+			alert.PubDate = t
+		}
+
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
+// classifyGDACSAlertLevel maps GDACS alert levels to severity.
+func classifyGDACSAlertLevel(level string) string {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "red":
+		return "extreme"
+	case "orange":
+		return "severe"
+	case "green":
+		return "moderate"
+	default:
+		return "info"
+	}
+}
+
+func normalizeGDACSAlert(alert GDACSAlert) connector.RawArtifact {
+	tier := "standard"
+	if alert.Severity == "extreme" || alert.Severity == "severe" {
+		tier = "full"
+	}
+
+	capturedAt := alert.PubDate
+	if capturedAt.IsZero() {
+		capturedAt = time.Now()
+	}
+
+	metadata := map[string]interface{}{
+		"alert_id":        alert.ID,
+		"source":          "gdacs",
+		"event_type":      "disaster",
+		"severity":        alert.Severity,
+		"processing_tier": tier,
+	}
+	if alert.GeoPoint != "" {
+		metadata["geo_point"] = alert.GeoPoint
+		parts := strings.Fields(alert.GeoPoint)
+		if len(parts) == 2 {
+			if lat, err := strconv.ParseFloat(parts[0], 64); err == nil {
+				metadata["latitude"] = lat
+			}
+			if lon, err := strconv.ParseFloat(parts[1], 64); err == nil {
+				metadata["longitude"] = lon
+			}
+		}
+	}
+
+	return connector.RawArtifact{
+		SourceID:    "gov-alerts",
+		SourceRef:   alert.ID,
+		ContentType: "alert/disaster",
+		Title:       alert.Title,
+		RawContent:  alert.Description,
+		URL:         alert.Link,
+		Metadata:    metadata,
+		CapturedAt:  capturedAt,
 	}
 }
