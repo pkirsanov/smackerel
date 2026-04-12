@@ -2,12 +2,48 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/smackerel/smackerel/internal/db"
 )
+
+// mockArtifactStore implements ArtifactQuerier for testing.
+type mockArtifactStore struct {
+	recentItems []db.RecentArtifact
+	recentErr   error
+	artifact    *db.ArtifactDetail
+	artifactErr error
+	exportRes   *db.ExportResult
+	exportErr   error
+}
+
+func (m *mockArtifactStore) RecentArtifacts(_ context.Context, limit int) ([]db.RecentArtifact, error) {
+	if m.recentErr != nil {
+		return nil, m.recentErr
+	}
+	return m.recentItems, nil
+}
+
+func (m *mockArtifactStore) GetArtifact(_ context.Context, id string) (*db.ArtifactDetail, error) {
+	if m.artifactErr != nil {
+		return nil, m.artifactErr
+	}
+	return m.artifact, nil
+}
+
+func (m *mockArtifactStore) ExportArtifacts(_ context.Context, cursor time.Time, limit int) (*db.ExportResult, error) {
+	if m.exportErr != nil {
+		return nil, m.exportErr
+	}
+	return m.exportRes, nil
+}
 
 func TestCaptureHandler_EmptyBody(t *testing.T) {
 	deps := &Dependencies{
@@ -272,5 +308,308 @@ func TestCaptureHandler_VoiceURLOnly(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 (past validation, no pipeline), got %d", rec.Code)
+	}
+}
+
+// === SCN-023-02: RecentHandler uses typed ArtifactQuerier (no type assertions) ===
+
+func TestRecentHandler_NilArtifactStore_Returns503(t *testing.T) {
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: nil,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recent", nil)
+	rec := httptest.NewRecorder()
+
+	deps.RecentHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for nil ArtifactStore, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "DB_UNAVAILABLE" {
+		t.Errorf("expected DB_UNAVAILABLE, got %q", resp.Error.Code)
+	}
+}
+
+func TestRecentHandler_Success(t *testing.T) {
+	now := time.Now()
+	store := &mockArtifactStore{
+		recentItems: []db.RecentArtifact{
+			{ID: "a1", Title: "First", ArtifactType: "article", Summary: "Summary 1", CreatedAt: now},
+			{ID: "a2", Title: "Second", ArtifactType: "note", Summary: "Summary 2", CreatedAt: now.Add(-time.Hour)},
+		},
+	}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recent", nil)
+	rec := httptest.NewRecorder()
+
+	deps.RecentHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	ct := rec.Header().Get("Content-Type")
+	if ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
+
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if _, ok := body["results"]; !ok {
+		t.Error("expected 'results' key in response")
+	}
+}
+
+func TestRecentHandler_QueryError(t *testing.T) {
+	store := &mockArtifactStore{
+		recentErr: fmt.Errorf("connection refused"),
+	}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recent", nil)
+	rec := httptest.NewRecorder()
+
+	deps.RecentHandler(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestRecentHandler_LimitCapped(t *testing.T) {
+	store := &mockArtifactStore{recentItems: []db.RecentArtifact{}}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	// Limit > 50 should be capped to 50 — handler still returns 200
+	req := httptest.NewRequest(http.MethodGet, "/api/recent?limit=999", nil)
+	rec := httptest.NewRecorder()
+
+	deps.RecentHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+// === SCN-023-02: ArtifactDetailHandler uses typed ArtifactQuerier ===
+
+func TestArtifactDetailHandler_NilArtifactStore_Returns503(t *testing.T) {
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: nil,
+	}
+
+	// Need Chi router context for URL params
+	r := chi.NewRouter()
+	r.Get("/api/artifact/{id}", deps.ArtifactDetailHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/artifact/test-id", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for nil ArtifactStore, got %d", rec.Code)
+	}
+}
+
+func TestArtifactDetailHandler_Success(t *testing.T) {
+	now := time.Now()
+	store := &mockArtifactStore{
+		artifact: &db.ArtifactDetail{
+			ID:             "art-123",
+			Title:          "Test Article",
+			ArtifactType:   "article",
+			Summary:        "A test summary",
+			SourceURL:      "https://example.com",
+			Sentiment:      "neutral",
+			SourceQuality:  "high",
+			ProcessingTier: "full",
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		},
+	}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	r := chi.NewRouter()
+	r.Get("/api/artifact/{id}", deps.ArtifactDetailHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/artifact/art-123", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if body["artifact_id"] != "art-123" {
+		t.Errorf("expected artifact_id=art-123, got %v", body["artifact_id"])
+	}
+	if body["title"] != "Test Article" {
+		t.Errorf("expected title=Test Article, got %v", body["title"])
+	}
+}
+
+func TestArtifactDetailHandler_NotFound(t *testing.T) {
+	store := &mockArtifactStore{
+		artifactErr: fmt.Errorf("get artifact: no rows in result set"),
+	}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	r := chi.NewRouter()
+	r.Get("/api/artifact/{id}", deps.ArtifactDetailHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/artifact/nonexistent", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "NOT_FOUND" {
+		t.Errorf("expected NOT_FOUND, got %q", resp.Error.Code)
+	}
+}
+
+// === SCN-023-02: ExportHandler uses typed ArtifactQuerier ===
+
+func TestExportHandler_NilArtifactStore_Returns503(t *testing.T) {
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: nil,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export", nil)
+	rec := httptest.NewRecorder()
+
+	deps.ExportHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for nil ArtifactStore, got %d", rec.Code)
+	}
+}
+
+func TestExportHandler_Success(t *testing.T) {
+	store := &mockArtifactStore{
+		exportRes: &db.ExportResult{
+			Artifacts: []db.ExportedArtifact{
+				{ArtifactID: "e1", Title: "Exported", ArtifactType: "article"},
+			},
+			NextCursor: time.Now(),
+		},
+	}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export", nil)
+	rec := httptest.NewRecorder()
+
+	deps.ExportHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	ct := rec.Header().Get("Content-Type")
+	if ct != "application/x-ndjson" {
+		t.Errorf("expected Content-Type application/x-ndjson, got %s", ct)
+	}
+
+	cursor := rec.Header().Get("X-Next-Cursor")
+	if cursor == "" {
+		t.Error("expected X-Next-Cursor header when results exist")
+	}
+}
+
+func TestExportHandler_InvalidCursor(t *testing.T) {
+	store := &mockArtifactStore{exportRes: &db.ExportResult{}}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?cursor=not-a-timestamp", nil)
+	rec := httptest.NewRecorder()
+
+	deps.ExportHandler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid cursor, got %d", rec.Code)
+	}
+}
+
+func TestExportHandler_QueryError(t *testing.T) {
+	store := &mockArtifactStore{
+		exportErr: fmt.Errorf("export query failed"),
+	}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export", nil)
+	rec := httptest.NewRecorder()
+
+	deps.ExportHandler(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
 	}
 }

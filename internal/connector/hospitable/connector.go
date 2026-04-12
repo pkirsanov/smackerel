@@ -89,6 +89,10 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	return nil
 }
 
+// maxSyncDuration bounds the total time a single Sync call may run to prevent
+// unbounded blocking under slow or hanging API responses.
+const maxSyncDuration = 10 * time.Minute
+
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.mu.Lock()
 	if c.client == nil {
@@ -103,6 +107,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.lastSyncErrors = 0
 	c.lastSyncCounts = make(map[string]int)
 	c.mu.Unlock()
+
+	// Bound total sync duration to prevent unbounded blocking under API failures.
+	syncCtx, syncCancel := context.WithTimeout(ctx, maxSyncDuration)
+	defer syncCancel()
 
 	syncCursor := parseCursor(cursor, config.InitialLookbackDays)
 	var allArtifacts []connector.RawArtifact
@@ -119,7 +127,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// 1. Sync properties (needed first for name cache)
 	if config.SyncProperties {
-		props, err := client.ListProperties(ctx, syncCursor.Properties)
+		if err := syncCtx.Err(); err != nil {
+			return allArtifacts, cursor, fmt.Errorf("sync cancelled before properties: %w", err)
+		}
+		props, err := client.ListProperties(syncCtx, syncCursor.Properties)
 		if err != nil {
 			slog.Error("hospitable: property sync failed", "error", err)
 			syncErrors++
@@ -140,7 +151,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	// 2. Sync reservations
 	var reservationIDs []string
 	if config.SyncReservations {
-		reservations, err := client.ListReservations(ctx, syncCursor.Reservations)
+		if err := syncCtx.Err(); err != nil {
+			return allArtifacts, cursor, fmt.Errorf("sync cancelled before reservations: %w", err)
+		}
+		reservations, err := client.ListReservations(syncCtx, syncCursor.Reservations)
 		if err != nil {
 			slog.Error("hospitable: reservation sync failed", "error", err)
 			syncErrors++
@@ -161,7 +175,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// 2b. Fetch active reservations for message sync coverage (R-016)
 	if config.SyncMessages {
-		activeRes, err := client.ListActiveReservations(ctx, time.Now().UTC().AddDate(0, 0, -7))
+		activeRes, err := client.ListActiveReservations(syncCtx, time.Now().UTC().AddDate(0, 0, -7))
 		if err != nil {
 			slog.Warn("hospitable: active reservation fetch failed", "error", err)
 		} else {
@@ -180,10 +194,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// 3. Sync messages per reservation (R-021: isolated cursor advancement)
 	if config.SyncMessages {
+		if err := syncCtx.Err(); err != nil {
+			return allArtifacts, cursor, fmt.Errorf("sync cancelled before messages: %w", err)
+		}
 		var msgAnyFailed bool
 		var msgCount int
 		for _, resID := range reservationIDs {
-			messages, err := client.ListMessages(ctx, resID, syncCursor.Messages)
+			messages, err := client.ListMessages(syncCtx, resID, syncCursor.Messages)
 			if err != nil {
 				slog.Warn("hospitable: message sync failed for reservation",
 					"reservation_id", resID, "error", err)
@@ -206,7 +223,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// 4. Sync reviews
 	if config.SyncReviews {
-		reviews, err := client.ListReviews(ctx, syncCursor.Reviews)
+		if err := syncCtx.Err(); err != nil {
+			return allArtifacts, cursor, fmt.Errorf("sync cancelled before reviews: %w", err)
+		}
+		reviews, err := client.ListReviews(syncCtx, syncCursor.Reviews)
 		if err != nil {
 			slog.Error("hospitable: review sync failed", "error", err)
 			syncErrors++
@@ -242,6 +262,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.lastSyncErrors = syncErrors
 	if syncErrors > 0 && len(allArtifacts) == 0 {
 		c.health = connector.HealthError
+	} else if syncErrors > 0 {
+		c.health = connector.HealthDegraded
 	} else {
 		c.health = connector.HealthHealthy
 	}

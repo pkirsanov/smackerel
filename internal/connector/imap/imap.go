@@ -72,7 +72,11 @@ type EmailMessage struct {
 // or from a live IMAP connection when credentials are configured.
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.health = connector.HealthSyncing
-	defer func() { c.health = connector.HealthHealthy }()
+	defer func() {
+		if c.health == connector.HealthSyncing {
+			c.health = connector.HealthHealthy
+		}
+	}()
 
 	messages, err := c.fetchMessages(ctx, cursor)
 	if err != nil {
