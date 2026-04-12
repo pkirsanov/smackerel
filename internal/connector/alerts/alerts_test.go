@@ -352,9 +352,11 @@ func makeFeature(id string, mag float64, lon, lat, depth float64, place string) 
 func newTestConnector(serverURL string, locations []LocationConfig) *Connector {
 	c := New("gov-alerts-test")
 	c.baseURL = serverURL
+	c.nwsBaseURL = serverURL
 	c.config = AlertsConfig{
 		Locations:        locations,
 		SourceEarthquake: true,
+		SourceWeather:    false,
 		MinEarthquakeMag: 2.5,
 	}
 	return c
@@ -495,6 +497,9 @@ func TestParseAlertsConfig_Defaults(t *testing.T) {
 	}
 	if !cfg.SourceEarthquake {
 		t.Error("expected SourceEarthquake true by default")
+	}
+	if !cfg.SourceWeather {
+		t.Error("expected SourceWeather true by default")
 	}
 	// No radius_km specified; default is 200
 	if len(cfg.Locations) != 1 {
@@ -1446,5 +1451,693 @@ func TestSync_WhitespaceOnlyID(t *testing.T) {
 	}
 	if len(arts) != 0 {
 		t.Errorf("expected 0 artifacts (whitespace-only ID rejected), got %d", len(arts))
+	}
+}
+
+// --- NWS Weather Alerts Tests ---
+
+// nwsResponse builds a JSON NWS alert API response.
+func nwsResponse(features []map[string]interface{}) []byte {
+	resp := map[string]interface{}{"features": features}
+	b, _ := json.Marshal(resp)
+	return b
+}
+
+// makeNWSFeature builds one NWS alert feature for test responses.
+func makeNWSFeature(id, event, severity, certainty, urgency, headline, description, instruction, areaDesc, effective, expires string) map[string]interface{} {
+	return map[string]interface{}{
+		"properties": map[string]interface{}{
+			"id":          id,
+			"event":       event,
+			"severity":    severity,
+			"certainty":   certainty,
+			"urgency":     urgency,
+			"headline":    headline,
+			"description": description,
+			"instruction": instruction,
+			"areaDesc":    areaDesc,
+			"effective":   effective,
+			"expires":     expires,
+		},
+	}
+}
+
+// newNWSTestConnector creates a Connector with NWS source enabled, earthquakes disabled.
+func newNWSTestConnector(nwsServerURL string, locations []LocationConfig) *Connector {
+	c := New("gov-alerts-nws-test")
+	c.nwsBaseURL = nwsServerURL
+	c.config = AlertsConfig{
+		Locations:        locations,
+		SourceEarthquake: false,
+		SourceWeather:    true,
+		MinEarthquakeMag: 2.5,
+	}
+	return c
+}
+
+func TestFetchNWSAlerts_ValidResponse(t *testing.T) {
+	features := []map[string]interface{}{
+		makeNWSFeature(
+			"urn:oid:2.49.0.1.840.0.001",
+			"Tornado Warning",
+			"Extreme",
+			"Observed",
+			"Immediate",
+			"Tornado Warning issued for Central Oklahoma",
+			"A large tornado was observed moving northeast.",
+			"TAKE COVER NOW. Move to a basement or interior room.",
+			"Central Oklahoma",
+			"2024-01-15T14:30:00-06:00",
+			"2024-01-15T15:30:00-06:00",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	alerts, err := c.fetchNWSAlerts(context.Background(), 35.47, -97.52)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+
+	alert := alerts[0]
+	if alert.ID != "urn:oid:2.49.0.1.840.0.001" {
+		t.Errorf("ID = %q", alert.ID)
+	}
+	if alert.Event != "Tornado Warning" {
+		t.Errorf("Event = %q", alert.Event)
+	}
+	if alert.Severity != "Extreme" {
+		t.Errorf("Severity = %q", alert.Severity)
+	}
+	if alert.Certainty != "Observed" {
+		t.Errorf("Certainty = %q", alert.Certainty)
+	}
+	if alert.Urgency != "Immediate" {
+		t.Errorf("Urgency = %q", alert.Urgency)
+	}
+	if alert.Headline != "Tornado Warning issued for Central Oklahoma" {
+		t.Errorf("Headline = %q", alert.Headline)
+	}
+	if alert.Description != "A large tornado was observed moving northeast." {
+		t.Errorf("Description = %q", alert.Description)
+	}
+	if alert.Instruction != "TAKE COVER NOW. Move to a basement or interior room." {
+		t.Errorf("Instruction = %q", alert.Instruction)
+	}
+	if alert.AreaDesc != "Central Oklahoma" {
+		t.Errorf("AreaDesc = %q", alert.AreaDesc)
+	}
+	if alert.Effective.IsZero() {
+		t.Error("Effective should be parsed")
+	}
+	if alert.Expires.IsZero() {
+		t.Error("Expires should be parsed")
+	}
+}
+
+func TestFetchNWSAlerts_EmptyResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(nil))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	alerts, err := c.fetchNWSAlerts(context.Background(), 35.47, -97.52)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts, got %d", len(alerts))
+	}
+}
+
+func TestFetchNWSAlerts_MalformedJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write([]byte(`{"features": [{"properties": {`))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	_, err := c.fetchNWSAlerts(context.Background(), 35.47, -97.52)
+	if err == nil {
+		t.Error("expected error for malformed JSON")
+	}
+}
+
+func TestFetchNWSAlerts_HTTPError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	_, err := c.fetchNWSAlerts(context.Background(), 35.47, -97.52)
+	if err == nil {
+		t.Error("expected error for HTTP 503")
+	}
+	if !strings.Contains(err.Error(), "status 503") {
+		t.Errorf("expected status 503 in error, got: %v", err)
+	}
+}
+
+func TestFetchNWSAlerts_UserAgentHeader(t *testing.T) {
+	var gotUA string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(nil))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	_, _ = c.fetchNWSAlerts(context.Background(), 35.47, -97.52)
+	if gotUA != userAgent {
+		t.Errorf("expected User-Agent %q, got %q", userAgent, gotUA)
+	}
+}
+
+func TestFetchNWSAlerts_EmptyIDRejected(t *testing.T) {
+	features := []map[string]interface{}{
+		makeNWSFeature("", "Flood Warning", "Severe", "Likely", "Expected", "Flood Warning", "desc", "", "Area", "2024-01-15T14:30:00-06:00", "2024-01-15T15:30:00-06:00"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	alerts, err := c.fetchNWSAlerts(context.Background(), 35.47, -97.52)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts (empty ID rejected), got %d", len(alerts))
+	}
+}
+
+func TestFetchNWSAlerts_InvalidTimeFallback(t *testing.T) {
+	features := []map[string]interface{}{
+		makeNWSFeature(
+			"urn:oid:test-bad-time", "Heat Advisory", "Moderate", "Likely", "Expected",
+			"Heat Advisory", "Stay hydrated", "", "Metro Area",
+			"not-a-date", "also-not-a-date",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	alerts, err := c.fetchNWSAlerts(context.Background(), 35.47, -97.52)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+	if !alerts[0].Effective.IsZero() {
+		t.Error("expected zero Effective for invalid time")
+	}
+	if !alerts[0].Expires.IsZero() {
+		t.Error("expected zero Expires for invalid time")
+	}
+}
+
+func TestMapNWSSeverity(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"Extreme", "extreme"},
+		{"Severe", "severe"},
+		{"Moderate", "moderate"},
+		{"Minor", "minor"},
+		{"Unknown", "unknown"},
+		{"", "unknown"},
+		{"extreme", "extreme"},
+		{"SEVERE", "severe"},
+		{"Something Else", "unknown"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := mapNWSSeverity(tt.input)
+			if got != tt.want {
+				t.Errorf("mapNWSSeverity(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClassifyNWSEventType(t *testing.T) {
+	tests := []struct {
+		event string
+		want  string
+	}{
+		{"Tornado Warning", "tornado"},
+		{"Tornado Watch", "tornado"},
+		{"Hurricane Warning", "hurricane"},
+		{"Tropical Storm Warning", "hurricane"},
+		{"Flash Flood Warning", "flood"},
+		{"Flood Watch", "flood"},
+		{"Winter Storm Warning", "winter_storm"},
+		{"Blizzard Warning", "winter_storm"},
+		{"Ice Storm Warning", "winter_storm"},
+		{"Severe Thunderstorm Warning", "thunderstorm"},
+		{"Excessive Heat Warning", "heat"},
+		{"Heat Advisory", "heat"},
+		{"High Wind Warning", "wind"},
+		{"Red Flag Warning", "fire"},
+		{"Dense Fog Advisory", "fog"},
+		{"Air Quality Alert", "weather"},
+		{"Special Weather Statement", "weather"},
+		{"", "weather"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.event, func(t *testing.T) {
+			got := classifyNWSEventType(tt.event)
+			if got != tt.want {
+				t.Errorf("classifyNWSEventType(%q) = %q, want %q", tt.event, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeNWSAlert(t *testing.T) {
+	alert := NWSAlert{
+		ID:          "urn:oid:2.49.0.1.840.0.001",
+		Event:       "Tornado Warning",
+		Severity:    "Extreme",
+		Certainty:   "Observed",
+		Urgency:     "Immediate",
+		Headline:    "Tornado Warning issued for Central Oklahoma",
+		Description: "A large tornado was observed.",
+		Instruction: "TAKE COVER NOW.",
+		AreaDesc:    "Central Oklahoma",
+		Effective:   time.Date(2024, 1, 15, 20, 30, 0, 0, time.UTC),
+		Expires:     time.Date(2024, 1, 15, 21, 30, 0, 0, time.UTC),
+	}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 25}
+
+	artifact := normalizeNWSAlert(alert, match)
+
+	if artifact.SourceID != "gov-alerts" {
+		t.Errorf("SourceID = %q", artifact.SourceID)
+	}
+	if artifact.SourceRef != "urn:oid:2.49.0.1.840.0.001" {
+		t.Errorf("SourceRef = %q", artifact.SourceRef)
+	}
+	if artifact.ContentType != "alert/weather" {
+		t.Errorf("ContentType = %q", artifact.ContentType)
+	}
+	if !strings.Contains(artifact.Title, "Tornado Warning") {
+		t.Errorf("Title missing event: %q", artifact.Title)
+	}
+	if !strings.Contains(artifact.Title, "Home") {
+		t.Errorf("Title missing location: %q", artifact.Title)
+	}
+	if !strings.Contains(artifact.RawContent, "TAKE COVER NOW.") {
+		t.Errorf("RawContent missing instruction: %q", artifact.RawContent)
+	}
+
+	checks := map[string]interface{}{
+		"alert_id":         "urn:oid:2.49.0.1.840.0.001",
+		"source":           "nws",
+		"event_type":       "tornado",
+		"event":            "Tornado Warning",
+		"severity":         "extreme",
+		"certainty":        "Observed",
+		"urgency":          "Immediate",
+		"area_desc":        "Central Oklahoma",
+		"distance_km":      25.0,
+		"nearest_location": "Home",
+		"processing_tier":  "full",
+	}
+	for key, want := range checks {
+		got, exists := artifact.Metadata[key]
+		if !exists {
+			t.Errorf("missing metadata key %q", key)
+			continue
+		}
+		if got != want {
+			t.Errorf("metadata[%q] = %v, want %v", key, got, want)
+		}
+	}
+}
+
+func TestNormalizeNWSAlert_TierAssignment(t *testing.T) {
+	tests := []struct {
+		name         string
+		severity     string
+		expectedTier string
+	}{
+		{"extreme gets full", "Extreme", "full"},
+		{"severe gets full", "Severe", "full"},
+		{"moderate gets standard", "Moderate", "standard"},
+		{"minor gets standard", "Minor", "standard"},
+		{"unknown gets standard", "FooBar", "standard"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			alert := NWSAlert{ID: "test-tier", Event: "Test", Severity: tt.severity}
+			match := &ProximityMatch{LocationName: "Home", DistanceKm: 10}
+			artifact := normalizeNWSAlert(alert, match)
+			tier, ok := artifact.Metadata["processing_tier"].(string)
+			if !ok || tier != tt.expectedTier {
+				t.Errorf("expected tier %q, got %q", tt.expectedTier, tier)
+			}
+		})
+	}
+}
+
+func TestNormalizeNWSAlert_ZeroEffectiveFallback(t *testing.T) {
+	alert := NWSAlert{ID: "test-zero-time", Event: "Test"}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 0}
+	artifact := normalizeNWSAlert(alert, match)
+	if artifact.CapturedAt.IsZero() {
+		t.Error("CapturedAt should not be zero when Effective is zero (should fall back to now)")
+	}
+}
+
+func TestParseAlertsConfig_SourceWeather(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  map[string]interface{}
+		want bool
+	}{
+		{
+			"default (no key) is true",
+			map[string]interface{}{
+				"locations": []interface{}{
+					map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+				},
+			},
+			true,
+		},
+		{
+			"explicitly true",
+			map[string]interface{}{
+				"locations": []interface{}{
+					map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+				},
+				"source_weather": true,
+			},
+			true,
+		},
+		{
+			"explicitly false",
+			map[string]interface{}{
+				"locations": []interface{}{
+					map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+				},
+				"source_weather": false,
+			},
+			false,
+		},
+		{
+			"wrong type ignored, default true",
+			map[string]interface{}{
+				"locations": []interface{}{
+					map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+				},
+				"source_weather": "yes",
+			},
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := parseAlertsConfig(connector.ConnectorConfig{SourceConfig: tt.cfg})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.SourceWeather != tt.want {
+				t.Errorf("SourceWeather = %v, want %v", cfg.SourceWeather, tt.want)
+			}
+		})
+	}
+}
+
+func TestSync_WeatherAlertsOnly(t *testing.T) {
+	features := []map[string]interface{}{
+		makeNWSFeature(
+			"urn:oid:nws-sync-1", "Flood Warning", "Severe", "Likely", "Expected",
+			"Flood Warning for Bay Area", "Heavy rain expected.", "Move to higher ground.",
+			"San Francisco Bay Area",
+			"2024-01-15T14:30:00-06:00", "2024-01-15T18:30:00-06:00",
+		),
+		makeNWSFeature(
+			"urn:oid:nws-sync-2", "Wind Advisory", "Minor", "Possible", "Expected",
+			"Wind Advisory", "Gusty winds expected.", "",
+			"San Francisco Bay Area",
+			"2024-01-15T14:30:00-06:00", "2024-01-15T18:30:00-06:00",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := newNWSTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 2 {
+		t.Errorf("expected 2 weather artifacts, got %d", len(arts))
+	}
+	for _, art := range arts {
+		if art.ContentType != "alert/weather" {
+			t.Errorf("expected alert/weather, got %s", art.ContentType)
+		}
+		if art.Metadata["source"] != "nws" {
+			t.Errorf("expected source nws, got %v", art.Metadata["source"])
+		}
+	}
+}
+
+func TestSync_WeatherAlertDeduplication(t *testing.T) {
+	features := []map[string]interface{}{
+		makeNWSFeature(
+			"urn:oid:nws-dedup-1", "Heat Advisory", "Moderate", "Likely", "Expected",
+			"Heat Advisory", "Stay hydrated.", "", "Metro Area",
+			"2024-01-15T14:30:00-06:00", "2024-01-15T18:30:00-06:00",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := newNWSTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+
+	// First sync: new alert.
+	arts1, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("first sync error: %v", err)
+	}
+	if len(arts1) != 1 {
+		t.Errorf("first sync: expected 1 artifact, got %d", len(arts1))
+	}
+
+	// Second sync: same ID, should be deduped.
+	arts2, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("second sync error: %v", err)
+	}
+	if len(arts2) != 0 {
+		t.Errorf("second sync: expected 0 artifacts (deduped), got %d", len(arts2))
+	}
+}
+
+func TestSync_BothEarthquakeAndWeather(t *testing.T) {
+	reqCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqCount++
+		w.Header().Set("Content-Type", "application/json")
+		// USGS endpoint contains "fdsnws"
+		if strings.Contains(r.URL.Path, "fdsnws") {
+			features := []map[string]interface{}{
+				makeFeature("eq-both-1", 4.0, -122.42, 37.77, 10, "Near Home"),
+			}
+			w.Write(usgsResponse(features))
+		} else {
+			// NWS endpoint
+			features := []map[string]interface{}{
+				makeNWSFeature(
+					"urn:oid:nws-both-1", "Tornado Warning", "Extreme", "Observed", "Immediate",
+					"Tornado Warning", "Take cover.", "Shelter now.",
+					"Local Area",
+					"2024-01-15T14:30:00-06:00", "2024-01-15T15:30:00-06:00",
+				),
+			}
+			w.Write(nwsResponse(features))
+		}
+	}))
+	defer ts.Close()
+
+	c := New("gov-alerts-both-test")
+	c.baseURL = ts.URL
+	c.nwsBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:        []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceEarthquake: true,
+		SourceWeather:    true,
+		MinEarthquakeMag: 2.5,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 2 {
+		t.Errorf("expected 2 artifacts (1 earthquake + 1 weather), got %d", len(arts))
+	}
+
+	// Verify we got both types.
+	types := map[string]bool{}
+	for _, art := range arts {
+		types[art.ContentType] = true
+	}
+	if !types["alert/earthquake"] {
+		t.Error("missing alert/earthquake artifact")
+	}
+	if !types["alert/weather"] {
+		t.Error("missing alert/weather artifact")
+	}
+}
+
+func TestSync_WeatherDisabled(t *testing.T) {
+	called := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "alerts") {
+			called = true
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(usgsResponse(nil))
+	}))
+	defer ts.Close()
+
+	c := newTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+	c.config.SourceWeather = false
+
+	_, _, _ = c.Sync(context.Background(), "")
+	if called {
+		t.Error("NWS endpoint should not have been called when source_weather is false")
+	}
+}
+
+func TestSync_NWSHTTPError_SetsDegraded(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	c := newNWSTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+	c.mu.Lock()
+	c.health = connector.HealthHealthy
+	c.mu.Unlock()
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error for NWS HTTP 500")
+	}
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected degraded after NWS failure, got %s", c.Health(context.Background()))
+	}
+}
+
+func TestFetchNWSAlerts_ControlCharsInFields(t *testing.T) {
+	features := []map[string]interface{}{
+		makeNWSFeature(
+			"urn:oid:nws-inject", "Flood\x00Warning", "Severe\x07", "Likely", "Expected",
+			"Headline\ninjected", "Desc\ttab", "Instruct\rreturn",
+			"Area\x1BEscape",
+			"2024-01-15T14:30:00-06:00", "2024-01-15T18:30:00-06:00",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	alerts, err := c.fetchNWSAlerts(context.Background(), 35.47, -97.52)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+
+	a := alerts[0]
+	if strings.ContainsAny(a.Event, "\x00\x07") {
+		t.Errorf("Event contains control chars: %q", a.Event)
+	}
+	if strings.ContainsAny(a.Headline, "\n\r") {
+		t.Errorf("Headline contains control chars: %q", a.Headline)
+	}
+	if strings.ContainsAny(a.Description, "\t") {
+		t.Errorf("Description contains control chars: %q", a.Description)
+	}
+	if strings.ContainsAny(a.AreaDesc, "\x1B") {
+		t.Errorf("AreaDesc contains escape: %q", a.AreaDesc)
+	}
+}
+
+func TestFetchNWSAlerts_PointInURL(t *testing.T) {
+	var requestedURL string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(nil))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	_, _ = c.fetchNWSAlerts(context.Background(), 35.4700, -97.5200)
+	if !strings.Contains(requestedURL, "point=35.4700,-97.5200") {
+		t.Errorf("expected point=35.4700,-97.5200 in URL, got: %s", requestedURL)
 	}
 }

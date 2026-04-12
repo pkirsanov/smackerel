@@ -177,6 +177,7 @@ connectors:
     enabled: false
     sync_schedule: "*/30 * * * *"
     min_earthquake_magnitude: 2.5
+    source_weather: true
     locations:
     - name: ""
       latitude: 0.0
