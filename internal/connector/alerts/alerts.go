@@ -43,6 +43,7 @@ type Connector struct {
 	config     AlertsConfig
 	httpClient *http.Client
 	baseURL    string
+	nwsBaseURL string
 	known      map[string]time.Time // alert_id → first-seen time for dedup
 }
 
@@ -51,6 +52,7 @@ type AlertsConfig struct {
 	Locations        []LocationConfig
 	MinEarthquakeMag float64
 	SourceEarthquake bool
+	SourceWeather    bool
 }
 
 // LocationConfig specifies a monitored location.
@@ -68,6 +70,7 @@ func New(id string) *Connector {
 		health:     connector.HealthDisconnected,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
 		baseURL:    "https://earthquake.usgs.gov",
+		nwsBaseURL: "https://api.weather.gov",
 		known:      make(map[string]time.Time),
 	}
 }
@@ -145,6 +148,39 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				c.mu.Unlock()
 				if !seen {
 					allArtifacts = append(allArtifacts, normalizeEarthquake(eq, match))
+				}
+			}
+		}
+	}
+
+	// NWS Weather Alerts source
+	if cfg.SourceWeather {
+		for _, loc := range cfg.Locations {
+			if ctx.Err() != nil {
+				syncErr = ctx.Err()
+				return allArtifacts, now.Format(time.RFC3339), syncErr
+			}
+			alerts, err := c.fetchNWSAlerts(ctx, loc.Latitude, loc.Longitude)
+			if err != nil {
+				slog.Warn("NWS weather alerts fetch failed", "error", err, "location", loc.Name)
+				syncErr = fmt.Errorf("nws weather fetch for %s: %w", loc.Name, err)
+				return allArtifacts, now.Format(time.RFC3339), syncErr
+			}
+			for _, alert := range alerts {
+				if ctx.Err() != nil {
+					syncErr = ctx.Err()
+					return allArtifacts, now.Format(time.RFC3339), syncErr
+				}
+				if match := findNearestLocation(loc.Latitude, loc.Longitude, cfg.Locations); match != nil {
+					c.mu.Lock()
+					_, seen := c.known[alert.ID]
+					if !seen {
+						c.known[alert.ID] = now
+					}
+					c.mu.Unlock()
+					if !seen {
+						allArtifacts = append(allArtifacts, normalizeNWSAlert(alert, match))
+					}
 				}
 			}
 		}
@@ -367,6 +403,7 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 	cfg := AlertsConfig{
 		MinEarthquakeMag: 2.5,
 		SourceEarthquake: true,
+		SourceWeather:    true,
 	}
 
 	if locs, ok := config.SourceConfig["locations"].([]interface{}); ok {
@@ -402,5 +439,190 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 		cfg.MinEarthquakeMag = mag
 	}
 
+	if sw, ok := config.SourceConfig["source_weather"].(bool); ok {
+		cfg.SourceWeather = sw
+	}
+
 	return cfg, nil
+}
+
+// NWSAlert represents a parsed NWS weather alert.
+type NWSAlert struct {
+	ID          string
+	Event       string
+	Severity    string
+	Certainty   string
+	Urgency     string
+	Headline    string
+	Description string
+	Instruction string
+	AreaDesc    string
+	Effective   time.Time
+	Expires     time.Time
+}
+
+// fetchNWSAlerts fetches active weather alerts from the NWS API for a given point.
+func (c *Connector) fetchNWSAlerts(ctx context.Context, lat, lon float64) ([]NWSAlert, error) {
+	reqURL := fmt.Sprintf("%s/alerts/active?point=%.4f,%.4f", c.nwsBaseURL, lat, lon)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "application/geo+json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("NWS request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("NWS returned status %d", resp.StatusCode)
+	}
+
+	limitedBody := io.LimitReader(resp.Body, maxResponseBytes)
+
+	var result struct {
+		Features []struct {
+			Properties struct {
+				ID          string `json:"id"`
+				Event       string `json:"event"`
+				Severity    string `json:"severity"`
+				Certainty   string `json:"certainty"`
+				Urgency     string `json:"urgency"`
+				Headline    string `json:"headline"`
+				Description string `json:"description"`
+				Instruction string `json:"instruction"`
+				AreaDesc    string `json:"areaDesc"`
+				Effective   string `json:"effective"`
+				Expires     string `json:"expires"`
+			} `json:"properties"`
+		} `json:"features"`
+	}
+
+	if err := json.NewDecoder(limitedBody).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode NWS response: %w", err)
+	}
+
+	var alerts []NWSAlert
+	for _, f := range result.Features {
+		sanitizedID, valid := sanitizeAlertID(f.Properties.ID)
+		if !valid {
+			slog.Warn("skipping NWS alert with empty or invalid ID")
+			continue
+		}
+
+		alert := NWSAlert{
+			ID:          sanitizedID,
+			Event:       sanitizeStringField(f.Properties.Event),
+			Severity:    sanitizeStringField(f.Properties.Severity),
+			Certainty:   sanitizeStringField(f.Properties.Certainty),
+			Urgency:     sanitizeStringField(f.Properties.Urgency),
+			Headline:    sanitizeStringField(f.Properties.Headline),
+			Description: sanitizeStringField(f.Properties.Description),
+			Instruction: sanitizeStringField(f.Properties.Instruction),
+			AreaDesc:    sanitizeStringField(f.Properties.AreaDesc),
+		}
+
+		if t, err := time.Parse(time.RFC3339, f.Properties.Effective); err == nil {
+			alert.Effective = t
+		}
+		if t, err := time.Parse(time.RFC3339, f.Properties.Expires); err == nil {
+			alert.Expires = t
+		}
+
+		alerts = append(alerts, alert)
+	}
+
+	return alerts, nil
+}
+
+// mapNWSSeverity maps NWS severity strings to internal severity categories.
+func mapNWSSeverity(nwsSeverity string) string {
+	switch strings.ToLower(nwsSeverity) {
+	case "extreme":
+		return "extreme"
+	case "severe":
+		return "severe"
+	case "moderate":
+		return "moderate"
+	case "minor":
+		return "minor"
+	default:
+		return "unknown"
+	}
+}
+
+// classifyNWSEventType maps NWS event names to broad event type categories.
+func classifyNWSEventType(event string) string {
+	lower := strings.ToLower(event)
+	switch {
+	case strings.Contains(lower, "tornado"):
+		return "tornado"
+	case strings.Contains(lower, "hurricane") || strings.Contains(lower, "tropical"):
+		return "hurricane"
+	case strings.Contains(lower, "flood"):
+		return "flood"
+	case strings.Contains(lower, "winter") || strings.Contains(lower, "blizzard") || strings.Contains(lower, "ice storm"):
+		return "winter_storm"
+	case strings.Contains(lower, "thunderstorm"):
+		return "thunderstorm"
+	case strings.Contains(lower, "heat"):
+		return "heat"
+	case strings.Contains(lower, "wind"):
+		return "wind"
+	case strings.Contains(lower, "fire") || strings.Contains(lower, "red flag"):
+		return "fire"
+	case strings.Contains(lower, "fog"):
+		return "fog"
+	default:
+		return "weather"
+	}
+}
+
+func normalizeNWSAlert(alert NWSAlert, match *ProximityMatch) connector.RawArtifact {
+	severity := mapNWSSeverity(alert.Severity)
+	eventType := classifyNWSEventType(alert.Event)
+	tier := "standard"
+	if severity == "extreme" || severity == "severe" {
+		tier = "full"
+	}
+
+	capturedAt := alert.Effective
+	if capturedAt.IsZero() {
+		capturedAt = time.Now()
+	}
+
+	rawContent := alert.Headline
+	if alert.Description != "" {
+		rawContent += "\n\n" + alert.Description
+	}
+	if alert.Instruction != "" {
+		rawContent += "\n\nInstruction: " + alert.Instruction
+	}
+
+	return connector.RawArtifact{
+		SourceID:    "gov-alerts",
+		SourceRef:   alert.ID,
+		ContentType: "alert/weather",
+		Title:       fmt.Sprintf("%s — %s (near %s)", alert.Event, alert.AreaDesc, match.LocationName),
+		RawContent:  rawContent,
+		URL:         "",
+		Metadata: map[string]interface{}{
+			"alert_id":         alert.ID,
+			"source":           "nws",
+			"event_type":       eventType,
+			"event":            alert.Event,
+			"severity":         severity,
+			"certainty":        alert.Certainty,
+			"urgency":          alert.Urgency,
+			"area_desc":        alert.AreaDesc,
+			"distance_km":      match.DistanceKm,
+			"nearest_location": match.LocationName,
+			"processing_tier":  tier,
+		},
+		CapturedAt: capturedAt,
+	}
 }
