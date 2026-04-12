@@ -2,19 +2,26 @@
   "version": 3,
   "featureDir": "specs/013-guesthost-connector",
   "featureName": "GuestHost Connector & Hospitality Intelligence",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "test",
+    "currentPhase": "finalize",
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedScopes": [],
-    "completedPhaseClaims": ["analyze", "plan", "implement", "test"],
+    "completedPhaseClaims": [
+      "analyze",
+      "plan",
+      "implement",
+      "test"
+    ],
     "pendingTransitionRequests": [],
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
-        "phasesExecuted": ["analyze"],
+        "phasesExecuted": [
+          "analyze"
+        ],
         "statusBefore": "not_started",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -23,7 +30,10 @@
       },
       {
         "agent": "bubbles.plan",
-        "phasesExecuted": ["bootstrap", "plan"],
+        "phasesExecuted": [
+          "bootstrap",
+          "plan"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -32,7 +42,9 @@
       },
       {
         "agent": "bubbles.implement",
-        "phasesExecuted": ["implement"],
+        "phasesExecuted": [
+          "implement"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-11T00:00:00Z",
@@ -41,7 +53,9 @@
       },
       {
         "agent": "bubbles.test",
-        "phasesExecuted": ["test"],
+        "phasesExecuted": [
+          "test"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-11T00:00:00Z",
@@ -53,7 +67,12 @@
   "certification": {
     "status": "in_progress",
     "completedScopes": [],
-    "certifiedCompletedPhases": ["analyze", "plan", "implement", "test"],
+    "certifiedCompletedPhases": [
+      "analyze",
+      "plan",
+      "implement",
+      "test"
+    ],
     "scopeProgress": [],
     "lockdownState": {
       "roundNumber": 1,
@@ -63,16 +82,34 @@
     }
   },
   "policySnapshot": {
-    "grill": {"mode": "off", "source": "repo-default"},
-    "tdd": {"mode": "scenario-first", "source": "repo-default"},
-    "autoCommit": {"mode": "off", "source": "repo-default"},
-    "lockdown": {"mode": "off", "source": "repo-default"},
-    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
-    "validation": {"mode": "certification-required", "source": "repo-default"}
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-09T00:00:00Z",
-  "notes": "Implementation in progress — all 5 scopes have code delivered, awaiting test execution and evidence."
+  "notes": "Implementation in progress \u2014 all 5 scopes have code delivered, awaiting test execution and evidence."
 }
