@@ -621,3 +621,248 @@ Config is in sync with SST
 $ ./smackerel.sh lint
 All checks passed!
 ```
+
+---
+
+## Stochastic Sweep — Harden Pass (Round N)
+
+**Date:** April 12, 2026
+**Trigger:** harden (via stochastic-quality-sweep child workflow, harden-to-doc mode)
+**Agent:** bubbles.harden (via bubbles.workflow)
+
+### Findings
+
+| ID | Severity | Finding | Location | Status |
+|----|----------|---------|----------|--------|
+| H-R2-001 | MEDIUM | Qualifier engine evaluates `recent` before `archived` — a recently-modified archived note gets `standard` instead of `light`. R-008 says "Archived note → light" without qualification; archiving is an intentional user deprioritization signal that overrides recency. R-008 row 5 explicitly says "Older active note (>30 days, **not archived**)" proving archived is a separate classification. | `qualifiers.go` line 52-56 | **Fixed** |
+| H-R2-002 | LOW | Design specifies `TopicMapper struct { pool *pgxpool.Pool }` with `pg_trgm` fuzzy matching, but implementation uses in-memory trigram calculation only. Design drift — implementation is correct for unit-testability but design.md is stale. | `design.md` vs `labels.go` | **Documented** |
+| H-R2-003 | LOW | Multiple scopes claim integration/E2E test passage, but evidence acknowledges they are unit tests. Examples: Scope 2 "Integration verified via unit-level connector lifecycle tests", Scope 4 "Integration verified via local trigram match", Scope 6 "Integration verified via OCR cache and fallback unit tests". | `scopes.md` Scopes 2-6 DoD | **Documented** |
+| H-R2-004 | LOW | No Gherkin scenario tested archived + recently-modified note tier assignment — the gap underlying H-R2-001 | `scopes.md` Scope 3 | **Fixed** (SCN-GK-030 added) |
+| H-R2-005 | INFO | `reminder_time` metadata always empty string. R-005 specifies it as ISO 8601 string. Neither Takeout JSON nor gkeepapi bridge populates it. Takeout format does not include reminder times; gkeepapi could but NormalizeGkeep() doesn't map it. | `normalizer.go` `buildMetadata()` | **Documented** |
+| H-R2-006 | INFO | No dedicated Gherkin scenario for R-011 partial sync cursor persistence (cursor set to last *successfully processed* note, not end of batch). Existing TestCorruptedCursorFallback covers missing/corrupted cursor but not mid-batch failure cursor position. | `scopes.md` Scope 2 | **Documented** |
+
+### Fixes Applied
+
+**H-R2-001: Qualifier evaluation order fix** — Moved `note.IsArchived` check before the `daysSinceModified` check in `qualifiers.go:Evaluate()`. Archived notes now always get `light` tier regardless of recency, matching R-008's "Archived note → light" specification. Added `TestQualifierRecentArchivedGetsLight` regression test. Updated scopes.md Scope 3 description and evaluation order documentation. Added SCN-GK-030 Gherkin scenario.
+
+### Documentary Observations
+
+**H-R2-002:** The in-memory trigram implementation is pragmatic for the current single-user deployment model and keeps all label matching unit-testable. A design.md note should be added when the design is next updated to reflect this trade-off.
+
+**H-R2-003:** The DoD evidence items are honest about their test classification in the evidence text itself ("verified via unit-level tests"), but the DoD item labels claim "integration passes" and "e2e passes". This is a systemic pattern across all 6 scopes. Future work should either implement real integration/E2E tests (requiring live NATS + PostgreSQL + ML sidecar) or reclassify the DoD items.
+
+**H-R2-005:** Google Takeout JSON format does not include reminder_time. The gkeepapi library could provide it via `note.reminders`, but the NormalizeGkeep() conversion drops it. Low priority — reminder_time adds limited value to the knowledge graph compared to other metadata.
+
+**H-R2-006:** The current cursor logic in `syncTakeout()` advances the cursor after full batch processing. If the process crashes mid-batch, the cursor stays at its previous position and the entire batch is re-processed on retry (with dedup protecting against duplicates). This is safe but could be more efficient with per-note cursor advancement.
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/keep  1.216s
+--- PASS: TestQualifierRecentArchivedGetsLight  (recently-archived → light)
+
+All 34 Go packages PASS.
+53 Python tests PASS.
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `internal/connector/keep/qualifiers.go` | Moved archived check before recent check in `Evaluate()` |
+| `internal/connector/keep/qualifiers_test.go` | Added `TestQualifierRecentArchivedGetsLight` regression test |
+| `specs/007-google-keep-connector/scopes.md` | Updated Scope 3 evaluation order description; added SCN-GK-030 Gherkin scenario; added T-3-08b test mapping; updated DoD evidence |
+| `specs/007-google-keep-connector/report.md` | Added this hardening report section |
+
+---
+
+## Security Sweep (2026-04-12)
+
+### Analysis Scope
+Full security review of specs/007-google-keep-connector attack surface:
+- `internal/connector/keep/` (Go: keep.go, takeout.go, normalizer.go, labels.go, qualifiers.go)
+- `ml/app/keep_bridge.py` (Python: gkeepapi bridge)
+- `ml/app/ocr.py` (Python: OCR pipeline)
+- Related infrastructure: `ml/app/url_validator.py`, `internal/auth/handler.go`, `config/smackerel.yaml`
+
+### Existing Mitigations Verified
+
+| Category | Location | Mitigation | Status |
+|----------|----------|------------|--------|
+| CWE-22 Path Traversal | `takeout.go:ParseExport` | Symlink rejection, boundary enforcement via `filepath.EvalSymlinks` | ✅ Sound |
+| CWE-79 URL Injection | `normalizer.go:safeAnnotationSchemes` | Scheme allowlist (http, https, mailto only) | ✅ Sound |
+| CWE-918 SSRF | `ocr.py:_validate_ollama_url` | Scheme + hostname validation | ✅ Sound |
+| CWE-918 SSRF | `url_validator.py` | Private IP blocking, DNS resolution check, credential stripping | ✅ Sound |
+| Decompression Bomb | `ocr.py` | PIL.Image.MAX_IMAGE_PIXELS = 25M | ✅ Sound |
+| File Size Limit | `takeout.go:maxNoteFileSize` | 50 MB per note file | ✅ Sound |
+| Image Size Limit | `ocr.py:MAX_IMAGE_SIZE_B64` | 10 MB base64 | ✅ Sound |
+| Cache Eviction | `ocr.py:MAX_CACHE_ENTRIES` | LRU eviction at 1000 entries | ✅ Sound |
+| Auth Gate | `keep.go:Connect` | `gkeep_warning_acknowledged` required for unofficial API | ✅ Sound |
+| CSRF | `auth/handler.go` | State token with 10min TTL eviction | ✅ Sound |
+| Config Validation | `keep.go:parseKeepConfig` | sync_mode allowlist, poll_interval minimum | ✅ Sound |
+| Credential Isolation | `keep_bridge.py` | Env-var-only credentials, no hardcoded secrets | ✅ Sound |
+
+### Findings
+
+| ID | Severity | File | CWE | Issue | Fix |
+|---|---|---|---|---|---|
+| SEC-001 | MEDIUM | `ml/app/ocr.py` | CWE-20 | `base64.b64decode()` called without error handling in `handle_ocr_request`; malformed base64 raises unhandled `binascii.Error` | Added try/except around both decode sites; returns structured error response |
+| SEC-002 | LOW | `ml/app/keep_bridge.py` | CWE-400 | No upper bound on notes fetched from `keep.all()`; large accounts could cause memory exhaustion | Added `MAX_SYNC_NOTES = 10_000` cap with warning log |
+
+### Fix Evidence
+```
+$ PYTHONPATH=. .venv/bin/python -m pytest tests/test_keep.py -v
+23 passed
+
+New tests:
+  PASS: TestSecurityOCR::test_malformed_base64_returns_error
+  PASS: TestSecurityOCR::test_malformed_base64_with_hash_returns_error
+  PASS: TestSecurityKeepBridge::test_note_limit_enforced
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml/app/ocr.py` | Wrapped two `base64.b64decode()` calls in try/except with error response (SEC-001) |
+| `ml/app/keep_bridge.py` | Added `MAX_SYNC_NOTES` constant and loop break with warning log (SEC-002) |
+| `ml/tests/test_keep.py` | Added 3 security regression tests (SEC-001 × 2, SEC-002 × 1) |
+| `specs/007-google-keep-connector/report.md` | Added this security sweep report section |
+
+---
+
+## Stochastic Sweep — Simplify Pass (R09)
+
+**Date:** April 13, 2026
+**Trigger:** simplify (via stochastic-quality-sweep child workflow, simplify-to-doc mode)
+**Agent:** bubbles.simplify (via bubbles.workflow)
+
+### Findings
+
+| ID | Severity | Finding | Location | Status |
+|----|----------|---------|----------|--------|
+| SIMP-001 | MEDIUM | `shouldSkip()` calls `buildContent(note)` to check emptiness/length, then `Normalize()` calls `buildContent(note)` again on the same note. Every non-skipped note pays the content-building cost twice — string allocation, iteration over annotations/list items/attachments duplicated. | `normalizer.go` lines 38, 48 | **Fixed** |
+| SIMP-002 | LOW | `Connector.tierCounts` field (`map[Tier]int`) is accumulated during `syncTakeout` but never read by any method — `Health()`, `Close()`, and `Sync()` all ignore it. Dead state: allocated on `New()`, reset on every `Sync()`, locally accumulated per-note, written back under lock, then never consumed. Also caused two separate lock/unlock cycles at the end of `syncTakeout` that are now unnecessary. | `keep.go` lines 77, 89, 146, 280-325 | **Fixed** |
+
+### Fixes Applied
+
+**SIMP-001: Eliminate redundant `buildContent` call**
+- Moved `content := n.buildContent(note)` to the top of `Normalize()`, before the `shouldSkip` call.
+- Changed `shouldSkip(note *TakeoutNote)` → `shouldSkip(note *TakeoutNote, content string)` to receive the pre-built content string.
+- Removed the internal `buildContent` call from `shouldSkip`.
+- Updated 5 direct `shouldSkip` test call sites to pass `n.buildContent(note)`.
+- Net effect: one `buildContent` call per note instead of two. Zero behavioral change.
+
+**SIMP-002: Remove dead `tierCounts` field**
+- Removed `tierCounts map[Tier]int` from `Connector` struct.
+- Removed `make(map[Tier]int)` from `New()` and `Sync()` reset.
+- Removed `localTierCounts` accumulation in `syncTakeout` (skip branch counter, per-artifact tier tracking, write-back lock region).
+- Merged the two remaining lock/unlock sequences at end of `syncTakeout` into one (only `processedExports` write remains).
+- Net effect: ~20 lines of dead code removed, one fewer lock/unlock cycle per sync. Zero behavioral change.
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/keep  1.083s
+All 34 Go packages PASS. 53 Python tests PASS.
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `internal/connector/keep/normalizer.go` | `shouldSkip` accepts pre-built `content` string; `Normalize` calls `buildContent` once |
+| `internal/connector/keep/normalizer_test.go` | 5 `shouldSkip` call sites updated to pass content |
+| `internal/connector/keep/keep.go` | Removed `tierCounts` field, initialization, reset, local accumulation, and write-back; merged lock regions |
+| `specs/007-google-keep-connector/report.md` | Added this simplification report section |
+
+---
+
+## Stochastic Sweep — Regression Pass (R12)
+
+**Date:** April 13, 2026
+**Trigger:** regression (via stochastic-quality-sweep child workflow, regression-to-doc mode)
+**Agent:** bubbles.regression (via bubbles.workflow)
+
+### Analysis
+
+Probed the Google Keep connector regression test surface against the full implementation, design, and spec. The existing regression suite (`regression_test.go`) contained **5 regression groups** (REG-001 through REG-005) covering:
+- R-008 skip-priority interactions (pinned/labeled/image override archived exclusion)
+- Cursor boundary exactness (strict-after semantics prevent reprocessing)
+- GkeepNote normalization (content type classification, label preservation, source path)
+- shouldSkip/qualifier priority alignment (table-driven)
+- Full sync cycle regression (end-to-end connector Sync behavior)
+
+### Regression Gaps Identified and Closed
+
+| ID | Gap | Risk If Regressed | Adversarial? | Status |
+|----|-----|-------------------|-------------|--------|
+| REG-006 | URL scheme sanitization (`isSafeURL`) — no regression test prevented weakening the `http/https/mailto` allowlist | CWE-79 XSS via `javascript:`, `data:`, `vbscript:` annotations | Yes — injects dangerous schemes AND verifies safe schemes pass | **Added** |
+| REG-007 | Attachment path traversal (`sanitizeAttachmentPath`) — no regression test prevented relaxing `../` stripping | CWE-22 directory traversal through crafted export attachments | Yes — injects `../../etc/passwd` traversal AND verifies base-only output | **Added** |
+| REG-008 | Metadata array cap (`maxMetadataArrayLen`) — no regression test prevented removing the 500-element bound | CWE-400 resource exhaustion from adversarial exports with 1000+ labels | Yes — creates 1000-label note and asserts cap at 500 | **Added** |
+| REG-009 | Config validation strictness (`parseKeepConfig`) — no regression test prevented accepting invalid sync modes or sub-15m poll intervals | Silent misconfiguration leading to runtime failures | Yes — passes `"invalid-mode"` and `"5m"` poll interval | **Added** |
+| REG-010 | Health state machine escalation — no regression test verified the degraded→failing→error threshold transitions | Incorrect health reporting misleads operational monitoring | Yes — runs 12 error-only syncs, asserts threshold transitions at 5 and 10 | **Added** |
+| REG-011 | Label cascade order (TopicMapper) — no regression test prevented reordering exact→abbreviation→fuzzy→created | Silent matching degradation: typos match before abbreviations, or abbreviations bypass exact | Yes — 4 tests each verify correct cascade stage for their input type | **Added** |
+| REG-012 | NoteID stability — no regression test verified deterministic IDs from filenames | Dedup failure: same note re-synced creates duplicate artifacts | Yes — asserts determinism and distinctness for different filenames with same title | **Added** |
+| REG-013 | Gkeepapi warning gate — no regression test prevented removing the `warning_acknowledged` requirement | Users unknowingly use unofficial, breakable API without informed consent | Yes — verifies rejection without ack AND acceptance with ack | **Added** |
+| REG-014 | Email sanitization (`isBasicEmail`) — no regression test prevented relaxing injection-susceptible format rejection | CWE-79 via crafted collaborator emails in metadata | Yes — injects `<script>@`, spaces, tabs, double-@, bare-domain | **Added** |
+| REG-015 | Timestamp zero guards — no regression test prevented epoch timestamps leaking into metadata | Downstream consumers see `1970-01-01` for notes with missing timestamps | Yes — creates zero-timestamp note, asserts no epoch dates in any field | **Added** |
+| REG-016 | DiffLabels correctness — no regression test verified added/removed label detection across sync cycles | Topic graph edges silently skip additions or deletions | Yes — detects adds/removes, empty-to-labels and labels-to-empty transitions | **Added** |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/keep  0.386s
+All 34 Go packages PASS.
+
+$ ./smackerel.sh lint
+All checks passed!
+```
+
+New regression tests in `internal/connector/keep/regression_test.go`:
+
+| Test Name | REG ID | Adversarial |
+|-----------|--------|-------------|
+| `TestRegression_URLSanitizationBlocksJavascript` | REG-006 | Yes — 6 dangerous scheme variants |
+| `TestRegression_URLSanitizationAllowsSafe` | REG-006 | Yes — verifies safe schemes survive |
+| `TestRegression_UnsafeURLStrippedFromContent` | REG-006 | Yes — end-to-end annotation content check |
+| `TestRegression_AttachmentPathTraversal` | REG-007 | Yes — 6 traversal patterns |
+| `TestRegression_TraversalPathStrippedFromMetadata` | REG-007 | Yes — end-to-end metadata check |
+| `TestRegression_MetadataArrayCap` | REG-008 | Yes — 1000 labels vs 500 cap |
+| `TestRegression_ConfigRejectsInvalidSyncMode` | REG-009 | Yes — passes invalid mode string |
+| `TestRegression_ConfigEnforcesMinPollInterval` | REG-009 | Yes — passes 5m below 15m minimum |
+| `TestRegression_HealthEscalationThresholds` | REG-010 | Yes — 12 error cycles with threshold assertions |
+| `TestRegression_HealthResetsOnSuccess` | REG-010 | Yes — verifies clean sync resets to healthy |
+| `TestRegression_LabelCascadeExactBeforeAbbreviation` | REG-011 | Yes — exact match must win over abbreviation |
+| `TestRegression_LabelCascadeAbbreviationResolves` | REG-011 | Yes — abbreviation resolves when no exact match |
+| `TestRegression_LabelCascadeFuzzyFallback` | REG-011 | Yes — typo falls through to fuzzy |
+| `TestRegression_LabelCascadeCreateNew` | REG-011 | Yes — novel label creates new topic |
+| `TestRegression_NoteIDDeterministic` | REG-012 | Yes — same filename always produces same ID |
+| `TestRegression_NoteIDDistinctForDifferentFiles` | REG-012 | Yes — different filenames never collide |
+| `TestRegression_GkeepWarningGateEnforced` | REG-013 | Yes — rejected without ack |
+| `TestRegression_GkeepWarningGatePassesWithAck` | REG-013 | Yes — accepted with ack |
+| `TestRegression_EmailSanitizationBlocksInjection` | REG-014 | Yes — 8 injection patterns |
+| `TestRegression_EmailSanitizationAllowsValid` | REG-014 | Yes — 3 valid formats pass through |
+| `TestRegression_ZeroTimestampGuards` | REG-015 | Yes — zero UsecTimestamps → no 1970 dates |
+| `TestRegression_DiffLabelsDetectsAddedAndRemoved` | REG-016 | Yes — add 2, remove 1, keep 1 |
+| `TestRegression_DiffLabelsEmptyTransitions` | REG-016 | Yes — nil→labels and labels→nil |
+
+### Coverage Summary
+
+| Category | Before | After | Delta |
+|----------|--------|-------|-------|
+| Regression test groups | 5 (REG-001 to REG-005) | 16 (REG-001 to REG-016) | +11 |
+| Individual regression test functions | 12 | 35 | +23 |
+| Security regression coverage | 0 (covered elsewhere in normalizer/takeout tests) | 8 (dedicated adversarial regression tests for CWE-22/79/400) | +8 |
+| Config/operational regression | 0 | 5 | +5 |
+| Data integrity regression | 2 (cursor) | 7 (cursor + NoteID + timestamps + labels) | +5 |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `internal/connector/keep/regression_test.go` | Added 23 new regression test functions covering REG-006 through REG-016; added `context` and `connector` imports |
+| `specs/007-google-keep-connector/report.md` | Added this regression sweep report section |

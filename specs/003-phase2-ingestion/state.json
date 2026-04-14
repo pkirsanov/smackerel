@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/003-phase2-ingestion",
   "featureName": "Phase 2: Passive Ingestion",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.iterate",
@@ -29,15 +29,13 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "1",
       "2",
       "3",
       "4",
-      "5",
-      "6",
-      "7"
+      "6"
     ],
     "certifiedCompletedPhases": [
       "select",
@@ -96,7 +94,7 @@
       {
         "scope": 5,
         "name": "Bookmarks Import",
-        "status": "Done",
+        "status": "In Progress",
         "dependsOn": [1],
         "scopeDir": null,
         "evidenceFile": "report.md",
@@ -114,7 +112,7 @@
       {
         "scope": 7,
         "name": "Settings UI Connectors",
-        "status": "Done",
+        "status": "In Progress",
         "dependsOn": [2, 3, 4, 5],
         "scopeDir": null,
         "evidenceFile": "report.md",

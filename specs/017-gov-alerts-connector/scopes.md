@@ -38,9 +38,9 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 |---|---|---|---|---|
 | 1 | Proximity Filter & Alert Types | Go core | 12+ unit tests | Done |
 | 2 | USGS Earthquake Source | Go core | 10+ unit tests | Done |
-| 3 | NWS Weather Alerts Source | Go core | 0 (not implemented) | Not Started |
-| 4 | Gov Alerts Connector & Config | Go core, Config | 20+ unit/integration | In Progress |
-| 5 | Additional Sources | Go core | 0 (not implemented) | Not Started |
+| 3 | NWS Weather Alerts Source | Go core | 20+ unit tests | Done |
+| 4 | Gov Alerts Connector & Config | Go core, Config | 20+ unit/integration | Done |
+| 5 | Additional Sources | Go core | 25+ unit tests | Done |
 | 6 | Proactive Delivery & Travel Alerts | Go core, NATS | 10 tests (6u+3i+1e2e) | Done |
 
 ---

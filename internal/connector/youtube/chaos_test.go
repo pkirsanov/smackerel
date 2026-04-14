@@ -27,12 +27,9 @@ func TestChaos_ParseVideoItems_AllFieldsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}
-	// Empty video_id → empty SourceRef, which is a data quality issue
-	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifact for empty video, got %d", len(artifacts))
-	}
-	if artifacts[0].SourceRef != "" {
-		t.Errorf("expected empty SourceRef for empty video_id, got %q", artifacts[0].SourceRef)
+	// Empty video_id → skipped by empty-VideoID guard
+	if len(artifacts) != 0 {
+		t.Fatalf("expected 0 artifacts for empty-VideoID video, got %d", len(artifacts))
 	}
 }
 
@@ -60,8 +57,9 @@ func TestChaos_ParseVideoItems_WrongTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync should handle wrong types: %v", err)
 	}
-	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	// video_id is int 12345, getStr returns "" → skipped by empty-VideoID guard
+	if len(artifacts) != 0 {
+		t.Fatalf("expected 0 artifacts for invalid-VideoID video, got %d", len(artifacts))
 	}
 }
 

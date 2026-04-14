@@ -10,14 +10,26 @@ import (
 
 // NormalizeActivity converts a TakeoutActivity into a connector.RawArtifact.
 func NormalizeActivity(activity TakeoutActivity, sourceFile string) connector.RawArtifact {
+	actType := validatedActivityType(activity.Type)
+	activity.Type = actType
 	return connector.RawArtifact{
 		SourceID:    "google-maps-timeline",
 		SourceRef:   computeDedupHash(activity),
-		ContentType: "activity/" + string(activity.Type),
+		ContentType: "activity/" + string(actType),
 		Title:       buildTitle(activity),
 		RawContent:  buildContent(activity),
 		Metadata:    buildMetadata(activity, sourceFile),
 		CapturedAt:  activity.StartTime,
+	}
+}
+
+// validatedActivityType returns the activity type if known, or ActivityWalk as a safe default.
+func validatedActivityType(t ActivityType) ActivityType {
+	switch t {
+	case ActivityHike, ActivityWalk, ActivityCycle, ActivityDrive, ActivityTransit, ActivityRun:
+		return t
+	default:
+		return ActivityWalk
 	}
 }
 
@@ -70,6 +82,13 @@ func buildMetadata(activity TakeoutActivity, sourceFile string) map[string]inter
 		meta["end_lat"] = activity.Route[len(activity.Route)-1].Lat
 		meta["end_lng"] = activity.Route[len(activity.Route)-1].Lng
 		meta["route_geojson"] = ToGeoJSON(activity.Route)
+	} else if activity.StartLocation.Lat != 0 || activity.StartLocation.Lng != 0 ||
+		activity.EndLocation.Lat != 0 || activity.EndLocation.Lng != 0 {
+		meta["start_lat"] = activity.StartLocation.Lat
+		meta["start_lng"] = activity.StartLocation.Lng
+		meta["end_lat"] = activity.EndLocation.Lat
+		meta["end_lng"] = activity.EndLocation.Lng
+		meta["route_geojson"] = nil
 	} else {
 		meta["start_lat"] = 0.0
 		meta["start_lng"] = 0.0
@@ -82,13 +101,20 @@ func buildMetadata(activity TakeoutActivity, sourceFile string) map[string]inter
 }
 
 // activityGridCoords returns the start and end route coordinates snapped to a ~500m grid.
-// Returns zeroes when the activity has no route points.
+// Falls back to StartLocation/EndLocation when route is empty.
+// Returns zeroes when neither route nor start/end locations are available.
 func activityGridCoords(activity TakeoutActivity) (startLat, startLng, endLat, endLng float64) {
 	if len(activity.Route) > 0 {
 		startLat = roundToGrid(activity.Route[0].Lat)
 		startLng = roundToGrid(activity.Route[0].Lng)
 		endLat = roundToGrid(activity.Route[len(activity.Route)-1].Lat)
 		endLng = roundToGrid(activity.Route[len(activity.Route)-1].Lng)
+	} else if activity.StartLocation.Lat != 0 || activity.StartLocation.Lng != 0 ||
+		activity.EndLocation.Lat != 0 || activity.EndLocation.Lng != 0 {
+		startLat = roundToGrid(activity.StartLocation.Lat)
+		startLng = roundToGrid(activity.StartLocation.Lng)
+		endLat = roundToGrid(activity.EndLocation.Lat)
+		endLng = roundToGrid(activity.EndLocation.Lng)
 	}
 	return
 }

@@ -79,8 +79,52 @@
 | `./smackerel.sh check` | PASS — config in sync with SST | 2026-04-10 |
 | `./smackerel.sh test unit` | PASS — 51 tests (Go 31 packages + Python 51 pytest) | 2026-04-10 |
 | `./smackerel.sh test unit` | PASS — 53 tests (Go 31 packages + Python 53 pytest) | 2026-04-11 |
+| `./smackerel.sh test unit` | PASS — 53 tests (Go 33 packages + Python 53 pytest) | 2026-04-12 (security sweep) |
 
-## Test Coverage Gaps (Resolved)
+## Security Sweep (2026-04-12) — Stochastic Quality Trigger
+
+### Sweep Methodology
+
+Full codebase security review covering:
+- Dependency scanning (Go go.mod, Python requirements.txt)
+- Code review for OWASP Top 10: injection, XSS, SSRF, auth bypass, CSRF, crypto weaknesses
+- Docker security hardening (CIS Docker benchmark)
+- Threat modeling of all HTTP attack surfaces
+
+### Findings
+
+| ID | Severity | Description | Status |
+|----|----------|-------------|--------|
+| SEC-SWEEP-001 | Medium | OAuth callback endpoint (`/auth/{provider}/callback`) lacked rate limiting — allows DoS via log flooding and state-map probing | **Fixed** |
+| SEC-SWEEP-002 | Low | Application containers (smackerel-core, smackerel-ml, nats) did not drop Linux capabilities | **Fixed** |
+
+### Verified Non-Findings (Negative Evidence)
+
+| Category | Finding | Evidence |
+|----------|---------|----------|
+| SQL Injection | None — all queries use pgx parameterized `$N` placeholders | Grep for `Sprintf.*WHERE/SELECT/INSERT` returns 0 matches |
+| XSS | None — Go `html/template` auto-escapes, `html.EscapeString` used in dynamic HTML | All templates use `html/template`; `safeURL` only allows http/https |
+| SSRF | None — ML sidecar and Ollama URLs are from config, not user input | `MLSidecarURL` and `OllamaURL` from env vars only |
+| Command Injection | None — no `os/exec` or `subprocess` usage | Zero matches for exec.Command or subprocess |
+| Path Traversal | Already mitigated — bookmarks/twitter connectors validate paths with `filepath.Abs`, `EvalSymlinks`, symlink guards, and boundary checks | Tests cover symlink, traversal, and TOCTOU scenarios |
+| Auth Bypass | None — Bearer + cookie auth with constant-time compare, dev passthrough only when token empty | `subtle.ConstantTimeCompare` and `hmac.compare_digest` |
+| CSRF | Mitigated — crypto/rand state token, 100-entry cap, 10m TTL | `generateState()` uses `crypto/rand` |
+| Security Headers | All OWASP-recommended headers present — CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy | `securityHeadersMiddleware` sets all 5 |
+| Docker Root | Core + ML run as non-root (`USER smackerel`), `no-new-privileges` on all 5 services | Dockerfiles + docker-compose.yml verified |
+| Secrets in CLI | NATS auth token not in CLI args — uses config file mount | `--config /etc/nats/nats.conf` verified |
+| Crypto | AES-256-GCM with random nonce, SHA-256 key derivation, fail-closed decrypt | `internal/auth/store.go` verified |
+
+### Fixes Implemented
+
+**SEC-SWEEP-001: OAuth callback rate limiting**
+- File: [internal/api/router.go](internal/api/router.go) — moved callback into rate-limited group (10 req/min/IP)
+- Test: [internal/api/router_test.go](internal/api/router_test.go) — `TestOAuthCallback_RateLimited` replaces `TestOAuthCallback_NotRateLimited`
+- Rationale: Defense in depth against callback abuse; CSRF state validation provides primary protection, rate limiting prevents log flooding
+
+**SEC-SWEEP-002: Docker container capability dropping**
+- File: [docker-compose.yml](docker-compose.yml) — added `cap_drop: [ALL]` to smackerel-core, smackerel-ml, nats
+- Test: [internal/config/docker_security_test.go](internal/config/docker_security_test.go) — `TestDockerCompose_CapDropAll`
+- Rationale: CIS Docker benchmark recommendation; limits blast radius on container compromise. Postgres and Ollama excluded (postgres needs init capabilities, Ollama needs GPU access)
 
 All 3 test coverage gaps identified in the 2026-04-10 reconciliation have been closed:
 

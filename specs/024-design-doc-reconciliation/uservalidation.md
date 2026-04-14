@@ -13,7 +13,7 @@
 - [x] §19 phases have delivery status markers
 - [x] §21.3 competitive matrix distinguishes implemented (✅) from planned (🔜)
 - [x] Pre-meeting briefs and weekly synthesis marked as planned, not implemented
-- [x] §22 accounts for all 14 committed connectors
+- [x] §22 accounts for all 15 committed connectors (including guesthost, added in hardening)
 - [x] §22 marks Notion, Obsidian, Slack as planned
 - [x] §24 glossary and migration table updated from OpenClaw terminology
 - [x] Zero code files modified (docs-only)

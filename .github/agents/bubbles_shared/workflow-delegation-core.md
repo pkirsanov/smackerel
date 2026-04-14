@@ -12,9 +12,9 @@ Use this module to keep routing responsibilities separated across the Bubbles fr
 
 Classify incoming workflow requests into exactly one of these buckets before Phase 0:
 
-1. `STRUCTURED` — explicit `mode:` and/or concrete spec targets are present. `bubbles.workflow` may continue directly.
+1. `STRUCTURED` — explicit `mode:` keyword is present WITH concrete spec targets. `bubbles.workflow` may continue directly. **NOTE:** If spec targets are present but NO explicit `mode:` keyword exists, this is NOT structured — classify as `VAGUE` and delegate to `bubbles.super` for intent resolution. The presence of spec targets alone does not make a request structured.
 2. `CONTINUATION` — continuation envelopes, run-state, recap/status/handoff packets, or explicit continuation language tied to active workflow state are present. Preserve the active workflow mode when possible.
-3. `VAGUE` — plain-English goal with no structured mode/target. Delegate to `bubbles.super` and consume a `RESOLUTION-ENVELOPE`.
+3. `VAGUE` — plain-English goal with no explicit `mode:` keyword, OR spec targets present without `mode:`. Delegate to `bubbles.super` and consume a `RESOLUTION-ENVELOPE`. This includes requests with planning-intent language ("plan", "design", "scope", "create specs", "create bugs", "planning cycle") even when the user names specific specs or features — the intent still needs NL-to-mode translation.
 4. `CONTINUE` — generic keep-going language with no recoverable active workflow target. Delegate to `bubbles.iterate` and consume a `WORK-ENVELOPE`.
 5. `FRAMEWORK` — framework operations such as doctor, hooks, upgrade, status, metrics, lessons, gates, or install. Delegate to `bubbles.super` and consume a `FRAMEWORK-ENVELOPE`.
 
@@ -42,8 +42,9 @@ Classify incoming workflow requests into exactly one of these buckets before Pha
 
 Use this summary before Phase 0 when no explicit `mode:` is present:
 
-1. `STRUCTURED` input stays inside `bubbles.workflow`.
-2. `VAGUE` input delegates to `bubbles.super` and consumes only a `RESOLUTION-ENVELOPE`.
+1. `STRUCTURED` input (explicit `mode:` + spec targets) stays inside `bubbles.workflow`.
+2. `VAGUE` input (no `mode:` keyword, OR natural-language intent even with spec targets) delegates to `bubbles.super` and consumes only a `RESOLUTION-ENVELOPE`.
 3. `CONTINUE` input with no recoverable active workflow delegates to `bubbles.iterate` and consumes only a `WORK-ENVELOPE`.
 4. `FRAMEWORK` input delegates to `bubbles.super` and consumes only a `FRAMEWORK-ENVELOPE`.
 5. After `bubbles.super` or `bubbles.iterate` resolves the request, `bubbles.workflow` MUST NOT run a second natural-language inference pass.
+6. **The `STRUCTURED` classification requires the literal keyword `mode:` in the input.** Spec targets, feature names, or natural-language descriptions — even when they reference specific specs — are NOT sufficient for `STRUCTURED` classification without `mode:`.

@@ -14,14 +14,14 @@
 ### Validation Checkpoints
 
 - After Scope 1: `grep -n "OpenClaw" docs/smackerel.md | grep -v "SUPERSEDED" | grep -v "## 4\."` returns zero hits; `grep -n "SQLite\|LanceDB" docs/smackerel.md | grep -v "SUPERSEDED"` returns zero hits; §14 DDL uses PostgreSQL types
-- After Scope 2: All ✅ in §21.3 correspond to committed code; 14 connectors represented in §22; §19 references Docker Compose + PostgreSQL; `git diff --stat` shows only `docs/smackerel.md` changed
+- After Scope 2: All ✅ in §21.3 correspond to committed code; 15 connectors represented in §22; §19 references Docker Compose + PostgreSQL; `git diff --stat` shows only `docs/smackerel.md` changed
 
 ## Scope Summary
 
 | # | Name | Surfaces | Key Tests | DoD Summary | Status |
 |---|------|----------|-----------|-------------|--------|
 | 1 | OpenClaw + Storage Reconciliation | docs/smackerel.md (§2,§4,§6,§7,§8,§14,§17,§18) | Grep validation, manual review | Zero unmarked OpenClaw/SQLite/LanceDB refs | Done |
-| 2 | Competitive Matrix + Phased Plan + Connectors | docs/smackerel.md (§19,§21.3,§22,§24) | Grep validation, connector count, git diff | Honest claims, accurate plan, 14 connectors listed | Done |
+| 2 | Competitive Matrix + Phased Plan + Connectors | docs/smackerel.md (§19,§21.3,§22,§24) | Grep validation, connector count, git diff | Honest claims, accurate plan, 15 connectors listed | Done |
 
 ---
 
@@ -92,8 +92,8 @@ Scenario: SCN-024-03 System architecture section is verified unchanged
 - [x] §8 storage diagram shows PostgreSQL + pgvector, not SQLite + LanceDB
 - [x] §14 all 6 table DDLs use PostgreSQL syntax (JSONB, TIMESTAMPTZ, BOOLEAN, vector)
 - [x] §17, §18 security/privacy references updated from SQLite/OpenClaw to PostgreSQL/Docker
-- [x] `grep -n "OpenClaw" docs/smackerel.md | grep -v "SUPERSEDED" | grep -v "## 4\."` returns zero outside §4 body
-- [x] `grep -n "SQLite\|LanceDB" docs/smackerel.md | grep -v "SUPERSEDED"` returns zero (except Apple Notes factual ref)
+- [x] `awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}' docs/smackerel.md` returns only the TOC link (line 23)
+- [x] `awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md` returns only Apple Notes factual ref
 - [x] §3 mermaid diagrams unchanged (verified no regressions)
 - [x] No code files modified — only `docs/smackerel.md` edited by this spec
 
@@ -123,7 +123,7 @@ Scenario: SCN-024-05 Phased plan reflects actual technology and delivery state
 Scenario: SCN-024-06 Connector ecosystem accurately lists all 14 connectors
   Given §22 lists connectors by category
   When the reconciliation is applied
-  Then all 14 committed connectors are represented (alerts, bookmarks, browser, caldav, discord, hospitable, imap, keep, maps, markets, rss, twitter, weather, youtube)
+  Then all 15 committed connectors are represented (alerts, bookmarks, browser, caldav, discord, guesthost, hospitable, imap, keep, maps, markets, rss, twitter, weather, youtube)
   And connectors not implemented (Notion, Obsidian, Slack) are marked as planned
   And email connectors note IMAP-based implementation
 ```
@@ -160,7 +160,7 @@ Scenario: SCN-024-06 Connector ecosystem accurately lists all 14 connectors
 - [x] Weekly synthesis marked as 🔜 (not ✅)
 - [x] §19 Gantt chart and Phase 1 table reference Docker Compose + PostgreSQL + pgvector
 - [x] §19 phases have delivery status markers (✅ Delivered / 🔜 In Progress)
-- [x] §22 accounts for all 14 committed connectors by name
+- [x] §22 accounts for all 15 committed connectors by name
 - [x] §22 marks Notion, Obsidian, Slack, Outlook/O365 SDK as planned
 - [x] §22 notes IMAP-based email implementation (not separate Gmail/Outlook connectors)
 - [x] §24 glossary references Smackerel Core, Ingestion Layer, Synthesis Engine (not OpenClaw agents)

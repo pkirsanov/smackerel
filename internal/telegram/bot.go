@@ -167,9 +167,14 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	chatID := msg.Chat.ID
 
 	// Check allowlist
-	if len(b.allowedChats) > 0 && !b.allowedChats[chatID] {
-		slog.Debug("ignoring unauthorized chat", "chat_id", chatID)
-		return // Silently ignore
+	if len(b.allowedChats) > 0 {
+		if !b.allowedChats[chatID] {
+			slog.Warn("rejected unauthorized chat", "chat_id", chatID)
+			return // Silently ignore (no reply to unauthorized user)
+		}
+	} else {
+		// Open-access mode — log every distinct chat for operator awareness
+		slog.Warn("open-access mode: processing message from unvalidated chat — set TELEGRAM_CHAT_IDS to restrict", "chat_id", chatID)
 	}
 
 	text := msg.Text
@@ -640,13 +645,17 @@ func (b *Bot) SendDigest(text string) {
 // the first send error encountered. This allows callers (e.g. the alert delivery
 // sweep) to detect delivery failures and keep alerts as "pending" for retry.
 func (b *Bot) SendAlertMessage(text string) error {
+	var firstErr error
 	for chatID := range b.allowedChats {
 		msg := tgbotapi.NewMessage(chatID, text)
 		if _, err := b.api.Send(msg); err != nil {
-			return fmt.Errorf("telegram send to chat %d: %w", chatID, err)
+			slog.Error("telegram alert send failed", "chat_id", chatID, "error", err)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("telegram send to chat %d: %w", chatID, err)
+			}
 		}
 	}
-	return nil
+	return firstErr
 }
 
 // handleDone flushes all open assembly buffers for the current chat.

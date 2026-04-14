@@ -53,7 +53,19 @@ const (
 	maxSyncArtifacts = 50000
 	// maxReactionEmojiLen caps stored reaction emoji string length.
 	maxReactionEmojiLen = 100
+	// maxMetadataStringLen caps general metadata string fields (usernames,
+	// server names, channel names, thread names) to prevent resource exhaustion.
+	maxMetadataStringLen = 256
+	// maxTotalChannels caps the total number of individual channel IDs across
+	// all monitored server entries to prevent resource exhaustion.
+	maxTotalChannels = 1000
+	// maxSafeReactionTotal is the overflow-safe cap for cumulative reaction counts.
+	// Prevents int wrap-around from causing tier misclassification.
+	maxSafeReactionTotal = 1<<31 - 1 // 2147483647 — safe on both 32-bit and 64-bit
 )
+
+// Compile-time interface check.
+var _ connector.Connector = (*Connector)(nil)
 
 // Connector implements the Discord connector using REST API for message history.
 type Connector struct {
@@ -64,6 +76,12 @@ type Connector struct {
 	config  DiscordConfig
 	cursors ChannelCursors
 	limiter *RateLimiter
+	closed  bool // set by Close to prevent Sync on a closed connector
+
+	// Sync metadata for health reporting
+	lastSyncTime   time.Time
+	lastSyncCount  int
+	lastSyncErrors int
 }
 
 // DiscordConfig holds parsed Discord-specific configuration.
@@ -139,25 +157,36 @@ func isSafeURL(rawURL string) bool {
 	return true
 }
 
+// setHealth sets the connector's health status under lock.
+func (c *Connector) setHealth(status connector.HealthStatus) {
+	c.mu.Lock()
+	c.health = status
+	c.mu.Unlock()
+}
+
 func (c *Connector) ID() string { return c.id }
 
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
 	cfg, err := parseDiscordConfig(config)
 	if err != nil {
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("parse discord config: %w", err)
 	}
 
 	if cfg.BotToken == "" {
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("discord bot_token is required")
 	}
 
 	// Basic bot token format validation: minimum length and no control characters.
 	// Prevents obviously invalid tokens and control-char injection via credentials.
 	if len(cfg.BotToken) < minBotTokenLen {
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("discord bot_token is too short (minimum %d characters)", minBotTokenLen)
 	}
 	for _, r := range cfg.BotToken {
 		if r < 0x20 || r == 0x7f {
+			c.setHealth(connector.HealthError)
 			return fmt.Errorf("discord bot_token contains invalid control characters")
 		}
 	}
@@ -165,11 +194,15 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	c.mu.Lock()
 	c.config = cfg
 
+	// Clear stale cursors from previous Connect to prevent cursor scope
+	// drift when re-connecting with a different channel configuration.
+	c.cursors = make(ChannelCursors)
+
 	// Restore cursors from source config, validating snowflake IDs
 	if cursorJSON, ok := config.SourceConfig["cursors"].(string); ok && cursorJSON != "" {
 		var restored ChannelCursors
 		if err := json.Unmarshal([]byte(cursorJSON), &restored); err != nil {
-			slog.Debug("failed to unmarshal discord cursors from config", "connector_id", c.id, "error", err)
+			slog.Warn("failed to unmarshal discord cursors from config, starting without stored cursors", "connector_id", c.id, "error", err)
 		} else {
 			for k, v := range restored {
 				if !isValidSnowflake(k) {
@@ -185,10 +218,26 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		}
 	}
 
+	c.closed = false
 	c.health = connector.HealthHealthy
 	c.mu.Unlock()
 	slog.Info("discord connector connected", "id", c.id, "channels", len(cfg.MonitoredChannels))
 	return nil
+}
+
+// awaitRateLimit blocks until the rate limiter allows a request to the given route,
+// or returns an error if the context is cancelled during the wait.
+func (c *Connector) awaitRateLimit(ctx context.Context, route string) error {
+	wait := c.limiter.ShouldWait(route)
+	if wait <= 0 {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(wait):
+		return nil
+	}
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
@@ -197,11 +246,22 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	defer c.syncMu.Unlock()
 
 	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil, "", fmt.Errorf("discord connector is closed")
+	}
 	c.health = connector.HealthSyncing
+	// Snapshot config under lock to prevent data race with concurrent Connect()
+	cfgSnapshot := c.config
 	c.mu.Unlock()
+	var syncErrors []string
 	defer func() {
 		c.mu.Lock()
-		c.health = connector.HealthHealthy
+		if len(syncErrors) > 0 {
+			c.health = connector.HealthDegraded
+		} else {
+			c.health = connector.HealthHealthy
+		}
 		c.mu.Unlock()
 	}()
 
@@ -215,7 +275,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// Build set of configured channel IDs for cursor scope enforcement
 	configuredChannels := make(map[string]struct{})
-	for _, chCfg := range c.config.MonitoredChannels {
+	for _, chCfg := range cfgSnapshot.MonitoredChannels {
 		for _, chID := range chCfg.ChannelIDs {
 			configuredChannels[chID] = struct{}{}
 		}
@@ -225,7 +285,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	if cursor != "" {
 		var parsedCursors ChannelCursors
 		if err := json.Unmarshal([]byte(cursor), &parsedCursors); err != nil {
-			slog.Debug("failed to unmarshal discord sync cursor", "connector_id", c.id, "error", err)
+			slog.Warn("failed to unmarshal discord sync cursor, falling back to stored cursors", "connector_id", c.id, "error", err)
 		} else {
 			// Validate cursor keys are valid snowflake IDs and values are valid snowflakes
 			for k, v := range parsedCursors {
@@ -248,12 +308,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	var allArtifacts []connector.RawArtifact
-	var syncErrors []string
 	seen := make(map[string]struct{})
 
 	// Iterate monitored channels and fetch messages, pins, and threads per channel
 	capReached := false
-	for _, chCfg := range c.config.MonitoredChannels {
+	for _, chCfg := range cfgSnapshot.MonitoredChannels {
 		if capReached {
 			break
 		}
@@ -276,25 +335,21 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			}
 
 			// Respect rate limiter before each channel fetch
-			if wait := c.limiter.ShouldWait("channels/" + chID + "/messages"); wait > 0 {
-				select {
-				case <-ctx.Done():
-					cursorBytes, _ := json.Marshal(localCursors)
-					return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled during rate wait: %w", ctx.Err())
-				case <-time.After(wait):
-				}
+			if err := c.awaitRateLimit(ctx, "channels/"+chID+"/messages"); err != nil {
+				cursorBytes, _ := json.Marshal(localCursors)
+				return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled during rate wait: %w", err)
 			}
 
 			// Fetch messages since cursor
 			afterID := localCursors[chID]
-			msgs, err := fetchChannelMessages(ctx, c.config.BotToken, chID, afterID, c.config.BackfillLimit)
+			msgs, err := fetchChannelMessages(ctx, cfgSnapshot.BotToken, chID, afterID, cfgSnapshot.BackfillLimit)
 			if err != nil {
 				slog.Warn("discord channel fetch failed", "channel", chID, "error", err)
 				syncErrors = append(syncErrors, fmt.Sprintf("channel %s: %v", chID, err))
 			}
 			for _, msg := range msgs {
 				seen[msg.ID] = struct{}{}
-				artifact := normalizeMessage(msg, chCfg.ProcessingTier, c.config.CaptureCommands)
+				artifact := normalizeMessage(msg, chCfg.ProcessingTier, cfgSnapshot.CaptureCommands)
 				allArtifacts = append(allArtifacts, artifact)
 				if msg.ID > localCursors[chID] {
 					localCursors[chID] = msg.ID
@@ -302,8 +357,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			}
 
 			// Fetch pinned messages (deduplicate against already-seen messages)
-			if c.config.IncludePins {
-				pins, err := fetchPinnedMessages(ctx, c.config.BotToken, chID)
+			if cfgSnapshot.IncludePins {
+				// Respect rate limiter before pin fetch (C3 chaos fix)
+				if err := c.awaitRateLimit(ctx, "channels/"+chID+"/pins"); err != nil {
+					cursorBytes, _ := json.Marshal(localCursors)
+					return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled during rate wait: %w", err)
+				}
+				pins, err := fetchPinnedMessages(ctx, cfgSnapshot.BotToken, chID)
 				if err != nil {
 					slog.Warn("discord pinned fetch failed", "channel", chID, "error", err)
 					syncErrors = append(syncErrors, fmt.Sprintf("pins %s: %v", chID, err))
@@ -314,14 +374,19 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					}
 					seen[pin.ID] = struct{}{}
 					pin.Pinned = true
-					artifact := normalizeMessage(pin, chCfg.ProcessingTier, c.config.CaptureCommands)
+					artifact := normalizeMessage(pin, chCfg.ProcessingTier, cfgSnapshot.CaptureCommands)
 					allArtifacts = append(allArtifacts, artifact)
 				}
 			}
 
 			// Fetch thread messages (deduplicate against already-seen messages)
-			if c.config.IncludeThreads {
-				threads, err := fetchActiveThreads(ctx, c.config.BotToken, chID)
+			if cfgSnapshot.IncludeThreads {
+				// Respect rate limiter before thread fetch (C3 chaos fix)
+				if err := c.awaitRateLimit(ctx, "channels/"+chID+"/threads"); err != nil {
+					cursorBytes, _ := json.Marshal(localCursors)
+					return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled during rate wait: %w", err)
+				}
+				threads, err := fetchActiveThreads(ctx, cfgSnapshot.BotToken, chID)
 				if err != nil {
 					slog.Warn("discord thread fetch failed", "channel", chID, "error", err)
 					syncErrors = append(syncErrors, fmt.Sprintf("threads %s: %v", chID, err))
@@ -331,7 +396,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 						continue
 					}
 					seen[thread.ID] = struct{}{}
-					artifact := normalizeMessage(thread, chCfg.ProcessingTier, c.config.CaptureCommands)
+					artifact := normalizeMessage(thread, chCfg.ProcessingTier, cfgSnapshot.CaptureCommands)
 					allArtifacts = append(allArtifacts, artifact)
 				}
 			}
@@ -352,6 +417,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		return allArtifacts, "", fmt.Errorf("cursor marshal: %w", err)
 	}
 
+	// Record sync metadata for health reporting
+	c.mu.Lock()
+	c.lastSyncTime = time.Now()
+	c.lastSyncCount = len(allArtifacts)
+	c.lastSyncErrors = len(syncErrors)
+	c.mu.Unlock()
+
 	if len(syncErrors) > 0 {
 		return allArtifacts, string(cursorBytes), fmt.Errorf("discord sync partial failure (%d errors): %s", len(syncErrors), strings.Join(syncErrors, "; "))
 	}
@@ -367,6 +439,7 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 func (c *Connector) Close() error {
 	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.closed = true
 	c.mu.Unlock()
 	slog.Info("discord connector closed", "id", c.id)
 	return nil
@@ -473,22 +546,36 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 	sanitizedContent := sanitizeControlChars(msg.Content)
 	sanitizedContent = stringutil.TruncateUTF8(sanitizedContent, maxRawContentLen)
 
+	// Validate message ID; if invalid, use empty SourceRef and skip URL construction.
+	validMsgID := isValidSnowflake(msg.ID)
+	sourceRef := msg.ID
+	if !validMsgID {
+		sourceRef = ""
+	}
+
 	metadata := map[string]interface{}{
-		"message_id":      msg.ID,
-		"channel_id":      msg.ChannelID,
-		"server_id":       msg.GuildID,
-		"server_name":     sanitizeControlChars(msg.ServerName),
-		"channel_name":    sanitizeControlChars(msg.ChannelName),
 		"pinned":          msg.Pinned,
 		"has_links":       hasLinks(msg),
 		"reaction_count":  totalReactions(msg.Reactions),
 		"processing_tier": tier,
 	}
+	// Only store IDs in metadata if they are valid snowflakes
+	if validMsgID {
+		metadata["message_id"] = msg.ID
+	}
+	if isValidSnowflake(msg.ChannelID) {
+		metadata["channel_id"] = msg.ChannelID
+	}
+	if isValidSnowflake(msg.GuildID) {
+		metadata["server_id"] = msg.GuildID
+	}
+	metadata["server_name"] = stringutil.TruncateUTF8(sanitizeControlChars(msg.ServerName), maxMetadataStringLen)
+	metadata["channel_name"] = stringutil.TruncateUTF8(sanitizeControlChars(msg.ChannelName), maxMetadataStringLen)
 	// Only store author_id if it is a valid snowflake
 	if isValidSnowflake(msg.Author.ID) {
 		metadata["author_id"] = msg.Author.ID
 	}
-	metadata["author_name"] = sanitizeControlChars(msg.Author.Username)
+	metadata["author_name"] = stringutil.TruncateUTF8(sanitizeControlChars(msg.Author.Username), maxMetadataStringLen)
 
 	// Sanitize and cap embeds
 	if len(msg.Embeds) > 0 {
@@ -514,6 +601,10 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 			a.URL = sanitizeEmbedURL(a.URL)
 			// Strip to basename to prevent path traversal in metadata
 			a.Filename = sanitizeControlChars(filepath.Base(a.Filename))
+			// Clamp negative sizes to 0
+			if a.Size < 0 {
+				a.Size = 0
+			}
 			safe = append(safe, a)
 		}
 		metadata["attachments"] = safe
@@ -526,9 +617,13 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 		}
 		safeReactions := make([]Reaction, len(r))
 		for i, rx := range r {
+			count := rx.Count
+			if count < 0 {
+				count = 0
+			}
 			safeReactions[i] = Reaction{
 				Emoji: stringutil.TruncateUTF8(sanitizeControlChars(rx.Emoji), maxReactionEmojiLen),
-				Count: rx.Count,
+				Count: count,
 			}
 		}
 		metadata["reactions"] = safeReactions
@@ -549,7 +644,7 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 	// Validate thread ID is a snowflake before storing
 	if msg.ThreadID != "" && isValidSnowflake(msg.ThreadID) {
 		metadata["thread_id"] = msg.ThreadID
-		metadata["thread_name"] = sanitizeControlChars(msg.ThreadName)
+		metadata["thread_name"] = stringutil.TruncateUTF8(sanitizeControlChars(msg.ThreadName), maxMetadataStringLen)
 	}
 	// Validate reply reference ID is a snowflake before storing
 	if msg.MessageReference != nil && isValidSnowflake(msg.MessageReference.MessageID) {
@@ -558,13 +653,13 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 
 	// Construct URL only from validated snowflake components to prevent injection
 	var artifactURL string
-	if isValidSnowflake(msg.GuildID) && isValidSnowflake(msg.ChannelID) && isValidSnowflake(msg.ID) {
+	if validMsgID && isValidSnowflake(msg.GuildID) && isValidSnowflake(msg.ChannelID) {
 		artifactURL = fmt.Sprintf("https://discord.com/channels/%s/%s/%s", msg.GuildID, msg.ChannelID, msg.ID)
 	}
 
 	return connector.RawArtifact{
 		SourceID:    "discord",
-		SourceRef:   msg.ID,
+		SourceRef:   sourceRef,
 		ContentType: contentType,
 		Title:       buildTitle(msg),
 		RawContent:  sanitizedContent,
@@ -641,7 +736,14 @@ func hasLinks(msg DiscordMessage) bool {
 func totalReactions(reactions []Reaction) int {
 	total := 0
 	for _, r := range reactions {
-		total += r.Count
+		if r.Count > 0 {
+			// Overflow-safe addition: cap at maxInt to prevent wrap-around
+			// that could cause tier misclassification (C2 chaos fix).
+			if total > maxSafeReactionTotal-r.Count {
+				return maxSafeReactionTotal
+			}
+			total += r.Count
+		}
 	}
 	return total
 }
@@ -820,6 +922,15 @@ func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error)
 	}
 	if cfg.BackfillLimit > maxBackfillLimit {
 		return DiscordConfig{}, fmt.Errorf("backfill_limit must not exceed %d, got %d", maxBackfillLimit, cfg.BackfillLimit)
+	}
+
+	// Enforce total channel count across all server entries
+	totalChannels := 0
+	for _, ch := range cfg.MonitoredChannels {
+		totalChannels += len(ch.ChannelIDs)
+	}
+	if totalChannels > maxTotalChannels {
+		return DiscordConfig{}, fmt.Errorf("total channel_ids across all servers exceeds maximum of %d, got %d", maxTotalChannels, totalChannels)
 	}
 
 	return cfg, nil

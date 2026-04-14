@@ -20,6 +20,10 @@ _session_authenticated_at: float = 0.0
 # gkeepapi sessions can expire server-side after extended inactivity.
 SESSION_MAX_AGE_SECONDS = 50 * 60
 
+# Maximum notes to fetch per sync cycle to prevent memory exhaustion
+# on accounts with very large note counts.
+MAX_SYNC_NOTES = 10_000
+
 
 def _is_session_expired() -> bool:
     """Check if the cached session has exceeded its max age."""
@@ -173,6 +177,12 @@ async def handle_sync_request(data: dict) -> dict:
                         continue
 
                 notes.append(serialized)
+                if len(notes) >= MAX_SYNC_NOTES:
+                    logger.warning(
+                        "gkeepapi sync hit note limit (%d), remaining notes deferred to next cycle",
+                        MAX_SYNC_NOTES,
+                    )
+                    break
 
             # Determine new cursor from latest modified time
             new_cursor = cursor

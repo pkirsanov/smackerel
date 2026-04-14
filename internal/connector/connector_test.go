@@ -125,6 +125,26 @@ func TestRegistry_List(t *testing.T) {
 	}
 }
 
+// Improve trigger I-001: List returns deterministic sorted order.
+func TestRegistry_List_Sorted(t *testing.T) {
+	reg := NewRegistry()
+	// Register in reverse to ensure sort is actually applied
+	for _, name := range []string{"zebra", "alpha", "mango", "beta"} {
+		reg.Register(newTestConnector(name))
+	}
+
+	ids := reg.List()
+	expected := []string{"alpha", "beta", "mango", "zebra"}
+	if len(ids) != len(expected) {
+		t.Fatalf("expected %d IDs, got %d", len(expected), len(ids))
+	}
+	for i, id := range ids {
+		if id != expected[i] {
+			t.Errorf("ids[%d] = %q, want %q", i, id, expected[i])
+		}
+	}
+}
+
 func TestConnectorSync(t *testing.T) {
 	conn := newTestConnector("test")
 	conn.items = []RawArtifact{
@@ -536,4 +556,207 @@ func TestSupervisor_ParentContextCancelled_NoRestart(t *testing.T) {
 	}
 
 	sup.StopAll()
+}
+
+// Chaos regression: connector that always fails Sync() must eventually be disabled
+// by the sync error circuit breaker, not loop forever.
+func TestSupervisor_SyncErrorCircuitBreaker(t *testing.T) {
+	reg := NewRegistry()
+	errorCount := &atomic.Int32{}
+	conn := &testConnector{
+		id:     "error-loop",
+		health: HealthHealthy,
+		syncFn: func(_ context.Context, _ string) ([]RawArtifact, string, error) {
+			errorCount.Add(1)
+			return nil, "", errors.New("persistent auth failure")
+		},
+	}
+	reg.Register(conn)
+
+	sup := NewSupervisor(reg, nil)
+	sup.maxSyncErrors = 5
+	sup.backoffFactory = func() *Backoff {
+		return &Backoff{
+			BaseDelay:  time.Millisecond,
+			MaxDelay:   5 * time.Millisecond,
+			MaxRetries: 100, // high enough to not exhaust before circuit trips
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sup.StartConnector(ctx, "error-loop")
+
+	// Wait for the circuit breaker to trip
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for sync error circuit breaker to trip")
+		default:
+		}
+		sup.mu.Lock()
+		_, stillRunning := sup.running["error-loop"]
+		sup.mu.Unlock()
+		if !stillRunning {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	count := errorCount.Load()
+	if count < 5 {
+		t.Errorf("expected at least 5 sync errors before circuit breaker, got %d", count)
+	}
+
+	sup.StopAll()
+}
+
+// Chaos regression: cursor must survive in memory when state store is nil,
+// so successive sync cycles use the latest cursor rather than empty string.
+func TestSupervisor_InMemoryCursorFallback(t *testing.T) {
+	reg := NewRegistry()
+	cursorsSeen := make([]string, 0)
+	var mu sync.Mutex
+	syncCalls := &atomic.Int32{}
+
+	conn := &testConnector{
+		id:     "cursor-test",
+		health: HealthHealthy,
+		syncFn: func(_ context.Context, cursor string) ([]RawArtifact, string, error) {
+			call := syncCalls.Add(1)
+			mu.Lock()
+			cursorsSeen = append(cursorsSeen, cursor)
+			mu.Unlock()
+			if call >= 3 {
+				// After 3 syncs, block until cancelled to let test inspect
+				return nil, fmt.Sprintf("cursor-%d", call), nil
+			}
+			return []RawArtifact{{SourceID: "cursor-test", SourceRef: "ref"}}, fmt.Sprintf("cursor-%d", call), nil
+		},
+	}
+	reg.Register(conn)
+
+	// No state store — relies entirely on in-memory cursor fallback
+	sup := NewSupervisor(reg, nil)
+	sup.backoffFactory = func() *Backoff {
+		return &Backoff{BaseDelay: time.Millisecond, MaxDelay: time.Millisecond, MaxRetries: 5}
+	}
+	// Override sync interval to be very short
+	sup.SetConfig("cursor-test", ConnectorConfig{SyncSchedule: "1ms"})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sup.StartConnector(ctx, "cursor-test")
+
+	// Wait for at least 3 sync calls
+	deadline := time.After(3 * time.Second)
+	for {
+		if syncCalls.Load() >= 3 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for sync calls, got %d", syncCalls.Load())
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+
+	cancel()
+	time.Sleep(50 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// First call should have empty cursor (no state store, no previous sync)
+	if len(cursorsSeen) < 2 {
+		t.Fatalf("expected at least 2 cursor observations, got %d", len(cursorsSeen))
+	}
+	if cursorsSeen[0] != "" {
+		t.Errorf("first sync should have empty cursor, got %q", cursorsSeen[0])
+	}
+	// Second call should have the cursor returned from first sync
+	if cursorsSeen[1] != "cursor-1" {
+		t.Errorf("second sync should use in-memory cursor 'cursor-1', got %q", cursorsSeen[1])
+	}
+}
+
+// --- Hardening: H1 — ListConnectorHealth does not hold lock during Health() calls ---
+
+// slowHealthConnector blocks in Health() for the configured duration.
+type slowHealthConnector struct {
+	id    string
+	delay time.Duration
+}
+
+func (c *slowHealthConnector) ID() string                                         { return c.id }
+func (c *slowHealthConnector) Connect(_ context.Context, _ ConnectorConfig) error { return nil }
+func (c *slowHealthConnector) Sync(_ context.Context, _ string) ([]RawArtifact, string, error) {
+	return nil, "", nil
+}
+func (c *slowHealthConnector) Health(_ context.Context) HealthStatus {
+	time.Sleep(c.delay)
+	return HealthHealthy
+}
+func (c *slowHealthConnector) Close() error { return nil }
+
+func TestRegistry_ListConnectorHealth_DoesNotBlockRegister(t *testing.T) {
+	reg := NewRegistry()
+	slow := &slowHealthConnector{id: "slow-health", delay: 200 * time.Millisecond}
+	reg.Register(slow)
+
+	done := make(chan struct{})
+	go func() {
+		reg.ListConnectorHealth(context.Background())
+		close(done)
+	}()
+
+	// While ListConnectorHealth is blocked in Health(), Register should succeed quickly
+	time.Sleep(20 * time.Millisecond)
+	start := time.Now()
+	err := reg.Register(newTestConnector("quick-register"))
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+	if elapsed > 100*time.Millisecond {
+		t.Errorf("Register took %v — should not be blocked by slow Health() call", elapsed)
+	}
+
+	<-done
+	reg.Unregister("slow-health")
+	reg.Unregister("quick-register")
+}
+
+// --- Hardening: H2 — Unregister recovers from Close() panic ---
+
+// panicCloseConnector panics in Close().
+type panicCloseConnector struct {
+	id string
+}
+
+func (c *panicCloseConnector) ID() string                                         { return c.id }
+func (c *panicCloseConnector) Connect(_ context.Context, _ ConnectorConfig) error { return nil }
+func (c *panicCloseConnector) Sync(_ context.Context, _ string) ([]RawArtifact, string, error) {
+	return nil, "", nil
+}
+func (c *panicCloseConnector) Health(_ context.Context) HealthStatus { return HealthHealthy }
+func (c *panicCloseConnector) Close() error                          { panic("Close() exploded") }
+
+func TestRegistry_Unregister_ClosePanicRecovery(t *testing.T) {
+	reg := NewRegistry()
+	pc := &panicCloseConnector{id: "panic-close"}
+	reg.Register(pc)
+
+	err := reg.Unregister("panic-close")
+	if err == nil {
+		t.Fatal("expected error from panicking Close()")
+	}
+	if reg.Count() != 0 {
+		t.Errorf("connector should still be removed from registry even when Close panics, got count=%d", reg.Count())
+	}
 }

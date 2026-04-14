@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -104,6 +105,13 @@ type TravelLocationProvider interface {
 	GetTravelLocations(ctx context.Context) ([]LocationConfig, error)
 }
 
+// drainBody discards remaining response data (up to 4KB) before closing the body.
+// This enables HTTP/1.1 keep-alive connection reuse when the body wasn't fully consumed.
+func drainBody(body io.ReadCloser) {
+	io.Copy(io.Discard, io.LimitReader(body, 4096))
+	body.Close()
+}
+
 // New creates a new Government Alerts connector.
 func New(id string) *Connector {
 	return &Connector{
@@ -176,8 +184,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		earthquakes, err := c.fetchUSGSEarthquakes(ctx, cfg.MinEarthquakeMag)
 		if err != nil {
 			slog.Warn("USGS earthquake fetch failed", "error", err)
-			syncErr = fmt.Errorf("usgs earthquake fetch: %w", err)
-			return allArtifacts, now.Format(time.RFC3339), syncErr
+			syncErr = errors.Join(syncErr, fmt.Errorf("usgs earthquake fetch: %w", err))
 		}
 		for _, eq := range earthquakes {
 			if ctx.Err() != nil {
@@ -214,8 +221,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			alerts, err := c.fetchNWSAlerts(ctx, loc.Latitude, loc.Longitude)
 			if err != nil {
 				slog.Warn("NWS weather alerts fetch failed", "error", err, "location", loc.Name)
-				syncErr = fmt.Errorf("nws weather fetch for %s: %w", loc.Name, err)
-				return allArtifacts, now.Format(time.RFC3339), syncErr
+				syncErr = errors.Join(syncErr, fmt.Errorf("nws weather fetch for %s: %w", loc.Name, err))
+				continue
 			}
 			for _, alert := range alerts {
 				if ctx.Err() != nil {
@@ -248,8 +255,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		tsunamis, err := c.fetchTsunamiAlerts(ctx)
 		if err != nil {
 			slog.Warn("NOAA tsunami fetch failed", "error", err)
-			syncErr = fmt.Errorf("noaa tsunami fetch: %w", err)
-			return allArtifacts, now.Format(time.RFC3339), syncErr
+			syncErr = errors.Join(syncErr, fmt.Errorf("noaa tsunami fetch: %w", err))
 		}
 		for _, t := range tsunamis {
 			if ctx.Err() != nil {
@@ -277,8 +283,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		volcanoes, err := c.fetchVolcanoAlerts(ctx)
 		if err != nil {
 			slog.Warn("USGS volcano fetch failed", "error", err)
-			syncErr = fmt.Errorf("usgs volcano fetch: %w", err)
-			return allArtifacts, now.Format(time.RFC3339), syncErr
+			syncErr = errors.Join(syncErr, fmt.Errorf("usgs volcano fetch: %w", err))
 		}
 		for _, v := range volcanoes {
 			if ctx.Err() != nil {
@@ -308,8 +313,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		wildfires, err := c.fetchWildfireAlerts(ctx)
 		if err != nil {
 			slog.Warn("InciWeb wildfire fetch failed", "error", err)
-			syncErr = fmt.Errorf("inciweb wildfire fetch: %w", err)
-			return allArtifacts, now.Format(time.RFC3339), syncErr
+			syncErr = errors.Join(syncErr, fmt.Errorf("inciweb wildfire fetch: %w", err))
 		}
 		for _, w := range wildfires {
 			if ctx.Err() != nil {
@@ -340,8 +344,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			observations, err := c.fetchAirNowAQI(ctx, loc.Latitude, loc.Longitude, cfg.AirNowAPIKey)
 			if err != nil {
 				slog.Warn("AirNow AQI fetch failed", "error", err, "location", loc.Name)
-				syncErr = fmt.Errorf("airnow fetch for %s: %w", loc.Name, err)
-				return allArtifacts, now.Format(time.RFC3339), syncErr
+				syncErr = errors.Join(syncErr, fmt.Errorf("airnow fetch for %s: %w", loc.Name, err))
+				continue
 			}
 			for _, obs := range observations {
 				if ctx.Err() != nil {
@@ -372,8 +376,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		disasters, err := c.fetchGDACSAlerts(ctx)
 		if err != nil {
 			slog.Warn("GDACS fetch failed", "error", err)
-			syncErr = fmt.Errorf("gdacs fetch: %w", err)
-			return allArtifacts, now.Format(time.RFC3339), syncErr
+			syncErr = errors.Join(syncErr, fmt.Errorf("gdacs fetch: %w", err))
 		}
 		for _, d := range disasters {
 			if ctx.Err() != nil {
@@ -394,7 +397,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 	}
 
-	return allArtifacts, now.Format(time.RFC3339), nil
+	return allArtifacts, now.Format(time.RFC3339), syncErr
 }
 
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
@@ -442,7 +445,7 @@ func (c *Connector) fetchUSGSEarthquakes(ctx context.Context, minMag float64) ([
 	if err != nil {
 		return nil, fmt.Errorf("USGS request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("USGS returned status %d", resp.StatusCode)
@@ -594,6 +597,25 @@ func safeEventPageURL(id string) string {
 	return "https://earthquake.usgs.gov/earthquakes/eventpage/" + url.PathEscape(id)
 }
 
+// sanitizeExternalURL validates that a URL from an external feed uses a safe scheme (http/https).
+// Returns the URL unchanged if safe, or empty string if the scheme is missing or dangerous
+// (e.g. javascript:, data:, vbscript:). This prevents XSS/phishing when URLs are rendered in a UI.
+func sanitizeExternalURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme == "http" || scheme == "https" {
+		return rawURL
+	}
+	return ""
+}
+
 func classifyEarthquakeSeverity(magnitude, distanceKm float64) string {
 	switch {
 	case magnitude >= 7.0:
@@ -741,7 +763,7 @@ func (c *Connector) fetchNWSAlerts(ctx context.Context, lat, lon float64) ([]NWS
 	if err != nil {
 		return nil, fmt.Errorf("NWS request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("NWS returned status %d", resp.StatusCode)
@@ -937,7 +959,7 @@ func (c *Connector) fetchTsunamiAlerts(ctx context.Context) ([]TsunamiAlert, err
 	if err != nil {
 		return nil, fmt.Errorf("tsunami request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("tsunami.gov returned status %d", resp.StatusCode)
@@ -962,7 +984,7 @@ func (c *Connector) fetchTsunamiAlerts(ctx context.Context) ([]TsunamiAlert, err
 			ID:       sanitizedID,
 			Title:    sanitizeStringField(entry.Title),
 			Summary:  sanitizeStringField(entry.Summary),
-			Link:     sanitizeStringField(entry.Link.Href),
+			Link:     sanitizeExternalURL(sanitizeStringField(entry.Link.Href)),
 			Severity: classifyTsunamiSeverity(entry.Title),
 		}
 
@@ -1048,7 +1070,7 @@ func (c *Connector) fetchVolcanoAlerts(ctx context.Context) ([]VolcanoAlert, err
 	if err != nil {
 		return nil, fmt.Errorf("volcano request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("volcanoes.usgs.gov returned status %d", resp.StatusCode)
@@ -1192,7 +1214,7 @@ func (c *Connector) fetchWildfireAlerts(ctx context.Context) ([]WildfireAlert, e
 	if err != nil {
 		return nil, fmt.Errorf("wildfire request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("inciweb returned status %d", resp.StatusCode)
@@ -1221,7 +1243,7 @@ func (c *Connector) fetchWildfireAlerts(ctx context.Context) ([]WildfireAlert, e
 			ID:          sanitizedID,
 			Title:       sanitizeStringField(item.Title),
 			Description: sanitizeStringField(item.Description),
-			Link:        sanitizeStringField(item.Link),
+			Link:        sanitizeExternalURL(sanitizeStringField(item.Link)),
 			Severity:    classifyWildfireSeverity(item.Title, item.Description),
 		}
 
@@ -1307,7 +1329,7 @@ func (c *Connector) fetchAirNowAQI(ctx context.Context, lat, lon float64, apiKey
 	if err != nil {
 		return nil, fmt.Errorf("AirNow request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("AirNow returned status %d", resp.StatusCode)
@@ -1454,7 +1476,7 @@ func (c *Connector) fetchGDACSAlerts(ctx context.Context) ([]GDACSAlert, error) 
 	if err != nil {
 		return nil, fmt.Errorf("GDACS request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer drainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GDACS returned status %d", resp.StatusCode)
@@ -1483,7 +1505,7 @@ func (c *Connector) fetchGDACSAlerts(ctx context.Context) ([]GDACSAlert, error) 
 			ID:          sanitizedID,
 			Title:       sanitizeStringField(item.Title),
 			Description: sanitizeStringField(item.Description),
-			Link:        sanitizeStringField(item.Link),
+			Link:        sanitizeExternalURL(sanitizeStringField(item.Link)),
 			GeoPoint:    sanitizeStringField(item.GeoPoint),
 			Severity:    classifyGDACSAlertLevel(item.AlertLevel),
 		}
@@ -1536,10 +1558,10 @@ func normalizeGDACSAlert(alert GDACSAlert) connector.RawArtifact {
 		metadata["geo_point"] = alert.GeoPoint
 		parts := strings.Fields(alert.GeoPoint)
 		if len(parts) == 2 {
-			if lat, err := strconv.ParseFloat(parts[0], 64); err == nil {
+			lat, latErr := strconv.ParseFloat(parts[0], 64)
+			lon, lonErr := strconv.ParseFloat(parts[1], 64)
+			if latErr == nil && lonErr == nil && isFiniteCoord(lat, lon) {
 				metadata["latitude"] = lat
-			}
-			if lon, err := strconv.ParseFloat(parts[1], 64); err == nil {
 				metadata["longitude"] = lon
 			}
 		}

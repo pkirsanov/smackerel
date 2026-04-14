@@ -168,6 +168,8 @@ func (rs *ResultSubscriber) Start(ctx context.Context) error {
 }
 
 // Stop signals the background goroutines to exit and waits for them to finish.
+// Uses a bounded timeout to prevent blocking shutdown indefinitely if a consumer
+// goroutine hangs despite the done channel being closed.
 func (rs *ResultSubscriber) Stop() {
 	rs.mu.Lock()
 	if !rs.started || rs.stopped {
@@ -177,27 +179,38 @@ func (rs *ResultSubscriber) Stop() {
 	rs.stopped = true
 	close(rs.done)
 	rs.mu.Unlock()
-	rs.wg.Wait()
+
+	done := make(chan struct{})
+	go func() {
+		rs.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		slog.Info("result subscriber stopped cleanly")
+	case <-time.After(10 * time.Second):
+		slog.Warn("result subscriber stop timed out waiting for consumer goroutines")
+	}
 }
 
 // handleMessage processes a single artifacts.processed message.
 func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg) {
-	// Check if message has exhausted MaxDeliver — route to dead-letter
-	if rs.isDeliveryExhausted(msg, DefaultMaxDeliver) {
-		if err := rs.publishToDeadLetter(ctx, msg, "artifacts.processed", "ARTIFACTS", "MaxDeliver exhausted"); err != nil {
-			// Dead-letter publish failed — Nak so NATS retries rather than silently losing the message.
-			slog.Error("dead-letter publish failed, Nak to preserve message", "error", err)
-			_ = msg.Nak()
-			return
-		}
+	var payload NATSProcessedPayload
+	if err := json.Unmarshal(msg.Data(), &payload); err != nil {
+		slog.Error("invalid artifacts.processed payload",
+			"error", err,
+			"raw_payload_truncated", truncateBytes(msg.Data(), 200),
+		)
+		// Ack to prevent infinite redelivery of malformed messages
 		_ = msg.Ack()
 		return
 	}
 
-	var payload NATSProcessedPayload
-	if err := json.Unmarshal(msg.Data(), &payload); err != nil {
-		slog.Error("invalid artifacts.processed payload", "error", err)
-		// Ack to prevent infinite redelivery of malformed messages
+	if err := ValidateProcessedPayload(&payload); err != nil {
+		slog.Error("artifacts.processed payload validation failed",
+			"error", err,
+			"artifact_id", payload.ArtifactID,
+		)
 		_ = msg.Ack()
 		return
 	}
@@ -207,7 +220,7 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 			"artifact_id", payload.ArtifactID,
 			"error", err,
 		)
-		_ = msg.Nak()
+		rs.handleDeliveryFailure(ctx, msg, "artifacts.processed", "ARTIFACTS", err)
 		return
 	}
 
@@ -217,20 +230,12 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 
 // handleDigestMessage processes a single digest.generated message.
 func (rs *ResultSubscriber) handleDigestMessage(ctx context.Context, msg jetstream.Msg) {
-	// Check if message has exhausted MaxDeliver — route to dead-letter
-	if rs.isDeliveryExhausted(msg, DefaultMaxDeliver) {
-		if err := rs.publishToDeadLetter(ctx, msg, "digest.generated", "DIGEST", "MaxDeliver exhausted"); err != nil {
-			slog.Error("dead-letter publish failed, Nak to preserve message", "error", err)
-			_ = msg.Nak()
-			return
-		}
-		_ = msg.Ack()
-		return
-	}
-
 	var payload NATSDigestGeneratedPayload
 	if err := json.Unmarshal(msg.Data(), &payload); err != nil {
-		slog.Error("invalid digest.generated payload", "error", err)
+		slog.Error("invalid digest.generated payload",
+			"error", err,
+			"raw_payload_truncated", truncateBytes(msg.Data(), 200),
+		)
 		_ = msg.Ack()
 		return
 	}
@@ -243,12 +248,33 @@ func (rs *ResultSubscriber) handleDigestMessage(ctx context.Context, msg jetstre
 
 	if err := rs.DigestGen.HandleDigestResult(ctx, payload.DigestDate, payload.Text, payload.WordCount, payload.ModelUsed); err != nil {
 		slog.Error("failed to handle digest result", "error", err)
-		_ = msg.Nak()
+		rs.handleDeliveryFailure(ctx, msg, "digest.generated", "DIGEST", err)
 		return
 	}
 
 	_ = msg.Ack()
 	slog.Debug("digest result stored")
+}
+
+// handleDeliveryFailure routes a failed message to dead-letter if delivery is exhausted,
+// otherwise Naks for retry. On dead-letter publish failure, Naks to preserve the message.
+func (rs *ResultSubscriber) handleDeliveryFailure(ctx context.Context, msg jetstream.Msg, subject, stream string, lastErr error) {
+	if rs.isDeliveryExhausted(msg, DefaultMaxDeliver) {
+		if dlErr := rs.publishToDeadLetter(ctx, msg, subject, stream, lastErr.Error()); dlErr != nil {
+			slog.Error("dead-letter publish failed, Nak to preserve message", "error", dlErr)
+			if nakErr := msg.Nak(); nakErr != nil {
+				slog.Error("Nak also failed after dead-letter failure — message may be lost",
+					"nak_error", nakErr,
+					"dead_letter_error", dlErr,
+					"subject", subject,
+				)
+			}
+			return
+		}
+		_ = msg.Ack()
+		return
+	}
+	_ = msg.Nak()
 }
 
 // isDeliveryExhausted checks if a message's delivery count has reached maxDeliver.
@@ -303,4 +329,13 @@ func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstre
 		"original_subject", originalSubject,
 	)
 	return nil
+}
+
+// truncateBytes returns a string representation of data, truncated to maxLen bytes.
+// Used for safe logging of potentially large or corrupt payloads.
+func truncateBytes(data []byte, maxLen int) string {
+	if len(data) <= maxLen {
+		return string(data)
+	}
+	return string(data[:maxLen]) + "...(truncated)"
 }

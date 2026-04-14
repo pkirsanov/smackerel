@@ -27,6 +27,7 @@ Retained workflow-agent anchors that must still be honored:
 - The orchestrator MUST enforce the Pre-Spec Advancement Gate (Gate G019) before advancing to the next spec.
 - The orchestrator MUST enforce Cross-Agent Output Verification (G020) and Anti-Fabrication heuristics (G021) after every specialist run.
 - The orchestrator MUST enforce Gate G033 before any `implement` phase.
+- **The orchestrator MUST enforce the Planning-Only Mode Gate (Gate G070) before any `implement` phase:** If the active workflow mode has `statusCeiling` below `done`, the `implement` phase MUST NOT be invoked. Instead, mark the spec as `route_required` with `nextRequiredOwner: bubbles.implement`. This gate also applies when the user's original request contained planning-only intent language (see workflow-mode-resolution.md → Reciprocal Status Ceiling Warning).
 - The state transition guard (G023) remains the first blocking check before any `done` promotion.
 
 ### Phase 2: Optional Global Final Pass

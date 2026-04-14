@@ -423,6 +423,16 @@ func (p *Processor) submitForProcessing(ctx context.Context, req *ProcessRequest
 		return nil, fmt.Errorf("marshal NATS payload: %w", err)
 	}
 
+	if len(data) > MaxNATSMessageSize {
+		slog.Warn("NATS payload exceeds max message size",
+			"artifact_id", artifactID,
+			"payload_size", len(data),
+			"max_size", MaxNATSMessageSize,
+			"source_id", req.SourceID,
+		)
+		return nil, fmt.Errorf("NATS payload too large: %d bytes exceeds max %d", len(data), MaxNATSMessageSize)
+	}
+
 	if err := p.NATS.Publish(ctx, smacknats.SubjectArtifactsProcess, data); err != nil {
 		// Clean up orphaned artifact on NATS publish failure
 		if _, cleanupErr := p.DB.Exec(ctx, "DELETE FROM artifacts WHERE id = $1", artifactID); cleanupErr != nil {
@@ -544,6 +554,10 @@ func conversationTimelineJSON(req *ProcessRequest) []byte {
 
 // HandleProcessedResult processes the result from the ML sidecar (artifacts.processed).
 func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProcessedPayload) error {
+	if p.DB == nil {
+		return fmt.Errorf("database pool is nil")
+	}
+
 	if err := ValidateProcessedPayload(payload); err != nil {
 		return fmt.Errorf("validate processed payload: %w", err)
 	}

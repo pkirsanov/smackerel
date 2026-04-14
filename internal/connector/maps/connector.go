@@ -2,6 +2,7 @@ package maps
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -118,6 +119,11 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.setHealth(connector.HealthSyncing)
 
+	// Snapshot config under RLock to prevent data races with concurrent Connect().
+	c.mu.RLock()
+	cfg := c.config
+	c.mu.RUnlock()
+
 	defer func() {
 		c.mu.Lock()
 		c.lastSyncTime = time.Now()
@@ -131,10 +137,12 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	processedFiles := parseCursor(cursor)
 
-	newFiles, err := c.findNewFiles(processedFiles)
+	newFiles, err := findNewFiles(cfg.ImportDir, processedFiles)
 	if err != nil {
 		c.mu.Lock()
+		c.lastSyncCount = 0
 		c.lastSyncErrors = 1
+		c.lastTrailCount = 0
 		c.mu.Unlock()
 		return nil, cursor, fmt.Errorf("scan import directory: %w", err)
 	}
@@ -191,6 +199,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 		filename := filepath.Base(file)
 		fileCancelled := false
+		artifactCapReached := false
 		for i, activity := range activities {
 			// Check for context cancellation periodically within large files.
 			if i > 0 && i%500 == 0 {
@@ -200,6 +209,14 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					fileCancelled = true
 					break
 				}
+			}
+
+			// Enforce cross-file artifact cap to prevent unbounded memory growth.
+			if len(allArtifacts) >= maxActivities {
+				slog.Warn("cross-file artifact cap reached, stopping activity processing",
+					"cap", maxActivities, "file", filename, "activity_index", i)
+				artifactCapReached = true
+				break
 			}
 
 			if activity.DistanceKm*1000 < c.config.MinDistanceM {
@@ -228,15 +245,21 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 
 		// Only mark the file as processed if all activities were processed.
-		// If context was cancelled mid-file, the file must be re-processed
-		// on the next sync to avoid permanently losing unprocessed activities.
+		// If context was cancelled mid-file or the artifact cap was reached,
+		// the file must be re-processed on the next sync to avoid permanently
+		// losing unprocessed activities.
 		if fileCancelled {
+			break
+		}
+		if artifactCapReached {
+			slog.Warn("artifact cap reached, halting sync cycle",
+				"total_artifacts", len(allArtifacts), "cap", maxActivities)
 			break
 		}
 
 		processedThisCycle = append(processedThisCycle, filename)
 
-		if c.config.ArchiveProcessed {
+		if cfg.ArchiveProcessed {
 			if err := c.archiveFile(file); err != nil {
 				slog.Warn("failed to archive processed file", "file", file, "error", err)
 			}
@@ -244,7 +267,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	allProcessed := append(processedFiles, processedThisCycle...)
-	pruned := c.pruneCursor(allProcessed)
+	pruned := pruneCursor(cfg.ImportDir, allProcessed)
 	newCursor := encodeCursor(pruned)
 
 	c.mu.Lock()
@@ -265,22 +288,25 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 // PostSync runs pattern detection and temporal-spatial linking after a sync cycle.
 // Returns any generated pattern/trip artifacts for pipeline publishing.
-// Each step continues on failure — errors are logged but do not block subsequent steps.
+// Each step continues on failure — errors are logged and aggregated.
 func (c *Connector) PostSync(ctx context.Context, activities []TakeoutActivity) ([]connector.RawArtifact, error) {
 	c.mu.RLock()
 	pool := c.pool
+	cfg := c.config
 	c.mu.RUnlock()
 
 	if pool == nil {
 		return nil, nil // no DB pool = skip pattern detection
 	}
 
-	pd := NewPatternDetector(pool, c.config)
+	pd := NewPatternDetector(pool, cfg)
 	var allArtifacts []connector.RawArtifact
+	var errs []error
 
 	commuteArtifacts, err := pd.DetectCommutes(ctx)
 	if err != nil {
 		slog.Warn("commute detection failed", "error", err)
+		errs = append(errs, fmt.Errorf("commute detection: %w", err))
 	} else {
 		allArtifacts = append(allArtifacts, commuteArtifacts...)
 	}
@@ -288,6 +314,7 @@ func (c *Connector) PostSync(ctx context.Context, activities []TakeoutActivity) 
 	tripArtifacts, err := pd.DetectTrips(ctx)
 	if err != nil {
 		slog.Warn("trip detection failed", "error", err)
+		errs = append(errs, fmt.Errorf("trip detection: %w", err))
 	} else {
 		allArtifacts = append(allArtifacts, tripArtifacts...)
 	}
@@ -295,13 +322,14 @@ func (c *Connector) PostSync(ctx context.Context, activities []TakeoutActivity) 
 	linkedCount, err := pd.LinkTemporalSpatial(ctx, activities)
 	if err != nil {
 		slog.Warn("temporal-spatial linking failed", "error", err)
+		errs = append(errs, fmt.Errorf("temporal-spatial linking: %w", err))
 	}
 
 	slog.Info("post-sync patterns complete",
 		"commute_patterns", len(commuteArtifacts),
 		"trip_events", len(tripArtifacts),
 		"links_created", linkedCount)
-	return allArtifacts, nil
+	return allArtifacts, errors.Join(errs...)
 }
 
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
@@ -326,10 +354,10 @@ func (c *Connector) SetPool(pool *pgxpool.Pool) {
 }
 
 // InsertLocationCluster inserts a location cluster row for pattern detection.
+// sourceRef is the dedup hash already computed by NormalizeActivity and doubles as the cluster primary key.
 func InsertLocationCluster(ctx context.Context, pool *pgxpool.Pool, activity TakeoutActivity, sourceRef string) error {
 	startLat, startLng, endLat, endLng := activityGridCoords(activity)
 
-	id := computeDedupHash(activity)
 	dayOfWeek := int(activity.StartTime.Weekday())
 	departureHour := activity.StartTime.Hour()
 	activityDate := activity.StartTime.Format("2006-01-02")
@@ -344,7 +372,7 @@ func InsertLocationCluster(ctx context.Context, pool *pgxpool.Pool, activity Tak
 			distance_km, duration_min
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (id) DO NOTHING`,
-		id, sourceRef,
+		sourceRef, sourceRef,
 		startLat, startLng,
 		endLat, endLng,
 		string(activity.Type), activityDate,
@@ -358,13 +386,13 @@ func InsertLocationCluster(ctx context.Context, pool *pgxpool.Pool, activity Tak
 }
 
 // findNewFiles scans the import directory for .json files not in the processed set.
-func (c *Connector) findNewFiles(processedFiles []string) ([]string, error) {
+func findNewFiles(importDir string, processedFiles []string) ([]string, error) {
 	processed := make(map[string]bool, len(processedFiles))
 	for _, f := range processedFiles {
 		processed[f] = true
 	}
 
-	entries, err := os.ReadDir(c.config.ImportDir)
+	entries, err := os.ReadDir(importDir)
 	if err != nil {
 		return nil, fmt.Errorf("read import directory: %w", err)
 	}
@@ -385,11 +413,19 @@ func (c *Connector) findNewFiles(processedFiles []string) ([]string, error) {
 			continue
 		}
 
+		// Skip files with pipe character — the cursor uses "|" as delimiter
+		// and a pipe in the filename would corrupt cursor encoding.
+		if strings.Contains(name, "|") {
+			slog.Warn("skipping file with pipe character in name (incompatible with cursor encoding)",
+				"file", name)
+			continue
+		}
+
 		if processed[name] {
 			continue
 		}
 
-		newFiles = append(newFiles, filepath.Join(c.config.ImportDir, name))
+		newFiles = append(newFiles, filepath.Join(importDir, name))
 	}
 
 	sort.Strings(newFiles)
@@ -397,12 +433,35 @@ func (c *Connector) findNewFiles(processedFiles []string) ([]string, error) {
 }
 
 // archiveFile moves a processed file to the archive/ subdirectory.
+// If a file with the same name already exists in the archive, a numeric
+// suffix is appended to prevent silent data loss from overwriting.
 func (c *Connector) archiveFile(filePath string) error {
 	archiveDir := filepath.Join(c.config.ImportDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 		return fmt.Errorf("create archive directory: %w", err)
 	}
-	dest := filepath.Join(archiveDir, filepath.Base(filePath))
+	baseName := filepath.Base(filePath)
+	dest := filepath.Join(archiveDir, baseName)
+
+	// If target already exists, add a numeric suffix to avoid overwriting.
+	const maxArchiveCollisions = 1000
+	if _, err := os.Stat(dest); err == nil {
+		ext := filepath.Ext(baseName)
+		prefix := strings.TrimSuffix(baseName, ext)
+		for i := 1; i <= maxArchiveCollisions; i++ {
+			candidate := filepath.Join(archiveDir, fmt.Sprintf("%s_%d%s", prefix, i, ext))
+			if _, err := os.Stat(candidate); os.IsNotExist(err) {
+				dest = candidate
+				break
+			}
+			if i == maxArchiveCollisions {
+				return fmt.Errorf("archive collision limit exceeded (%d) for %s", maxArchiveCollisions, baseName)
+			}
+		}
+		slog.Info("archive collision detected, using alternate name",
+			"original", baseName, "dest", filepath.Base(dest))
+	}
+
 	if err := os.Rename(filePath, dest); err != nil {
 		return fmt.Errorf("move file to archive: %w", err)
 	}
@@ -425,13 +484,13 @@ func encodeCursor(files []string) string {
 
 // pruneCursor removes cursor entries for files that no longer exist in the import directory.
 // This prevents the cursor from growing unboundedly after files are archived or deleted.
-func (c *Connector) pruneCursor(files []string) []string {
+func pruneCursor(importDir string, files []string) []string {
 	if len(files) == 0 {
 		return files
 	}
 
 	// Build a set of files currently present in the import directory.
-	entries, err := os.ReadDir(c.config.ImportDir)
+	entries, err := os.ReadDir(importDir)
 	if err != nil {
 		// On read error, keep all entries to avoid losing track of processed files.
 		return files
@@ -492,148 +551,142 @@ func parseMapsConfig(config connector.ConnectorConfig) (MapsConfig, error) {
 	}
 
 	// Min distance
-	if md, ok := sc["min_distance_m"]; ok {
-		switch v := md.(type) {
-		case float64:
-			if v < 0 {
-				return MapsConfig{}, fmt.Errorf("min_distance_m must be non-negative, got %v", v)
-			}
-			cfg.MinDistanceM = v
-		case int:
-			if v < 0 {
-				return MapsConfig{}, fmt.Errorf("min_distance_m must be non-negative, got %v", v)
-			}
-			cfg.MinDistanceM = float64(v)
-		}
+	if v, err := configFloat64NonNeg(sc, "min_distance_m"); err != nil {
+		return MapsConfig{}, err
+	} else if v >= 0 {
+		cfg.MinDistanceM = v
 	}
 
 	// Min duration
-	if md, ok := sc["min_duration_min"]; ok {
-		switch v := md.(type) {
-		case float64:
-			if v < 0 {
-				return MapsConfig{}, fmt.Errorf("min_duration_min must be non-negative, got %v", v)
-			}
-			cfg.MinDurationMin = v
-		case int:
-			if v < 0 {
-				return MapsConfig{}, fmt.Errorf("min_duration_min must be non-negative, got %v", v)
-			}
-			cfg.MinDurationMin = float64(v)
-		}
+	if v, err := configFloat64NonNeg(sc, "min_duration_min"); err != nil {
+		return MapsConfig{}, err
+	} else if v >= 0 {
+		cfg.MinDurationMin = v
 	}
 
 	// Clustering config
-	if lr, ok := sc["location_radius_m"]; ok {
-		switch v := lr.(type) {
-		case float64:
-			if v < 0 {
-				return MapsConfig{}, fmt.Errorf("location_radius_m must be non-negative, got %v", v)
-			}
-			cfg.LocationRadiusM = v
-		case int:
-			if v < 0 {
-				return MapsConfig{}, fmt.Errorf("location_radius_m must be non-negative, got %v", v)
-			}
-			cfg.LocationRadiusM = float64(v)
-		}
+	if v, err := configFloat64NonNeg(sc, "location_radius_m"); err != nil {
+		return MapsConfig{}, err
+	} else if v >= 0 {
+		cfg.LocationRadiusM = v
 	}
 	if hd, ok := sc["home_detection"].(string); ok && hd != "" {
 		cfg.HomeDetection = hd
 	}
 
 	// Commute config
-	if cmo, ok := sc["commute_min_occurrences"]; ok {
-		switch v := cmo.(type) {
-		case float64:
-			if v < 1 {
-				return MapsConfig{}, fmt.Errorf("commute_min_occurrences must be >= 1, got %v", v)
-			}
-			cfg.CommuteMinOccurrences = int(v)
-		case int:
-			if v < 1 {
-				return MapsConfig{}, fmt.Errorf("commute_min_occurrences must be >= 1, got %v", v)
-			}
-			cfg.CommuteMinOccurrences = v
-		}
+	if v, err := configIntMin(sc, "commute_min_occurrences", 1); err != nil {
+		return MapsConfig{}, err
+	} else if v >= 0 {
+		cfg.CommuteMinOccurrences = v
 	}
-	if cwd, ok := sc["commute_window_days"]; ok {
-		switch v := cwd.(type) {
-		case float64:
-			if v < 1 {
-				return MapsConfig{}, fmt.Errorf("commute_window_days must be >= 1, got %v", v)
-			}
-			cfg.CommuteWindowDays = int(v)
-		case int:
-			if v < 1 {
-				return MapsConfig{}, fmt.Errorf("commute_window_days must be >= 1, got %v", v)
-			}
-			cfg.CommuteWindowDays = v
-		}
+	if v, err := configIntMin(sc, "commute_window_days", 1); err != nil {
+		return MapsConfig{}, err
+	} else if v >= 0 {
+		cfg.CommuteWindowDays = v
 	}
 	if cwo, ok := sc["commute_weekdays_only"].(bool); ok {
 		cfg.CommuteWeekdaysOnly = cwo
 	}
 
 	// Trip config
-	if tmd, ok := sc["trip_min_distance_km"]; ok {
-		switch v := tmd.(type) {
-		case float64:
-			if v <= 0 {
-				return MapsConfig{}, fmt.Errorf("trip_min_distance_km must be positive, got %v", v)
-			}
-			cfg.TripMinDistanceKm = v
-		case int:
-			if v <= 0 {
-				return MapsConfig{}, fmt.Errorf("trip_min_distance_km must be positive, got %v", v)
-			}
-			cfg.TripMinDistanceKm = float64(v)
-		}
+	if v, err := configFloat64Positive(sc, "trip_min_distance_km"); err != nil {
+		return MapsConfig{}, err
+	} else if v >= 0 {
+		cfg.TripMinDistanceKm = v
 	}
-	if tmo, ok := sc["trip_min_overnight_hours"]; ok {
-		switch v := tmo.(type) {
-		case float64:
-			if v <= 0 {
-				return MapsConfig{}, fmt.Errorf("trip_min_overnight_hours must be positive, got %v", v)
-			}
-			cfg.TripMinOvernightHours = v
-		case int:
-			if v <= 0 {
-				return MapsConfig{}, fmt.Errorf("trip_min_overnight_hours must be positive, got %v", v)
-			}
-			cfg.TripMinOvernightHours = float64(v)
-		}
+	if v, err := configFloat64Positive(sc, "trip_min_overnight_hours"); err != nil {
+		return MapsConfig{}, err
+	} else if v >= 0 {
+		cfg.TripMinOvernightHours = v
 	}
 
 	// Link config
-	if lte, ok := sc["link_time_extend_min"]; ok {
-		switch v := lte.(type) {
-		case float64:
-			if v < 0 {
-				return MapsConfig{}, fmt.Errorf("link_time_extend_min must be non-negative, got %v", v)
-			}
-			cfg.LinkTimeExtendMin = v
-		case int:
-			if v < 0 {
-				return MapsConfig{}, fmt.Errorf("link_time_extend_min must be non-negative, got %v", v)
-			}
-			cfg.LinkTimeExtendMin = float64(v)
-		}
+	if v, err := configFloat64NonNeg(sc, "link_time_extend_min"); err != nil {
+		return MapsConfig{}, err
+	} else if v >= 0 {
+		cfg.LinkTimeExtendMin = v
 	}
-	if lpr, ok := sc["link_proximity_radius_m"]; ok {
-		switch v := lpr.(type) {
-		case float64:
-			if v <= 0 {
-				return MapsConfig{}, fmt.Errorf("link_proximity_radius_m must be positive, got %v", v)
-			}
-			cfg.LinkProximityRadiusM = v
-		case int:
-			if v <= 0 {
-				return MapsConfig{}, fmt.Errorf("link_proximity_radius_m must be positive, got %v", v)
-			}
-			cfg.LinkProximityRadiusM = float64(v)
-		}
+	if v, err := configFloat64Positive(sc, "link_proximity_radius_m"); err != nil {
+		return MapsConfig{}, err
+	} else if v >= 0 {
+		cfg.LinkProximityRadiusM = v
 	}
 
 	return cfg, nil
+}
+
+// configFloat64NonNeg extracts a non-negative float64 from a source config map.
+// Returns (-1, nil) if the key is absent, (value, nil) on success, or an error on invalid input.
+func configFloat64NonNeg(sc map[string]interface{}, key string) (float64, error) {
+	val, ok := sc[key]
+	if !ok {
+		return -1, nil
+	}
+	switch v := val.(type) {
+	case float64:
+		if v < 0 {
+			return 0, fmt.Errorf("%s must be non-negative, got %v", key, v)
+		}
+		return v, nil
+	case int:
+		if v < 0 {
+			return 0, fmt.Errorf("%s must be non-negative, got %v", key, v)
+		}
+		return float64(v), nil
+	case string:
+		return 0, fmt.Errorf("%s has unsupported type string (got %q); use a numeric value", key, v)
+	default:
+		return -1, nil
+	}
+}
+
+// configFloat64Positive extracts a positive (>0) float64 from a source config map.
+// Returns (-1, nil) if the key is absent, (value, nil) on success, or an error on invalid input.
+func configFloat64Positive(sc map[string]interface{}, key string) (float64, error) {
+	val, ok := sc[key]
+	if !ok {
+		return -1, nil
+	}
+	switch v := val.(type) {
+	case float64:
+		if v <= 0 {
+			return 0, fmt.Errorf("%s must be positive, got %v", key, v)
+		}
+		return v, nil
+	case int:
+		if v <= 0 {
+			return 0, fmt.Errorf("%s must be positive, got %v", key, v)
+		}
+		return float64(v), nil
+	case string:
+		return 0, fmt.Errorf("%s has unsupported type string (got %q); use a numeric value", key, v)
+	default:
+		return -1, nil
+	}
+}
+
+// configIntMin extracts an int >= min from a source config map.
+// Returns (-1, nil) if the key is absent, (value, nil) on success, or an error on invalid input.
+func configIntMin(sc map[string]interface{}, key string, min int) (int, error) {
+	val, ok := sc[key]
+	if !ok {
+		return -1, nil
+	}
+	switch v := val.(type) {
+	case float64:
+		if int(v) < min {
+			return 0, fmt.Errorf("%s must be >= %d, got %v", key, min, v)
+		}
+		return int(v), nil
+	case int:
+		if v < min {
+			return 0, fmt.Errorf("%s must be >= %d, got %v", key, min, v)
+		}
+		return v, nil
+	case string:
+		return 0, fmt.Errorf("%s has unsupported type string (got %q); use a numeric value", key, v)
+	default:
+		return -1, nil
+	}
 }

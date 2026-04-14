@@ -217,24 +217,11 @@ func TestSCN002043_DigestLLMFailureFallback(t *testing.T) {
 		t.Error("fallback digest should have words")
 	}
 	// Verify action items mentioned
-	if !containsSubstring(text, "action items") {
+	if !strings.Contains(text, "action items") {
 		t.Error("fallback should mention action items")
 	}
 	// Verify topics mentioned
-	if !containsSubstring(text, "pricing") {
+	if !strings.Contains(text, "pricing") {
 		t.Error("fallback should mention hot topics")
 	}
-}
-
-func containsSubstring(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && findSubstring(s, sub))
-}
-
-func findSubstring(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

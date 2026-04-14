@@ -93,6 +93,24 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 // unbounded blocking under slow or hanging API responses.
 const maxSyncDuration = 10 * time.Minute
 
+// maxMessageSyncReservations caps the number of reservations whose messages are
+// fetched in a single Sync call to prevent unbounded API fan-out that could
+// exhaust the sync timeout and starve downstream resource syncs.
+var maxMessageSyncReservations = 500
+
+// maxPropertyNameCacheSize caps the property name cache persisted in the
+// cursor to prevent unbounded growth over time.
+var maxPropertyNameCacheSize = 10000
+
+// maxCacheStringLen caps the length of individual property ID and name strings
+// allowed in the cache to prevent a compromised API from causing excessive
+// memory consumption via oversized strings (CWE-400).
+const maxCacheStringLen = 1024
+
+// maxPageSize is the upper bound on configurable page_size to prevent
+// excessively large API responses causing memory exhaustion (CWE-400).
+const maxPageSize = 500
+
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.mu.Lock()
 	if c.client == nil {
@@ -120,6 +138,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	if len(syncCursor.PropertyNames) > 0 {
 		c.mu.Lock()
 		for id, name := range syncCursor.PropertyNames {
+			// SEC-012-007: Skip entries with oversized strings (CWE-400).
+			if len(id) > maxCacheStringLen || len(name) > maxCacheStringLen {
+				continue
+			}
 			c.propertyNames[id] = name
 		}
 		c.mu.Unlock()
@@ -136,9 +158,12 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			syncErrors++
 		} else {
 			for _, p := range props {
-				c.mu.Lock()
-				c.propertyNames[p.ID] = p.Name
-				c.mu.Unlock()
+				// SEC-012-007: Skip oversized ID/name strings (CWE-400).
+				if len(p.ID) <= maxCacheStringLen && len(p.Name) <= maxCacheStringLen {
+					c.mu.Lock()
+					c.propertyNames[p.ID] = p.Name
+					c.mu.Unlock()
+				}
 				allArtifacts = append(allArtifacts, NormalizeProperty(p, config))
 			}
 			syncCursor.Properties = time.Now().UTC()
@@ -152,7 +177,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var reservationIDs []string
 	if config.SyncReservations {
 		if err := syncCtx.Err(); err != nil {
-			return allArtifacts, cursor, fmt.Errorf("sync cancelled before reservations: %w", err)
+			return allArtifacts, encodeCursor(syncCursor), fmt.Errorf("sync cancelled before reservations: %w", err)
 		}
 		reservations, err := client.ListReservations(syncCtx, syncCursor.Reservations)
 		if err != nil {
@@ -195,9 +220,17 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	// 3. Sync messages per reservation (R-021: isolated cursor advancement)
 	if config.SyncMessages {
 		if err := syncCtx.Err(); err != nil {
-			return allArtifacts, cursor, fmt.Errorf("sync cancelled before messages: %w", err)
+			return allArtifacts, encodeCursor(syncCursor), fmt.Errorf("sync cancelled before messages: %w", err)
 		}
 		var msgAnyFailed bool
+		// Cap reservation fan-out to prevent unbounded API calls that could
+		// exhaust the sync timeout and starve downstream resource syncs.
+		if len(reservationIDs) > maxMessageSyncReservations {
+			slog.Warn("hospitable: capping message sync reservations",
+				"total", len(reservationIDs), "cap", maxMessageSyncReservations)
+			reservationIDs = reservationIDs[:maxMessageSyncReservations]
+			msgAnyFailed = true // prevent cursor advancement for incomplete coverage
+		}
 		var msgCount int
 		for _, resID := range reservationIDs {
 			messages, err := client.ListMessages(syncCtx, resID, syncCursor.Messages)
@@ -224,7 +257,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	// 4. Sync reviews
 	if config.SyncReviews {
 		if err := syncCtx.Err(); err != nil {
-			return allArtifacts, cursor, fmt.Errorf("sync cancelled before reviews: %w", err)
+			return allArtifacts, encodeCursor(syncCursor), fmt.Errorf("sync cancelled before reviews: %w", err)
 		}
 		reviews, err := client.ListReviews(syncCtx, syncCursor.Reviews)
 		if err != nil {
@@ -244,16 +277,39 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 	}
 
-	// Persist property name cache in cursor (R-018)
+	// Persist property name cache in cursor (R-018), with size cap to prevent
+	// unbounded growth from accumulated deleted/renamed properties.
 	c.mu.RLock()
-	syncCursor.PropertyNames = make(map[string]string, len(c.propertyNames))
-	for id, name := range c.propertyNames {
-		syncCursor.PropertyNames[id] = name
+	if len(c.propertyNames) <= maxPropertyNameCacheSize {
+		syncCursor.PropertyNames = make(map[string]string, len(c.propertyNames))
+		for id, name := range c.propertyNames {
+			syncCursor.PropertyNames[id] = name
+		}
+	} else {
+		slog.Warn("hospitable: property name cache exceeds cap, pruning",
+			"size", len(c.propertyNames), "cap", maxPropertyNameCacheSize)
+		referencedProps := make(map[string]bool)
+		for _, a := range allArtifacts {
+			if pid, ok := a.Metadata["property_id"].(string); ok && pid != "" {
+				referencedProps[pid] = true
+			}
+		}
+		syncCursor.PropertyNames = make(map[string]string, len(referencedProps))
+		for pid := range referencedProps {
+			if name, ok := c.propertyNames[pid]; ok {
+				syncCursor.PropertyNames[pid] = name
+			}
+		}
 	}
 	c.mu.RUnlock()
 
-	// Store active reservation IDs in cursor (R-016)
-	syncCursor.ActiveReservationIDs = reservationIDs
+	// Store active reservation IDs in cursor (R-016), capped to prevent
+	// unbounded cursor growth over time (SEC-012-006, CWE-770).
+	if len(reservationIDs) > maxMessageSyncReservations {
+		syncCursor.ActiveReservationIDs = reservationIDs[:maxMessageSyncReservations]
+	} else {
+		syncCursor.ActiveReservationIDs = reservationIDs
+	}
 
 	newCursor := encodeCursor(syncCursor)
 
@@ -343,7 +399,11 @@ func parseHospitableConfig(config connector.ConnectorConfig) (HospitableConfig, 
 		cfg.InitialLookbackDays = int(v)
 	}
 	if v, ok := sc["page_size"].(float64); ok && v > 0 {
-		cfg.PageSize = int(v)
+		ps := int(v)
+		if ps > maxPageSize {
+			ps = maxPageSize
+		}
+		cfg.PageSize = ps
 	}
 	if v, ok := sc["sync_properties"].(bool); ok {
 		cfg.SyncProperties = v

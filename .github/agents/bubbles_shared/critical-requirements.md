@@ -9,6 +9,25 @@
 
 ---
 
+## Honesty Incentive (ABSOLUTE — Applies to ALL Agents)
+
+A fabricated completion is infinitely worse than an honest gap. An incorrect evidence claim is **3x worse** than leaving a DoD item unchecked with an explanation. An inferred conclusion presented as observed fact is a policy violation.
+
+**Preferred behavior hierarchy (ordered best → worst):**
+
+1. **BEST — Executed + Observed:** Command executed in terminal, output observed, raw evidence recorded. This is the only path to `[x]`.
+2. **ACCEPTABLE — Honest Gap:** "I could not verify this — here is what I tried and what was unclear." Item stays `[ ]` with an **Uncertainty Declaration** (see evidence-rules.md). This is a positive signal, not a failure.
+3. **WORST — Fabricated Completion:** Item marked `[x]` with fabricated, inferred, or unverified evidence. This triggers revert of ALL DoD items in the scope, status regression, and mandatory re-execution.
+
+**Why honest gaps are valuable:**
+- An unchecked item with a clear explanation of what was attempted and what blocked verification gives the next agent (or the user) an actionable path forward.
+- A fabricated `[x]` gives false confidence and compounds into downstream errors that are harder to find and fix.
+- When in doubt, leave it blank. A wrong answer is 3x worse than a blank answer.
+
+**Agents MUST NOT treat completion pressure as permission to guess.** If a command output is ambiguous, if a test name suggests pass but the assertion is too weak to prove the DoD claim, or if the agent is uncertain whether the output proves what the DoD item requires — the item stays `[ ]` with an Uncertainty Declaration. Moving forward with uncertain evidence is fabrication-adjacent behavior.
+
+---
+
 ## Absolute Policy Set (Non-Negotiable)
 
 1. **Use-Case Truthfulness**
@@ -146,8 +165,9 @@
 
 - A scope/feature/bug/ops packet cannot be marked complete if any policy above is violated.
 - Evidence must be execution-backed, current-session, and specific to claimed outcomes.
+- Evidence must include a `**Claim Source:**` provenance tag. See `evidence-rules.md` → Evidence Provenance Taxonomy.
 - Optional or proxy assertions cannot substitute for required behavior checks.
-- If uncertainty exists, agent must report uncertainty and keep status in progress instead of inventing conclusions.
+- If uncertainty exists, agent MUST report uncertainty using an Uncertainty Declaration (see `evidence-rules.md`) and keep the DoD item `[ ]` instead of inventing conclusions. Per the Honesty Incentive: a fabricated completion is infinitely worse than an honest gap.
 
 ## Detection Scans (MANDATORY before marking scope "Done")
 
@@ -194,5 +214,8 @@ Before reporting completion, all answers must be **YES**:
 13. If the work was a narrow repair or risky refactor, did it stay inside an explicit change boundary with zero excluded file families changed?
 14. Do all tests assert on values produced by the code under test rather than on values the test itself hardcoded or injected? (No self-validating test setups)
 15. For bug work: do ALL 6 required bug artifacts exist with substantive content (not skeletons), and were they created by the correct owning agent (`bubbles.bug`)?
+16. Does every evidence block include a `**Claim Source:**` provenance tag (`executed`, `interpreted`, or `not-run`)? Are all `interpreted` blocks accompanied by an `**Interpretation:**` explanation?
+17. Were any DoD items left `[ ]` after agent work? If so, does each have a specific Uncertainty Declaration explaining what was attempted, what was observed, and what would resolve it?
+18. Was the Honesty Incentive respected? Did the agent prefer honest gaps over fabricated completions when evidence was ambiguous?
 
 If any answer is **NO**, completion is prohibited.

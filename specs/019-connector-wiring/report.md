@@ -28,9 +28,9 @@
 
 | Claim | Verified |
 |-------|----------|
-| 14 connector imports in `cmd/core/main.go` | YES |
-| 14 connector instantiations with correct IDs | YES |
-| 14 connector registrations with registry | YES |
+| 15 connector imports in `cmd/core/main.go` | YES |
+| 15 connector instantiations with correct IDs | YES |
+| 15 connector registrations with registry | YES |
 | 5 auto-start blocks (Discord, Twitter, Weather, Gov Alerts, Financial Markets) | YES |
 | 4 new YAML config blocks in `smackerel.yaml` (Twitter, Weather, Gov Alerts, Financial Markets) | YES |
 | Discord YAML block already existed | YES |
@@ -39,7 +39,7 @@
 | All 5 connectors default to `enabled: false` | YES |
 | Helper functions `parseJSONArray`, `parseJSONObject`, `parseFloatEnv` in `main.go` | YES |
 | No hardcoded fallback defaults in `main.go` auto-start blocks | YES — all read from `os.Getenv()` |
-| Existing 9 connectors unaffected | YES — tests cached, no source changes |
+| Existing 10 connectors unaffected | YES — tests cached, no source changes |
 
 ### Drift Items
 
@@ -56,7 +56,7 @@ None — all SST gaps have been remediated.
 
 ## Completion Statement
 
-Scope 1 implementation is complete. All 14 connectors are imported, instantiated, registered, and conditionally startable. Config generation produces correct env vars. CoinGecko SST gap (DRIFT-002) and DISCORD_CAPTURE_COMMANDS fragility (DRIFT-004) remediated. All unit tests pass.
+Scope 1 implementation is complete. All 15 connectors are imported, instantiated, registered, and conditionally startable. Config generation produces correct env vars. CoinGecko SST gap (DRIFT-002) and DISCORD_CAPTURE_COMMANDS fragility (DRIFT-004) remediated. All unit tests pass.
 
 ---
 
@@ -87,3 +87,77 @@ Scope 1 implementation is complete. All 14 connectors are imported, instantiated
 |-----------|---------|--------|-----------|
 | Build | `./smackerel.sh build` | PASS — both images built | 2026-04-11 |
 | Unit | `./smackerel.sh test unit` | PASS — 31 Go packages (markets recompiled), 53 Python tests | 2026-04-11 |
+
+---
+
+## Test Sweep (2026-04-12)
+
+**Trigger:** Stochastic quality sweep — test trigger on connector wiring.
+**Scope:** Test coverage, quality, and gaps against spec 019 Gherkin scenarios.
+
+### Coverage Assessment
+
+| Scenario | Required Test (per scopes.md) | Pre-Sweep Status | Post-Sweep Status |
+|----------|-------------------------------|-------------------|-------------------|
+| SCN-019-001 (All connectors registered) | `cmd/core/main_test.go` — registry count | **MISSING** — only helper tests existed | **ADDED** — `TestAllConnectorsRegistered` |
+| SCN-019-002 (Discord operational) | `internal/connector/discord/discord_test.go` | ✅ Covered by `TestConnect_ValidConfig` | ✅ No change needed |
+| SCN-019-003 (Missing creds → error) | Individual connector `*_test.go` files | ✅ Covered (`TestConnect_Missing*`) | ✅ No change needed |
+| SCN-019-004 (Config entries exist) | `tests/integration/connector_wiring_test.go` | **MISSING** — file never created | **ADDED** — `test_connector_wiring.sh` (32 assertions) |
+| SCN-019-005 (Health shows connectors) | `tests/e2e/health_connectors_test.go` | Partial — mocked in `health_test.go` | Partial — E2E requires live stack |
+| SCN-019-006 (Existing unaffected) | Regression via existing tests | ✅ All existing tests pass | **ADDED** — `TestDuplicateRegistrationRejected` |
+
+### Findings
+
+| ID | Severity | Description | Status |
+|----|----------|-------------|--------|
+| TEST-019-001 | Medium | `cmd/core/main_test.go` had no test verifying all connectors register — only `parseJSONArray`, `parseJSONObject`, `parseFloatEnv` helpers were tested. SCN-019-001 was uncovered. | **Fixed** — `TestAllConnectorsRegistered` added: instantiates all 15 connectors, registers in Registry, asserts count=15 and all expected IDs present. |
+| TEST-019-002 | Medium | `tests/integration/connector_wiring_test.go` listed in test plan (scopes.md) but file never created. SCN-019-004 config generation validation was uncovered. | **Fixed** — `tests/integration/test_connector_wiring.sh` added: runs `config generate`, verifies 27 env vars present for all 5 connectors, asserts all default to `enabled: false`. |
+| TEST-019-003 | Low | Spec claimed "14 connectors" but actual codebase registers 15 (guesthost was a 10th pre-existing connector). Not a code bug — only a spec narrative inaccuracy. | **Fixed** — all spec artifacts (spec.md, design.md, scopes.md, uservalidation.md) updated to 15 in harden-to-doc sweep. |
+| TEST-019-004 | Low | No E2E test for `GET /api/health` listing all connectors (SCN-019-005). The `health_test.go` covers the mechanism via mock but no live-stack E2E exists. | **Documented** — E2E requires running stack; deferred to integration test suite. |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `cmd/core/main_test.go` | Added `TestAllConnectorsRegistered` (SCN-019-001) and `TestDuplicateRegistrationRejected` (SCN-019-006 guard) |
+| `tests/integration/test_connector_wiring.sh` | New file — config generation integration test (SCN-019-004), 32 assertions |
+
+### Test Evidence
+
+| Test Type | Command | Result | Timestamp |
+|-----------|---------|--------|-----------|
+| Unit | `./smackerel.sh test unit` | PASS — 33 Go packages, 69 Python tests | 2026-04-12 |
+| Integration (config) | `bash tests/integration/test_connector_wiring.sh` | PASS — 32/32 assertions | 2026-04-12 |
+
+---
+
+## Hardening Sweep (2026-04-13)
+
+**Trigger:** Stochastic quality sweep R01 — harden trigger on connector wiring.
+**Scope:** Spec artifact accuracy, startup observability, code/doc consistency.
+
+### Findings
+
+| ID | Severity | Description | Status |
+|----|----------|-------------|--------|
+| HARDEN-019-001 | Low | All spec artifacts (spec.md, design.md, scopes.md, uservalidation.md, report.md) claimed "14 connectors" but codebase has 15 packages (guesthost was the 10th pre-existing connector). Code and tests were already correct at 15. | **Fixed** — all spec artifacts updated: 14→15 connector count, 9→10 pre-existing count. |
+| HARDEN-019-002 | Low | No startup log confirming total registered connector count after the registration loop. Operators could not easily verify all connectors loaded without examining health endpoint. | **Fixed** — added `slog.Info("connector registry initialized", "count", registry.Count())` after registration loop in `cmd/core/main.go`. |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `cmd/core/main.go` | Added `slog.Info("connector registry initialized", ...)` after registration loop |
+| `specs/019-connector-wiring/spec.md` | 14→15 connector count in 9 locations |
+| `specs/019-connector-wiring/design.md` | 14→15 / 9→10 counts in 5 locations |
+| `specs/019-connector-wiring/scopes.md` | 14→15 counts in 7 locations |
+| `specs/019-connector-wiring/uservalidation.md` | 14→15 counts in 2 locations |
+| `specs/019-connector-wiring/report.md` | 14→15 / 9→10 counts in 4 locations, TEST-019-003 status updated |
+
+### Test Evidence
+
+| Test Type | Command | Result | Timestamp |
+|-----------|---------|--------|-----------|
+| Unit | `./smackerel.sh test unit` | PASS — 33 Go packages (core recompiled), Python tests cached | 2026-04-13 |
+| Check | `./smackerel.sh check` | PASS — config in sync | 2026-04-13 |
+| Lint | `./smackerel.sh lint` | PASS — all checks passed | 2026-04-13 |

@@ -141,6 +141,24 @@
       "summary": "Chaos pass completed. Corrupted file handling verified (TestSyncCorruptedFileSkipped, TestSyncCorruptedExportNoPanic). Empty import dir handled. Nil pool graceful degradation (TestFilterNew_NilPool, TestTopicMapper_NilPool). Invalid URL normalization (TestNormalizeURL_Regression_NoPanic)."
     },
     {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": ["chaos"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-04-13T00:00:00Z",
+      "completedAt": "2026-04-13T00:30:00Z",
+      "summary": "Chaos R16 probe. Found and fixed: F-CHAOS-C16-001 (health state corruption on Sync() early exit before dedup — sync counters not flushed to struct before return), F-CHAOS-C16-002 (zero-bookmark files consumed silently without warning log). Added 4 adversarial regression tests: TestChaosC16_CancelledSyncWithDedupHealthError, TestChaosC16_CancelledDuringFileLoopWithDedup, TestChaosC16_NonBookmarkHTMLZeroArtifacts, TestChaosC16_PartialSuccessWithDedupHealthy. All 34+ bookmarks tests pass. Lint passes."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": ["chaos"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-04-14T00:00:00Z",
+      "completedAt": "2026-04-14T00:30:00Z",
+      "summary": "Chaos R24 probe. Found and fixed 3 findings: R24-001 (Sync reads c.config without lock — data race with concurrent Connect; snapshot cfg := c.config under lock, aligned with maps/browser/markets/alerts pattern), R24-002 (NormalizeURL preserves userinfo — credential leak into SourceRef/DB; u.User = nil, CWE-522), R24-003 (Chrome date_added uncapped far-future timestamps; added maxReasonableUnixSec year-2100 ceiling). Added 8 adversarial regression tests. All bookmarks tests pass. Lint passes."
+    },
+    {
       "agent": "bubbles.docs",
       "phasesExecuted": ["docs"],
       "statusBefore": "in_progress",

@@ -20,7 +20,7 @@ The design doc is the primary architecture reference for the project. Inaccurate
 - No code changes; this is a docs-only reconciliation
 - Preserve the design document's vision and aspirational content — just label it honestly
 - §3 (System Architecture) mermaid diagrams that already reflect the Go/Docker stack must be preserved as-is
-- All 14 committed connectors must be accurately represented
+- All 15 committed connectors must be accurately represented
 
 **Failure Condition:** A reader encounters a described capability (e.g., OpenClaw workspace, SQLite storage, weekly synthesis) and believes it is implemented when it is not.
 
@@ -30,7 +30,7 @@ The design doc is the primary architecture reference for the project. Inaccurate
 - G2: Update storage references from SQLite + LanceDB to PostgreSQL + pgvector
 - G3: Update data model schemas to reflect actual PostgreSQL table structure
 - G4: Mark aspirational competitive claims honestly in the differentiation matrix
-- G5: Verify connector references match the 14 implemented connectors
+- G5: Verify connector references match the 15 implemented connectors
 - G6: Update the phased implementation plan to reflect actual delivery state
 - G7: Ensure §3 system architecture is accurate (currently correct — verify only)
 
@@ -117,7 +117,7 @@ And the competitive comparison becomes unreliable
 ### BS-004: Connector Count Inflation
 Given the design doc might reference more connectors than exist
 When a reviewer counts implemented connectors
-Then they find exactly 14: alerts, bookmarks, browser, caldav, discord, hospitable, imap, keep, maps, markets, rss, twitter, weather, youtube
+Then they find exactly 15: alerts, bookmarks, browser, caldav, discord, guesthost, hospitable, imap, keep, maps, markets, rss, twitter, weather, youtube
 And any claimed connector not in this list is aspirational
 
 ### BS-005: Phased Plan References Superseded Technology
@@ -160,7 +160,7 @@ Then the plan should reflect what was actually built (Go/Docker, PostgreSQL+pgve
   - "Topic lifecycle (hot/cooling/dormant)" — verify implementation in `internal/topics/`
   - "Location/travel intelligence" — maps connector exists but full travel intelligence unclear
   - "Multi-channel delivery" — Telegram exists; verify others
-- Connector ecosystem references (§22) must match the 14 committed connectors
+- Connector ecosystem references (§22) must match the 15 committed connectors
 
 ### R-004: System Architecture Verification
 - §3 mermaid diagrams already show Go core + Python sidecar + PostgreSQL + pgvector + NATS
@@ -174,21 +174,22 @@ Then the plan should reflect what was actually built (Go/Docker, PostgreSQL+pgve
 - Mark completed phases as delivered
 
 ### R-006: Connector Reference Accuracy
-- All connector lists in the document must account for the 14 implemented connectors:
+- All connector lists in the document must account for the 15 implemented connectors:
   1. alerts (gov alerts)
   2. bookmarks
   3. browser (browser history)
   4. caldav (calendar)
   5. discord
-  6. hospitable
-  7. imap (email)
-  8. keep (Google Keep)
-  9. maps (Google Maps)
-  10. markets (financial markets)
-  11. rss (podcast/feed)
-  12. twitter
-  13. weather
-  14. youtube
+  6. guesthost (property management)
+  7. hospitable
+  8. imap (email)
+  9. keep (Google Keep)
+  10. maps (Google Maps)
+  11. markets (financial markets)
+  12. rss (podcast/feed)
+  13. twitter
+  14. weather
+  15. youtube
 - §22 (Connector Ecosystem) references to Gmail, Outlook connectors should note actual implementation is IMAP-based
 - Connectors mentioned in design but not implemented (e.g., Notion, Photos, SMS) must be marked as planned/future
 
@@ -214,7 +215,7 @@ Scenario: Competitive matrix is honest
   When the reconciliation is applied
   Then only actually implemented features retain ✅
   And aspirational features use a distinct planned indicator
-  And connector counts match the 14 committed connectors
+  And connector counts match the 15 committed connectors
 
 Scenario: Phased plan reflects reality
   Given §19 references OpenClaw setup and SQLite/LanceDB
@@ -235,7 +236,7 @@ Scenario: System architecture section is verified
 - AC-2: All storage references in §8, §14, §17, §18, §19 reflect PostgreSQL + pgvector
 - AC-3: §14 DDL matches PostgreSQL syntax consistent with `internal/db/migrations/`
 - AC-4: §21.3 competitive matrix distinguishes implemented vs. planned features
-- AC-5: All connector references match the 14 committed connectors
+- AC-5: All connector references match the 15 committed connectors
 - AC-6: §19 phased plan reflects actual technology and delivery state
 - AC-7: §3 system architecture diagrams remain accurate (no regressions introduced)
 - AC-8: No code files are modified — docs-only changes

@@ -6,10 +6,12 @@ import logging
 import os
 import time
 
+import httpx
 import nats
 from nats.aio.client import Client as NATSConn
 from nats.js.client import JetStreamContext
 
+from .url_validator import validate_fetch_url
 from .validation import (
     PayloadValidationError,
     validate_process_payload,
@@ -323,6 +325,39 @@ class NATSClient:
                     "success": False,
                     "error": f"Transcription failed: {whisper_result.get('error', 'unknown')}",
                 }
+
+        # Handle image content — OCR extraction (R-003)
+        if content_type == "image" and url:
+            from .ocr import extract_text_tesseract
+
+            try:
+                validate_fetch_url(url)  # SSRF prevention (SEC-004-002)
+                async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                    resp = await client.get(url)
+                    resp.raise_for_status()
+                    image_bytes = resp.content
+                ocr_text = extract_text_tesseract(image_bytes)
+                if ocr_text and len(ocr_text.strip()) >= 3:
+                    raw_text = ocr_text.strip()
+                    logger.info("Image OCR extracted %d chars for %s", len(raw_text), artifact_id)
+                else:
+                    logger.info("Image OCR produced no usable text for %s", artifact_id)
+            except Exception as e:
+                logger.warning("Image OCR failed for %s: %s", artifact_id, e)
+
+        # Handle PDF content — text extraction (R-003)
+        if content_type == "pdf" and url:
+            from .pdf_extract import extract_pdf_text
+
+            try:
+                pdf_text = await extract_pdf_text(url)
+                if pdf_text and len(pdf_text.strip()) >= 3:
+                    raw_text = pdf_text.strip()
+                    logger.info("PDF extracted %d chars for %s", len(raw_text), artifact_id)
+                else:
+                    logger.info("PDF extraction produced no usable text for %s", artifact_id)
+            except Exception as e:
+                logger.warning("PDF extraction failed for %s: %s", artifact_id, e)
 
         if not raw_text:
             return {

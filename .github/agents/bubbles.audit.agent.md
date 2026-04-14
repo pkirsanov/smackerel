@@ -44,6 +44,25 @@ If any required check fails, report an audit failure and do not issue a ship-rea
 
 **Verdicts:** `🚀 SHIP_IT` (all pass) / `⚠️ SHIP_WITH_NOTES` (minor) / `🛑 REWORK_REQUIRED` (fixable) / `🔴 DO_NOT_SHIP` (fabrication or critical failure)
 
+**MANDATORY: Spot-Check Recommendations (Automation Bias Mitigation)**
+
+Every audit verdict MUST include a `## Spot-Check Recommendations` section, even when the verdict is `🚀 SHIP_IT`. See [audit-core.md](bubbles_shared/audit-core.md) for trigger conditions and format. This section highlights items the user should manually verify to counteract automation bias (the tendency to check less as AI sounds more confident).
+
+Required steps:
+1. Scan all evidence blocks for `**Claim Source:** interpreted` — add each to spot-check list
+2. Scan all evidence blocks for exactly 10-line output (minimum threshold) — add each to spot-check list
+3. Scan for any resolved Uncertainty Declarations — add each to spot-check list
+4. Scan for `Done with Concerns` scopes — add each to spot-check list
+5. Format as ordered list with one-sentence explanation + what to verify
+
+**MANDATORY: Evidence Provenance Review**
+
+Every `**Claim Source:** interpreted` evidence block MUST be individually reviewed by the audit agent. For each:
+1. Read the `**Interpretation:**` line
+2. Read the raw output
+3. Verify the interpretation is reasonable and the DoD claim is supported
+4. If the interpretation is wrong or unsupported, fail the DoD item and require re-execution
+
 When `bubbles.audit` is invoked by `bubbles.workflow` or `bubbles.iterate`, it MUST finish with a concrete result envelope so the orchestrator can repair before finalize when needed.
 
 ## RESULT-ENVELOPE

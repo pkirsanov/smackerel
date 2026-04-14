@@ -105,10 +105,7 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CaptureRequest
-	// Limit request body to 1MB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON body")
+	if !decodeJSONBody(w, r, &req, "INVALID_INPUT", "Invalid JSON body") {
 		return
 	}
 
@@ -158,6 +155,15 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 
 		if strings.Contains(err.Error(), "publish to NATS") {
 			writeError(w, http.StatusServiceUnavailable, "ML_UNAVAILABLE", "Processing service unavailable")
+			return
+		}
+
+		// Re-check DB health: if the database became unreachable during processing,
+		// return 503 DB_UNAVAILABLE instead of a generic 500 so callers can distinguish
+		// transient DB outage from other processing failures (chaos finding C-001).
+		if d.DB != nil && !d.DB.Healthy(r.Context()) {
+			writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE",
+				"Database is temporarily unavailable, please retry")
 			return
 		}
 
@@ -239,6 +245,23 @@ func toPipelineForwardMeta(fm *ForwardMetaPayload) *pipeline.ForwardMetaPayload 
 	}
 }
 
+// decodeJSONBody validates Content-Type, limits body size to 1MB, and decodes
+// JSON into dst. Returns true on success. On failure it writes an error
+// response to w and returns false so callers can simply return.
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst interface{}, errCode, errMsg string) bool {
+	ct := r.Header.Get("Content-Type")
+	if ct != "" && !strings.HasPrefix(ct, "application/json") {
+		writeError(w, http.StatusUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json")
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		writeError(w, http.StatusBadRequest, errCode, errMsg)
+		return false
+	}
+	return true
+}
+
 // writeError writes a standardized error response.
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, ErrorResponse{
@@ -287,7 +310,7 @@ func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt    string `json:"created_at"`
 	}
 
-	var results []RecentItem
+	results := make([]RecentItem, 0, len(items))
 	for _, a := range items {
 		results = append(results, RecentItem{
 			ID:           a.ID,
@@ -304,10 +327,17 @@ func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ArtifactDetailHandler handles GET /api/artifact/{id}.
+// maxArtifactIDLen limits artifact ID length to prevent abuse (ULIDs are 26 chars).
+const maxArtifactIDLen = 128
+
 func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Request) {
 	artifactID := chi.URLParam(r, "id")
 	if artifactID == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Artifact ID is required")
+		return
+	}
+	if len(artifactID) > maxArtifactIDLen {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Artifact ID exceeds maximum length")
 		return
 	}
 

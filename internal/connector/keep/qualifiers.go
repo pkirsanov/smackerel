@@ -45,15 +45,17 @@ func (q *Qualifier) Evaluate(note *TakeoutNote) QualifierResult {
 		}
 	}
 
+	// Archived notes are always light — archiving is an intentional user
+	// deprioritization signal that overrides recency (R-008).
+	if note.IsArchived {
+		return QualifierResult{Tier: TierLight, Reason: "archived"}
+	}
+
 	modifiedAt := q.parser.ModifiedAt(note)
 	daysSinceModified := time.Since(modifiedAt).Hours() / 24
 
 	if daysSinceModified <= float64(q.recentThresholdDays) {
 		return QualifierResult{Tier: TierStandard, Reason: "recent"}
-	}
-
-	if note.IsArchived {
-		return QualifierResult{Tier: TierLight, Reason: "archived"}
 	}
 
 	if daysSinceModified > float64(q.recentThresholdDays) {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,7 +18,8 @@ import (
 type ContextRequest struct {
 	EntityType string   `json:"entityType"` // "guest", "property", "booking"
 	EntityID   string   `json:"entityId"`
-	Include    []string `json:"include"` // ["artifacts", "hints", "alerts", "sentiment"]
+	Source     string   `json:"source,omitempty"` // optional: scope lookups to a specific connector source (e.g. "guesthost")
+	Include    []string `json:"include"`          // ["artifacts", "hints", "alerts", "sentiment"]
 }
 
 // ContextResponse is the JSON response for POST /api/context-for.
@@ -105,16 +107,23 @@ func NewContextHandler(guestRepo *db.GuestRepository, propertyRepo *db.PropertyR
 	}
 }
 
+// maxEntityIDLen limits entity ID length to prevent abuse.
+const maxEntityIDLen = 512
+
 // HandleContextFor handles POST /api/context-for.
 func (h *ContextHandler) HandleContextFor(w http.ResponseWriter, r *http.Request) {
 	var req ContextRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req, "INVALID_REQUEST", "Invalid JSON request body") {
 		return
 	}
 
 	if req.EntityID == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "entityId is required")
+		return
+	}
+
+	if len(req.EntityID) > maxEntityIDLen {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "entityId exceeds maximum length")
 		return
 	}
 
@@ -133,7 +142,7 @@ func (h *ContextHandler) HandleContextFor(w http.ResponseWriter, r *http.Request
 
 	switch req.EntityType {
 	case "guest":
-		if err := h.buildGuestContext(ctx, &resp, req.EntityID, includeSet, includeAll); err != nil {
+		if err := h.buildGuestContext(ctx, &resp, req.EntityID, req.Source, includeSet, includeAll); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "Guest not found")
 				return
@@ -144,7 +153,7 @@ func (h *ContextHandler) HandleContextFor(w http.ResponseWriter, r *http.Request
 		}
 
 	case "property":
-		if err := h.buildPropertyContext(ctx, &resp, req.EntityID, includeSet, includeAll); err != nil {
+		if err := h.buildPropertyContext(ctx, &resp, req.EntityID, req.Source, includeSet, includeAll); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "Property not found")
 				return
@@ -174,8 +183,8 @@ func (h *ContextHandler) HandleContextFor(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (h *ContextHandler) buildGuestContext(ctx context.Context, resp *ContextResponse, email string, includeSet map[string]bool, includeAll bool) error {
-	guest, err := h.guestRepo.FindByEmail(ctx, email)
+func (h *ContextHandler) buildGuestContext(ctx context.Context, resp *ContextResponse, email string, source string, includeSet map[string]bool, includeAll bool) error {
+	guest, err := h.guestRepo.FindByEmail(ctx, email, source)
 	if err != nil {
 		return err
 	}
@@ -223,8 +232,8 @@ func (h *ContextHandler) buildGuestContext(ctx context.Context, resp *ContextRes
 	return nil
 }
 
-func (h *ContextHandler) buildPropertyContext(ctx context.Context, resp *ContextResponse, externalID string, includeSet map[string]bool, includeAll bool) error {
-	property, err := h.propertyRepo.FindByExternalID(ctx, externalID)
+func (h *ContextHandler) buildPropertyContext(ctx context.Context, resp *ContextResponse, externalID string, source string, includeSet map[string]bool, includeAll bool) error {
+	property, err := h.propertyRepo.FindByExternalID(ctx, externalID, source)
 	if err != nil {
 		return err
 	}
@@ -269,7 +278,7 @@ func (h *ContextHandler) buildBookingContext(ctx context.Context, resp *ContextR
 		FROM artifacts
 		WHERE artifact_type = 'booking'
 		  AND source_id = 'guesthost'
-		  AND content_raw LIKE '%' || $1 || '%'
+		  AND content_raw::jsonb @> jsonb_build_object('bookingId', $1)
 		ORDER BY created_at DESC
 		LIMIT 1
 	`, bookingID).Scan(&contentRaw)
@@ -386,7 +395,7 @@ func (h *ContextHandler) generateGuestHints(guest *db.GuestNode) []Communication
 	if guest.TotalStays > 1 {
 		hints = append(hints, CommunicationHint{
 			HintType:    "repeat_guest",
-			Description: "Returning guest with " + itoa(guest.TotalStays) + " previous stays",
+			Description: "Returning guest with " + strconv.Itoa(guest.TotalStays) + " previous stays",
 			Priority:    "medium",
 		})
 	}
@@ -453,27 +462,4 @@ func (h *ContextHandler) generatePropertyAlerts(property *db.PropertyNode) []Ale
 	}
 
 	return alerts
-}
-
-// itoa converts an int to a string without importing strconv.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var buf [20]byte
-	pos := len(buf)
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	for n > 0 {
-		pos--
-		buf[pos] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		pos--
-		buf[pos] = '-'
-	}
-	return string(buf[pos:])
 }

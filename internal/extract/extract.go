@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	readability "github.com/go-shiori/go-readability"
 )
@@ -244,13 +245,13 @@ func ExtractArticle(ctx context.Context, articleURL string) (*Result, error) {
 
 // ExtractText creates an extraction result from plain text input.
 func ExtractText(text string) *Result {
-	// Use first line as title, capped at 100 chars
+	// Use first line as title, capped at 100 bytes (rune-safe truncation)
 	title := text
 	if idx := strings.IndexByte(text, '\n'); idx >= 0 {
 		title = text[:idx]
 	}
 	if len(title) > 100 {
-		title = title[:100]
+		title = truncateTitleUTF8(title, 100)
 	}
 
 	return &Result{
@@ -266,4 +267,17 @@ func HashContent(content string) string {
 	h := sha256.New()
 	h.Write([]byte(strings.TrimSpace(strings.ToLower(content))))
 	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// truncateTitleUTF8 truncates a string to at most maxBytes bytes without
+// splitting a multi-byte UTF-8 character.
+func truncateTitleUTF8(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	// Walk backward from the cut point to find a valid rune boundary
+	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
+		maxBytes--
+	}
+	return s[:maxBytes]
 }

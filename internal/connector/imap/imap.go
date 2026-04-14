@@ -71,6 +71,9 @@ type EmailMessage struct {
 // Emails are read from the source_config "messages" field for local/test use,
 // or from a live IMAP connection when credentials are configured.
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	if c.health == connector.HealthDisconnected {
+		return nil, "", fmt.Errorf("IMAP connector %q: Sync called before Connect", c.id)
+	}
 	c.health = connector.HealthSyncing
 	defer func() {
 		if c.health == connector.HealthSyncing {
@@ -405,6 +408,10 @@ func parseEmailMessages(raw interface{}) ([]EmailMessage, error) {
 			Date:    time.Now(),
 		}
 
+		if msg.UID == "" {
+			continue
+		}
+
 		if uid := getStr(mm, "message_id"); uid != "" {
 			msg.MessageID = uid
 		}
@@ -484,6 +491,13 @@ func ParseQualifiers(q map[string]interface{}) QualifierConfig {
 		for _, s := range pl {
 			if str, ok := s.(string); ok {
 				cfg.PriorityLabels = append(cfg.PriorityLabels, str)
+			}
+		}
+	}
+	if sd, ok := q["skip_domains"].([]interface{}); ok {
+		for _, s := range sd {
+			if str, ok := s.(string); ok {
+				cfg.SkipDomains = append(cfg.SkipDomains, str)
 			}
 		}
 	}

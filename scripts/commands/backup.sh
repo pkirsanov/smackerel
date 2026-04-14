@@ -56,11 +56,24 @@ fi
 
 echo "Starting backup of database '$POSTGRES_DB'..."
 
-# Run pg_dump inside the container, pipe through gzip
-if ! docker exec "$CONTAINER_NAME" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists 2>/dev/null | gzip > "$BACKUP_PATH"; then
+# Run pg_dump inside the container, pipe through gzip.
+# Capture stderr so diagnostic errors from pg_dump are visible on failure.
+PGDUMP_STDERR_FILE="$(mktemp)"
+trap 'rm -f "$PGDUMP_STDERR_FILE"' EXIT
+if ! docker exec "$CONTAINER_NAME" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists 2>"$PGDUMP_STDERR_FILE" | gzip > "$BACKUP_PATH"; then
   rm -f "$BACKUP_PATH"
   echo "ERROR: pg_dump failed" >&2
+  if [[ -s "$PGDUMP_STDERR_FILE" ]]; then
+    echo "pg_dump stderr:" >&2
+    cat "$PGDUMP_STDERR_FILE" >&2
+  fi
   exit 1
+fi
+
+# Show any pg_dump warnings even on success
+if [[ -s "$PGDUMP_STDERR_FILE" ]]; then
+  echo "pg_dump warnings:" >&2
+  cat "$PGDUMP_STDERR_FILE" >&2
 fi
 
 # Validate output file is non-empty
@@ -68,6 +81,13 @@ FILESIZE="$(stat --format='%s' "$BACKUP_PATH" 2>/dev/null || stat -f '%z' "$BACK
 if [[ "$FILESIZE" -lt 100 ]]; then
   rm -f "$BACKUP_PATH"
   echo "ERROR: Backup file is empty — dump may have failed" >&2
+  exit 1
+fi
+
+# Validate gzip integrity before reporting success
+if ! gunzip -t "$BACKUP_PATH" 2>/dev/null; then
+  rm -f "$BACKUP_PATH"
+  echo "ERROR: Backup file failed gzip integrity check — dump may be corrupt" >&2
   exit 1
 fi
 

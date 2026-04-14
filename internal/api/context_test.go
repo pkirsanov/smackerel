@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -76,22 +77,9 @@ func TestHandleContextForInvalidJSON(t *testing.T) {
 	}
 }
 
-func TestHandleContextForGuestNotFound(t *testing.T) {
-	// GuestRepository with a nil pool will cause pgx to return an error.
-	// We simulate "not found" via a repository that has no backing DB.
-	// Since we cannot mock internal repos per policy, we rely on the real
-	// repository hitting a nil pool, which will not return pgx.ErrNoRows
-	// but rather a connection error → 500. This is expected behavior for
-	// the unit layer; the 404 path requires integration tests with a real DB.
-	//
-	// Instead, test the validation paths above (400s) at unit level,
-	// and note that 404/200 paths are covered by integration/e2e tests.
-	t.Skip("Guest 404 path requires real DB (integration test)")
-}
-
-func TestHandleContextForPropertyNotFound(t *testing.T) {
-	t.Skip("Property 404 path requires real DB (integration test)")
-}
+// NOTE: Guest/Property 404 paths require a real DB (integration-level concern).
+// Validation paths (400s) are covered by unit tests above; 404/200 paths are
+// covered by integration/e2e tests.
 
 // TestContextResponseEntityType validates that the response echoes the entity type/ID.
 func TestContextResponseEntityType(t *testing.T) {
@@ -168,5 +156,22 @@ func TestPropertyContextStructure(t *testing.T) {
 	}
 	if decoded.TotalBookings != 25 {
 		t.Errorf("TotalBookings = %d, want 25", decoded.TotalBookings)
+	}
+}
+
+// TestHandleContextForOversizedBody verifies the 1MB body limit (SEC-004-001).
+func TestHandleContextForOversizedBody(t *testing.T) {
+	handler := NewContextHandler(nil, nil, nil)
+
+	// Create a body larger than 1MB
+	oversized := strings.Repeat("x", 2<<20) // 2MB
+	req := httptest.NewRequest(http.MethodPost, "/api/context-for", strings.NewReader(oversized))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.HandleContextFor(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for oversized body, got %d", rec.Code)
 	}
 }

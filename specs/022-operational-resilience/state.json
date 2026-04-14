@@ -68,12 +68,21 @@
       "runStartedAt": "2026-04-10T14:00:00Z",
       "runCompletedAt": "2026-04-10T14:00:00Z",
       "summary": "Created design.md covering 8 resilience improvements: backup CLI (pg_dump via docker exec), capture DB health gate (503 on outage), cron per-group mutex (6 groups for 9 jobs), NATS DEADLETTER stream with handler-side routing, explicit sequential shutdown (replacing defer-based), Docker stop_grace_period 30s, ML health cache (atomic bool + TTL), and SST pool config (DB_MAX_CONNS/DB_MIN_CONNS). All 4 new SST config keys defined. Scenario-to-test mapping covers all 13 business scenarios. No open questions."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["harden", "implement", "test", "docs"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-13T05:40:00Z",
+      "runCompletedAt": "2026-04-13T05:50:00Z",
+      "summary": "Harden-to-doc pass 3: 4 findings (H-006 High: dead-letter off-by-one — skipped final processing attempt, H-007 Medium: no DBMinConns<=DBMaxConns cross-validation, H-008 Medium: ResultSubscriber.Stop() unbounded wg.Wait, H-009 Low: nil pool panic guard). All fixed. 4 new tests, 4 updated tests. All 33 Go packages PASS."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-10T14:00:00Z",
+  "lastUpdatedAt": "2026-04-13T05:50:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

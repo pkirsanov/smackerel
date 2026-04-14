@@ -199,6 +199,9 @@ case "$COMMAND" in
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_ui.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_detail.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_settings.sh"
+        # Phase 4: Expansion (maps + browser)
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_maps_import.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_browser_sync.sh"
         ;;
       stress)
         timeout 300 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"

@@ -37,6 +37,15 @@ telegram:
   media_group_window_seconds: 3
 
 connectors:
+  imap:
+    sync_schedule: "*/15 * * * *" # Every 15 minutes (spec R-202)
+
+  caldav:
+    sync_schedule: "*/15 * * * *" # Every 15 minutes
+
+  youtube:
+    sync_schedule: "0 */4 * * *" # Every 4 hours (spec R-203)
+
   google-keep:
     enabled: false
     sync_mode: takeout # takeout, gkeepapi, or hybrid
@@ -52,7 +61,7 @@ connectors:
     sync_schedule: "*/30 * * * *"
     import_dir: "" # path to directory where browser bookmark exports are placed
     watch_interval: 5m
-    archive_processed: true
+    archive_processed: false # Docker mounts import dir as :ro; enable only for non-Docker deployments
     processing_tier: full
     min_url_length: 10
     exclude_domains: []

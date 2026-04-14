@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,13 @@ func New() *Connector {
 	}
 }
 
+// setHealth updates the connector health status under lock.
+func (c *Connector) setHealth(status connector.HealthStatus) {
+	c.mu.Lock()
+	c.health = status
+	c.mu.Unlock()
+}
+
 // ID returns the unique identifier for this connector.
 func (c *Connector) ID() string { return c.id }
 
@@ -38,26 +46,26 @@ func (c *Connector) ID() string { return c.id }
 func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) error {
 	baseURL, err := extractString(cfg.SourceConfig, "base_url")
 	if err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("guesthost connect: %w", err)
+	}
+
+	parsed, err := url.Parse(baseURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		c.setHealth(connector.HealthError)
+		return fmt.Errorf("guesthost connect: base_url must be a valid http(s) URL: %s", baseURL)
 	}
 
 	apiKey, err := extractString(cfg.SourceConfig, "api_key")
 	if err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("guesthost connect: %w", err)
 	}
 
 	client := NewClient(baseURL, apiKey)
 
 	if err := client.Validate(ctx); err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("guesthost validate: %w", err)
 	}
 
@@ -78,6 +86,27 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		c.mu.Unlock()
 		return nil, cursor, fmt.Errorf("guesthost connector not connected")
 	}
+	client := c.client // snapshot before releasing lock
+	// Snapshot config values under lock to avoid data race (SEC-013-001)
+	var types string
+	if et, ok := c.config.SourceConfig["event_types"]; ok {
+		switch v := et.(type) {
+		case string:
+			types = v
+		case []interface{}:
+			// YAML list → join as CSV (H-013-002: don't silently ignore)
+			parts := make([]string, 0, len(v))
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					parts = append(parts, s)
+				}
+			}
+			types = strings.Join(parts, ",")
+		default:
+			slog.Warn("guesthost: event_types has unexpected type, fetching all types",
+				"type", fmt.Sprintf("%T", et))
+		}
+	}
 	c.health = connector.HealthSyncing
 	c.mu.Unlock()
 
@@ -85,28 +114,20 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	since := cursor
 	if since != "" {
 		if _, err := time.Parse(time.RFC3339, since); err != nil {
+			c.setHealth(connector.HealthError) // H-013-003: don't leave stale HealthSyncing
 			return nil, cursor, fmt.Errorf("invalid cursor timestamp: %w", err)
 		}
 	}
 
-	// Build event_types CSV from config
-	var types string
-	if et, ok := c.config.SourceConfig["event_types"]; ok {
-		if s, ok := et.(string); ok {
-			types = s
-		}
-	}
-
-	resp, err := c.client.FetchActivity(ctx, since, types, 100)
+	resp, err := client.FetchActivity(ctx, since, types, 100)
 	if err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return nil, cursor, fmt.Errorf("guesthost sync: %w", err)
 	}
 
 	var artifacts []connector.RawArtifact
 	var newCursor string
+	var latestTime time.Time
 
 	for _, event := range resp.Events {
 		artifact, err := NormalizeEvent(event)
@@ -116,8 +137,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			continue
 		}
 		artifacts = append(artifacts, artifact)
-		// Track the latest event timestamp as the new cursor
-		if event.Timestamp > newCursor {
+		// Track the latest event timestamp as the new cursor using proper time comparison
+		eventTime, parseErr := time.Parse(time.RFC3339, event.Timestamp)
+		if parseErr == nil && eventTime.After(latestTime) {
+			latestTime = eventTime
 			newCursor = event.Timestamp
 		}
 	}
@@ -126,9 +149,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		newCursor = cursor
 	}
 
-	c.mu.Lock()
-	c.health = connector.HealthHealthy
-	c.mu.Unlock()
+	c.setHealth(connector.HealthHealthy)
 
 	slog.Info("GuestHost sync complete", "id", c.id, "events", len(artifacts), "cursor", newCursor)
 	return artifacts, newCursor, nil

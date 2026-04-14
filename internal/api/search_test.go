@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -135,6 +136,45 @@ func TestDigestHandler_NoGenerator(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", rec.Code)
+	}
+}
+
+// === Harden H-015: DigestHandler rejects invalid date format ===
+
+func TestDigestHandler_InvalidDateFormat(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		DigestGen: nil, // won't be reached due to date validation
+	}
+
+	tests := []struct {
+		name string
+		date string
+		code int
+	}{
+		{"invalid format", "not-a-date", http.StatusBadRequest},
+		{"wrong separator", "2026/04/13", http.StatusBadRequest},
+		{"US format", "04-13-2026", http.StatusBadRequest},
+		{"partial date", "2026-04", http.StatusBadRequest},
+		{"empty date", "", http.StatusServiceUnavailable}, // passes validation, hits nil generator
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url := "/api/digest"
+			if tt.date != "" {
+				url += "?date=" + tt.date
+			}
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			rec := httptest.NewRecorder()
+			deps.DigestHandler(rec, req)
+
+			if rec.Code != tt.code {
+				t.Errorf("date=%q: expected %d, got %d", tt.date, tt.code, rec.Code)
+			}
+		})
 	}
 }
 
@@ -1237,4 +1277,207 @@ func TestSearchHandler_LogSearchCalledWithZeroResults(t *testing.T) {
 	if resp.Message != "I don't have anything about that yet" {
 		t.Errorf("expected empty results message, got %q", resp.Message)
 	}
+}
+
+// --- Content-Type validation tests ---
+
+func TestSearchHandler_WrongContentType(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	body := `{"query": "test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("expected 415 for wrong Content-Type, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "UNSUPPORTED_MEDIA_TYPE" {
+		t.Errorf("expected UNSUPPORTED_MEDIA_TYPE, got %q", resp.Error.Code)
+	}
+}
+
+func TestSearchHandler_NoContentType_Accepted(t *testing.T) {
+	se := &mockSearchEngine{results: []SearchResult{}, mode: "semantic"}
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		SearchEngine: se,
+	}
+
+	body := `{"query": "test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	// No Content-Type header — should still be accepted
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code == http.StatusUnsupportedMediaType {
+		t.Fatal("missing Content-Type should not trigger 415")
+	}
+}
+
+func TestSearchHandler_ContentTypeWithCharset_Accepted(t *testing.T) {
+	se := &mockSearchEngine{results: []SearchResult{}, mode: "semantic"}
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		SearchEngine: se,
+	}
+
+	body := `{"query": "test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code == http.StatusUnsupportedMediaType {
+		t.Fatal("application/json with charset should be accepted")
+	}
+}
+
+// --- Query length validation tests ---
+
+func TestSearchHandler_QueryTooLong(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	longQuery := strings.Repeat("a", maxQueryLen+1)
+	body := `{"query": "` + longQuery + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for too-long query, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Error.Code != "QUERY_TOO_LONG" {
+		t.Errorf("expected QUERY_TOO_LONG, got %q", resp.Error.Code)
+	}
+}
+
+func TestSearchHandler_QueryAtMaxLength_Accepted(t *testing.T) {
+	se := &mockSearchEngine{results: []SearchResult{}, mode: "semantic"}
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		SearchEngine: se,
+	}
+
+	exactQuery := strings.Repeat("a", maxQueryLen)
+	body := `{"query": "` + exactQuery + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code == http.StatusBadRequest {
+		var resp ErrorResponse
+		json.Unmarshal(rec.Body.Bytes(), &resp)
+		if resp.Error.Code == "QUERY_TOO_LONG" {
+			t.Fatal("query at exact max length should be accepted")
+		}
+	}
+}
+
+// === Chaos: ML health cache rapid state transitions ===
+
+// TestIsMLHealthy_Chaos_RapidFlapping verifies the health cache handles rapid
+// healthy→unhealthy→healthy transitions without stale state or panics.
+func TestIsMLHealthy_Chaos_RapidFlapping(t *testing.T) {
+	var state atomic.Bool
+	state.Store(true) // starts healthy
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if state.Load() {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+	}))
+	defer srv.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   srv.URL,
+		HealthCacheTTL: 1 * time.Millisecond, // near-zero TTL forces frequent probes
+	}
+
+	// Cycle through rapid state transitions
+	for cycle := 0; cycle < 20; cycle++ {
+		engine.mlHealthAt.Store(0) // force TTL expiration
+		healthy := engine.isMLHealthy(context.Background())
+
+		if state.Load() && !healthy {
+			t.Errorf("cycle %d: expected healthy=true when sidecar is up", cycle)
+		}
+		if !state.Load() && healthy {
+			t.Errorf("cycle %d: expected healthy=false when sidecar is down", cycle)
+		}
+
+		// Flip state
+		state.Store(!state.Load())
+	}
+}
+
+// TestIsMLHealthy_Chaos_ConcurrentFlapping verifies probe coalescing under
+// concurrent requests during sidecar flapping (race detector validation).
+func TestIsMLHealthy_Chaos_ConcurrentFlapping(t *testing.T) {
+	var state atomic.Bool
+	state.Store(true)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if state.Load() {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+	}))
+	defer srv.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   srv.URL,
+		HealthCacheTTL: 1 * time.Millisecond,
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(iter int) {
+			defer wg.Done()
+			engine.mlHealthAt.Store(0)
+			_ = engine.isMLHealthy(context.Background())
+			// Flip state mid-flight to stress the cache
+			if iter%3 == 0 {
+				state.Store(!state.Load())
+			}
+		}(i)
+	}
+	wg.Wait()
+	// Success = no panics, no data races (verified by -race flag)
 }

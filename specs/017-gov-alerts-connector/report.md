@@ -8,6 +8,81 @@ _No scopes have been implemented yet._
 
 ---
 
+## Regression Report — 2026-04-12
+
+**Trigger:** `regression` (stochastic-quality-sweep child workflow)
+**Mode:** `regression-to-doc`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Regression analysis of the Government Alerts connector. Found 2 regressions: a functional config-wiring gap in `main.go` that silently ignored user source enablement flags, and scope summary table drift in `scopes.md`. All unit tests green (118 test functions, all passing). No cross-spec conflicts found.
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| REG-001 | Config Wiring Regression | High | `cmd/core/main.go` built `alertsCfg.SourceConfig` with only `locations`, `min_earthquake_magnitude`, and `travel_locations` — missing `source_weather`, `source_tsunami`, `source_volcano`, `source_wildfire`, `source_airnow`, `source_gdacs`, and `airnow_api_key`. Config generation pipeline (`scripts/commands/config.sh`) correctly exports `GOV_ALERTS_SOURCE_*` env vars, but `main.go` did not consume them. Result: user source enable/disable choices silently ignored; connector always defaults to earthquake=true, weather=true, all others=false. | Fixed |
+| REG-002 | Documentation Drift | Medium | Scope Summary table in `scopes.md` claimed Scopes 3 and 5 were "Not Started" with "0 (not implemented)" tests, and Scope 4 was "In Progress". Actual state: all 6 scopes fully implemented with 118 test functions total. Table now corrected to match individual scope sections. | Fixed |
+
+### Remediation
+
+**REG-001 Fix — `cmd/core/main.go`:**
+
+Added 7 missing source config entries to the `alertsCfg.SourceConfig` map:
+```go
+"source_weather":  os.Getenv("GOV_ALERTS_SOURCE_WEATHER") == "true",
+"source_tsunami":  os.Getenv("GOV_ALERTS_SOURCE_TSUNAMI") == "true",
+"source_volcano":  os.Getenv("GOV_ALERTS_SOURCE_VOLCANO") == "true",
+"source_wildfire": os.Getenv("GOV_ALERTS_SOURCE_WILDFIRE") == "true",
+"source_airnow":   os.Getenv("GOV_ALERTS_SOURCE_AIRNOW") == "true",
+"source_gdacs":    os.Getenv("GOV_ALERTS_SOURCE_GDACS") == "true",
+"airnow_api_key":  os.Getenv("GOV_ALERTS_AIRNOW_API_KEY"),
+```
+
+**Regression Test — `internal/connector/alerts/alerts_test.go`:**
+
+Added `TestParseAlertsConfig_AllSourceFlags` — verifies ALL 7 source flags are parsed and respected by `parseAlertsConfig`. This test would fail if any source flag is no longer wired into the config path.
+
+**REG-002 Fix — `specs/017-gov-alerts-connector/scopes.md`:**
+
+Updated Scope Summary table: Scope 3 → Done (20+ tests), Scope 4 → Done, Scope 5 → Done (25+ tests).
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `cmd/core/main.go` | Added 7 missing source config entries to gov-alerts SourceConfig map |
+| `internal/connector/alerts/alerts_test.go` | Added `TestParseAlertsConfig_AllSourceFlags` regression test |
+| `specs/017-gov-alerts-connector/scopes.md` | Fixed Scope Summary table drift |
+| `specs/017-gov-alerts-connector/report.md` | Added this regression report |
+
+### Cross-Spec Conflict Check
+
+| Check | Result |
+|-------|--------|
+| Connector interface compliance (`ID/Connect/Sync/Health/Close`) | Compliant — all methods match `connector.Connector` |
+| NATS contract (`alerts.notify` in `nats_contract.json`) | Present and wired in `main.go` |
+| Config SST (`config/smackerel.yaml` → `config.sh` → `dev.env` → `main.go`) | Now complete — all 7 source flags flow end-to-end |
+| Registry wiring (`cmd/core/main.go`) | `alertsConn` registered and auto-started correctly |
+| Weather connector (016) overlap | No conflict — weather connector uses Open-Meteo for forecasts; gov-alerts uses NWS for severe weather alerts. Different data, different APIs. |
+| Cross-connector locations | No shared location config between weather and gov-alerts — each parses independently from env vars. No conflict. |
+
+### Baseline Test Status
+
+- `./smackerel.sh test unit` — All Go packages pass (118 alerts tests, 69 Python tests)
+- No test count decrease (net +1 new regression test)
+- No existing tests weakened or removed
+
+### Validation
+
+- `./smackerel.sh test unit` — all Go and Python tests pass
+- `cmd/core` rebuilt clean (0.027s)
+- `internal/connector/alerts` 118 tests pass (2.719s)
+
+---
+
 ## Reconciliation Report — 2026-04-11
 
 **Trigger:** `validate` (stochastic-quality-sweep child workflow)
@@ -200,3 +275,76 @@ Prior state: 16 tests (8 core + 8 chaos). Coverage gaps in:
 
 - `./smackerel.sh test unit` — all Go and Python tests pass (alerts package: 1.190s, ran fresh)
 - `./smackerel.sh check` — config SST verified, Go vet/lint clean
+
+---
+
+## Security Report — 2026-04-13
+
+**Trigger:** `security` (stochastic-quality-sweep R10 child workflow)
+**Mode:** `security-to-doc`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Security probe of the Government Alerts connector. Audited all 7 external data source clients (USGS earthquake, NWS weather, NOAA tsunami, USGS volcano, InciWeb wildfire, AirNow AQI, GDACS disasters) for OWASP Top 10 vulnerabilities. Found 2 concrete security gaps and remediated both with code fixes and targeted tests. Existing security posture was already strong (input sanitization, response body limits, coordinate validation, URL path escaping, control character stripping).
+
+### Existing Security Controls (Pre-Probe)
+
+| Control | Implementation | Status |
+|---------|---------------|--------|
+| Response body size limiting | `io.LimitReader(resp.Body, maxResponseBytes)` on all 7 sources (10MB cap) | Adequate |
+| Input sanitization | `sanitizeStringField()` strips control chars, truncates to 1024 chars | Adequate |
+| Alert ID validation | `sanitizeAlertID()` rejects empty/whitespace-only IDs | Adequate |
+| URL path escaping | `safeEventPageURL()` uses `url.PathEscape()` for USGS event page links | Adequate |
+| Coordinate validation | `isFiniteCoord()` rejects NaN, Inf, out-of-range lat/lon; applied to earthquakes and config | Adequate |
+| HTTP client timeout | 15-second timeout on all outbound requests | Adequate |
+| API key escaping | `url.QueryEscape()` on AirNow API key in query parameter | Adequate |
+| User-Agent identification | All outbound requests include `Smackerel/1.0 (gov-alerts-connector)` | Adequate |
+| Dedup map eviction | `knownEvictionAge` (7 days) prevents unbounded memory growth | Adequate |
+| Concurrent access protection | `sync.RWMutex` on all shared state (config, health, known map) | Adequate |
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| SEC-001 | XSS / URL Injection | High | Tsunami, wildfire, and GDACS feeds store URLs from external XML/RSS into `RawArtifact.URL` after only `sanitizeStringField()` processing. A compromised or spoofed feed could inject `javascript:`, `data:`, `vbscript:`, or other dangerous URI schemes. If these URLs are rendered as clickable links in a web UI or Telegram message, this is an XSS/phishing vector. | Fixed |
+| SEC-002 | Data Integrity / Injection | Medium | GDACS `geo_point` lat/lon parsed via `strconv.ParseFloat()` and stored in metadata without `isFiniteCoord()` validation. NaN, Inf, or out-of-range values could propagate into the knowledge graph. Inconsistent with earthquake coordinate validation. | Fixed |
+
+### Remediation
+
+**SEC-001 Fix — External URL scheme allowlisting:**
+
+Added `sanitizeExternalURL()` function that validates URL scheme is `http` or `https` only. Returns empty string for dangerous schemes (`javascript:`, `data:`, `vbscript:`, `ftp:`, etc.) or unparseable URLs. Applied to all three external feed URL sources:
+
+- `fetchTsunamiAlerts()` — `entry.Link.Href` now passes through `sanitizeExternalURL(sanitizeStringField(...))`
+- `fetchWildfireAlerts()` — `item.Link` now passes through `sanitizeExternalURL(sanitizeStringField(...))`
+- `fetchGDACSAlerts()` — `item.Link` now passes through `sanitizeExternalURL(sanitizeStringField(...))`
+
+USGS earthquake (hardcoded URL via `safeEventPageURL`), NWS weather (no URL field), AirNow (no URL field), and USGS volcano (no URL field) were not affected.
+
+**SEC-002 Fix — GDACS coordinate validation:**
+
+Updated `normalizeGDACSAlert()` to validate parsed lat/lon with `isFiniteCoord()` before storing in metadata. Both coordinates are now set atomically only when both are valid, matching the earthquake coordinate validation pattern.
+
+### New Security Tests (8 tests added)
+
+| Test | Category | What It Verifies |
+|------|----------|------------------|
+| `TestSanitizeExternalURL` (11 sub) | Unit | URL scheme allowlisting: http/https preserved; javascript/data/vbscript/ftp/empty/no-scheme rejected; case-insensitive |
+| `TestTsunamiAlerts_JavascriptURLRejected` | Integration | Tsunami feed with `javascript:alert(...)` link → artifact URL is empty |
+| `TestWildfireAlerts_DataURLRejected` | Integration | Wildfire feed with `data:text/html,...` link → artifact URL is empty |
+| `TestGDACSAlerts_VbscriptURLRejected` | Integration | GDACS feed with `vbscript:MsgBox` link → artifact URL is empty |
+| `TestNormalizeGDACSAlert_InvalidCoordinatesRejected` (6 sub) | Unit | Valid coords stored; lat>90, lon>200, NaN, Inf, both-invalid all rejected; geo_point string always present |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/alerts/alerts.go` | Added `sanitizeExternalURL()`. Applied to tsunami, wildfire, GDACS link parsing. Fixed GDACS geo_point coordinate validation with `isFiniteCoord()`. |
+| `internal/connector/alerts/alerts_test.go` | Added 8 security tests (5 unit test functions with 17 subtests + 3 integration tests) |
+
+### Validation
+
+- `./smackerel.sh test unit` — all Go and Python tests pass (alerts package: 2.233s, ran fresh)
+- `./smackerel.sh lint` — clean, no errors

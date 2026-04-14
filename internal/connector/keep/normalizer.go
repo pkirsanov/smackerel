@@ -3,6 +3,7 @@ package keep
 import (
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -34,12 +35,12 @@ func NewNormalizer(config KeepConfig) *Normalizer {
 
 // Normalize converts a TakeoutNote into a RawArtifact.
 func (n *Normalizer) Normalize(note *TakeoutNote, noteID, sourcePath string) (*connector.RawArtifact, error) {
-	if n.shouldSkip(note) {
+	content := n.buildContent(note)
+	if n.shouldSkip(note, content) {
 		return nil, nil
 	}
 
 	noteType := n.classifyNote(note)
-	content := n.buildContent(note)
 	title := note.Title
 	if title == "" && len(content) > 0 {
 		title = content
@@ -192,48 +193,119 @@ func (n *Normalizer) buildContent(note *TakeoutNote) string {
 		}
 	}
 
-	// Image attachment references
+	// Image attachment references — use sanitized base filename only (CWE-22)
 	for _, a := range note.Attachments {
+		safePath := sanitizeAttachmentPath(a.FilePath)
+		if safePath == "" {
+			safePath = "(unknown)"
+		}
 		if strings.HasPrefix(a.MimeType, "image/") {
-			parts = append(parts, fmt.Sprintf("[Image attached: %s]", a.FilePath))
+			parts = append(parts, fmt.Sprintf("[Image attached: %s]", safePath))
 		}
 		if strings.HasPrefix(a.MimeType, "audio/") {
-			parts = append(parts, fmt.Sprintf("[Audio attached: %s]", a.FilePath))
+			parts = append(parts, fmt.Sprintf("[Audio attached: %s]", safePath))
 		}
 	}
 
 	return strings.Join(parts, "\n")
 }
 
+// maxMetadataArrayLen caps metadata arrays to prevent resource exhaustion
+// from crafted Takeout exports with excessive labels/annotations/etc (CWE-400).
+const maxMetadataArrayLen = 500
+
+// isBasicEmail performs a minimal format check on email addresses to prevent
+// injection via metadata if content is rendered in a web context (CWE-79).
+func isBasicEmail(s string) bool {
+	// Must contain exactly one @, non-empty local and domain parts, no angle brackets or spaces.
+	if strings.ContainsAny(s, "<> \t\n\r") {
+		return false
+	}
+	at := strings.Index(s, "@")
+	if at < 1 || at >= len(s)-1 {
+		return false
+	}
+	// Only one @
+	if strings.Count(s, "@") != 1 {
+		return false
+	}
+	return true
+}
+
+// sanitizeAttachmentPath strips path traversal sequences from attachment file paths
+// to prevent directory traversal if a downstream consumer resolves them (CWE-22).
+func sanitizeAttachmentPath(p string) string {
+	// Use only the base name — attachment paths in Takeout are relative filenames.
+	base := filepath.Base(p)
+	// filepath.Base returns "." for empty strings — treat as empty.
+	if base == "." {
+		return ""
+	}
+	return base
+}
+
 // buildMetadata constructs the R-005 metadata map.
 func (n *Normalizer) buildMetadata(note *TakeoutNote, noteID, sourcePath string) map[string]interface{} {
 	parser := n.parser
 
-	labels := make([]string, 0, len(note.Labels))
-	for _, l := range note.Labels {
+	labelLen := len(note.Labels)
+	if labelLen > maxMetadataArrayLen {
+		labelLen = maxMetadataArrayLen
+	}
+	labels := make([]string, 0, labelLen)
+	for i, l := range note.Labels {
+		if i >= maxMetadataArrayLen {
+			break
+		}
 		labels = append(labels, l.Name)
 	}
 
-	collaborators := make([]string, 0, len(note.Sharees))
-	for _, s := range note.Sharees {
-		if s.Email != "" {
+	collabLen := len(note.Sharees)
+	if collabLen > maxMetadataArrayLen {
+		collabLen = maxMetadataArrayLen
+	}
+	collaborators := make([]string, 0, collabLen)
+	for i, s := range note.Sharees {
+		if i >= maxMetadataArrayLen {
+			break
+		}
+		if s.Email != "" && isBasicEmail(s.Email) {
 			collaborators = append(collaborators, s.Email)
 		}
 	}
 
-	annotations := make([]map[string]string, 0, len(note.Annotations))
-	for _, a := range note.Annotations {
+	annLen := len(note.Annotations)
+	if annLen > maxMetadataArrayLen {
+		annLen = maxMetadataArrayLen
+	}
+	annotations := make([]map[string]string, 0, annLen)
+	for i, a := range note.Annotations {
+		if i >= maxMetadataArrayLen {
+			break
+		}
+		// Apply same URL scheme filtering to metadata as to content (CWE-79).
+		sanitizedURL := a.URL
+		if sanitizedURL != "" && !isSafeURL(sanitizedURL) {
+			sanitizedURL = ""
+		}
 		annotations = append(annotations, map[string]string{
-			"url":         a.URL,
+			"url":         sanitizedURL,
 			"title":       a.Title,
 			"description": a.Description,
 		})
 	}
 
-	attachments := make([]map[string]string, 0, len(note.Attachments))
-	for _, a := range note.Attachments {
+	attLen := len(note.Attachments)
+	if attLen > maxMetadataArrayLen {
+		attLen = maxMetadataArrayLen
+	}
+	attachments := make([]map[string]string, 0, attLen)
+	for i, a := range note.Attachments {
+		if i >= maxMetadataArrayLen {
+			break
+		}
 		attachments = append(attachments, map[string]string{
-			"file_path": a.FilePath,
+			"file_path": sanitizeAttachmentPath(a.FilePath),
 			"mime_type": a.MimeType,
 		})
 	}
@@ -270,14 +342,38 @@ func (n *Normalizer) buildMetadata(note *TakeoutNote, noteID, sourcePath string)
 }
 
 // shouldSkip determines whether a note should be skipped entirely.
-func (n *Normalizer) shouldSkip(note *TakeoutNote) bool {
+// content is the pre-built output of buildContent to avoid redundant work.
+//
+// Priority mirrors R-008 qualifier evaluation order:
+// trashed → skip always (highest priority)
+// pinned/labeled/has-images → never skip (these are high-signal notes)
+// archived + !IncludeArchived → skip (user-deprioritized)
+// empty/short content → skip
+func (n *Normalizer) shouldSkip(note *TakeoutNote, content string) bool {
 	if note.IsTrashed {
 		return true
 	}
 	if note.IsArchived && !n.config.IncludeArchived {
+		// High-signal notes survive archived exclusion per R-008 priority:
+		// pinned, labeled, and image-bearing notes are never dropped.
+		if note.IsPinned {
+			return false
+		}
+		if len(note.Labels) > 0 {
+			return false
+		}
+		hasImages := false
+		for _, a := range note.Attachments {
+			if strings.HasPrefix(a.MimeType, "image/") {
+				hasImages = true
+				break
+			}
+		}
+		if hasImages {
+			return false
+		}
 		return true
 	}
-	content := n.buildContent(note)
 	// Skip completely empty notes (no text, no list, no attachments, no annotations, no title)
 	if content == "" && note.Title == "" {
 		return true

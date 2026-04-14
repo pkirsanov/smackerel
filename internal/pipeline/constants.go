@@ -9,6 +9,11 @@ const (
 	StatusFailed    ProcessingStatus = "failed"
 )
 
+// MaxNATSMessageSize is the maximum allowed NATS message payload size (1MB).
+// NATS default max_payload is 1MB. Messages exceeding this will be rejected
+// by the server, so we check before publishing to surface a clear error.
+const MaxNATSMessageSize = 1048576
+
 // Source ID constants — canonical source identifiers shared across capture API,
 // Telegram bot, connectors, and tier assignment. Defined here (not in processor.go)
 // so adding a new connector does not require editing the processor.

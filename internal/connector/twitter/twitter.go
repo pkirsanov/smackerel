@@ -1,16 +1,19 @@
 package twitter
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
@@ -28,10 +31,19 @@ const (
 	// maxArchiveFileSize is the maximum size of a tweets.js file we will read (500 MiB).
 	// Prevents OOM from crafted or corrupt archives.
 	maxArchiveFileSize = 500 * 1024 * 1024
+
+	// maxTweetCount is the maximum number of tweets we will process from a single
+	// archive file. Prevents OOM when an archive contains millions of tiny tweets
+	// that individually pass the file-size check (CWE-770).
+	maxTweetCount = 500_000
 )
 
 // tweetIDPattern validates that a tweet ID contains only digits.
 var tweetIDPattern = regexp.MustCompile(`^[0-9]+$`)
+
+// safeURLSchemes lists the URL schemes allowed in tweet entity URLs.
+// Reject javascript:, data:, vbscript: etc. to prevent XSS (CWE-79/601).
+var safeURLSchemes = map[string]bool{"http": true, "https": true}
 
 // TwitterConfig holds parsed Twitter-specific configuration.
 type TwitterConfig struct {
@@ -83,10 +95,11 @@ type Thread struct {
 
 // Connector implements the Twitter/X connector.
 type Connector struct {
-	id     string
-	health connector.HealthStatus
-	mu     sync.RWMutex
-	config TwitterConfig
+	id      string
+	health  connector.HealthStatus
+	mu      sync.RWMutex
+	config  TwitterConfig
+	syncing bool
 }
 
 // New creates a new Twitter connector.
@@ -139,15 +152,35 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.mu.Lock()
+	if c.health == connector.HealthDisconnected {
+		c.mu.Unlock()
+		return nil, cursor, fmt.Errorf("cannot sync: connector is disconnected")
+	}
+	if c.syncing {
+		c.mu.Unlock()
+		return nil, cursor, fmt.Errorf("cannot sync: sync already in progress")
+	}
+	c.syncing = true
 	c.health = connector.HealthSyncing
 	c.mu.Unlock()
+
+	var syncFailed bool
 	defer func() {
 		c.mu.Lock()
-		c.health = connector.HealthHealthy
+		c.syncing = false
+		// Only restore health if connector was not closed during sync.
+		if c.health != connector.HealthDisconnected {
+			if syncFailed {
+				c.health = connector.HealthDegraded
+			} else {
+				c.health = connector.HealthHealthy
+			}
+		}
 		c.mu.Unlock()
 	}()
 
 	var allArtifacts []connector.RawArtifact
+	var syncErr error
 	newCursor := cursor
 
 	// Archive import
@@ -155,12 +188,19 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		artifacts, cur, err := c.syncArchive(ctx, cursor)
 		if err != nil {
 			slog.Warn("twitter archive sync failed", "error", err)
+			syncFailed = true
+			syncErr = fmt.Errorf("archive sync: %w", err)
 		} else {
 			allArtifacts = append(allArtifacts, artifacts...)
 			if cur > newCursor {
 				newCursor = cur
 			}
 		}
+	}
+
+	// Propagate error when all sync sources failed and no artifacts collected.
+	if syncFailed && len(allArtifacts) == 0 {
+		return nil, cursor, syncErr
 	}
 
 	return allArtifacts, newCursor, nil
@@ -218,6 +258,12 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 		return nil, cursor, fmt.Errorf("parse tweets.js: %w", err)
 	}
 
+	// Enforce maximum tweet count to prevent OOM from archives with
+	// massive tweet counts that individually pass the file-size check (CWE-770).
+	if len(tweets) > maxTweetCount {
+		return nil, cursor, fmt.Errorf("tweets.js contains %d tweets, exceeding max %d", len(tweets), maxTweetCount)
+	}
+
 	// Build thread map for thread reconstruction
 	threads := buildThreads(tweets)
 	threadMap := make(map[string]*Thread)
@@ -264,8 +310,7 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 
 // parseTweetsJS strips the JS wrapper and parses the JSON array.
 func parseTweetsJS(data []byte) ([]ArchiveTweet, error) {
-	s := string(data)
-	idx := strings.Index(s, "[")
+	idx := bytes.Index(data, []byte("["))
 	if idx < 0 {
 		return nil, fmt.Errorf("no JSON array found in tweets.js")
 	}
@@ -273,7 +318,7 @@ func parseTweetsJS(data []byte) ([]ArchiveTweet, error) {
 	var wrapper []struct {
 		Tweet ArchiveTweet `json:"tweet"`
 	}
-	if err := json.Unmarshal([]byte(s[idx:]), &wrapper); err != nil {
+	if err := json.Unmarshal(data[idx:], &wrapper); err != nil {
 		return nil, err
 	}
 
@@ -366,11 +411,14 @@ func normalizeTweet(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread) 
 	}
 	metadata["hashtags"] = hashtags
 
-	urls := make([]string, len(tweet.Entities.URLs))
-	for i, u := range tweet.Entities.URLs {
-		urls[i] = u.ExpandedURL
+	urls := make([]string, 0, len(tweet.Entities.URLs))
+	for _, u := range tweet.Entities.URLs {
+		if isSafeURL(u.ExpandedURL) {
+			urls = append(urls, u.ExpandedURL)
+		}
 	}
 	metadata["urls"] = urls
+	metadata["url_count"] = len(urls)
 
 	if thread != nil {
 		metadata["is_thread"] = true
@@ -442,9 +490,35 @@ func assignTweetTier(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread)
 func buildTweetTitle(tweet ArchiveTweet) string {
 	title := tweet.FullText
 	if len(title) > 80 {
-		title = title[:80] + "..."
+		// Truncate at a valid UTF-8 boundary to avoid producing invalid
+		// byte sequences from multi-byte characters (CWE-838).
+		title = truncateUTF8(title, 80) + "..."
 	}
 	return title
+}
+
+// truncateUTF8 truncates s to at most maxBytes while respecting UTF-8
+// character boundaries. The returned string is always valid UTF-8.
+func truncateUTF8(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	// Walk backwards from maxBytes to find a valid rune boundary.
+	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
+		maxBytes--
+	}
+	return s[:maxBytes]
+}
+
+// isSafeURL checks that u is an absolute URL with an allowed scheme (http/https).
+// Rejects javascript:, data:, vbscript:, and other dangerous URI schemes
+// that could lead to XSS when entity URLs are rendered downstream (CWE-79/601).
+func isSafeURL(u string) bool {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return false
+	}
+	return safeURLSchemes[strings.ToLower(parsed.Scheme)]
 }
 
 // parseTweetTime parses Twitter's date format. Returns an error if the
@@ -484,6 +558,15 @@ func parseTwitterConfig(config connector.ConnectorConfig) (TwitterConfig, error)
 	if token, ok := config.Credentials["bearer_token"]; ok {
 		cfg.BearerToken = token
 		cfg.APIEnabled = true
+	}
+
+	// Fail-loud when API mode requires a bearer token but none was provided (CWE-287).
+	if (cfg.SyncMode == SyncModeAPI || cfg.SyncMode == SyncModeHybrid) && cfg.BearerToken == "" {
+		if cfg.SyncMode == SyncModeAPI {
+			return TwitterConfig{}, fmt.Errorf("bearer_token credential required for sync_mode %q", cfg.SyncMode)
+		}
+		// Hybrid mode: warn but allow — archive is the primary path.
+		slog.Warn("bearer_token not set for hybrid mode; API polling disabled", "sync_mode", string(cfg.SyncMode))
 	}
 
 	return cfg, nil

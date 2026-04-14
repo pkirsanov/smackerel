@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+// maxActivities caps the number of activities parsed from a single Takeout
+// import to prevent memory exhaustion from multi-year exports.
+const maxActivities = 50000
+
 // ActivityType represents the type of map activity.
 type ActivityType string
 
@@ -22,13 +26,15 @@ const (
 
 // TakeoutActivity represents a parsed Google Takeout activity.
 type TakeoutActivity struct {
-	Type        ActivityType `json:"activity_type"`
-	StartTime   time.Time    `json:"start_time"`
-	EndTime     time.Time    `json:"end_time"`
-	Route       []LatLng     `json:"route"`
-	DistanceKm  float64      `json:"distance_km"`
-	DurationMin float64      `json:"duration_min"`
-	ElevationM  float64      `json:"elevation_m"`
+	Type          ActivityType `json:"activity_type"`
+	StartTime     time.Time    `json:"start_time"`
+	EndTime       time.Time    `json:"end_time"`
+	Route         []LatLng     `json:"route"`
+	StartLocation LatLng       `json:"start_location"`
+	EndLocation   LatLng       `json:"end_location"`
+	DistanceKm    float64      `json:"distance_km"`
+	DurationMin   float64      `json:"duration_min"`
+	ElevationM    float64      `json:"elevation_m"`
 }
 
 // LatLng represents a geographic coordinate.
@@ -102,6 +108,22 @@ func ParseTakeoutJSON(data []byte) ([]TakeoutActivity, error) {
 			continue
 		}
 
+		// Validate start/end location coordinates (same bounds as waypoints).
+		startLat := float64(seg.StartLocation.LatitudeE7) / 1e7
+		startLng := float64(seg.StartLocation.LongitudeE7) / 1e7
+		endLat := float64(seg.EndLocation.LatitudeE7) / 1e7
+		endLng := float64(seg.EndLocation.LongitudeE7) / 1e7
+		if !validCoord(startLat, startLng) {
+			slog.Warn("skipping activity with out-of-range start location",
+				"lat", startLat, "lng", startLng)
+			continue
+		}
+		if !validCoord(endLat, endLng) {
+			slog.Warn("skipping activity with out-of-range end location",
+				"lat", endLat, "lng", endLng)
+			continue
+		}
+
 		actType := ClassifyActivity(seg.ActivityType, float64(seg.Distance)/1000.0)
 
 		var route []LatLng
@@ -109,7 +131,7 @@ func ParseTakeoutJSON(data []byte) ([]TakeoutActivity, error) {
 			lat := float64(wp.LatE7) / 1e7
 			lng := float64(wp.LngE7) / 1e7
 			// Skip waypoints with out-of-range coordinates.
-			if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+			if !validCoord(lat, lng) {
 				slog.Warn("skipping waypoint with out-of-range coordinates",
 					"lat", lat, "lng", lng)
 				continue
@@ -121,13 +143,27 @@ func ParseTakeoutJSON(data []byte) ([]TakeoutActivity, error) {
 		}
 
 		activities = append(activities, TakeoutActivity{
-			Type:        actType,
-			StartTime:   startTime,
-			EndTime:     endTime,
-			Route:       route,
+			Type:      actType,
+			StartTime: startTime,
+			EndTime:   endTime,
+			Route:     route,
+			StartLocation: LatLng{
+				Lat: startLat,
+				Lng: startLng,
+			},
+			EndLocation: LatLng{
+				Lat: endLat,
+				Lng: endLng,
+			},
 			DistanceKm:  float64(seg.Distance) / 1000.0,
 			DurationMin: endTime.Sub(startTime).Minutes(),
 		})
+
+		if len(activities) >= maxActivities {
+			slog.Warn("activities cap reached, truncating import",
+				"cap", maxActivities)
+			break
+		}
 	}
 
 	return activities, nil
@@ -189,6 +225,11 @@ func ToGeoJSON(route []LatLng) map[string]interface{} {
 			"coordinates": coords,
 		}
 	}
+}
+
+// validCoord returns true when lat ∈ [-90, 90] and lng ∈ [-180, 180].
+func validCoord(lat, lng float64) bool {
+	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
 }
 
 // Haversine calculates distance between two LatLng points in km.

@@ -43,7 +43,9 @@ type hospitalityMeta struct {
 	GuestEmail   string  `json:"guestEmail"`
 	GuestName    string  `json:"guestName"`
 	BookingID    string  `json:"bookingId"`
-	Revenue      float64 `json:"totalPrice"`
+	CheckIn      string  `json:"checkinDate"`
+	CheckOut     string  `json:"checkoutDate"`
+	Revenue      float64 `json:"totalAmount"`
 	Category     string  `json:"category"`
 	Amount       float64 `json:"amount"`
 	Rating       string  `json:"rating"`
@@ -160,8 +162,13 @@ func (l *HospitalityLinker) linkBooking(ctx context.Context, artifactID string, 
 
 	// Link artifact to booking period
 	if property != nil {
-		metadata := fmt.Sprintf(`{"checkin": %q, "checkout": %q}`, meta.GuestEmail, meta.BookingID)
-		if err := l.createEdgeWithMetadata(ctx, "artifact", artifactID, "property", property.ID, "DURING_STAY", 1.0, metadata); err == nil {
+		metaMap := map[string]string{"checkin": meta.CheckIn, "checkout": meta.CheckOut}
+		metadataBytes, marshalErr := json.Marshal(metaMap)
+		if marshalErr != nil {
+			slog.Warn("hospitality linker: marshal booking metadata failed", "error", marshalErr)
+			metadataBytes = []byte("{}")
+		}
+		if err := l.createEdgeWithMetadata(ctx, "artifact", artifactID, "property", property.ID, "DURING_STAY", 1.0, string(metadataBytes)); err == nil {
 			count++
 		}
 	}
@@ -211,8 +218,13 @@ func (l *HospitalityLinker) linkExpense(ctx context.Context, artifactID string, 
 	count := 0
 
 	if property != nil {
-		metadata := fmt.Sprintf(`{"category": %q, "amount": %f}`, meta.Category, meta.Amount)
-		if err := l.createEdgeWithMetadata(ctx, "artifact", artifactID, "property", property.ID, "ISSUE_AT", 0.7, metadata); err == nil {
+		metaMap := map[string]interface{}{"category": meta.Category, "amount": meta.Amount}
+		metadataBytes, marshalErr := json.Marshal(metaMap)
+		if marshalErr != nil {
+			slog.Warn("hospitality linker: marshal expense metadata failed", "error", marshalErr)
+			metadataBytes = []byte("{}")
+		}
+		if err := l.createEdgeWithMetadata(ctx, "artifact", artifactID, "property", property.ID, "ISSUE_AT", 0.7, string(metadataBytes)); err == nil {
 			count++
 		}
 	}
@@ -225,8 +237,13 @@ func (l *HospitalityLinker) linkMessage(ctx context.Context, artifactID string, 
 	count := 0
 
 	if property != nil {
-		metadata := fmt.Sprintf(`{"booking_id": %q}`, meta.BookingID)
-		if err := l.createEdgeWithMetadata(ctx, "artifact", artifactID, "property", property.ID, "DURING_STAY", 0.8, metadata); err == nil {
+		metaMap := map[string]string{"booking_id": meta.BookingID}
+		metadataBytes, marshalErr := json.Marshal(metaMap)
+		if marshalErr != nil {
+			slog.Warn("hospitality linker: marshal message metadata failed", "error", marshalErr)
+			metadataBytes = []byte("{}")
+		}
+		if err := l.createEdgeWithMetadata(ctx, "artifact", artifactID, "property", property.ID, "DURING_STAY", 0.8, string(metadataBytes)); err == nil {
 			count++
 		}
 	}

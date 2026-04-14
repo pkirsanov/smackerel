@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 )
+
+// maxTokenResponseBytes limits the size of token endpoint responses to 1 MB.
+// Prevents memory exhaustion from misconfigured OAuth providers or proxy redirects.
+const maxTokenResponseBytes = 1 << 20 // 1 MB
 
 // Token represents an OAuth2 token.
 type Token struct {
@@ -117,6 +122,12 @@ func (g *GenericOAuth2) tokenRequest(ctx context.Context, data url.Values) (*Tok
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// Read truncated error body for diagnostic context
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		detail := strings.TrimSpace(string(errBody))
+		if detail != "" {
+			return nil, fmt.Errorf("token endpoint returned %d for %s: %s", resp.StatusCode, g.Name, detail)
+		}
 		return nil, fmt.Errorf("token endpoint returned %d for %s", resp.StatusCode, g.Name)
 	}
 
@@ -127,7 +138,7 @@ func (g *GenericOAuth2) tokenRequest(ctx context.Context, data url.Values) (*Tok
 		TokenType    string `json:"token_type"`
 		Scope        string `json:"scope"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxTokenResponseBytes)).Decode(&tokenResp); err != nil {
 		return nil, fmt.Errorf("decode token response: %w", err)
 	}
 

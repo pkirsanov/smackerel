@@ -182,3 +182,147 @@ func TestIsKnown_NilPool(t *testing.T) {
 		t.Error("IsKnown() = true with nil pool, want false")
 	}
 }
+
+// T-2-12: NormalizeURL preserves port numbers.
+func TestNormalizeURL_WithPort(t *testing.T) {
+	got := NormalizeURL("HTTPS://Example.COM:8080/page")
+	want := "https://example.com:8080/page"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q", got, want)
+	}
+}
+
+// T-2-13: NormalizeURL strips all tracking params leaving clean URL.
+func TestNormalizeURL_AllTrackingParamsStripped(t *testing.T) {
+	got := NormalizeURL("https://example.com/page?utm_source=a&utm_medium=b&utm_campaign=c&utm_term=d&utm_content=e&fbclid=f&gclid=g&ref=h")
+	want := "https://example.com/page"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q", got, want)
+	}
+}
+
+// T-2-14: NormalizeURL strips auth credentials from URLs (F-CHAOS-R24-002).
+func TestNormalizeURL_WithCredentials(t *testing.T) {
+	got := NormalizeURL("https://user:pass@Example.COM/page")
+	want := "https://example.com/page"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q", got, want)
+	}
+}
+
+// T-2-15: NormalizeURL with query params but no tracking params preserves them.
+func TestNormalizeURL_NoTrackingParams(t *testing.T) {
+	got := NormalizeURL("https://example.com/search?q=test&page=2")
+	// No tracking params to strip → URL is returned unchanged (no re-encoding)
+	want := "https://example.com/search?q=test&page=2"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q", got, want)
+	}
+}
+
+// T-2-16: NormalizeURL handles FTP scheme.
+func TestNormalizeURL_FTPScheme(t *testing.T) {
+	got := NormalizeURL("FTP://Files.Example.COM/readme.txt")
+	want := "ftp://files.example.com/readme.txt"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q", got, want)
+	}
+}
+
+// T-2-17: FilterNew with empty artifacts and nil pool returns empty.
+func TestFilterNew_EmptyArtifacts(t *testing.T) {
+	d := NewURLDeduplicator(nil)
+	result, dupes, err := d.FilterNew(context.Background(), []connector.RawArtifact{})
+	if err != nil {
+		t.Fatalf("FilterNew() error: %v", err)
+	}
+	if dupes != 0 {
+		t.Errorf("dupes = %d, want 0", dupes)
+	}
+	if len(result) != 0 {
+		t.Errorf("result len = %d, want 0", len(result))
+	}
+}
+
+// T-2-18: FilterNew with nil artifacts and nil pool returns nil.
+func TestFilterNew_NilArtifacts(t *testing.T) {
+	d := NewURLDeduplicator(nil)
+	result, dupes, err := d.FilterNew(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("FilterNew() error: %v", err)
+	}
+	if dupes != 0 {
+		t.Errorf("dupes = %d, want 0", dupes)
+	}
+	if result != nil {
+		t.Errorf("result = %v, want nil", result)
+	}
+}
+
+// T-2-19: NormalizeURL with only a fragment and no query.
+func TestNormalizeURL_OnlyFragment(t *testing.T) {
+	got := NormalizeURL("https://example.com/page#top")
+	want := "https://example.com/page"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q", got, want)
+	}
+}
+
+// T-2-20: NormalizeURL with empty path (just host).
+func TestNormalizeURL_HostOnly(t *testing.T) {
+	got := NormalizeURL("https://example.com")
+	want := "https://example.com"
+	if got != want {
+		t.Errorf("NormalizeURL() = %q, want %q", got, want)
+	}
+}
+
+// ============================================================================
+// CHAOS R24 — Adversarial regression tests for NormalizeURL
+// ============================================================================
+
+// T-CHAOS-R24-002: NormalizeURL MUST strip userinfo to prevent credential
+// leaks into SourceRef. Before the fix, "https://user:pass@host/p" would
+// store the credentials in the database.
+func TestChaosR24_NormalizeURLStripsUserinfo(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "user:pass basic auth",
+			in:   "https://user:pass@example.com/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "user-only (no password)",
+			in:   "https://admin@example.com/path",
+			want: "https://example.com/path",
+		},
+		{
+			name: "encoded credentials",
+			in:   "https://u%40ser:p%40ss@example.com/path",
+			want: "https://example.com/path",
+		},
+		{
+			name: "userinfo with port",
+			in:   "https://root:secret@db.example.com:5432/admin",
+			want: "https://db.example.com:5432/admin",
+		},
+		{
+			name: "ftp with credentials",
+			in:   "ftp://anonymous:email@files.example.com/pub",
+			want: "ftp://files.example.com/pub",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeURL(tt.in)
+			if got != tt.want {
+				t.Errorf("CHAOS R24-002: NormalizeURL(%q) = %q, want %q — userinfo leaked", tt.in, got, tt.want)
+			}
+		})
+	}
+}

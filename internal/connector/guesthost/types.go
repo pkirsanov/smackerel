@@ -26,11 +26,11 @@ type BookingData struct {
 	GuestID      string  `json:"guestId"`
 	GuestEmail   string  `json:"guestEmail"`
 	GuestName    string  `json:"guestName"`
-	CheckIn      string  `json:"checkIn"`
-	CheckOut     string  `json:"checkOut"`
+	CheckIn      string  `json:"checkinDate"`
+	CheckOut     string  `json:"checkoutDate"`
 	Source       string  `json:"source"`
 	Status       string  `json:"status"`
-	TotalPrice   float64 `json:"totalPrice"`
+	TotalPrice   float64 `json:"totalAmount"`
 }
 
 // ReviewData is the typed payload for review-related activity events.

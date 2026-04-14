@@ -31,52 +31,30 @@ func (l *Linker) LinkArtifact(ctx context.Context, artifactID string) (int, erro
 		return 0, nil
 	}
 
+	type strategy struct {
+		name string
+		fn   func(context.Context, string) (int, error)
+	}
+
+	strategies := []strategy{
+		{"similarity", l.linkBySimilarity},
+		{"entity", l.linkByEntities},
+		{"topic", l.linkByTopics},
+		{"temporal", l.linkByTemporal},
+		{"source", l.linkBySource},
+	}
+
 	var totalEdges int
 	var errs []string
 
-	// 1. Vector similarity linking
-	simEdges, err := l.linkBySimilarity(ctx, artifactID)
-	if err != nil {
-		slog.Warn("similarity linking failed", "artifact_id", artifactID, "error", err)
-		errs = append(errs, fmt.Sprintf("similarity: %v", err))
-	} else {
-		totalEdges += simEdges
-	}
-
-	// 2. Entity-based linking (people)
-	entEdges, err := l.linkByEntities(ctx, artifactID)
-	if err != nil {
-		slog.Warn("entity linking failed", "artifact_id", artifactID, "error", err)
-		errs = append(errs, fmt.Sprintf("entity: %v", err))
-	} else {
-		totalEdges += entEdges
-	}
-
-	// 3. Topic clustering
-	topicEdges, err := l.linkByTopics(ctx, artifactID)
-	if err != nil {
-		slog.Warn("topic linking failed", "artifact_id", artifactID, "error", err)
-		errs = append(errs, fmt.Sprintf("topic: %v", err))
-	} else {
-		totalEdges += topicEdges
-	}
-
-	// 4. Temporal linking (same-day)
-	tempEdges, err := l.linkByTemporal(ctx, artifactID)
-	if err != nil {
-		slog.Warn("temporal linking failed", "artifact_id", artifactID, "error", err)
-		errs = append(errs, fmt.Sprintf("temporal: %v", err))
-	} else {
-		totalEdges += tempEdges
-	}
-
-	// 5. Source linking (same source_id)
-	srcEdges, err := l.linkBySource(ctx, artifactID)
-	if err != nil {
-		slog.Warn("source linking failed", "artifact_id", artifactID, "error", err)
-		errs = append(errs, fmt.Sprintf("source: %v", err))
-	} else {
-		totalEdges += srcEdges
+	for _, s := range strategies {
+		edges, err := s.fn(ctx, artifactID)
+		if err != nil {
+			slog.Warn(s.name+" linking failed", "artifact_id", artifactID, "error", err)
+			errs = append(errs, fmt.Sprintf("%s: %v", s.name, err))
+		} else {
+			totalEdges += edges
+		}
 	}
 
 	slog.Info("artifact linking complete",

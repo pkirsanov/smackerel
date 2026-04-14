@@ -138,7 +138,7 @@ Exit code: 0
 - [x] Folder structure preserved as topic hints
 - [x] Duplicate URLs detected and skipped
 - [x] Async processing with progress reporting
-- [x] POST /api/bookmarks/import endpoint works
+- [ ] POST /api/bookmarks/import endpoint works — **NOT IMPLEMENTED** (directory-based import via BookmarksConnector exists instead)
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior
 - [x] Broader E2E regression suite passes
 - [x] Zero warnings, lint/format clean
@@ -193,10 +193,10 @@ Exit code: 0
 - Unit tests: `internal/auth/oauth_test.go` — OAuth2 connect/disconnect flow tests
 
 ### DoD Checklist
-- [x] Connector cards show status, last sync, items, errors
+- [ ] Connector cards show status, last sync, items, errors — **PARTIAL** (shows name + enabled/disabled + last_error only; missing last_sync, items_synced, sync-now button)
 - [x] OAuth connect/disconnect flow works for Google services
-- [x] Manual "Sync Now" button triggers immediate sync
-- [x] Bookmark file upload with progress reporting
+- [ ] Manual "Sync Now" button triggers immediate sync — **NOT IMPLEMENTED** (no POST web handler)
+- [ ] Bookmark file upload with progress reporting — **NOT IMPLEMENTED** (no upload web handler)
 - [x] All status indicators use monochrome icons, no emoji
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior
 - [x] Broader E2E regression suite passes
@@ -249,6 +249,32 @@ All 67 DoD items verified against source code.
 Exit code: 0
 ```
 
+---
+
+## Reconciliation Findings (2026-04-12)
+
+**Phase Agent:** bubbles.validate (reconcile-to-doc trigger)
+**Executed:** YES
+
+### Drift Summary
+
+| ID | Scope | Finding | Severity | Status |
+|----|-------|---------|----------|--------|
+| F-REC-001 | 5 | `POST /api/bookmarks/import` endpoint not in router; directory-based BookmarksConnector exists instead | Medium | DoD unchecked, evidence corrected |
+| F-REC-002 | 6 | Momentum threshold evidence said ≥15/≥8 but code uses >50/≥10 | Low | Evidence corrected |
+| F-REC-003 | 7 | Settings page has no "Sync Now" POST handler or HTMX interactivity | Medium | DoD unchecked |
+| F-REC-004 | 7 | Settings page has no bookmark file upload handler | Medium | DoD unchecked |
+| F-REC-005 | 7 | Settings connector cards only show name + enabled + last_error; missing last_sync, items_synced | Medium | DoD unchecked, evidence corrected |
+
+### Scope Status Changes
+- Scope 5 (Bookmarks Import): Done → **In Progress** (1 unchecked DoD item: REST endpoint)
+- Scope 7 (Settings UI Connectors): Done → **In Progress** (3 unchecked DoD items: connector cards detail, sync trigger, bookmark upload)
+- Scopes 1-4 and 6: No changes — evidence is accurate
+
+### Remaining Work to Complete Spec
+1. **Scope 5**: Either implement `POST /api/bookmarks/import` REST endpoint OR update the DoD to accept directory-based import as the sanctioned mechanism
+2. **Scope 7**: Implement Settings page interactive features — connector card detail (last_sync, items_synced), "Sync Now" POST handler with HTMX, bookmark file upload handler
+
 ### Chaos Evidence
 
 **Phase Agent:** bubbles.chaos
@@ -272,6 +298,57 @@ Exit code: 0
 git log --oneline shows connector framework, IMAP/CalDAV/YouTube/bookmarks connectors, topic lifecycle, and settings UI all committed.
 git diff HEAD shows scopes.md heading fixes, DoD evidence blocks, state.json delivery-lockdown update, report.md evidence sections, scenario-manifest.json creation.
 git status confirms no untracked source files outside specs/ artifacts.
+
+---
+
+## DevOps Findings (2026-04-14)
+
+**Phase Agent:** bubbles.devops (stochastic-quality-sweep R21 trigger)
+**Executed:** YES
+
+### Finding Summary
+
+| ID | Area | Finding | Severity | Status |
+|----|------|---------|----------|--------|
+| DEV-003-001 | Config SST | OAuth connector sync schedules (IMAP, CalDAV, YouTube) missing from SST pipeline — no `smackerel.yaml` entries, no env var generation, no Docker propagation. All three fell back to `defaultSyncInterval=5m`. IMAP spec-mandated=15m, YouTube spec-mandated=4h. YouTube at 5m would exhaust API quota. | High | **Fixed** |
+| DEV-003-002 | Health aggregation | `/api/health` overall status aggregation only checked `"down"` and `"stale"` — missed connector-specific statuses `"error"`, `"failing"`, `"disconnected"`, `"degraded"`. Connector failures invisible to monitoring. | High | **Fixed** |
+
+### DEV-003-001: OAuth Connector Sync Schedules SST (Fixed)
+
+**Root Cause:** `config/smackerel.yaml` had no `connectors.imap`, `connectors.caldav`, or `connectors.youtube` sections. `scripts/commands/config.sh` had no extraction for these. `docker-compose.yml` had no env var propagation. `cmd/core/main.go` created `ConnectorConfig` with empty `SyncSchedule` for all OAuth connectors, sharing a single config object.
+
+**Fix:**
+- Added `connectors.imap` (15m), `connectors.caldav` (15m), `connectors.youtube` (4h) to `config/smackerel.yaml`
+- Added `IMAP_SYNC_SCHEDULE`, `CALDAV_SYNC_SCHEDULE`, `YOUTUBE_SYNC_SCHEDULE` extraction to `scripts/commands/config.sh`
+- Added env var output to config.sh template and `docker-compose.yml` smackerel-core service
+- Refactored `main.go` OAuth auto-start to create per-connector `ConnectorConfig` with individually sourced `SyncSchedule` from env
+
+**Evidence:**
+- `config/generated/dev.env` now emits: `IMAP_SYNC_SCHEDULE=*/15 * * * *`, `CALDAV_SYNC_SCHEDULE=*/15 * * * *`, `YOUTUBE_SYNC_SCHEDULE=0 */4 * * *`
+- Adversarial test `TestGetSyncInterval_OAuthConnectorSchedules` verifies Gmail=15m, CalDAV=15m, YouTube=4h and detects regression to default 5m
+- `./smackerel.sh config generate` → `./smackerel.sh build` → `./smackerel.sh test unit` → all pass
+
+### DEV-003-002: Health Aggregation Connector States (Fixed)
+
+**Root Cause:** `internal/api/health.go` overall health aggregation loop: `if svc.Status == "down" || svc.Status == "stale"` — only two statuses checked. Connector health uses statuses from `connector.HealthStatus`: `"healthy"`, `"syncing"`, `"degraded"`, `"failing"`, `"error"`, `"disconnected"`. The aggregation missed 4 of 6 non-healthy statuses.
+
+**Fix:** Changed the aggregation to a `switch` statement covering `"down"`, `"stale"`, `"error"`, `"failing"`, `"disconnected"`, `"degraded"`.
+
+**Evidence:**
+- Adversarial test `TestHealthHandler_ConnectorErrorDegrades` covers 6 connector statuses: verifies `"error"`, `"failing"`, `"disconnected"`, `"degraded"` all degrade overall health, while `"healthy"` and `"syncing"` do not
+- `./smackerel.sh test unit` — all 33 Go packages PASS
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `config/smackerel.yaml` | Added `connectors.imap`, `connectors.caldav`, `connectors.youtube` sections with sync schedules |
+| `scripts/commands/config.sh` | Added extraction + output for `IMAP_SYNC_SCHEDULE`, `CALDAV_SYNC_SCHEDULE`, `YOUTUBE_SYNC_SCHEDULE` |
+| `docker-compose.yml` | Added 3 env vars to smackerel-core service |
+| `cmd/core/main.go` | Per-connector `ConnectorConfig` with individual `SyncSchedule` from env |
+| `internal/api/health.go` | Health aggregation switch covers connector error states |
+| `internal/api/health_test.go` | +1 adversarial test (6 subtests) for connector health aggregation |
+| `internal/connector/sync_interval_test.go` | +1 adversarial test (3 subtests) for OAuth connector schedules |
 
 ### TDD Evidence
 
@@ -325,5 +402,66 @@ Exit code: 0
 
 $ ./smackerel.sh test unit
 25 Go packages PASS, 11 Python tests PASS
+Exit code: 0
+```
+
+---
+
+## Security-to-Doc Sweep (April 13, 2026)
+
+**Trigger:** Stochastic quality sweep R06 — security trigger
+**Agent:** bubbles.workflow (security-to-doc mode)
+
+### Scope
+
+Full security review of spec 003 (Phase 2: Passive Ingestion) covering:
+- OAuth2 implementation (auth/oauth.go, store.go, handler.go)
+- Connector framework and all 4 connectors (IMAP, CalDAV, YouTube, Bookmarks)
+- API router, middleware, and web handlers
+- Token storage encryption, CSRF protection, input validation
+- File I/O boundary safety (bookmarks import)
+
+### Findings
+
+| # | Finding | Severity | OWASP Category | Resolution |
+|---|---------|----------|----------------|------------|
+| F-SEC-001 | `generateState()` ignores `crypto/rand.Read` error — if entropy source fails, CSRF state is all zeros (predictable) | Medium | A07:2021 Identification & Auth Failures | **Fixed** — `generateState()` now returns `(string, error)`, caller returns 500 on failure |
+| F-SEC-002 | `NewTokenStore` with empty encryption key stores OAuth tokens in plaintext without any runtime warning | Low | A02:2021 Cryptographic Failures | **Fixed** — Added `slog.Warn` when encryption key is empty |
+
+### What Passed Review (no findings)
+
+| Area | Assessment |
+|------|-----------|
+| SQL queries | All parameterized ($1, $2) — no injection vectors |
+| API response bodies | All use `io.LimitReader` (1MB–10MB) — no resource exhaustion |
+| OAuth CSRF | State validation with 10-min TTL, 100-entry cap, one-time use |
+| OAuth rate limiting | `httprate.LimitByIP(10, 1*time.Minute)` on start + callback |
+| XSS protection | `html/template` auto-escaping + `html.EscapeString` for provider name |
+| Security headers | CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, Permissions-Policy |
+| Bearer auth | Constant-time `crypto/subtle.ConstantTimeCompare` |
+| File path traversal | `filepath.Abs` boundary check + `os.Lstat` TOCTOU symlink guard + file size limit |
+| Symlink protection | Both `DirEntry.Type()` and `Lstat` double-check in bookmarks connector |
+| Panic recovery | Circuit breaker (5 panics in 10-min window) prevents restart loops |
+| Token encryption | AES-256-GCM with random nonce, key derived via SHA-256 |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/auth/handler.go` | `generateState()` returns `(string, error)` instead of `string`; `StartHandler` returns 500 on failure (F-SEC-001) |
+| `internal/auth/store.go` | `NewTokenStore` logs `slog.Warn` when encryption key is empty (F-SEC-002); added `log/slog` import |
+| `internal/auth/oauth_test.go` | Updated `TestGenerateState_Unique` and `TestGenerateState_Length` to handle new error return |
+
+### Verification
+
+```
+$ ./smackerel.sh test unit
+33 Go packages PASS (internal/auth recompiled fresh at 0.480s)
+11 Python tests PASS
+Exit code: 0
+
+$ ./smackerel.sh lint
+Go lint: PASS, Python lint: PASS
+All checks passed!
 Exit code: 0
 ```

@@ -158,3 +158,156 @@ func TestTrigramUnicodeSafety(t *testing.T) {
 		}
 	}
 }
+
+// --- DiffLabels edge cases ---
+
+func TestDiffLabelsNilInputs(t *testing.T) {
+	added, removed := DiffLabels(nil, nil)
+	if len(added) != 0 || len(removed) != 0 {
+		t.Errorf("nil/nil: added=%v, removed=%v — both should be empty", added, removed)
+	}
+}
+
+func TestDiffLabelsEmptySlices(t *testing.T) {
+	added, removed := DiffLabels([]string{}, []string{})
+	if len(added) != 0 || len(removed) != 0 {
+		t.Errorf("empty/empty: added=%v, removed=%v — both should be empty", added, removed)
+	}
+}
+
+func TestDiffLabelsIdenticalSets(t *testing.T) {
+	added, removed := DiffLabels([]string{"A", "B", "C"}, []string{"A", "B", "C"})
+	if len(added) != 0 || len(removed) != 0 {
+		t.Errorf("identical sets: added=%v, removed=%v — both should be empty", added, removed)
+	}
+}
+
+func TestDiffLabelsAllNew(t *testing.T) {
+	added, removed := DiffLabels([]string{"X", "Y"}, []string{})
+	if len(added) != 2 {
+		t.Errorf("all new: added=%v, want [X Y]", added)
+	}
+	if len(removed) != 0 {
+		t.Errorf("all new: removed=%v, want empty", removed)
+	}
+}
+
+func TestDiffLabelsAllRemoved(t *testing.T) {
+	added, removed := DiffLabels([]string{}, []string{"X", "Y"})
+	if len(added) != 0 {
+		t.Errorf("all removed: added=%v, want empty", added)
+	}
+	if len(removed) != 2 {
+		t.Errorf("all removed: removed=%v, want [X Y]", removed)
+	}
+}
+
+func TestDiffLabelsDuplicates(t *testing.T) {
+	// DiffLabels uses set-based comparison — duplicates in input are deduplicated via map
+	added, removed := DiffLabels([]string{"A", "A", "B"}, []string{"A", "C", "C"})
+	// added: B (A is in previous, B is not)
+	// removed: C (C is in previous, not in current)
+	hasB := false
+	for _, a := range added {
+		if a == "B" {
+			hasB = true
+		}
+	}
+	if !hasB {
+		t.Errorf("added should contain B: %v", added)
+	}
+	hasC := false
+	for _, r := range removed {
+		if r == "C" {
+			hasC = true
+		}
+	}
+	if !hasC {
+		t.Errorf("removed should contain C: %v", removed)
+	}
+}
+
+// --- topicIDFromName edge cases ---
+
+func TestTopicIDFromNameEmpty(t *testing.T) {
+	id := topicIDFromName("")
+	if id != "topic-" {
+		t.Errorf("topicIDFromName(\"\") = %q, want \"topic-\"", id)
+	}
+}
+
+func TestTopicIDFromNameSpecialChars(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"Machine Learning", "topic-machine-learning"},
+		{"  padded  ", "topic-padded"},
+		{"UPPER CASE", "topic-upper-case"},
+		{"single", "topic-single"},
+	}
+	for _, tt := range tests {
+		got := topicIDFromName(tt.name)
+		if got != tt.want {
+			t.Errorf("topicIDFromName(%q) = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
+
+// --- MapLabels: multiple labels in one call ---
+
+func TestMapLabelsMultiple(t *testing.T) {
+	tm := NewTopicMapper()
+	labels := []string{"Recipes", "ML", "Unknown Topic", "Travel"}
+	topics := []string{"Recipes", "Travel", "Machine Learning"}
+	matches := tm.MapLabels(labels, topics)
+	if len(matches) != 4 {
+		t.Fatalf("matches = %d, want 4", len(matches))
+	}
+
+	expectedTypes := map[string]string{
+		"Recipes":       "exact",
+		"ML":            "abbreviation",
+		"Unknown Topic": "created",
+		"Travel":        "exact",
+	}
+	for _, m := range matches {
+		if expected, ok := expectedTypes[m.LabelName]; ok {
+			if m.MatchType != expected {
+				t.Errorf("label %q: type = %q, want %q", m.LabelName, m.MatchType, expected)
+			}
+		}
+	}
+}
+
+// --- fuzzyMatch: empty topics list ---
+
+func TestFuzzyMatchEmptyTopics(t *testing.T) {
+	tm := NewTopicMapper()
+	best, sim := tm.fuzzyMatch("anything", []string{})
+	if best != "" {
+		t.Errorf("fuzzyMatch with empty topics: best = %q, want empty", best)
+	}
+	if sim != 0 {
+		t.Errorf("fuzzyMatch with empty topics: similarity = %f, want 0", sim)
+	}
+}
+
+// --- trigramSimilarity: both empty ---
+
+func TestTrigramSimilarityBothEmpty(t *testing.T) {
+	a := make(map[string]bool)
+	b := make(map[string]bool)
+	sim := trigramSimilarity(a, b)
+	if sim != 0 {
+		t.Errorf("trigramSimilarity(empty, empty) = %f, want 0", sim)
+	}
+}
+
+func TestTrigramSimilarityIdentical(t *testing.T) {
+	a := trigrams("hello")
+	sim := trigramSimilarity(a, a)
+	if sim != 1.0 {
+		t.Errorf("trigramSimilarity(identical) = %f, want 1.0", sim)
+	}
+}

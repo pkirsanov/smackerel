@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,6 +30,8 @@ func NewTokenStore(pool *pgxpool.Pool, encryptionKey string) *TokenStore {
 		// Derive a 32-byte key from the auth token using SHA-256
 		h := sha256.Sum256([]byte(encryptionKey))
 		key = h[:]
+	} else {
+		slog.Warn("TokenStore: encryption key is empty — OAuth tokens will be stored in PLAINTEXT. Set SMACKEREL_AUTH_TOKEN for encrypted storage.")
 	}
 	return &TokenStore{pool: pool, encKey: key}
 }
