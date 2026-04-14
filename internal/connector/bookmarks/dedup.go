@@ -39,6 +39,9 @@ func NormalizeURL(rawURL string) string {
 	u.Scheme = strings.ToLower(u.Scheme)
 	u.Host = strings.ToLower(u.Host)
 
+	// F-CHAOS-R24-002: Strip userinfo to prevent credential leaks into SourceRef.
+	u.User = nil
+
 	// Strip trailing slash from path (unless path is just "/")
 	if len(u.Path) > 1 && strings.HasSuffix(u.Path, "/") {
 		u.Path = strings.TrimRight(u.Path, "/")

@@ -81,14 +81,14 @@ func AssembleHospitalityContext(ctx context.Context, pool *pgxpool.Pool) (*Hospi
 
 	hCtx := &HospitalityDigestContext{}
 
-	arrivals, err := queryTodayArrivals(ctx, pool, today)
+	arrivals, err := queryGuestStaysByDate(ctx, pool, "checkin_date", "arrivals", today)
 	if err != nil {
 		slog.Warn("hospitality digest: failed to query arrivals", "error", err)
 	} else {
 		hCtx.TodayArrivals = arrivals
 	}
 
-	departures, err := queryTodayDepartures(ctx, pool, today)
+	departures, err := queryGuestStaysByDate(ctx, pool, "checkout_date", "departures", today)
 	if err != nil {
 		slog.Warn("hospitality digest: failed to query departures", "error", err)
 	} else {
@@ -130,9 +130,14 @@ func AssembleHospitalityContext(ctx context.Context, pool *pgxpool.Pool) (*Hospi
 	return hCtx, nil
 }
 
-// queryTodayArrivals returns bookings whose check-in date is today.
-func queryTodayArrivals(ctx context.Context, pool *pgxpool.Pool, today string) ([]GuestStay, error) {
-	rows, err := pool.Query(ctx, `
+// queryGuestStaysByDate returns bookings matching a given date field (checkin_date or checkout_date).
+// The dateField parameter is validated to prevent SQL injection.
+func queryGuestStaysByDate(ctx context.Context, pool *pgxpool.Pool, dateField, label, today string) ([]GuestStay, error) {
+	if dateField != "checkin_date" && dateField != "checkout_date" {
+		return nil, fmt.Errorf("unsupported hospitality date field: %s", dateField)
+	}
+
+	rows, err := pool.Query(ctx, fmt.Sprintf(`
 		SELECT
 			COALESCE(a.metadata->>'guest_name', ''),
 			COALESCE(a.metadata->>'guest_email', ''),
@@ -144,12 +149,12 @@ func queryTodayArrivals(ctx context.Context, pool *pgxpool.Pool, today string) (
 		FROM artifacts a
 		WHERE a.source_id = 'guesthost'
 		  AND a.artifact_type = 'booking'
-		  AND a.metadata->>'checkin_date' = $1
+		  AND a.metadata->>'%s' = $1
 		ORDER BY a.created_at
 		LIMIT 50
-	`, today)
+	`, dateField), today)
 	if err != nil {
-		return nil, fmt.Errorf("query today arrivals: %w", err)
+		return nil, fmt.Errorf("query today %s: %w", label, err)
 	}
 	defer rows.Close()
 
@@ -158,46 +163,7 @@ func queryTodayArrivals(ctx context.Context, pool *pgxpool.Pool, today string) (
 		var s GuestStay
 		if err := rows.Scan(&s.GuestName, &s.GuestEmail, &s.PropertyName,
 			&s.CheckIn, &s.CheckOut, &s.Source, &s.TotalPrice); err != nil {
-			slog.Warn("arrivals scan failed", "error", err)
-			continue
-		}
-		stays = append(stays, s)
-	}
-	if err := rows.Err(); err != nil {
-		return stays, err
-	}
-	return stays, nil
-}
-
-// queryTodayDepartures returns bookings whose check-out date is today.
-func queryTodayDepartures(ctx context.Context, pool *pgxpool.Pool, today string) ([]GuestStay, error) {
-	rows, err := pool.Query(ctx, `
-		SELECT
-			COALESCE(a.metadata->>'guest_name', ''),
-			COALESCE(a.metadata->>'guest_email', ''),
-			COALESCE(a.metadata->>'property_name', ''),
-			COALESCE(a.metadata->>'checkin_date', ''),
-			COALESCE(a.metadata->>'checkout_date', ''),
-			a.source_id,
-			COALESCE((a.metadata->>'total_price')::numeric, 0)
-		FROM artifacts a
-		WHERE a.source_id = 'guesthost'
-		  AND a.artifact_type = 'booking'
-		  AND a.metadata->>'checkout_date' = $1
-		ORDER BY a.created_at
-		LIMIT 50
-	`, today)
-	if err != nil {
-		return nil, fmt.Errorf("query today departures: %w", err)
-	}
-	defer rows.Close()
-
-	var stays []GuestStay
-	for rows.Next() {
-		var s GuestStay
-		if err := rows.Scan(&s.GuestName, &s.GuestEmail, &s.PropertyName,
-			&s.CheckIn, &s.CheckOut, &s.Source, &s.TotalPrice); err != nil {
-			slog.Warn("departures scan failed", "error", err)
+			slog.Warn(label+" scan failed", "error", err)
 			continue
 		}
 		stays = append(stays, s)

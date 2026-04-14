@@ -33,8 +33,21 @@ Minimum bar:
 - raw output
 - real exit status or tool result
 - enough output to verify what actually happened
+- `**Claim Source:**` tag classifying evidence provenance (see evidence-rules.md)
 
 Summaries are not evidence.
+
+## Evidence Provenance Standard
+
+Every evidence block MUST include a `**Claim Source:**` tag. Valid values:
+
+- `executed` — output directly proves the DoD claim without interpretation
+- `interpreted` — command ran but DoD conclusion requires agent reasoning about the output (must include `**Interpretation:**` line)
+- `not-run` — no command was executed; item MUST stay `[ ]` with Uncertainty Declaration
+
+A missing `**Claim Source:**` tag is treated as `interpreted` by default — never as `executed`. When in doubt about whether evidence is `executed` or `interpreted`, agents MUST use `interpreted`.
+
+Mislabeling `interpreted` evidence as `executed` is a provenance fabrication and triggers the same consequences as other fabrication types.
 
 ## Anti-Fabrication Rules
 
@@ -48,6 +61,8 @@ Block completion when any of these occur:
 - narrative completion claims without a structured RESULT-ENVELOPE (equivalent to fabrication for tracking purposes)
 - unresolved pseudo-completion language in report or scope artifacts (see Gate G040 in state-gates.md)
 - **analysis-as-execution (Gate G071):** reading files that a script would check, performing equivalent pattern matching, and reporting predicted findings as command output — even when predictions are accurate (see evidence-rules.md)
+- **provenance fabrication:** labeling evidence as `executed` when the DoD claim requires interpretation of the output
+- **missing provenance:** evidence blocks without `**Claim Source:**` tags (treated as `interpreted` by default)
 
 ## Test Execution Gate
 

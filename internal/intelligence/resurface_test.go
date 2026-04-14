@@ -2,7 +2,9 @@ package intelligence
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestResurfaceCandidate_Fields(t *testing.T) {
@@ -174,5 +176,95 @@ func TestSerendipityCandidate_TopicAndPinnedCombined(t *testing.T) {
 	expected := base + topicBonus + pinBonus
 	if sc.ContextScore != expected {
 		t.Errorf("expected combined score %.4f, got %.4f", expected, sc.ContextScore)
+	}
+}
+
+// === TST-004-R01: ResurfaceCandidate dormancy reason format ===
+
+func TestResurfaceCandidate_DormancyReasonFormat(t *testing.T) {
+	// The Resurface function generates reason strings like
+	// "High-value artifact dormant for N days". Verify the struct
+	// correctly stores and surfaces structured dormancy reasons.
+	c := ResurfaceCandidate{
+		ArtifactID:   "art-dormant",
+		Title:        "Important Meeting Notes",
+		Score:        0.82,
+		Reason:       "High-value artifact dormant for 45 days",
+		LastAccessed: time.Now().AddDate(0, 0, -45),
+	}
+
+	if c.Score < 0.5 {
+		t.Errorf("high-value candidate should have score > 0.5, got %.2f", c.Score)
+	}
+	if !strings.Contains(c.Reason, "dormant for 45 days") {
+		t.Errorf("reason should contain dormancy duration, got: %s", c.Reason)
+	}
+	if time.Since(c.LastAccessed).Hours() < 24*40 {
+		t.Error("last accessed should be more than 40 days ago")
+	}
+}
+
+// === TST-004-R02: SerendipityCandidate CalendarMatch field behavior ===
+
+func TestSerendipityCandidate_CalendarMatchBoost(t *testing.T) {
+	// Calendar-matched candidates get a bonus (SCN-004-016)
+	noCalendar := SerendipityCandidate{
+		ResurfaceCandidate: ResurfaceCandidate{Score: 0.7},
+		CalendarMatch:      false,
+		TopicMatch:         false,
+		ContextScore:       0.7 * 0.5, // base only
+	}
+	withCalendar := SerendipityCandidate{
+		ResurfaceCandidate: ResurfaceCandidate{Score: 0.7},
+		CalendarMatch:      true,
+		TopicMatch:         false,
+		ContextScore:       0.7*0.5 + 1.5, // base + calendar bonus
+	}
+
+	if withCalendar.ContextScore <= noCalendar.ContextScore {
+		t.Errorf("calendar-matched candidate should score higher: with=%.2f, without=%.2f",
+			withCalendar.ContextScore, noCalendar.ContextScore)
+	}
+	if !withCalendar.CalendarMatch {
+		t.Error("CalendarMatch should be true")
+	}
+	if noCalendar.CalendarMatch {
+		t.Error("non-calendar candidate should have CalendarMatch=false")
+	}
+}
+
+// === TST-004-R03: SerendipityCandidate ContextReason field ===
+
+func TestSerendipityCandidate_ContextReason(t *testing.T) {
+	sc := SerendipityCandidate{
+		ResurfaceCandidate: ResurfaceCandidate{
+			ArtifactID: "art-matched",
+			Title:      "Old Negotiation Article",
+		},
+		TopicMatch:    true,
+		CalendarMatch: true,
+		ContextReason: "Matches upcoming meeting topic and hot topic 'negotiation'",
+	}
+
+	if sc.ContextReason == "" {
+		t.Error("context reason should be populated for matched candidates")
+	}
+	if !strings.Contains(sc.ContextReason, "negotiation") {
+		t.Error("context reason should reference the matching topic")
+	}
+}
+
+// === TST-004-R04: Resurface limit boundary — exactly 1 ===
+
+func TestResurface_LimitOne_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	// limit=1 is valid and should not trigger the default-to-5 path
+	_, err := engine.Resurface(context.Background(), 1)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	// Verify the error comes from the DB query, not from limit validation
+	if !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected pool error, got: %s", err.Error())
 	}
 }

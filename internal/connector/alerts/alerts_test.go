@@ -3436,3 +3436,475 @@ func TestNATSAlertNotifier_PublishesJSON(t *testing.T) {
 		t.Errorf("decoded Instructions = %q", decoded.Instructions)
 	}
 }
+
+// --- Regression test: source config flags wiring ---
+
+// TestParseAlertsConfig_AllSourceFlags verifies ALL source flags are parsed from config
+// and not silently ignored. This is a regression test for the bug where main.go did not
+// wire GOV_ALERTS_SOURCE_* env vars into SourceConfig, causing user config to be ignored.
+func TestParseAlertsConfig_AllSourceFlags(t *testing.T) {
+	cfg, err := parseAlertsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+			"source_weather":  false,
+			"source_tsunami":  true,
+			"source_volcano":  true,
+			"source_wildfire": true,
+			"source_airnow":   true,
+			"source_gdacs":    true,
+			"airnow_api_key":  "test-key-123",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Earthquake defaults to true (no explicit source_earthquake key parsed).
+	if !cfg.SourceEarthquake {
+		t.Error("SourceEarthquake should default to true")
+	}
+
+	// Weather explicitly set to false.
+	if cfg.SourceWeather {
+		t.Error("SourceWeather should be false when explicitly set")
+	}
+
+	// All optional sources explicitly enabled.
+	if !cfg.SourceTsunami {
+		t.Error("SourceTsunami should be true when source_tsunami=true")
+	}
+	if !cfg.SourceVolcano {
+		t.Error("SourceVolcano should be true when source_volcano=true")
+	}
+	if !cfg.SourceWildfire {
+		t.Error("SourceWildfire should be true when source_wildfire=true")
+	}
+	if !cfg.SourceAirNow {
+		t.Error("SourceAirNow should be true when source_airnow=true")
+	}
+	if !cfg.SourceGDACS {
+		t.Error("SourceGDACS should be true when source_gdacs=true")
+	}
+	if cfg.AirNowAPIKey != "test-key-123" {
+		t.Errorf("AirNowAPIKey = %q, want test-key-123", cfg.AirNowAPIKey)
+	}
+}
+
+// =====================================================
+// Partial Failure Resilience Tests (Stabilize R1)
+// =====================================================
+
+// TestSync_PartialFailure_USGSDown_NWSUp verifies that when USGS is down,
+// NWS weather alerts are still returned (not aborted).
+func TestSync_PartialFailure_USGSDown_NWSUp(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "fdsnws") {
+			// USGS is down
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		// NWS returns valid alerts
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse([]map[string]interface{}{
+			makeNWSFeature(
+				"urn:oid:partial-nws-1", "Heat Advisory", "Moderate", "Likely", "Expected",
+				"Heat Advisory for SF", "Stay hydrated.", "", "San Francisco",
+				"2024-01-15T14:30:00-06:00", "2024-01-15T18:30:00-06:00",
+			),
+		}))
+	}))
+	defer ts.Close()
+
+	c := New("gov-alerts-partial-test")
+	c.baseURL = ts.URL
+	c.nwsBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:        []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceEarthquake: true,
+		SourceWeather:    true,
+		MinEarthquakeMag: 2.5,
+	}
+
+	arts, cursor, err := c.Sync(context.Background(), "")
+
+	// Error should be non-nil (USGS failed)
+	if err == nil {
+		t.Fatal("expected error when USGS fails")
+	}
+	if !strings.Contains(err.Error(), "usgs earthquake fetch") {
+		t.Errorf("error should mention USGS failure, got: %v", err)
+	}
+
+	// Weather alerts should still be present despite USGS failure
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 NWS artifact despite USGS failure, got %d", len(arts))
+	}
+	if arts[0].ContentType != "alert/weather" {
+		t.Errorf("expected alert/weather, got %s", arts[0].ContentType)
+	}
+
+	// Cursor should be valid
+	if cursor == "" {
+		t.Error("expected non-empty cursor")
+	}
+
+	// Health should be degraded (partial failure)
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected degraded health on partial failure, got %s", c.Health(context.Background()))
+	}
+}
+
+// TestSync_PartialFailure_NWSDown_USGSUp verifies that when NWS is down,
+// USGS earthquake results are still returned.
+func TestSync_PartialFailure_NWSDown_USGSUp(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "fdsnws") {
+			// USGS returns valid earthquakes
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(usgsResponse([]map[string]interface{}{
+				makeFeature("eq-partial-1", 4.5, -122.42, 37.77, 10, "Near Home"),
+			}))
+			return
+		}
+		// NWS is down
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer ts.Close()
+
+	c := New("gov-alerts-partial-test-2")
+	c.baseURL = ts.URL
+	c.nwsBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:        []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceEarthquake: true,
+		SourceWeather:    true,
+		MinEarthquakeMag: 2.5,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+
+	// Error should be non-nil (NWS failed)
+	if err == nil {
+		t.Fatal("expected error when NWS fails")
+	}
+	if !strings.Contains(err.Error(), "nws weather fetch") {
+		t.Errorf("error should mention NWS failure, got: %v", err)
+	}
+
+	// Earthquake results should still be present despite NWS failure
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 USGS artifact despite NWS failure, got %d", len(arts))
+	}
+	if arts[0].ContentType != "alert/earthquake" {
+		t.Errorf("expected alert/earthquake, got %s", arts[0].ContentType)
+	}
+}
+
+// TestSync_AllSourcesFail verifies error accumulation when all enabled sources fail.
+func TestSync_AllSourcesFail(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer ts.Close()
+
+	c := New("gov-alerts-all-fail")
+	c.baseURL = ts.URL
+	c.nwsBaseURL = ts.URL
+	c.tsunamiBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:        []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceEarthquake: true,
+		SourceWeather:    true,
+		SourceTsunami:    true,
+		MinEarthquakeMag: 2.5,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+
+	// All sources failed → error should contain all failures
+	if err == nil {
+		t.Fatal("expected error when all sources fail")
+	}
+	if !strings.Contains(err.Error(), "usgs earthquake fetch") {
+		t.Errorf("error should mention USGS failure, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "nws weather fetch") {
+		t.Errorf("error should mention NWS failure, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "noaa tsunami fetch") {
+		t.Errorf("error should mention tsunami failure, got: %v", err)
+	}
+
+	// No artifacts
+	if len(arts) != 0 {
+		t.Errorf("expected 0 artifacts when all sources fail, got %d", len(arts))
+	}
+
+	// Health should be degraded
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected degraded when all sources fail, got %s", c.Health(context.Background()))
+	}
+}
+
+// TestSync_PartialFailure_OneNWSLocationFails verifies that when one NWS location
+// fails, other locations are still fetched.
+func TestSync_PartialFailure_OneNWSLocationFails(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// First location request fails
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		// Second location request succeeds
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse([]map[string]interface{}{
+			makeNWSFeature(
+				"urn:oid:partial-loc-2", "Wind Advisory", "Minor", "Possible", "Expected",
+				"Wind Advisory", "Gusty winds.", "", "Area 2",
+				"2024-01-15T14:30:00-06:00", "2024-01-15T18:30:00-06:00",
+			),
+		}))
+	}))
+	defer ts.Close()
+
+	c := New("gov-alerts-partial-loc")
+	c.nwsBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations: []LocationConfig{
+			{Name: "Location1", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+			{Name: "Location2", Latitude: 40.71, Longitude: -74.01, RadiusKm: 200},
+		},
+		SourceEarthquake: false,
+		SourceWeather:    true,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+
+	// Error should mention Location1 failure
+	if err == nil {
+		t.Fatal("expected error when one NWS location fails")
+	}
+	if !strings.Contains(err.Error(), "nws weather fetch for Location1") {
+		t.Errorf("error should mention Location1 failure, got: %v", err)
+	}
+
+	// Location2 alert should still be present
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 artifact from Location2, got %d", len(arts))
+	}
+}
+
+// TestSync_PartialFailure_SuccessfulSyncAfterPartial verifies that a subsequent
+// fully-successful sync restores health to healthy after a partial failure.
+func TestSync_PartialFailure_SuccessfulSyncAfterPartial(t *testing.T) {
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		if callCount <= 2 {
+			// First sync: USGS fails, NWS succeeds
+			if strings.Contains(r.URL.Path, "fdsnws") {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			w.Write(nwsResponse([]map[string]interface{}{
+				makeNWSFeature("urn:oid:recovery-1", "Heat Advisory", "Moderate", "Likely", "Expected",
+					"Heat", "desc", "", "Area", "2024-01-15T14:30:00-06:00", "2024-01-15T18:30:00-06:00"),
+			}))
+		} else {
+			// Second sync: both succeed
+			if strings.Contains(r.URL.Path, "fdsnws") {
+				w.Write(usgsResponse(nil))
+			} else {
+				w.Write(nwsResponse(nil))
+			}
+		}
+	}))
+	defer ts.Close()
+
+	c := New("gov-alerts-recovery")
+	c.baseURL = ts.URL
+	c.nwsBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:        []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceEarthquake: true,
+		SourceWeather:    true,
+		MinEarthquakeMag: 2.5,
+	}
+
+	// First sync: partial failure
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error on partial failure")
+	}
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Fatalf("expected degraded after partial failure, got %s", c.Health(context.Background()))
+	}
+
+	// Second sync: full success → health restored
+	_, _, err = c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("expected no error on full success, got: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected healthy after full success, got %s", c.Health(context.Background()))
+	}
+}
+
+// =====================================================
+// Security: URL Scheme Validation Tests
+// =====================================================
+
+// TestSanitizeExternalURL verifies URL scheme allowlisting (http/https only).
+func TestSanitizeExternalURL(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"https URL preserved", "https://www.tsunami.gov/events/001", "https://www.tsunami.gov/events/001"},
+		{"http URL preserved", "http://example.com/alert", "http://example.com/alert"},
+		{"javascript scheme rejected", "javascript:alert(1)", ""},
+		{"data scheme rejected", "data:text/html,<script>alert(1)</script>", ""},
+		{"vbscript scheme rejected", "vbscript:MsgBox", ""},
+		{"ftp scheme rejected", "ftp://example.com/file", ""},
+		{"empty string returns empty", "", ""},
+		{"whitespace only returns empty", "   ", ""},
+		{"no scheme returns empty", "no-scheme-url", ""},
+		{"HTTPS upper case preserved", "HTTPS://WWW.TSUNAMI.GOV/events", "HTTPS://WWW.TSUNAMI.GOV/events"},
+		{"mixed case javascript rejected", "JavaScript:alert(1)", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeExternalURL(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeExternalURL(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTsunamiAlerts_JavascriptURLRejected verifies malicious URLs in tsunami feeds are sanitized.
+func TestTsunamiAlerts_JavascriptURLRejected(t *testing.T) {
+	entries := []string{
+		makeTsunamiEntry("tsunami-xss-1", "Tsunami Warning", "XSS test", "javascript:alert(document.cookie)", "2024-03-15T10:30:00Z"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, tsunamiAtomXML(entries))
+	}))
+	defer ts.Close()
+
+	c := New("test-xss")
+	c.tsunamiBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:     []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceTsunami: true,
+	}
+
+	arts, _, _ := c.Sync(context.Background(), "")
+	if len(arts) == 0 {
+		t.Fatal("expected artifact from tsunami feed")
+	}
+	if arts[0].URL != "" {
+		t.Errorf("expected empty URL for javascript: scheme, got %q", arts[0].URL)
+	}
+}
+
+// TestWildfireAlerts_DataURLRejected verifies malicious URLs in wildfire feeds are sanitized.
+func TestWildfireAlerts_DataURLRejected(t *testing.T) {
+	items := []string{
+		makeWildfireItem("wf-xss-1", "Camp Fire", "Large wildfire", "data:text/html,<script>alert(1)</script>", "Mon, 15 Jul 2024 10:30:00 +0000"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, wildfireRSSXML(items))
+	}))
+	defer ts.Close()
+
+	c := New("test-xss")
+	c.wildfireBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:      []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceWildfire: true,
+	}
+
+	arts, _, _ := c.Sync(context.Background(), "")
+	if len(arts) == 0 {
+		t.Fatal("expected artifact from wildfire feed")
+	}
+	if arts[0].URL != "" {
+		t.Errorf("expected empty URL for data: scheme, got %q", arts[0].URL)
+	}
+}
+
+// TestGDACSAlerts_VbscriptURLRejected verifies malicious URLs in GDACS feeds are sanitized.
+func TestGDACSAlerts_VbscriptURLRejected(t *testing.T) {
+	items := []string{
+		makeGDACSItem("gdacs-xss-1", "Flood", "Flood alert", "vbscript:MsgBox", "Mon, 15 Jul 2024 10:30:00 +0000", "Red", "37.0 -122.0"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, gdacsRSSXML(items))
+	}))
+	defer ts.Close()
+
+	c := New("test-xss")
+	c.gdacsBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:   []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceGDACS: true,
+	}
+
+	arts, _, _ := c.Sync(context.Background(), "")
+	if len(arts) == 0 {
+		t.Fatal("expected artifact from GDACS feed")
+	}
+	if arts[0].URL != "" {
+		t.Errorf("expected empty URL for vbscript: scheme, got %q", arts[0].URL)
+	}
+}
+
+// =====================================================
+// Security: GDACS Coordinate Validation Tests
+// =====================================================
+
+// TestNormalizeGDACSAlert_InvalidCoordinatesRejected verifies NaN/Inf/out-of-range lat/lon from geo_point are not stored.
+func TestNormalizeGDACSAlert_InvalidCoordinatesRejected(t *testing.T) {
+	tests := []struct {
+		name     string
+		geoPoint string
+		wantLat  bool
+	}{
+		{"valid coordinates", "37.5 -122.4", true},
+		{"latitude out of range", "95.0 -122.4", false},
+		{"longitude out of range", "37.5 -200.0", false},
+		{"NaN latitude", "NaN -122.4", false},
+		{"Inf longitude", "37.5 Inf", false},
+		{"both invalid", "999.0 999.0", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			alert := GDACSAlert{
+				ID:       "gdacs-coord-test",
+				Title:    "Test",
+				GeoPoint: tt.geoPoint,
+				Severity: "moderate",
+			}
+			artifact := normalizeGDACSAlert(alert)
+			_, hasLat := artifact.Metadata["latitude"]
+			_, hasLon := artifact.Metadata["longitude"]
+			if hasLat != tt.wantLat || hasLon != tt.wantLat {
+				t.Errorf("geoPoint=%q: hasLat=%v hasLon=%v, wantBoth=%v", tt.geoPoint, hasLat, hasLon, tt.wantLat)
+			}
+			// geo_point string should still be present regardless
+			if _, hasGP := artifact.Metadata["geo_point"]; !hasGP {
+				t.Error("geo_point should always be present when GeoPoint is non-empty")
+			}
+		})
+	}
+}

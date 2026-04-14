@@ -37,6 +37,9 @@ func TestExtractAmount(t *testing.T) {
 		{"USD 29.00 was charged", 29.00},
 		{"No amount here", 0},
 		{"$0.99 per month", 0.99},
+		{"Premium plan: $1,299.99/year", 1299.99},
+		{"Charged $2,500 USD for enterprise", 2500.0},
+		{"USD 1,000.50 annual renewal", 1000.50},
 	}
 
 	for _, tt := range tests {

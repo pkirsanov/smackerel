@@ -92,6 +92,18 @@ Minimal syntax anchors retained in the workflow shell:
 
 When a selected mode has `statusCeiling` below `done`, `bubbles.workflow` must warn the user if the request language implies full completion. Delivery-capable modes should be recommended instead of silently proceeding with a lower ceiling.
 
+### Reciprocal Status Ceiling Warning (Planning-Only Intent)
+
+When the user's request implies planning-only intent (contains "plan", "planning", "design", "scope", "analyze", "create specs", "create bugs" WITHOUT "implement", "build", "fix", "deliver"), `bubbles.workflow` MUST:
+
+1. If the selected mode has `statusCeiling: done` → warn and suggest planning-capped alternative
+2. Example warning: "Your request 'plan scope 027' implies planning-only work. Selected mode 'full-delivery' includes implementation. Switching to spec-scope-hardening mode."
+3. If user explicitly provides `mode: full-delivery` alongside planning language → respect the explicit mode but log the intent mismatch
+4. If no explicit `mode:` is provided → auto-select the planning-capped mode
+
+**Planning-intent keywords:** plan, planning, design, scope, analyze, create specs, create bugs, convert findings to specs, planning cycle, planning workflow
+**Delivery-intent keywords:** implement, build, fix, deliver, ship, deploy, full delivery, bugfix
+
 ### Status Ceiling Warning Details
 
 When resolving mode in Phase 0, `bubbles.workflow` MUST check whether the user's requested outcome conflicts with the selected mode's `statusCeiling`.

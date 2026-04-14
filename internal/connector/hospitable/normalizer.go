@@ -3,14 +3,46 @@ package hospitable
 import (
 	"fmt"
 	"math"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
+
+// safeURLSchemes lists the URL schemes allowed in artifact URLs.
+// Reject javascript:, data:, vbscript: etc. to prevent XSS (CWE-79/601).
+var safeURLSchemes = map[string]bool{"http": true, "https": true}
+
+// isSafeURL checks that u is an absolute URL with an allowed scheme (http/https).
+func isSafeURL(u string) bool {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return false
+	}
+	return safeURLSchemes[strings.ToLower(parsed.Scheme)]
+}
+
+// clampRating constrains a rating to [0.0, 5.0], mapping NaN to 0 (CWE-20).
+func clampRating(r float64) float64 {
+	if math.IsNaN(r) || math.IsInf(r, 0) {
+		return 0
+	}
+	if r < 0 {
+		return 0
+	}
+	if r > 5 {
+		return 5
+	}
+	return r
+}
 
 // NormalizeProperty converts a Hospitable Property to a RawArtifact.
 func NormalizeProperty(p Property, config HospitableConfig) connector.RawArtifact {
+	// SEC-012-005: Sanitize control characters in API-supplied text (CWE-116).
+	p.Name = stringutil.SanitizeControlChars(p.Name)
+
 	content := buildPropertyContent(p)
 	metadata := map[string]interface{}{
 		"property_id":     p.ID,
@@ -38,7 +70,7 @@ func NormalizeProperty(p Property, config HospitableConfig) connector.RawArtifac
 		SourceRef:   "property:" + p.ID,
 		ContentType: "property/str-listing",
 		Title:       p.Name,
-		URL:         firstNonEmpty(p.ListingURLs),
+		URL:         firstSafeURL(p.ListingURLs),
 		RawContent:  content,
 		Metadata:    metadata,
 		CapturedAt:  capturedAt,
@@ -47,6 +79,10 @@ func NormalizeProperty(p Property, config HospitableConfig) connector.RawArtifac
 
 // NormalizeReservation converts a Hospitable Reservation to a RawArtifact.
 func NormalizeReservation(r Reservation, propertyName string, config HospitableConfig) connector.RawArtifact {
+	// SEC-012-005: Sanitize control characters in API-supplied text (CWE-116).
+	r.GuestName = stringutil.SanitizeControlChars(r.GuestName)
+	propertyName = stringutil.SanitizeControlChars(propertyName)
+
 	if propertyName == "" {
 		propertyName = r.PropertyID
 	}
@@ -85,7 +121,7 @@ func NormalizeReservation(r Reservation, propertyName string, config HospitableC
 
 	var reservationURL string
 	if strings.Contains(config.BaseURL, "api.hospitable.com") {
-		reservationURL = "https://app.hospitable.com/reservations/" + r.ID
+		reservationURL = "https://app.hospitable.com/reservations/" + url.PathEscape(r.ID)
 	}
 
 	return connector.RawArtifact{
@@ -102,6 +138,10 @@ func NormalizeReservation(r Reservation, propertyName string, config HospitableC
 
 // NormalizeMessage converts a Hospitable Message to a RawArtifact.
 func NormalizeMessage(m Message, reservationID string, config HospitableConfig) connector.RawArtifact {
+	// SEC-012-005: Sanitize control characters in API-supplied text (CWE-116).
+	m.Sender = stringutil.SanitizeControlChars(m.Sender)
+	m.Body = stringutil.SanitizeControlChars(m.Body)
+
 	role := classifySender(m)
 	title := fmt.Sprintf("Message from %s (%s)", m.Sender, role)
 	content := buildMessageContent(m, reservationID)
@@ -135,19 +175,25 @@ func NormalizeMessage(m Message, reservationID string, config HospitableConfig) 
 
 // NormalizeReview converts a Hospitable Review to a RawArtifact.
 func NormalizeReview(r Review, propertyName string, config HospitableConfig) connector.RawArtifact {
+	// SEC-012-005: Sanitize control characters in API-supplied text (CWE-116).
+	r.ReviewText = stringutil.SanitizeControlChars(r.ReviewText)
+	r.HostResponse = stringutil.SanitizeControlChars(r.HostResponse)
+	propertyName = stringutil.SanitizeControlChars(propertyName)
+
 	if propertyName == "" {
 		propertyName = r.PropertyID
 	}
 
-	title := fmt.Sprintf("Review: %s at %s", formatRating(r.Rating), propertyName)
-	content := buildReviewContent(r, propertyName)
+	safeRating := clampRating(r.Rating)
+	title := fmt.Sprintf("Review: %s at %s", formatRating(safeRating), propertyName)
+	content := buildReviewContent(r, propertyName, safeRating)
 
 	metadata := map[string]interface{}{
 		"review_id":       r.ID,
 		"reservation_id":  r.ReservationID,
 		"property_id":     r.PropertyID,
 		"property_name":   propertyName,
-		"rating":          r.Rating,
+		"rating":          safeRating,
 		"channel":         r.Channel,
 		"submitted_at":    r.SubmittedAt.Format(time.RFC3339),
 		"processing_tier": config.TierReviews,
@@ -229,9 +275,9 @@ func buildMessageContent(m Message, reservationID string) string {
 	return b.String()
 }
 
-func buildReviewContent(r Review, propertyName string) string {
+func buildReviewContent(r Review, propertyName string, safeRating float64) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Review: %s at %s\n", formatRating(r.Rating), propertyName))
+	b.WriteString(fmt.Sprintf("Review: %s at %s\n", formatRating(safeRating), propertyName))
 	b.WriteString(fmt.Sprintf("Channel: %s\n\n", r.Channel))
 	b.WriteString(r.ReviewText)
 
@@ -308,6 +354,17 @@ func formatRating(rating float64) string {
 func firstNonEmpty(ss []string) string {
 	for _, s := range ss {
 		if s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// firstSafeURL returns the first URL with a safe scheme (http/https) from a slice,
+// or "" if none qualify. Rejects javascript:, data:, vbscript: etc. (CWE-79/601).
+func firstSafeURL(ss []string) string {
+	for _, s := range ss {
+		if s != "" && isSafeURL(s) {
 			return s
 		}
 	}

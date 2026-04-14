@@ -11,6 +11,8 @@ Every agent MUST pass ALL of the following before reporting a completion or diag
 3. **No unresolved continuation language** — report.md, scopes.md, and scope directories must not contain unresolved pseudo-completion text: `Next Steps` (as heading or bullet leader), `Recommended routing:`, `Recommended resolution:`, `Ready for /bubbles.`, `Re-run /bubbles.validate`, `Commit the fix`, `Record DoD evidence`, `Run full E2E suite`, `[PENDING`, `header only initially`.
 4. **No deferral language** — scope artifacts must not contain any phrases from the deferral-language list in `completion-governance.md`.
 5. **RESULT-ENVELOPE emitted** — state-modifying and diagnostic agents must end their response with a `## RESULT-ENVELOPE` containing a concrete outcome (`completed_owned`, `completed_diagnostic`, `route_required`, or `blocked`). Read-only agents (status, recap, handoff) are exempt, but if they emit continuation guidance they should use a `## CONTINUATION-ENVELOPE` and recommend workflow commands rather than raw specialist commands.
+6. **Evidence provenance tags present** — every evidence block in scope/report artifacts must include a `**Claim Source:**` tag. All `interpreted` blocks must include an `**Interpretation:**` line. Missing tags are treated as `interpreted` and flagged as lint failures.
+7. **Uncertainty Declarations present for unchecked items** — any DoD item left `[ ]` after agent work must have an Uncertainty Declaration explaining what was attempted and what would resolve it. Unchecked items without explanation are incomplete handoffs.
 
 If ANY Tier 1 check fails, the agent must fix the issue or report failure — not claim completion.
 

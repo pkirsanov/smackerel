@@ -28,18 +28,9 @@ func TestChaos_ParseEvents_AllFieldsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}
-	// Empty event defaults: status="confirmed", updated=time.Now()
-	// Since status is "confirmed" (not "cancelled"), it should produce an artifact
-	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifact for empty event, got %d", len(artifacts))
-	}
-	// Empty UID → empty SourceRef
-	if artifacts[0].SourceRef != "" {
-		t.Errorf("expected empty SourceRef, got %q", artifacts[0].SourceRef)
-	}
-	// Standard tier (no attendees, not recurring)
-	if artifacts[0].Metadata["processing_tier"] != "standard" {
-		t.Errorf("expected standard tier, got %v", artifacts[0].Metadata["processing_tier"])
+	// Empty event has no UID → skipped by empty-UID guard
+	if len(artifacts) != 0 {
+		t.Fatalf("expected 0 artifacts for empty-UID event, got %d", len(artifacts))
 	}
 }
 
@@ -66,8 +57,9 @@ func TestChaos_ParseEvents_WrongTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync should handle wrong types: %v", err)
 	}
-	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	// UID is int 12345, getStr returns "" → skipped by empty-UID guard
+	if len(artifacts) != 0 {
+		t.Fatalf("expected 0 artifacts for invalid-UID event, got %d", len(artifacts))
 	}
 }
 

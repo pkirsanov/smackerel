@@ -369,18 +369,17 @@ func TestSync_SkipDomainFiltering(t *testing.T) {
 		},
 	})
 
-	// Need to parse qualifiers — skip_domains is custom, check via parsing
 	artifacts, _, err := c.Sync(context.Background(), "")
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}
-	// Both should appear since ParseQualifiers doesn't handle skip_domains from interface
-	// but AssignTier checks SkipDomains — verify the domain check works in isolation
-	tier := AssignTier("bot@noreply.example.com", nil, QualifierConfig{SkipDomains: []string{"noreply.example.com"}})
-	if tier != "skip" {
-		t.Errorf("expected skip tier for noreply domain, got %q", tier)
+	// skip_domains should filter out bot@noreply.example.com via AssignTier → "skip"
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact (skip domain filtered), got %d", len(artifacts))
 	}
-	_ = artifacts
+	if artifacts[0].Title != "Real email" {
+		t.Errorf("expected 'Real email', got %q", artifacts[0].Title)
+	}
 }
 
 func TestSync_ActionItemsInMetadata(t *testing.T) {
@@ -534,5 +533,44 @@ func TestSync_HealthStaysErrorOnFailure(t *testing.T) {
 	// Health must remain at Error, not reset to Healthy by the defer
 	if c.Health(context.Background()) != connector.HealthError {
 		t.Errorf("health should be Error after failed sync, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSync_BeforeConnect(t *testing.T) {
+	c := New("imap-no-connect")
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error when Sync called before Connect")
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("health should remain disconnected, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestParseQualifiers_SkipDomains(t *testing.T) {
+	q := ParseQualifiers(map[string]interface{}{
+		"skip_domains": []interface{}{"spam.com", "noreply.example.com"},
+	})
+	if len(q.SkipDomains) != 2 {
+		t.Errorf("expected 2 skip domains, got %d", len(q.SkipDomains))
+	}
+	if q.SkipDomains[0] != "spam.com" {
+		t.Errorf("expected skip domain 'spam.com', got %q", q.SkipDomains[0])
+	}
+}
+
+func TestParseEmailMessages_SkipsEmptyUID(t *testing.T) {
+	msgs, err := parseEmailMessages([]interface{}{
+		map[string]interface{}{"uid": "", "from": "a@b.com", "subject": "No UID"},
+		map[string]interface{}{"uid": "valid", "from": "a@b.com", "subject": "Valid"},
+	})
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message (empty UID skipped), got %d", len(msgs))
+	}
+	if msgs[0].UID != "valid" {
+		t.Errorf("expected UID 'valid', got %q", msgs[0].UID)
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"sync"
 	"testing"
 	"time"
 
@@ -1386,5 +1388,663 @@ func TestConnect_CursorRestorationValidatesSnowflakes(t *testing.T) {
 	// Invalid value should be rejected
 	if _, ok := c.cursors["400000000000000001"]; ok {
 		t.Error("cursor with invalid snowflake value should not be restored")
+	}
+}
+
+// --- Stabilize Pass 2 Tests ---
+
+func TestSync_AfterClose_ReturnsError(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+	})
+	c.Close()
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error when syncing a closed connector")
+	}
+}
+
+func TestSync_HealthDegradedOnPartialFailure(t *testing.T) {
+	// Verify that after a clean sync, health returns to healthy
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if h := c.Health(context.Background()); h != connector.HealthHealthy {
+		t.Errorf("expected HealthHealthy after clean sync, got %s", h)
+	}
+}
+
+func TestClose_SetsClosed(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+	})
+	if c.closed {
+		t.Error("connector should not be closed before Close()")
+	}
+	c.Close()
+	if !c.closed {
+		t.Error("connector should be closed after Close()")
+	}
+}
+
+func TestSync_HealthTransitionsDuringSyncLifecycle(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+	})
+
+	if h := c.Health(context.Background()); h != connector.HealthHealthy {
+		t.Errorf("expected HealthHealthy before sync, got %s", h)
+	}
+
+	c.Sync(context.Background(), "")
+
+	if h := c.Health(context.Background()); h != connector.HealthHealthy {
+		t.Errorf("expected HealthHealthy after clean sync, got %s", h)
+	}
+}
+
+func TestConnect_SetsHealthErrorOnConfigFailure(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"backfill_limit": float64(-1),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid config")
+	}
+	if h := c.Health(context.Background()); h != connector.HealthError {
+		t.Errorf("expected HealthError after config failure, got %s", h)
+	}
+}
+
+func TestConnect_SetsHealthErrorOnMissingToken(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{},
+	})
+	if err == nil {
+		t.Fatal("expected error for missing token")
+	}
+	if h := c.Health(context.Background()); h != connector.HealthError {
+		t.Errorf("expected HealthError after missing token, got %s", h)
+	}
+}
+
+func TestConnect_SetsHealthErrorOnShortToken(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": "short"},
+	})
+	if err == nil {
+		t.Fatal("expected error for short token")
+	}
+	if h := c.Health(context.Background()); h != connector.HealthError {
+		t.Errorf("expected HealthError after short token, got %s", h)
+	}
+}
+
+func TestParseDiscordConfig_Defaults(t *testing.T) {
+	cfg, err := parseDiscordConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BackfillLimit != 1000 {
+		t.Errorf("expected default backfill_limit 1000, got %d", cfg.BackfillLimit)
+	}
+	if !cfg.EnableGateway {
+		t.Error("expected default enable_gateway true")
+	}
+	if !cfg.IncludeThreads {
+		t.Error("expected default include_threads true")
+	}
+	if !cfg.IncludePins {
+		t.Error("expected default include_pins true")
+	}
+	if len(cfg.CaptureCommands) != 2 || cfg.CaptureCommands[0] != "!save" || cfg.CaptureCommands[1] != "!capture" {
+		t.Errorf("expected default capture_commands [!save, !capture], got %v", cfg.CaptureCommands)
+	}
+}
+
+func TestSync_RecordsSyncMetadata(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+
+	c.Sync(context.Background(), "")
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.lastSyncTime.IsZero() {
+		t.Error("expected lastSyncTime to be set after sync")
+	}
+	if c.lastSyncErrors != 0 {
+		t.Errorf("expected 0 sync errors, got %d", c.lastSyncErrors)
+	}
+}
+
+func TestNormalizeMessage_CaptureCommandContentType(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "!save https://example.com/article Great read",
+		Author:    Author{ID: "222222222222222222", Username: "alice"},
+		ChannelID: "333333333333333333",
+		GuildID:   "444444444444444444",
+		Timestamp: time.Now(),
+	}
+
+	artifact := normalizeMessage(msg, "standard", []string{"!save"})
+	if artifact.ContentType != "discord/capture" {
+		t.Errorf("expected discord/capture for bot command, got %s", artifact.ContentType)
+	}
+}
+
+func TestCompileTimeInterfaceCheck(t *testing.T) {
+	// Verify the connector satisfies the interface at runtime too
+	var c connector.Connector = New("test")
+	if c.ID() != "test" {
+		t.Errorf("expected ID 'test', got %s", c.ID())
+	}
+}
+
+// --- Hardening Pass 2 Tests ---
+
+func TestTotalReactions_NegativeCountIgnored(t *testing.T) {
+	reactions := []Reaction{
+		{Emoji: "👍", Count: 5},
+		{Emoji: "👎", Count: -3},
+		{Emoji: "❤️", Count: 2},
+	}
+	got := totalReactions(reactions)
+	if got != 7 {
+		t.Errorf("expected 7 (negative counts ignored), got %d", got)
+	}
+}
+
+func TestNormalizeMessage_NegativeReactionCountClamped(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+		Reactions: []Reaction{{Emoji: "👎", Count: -10}},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	reactions := artifact.Metadata["reactions"].([]Reaction)
+	if reactions[0].Count != 0 {
+		t.Errorf("expected negative count clamped to 0, got %d", reactions[0].Count)
+	}
+}
+
+func TestNormalizeMessage_NegativeAttachmentSizeClamped(t *testing.T) {
+	msg := DiscordMessage{
+		ID:          "111111111111111111",
+		Content:     "test",
+		ChannelID:   "222222222222222222",
+		GuildID:     "333333333333333333",
+		Timestamp:   time.Now(),
+		Attachments: []Attachment{{ID: "a1", Filename: "f.txt", URL: "https://cdn.discordapp.com/f.txt", Size: -100}},
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	attachments := artifact.Metadata["attachments"].([]Attachment)
+	if attachments[0].Size != 0 {
+		t.Errorf("expected negative size clamped to 0, got %d", attachments[0].Size)
+	}
+}
+
+func TestNormalizeMessage_InvalidMsgIDEmptySourceRef(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "not-a-snowflake",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if artifact.SourceRef != "" {
+		t.Errorf("expected empty SourceRef for invalid msg ID, got %q", artifact.SourceRef)
+	}
+	if _, found := artifact.Metadata["message_id"]; found {
+		t.Error("invalid message_id should not be stored in metadata")
+	}
+}
+
+func TestNormalizeMessage_InvalidChannelIDOmittedFromMetadata(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "not-valid",
+		GuildID:   "333333333333333333",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if _, found := artifact.Metadata["channel_id"]; found {
+		t.Error("invalid channel_id should not be stored in metadata")
+	}
+}
+
+func TestNormalizeMessage_InvalidGuildIDOmittedFromMetadata(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "test",
+		ChannelID: "222222222222222222",
+		GuildID:   "../../inject",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if _, found := artifact.Metadata["server_id"]; found {
+		t.Error("invalid server_id should not be stored in metadata")
+	}
+}
+
+func TestNormalizeMessage_LongMetadataStringsTruncated(t *testing.T) {
+	longStr := ""
+	for len(longStr) < 500 {
+		longStr += "abcdefghij"
+	}
+	msg := DiscordMessage{
+		ID:          "111111111111111111",
+		Content:     "test",
+		ChannelID:   "222222222222222222",
+		GuildID:     "333333333333333333",
+		Author:      Author{ID: "444444444444444444", Username: longStr},
+		Timestamp:   time.Now(),
+		ServerName:  longStr,
+		ChannelName: longStr,
+		ThreadID:    "555555555555555555",
+		ThreadName:  longStr,
+	}
+	artifact := normalizeMessage(msg, "light", nil)
+	if len(artifact.Metadata["author_name"].(string)) > 256 {
+		t.Errorf("author_name should be capped at 256 bytes, got %d", len(artifact.Metadata["author_name"].(string)))
+	}
+	if len(artifact.Metadata["server_name"].(string)) > 256 {
+		t.Errorf("server_name should be capped at 256 bytes, got %d", len(artifact.Metadata["server_name"].(string)))
+	}
+	if len(artifact.Metadata["channel_name"].(string)) > 256 {
+		t.Errorf("channel_name should be capped at 256 bytes, got %d", len(artifact.Metadata["channel_name"].(string)))
+	}
+	if len(artifact.Metadata["thread_name"].(string)) > 256 {
+		t.Errorf("thread_name should be capped at 256 bytes, got %d", len(artifact.Metadata["thread_name"].(string)))
+	}
+}
+
+func TestParseDiscordConfig_TotalChannelsCap(t *testing.T) {
+	// 5 server entries × 250 channels each = 1250 > maxTotalChannels (1000)
+	servers := make([]interface{}, 5)
+	for i := range servers {
+		channels := make([]interface{}, 250)
+		for j := range channels {
+			channels[j] = fmt.Sprintf("%018d", (i*250+j)+100000000000000001)
+		}
+		servers[i] = map[string]interface{}{
+			"server_id":   fmt.Sprintf("%018d", i+200000000000000001),
+			"channel_ids": channels,
+		}
+	}
+	_, err := parseDiscordConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": servers,
+		},
+	})
+	if err == nil {
+		t.Error("expected error for total channel_ids exceeding maximum")
+	}
+}
+
+func TestTotalReactions_AllNegative(t *testing.T) {
+	reactions := []Reaction{
+		{Emoji: "👎", Count: -5},
+		{Emoji: "💀", Count: -3},
+	}
+	got := totalReactions(reactions)
+	if got != 0 {
+		t.Errorf("expected 0 for all negative counts, got %d", got)
+	}
+}
+
+// --- Chaos Hardening Tests ---
+
+// C1: Concurrent Connect + Sync must not race.
+// go test -race catches this if the config snapshot fix is missing.
+func TestChaos_ConcurrentConnectSync(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Concurrent Sync
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			c.Sync(context.Background(), "")
+		}
+	}()
+
+	// Concurrent re-Connect with different config
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			c.Connect(context.Background(), connector.ConnectorConfig{
+				Credentials: map[string]string{"bot_token": testBotToken},
+				SourceConfig: map[string]interface{}{
+					"monitored_channels": []interface{}{
+						map[string]interface{}{
+							"server_id":   "300000000000000001",
+							"channel_ids": []interface{}{"400000000000000001"},
+						},
+					},
+				},
+			})
+		}
+	}()
+
+	wg.Wait()
+	// If we get here without -race detection, the fix is working
+}
+
+// C1b: Concurrent Sync + Close must not race.
+func TestChaos_ConcurrentSyncClose(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			c.Sync(context.Background(), "")
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			c.Close()
+			// Re-connect for next iteration
+			c.Connect(context.Background(), connector.ConnectorConfig{
+				Credentials: map[string]string{"bot_token": testBotToken},
+				SourceConfig: map[string]interface{}{
+					"monitored_channels": []interface{}{
+						map[string]interface{}{
+							"server_id":   "100000000000000001",
+							"channel_ids": []interface{}{"200000000000000001"},
+						},
+					},
+				},
+			})
+		}
+	}()
+
+	wg.Wait()
+}
+
+// C1c: Concurrent Health reads during Sync and Connect.
+func TestChaos_ConcurrentHealthSyncConnect(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			c.Health(context.Background())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			c.Sync(context.Background(), "")
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			c.Connect(context.Background(), connector.ConnectorConfig{
+				Credentials: map[string]string{"bot_token": testBotToken},
+			})
+		}
+	}()
+
+	wg.Wait()
+}
+
+// C2: Integer overflow in totalReactions must not wrap to negative.
+func TestChaos_TotalReactionsOverflow(t *testing.T) {
+	reactions := []Reaction{
+		{Emoji: "👍", Count: math.MaxInt32},
+		{Emoji: "❤️", Count: math.MaxInt32},
+		{Emoji: "🔥", Count: math.MaxInt32},
+	}
+	total := totalReactions(reactions)
+	if total < 0 {
+		t.Fatalf("totalReactions overflowed to negative: %d", total)
+	}
+	if total < 5 {
+		t.Errorf("total should be ≥5 to trigger full tier, got %d", total)
+	}
+}
+
+// C2b: Overflow must still trigger "full" tier, not "metadata" or "light".
+func TestChaos_OverflowReactionsTriggerFullTier(t *testing.T) {
+	msg := DiscordMessage{
+		Content: "normal short msg",
+		Reactions: []Reaction{
+			{Emoji: "👍", Count: math.MaxInt32},
+			{Emoji: "❤️", Count: math.MaxInt32},
+		},
+	}
+	tier := assignTier(msg, "light")
+	if tier != "full" {
+		t.Errorf("expected 'full' tier when reactions overflow, got %q", tier)
+	}
+}
+
+// C4: Re-Connect clears stale cursors from previous channel config.
+func TestChaos_ReConnectClearsUnmonitoredCursors(t *testing.T) {
+	c := New("discord")
+
+	// First connect: monitor channel A
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+			"cursors": `{"200000000000000001":"300000000000000001"}`,
+		},
+	})
+
+	// Verify cursor was set
+	c.mu.RLock()
+	if _, ok := c.cursors["200000000000000001"]; !ok {
+		c.mu.RUnlock()
+		t.Fatal("expected cursor for channel A after first connect")
+	}
+	c.mu.RUnlock()
+
+	// Second connect: monitor channel B (not A)
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"400000000000000001"},
+				},
+			},
+		},
+	})
+
+	// Channel A cursor must be gone
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if _, ok := c.cursors["200000000000000001"]; ok {
+		t.Error("stale cursor for channel A should be cleared after re-Connect with different config")
+	}
+}
+
+// C4b: Re-Connect resets closed flag so Sync works after Close+Connect cycle.
+func TestChaos_ReConnectAfterCloseResetsState(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+	})
+	c.Close()
+
+	// Re-connect should reset the closed flag
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error on re-connect: %v", err)
+	}
+
+	// Sync should work after re-connect
+	_, _, err = c.Sync(context.Background(), "")
+	if err != nil {
+		t.Errorf("Sync should succeed after Close+Connect cycle, got: %v", err)
+	}
+}
+
+// C5: Rapid successive Syncs must not corrupt cursors.
+func TestChaos_RapidSuccessiveSyncs(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001", "200000000000000002"},
+				},
+			},
+		},
+	})
+
+	var lastCursor string
+	for i := 0; i < 100; i++ {
+		_, cursor, err := c.Sync(context.Background(), lastCursor)
+		if err != nil {
+			t.Fatalf("sync %d failed: %v", i, err)
+		}
+		// Cursor must always be valid JSON
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(cursor), &parsed); err != nil {
+			t.Fatalf("sync %d produced invalid cursor JSON: %v", i, err)
+		}
+		lastCursor = cursor
+	}
+}
+
+// C6: Double Close must not panic.
+func TestChaos_DoubleClose(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+	})
+	if err := c.Close(); err != nil {
+		t.Fatalf("first close: %v", err)
+	}
+	if err := c.Close(); err != nil {
+		t.Fatalf("second close should not fail: %v", err)
+	}
+	if h := c.Health(context.Background()); h != connector.HealthDisconnected {
+		t.Errorf("expected disconnected after double close, got %s", h)
+	}
+}
+
+// C7: Craft maximally adversarial cursor input.
+func TestChaos_AdversarialCursorJSON(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+
+	adversarial := []string{
+		`{}`,
+		`{"":""}`,
+		`{"\u0000":"123"}`,
+		`{"200000000000000001":""}`,
+		`{"200000000000000001":"0"}`,
+		`not json at all`,
+		`{"200000000000000001":"\u0000"}`,
+		`{"200000000000000001":"18446744073709551615"}`, // max uint64
+		`null`,
+	}
+	for _, cursor := range adversarial {
+		_, _, err := c.Sync(context.Background(), cursor)
+		// Must not panic; errors are acceptable
+		_ = err
 	}
 }

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -158,6 +157,9 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				slog.Warn("intelligence freshness check failed", "error", err)
 				services["intelligence"] = ServiceStatus{Status: "up"}
+			} else if lastSynthesis.IsZero() || lastSynthesis.Year() < 2000 {
+				// No synthesis has ever run (fresh install) — not stale, just not started
+				services["intelligence"] = ServiceStatus{Status: "up"}
 			} else if time.Since(lastSynthesis) > 48*time.Hour {
 				services["intelligence"] = ServiceStatus{Status: "stale"}
 			} else {
@@ -190,7 +192,9 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		if name == "telegram_bot" || name == "ollama" {
 			continue // optional services don't affect overall status
 		}
-		if svc.Status == "down" || svc.Status == "stale" {
+		// Connector-specific statuses that indicate degraded health
+		switch svc.Status {
+		case "down", "stale", "error", "failing", "disconnected", "degraded":
 			overall = "degraded"
 		}
 	}
@@ -206,11 +210,7 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		resp.CommitHash = d.CommitHash
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.Error("failed to encode health response", "error", err)
-	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // isAuthenticated checks whether the request carries a valid Bearer token.
@@ -236,10 +236,13 @@ func (d *Dependencies) mlClient() *http.Client {
 // checkMLSidecar probes the ML sidecar health endpoint.
 func checkMLSidecar(ctx context.Context, baseURL string, client *http.Client) ServiceStatus {
 	if baseURL == "" {
-		return ServiceStatus{Status: "down"}
+		return ServiceStatus{Status: "not_configured"}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/health", nil)
+	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, baseURL+"/health", nil)
 	if err != nil {
 		return ServiceStatus{Status: "down"}
 	}

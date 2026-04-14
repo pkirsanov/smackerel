@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/013-guesthost-connector",
   "featureName": "GuestHost Connector & Hospitality Intelligence",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "finalize",
+    "currentPhase": "test",
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedScopes": [],
     "completedPhaseClaims": [
@@ -61,6 +61,17 @@
         "runStartedAt": "2026-04-11T00:00:00Z",
         "runEndedAt": "2026-04-11T00:00:00Z",
         "summary": "Unit tests: 53 passed across all packages including guesthost connector (client, connector, normalizer), graph, digest. Scenario manifest created (46 scenarios). go build clean."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": [
+          "reconcile"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-04-12T00:00:00Z",
+        "runEndedAt": "2026-04-12T00:00:00Z",
+        "summary": "Reconcile-to-doc: Found 11 findings. report.md rewritten with real evidence. Scope 3 has zero unit tests (12 planned). All integration/e2e test files missing (34 tests across 8 files). Scopes 1,2,4,5 have adequate unit coverage (53 tests). Implementation deviations documented: 5 vs 15 topics, no 24h revenue, partial hint rules, no separate intelligence/context config sections. uservalidation.md corrected for unvalidated features."
       }
     ]
   },
@@ -77,8 +88,8 @@
     "lockdownState": {
       "roundNumber": 1,
       "lastRoundResult": "test_in_progress",
-      "findingsResolved": 0,
-      "findingsTotal": 0
+      "findingsResolved": 3,
+      "findingsTotal": 11
     }
   },
   "policySnapshot": {
@@ -110,6 +121,6 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-09T00:00:00Z",
-  "notes": "Implementation in progress \u2014 all 5 scopes have code delivered, awaiting test execution and evidence."
+  "lastUpdatedAt": "2026-04-12T00:00:00Z",
+  "notes": "Reconciled 2026-04-12: All implementation code exists and builds clean. 53 unit tests pass (Scopes 1,2,4,5). Scope 3 has ZERO unit tests. All integration/e2e test files missing (34 planned). report.md + uservalidation.md corrected. Spec remains in_progress — test gaps must be addressed before Done."
 }

@@ -33,6 +33,7 @@ handoffs:
 - **Validate fixes with concrete evidence obtained from actual execution** (run commands, capture metrics, query logs) — see Execution Evidence Standard in agent-common.md
 - **Never claim fixes are verified without running commands and observing actual output**
 - **No regression introduction** — stability fixes must not introduce new test failures or warnings; verify by running impacted tests after each fix (see No Regression Introduction in agent-common.md)
+- **Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md). Every evidence block MUST include a `**Claim Source:**` tag. When stability metrics are borderline or measurement is noisy, use an Uncertainty Declaration rather than claiming definitive improvement. See [critical-requirements.md](bubbles_shared/critical-requirements.md) → Honesty Incentive.
 - **Test stability fixes with real user scenarios** — verify improvements using actual user workflows (E2E tests, API calls) not just internal benchmarks (see Use Case Testing Integrity in agent-common.md)
 - Escalate design drift to bubbles.gaps for audit
 

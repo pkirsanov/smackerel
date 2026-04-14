@@ -127,7 +127,7 @@ func ParseChromeHistorySince(dbPath string, chromeTimeCursor int64) ([]HistoryEn
 			slog.Warn("skipping malformed chrome history row", "error", err)
 			continue
 		}
-		e.VisitTime = chromeTimeToGo(visitTime)
+		e.VisitTime = ChromeTimeToGo(visitTime)
 		// CHAOS-F4: Clamp negative durations from corrupted SQLite data.
 		if duration < 0 {
 			duration = 0
@@ -151,12 +151,7 @@ func GoTimeToChrome(t time.Time) int64 {
 }
 
 // ChromeTimeToGo converts Chrome's microseconds-since-1601 to time.Time.
-// Exports the existing chromeTimeToGo for use by the connector.
 func ChromeTimeToGo(chromeTime int64) time.Time {
-	return chromeTimeToGo(chromeTime)
-}
-
-func chromeTimeToGo(chromeTime int64) time.Time {
 	// Chrome epoch: 1601-01-01. Difference from Unix epoch in microseconds.
 	const chromeEpochDiff = 11644473600000000
 	unixMicro := chromeTime - chromeEpochDiff

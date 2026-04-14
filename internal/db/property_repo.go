@@ -33,6 +33,12 @@ func NewPropertyRepository(pool *pgxpool.Pool) *PropertyRepository {
 
 // UpsertByExternalID inserts or updates a property by external_id+source, returning the node.
 func (r *PropertyRepository) UpsertByExternalID(ctx context.Context, externalID, source, name string) (*PropertyNode, error) {
+	if externalID == "" || len(externalID) > 255 {
+		return nil, fmt.Errorf("invalid external_id: must be 1-255 chars, got %d", len(externalID))
+	}
+	if len(name) > 500 {
+		name = name[:500]
+	}
 	id := ulid.Make().String()
 	var p PropertyNode
 	err := r.Pool.QueryRow(ctx, `
@@ -56,6 +62,9 @@ func (r *PropertyRepository) UpsertByExternalID(ctx context.Context, externalID,
 
 // IncrementBookings increments booking count and adds revenue for a property.
 func (r *PropertyRepository) IncrementBookings(ctx context.Context, id string, revenue float64) error {
+	if revenue < 0 {
+		return fmt.Errorf("revenue must be non-negative: %f", revenue)
+	}
 	_, err := r.Pool.Exec(ctx, `
 		UPDATE properties SET
 			total_bookings = total_bookings + 1,
@@ -82,13 +91,23 @@ func (r *PropertyRepository) UpdateTopics(ctx context.Context, id string, topics
 }
 
 // FindByExternalID looks up a property by external_id.
-func (r *PropertyRepository) FindByExternalID(ctx context.Context, externalID string) (*PropertyNode, error) {
+// FindByExternalID looks up a property by external_id. If source is non-empty, scopes the lookup.
+func (r *PropertyRepository) FindByExternalID(ctx context.Context, externalID string, source ...string) (*PropertyNode, error) {
 	var p PropertyNode
-	err := r.Pool.QueryRow(ctx, `
-		SELECT id, external_id, source, name, total_bookings, total_revenue,
+	var query string
+	var args []interface{}
+	if len(source) > 0 && source[0] != "" {
+		query = `SELECT id, external_id, source, name, total_bookings, total_revenue,
 		       avg_rating, issue_count, topics
-		FROM properties WHERE external_id = $1
-	`, externalID).Scan(
+		FROM properties WHERE external_id = $1 AND source = $2`
+		args = []interface{}{externalID, source[0]}
+	} else {
+		query = `SELECT id, external_id, source, name, total_bookings, total_revenue,
+		       avg_rating, issue_count, topics
+		FROM properties WHERE external_id = $1`
+		args = []interface{}{externalID}
+	}
+	err := r.Pool.QueryRow(ctx, query, args...).Scan(
 		&p.ID, &p.ExternalID, &p.Source, &p.Name,
 		&p.TotalBookings, &p.TotalRevenue,
 		&p.AvgRating, &p.IssueCount, &p.Topics,

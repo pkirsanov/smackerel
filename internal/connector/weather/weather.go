@@ -34,6 +34,13 @@ const maxSyncDuration = 5 * time.Minute
 // maxLocationNameLen limits location name length to prevent log injection and memory abuse.
 const maxLocationNameLen = 100
 
+// maxErrorBodyDrain limits bytes drained from error responses to allow connection reuse
+// without consuming excessive memory on chatty error bodies.
+const maxErrorBodyDrain = 1 << 16 // 64 KiB
+
+// userAgent identifies Smackerel to upstream weather APIs per their terms of service.
+const userAgent = "Smackerel/1.0 (personal knowledge engine; github.com/smackerel/smackerel)"
+
 // Connector implements the Weather enrichment connector using Open-Meteo API.
 type Connector struct {
 	id         string
@@ -68,11 +75,19 @@ type cacheEntry struct {
 // New creates a new Weather connector.
 func New(id string) *Connector {
 	return &Connector{
-		id:         id,
-		health:     connector.HealthDisconnected,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		cache:      make(map[string]*cacheEntry),
-		baseURL:    "https://api.open-meteo.com",
+		id:     id,
+		health: connector.HealthDisconnected,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+			// Block all redirects to prevent SSRF via open-redirect on the
+			// upstream API. Weather APIs return JSON directly and must never
+			// issue redirects under normal operation.
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return fmt.Errorf("weather connector refuses redirect to %s", req.URL.Hostname())
+			},
+		},
+		cache:   make(map[string]*cacheEntry),
+		baseURL: "https://api.open-meteo.com",
 	}
 }
 
@@ -104,6 +119,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var artifacts []connector.RawArtifact
 	var failCount int
 	now := time.Now()
+	syncStart := time.Now()
 
 	for _, loc := range c.config.Locations {
 		// Check for context cancellation between locations.
@@ -129,15 +145,18 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			SourceRef:   fmt.Sprintf("current-%s-%s", loc.Name, now.Format("2006-01-02")),
 			ContentType: "weather/current",
 			Title:       fmt.Sprintf("Weather: %s — %s", loc.Name, current.Description),
-			RawContent:  fmt.Sprintf("Temperature: %.1f°C, Humidity: %d%%, Wind: %.1f km/h", current.Temperature, current.Humidity, current.WindSpeed),
+			RawContent:  fmt.Sprintf("Temperature: %.1f°C (feels like %.1f°C), Humidity: %d%%, Wind: %.1f km/h", current.Temperature, current.ApparentTemp, current.Humidity, current.WindSpeed),
 			Metadata: map[string]interface{}{
-				"location":     loc.Name,
-				"latitude":     lat,
-				"longitude":    lon,
-				"temperature":  current.Temperature,
-				"humidity":     current.Humidity,
-				"wind_speed":   current.WindSpeed,
-				"weather_code": current.WeatherCode,
+				"location":             loc.Name,
+				"latitude":             lat,
+				"longitude":            lon,
+				"temperature":          current.Temperature,
+				"apparent_temperature": current.ApparentTemp,
+				"humidity":             current.Humidity,
+				"wind_speed":           current.WindSpeed,
+				"weather_code":         current.WeatherCode,
+				"description":          current.Description,
+				"is_day":               current.IsDay,
 			},
 			CapturedAt: now,
 		})
@@ -147,6 +166,19 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.mu.Lock()
 	c.health = healthFromFailureRatio(failCount, len(c.config.Locations))
 	c.mu.Unlock()
+
+	slog.Info("weather sync complete",
+		"id", c.id,
+		"locations", len(c.config.Locations),
+		"artifacts", len(artifacts),
+		"failures", failCount,
+		"duration", time.Since(syncStart),
+	)
+
+	// Return an error when ALL locations failed so callers can detect total failure.
+	if failCount > 0 && failCount >= len(c.config.Locations) {
+		return artifacts, cursor, fmt.Errorf("all %d weather locations failed to sync", failCount)
+	}
 
 	return artifacts, now.Format(time.RFC3339), nil
 }
@@ -168,11 +200,13 @@ func (c *Connector) Close() error {
 
 // CurrentWeather represents current weather conditions from Open-Meteo.
 type CurrentWeather struct {
-	Temperature float64 `json:"temperature"`
-	Humidity    int     `json:"humidity"`
-	WindSpeed   float64 `json:"wind_speed"`
-	WeatherCode int     `json:"weather_code"`
-	Description string  `json:"description"`
+	Temperature  float64 `json:"temperature"`
+	ApparentTemp float64 `json:"apparent_temperature"`
+	Humidity     int     `json:"humidity"`
+	WindSpeed    float64 `json:"wind_speed"`
+	WeatherCode  int     `json:"weather_code"`
+	Description  string  `json:"description"`
+	IsDay        bool    `json:"is_day"`
 }
 
 // fetchCurrent gets current weather from Open-Meteo API (free, no key needed).
@@ -189,7 +223,7 @@ func (c *Connector) fetchCurrent(ctx context.Context, lat, lon float64) (*Curren
 	}
 	c.mu.RUnlock()
 
-	url := fmt.Sprintf(c.baseURL+"/v1/forecast?latitude="+cf+"&longitude="+cf+"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code", lat, lon)
+	url := fmt.Sprintf(c.baseURL+"/v1/forecast?latitude="+cf+"&longitude="+cf+"&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day", lat, lon)
 
 	backoff := connector.DefaultBackoff()
 	var lastErr error
@@ -224,6 +258,7 @@ func (c *Connector) doFetch(ctx context.Context, url string) (io.ReadCloser, err
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -232,7 +267,7 @@ func (c *Connector) doFetch(ctx context.Context, url string) (io.ReadCloser, err
 
 	if resp.StatusCode != http.StatusOK {
 		// Drain body to allow connection reuse.
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyDrain))
 		resp.Body.Close()
 		// Retry on server errors and rate limits; fail permanently on client errors.
 		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
@@ -254,10 +289,12 @@ func (c *Connector) decodeCurrent(body io.ReadCloser, cacheKey string) (*Current
 
 	var result struct {
 		Current struct {
-			Temperature float64 `json:"temperature_2m"`
-			Humidity    float64 `json:"relative_humidity_2m"`
-			WindSpeed   float64 `json:"wind_speed_10m"`
-			WeatherCode int     `json:"weather_code"`
+			Temperature  float64 `json:"temperature_2m"`
+			ApparentTemp float64 `json:"apparent_temperature"`
+			Humidity     float64 `json:"relative_humidity_2m"`
+			WindSpeed    float64 `json:"wind_speed_10m"`
+			WeatherCode  int     `json:"weather_code"`
+			IsDay        float64 `json:"is_day"`
 		} `json:"current"`
 	}
 
@@ -271,11 +308,13 @@ func (c *Connector) decodeCurrent(body io.ReadCloser, cacheKey string) (*Current
 	_, _ = io.Copy(io.Discard, limitedBody)
 
 	cw := &CurrentWeather{
-		Temperature: result.Current.Temperature,
-		Humidity:    int(result.Current.Humidity),
-		WindSpeed:   result.Current.WindSpeed,
-		WeatherCode: result.Current.WeatherCode,
-		Description: wmoCodeToDescription(result.Current.WeatherCode),
+		Temperature:  result.Current.Temperature,
+		ApparentTemp: result.Current.ApparentTemp,
+		Humidity:     int(math.Round(result.Current.Humidity)),
+		WindSpeed:    result.Current.WindSpeed,
+		WeatherCode:  result.Current.WeatherCode,
+		Description:  wmoCodeToDescription(result.Current.WeatherCode),
+		IsDay:        result.Current.IsDay == 1,
 	}
 
 	c.mu.Lock()

@@ -33,7 +33,7 @@ Items are checked `[x]` by default (validated via audit). Uncheck `[ ]` to repor
 - [x] Digest includes today's arrivals with returning-guest detection
 - [x] Digest includes today's departures
 - [x] Digest includes pending tasks across properties
-- [x] Revenue snapshot shows 24h/7d/30d breakdown by channel and property
+- [ ] Revenue snapshot shows 24h/7d/30d breakdown by channel and property *(Reconciliation 2026-04-12: only 7d/30d implemented; no 24h window; no per-channel breakdown)*
 - [x] Guest and property alerts surface in digest
 - [x] Empty day omits hospitality sections (not shown empty)
 - [x] No hospitality connectors active → standard digest only
@@ -42,6 +42,6 @@ Items are checked `[x]` by default (validated via audit). Uncheck `[ ]` to repor
 - [x] POST /api/context-for returns full guest context with history, sentiment, hints
 - [x] POST /api/context-for returns full property context with performance, topics, hints
 - [x] Unknown guest/property returns 404 (not empty 200)
-- [x] Communication hints are rule-based and deterministic
+- [ ] Communication hints are rule-based and deterministic *(Reconciliation 2026-04-12: repeat_guest/vip/positive_reviewer hints work; early-checkin and direct-booking-% rules not implemented)*
 - [x] API key authentication enforced
 - [x] Include parameter controls response sections

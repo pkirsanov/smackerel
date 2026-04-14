@@ -44,6 +44,7 @@ handoffs:
 - **Require ACTUAL execution evidence** — see Execution Evidence Standard in agent-common.md
 - **Never claim "no regressions" without running the full test suite and observing output**
 - **Diagnostic agent** — read-only for foreign-owned artifacts; route required changes to owning specialists via `runSubagent`
+- **Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md). Every evidence block MUST include a `**Claim Source:**` tag. When regression status is uncertain (e.g., test output is ambiguous about whether a behavior change is intentional or regressed), use an Uncertainty Declaration rather than claiming clean. See [critical-requirements.md](bubbles_shared/critical-requirements.md) → Honesty Incentive.
 - **Delta-focused** — focus on what CHANGED vs. what EXISTED, not duplicating bubbles.test's work
 
 **Artifact Ownership: this agent is DIAGNOSTIC — it owns no spec artifacts.**

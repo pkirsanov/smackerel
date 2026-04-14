@@ -8,7 +8,7 @@
 
 ## Problem Statement
 
-Smackerel has 14 connector packages under `internal/connector/`, but only 9 are registered in `cmd/core/main.go`. Five connectors — Discord, Twitter/X, Weather, Gov Alerts (USGS), and Financial Markets (Finnhub/CoinGecko) — have fully implemented code packages with tests but are **never instantiated or registered** with the connector supervisor. They are dead code that cannot be reached at runtime.
+Smackerel has 15 connector packages under `internal/connector/`, but only 10 are registered in `cmd/core/main.go`. Five connectors — Discord, Twitter/X, Weather, Gov Alerts (USGS), and Financial Markets (Finnhub/CoinGecko) — have fully implemented code packages with tests but are **never instantiated or registered** with the connector supervisor. They are dead code that cannot be reached at runtime.
 
 Additionally, four of these five connectors (Twitter/X, Weather, Gov Alerts, Financial Markets) have no configuration entries in `config/smackerel.yaml`, so even with registration they would have no config-driven enable/disable surface. Discord already has a YAML entry but is still never instantiated.
 
@@ -36,7 +36,7 @@ This is a wiring-only fix. No new connector logic is needed — only registratio
 
 ## Outcome Contract
 
-**Intent:** All 14 connector packages are reachable at runtime — the 5 currently dead connectors (Discord, Twitter/X, Weather, Gov Alerts, Financial Markets) are registered with the supervisor and configurable via `smackerel.yaml`, following the same pattern as the existing 9 connectors.
+**Intent:** All 15 connector packages are reachable at runtime — the 5 currently dead connectors (Discord, Twitter/X, Weather, Gov Alerts, Financial Markets) are registered with the supervisor and configurable via `smackerel.yaml`, following the same pattern as the existing 10 connectors.
 
 **Success Signal:** When `enabled: true` is set for any of the 5 connectors in `smackerel.yaml` with valid credentials/config, the connector starts, syncs, and reports health through the supervisor — identical to the existing 9 connectors.
 
@@ -132,10 +132,10 @@ This is a wiring-only fix. No new connector logic is needed — only registratio
 ### UC-006: Verify All Connectors in Health Endpoint
 
 - **Actor:** Operator
-- **Preconditions:** Smackerel is running with all 14 connectors registered
+- **Preconditions:** Smackerel is running with all 15 connectors registered
 - **Main Flow:**
   1. Operator queries `GET /api/health`
-  2. Response includes all 14 connectors with their current health status
+  2. Response includes all 15 connectors with their current health status
   3. Disabled connectors show as `disconnected`; enabled ones show `healthy`/`syncing`/`degraded`
 - **Postconditions:** Complete visibility into connector fleet status
 
@@ -143,12 +143,12 @@ This is a wiring-only fix. No new connector logic is needed — only registratio
 
 ## Business Scenarios
 
-### BS-001: All 14 connectors appear in supervisor registry after startup
+### BS-001: All 15 connectors appear in supervisor registry after startup
 
 ```
 Given Smackerel core starts with default configuration (all connectors disabled)
 When the supervisor registry is inspected
-Then all 14 connectors are registered
+Then all 15 connectors are registered
 And none are in the "running" state (all disabled by default)
 ```
 
@@ -340,15 +340,15 @@ Scenario: Financial Markets config maps API keys to credentials
   And ConnectorConfig.Credentials["finnhub_api_key"] equals "fk_123"
 ```
 
-### R-005: Health reporting for all 14 connectors
+### R-005: Health reporting for all 15 connectors
 
 All connectors, including the 5 newly wired ones, MUST report health through the supervisor and be visible in the health API endpoint.
 
 ```gherkin
-Scenario: Health endpoint shows all 14 connectors
-  Given all 14 connectors are registered
+Scenario: Health endpoint shows all 15 connectors
+  Given all 15 connectors are registered
   When GET /api/health is called
-  Then the response includes health status for all 14 connectors
+  Then the response includes health status for all 15 connectors
   And disabled connectors show status "disconnected"
   And enabled + healthy connectors show status "healthy"
 ```
@@ -393,7 +393,7 @@ Scenario: No fallback defaults for required credentials
 
 - **Performance:** Registering 5 additional connectors adds negligible startup time (<100ms total)
 - **Reliability:** Each connector's failure is isolated — one failing connector does not affect others (existing supervisor guarantee)
-- **Maintainability:** The wiring pattern for all 14 connectors is consistent — no special-case logic for any connector
+- **Maintainability:** The wiring pattern for all 15 connectors is consistent — no special-case logic for any connector
 - **Observability:** All connectors produce structured log entries on connect, sync, and error events
 
 ---
@@ -402,11 +402,11 @@ Scenario: No fallback defaults for required credentials
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| Registered connectors | 14 (up from 9) | Supervisor registry count at startup |
+| Registered connectors | 15 (up from 10) | Supervisor registry count at startup |
 | Dead code packages | 0 (down from 5) | Static analysis: all connector imports used |
-| Config coverage | 14/14 connectors in smackerel.yaml | YAML inspection |
+| Config coverage | 15/15 connectors in smackerel.yaml | YAML inspection |
 | Regression tests | All existing connector tests pass | `./smackerel.sh test unit` |
-| Health visibility | 14 connectors in `/api/health` | E2E health endpoint check |
+| Health visibility | 15 connectors in `/api/health` | E2E health endpoint check |
 
 ---
 

@@ -444,6 +444,8 @@ When a user asks "which mode should I use?" or describes a situation:
 | Situation | Likely Mode | Default Tags |
 |-----------|-------------|--------------|
 | Exploring an idea, no code yet | `spec-scope-hardening` with `analyze: true socratic: true` | `socratic: true` |
+| **Planning only** — "plan", "create specs", "create bugs", "planning cycle", "scope this", "convert findings to specs" | `spec-scope-hardening` | — |
+| **Bug triage** — "create bug artifacts", "plan each finding", "full planning for each" | `spec-scope-hardening` | — |
 | No code changes needed | Modes with `statusCeiling: docs_updated` or `validated` | — |
 | Bug fix | Mode with "bugfix" or "fastlane" in name | — |
 | New feature from scratch | Mode with "product" or "discovery" in name/description | — |

@@ -94,7 +94,7 @@ gates:
     description: spec.md contains actors, use cases, business scenarios, and UI wireframes (when applicable). Competitive analysis is documented. Requirements are traceable and testable. Gate passes if spec.md has the required sections or if scope explicitly does not need business analysis (backend-infra work, bug fixes, etc.).
   G033:
     name: design_readiness_gate
-    description: ABSOLUTE BLOCKING gate for the implement phase. design.md MUST exist and contain substantive technical design (not stubs/placeholders). scopes.md MUST exist with at least one scope containing Gherkin scenarios, a Test Plan, and a Definition of Done. When this gate fails, the workflow MUST auto-escalate by invoking bubbles.design → bubbles.plan before proceeding to implement. This gate prevents implementation from starting with only spec.md. Exempt for bugfix-fastlane mode (bugs may not need new design artifacts).
+    description: ABSOLUTE BLOCKING gate for the implement phase. design.md MUST exist and contain substantive technical design (not stubs/placeholders). scopes.md MUST exist with at least one scope containing Gherkin scenarios, a Test Plan, and a Definition of Done. When this gate fails, the workflow MUST auto-escalate by invoking bubbles.design → bubbles.plan before proceeding to implement. This gate prevents implementation from starting with only spec.md. For bugfix-fastlane mode, the bootstrap phase now runs design and planning agents; the gate still applies but bug artifacts may be lighter-weight than feature artifacts.
   G034:
     name: security_gate
     description: Security scan clean — no critical or high severity vulnerabilities. Dependency audit passed, code review found no injection/XSS/SSRF/auth-bypass findings above medium severity. When this gate fails, the workflow MUST route to bubbles.implement to fix security findings before proceeding.
@@ -1153,7 +1153,7 @@ modes:
   bugfix-fastlane:
     description: Focused bug loop with mandatory reproduction and verification.
     statusCeiling: done
-    phaseOrder: [ select, implement, test, regression, simplify, stabilize, devops, security, validate, audit, finalize ]
+    phaseOrder: [ select, bootstrap, implement, test, regression, simplify, stabilize, devops, security, validate, audit, finalize ]
     requiredGates: [ G001, G003, G004, G005, G007, G008, G010, G011, G012, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G035, G044, G047, G048, G051, G055, G056, G057, G059, G060, G061 ]
     constraints:
       requireBugReproductionBeforeFix: true

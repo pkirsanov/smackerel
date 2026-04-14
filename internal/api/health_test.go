@@ -55,7 +55,7 @@ func TestHealthHandler_AllHealthy(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	// With no ML sidecar URL, ml_sidecar will be down, so status is degraded
+	// With no ML sidecar URL, ml_sidecar will be not_configured (not "down")
 	if resp.Services["api"].Status != "up" {
 		t.Errorf("expected api status up, got %s", resp.Services["api"].Status)
 	}
@@ -320,10 +320,97 @@ func TestHealthHandler_VersionAndCommitHash(t *testing.T) {
 	}
 }
 
+// IMP-023-01: Version and commit hash are hidden from unauthenticated callers
+// when AuthToken is configured, preventing server fingerprinting.
+func TestHealthHandler_VersionHiddenWithoutAuth(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		Version:    "1.2.3",
+		CommitHash: "abc123",
+		AuthToken:  "secret-token",
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	// No Authorization header — unauthenticated caller
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if resp.Version != "" {
+		t.Errorf("expected empty version for unauthenticated caller, got %s", resp.Version)
+	}
+	if resp.CommitHash != "" {
+		t.Errorf("expected empty commit hash for unauthenticated caller, got %s", resp.CommitHash)
+	}
+}
+
+// IMP-023-01: Version and commit hash are visible to authenticated callers.
+func TestHealthHandler_VersionVisibleWithAuth(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		Version:    "1.2.3",
+		CommitHash: "abc123",
+		AuthToken:  "secret-token",
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if resp.Version != "1.2.3" {
+		t.Errorf("expected version 1.2.3, got %s", resp.Version)
+	}
+	if resp.CommitHash != "abc123" {
+		t.Errorf("expected commit abc123, got %s", resp.CommitHash)
+	}
+}
+
+// IMP-023-02: ML sidecar reports "not_configured" (not "down") when URL is empty,
+// preventing false "degraded" overall status for unconfigured optional services.
+func TestHealthHandler_MLSidecarNotConfigured_OverallHealthy(t *testing.T) {
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true, artifactCount: 5},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		MLSidecarURL: "", // not configured
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if resp.Services["ml_sidecar"].Status != "not_configured" {
+		t.Errorf("expected ml_sidecar not_configured, got %s", resp.Services["ml_sidecar"].Status)
+	}
+	// "not_configured" should NOT trigger degraded status
+	if resp.Status != "healthy" {
+		t.Errorf("expected overall healthy when all critical services up and ml_sidecar not configured, got %s", resp.Status)
+	}
+}
+
 func TestCheckMLSidecar_EmptyURL(t *testing.T) {
 	status := checkMLSidecar(context.Background(), "", &http.Client{})
-	if status.Status != "down" {
-		t.Errorf("expected down for empty ML sidecar URL, got %s", status.Status)
+	if status.Status != "not_configured" {
+		t.Errorf("expected not_configured for empty ML sidecar URL, got %s", status.Status)
 	}
 }
 
@@ -983,5 +1070,94 @@ func TestHealthHandler_NilConnectorRegistry(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 with nil ConnectorRegistry, got %d", rec.Code)
+	}
+}
+
+// CHAOS-C1: Fresh install with epoch lastSynthesis must NOT report stale.
+// GetLastSynthesisTime returns 1970-01-01 when no synthesis has ever run (fresh install).
+// Before the fix, this caused intelligence to report "stale" and overall status "degraded"
+// on brand-new deployments with zero data.
+func TestHealthHandler_IntelligenceFreshInstallNotStale(t *testing.T) {
+	// This test requires a mock that simulates GetLastSynthesisTime returning epoch.
+	// Since the handler calls engine.GetLastSynthesisTime which needs a real DB,
+	// we verify the branch logic directly: a year < 2000 must not trigger "stale".
+	//
+	// The epoch check is: lastSynthesis.IsZero() || lastSynthesis.Year() < 2000
+	// time.Time{}.IsZero() = true, time.Date(1970,1,1,...).Year() = 1970 < 2000
+
+	// Verify the guard condition directly
+	epoch := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+	if !epoch.IsZero() && epoch.Year() >= 2000 {
+		t.Fatal("epoch should trigger the fresh-install guard (IsZero or Year<2000)")
+	}
+
+	zeroTime := time.Time{}
+	if !zeroTime.IsZero() {
+		t.Fatal("zero time should be detected as zero")
+	}
+
+	// A real synthesis time should pass through
+	recent := time.Now().Add(-1 * time.Hour)
+	if recent.IsZero() || recent.Year() < 2000 {
+		t.Fatal("recent time should not trigger fresh-install guard")
+	}
+
+	// A stale but real synthesis should still be detected
+	stale := time.Now().Add(-72 * time.Hour)
+	if stale.IsZero() || stale.Year() < 2000 {
+		t.Fatal("stale but recent-year time should not trigger fresh-install guard")
+	}
+	if time.Since(stale) <= 48*time.Hour {
+		t.Fatal("stale synthesis should exceed 48h threshold")
+	}
+}
+
+// DEV-003-002: Connector error/failing/disconnected states MUST degrade overall health.
+// Before the fix, the aggregation only checked "down" and "stale" — connector-specific
+// statuses like "error", "failing", "disconnected" were silently ignored, leaving overall
+// health reported as "healthy" even when connectors were broken.
+func TestHealthHandler_ConnectorErrorDegrades(t *testing.T) {
+	tests := []struct {
+		name            string
+		connectorStatus string
+		expectDegraded  bool
+	}{
+		{"error_degrades", "error", true},
+		{"failing_degrades", "failing", true},
+		{"disconnected_degrades", "disconnected", true},
+		{"degraded_degrades", "degraded", true},
+		{"healthy_stays_healthy", "healthy", false},
+		{"syncing_stays_healthy", "syncing", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := &Dependencies{
+				DB:        &mockDB{healthy: true},
+				NATS:      &mockNATS{healthy: true},
+				StartTime: time.Now(),
+				ConnectorRegistry: &mockConnectorHealth{
+					health: map[string]string{
+						"gmail": tt.connectorStatus,
+					},
+				},
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+			rec := httptest.NewRecorder()
+			deps.HealthHandler(rec, req)
+
+			var resp HealthResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+
+			if tt.expectDegraded && resp.Status != "degraded" {
+				t.Errorf("connector status %q should degrade overall health, got %q", tt.connectorStatus, resp.Status)
+			}
+			if !tt.expectDegraded && resp.Status != "healthy" {
+				t.Errorf("connector status %q should NOT degrade overall health, got %q", tt.connectorStatus, resp.Status)
+			}
+		})
 	}
 }

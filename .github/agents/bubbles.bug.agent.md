@@ -102,6 +102,8 @@ When the user provides free-text input WITHOUT explicit `mode:` parameters, infe
 - Implement full feature behavior with edge-case handling and complete documentation.
 - If any critical requirement is unmet, status MUST remain `in_progress`/`blocked`.
 
+**⚠️ Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md) for all evidence recording. Every evidence block MUST include a `**Claim Source:**` tag (`executed`, `interpreted`, `not-run`). When bug reproduction or fix verification is ambiguous, use an Uncertainty Declaration instead of claiming certainty. A fabricated bug reproduction is infinitely worse than an honest "could not reproduce — here is what was tried." See [critical-requirements.md](bubbles_shared/critical-requirements.md) → Honesty Incentive.
+
 ## Shared Agent Patterns
 
 **MANDATORY:** Follow all patterns in [agent-common.md](bubbles_shared/agent-common.md) and scope templates in [scope-workflow.md](bubbles_shared/scope-workflow.md).

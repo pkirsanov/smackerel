@@ -1349,6 +1349,137 @@ func TestProcessEntries_ZeroDwellTime(t *testing.T) {
 	}
 }
 
+// GAP-FIX: Connect must verify file readability, not just existence (R-002).
+// Adversarial: would pass if Connect only used os.Stat (which succeeds on unreadable files).
+func TestConnect_HistoryFileNotReadable(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping readability test when running as root")
+	}
+
+	tmpDir := t.TempDir()
+	historyPath := filepath.Join(tmpDir, "History")
+	if err := os.WriteFile(historyPath, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	// Remove read permission
+	if err := os.Chmod(historyPath, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { os.Chmod(historyPath, 0o644) })
+
+	c := New("browser-history")
+	config := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"history_path": historyPath,
+		},
+	}
+
+	err := c.Connect(context.Background(), config)
+	if err == nil {
+		t.Fatal("expected error for unreadable history file")
+	}
+	if !contains(err.Error(), "not readable") {
+		t.Errorf("expected 'not readable' in error, got: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected health error, got %s", c.Health(context.Background()))
+	}
+}
+
+// GAP-FIX: Config validation rejects initial_lookback_days < 1 (R-012).
+func TestParseBrowserConfig_InitialLookbackDaysValidation(t *testing.T) {
+	tests := []struct {
+		name   string
+		value  interface{}
+		errMsg string
+	}{
+		{"zero", 0, "initial_lookback_days must be >= 1"},
+		{"negative", -5, "initial_lookback_days must be >= 1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := connector.ConnectorConfig{
+				SourceConfig: map[string]interface{}{
+					"history_path":          "/some/path",
+					"initial_lookback_days": tt.value,
+				},
+			}
+			_, err := parseBrowserConfig(config)
+			if err == nil {
+				t.Fatalf("expected error containing %q", tt.errMsg)
+			}
+			if !contains(err.Error(), tt.errMsg) {
+				t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
+			}
+		})
+	}
+}
+
+// GAP-FIX: Config validation rejects content_fetch_concurrency < 1 (R-012).
+func TestParseBrowserConfig_ContentFetchConcurrencyValidation(t *testing.T) {
+	tests := []struct {
+		name   string
+		value  interface{}
+		errMsg string
+	}{
+		{"zero", 0, "content_fetch_concurrency must be >= 1"},
+		{"negative", -1, "content_fetch_concurrency must be >= 1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := connector.ConnectorConfig{
+				SourceConfig: map[string]interface{}{
+					"history_path":              "/some/path",
+					"content_fetch_concurrency": tt.value,
+				},
+			}
+			_, err := parseBrowserConfig(config)
+			if err == nil {
+				t.Fatalf("expected error containing %q", tt.errMsg)
+			}
+			if !contains(err.Error(), tt.errMsg) {
+				t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
+			}
+		})
+	}
+}
+
+// GAP-FIX: Health() transitions to error when file disappears between syncs (R-013).
+// Adversarial: would pass if Health() only returned cached status without re-checking file.
+func TestHealth_FileDisappearsAfterConnect(t *testing.T) {
+	tmpDir := t.TempDir()
+	historyPath := filepath.Join(tmpDir, "History")
+	if err := os.WriteFile(historyPath, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	c := New("browser-history")
+	config := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"history_path": historyPath,
+		},
+	}
+
+	if err := c.Connect(context.Background(), config); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Fatal("expected healthy after Connect")
+	}
+
+	// Delete the file — simulates user moving Chrome profile
+	os.Remove(historyPath)
+
+	// Health should detect file disappearance and transition to error
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected health error after file deletion, got %s", c.Health(context.Background()))
+	}
+}
+
 // CHAOS: dedupByURLDate must handle empty/nil input without panicking.
 func TestDedupByURLDate_EmptyInput(t *testing.T) {
 	result := dedupByURLDate(nil)

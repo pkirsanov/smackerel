@@ -236,9 +236,9 @@ func TestOAuthStart_AllowsWithinLimit(t *testing.T) {
 	}
 }
 
-// --- OAuth callback is NOT rate-limited ---
+// --- OAuth callback IS rate-limited (SEC-SWEEP-001) ---
 
-func TestOAuthCallback_NotRateLimited(t *testing.T) {
+func TestOAuthCallback_RateLimited(t *testing.T) {
 	deps := &Dependencies{
 		DB:           &mockDB{healthy: true},
 		NATS:         &mockNATS{healthy: true},
@@ -248,16 +248,22 @@ func TestOAuthCallback_NotRateLimited(t *testing.T) {
 
 	router := NewRouter(deps)
 
-	// Send 15 requests to callback — all should succeed (no rate limit).
+	// Send 15 requests to callback — should hit 429 after 10.
+	got429 := false
 	for i := 0; i < 15; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
 		req.RemoteAddr = "192.168.1.200:12345"
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Errorf("callback request %d: expected 200, got %d", i+1, rec.Code)
+		if rec.Code == http.StatusTooManyRequests {
+			got429 = true
+			break
 		}
+	}
+
+	if !got429 {
+		t.Error("expected 429 after exceeding rate limit on OAuth callback")
 	}
 }
 
@@ -379,4 +385,358 @@ func stringContains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// --- Security headers on 404 (unmatched routes) ---
+
+func TestSecurityHeaders_On404(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/nonexistent/path", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	// Even 404 responses must carry security headers (middleware runs before routing)
+	if rec.Header().Get("X-Frame-Options") != "DENY" {
+		t.Error("missing X-Frame-Options on 404 response")
+	}
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("missing X-Content-Type-Options on 404 response")
+	}
+	if rec.Header().Get("Referrer-Policy") != "strict-origin-when-cross-origin" {
+		t.Error("missing Referrer-Policy on 404 response")
+	}
+	if rec.Header().Get("Permissions-Policy") != "camera=(), microphone=(), geolocation=()" {
+		t.Error("missing Permissions-Policy on 404 response")
+	}
+}
+
+// --- CSP directive completeness ---
+
+func TestSecurityHeaders_CSP_Directives(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+
+	// Verify each required CSP directive is present
+	requiredDirectives := []string{
+		"default-src 'self'",
+		"style-src",
+		"script-src",
+		"img-src",
+		"connect-src 'self'",
+	}
+	for _, directive := range requiredDirectives {
+		if !stringContains(csp, directive) {
+			t.Errorf("CSP missing required directive %q, full CSP: %s", directive, csp)
+		}
+	}
+
+	// Verify no unsafe-eval in script-src
+	if stringContains(csp, "'unsafe-eval'") {
+		t.Error("CSP should not include 'unsafe-eval' in script-src")
+	}
+}
+
+// --- API bearer auth dev mode (empty AuthToken allows all) ---
+
+func TestAPIAuth_DevMode_AllowsAll(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		AuthToken: "", // dev mode
+	}
+
+	router := NewRouter(deps)
+
+	// Authenticated API routes should be accessible without auth in dev mode
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/api/health"},
+		{http.MethodGet, "/api/digest"},
+		{http.MethodGet, "/api/recent"},
+	}
+
+	for _, rt := range routes {
+		t.Run(rt.method+"_"+rt.path, func(t *testing.T) {
+			req := httptest.NewRequest(rt.method, rt.path, nil)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code == http.StatusUnauthorized {
+				t.Errorf("dev mode should allow %s %s without auth, got 401", rt.method, rt.path)
+			}
+		})
+	}
+}
+
+// --- Web auth: wrong cookie value ---
+
+func TestWebUI_RejectsWrongCookie(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		AuthToken:  "correct-secret-token-12345",
+		WebHandler: &mockWebUI{},
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: "auth_token", Value: "wrong-cookie-value"})
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for wrong cookie, got %d", rec.Code)
+	}
+}
+
+// --- Web auth: both wrong bearer AND wrong cookie ---
+
+func TestWebUI_RejectsBothWrongBearerAndWrongCookie(t *testing.T) {
+	deps := &Dependencies{
+		DB:         &mockDB{healthy: true},
+		NATS:       &mockNATS{healthy: true},
+		StartTime:  time.Now(),
+		AuthToken:  "correct-secret-token-12345",
+		WebHandler: &mockWebUI{},
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	req.AddCookie(&http.Cookie{Name: "auth_token", Value: "also-wrong"})
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 with both wrong bearer and wrong cookie, got %d", rec.Code)
+	}
+}
+
+// --- Bearer auth: case-insensitive "Bearer" scheme ---
+
+func TestBearerAuth_CaseInsensitiveScheme(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		AuthToken: "test-secret-token-1234",
+	}
+
+	router := NewRouter(deps)
+
+	// "bearer" (lowercase) should also be accepted
+	cases := []string{
+		"Bearer test-secret-token-1234",
+		"bearer test-secret-token-1234",
+		"BEARER test-secret-token-1234",
+		"BeArEr test-secret-token-1234",
+	}
+
+	for _, auth := range cases {
+		t.Run(auth[:6], func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+			req.Header.Set("Authorization", auth)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code == http.StatusUnauthorized {
+				t.Errorf("expected auth to accept %q, got 401", auth[:6])
+			}
+		})
+	}
+}
+
+// --- Rate limit IP isolation ---
+
+func TestOAuthStart_RateLimitPerIP(t *testing.T) {
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		OAuthHandler: &mockOAuth{},
+	}
+
+	router := NewRouter(deps)
+
+	// Exhaust rate limit for IP A
+	for i := 0; i < 11; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/auth/google/start", nil)
+		req.RemoteAddr = "10.10.10.1:12345"
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+	}
+
+	// IP B should still have its own limit — first request should succeed
+	req := httptest.NewRequest(http.MethodGet, "/auth/google/start", nil)
+	req.RemoteAddr = "10.10.10.2:12345"
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusTooManyRequests {
+		t.Error("rate limit for IP A should not affect IP B")
+	}
+}
+
+// --- Security headers on authenticated error responses ---
+
+func TestSecurityHeaders_OnUnauthorized(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		AuthToken: "test-secret-token-1234",
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/digest", nil)
+	// No auth header — should get 401
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+
+	// Security headers must still be present on error responses
+	if rec.Header().Get("X-Frame-Options") != "DENY" {
+		t.Error("missing X-Frame-Options on 401 response")
+	}
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("missing X-Content-Type-Options on 401 response")
+	}
+}
+
+// --- API bearer auth: empty Authorization header value ---
+
+func TestBearerAuth_EmptyAuthorizationHeader(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		AuthToken: "test-secret-token-1234",
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/digest", nil)
+	req.Header.Set("Authorization", "")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for empty Authorization header, got %d", rec.Code)
+	}
+}
+
+// --- OAuth routes not behind bearer auth ---
+
+func TestOAuthRoutes_NotBehindBearerAuth(t *testing.T) {
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		AuthToken:    "test-secret-token-1234",
+		OAuthHandler: &mockOAuth{},
+	}
+
+	router := NewRouter(deps)
+
+	// OAuth start and callback should be accessible without Bearer token
+	routes := []string{
+		"/auth/google/start",
+		"/auth/google/callback",
+	}
+
+	for _, path := range routes {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.RemoteAddr = "172.16.0.1:12345" // unique IP to avoid rate limit
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			// Should NOT be 401 — OAuth routes are outside bearer auth group
+			if rec.Code == http.StatusUnauthorized {
+				t.Errorf("OAuth route %s should not require bearer auth, got 401", path)
+			}
+		})
+	}
+}
+
+// --- Auth status endpoint requires bearer auth ---
+
+func TestOAuthStatus_RequiresBearerAuth(t *testing.T) {
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		AuthToken:    "test-secret-token-1234",
+		OAuthHandler: &mockOAuth{},
+	}
+
+	router := NewRouter(deps)
+
+	// /api/auth/status should require bearer auth
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for /api/auth/status without auth, got %d", rec.Code)
+	}
+
+	// With valid auth, should succeed
+	req2 := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	req2.Header.Set("Authorization", "Bearer test-secret-token-1234")
+	rec2 := httptest.NewRecorder()
+	router.ServeHTTP(rec2, req2)
+
+	if rec2.Code == http.StatusUnauthorized {
+		t.Error("/api/auth/status should be accessible with valid bearer token")
+	}
+}
+
+// --- Health endpoint does not require auth ---
+
+func TestHealthEndpoint_NoAuthRequired(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		AuthToken: "test-secret-token-1234",
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusUnauthorized {
+		t.Error("/api/health should not require authentication")
+	}
 }

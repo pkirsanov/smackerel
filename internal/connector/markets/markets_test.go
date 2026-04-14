@@ -3,11 +3,13 @@ package markets
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
@@ -815,8 +817,8 @@ func TestSyncDegradedHealthOnTotalFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if c.Health(context.Background()) != connector.HealthDegraded {
-		t.Errorf("expected degraded health after total failure, got %v", c.Health(context.Background()))
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected error health after total failure, got %v", c.Health(context.Background()))
 	}
 }
 
@@ -1001,5 +1003,883 @@ func TestConnectThenCloseAndReconnect(t *testing.T) {
 	}
 	if !c.tryRecordCall("finnhub") {
 		t.Error("rate limits should be fresh after Close + reconnect")
+	}
+}
+
+func TestFetchCoinGeckoPrices_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"status":{"error_code":429,"error_message":"rate limit"}}`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.coingeckoBaseURL = srv.URL
+
+	_, err := c.fetchCoinGeckoPrices(context.Background(), []string{"bitcoin"})
+	if err == nil {
+		t.Fatal("expected error for 429 response")
+	}
+	if !strings.Contains(err.Error(), "429") {
+		t.Errorf("error should mention status 429, got: %v", err)
+	}
+}
+
+func TestFetchCoinGeckoPrices_AllInvalidIDs(t *testing.T) {
+	c := New("financial-markets")
+	// All IDs fail validation — should error before any HTTP call.
+	_, err := c.fetchCoinGeckoPrices(context.Background(), []string{"BITCOIN", "../admin", ""})
+	if err == nil {
+		t.Fatal("expected error for all-invalid coin IDs")
+	}
+	if !strings.Contains(err.Error(), "no valid coin IDs") {
+		t.Errorf("error should mention no valid coin IDs, got: %v", err)
+	}
+}
+
+func TestFetchCoinGeckoPrices_MalformedJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{not valid json`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.coingeckoBaseURL = srv.URL
+
+	_, err := c.fetchCoinGeckoPrices(context.Background(), []string{"bitcoin"})
+	if err == nil {
+		t.Fatal("expected error for malformed JSON response")
+	}
+	if !strings.Contains(err.Error(), "decode") {
+		t.Errorf("error should mention decode, got: %v", err)
+	}
+}
+
+func TestSyncCoinGeckoDisabledSkipsCrypto(t *testing.T) {
+	// When CoinGeckoEnabled=false, Sync should not fetch crypto even if watchlist has crypto.
+	srvCalled := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		srvCalled = true
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]map[string]float64{})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.coingeckoBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:    "test-key",
+		CoinGeckoEnabled: false,
+		Watchlist:        WatchlistConfig{Crypto: []string{"bitcoin", "ethereum"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts when CoinGecko disabled, got %d", len(artifacts))
+	}
+	if srvCalled {
+		t.Error("CoinGecko server should not be called when CoinGeckoEnabled=false")
+	}
+}
+
+func TestSyncETFsMergedWithStocks(t *testing.T) {
+	// ETFs should be fetched via Finnhub alongside stocks.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 450.0, "d": 3.0, "dp": 0.7, "h": 452.0, "l": 448.0, "o": 449.0, "pc": 447.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL"},
+			ETFs:   []string{"SPY", "QQQ"},
+		},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 3 {
+		t.Fatalf("expected 3 artifacts (1 stock + 2 ETFs), got %d", len(artifacts))
+	}
+
+	// Verify all symbols appear in artifacts.
+	symbols := map[string]bool{}
+	for _, a := range artifacts {
+		symbols[a.Metadata["symbol"].(string)] = true
+	}
+	for _, want := range []string{"AAPL", "SPY", "QQQ"} {
+		if !symbols[want] {
+			t.Errorf("missing artifact for symbol %s", want)
+		}
+	}
+}
+
+func TestSyncMultiProviderCombined(t *testing.T) {
+	// Verify Sync fetches from both Finnhub and CoinGecko in a single call.
+	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer finnhubSrv.Close()
+
+	coingeckoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]map[string]float64{
+			"bitcoin": {"usd": 67000.0, "usd_24h_change": 2.5},
+		})
+	}))
+	defer coingeckoSrv.Close()
+
+	c := New("financial-markets")
+	// Can't easily split HTTP clients per host, so use one client.
+	// Instead, point both base URLs to their respective servers.
+	c.finnhubBaseURL = finnhubSrv.URL
+	c.coingeckoBaseURL = coingeckoSrv.URL
+	c.httpClient = &http.Client{Timeout: 5 * time.Second}
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:    "test-key",
+		CoinGeckoEnabled: true,
+		AlertThreshold:   5.0,
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL"},
+			Crypto: []string{"bitcoin"},
+		},
+	}
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cursor == "" {
+		t.Error("cursor should be set")
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts (1 stock + 1 crypto), got %d", len(artifacts))
+	}
+
+	var hasStock, hasCrypto bool
+	for _, a := range artifacts {
+		if a.Metadata["symbol"] == "AAPL" {
+			hasStock = true
+		}
+		if a.Metadata["symbol"] == "bitcoin" {
+			hasCrypto = true
+			if a.Metadata["asset_type"] != "crypto" {
+				t.Errorf("bitcoin should have asset_type=crypto, got %v", a.Metadata["asset_type"])
+			}
+		}
+	}
+	if !hasStock {
+		t.Error("missing AAPL stock artifact")
+	}
+	if !hasCrypto {
+		t.Error("missing bitcoin crypto artifact")
+	}
+}
+
+func TestConnect_SetsHealthErrorOnInvalidConfig(t *testing.T) {
+	c := New("financial-markets")
+
+	// Missing API key should set health to HealthError.
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{},
+	})
+	if err == nil {
+		t.Fatal("expected error for missing API key")
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected HealthError after failed Connect, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestConnect_SetsHealthErrorOnBadSymbol(t *testing.T) {
+	c := New("financial-markets")
+
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "test"},
+		SourceConfig: map[string]interface{}{
+			"watchlist": map[string]interface{}{
+				"stocks": []interface{}{"AAPL&inject"},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid symbol in config")
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected HealthError after config parse failure, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestFetchFinnhubQuote_MalformedJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{not valid json`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	_, err := c.fetchFinnhubQuote(context.Background(), "AAPL")
+	if err == nil {
+		t.Fatal("expected error for malformed JSON response")
+	}
+	if !strings.Contains(err.Error(), "decode") {
+		t.Errorf("error should mention decode, got: %v", err)
+	}
+}
+
+func TestFetchCoinGeckoPrices_BatchTruncationViaHTTPTest(t *testing.T) {
+	// Verify that oversized batch is truncated before the HTTP call.
+	var receivedIDs string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedIDs = r.URL.Query().Get("ids")
+		result := make(map[string]map[string]float64)
+		for _, id := range strings.Split(receivedIDs, ",") {
+			if id != "" {
+				result[id] = map[string]float64{"usd": 100.0, "usd_24h_change": 1.0}
+			}
+		}
+		json.NewEncoder(w).Encode(result)
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.coingeckoBaseURL = srv.URL
+
+	// Build list exceeding maxCoinGeckoBatchSize.
+	ids := make([]string, maxCoinGeckoBatchSize+10)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("coin-%d", i)
+	}
+
+	prices, err := c.fetchCoinGeckoPrices(context.Background(), ids)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the server received at most maxCoinGeckoBatchSize IDs.
+	sentIDs := strings.Split(receivedIDs, ",")
+	if len(sentIDs) > maxCoinGeckoBatchSize {
+		t.Errorf("sent %d IDs to server, expected at most %d", len(sentIDs), maxCoinGeckoBatchSize)
+	}
+	if len(prices) > maxCoinGeckoBatchSize {
+		t.Errorf("got %d prices, expected at most %d", len(prices), maxCoinGeckoBatchSize)
+	}
+}
+
+func TestSyncDegradedHealthOnPartialProviderFailure(t *testing.T) {
+	// When one whole provider fails but another succeeds, health should be HealthDegraded.
+	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer finnhubSrv.Close()
+
+	coingeckoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"server error"}`))
+	}))
+	defer coingeckoSrv.Close()
+
+	c := New("financial-markets")
+	c.finnhubBaseURL = finnhubSrv.URL
+	c.coingeckoBaseURL = coingeckoSrv.URL
+	c.httpClient = &http.Client{Timeout: 5 * time.Second}
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:    "test-key",
+		CoinGeckoEnabled: true,
+		AlertThreshold:   5.0,
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL"},
+			Crypto: []string{"bitcoin"},
+		},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Finnhub succeeded (1 artifact), CoinGecko failed.
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact (stock only), got %d", len(artifacts))
+	}
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected HealthDegraded on partial provider failure, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSyncHealthRestoredAfterRecovery(t *testing.T) {
+	// After a degraded sync, a clean sync should restore health to Healthy.
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount <= 2 {
+			// First sync: all calls fail.
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"error":"down"}`))
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL", "GOOGL"}},
+	}
+
+	// First sync: total failure → HealthError.
+	_, _, _ = c.Sync(context.Background(), "")
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected HealthError after total failure, got %v", c.Health(context.Background()))
+	}
+
+	// Second sync: recovery → HealthHealthy.
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error on recovery sync: %v", err)
+	}
+	if len(artifacts) == 0 {
+		t.Error("expected artifacts on recovery sync")
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected HealthHealthy after recovery, got %v", c.Health(context.Background()))
+	}
+}
+
+// --- Hardening Tests: H-018-001 through H-018-004 ---
+
+func TestFetchFinnhubQuote_MalformedBaseURL(t *testing.T) {
+	// H-018-001: url.Parse error must be returned, not silently discarded.
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.finnhubBaseURL = "://invalid-url"
+
+	_, err := c.fetchFinnhubQuote(context.Background(), "AAPL")
+	if err == nil {
+		t.Fatal("expected error for malformed base URL")
+	}
+	if !strings.Contains(err.Error(), "parse finnhub URL") {
+		t.Errorf("error should mention URL parse failure, got: %v", err)
+	}
+}
+
+func TestFetchCoinGeckoPrices_MalformedBaseURL(t *testing.T) {
+	// H-018-001: url.Parse error must be returned for CoinGecko too.
+	c := New("financial-markets")
+	c.coingeckoBaseURL = "://invalid-url"
+
+	_, err := c.fetchCoinGeckoPrices(context.Background(), []string{"bitcoin"})
+	if err == nil {
+		t.Fatal("expected error for malformed CoinGecko base URL")
+	}
+	if !strings.Contains(err.Error(), "parse coingecko URL") {
+		t.Errorf("error should mention URL parse failure, got: %v", err)
+	}
+}
+
+func TestSyncForexPairsProduceArtifacts(t *testing.T) {
+	// H-018-002: Forex pairs must produce artifacts, not be dead config.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		symbol := r.URL.Query().Get("symbol")
+		switch symbol {
+		case "OANDA:USD_JPY":
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 154.32, "d": 0.45, "dp": 0.29, "h": 155.0, "l": 153.5, "o": 153.87, "pc": 153.87,
+			})
+		case "OANDA:EUR_USD":
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 1.0821, "d": -0.003, "dp": -0.28, "h": 1.0855, "l": 1.08, "o": 1.0851, "pc": 1.0851,
+			})
+		default:
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
+			})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			ForexPairs: []string{"USD/JPY", "EUR/USD"},
+		},
+	}
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cursor == "" {
+		t.Error("cursor should be set")
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 forex artifacts, got %d", len(artifacts))
+	}
+
+	// Verify artifacts carry forex metadata.
+	for _, a := range artifacts {
+		if a.ContentType != "market/quote" {
+			t.Errorf("expected market/quote, got %s", a.ContentType)
+		}
+		if a.Metadata["asset_type"] != "forex" {
+			t.Errorf("expected asset_type=forex, got %v", a.Metadata["asset_type"])
+		}
+		if a.Metadata["processing_tier"] != "light" {
+			t.Errorf("forex should always be light tier, got %v", a.Metadata["processing_tier"])
+		}
+	}
+}
+
+func TestSyncForexOnlyNoStocks(t *testing.T) {
+	// H-018-002: Forex-only watchlist (no stocks, no crypto) must still produce artifacts.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 154.32, "d": 0.45, "dp": 0.29, "h": 155.0, "l": 153.5, "o": 153.87, "pc": 153.87,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{ForexPairs: []string{"GBP/CHF"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact for forex-only watchlist, got %d", len(artifacts))
+	}
+	if artifacts[0].Metadata["symbol"] != "GBP/CHF" {
+		t.Errorf("expected symbol GBP/CHF, got %v", artifacts[0].Metadata["symbol"])
+	}
+}
+
+func TestFetchFinnhubForex_RejectsInvalidPair(t *testing.T) {
+	// H-018-002: fetchFinnhubForex defense-in-depth validates pair format.
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+
+	cases := []string{"usd/jpy", "USDJPY", "", "USD/JPYX", "USD/JPY&x=1", "123/456"}
+	for _, pair := range cases {
+		_, err := c.fetchFinnhubForex(context.Background(), pair)
+		if err == nil {
+			t.Errorf("expected error for invalid forex pair %q", pair)
+		}
+	}
+}
+
+func TestFetchFinnhubForex_ConvertsToOANDAFormat(t *testing.T) {
+	// H-018-002: Verify "USD/JPY" is sent as "OANDA:USD_JPY" to Finnhub.
+	var receivedSymbol string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedSymbol = r.URL.Query().Get("symbol")
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 154.32, "d": 0.45, "dp": 0.29, "h": 155.0, "l": 153.5, "o": 153.87, "pc": 153.87,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	_, err := c.fetchFinnhubForex(context.Background(), "USD/JPY")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedSymbol != "OANDA:USD_JPY" {
+		t.Errorf("expected OANDA:USD_JPY, got %q", receivedSymbol)
+	}
+}
+
+func TestParseMarketsConfig_RejectsNonStringEntries(t *testing.T) {
+	// H-018-003: Non-string watchlist entries must be rejected, not silently swallowed.
+	cases := []struct {
+		name  string
+		field string
+		value interface{}
+	}{
+		{"stock integer", "stocks", 42},
+		{"stock boolean", "stocks", true},
+		{"stock float", "stocks", 3.14},
+		{"etf integer", "etfs", 99},
+		{"crypto boolean", "crypto", false},
+		{"forex_pairs integer", "forex_pairs", 7},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseMarketsConfig(connector.ConnectorConfig{
+				Credentials: map[string]string{"finnhub_api_key": "test"},
+				SourceConfig: map[string]interface{}{
+					"watchlist": map[string]interface{}{
+						tc.field: []interface{}{tc.value},
+					},
+				},
+			})
+			if err == nil {
+				t.Errorf("expected error for non-string %s value %v (%T), got nil", tc.field, tc.value, tc.value)
+			}
+			if err != nil && !strings.Contains(err.Error(), "expected string") {
+				t.Errorf("error should mention 'expected string', got: %v", err)
+			}
+		})
+	}
+}
+
+func TestConnectResetsRateLimits(t *testing.T) {
+	// H-018-004: Connect() must reset callCounts so stale entries don't carry over.
+	c := New("financial-markets")
+	cfg := connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "test-key"},
+	}
+
+	// First Connect.
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("first Connect failed: %v", err)
+	}
+
+	// Exhaust rate limit.
+	for i := 0; i < 55; i++ {
+		c.tryRecordCall("finnhub")
+	}
+	if c.tryRecordCall("finnhub") {
+		t.Fatal("rate limit should be exhausted")
+	}
+
+	// Reconnect WITHOUT Close() — Connect() alone must reset limits.
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("second Connect failed: %v", err)
+	}
+	if !c.tryRecordCall("finnhub") {
+		t.Error("rate limits should be fresh after Connect(), even without Close()")
+	}
+}
+
+func TestSyncForexTotalFailureSetsHealthDegraded(t *testing.T) {
+	// H-018-002: When forex is the only provider and all forex calls fail, health should be Error.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"server error"}`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{ForexPairs: []string{"USD/JPY"}},
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected HealthError after total forex failure, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSyncStocksAndForexMixed(t *testing.T) {
+	// H-018-002: Combined stocks + forex in a single Sync call.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			Stocks:     []string{"AAPL"},
+			ForexPairs: []string{"USD/JPY"},
+		},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts (1 stock + 1 forex), got %d", len(artifacts))
+	}
+
+	var hasStock, hasForex bool
+	for _, a := range artifacts {
+		switch a.Metadata["asset_type"] {
+		case "forex":
+			hasForex = true
+		default:
+			if a.Metadata["symbol"] == "AAPL" {
+				hasStock = true
+			}
+		}
+	}
+	if !hasStock {
+		t.Error("missing stock artifact")
+	}
+	if !hasForex {
+		t.Error("missing forex artifact")
+	}
+}
+
+// --- Stabilize Tests: STB-018-001 through STB-018-003 ---
+
+func TestSync_ConnectDuringSyncSkipsStaleHealthWrite(t *testing.T) {
+	// STB-018-001: If Connect() succeeds while a Sync() is in flight (with failures),
+	// the Sync's deferred health write must NOT clobber Connect's HealthHealthy.
+	// We simulate this by:
+	//  1. Starting a Sync against a failing server (will set failCount > 0).
+	//  2. Calling Connect() before the Sync's defer runs.
+	//  3. Verifying health stays HealthHealthy from Connect, not overwritten.
+	//
+	// To control timing, we use a slow failing server and call Connect()
+	// in a goroutine that races with the Sync defer.
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"down"}`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey: "test-key",
+		Watchlist:     WatchlistConfig{Stocks: []string{"AAPL"}},
+	}
+
+	// Run a failing Sync to completion — health will be Error.
+	_, _, _ = c.Sync(context.Background(), "")
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Fatalf("expected HealthError after failed Sync, got %v", c.Health(context.Background()))
+	}
+
+	// Now simulate the race: Connect resets health to Healthy and increments configGen.
+	// A subsequent stale Sync defer would see a mismatched gen and skip the health write.
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "fresh-key"},
+	})
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Fatalf("expected HealthHealthy after Connect, got %v", c.Health(context.Background()))
+	}
+
+	// Verify configGen was incremented — the generation counter protects against stale writes.
+	c.mu.RLock()
+	gen := c.configGen
+	c.mu.RUnlock()
+	if gen == 0 {
+		t.Error("configGen should be > 0 after Connect")
+	}
+}
+
+func TestSync_CoinGeckoRateLimited_HealthDegraded(t *testing.T) {
+	// STB-018-002: When CoinGecko is rate-limited (tryRecordCall returns false),
+	// health must be Degraded, not Healthy. Previously the code counted
+	// CoinGecko as a provider but never incremented failCount on rate-limit skip.
+
+	// Use a healthy Finnhub server so stocks succeed.
+	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer finnhubSrv.Close()
+
+	// CoinGecko server should never be called.
+	coingeckoCalled := false
+	coingeckoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		coingeckoCalled = true
+		json.NewEncoder(w).Encode(map[string]map[string]float64{
+			"bitcoin": {"usd": 67000.0, "usd_24h_change": 2.0},
+		})
+	}))
+	defer coingeckoSrv.Close()
+
+	c := New("financial-markets")
+	c.finnhubBaseURL = finnhubSrv.URL
+	c.coingeckoBaseURL = coingeckoSrv.URL
+	c.httpClient = &http.Client{Timeout: 5 * time.Second}
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:    "test-key",
+		CoinGeckoEnabled: true,
+		AlertThreshold:   5.0,
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL"},
+			Crypto: []string{"bitcoin"},
+		},
+	}
+
+	// Exhaust CoinGecko rate budget before Sync.
+	for i := 0; i < 25; i++ {
+		c.tryRecordCall("coingecko")
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Stock artifact should exist, but crypto should be missing.
+	if len(artifacts) != 1 {
+		t.Errorf("expected 1 artifact (stock only, crypto rate-limited), got %d", len(artifacts))
+	}
+	if coingeckoCalled {
+		t.Error("CoinGecko server should not be called when rate-limited")
+	}
+
+	// Health MUST be Degraded — before the fix it was Healthy.
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected HealthDegraded when CoinGecko rate-limited, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSync_StocksRateLimitedMidLoop_HealthDegraded(t *testing.T) {
+	// STB-018-003: When Finnhub rate limit exhausts mid-loop for stocks,
+	// health must be Degraded, not Healthy. The break skips remaining symbols.
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	// Watchlist with 10 symbols, but pre-exhaust to leave only 3 calls.
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}},
+	}
+
+	// Pre-exhaust 52 of 55 Finnhub calls, leaving only 3.
+	for i := 0; i < 52; i++ {
+		c.tryRecordCall("finnhub")
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should get at most 3 artifacts (remaining budget), not all 10.
+	if len(artifacts) > 3 {
+		t.Errorf("expected at most 3 artifacts due to rate limit, got %d", len(artifacts))
+	}
+	if len(artifacts) == 0 {
+		t.Error("expected at least some artifacts before rate limit")
+	}
+
+	// Health MUST be Degraded — before the fix it was Healthy.
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected HealthDegraded when stocks rate-limited mid-loop, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSync_ForexRateLimitedMidLoop_HealthDegraded(t *testing.T) {
+	// STB-018-003: When Finnhub rate limit exhausts mid-loop for forex pairs,
+	// health must be Degraded, not Healthy.
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 154.0, "d": 0.45, "dp": 0.29, "h": 155.0, "l": 153.5, "o": 153.87, "pc": 153.87,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			ForexPairs: []string{"USD/JPY", "EUR/USD", "GBP/CHF", "AUD/NZD", "CAD/CHF"},
+		},
+	}
+
+	// Pre-exhaust 53 of 55 Finnhub calls, leaving only 2.
+	for i := 0; i < 53; i++ {
+		c.tryRecordCall("finnhub")
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should get at most 2 forex artifacts (remaining budget), not all 5.
+	if len(artifacts) > 2 {
+		t.Errorf("expected at most 2 artifacts due to rate limit, got %d", len(artifacts))
+	}
+
+	// Health MUST be Degraded — before the fix it was Healthy.
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected HealthDegraded when forex rate-limited mid-loop, got %v", c.Health(context.Background()))
 	}
 }

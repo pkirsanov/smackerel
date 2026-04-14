@@ -23,7 +23,8 @@
       "analyze",
       "design",
       "plan",
-      "implement"
+      "implement",
+      "harden"
     ],
     "scopeProgress": [
       {

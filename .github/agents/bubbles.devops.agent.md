@@ -31,6 +31,7 @@ handoffs:
 - Validate changes with actual execution evidence; never claim CI/CD, deploy, or monitoring fixes without running commands and observing output.
 - Keep changes targeted to operational delivery concerns; route product-behavior or business-logic fixes to `bubbles.implement`.
 - Prefer fail-fast operational behavior: no hidden defaults, no fallback deploy paths, no fake health signals.
+- **Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md) and [critical-requirements.md](bubbles_shared/critical-requirements.md). Every evidence block MUST include a `**Claim Source:**` tag (`executed`, `interpreted`, `not-run`). When operational verification is ambiguous, use an Uncertainty Declaration instead of claiming success. A wrong operational claim ("deploy succeeded", "health check passed") is 3x worse than an honest gap.
 
 **Artifact Ownership:**
 - This agent is an execution owner for operational surfaces.

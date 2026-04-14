@@ -188,7 +188,7 @@ func (p *TakeoutParser) FilterByCursor(notes []TakeoutNote, cursor string) ([]Ta
 	var cursorTime time.Time
 	if cursor != "" {
 		var err error
-		cursorTime, err = time.Parse(time.RFC3339, cursor)
+		cursorTime, err = time.Parse(time.RFC3339Nano, cursor)
 		if err != nil {
 			// Invalid cursor — return all notes
 			cursorTime = time.Time{}
@@ -211,7 +211,7 @@ func (p *TakeoutParser) FilterByCursor(notes []TakeoutNote, cursor string) ([]Ta
 
 	newCursor := cursor
 	if !latestModified.IsZero() {
-		newCursor = latestModified.UTC().Format(time.RFC3339)
+		newCursor = latestModified.UTC().Format(time.RFC3339Nano)
 	}
 
 	return filtered, newCursor

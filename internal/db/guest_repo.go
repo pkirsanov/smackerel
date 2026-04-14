@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -37,6 +38,13 @@ func NewGuestRepository(pool *pgxpool.Pool) *GuestRepository {
 
 // UpsertByEmail inserts or updates a guest by email+source, returning the node.
 func (r *GuestRepository) UpsertByEmail(ctx context.Context, email, name, source string) (*GuestNode, error) {
+	email = strings.TrimSpace(email)
+	if email == "" || !strings.Contains(email, "@") || len(email) > 254 {
+		return nil, fmt.Errorf("invalid email address: %q", email)
+	}
+	if len(name) > 500 {
+		name = name[:500]
+	}
 	id := ulid.Make().String()
 	var g GuestNode
 	err := r.Pool.QueryRow(ctx, `
@@ -62,14 +70,29 @@ func (r *GuestRepository) UpsertByEmail(ctx context.Context, email, name, source
 }
 
 // FindByEmail looks up a guest by email address.
-func (r *GuestRepository) FindByEmail(ctx context.Context, email string) (*GuestNode, error) {
+// FindByEmail looks up a guest by email address. If source is non-empty, scopes the lookup.
+func (r *GuestRepository) FindByEmail(ctx context.Context, email string, source ...string) (*GuestNode, error) {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, fmt.Errorf("email address is required")
+	}
 	var g GuestNode
-	err := r.Pool.QueryRow(ctx, `
-		SELECT id, email, name, source, total_stays, total_spend,
+	var query string
+	var args []interface{}
+	if len(source) > 0 && source[0] != "" {
+		query = `SELECT id, email, name, source, total_stays, total_spend,
 		       avg_rating, sentiment_score, first_stay_at, last_stay_at,
 		       created_at, updated_at
-		FROM guests WHERE email = $1
-	`, email).Scan(
+		FROM guests WHERE email = $1 AND source = $2`
+		args = []interface{}{email, source[0]}
+	} else {
+		query = `SELECT id, email, name, source, total_stays, total_spend,
+		       avg_rating, sentiment_score, first_stay_at, last_stay_at,
+		       created_at, updated_at
+		FROM guests WHERE email = $1`
+		args = []interface{}{email}
+	}
+	err := r.Pool.QueryRow(ctx, query, args...).Scan(
 		&g.ID, &g.Email, &g.Name, &g.Source,
 		&g.TotalStays, &g.TotalSpend,
 		&g.AvgRating, &g.SentimentScore,
@@ -84,6 +107,9 @@ func (r *GuestRepository) FindByEmail(ctx context.Context, email string) (*Guest
 
 // IncrementStay increments stay count and adds spend for a guest.
 func (r *GuestRepository) IncrementStay(ctx context.Context, id string, spend float64) error {
+	if spend < 0 {
+		return fmt.Errorf("spend must be non-negative: %f", spend)
+	}
 	_, err := r.Pool.Exec(ctx, `
 		UPDATE guests SET
 			total_stays = total_stays + 1,
@@ -101,6 +127,9 @@ func (r *GuestRepository) IncrementStay(ctx context.Context, id string, spend fl
 
 // UpdateSentiment sets the sentiment score for a guest.
 func (r *GuestRepository) UpdateSentiment(ctx context.Context, id string, score float64) error {
+	if score < 0 || score > 1 {
+		return fmt.Errorf("sentiment score must be between 0 and 1: %f", score)
+	}
 	_, err := r.Pool.Exec(ctx, `
 		UPDATE guests SET sentiment_score = $2, updated_at = NOW()
 		WHERE id = $1

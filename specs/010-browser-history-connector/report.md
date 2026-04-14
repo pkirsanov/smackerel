@@ -18,6 +18,19 @@ Browser History Connector delivered under delivery-lockdown mode. 2 scopes compl
 | F-003 | Low-Medium | R-005 social aggregate missing top-dwell page tracking (spec: "top-dwell-time pages per domain") | Added `peak_page_title` and `peak_page_dwell_seconds` to aggregate metadata; added `RawContent` with human-readable summary; updated `TestBuildSocialAggregate_ArtifactFields` |
 | F-004 | Low | R-012 privacy config fields (`store_full_urls_above_tier`, `aggregate_only_below_tier`) not configurable | Known gap — hardcoded behavior matches documented defaults; configurable privacy thresholds deferred |
 
+## Simplification Pass (stochastic-quality-sweep, simplify trigger, April 12 2026)
+
+### Findings Detected
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| S-001 | Low | Social media split in `processEntries` Step 3 had 3 branches where first and third both appended to `contentEntries`; redundant branching | Collapsed to 2 branches: below-threshold social → aggregate track; everything else → content track. Net -4 lines, clearer logic |
+| S-002 | Low | `ChromeTimeToGo` (exported) wrapped `chromeTimeToGo` (unexported) with identical logic — unnecessary indirection | Collapsed into single exported `ChromeTimeToGo` function; updated `ParseChromeHistorySince` and `TestChromeTimeToGo` to use it directly |
+
+### Verification
+- `./smackerel.sh test unit` — all 33 Go packages pass, browser package 0.080s
+- `./smackerel.sh lint` — All checks passed
+- No behavioral changes; all 55 browser-specific tests pass unchanged
+
 ## Completion Statement
 
 ```

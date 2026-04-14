@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -69,10 +70,10 @@ type Connector struct {
 	normalizer *Normalizer
 
 	// Sync metadata
-	lastSyncTime   time.Time
-	lastSyncCount  int
-	lastSyncErrors int
-	tierCounts     map[Tier]int
+	lastSyncTime      time.Time
+	lastSyncCount     int
+	lastSyncErrors    int
+	consecutiveErrors int
 
 	// Track processed exports
 	processedExports map[string]bool
@@ -84,7 +85,6 @@ func New(id string) *Connector {
 		id:               id,
 		health:           connector.HealthDisconnected,
 		processedExports: make(map[string]bool),
-		tierCounts:       make(map[Tier]int),
 	}
 }
 
@@ -141,15 +141,31 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
-	c.tierCounts = make(map[Tier]int)
+	c.lastSyncCount = 0
+	c.lastSyncErrors = 0
 	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
 		c.lastSyncTime = time.Now()
-		if c.lastSyncErrors > 0 {
-			c.health = connector.HealthError
+		if c.lastSyncErrors > 0 && c.lastSyncCount == 0 {
+			// Complete failure: no artifacts produced — escalate with consecutive count
+			c.consecutiveErrors++
+			switch {
+			case c.consecutiveErrors >= 10:
+				c.health = connector.HealthError
+			case c.consecutiveErrors >= 5:
+				c.health = connector.HealthFailing
+			default:
+				c.health = connector.HealthDegraded
+			}
+		} else if c.lastSyncErrors > 0 {
+			// Partial success: some artifacts produced despite errors
+			c.consecutiveErrors = 0
+			c.health = connector.HealthDegraded
 		} else {
+			// Full success
+			c.consecutiveErrors = 0
 			c.health = connector.HealthHealthy
 		}
 		c.mu.Unlock()
@@ -177,6 +193,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		gkeepArtifacts, gkeepCur, gkeepErrs, err := c.syncGkeepapi(ctx, cursor)
 		if err != nil {
 			slog.Warn("gkeepapi sync failed", "error", err)
+			syncErrors++
 		} else {
 			allArtifacts = append(allArtifacts, gkeepArtifacts...)
 			if gkeepCur != "" {
@@ -190,6 +207,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		artifacts, cur, errs, err := c.syncTakeout(ctx, cursor)
 		if err != nil {
 			slog.Warn("takeout sync failed in hybrid mode", "error", err)
+			syncErrors++
 		} else {
 			allArtifacts = append(allArtifacts, artifacts...)
 			newCursor = cur
@@ -199,11 +217,12 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		gkeepArtifacts, gkeepCur, gkeepErrs, err := c.syncGkeepapi(ctx, cursor)
 		if err != nil {
 			slog.Warn("gkeepapi sync failed in hybrid mode, continuing with takeout results", "error", err)
+			syncErrors++
 		} else {
 			allArtifacts = append(allArtifacts, gkeepArtifacts...)
 			if gkeepCur != "" && newCursor != "" {
-				gkeepTime, gErr := time.Parse(time.RFC3339, gkeepCur)
-				newTime, nErr := time.Parse(time.RFC3339, newCursor)
+				gkeepTime, gErr := time.Parse(time.RFC3339Nano, gkeepCur)
+				newTime, nErr := time.Parse(time.RFC3339Nano, newCursor)
 				if gErr == nil && nErr == nil && gkeepTime.After(newTime) {
 					newCursor = gkeepCur
 				}
@@ -228,17 +247,18 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 // syncTakeout syncs notes from a Google Takeout export directory.
 func (c *Connector) syncTakeout(ctx context.Context, cursor string) ([]connector.RawArtifact, string, int, error) {
-	importDir := c.config.TakeoutImportDir
-
-	// Check if this export directory was already processed (under lock for concurrency safety)
 	c.mu.RLock()
+	importDir := c.config.TakeoutImportDir
+	parser := c.parser
+	normalizer := c.normalizer
+	natsClient := c.natsClient
 	alreadyProcessed := c.processedExports[importDir]
 	c.mu.RUnlock()
 	if alreadyProcessed && cursor != "" {
 		// Re-parse to check for new files, but filter by cursor
 	}
 
-	notes, parseErrors, err := c.parser.ParseExport(importDir)
+	notes, parseErrors, err := parser.ParseExport(importDir)
 	if err != nil {
 		return nil, cursor, 0, fmt.Errorf("parse takeout export: %w", err)
 	}
@@ -250,44 +270,36 @@ func (c *Connector) syncTakeout(ctx context.Context, cursor string) ([]connector
 	}
 
 	// Filter by cursor
-	filtered, newCursor := c.parser.FilterByCursor(notes, cursor)
+	filtered, newCursor := parser.FilterByCursor(notes, cursor)
 
 	var artifacts []connector.RawArtifact
-	// Accumulate tier counts locally to avoid per-note lock contention
-	localTierCounts := make(map[Tier]int)
 
 	for i := range filtered {
 		if err := ctx.Err(); err != nil {
 			return artifacts, cursor, 0, fmt.Errorf("sync cancelled: %w", err)
 		}
 
-		noteID := c.parser.NoteID(&filtered[i], filtered[i].SourceFile)
+		noteID := parser.NoteID(&filtered[i], filtered[i].SourceFile)
 		if noteID == "" {
 			noteID = fmt.Sprintf("keep-note-%d", i)
 		}
 
-		artifact, err := c.normalizer.Normalize(&filtered[i], noteID, "takeout")
+		artifact, err := normalizer.Normalize(&filtered[i], noteID, "takeout")
 		if err != nil {
 			slog.Warn("failed to normalize note", "note_id", noteID, "error", err)
 			continue
 		}
 		if artifact == nil {
 			// Skipped (trashed, archived, etc.)
-			localTierCounts[TierSkip]++
 			continue
 		}
 
-		// Track tier counts locally (no lock needed)
-		if tierStr, ok := artifact.Metadata["processing_tier"].(string); ok {
-			localTierCounts[Tier(tierStr)]++
-		}
-
 		// Publish artifact to NATS for pipeline processing
-		if client := c.natsClient; client != nil {
+		if natsClient != nil {
 			payload, marshalErr := json.Marshal(artifact)
 			if marshalErr != nil {
 				slog.Warn("failed to serialize artifact for NATS", "note_id", noteID, "error", marshalErr)
-			} else if pubErr := client.Publish(ctx, "artifacts.process", payload); pubErr != nil {
+			} else if pubErr := natsClient.Publish(ctx, "artifacts.process", payload); pubErr != nil {
 				slog.Warn("failed to publish artifact to NATS", "note_id", noteID, "error", pubErr)
 			}
 		}
@@ -295,14 +307,6 @@ func (c *Connector) syncTakeout(ctx context.Context, cursor string) ([]connector
 		artifacts = append(artifacts, *artifact)
 	}
 
-	// Write accumulated tier counts under a single lock
-	c.mu.Lock()
-	for tier, count := range localTierCounts {
-		c.tierCounts[tier] += count
-	}
-	c.mu.Unlock()
-
-	// Mark export as processed (under lock for concurrency safety)
 	c.mu.Lock()
 	c.processedExports[importDir] = true
 	c.mu.Unlock()
@@ -362,8 +366,13 @@ func parseKeepConfig(config connector.ConnectorConfig) (KeepConfig, error) {
 		}
 	}
 
-	if dir, ok := sc["import_dir"].(string); ok {
-		kc.TakeoutImportDir = dir
+	if dir, ok := sc["import_dir"].(string); ok && dir != "" {
+		// Canonicalize import path to prevent traversal via config (CWE-22).
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			return kc, fmt.Errorf("invalid import_dir path: %w", err)
+		}
+		kc.TakeoutImportDir = absDir
 	}
 
 	if enabled, ok := sc["gkeep_enabled"].(bool); ok {

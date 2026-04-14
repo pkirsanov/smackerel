@@ -176,7 +176,17 @@ async def handle_ocr_request(data: dict) -> dict:
         }
 
     if not image_hash and image_data_b64:
-        raw = base64.b64decode(image_data_b64)
+        try:
+            raw = base64.b64decode(image_data_b64)
+        except Exception:
+            return {
+                "status": "error",
+                "text": "",
+                "cached": False,
+                "ocr_engine": "none",
+                "image_hash": "",
+                "error": "invalid base64 image data",
+            }
         image_hash = hashlib.sha256(raw).hexdigest()
 
     # Check cache first
@@ -201,7 +211,18 @@ async def handle_ocr_request(data: dict) -> dict:
             "image_hash": image_hash,
         }
 
-    image_bytes = base64.b64decode(image_data_b64)
+    image_bytes = None
+    try:
+        image_bytes = base64.b64decode(image_data_b64)
+    except Exception:
+        return {
+            "status": "error",
+            "text": "",
+            "cached": False,
+            "ocr_engine": "none",
+            "image_hash": image_hash,
+            "error": "invalid base64 image data",
+        }
 
     # Try Tesseract first
     text = extract_text_tesseract(image_bytes)

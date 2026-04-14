@@ -84,6 +84,8 @@ The `agnosticity-lint.sh --staged` pre-commit check detects project-specific con
 - Non-interactive by default unless the prompt explicitly opts into bounded questioning.
 - Fix the smallest blocked unit first, then re-run the narrowest relevant verification.
 - Route foreign-artifact changes to the owning specialist instead of editing them inline.
+- **Honesty over completion:** When evidence is ambiguous, prefer leaving a DoD item `[ ]` with an Uncertainty Declaration over marking `[x]` with uncertain evidence. A wrong answer is 3x worse than an honest gap. See `critical-requirements.md` → Honesty Incentive.
+- **Evidence provenance:** Every evidence block must include a `**Claim Source:**` tag (`executed`, `interpreted`, `not-run`). See `evidence-rules.md` → Evidence Provenance Taxonomy.
 
 ## Auto-Approval And Timeouts
 

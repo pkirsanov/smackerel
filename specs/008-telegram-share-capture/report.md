@@ -348,6 +348,37 @@ Scenario-first development: Gherkin scenarios defined in scopes.md before implem
 | SQL injection | Parameterized queries (`$1` placeholders) throughout — in `capture.go`, `search.go` |
 | Share text truncation | `handleShareCapture` and forward assembly path already enforce `maxShareTextLen` — in `share.go:21`, `forward.go:84` |
 
+---
+
+## Simplify Sweep (2026-04-13)
+
+**Trigger:** `simplify-to-doc` via stochastic-quality-sweep R03
+**Scope:** Telegram bot package (`internal/telegram/`)
+
+### Findings & Remediation
+
+| # | Category | Finding | File | Remediation |
+|---|----------|---------|------|-------------|
+| SIMP-1 | DRY violation | `handleForwardedMessage` manually checked `msg.Photo/Video/Document` to set `cmsg.HasMedia/MediaType/MediaRef` — duplicating exact same type-switching logic that `extractMediaItem()` in `media.go` already provides. Adding a new media type would require updates in two locations. | `forward.go:107-130` | Replaced 18 lines of inline media detection with 5-line call to shared `extractMediaItem()` helper. Single source of truth for media type detection. |
+
+### No Further Findings
+
+The rest of the codebase is clean:
+- No dead code or unused exports detected
+- No over-abstraction — each assembler (conversation, media group) has distinct enough behavior to justify separate types
+- No unnecessary indirection — handlers call capture API directly
+- Format markers are minimal constants (14 lines in `format.go`)
+- `extractURL` wrapper (3 lines) justifies its existence through test coverage and readability
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit --go 2>&1 | grep telegram
+ok  	github.com/smackerel/smackerel/internal/telegram	23.603s
+```
+
+All 45+ telegram unit tests pass. No behavior change — simplification was purely structural.
+
 ### Test Evidence
 
 ```
@@ -463,3 +494,65 @@ exit code: 0
 ```
 ./smackerel.sh test unit → all packages pass (telegram: 20.978s)
 ```
+
+---
+
+## Test Coverage Sweep (Stochastic Sweep R-test, 2026-04-12)
+
+**Trigger:** `test-to-doc` via stochastic-quality-sweep
+**Scope:** All 6 scopes of spec 008, cross-referenced against test plans in scopes.md and scenario-manifest.json
+
+### Coverage Audit
+
+Cross-referenced:
+- 20 scenarios in `scenario-manifest.json` against existing test files
+- Test plans in scopes.md against actual test functions
+- Gherkin scenarios (SC-TSC01 through SC-TSC17) against linked tests
+
+### Findings & Resolutions
+
+| # | Severity | Gap | File | Resolution |
+|---|----------|-----|------|------------|
+| T1 | Medium | Missing `TestExtractAllURLs_URLsWithQueryParams` — test plan lists URL query param test, real share-sheet payloads commonly include query strings | `share_test.go` | Added `TestExtractAllURLs_URLsWithQueryParams` and `TestExtractAllURLs_URLsWithFragment` |
+| T2 | High | Missing explicit out-of-order timestamp sorting test — SC-TSC12c requires chronological ordering proof but only `TestFormatConversation` existed (tests format, not sort) | `assembly_test.go` | Added `TestConversationAssembler_OutOfOrderTimestamps` — adds 4 messages in scrambled arrival order, verifies sorted output |
+| T3 | Medium | Missing config validation tests for assembly fields — 3 config fields have range validation in code (`[5,60]`, `[10,500]`, `[2,10]`) but no dedicated tests | `validate_test.go` | Added 7 tests: `Valid` + `OutOfRange` for each field, plus `Defaults` test |
+| T4 | Low | Missing explicit `TestConversationAssembler_URLsInConversation_NotSeparated` — SC-TSC12b coverage was only implicit via routing | `assembly_test.go` | Added `TestConversationAssembler_URLsInConversation_NotSeparated` — verifies URL-bearing messages stay in conversation buffer |
+
+### New Tests Added
+
+**`internal/telegram/share_test.go`:**
+- `TestExtractAllURLs_URLsWithQueryParams` — verifies `?foo=bar&baz=1` preserved
+- `TestExtractAllURLs_URLsWithFragment` — verifies `#section2` preserved
+
+**`internal/telegram/assembly_test.go`:**
+- `TestConversationAssembler_OutOfOrderTimestamps` — 4 messages added in scrambled order (t3, t1, t4, t2), verified output is chronological (First, Second, Third, Fourth)
+- `TestConversationAssembler_URLsInConversation_NotSeparated` — 3 messages (2 with URLs) assembled into single conversation, URLs remain in message text
+
+**`internal/config/validate_test.go`:**
+- `TestValidate_TelegramAssemblyWindowSeconds_Valid` — values 5, 10, 30, 60 accepted
+- `TestValidate_TelegramAssemblyWindowSeconds_OutOfRange` — values 0, 1, 4, 61, 100, -1, abc rejected
+- `TestValidate_TelegramAssemblyMaxMessages_Valid` — values 10, 100, 250, 500 accepted
+- `TestValidate_TelegramAssemblyMaxMessages_OutOfRange` — values 0, 5, 9, 501, 1000, -1, abc rejected
+- `TestValidate_TelegramMediaGroupWindowSeconds_Valid` — values 2, 3, 5, 10 accepted
+- `TestValidate_TelegramMediaGroupWindowSeconds_OutOfRange` — values 0, 1, 11, 100, -1, abc rejected
+- `TestValidate_TelegramAssemblyConfig_Defaults` — unset env vars yield zero (defaults applied at assembler init)
+
+### Test Evidence
+
+```
+./smackerel.sh test unit → all packages pass
+  internal/config  0.109s (recompiled with new tests)
+  internal/telegram  23.572s (recompiled with new tests)
+./smackerel.sh lint → exit 0
+```
+
+### Coverage Summary After Sweep
+
+| Scope | Before | After | New Tests |
+|-------|--------|-------|-----------|
+| 1 (Share) | 11 scenario tests + 14 chaos | 13 scenario tests + 14 chaos | +2 query param/fragment |
+| 2 (Forward) | 8 scenario tests + 6 chaos | 8 scenario tests + 6 chaos | — |
+| 3 (Assembly) | 8 lifecycle + 3 chaos + 3 stabilization | 10 lifecycle + 3 chaos + 3 stabilization | +2 out-of-order, URLs-in-convo |
+| 4 (Pipeline) | Covered by api/pipeline/db tests | Covered by api/pipeline/db tests | — |
+| 5 (Media) | 9 scenario + 3 stabilization | 9 scenario + 3 stabilization | — |
+| 6 (Config) | Chat ID validation only | Chat ID + assembly config validation | +7 range/default tests |

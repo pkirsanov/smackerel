@@ -404,6 +404,202 @@ func TestParseChromeJSON_MultipleRoots(t *testing.T) {
 	}
 }
 
+// T-PARSE-001b: Chrome JSON nodes with empty URL are skipped.
+func TestParseChromeJSON_EmptyURLNode(t *testing.T) {
+	data := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Bar",
+				"children": [
+					{"type": "url", "name": "No URL", "url": ""},
+					{"type": "url", "name": "Has URL", "url": "https://example.com"}
+				]
+			}
+		}
+	}`)
+
+	bookmarks, err := ParseChromeJSON(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark (empty URL skipped), got %d", len(bookmarks))
+	}
+	if bookmarks[0].Title != "Has URL" {
+		t.Errorf("Title = %q, want %q", bookmarks[0].Title, "Has URL")
+	}
+}
+
+// T-PARSE-001c: Chrome JSON with non-map children entries are silently skipped.
+func TestParseChromeJSON_NonMapChildren(t *testing.T) {
+	data := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Bar",
+				"children": [
+					"a string child",
+					42,
+					null,
+					{"type": "url", "name": "Valid", "url": "https://example.com"}
+				]
+			}
+		}
+	}`)
+
+	bookmarks, err := ParseChromeJSON(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark (non-map children skipped), got %d", len(bookmarks))
+	}
+	if bookmarks[0].Title != "Valid" {
+		t.Errorf("Title = %q, want %q", bookmarks[0].Title, "Valid")
+	}
+}
+
+// T-PARSE-001d: Chrome JSON with non-object entries in roots are silently skipped.
+func TestParseChromeJSON_NonObjectRootsEntries(t *testing.T) {
+	data := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Bar",
+				"children": [
+					{"type": "url", "name": "Valid", "url": "https://example.com"}
+				]
+			},
+			"synced": "not-a-node",
+			"checksum": 12345
+		}
+	}`)
+
+	bookmarks, err := ParseChromeJSON(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark (non-object roots skipped), got %d", len(bookmarks))
+	}
+}
+
+// T-PARSE-001e: Chrome JSON node without children key is a leaf - no panic.
+func TestParseChromeJSON_FolderWithoutChildren(t *testing.T) {
+	data := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Empty Folder"
+			}
+		}
+	}`)
+
+	bookmarks, err := ParseChromeJSON(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 0 {
+		t.Errorf("expected 0 bookmarks from childless folder, got %d", len(bookmarks))
+	}
+}
+
+// T-PARSE-003: Netscape HTML ADD_DATE edge cases.
+func TestParseNetscapeHTML_AddDateEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		wantZero bool
+	}{
+		{
+			name:     "zero timestamp",
+			line:     `<DT><A HREF="https://example.com/a" ADD_DATE="0">Zero</A>`,
+			wantZero: true,
+		},
+		{
+			name:     "negative timestamp",
+			line:     `<DT><A HREF="https://example.com/b" ADD_DATE="-100">Negative</A>`,
+			wantZero: true,
+		},
+		{
+			name:     "non-numeric ADD_DATE",
+			line:     `<DT><A HREF="https://example.com/c" ADD_DATE="abc">BadDate</A>`,
+			wantZero: true,
+		},
+		{
+			name:     "missing ADD_DATE attribute",
+			line:     `<DT><A HREF="https://example.com/d">NoDate</A>`,
+			wantZero: true,
+		},
+		{
+			name:     "future timestamp",
+			line:     `<DT><A HREF="https://example.com/e" ADD_DATE="2000000000">Future</A>`,
+			wantZero: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := []byte("<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<DL>\n" + tt.line + "\n</DL>")
+			bookmarks, err := ParseNetscapeHTML(data)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if len(bookmarks) != 1 {
+				t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
+			}
+			if tt.wantZero && !bookmarks[0].AddedAt.IsZero() {
+				t.Errorf("AddedAt = %v, want zero", bookmarks[0].AddedAt)
+			}
+			if !tt.wantZero && bookmarks[0].AddedAt.IsZero() {
+				t.Error("AddedAt is zero, want non-zero")
+			}
+		})
+	}
+}
+
+// T-PARSE-004: ToRawArtifacts preserves folder in metadata.
+func TestToRawArtifacts_FolderMetadata(t *testing.T) {
+	bookmarks := []Bookmark{
+		{Title: "A", URL: "https://a.com", Folder: "Dev/Go"},
+		{Title: "B", URL: "https://b.com", Folder: ""},
+	}
+
+	artifacts := ToRawArtifacts(bookmarks)
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts, got %d", len(artifacts))
+	}
+
+	if folder, ok := artifacts[0].Metadata["folder"].(string); !ok || folder != "Dev/Go" {
+		t.Errorf("artifacts[0] folder = %v, want %q", artifacts[0].Metadata["folder"], "Dev/Go")
+	}
+	if folder, ok := artifacts[1].Metadata["folder"].(string); !ok || folder != "" {
+		t.Errorf("artifacts[1] folder = %v, want empty string", artifacts[1].Metadata["folder"])
+	}
+}
+
+// T-PARSE-005: FolderToTopicMapping with multi-level slash paths.
+func TestFolderToTopicMapping_MultiLevel(t *testing.T) {
+	tests := []struct {
+		folder   string
+		expected string
+	}{
+		{"Tech/Go/Libraries", "tech go libraries"},
+		{"a/b/c/d", "a b c d"},
+		{"single", "single"},
+		{"/leading/slash", " leading slash"},
+		{"trailing/slash/", "trailing slash "},
+	}
+
+	for _, tt := range tests {
+		got := FolderToTopicMapping(tt.folder)
+		if got != tt.expected {
+			t.Errorf("FolderToTopicMapping(%q) = %q, want %q", tt.folder, got, tt.expected)
+		}
+	}
+}
+
 // T-PARSE-002: Netscape HTML with nested folders preserves folder context.
 func TestParseNetscapeHTML_NestedFolders(t *testing.T) {
 	data := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
@@ -429,5 +625,121 @@ func TestParseNetscapeHTML_NestedFolders(t *testing.T) {
 	// Current implementation sets folder to the most recent H3 — "Inner".
 	if bookmarks[0].Folder != "Inner" {
 		t.Errorf("Folder = %q, want %q", bookmarks[0].Folder, "Inner")
+	}
+}
+
+// ============================================================================
+// CHAOS R24 — Adversarial regression tests for Chrome date_added
+// ============================================================================
+
+// T-CHAOS-R24-003: Chrome date_added with adversarial far-future value must
+// NOT produce a timestamp. Before the fix, a crafted date_added could push
+// AddedAt centuries into the future, disrupting downstream sort/filter.
+func TestChaosR24_ChromeDateAddedFarFuture(t *testing.T) {
+	// date_added = 99999999999999999 microseconds from Chrome epoch.
+	// That's roughly year 5145 — well beyond the year 2100 cap.
+	data := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Bar",
+				"children": [
+					{
+						"type": "url",
+						"name": "Future",
+						"url": "https://example.com/future",
+						"date_added": "99999999999999999"
+					}
+				]
+			}
+		}
+	}`)
+
+	bookmarks, err := ParseChromeJSON(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
+	}
+
+	// AddedAt must be zero — the far-future value should be rejected.
+	if !bookmarks[0].AddedAt.IsZero() {
+		t.Errorf("CHAOS R24-003: AddedAt = %v for far-future date_added; "+
+			"expected zero — uncapped timestamp leaked through", bookmarks[0].AddedAt)
+	}
+}
+
+// T-CHAOS-R24-003b: Reasonable Chrome date_added (2024) must still be accepted.
+func TestChaosR24_ChromeDateAddedReasonable(t *testing.T) {
+	// date_added for 2024-01-15 = 13349811200000000 microseconds from Chrome epoch.
+	// (Chrome epoch: 1601-01-01 UTC, offset: 11644473600 seconds)
+	// Unix timestamp: (13349811200000000 / 1000000) - 11644473600 = 1705337600
+	// ≈ 2024-01-15T16:53:20 UTC
+	data := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Bar",
+				"children": [
+					{
+						"type": "url",
+						"name": "Recent",
+						"url": "https://example.com/recent",
+						"date_added": "13349811200000000"
+					}
+				]
+			}
+		}
+	}`)
+
+	bookmarks, err := ParseChromeJSON(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
+	}
+
+	if bookmarks[0].AddedAt.IsZero() {
+		t.Fatal("CHAOS R24-003b: AddedAt is zero for a reasonable 2024 date_added — valid dates are being rejected")
+	}
+
+	year := bookmarks[0].AddedAt.Year()
+	if year != 2024 {
+		t.Errorf("CHAOS R24-003b: AddedAt year = %d, want 2024", year)
+	}
+}
+
+// T-CHAOS-R24-003c: Chrome date_added with MaxInt64 must not produce a timestamp.
+func TestChaosR24_ChromeDateAddedMaxInt64(t *testing.T) {
+	data := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Bar",
+				"children": [
+					{
+						"type": "url",
+						"name": "MaxInt",
+						"url": "https://example.com/maxint",
+						"date_added": "9223372036854775807"
+					}
+				]
+			}
+		}
+	}`)
+
+	bookmarks, err := ParseChromeJSON(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
+	}
+
+	if !bookmarks[0].AddedAt.IsZero() {
+		t.Errorf("CHAOS R24-003c: AddedAt = %v for MaxInt64 date_added; "+
+			"expected zero — integer overflow timestamp leaked through", bookmarks[0].AddedAt)
 	}
 }

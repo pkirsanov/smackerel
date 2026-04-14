@@ -465,3 +465,30 @@ func TestSync_HealthStaysErrorOnFailure(t *testing.T) {
 		t.Errorf("health should be Error after failed sync, got %v", c.Health(context.Background()))
 	}
 }
+
+func TestSync_BeforeConnect(t *testing.T) {
+	c := New("yt-no-connect")
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error when Sync called before Connect")
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("health should remain disconnected, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestParseVideoItems_SkipsEmptyVideoID(t *testing.T) {
+	vids, err := parseVideoItems([]interface{}{
+		map[string]interface{}{"video_id": "", "title": "No ID"},
+		map[string]interface{}{"video_id": "valid-id", "title": "Valid Video"},
+	})
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if len(vids) != 1 {
+		t.Fatalf("expected 1 video (empty ID skipped), got %d", len(vids))
+	}
+	if vids[0].VideoID != "valid-id" {
+		t.Errorf("expected video_id 'valid-id', got %q", vids[0].VideoID)
+	}
+}

@@ -8,9 +8,9 @@
 
 ## Design Brief
 
-**Current State:** 9 of 14 connector packages are registered in `cmd/core/main.go`. Five packages (discord, twitter, weather, alerts, markets) exist with full implementations and tests but are never imported, instantiated, or registered. Discord has a YAML config entry; the other four have none.
+**Current State:** 10 of 15 connector packages are registered in `cmd/core/main.go`. Five packages (discord, twitter, weather, alerts, markets) exist with full implementations and tests but are never imported, instantiated, or registered. Discord has a YAML config entry; the other four have none.
 
-**Target State:** All 14 connectors are imported, instantiated, registered, and conditionally started in `cmd/core/main.go`. All 5 have config entries in `config/smackerel.yaml` and env var wiring in `scripts/commands/config.sh`. Each connector follows the exact same instantiation → register → conditional-start pattern as the existing 9.
+**Target State:** All 15 connectors are imported, instantiated, registered, and conditionally started in `cmd/core/main.go`. All 5 have config entries in `config/smackerel.yaml` and env var wiring in `scripts/commands/config.sh`. Each connector follows the exact same instantiation → register → conditional-start pattern as the existing 10.
 
 **Patterns to Follow:**
 - Import aliasing: `<name>Connector "github.com/smackerel/smackerel/internal/connector/<pkg>"` (see [main.go](../../cmd/core/main.go#L14-L25))
@@ -419,11 +419,11 @@ These are trivial parsing utilities, not business logic. They exist purely to br
 
 | Test Type | What to Validate | How |
 |-----------|-----------------|-----|
-| Unit (Go) | All 14 connectors present in registry after startup | Test `main.go` wiring or registry count |
+| Unit (Go) | All 15 connectors present in registry after startup | Test `main.go` wiring or registry count |
 | Unit (Go) | Config parsing for each connector handles empty/missing values correctly | Existing `*_test.go` in each connector package already cover this |
 | Config generation | New env vars appear in generated env files | `./smackerel.sh config generate` then check output |
-| E2E | Health endpoint lists 14 connectors | `GET /api/health` shows all connectors |
-| Regression | Existing 9 connectors still work | Existing unit + integration tests pass unchanged |
+| E2E | Health endpoint lists 15 connectors | `GET /api/health` shows all connectors |
+| Regression | Existing 10 connectors still work | Existing unit + integration tests pass unchanged |
 
 ---
 

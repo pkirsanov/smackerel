@@ -195,6 +195,15 @@ func (a *ConversationAssembler) flushBufferLocked(key assemblyKey) {
 		a.wg.Add(1)
 		go func() {
 			defer a.wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("assembly flush panic recovered",
+						"chat_id", key.chatID,
+						"source", key.sourceName,
+						"panic", r,
+					)
+				}
+			}()
 			flushCtx, cancel := context.WithTimeout(context.Background(), flushTimeout)
 			defer cancel()
 			if err := a.flushFn(flushCtx, buf); err != nil {

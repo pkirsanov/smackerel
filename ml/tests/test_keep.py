@@ -252,6 +252,20 @@ class TestSecurityOCR:
         assert result["status"] == "error"
         assert "too large" in result["error"]
 
+    def test_malformed_base64_returns_error(self):
+        """Malformed base64 image data must return error, not raise (SEC-001)."""
+        _ocr_cache.clear()
+        result = asyncio.run(handle_ocr_request({"image_hash": "", "image_data": "!!!not-valid-base64!!!"}))
+        assert result["status"] == "error"
+        assert "invalid base64" in result["error"]
+
+    def test_malformed_base64_with_hash_returns_error(self):
+        """Malformed base64 with a pre-supplied hash still fails on decode (SEC-001)."""
+        _ocr_cache.clear()
+        result = asyncio.run(handle_ocr_request({"image_hash": "prehashed", "image_data": "~~~bad~~~"}))
+        assert result["status"] == "error"
+        assert "invalid base64" in result["error"]
+
 
 class TestSecurityKeepBridge:
     """Security tests for the Keep bridge."""
@@ -298,6 +312,52 @@ class TestSecurityKeepBridge:
                 # Must NOT contain internal infrastructure details
                 assert "db:5432" not in err_msg
                 assert "connection refused" not in err_msg
+
+        bridge._keep_session = None
+        bridge._session_email = None
+        bridge._session_authenticated_at = 0.0
+
+    def test_note_limit_enforced(self):
+        """Sync must cap returned notes at MAX_SYNC_NOTES (SEC-002)."""
+        import time
+
+        import app.keep_bridge as bridge
+
+        # Create a mock keep with more notes than the limit
+        mock_keep = MagicMock()
+        mock_keep.sync.return_value = None
+
+        # Generate mock notes exceeding the limit
+        mock_notes = []
+        for i in range(bridge.MAX_SYNC_NOTES + 50):
+            gnote = MagicMock()
+            gnote.id = f"note-{i}"
+            gnote.title = f"Note {i}"
+            gnote.text = "content"
+            gnote.pinned = False
+            gnote.archived = False
+            gnote.trashed = False
+            gnote.color = None
+            gnote.labels.all.return_value = []
+            gnote.collaborators.all.return_value = []
+            gnote.items = []
+            gnote.timestamps.updated = None
+            gnote.timestamps.created = None
+            mock_notes.append(gnote)
+
+        mock_keep.all.return_value = mock_notes
+        bridge._keep_session = mock_keep
+        bridge._session_email = "test@example.com"
+        bridge._session_authenticated_at = time.time()
+
+        with patch.dict(
+            os.environ,
+            {"KEEP_GOOGLE_EMAIL": "test@example.com", "KEEP_GOOGLE_APP_PASSWORD": "pw"},
+        ):
+            with patch.object(bridge, "authenticate", return_value=mock_keep):
+                result = asyncio.run(handle_sync_request({"cursor": ""}))
+                assert result["status"] == "ok"
+                assert len(result["notes"]) == bridge.MAX_SYNC_NOTES
 
         bridge._keep_session = None
         bridge._session_email = None

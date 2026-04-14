@@ -39,6 +39,9 @@ var (
 	providerRateLimits = map[string]int{"finnhub": 55, "coingecko": 25, "fred": 100}
 )
 
+// Compile-time interface check.
+var _ connector.Connector = (*Connector)(nil)
+
 // Connector implements the Financial Markets connector using Finnhub, CoinGecko, and FRED.
 type Connector struct {
 	id         string
@@ -47,6 +50,7 @@ type Connector struct {
 	config     MarketsConfig
 	httpClient *http.Client
 	callCounts map[string][]time.Time // per-provider rate tracking
+	configGen  uint64                 // incremented on Connect; Sync uses it to skip stale health writes
 
 	// Base URLs for API providers — overridable for testing via httptest.
 	finnhubBaseURL   string
@@ -107,15 +111,24 @@ func (c *Connector) ID() string { return c.id }
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
 	cfg, err := parseMarketsConfig(config)
 	if err != nil {
+		c.mu.Lock()
+		c.health = connector.HealthError
+		c.mu.Unlock()
 		return fmt.Errorf("parse markets config: %w", err)
 	}
 	if cfg.FinnhubAPIKey == "" {
+		c.mu.Lock()
+		c.health = connector.HealthError
+		c.mu.Unlock()
 		return fmt.Errorf("finnhub_api_key is required")
 	}
 
 	c.mu.Lock()
 	c.config = cfg
 	c.health = connector.HealthHealthy
+	// Reset rate limit tracking so a fresh Connect() starts with clean budgets.
+	c.callCounts = make(map[string][]time.Time)
+	c.configGen++
 	c.mu.Unlock()
 	slog.Info("financial-markets connector connected", "id", c.id,
 		"stocks", len(cfg.Watchlist.Stocks), "crypto", len(cfg.Watchlist.Crypto))
@@ -127,16 +140,23 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
 	cfg := c.config
+	gen := c.configGen
 	c.mu.Unlock()
 
 	var failCount int
 	var totalProviders int
+	var partialSkip bool
 	defer func() {
 		c.mu.Lock()
-		if failCount > 0 && failCount >= totalProviders {
-			c.health = connector.HealthDegraded
-		} else {
-			c.health = connector.HealthHealthy
+		// Only update health if no concurrent Connect() has occurred since Sync started.
+		if c.configGen == gen {
+			if totalProviders > 0 && failCount >= totalProviders {
+				c.health = connector.HealthError
+			} else if failCount > 0 || partialSkip {
+				c.health = connector.HealthDegraded
+			} else {
+				c.health = connector.HealthHealthy
+			}
 		}
 		c.mu.Unlock()
 	}()
@@ -167,6 +187,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 		if !c.tryRecordCall("finnhub") {
 			slog.Warn("finnhub rate limit reached, skipping remaining symbols")
+			partialSkip = true
 			break
 		}
 		quote, err := c.fetchFinnhubQuote(ctx, symbol)
@@ -234,6 +255,52 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					})
 				}
 			}
+		} else {
+			slog.Warn("coingecko rate limit reached, skipping crypto fetch")
+			partialSkip = true
+		}
+	}
+
+	// Fetch forex rates via Finnhub
+	if len(cfg.Watchlist.ForexPairs) > 0 {
+		totalProviders++ // count forex as a distinct provider dimension
+		var forexFails int
+		for _, pair := range cfg.Watchlist.ForexPairs {
+			select {
+			case <-ctx.Done():
+				return artifacts, cursor, ctx.Err()
+			default:
+			}
+			if !c.tryRecordCall("finnhub") {
+				slog.Warn("finnhub rate limit reached, skipping remaining forex pairs")
+				partialSkip = true
+				break
+			}
+			quote, err := c.fetchFinnhubForex(ctx, pair)
+			if err != nil {
+				slog.Warn("finnhub forex failed", "pair", pair, "error", err)
+				forexFails++
+				continue
+			}
+			artifacts = append(artifacts, connector.RawArtifact{
+				SourceID:    "financial-markets",
+				SourceRef:   fmt.Sprintf("forex-%s-%s", strings.ReplaceAll(pair, "/", "-"), now.Format("2006-01-02")),
+				ContentType: "market/quote",
+				Title:       fmt.Sprintf("%s: %.4f", pair, quote.CurrentPrice),
+				RawContent:  fmt.Sprintf("%s: %.4f (change: %+.4f / %+.2f%%)", pair, quote.CurrentPrice, quote.Change, quote.ChangePercent),
+				Metadata: map[string]interface{}{
+					"symbol":          pair,
+					"asset_type":      "forex",
+					"price":           quote.CurrentPrice,
+					"change":          quote.Change,
+					"change_percent":  quote.ChangePercent,
+					"processing_tier": "light",
+				},
+				CapturedAt: now,
+			})
+		}
+		if forexFails > 0 && forexFails >= len(cfg.Watchlist.ForexPairs) {
+			failCount++
 		}
 	}
 
@@ -263,7 +330,10 @@ func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*Stoc
 		return nil, fmt.Errorf("invalid symbol format: %q", symbol)
 	}
 
-	u, _ := url.Parse(c.finnhubBaseURL + "/api/v1/quote")
+	u, err := url.Parse(c.finnhubBaseURL + "/api/v1/quote")
+	if err != nil {
+		return nil, fmt.Errorf("parse finnhub URL: %w", err)
+	}
 	q := u.Query()
 	q.Set("symbol", symbol)
 	q.Set("token", c.config.FinnhubAPIKey)
@@ -302,6 +372,57 @@ func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*Stoc
 	return &quote, nil
 }
 
+// fetchFinnhubForex gets a forex exchange rate from Finnhub.
+// The pair must be in "BASE/QUOTE" format (e.g., "USD/JPY").
+// Finnhub's forex endpoint uses the format "OANDA:BASE_QUOTE".
+func (c *Connector) fetchFinnhubForex(ctx context.Context, pair string) (*StockQuote, error) {
+	if !validForexPairRe.MatchString(pair) {
+		return nil, fmt.Errorf("invalid forex pair format: %q", pair)
+	}
+
+	// Convert "USD/JPY" → "OANDA:USD_JPY" for Finnhub forex endpoint.
+	finnhubSymbol := "OANDA:" + strings.ReplaceAll(pair, "/", "_")
+
+	u, err := url.Parse(c.finnhubBaseURL + "/api/v1/quote")
+	if err != nil {
+		return nil, fmt.Errorf("parse finnhub URL: %w", err)
+	}
+	q := u.Query()
+	q.Set("symbol", finnhubSymbol)
+	q.Set("token", c.config.FinnhubAPIKey)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("finnhub forex request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		snippet := make([]byte, maxErrorBodySnippet)
+		n, _ := io.ReadFull(resp.Body, snippet)
+		io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
+		return nil, fmt.Errorf("finnhub forex returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
+	}
+
+	var quote StockQuote
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBodyBytes)).Decode(&quote); err != nil {
+		return nil, fmt.Errorf("decode finnhub forex response: %w", err)
+	}
+	quote.Symbol = pair
+
+	if quote.CurrentPrice == 0 && quote.High == 0 && quote.Low == 0 && quote.PreviousClose == 0 {
+		return nil, fmt.Errorf("finnhub returned no forex data for pair %q", pair)
+	}
+
+	return &quote, nil
+}
+
 // fetchCoinGeckoPrices gets crypto prices from CoinGecko (no API key needed).
 func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) ([]CryptoPrice, error) {
 	var sanitizedIDs []string
@@ -320,7 +441,10 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 		sanitizedIDs = sanitizedIDs[:maxCoinGeckoBatchSize]
 	}
 
-	u, _ := url.Parse(c.coingeckoBaseURL + "/api/v3/simple/price")
+	u, err := url.Parse(c.coingeckoBaseURL + "/api/v3/simple/price")
+	if err != nil {
+		return nil, fmt.Errorf("parse coingecko URL: %w", err)
+	}
 	q := u.Query()
 	q.Set("ids", strings.Join(sanitizedIDs, ","))
 	q.Set("vs_currencies", "usd")
@@ -428,52 +552,60 @@ func parseMarketsConfig(config connector.ConnectorConfig) (MarketsConfig, error)
 
 	if wl, ok := config.SourceConfig["watchlist"].(map[string]interface{}); ok {
 		if stocks, ok := wl["stocks"].([]interface{}); ok {
-			for _, s := range stocks {
-				if str, ok := s.(string); ok {
-					if !validSymbolRe.MatchString(str) {
-						return MarketsConfig{}, fmt.Errorf("invalid stock symbol: %q", str)
-					}
-					cfg.Watchlist.Stocks = append(cfg.Watchlist.Stocks, str)
+			for i, s := range stocks {
+				str, ok := s.(string)
+				if !ok {
+					return MarketsConfig{}, fmt.Errorf("watchlist stocks[%d]: expected string, got %T", i, s)
 				}
+				if !validSymbolRe.MatchString(str) {
+					return MarketsConfig{}, fmt.Errorf("invalid stock symbol: %q", str)
+				}
+				cfg.Watchlist.Stocks = append(cfg.Watchlist.Stocks, str)
 			}
 			if len(cfg.Watchlist.Stocks) > maxWatchlistSymbols {
 				return MarketsConfig{}, fmt.Errorf("stocks watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
 			}
 		}
 		if etfs, ok := wl["etfs"].([]interface{}); ok {
-			for _, s := range etfs {
-				if str, ok := s.(string); ok {
-					if !validSymbolRe.MatchString(str) {
-						return MarketsConfig{}, fmt.Errorf("invalid ETF symbol: %q", str)
-					}
-					cfg.Watchlist.ETFs = append(cfg.Watchlist.ETFs, str)
+			for i, s := range etfs {
+				str, ok := s.(string)
+				if !ok {
+					return MarketsConfig{}, fmt.Errorf("watchlist etfs[%d]: expected string, got %T", i, s)
 				}
+				if !validSymbolRe.MatchString(str) {
+					return MarketsConfig{}, fmt.Errorf("invalid ETF symbol: %q", str)
+				}
+				cfg.Watchlist.ETFs = append(cfg.Watchlist.ETFs, str)
 			}
 			if len(cfg.Watchlist.ETFs) > maxWatchlistSymbols {
 				return MarketsConfig{}, fmt.Errorf("ETFs watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
 			}
 		}
 		if crypto, ok := wl["crypto"].([]interface{}); ok {
-			for _, s := range crypto {
-				if str, ok := s.(string); ok {
-					if !validCoinIDRe.MatchString(str) {
-						return MarketsConfig{}, fmt.Errorf("invalid crypto coin ID: %q", str)
-					}
-					cfg.Watchlist.Crypto = append(cfg.Watchlist.Crypto, str)
+			for i, s := range crypto {
+				str, ok := s.(string)
+				if !ok {
+					return MarketsConfig{}, fmt.Errorf("watchlist crypto[%d]: expected string, got %T", i, s)
 				}
+				if !validCoinIDRe.MatchString(str) {
+					return MarketsConfig{}, fmt.Errorf("invalid crypto coin ID: %q", str)
+				}
+				cfg.Watchlist.Crypto = append(cfg.Watchlist.Crypto, str)
 			}
 			if len(cfg.Watchlist.Crypto) > maxWatchlistSymbols {
 				return MarketsConfig{}, fmt.Errorf("crypto watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
 			}
 		}
 		if pairs, ok := wl["forex_pairs"].([]interface{}); ok {
-			for _, s := range pairs {
-				if str, ok := s.(string); ok {
-					if !validForexPairRe.MatchString(str) {
-						return MarketsConfig{}, fmt.Errorf("invalid forex pair: %q (expected format: USD/JPY)", str)
-					}
-					cfg.Watchlist.ForexPairs = append(cfg.Watchlist.ForexPairs, str)
+			for i, s := range pairs {
+				str, ok := s.(string)
+				if !ok {
+					return MarketsConfig{}, fmt.Errorf("watchlist forex_pairs[%d]: expected string, got %T", i, s)
 				}
+				if !validForexPairRe.MatchString(str) {
+					return MarketsConfig{}, fmt.Errorf("invalid forex pair: %q (expected format: USD/JPY)", str)
+				}
+				cfg.Watchlist.ForexPairs = append(cfg.Watchlist.ForexPairs, str)
 			}
 			if len(cfg.Watchlist.ForexPairs) > maxWatchlistSymbols {
 				return MarketsConfig{}, fmt.Errorf("forex pairs watchlist exceeds maximum of %d entries", maxWatchlistSymbols)

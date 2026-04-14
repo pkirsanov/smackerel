@@ -238,3 +238,104 @@ func TestLogSearch_EmptyQuery(t *testing.T) {
 		t.Error("expected error for nil pool")
 	}
 }
+
+// === Harden H-012: LogSearch UTF-8 safe truncation ===
+
+func TestLogSearch_UTF8SafeTruncation(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	// Build a query where the 500-byte boundary falls inside a multi-byte rune.
+	// "日" is 3 bytes. 499 ASCII bytes + "日" = 502 bytes total.
+	// Naive slice at 500 would split the 3-byte rune.
+	longQuery := strings.Repeat("a", 499) + "日日"
+	if len(longQuery) != 505 {
+		t.Fatalf("precondition: expected 505 bytes, got %d", len(longQuery))
+	}
+
+	// The function should truncate safely and proceed to pool check.
+	err := engine.LogSearch(nil, longQuery, 0, "")
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	if !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected pool error after safe truncation, got: %s", err.Error())
+	}
+}
+
+// === Harden H-013: CreateQuickReference empty concept validation ===
+
+func TestCreateQuickReference_EmptyConcept(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	_, err := engine.CreateQuickReference(nil, "", "content", []string{"id1"})
+	if err == nil {
+		t.Error("expected error for empty concept")
+	}
+	if !strings.Contains(err.Error(), "concept is required") {
+		t.Errorf("expected concept validation error, got: %s", err.Error())
+	}
+}
+
+// === Harden H-014: CreateQuickReference concept/content length truncation ===
+
+func TestCreateQuickReference_ConceptTruncation(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	longConcept := strings.Repeat("x", 300)
+	_, err := engine.CreateQuickReference(nil, longConcept, "content", []string{"id1"})
+	// Should get past concept validation (truncated, not rejected) but fail on pool
+	if err == nil {
+		t.Error("expected pool error")
+	}
+	if strings.Contains(err.Error(), "concept is required") {
+		t.Error("long concept should be truncated, not rejected")
+	}
+}
+
+func TestCreateQuickReference_ContentTruncation(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	longContent := strings.Repeat("y", 6000)
+	_, err := engine.CreateQuickReference(nil, "concept", longContent, []string{"id1"})
+	// Should get past validation but fail on pool
+	if err == nil {
+		t.Error("expected pool error")
+	}
+	if !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected pool error after content truncation, got: %s", err.Error())
+	}
+}
+
+// === DevOps DEV-001: PurgeOldSearchLogs ===
+
+func TestPurgeOldSearchLogs_NilPool(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	_, err := engine.PurgeOldSearchLogs(nil, 60)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	if !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected pool error, got: %s", err.Error())
+	}
+}
+
+func TestPurgeOldSearchLogs_MinRetentionDays(t *testing.T) {
+	// Retention below 30 is clamped to 30 to never purge within the detection window.
+	// With nil pool we can only verify it reaches the pool check without panicking.
+	engine := &Engine{Pool: nil}
+	_, err := engine.PurgeOldSearchLogs(nil, 10)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	if !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected pool error, got: %s", err.Error())
+	}
+}
+
+func TestPurgeOldSearchLogs_ZeroDays(t *testing.T) {
+	engine := &Engine{Pool: nil}
+	_, err := engine.PurgeOldSearchLogs(nil, 0)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	// 0 days should be clamped to 30 and still reach pool check
+	if !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected pool error, got: %s", err.Error())
+	}
+}

@@ -5,77 +5,59 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
 
 // NormalizeEvent converts a GuestHost ActivityEvent into a RawArtifact.
 func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
+	if len(event.Data) == 0 || string(event.Data) == "null" {
+		return connector.RawArtifact{}, fmt.Errorf("event data is empty for event %s (type %s)", event.ID, event.Type)
+	}
+
 	capturedAt, err := time.Parse(time.RFC3339, event.Timestamp)
 	if err != nil {
 		return connector.RawArtifact{}, fmt.Errorf("parse event timestamp %q: %w", event.Timestamp, err)
 	}
 
-	rawContent, err := json.Marshal(event.Data)
-	if err != nil {
-		return connector.RawArtifact{}, fmt.Errorf("marshal event data: %w", err)
-	}
-
-	contentHash := sha256.Sum256([]byte(event.Type + event.EntityID + event.Timestamp))
-	sourceRef := fmt.Sprintf("%x", contentHash[:])
-
-	if event.ID != "" {
-		sourceRef = event.ID
+	sourceRef := event.ID
+	if sourceRef == "" {
+		contentHash := sha256.Sum256([]byte(event.Type + event.EntityID + event.Timestamp))
+		sourceRef = fmt.Sprintf("%x", contentHash[:])
 	}
 
 	var contentType, title string
 	metadata := map[string]interface{}{}
 
 	switch event.Type {
-	case "booking.created":
+	case "booking.created", "booking.updated", "booking.cancelled":
 		var d BookingData
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal booking data: %w", err)
 		}
 		contentType = "booking"
-		title = fmt.Sprintf("%s — %s — %s-%s", d.PropertyName, d.GuestName, d.CheckIn, d.CheckOut)
-		metadata = bookingMetadata(d)
-
-	case "booking.updated":
-		var d BookingData
-		if err := json.Unmarshal(event.Data, &d); err != nil {
-			return connector.RawArtifact{}, fmt.Errorf("unmarshal booking data: %w", err)
+		switch event.Type {
+		case "booking.created":
+			title = fmt.Sprintf("%s — %s — %s-%s", d.PropertyName, d.GuestName, d.CheckIn, d.CheckOut)
+		case "booking.updated":
+			title = fmt.Sprintf("%s — Booking updated: %s", d.PropertyName, d.GuestName)
+		case "booking.cancelled":
+			title = fmt.Sprintf("%s — Booking cancelled: %s", d.PropertyName, d.GuestName)
 		}
-		contentType = "booking"
-		title = fmt.Sprintf("%s — Booking updated: %s", d.PropertyName, d.GuestName)
 		metadata = bookingMetadata(d)
 
-	case "booking.cancelled":
-		var d BookingData
-		if err := json.Unmarshal(event.Data, &d); err != nil {
-			return connector.RawArtifact{}, fmt.Errorf("unmarshal booking data: %w", err)
-		}
-		contentType = "booking"
-		title = fmt.Sprintf("%s — Booking cancelled: %s", d.PropertyName, d.GuestName)
-		metadata = bookingMetadata(d)
-
-	case "guest.created":
+	case "guest.created", "guest.updated":
 		var d GuestData
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal guest data: %w", err)
 		}
 		contentType = "guest"
-		title = fmt.Sprintf("Guest: %s (%s)", d.Name, d.Email)
-		metadata["guest_email"] = d.Email
-		metadata["guest_name"] = d.Name
-
-	case "guest.updated":
-		var d GuestData
-		if err := json.Unmarshal(event.Data, &d); err != nil {
-			return connector.RawArtifact{}, fmt.Errorf("unmarshal guest data: %w", err)
+		if event.Type == "guest.created" {
+			title = fmt.Sprintf("Guest: %s (%s)", d.Name, d.Email)
+		} else {
+			title = fmt.Sprintf("Guest updated: %s", d.Name)
 		}
-		contentType = "guest"
-		title = fmt.Sprintf("Guest updated: %s", d.Name)
 		metadata["guest_email"] = d.Email
 		metadata["guest_name"] = d.Name
 
@@ -105,24 +87,17 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		metadata["guest_name"] = d.GuestName
 		metadata["booking_id"] = d.BookingID
 
-	case "task.created":
+	case "task.created", "task.completed":
 		var d TaskData
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal task data: %w", err)
 		}
 		contentType = "task"
-		title = fmt.Sprintf("%s — Task: %s", d.PropertyName, d.Title)
-		metadata["property_id"] = d.PropertyID
-		metadata["property_name"] = d.PropertyName
-		metadata["category"] = d.Category
-
-	case "task.completed":
-		var d TaskData
-		if err := json.Unmarshal(event.Data, &d); err != nil {
-			return connector.RawArtifact{}, fmt.Errorf("unmarshal task data: %w", err)
+		if event.Type == "task.created" {
+			title = fmt.Sprintf("%s — Task: %s", d.PropertyName, d.Title)
+		} else {
+			title = fmt.Sprintf("%s — Task completed: %s", d.PropertyName, d.Title)
 		}
-		contentType = "task"
-		title = fmt.Sprintf("%s — Task completed: %s", d.PropertyName, d.Title)
 		metadata["property_id"] = d.PropertyID
 		metadata["property_name"] = d.PropertyName
 		metadata["category"] = d.Category
@@ -155,12 +130,34 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		SourceID:    "guesthost",
 		SourceRef:   sourceRef,
 		ContentType: contentType,
-		Title:       title,
-		RawContent:  string(rawContent),
+		Title:       truncateStr(title, 500),
+		RawContent:  string(event.Data),
 		URL:         "",
 		Metadata:    metadata,
 		CapturedAt:  capturedAt,
 	}, nil
+}
+
+// truncateStr truncates s to maxLen bytes at a valid UTF-8 rune boundary,
+// appending "..." if truncated. Never produces invalid UTF-8 (CWE-838).
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		// Even for tiny limits, respect rune boundaries.
+		cut := maxLen
+		for cut > 0 && !utf8.RuneStart(s[cut]) {
+			cut--
+		}
+		return s[:cut]
+	}
+	// Walk back from the byte budget to find a valid rune boundary.
+	cut := maxLen - 3
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "..."
 }
 
 // bookingMetadata builds the common metadata map for all booking event types.
@@ -173,6 +170,6 @@ func bookingMetadata(d BookingData) map[string]interface{} {
 		"checkin_date":   d.CheckIn,
 		"checkout_date":  d.CheckOut,
 		"booking_source": d.Source,
-		"revenue":        d.TotalPrice,
+		"total_price":    d.TotalPrice,
 	}
 }

@@ -22,7 +22,9 @@ handoffs:
 - Never return a narrative checklist of follow-up actions for the user. Either complete the routed work inline, return `route_required` with a concrete owner packet, or return `blocked` with a concrete blocker.
 - Never certify or describe a spec/bug as complete when guard/lint output is missing, non-zero, or contradicted by unchecked DoD items, placeholder evidence, missing workflow metadata, or unresolved routed work.
 
-**⚠️ Anti-Fabrication for Validation (NON-NEGOTIABLE):** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md) and [state-gates.md](bubbles_shared/state-gates.md).
+**⚠️ Anti-Fabrication for Validation (NON-NEGOTIABLE):** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md), [state-gates.md](bubbles_shared/state-gates.md), and [critical-requirements.md](bubbles_shared/critical-requirements.md).
+
+**⚠️ Honesty Incentive (ABSOLUTE):** When reviewing evidence blocks, verify each has a `**Claim Source:**` tag (`executed`, `interpreted`, or `not-run`). If evidence is labeled `executed` but the DoD claim requires interpretation of the output, downgrade to `interpreted` and require an `**Interpretation:**` explanation. If evidence is `not-run`, the DoD item MUST stay `[ ]` with an Uncertainty Declaration. Review all Uncertainty Declarations and either resolve them or confirm as genuine blockers. See [critical-requirements.md](bubbles_shared/critical-requirements.md) → Honesty Incentive and [evidence-rules.md](bubbles_shared/evidence-rules.md) → Evidence Provenance Taxonomy.
 
 **⚠️ Execution-Only Validation (NON-NEGOTIABLE — Gate G071):**
 Every validation command in Step 2 (build, lint, test, guard scripts, artifact lint, traceability guard, implementation reality scan, etc.) MUST be executed via `run_in_terminal`. Reading the files that a script would check, performing equivalent pattern matching, and reporting predicted findings is **fabrication** — even if the predictions turn out to be accurate. The value of validation is that it runs the canonical script with its exact logic, not that an agent approximates that logic by reading files.

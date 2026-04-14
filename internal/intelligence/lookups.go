@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // SearchLogEntry records a single search query for frequency tracking.
@@ -48,9 +50,10 @@ func (e *Engine) LogSearch(ctx context.Context, query string, resultsCount int, 
 	}
 
 	// Truncate query to prevent unbounded storage from large request bodies.
+	// Use TruncateUTF8 to avoid splitting multi-byte runes at the cut point.
 	const maxQueryLen = 500
 	if len(query) > maxQueryLen {
-		query = query[:maxQueryLen]
+		query = stringutil.TruncateUTF8(query, maxQueryLen)
 	}
 
 	normalizedQuery := normalizeQuery(query)
@@ -77,6 +80,7 @@ func (e *Engine) DetectFrequentLookups(ctx context.Context) ([]FrequentLookup, e
 		GROUP BY sl.query_hash
 		HAVING COUNT(*) >= 3
 		ORDER BY freq DESC
+		LIMIT 20
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query frequent lookups: %w", err)
@@ -97,6 +101,18 @@ func (e *Engine) DetectFrequentLookups(ctx context.Context) ([]FrequentLookup, e
 
 // CreateQuickReference creates a pinned quick reference from frequently looked-up content.
 func (e *Engine) CreateQuickReference(ctx context.Context, concept, content string, sourceIDs []string) (*QuickReference, error) {
+	if concept == "" {
+		return nil, fmt.Errorf("quick reference concept is required")
+	}
+	const maxConceptLen = 200
+	const maxContentLen = 5000
+	if len(concept) > maxConceptLen {
+		concept = stringutil.TruncateUTF8(concept, maxConceptLen)
+	}
+	if len(content) > maxContentLen {
+		content = stringutil.TruncateUTF8(content, maxContentLen)
+	}
+
 	if e.Pool == nil {
 		return nil, fmt.Errorf("quick reference creation requires a database connection")
 	}
@@ -166,4 +182,23 @@ func normalizeQuery(q string) string {
 func hashQuery(normalized string) string {
 	h := sha256.Sum256([]byte(normalized))
 	return fmt.Sprintf("%x", h[:16]) // 128-bit prefix is sufficient
+}
+
+// PurgeOldSearchLogs deletes search_log entries older than the retention period.
+// The 30-day detection window for frequent lookups means anything older than
+// 60 days (2× safety margin) is operationally dead weight.
+func (e *Engine) PurgeOldSearchLogs(ctx context.Context, retentionDays int) (int64, error) {
+	if e.Pool == nil {
+		return 0, fmt.Errorf("search log purge requires a database connection")
+	}
+	if retentionDays < 30 {
+		retentionDays = 30 // never purge within the detection window
+	}
+	result, err := e.Pool.Exec(ctx, `
+		DELETE FROM search_log WHERE created_at < NOW() - ($1 || ' days')::interval
+	`, fmt.Sprintf("%d", retentionDays))
+	if err != nil {
+		return 0, fmt.Errorf("purge search logs: %w", err)
+	}
+	return result.RowsAffected(), nil
 }

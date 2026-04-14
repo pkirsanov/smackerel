@@ -399,6 +399,125 @@ func TestValidate_MLHealthCacheTTLS_Missing(t *testing.T) {
 	}
 }
 
+func TestValidate_DBMinConns_ExceedsMaxConns(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("DB_MIN_CONNS", "20")
+	t.Setenv("DB_MAX_CONNS", "5")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when DB_MIN_CONNS > DB_MAX_CONNS")
+	}
+	if !strings.Contains(err.Error(), "DB_MIN_CONNS") || !strings.Contains(err.Error(), "DB_MAX_CONNS") {
+		t.Errorf("error should name both DB_MIN_CONNS and DB_MAX_CONNS, got: %v", err)
+	}
+}
+
+func TestValidate_DBMinConns_EqualsMaxConns(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("DB_MIN_CONNS", "10")
+	t.Setenv("DB_MAX_CONNS", "10")
+	_, err := Load()
+	if err != nil {
+		t.Fatalf("DB_MIN_CONNS == DB_MAX_CONNS should be valid, got: %v", err)
+	}
+}
+
+// --- Telegram assembly config validation tests (spec 008) ---
+
+func TestValidate_TelegramAssemblyWindowSeconds_Valid(t *testing.T) {
+	setRequiredEnv(t)
+	for _, val := range []string{"5", "10", "30", "60"} {
+		t.Setenv("TELEGRAM_ASSEMBLY_WINDOW_SECONDS", val)
+		_, err := Load()
+		if err != nil {
+			t.Errorf("TELEGRAM_ASSEMBLY_WINDOW_SECONDS=%s should be valid, got: %v", val, err)
+		}
+	}
+}
+
+func TestValidate_TelegramAssemblyWindowSeconds_OutOfRange(t *testing.T) {
+	setRequiredEnv(t)
+	for _, val := range []string{"0", "1", "4", "61", "100", "-1", "abc"} {
+		t.Setenv("TELEGRAM_ASSEMBLY_WINDOW_SECONDS", val)
+		_, err := Load()
+		if err == nil {
+			t.Errorf("TELEGRAM_ASSEMBLY_WINDOW_SECONDS=%s should be rejected", val)
+		}
+		if err != nil && !strings.Contains(err.Error(), "TELEGRAM_ASSEMBLY_WINDOW_SECONDS") {
+			t.Errorf("TELEGRAM_ASSEMBLY_WINDOW_SECONDS=%s error should name the field, got: %v", val, err)
+		}
+	}
+}
+
+func TestValidate_TelegramAssemblyMaxMessages_Valid(t *testing.T) {
+	setRequiredEnv(t)
+	for _, val := range []string{"10", "100", "250", "500"} {
+		t.Setenv("TELEGRAM_ASSEMBLY_MAX_MESSAGES", val)
+		_, err := Load()
+		if err != nil {
+			t.Errorf("TELEGRAM_ASSEMBLY_MAX_MESSAGES=%s should be valid, got: %v", val, err)
+		}
+	}
+}
+
+func TestValidate_TelegramAssemblyMaxMessages_OutOfRange(t *testing.T) {
+	setRequiredEnv(t)
+	for _, val := range []string{"0", "5", "9", "501", "1000", "-1", "abc"} {
+		t.Setenv("TELEGRAM_ASSEMBLY_MAX_MESSAGES", val)
+		_, err := Load()
+		if err == nil {
+			t.Errorf("TELEGRAM_ASSEMBLY_MAX_MESSAGES=%s should be rejected", val)
+		}
+		if err != nil && !strings.Contains(err.Error(), "TELEGRAM_ASSEMBLY_MAX_MESSAGES") {
+			t.Errorf("TELEGRAM_ASSEMBLY_MAX_MESSAGES=%s error should name the field, got: %v", val, err)
+		}
+	}
+}
+
+func TestValidate_TelegramMediaGroupWindowSeconds_Valid(t *testing.T) {
+	setRequiredEnv(t)
+	for _, val := range []string{"2", "3", "5", "10"} {
+		t.Setenv("TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS", val)
+		_, err := Load()
+		if err != nil {
+			t.Errorf("TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS=%s should be valid, got: %v", val, err)
+		}
+	}
+}
+
+func TestValidate_TelegramMediaGroupWindowSeconds_OutOfRange(t *testing.T) {
+	setRequiredEnv(t)
+	for _, val := range []string{"0", "1", "11", "100", "-1", "abc"} {
+		t.Setenv("TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS", val)
+		_, err := Load()
+		if err == nil {
+			t.Errorf("TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS=%s should be rejected", val)
+		}
+		if err != nil && !strings.Contains(err.Error(), "TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS") {
+			t.Errorf("TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS=%s error should name the field, got: %v", val, err)
+		}
+	}
+}
+
+func TestValidate_TelegramAssemblyConfig_Defaults(t *testing.T) {
+	setRequiredEnv(t)
+	// Not setting any assembly config env vars — should load with zero values
+	// (defaults applied at assembler construction time, not at config load)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TelegramAssemblyWindowSeconds != 0 {
+		t.Errorf("expected 0 (defaults applied at assembler init), got %d", cfg.TelegramAssemblyWindowSeconds)
+	}
+	if cfg.TelegramAssemblyMaxMessages != 0 {
+		t.Errorf("expected 0 (defaults applied at assembler init), got %d", cfg.TelegramAssemblyMaxMessages)
+	}
+	if cfg.TelegramMediaGroupWindowSeconds != 0 {
+		t.Errorf("expected 0 (defaults applied at assembler init), got %d", cfg.TelegramMediaGroupWindowSeconds)
+	}
+}
+
 func TestValidate_DBPoolConfig_Valid(t *testing.T) {
 	setRequiredEnv(t)
 	t.Setenv("DB_MAX_CONNS", "20")

@@ -500,3 +500,30 @@ func TestSync_HealthStaysErrorOnFailure(t *testing.T) {
 		t.Errorf("health should be Error after failed sync, got %v", c.Health(context.Background()))
 	}
 }
+
+func TestSync_BeforeConnect(t *testing.T) {
+	c := New("cal-no-connect")
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error when Sync called before Connect")
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("health should remain disconnected, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestParseCalendarEvents_SkipsEmptyUID(t *testing.T) {
+	events, err := parseCalendarEvents([]interface{}{
+		map[string]interface{}{"uid": "", "summary": "No UID Event"},
+		map[string]interface{}{"uid": "valid-uid", "summary": "Valid Event"},
+	})
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event (empty UID skipped), got %d", len(events))
+	}
+	if events[0].UID != "valid-uid" {
+		t.Errorf("expected UID 'valid-uid', got %q", events[0].UID)
+	}
+}

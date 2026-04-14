@@ -252,3 +252,173 @@ ok  github.com/smackerel/smackerel/internal/connector/bookmarks  0.442s
 63 tests, 0 failures (was 43 tests before sweep)
 All 33 Go packages pass, 0 regressions.
 ```
+
+### DevOps Quality Sweep (Round 2 — Stochastic Quality Sweep)
+
+**Date:** 2026-04-12
+**Trigger:** devops
+**Mode:** devops-to-doc
+
+#### Pre-Sweep Assessment
+
+- **Prior devops sweep (Round 8):** Fixed config SST extraction (`BOOKMARKS_IMPORT_DIR`), Docker Compose env passthrough, and volume mount
+- **Prior security/regression/test/chaos sweeps** already completed
+- **Focus areas:** Production wiring, config flag completeness, Docker security alignment, sync schedule wiring
+
+#### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| D004 | Production Wiring | High | `cmd/core/main.go` uses `NewConnector("bookmarks")` instead of `NewConnectorWithPool("bookmarks", pg.Pool)` — DB pool is nil, so URL deduplication and folder-to-topic mapping are dead code in production. Scope 2 functionality (dedup + topic mapping) never executes. | Fixed |
+| D005 | Docker Security | Medium | `docker-compose.yml` mounts bookmarks import dir as `:ro`, but `smackerel.yaml` defaults `archive_processed: true` and `main.go` auto-start hardcodes `"archive_processed": true`. Archive operations silently fail on every sync cycle with logged warnings. | Fixed |
+| D006 | Config SST | Low | `connectors.bookmarks.enabled` and `connectors.bookmarks.sync_schedule` exist in `smackerel.yaml` but were not extracted by `config.sh`, not present in `dev.env`, and not checked by `main.go`. Auto-start gates only on `import_dir != ""`, ignoring the `enabled` flag. Sync schedule falls back to supervisor default (5min) instead of configured `*/30 * * * *`. | Fixed |
+
+#### Fixes Applied
+
+**D004 — Wire DB Pool for Dedup and Topic Mapping** (`cmd/core/main.go`):
+- Changed `bookmarksConnector.NewConnector("bookmarks")` to `bookmarksConnector.NewConnectorWithPool("bookmarks", pg.Pool)`
+- This wires the PostgreSQL connection pool to the `URLDeduplicator` and `TopicMapper`, enabling URL dedup (Scope 2 feature 1) and folder-to-topic mapping (Scope 2 feature 2) in production
+
+**D005 — Align Archive Default with Docker `:ro` Mount** (`config/smackerel.yaml`, `cmd/core/main.go`):
+- Changed `archive_processed` default from `true` to `false` in `smackerel.yaml`
+- Changed `"archive_processed": true` to `"archive_processed": false` in auto-start config in `main.go`
+- Added inline comment: `# Docker mounts import dir as :ro; enable only for non-Docker deployments`
+- The `:ro` volume mount is the correct security posture (spec says "read-only — never modify"); archive is opt-in for non-Docker environments
+
+**D006 — Wire `enabled` and `sync_schedule` Through Config Pipeline** (4 files):
+- `scripts/commands/config.sh`: Added `BOOKMARKS_ENABLED` and `BOOKMARKS_SYNC_SCHEDULE` extraction from YAML and output to env template
+- `config/generated/dev.env`: Now includes `BOOKMARKS_ENABLED=false` and `BOOKMARKS_SYNC_SCHEDULE=*/30 * * * *`
+- `docker-compose.yml`: Added `BOOKMARKS_ENABLED` and `BOOKMARKS_SYNC_SCHEDULE` to smackerel-core environment block
+- `internal/config/config.go`: Added `BookmarksEnabled bool` and `BookmarksSyncSchedule string` fields, loaded from env
+- `cmd/core/main.go`: Auto-start now checks `cfg.BookmarksEnabled && cfg.BookmarksImportDir != ""` and passes `SyncSchedule` to `ConnectorConfig`
+
+#### Verification Evidence
+
+```
+$ ./smackerel.sh config generate
+Generated config/generated/dev.env
+  BOOKMARKS_ENABLED=false
+  BOOKMARKS_SYNC_SCHEDULE=*/30 * * * *
+  BOOKMARKS_IMPORT_DIR=
+
+$ ./smackerel.sh check
+Config is in sync with SST
+
+$ ./smackerel.sh test unit --go
+ok  github.com/smackerel/smackerel/internal/config  0.027s (re-ran, not cached)
+ok  github.com/smackerel/smackerel/internal/connector/bookmarks (cached)
+All 32 Go packages pass, 0 failures, 0 regressions
+
+$ ./smackerel.sh lint
+All checks passed
+```
+
+### Chaos Quality Sweep R16 (Stochastic Quality Sweep)
+
+**Date:** 2026-04-13
+**Trigger:** chaos
+**Mode:** chaos-hardening
+
+#### Pre-Sweep Assessment
+
+- **Prior chaos sweep (delivery-lockdown):** Verified corrupted files, nil pool degradation, invalid URL normalization, TOCTOU symlink guard, scheme rejection
+- **Focus areas:** Health state correctness under cancellation/error edge cases, observability gaps, deduplicator-present code paths
+
+#### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| C16-001 | Health State | Medium | `Sync()` early exit before dedup phase does not flush `lastSyncCount`/`lastSyncErrors` to struct. When context is cancelled after file processing but before the deduplication phase, the deferred health-transition function reads stale zero values from the initial reset and may incorrectly report `HealthHealthy`. Monitoring dashboards would see false-positive health. | Fixed |
+| C16-002 | Observability | Low | Non-bookmark `.html` files (e.g. saved web pages) parsed with 0 bookmarks are consumed silently — added to cursor with no warning. Operators have no diagnostic signal that a file was not a bookmark export. | Fixed |
+
+#### Fixes Applied
+
+**C16-001 — Flush Sync Counters Before Early Return** (`internal/connector/bookmarks/connector.go`):
+- Added `c.lastSyncCount = len(allArtifacts)` and `c.lastSyncErrors = syncErrors` (under lock) before the early return at the "sync cancelled before dedup" check
+- The deferred health-transition function now reads correct counter values from the struct, ensuring health reflects actual sync outcome
+- Tagged `F-CHAOS-C16-001` in code comment
+
+**C16-002 — Zero-Bookmark File Warning** (`internal/connector/bookmarks/connector.go`):
+- Added `slog.Warn` log when a recognised export file (`.json`/`.html`/`.htm`) yields zero bookmarks after parsing
+- Message: "bookmark export file produced zero bookmarks — may not be a bookmark export"
+- Includes file name and detected format for operator diagnostics
+- Tagged `F-CHAOS-C16-002` in code comment
+
+#### Adversarial Regression Tests Added (4 tests)
+
+| Test | Finding | Assertion | Would Fail Without Fix |
+|------|---------|-----------|----------------------|
+| `TestChaosC16_CancelledSyncWithDedupHealthError` | C16-001 | All-fail sync with non-nil deduplicator → health must be `HealthError` | Yes — stale counters would leave health at `HealthHealthy` |
+| `TestChaosC16_CancelledDuringFileLoopWithDedup` | C16-001 | Pre-cancelled context with deduplicator → health must NOT be `HealthHealthy` | Yes — cancel path tests counter propagation |
+| `TestChaosC16_NonBookmarkHTMLZeroArtifacts` | C16-002 | Non-bookmark HTML file → 0 artifacts, file added to cursor (prevents reprocessing) | Documents behaviour that triggers the warning |
+| `TestChaosC16_PartialSuccessWithDedupHealthy` | C16-001 | Mixed valid/corrupt files with deduplicator → health must be `HealthHealthy` (partial success per SCN-BK-005) | Confirms partial success path is NOT over-corrected |
+
+#### Verification Evidence
+
+```
+$ ./smackerel.sh test unit (2026-04-13)
+ok  github.com/smackerel/smackerel/internal/connector/bookmarks  0.155s
+All 33 Go packages pass, 72 Python tests pass, 0 regressions
+
+$ ./smackerel.sh lint
+All checks passed
+```
+
+### Chaos Quality Sweep R24 (Stochastic Quality Sweep)
+
+**Date:** 2026-04-14
+**Trigger:** chaos
+**Mode:** chaos-hardening
+
+#### Pre-Sweep Assessment
+
+- **Prior chaos sweep R16:** Fixed health state corruption on sync cancellation (C16-001) and zero-bookmark observability gap (C16-002). 4 adversarial regression tests added.
+- **Focus areas:** Concurrency safety, credential hygiene, input bounds validation
+
+#### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| R24-001 | Concurrency | High | `Sync()` reads `c.config` fields (ImportDir, ExcludeDomains, MinURLLength, ProcessingTier, ArchiveProcessed) without holding any lock. `Connect()` writes `c.config` under `c.mu.Lock()`. Concurrent `Connect()` + `Sync()` is a data race detectable by `go test -race`. Other connectors (maps, browser, markets, alerts) already snapshot `cfg := c.config` under lock — bookmarks lacked parity. | Fixed |
+| R24-002 | Security | High | `NormalizeURL` preserves `url.User` (userinfo). A bookmark URL like `https://user:pass@host/path` stores credentials in `SourceRef`, which flows to the `artifacts.source_ref` database column. Credential leak into persistent storage (CWE-522). | Fixed |
+| R24-003 | Input Validation | Medium | Chrome `date_added` parsing has no upper bound. An adversarial microsecond value (e.g., `9223372036854775807`) produces a far-future timestamp (year 292278994) that passes the `unixSec > 0` guard. Far-future timestamps disrupt downstream sorting, digest scheduling, and temporal queries. | Fixed |
+
+#### Fixes Applied
+
+**R24-001 — Config Snapshot Under Lock** (`internal/connector/bookmarks/connector.go`):
+- Added `cfg := c.config` snapshot inside the existing `c.mu.Lock()` block at the start of `Sync()`
+- Changed `findNewFiles`, `processFile`, `filterArtifacts`, and `archiveFile` method signatures to accept `Config` parameter
+- All `c.config.*` reads in Sync and helpers replaced with `cfg.*` from the snapshot
+- Aligns with the pattern used by maps, browser, markets, and alerts connectors
+
+**R24-002 — Strip Userinfo from Normalized URLs** (`internal/connector/bookmarks/dedup.go`):
+- Added `u.User = nil` after scheme/host lowercasing in `NormalizeURL()`
+- Prevents credentials from leaking into `SourceRef` → `artifacts.source_ref`
+- Covers basic auth, user-only, encoded credentials, and credentials with port
+
+**R24-003 — Chrome date_added Upper Bound** (`internal/connector/bookmarks/bookmarks.go`):
+- Added `maxReasonableUnixSec` constant (year 2100 = 4102444800)
+- Changed guard from `unixSec > 0` to `unixSec > 0 && unixSec < maxReasonableUnixSec`
+- Rejects far-future timestamps while accepting all reasonable bookmark dates
+
+#### Adversarial Regression Tests Added (8 tests)
+
+| Test | Finding | Assertion | Would Fail Without Fix |
+|------|---------|-----------|----------------------|
+| `TestChaosR24_ConfigSnapshotRace` | R24-001 | Concurrent Connect()/Sync() goroutines complete without race detector panic | Yes — data race on `c.config` fields |
+| `TestChaosR24_ConfigSnapshotDeterministic` | R24-001 | Sync with valid config produces deterministic 2-artifact result | Validates snapshot correctness |
+| `TestChaosR24_NormalizeURLStripsUserinfo` (5 subtests) | R24-002 | user:pass, user-only, encoded creds, creds+port, ftp creds → all stripped from output | Yes — userinfo preserved in SourceRef |
+| `TestChaosR24_ChromeDateAddedFarFuture` | R24-003 | date_added=99999999999999999 → AddedAt must be zero | Yes — far-future timestamp produced |
+| `TestChaosR24_ChromeDateAddedReasonable` | R24-003 | date_added for 2024 → AddedAt.Year()==2024 | Ensures valid dates still accepted |
+| `TestChaosR24_ChromeDateAddedMaxInt64` | R24-003 | date_added=MaxInt64 → AddedAt must be zero | Yes — overflow timestamp produced |
+
+#### Verification Evidence
+
+```
+$ ./smackerel.sh test unit (2026-04-14)
+ok  github.com/smackerel/smackerel/internal/connector/bookmarks  0.203s
+All 33 Go packages pass, Python tests pass, 0 regressions
+
+$ ./smackerel.sh lint
+All checks passed
+```

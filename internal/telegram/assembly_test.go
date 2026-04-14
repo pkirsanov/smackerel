@@ -299,6 +299,111 @@ func TestExtractParticipants_Deduplication(t *testing.T) {
 	}
 }
 
+func TestConversationAssembler_OutOfOrderTimestamps(t *testing.T) {
+	// SC-TSC12c: Messages arriving out-of-order must be sorted by timestamp in output.
+	var flushed []*ConversationBuffer
+	var mu sync.Mutex
+
+	a := NewConversationAssembler(context.Background(), 1, 100,
+		func(_ context.Context, buf *ConversationBuffer) error {
+			mu.Lock()
+			flushed = append(flushed, buf)
+			mu.Unlock()
+			return nil
+		}, nil)
+
+	key := assemblyKey{chatID: 1, sourceChatID: -100, sourceName: "Team Chat"}
+
+	// Add messages in REVERSE chronological order (out of order)
+	t3 := time.Date(2026, 4, 6, 10, 30, 0, 0, time.UTC)
+	t1 := time.Date(2026, 4, 6, 10, 10, 0, 0, time.UTC)
+	t2 := time.Date(2026, 4, 6, 10, 20, 0, 0, time.UTC)
+	t4 := time.Date(2026, 4, 6, 10, 40, 0, 0, time.UTC)
+
+	a.Add(key, ConversationMessage{SenderName: "Alice", Timestamp: t3, Text: "Third"}, ForwardedMeta{SourceChat: "Team Chat"})
+	a.Add(key, ConversationMessage{SenderName: "Bob", Timestamp: t1, Text: "First"}, ForwardedMeta{SourceChat: "Team Chat"})
+	a.Add(key, ConversationMessage{SenderName: "Charlie", Timestamp: t4, Text: "Fourth"}, ForwardedMeta{SourceChat: "Team Chat"})
+	a.Add(key, ConversationMessage{SenderName: "Alice", Timestamp: t2, Text: "Second"}, ForwardedMeta{SourceChat: "Team Chat"})
+
+	// Wait for inactivity timer
+	time.Sleep(1500 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(flushed) != 1 {
+		t.Fatalf("expected 1 flush, got %d", len(flushed))
+	}
+	msgs := flushed[0].Messages
+	if len(msgs) != 4 {
+		t.Fatalf("expected 4 messages, got %d", len(msgs))
+	}
+	// Verify chronological order regardless of arrival order
+	expected := []string{"First", "Second", "Third", "Fourth"}
+	for i, text := range expected {
+		if msgs[i].Text != text {
+			t.Errorf("message %d: expected %q, got %q", i, text, msgs[i].Text)
+		}
+	}
+}
+
+func TestConversationAssembler_URLsInConversation_NotSeparated(t *testing.T) {
+	// SC-TSC12b: Forwarded messages with URLs must be part of the conversation,
+	// not captured as separate URL artifacts.
+	var flushed []*ConversationBuffer
+	var mu sync.Mutex
+
+	a := NewConversationAssembler(context.Background(), 1, 100,
+		func(_ context.Context, buf *ConversationBuffer) error {
+			mu.Lock()
+			flushed = append(flushed, buf)
+			mu.Unlock()
+			return nil
+		}, nil)
+
+	key := assemblyKey{chatID: 1, sourceChatID: -200, sourceName: "Tech Chat"}
+
+	a.Add(key, ConversationMessage{
+		SenderName: "Alice",
+		Timestamp:  time.Now(),
+		Text:       "Check this article about Go",
+	}, ForwardedMeta{SourceChat: "Tech Chat"})
+	a.Add(key, ConversationMessage{
+		SenderName: "Bob",
+		Timestamp:  time.Now().Add(time.Second),
+		Text:       "https://go.dev/blog/concurrency is a good one",
+	}, ForwardedMeta{SourceChat: "Tech Chat"})
+	a.Add(key, ConversationMessage{
+		SenderName: "Alice",
+		Timestamp:  time.Now().Add(2 * time.Second),
+		Text:       "Also see https://effective-go.dev for patterns",
+	}, ForwardedMeta{SourceChat: "Tech Chat"})
+
+	// Wait for inactivity timer
+	time.Sleep(1500 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	// All 3 messages (including ones with URLs) must be assembled into
+	// a single conversation flush — exactly 1 flush, exactly 3 messages.
+	if len(flushed) != 1 {
+		t.Fatalf("expected 1 flush (single conversation), got %d", len(flushed))
+	}
+	if len(flushed[0].Messages) != 3 {
+		t.Errorf("expected 3 messages in conversation (URLs included), got %d", len(flushed[0].Messages))
+	}
+	// Verify URL-containing messages are present in the conversation text
+	hasURL := false
+	for _, msg := range flushed[0].Messages {
+		if containsSubstring(msg.Text, "https://") {
+			hasURL = true
+			break
+		}
+	}
+	if !hasURL {
+		t.Error("expected at least one message with URL in conversation")
+	}
+}
+
 // --- Chaos-hardening tests ---
 
 func TestChaos_FlushChat_ReturnsCount(t *testing.T) {

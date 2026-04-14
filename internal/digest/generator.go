@@ -135,6 +135,10 @@ func (g *Generator) HandleDigestResult(ctx context.Context, digestDate, text str
 		return fmt.Errorf("invalid digest result: missing date or text")
 	}
 
+	if g.Pool == nil {
+		return fmt.Errorf("database pool is nil")
+	}
+
 	id := ulid.Make().String()
 	_, err := g.Pool.Exec(ctx, `
 		INSERT INTO digests (id, digest_date, digest_text, word_count, model_used, is_quiet)

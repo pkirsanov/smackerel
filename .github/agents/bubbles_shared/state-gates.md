@@ -69,3 +69,16 @@ Blocked patterns:
 When a command cannot be executed, the correct report is `NOT RUN` with reason — never substitute file analysis.
 
 Enforced by: evidence-rules.md (analysis-as-execution section), quality-gates.md (anti-fabrication rules), validation-core.md (rule 5).
+
+## Evidence Provenance Gate (G072)
+
+Every evidence block attached to a DoD item MUST include a `**Claim Source:**` tag with a valid value: `executed`, `interpreted`, or `not-run`.
+
+Blocked patterns:
+- Evidence block without a `**Claim Source:**` tag (treated as `interpreted` by default, but missing tag is a lint failure)
+- Evidence labeled `**Claim Source:** executed` where the DoD claim is not directly readable in the raw output (provenance fabrication)
+- Evidence labeled `**Claim Source:** interpreted` without an `**Interpretation:**` line explaining the reasoning
+- DoD item marked `[x]` with `**Claim Source:** not-run` evidence (not-run cannot support completion)
+- DoD item left `[ ]` after agent work without an Uncertainty Declaration explaining what was attempted
+
+Enforced by: evidence-rules.md (Evidence Provenance Taxonomy), quality-gates.md (Evidence Provenance Standard), audit-core.md (Evidence provenance review).

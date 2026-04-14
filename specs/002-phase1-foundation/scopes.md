@@ -64,6 +64,9 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 | 20 | remove-dead-synthesis-stream | 02 | Backend (cleanup) | Done |
 | 21 | core-api-url-config-sst | 01 | Backend + Config (SST) | Done |
 | 22 | digest-nats-typed-payload | 02 | Backend (hardening) | Done |
+| 23 | people-name-unique | 04 | DB + Backend (bugfix) | Done |
+| 24 | image-ocr-pipeline | 02 | ML sidecar (gap closure) | Done |
+| 25 | pdf-extract-pipeline | 02 | ML sidecar (gap closure) | Done |
 
 ### Spec Coverage
 
@@ -72,6 +75,7 @@ Improvement scopes 09-11 add coverage for R-011 delta re-processing (SCN-002-048
 Improvement scopes 12-13 add cross-language NATS subject alignment (SCN-002-054/055) and Python-side payload validation (SCN-002-056/057).
 System review scopes 14-18 add scheduler data race fix (SCN-002-058/059), scheduler test coverage (SCN-002-060-063), API auth middleware (SCN-002-064-067), export scan error logging (SCN-002-068), and auth decryption fallback logging (SCN-002-069-071).
 System review scopes 19-22 add supervisor sleep context cancellation (SCN-002-072), dead SYNTHESIS stream removal (SCN-002-073), CoreAPIURL config SST compliance (SCN-002-074/075), and digest NATS typed payload (SCN-002-076/077).
+Gaps closure scopes 23-25 fix entity linking via people.name unique constraint (SCN-002-078), image OCR in capture pipeline (SCN-002-079/080), and PDF text extraction in capture pipeline (SCN-002-081/082).
 
 ---
 
@@ -1714,3 +1718,157 @@ Scenario: SCN-002-077 Invalid digest payload rejected with validation error
   > Evidence: `./smackerel.sh test unit` — all packages pass
 - [x] Zero warnings, lint/format clean
   > Evidence: `./smackerel.sh check` passes; `./smackerel.sh test unit` passes clean
+
+---
+
+## Scope 23: People Name Unique Constraint
+
+**Status:** Done
+**Priority:** P1
+**Depends On:** 04-knowledge-graph-linking
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-078 Entity linking upserts people without error
+  Given the people table has a UNIQUE constraint on name
+  When the graph linker processes an artifact with entities ["Alice", "Bob"]
+  And "Alice" already exists in the people table
+  Then the linker's ON CONFLICT (name) upsert succeeds for both rows
+  And MENTIONS edges are created for both people
+  And Alice's interaction_count is incremented
+```
+
+### Implementation Plan
+- Add migration `012_people_name_unique.sql` that:
+  1. Deduplicates any existing people rows (re-parents edges to the kept row)
+  2. Creates `UNIQUE INDEX idx_people_name_unique ON people(name)`
+- Add Go test verifying the migration is embedded and contains the unique index
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Migration 012 embedded and parseable | Unit | internal/db/migration_test.go | SCN-002-078 |
+
+### Definition of Done
+- [x] Migration `012_people_name_unique.sql` adds UNIQUE index on people.name
+  > Evidence: `internal/db/migrations/012_people_name_unique.sql` — `CREATE UNIQUE INDEX IF NOT EXISTS idx_people_name_unique ON people(name)`
+- [x] Migration handles pre-existing duplicates by re-parenting edges and merging interaction counts
+  > Evidence: `012_people_name_unique.sql` — DO block finds duplicates, re-parents edges, deletes duplicate rows
+- [x] Migration file is embedded in Go binary
+  > Evidence: `internal/db/migration_test.go::TestMigration012_PeopleNameUnique` passes
+- [x] SCN-002-078: Entity linking ON CONFLICT (name) upsert now has a matching unique constraint
+  > Evidence: migration adds `idx_people_name_unique`; `internal/graph/linker.go::findOrCreatePeople` ON CONFLICT (name) is now valid
+- [x] All existing tests pass
+  > Evidence: `./smackerel.sh test unit` — 33 Go packages pass, 53 Python tests pass
+
+---
+
+## Scope 24: Image OCR Pipeline
+
+**Status:** Done
+**Priority:** P2
+**Depends On:** 02-processing-pipeline
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-079 Image URL processed through OCR in capture pipeline
+  Given a user sends POST /api/capture with body {"url": "https://example.com/photo.jpg"}
+  When the ML sidecar receives the artifacts.process message with content_type "image"
+  Then the sidecar downloads the image from the URL
+  And runs OCR (Tesseract) to extract text
+  And sends the extracted text to the LLM for processing
+  And returns a structured artifact result
+
+Scenario: SCN-002-080 Image OCR graceful fallback on failure
+  Given a user captures an image URL that cannot be downloaded
+  When the ML sidecar attempts OCR
+  Then the failure is logged as a warning
+  And the LLM still receives the URL as minimal content
+  And the artifact is not marked as failed
+```
+
+### Implementation Plan
+- Add image content type handling in `_handle_artifact_process` in `ml/app/nats_client.py`
+- Reuse existing `ml/app/ocr.py::extract_text_tesseract` for OCR
+- Download image via `httpx`, run OCR, use extracted text as LLM input
+- Graceful fallback: if OCR fails, continue with URL-only text (existing behavior)
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Image handler code path exists | Code review | ml/app/nats_client.py | SCN-002-079 |
+
+### Definition of Done
+- [x] Image content type handled in `_handle_artifact_process` with OCR extraction
+  > Evidence: `ml/app/nats_client.py` — `if content_type == "image" and url:` block downloads image, calls `extract_text_tesseract`, uses OCR text as raw_text
+- [x] OCR failure is gracefully handled with warning log and fallback to URL text
+  > Evidence: `ml/app/nats_client.py` — `except Exception as e: logger.warning("Image OCR failed...")`
+- [x] SCN-002-079: Image URLs now get OCR processing in the capture pipeline
+  > Evidence: `ml/app/nats_client.py::_handle_artifact_process` — new image OCR block
+- [x] SCN-002-080: OCR failure falls back gracefully
+  > Evidence: try/except around OCR download/extraction; fallback to URL-only text preserved
+- [x] All existing tests pass
+  > Evidence: `./smackerel.sh test unit` — 33 Go packages pass, 53 Python tests pass (1 skipped)
+
+---
+
+## Scope 25: PDF Extract Pipeline
+
+**Status:** Done
+**Priority:** P2
+**Depends On:** 02-processing-pipeline
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-002-081 PDF URL text extracted in capture pipeline
+  Given a user sends POST /api/capture with body {"url": "https://example.com/report.pdf"}
+  When the ML sidecar receives the artifacts.process message with content_type "pdf"
+  Then the sidecar downloads the PDF from the URL
+  And extracts text content using pypdf
+  And sends the extracted text to the LLM for processing
+  And returns a structured artifact result
+
+Scenario: SCN-002-082 PDF extraction graceful fallback on failure
+  Given a user captures a PDF URL that cannot be downloaded or parsed
+  When the ML sidecar attempts PDF extraction
+  Then the failure is logged as a warning
+  And the LLM still receives the URL as minimal content
+  And the artifact is not marked as failed
+```
+
+### Implementation Plan
+- Create `ml/app/pdf_extract.py` with `extract_pdf_text(url)` and `extract_text_from_bytes(pdf_bytes)` functions
+- Add `pypdf>=4.1.0` to `pyproject.toml` runtime dependencies and `requirements.txt`
+- Add PDF content type handling in `_handle_artifact_process` in `ml/app/nats_client.py`
+- Add Python tests for PDF extraction (skipped when pypdf not available)
+
+### Test Plan
+
+| # | Test | Type | File | Scenario |
+|---|------|------|------|----------|
+| 1 | Valid PDF extracts text | Unit | ml/tests/test_pdf_extract.py | SCN-002-081 |
+| 2 | Empty/invalid PDF returns None | Unit | ml/tests/test_pdf_extract.py | SCN-002-082 |
+| 3 | Non-PDF bytes returns None | Unit | ml/tests/test_pdf_extract.py | SCN-002-082 |
+
+### Definition of Done
+- [x] `ml/app/pdf_extract.py` module created with download + text extraction
+  > Evidence: `ml/app/pdf_extract.py` — `extract_pdf_text(url)` downloads PDF via httpx, `extract_text_from_bytes` uses pypdf to extract text
+- [x] PDF content type handled in `_handle_artifact_process`
+  > Evidence: `ml/app/nats_client.py` — `if content_type == "pdf" and url:` block calls `extract_pdf_text`, uses extracted text
+- [x] `pypdf` added to runtime dependencies
+  > Evidence: `ml/pyproject.toml` — `"pypdf>=4.1.0"` in `[project.optional-dependencies] runtime`; `ml/requirements.txt` — `pypdf==4.1.0`
+- [x] Python tests for PDF extraction
+  > Evidence: `ml/tests/test_pdf_extract.py` — 4 test cases (valid PDF, empty bytes, non-PDF bytes, truncation)
+- [x] PDF extraction gracefully handles failure with fallback
+  > Evidence: `ml/app/nats_client.py` — `except Exception as e: logger.warning("PDF extraction failed...")`
+- [x] SCN-002-081: PDF URLs now get text extraction in the capture pipeline
+  > Evidence: `ml/app/nats_client.py::_handle_artifact_process` — new PDF extraction block
+- [x] SCN-002-082: PDF extraction failure falls back gracefully
+  > Evidence: try/except around PDF download/extraction; fallback to URL-only text preserved
+- [x] All existing tests pass
+  > Evidence: `./smackerel.sh test unit` — 33 Go packages pass, 53 Python tests pass (1 skipped)

@@ -1,5 +1,15 @@
-ml/app/__pycache__/
-ml/tests/__pycache__/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+site-packages/
+.venv/
+venv/
+.Python
 
 # Generated config (contains resolved secrets)
 config/generated/
@@ -17,6 +27,28 @@ backups/
 .env
 .env.*
 secrets.yaml
+
+# IDE / editor
+.idea/
+*.swp
+*.swo
+*~
+.vscode/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+
+# Node (if ever added)
+node_modules/
+
+# Temp / build
+tmp/
+*.tmp
+*.log
 
 # Prevent Bubbles framework README from overriding project README on GitHub
 .github/README.md

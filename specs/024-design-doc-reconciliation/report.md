@@ -56,8 +56,8 @@
 - Delivery status markers added: Phase 1 ✅, Phase 2 ✅, Phase 3 🔜, Phase 4 ✅, Phase 5 ✅
 
 **§22 connector inventory:**
-- 14 committed connectors verified in §22.7 inventory table
-- Each verified against `internal/connector/` directory
+- 15 committed connectors verified in §22.7 inventory table
+- Each verified against `internal/connector/` directory (including guesthost, added in hardening pass)
 - Status column added to all existing connector tables (Email, Calendar, Chat, Notes)
 - IMAP listed as primary email connector (✅ Committed); Gmail/Outlook SDKs as 🔜 Planned
 - Google Keep added to Notes section (✅ Committed)
@@ -73,4 +73,36 @@
 
 ## Completion Statement
 
-Feature 024 is done. Both scopes delivered: `docs/smackerel.md` is fully reconciled with the committed codebase. All OpenClaw, SQLite, and LanceDB references outside the §4 SUPERSEDED block have been replaced. Competitive claims are honest. All 14 committed connectors are inventoried. No code files were modified.
+Feature 024 is done. Both scopes delivered: `docs/smackerel.md` is fully reconciled with the committed codebase. All OpenClaw, SQLite, and LanceDB references outside the §4 SUPERSEDED block have been replaced. Competitive claims are honest. All 15 committed connectors are inventoried. No code files were modified.
+
+---
+
+## Hardening Pass (2026-04-12, harden-to-doc)
+
+### Findings & Resolutions
+
+| # | Severity | Finding | Resolution |
+|---|----------|---------|------------|
+| H1 | HIGH | Connector count claimed 14 but codebase has 15 — `guesthost/` connector omitted from spec, design doc §22.7, and scopes | Added guesthost to §22.7 inventory (now 15 connectors), updated spec.md R-006/BS-004/G5/AC-5, updated scopes.md Gherkin and DoD |
+| H2 | MEDIUM | state.json had 4 scopeProgress entries but scopes.md defines only 2 scopes | Reconciled state.json to match the 2 merged scopes in scopes.md |
+| H3 | LOW | §19 Phase 1 table had duplicate step 1.10 and stale "WhatsApp" reference | Fixed step numbering: merged duplicate 1.10/1.11 into clean 1.10 (Connect Telegram) + 1.11 (Test) |
+| H4 | LOW | DoD grep validation patterns (`grep -v "## 4\."`) don't accurately filter §4 body | Replaced with awk-based section-aware patterns in scopes.md DoD |
+
+### Verification
+
+```
+# Connector count verification
+$ find internal/connector -maxdepth 1 -mindepth 1 -type d | wc -l → 15
+$ grep "Committed Connector Inventory" docs/smackerel.md → "(15 connectors)"
+
+# OpenClaw outside §4 (awk-based)
+$ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}' docs/smackerel.md
+→ Only line 23 (TOC link to retained §4 heading)
+
+# SQLite/LanceDB outside §4
+$ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md
+→ Only line 2155 (Apple Notes factual reference)
+
+# state.json scope count matches scopes.md
+$ python3 -c "import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); print(len(d['certification']['scopeProgress']))" → 2
+```

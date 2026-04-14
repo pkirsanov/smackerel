@@ -75,6 +75,14 @@ func (m *MediaGroupAssembler) asyncFlush(buf *MediaGroupBuffer, logMsg string, l
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("media group flush panic recovered",
+					"media_group_id", buf.MediaGroupID,
+					"panic", r,
+				)
+			}
+		}()
 		flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
 		defer cancel()
 		if err := m.flushFn(flushCtx, buf); err != nil {
