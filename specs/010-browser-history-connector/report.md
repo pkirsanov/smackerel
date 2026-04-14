@@ -59,9 +59,13 @@ $ ./smackerel.sh check — config in sync
 | S-002 | Low | `ChromeTimeToGo` (exported) wrapped `chromeTimeToGo` (unexported) with identical logic — unnecessary indirection | Collapsed into single exported `ChromeTimeToGo` function; updated `ParseChromeHistorySince` and `TestChromeTimeToGo` to use it directly |
 
 ### Verification
-- `./smackerel.sh test unit` — all 33 Go packages pass, browser package 0.080s
-- `./smackerel.sh lint` — All checks passed
-- No behavioral changes; all 55 browser-specific tests pass unchanged
+```
+./smackerel.sh test unit — all 33 Go packages pass, browser package 0.080s
+./smackerel.sh lint — 0 errors
+./smackerel.sh check — Config is in sync with SST
+```
+
+No behavioral changes; all 55 browser-specific tests pass unchanged
 
 ## Completion Statement
 

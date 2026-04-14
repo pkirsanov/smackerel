@@ -40,10 +40,13 @@ type HospitalityTask struct {
 
 // RevenueSnapshot summarises check-in/out counts and revenue for the digest.
 type RevenueSnapshot struct {
-	TodayCheckIns  int     `json:"todayCheckIns"`
-	TodayCheckOuts int     `json:"todayCheckOuts"`
-	WeekRevenue    float64 `json:"weekRevenue"`
-	MonthRevenue   float64 `json:"monthRevenue"`
+	TodayCheckIns  int                `json:"todayCheckIns"`
+	TodayCheckOuts int                `json:"todayCheckOuts"`
+	DayRevenue     float64            `json:"dayRevenue"`
+	WeekRevenue    float64            `json:"weekRevenue"`
+	MonthRevenue   float64            `json:"monthRevenue"`
+	ByChannel      map[string]float64 `json:"byChannel,omitempty"`
+	ByProperty     map[string]float64 `json:"byProperty,omitempty"`
 }
 
 // GuestAlert flags notable guest conditions.
@@ -209,25 +212,73 @@ func queryPendingTasks(ctx context.Context, pool *pgxpool.Pool) ([]HospitalityTa
 	return tasks, nil
 }
 
-// queryRevenueSnapshot computes week and month revenue from booking artifacts.
+// queryRevenueSnapshot computes 24h, week, and month revenue from booking
+// artifacts, including per-channel and per-property breakdowns.
 func queryRevenueSnapshot(ctx context.Context, pool *pgxpool.Pool, now time.Time) (RevenueSnapshot, error) {
 	var snap RevenueSnapshot
 
+	dayStart := now.Add(-24 * time.Hour)
 	weekStart := now.AddDate(0, 0, -int(now.Weekday()))
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
 	err := pool.QueryRow(ctx, `
 		SELECT
 			COALESCE(SUM(CASE WHEN a.created_at >= $1 THEN (a.metadata->>'total_price')::numeric ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN a.created_at >= $2 THEN (a.metadata->>'total_price')::numeric ELSE 0 END), 0)
+			COALESCE(SUM(CASE WHEN a.created_at >= $2 THEN (a.metadata->>'total_price')::numeric ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN a.created_at >= $3 THEN (a.metadata->>'total_price')::numeric ELSE 0 END), 0)
 		FROM artifacts a
 		WHERE a.source_id = 'guesthost'
 		  AND a.artifact_type = 'booking'
-		  AND a.created_at >= $2
-	`, weekStart, monthStart).Scan(&snap.WeekRevenue, &snap.MonthRevenue)
+		  AND a.created_at >= $3
+	`, dayStart, weekStart, monthStart).Scan(&snap.DayRevenue, &snap.WeekRevenue, &snap.MonthRevenue)
 	if err != nil {
 		return snap, fmt.Errorf("query revenue snapshot: %w", err)
 	}
+
+	// Per-channel (booking_source) breakdown for the month
+	snap.ByChannel = make(map[string]float64)
+	chRows, err := pool.Query(ctx, `
+		SELECT COALESCE(a.metadata->>'booking_source', 'unknown'),
+		       COALESCE(SUM((a.metadata->>'total_price')::numeric), 0)
+		FROM artifacts a
+		WHERE a.source_id = 'guesthost'
+		  AND a.artifact_type = 'booking'
+		  AND a.created_at >= $1
+		GROUP BY a.metadata->>'booking_source'
+	`, monthStart)
+	if err == nil {
+		for chRows.Next() {
+			var channel string
+			var amount float64
+			if err := chRows.Scan(&channel, &amount); err == nil && amount > 0 {
+				snap.ByChannel[channel] = amount
+			}
+		}
+		chRows.Close()
+	}
+
+	// Per-property breakdown for the month
+	snap.ByProperty = make(map[string]float64)
+	pRows, err := pool.Query(ctx, `
+		SELECT COALESCE(a.metadata->>'property_name', 'unknown'),
+		       COALESCE(SUM((a.metadata->>'total_price')::numeric), 0)
+		FROM artifacts a
+		WHERE a.source_id = 'guesthost'
+		  AND a.artifact_type = 'booking'
+		  AND a.created_at >= $1
+		GROUP BY a.metadata->>'property_name'
+	`, monthStart)
+	if err == nil {
+		for pRows.Next() {
+			var propName string
+			var amount float64
+			if err := pRows.Scan(&propName, &amount); err == nil && amount > 0 {
+				snap.ByProperty[propName] = amount
+			}
+		}
+		pRows.Close()
+	}
+
 	return snap, nil
 }
 

@@ -94,6 +94,19 @@ func (s *Supervisor) StopConnector(id string) {
 	}
 }
 
+// TriggerSync stops a running connector and restarts it, which causes
+// an immediate sync cycle. If the connector is not running, it is started.
+func (s *Supervisor) TriggerSync(ctx context.Context, id string) {
+	s.mu.RLock()
+	_, running := s.running[id]
+	s.mu.RUnlock()
+
+	if running {
+		s.StopConnector(id)
+	}
+	s.StartConnector(ctx, id)
+}
+
 // StopAll stops all running connectors, waits for goroutines to drain, and clears the running map.
 func (s *Supervisor) StopAll() {
 	s.mu.Lock()

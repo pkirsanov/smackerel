@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"strconv"
@@ -63,6 +65,14 @@ const (
 	// maxSafeReactionTotal is the overflow-safe cap for cumulative reaction counts.
 	// Prevents int wrap-around from causing tier misclassification.
 	maxSafeReactionTotal = 1<<31 - 1 // 2147483647 — safe on both 32-bit and 64-bit
+	// discordDefaultAPIURL is the default Discord REST API base URL.
+	discordDefaultAPIURL = "https://discord.com/api/v10"
+	// maxRetries is the maximum number of retries for rate-limited requests.
+	maxRetries = 3
+	// maxResponseBody caps the response body size to prevent resource exhaustion.
+	maxResponseBody = 10 * 1024 * 1024 // 10MB
+	// httpClientTimeout is the default timeout for Discord API HTTP requests.
+	httpClientTimeout = 30 * time.Second
 )
 
 // Compile-time interface check.
@@ -70,14 +80,16 @@ var _ connector.Connector = (*Connector)(nil)
 
 // Connector implements the Discord connector using REST API for message history.
 type Connector struct {
-	id      string
-	health  connector.HealthStatus
-	mu      sync.RWMutex
-	syncMu  sync.Mutex // serializes Sync calls to prevent cursor regression
-	config  DiscordConfig
-	cursors ChannelCursors
-	limiter *RateLimiter
-	closed  bool // set by Close to prevent Sync on a closed connector
+	id         string
+	health     connector.HealthStatus
+	mu         sync.RWMutex
+	syncMu     sync.Mutex // serializes Sync calls to prevent cursor regression
+	config     DiscordConfig
+	cursors    ChannelCursors
+	limiter    *RateLimiter
+	closed     bool          // set by Close to prevent Sync on a closed connector
+	httpClient *http.Client  // HTTP client for Discord REST API calls
+	gateway    GatewayClient // real-time event poller (nil when gateway disabled)
 
 	// Sync metadata for health reporting
 	lastSyncTime   time.Time
@@ -88,8 +100,9 @@ type Connector struct {
 // DiscordConfig holds parsed Discord-specific configuration.
 type DiscordConfig struct {
 	BotToken          string
+	APIURL            string
 	MonitoredChannels []ChannelConfig
-	EnableGateway     bool // TODO: parsed but unused until gateway implementation
+	EnableGateway     bool
 	BackfillLimit     int
 	IncludeThreads    bool
 	IncludePins       bool
@@ -109,10 +122,11 @@ type ChannelCursors map[string]string
 // New creates a new Discord connector.
 func New(id string) *Connector {
 	return &Connector{
-		id:      id,
-		health:  connector.HealthDisconnected,
-		cursors: make(ChannelCursors),
-		limiter: NewRateLimiter(),
+		id:         id,
+		health:     connector.HealthDisconnected,
+		cursors:    make(ChannelCursors),
+		limiter:    NewRateLimiter(),
+		httpClient: &http.Client{Timeout: httpClientTimeout},
 	}
 }
 
@@ -192,6 +206,12 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		}
 	}
 
+	// Validate token with Discord API (GET /users/@me)
+	if err := c.validateToken(ctx, cfg.APIURL, cfg.BotToken); err != nil {
+		c.setHealth(connector.HealthError)
+		return fmt.Errorf("discord token validation: %w", err)
+	}
+
 	c.mu.Lock()
 	c.config = cfg
 
@@ -236,6 +256,29 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	c.closed = false
 	c.health = connector.HealthHealthy
 	c.mu.Unlock()
+
+	// Start gateway event poller if enabled
+	if cfg.EnableGateway && len(cfg.MonitoredChannels) > 0 {
+		channelSet := make(map[string]struct{})
+		for _, chCfg := range cfg.MonitoredChannels {
+			for _, chID := range chCfg.ChannelIDs {
+				channelSet[chID] = struct{}{}
+			}
+		}
+		fetcher := func(fctx context.Context, channelID, afterID string, limit int) ([]DiscordMessage, error) {
+			return c.fetchChannelMessages(fctx, cfg.APIURL, cfg.BotToken, channelID, afterID, limit)
+		}
+		poller := NewEventPoller(channelSet, fetcher, defaultGatewayBufferSize, defaultPollInterval)
+		intents := IntentGuilds | IntentGuildMessages | IntentMessageContent
+		if err := poller.Connect(ctx, cfg.BotToken, intents); err != nil {
+			slog.Warn("discord gateway connect failed, continuing REST-only", "error", err)
+		} else {
+			c.mu.Lock()
+			c.gateway = poller
+			c.mu.Unlock()
+		}
+	}
+
 	slog.Info("discord connector connected", "id", c.id, "channels", len(cfg.MonitoredChannels))
 	return nil
 }
@@ -289,10 +332,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.mu.RUnlock()
 
 	// Build set of configured channel IDs for cursor scope enforcement
+	// and per-channel processing tier map for gateway event normalization
 	configuredChannels := make(map[string]struct{})
+	channelTier := make(map[string]string)
 	for _, chCfg := range cfgSnapshot.MonitoredChannels {
 		for _, chID := range chCfg.ChannelIDs {
 			configuredChannels[chID] = struct{}{}
+			channelTier[chID] = chCfg.ProcessingTier
 		}
 	}
 
@@ -325,6 +371,28 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var allArtifacts []connector.RawArtifact
 	seen := make(map[string]struct{})
 
+	// Drain gateway events before REST sync to capture real-time messages.
+	// Events are filtered to configured channels and deduplicated against the
+	// seen set. Cursors advance so the REST fetch skips already-captured messages.
+	c.mu.RLock()
+	gw := c.gateway
+	c.mu.RUnlock()
+	for _, ev := range drainGatewayEvents(gw) {
+		if _, ok := configuredChannels[ev.Message.ChannelID]; !ok {
+			continue
+		}
+		if _, dup := seen[ev.Message.ID]; dup {
+			continue
+		}
+		seen[ev.Message.ID] = struct{}{}
+		tier := channelTier[ev.Message.ChannelID]
+		artifact := normalizeMessage(ev.Message, tier, cfgSnapshot.CaptureCommands)
+		allArtifacts = append(allArtifacts, artifact)
+		if ev.Message.ID > localCursors[ev.Message.ChannelID] {
+			localCursors[ev.Message.ChannelID] = ev.Message.ID
+		}
+	}
+
 	// Iterate monitored channels and fetch messages, pins, and threads per channel
 	capReached := false
 	for _, chCfg := range cfgSnapshot.MonitoredChannels {
@@ -349,15 +417,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled: %w", err)
 			}
 
-			// Respect rate limiter before each channel fetch
-			if err := c.awaitRateLimit(ctx, "channels/"+chID+"/messages"); err != nil {
-				cursorBytes, _ := json.Marshal(localCursors)
-				return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled during rate wait: %w", err)
-			}
-
 			// Fetch messages since cursor
 			afterID := localCursors[chID]
-			msgs, err := fetchChannelMessages(ctx, cfgSnapshot.BotToken, chID, afterID, cfgSnapshot.BackfillLimit)
+			msgs, err := c.fetchChannelMessages(ctx, cfgSnapshot.APIURL, cfgSnapshot.BotToken, chID, afterID, cfgSnapshot.BackfillLimit)
 			if err != nil {
 				slog.Warn("discord channel fetch failed", "channel", chID, "error", err)
 				syncErrors = append(syncErrors, fmt.Sprintf("channel %s: %v", chID, err))
@@ -373,12 +435,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 			// Fetch pinned messages (deduplicate against already-seen messages)
 			if cfgSnapshot.IncludePins {
-				// Respect rate limiter before pin fetch (C3 chaos fix)
-				if err := c.awaitRateLimit(ctx, "channels/"+chID+"/pins"); err != nil {
-					cursorBytes, _ := json.Marshal(localCursors)
-					return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled during rate wait: %w", err)
-				}
-				pins, err := fetchPinnedMessages(ctx, cfgSnapshot.BotToken, chID)
+				pins, err := c.fetchPinnedMessages(ctx, cfgSnapshot.APIURL, cfgSnapshot.BotToken, chID)
 				if err != nil {
 					slog.Warn("discord pinned fetch failed", "channel", chID, "error", err)
 					syncErrors = append(syncErrors, fmt.Sprintf("pins %s: %v", chID, err))
@@ -396,23 +453,45 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 			// Fetch thread messages (deduplicate against already-seen messages)
 			if cfgSnapshot.IncludeThreads {
-				// Respect rate limiter before thread fetch (C3 chaos fix)
-				if err := c.awaitRateLimit(ctx, "channels/"+chID+"/threads"); err != nil {
-					cursorBytes, _ := json.Marshal(localCursors)
-					return allArtifacts, string(cursorBytes), fmt.Errorf("sync cancelled during rate wait: %w", err)
+				// Fetch active threads for the guild, filtered to this channel
+				if chCfg.ServerID != "" {
+					threadChannelSet := map[string]struct{}{chID: {}}
+					threadMsgs, err := c.fetchActiveThreads(ctx, cfgSnapshot.APIURL, cfgSnapshot.BotToken, chCfg.ServerID, threadChannelSet, localCursors, cfgSnapshot.BackfillLimit)
+					if err != nil {
+						slog.Warn("discord active thread fetch failed", "channel", chID, "error", err)
+						syncErrors = append(syncErrors, fmt.Sprintf("active-threads %s: %v", chID, err))
+					}
+					for _, tmsg := range threadMsgs {
+						if _, dup := seen[tmsg.ID]; dup {
+							continue
+						}
+						seen[tmsg.ID] = struct{}{}
+						artifact := normalizeMessage(tmsg, chCfg.ProcessingTier, cfgSnapshot.CaptureCommands)
+						allArtifacts = append(allArtifacts, artifact)
+					}
 				}
-				threads, err := fetchActiveThreads(ctx, cfgSnapshot.BotToken, chID)
+
+				// Fetch archived threads for this channel
+				archivedMsgs, err := c.fetchArchivedThreads(ctx, cfgSnapshot.APIURL, cfgSnapshot.BotToken, chID, localCursors, cfgSnapshot.BackfillLimit)
 				if err != nil {
-					slog.Warn("discord thread fetch failed", "channel", chID, "error", err)
-					syncErrors = append(syncErrors, fmt.Sprintf("threads %s: %v", chID, err))
+					slog.Warn("discord archived thread fetch failed", "channel", chID, "error", err)
+					syncErrors = append(syncErrors, fmt.Sprintf("archived-threads %s: %v", chID, err))
 				}
-				for _, thread := range threads {
-					if _, dup := seen[thread.ID]; dup {
+				for _, tmsg := range archivedMsgs {
+					if _, dup := seen[tmsg.ID]; dup {
 						continue
 					}
-					seen[thread.ID] = struct{}{}
-					artifact := normalizeMessage(thread, chCfg.ProcessingTier, cfgSnapshot.CaptureCommands)
+					seen[tmsg.ID] = struct{}{}
+					artifact := normalizeMessage(tmsg, chCfg.ProcessingTier, cfgSnapshot.CaptureCommands)
 					allArtifacts = append(allArtifacts, artifact)
+				}
+
+				// Register discovered thread IDs with the gateway poller
+				c.mu.RLock()
+				gwPoller := c.gateway
+				c.mu.RUnlock()
+				if poller, ok := gwPoller.(*EventPoller); ok {
+					poller.AddChannels(localCursors, configuredChannels)
 				}
 			}
 		}
@@ -448,6 +527,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if c.gateway != nil && (c.health == connector.HealthHealthy || c.health == connector.HealthSyncing) {
+		if poller, ok := c.gateway.(*EventPoller); ok && !poller.Healthy() {
+			return connector.HealthDegraded
+		}
+	}
 	return c.health
 }
 
@@ -455,7 +539,12 @@ func (c *Connector) Close() error {
 	c.mu.Lock()
 	c.health = connector.HealthDisconnected
 	c.closed = true
+	gw := c.gateway
+	c.gateway = nil
 	c.mu.Unlock()
+	if gw != nil {
+		gw.Close()
+	}
 	slog.Info("discord connector closed", "id", c.id)
 	return nil
 }
@@ -515,46 +604,444 @@ type MessageRef struct {
 	GuildID   string `json:"guild_id"`
 }
 
-// fetchChannelMessages retrieves messages from a channel via Discord REST API.
-func fetchChannelMessages(_ context.Context, botToken, channelID, afterID string, limit int) ([]DiscordMessage, error) {
-	// In production, this calls Discord REST API:
-	// GET /api/v10/channels/{channel_id}/messages?after={afterID}&limit=100
-	// Headers: Authorization: Bot {token}
-	// Paginated in pages of 100 up to limit
-	_ = botToken
-	_ = channelID
-	_ = afterID
+// fetchChannelMessages retrieves messages from a channel via Discord REST API
+// with pagination. Fetches up to `limit` messages newer than `afterID`.
+func (c *Connector) fetchChannelMessages(ctx context.Context, apiURL, botToken, channelID, afterID string, limit int) ([]DiscordMessage, error) {
 	if limit <= 0 {
 		limit = 100
 	}
-	return nil, nil
+
+	var allMessages []DiscordMessage
+	currentAfter := afterID
+
+	for len(allMessages) < limit {
+		if err := c.awaitRateLimit(ctx, "channels/"+channelID+"/messages"); err != nil {
+			return allMessages, err
+		}
+
+		pageSize := 100
+		if remaining := limit - len(allMessages); remaining < pageSize {
+			pageSize = remaining
+		}
+
+		path := fmt.Sprintf("/channels/%s/messages?limit=%d", channelID, pageSize)
+		if currentAfter != "" {
+			path += "&after=" + currentAfter
+		}
+
+		body, err := c.doDiscordRequest(ctx, http.MethodGet, apiURL, botToken, path)
+		if err != nil {
+			return allMessages, fmt.Errorf("fetch messages for channel %s: %w", channelID, err)
+		}
+
+		var apiMsgs []apiMessage
+		if err := json.Unmarshal(body, &apiMsgs); err != nil {
+			return allMessages, fmt.Errorf("parse messages for channel %s: %w", channelID, err)
+		}
+
+		if len(apiMsgs) == 0 {
+			break
+		}
+
+		maxID := currentAfter
+		for _, msg := range apiMsgs {
+			if len(allMessages) >= limit {
+				break
+			}
+			dm := apiMessageToInternal(msg)
+			allMessages = append(allMessages, dm)
+			if dm.ID > maxID {
+				maxID = dm.ID
+			}
+		}
+		currentAfter = maxID
+
+		if len(apiMsgs) < pageSize || len(allMessages) >= limit {
+			break
+		}
+	}
+
+	return allMessages, nil
 }
 
 // fetchPinnedMessages retrieves pinned messages from a channel via Discord REST API.
-func fetchPinnedMessages(_ context.Context, botToken, channelID string) ([]DiscordMessage, error) {
-	// In production, this calls Discord REST API:
-	// GET /api/v10/channels/{channel_id}/pins
-	// Headers: Authorization: Bot {token}
-	_ = botToken
-	_ = channelID
-	return nil, nil
+func (c *Connector) fetchPinnedMessages(ctx context.Context, apiURL, botToken, channelID string) ([]DiscordMessage, error) {
+	if err := c.awaitRateLimit(ctx, "channels/"+channelID+"/pins"); err != nil {
+		return nil, err
+	}
+
+	body, err := c.doDiscordRequest(ctx, http.MethodGet, apiURL, botToken, fmt.Sprintf("/channels/%s/pins", channelID))
+	if err != nil {
+		return nil, fmt.Errorf("fetch pins for channel %s: %w", channelID, err)
+	}
+
+	var apiMsgs []apiMessage
+	if err := json.Unmarshal(body, &apiMsgs); err != nil {
+		return nil, fmt.Errorf("parse pins for channel %s: %w", channelID, err)
+	}
+
+	messages := make([]DiscordMessage, 0, len(apiMsgs))
+	for _, msg := range apiMsgs {
+		messages = append(messages, apiMessageToInternal(msg))
+	}
+	return messages, nil
 }
 
-// fetchActiveThreads retrieves active thread messages from a channel via Discord REST API.
-func fetchActiveThreads(_ context.Context, botToken, channelID string) ([]DiscordMessage, error) {
-	// In production, this calls Discord REST API:
-	// GET /api/v10/channels/{channel_id}/threads/archived/public
-	// GET /api/v10/guilds/{guild_id}/threads/active (filtered by channel)
-	// Headers: Authorization: Bot {token}
-	_ = botToken
-	_ = channelID
-	return nil, nil
+// apiThreadChannel is a thread channel returned by Discord's thread list endpoints.
+type apiThreadChannel struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	ParentID string `json:"parent_id"`
+	Type     int    `json:"type"`
+}
+
+// apiActiveThreadsResponse is the response from GET /guilds/{guild_id}/threads/active.
+type apiActiveThreadsResponse struct {
+	Threads []apiThreadChannel `json:"threads"`
+}
+
+// apiArchivedThreadsResponse is the response from GET /channels/{channel_id}/threads/archived/public.
+type apiArchivedThreadsResponse struct {
+	Threads []apiThreadChannel `json:"threads"`
+	HasMore bool               `json:"has_more"`
+}
+
+// fetchActiveThreads retrieves active threads for a guild, filtered to those
+// whose parent_id matches one of the monitoredChannels. For each matching thread,
+// it fetches messages via fetchChannelMessages using the thread's ID (Discord
+// threads are channels). Thread metadata (thread_id, thread_name, parent_channel_id)
+// is set on each returned message.
+func (c *Connector) fetchActiveThreads(ctx context.Context, apiURL, botToken, guildID string, monitoredChannels map[string]struct{}, cursors ChannelCursors, backfillLimit int) ([]DiscordMessage, error) {
+	if err := c.awaitRateLimit(ctx, "guilds/"+guildID+"/threads/active"); err != nil {
+		return nil, err
+	}
+
+	body, err := c.doDiscordRequest(ctx, http.MethodGet, apiURL, botToken, fmt.Sprintf("/guilds/%s/threads/active", guildID))
+	if err != nil {
+		return nil, fmt.Errorf("fetch active threads for guild %s: %w", guildID, err)
+	}
+
+	var resp apiActiveThreadsResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("parse active threads for guild %s: %w", guildID, err)
+	}
+
+	var allMessages []DiscordMessage
+	for _, thread := range resp.Threads {
+		if _, monitored := monitoredChannels[thread.ParentID]; !monitored {
+			continue
+		}
+		afterID := cursors[thread.ID]
+		msgs, err := c.fetchChannelMessages(ctx, apiURL, botToken, thread.ID, afterID, backfillLimit)
+		if err != nil {
+			slog.Warn("discord thread message fetch failed", "thread_id", thread.ID, "error", err)
+			continue
+		}
+		for i := range msgs {
+			msgs[i].ThreadID = thread.ID
+			msgs[i].ThreadName = thread.Name
+		}
+		allMessages = append(allMessages, msgs...)
+		// Advance thread cursor
+		for _, msg := range msgs {
+			if msg.ID > cursors[thread.ID] {
+				cursors[thread.ID] = msg.ID
+			}
+		}
+	}
+
+	return allMessages, nil
+}
+
+// fetchArchivedThreads retrieves public archived threads for a channel.
+// Only fetches if there's a cursor indicating we've synced before (to avoid
+// pulling all historical archived threads on first sync).
+func (c *Connector) fetchArchivedThreads(ctx context.Context, apiURL, botToken, channelID string, cursors ChannelCursors, backfillLimit int) ([]DiscordMessage, error) {
+	if err := c.awaitRateLimit(ctx, "channels/"+channelID+"/threads/archived"); err != nil {
+		return nil, err
+	}
+
+	body, err := c.doDiscordRequest(ctx, http.MethodGet, apiURL, botToken, fmt.Sprintf("/channels/%s/threads/archived/public", channelID))
+	if err != nil {
+		return nil, fmt.Errorf("fetch archived threads for channel %s: %w", channelID, err)
+	}
+
+	var resp apiArchivedThreadsResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("parse archived threads for channel %s: %w", channelID, err)
+	}
+
+	var allMessages []DiscordMessage
+	for _, thread := range resp.Threads {
+		afterID := cursors[thread.ID]
+		msgs, err := c.fetchChannelMessages(ctx, apiURL, botToken, thread.ID, afterID, backfillLimit)
+		if err != nil {
+			slog.Warn("discord archived thread message fetch failed", "thread_id", thread.ID, "error", err)
+			continue
+		}
+		for i := range msgs {
+			msgs[i].ThreadID = thread.ID
+			msgs[i].ThreadName = thread.Name
+		}
+		allMessages = append(allMessages, msgs...)
+		for _, msg := range msgs {
+			if msg.ID > cursors[thread.ID] {
+				cursors[thread.ID] = msg.ID
+			}
+		}
+	}
+
+	return allMessages, nil
+}
+
+// --- Discord REST API response types ---
+
+// apiUser is the Discord REST API user object (subset of fields used).
+type apiUser struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+}
+
+// apiEmoji is the Discord REST API reaction emoji object.
+type apiEmoji struct {
+	ID   *string `json:"id"`
+	Name string  `json:"name"`
+}
+
+// apiReaction is the Discord REST API reaction object.
+type apiReaction struct {
+	Count int      `json:"count"`
+	Emoji apiEmoji `json:"emoji"`
+}
+
+// apiMention is a user mentioned in a Discord message.
+type apiMention struct {
+	ID string `json:"id"`
+}
+
+// apiMessageRef is the Discord REST API message reference (for replies).
+type apiMessageRef struct {
+	MessageID string `json:"message_id"`
+	ChannelID string `json:"channel_id"`
+	GuildID   string `json:"guild_id"`
+}
+
+// apiThread is thread metadata attached to a message.
+type apiThread struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// apiAttachment is the Discord REST API attachment object.
+type apiAttachment struct {
+	ID       string `json:"id"`
+	Filename string `json:"filename"`
+	URL      string `json:"url"`
+	Size     int    `json:"size"`
+}
+
+// apiEmbed is the Discord REST API embed object (subset of fields).
+type apiEmbed struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	URL         string `json:"url"`
+}
+
+// apiMessage is the Discord REST API message object.
+type apiMessage struct {
+	ID               string          `json:"id"`
+	Content          string          `json:"content"`
+	Author           apiUser         `json:"author"`
+	ChannelID        string          `json:"channel_id"`
+	GuildID          string          `json:"guild_id"`
+	Timestamp        time.Time       `json:"timestamp"`
+	Pinned           bool            `json:"pinned"`
+	Embeds           []apiEmbed      `json:"embeds"`
+	Attachments      []apiAttachment `json:"attachments"`
+	Reactions        []apiReaction   `json:"reactions"`
+	Mentions         []apiMention    `json:"mentions"`
+	Type             int             `json:"type"`
+	MessageReference *apiMessageRef  `json:"message_reference,omitempty"`
+	Thread           *apiThread      `json:"thread,omitempty"`
+}
+
+// apiMessageToInternal converts a Discord REST API message to the internal DiscordMessage type.
+func apiMessageToInternal(msg apiMessage) DiscordMessage {
+	dm := DiscordMessage{
+		ID:        msg.ID,
+		Content:   msg.Content,
+		Author:    Author{ID: msg.Author.ID, Username: msg.Author.Username},
+		ChannelID: msg.ChannelID,
+		GuildID:   msg.GuildID,
+		Timestamp: msg.Timestamp,
+		Pinned:    msg.Pinned,
+		Type:      msg.Type,
+	}
+	for _, e := range msg.Embeds {
+		dm.Embeds = append(dm.Embeds, Embed{Title: e.Title, Description: e.Description, URL: e.URL})
+	}
+	for _, a := range msg.Attachments {
+		dm.Attachments = append(dm.Attachments, Attachment{ID: a.ID, Filename: a.Filename, URL: a.URL, Size: a.Size})
+	}
+	for _, r := range msg.Reactions {
+		emojiStr := r.Emoji.Name
+		if r.Emoji.ID != nil && *r.Emoji.ID != "" {
+			emojiStr = r.Emoji.Name + ":" + *r.Emoji.ID
+		}
+		dm.Reactions = append(dm.Reactions, Reaction{Emoji: emojiStr, Count: r.Count})
+	}
+	for _, m := range msg.Mentions {
+		dm.MentionIDs = append(dm.MentionIDs, m.ID)
+	}
+	if msg.MessageReference != nil {
+		dm.MessageReference = &MessageRef{
+			MessageID: msg.MessageReference.MessageID,
+			ChannelID: msg.MessageReference.ChannelID,
+			GuildID:   msg.MessageReference.GuildID,
+		}
+	}
+	if msg.Thread != nil {
+		dm.ThreadID = msg.Thread.ID
+		dm.ThreadName = msg.Thread.Name
+	}
+	return dm
+}
+
+// doDiscordRequest makes an authenticated HTTP request to the Discord REST API.
+// It handles rate limit headers, 429 retries, and error classification.
+func (c *Connector) doDiscordRequest(ctx context.Context, method, apiURL, botToken, path string) ([]byte, error) {
+	fullURL := apiURL + path
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, method, fullURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bot "+botToken)
+		req.Header.Set("User-Agent", "Smackerel/1.0")
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("discord API request failed: %w", err)
+		}
+
+		// Parse rate limit headers and update limiter
+		c.updateRateLimits(path, resp.Header)
+
+		if resp.StatusCode == 429 {
+			_, _ = io.ReadAll(io.LimitReader(resp.Body, 1024))
+			resp.Body.Close()
+
+			retryAfter := parseRetryAfter(resp.Header)
+			if retryAfter <= 0 {
+				retryAfter = time.Duration(attempt+1) * time.Second
+			}
+			slog.Warn("discord rate limited", "path", path, "retry_after", retryAfter, "attempt", attempt)
+
+			if attempt >= maxRetries {
+				return nil, fmt.Errorf("discord rate limited after %d retries", maxRetries)
+			}
+
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(retryAfter):
+				continue
+			}
+		}
+
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("read response: %w", err)
+		}
+
+		if resp.StatusCode == 401 {
+			return nil, fmt.Errorf("discord API unauthorized (401)")
+		}
+		if resp.StatusCode == 403 {
+			return nil, fmt.Errorf("discord API forbidden (403)")
+		}
+		if resp.StatusCode == 404 {
+			return nil, fmt.Errorf("discord API not found (404): %s", path)
+		}
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("discord API error: status %d", resp.StatusCode)
+		}
+
+		return body, nil
+	}
+
+	return nil, fmt.Errorf("discord request exhausted retries")
+}
+
+// updateRateLimits parses Discord rate limit headers and updates the rate limiter.
+func (c *Connector) updateRateLimits(route string, header http.Header) {
+	remaining := header.Get("X-RateLimit-Remaining")
+	resetStr := header.Get("X-RateLimit-Reset")
+
+	if remaining == "" || resetStr == "" {
+		return
+	}
+
+	rem, err := strconv.Atoi(remaining)
+	if err != nil {
+		return
+	}
+
+	resetFloat, err := strconv.ParseFloat(resetStr, 64)
+	if err != nil {
+		return
+	}
+
+	secs := int64(resetFloat)
+	nsecs := int64((resetFloat - float64(secs)) * 1e9)
+	resetTime := time.Unix(secs, nsecs)
+	c.limiter.Update(route, rem, resetTime)
+}
+
+// parseRetryAfter extracts the Retry-After duration from a Discord API 429 response.
+func parseRetryAfter(header http.Header) time.Duration {
+	val := header.Get("Retry-After")
+	if val == "" {
+		return 0
+	}
+	seconds, err := strconv.ParseFloat(val, 64)
+	if err != nil || seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds * float64(time.Second))
+}
+
+// validateToken verifies the bot token by calling GET /users/@me.
+func (c *Connector) validateToken(ctx context.Context, apiURL, botToken string) error {
+	body, err := c.doDiscordRequest(ctx, http.MethodGet, apiURL, botToken, "/users/@me")
+	if err != nil {
+		return fmt.Errorf("token validation failed: %w", err)
+	}
+
+	var user apiUser
+	if err := json.Unmarshal(body, &user); err != nil {
+		return fmt.Errorf("parse user response: %w", err)
+	}
+
+	if user.ID == "" {
+		return fmt.Errorf("discord API returned empty user ID")
+	}
+
+	slog.Info("discord bot authenticated", "bot_id", user.ID, "bot_username", user.Username)
+	return nil
 }
 
 // normalizeMessage converts a DiscordMessage to a RawArtifact.
 func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []string) connector.RawArtifact {
 	contentType := classifyMessage(msg, captureCommands)
-	tier := assignTier(msg, defaultTier)
+	// Force "full" tier for capture commands so captured URLs get maximum extraction
+	tierDefault := defaultTier
+	if contentType == "discord/capture" {
+		tierDefault = "capture"
+	}
+	tier := assignTier(msg, tierDefault)
 
 	// Sanitize content: strip control chars and enforce size limit to prevent
 	// null-byte injection into storage and resource exhaustion from oversized content.
@@ -666,6 +1153,17 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 		metadata["reply_to_id"] = msg.MessageReference.MessageID
 	}
 
+	// Add capture command metadata (URL and comment) when content type is discord/capture
+	if contentType == "discord/capture" && captureCommands != nil {
+		captureURL, captureComment, _ := ParseBotCommand(msg.Content, captureCommands)
+		if captureURL != "" {
+			metadata["capture_url"] = captureURL
+		}
+		if captureComment != "" {
+			metadata["capture_comment"] = captureComment
+		}
+	}
+
 	// Construct URL only from validated snowflake components to prevent injection
 	var artifactURL string
 	if validMsgID && isValidSnowflake(msg.GuildID) && isValidSnowflake(msg.ChannelID) {
@@ -721,6 +1219,11 @@ func assignTier(msg DiscordMessage, defaultTier string) string {
 		return "full"
 	}
 	if hasLinks(msg) {
+		return "full"
+	}
+	// Capture commands always get full extraction to ensure captured URLs
+	// are processed with maximum detail.
+	if defaultTier == "capture" {
 		return "full"
 	}
 	if len(msg.Attachments) > 0 {
@@ -855,6 +1358,7 @@ func ParseBotCommand(content string, captureCommands []string) (parsedURL, comme
 
 func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error) {
 	cfg := DiscordConfig{
+		APIURL:          discordDefaultAPIURL,
 		EnableGateway:   true,
 		BackfillLimit:   1000,
 		IncludeThreads:  true,
@@ -864,6 +1368,10 @@ func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error)
 
 	if token, ok := config.Credentials["bot_token"]; ok {
 		cfg.BotToken = token
+	}
+
+	if apiURL, ok := config.SourceConfig["api_url"].(string); ok && apiURL != "" {
+		cfg.APIURL = apiURL
 	}
 
 	if channels, ok := config.SourceConfig["monitored_channels"].([]interface{}); ok {

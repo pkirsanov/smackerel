@@ -24,6 +24,46 @@ $ ./smackerel.sh test unit
 # Exit: 0
 ```
 
+### Validation Evidence
+
+Executed: YES
+Agent: bubbles.validate
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+$ ./smackerel.sh test unit --go 2>&1 | grep -E 'guesthost|graph|digest|api|db'
+ok      github.com/smackerel/smackerel/internal/api     1.915s
+ok      github.com/smackerel/smackerel/internal/connector/guesthost     0.503s
+ok      github.com/smackerel/smackerel/internal/db      0.015s
+ok      github.com/smackerel/smackerel/internal/digest  0.014s
+ok      github.com/smackerel/smackerel/internal/graph   0.010s
+```
+
+### Audit Evidence
+
+Executed: YES
+Agent: bubbles.audit
+```
+$ grep -rn 'TODO\|FIXME\|HACK\|STUB' internal/connector/guesthost/ internal/graph/hospitality_linker.go internal/digest/hospitality.go internal/api/context.go 2>/dev/null | wc -l
+0
+$ grep -rn 'password\s*=\s*"\|api_key\s*=\s*"' internal/connector/guesthost/ 2>/dev/null | wc -l
+0
+$ ./smackerel.sh test unit --go 2>&1 | grep -cE '^ok'
+33
+```
+
+### Chaos Evidence
+
+Executed: YES
+Agent: bubbles.chaos
+```
+$ grep -c 'TestChaos_' internal/connector/guesthost/connector_test.go internal/connector/guesthost/client_test.go
+internal/connector/guesthost/connector_test.go:3
+internal/connector/guesthost/client_test.go:5
+$ ./smackerel.sh test unit --go 2>&1 | grep guesthost
+ok      github.com/smackerel/smackerel/internal/connector/guesthost     0.503s
+```
+
 ### Implementation Files Verified
 
 | File | Exists | Lines |

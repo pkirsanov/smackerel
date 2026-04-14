@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +19,35 @@ import (
 // testBotToken is a fake token for tests that need to pass length validation.
 // Uses a format that won't trigger GitHub secret scanning push protection.
 const testBotToken = "test-discord-bot-token-placeholder-that-is-long-enough-for-validation"
+
+// newTestDiscordAPI creates an httptest.Server simulating the Discord REST API.
+// By default it responds to /users/@me with a valid bot user and returns empty
+// arrays for all other endpoints. Custom handler functions can override routes.
+func newTestDiscordAPI(t *testing.T, handlers ...func(*http.ServeMux)) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/users/@me", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"id":"999999999999999999","username":"TestBot"}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Thread endpoints expect object responses, all others expect arrays
+		path := r.URL.Path
+		if strings.Contains(path, "/threads/active") ||
+			strings.Contains(path, "/threads/archived/") {
+			w.Write([]byte(`{"threads":[],"has_more":false}`))
+			return
+		}
+		w.Write([]byte("[]"))
+	})
+	for _, h := range handlers {
+		h(mux)
+	}
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+	return ts
+}
 
 func TestNew(t *testing.T) {
 	c := New("discord")
@@ -41,10 +73,12 @@ func TestConnect_MissingToken(t *testing.T) {
 }
 
 func TestConnect_ValidConfig(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url":          ts.URL,
 			"backfill_limit":   float64(500),
 			"enable_gateway":   false,
 			"include_threads":  false,
@@ -76,9 +110,11 @@ func TestConnect_ValidConfig(t *testing.T) {
 }
 
 func TestSync_EmptyChannels(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 	artifacts, cursor, err := c.Sync(context.Background(), "")
 	if err != nil {
@@ -93,9 +129,11 @@ func TestSync_EmptyChannels(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 	err := c.Close()
 	if err != nil {
@@ -313,9 +351,11 @@ func TestBuildTitle_ControlCharsSanitized(t *testing.T) {
 }
 
 func TestSyncCursor_InvalidSnowflakeIgnored(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 	// Provide a cursor with an invalid channel ID — should not crash
 	_, cursor, err := c.Sync(context.Background(), `{"../etc/passwd":"999","valid_but_not_configured":"111"}`)
@@ -586,10 +626,12 @@ func TestRateLimiter_PruneExpired(t *testing.T) {
 }
 
 func TestSync_ContextCancellation(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -610,6 +652,7 @@ func TestSync_ContextCancellation(t *testing.T) {
 }
 
 func TestConnect_HealthRaceSafe(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	done := make(chan struct{})
 
@@ -622,15 +665,18 @@ func TestConnect_HealthRaceSafe(t *testing.T) {
 	}()
 
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 	<-done
 }
 
 func TestClose_HealthRaceSafe(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 
 	done := make(chan struct{})
@@ -715,10 +761,12 @@ func TestIsSafeURL_RejectsNonHTTPSchemes(t *testing.T) {
 }
 
 func TestSyncCursor_UnconfiguredChannelRejected(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -1363,10 +1411,12 @@ func TestNormalizeMessage_ReactionEmojiSanitized(t *testing.T) {
 }
 
 func TestConnect_CursorRestorationValidatesSnowflakes(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "900000000000000001",
@@ -1400,9 +1450,11 @@ func TestConnect_CursorRestorationValidatesSnowflakes(t *testing.T) {
 // --- Stabilize Pass 2 Tests ---
 
 func TestSync_AfterClose_ReturnsError(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 	c.Close()
 
@@ -1414,10 +1466,12 @@ func TestSync_AfterClose_ReturnsError(t *testing.T) {
 
 func TestSync_HealthDegradedOnPartialFailure(t *testing.T) {
 	// Verify that after a clean sync, health returns to healthy
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -1437,9 +1491,11 @@ func TestSync_HealthDegradedOnPartialFailure(t *testing.T) {
 }
 
 func TestClose_SetsClosed(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 	if c.closed {
 		t.Error("connector should not be closed before Close()")
@@ -1451,9 +1507,11 @@ func TestClose_SetsClosed(t *testing.T) {
 }
 
 func TestSync_HealthTransitionsDuringSyncLifecycle(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 
 	if h := c.Health(context.Background()); h != connector.HealthHealthy {
@@ -1516,6 +1574,9 @@ func TestParseDiscordConfig_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if cfg.APIURL != discordDefaultAPIURL {
+		t.Errorf("expected default APIURL %q, got %q", discordDefaultAPIURL, cfg.APIURL)
+	}
 	if cfg.BackfillLimit != 1000 {
 		t.Errorf("expected default backfill_limit 1000, got %d", cfg.BackfillLimit)
 	}
@@ -1534,10 +1595,12 @@ func TestParseDiscordConfig_Defaults(t *testing.T) {
 }
 
 func TestSync_RecordsSyncMetadata(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -1747,10 +1810,12 @@ func TestTotalReactions_AllNegative(t *testing.T) {
 // C1: Concurrent Connect + Sync must not race.
 // go test -race catches this if the config snapshot fix is missing.
 func TestChaos_ConcurrentConnectSync(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -1778,6 +1843,7 @@ func TestChaos_ConcurrentConnectSync(t *testing.T) {
 			c.Connect(context.Background(), connector.ConnectorConfig{
 				Credentials: map[string]string{"bot_token": testBotToken},
 				SourceConfig: map[string]interface{}{
+					"api_url": ts.URL,
 					"monitored_channels": []interface{}{
 						map[string]interface{}{
 							"server_id":   "300000000000000001",
@@ -1795,10 +1861,12 @@ func TestChaos_ConcurrentConnectSync(t *testing.T) {
 
 // C1b: Concurrent Sync + Close must not race.
 func TestChaos_ConcurrentSyncClose(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -1826,6 +1894,7 @@ func TestChaos_ConcurrentSyncClose(t *testing.T) {
 			c.Connect(context.Background(), connector.ConnectorConfig{
 				Credentials: map[string]string{"bot_token": testBotToken},
 				SourceConfig: map[string]interface{}{
+					"api_url": ts.URL,
 					"monitored_channels": []interface{}{
 						map[string]interface{}{
 							"server_id":   "100000000000000001",
@@ -1842,9 +1911,11 @@ func TestChaos_ConcurrentSyncClose(t *testing.T) {
 
 // C1c: Concurrent Health reads during Sync and Connect.
 func TestChaos_ConcurrentHealthSyncConnect(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 
 	var wg sync.WaitGroup
@@ -1866,7 +1937,8 @@ func TestChaos_ConcurrentHealthSyncConnect(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < 50; i++ {
 			c.Connect(context.Background(), connector.ConnectorConfig{
-				Credentials: map[string]string{"bot_token": testBotToken},
+				Credentials:  map[string]string{"bot_token": testBotToken},
+				SourceConfig: map[string]interface{}{"api_url": ts.URL},
 			})
 		}
 	}()
@@ -1907,12 +1979,14 @@ func TestChaos_OverflowReactionsTriggerFullTier(t *testing.T) {
 
 // C4: Re-Connect clears stale cursors from previous channel config.
 func TestChaos_ReConnectClearsUnmonitoredCursors(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 
 	// First connect: monitor channel A
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -1935,6 +2009,7 @@ func TestChaos_ReConnectClearsUnmonitoredCursors(t *testing.T) {
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -1954,15 +2029,18 @@ func TestChaos_ReConnectClearsUnmonitoredCursors(t *testing.T) {
 
 // C4b: Re-Connect resets closed flag so Sync works after Close+Connect cycle.
 func TestChaos_ReConnectAfterCloseResetsState(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 	c.Close()
 
 	// Re-connect should reset the closed flag
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error on re-connect: %v", err)
@@ -1977,10 +2055,12 @@ func TestChaos_ReConnectAfterCloseResetsState(t *testing.T) {
 
 // C5: Rapid successive Syncs must not corrupt cursors.
 func TestChaos_RapidSuccessiveSyncs(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -2007,9 +2087,11 @@ func TestChaos_RapidSuccessiveSyncs(t *testing.T) {
 
 // C6: Double Close must not panic.
 func TestChaos_DoubleClose(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
-		Credentials: map[string]string{"bot_token": testBotToken},
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
 	})
 	if err := c.Close(); err != nil {
 		t.Fatalf("first close: %v", err)
@@ -2029,10 +2111,12 @@ func TestChaos_DoubleClose(t *testing.T) {
 // stale channel cursors from a previous config would leak into Sync()
 // output, disclosing channel IDs the user is no longer monitoring.
 func TestRegression_ConnectCursorScopeEnforcement(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -2062,10 +2146,12 @@ func TestRegression_ConnectCursorScopeEnforcement(t *testing.T) {
 
 // REG-014-R22-001b: Connect() stale cursors must not leak into Sync() output.
 func TestRegression_ConnectStaleCursorsNotInSyncOutput(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -2132,10 +2218,12 @@ func TestRegression_BackfillLimitRejectsNaN(t *testing.T) {
 
 // C7: Craft maximally adversarial cursor input.
 func TestChaos_AdversarialCursorJSON(t *testing.T) {
+	ts := newTestDiscordAPI(t)
 	c := New("discord")
 	c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",
@@ -2160,5 +2248,868 @@ func TestChaos_AdversarialCursorJSON(t *testing.T) {
 		_, _, err := c.Sync(context.Background(), cursor)
 		// Must not panic; errors are acceptable
 		_ = err
+	}
+}
+
+// --- Scope 2 & 3: REST Client & Token Validation Tests ---
+
+func TestConnect_TokenValidationSuccess(t *testing.T) {
+	ts := newTestDiscordAPI(t)
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
+	})
+	if err != nil {
+		t.Fatalf("expected success, got: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Error("expected healthy after valid token")
+	}
+}
+
+func TestConnect_TokenValidationUnauthorized(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/users/@me" {
+			w.WriteHeader(401)
+			w.Write([]byte(`{"message":"401: Unauthorized"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+	}))
+	t.Cleanup(ts.Close)
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
+	})
+	if err == nil {
+		t.Fatal("expected error for unauthorized token")
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Error("expected error health after failed token validation")
+	}
+}
+
+func TestFetchChannelMessages_Basic(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/100000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[
+				{"id":"200000000000000001","content":"hello","author":{"id":"300000000000000001","username":"alice"},"channel_id":"100000000000000001","guild_id":"400000000000000001","timestamp":"2024-01-01T00:00:00Z"},
+				{"id":"200000000000000002","content":"world","author":{"id":"300000000000000002","username":"bob"},"channel_id":"100000000000000001","guild_id":"400000000000000001","timestamp":"2024-01-01T00:01:00Z"}
+			]`))
+		})
+	})
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
+	})
+
+	msgs, err := c.fetchChannelMessages(context.Background(), ts.URL, testBotToken, "100000000000000001", "", 100)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(msgs))
+	}
+	if msgs[0].Content != "hello" {
+		t.Errorf("expected first message content 'hello', got %q", msgs[0].Content)
+	}
+	if msgs[1].Author.Username != "bob" {
+		t.Errorf("expected second message author 'bob', got %q", msgs[1].Author.Username)
+	}
+}
+
+func TestFetchChannelMessages_Pagination(t *testing.T) {
+	callCount := 0
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/100000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			after := r.URL.Query().Get("after")
+			limitStr := r.URL.Query().Get("limit")
+			w.Header().Set("Content-Type", "application/json")
+
+			// Return a full page on first call (matching limit), then partial on second
+			if after == "" {
+				// First page: return exactly limit messages
+				msgs := make([]apiMessage, 0)
+				limit := 5 // default small limit for test
+				if limitStr != "" {
+					fmt.Sscanf(limitStr, "%d", &limit)
+				}
+				for i := 0; i < limit; i++ {
+					msgs = append(msgs, apiMessage{
+						ID:        fmt.Sprintf("%d", 100+i),
+						Content:   fmt.Sprintf("msg%d", i),
+						Author:    apiUser{ID: "1", Username: "a"},
+						ChannelID: "100000000000000001",
+						GuildID:   "g1",
+						Timestamp: time.Now(),
+					})
+				}
+				json.NewEncoder(w).Encode(msgs)
+			} else {
+				// Second page: return fewer than limit (end of results)
+				w.Write([]byte(`[
+					{"id":"999","content":"last","author":{"id":"1","username":"a"},"channel_id":"100000000000000001","guild_id":"g1","timestamp":"2024-01-01T00:03:00Z"}
+				]`))
+			}
+		})
+	})
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
+	})
+
+	// Request up to 200 — should paginate: first page returns 100 (full), second returns 1 (partial)
+	msgs, err := c.fetchChannelMessages(context.Background(), ts.URL, testBotToken, "100000000000000001", "", 200)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) != 101 {
+		t.Fatalf("expected 101 messages across pagination (100+1), got %d", len(msgs))
+	}
+	if callCount < 2 {
+		t.Errorf("expected at least 2 API calls for pagination, got %d", callCount)
+	}
+}
+
+func TestFetchChannelMessages_RespectsBackfillLimit(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/100000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			// Return exactly limit messages (simulating a full page always available)
+			limitStr := r.URL.Query().Get("limit")
+			count := 100
+			if limitStr != "" {
+				fmt.Sscanf(limitStr, "%d", &count)
+			}
+			msgs := make([]apiMessage, count)
+			for i := range msgs {
+				msgs[i] = apiMessage{
+					ID:        fmt.Sprintf("%d", 1000+i),
+					Content:   fmt.Sprintf("msg%d", i),
+					Author:    apiUser{ID: "1", Username: "a"},
+					ChannelID: "100000000000000001",
+					GuildID:   "g1",
+					Timestamp: time.Now(),
+				}
+			}
+			json.NewEncoder(w).Encode(msgs)
+		})
+	})
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
+	})
+
+	// Limit to 50 messages — should stop after first partial page request
+	msgs, err := c.fetchChannelMessages(context.Background(), ts.URL, testBotToken, "100000000000000001", "", 50)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) > 50 {
+		t.Errorf("backfill limit not respected: got %d messages, max 50", len(msgs))
+	}
+}
+
+func TestFetchPinnedMessages_Basic(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/100000000000000001/pins", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[
+				{"id":"500000000000000001","content":"important pinned","author":{"id":"1","username":"admin"},"channel_id":"100000000000000001","guild_id":"g1","timestamp":"2024-01-01T00:00:00Z","pinned":true}
+			]`))
+		})
+	})
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
+	})
+
+	pins, err := c.fetchPinnedMessages(context.Background(), ts.URL, testBotToken, "100000000000000001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(pins) != 1 {
+		t.Fatalf("expected 1 pinned message, got %d", len(pins))
+	}
+	if pins[0].Content != "important pinned" {
+		t.Errorf("expected pinned content, got %q", pins[0].Content)
+	}
+}
+
+func TestDoDiscordRequest_AuthHeader(t *testing.T) {
+	var gotAuth string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	c := New("discord")
+	c.doDiscordRequest(context.Background(), http.MethodGet, ts.URL, "my-secret-token", "/test")
+
+	if gotAuth != "Bot my-secret-token" {
+		t.Errorf("expected 'Bot my-secret-token', got %q", gotAuth)
+	}
+}
+
+func TestDoDiscordRequest_RateLimitHeaders(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "2")
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(10*time.Second).Unix()))
+		w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(ts.Close)
+
+	c := New("discord")
+	_, err := c.doDiscordRequest(context.Background(), http.MethodGet, ts.URL, testBotToken, "/channels/123/messages")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Rate limiter should now have state for this route
+	wait := c.limiter.ShouldWait("/channels/123/messages")
+	// remaining=2 > 1, so should not wait
+	if wait != 0 {
+		t.Errorf("expected no wait (remaining=2), got %v", wait)
+	}
+}
+
+func TestDoDiscordRequest_429Retry(t *testing.T) {
+	attempt := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempt++
+		if attempt <= 1 {
+			w.Header().Set("Retry-After", "0.01")
+			w.WriteHeader(429)
+			w.Write([]byte(`{"message":"rate limited"}`))
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	c := New("discord")
+	body, err := c.doDiscordRequest(context.Background(), http.MethodGet, ts.URL, testBotToken, "/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(body) != `{"ok":true}` {
+		t.Errorf("unexpected response: %s", body)
+	}
+	if attempt != 2 {
+		t.Errorf("expected 2 attempts (1 retry), got %d", attempt)
+	}
+}
+
+func TestSyncEndToEnd_WithMessagesAndPins(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/200000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[
+				{"id":"300000000000000001","content":"hello world","author":{"id":"400000000000000001","username":"alice"},"channel_id":"200000000000000001","guild_id":"100000000000000001","timestamp":"2024-01-01T00:00:00Z"}
+			]`))
+		})
+		mux.HandleFunc("/channels/200000000000000001/pins", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[
+				{"id":"300000000000000002","content":"pinned msg","author":{"id":"400000000000000001","username":"alice"},"channel_id":"200000000000000001","guild_id":"100000000000000001","timestamp":"2024-01-01T00:00:00Z","pinned":true}
+			]`))
+		})
+	})
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":         ts.URL,
+			"include_pins":    true,
+			"include_threads": false,
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts (1 message + 1 pin), got %d", len(artifacts))
+	}
+
+	// Verify message artifact
+	if artifacts[0].SourceID != "discord" {
+		t.Errorf("expected source_id 'discord', got %q", artifacts[0].SourceID)
+	}
+	if artifacts[0].RawContent != "hello world" {
+		t.Errorf("expected content 'hello world', got %q", artifacts[0].RawContent)
+	}
+
+	// Verify cursor advanced (pins don't advance cursors, only message fetches do)
+	var cursors map[string]string
+	if err := json.Unmarshal([]byte(cursor), &cursors); err != nil {
+		t.Fatalf("failed to parse cursor: %v", err)
+	}
+	if cursors["200000000000000001"] != "300000000000000001" {
+		t.Errorf("expected cursor at 300000000000000001, got %q", cursors["200000000000000001"])
+	}
+}
+
+func TestSyncEndToEnd_CursorPreventsRefetch(t *testing.T) {
+	callCount := 0
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/200000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			after := r.URL.Query().Get("after")
+			w.Header().Set("Content-Type", "application/json")
+			if after == "300000000000000001" {
+				// Second sync: no new messages
+				w.Write([]byte("[]"))
+			} else {
+				w.Write([]byte(`[
+					{"id":"300000000000000001","content":"first","author":{"id":"1","username":"a"},"channel_id":"200000000000000001","guild_id":"100000000000000001","timestamp":"2024-01-01T00:00:00Z"}
+				]`))
+			}
+		})
+	})
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":         ts.URL,
+			"include_pins":    false,
+			"include_threads": false,
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+
+	// First sync: get 1 message
+	artifacts1, cursor1, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("first sync failed: %v", err)
+	}
+	if len(artifacts1) != 1 {
+		t.Fatalf("expected 1 artifact on first sync, got %d", len(artifacts1))
+	}
+
+	// Second sync with cursor: no new messages
+	artifacts2, _, err := c.Sync(context.Background(), cursor1)
+	if err != nil {
+		t.Fatalf("second sync failed: %v", err)
+	}
+	if len(artifacts2) != 0 {
+		t.Errorf("expected 0 artifacts on second sync, got %d", len(artifacts2))
+	}
+}
+
+func TestApiMessageToInternal_Reactions(t *testing.T) {
+	customID := "emoji123"
+	msg := apiMessage{
+		ID:        "111",
+		Content:   "test",
+		ChannelID: "222",
+		GuildID:   "333",
+		Reactions: []apiReaction{
+			{Count: 5, Emoji: apiEmoji{Name: "👍"}},
+			{Count: 3, Emoji: apiEmoji{Name: "custom", ID: &customID}},
+		},
+	}
+	dm := apiMessageToInternal(msg)
+	if len(dm.Reactions) != 2 {
+		t.Fatalf("expected 2 reactions, got %d", len(dm.Reactions))
+	}
+	if dm.Reactions[0].Emoji != "👍" {
+		t.Errorf("expected standard emoji '👍', got %q", dm.Reactions[0].Emoji)
+	}
+	if dm.Reactions[1].Emoji != "custom:emoji123" {
+		t.Errorf("expected custom emoji 'custom:emoji123', got %q", dm.Reactions[1].Emoji)
+	}
+}
+
+func TestApiMessageToInternal_Mentions(t *testing.T) {
+	msg := apiMessage{
+		ID:       "111",
+		Content:  "hey @alice",
+		Mentions: []apiMention{{ID: "444"}, {ID: "555"}},
+	}
+	dm := apiMessageToInternal(msg)
+	if len(dm.MentionIDs) != 2 || dm.MentionIDs[0] != "444" || dm.MentionIDs[1] != "555" {
+		t.Errorf("expected mention IDs [444, 555], got %v", dm.MentionIDs)
+	}
+}
+
+func TestApiMessageToInternal_ThreadAndReply(t *testing.T) {
+	msg := apiMessage{
+		ID:      "111",
+		Content: "reply in thread",
+		MessageReference: &apiMessageRef{
+			MessageID: "100",
+			ChannelID: "200",
+			GuildID:   "300",
+		},
+		Thread: &apiThread{
+			ID:   "999",
+			Name: "Cool Thread",
+		},
+	}
+	dm := apiMessageToInternal(msg)
+	if dm.ThreadID != "999" || dm.ThreadName != "Cool Thread" {
+		t.Errorf("expected thread metadata, got id=%q name=%q", dm.ThreadID, dm.ThreadName)
+	}
+	if dm.MessageReference == nil || dm.MessageReference.MessageID != "100" {
+		t.Error("expected message reference preserved")
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	tests := []struct {
+		name   string
+		header http.Header
+		want   time.Duration
+	}{
+		{"empty", http.Header{}, 0},
+		{"1.5 seconds", http.Header{"Retry-After": []string{"1.5"}}, 1500 * time.Millisecond},
+		{"invalid", http.Header{"Retry-After": []string{"abc"}}, 0},
+		{"negative", http.Header{"Retry-After": []string{"-1"}}, 0},
+		{"zero", http.Header{"Retry-After": []string{"0"}}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseRetryAfter(tt.header)
+			if got != tt.want {
+				t.Errorf("parseRetryAfter = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseDiscordConfig_APIURLOverride(t *testing.T) {
+	cfg, err := parseDiscordConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url": "http://localhost:9999",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.APIURL != "http://localhost:9999" {
+		t.Errorf("expected overridden API URL, got %q", cfg.APIURL)
+	}
+}
+
+// --- Scope 5: Thread Ingestion Tests ---
+
+func TestFetchActiveThreads_ParsesResponse(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/guilds/900000000000000000/threads/active", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{
+				"threads": [
+					{"id":"500000000000000001","name":"Thread Alpha","parent_id":"111000000000000000","type":11},
+					{"id":"500000000000000002","name":"Thread Beta","parent_id":"222000000000000000","type":11}
+				]
+			}`))
+		})
+		mux.HandleFunc("/channels/500000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[
+				{"id":"600000000000000001","content":"thread msg 1","author":{"id":"700000000000000001","username":"alice"},"channel_id":"500000000000000001","guild_id":"900000000000000000","timestamp":"2024-01-01T00:00:00Z"},
+				{"id":"600000000000000002","content":"thread msg 2","author":{"id":"700000000000000001","username":"alice"},"channel_id":"500000000000000001","guild_id":"900000000000000000","timestamp":"2024-01-01T00:01:00Z"}
+			]`))
+		})
+		mux.HandleFunc("/channels/500000000000000002/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[
+				{"id":"600000000000000003","content":"beta msg","author":{"id":"700000000000000002","username":"bob"},"channel_id":"500000000000000002","guild_id":"900000000000000000","timestamp":"2024-01-01T00:02:00Z"}
+			]`))
+		})
+	})
+
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
+	})
+
+	monitored := map[string]struct{}{
+		"111000000000000000": {},
+		"222000000000000000": {},
+	}
+	cursors := make(ChannelCursors)
+	msgs, err := c.fetchActiveThreads(context.Background(), ts.URL, testBotToken, "900000000000000000", monitored, cursors, 1000)
+	if err != nil {
+		t.Fatalf("fetchActiveThreads: %v", err)
+	}
+	if len(msgs) != 3 {
+		t.Fatalf("expected 3 thread messages, got %d", len(msgs))
+	}
+	// Verify thread metadata is set
+	for _, msg := range msgs {
+		if msg.ThreadID == "" {
+			t.Error("expected ThreadID set on thread message")
+		}
+		if msg.ThreadName == "" {
+			t.Error("expected ThreadName set on thread message")
+		}
+	}
+	// Verify cursors were advanced
+	if cursors["500000000000000001"] != "600000000000000002" {
+		t.Errorf("expected cursor for thread 500000000000000001 = 600000000000000002, got %s", cursors["500000000000000001"])
+	}
+	if cursors["500000000000000002"] != "600000000000000003" {
+		t.Errorf("expected cursor for thread 500000000000000002 = 600000000000000003, got %s", cursors["500000000000000002"])
+	}
+}
+
+func TestFetchActiveThreads_FiltersToMonitoredChannels(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/guilds/900000000000000000/threads/active", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{
+				"threads": [
+					{"id":"500000000000000001","name":"Monitored Thread","parent_id":"111000000000000000","type":11},
+					{"id":"500000000000000002","name":"Unmonitored Thread","parent_id":"999000000000000000","type":11}
+				]
+			}`))
+		})
+		mux.HandleFunc("/channels/500000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"id":"600000000000000001","content":"monitored thread msg","author":{"id":"700000000000000001","username":"alice"},"channel_id":"500000000000000001","guild_id":"900000000000000000","timestamp":"2024-01-01T00:00:00Z"}]`))
+		})
+		// Should NOT be called since parent_id 999 is not monitored
+		mux.HandleFunc("/channels/500000000000000002/messages", func(w http.ResponseWriter, r *http.Request) {
+			t.Error("fetchChannelMessages called for unmonitored thread parent")
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[]`))
+		})
+	})
+
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{"api_url": ts.URL},
+	})
+
+	// Only monitor channel 111, not 999
+	monitored := map[string]struct{}{"111000000000000000": {}}
+	cursors := make(ChannelCursors)
+	msgs, err := c.fetchActiveThreads(context.Background(), ts.URL, testBotToken, "900000000000000000", monitored, cursors, 1000)
+	if err != nil {
+		t.Fatalf("fetchActiveThreads: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message from monitored thread only, got %d", len(msgs))
+	}
+	if msgs[0].Content != "monitored thread msg" {
+		t.Errorf("unexpected message content: %s", msgs[0].Content)
+	}
+}
+
+func TestSync_IncludesThreadMessages(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/111000000000000000/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"id":"200000000000000001","content":"channel msg","author":{"id":"300000000000000001","username":"alice"},"channel_id":"111000000000000000","guild_id":"900000000000000000","timestamp":"2024-01-01T00:00:00Z"}]`))
+		})
+		mux.HandleFunc("/guilds/900000000000000000/threads/active", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{
+				"threads": [{"id":"500000000000000001","name":"Test Thread","parent_id":"111000000000000000","type":11}]
+			}`))
+		})
+		mux.HandleFunc("/channels/500000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"id":"600000000000000001","content":"thread msg","author":{"id":"300000000000000001","username":"alice"},"channel_id":"500000000000000001","guild_id":"900000000000000000","timestamp":"2024-01-01T00:01:00Z"}]`))
+		})
+		mux.HandleFunc("/channels/111000000000000000/threads/archived/public", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"threads":[],"has_more":false}`))
+		})
+	})
+
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":         ts.URL,
+			"enable_gateway":  false,
+			"include_threads": true,
+			"include_pins":    false,
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "900000000000000000",
+					"channel_ids": []interface{}{"111000000000000000"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	if len(artifacts) < 2 {
+		t.Fatalf("expected at least 2 artifacts (channel + thread), got %d", len(artifacts))
+	}
+
+	foundThread := false
+	for _, a := range artifacts {
+		if a.SourceRef == "600000000000000001" {
+			foundThread = true
+			if a.Metadata["thread_id"] != "500000000000000001" {
+				t.Errorf("expected thread_id 500000000000000001, got %v", a.Metadata["thread_id"])
+			}
+			if a.Metadata["thread_name"] != "Test Thread" {
+				t.Errorf("expected thread_name 'Test Thread', got %v", a.Metadata["thread_name"])
+			}
+		}
+	}
+	if !foundThread {
+		t.Error("thread message not found in sync artifacts")
+	}
+}
+
+func TestSync_ThreadMetadataOnArtifacts(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/111000000000000000/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/guilds/900000000000000000/threads/active", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{
+				"threads": [{"id":"500000000000000001","name":"Design Thread","parent_id":"111000000000000000","type":11}]
+			}`))
+		})
+		mux.HandleFunc("/channels/500000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"id":"600000000000000001","content":"design discussion","author":{"id":"300000000000000001","username":"carol"},"channel_id":"500000000000000001","guild_id":"900000000000000000","timestamp":"2024-01-01T00:00:00Z"}]`))
+		})
+		mux.HandleFunc("/channels/111000000000000000/threads/archived/public", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"threads":[],"has_more":false}`))
+		})
+	})
+
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":         ts.URL,
+			"enable_gateway":  false,
+			"include_threads": true,
+			"include_pins":    false,
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "900000000000000000",
+					"channel_ids": []interface{}{"111000000000000000"},
+				},
+			},
+		},
+	})
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// Verify thread message metadata
+	found := false
+	for _, a := range artifacts {
+		if a.SourceRef == "600000000000000001" {
+			found = true
+			if a.Metadata["thread_id"] != "500000000000000001" {
+				t.Errorf("expected thread_id, got %v", a.Metadata["thread_id"])
+			}
+			if a.Metadata["thread_name"] != "Design Thread" {
+				t.Errorf("expected thread_name 'Design Thread', got %v", a.Metadata["thread_name"])
+			}
+			// Thread messages should get discord/thread content type
+			if a.ContentType != "discord/thread" {
+				t.Errorf("expected content type discord/thread, got %s", a.ContentType)
+			}
+		}
+	}
+	if !found {
+		t.Error("thread message artifact not found")
+	}
+
+	// Verify thread cursor persisted
+	var cursorMap map[string]string
+	if err := json.Unmarshal([]byte(cursor), &cursorMap); err != nil {
+		t.Fatalf("failed to parse cursor: %v", err)
+	}
+	if cursorMap["500000000000000001"] != "600000000000000001" {
+		t.Errorf("expected thread cursor persisted, got %v", cursorMap["500000000000000001"])
+	}
+}
+
+func TestSync_IncludeThreadsFalse_SkipsThreads(t *testing.T) {
+	threadFetched := false
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/111000000000000000/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[{"id":"200000000000000001","content":"channel msg","author":{"id":"300000000000000001","username":"alice"},"channel_id":"111000000000000000","guild_id":"900000000000000000","timestamp":"2024-01-01T00:00:00Z"}]`))
+		})
+		mux.HandleFunc("/guilds/900000000000000000/threads/active", func(w http.ResponseWriter, r *http.Request) {
+			threadFetched = true
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"threads":[]}`))
+		})
+	})
+
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":         ts.URL,
+			"enable_gateway":  false,
+			"include_threads": false,
+			"include_pins":    false,
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "900000000000000000",
+					"channel_ids": []interface{}{"111000000000000000"},
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	if threadFetched {
+		t.Error("threads should not be fetched when include_threads is false")
+	}
+	if len(artifacts) != 1 {
+		t.Errorf("expected 1 artifact (channel only), got %d", len(artifacts))
+	}
+}
+
+// --- Scope 6: Bot Command Capture Tests ---
+
+func TestAssignTier_CaptureContentType_ForceFull(t *testing.T) {
+	// A short message with no links, no pins, no reactions that would normally get "metadata"
+	msg := DiscordMessage{Content: "!save https://example.com"}
+	// With "capture" as the tier hint, assignTier should return "full"
+	tier := assignTier(msg, "capture")
+	if tier != "full" {
+		t.Errorf("expected 'full' tier for capture content type, got %q", tier)
+	}
+
+	// Even without a link in the message (e.g. "!save some text")
+	msg2 := DiscordMessage{Content: "!save no-link"}
+	tier2 := assignTier(msg2, "capture")
+	if tier2 != "full" {
+		t.Errorf("expected 'full' tier for capture without link, got %q", tier2)
+	}
+}
+
+func TestNormalize_BotCommand_SetsCaptureType(t *testing.T) {
+	msg := DiscordMessage{
+		ID:        "111111111111111111",
+		Content:   "!save https://example.com/article Great read",
+		Author:    Author{ID: "222222222222222222", Username: "alice"},
+		ChannelID: "333333333333333333",
+		GuildID:   "444444444444444444",
+		Timestamp: time.Now(),
+	}
+	artifact := normalizeMessage(msg, "light", []string{"!save", "!capture"})
+	if artifact.ContentType != "discord/capture" {
+		t.Errorf("expected discord/capture, got %s", artifact.ContentType)
+	}
+	// Must be "full" tier due to capture escalation
+	if artifact.Metadata["processing_tier"] != "full" {
+		t.Errorf("expected processing_tier 'full' for capture, got %v", artifact.Metadata["processing_tier"])
+	}
+	// Must have capture_url metadata
+	if artifact.Metadata["capture_url"] != "https://example.com/article" {
+		t.Errorf("expected capture_url, got %v", artifact.Metadata["capture_url"])
+	}
+	if artifact.Metadata["capture_comment"] != "Great read" {
+		t.Errorf("expected capture_comment, got %v", artifact.Metadata["capture_comment"])
+	}
+}
+
+func TestSync_CaptureCommand_ProducesFullTierArtifact(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/111000000000000000/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[
+				{"id":"200000000000000001","content":"!save https://example.com/article Check this out","author":{"id":"300000000000000001","username":"alice"},"channel_id":"111000000000000000","guild_id":"900000000000000000","timestamp":"2024-01-01T00:00:00Z"},
+				{"id":"200000000000000002","content":"ok","author":{"id":"300000000000000002","username":"bob"},"channel_id":"111000000000000000","guild_id":"900000000000000000","timestamp":"2024-01-01T00:01:00Z"}
+			]`))
+		})
+	})
+
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":          ts.URL,
+			"enable_gateway":   false,
+			"include_threads":  false,
+			"include_pins":     false,
+			"capture_commands": []interface{}{"!save", "!capture"},
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "900000000000000000",
+					"channel_ids": []interface{}{"111000000000000000"},
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts, got %d", len(artifacts))
+	}
+
+	// First message is capture command
+	captureArtifact := artifacts[0]
+	if captureArtifact.ContentType != "discord/capture" {
+		t.Errorf("expected discord/capture for capture command, got %s", captureArtifact.ContentType)
+	}
+	if captureArtifact.Metadata["processing_tier"] != "full" {
+		t.Errorf("expected 'full' tier for capture artifact, got %v", captureArtifact.Metadata["processing_tier"])
+	}
+	if captureArtifact.Metadata["capture_url"] != "https://example.com/article" {
+		t.Errorf("expected capture_url, got %v", captureArtifact.Metadata["capture_url"])
+	}
+
+	// Second message is a short message, should NOT be "full"
+	normalArtifact := artifacts[1]
+	if normalArtifact.Metadata["processing_tier"] == "full" {
+		t.Error("short normal message should not get 'full' tier")
 	}
 }

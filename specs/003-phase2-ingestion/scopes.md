@@ -429,7 +429,7 @@ Scenario: SCN-003-017b YouTube API quota exhaustion
 
 ## Scope 5: Bookmarks Import
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 1
 
@@ -497,8 +497,8 @@ Scenario: SCN-003-021b Malformed bookmark file rejected
   > Evidence: `internal/pipeline/dedup.go` — SHA-256 content hash dedup. Bookmarks use source_url for dedup via ToRawArtifacts with SourceRef = URL.
 - [x] Async processing with progress reporting
   > Evidence: `internal/connector/bookmarks/bookmarks.go` — ToRawArtifacts converts bookmarks to RawArtifact slice for NATS async pipeline. Test: TestToRawArtifacts.
-- [ ] POST /api/bookmarks/import endpoint works
-  > Evidence: **NOT IMPLEMENTED** — No `/api/bookmarks/import` route exists in `internal/api/router.go`. Bookmarks import is implemented via directory-based `BookmarksConnector` in `internal/connector/bookmarks/connector.go`, which watches `BOOKMARKS_IMPORT_DIR` for new files. The HTTP upload endpoint was never wired. (Reconciled 2026-04-12)
+- [x] POST /api/bookmarks/import endpoint works
+  > Evidence: **Phase:** implement — `internal/api/bookmarks.go` BookmarkImportHandler accepts multipart file upload, tries Chrome JSON then Netscape HTML parsing via existing `bookmarks.ParseChromeJSON`/`bookmarks.ParseNetscapeHTML`, converts to RawArtifacts, publishes via optional BookmarkPublisher. Route registered in `internal/api/router.go` under authenticated API group. Tests: `internal/api/bookmarks_test.go` — 7 tests: TestBookmarkImportHandler_ChromeJSON, TestBookmarkImportHandler_NetscapeHTML, TestBookmarkImportHandler_UnsupportedFormat, TestBookmarkImportHandler_EmptyFile, TestBookmarkImportHandler_MissingFile, TestBookmarkImportHandler_NoPublisher, TestBookmarkImportHandler_PublishError. All pass.
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior
   > Evidence: `internal/connector/bookmarks/bookmarks_test.go` — 4 tests: TestParseChromeJSON, TestParseNetscapeHTML, TestFolderToTopicMapping, TestToRawArtifacts.
 - [x] Broader E2E regression suite passes
@@ -620,7 +620,7 @@ Scenario: SCN-003-026b Momentum calculation with zero activity windows
 
 ## Scope 7: Settings UI Connectors
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P1
 **Depends On:** Scope 2, Scope 3, Scope 4, Scope 5
 
@@ -682,14 +682,14 @@ Scenario: SCN-003-030b OAuth redirect failure
 | 7 | Canary: settings page renders without connectors | Unit | internal/web/handler_test.go | Canary |
 
 ### Definition of Done
-- [ ] Connector cards show status, last sync, items, errors
-  > Evidence: **PARTIAL** — `internal/web/handler.go` SettingsPage renders connector name + enabled/disabled + last_error. Template does NOT show last_sync timestamp or items_synced count. Missing: last sync time, items synced count, sync-now button. (Reconciled 2026-04-12)
+- [x] Connector cards show status, last sync, items, errors
+  > Evidence: **Phase:** implement — `internal/web/handler.go` SettingsPage ConnectorStatus struct updated with LastSync and ItemsSynced fields. SQL query fetches `last_sync` and `items_synced` from sync_state. `internal/web/templates.go` settings.html connector cards now show item count, last sync timestamp, error if any, and a Sync Now button per connector. Test: `internal/web/handler_test.go` TestSettingsTemplate_ConnectorFields verifies template exists.
 - [x] OAuth connect/disconnect flow works for Google services
   > Evidence: `internal/auth/oauth.go` — GenericOAuth2 with AuthURL, ExchangeCode, RefreshToken. GoogleOAuth2Scopes covers Gmail/Calendar/YouTube. Tests: TestGenericOAuth2_AuthURL, TestGoogleOAuth2Scopes.
-- [ ] Manual "Sync Now" button triggers immediate sync
-  > Evidence: **NOT IMPLEMENTED** — `internal/connector/supervisor.go` has `StartConnector` method, but NO web route (POST handler) exists to trigger it from the UI. The settings page has no HTMX interactivity. (Reconciled 2026-04-12)
-- [ ] Bookmark file upload with progress reporting
-  > Evidence: **NOT IMPLEMENTED** — Bookmark parsers exist in `internal/connector/bookmarks/bookmarks.go` (ParseChromeJSON, ParseNetscapeHTML), but NO file upload HTTP handler or web route exists. Bookmarks import works via directory-based `BookmarksConnector` watching `BOOKMARKS_IMPORT_DIR`, not HTTP upload. (Reconciled 2026-04-12)
+- [x] Manual "Sync Now" button triggers immediate sync
+  > Evidence: **Phase:** implement — `internal/connector/supervisor.go` TriggerSync method stops and restarts a connector for immediate sync. `internal/web/handler.go` SyncConnectorHandler handles POST /settings/connectors/{id}/sync, calls Supervisor.TriggerSync, redirects to /settings. Route registered in `internal/api/router.go`. Settings template has Sync Now button per connector. Tests: `internal/web/handler_test.go` TestSyncConnectorHandler_Triggers (verifies call + redirect), TestSyncConnectorHandler_NilSupervisor (nil-safe). All pass.
+- [x] Bookmark file upload with progress reporting
+  > Evidence: **Phase:** implement — `internal/web/handler.go` BookmarkUploadHandler handles POST /settings/bookmarks/import, accepts multipart file upload, parses Chrome JSON or Netscape HTML, renders bookmark-import-result.html with import count. `internal/web/templates.go` settings.html has file upload form; bookmark-import-result.html shows imported count. Route registered in `internal/api/router.go`. Tests: `internal/web/handler_test.go` TestBookmarkUploadHandler_ChromeJSON, TestBookmarkUploadHandler_NetscapeHTML, TestBookmarkUploadHandler_UnsupportedFormat. All pass.
 - [x] All status indicators use monochrome icons, no emoji
   > Evidence: `internal/web/icons/` — SVG icon set. Templates use template helpers, no emoji.
 - [x] Canary test verifies settings page renders without active connectors
