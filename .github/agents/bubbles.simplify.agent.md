@@ -98,6 +98,8 @@ When the user provides free-text input WITHOUT structured parameters, infer them
 - Implement full feature behavior with edge-case handling and complete documentation.
 - If any critical requirement is unmet, status MUST remain `in_progress`/`blocked`.
 
+**⚠️ Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md). Every evidence block MUST include a `**Claim Source:**` tag. When simplification changes cannot be fully verified (e.g., test coverage is uncertain), use an Uncertainty Declaration instead of claiming clean pass. A wrong claim about simplification safety is 3x worse than leaving an item unchecked with an explanation.
+
 ## Shared Agent Patterns
 
 **MANDATORY:** Follow all patterns in [agent-common.md](bubbles_shared/agent-common.md).

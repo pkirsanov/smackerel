@@ -58,6 +58,8 @@ The **artifact lint script** (`artifact-lint.sh`) includes automated detection f
 - Narrative summary language
 - Missing specialist phases in `execution.completedPhaseClaims` / `certification.certifiedCompletedPhases`
 - Duplicate evidence blocks
+- Missing `**Claim Source:**` provenance tags in evidence blocks
+- Evidence labeled `executed` where the DoD claim requires interpretation (provenance fabrication)
 
 The **implementation reality scan** (`implementation-reality-scan.sh`) includes automated detection for:
 - Backend stub patterns (hardcoded vecs, fake/mock/stub functions)

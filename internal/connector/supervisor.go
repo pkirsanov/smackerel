@@ -15,17 +15,21 @@ type Supervisor struct {
 	registry         *Registry
 	stateStore       *StateStore
 	publisher        ArtifactPublisher // optional: bridges RawArtifacts to NATS pipeline
-	mu               sync.Mutex
+	mu               sync.RWMutex
+	wg               sync.WaitGroup // tracks running goroutines for graceful drain
 	running          map[string]context.CancelFunc
 	panicCounts      map[string]int             // circuit breaker: panic count per connector
 	panicResetAt     map[string]time.Time       // time when panic count was first incremented
 	stopped          bool                       // set by StopAll to prevent panic-recovery restarts
 	connectorConfigs map[string]ConnectorConfig // per-connector config for schedule lookup
+	maxSyncErrors    int                        // max consecutive sync errors before disabling (0 = default)
+	backoffFactory   func() *Backoff            // optional: override backoff creation for testing
 }
 
 const (
-	maxPanicsBeforeDisable = 5                // max panics before circuit breaker trips
-	panicWindowDuration    = 10 * time.Minute // rolling window for panic counting
+	maxPanicsBeforeDisable          = 5                // max panics before circuit breaker trips
+	panicWindowDuration             = 10 * time.Minute // rolling window for panic counting
+	defaultMaxConsecutiveSyncErrors = 50               // max consecutive Sync() errors before disabling
 )
 
 // NewSupervisor creates a new connector supervisor.
@@ -72,7 +76,11 @@ func (s *Supervisor) StartConnector(ctx context.Context, id string) {
 	connCtx, cancel := context.WithCancel(ctx)
 	s.running[id] = cancel
 
-	go s.runWithRecovery(ctx, connCtx, cancel, id)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.runWithRecovery(ctx, connCtx, cancel, id)
+	}()
 }
 
 // StopConnector stops a running connector.
@@ -86,16 +94,19 @@ func (s *Supervisor) StopConnector(id string) {
 	}
 }
 
-// StopAll stops all running connectors and clears the running map.
+// StopAll stops all running connectors, waits for goroutines to drain, and clears the running map.
 func (s *Supervisor) StopAll() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.stopped = true
 	for id, cancel := range s.running {
 		cancel()
 		delete(s.running, id)
 	}
+	s.mu.Unlock()
+
+	// Wait for all goroutines to finish so downstream resources (NATS, DB)
+	// are not closed while connectors are still in-flight.
+	s.wg.Wait()
 }
 
 // runWithRecovery runs a connector sync loop and recovers from panics.
@@ -163,6 +174,11 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 				return
 			case <-time.After(5 * time.Second):
 			}
+			// Re-check after sleep: shutdown may have started during the delay
+			if s.stopped || parentCtx.Err() != nil {
+				slog.Warn("skipping restart — supervisor stopped during delay", "connector", id)
+				return
+			}
 			s.StartConnector(parentCtx, id)
 		}
 	}()
@@ -173,7 +189,19 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 		return
 	}
 
-	backoff := DefaultBackoff()
+	var backoff *Backoff
+	if s.backoffFactory != nil {
+		backoff = s.backoffFactory()
+	} else {
+		backoff = DefaultBackoff()
+	}
+
+	maxErrors := s.maxSyncErrors
+	if maxErrors <= 0 {
+		maxErrors = defaultMaxConsecutiveSyncErrors
+	}
+	var lastCursor string
+	consecutiveErrors := 0
 
 	for {
 		select {
@@ -182,23 +210,42 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 		default:
 		}
 
-		// Get current sync state
+		// Get current sync state; fall back to in-memory cursor on DB failure
 		var cursor string
 		if s.stateStore != nil {
 			state, err := s.stateStore.Get(connCtx, id)
 			if err == nil {
 				cursor = state.SyncCursor
+			} else if lastCursor != "" {
+				cursor = lastCursor
+				slog.Debug("using in-memory cursor after state store read failure", "connector", id)
 			}
+		} else if lastCursor != "" {
+			cursor = lastCursor
 		}
 
 		// Run sync. Connectors return RawArtifacts; the supervisor publishes
 		// them to the NATS processing pipeline via the ArtifactPublisher.
 		items, newCursor, err := conn.Sync(connCtx, cursor)
 		if err != nil {
+			consecutiveErrors++
 			slog.Error("connector sync failed",
 				"connector", id,
 				"error", err,
+				"consecutive_errors", consecutiveErrors,
 			)
+
+			// Circuit breaker: disable connector after too many consecutive errors
+			if consecutiveErrors >= maxErrors {
+				slog.Error("connector sync error circuit breaker tripped — disabling",
+					"connector", id,
+					"consecutive_errors", consecutiveErrors,
+				)
+				s.mu.Lock()
+				delete(s.running, id)
+				s.mu.Unlock()
+				return
+			}
 
 			if s.stateStore != nil {
 				if err := s.stateStore.RecordError(connCtx, id, err.Error()); err != nil {
@@ -229,8 +276,14 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 			continue
 		}
 
-		// Success — reset backoff
+		// Success — reset backoff and error counter
 		backoff.Reset()
+		consecutiveErrors = 0
+
+		// Track cursor in memory as fallback for transient DB failures
+		if newCursor != "" {
+			lastCursor = newCursor
+		}
 
 		// Publish returned artifacts to the processing pipeline
 		if s.publisher != nil && len(items) > 0 {
@@ -292,9 +345,9 @@ const defaultSyncInterval = 5 * time.Minute
 // getSyncInterval returns the sync interval for a connector from its config.
 // Falls back to defaultSyncInterval when no schedule is configured.
 func (s *Supervisor) getSyncInterval(id string) time.Duration {
-	s.mu.Lock()
+	s.mu.RLock()
 	cfg, ok := s.connectorConfigs[id]
-	s.mu.Unlock()
+	s.mu.RUnlock()
 
 	if !ok {
 		return defaultSyncInterval

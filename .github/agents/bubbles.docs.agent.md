@@ -31,6 +31,8 @@ handoffs:
 
 **⚠️ ANTI-FABRICATION:** Documentation updates MUST reflect real implementation state. Do NOT write docs describing behavior that has not been implemented or tested. Cross-reference code and test results before documenting behavior. If you document that "feature X does Y", verify that X actually does Y by checking the code or test output.
 
+**⚠️ Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md) and [critical-requirements.md](bubbles_shared/critical-requirements.md). When documenting behavior that has not been directly verified via execution, mark evidence as `interpreted` with an explanation. When behavior cannot be verified, use an Uncertainty Declaration instead of documenting unverified claims as fact. Every evidence block MUST include a `**Claim Source:**` tag. A documented claim presented as verified when it was only inferred from code reading is provenance fabrication.
+
 **⚠️ DRIFT-FIX MANDATE (applies to ALL invocations):**
 Whenever this agent is invoked — whether directly by a user, by `bubbles.spec-review` after detecting drift, by `bubbles.implement` after scope completion, by `bubbles.bug` after a fix, by `bubbles.system-review`, or by ANY other agent — this agent MUST:
 1. **Check for implementation-to-doc drift** by cross-referencing actual code against current docs

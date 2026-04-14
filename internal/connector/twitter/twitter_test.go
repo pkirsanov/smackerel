@@ -490,3 +490,495 @@ func TestParseTwitterConfig_CleansDirPath(t *testing.T) {
 		t.Errorf("expected cleaned path %q, got %q", expected, cfg.ArchiveDir)
 	}
 }
+
+// --- Chaos hardening: Sync lifecycle race conditions ---
+
+func TestSync_OnDisconnectedConnector(t *testing.T) {
+	// Syncing a connector that was never connected (or was closed) must fail
+	// rather than silently proceeding with zero config.
+	c := New("twitter")
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error when syncing a disconnected connector")
+	}
+	if !strings.Contains(err.Error(), "disconnected") {
+		t.Errorf("expected 'disconnected' in error, got: %v", err)
+	}
+}
+
+func TestSync_AfterClose(t *testing.T) {
+	// Connect, close, then sync — must reject.
+	c := New("twitter")
+	dir := t.TempDir()
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error when syncing after Close()")
+	}
+}
+
+func TestSync_CloseDoesNotRestoreHealthy(t *testing.T) {
+	// Previously, Sync's defer unconditionally set HealthHealthy,
+	// overwriting HealthDisconnected from a concurrent Close().
+	// After fix: if Close() runs during sync, health stays Disconnected.
+	c := New("twitter")
+	dir := t.TempDir()
+
+	// Create a valid archive so sync takes a moment
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"hello","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Sync completes first, then close
+	c.Sync(context.Background(), "")
+	c.Close()
+
+	health := c.Health(context.Background())
+	if health != connector.HealthDisconnected {
+		t.Errorf("expected disconnected after close, got %s", health)
+	}
+}
+
+func TestSync_ConcurrentDoubleSync(t *testing.T) {
+	// Two concurrent Sync() calls — one must succeed, one must get
+	// "sync already in progress" error.
+	c := New("twitter")
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"hello","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Force syncing=true to simulate concurrent sync
+	c.mu.Lock()
+	c.syncing = true
+	c.mu.Unlock()
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error for concurrent sync attempt")
+	}
+	if !strings.Contains(err.Error(), "already in progress") {
+		t.Errorf("expected 'already in progress' in error, got: %v", err)
+	}
+
+	// Release the guard
+	c.mu.Lock()
+	c.syncing = false
+	c.mu.Unlock()
+}
+
+func TestSync_HealthDegradedAfterFailure(t *testing.T) {
+	// When syncArchive fails, health should be Degraded, not Healthy.
+	c := New("twitter")
+	dir := t.TempDir()
+	// No data/ subdir — syncArchive will fail trying to find tweets.js
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	c.Sync(context.Background(), "")
+	health := c.Health(context.Background())
+	if health != connector.HealthDegraded {
+		t.Errorf("expected degraded health after sync failure, got %s", health)
+	}
+}
+
+// --- Stability regression: error propagation and cursor correctness ---
+
+func TestSync_ReturnsErrorOnArchiveFailure(t *testing.T) {
+	// Sync must return a non-nil error when archive sync fails completely.
+	// Previously Sync swallowed the error and returned nil, making failures
+	// invisible to the supervisor and preventing retries.
+	c := New("twitter")
+	dir := t.TempDir()
+	// No data/ subdir — syncArchive will fail
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected non-nil error when archive sync fails, got nil (error swallowed)")
+	}
+	if err != nil && !strings.Contains(err.Error(), "archive sync") {
+		t.Errorf("expected 'archive sync' in error, got: %v", err)
+	}
+}
+
+func TestSync_PreservesCursorOnFailure(t *testing.T) {
+	// When sync fails, the original cursor must be returned unchanged so that
+	// the next retry reprocesses from the same position. No data loss.
+	c := New("twitter")
+	dir := t.TempDir()
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	originalCursor := "2026-03-15T10:00:00Z"
+	_, returnedCursor, _ := c.Sync(context.Background(), originalCursor)
+	if returnedCursor != originalCursor {
+		t.Errorf("cursor must not advance on failure: expected %q, got %q", originalCursor, returnedCursor)
+	}
+}
+
+func TestSync_RecoveryAfterFailure(t *testing.T) {
+	// After a failed sync (health=Degraded), a subsequent successful sync
+	// must restore health to Healthy and return artifacts.
+	c := New("twitter")
+	dir := t.TempDir()
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// First sync fails — no data/ directory
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected first sync to fail")
+	}
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Fatal("expected degraded health after failed sync")
+	}
+
+	// Create the archive so next sync succeeds
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"recovery tweet","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("expected recovery sync to succeed, got: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Errorf("expected 1 artifact from recovery sync, got %d", len(artifacts))
+	}
+	if cursor == "" {
+		t.Error("expected non-empty cursor after successful recovery sync")
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected healthy after recovery, got %s", c.Health(context.Background()))
+	}
+}
+
+func TestSync_CursorNotAdvancedOnContextCancel(t *testing.T) {
+	// When context is cancelled during sync, cursor must stay at its original
+	// position to prevent skipping unprocessed tweets on the next attempt.
+	c := New("twitter")
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"hello","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before sync starts
+
+	originalCursor := "2026-01-01T00:00:00Z"
+	_, returnedCursor, err := c.Sync(ctx, originalCursor)
+	if err == nil {
+		// Context was cancelled — sync should fail
+		t.Error("expected error for cancelled context sync")
+	}
+	if returnedCursor != originalCursor {
+		t.Errorf("cursor must not advance on context cancel: expected %q, got %q", originalCursor, returnedCursor)
+	}
+}
+
+func TestSync_ReturnsNilArtifactsOnFailure(t *testing.T) {
+	// When sync fails, returned artifacts must be nil (not an empty slice)
+	// so callers can distinguish "nothing new" from "failure".
+	c := New("twitter")
+	dir := t.TempDir()
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if artifacts != nil {
+		t.Errorf("expected nil artifacts on failure, got %d items", len(artifacts))
+	}
+}
+
+func TestSync_HealthRestoredAfterSuccess(t *testing.T) {
+	// Successful sync should restore Healthy.
+	c := New("twitter")
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"hello","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	c.Sync(context.Background(), "")
+	health := c.Health(context.Background())
+	if health != connector.HealthHealthy {
+		t.Errorf("expected healthy after successful sync, got %s", health)
+	}
+}
+
+func TestSync_ConcurrentSyncAndClose(t *testing.T) {
+	// Stress test: many goroutines calling Sync and Close concurrently.
+	// Must not panic, deadlock, or produce data races.
+	c := New("twitter")
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = []`), 0o600)
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			c.Sync(context.Background(), "")
+		}()
+		go func() {
+			defer wg.Done()
+			c.Close()
+		}()
+	}
+	// Also read health concurrently
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.Health(context.Background())
+		}()
+	}
+	wg.Wait()
+}
+
+// --- Security hardening: Round R15 findings ---
+
+func TestIsSafeURL_AllowsHTTPS(t *testing.T) {
+	if !isSafeURL("https://example.com/article") {
+		t.Error("https URL should be safe")
+	}
+}
+
+func TestIsSafeURL_AllowsHTTP(t *testing.T) {
+	if !isSafeURL("http://example.com/article") {
+		t.Error("http URL should be safe")
+	}
+}
+
+func TestIsSafeURL_RejectsJavascript(t *testing.T) {
+	if isSafeURL("javascript:alert(1)") {
+		t.Error("javascript: URL must be rejected (CWE-79)")
+	}
+}
+
+func TestIsSafeURL_RejectsData(t *testing.T) {
+	if isSafeURL("data:text/html,<script>alert(1)</script>") {
+		t.Error("data: URL must be rejected (CWE-79)")
+	}
+}
+
+func TestIsSafeURL_RejectsVBScript(t *testing.T) {
+	if isSafeURL("vbscript:MsgBox(1)") {
+		t.Error("vbscript: URL must be rejected")
+	}
+}
+
+func TestIsSafeURL_RejectsEmpty(t *testing.T) {
+	if isSafeURL("") {
+		t.Error("empty URL should not be considered safe")
+	}
+}
+
+func TestIsSafeURL_RejectsRelativePath(t *testing.T) {
+	// Relative paths have no scheme and should be rejected.
+	if isSafeURL("../../etc/passwd") {
+		t.Error("relative path should not be considered safe")
+	}
+}
+
+func TestNormalizeTweet_FiltersUnsafeURLs(t *testing.T) {
+	// A tweet with a mix of safe and unsafe URLs should only include safe ones.
+	tweet := ArchiveTweet{
+		ID:       "555",
+		FullText: "Check this out!",
+		Entities: TweetEntities{
+			URLs: []TweetURL{
+				{ExpandedURL: "https://example.com/safe"},
+				{ExpandedURL: "javascript:alert('xss')"},
+				{ExpandedURL: "https://another.com/also-safe"},
+				{ExpandedURL: "data:text/html,evil"},
+			},
+		},
+	}
+
+	artifact := normalizeTweet(tweet, false, false, nil)
+	urls, ok := artifact.Metadata["urls"].([]string)
+	if !ok {
+		t.Fatal("expected urls metadata to be []string")
+	}
+	if len(urls) != 2 {
+		t.Errorf("expected 2 safe URLs, got %d: %v", len(urls), urls)
+	}
+	for _, u := range urls {
+		if strings.HasPrefix(u, "javascript:") || strings.HasPrefix(u, "data:") {
+			t.Errorf("unsafe URL leaked through filter: %s", u)
+		}
+	}
+	// url_count should reflect only safe URLs
+	count, _ := artifact.Metadata["url_count"].(int)
+	if count != 2 {
+		t.Errorf("expected url_count=2, got %d", count)
+	}
+}
+
+func TestConnect_APIModeRequiresBearerToken(t *testing.T) {
+	// sync_mode=api without bearer_token must fail-loud (CWE-287).
+	c := New("twitter")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "api"},
+	})
+	if err == nil {
+		t.Error("expected error when bearer_token missing for API mode")
+	}
+	if err != nil && !strings.Contains(err.Error(), "bearer_token") {
+		t.Errorf("expected 'bearer_token' in error, got: %v", err)
+	}
+}
+
+func TestConnect_HybridModeWithoutTokenAllowed(t *testing.T) {
+	// Hybrid mode without token should connect (archive is primary).
+	c := New("twitter")
+	dir := t.TempDir()
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":   "hybrid",
+			"archive_dir": dir,
+		},
+	})
+	if err != nil {
+		t.Errorf("hybrid mode should allow missing token (archive is primary): %v", err)
+	}
+}
+
+func TestTruncateUTF8_ASCIIOnly(t *testing.T) {
+	got := truncateUTF8("Hello, World!", 5)
+	if got != "Hello" {
+		t.Errorf("expected 'Hello', got %q", got)
+	}
+}
+
+func TestTruncateUTF8_MultiByteBoundary(t *testing.T) {
+	// "é" is 2 bytes in UTF-8. "café" = 5 bytes. Truncating at 4 should not
+	// split the "é" — should truncate to "caf" (3 bytes).
+	s := "café"
+	got := truncateUTF8(s, 4)
+	if got != "caf" {
+		t.Errorf("expected 'caf', got %q", got)
+	}
+}
+
+func TestTruncateUTF8_ThreeByteRune(t *testing.T) {
+	// "日" is 3 bytes. "AB日" = 5 bytes. Truncating at 4 should → "AB" (2 bytes).
+	s := "AB日"
+	got := truncateUTF8(s, 4)
+	if got != "AB" {
+		t.Errorf("expected 'AB', got %q", got)
+	}
+}
+
+func TestTruncateUTF8_FourByteEmoji(t *testing.T) {
+	// "🐦" is 4 bytes. "X🐦" = 5 bytes. Truncating at 3 → "X" (1 byte).
+	s := "X🐦"
+	got := truncateUTF8(s, 3)
+	if got != "X" {
+		t.Errorf("expected 'X', got %q", got)
+	}
+}
+
+func TestTruncateUTF8_ShortString(t *testing.T) {
+	got := truncateUTF8("hi", 80)
+	if got != "hi" {
+		t.Errorf("expected 'hi', got %q", got)
+	}
+}
+
+func TestBuildTweetTitle_UTF8Safe(t *testing.T) {
+	// Title with multi-byte chars near the boundary must not produce invalid UTF-8.
+	// 78 ASCII + "日本" = 78 + 6 = 84 bytes; truncation should not split a rune.
+	tweet := ArchiveTweet{
+		FullText: strings.Repeat("a", 78) + "日本",
+	}
+	title := buildTweetTitle(tweet)
+	if !strings.HasSuffix(title, "...") {
+		t.Error("expected truncated title to end with ...")
+	}
+	// Verify the title is valid UTF-8
+	if strings.ToValidUTF8(title, "\xff") != title {
+		t.Error("truncated title contains invalid UTF-8")
+	}
+	// The title (minus "...") should be exactly the ASCII portion since the rune
+	// at byte 78 is a 3-byte char that can't fit in 2 remaining bytes.
+	trimmed := strings.TrimSuffix(title, "...")
+	if len(trimmed) > 80 {
+		t.Errorf("truncated title body exceeds 80 bytes: %d", len(trimmed))
+	}
+}
+
+func TestMaxTweetCount_ConstantSet(t *testing.T) {
+	if maxTweetCount != 500_000 {
+		t.Errorf("maxTweetCount should be 500000, got %d", maxTweetCount)
+	}
+}

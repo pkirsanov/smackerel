@@ -107,3 +107,41 @@ func TestGetSyncInterval_EmptySchedule(t *testing.T) {
 		t.Errorf("expected default %v, got %v", defaultSyncInterval, interval)
 	}
 }
+
+// DEV-003-001: OAuth connector sync schedules MUST be configurable via SST.
+// Before the fix, IMAP/CalDAV/YouTube connectors were started with empty
+// SyncSchedule, falling back to defaultSyncInterval (5m). IMAP should be 15m,
+// YouTube should be 4h per spec R-202/R-203.
+func TestGetSyncInterval_OAuthConnectorSchedules(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       string
+		schedule string
+		expected time.Duration
+	}{
+		{"imap_15m", "gmail", "*/15 * * * *", 15 * time.Minute},
+		{"caldav_15m", "google-calendar", "*/15 * * * *", 15 * time.Minute},
+		{"youtube_4h", "youtube", "0 */4 * * *", 4 * time.Hour},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewRegistry()
+			supervisor := NewSupervisor(registry, nil)
+			supervisor.SetConfig(tt.id, ConnectorConfig{
+				AuthType:     "oauth2",
+				SyncSchedule: tt.schedule,
+			})
+
+			interval := supervisor.getSyncInterval(tt.id)
+			if interval != tt.expected {
+				t.Errorf("expected %v for %s, got %v (defaultSyncInterval=%v)",
+					tt.expected, tt.id, interval, defaultSyncInterval)
+			}
+			if interval == defaultSyncInterval && tt.expected != defaultSyncInterval {
+				t.Errorf("REGRESSION: %s fell back to default %v — SST schedule not applied",
+					tt.id, defaultSyncInterval)
+			}
+		})
+	}
+}

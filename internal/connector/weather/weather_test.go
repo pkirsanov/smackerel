@@ -611,6 +611,26 @@ func TestDoFetch_Success(t *testing.T) {
 	}
 }
 
+func TestDoFetch_SetsUserAgent(t *testing.T) {
+	var gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	body, err := c.doFetch(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	body.Close()
+	if gotUA != userAgent {
+		t.Errorf("User-Agent = %q, want %q", gotUA, userAgent)
+	}
+}
+
 func TestDoFetch_ServerError_Retryable(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -734,6 +754,9 @@ func TestSync_ProducesArtifacts(t *testing.T) {
 	}
 	if a.Metadata["humidity"] != 72 {
 		t.Errorf("metadata humidity = %v, want 72", a.Metadata["humidity"])
+	}
+	if a.Metadata["description"] != "Clear sky" {
+		t.Errorf("metadata description = %v, want %q", a.Metadata["description"], "Clear sky")
 	}
 	if cursor == "" {
 		t.Error("cursor should not be empty after successful sync")
@@ -947,9 +970,15 @@ func TestSync_AllFail_HealthError(t *testing.T) {
 		},
 	})
 
-	_, _, err := c.Sync(context.Background(), "")
-	if err != nil {
-		t.Fatalf("sync should not error on all-fail (returns empty artifacts): %v", err)
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("sync should return error when all locations fail")
+	}
+	if !strings.Contains(err.Error(), "all 2 weather locations failed") {
+		t.Errorf("error should mention all-fail, got: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts when all fail, got %d", len(artifacts))
 	}
 	if c.Health(context.Background()) != connector.HealthError {
 		t.Errorf("health = %q, want %q after all locations fail", c.Health(context.Background()), connector.HealthError)
@@ -992,4 +1021,256 @@ func TestSync_HealthSetToSyncingDuringSync(t *testing.T) {
 	}
 	close(proceed)
 	<-done
+}
+
+// --- Security regression tests ---
+
+// --- Tests for enriched metadata (apparent_temperature, is_day) ---
+
+func TestDecodeCurrent_EnrichedFields(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{
+		"current": {
+			"temperature_2m": 25.0,
+			"apparent_temperature": 28.3,
+			"relative_humidity_2m": 70,
+			"wind_speed_10m": 10.0,
+			"weather_code": 0,
+			"is_day": 1
+		}
+	}`))
+	cw, err := c.decodeCurrent(body, "enriched-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cw.ApparentTemp != 28.3 {
+		t.Errorf("apparent_temperature = %v, want 28.3", cw.ApparentTemp)
+	}
+	if !cw.IsDay {
+		t.Error("is_day should be true when API returns 1")
+	}
+}
+
+func TestDecodeCurrent_NightTime(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{
+		"current": {
+			"temperature_2m": 12.0,
+			"apparent_temperature": 9.5,
+			"relative_humidity_2m": 85,
+			"wind_speed_10m": 5.0,
+			"weather_code": 0,
+			"is_day": 0
+		}
+	}`))
+	cw, err := c.decodeCurrent(body, "night-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cw.IsDay {
+		t.Error("is_day should be false when API returns 0")
+	}
+	if cw.ApparentTemp != 9.5 {
+		t.Errorf("apparent_temperature = %v, want 9.5", cw.ApparentTemp)
+	}
+}
+
+// --- Test humidity rounding fix ---
+
+func TestDecodeCurrent_HumidityRounding(t *testing.T) {
+	c := New("weather")
+	// 65.7 should round to 66, not truncate to 65
+	body := io.NopCloser(strings.NewReader(`{
+		"current": {
+			"temperature_2m": 20.0,
+			"apparent_temperature": 20.0,
+			"relative_humidity_2m": 65.7,
+			"wind_speed_10m": 5.0,
+			"weather_code": 0,
+			"is_day": 1
+		}
+	}`))
+	cw, err := c.decodeCurrent(body, "humidity-round-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cw.Humidity != 66 {
+		t.Errorf("humidity = %d, want 66 (rounded from 65.7)", cw.Humidity)
+	}
+}
+
+func TestDecodeCurrent_HumidityRoundDown(t *testing.T) {
+	c := New("weather")
+	// 65.3 should round to 65
+	body := io.NopCloser(strings.NewReader(`{
+		"current": {
+			"temperature_2m": 20.0,
+			"apparent_temperature": 20.0,
+			"relative_humidity_2m": 65.3,
+			"wind_speed_10m": 5.0,
+			"weather_code": 0,
+			"is_day": 1
+		}
+	}`))
+	cw, err := c.decodeCurrent(body, "humidity-down-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cw.Humidity != 65 {
+		t.Errorf("humidity = %d, want 65 (rounded from 65.3)", cw.Humidity)
+	}
+}
+
+// --- Test Sync enriched artifact metadata ---
+
+func TestSync_ArtifactEnrichedMetadata(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{
+			"current": {
+				"temperature_2m": 22.0,
+				"apparent_temperature": 25.5,
+				"relative_humidity_2m": 60,
+				"wind_speed_10m": 7.0,
+				"weather_code": 2,
+				"is_day": 1
+			}
+		}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Enriched", "latitude": 40.0, "longitude": -74.0},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+
+	a := artifacts[0]
+	if a.Metadata["apparent_temperature"] != 25.5 {
+		t.Errorf("metadata apparent_temperature = %v, want 25.5", a.Metadata["apparent_temperature"])
+	}
+	if a.Metadata["is_day"] != true {
+		t.Errorf("metadata is_day = %v, want true", a.Metadata["is_day"])
+	}
+	if !strings.Contains(a.RawContent, "feels like") {
+		t.Errorf("RawContent should contain 'feels like', got %q", a.RawContent)
+	}
+}
+
+// --- Test Sync all-fail returns error ---
+
+func TestSync_AllFail_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Fail1", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error when single location fails (all locations failed)")
+	}
+	if !strings.Contains(err.Error(), "all 1 weather locations failed") {
+		t.Errorf("error message should mention all-fail count, got: %v", err)
+	}
+}
+
+func TestDoFetch_BlocksRedirects(t *testing.T) {
+	// Regression: HTTP redirects must be blocked to prevent SSRF via open-redirect
+	// on the upstream API (OWASP A10). Weather APIs return JSON directly and must
+	// never issue redirects under normal operation.
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("request should never reach redirect target")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusFound)
+	}))
+	defer redirector.Close()
+
+	c := New("weather")
+	_, err := c.doFetch(context.Background(), redirector.URL)
+	if err == nil {
+		t.Fatal("expected error when server issues redirect, got nil — SSRF protection missing")
+	}
+	if !strings.Contains(err.Error(), "redirect") {
+		t.Errorf("error should mention redirect blocking, got: %v", err)
+	}
+}
+
+func TestDoFetch_BlocksRedirectChain(t *testing.T) {
+	// Regression: even multi-hop redirects must be blocked on the first hop.
+	hop2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("request should never reach second hop")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer hop2.Close()
+
+	hop1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, hop2.URL, http.StatusTemporaryRedirect)
+	}))
+	defer hop1.Close()
+
+	c := New("weather")
+	_, err := c.doFetch(context.Background(), hop1.URL)
+	if err == nil {
+		t.Fatal("expected error on redirect chain — SSRF protection missing")
+	}
+}
+
+func TestSync_RedirectDoesNotProduceArtifacts(t *testing.T) {
+	// Regression: a redirecting upstream must not produce artifacts or crash Sync.
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("redirected request should never arrive")
+	}))
+	defer target.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusMovedPermanently)
+	}))
+	defer redirector.Close()
+
+	c := New("weather")
+	c.baseURL = redirector.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Victim", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("Sync should return error when all locations fail due to redirect")
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts when upstream redirects, got %d", len(artifacts))
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("health should be error when all locations fail due to redirect, got %s", c.Health(context.Background()))
+	}
 }

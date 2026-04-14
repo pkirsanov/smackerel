@@ -27,14 +27,9 @@ func TestChaos_ParseMessages_AllFieldsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}
-	// Empty UID message: cursor is "", code checks msg.UID <= cursor && cursor != "" → false → proceeds.
-	// So the message with empty UID should produce an artifact with empty SourceRef
-	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifact for empty-field message, got %d", len(artifacts))
-	}
-	// The artifact has empty SourceRef which is a data quality issue
-	if artifacts[0].SourceRef != "" {
-		t.Errorf("expected empty SourceRef for empty UID, got %q", artifacts[0].SourceRef)
+	// Empty UID message is skipped by empty-UID guard
+	if len(artifacts) != 0 {
+		t.Fatalf("expected 0 artifacts for empty-UID message, got %d", len(artifacts))
 	}
 }
 
@@ -62,9 +57,9 @@ func TestChaos_ParseMessages_WrongTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync should not error on wrong types: %v", err)
 	}
-	// Message with all wrong types still gets created — fields are just empty
-	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifact (defaults for wrong types), got %d", len(artifacts))
+	// UID is int 12345, getStr returns "" → skipped by empty-UID guard
+	if len(artifacts) != 0 {
+		t.Fatalf("expected 0 artifacts for invalid-UID message, got %d", len(artifacts))
 	}
 }
 

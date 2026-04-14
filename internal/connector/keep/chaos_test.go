@@ -299,8 +299,8 @@ func TestChaos_ManyLabels(t *testing.T) {
 	if !ok {
 		t.Fatal("labels metadata should be []string")
 	}
-	if len(metaLabels) != 1000 {
-		t.Errorf("metadata labels = %d, want 1000", len(metaLabels))
+	if len(metaLabels) != maxMetadataArrayLen {
+		t.Errorf("metadata labels = %d, want %d (capped)", len(metaLabels), maxMetadataArrayLen)
 	}
 }
 

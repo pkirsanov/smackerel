@@ -199,6 +199,69 @@ Scenario-first red-green TDD methodology was applied: test scenarios written fro
 
 ---
 
+## Stochastic Quality Sweep — Improve Pass (R11)
+
+### Findings
+
+| ID | Finding | File | Fix |
+|----|---------|------|-----|
+| I-001 | `Registry.List()` returns non-deterministic ordering from map iteration | `internal/connector/registry.go` | Added `sort.Strings(ids)` for predictable API responses |
+| I-002 | `StateStore.RecordError` returns unwrapped DB error, inconsistent with `Get()`/`Save()` | `internal/connector/state.go` | Wrapped with `fmt.Errorf("record error: %w", err)` |
+| I-003 | `Supervisor.mu` is `sync.Mutex` but `getSyncInterval` is read-only — unnecessary write-lock contention in hot sync loop | `internal/connector/supervisor.go` | Changed to `sync.RWMutex`, use `RLock` in `getSyncInterval` |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit 2>&1 | grep connector
+ok      github.com/smackerel/smackerel/internal/connector       5.938s
+```
+
+New test `TestRegistry_List_Sorted` verifies deterministic ordering.
+
+### Validation
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+$ ./smackerel.sh lint
+(clean)
+$ ./smackerel.sh test unit
+All packages pass
+```
+
+---
+
+## Gaps Sweep (2026-04-12) — Stochastic Quality Sweep Round
+
+### Trigger
+`gaps-to-doc` child workflow invoked by `stochastic-quality-sweep` orchestrator.
+
+### Findings (2)
+
+| # | Gap | Scope | Severity | Resolution |
+|---|-----|-------|----------|------------|
+| 1 | Telegram markers: spec mandates 8 (`. ? ! > - ~ # @`), only 6 were implemented (missing `#` heading and `@` mention) | Scope 01 | Medium | Added `MarkerHeading = "# "` and `MarkerMention = "@ "` to `internal/telegram/format.go`. Updated `format_test.go` to assert count == 8. |
+| 2 | Manual dark mode toggle: spec SCN-001-006 requires manual toggle with localStorage, only `prefers-color-scheme` auto-detection existed | Scope 02 | Medium | Added `<button class="theme-toggle">` with `toggleTheme()` JS, `localStorage` persistence, and `html[data-theme="dark"]` CSS rule to `internal/web/templates.go`. |
+
+### Files Changed
+- `internal/telegram/format.go` — added `MarkerHeading`, `MarkerMention` constants
+- `internal/telegram/format_test.go` — updated marker tests to assert 8 markers
+- `internal/web/templates.go` — added dark mode toggle button, JS, and CSS override rule
+
+### Verification
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+$ ./smackerel.sh test unit → all packages pass (telegram recompiled, web recompiled)
+$ ./smackerel.sh lint → All checks passed
+```
+
+### DoD Evidence Updates
+- Scope 01 DoD: Updated marker evidence to reflect actual 8 constants with names
+- Scope 02 DoD: Updated dark mode toggle evidence to reflect localStorage mechanism
+
+---
+
 ## Test-to-Doc Sweep (2026-04-11)
 
 **Trigger:** test (stochastic quality sweep)
@@ -296,3 +359,64 @@ Format: No drift detected
 ### Completion Statement
 
 Spec 001-smackerel-mvp is complete. All 4 scopes (Monochrome Icon System, Design System CSS, Generic Connector Framework, Product-Level Testing) are Done with 55 DoD items checked. All 21 Gherkin scenarios (SCN-001-001 through SCN-001-021) are covered by unit tests and E2E scripts. Build, lint, and unit tests all pass.
+
+---
+
+## Stabilization Pass (Stochastic Sweep R02 — 2026-04-13)
+
+### Trigger: stabilize
+
+### Findings
+
+**S-001: Supervisor.StopAll() did not wait for goroutines to drain**
+- `StopAll()` cancelled contexts and returned immediately. Downstream shutdown steps (NATS close, DB pool close in `shutdownAll`) could race against in-flight goroutines still calling `stateStore.Save()` or `publisher.PublishRawArtifact()`.
+- Fix: Added `sync.WaitGroup` to `Supervisor`. `StartConnector` increments, goroutines decrement on exit. `StopAll` cancels contexts then calls `wg.Wait()`.
+- Files: `internal/connector/supervisor.go`
+
+**S-002: Registry.Unregister() held write lock during Close()**
+- A slow connector `Close()` (e.g., network drain) blocked all concurrent `Get`, `List`, `ListConnectorHealth` reads, causing health endpoint hangs during connector removal.
+- Fix: Remove connector from map and release lock before calling `Close()`. Health/status reads are never blocked by a slow close.
+- Files: `internal/connector/registry.go`
+
+### Test Evidence
+
+```
+ok  github.com/smackerel/smackerel/internal/connector  5.683s  (rebuilt, not cached)
+```
+
+All 34 Go packages pass. `./smackerel.sh check` clean.
+
+---
+
+## Hardening Pass (Stochastic Sweep R08 — 2026-04-13)
+
+### Trigger: harden
+
+### Findings
+
+**H-001: Registry.ListConnectorHealth held RLock during external Health() calls**
+- `ListConnectorHealth` iterated connectors under `RLock` and called each connector's `Health()` method. If any `Health()` blocks (network timeout, deadlock), all `Register`/`Unregister` operations are stalled because the write lock cannot be acquired.
+- Fix: Snapshot connectors under `RLock`, release the lock, then call `Health()` outside the lock.
+- Files: `internal/connector/registry.go`
+- Test: `TestRegistry_ListConnectorHealth_DoesNotBlockRegister` — verifies `Register` completes fast while `ListConnectorHealth` is blocked in a slow `Health()` call.
+
+**H-002: Registry.Unregister vulnerable to Close() panic**
+- `Unregister` called `c.Close()` outside the lock but without `defer recover()`. A buggy connector whose `Close()` panics would crash the calling goroutine (typically a shutdown path or API handler), leaving the registry in an inconsistent state.
+- Fix: Wrap `Close()` in an anonymous function with `defer recover()` and convert panics to errors.
+- Files: `internal/connector/registry.go`
+- Test: `TestRegistry_Unregister_ClosePanicRecovery` — verifies a panicking `Close()` returns an error instead of crashing, and the connector is still removed from the registry.
+
+**H-003: OAuth CallbackHandler did not enforce state token TTL**
+- The `StartHandler` evicted expired states (>10 min) during new flow starts, but `CallbackHandler` accepted any matching state regardless of age. An attacker could exploit a leaked state token well after the intended 10-minute window if no new `StartHandler` calls triggered eviction.
+- Fix: Check `stateCreated[state]` time during callback validation; reject states older than 10 minutes with descriptive error.
+- Files: `internal/auth/handler.go`
+- Test: `TestOAuthHandler_CallbackHandler_ExpiredState` — verifies expired state returns 400 with "expired" message. `TestOAuthHandler_CallbackHandler_FreshState` — verifies fresh states pass TTL check and proceed to token exchange.
+
+### Test Evidence
+
+```
+ok  github.com/smackerel/smackerel/internal/connector  5.967s  (rebuilt, not cached)
+ok  github.com/smackerel/smackerel/internal/auth        0.227s  (rebuilt, not cached)
+```
+
+All 34 Go packages pass. 72 Python tests pass. `./smackerel.sh check` clean.

@@ -48,6 +48,8 @@ handoffs:
 
 **⚠️ No-Defaults / No-Stubs:** See [critical-requirements.md](bubbles_shared/critical-requirements.md). Reality scan (G028+G028) enforces mechanically.
 
+**⚠️ Honesty Incentive (ABSOLUTE):** A fabricated completion is infinitely worse than an honest gap. When evidence is ambiguous or a command output does not directly prove a DoD claim, leave the item `[ ]` with an **Uncertainty Declaration** (see [evidence-rules.md](bubbles_shared/evidence-rules.md)). Every evidence block MUST include a `**Claim Source:**` tag (`executed`, `interpreted`, or `not-run`). See [critical-requirements.md](bubbles_shared/critical-requirements.md) → Honesty Incentive and [evidence-rules.md](bubbles_shared/evidence-rules.md) → Evidence Provenance Taxonomy.
+
 **⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G028, G036, G038, G040). State transition guard MUST pass before any state.json write. Per-agent validation (Tier 2 checks I1-I5) MUST pass before reporting results. **G040 (zero deferral language) is critical — NEVER write deferral language into scope artifacts and then mark the spec done.**
 
 **Artifact Ownership (this agent creates/modifies ONLY these):**

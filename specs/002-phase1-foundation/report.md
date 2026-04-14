@@ -2,6 +2,26 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Scope: improve-existing (stochastic-quality-sweep, 2026-04-12)
+### Summary
+Added missing `ValidateProcessedPayload` call in `handleMessage` for the `artifacts.processed` NATS path. The digest path (`handleDigestMessage`) already called `ValidateDigestGeneratedPayload`, but the primary artifact processing path skipped boundary validation after unmarshal — going directly to `HandleProcessedResult`. This created an asymmetric validation gap: Go validated outbound payloads to Python but not inbound results from Python on the most critical NATS path.
+
+### Finding Addressed
+- IMPROVE-001 (MEDIUM): `handleMessage` in `subscriber.go` skips `ValidateProcessedPayload` — asymmetric boundary validation on the primary `artifacts.processed` NATS receive path
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/pipeline/subscriber.go` | Added `ValidateProcessedPayload(&payload)` call after unmarshal, before `HandleProcessedResult`, matching the pattern in `handleDigestMessage` |
+| `internal/pipeline/subscriber_test.go` | Added `TestHandleMessage_EmptyArtifactID_AckedAsInvalid` and `TestHandleMessage_MalformedJSON_Acked` tests covering the validation gate |
+
+### Test Evidence
+- `./smackerel.sh test unit` — all 33 Go packages pass, 0 failures
+- `./smackerel.sh lint` — all checks passed
+
+---
+
 ## Scope: simplify-to-doc (stochastic-quality-sweep)
 ### Summary
 Simplification pass across the Phase 1 foundation layer. Two findings remediated:
@@ -829,7 +849,7 @@ Added `CheckURL` method to `DedupChecker` — queries `source_url` column before
 ### G004/G005: Documented Gaps (Not In Gherkin Scenarios)
 
 - **R-011 delta re-processing:** Spec says "Updated content: re-process only delta" but no Gherkin scenario covers this. Phase 2/3 ingestion connectors would need this as they bring in email threads and feed updates.
-- **R-003 image/PDF extraction:** Spec lists "Image/screenshot: OCR" and "PDF/document: extract text" but these are not in any Phase 1 Gherkin scenario or scope DoD. The Keep connector (007) has OCR cache support, suggesting image OCR enters the codebase from connector-specific needs rather than core pipeline.
+- ~~**R-003 image/PDF extraction:** Spec lists "Image/screenshot: OCR" and "PDF/document: extract text" but these are not in any Phase 1 Gherkin scenario or scope DoD.~~ **Resolved in scopes 24-25** (gaps-to-doc, 2026-04-12): Image OCR and PDF text extraction now wired into the ML sidecar's `_handle_artifact_process` flow.
 
 ### Test Evidence
 
@@ -841,4 +861,40 @@ All 25 Go packages pass. 31 Python tests pass.
 
 $ ./smackerel.sh lint
 All checks passed!
+```
+
+---
+
+## Scope: gaps-to-doc (stochastic-quality-sweep, 2026-04-12)
+
+### Summary
+Gaps analysis across Phase 1 foundation identified 3 implementation gaps between spec/design requirements and actual code. All 3 resolved.
+
+### Findings
+
+| ID | Severity | Description | Resolution |
+|----|----------|-------------|------------|
+| GAP-001 | HIGH | `people` table missing UNIQUE constraint on `name` — `findOrCreatePeople` ON CONFLICT (name) fails at runtime, silently breaking entity linking (R-006) | Migration `012_people_name_unique.sql` adds unique index after deduplicating existing rows |
+| GAP-002 | MEDIUM | Image URLs captured via API create stubs with URL-as-text — ML sidecar has no image OCR handler, so LLM receives a URL string instead of extracted text (R-003) | Added image content type handling in `_handle_artifact_process` with OCR via existing `ocr.py` module |
+| GAP-003 | MEDIUM | PDF URLs captured via API create stubs with URL-as-text — no PDF text extraction in ML sidecar (R-003) | Created `ml/app/pdf_extract.py` using `pypdf`, wired into `_handle_artifact_process` |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/db/migrations/012_people_name_unique.sql` | New migration: dedup existing people rows, add UNIQUE index on people.name |
+| `internal/db/migration_test.go` | Added `TestMigration012_PeopleNameUnique` verifying migration embedded |
+| `ml/app/nats_client.py` | Added `import httpx`; added image OCR and PDF extraction handlers in `_handle_artifact_process` |
+| `ml/app/pdf_extract.py` | New module: `extract_pdf_text(url)` + `extract_text_from_bytes(pdf_bytes)` using pypdf |
+| `ml/pyproject.toml` | Added `pypdf>=4.1.0` to runtime dependencies |
+| `ml/requirements.txt` | Added `pypdf==4.1.0` |
+| `ml/tests/test_pdf_extract.py` | New test file: 4 tests for PDF extraction (valid, empty, non-PDF, truncation) |
+| `specs/002-phase1-foundation/scopes.md` | Added scopes 23-25 with scenarios SCN-002-078 through SCN-002-082 |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+33 Go packages: ok (all pass)
+53 Python tests passed, 1 skipped (pypdf not in dev env)
 ```

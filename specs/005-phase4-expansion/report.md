@@ -2,6 +2,28 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Hardening Pass (Stochastic Sweep R04 — harden trigger)
+
+### Findings
+
+| ID | Finding | Severity | Fix |
+|----|---------|----------|-----|
+| HARDEN-R04-H1 | `ParseTakeoutJSON` validates waypoint coordinates but stores start/end locations without bounds checking | Medium | Added lat ∈ [-90,90], lng ∈ [-180,180] validation for start/end locations; activities with out-of-range values are skipped |
+| HARDEN-R04-H2 | `ParseTakeoutJSON` has no upper bound on parsed activities (memory exhaustion risk) | Medium | Added `maxActivities = 50000` cap with logged truncation warning |
+
+### Files Changed
+- `internal/connector/maps/maps.go` — Added `maxActivities` constant, start/end location coordinate validation
+- `internal/connector/maps/maps_test.go` — Added `TestParseTakeoutJSON_OutOfRangeStartLocation`, `TestParseTakeoutJSON_OutOfRangeEndLocation`, `TestParseTakeoutJSON_MaxActivitiesCap`
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/maps  1.297s
+All 33 Go packages pass. Lint clean.
+```
+
+---
+
 ## Scope 01: Maps Timeline Connector
 ### Summary
 Implementation complete. Google Takeout JSON parser with activity classification (walk/cycle/drive/transit/hike/run), GeoJSON LineString route storage, trail qualification by distance threshold, Haversine distance calculation.
@@ -853,3 +875,143 @@ Exit code: 0
 ### Hardening Summary
 
 Prior sweeps (chaos ×2, security ×2, regression ×2, test quality, devops) had covered most attack surface. This harden pass found one high-severity privacy gap (H1 — subdomain social media bypass) that prior rounds missed because test fixtures and chaos probes all used bare domains. The `IsSocialMedia` function appeared correct against its test suite but failed the spec contract when real-world subdomain variants were considered.
+
+---
+
+## DevOps Probe Round 2 — 2026-04-12
+
+**Trigger:** Stochastic quality sweep devops trigger
+**Agent:** bubbles.devops → bubbles.workflow (devops-to-doc)
+**Scope:** Config SST completeness for maps/browser connector enabled/schedule vars, E2E test CLI wiring, Docker Compose env passthrough
+
+### Methodology
+Full DevOps readiness audit covering:
+- Config generation pipeline SST compliance for ALL Phase 4 connector env vars (not just import paths)
+- Parity with other connectors' enabled/schedule env var propagation
+- E2E test coverage wiring in `smackerel.sh test e2e`
+- Docker Compose env var passthrough completeness
+
+### Findings
+
+| ID | Severity | Component | Finding | Status |
+|----|----------|-----------|---------|--------|
+| DEVOPS2-005-F1 | MEDIUM | `scripts/commands/config.sh` | `MAPS_ENABLED` and `MAPS_SYNC_SCHEDULE` not generated from SST. Every other connector (bookmarks, discord, twitter, weather, gov-alerts, financial-markets, guesthost) has `_ENABLED` and `_SYNC_SCHEDULE` vars extracted and propagated. Maps timeline connector only had `MAPS_IMPORT_DIR`. | FIXED |
+| DEVOPS2-005-F2 | MEDIUM | `scripts/commands/config.sh` | `BROWSER_HISTORY_ENABLED` and `BROWSER_HISTORY_SYNC_SCHEDULE` not generated from SST. Same parity gap as F1 — browser-history connector only had `BROWSER_HISTORY_PATH`. | FIXED |
+| DEVOPS2-005-F3 | MEDIUM | `docker-compose.yml` | `MAPS_ENABLED`, `MAPS_SYNC_SCHEDULE`, `BROWSER_HISTORY_ENABLED`, `BROWSER_HISTORY_SYNC_SCHEDULE` not passed to `smackerel-core` container environment. Connector supervisor reads these to decide whether to auto-start connectors. | FIXED |
+| DEVOPS2-005-F4 | MEDIUM | `smackerel.sh` | `tests/e2e/test_maps_import.sh` and `tests/e2e/test_browser_sync.sh` exist but are NOT wired into `./smackerel.sh test e2e`. All scopes 01-08 E2E tests are wired; Phase 4 expansion tests are orphaned. | FIXED |
+
+### Fix Details
+
+**DEVOPS2-005-F1 + F2 — Missing enabled/schedule env var extraction:**
+- Added `MAPS_ENABLED` extraction from `connectors.google-maps-timeline.enabled`
+- Added `MAPS_SYNC_SCHEDULE` extraction from `connectors.google-maps-timeline.sync_schedule`
+- Added `BROWSER_HISTORY_ENABLED` extraction from `connectors.browser-history.enabled`
+- Added `BROWSER_HISTORY_SYNC_SCHEDULE` extraction from `connectors.browser-history.sync_schedule`
+- All four emitted in generated env file
+
+**DEVOPS2-005-F3 — Docker Compose env passthrough:**
+- Added `MAPS_ENABLED`, `MAPS_SYNC_SCHEDULE`, `BROWSER_HISTORY_ENABLED`, `BROWSER_HISTORY_SYNC_SCHEDULE` to `smackerel-core` environment section in `docker-compose.yml`
+
+**DEVOPS2-005-F4 — E2E test CLI wiring:**
+- Added `timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_maps_import.sh"` and `timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_browser_sync.sh"` to the `test e2e` section of `smackerel.sh`, following the existing pattern with timeout wrappers
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `scripts/commands/config.sh` | Added MAPS_ENABLED, MAPS_SYNC_SCHEDULE, BROWSER_HISTORY_ENABLED, BROWSER_HISTORY_SYNC_SCHEDULE extraction and env file output |
+| `docker-compose.yml` | Added 4 env vars to smackerel-core environment |
+| `smackerel.sh` | Wired test_maps_import.sh and test_browser_sync.sh into `test e2e` |
+| `config/generated/dev.env` | Regenerated — now includes all 4 new env vars |
+
+### Verification
+
+```
+$ ./smackerel.sh config generate
+Generated config/generated/dev.env
+
+$ grep -E 'MAPS_ENABLED|MAPS_SYNC|BROWSER_HISTORY_ENABLED|BROWSER_HISTORY_SYNC' config/generated/dev.env
+MAPS_ENABLED=false
+MAPS_SYNC_SCHEDULE=0 */6 * * *
+BROWSER_HISTORY_ENABLED=false
+BROWSER_HISTORY_SYNC_SCHEDULE=0 */4 * * *
+
+$ ./smackerel.sh check
+Config is in sync with SST
+
+$ ./smackerel.sh test unit
+33 Go packages ok, 0 failures
+69 Python tests passed, 1 skipped
+Exit code: 0
+
+$ ./smackerel.sh lint
+Exit code: 0
+```
+
+### SST Parity Assessment
+
+After fixes, all Phase 4 connectors now have full config parity with other connectors:
+
+| Connector | `_ENABLED` | `_SYNC_SCHEDULE` | Import Path/Token | Volume Mount |
+|-----------|-----------|-----------------|------------------|-------------|
+| Bookmarks | BOOKMARKS_ENABLED | BOOKMARKS_SYNC_SCHEDULE | BOOKMARKS_IMPORT_DIR | ✅ :ro |
+| Maps Timeline | MAPS_ENABLED ✅ | MAPS_SYNC_SCHEDULE ✅ | MAPS_IMPORT_DIR | ✅ :ro |
+| Browser History | BROWSER_HISTORY_ENABLED ✅ | BROWSER_HISTORY_SYNC_SCHEDULE ✅ | BROWSER_HISTORY_PATH | ✅ :ro |
+| Discord | DISCORD_ENABLED | DISCORD_SYNC_SCHEDULE | DISCORD_BOT_TOKEN | N/A |
+| Twitter | TWITTER_ENABLED | TWITTER_SYNC_SCHEDULE | TWITTER_BEARER_TOKEN | N/A |
+| Weather | WEATHER_ENABLED | WEATHER_SYNC_SCHEDULE | N/A | N/A |
+| Gov Alerts | GOV_ALERTS_ENABLED | GOV_ALERTS_SYNC_SCHEDULE | GOV_ALERTS_AIRNOW_API_KEY | N/A |
+| Financial Markets | FINANCIAL_MARKETS_ENABLED | FINANCIAL_MARKETS_SYNC_SCHEDULE | FINANCIAL_MARKETS_*_API_KEY | N/A |
+| GuestHost | GUESTHOST_ENABLED | GUESTHOST_SYNC_SCHEDULE | GUESTHOST_API_KEY | N/A |
+
+---
+
+## Simplification Pass (Stochastic Sweep R19 — simplify trigger)
+
+**Date:** 2026-04-13
+**Trigger:** simplify-to-doc
+**Source:** Stochastic quality sweep Round 19
+
+### Findings
+
+| ID | Severity | Component | Finding | Status |
+|----|----------|-----------|---------|--------|
+| SIMPLIFY-005-S1 | LOW | `maps/maps.go::ParseTakeoutJSON` | Coordinate bounds check `lat < -90 \|\| lat > 90 \|\| lng < -180 \|\| lng > 180` duplicated 3× (start location, end location, waypoint loop). Extract to single `validCoord` helper. | FIXED |
+| SIMPLIFY-005-S2 | LOW | `graph/linker.go::LinkArtifact` | 5× identical error-handling + accumulation pattern for linking strategies (similarity, entity, topic, temporal, source). Each block: call method, check error, append to errs, add to totalEdges. Extract to strategy slice + loop. | FIXED |
+
+### Fix Details
+
+**S1 — Extract `validCoord` helper in maps.go:**
+- Added `func validCoord(lat, lng float64) bool` that returns `lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180`
+- Replaced 3 inline bounds checks in `ParseTakeoutJSON` with calls to `validCoord`
+- Net: −6 lines of duplicated logic, +4 lines for helper = cleaner single-responsibility validation
+
+**S2 — Extract linking strategy runner in linker.go:**
+- Defined a `strategy` struct with `name string` and `fn func(context.Context, string) (int, error)`
+- Replaced 5× copied error-handling blocks with a `[]strategy` slice and single `for range` loop
+- Net: −25 lines of duplicated logic, +12 lines for loop = same behavior with half the code
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/maps/maps.go` | Added `validCoord` helper; replaced 3 inline bounds checks |
+| `internal/connector/maps/maps_test.go` | Added `TestValidCoord` (11 boundary/adversarial cases) |
+| `internal/graph/linker.go` | Replaced 5× strategy blocks with strategy slice + loop |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/maps  0.953s
+ok  github.com/smackerel/smackerel/internal/graph           0.026s
+34 Go packages ok, 0 failures
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+Exit code: 0
+
+$ ./smackerel.sh format --check
+Exit code: 0
+```

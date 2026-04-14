@@ -92,6 +92,20 @@ func TestMigrationSQL_Indexes(t *testing.T) {
 	}
 }
 
+func TestMigration012_PeopleNameUnique(t *testing.T) {
+	content, err := migrationFS.ReadFile("migrations/012_people_name_unique.sql")
+	if err != nil {
+		t.Fatalf("failed to read migration 012: %v", err)
+	}
+	sql := string(content)
+	if !contains(sql, "idx_people_name_unique") {
+		t.Error("migration 012 missing unique index on people.name")
+	}
+	if !contains(sql, "ON people(name)") {
+		t.Error("migration 012 unique index not on people(name)")
+	}
+}
+
 // contains is a simple substring check.
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchSubstring(s, substr)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/smackerel/smackerel/internal/db"
+	"github.com/smackerel/smackerel/internal/pipeline"
 )
 
 // mockArtifactStore implements ArtifactQuerier for testing.
@@ -611,5 +612,236 @@ func TestExportHandler_QueryError(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+// --- Content-Type validation tests ---
+
+func TestCaptureHandler_WrongContentType(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	body := `{"url": "https://example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("expected 415 for wrong Content-Type, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "UNSUPPORTED_MEDIA_TYPE" {
+		t.Errorf("expected UNSUPPORTED_MEDIA_TYPE, got %q", resp.Error.Code)
+	}
+}
+
+func TestCaptureHandler_NoContentType_Accepted(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  nil,
+	}
+
+	body := `{"url": "https://example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	// No Content-Type header — should still be accepted
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	// Should pass Content-Type check and hit ML_UNAVAILABLE (no pipeline)
+	if rec.Code == http.StatusUnsupportedMediaType {
+		t.Fatal("missing Content-Type should not trigger 415")
+	}
+}
+
+func TestCaptureHandler_ContentTypeWithCharset_Accepted(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  nil,
+	}
+
+	body := `{"url": "https://example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	// application/json with charset should be accepted
+	if rec.Code == http.StatusUnsupportedMediaType {
+		t.Fatal("application/json with charset should be accepted")
+	}
+}
+
+func TestRecentHandler_EmptyResults_ReturnsEmptyArray(t *testing.T) {
+	store := &mockArtifactStore{recentItems: []db.RecentArtifact{}}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recent", nil)
+	rec := httptest.NewRecorder()
+
+	deps.RecentHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	raw, ok := body["results"]
+	if !ok {
+		t.Fatal("expected 'results' key in response")
+	}
+
+	// Must be [] not null — null breaks frontend consumers
+	if string(raw) == "null" {
+		t.Fatal("results must be [] for empty results, got null")
+	}
+	var arr []json.RawMessage
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		t.Fatalf("results should be an array: %v", err)
+	}
+	if len(arr) != 0 {
+		t.Fatalf("expected 0 results, got %d", len(arr))
+	}
+}
+
+func TestArtifactDetailHandler_OversizedID(t *testing.T) {
+	store := &mockArtifactStore{}
+	deps := &Dependencies{
+		DB:            &mockDB{healthy: true},
+		NATS:          &mockNATS{healthy: true},
+		StartTime:     time.Now(),
+		ArtifactStore: store,
+	}
+
+	r := chi.NewRouter()
+	r.Get("/api/artifact/{id}", deps.ArtifactDetailHandler)
+
+	longID := bytes.Repeat([]byte("x"), maxArtifactIDLen+1)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/artifact/"+string(longID), nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized artifact ID, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "INVALID_INPUT" {
+		t.Errorf("expected INVALID_INPUT, got %q", resp.Error.Code)
+	}
+}
+
+// === Chaos C-001: CaptureHandler TOCTOU — DB failure during Pipeline.Process() returns 503 ===
+
+// failingPipeline simulates a pipeline that returns an error (e.g., DB failure mid-processing).
+type failingPipeline struct {
+	err error
+}
+
+func (f *failingPipeline) Process(_ context.Context, _ *pipeline.ProcessRequest) (*pipeline.ProcessResult, error) {
+	return nil, f.err
+}
+
+// flappingDB simulates a DB that becomes unhealthy after the initial health check.
+type flappingDB struct {
+	callCount int
+	failAfter int // become unhealthy after this many Healthy() calls
+}
+
+func (f *flappingDB) Healthy(_ context.Context) bool {
+	f.callCount++
+	return f.callCount <= f.failAfter
+}
+
+func (f *flappingDB) ArtifactCount(_ context.Context) (int64, error) {
+	return 0, nil
+}
+
+func TestCaptureHandler_Chaos_DBFailsDuringProcessing_Returns503(t *testing.T) {
+	// Simulate TOCTOU: DB is healthy at the gate check (first call) but unhealthy
+	// when re-checked after pipeline processing fails (second call).
+	flapping := &flappingDB{failAfter: 1}
+	deps := &Dependencies{
+		DB:        flapping,
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  &failingPipeline{err: fmt.Errorf("connection refused")},
+	}
+
+	body := `{"url": "https://example.com/article"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when DB fails mid-processing, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "DB_UNAVAILABLE" {
+		t.Errorf("expected DB_UNAVAILABLE (chaos TOCTOU fix), got %q", resp.Error.Code)
+	}
+}
+
+func TestCaptureHandler_Chaos_PipelineFailsWithDBStillHealthy_Returns500(t *testing.T) {
+	// When pipeline fails but DB is still healthy, the error is a genuine processing
+	// failure — should return 500 PROCESSING_FAILED, not 503 DB_UNAVAILABLE.
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  &failingPipeline{err: fmt.Errorf("unexpected nil pointer in extraction")},
+	}
+
+	body := `{"text": "quick note"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for non-DB processing failure, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "PROCESSING_FAILED" {
+		t.Errorf("expected PROCESSING_FAILED when DB is healthy, got %q", resp.Error.Code)
 	}
 }

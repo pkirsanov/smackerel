@@ -339,3 +339,421 @@ func TestParseKeepConfigAllFields(t *testing.T) {
 		t.Errorf("LabelsFilter = %v, want [Work Personal]", kc.LabelsFilter)
 	}
 }
+
+// --- Config parsing edge cases ---
+
+func TestParseKeepConfigEmptySourceConfig(t *testing.T) {
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{},
+	}
+	kc, err := parseKeepConfig(cfg)
+	if err != nil {
+		t.Fatalf("parseKeepConfig with empty config: %v", err)
+	}
+	if kc.SyncMode != SyncModeTakeout {
+		t.Errorf("default SyncMode = %q, want takeout", kc.SyncMode)
+	}
+	if kc.GkeepPollInterval != 60*time.Minute {
+		t.Errorf("default GkeepPollInterval = %v, want 60m", kc.GkeepPollInterval)
+	}
+	if kc.MinContentLength != 0 {
+		t.Errorf("default MinContentLength = %d, want 0", kc.MinContentLength)
+	}
+	if kc.IncludeArchived != false {
+		t.Error("default IncludeArchived should be false")
+	}
+}
+
+func TestParseKeepConfigInvalidWatchInterval(t *testing.T) {
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"watch_interval": "not-a-duration",
+		},
+	}
+	_, err := parseKeepConfig(cfg)
+	if err == nil {
+		t.Error("expected error for invalid watch_interval")
+	}
+}
+
+func TestParseKeepConfigInvalidPollIntervalFormat(t *testing.T) {
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"poll_interval": "abc",
+		},
+	}
+	_, err := parseKeepConfig(cfg)
+	if err == nil {
+		t.Error("expected error for unparseable poll_interval")
+	}
+}
+
+func TestParseKeepConfigTypeMismatchesUseDefaults(t *testing.T) {
+	// When type assertions fail, the fields should keep defaults (no panic)
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"gkeep_enabled":      "not-a-bool",   // string, not bool
+			"include_archived":   42,             // int, not bool
+			"min_content_length": "not-a-number", // string, not float64
+		},
+	}
+	kc, err := parseKeepConfig(cfg)
+	if err != nil {
+		t.Fatalf("type mismatches should not cause error: %v", err)
+	}
+	// All mismatched fields should stay at defaults
+	if kc.GkeepEnabled != false {
+		t.Errorf("GkeepEnabled = %v, want false (default on type mismatch)", kc.GkeepEnabled)
+	}
+	if kc.IncludeArchived != false {
+		t.Errorf("IncludeArchived = %v, want false (default on type mismatch)", kc.IncludeArchived)
+	}
+	if kc.MinContentLength != 0 {
+		t.Errorf("MinContentLength = %d, want 0 (default on type mismatch)", kc.MinContentLength)
+	}
+}
+
+// --- Connect edge cases ---
+
+func TestConnectEmptyImportDirString(t *testing.T) {
+	c := New("google-keep")
+	err := c.Connect(context.Background(), testConnectorConfig("", "takeout", false, false))
+	if err == nil {
+		t.Fatal("expected error for empty import dir string in takeout mode")
+	}
+	if c.Health(context.Background()) != "error" {
+		t.Errorf("health = %q, want error", c.Health(context.Background()))
+	}
+}
+
+func TestConnectGkeepWithAck(t *testing.T) {
+	c := New("google-keep")
+	// gkeepapi mode with warning acknowledged — Connect should succeed
+	// (no import dir needed since gkeepapi doesn't use it)
+	err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true))
+	if err != nil {
+		t.Fatalf("Connect gkeepapi with ack: %v", err)
+	}
+	if c.Health(context.Background()) != "healthy" {
+		t.Errorf("health = %q, want healthy", c.Health(context.Background()))
+	}
+}
+
+func TestConnectHybridModeMissingDir(t *testing.T) {
+	c := New("google-keep")
+	err := c.Connect(context.Background(), testConnectorConfig("", "hybrid", true, true))
+	if err == nil {
+		t.Fatal("expected error for hybrid mode with empty import dir")
+	}
+}
+
+func TestConnectHybridModeValid(t *testing.T) {
+	dir := t.TempDir()
+	c := New("google-keep")
+	err := c.Connect(context.Background(), testConnectorConfig(dir, "hybrid", true, true))
+	if err != nil {
+		t.Fatalf("Connect hybrid: %v", err)
+	}
+	if c.Health(context.Background()) != "healthy" {
+		t.Errorf("health = %q, want healthy", c.Health(context.Background()))
+	}
+}
+
+// --- Sync mode and health transition tests ---
+
+func TestSyncGkeepModeReportsError(t *testing.T) {
+	// gkeepapi mode always fails (bridge stub) — health should reflect that
+	c := New("google-keep")
+	err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true))
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync should not return fatal error: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("artifacts = %d, want 0 (gkeepapi bridge not connected)", len(artifacts))
+	}
+	// Health should transition to degraded on first failure (graduated escalation)
+	if c.Health(context.Background()) != "degraded" {
+		t.Errorf("health = %q, want degraded (gkeepapi failed — first failure)", c.Health(context.Background()))
+	}
+}
+
+func TestSyncHybridModeTakeoutSucceedsGkeepFails(t *testing.T) {
+	dir := t.TempDir()
+	writeTestJSON(t, dir, "hybrid-note.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Hybrid mode note with enough content for filters to pass",
+		"title": "Hybrid Test", "userEditedTimestampUsec": 1712000000000000,
+		"createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":            "hybrid",
+			"import_dir":           dir,
+			"gkeep_enabled":        true,
+			"warning_acknowledged": true,
+		},
+	}
+
+	c := New("google-keep")
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Hybrid mode: takeout succeeds, gkeepapi fails gracefully
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Errorf("artifacts = %d, want 1 (from takeout)", len(artifacts))
+	}
+}
+
+func TestHealthErrorToCloseTransition(t *testing.T) {
+	ctx := context.Background()
+	c := New("google-keep")
+
+	// Force error state via bad config
+	_ = c.Connect(ctx, testConnectorConfig("", "invalid_mode", false, false))
+	// connect returns error, health set to error from parse failure
+	if c.Health(ctx) != "error" {
+		t.Errorf("after bad connect: health = %q, want error", c.Health(ctx))
+	}
+
+	// Close from error state → disconnected
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if c.Health(ctx) != "disconnected" {
+		t.Errorf("after close from error: health = %q, want disconnected", c.Health(ctx))
+	}
+}
+
+func TestCloseIdempotent(t *testing.T) {
+	c := New("google-keep")
+	// Close on a never-connected connector
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close on disconnected: %v", err)
+	}
+	if c.Health(context.Background()) != "disconnected" {
+		t.Errorf("health = %q, want disconnected", c.Health(context.Background()))
+	}
+	// Close again
+	if err := c.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+}
+
+func TestSyncSetsHealthToSyncing(t *testing.T) {
+	dir := t.TempDir()
+	writeTestJSON(t, dir, "sync-health.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Note to verify syncing health transition during sync",
+		"title": "Sync Health", "userEditedTimestampUsec": 1712000000000000,
+		"createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+
+	c := New("google-keep")
+	if err := c.Connect(context.Background(), testConnectorConfig(dir, "takeout", false, false)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// After sync completes, health should be healthy (no errors)
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if c.Health(context.Background()) != "healthy" {
+		t.Errorf("after sync health = %q, want healthy", c.Health(context.Background()))
+	}
+}
+
+func TestCursorPrecisionPreventsDuplicates(t *testing.T) {
+	dir := t.TempDir()
+	// Timestamp with sub-second precision: 1712000000123456 usec
+	writeTestJSON(t, dir, "precise-note.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Note with sub-second timestamp to test cursor precision",
+		"title": "Precision Test", "userEditedTimestampUsec": 1712000000123456,
+		"createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+
+	c := New("google-keep")
+	if err := c.Connect(context.Background(), testConnectorConfig(dir, "takeout", false, false)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts1, cursor1, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync 1: %v", err)
+	}
+	if len(artifacts1) != 1 {
+		t.Fatalf("first sync: artifacts = %d, want 1", len(artifacts1))
+	}
+
+	// Second sync with cursor from first — sub-second precision must prevent re-processing
+	artifacts2, _, err := c.Sync(context.Background(), cursor1)
+	if err != nil {
+		t.Fatalf("Sync 2: %v", err)
+	}
+	if len(artifacts2) != 0 {
+		t.Errorf("second sync: artifacts = %d, want 0 (cursor precision should prevent re-processing)", len(artifacts2))
+	}
+}
+
+func TestHealthGraduatedEscalation(t *testing.T) {
+	c := New("google-keep")
+	if err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// First failure → degraded
+	c.Sync(context.Background(), "")
+	if c.Health(context.Background()) != "degraded" {
+		t.Errorf("after 1 failure: health = %q, want degraded", c.Health(context.Background()))
+	}
+
+	// Failures 2-4 → still degraded
+	for i := 2; i <= 4; i++ {
+		c.Sync(context.Background(), "")
+		if c.Health(context.Background()) != "degraded" {
+			t.Errorf("after %d failures: health = %q, want degraded", i, c.Health(context.Background()))
+		}
+	}
+
+	// Failure 5 → failing
+	c.Sync(context.Background(), "")
+	if c.Health(context.Background()) != "failing" {
+		t.Errorf("after 5 failures: health = %q, want failing", c.Health(context.Background()))
+	}
+
+	// Failures 6-9 → still failing
+	for i := 6; i <= 9; i++ {
+		c.Sync(context.Background(), "")
+		if c.Health(context.Background()) != "failing" {
+			t.Errorf("after %d failures: health = %q, want failing", i, c.Health(context.Background()))
+		}
+	}
+
+	// Failure 10 → error
+	c.Sync(context.Background(), "")
+	if c.Health(context.Background()) != "error" {
+		t.Errorf("after 10 failures: health = %q, want error", c.Health(context.Background()))
+	}
+}
+
+func TestHealthRecoveryAfterFailures(t *testing.T) {
+	dir := t.TempDir()
+	writeTestJSON(t, dir, "recovery-note.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Note for health recovery test with enough content",
+		"title": "Recovery", "userEditedTimestampUsec": 1712000000000000,
+		"createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+
+	c := New("google-keep")
+
+	// Start in gkeepapi mode to induce failures
+	if err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true)); err != nil {
+		t.Fatalf("Connect gkeepapi: %v", err)
+	}
+
+	// Build up 6 consecutive failures → failing state
+	for i := 0; i < 6; i++ {
+		c.Sync(context.Background(), "")
+	}
+	if c.Health(context.Background()) != "failing" {
+		t.Fatalf("after 6 failures: health = %q, want failing", c.Health(context.Background()))
+	}
+
+	// Reconnect with working takeout config
+	if err := c.Connect(context.Background(), testConnectorConfig(dir, "takeout", false, false)); err != nil {
+		t.Fatalf("Connect takeout: %v", err)
+	}
+
+	// Successful sync should recover to healthy and reset consecutive error counter
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if c.Health(context.Background()) != "healthy" {
+		t.Errorf("after recovery sync: health = %q, want healthy", c.Health(context.Background()))
+	}
+}
+
+func TestHealthDegradedOnPartialFailure(t *testing.T) {
+	dir := t.TempDir()
+	writeTestJSON(t, dir, "valid.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Valid note content that is long enough to pass filters easily",
+		"title": "Valid", "userEditedTimestampUsec": 1712000000000000,
+		"createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+	writeTestJSON(t, dir, "corrupt.json", `{invalid json that cannot be parsed}`)
+
+	c := New("google-keep")
+	if err := c.Connect(context.Background(), testConnectorConfig(dir, "takeout", false, false)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Errorf("artifacts = %d, want 1", len(artifacts))
+	}
+
+	// Partial failure: 1 artifact produced, 1 parse error → degraded (not error)
+	if c.Health(context.Background()) != "degraded" {
+		t.Errorf("health = %q, want degraded (partial failure)", c.Health(context.Background()))
+	}
+}
+
+func TestHybridModeCountsErrorsFromBothSources(t *testing.T) {
+	dir := t.TempDir()
+	writeTestJSON(t, dir, "note.json", `{
+		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
+		"textContent": "Hybrid mode note for error counting verification test",
+		"title": "Hybrid Error Count", "userEditedTimestampUsec": 1712000000000000,
+		"createdTimestampUsec": 1711900000000000,
+		"labels": [], "annotations": [], "attachments": [], "listContent": [], "sharees": []
+	}`)
+
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":            "hybrid",
+			"import_dir":           dir,
+			"gkeep_enabled":        true,
+			"warning_acknowledged": true,
+		},
+	}
+
+	c := New("google-keep")
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Takeout succeeds (1 artifact), gkeep fails → partial success → degraded
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Errorf("artifacts = %d, want 1", len(artifacts))
+	}
+	if c.Health(context.Background()) != "degraded" {
+		t.Errorf("health = %q, want degraded (hybrid with gkeep failure)", c.Health(context.Background()))
+	}
+}

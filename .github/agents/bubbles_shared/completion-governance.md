@@ -8,7 +8,7 @@ Completion flows bottom-up only:
 
 1. A DoD item is implemented.
 2. The item is validated with a real command or tool run.
-3. Raw evidence is recorded inline.
+3. Raw evidence is recorded inline with a `**Claim Source:**` provenance tag (see evidence-rules.md).
 4. Only then may the item be marked `[x]`.
 5. A scope is `Done` only when every DoD item is `[x]` with real evidence.
 6. A spec is `done` only when every scope is `Done`.
@@ -20,13 +20,17 @@ If any link in that chain is false, completion state must be lowered immediately
 - Each DoD item requires its own validation and its own evidence.
 - Batch-checking multiple items from one generic run is invalid.
 - Evidence must be current-session raw output with recognizable terminal or tool signals.
+- Evidence must include a `**Claim Source:**` tag (`executed`, `interpreted`, or `not-run`). See evidence-rules.md for the Evidence Provenance Taxonomy.
+- Only `executed` evidence permits `[x]` without further review. `interpreted` evidence permits `[x]` but requires audit verification.
+- `not-run` evidence MUST NOT be used to mark `[x]` — the item stays `[ ]` with an Uncertainty Declaration.
 - If execution fails, the item remains `[ ]` until fixed and re-run.
+- If an item cannot be verified, it MUST remain `[ ]` with an Uncertainty Declaration (see evidence-rules.md). An honest gap is preferred over fabricated completion (see Honesty Incentive in critical-requirements.md).
 
 ## Scope Completion Rules
 
 A scope cannot be `Done` (or `Done with Concerns`) when any of these are true:
 
-- any DoD item is unchecked
+- any DoD item is unchecked (unless it has an approved Uncertainty Declaration that was resolved by audit)
 - any checked DoD item lacks inline evidence
 - required test types have not run
 - evidence shows failure

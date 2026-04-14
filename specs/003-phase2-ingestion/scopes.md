@@ -429,7 +429,7 @@ Scenario: SCN-003-017b YouTube API quota exhaustion
 
 ## Scope 5: Bookmarks Import
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Depends On:** Scope 1
 
@@ -497,8 +497,8 @@ Scenario: SCN-003-021b Malformed bookmark file rejected
   > Evidence: `internal/pipeline/dedup.go` — SHA-256 content hash dedup. Bookmarks use source_url for dedup via ToRawArtifacts with SourceRef = URL.
 - [x] Async processing with progress reporting
   > Evidence: `internal/connector/bookmarks/bookmarks.go` — ToRawArtifacts converts bookmarks to RawArtifact slice for NATS async pipeline. Test: TestToRawArtifacts.
-- [x] POST /api/bookmarks/import endpoint works
-  > Evidence: `internal/api/router.go` wires routes. Bookmark import goes through capture pipeline via NATS.
+- [ ] POST /api/bookmarks/import endpoint works
+  > Evidence: **NOT IMPLEMENTED** — No `/api/bookmarks/import` route exists in `internal/api/router.go`. Bookmarks import is implemented via directory-based `BookmarksConnector` in `internal/connector/bookmarks/connector.go`, which watches `BOOKMARKS_IMPORT_DIR` for new files. The HTTP upload endpoint was never wired. (Reconciled 2026-04-12)
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior
   > Evidence: `internal/connector/bookmarks/bookmarks_test.go` — 4 tests: TestParseChromeJSON, TestParseNetscapeHTML, TestFolderToTopicMapping, TestToRawArtifacts.
 - [x] Broader E2E regression suite passes
@@ -586,7 +586,7 @@ Scenario: SCN-003-026b Momentum calculation with zero activity windows
 - [x] Daily lifecycle cron recalculates all topic momentum scores
   > Evidence: `internal/topics/lifecycle.go` — Lifecycle.UpdateAllMomentum queries all non-archived topics and recalculates momentum via CalculateMomentum.
 - [x] State transitions execute correctly (emerging -> active -> hot -> cooling -> dormant -> archived)
-  > Evidence: `internal/topics/lifecycle.go` — TransitionState function with momentum thresholds: >=15 hot, >=8 active, >=3 cooling/emerging, <1 dormant. Tests: 8 transition tests in lifecycle_test.go.
+  > Evidence: `internal/topics/lifecycle.go` — TransitionState function with momentum thresholds: >50 hot, >=10 active, >=3 cooling/emerging, >=1 cooling/emerging, <1 dormant. Tests: 8 transition tests in lifecycle_test.go.
 - [x] Hot topics surfaced in daily digest
   > Evidence: `internal/digest/generator.go` — digest includes HotTopics. `internal/topics/lifecycle.go` logs state transitions to hot.
 - [x] Decay notifications queued (max 3/month)
@@ -606,9 +606,9 @@ Scenario: SCN-003-026b Momentum calculation with zero activity windows
 - [x] SCN-003-022 Topic momentum calculation matches R-208 formula with weighted captures and decay
   > Evidence: `internal/topics/lifecycle.go` CalculateMomentum. `lifecycle_test.go` TestCalculateMomentum verifies range 20-35.
 - [x] SCN-003-023 Topic state transition from emerging to active at threshold
-  > Evidence: `internal/topics/lifecycle.go` TransitionState returns StateActive at momentum>=8. `lifecycle_test.go` TestTransitionState subtests.
+  > Evidence: `internal/topics/lifecycle.go` TransitionState returns StateActive at momentum>=10. `lifecycle_test.go` TestTransitionState subtests.
 - [x] SCN-003-024 Topic goes hot at momentum above 50 and surfaced in daily digest
-  > Evidence: `internal/topics/lifecycle.go` TransitionState returns StateHot at momentum>=15. `lifecycle_test.go` TestTransitionState/emerging_to_hot.
+  > Evidence: `internal/topics/lifecycle.go` TransitionState returns StateHot at momentum>50. `lifecycle_test.go` TestTransitionState/emerging_to_hot.
 - [x] SCN-003-025 Topic decay to dormant after 0 captures in 90 days with notification
   > Evidence: `internal/topics/lifecycle.go` TransitionState emerging/cooling to dormant at <1 momentum. `lifecycle_test.go` TestTransitionState_EmergingToDormant.
 - [x] SCN-003-026 Archived topic resurfaces on new capture back to active
@@ -620,7 +620,7 @@ Scenario: SCN-003-026b Momentum calculation with zero activity windows
 
 ## Scope 7: Settings UI Connectors
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P1
 **Depends On:** Scope 2, Scope 3, Scope 4, Scope 5
 
@@ -682,14 +682,14 @@ Scenario: SCN-003-030b OAuth redirect failure
 | 7 | Canary: settings page renders without connectors | Unit | internal/web/handler_test.go | Canary |
 
 ### Definition of Done
-- [x] Connector cards show status, last sync, items, errors
-  > Evidence: `internal/web/handler.go` — SettingsPage handler renders settings.html template. `internal/web/templates.go` — settings.html template with connector status display.
+- [ ] Connector cards show status, last sync, items, errors
+  > Evidence: **PARTIAL** — `internal/web/handler.go` SettingsPage renders connector name + enabled/disabled + last_error. Template does NOT show last_sync timestamp or items_synced count. Missing: last sync time, items synced count, sync-now button. (Reconciled 2026-04-12)
 - [x] OAuth connect/disconnect flow works for Google services
   > Evidence: `internal/auth/oauth.go` — GenericOAuth2 with AuthURL, ExchangeCode, RefreshToken. GoogleOAuth2Scopes covers Gmail/Calendar/YouTube. Tests: TestGenericOAuth2_AuthURL, TestGoogleOAuth2Scopes.
-- [x] Manual "Sync Now" button triggers immediate sync
-  > Evidence: `internal/connector/supervisor.go` — Supervisor.StartConnector can trigger immediate sync. Web handler wires sync trigger via HTMX.
-- [x] Bookmark file upload with progress reporting
-  > Evidence: `internal/connector/bookmarks/bookmarks.go` — ParseChromeJSON + ParseNetscapeHTML with ToRawArtifacts for batch processing.
+- [ ] Manual "Sync Now" button triggers immediate sync
+  > Evidence: **NOT IMPLEMENTED** — `internal/connector/supervisor.go` has `StartConnector` method, but NO web route (POST handler) exists to trigger it from the UI. The settings page has no HTMX interactivity. (Reconciled 2026-04-12)
+- [ ] Bookmark file upload with progress reporting
+  > Evidence: **NOT IMPLEMENTED** — Bookmark parsers exist in `internal/connector/bookmarks/bookmarks.go` (ParseChromeJSON, ParseNetscapeHTML), but NO file upload HTTP handler or web route exists. Bookmarks import works via directory-based `BookmarksConnector` watching `BOOKMARKS_IMPORT_DIR`, not HTTP upload. (Reconciled 2026-04-12)
 - [x] All status indicators use monochrome icons, no emoji
   > Evidence: `internal/web/icons/` — SVG icon set. Templates use template helpers, no emoji.
 - [x] Canary test verifies settings page renders without active connectors

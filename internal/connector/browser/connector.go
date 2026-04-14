@@ -82,13 +82,18 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		return fmt.Errorf("parse browser config: %w", err)
 	}
 
-	// Validate History file exists and is readable
-	if _, err := os.Stat(cfg.HistoryPath); os.IsNotExist(err) {
+	// Validate History file exists and is readable (R-002: "exists and is readable")
+	f, err := os.Open(cfg.HistoryPath)
+	if err != nil {
 		c.mu.Lock()
 		c.health = connector.HealthError
 		c.mu.Unlock()
-		return fmt.Errorf("chrome history file not found: %s", cfg.HistoryPath)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("chrome history file not found: %s", cfg.HistoryPath)
+		}
+		return fmt.Errorf("chrome history file not readable: %s: %w", cfg.HistoryPath, err)
 	}
+	f.Close()
 
 	c.mu.Lock()
 	c.config = cfg
@@ -148,7 +153,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			return nil, cursor, fmt.Errorf("copy history file (after retry): %w", err)
 		}
 	}
-	defer os.Remove(tmpPath)
+	defer func() {
+		if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			slog.Warn("failed to remove temp history file", "path", tmpPath, "error", removeErr)
+		}
+	}()
 
 	// CHAOS-F5: Check context before expensive parse.
 	if err := ctx.Err(); err != nil {
@@ -219,8 +228,22 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.health
+	h := c.health
+	histPath := c.config.HistoryPath
+	c.mu.RUnlock()
+
+	// R-013: Health MUST include whether the Chrome History file is currently accessible.
+	// If the connector is nominally healthy but the file has disappeared, transition to error.
+	if h == connector.HealthHealthy && histPath != "" {
+		if _, err := os.Stat(histPath); err != nil {
+			c.mu.Lock()
+			c.health = connector.HealthError
+			c.mu.Unlock()
+			slog.Warn("chrome history file no longer accessible", "path", histPath, "error", err)
+			return connector.HealthError
+		}
+	}
+	return h
 }
 
 func (c *Connector) Close() error {
@@ -340,17 +363,11 @@ func (c *Connector) processEntries(entries []HistoryEntry, prevCursor int64) ([]
 	var contentEntries []HistoryEntry
 
 	for _, e := range qualifying {
-		if IsSocialMedia(e.Domain) {
-			if c.config.SocialMediaIndividualThreshold > 0 && e.DwellTime >= c.config.SocialMediaIndividualThreshold {
-				// High-dwell social media → content track for individual "full" processing
-				contentEntries = append(contentEntries, e)
-			} else if c.config.SocialMediaIndividualThreshold > 0 {
-				socialEntries = append(socialEntries, e)
-			} else {
-				// Threshold not configured — treat as content
-				contentEntries = append(contentEntries, e)
-			}
+		if IsSocialMedia(e.Domain) && c.config.SocialMediaIndividualThreshold > 0 && e.DwellTime < c.config.SocialMediaIndividualThreshold {
+			// Below-threshold social media → aggregate track
+			socialEntries = append(socialEntries, e)
 		} else {
+			// Non-social, high-dwell social, or unconfigured threshold → content track
 			contentEntries = append(contentEntries, e)
 		}
 	}
@@ -578,6 +595,9 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 			cfg.InitialLookbackDays = int(v)
 		}
 	}
+	if cfg.InitialLookbackDays < 1 {
+		return BrowserConfig{}, fmt.Errorf("initial_lookback_days must be >= 1, got %d", cfg.InitialLookbackDays)
+	}
 
 	// repeat_visit_window
 	if rvw, ok := sc["repeat_visit_window"].(string); ok && rvw != "" {
@@ -615,6 +635,9 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 		case float64:
 			cfg.ContentFetchConcurrency = int(v)
 		}
+	}
+	if cfg.ContentFetchConcurrency < 1 {
+		return BrowserConfig{}, fmt.Errorf("content_fetch_concurrency must be >= 1, got %d", cfg.ContentFetchConcurrency)
 	}
 
 	// content_fetch_domain_delay

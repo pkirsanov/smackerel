@@ -45,6 +45,10 @@ Load the smallest authoritative module set that matches the role and current pha
 | How do I invalidate stale spec/design/scopes safely? | `artifact-freshness.md` |
 | Can this scope/spec be marked complete? | `completion-governance.md` |
 | What does `done_with_concerns` mean? | `completion-governance.md` |
+| What is the Honesty Incentive? | `critical-requirements.md` |
+| What are the evidence provenance rules? | `evidence-rules.md` → Evidence Provenance Taxonomy |
+| What is an Uncertainty Declaration? | `evidence-rules.md` → Uncertainty Declaration Protocol |
+| What are Spot-Check Recommendations? | `audit-core.md` → Spot-Check Recommendations |
 | What Tier 2 checks apply to this agent? | `validation-profiles.md` |
 | What test categories and evidence rules apply? | `quality-gates.md`, `evidence-rules.md`, `test-fidelity.md` |
 | What artifacts must exist and how are scopes structured? | `artifact-lifecycle.md`, `scope-templates.md`, `scope-workflow.md` |

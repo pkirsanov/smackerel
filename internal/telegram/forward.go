@@ -93,8 +93,9 @@ func (b *Bot) handleForwardedMessage(ctx context.Context, msg *tgbotapi.Message)
 
 		text := msgTextTruncated(msg)
 
-		// Detect media before building the message
-		hasMedia := msg.Photo != nil || msg.Video != nil || msg.Document != nil
+		// Detect media using the shared extraction helper (single source of truth in media.go)
+		mediaItem := extractMediaItem(msg)
+		hasMedia := mediaItem.Type != "unknown"
 
 		// Use placeholder for text-less forwarded messages (stickers, contacts, etc.)
 		if text == "" && !hasMedia {
@@ -108,21 +109,10 @@ func (b *Bot) handleForwardedMessage(ctx context.Context, msg *tgbotapi.Message)
 			Text:       text,
 		}
 
-		// Check for media in forwarded message
-		if msg.Photo != nil {
+		if hasMedia {
 			cmsg.HasMedia = true
-			cmsg.MediaType = "photo"
-			if len(msg.Photo) > 0 {
-				cmsg.MediaRef = msg.Photo[len(msg.Photo)-1].FileID
-			}
-		} else if msg.Video != nil {
-			cmsg.HasMedia = true
-			cmsg.MediaType = "video"
-			cmsg.MediaRef = msg.Video.FileID
-		} else if msg.Document != nil {
-			cmsg.HasMedia = true
-			cmsg.MediaType = "document"
-			cmsg.MediaRef = msg.Document.FileID
+			cmsg.MediaType = mediaItem.Type
+			cmsg.MediaRef = mediaItem.FileID
 		}
 
 		b.assembler.Add(key, cmsg, meta)

@@ -16,6 +16,11 @@ import (
 	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
+// maxSynthesisTopicGroups limits the number of cross-domain topic clusters
+// evaluated per synthesis run. Capped to keep synthesis latency bounded and
+// surface only the strongest signals.
+const maxSynthesisTopicGroups = 10
+
 // InsightType represents the type of synthesis insight.
 type InsightType string
 
@@ -107,8 +112,8 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 		)
 		SELECT topic_id, name, artifact_ids, source_count FROM topic_groups
 		ORDER BY array_length(artifact_ids, 1) DESC
-		LIMIT 10
-	`)
+		LIMIT $1
+	`, maxSynthesisTopicGroups)
 	if err != nil {
 		return nil, fmt.Errorf("query clusters: %w", err)
 	}
@@ -116,6 +121,11 @@ func (e *Engine) RunSynthesis(ctx context.Context) ([]SynthesisInsight, error) {
 
 	var insights []SynthesisInsight
 	for rows.Next() {
+		// Check context between cluster evaluations
+		if ctx.Err() != nil {
+			return insights, ctx.Err()
+		}
+
 		var topicID, topicName string
 		var artifactIDs []string
 		var sourceCount int
@@ -182,11 +192,20 @@ func (e *Engine) CreateAlert(ctx context.Context, alert *Alert) error {
 	const maxTitleLen = 200
 	const maxBodyLen = 2000
 	if len(alert.Title) > maxTitleLen {
+		slog.Warn("alert title truncated", "original_len", len(alert.Title), "max_len", maxTitleLen)
 		alert.Title = stringutil.TruncateUTF8(alert.Title, maxTitleLen)
 	}
 	if len(alert.Body) > maxBodyLen {
+		slog.Warn("alert body truncated", "original_len", len(alert.Body), "max_len", maxBodyLen)
 		alert.Body = stringutil.TruncateUTF8(alert.Body, maxBodyLen)
 	}
+	// Sanitize control characters from connector-imported data (SEC-021-002, CWE-116).
+	// Titles are single-line: collapse all control chars, newlines, and tabs to spaces.
+	// Bodies may contain intentional newlines (e.g., meeting briefs) so only strip
+	// true control chars (null bytes, carriage returns, escape sequences).
+	alert.Title = strings.ReplaceAll(strings.ReplaceAll(
+		stringutil.SanitizeControlChars(alert.Title), "\n", " "), "\t", " ")
+	alert.Body = stringutil.SanitizeControlChars(alert.Body)
 	if !validAlertTypes[alert.AlertType] {
 		return fmt.Errorf("unknown alert type: %s", alert.AlertType)
 	}
@@ -252,17 +271,25 @@ func (e *Engine) SnoozeAlert(ctx context.Context, alertID string, until time.Tim
 	return nil
 }
 
+// maxPendingAlertAgeDays bounds how long a pending alert remains eligible for
+// delivery. Alerts older than this are effectively dead-lettered to prevent
+// infinite retry loops from poison alerts that Telegram consistently rejects
+// (CWE-770: Allocation of Resources Without Limits).
+const maxPendingAlertAgeDays = 7
+
 // GetPendingAlerts returns alerts ready for delivery (max 2/day).
 func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
 	if e.Pool == nil {
 		return nil, fmt.Errorf("alert delivery requires a database connection")
 	}
-	// Single query: compute remaining delivery slots and fetch pending alerts in one round-trip
+	// Single query: compute remaining delivery slots and fetch pending alerts in one round-trip.
+	// The age filter (SEC-021-001) prevents poison alerts from retrying indefinitely.
 	rows, err := e.Pool.Query(ctx, `
 		SELECT id, alert_type, title, body, priority, status, artifact_id, created_at
 		FROM alerts
-		WHERE status = 'pending'
-		   OR (status = 'snoozed' AND snooze_until <= NOW())
+		WHERE (status = 'pending'
+		   OR (status = 'snoozed' AND snooze_until <= NOW()))
+		  AND created_at > NOW() - INTERVAL '7 days'
 		ORDER BY priority, created_at
 		LIMIT GREATEST(0, 2 - (
 			SELECT COUNT(*) FROM alerts
@@ -403,6 +430,12 @@ func (e *Engine) GeneratePreMeetingBriefs(ctx context.Context) ([]MeetingBrief, 
 			slog.Debug("failed to unmarshal meeting attendees", "event_id", eventID, "error", err)
 		}
 
+		// Cap attendees to prevent excessive per-attendee DB queries.
+		const maxAttendeesPerMeeting = 10
+		if len(attendeeEmails) > maxAttendeesPerMeeting {
+			attendeeEmails = attendeeEmails[:maxAttendeesPerMeeting]
+		}
+
 		brief := MeetingBrief{
 			EventID:    eventID,
 			EventTitle: title,
@@ -418,15 +451,21 @@ func (e *Engine) GeneratePreMeetingBriefs(ctx context.Context) ([]MeetingBrief, 
 		// 3. Assemble brief text
 		brief.BriefText = assembleBriefText(brief)
 
-		// 4. Create alert to prevent duplicate briefs
-		if err := e.CreateAlert(ctx, &Alert{
+		// 4. Create dedup alert to prevent duplicate briefs.
+		// Mark as delivered immediately since the brief is sent directly by the
+		// scheduler — prevents the alert delivery sweep from re-sending it
+		// (SEC-021-003: double-delivery of meeting brief alerts).
+		briefAlert := &Alert{
 			AlertType:  AlertMeetingBrief,
 			Title:      fmt.Sprintf("Meeting brief: %s", title),
 			Body:       brief.BriefText,
 			Priority:   1,
 			ArtifactID: eventID,
-		}); err != nil {
+		}
+		if err := e.CreateAlert(ctx, briefAlert); err != nil {
 			slog.Warn("failed to create meeting brief alert", "event", eventID, "error", err)
+		} else if err := e.MarkAlertDelivered(ctx, briefAlert.ID); err != nil {
+			slog.Warn("failed to mark brief alert delivered", "event", eventID, "error", err)
 		}
 
 		briefs = append(briefs, brief)
@@ -845,6 +884,11 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 
 	var created int
 	for rows.Next() {
+		if ctx.Err() != nil {
+			slog.Warn("bill alert production context cancelled, remaining rows skipped", "created_so_far", created)
+			break
+		}
+
 		var id, serviceName, currency, billingFreq string
 		var amount float64
 		var firstSeen time.Time
@@ -883,7 +927,7 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 			}
 		}
 
-		daysUntilBilling := int(time.Until(nextBilling).Hours()/24) + 1
+		daysUntilBilling := calendarDaysBetween(localToday, nextBilling)
 		if daysUntilBilling < 0 || daysUntilBilling > 3 {
 			continue
 		}
@@ -940,6 +984,11 @@ func (e *Engine) ProduceTripPrepAlerts(ctx context.Context) error {
 
 	var created int
 	for rows.Next() {
+		if ctx.Err() != nil {
+			slog.Warn("trip prep alert production context cancelled, remaining rows skipped", "created_so_far", created)
+			break
+		}
+
 		var id, destination string
 		var startDate time.Time
 		if err := rows.Scan(&id, &destination, &startDate); err != nil {
@@ -979,10 +1028,13 @@ func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
 		return fmt.Errorf("return window alert production requires a database connection")
 	}
 
+	// Use a safe date cast so a single artifact with a malformed return_deadline
+	// doesn't cause the entire query to fail (killing all return window detection).
 	rows, err := e.Pool.Query(ctx, `
 		SELECT id, title, metadata->>'return_deadline' AS return_deadline
 		FROM artifacts
 		WHERE metadata->>'return_deadline' IS NOT NULL
+		  AND metadata->>'return_deadline' ~ '^\d{4}-\d{2}-\d{2}$'
 		  AND (metadata->>'return_deadline')::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '5 days'
 		  AND NOT EXISTS (
 		    SELECT 1 FROM alerts
@@ -999,6 +1051,11 @@ func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
 
 	var created int
 	for rows.Next() {
+		if ctx.Err() != nil {
+			slog.Warn("return window alert production context cancelled, remaining rows skipped", "created_so_far", created)
+			break
+		}
+
 		var id, title, deadlineStr string
 		if err := rows.Scan(&id, &title, &deadlineStr); err != nil {
 			slog.Warn("return window scan failed", "error", err)
@@ -1057,6 +1114,11 @@ func (e *Engine) ProduceRelationshipCoolingAlerts(ctx context.Context) error {
 
 	var created int
 	for rows.Next() {
+		if ctx.Err() != nil {
+			slog.Warn("relationship cooling alert production context cancelled, remaining rows skipped", "created_so_far", created)
+			break
+		}
+
 		var id, name string
 		var daysSince int
 		if err := rows.Scan(&id, &name, &daysSince); err != nil {
@@ -1115,4 +1177,13 @@ func clampDay(year int, month time.Month, day int) time.Time {
 		day = lastDay
 	}
 	return time.Date(year, month, day, 0, 0, 0, 0, time.Local)
+}
+
+// calendarDaysBetween counts whole calendar days from 'from' to 'to',
+// ignoring time-of-day. Uses UTC normalisation so DST transitions
+// (23-hour or 25-hour days) don't cause off-by-one errors.
+func calendarDaysBetween(from, to time.Time) int {
+	fromUTC := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
+	toUTC := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
+	return int(toUTC.Sub(fromUTC).Hours() / 24)
 }

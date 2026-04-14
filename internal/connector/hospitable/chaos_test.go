@@ -1044,8 +1044,9 @@ func TestChaos_ConfigHugePageSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.PageSize != 999999 {
-		t.Errorf("huge page size should be accepted: got %d", cfg.PageSize)
+	// SEC-012-003: huge page_size must be capped at maxPageSize (CWE-400)
+	if cfg.PageSize != maxPageSize {
+		t.Errorf("huge page size should be capped at %d: got %d", maxPageSize, cfg.PageSize)
 	}
 }
 
@@ -1631,5 +1632,546 @@ func TestChaos_ConfigNegativeLookback(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "negative") {
 		t.Errorf("expected negative lookback error, got: %v", err)
+	}
+}
+
+// --- Chaos regression: Message sync fan-out cap ---
+
+func TestChaos_MessageSyncFanOutCap(t *testing.T) {
+	// Override the cap to a small value for testing.
+	oldCap := maxMessageSyncReservations
+	maxMessageSyncReservations = 3
+	defer func() { maxMessageSyncReservations = oldCap }()
+
+	var msgFetches atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/properties":
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+		case r.URL.Path == "/reservations":
+			var reservations []Reservation
+			for i := 0; i < 10; i++ {
+				reservations = append(reservations, Reservation{
+					ID: fmt.Sprintf("r%d", i), PropertyID: "p1",
+					GuestName: fmt.Sprintf("Guest %d", i),
+					CheckIn:   "2026-04-15", CheckOut: "2026-04-18",
+					BookedAt: time.Now(),
+				})
+			}
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: reservations, Total: 10})
+		case strings.Contains(r.URL.Path, "/messages"):
+			msgFetches.Add(1)
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		case r.URL.Path == "/reviews":
+			json.NewEncoder(w).Encode(PaginatedResponse[Review]{Data: []Review{}, Total: 0})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 100,
+		SyncProperties: true, SyncReservations: true, SyncMessages: true, SyncReviews: true,
+		TierProperties: "light", TierReservations: "standard",
+		TierMessages: "full", TierReviews: "full", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 100)
+	c.health = connector.HealthHealthy
+
+	artifacts, newCursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// Verify message fetches were capped at 3, not 10.
+	fetches := msgFetches.Load()
+	if fetches > int64(maxMessageSyncReservations) {
+		t.Errorf("CHAOS: message fetches (%d) exceeded cap (%d) — fan-out not bounded",
+			fetches, maxMessageSyncReservations)
+	}
+	if fetches != int64(maxMessageSyncReservations) {
+		t.Errorf("expected exactly %d message fetches, got %d", maxMessageSyncReservations, fetches)
+	}
+
+	// Verify reservation artifacts are still all present (cap only affects messages).
+	resCount := 0
+	for _, a := range artifacts {
+		if a.ContentType == "reservation/str-booking" {
+			resCount++
+		}
+	}
+	if resCount != 10 {
+		t.Errorf("expected 10 reservation artifacts, got %d", resCount)
+	}
+
+	// Message cursor must NOT advance because fan-out was capped (incomplete coverage).
+	var cur SyncCursor
+	json.Unmarshal([]byte(newCursor), &cur)
+	if !cur.Messages.IsZero() {
+		// parseCursor for fresh sync sets Messages to lookback time; if it advanced
+		// past that it means cursor progressed despite incomplete coverage.
+		lookback := time.Now().UTC().AddDate(0, 0, -90)
+		if cur.Messages.After(lookback.Add(time.Minute)) {
+			t.Errorf("CHAOS: message cursor advanced despite capped fan-out: %v", cur.Messages)
+		}
+	}
+}
+
+// --- Chaos regression: Cursor preserved on context cancellation ---
+
+func TestChaos_CursorPreservedOnCancellation(t *testing.T) {
+	// resRequested signals that the reservation request has reached the server,
+	// ensuring properties have been fully served and processed by the client
+	// before we cancel the context. This eliminates the race between the
+	// server writing the properties response and the client reading it.
+	resRequested := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data: []Property{{ID: "p1", Name: "House", UpdatedAt: time.Now()}}, Total: 1,
+			})
+		case strings.Contains(r.URL.Path, "/reservations"):
+			// Signal that reservoir request arrived (properties fully processed).
+			select {
+			case resRequested <- struct{}{}:
+			default:
+			}
+			// Block until context is cancelled to simulate slow downstream API
+			<-r.Context().Done()
+		default:
+			<-r.Context().Done()
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: true, SyncMessages: false, SyncReviews: false,
+		TierProperties: "light", TierReservations: "standard",
+		InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Run sync in a goroutine; cancel after reservations request arrives
+	// (which proves properties completed successfully).
+	type syncResult struct {
+		artifacts []connector.RawArtifact
+		cursor    string
+		err       error
+	}
+	resultCh := make(chan syncResult, 1)
+	go func() {
+		arts, cur, err := c.Sync(ctx, "")
+		resultCh <- syncResult{arts, cur, err}
+	}()
+
+	// Wait for reservation request to reach server (properties already done), then cancel.
+	<-resRequested
+	cancel()
+
+	result := <-resultCh
+
+	// The sync should have returned an error (cancelled during reservations),
+	// but the cursor should preserve the properties advancement.
+	if result.cursor == "" {
+		t.Fatal("CHAOS: cursor is empty after partial sync — progress lost")
+	}
+
+	var cur SyncCursor
+	if err := json.Unmarshal([]byte(result.cursor), &cur); err != nil {
+		t.Fatalf("CHAOS: cursor is not valid JSON: %v", err)
+	}
+
+	// Properties cursor should have advanced (not zero, not the original lookback).
+	if cur.Properties.IsZero() {
+		t.Errorf("CHAOS: properties cursor is zero — sync progress lost on cancellation")
+	}
+	// Properties cursor should be recent (within the last minute).
+	if time.Since(cur.Properties) > time.Minute {
+		t.Errorf("CHAOS: properties cursor not recent: %v", cur.Properties)
+	}
+}
+
+// --- Chaos regression: Property name cache pruning under cap ---
+
+func TestChaos_PropertyNameCachePruning(t *testing.T) {
+	oldCap := maxPropertyNameCacheSize
+	maxPropertyNameCacheSize = 5
+	defer func() { maxPropertyNameCacheSize = oldCap }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data: []Property{
+					{ID: "p1", Name: "House 1", UpdatedAt: time.Now()},
+					{ID: "p2", Name: "House 2", UpdatedAt: time.Now()},
+				},
+				Total: 2,
+			})
+		case strings.Contains(r.URL.Path, "/reservations"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{
+				Data: []Reservation{{
+					ID: "r1", PropertyID: "p1", GuestName: "John",
+					CheckIn: "2026-04-15", CheckOut: "2026-04-18", BookedAt: time.Now(),
+				}},
+				Total: 1,
+			})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	// Pre-populate propertyNames with 10 entries (above the cap of 5).
+	for i := 0; i < 10; i++ {
+		c.propertyNames[fmt.Sprintf("old-p%d", i)] = fmt.Sprintf("Old House %d", i)
+	}
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: true, SyncMessages: false, SyncReviews: false,
+		TierProperties: "light", TierReservations: "standard",
+		InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	_, newCursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	var cur SyncCursor
+	json.Unmarshal([]byte(newCursor), &cur)
+
+	// Cache should have been pruned to only referenced properties.
+	// The sync produced artifacts referencing p1 and p2 (from properties and reservation).
+	if len(cur.PropertyNames) > maxPropertyNameCacheSize {
+		t.Errorf("CHAOS: property name cache in cursor (%d) exceeds cap (%d) — unbounded growth",
+			len(cur.PropertyNames), maxPropertyNameCacheSize)
+	}
+
+	// p1 must be preserved (referenced by reservation artifact).
+	if cur.PropertyNames["p1"] != "House 1" {
+		t.Errorf("CHAOS: referenced property p1 was pruned from cache: %v", cur.PropertyNames)
+	}
+
+	// Old entries should NOT be in the cursor (they're not referenced by any artifact).
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("old-p%d", i)
+		if _, exists := cur.PropertyNames[key]; exists {
+			t.Errorf("CHAOS: unreferenced property %s should have been pruned from cursor", key)
+		}
+	}
+}
+
+// --- SEC-012-005: Control character sanitization in user-supplied text (CWE-116) ---
+
+func TestSEC012005_GuestNameControlChars(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard"}
+	r := Reservation{
+		ID:         "res-ctrl",
+		PropertyID: "p1",
+		GuestName:  "John\x00Smith\x01\x02\x03\rDoe",
+		CheckIn:    "2026-04-15",
+		CheckOut:   "2026-04-18",
+		BookedAt:   time.Now(),
+	}
+
+	a := NormalizeReservation(r, "Beach House", cfg)
+
+	// Null bytes and control chars must be stripped from title and content
+	if strings.ContainsAny(a.Title, "\x00\x01\x02\x03\r") {
+		t.Errorf("SEC-012-005: title still contains control characters: %q", a.Title)
+	}
+	if strings.ContainsAny(a.RawContent, "\x00\x01\x02\x03\r") {
+		t.Errorf("SEC-012-005: content still contains control characters: %q", a.RawContent)
+	}
+	// Guest name in metadata should also be sanitized
+	if name, ok := a.Metadata["guest_name"].(string); ok {
+		if strings.ContainsAny(name, "\x00\x01\x02\x03\r") {
+			t.Errorf("SEC-012-005: metadata guest_name still contains control characters: %q", name)
+		}
+	}
+}
+
+func TestSEC012005_MessageBodyControlChars(t *testing.T) {
+	cfg := HospitableConfig{TierMessages: "full"}
+	m := Message{
+		ID:     "msg-ctrl",
+		Sender: "Evil\x00Sender\x1B[31m",
+		Body:   "Normal text\x00hidden\rinjection\x1B[0m",
+		SentAt: time.Now(),
+	}
+
+	a := NormalizeMessage(m, "res-1", cfg)
+
+	if strings.ContainsAny(a.Title, "\x00\x1B\r") {
+		t.Errorf("SEC-012-005: message title contains control chars: %q", a.Title)
+	}
+	if strings.ContainsAny(a.RawContent, "\x00\x1B\r") {
+		t.Errorf("SEC-012-005: message content contains control chars: %q", a.RawContent)
+	}
+}
+
+func TestSEC012005_ReviewTextControlChars(t *testing.T) {
+	cfg := HospitableConfig{TierReviews: "full"}
+	r := Review{
+		ID:           "rev-ctrl",
+		PropertyID:   "p1",
+		Rating:       4.5,
+		ReviewText:   "Great\x00stay\rno\x1Bproblems",
+		HostResponse: "Thanks\x00for\rstaying\x01!",
+		Channel:      "Airbnb",
+		SubmittedAt:  time.Now(),
+	}
+
+	a := NormalizeReview(r, "Beach\x00House", cfg)
+
+	if strings.ContainsAny(a.Title, "\x00\x01\r\x1B") {
+		t.Errorf("SEC-012-005: review title contains control chars: %q", a.Title)
+	}
+	if strings.ContainsAny(a.RawContent, "\x00\x01\r\x1B") {
+		t.Errorf("SEC-012-005: review content contains control chars: %q", a.RawContent)
+	}
+}
+
+func TestSEC012005_PropertyNameControlChars(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:        "prop-ctrl",
+		Name:      "Beach\x00House\rEvil\x1BPlace",
+		UpdatedAt: time.Now(),
+	}
+
+	a := NormalizeProperty(p, cfg)
+
+	if strings.ContainsAny(a.Title, "\x00\r\x1B") {
+		t.Errorf("SEC-012-005: property title contains control chars: %q", a.Title)
+	}
+	if strings.ContainsAny(a.RawContent, "\x00\r\x1B") {
+		t.Errorf("SEC-012-005: property content contains control chars: %q", a.RawContent)
+	}
+}
+
+// --- SEC-012-006: ActiveReservationIDs cursor cap (CWE-770) ---
+
+func TestSEC012006_ActiveReservationIDsCursorCap(t *testing.T) {
+	oldCap := maxMessageSyncReservations
+	maxMessageSyncReservations = 5
+	defer func() { maxMessageSyncReservations = oldCap }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/properties":
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+		case r.URL.Path == "/reservations":
+			var reservations []Reservation
+			for i := 0; i < 20; i++ {
+				reservations = append(reservations, Reservation{
+					ID: fmt.Sprintf("r-%04d", i), PropertyID: "p1",
+					GuestName: "Guest", CheckIn: "2026-04-15", CheckOut: "2026-04-18",
+					BookedAt: time.Now(),
+				})
+			}
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: reservations, Total: 20})
+		case strings.Contains(r.URL.Path, "/messages"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		case r.URL.Path == "/reviews":
+			json.NewEncoder(w).Encode(PaginatedResponse[Review]{Data: []Review{}, Total: 0})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 100,
+		SyncProperties: true, SyncReservations: true, SyncMessages: true, SyncReviews: true,
+		TierProperties: "light", TierReservations: "standard",
+		TierMessages: "full", TierReviews: "full", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 100)
+	c.health = connector.HealthHealthy
+
+	_, newCursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	var cur SyncCursor
+	if err := json.Unmarshal([]byte(newCursor), &cur); err != nil {
+		t.Fatalf("cursor unmarshal: %v", err)
+	}
+
+	// ActiveReservationIDs in cursor must be capped at maxMessageSyncReservations
+	if len(cur.ActiveReservationIDs) > maxMessageSyncReservations {
+		t.Errorf("SEC-012-006: ActiveReservationIDs (%d) exceeds cap (%d) — unbounded cursor growth",
+			len(cur.ActiveReservationIDs), maxMessageSyncReservations)
+	}
+}
+
+// --- SEC-012-007: Property name cache string length cap (CWE-400) ---
+
+func TestSEC012007_OversizedPropertyIDSkipped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data: []Property{
+					{ID: strings.Repeat("x", maxCacheStringLen+1), Name: "Oversized ID", UpdatedAt: time.Now()},
+					{ID: "p-normal", Name: "Normal Prop", UpdatedAt: time.Now()},
+				},
+				Total: 2,
+			})
+		case strings.Contains(r.URL.Path, "/reservations"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{
+				Data: []Reservation{{
+					ID: "r1", PropertyID: "p-normal", GuestName: "Alice",
+					CheckIn: "2026-04-15", CheckOut: "2026-04-18", BookedAt: time.Now(),
+				}},
+				Total: 1,
+			})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: true, SyncMessages: false, SyncReviews: false,
+		TierProperties: "light", TierReservations: "standard", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	_, newCursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	var cur SyncCursor
+	json.Unmarshal([]byte(newCursor), &cur)
+
+	// Oversized ID must NOT appear in cursor property names
+	oversizedKey := strings.Repeat("x", maxCacheStringLen+1)
+	if _, exists := cur.PropertyNames[oversizedKey]; exists {
+		t.Errorf("SEC-012-007: oversized property ID was stored in cursor cache")
+	}
+
+	// Normal ID should still be cached
+	if cur.PropertyNames["p-normal"] != "Normal Prop" {
+		t.Errorf("SEC-012-007: normal property ID should be cached, got: %v", cur.PropertyNames["p-normal"])
+	}
+}
+
+func TestSEC012007_OversizedPropertyNameSkipped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data: []Property{
+					{ID: "p-bigname", Name: strings.Repeat("N", maxCacheStringLen+1), UpdatedAt: time.Now()},
+					{ID: "p-ok", Name: "Small Name", UpdatedAt: time.Now()},
+				},
+				Total: 2,
+			})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: []Reservation{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: false, SyncMessages: false, SyncReviews: false,
+		TierProperties: "light", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	_, newCursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	var cur SyncCursor
+	json.Unmarshal([]byte(newCursor), &cur)
+
+	// Property with oversized name must not appear in cache
+	if _, exists := cur.PropertyNames["p-bigname"]; exists {
+		t.Errorf("SEC-012-007: property with oversized name was stored in cursor cache")
+	}
+
+	// Property with normal name should be cached
+	if cur.PropertyNames["p-ok"] != "Small Name" {
+		t.Errorf("SEC-012-007: normal property should be cached, got: %v", cur.PropertyNames["p-ok"])
+	}
+}
+
+func TestSEC012007_OversizedCursorPropertyNamesSkippedOnLoad(t *testing.T) {
+	// Simulate a cursor with pre-existing oversized entries (persisted before the fix)
+	oversizedCursor := SyncCursor{
+		PropertyNames: map[string]string{
+			strings.Repeat("K", maxCacheStringLen+1): "Oversized Key",
+			"normal-key":                             strings.Repeat("V", maxCacheStringLen+1),
+			"ok-key":                                 "OK Value",
+		},
+	}
+	cursorJSON, _ := json.Marshal(oversizedCursor)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: false, SyncMessages: false, SyncReviews: false,
+		TierProperties: "light", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	_, _, err := c.Sync(context.Background(), string(cursorJSON))
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Oversized key should NOT have been loaded into the in-memory cache
+	oversizedKey := strings.Repeat("K", maxCacheStringLen+1)
+	if _, exists := c.propertyNames[oversizedKey]; exists {
+		t.Errorf("SEC-012-007: oversized cursor key was loaded into memory cache")
+	}
+	// Oversized value should NOT have been loaded
+	if _, exists := c.propertyNames["normal-key"]; exists {
+		t.Errorf("SEC-012-007: cursor entry with oversized value was loaded into memory cache")
+	}
+	// Normal entry should be loaded
+	if c.propertyNames["ok-key"] != "OK Value" {
+		t.Errorf("SEC-012-007: normal cursor entry should be loaded, got: %q", c.propertyNames["ok-key"])
 	}
 }

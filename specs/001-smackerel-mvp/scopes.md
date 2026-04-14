@@ -127,7 +127,7 @@ Scenario: SCN-001-018 Navigation and UI chrome icons exist
 - [x] Go template partials for all 32 icons
     > Evidence: `internal/web/icons/icons.go` exports `AllIcons()` returning all 32 SVG strings as Go template partials. Used by `internal/web/handler.go`.
 - [x] SCN-001-004: Telegram bot uses text markers only — constants defined (. ? ! > - ~ # @)
-    > Evidence: `internal/telegram/format.go` defines 8 markers. `format_test.go::TestAllMarkers` verifies all 8 match expected set.
+    > Evidence: `internal/telegram/format.go` defines 8 markers (MarkerSuccess, MarkerUncertain, MarkerAction, MarkerInfo, MarkerListItem, MarkerContinued, MarkerHeading, MarkerMention). `format_test.go::TestMarkerConstants_Unique` asserts count == 8 and verifies all are distinct single-char-plus-space.
 - [x] SCN-001-004: No emoji in any system output (bot, web, digest, API)
     > Evidence: `format_test.go::TestContainsEmoji_True/False`, `TestSanitizeOutput`, `TestSCN001004_NoEmojiInOutput` verify emoji detection and sanitization.
 - [x] No external icon library imports (FontAwesome, Material Icons, etc.)
@@ -216,7 +216,7 @@ Scenario: SCN-001-009 No accent colors anywhere
 - [x] SCN-001-006: Dark theme renders correctly — auto-detects from OS prefers-color-scheme with warm near-black bg (#1A1A18)
     > Evidence: `templates.go` includes `@media (prefers-color-scheme: dark)` with `--bg: #1a1a18; --fg: #e8e8e4;`. Elements adapt via CSS custom properties.
 - [x] SCN-001-006: Manual dark mode toggle works and persists state
-    > Evidence: `templates.go` CSS uses `prefers-color-scheme: dark` media query for auto-detection. Theme variables cascade to all components.
+    > Evidence: `templates.go` includes a `<button class="theme-toggle">` with `toggleTheme()` JS function that reads/writes `localStorage.getItem('theme')`. `html[data-theme="dark"]` CSS rule overrides variables when toggle is active. Auto-detection via `prefers-color-scheme: dark` still applies as fallback.
 - [x] SCN-001-008: Typography uses system fonts (system-ui, -apple-system, etc.), zero custom font downloads
     > Evidence: `templates.go` body CSS: `font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;`. No `@font-face` declarations.
 - [x] SCN-001-008: Type scale applied — body 16px/1.6, h1 1.5rem

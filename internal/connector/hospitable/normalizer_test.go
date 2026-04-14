@@ -1,6 +1,7 @@
 package hospitable
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -590,5 +591,187 @@ func TestFirstNonEmptyNil(t *testing.T) {
 	got := firstNonEmpty(nil)
 	if got != "" {
 		t.Errorf("firstNonEmpty nil = %q, want empty", got)
+	}
+}
+
+// --- SEC-012-001: ListingURL scheme validation (CWE-79/601) ---
+
+func TestIsSafeURL(t *testing.T) {
+	cases := map[string]bool{
+		"https://airbnb.com/rooms/123": true,
+		"http://localhost:8080":        true,
+		"javascript:alert(1)":          false,
+		"data:text/html,<h1>xss</h1>":  false,
+		"vbscript:MsgBox('xss')":       false,
+		"JAVASCRIPT:alert(1)":          false, // case-insensitive
+		"ftp://evil.com/payload":       false,
+		"file:///etc/passwd":           false,
+		"":                             false,
+		"not-a-url":                    false,
+		"//evil.com/xss":               false, // protocol-relative
+	}
+	for u, want := range cases {
+		t.Run(u, func(t *testing.T) {
+			if got := isSafeURL(u); got != want {
+				t.Errorf("isSafeURL(%q) = %v, want %v", u, got, want)
+			}
+		})
+	}
+}
+
+func TestFirstSafeURL(t *testing.T) {
+	// Only http/https should be returned
+	got := firstSafeURL([]string{"javascript:alert(1)", "data:text/html,xss", "https://airbnb.com/rooms/123"})
+	if got != "https://airbnb.com/rooms/123" {
+		t.Errorf("firstSafeURL = %q, want https://airbnb.com/rooms/123", got)
+	}
+}
+
+func TestFirstSafeURL_AllUnsafe(t *testing.T) {
+	got := firstSafeURL([]string{"javascript:alert(1)", "data:text/html,xss", "vbscript:run"})
+	if got != "" {
+		t.Errorf("firstSafeURL all-unsafe = %q, want empty", got)
+	}
+}
+
+func TestFirstSafeURL_Nil(t *testing.T) {
+	got := firstSafeURL(nil)
+	if got != "" {
+		t.Errorf("firstSafeURL nil = %q, want empty", got)
+	}
+}
+
+func TestNormalizePropertyRejectsJavascriptURL(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:          "p-xss",
+		Name:        "XSS Property",
+		ListingURLs: []string{"javascript:alert(document.cookie)"},
+		UpdatedAt:   time.Now(),
+	}
+	a := NormalizeProperty(p, cfg)
+	if a.URL != "" {
+		t.Errorf("SEC-012-001: javascript: URL must be rejected (CWE-79), got %q", a.URL)
+	}
+}
+
+func TestNormalizePropertyRejectsDataURL(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:          "p-data",
+		Name:        "Data URL Property",
+		ListingURLs: []string{"data:text/html,<script>alert(1)</script>", "https://airbnb.com/rooms/safe"},
+		UpdatedAt:   time.Now(),
+	}
+	a := NormalizeProperty(p, cfg)
+	if a.URL != "https://airbnb.com/rooms/safe" {
+		t.Errorf("SEC-012-001: should skip data: URL and use safe URL, got %q", a.URL)
+	}
+}
+
+// --- SEC-012-002: Reservation URL escape (CWE-79) ---
+
+func TestNormalizeReservationURLPathEscape(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard", BaseURL: "https://api.hospitable.com"}
+	r := Reservation{
+		ID:       "res/../admin",
+		CheckIn:  "2026-04-15",
+		CheckOut: "2026-04-18",
+		BookedAt: time.Now(),
+	}
+	a := NormalizeReservation(r, "", cfg)
+	if strings.Contains(a.URL, "/../") {
+		t.Errorf("SEC-012-002: reservation URL must escape path traversal, got %q", a.URL)
+	}
+	if !strings.Contains(a.URL, "res%2F..%2Fadmin") {
+		t.Errorf("SEC-012-002: reservation ID must be path-escaped, got %q", a.URL)
+	}
+}
+
+func TestNormalizeReservationURLQueryInjection(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard", BaseURL: "https://api.hospitable.com"}
+	r := Reservation{
+		ID:       "res-001?admin=true#fragment",
+		CheckIn:  "2026-04-15",
+		CheckOut: "2026-04-18",
+		BookedAt: time.Now(),
+	}
+	a := NormalizeReservation(r, "", cfg)
+	if strings.Contains(a.URL, "?admin=true") {
+		t.Errorf("SEC-012-002: reservation URL must escape query injection, got %q", a.URL)
+	}
+}
+
+// --- SEC-012-004: Rating clamping (CWE-20) ---
+
+func TestClampRating(t *testing.T) {
+	cases := []struct {
+		input float64
+		want  float64
+	}{
+		{5.0, 5.0},
+		{4.5, 4.5},
+		{0.0, 0.0},
+		{-1.0, 0.0},
+		{-999.0, 0.0},
+		{6.0, 5.0},
+		{100.0, 5.0},
+		{math.NaN(), 0.0},
+		{math.Inf(1), 0.0},
+		{math.Inf(-1), 0.0},
+	}
+	for _, tc := range cases {
+		got := clampRating(tc.input)
+		if got != tc.want {
+			t.Errorf("clampRating(%v) = %v, want %v", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestNormalizeReviewNegativeRatingClamped(t *testing.T) {
+	cfg := HospitableConfig{TierReviews: "full"}
+	r := Review{
+		ID:          "rev-neg",
+		PropertyID:  "p1",
+		Rating:      -5.0,
+		ReviewText:  "Injected negative",
+		SubmittedAt: time.Now(),
+	}
+	a := NormalizeReview(r, "Beach House", cfg)
+	if strings.Contains(a.Title, "-") {
+		t.Errorf("SEC-012-004: negative rating must be clamped to 0, got title %q", a.Title)
+	}
+	if a.Metadata["rating"] != 0.0 {
+		t.Errorf("SEC-012-004: metadata rating should be 0, got %v", a.Metadata["rating"])
+	}
+}
+
+func TestNormalizeReviewNaNRatingClamped(t *testing.T) {
+	cfg := HospitableConfig{TierReviews: "full"}
+	r := Review{
+		ID:          "rev-nan",
+		PropertyID:  "p1",
+		Rating:      math.NaN(),
+		ReviewText:  "Injected NaN",
+		SubmittedAt: time.Now(),
+	}
+	a := NormalizeReview(r, "Beach House", cfg)
+	if strings.Contains(a.Title, "NaN") {
+		t.Errorf("SEC-012-004: NaN rating must be clamped to 0, got title %q", a.Title)
+	}
+}
+
+func TestNormalizeReviewOverflowRatingClamped(t *testing.T) {
+	cfg := HospitableConfig{TierReviews: "full"}
+	r := Review{
+		ID:          "rev-overflow",
+		PropertyID:  "p1",
+		Rating:      999.9,
+		ReviewText:  "Injected overflow",
+		SubmittedAt: time.Now(),
+	}
+	a := NormalizeReview(r, "Beach House", cfg)
+	if a.Metadata["rating"] != 5.0 {
+		t.Errorf("SEC-012-004: overflow rating must be clamped to 5, got %v", a.Metadata["rating"])
 	}
 }

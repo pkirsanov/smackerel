@@ -185,7 +185,7 @@ func TestAssignTierArchived(t *testing.T) {
 func TestShouldSkipTrashed(t *testing.T) {
 	n := NewNormalizer(KeepConfig{})
 	note := &TakeoutNote{IsTrashed: true, TextContent: "Some content"}
-	if !n.shouldSkip(note) {
+	if !n.shouldSkip(note, n.buildContent(note)) {
 		t.Error("trashed note should be skipped")
 	}
 }
@@ -193,7 +193,7 @@ func TestShouldSkipTrashed(t *testing.T) {
 func TestShouldSkipShortContent(t *testing.T) {
 	n := NewNormalizer(KeepConfig{MinContentLength: 5})
 	note := &TakeoutNote{TextContent: "Hi"}
-	if !n.shouldSkip(note) {
+	if !n.shouldSkip(note, n.buildContent(note)) {
 		t.Error("short content note should be skipped")
 	}
 }
@@ -409,5 +409,448 @@ func TestNormalizeGkeepTrashedSkipped(t *testing.T) {
 	}
 	if artifact != nil {
 		t.Error("trashed gkeep note should return nil artifact")
+	}
+}
+
+// --- Edge case: audio-only note (no text, no title) ---
+
+func TestNormalizeAudioOnlyNoTitle(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{
+		Title:       "",
+		TextContent: "",
+		Attachments: []TakeoutAttachment{
+			{FilePath: "voice-memo.3gp", MimeType: "audio/3gpp"},
+		},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.Normalize(note, "audio-only", "takeout")
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if artifact == nil {
+		t.Fatal("audio-only note should not be skipped")
+	}
+	if artifact.ContentType != "note/audio" {
+		t.Errorf("ContentType = %q, want note/audio", artifact.ContentType)
+	}
+	if artifact.Title == "" {
+		t.Error("title should be derived from content for audio-only note")
+	}
+	if !strings.Contains(artifact.RawContent, "[Audio attached: voice-memo.3gp]") {
+		t.Errorf("missing audio reference: %q", artifact.RawContent)
+	}
+}
+
+// --- Edge case: annotation-only note ---
+
+func TestNormalizeAnnotationOnlyNote(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{
+		Title:       "",
+		TextContent: "",
+		Annotations: []TakeoutAnnotation{
+			{URL: "https://example.com/article", Title: "Great Article", Description: "Worth reading"},
+		},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.Normalize(note, "ann-only", "takeout")
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if artifact == nil {
+		t.Fatal("annotation-only note should not be skipped (has content via URL)")
+	}
+	if !strings.Contains(artifact.RawContent, "https://example.com/article") {
+		t.Error("missing annotation URL in content")
+	}
+}
+
+// --- Edge case: title-only note (no other content) ---
+
+func TestNormalizeTitleOnlyNote(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{
+		Title:                   "Just a title, nothing else",
+		TextContent:             "",
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.Normalize(note, "title-only", "takeout")
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	// Title-only note should not be skipped because it has a title
+	if artifact == nil {
+		t.Fatal("title-only note should not be skipped")
+	}
+	if artifact.Title != "Just a title, nothing else" {
+		t.Errorf("title = %q, want original title", artifact.Title)
+	}
+}
+
+// --- shouldSkip: archived with IncludeArchived=true ---
+
+func TestShouldSkipArchivedIncluded(t *testing.T) {
+	n := NewNormalizer(KeepConfig{IncludeArchived: true})
+	note := &TakeoutNote{
+		IsArchived:              true,
+		TextContent:             "Archived note that should be included",
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("archived note should NOT be skipped when IncludeArchived=true")
+	}
+}
+
+// --- Security: Metadata URL filtering (S1) ---
+
+func TestMetadataAnnotationURLsFiltered(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{
+		Title:       "Metadata URL Test",
+		TextContent: "Test note",
+		Annotations: []TakeoutAnnotation{
+			{URL: "https://safe.example.com", Title: "Safe"},
+			{URL: "javascript:alert(document.cookie)", Title: "XSS"},
+			{URL: "data:text/html,<script>alert(1)</script>", Title: "Data"},
+			{URL: "http://also-safe.example.com", Title: "Also Safe"},
+		},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.Normalize(note, "meta-url-test", "takeout")
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if artifact == nil {
+		t.Fatal("artifact should not be nil")
+	}
+
+	anns, ok := artifact.Metadata["annotations"].([]map[string]string)
+	if !ok {
+		t.Fatal("annotations metadata should be []map[string]string")
+	}
+	if len(anns) != 4 {
+		t.Fatalf("annotations count = %d, want 4", len(anns))
+	}
+
+	// Safe URLs preserved in metadata
+	if anns[0]["url"] != "https://safe.example.com" {
+		t.Errorf("safe URL stripped from metadata: %q", anns[0]["url"])
+	}
+	if anns[3]["url"] != "http://also-safe.example.com" {
+		t.Errorf("safe URL stripped from metadata: %q", anns[3]["url"])
+	}
+
+	// Dangerous URLs replaced with empty string
+	if anns[1]["url"] != "" {
+		t.Errorf("SECURITY: javascript: URL in metadata: %q", anns[1]["url"])
+	}
+	if anns[2]["url"] != "" {
+		t.Errorf("SECURITY: data: URL in metadata: %q", anns[2]["url"])
+	}
+}
+
+// --- Security: Attachment path sanitization (S2) ---
+
+func TestAttachmentPathTraversalSanitized(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{
+		Title:       "Path Traversal Test",
+		TextContent: "test",
+		Attachments: []TakeoutAttachment{
+			{FilePath: "../../etc/passwd", MimeType: "image/jpeg"},
+			{FilePath: "../../../sensitive/data.png", MimeType: "image/png"},
+			{FilePath: "normal-photo.jpg", MimeType: "image/jpeg"},
+			{FilePath: "/absolute/path/secret.jpg", MimeType: "image/jpeg"},
+		},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.Normalize(note, "traversal-test", "takeout")
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if artifact == nil {
+		t.Fatal("artifact should not be nil")
+	}
+
+	// Check content doesn't contain path traversal
+	if strings.Contains(artifact.RawContent, "../../") {
+		t.Error("SECURITY: path traversal sequence in content")
+	}
+	if strings.Contains(artifact.RawContent, "/etc/passwd") {
+		t.Error("SECURITY: absolute path leaked into content")
+	}
+
+	// Check metadata attachment paths are sanitized
+	atts, ok := artifact.Metadata["attachments"].([]map[string]string)
+	if !ok {
+		t.Fatal("attachments metadata should be []map[string]string")
+	}
+	for _, att := range atts {
+		fp := att["file_path"]
+		if strings.Contains(fp, "..") {
+			t.Errorf("SECURITY: path traversal in metadata attachment: %q", fp)
+		}
+		if strings.HasPrefix(fp, "/") {
+			t.Errorf("SECURITY: absolute path in metadata attachment: %q", fp)
+		}
+	}
+
+	// Normal filename preserved
+	if atts[2]["file_path"] != "normal-photo.jpg" {
+		t.Errorf("normal attachment path = %q, want normal-photo.jpg", atts[2]["file_path"])
+	}
+}
+
+func TestSanitizeAttachmentPath(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"photo.jpg", "photo.jpg"},
+		{"../../etc/passwd", "passwd"},
+		{"../secret.png", "secret.png"},
+		{"/absolute/path/file.jpg", "file.jpg"},
+		{"subdir/nested/image.png", "image.png"},
+		{"", ""},
+		{".", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := sanitizeAttachmentPath(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeAttachmentPath(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- Security: Metadata array bounds (S3) ---
+
+func TestMetadataArrayBounds(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+
+	// Create a note with more than maxMetadataArrayLen labels
+	var labels []TakeoutLabel
+	for i := 0; i < maxMetadataArrayLen+100; i++ {
+		labels = append(labels, TakeoutLabel{Name: "label"})
+	}
+
+	note := &TakeoutNote{
+		Title:                   "Bounds Test",
+		TextContent:             "test",
+		Labels:                  labels,
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.Normalize(note, "bounds-test", "takeout")
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if artifact == nil {
+		t.Fatal("artifact should not be nil")
+	}
+
+	metaLabels, ok := artifact.Metadata["labels"].([]string)
+	if !ok {
+		t.Fatal("labels metadata should be []string")
+	}
+	if len(metaLabels) > maxMetadataArrayLen {
+		t.Errorf("SECURITY: labels count %d exceeds cap %d", len(metaLabels), maxMetadataArrayLen)
+	}
+}
+
+// --- Security: Email validation (S5) ---
+
+func TestIsBasicEmail(t *testing.T) {
+	tests := []struct {
+		input string
+		valid bool
+	}{
+		{"user@example.com", true},
+		{"a@b.co", true},
+		{"", false},
+		{"no-at-sign", false},
+		{"@domain.com", false},
+		{"user@", false},
+		{"user@@double.com", false},
+		{"<script>@xss.com", false},
+		{"user name@domain.com", false},
+		{"user\t@domain.com", false},
+		{"user\n@domain.com", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := isBasicEmail(tt.input); got != tt.valid {
+				t.Errorf("isBasicEmail(%q) = %v, want %v", tt.input, got, tt.valid)
+			}
+		})
+	}
+}
+
+func TestCollaboratorEmailFiltering(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{
+		Title:       "Collab Test",
+		TextContent: "test content",
+		Sharees: []TakeoutSharee{
+			{Email: "valid@example.com"},
+			{Email: "<script>alert(1)</script>@evil.com"},
+			{Email: "also-valid@test.org"},
+			{Email: ""},
+		},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.Normalize(note, "collab-test", "takeout")
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if artifact == nil {
+		t.Fatal("artifact should not be nil")
+	}
+
+	collabs, ok := artifact.Metadata["collaborators"].([]string)
+	if !ok {
+		t.Fatal("collaborators should be []string")
+	}
+	// Only 2 valid emails should pass
+	if len(collabs) != 2 {
+		t.Errorf("collaborators = %d, want 2 (valid emails only)", len(collabs))
+	}
+	for _, c := range collabs {
+		if strings.Contains(c, "<script>") {
+			t.Errorf("SECURITY: XSS payload in collaborator: %q", c)
+		}
+	}
+}
+
+func TestShouldSkipArchivedExcluded(t *testing.T) {
+	n := NewNormalizer(KeepConfig{IncludeArchived: false})
+	note := &TakeoutNote{
+		IsArchived:              true,
+		TextContent:             "Archived note excluded by default",
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if !n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("archived note should be skipped when IncludeArchived=false")
+	}
+}
+
+// --- shouldSkip: MinContentLength with list content ---
+
+func TestShouldSkipMinLengthChecksBuiltContent(t *testing.T) {
+	n := NewNormalizer(KeepConfig{MinContentLength: 50})
+	// Note has short text but long list content — buildContent produces enough
+	note := &TakeoutNote{
+		Title: "List Note",
+		ListContent: []TakeoutListItem{
+			{Text: "First long item that contributes to content length", IsChecked: false},
+			{Text: "Second long item that also contributes to content", IsChecked: true},
+		},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("note with list content exceeding MinContentLength should not be skipped")
+	}
+}
+
+// --- classifyNote: audio-only ---
+
+func TestClassifyAudioOnly(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{
+		Attachments: []TakeoutAttachment{
+			{MimeType: "audio/3gpp"},
+			{MimeType: "audio/mpeg"},
+		},
+	}
+	got := n.classifyNote(note)
+	// Multiple audio attachments are still a single content type (audio)
+	if got != NoteTypeAudio {
+		t.Errorf("classifyNote = %q, want note/audio", got)
+	}
+}
+
+func TestClassifySingleAudioOnly(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{
+		Attachments: []TakeoutAttachment{
+			{MimeType: "audio/3gpp"},
+		},
+	}
+	got := n.classifyNote(note)
+	if got != NoteTypeAudio {
+		t.Errorf("classifyNote = %q, want note/audio", got)
+	}
+}
+
+// --- NormalizeGkeep: archived gkeep note ---
+
+func TestNormalizeGkeepArchivedSkippedByDefault(t *testing.T) {
+	n := NewNormalizer(KeepConfig{IncludeArchived: false})
+	gNote := &GkeepNote{
+		NoteID:       "gkeep-archived-1",
+		Title:        "Archived via gkeep",
+		TextContent:  "Archived gkeep note content",
+		IsArchived:   true,
+		ModifiedUsec: time.Now().UnixMicro(),
+		CreatedUsec:  time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.NormalizeGkeep(gNote)
+	if err != nil {
+		t.Fatalf("NormalizeGkeep: %v", err)
+	}
+	if artifact != nil {
+		t.Error("archived gkeep note should be skipped when IncludeArchived=false")
+	}
+}
+
+func TestNormalizeGkeepArchivedIncluded(t *testing.T) {
+	n := NewNormalizer(KeepConfig{IncludeArchived: true})
+	gNote := &GkeepNote{
+		NoteID:       "gkeep-archived-2",
+		Title:        "Archived but included",
+		TextContent:  "This archived note should be included",
+		IsArchived:   true,
+		ModifiedUsec: time.Now().UnixMicro(),
+		CreatedUsec:  time.Now().UnixMicro(),
+	}
+
+	artifact, err := n.NormalizeGkeep(gNote)
+	if err != nil {
+		t.Fatalf("NormalizeGkeep: %v", err)
+	}
+	if artifact == nil {
+		t.Error("archived gkeep note should be included when IncludeArchived=true")
+	}
+}
+
+// --- buildContent: empty note ---
+
+func TestBuildContentEmptyNote(t *testing.T) {
+	n := NewNormalizer(KeepConfig{})
+	note := &TakeoutNote{} // All fields zero
+	content := n.buildContent(note)
+	if content != "" {
+		t.Errorf("empty note content = %q, want empty string", content)
 	}
 }

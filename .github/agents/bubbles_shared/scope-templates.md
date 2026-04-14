@@ -51,6 +51,10 @@ Every scenario listed here must be mirrored into `scenario-manifest.json` with a
 - [ ] Scenario-specific tests pass for this scope
 - [ ] Regression coverage exists for newly-fixed failure modes
 - [ ] Build Quality Gate passes as a grouped block
+
+Note: Each `[x]` item MUST have inline evidence with a `**Claim Source:**` tag (`executed` or `interpreted`).
+Items that cannot be verified MUST remain `[ ]` with an Uncertainty Declaration (see evidence-rules.md).
+An honest gap with explanation is preferred over fabricated evidence (see Honesty Incentive in critical-requirements.md).
 ```
 
 ## Single-File `scopes.md` Template
@@ -96,11 +100,22 @@ Every scenario listed here must be mirrored into `scenario-manifest.json` with a
 
 ### Test Evidence (ALL TYPES REQUIRED)
 
+Evidence format per block:
+**Phase:** <phase-name>
+**Command:** <exact command executed>
+**Exit Code:** <actual exit code>
+**Claim Source:** <executed | interpreted | not-run>
+<raw output, ≥10 lines>
+
+### Uncertainty Declarations (if any DoD items remain [ ])
+
 ### Scenario Contract Evidence (Required when behavior changes)
 
 ### Coverage Report
 
 ### Lint/Quality
+
+### Spot-Check Recommendations
 
 ### Validation Summary
 

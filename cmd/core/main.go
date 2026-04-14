@@ -167,7 +167,7 @@ func run() error {
 	ytConn := youtubeConnector.New("youtube")
 	rssConn := rssConnector.New("rss", nil) // feed URLs configured via source_config
 	keepConn := keepConnector.New("google-keep")
-	bmConn := bookmarksConnector.NewConnector("bookmarks")
+	bmConn := bookmarksConnector.NewConnectorWithPool("bookmarks", pg.Pool)
 	browserHistConn := browserConnector.New("browser-history")
 	mapsConn := mapsConnector.New("google-maps-timeline")
 	hospitableConn := hospitableConnector.New("hospitable")
@@ -177,31 +177,27 @@ func run() error {
 	weatherConn := weatherConnector.New("weather")
 	alertsConn := alertsConnector.New("gov-alerts")
 	marketsConn := marketsConnector.New("financial-markets")
-	registry.Register(imapConn)
-	registry.Register(caldavConn)
-	registry.Register(ytConn)
-	registry.Register(rssConn)
-	registry.Register(keepConn)
-	registry.Register(bmConn)
-	registry.Register(browserHistConn)
-	registry.Register(mapsConn)
-	registry.Register(hospitableConn)
-	registry.Register(guesthostConn)
-	registry.Register(discordConn)
-	registry.Register(twitterConn)
-	registry.Register(weatherConn)
-	registry.Register(alertsConn)
-	registry.Register(marketsConn)
+	for _, c := range []connector.Connector{
+		imapConn, caldavConn, ytConn, rssConn, keepConn,
+		bmConn, browserHistConn, mapsConn, hospitableConn, guesthostConn,
+		discordConn, twitterConn, weatherConn, alertsConn, marketsConn,
+	} {
+		if err := registry.Register(c); err != nil {
+			return fmt.Errorf("register connector %q: %w", c.ID(), err)
+		}
+	}
+	slog.Info("connector registry initialized", "count", registry.Count())
 
 	// Auto-start bookmarks connector (no OAuth needed — file-based import)
-	if cfg.BookmarksImportDir != "" {
+	if cfg.BookmarksEnabled && cfg.BookmarksImportDir != "" {
 		bmConfig := connector.ConnectorConfig{
 			AuthType:       "none",
 			Enabled:        true,
 			ProcessingTier: "full",
+			SyncSchedule:   cfg.BookmarksSyncSchedule,
 			SourceConfig: map[string]interface{}{
 				"import_dir":        cfg.BookmarksImportDir,
-				"archive_processed": true,
+				"archive_processed": false,
 			},
 		}
 		if err := bmConn.Connect(ctx, bmConfig); err == nil {
@@ -234,13 +230,24 @@ func run() error {
 	// Auto-start Google Maps Timeline connector (no OAuth needed — file-based Takeout import)
 	if cfg.MapsImportDir != "" {
 		mapsCfg := connector.ConnectorConfig{
-			AuthType: "none",
-			Enabled:  true,
+			AuthType:     "none",
+			Enabled:      true,
+			SyncSchedule: os.Getenv("MAPS_SYNC_SCHEDULE"),
 			SourceConfig: map[string]interface{}{
-				"import_dir":        cfg.MapsImportDir,
-				"archive_processed": false,
-				"min_distance_m":    float64(100),
-				"min_duration_min":  float64(2),
+				"import_dir":               cfg.MapsImportDir,
+				"watch_interval":           os.Getenv("MAPS_WATCH_INTERVAL"),
+				"archive_processed":        os.Getenv("MAPS_ARCHIVE_PROCESSED") == "true",
+				"min_distance_m":           parseFloatEnv("MAPS_MIN_DISTANCE_M"),
+				"min_duration_min":         parseFloatEnv("MAPS_MIN_DURATION_MIN"),
+				"location_radius_m":        parseFloatEnv("MAPS_LOCATION_RADIUS_M"),
+				"home_detection":           os.Getenv("MAPS_HOME_DETECTION"),
+				"commute_min_occurrences":  parseFloatEnv("MAPS_COMMUTE_MIN_OCCURRENCES"),
+				"commute_window_days":      parseFloatEnv("MAPS_COMMUTE_WINDOW_DAYS"),
+				"commute_weekdays_only":    os.Getenv("MAPS_COMMUTE_WEEKDAYS_ONLY") == "true",
+				"trip_min_distance_km":     parseFloatEnv("MAPS_TRIP_MIN_DISTANCE_KM"),
+				"trip_min_overnight_hours": parseFloatEnv("MAPS_TRIP_MIN_OVERNIGHT_HOURS"),
+				"link_time_extend_min":     parseFloatEnv("MAPS_LINK_TIME_EXTEND_MIN"),
+				"link_proximity_radius_m":  parseFloatEnv("MAPS_LINK_PROXIMITY_RADIUS_M"),
 			},
 		}
 		if err := mapsConn.Connect(ctx, mapsCfg); err == nil {
@@ -333,6 +340,13 @@ func run() error {
 				"locations":                parseJSONArray(os.Getenv("GOV_ALERTS_LOCATIONS")),
 				"min_earthquake_magnitude": parseFloatEnv("GOV_ALERTS_MIN_EARTHQUAKE_MAG"),
 				"travel_locations":         parseJSONArray(os.Getenv("GOV_ALERTS_TRAVEL_LOCATIONS")),
+				"source_weather":           os.Getenv("GOV_ALERTS_SOURCE_WEATHER") == "true",
+				"source_tsunami":           os.Getenv("GOV_ALERTS_SOURCE_TSUNAMI") == "true",
+				"source_volcano":           os.Getenv("GOV_ALERTS_SOURCE_VOLCANO") == "true",
+				"source_wildfire":          os.Getenv("GOV_ALERTS_SOURCE_WILDFIRE") == "true",
+				"source_airnow":            os.Getenv("GOV_ALERTS_SOURCE_AIRNOW") == "true",
+				"source_gdacs":             os.Getenv("GOV_ALERTS_SOURCE_GDACS") == "true",
+				"airnow_api_key":           os.Getenv("GOV_ALERTS_AIRNOW_API_KEY"),
 			},
 		}
 		if err := alertsConn.Connect(ctx, alertsCfg); err == nil {
@@ -380,24 +394,36 @@ func run() error {
 		token, err := tokenStore.Get(ctx, "google")
 		if err == nil && token != nil {
 			creds := map[string]string{"access_token": token.AccessToken}
-			connConfig := connector.ConnectorConfig{
-				AuthType:    "oauth2",
-				Credentials: creds,
-				Enabled:     true,
+			imapConfig := connector.ConnectorConfig{
+				AuthType:     "oauth2",
+				Credentials:  creds,
+				Enabled:      true,
+				SyncSchedule: os.Getenv("IMAP_SYNC_SCHEDULE"),
 			}
-			if err := imapConn.Connect(ctx, connConfig); err == nil {
-				supervisor.SetConfig("gmail", connConfig)
+			if err := imapConn.Connect(ctx, imapConfig); err == nil {
+				supervisor.SetConfig("gmail", imapConfig)
 				supervisor.StartConnector(ctx, "gmail")
 				slog.Info("gmail connector started with OAuth token")
 			}
-			if err := caldavConn.Connect(ctx, connConfig); err == nil {
-				supervisor.SetConfig("google-calendar", connConfig)
+			caldavConfig := connector.ConnectorConfig{
+				AuthType:     "oauth2",
+				Credentials:  creds,
+				Enabled:      true,
+				SyncSchedule: os.Getenv("CALDAV_SYNC_SCHEDULE"),
+			}
+			if err := caldavConn.Connect(ctx, caldavConfig); err == nil {
+				supervisor.SetConfig("google-calendar", caldavConfig)
 				supervisor.StartConnector(ctx, "google-calendar")
 				slog.Info("google-calendar connector started with OAuth token")
 			}
-			connConfig.AuthType = "oauth2"
-			if err := ytConn.Connect(ctx, connConfig); err == nil {
-				supervisor.SetConfig("youtube", connConfig)
+			ytConfig := connector.ConnectorConfig{
+				AuthType:     "oauth2",
+				Credentials:  creds,
+				Enabled:      true,
+				SyncSchedule: os.Getenv("YOUTUBE_SYNC_SCHEDULE"),
+			}
+			if err := ytConn.Connect(ctx, ytConfig); err == nil {
+				supervisor.SetConfig("youtube", ytConfig)
 				supervisor.StartConnector(ctx, "youtube")
 				slog.Info("youtube connector started with OAuth token")
 			}
@@ -464,11 +490,12 @@ func run() error {
 	}
 
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	// Graceful shutdown
@@ -512,8 +539,12 @@ func shutdownAll(
 	nc *smacknats.Client,
 	pg *db.Postgres,
 ) {
+	shutdownStart := time.Now()
 	totalTimeout := time.Duration(timeoutS) * time.Second
 	slog.Info("starting graceful shutdown", "timeout_s", timeoutS)
+	defer func() {
+		slog.Info("graceful shutdown complete", "elapsed_ms", time.Since(shutdownStart).Milliseconds(), "budget_s", timeoutS)
+	}()
 
 	// Step 1: Stop scheduler (no new cron jobs fire) — 2s budget
 	runWithTimeout("scheduler", 2*time.Second, func() {
@@ -544,8 +575,11 @@ func shutdownAll(
 		}
 	})
 
-	// Step 4: Stop result subscribers (NATS consumer drain) — 2s budget
-	runWithTimeout("result subscribers", 2*time.Second, func() {
+	// Step 4: Stop result subscribers (NATS consumer drain) — 6s budget
+	// Budget covers NATS Fetch() MaxWait (5s) + processing margin (1s).
+	// If goroutines are still blocked in Fetch after 6s, step 6 (NATS close) will
+	// interrupt the call; the done channel ensures no new messages are processed.
+	runWithTimeout("result subscribers", 6*time.Second, func() {
 		if resultSub != nil {
 			resultSub.Stop()
 		}
@@ -577,6 +611,7 @@ func shutdownAll(
 // a warning is logged and control returns immediately so shutdown can proceed.
 func runWithTimeout(step string, budget time.Duration, fn func()) {
 	slog.Info("shutdown: stopping "+step, "budget", budget)
+	stepStart := time.Now()
 	done := make(chan struct{})
 	go func() {
 		fn()
@@ -584,9 +619,9 @@ func runWithTimeout(step string, budget time.Duration, fn func()) {
 	}()
 	select {
 	case <-done:
-		// completed within budget
+		slog.Info("shutdown: "+step+" stopped", "elapsed_ms", time.Since(stepStart).Milliseconds())
 	case <-time.After(budget):
-		slog.Warn("shutdown: step exceeded timeout, proceeding", "step", step, "budget", budget)
+		slog.Warn("shutdown: step exceeded timeout, proceeding", "step", step, "budget", budget, "elapsed_ms", time.Since(stepStart).Milliseconds())
 	}
 }
 

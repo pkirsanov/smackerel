@@ -25,6 +25,7 @@ handoffs:
 - **Require ACTUAL execution evidence before declaring anything complete** — see Execution Evidence Standard in agent-common.md
 - **Never claim tests pass, endpoints work, or UI is verified without having run the command/tool and observed the output**
 - **Copy actual terminal output into reports; never write expected output**
+- **Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md). Every evidence block MUST include a `**Claim Source:**` tag (`executed`, `interpreted`, `not-run`). When hardening findings are ambiguous, report them honestly with Uncertainty Declarations rather than claiming definitive pass/fail. See [critical-requirements.md](bubbles_shared/critical-requirements.md) → Honesty Incentive.
 - **Anti-proxy test detection** — during test review, identify and flag/rewrite proxy tests that don't test real use cases (E2E tests checking only status codes, UI tests checking only element existence, integration tests with mocked dependencies) — see Use Case Testing Integrity in agent-common.md
 - **No regression introduction** — hardening changes must not introduce new failures; verify by running impacted tests after each change (see No Regression Introduction in agent-common.md)
 - **Strengthen weak tests** — when reviewing tests, proactively add missing edge cases, negative tests, and round-trip verifications

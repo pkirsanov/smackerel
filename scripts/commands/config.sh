@@ -295,9 +295,33 @@ CORE_API_URL="http://smackerel-core:${CORE_CONTAINER_PORT}"
 CORE_EXTERNAL_URL="http://127.0.0.1:${CORE_HOST_PORT}"
 ML_EXTERNAL_URL="http://127.0.0.1:${ML_HOST_PORT}"
 
+# OAuth connector sync schedules (Phase 2 — IMAP, CalDAV, YouTube)
+IMAP_SYNC_SCHEDULE="$(yaml_get connectors.imap.sync_schedule 2>/dev/null)" || IMAP_SYNC_SCHEDULE=""
+CALDAV_SYNC_SCHEDULE="$(yaml_get connectors.caldav.sync_schedule 2>/dev/null)" || CALDAV_SYNC_SCHEDULE=""
+YOUTUBE_SYNC_SCHEDULE="$(yaml_get connectors.youtube.sync_schedule 2>/dev/null)" || YOUTUBE_SYNC_SCHEDULE=""
+
 # Connector import paths (optional — empty string is valid default)
+BOOKMARKS_ENABLED="$(yaml_get connectors.bookmarks.enabled 2>/dev/null)" || BOOKMARKS_ENABLED="false"
+BOOKMARKS_SYNC_SCHEDULE="$(yaml_get connectors.bookmarks.sync_schedule 2>/dev/null)" || BOOKMARKS_SYNC_SCHEDULE=""
 BOOKMARKS_IMPORT_DIR="$(yaml_get connectors.bookmarks.import_dir 2>/dev/null)" || BOOKMARKS_IMPORT_DIR=""
+MAPS_ENABLED="$(yaml_get connectors.google-maps-timeline.enabled 2>/dev/null)" || MAPS_ENABLED="false"
+MAPS_SYNC_SCHEDULE="$(yaml_get connectors.google-maps-timeline.sync_schedule 2>/dev/null)" || MAPS_SYNC_SCHEDULE=""
 MAPS_IMPORT_DIR="$(yaml_get connectors.google-maps-timeline.import_dir 2>/dev/null)" || MAPS_IMPORT_DIR=""
+MAPS_WATCH_INTERVAL="$(yaml_get connectors.google-maps-timeline.watch_interval 2>/dev/null)" || MAPS_WATCH_INTERVAL=""
+MAPS_ARCHIVE_PROCESSED="$(yaml_get connectors.google-maps-timeline.archive_processed 2>/dev/null)" || MAPS_ARCHIVE_PROCESSED=""
+MAPS_MIN_DISTANCE_M="$(yaml_get connectors.google-maps-timeline.min_distance_m 2>/dev/null)" || MAPS_MIN_DISTANCE_M=""
+MAPS_MIN_DURATION_MIN="$(yaml_get connectors.google-maps-timeline.min_duration_min 2>/dev/null)" || MAPS_MIN_DURATION_MIN=""
+MAPS_LOCATION_RADIUS_M="$(yaml_get connectors.google-maps-timeline.clustering.location_radius_m 2>/dev/null)" || MAPS_LOCATION_RADIUS_M=""
+MAPS_HOME_DETECTION="$(yaml_get connectors.google-maps-timeline.clustering.home_detection 2>/dev/null)" || MAPS_HOME_DETECTION=""
+MAPS_COMMUTE_MIN_OCCURRENCES="$(yaml_get connectors.google-maps-timeline.commute.min_occurrences 2>/dev/null)" || MAPS_COMMUTE_MIN_OCCURRENCES=""
+MAPS_COMMUTE_WINDOW_DAYS="$(yaml_get connectors.google-maps-timeline.commute.window_days 2>/dev/null)" || MAPS_COMMUTE_WINDOW_DAYS=""
+MAPS_COMMUTE_WEEKDAYS_ONLY="$(yaml_get connectors.google-maps-timeline.commute.weekdays_only 2>/dev/null)" || MAPS_COMMUTE_WEEKDAYS_ONLY=""
+MAPS_TRIP_MIN_DISTANCE_KM="$(yaml_get connectors.google-maps-timeline.trip.min_distance_km 2>/dev/null)" || MAPS_TRIP_MIN_DISTANCE_KM=""
+MAPS_TRIP_MIN_OVERNIGHT_HOURS="$(yaml_get connectors.google-maps-timeline.trip.min_overnight_hours 2>/dev/null)" || MAPS_TRIP_MIN_OVERNIGHT_HOURS=""
+MAPS_LINK_TIME_EXTEND_MIN="$(yaml_get connectors.google-maps-timeline.linking.time_extend_min 2>/dev/null)" || MAPS_LINK_TIME_EXTEND_MIN=""
+MAPS_LINK_PROXIMITY_RADIUS_M="$(yaml_get connectors.google-maps-timeline.linking.proximity_radius_m 2>/dev/null)" || MAPS_LINK_PROXIMITY_RADIUS_M=""
+BROWSER_HISTORY_ENABLED="$(yaml_get connectors.browser-history.enabled 2>/dev/null)" || BROWSER_HISTORY_ENABLED="false"
+BROWSER_HISTORY_SYNC_SCHEDULE="$(yaml_get connectors.browser-history.sync_schedule 2>/dev/null)" || BROWSER_HISTORY_SYNC_SCHEDULE=""
 BROWSER_HISTORY_PATH="$(yaml_get connectors.browser-history.chrome.history_path 2>/dev/null)" || BROWSER_HISTORY_PATH=""
 
 # Discord connector
@@ -406,9 +430,31 @@ TELEGRAM_ASSEMBLY_MAX_MESSAGES=${TELEGRAM_ASSEMBLY_MAX_MESSAGES}
 TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS=${TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS}
 CORE_EXTERNAL_URL=${CORE_EXTERNAL_URL}
 ML_EXTERNAL_URL=${ML_EXTERNAL_URL}
+BOOKMARKS_ENABLED=${BOOKMARKS_ENABLED}
+BOOKMARKS_SYNC_SCHEDULE=${BOOKMARKS_SYNC_SCHEDULE}
 BOOKMARKS_IMPORT_DIR=${BOOKMARKS_IMPORT_DIR}
+MAPS_ENABLED=${MAPS_ENABLED}
+MAPS_SYNC_SCHEDULE=${MAPS_SYNC_SCHEDULE}
 MAPS_IMPORT_DIR=${MAPS_IMPORT_DIR}
+MAPS_WATCH_INTERVAL=${MAPS_WATCH_INTERVAL}
+MAPS_ARCHIVE_PROCESSED=${MAPS_ARCHIVE_PROCESSED}
+MAPS_MIN_DISTANCE_M=${MAPS_MIN_DISTANCE_M}
+MAPS_MIN_DURATION_MIN=${MAPS_MIN_DURATION_MIN}
+MAPS_LOCATION_RADIUS_M=${MAPS_LOCATION_RADIUS_M}
+MAPS_HOME_DETECTION=${MAPS_HOME_DETECTION}
+MAPS_COMMUTE_MIN_OCCURRENCES=${MAPS_COMMUTE_MIN_OCCURRENCES}
+MAPS_COMMUTE_WINDOW_DAYS=${MAPS_COMMUTE_WINDOW_DAYS}
+MAPS_COMMUTE_WEEKDAYS_ONLY=${MAPS_COMMUTE_WEEKDAYS_ONLY}
+MAPS_TRIP_MIN_DISTANCE_KM=${MAPS_TRIP_MIN_DISTANCE_KM}
+MAPS_TRIP_MIN_OVERNIGHT_HOURS=${MAPS_TRIP_MIN_OVERNIGHT_HOURS}
+MAPS_LINK_TIME_EXTEND_MIN=${MAPS_LINK_TIME_EXTEND_MIN}
+MAPS_LINK_PROXIMITY_RADIUS_M=${MAPS_LINK_PROXIMITY_RADIUS_M}
+BROWSER_HISTORY_ENABLED=${BROWSER_HISTORY_ENABLED}
+BROWSER_HISTORY_SYNC_SCHEDULE=${BROWSER_HISTORY_SYNC_SCHEDULE}
 BROWSER_HISTORY_PATH=${BROWSER_HISTORY_PATH}
+IMAP_SYNC_SCHEDULE=${IMAP_SYNC_SCHEDULE}
+CALDAV_SYNC_SCHEDULE=${CALDAV_SYNC_SCHEDULE}
+YOUTUBE_SYNC_SCHEDULE=${YOUTUBE_SYNC_SCHEDULE}
 DISCORD_ENABLED=${DISCORD_ENABLED}
 DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
 DISCORD_SYNC_SCHEDULE=${DISCORD_SYNC_SCHEDULE}

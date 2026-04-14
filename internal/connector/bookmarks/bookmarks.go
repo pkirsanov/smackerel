@@ -15,6 +15,10 @@ import (
 // maxExtractDepth limits Chrome JSON tree recursion to prevent stack overflow on malformed input.
 const maxExtractDepth = 50
 
+// maxReasonableUnixSec is the upper bound for bookmark timestamps (year 2100).
+// F-CHAOS-R24-003: Rejects adversarial far-future date_added values.
+const maxReasonableUnixSec int64 = 4102444800
+
 // Pre-compiled regexes for Netscape HTML parsing (F-STAB-005).
 var (
 	netscapeLinkRe    = regexp.MustCompile(`<A HREF="([^"]+)"[^>]*>([^<]+)</A>`)
@@ -149,7 +153,8 @@ func extractBookmarksDepth(node map[string]interface{}, folder string, out *[]Bo
 					const chromeEpochOffset int64 = 11644473600
 					unixSec := (us / 1_000_000) - chromeEpochOffset
 					unixNsec := (us % 1_000_000) * 1000
-					if unixSec > 0 { // sanity: only accept post-Unix-epoch dates
+					// F-CHAOS-R24-003: Reject dates before Unix epoch or beyond year 2100.
+					if unixSec > 0 && unixSec < maxReasonableUnixSec {
 						b.AddedAt = time.Unix(unixSec, unixNsec)
 					}
 				}

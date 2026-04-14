@@ -15,6 +15,7 @@ description: Deep gap analysis & remediation - identify and fix ALL implementati
 - **Prove fixes with required tests/validation by actually executing them in a terminal** and record ACTUAL output in `report.md`
 - **Never claim fixes are verified without running commands and observing output** — see Execution Evidence Standard in agent-common.md
 - **Proxy test gap detection** — identify tests that exist but are proxies (don't actually validate user/consumer use cases): status-code-only E2E, element-existence-only UI, mock-heavy integration tests (see Use Case Testing Integrity in agent-common.md)
+- **Honesty Incentive + Evidence Provenance:** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md). Every evidence block MUST include a `**Claim Source:**` tag. When gap analysis findings are uncertain (e.g., cannot determine if a gap is real or a false positive without execution), use an Uncertainty Declaration. See [critical-requirements.md](bubbles_shared/critical-requirements.md) → Honesty Incentive.
 - **No regression introduction** — gap remediation must not break existing passing tests (see No Regression Introduction in agent-common.md)
 - **Planning artifacts are foreign-owned** — when gap analysis discovers missing scenarios, tests, or DoD structure, invoke `bubbles.plan` via `runSubagent` instead of editing `scopes.md` directly.
 - **State coherence** — if routed planning changes reopen a completed scope, require `bubbles.plan` to reset scope/state artifacts; do not rewrite them here.

@@ -4,6 +4,40 @@ Links: [uservalidation.md](uservalidation.md)
 
 ## Reports
 
+### Chaos-Hardening Sweep — 2026-04-13
+
+**Trigger:** `chaos` probe via stochastic-quality-sweep (Round R07)
+**Mode:** `chaos-hardening`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Findings (4 chaos vulnerabilities identified)
+
+| # | Finding | Category | Severity | Status |
+|---|---------|----------|----------|--------|
+| C1 | Concurrent Connect+Sync data race — `Sync()` reads `c.config` without lock after closed check; `Connect()` writes `c.config` under lock. Race detector fires. | concurrency | High | Fixed |
+| C2 | Integer overflow in `totalReactions()` — cumulative addition of large `r.Count` values wraps to negative on 32-bit, causing tier misclassification ("full" tier never triggers) | arithmetic | Medium | Fixed |
+| C3 | Rate limiter missing for pin/thread fetches — `ShouldWait()` called before `fetchChannelMessages()` but not before `fetchPinnedMessages()` or `fetchActiveThreads()`, allowing unthrottled API bursts | rate-limiting | Medium | Fixed |
+| C4 | Re-Connect leaves stale cursors — second `Connect()` with different channels keeps cursors from channels no longer monitored; cursor scope drift | state | Medium | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+- `internal/connector/discord/discord.go`:
+  - C1: Snapshot `c.config` into `cfgSnapshot` under `c.mu` lock in `Sync()`, use snapshot for all reads
+  - C2: Added `maxSafeReactionTotal` constant (2^31-1) and overflow-safe addition in `totalReactions()`
+  - C3: Added `ShouldWait()` calls for `channels/{id}/pins` and `channels/{id}/threads` routes before pin/thread fetches
+  - C4: Clear cursors (`make(ChannelCursors)`) at start of `Connect()` lock region; reset `c.closed = false` so Close+Connect cycle works
+- `internal/connector/discord/discord_test.go`:
+  - Added 10 adversarial chaos tests: `TestChaos_ConcurrentConnectSync`, `TestChaos_ConcurrentSyncClose`, `TestChaos_ConcurrentHealthSyncConnect`, `TestChaos_TotalReactionsOverflow`, `TestChaos_OverflowReactionsTriggerFullTier`, `TestChaos_ReConnectClearsUnmonitoredCursors`, `TestChaos_ReConnectAfterCloseResetsState`, `TestChaos_RapidSuccessiveSyncs`, `TestChaos_DoubleClose`, `TestChaos_AdversarialCursorJSON`
+
+#### Validation
+
+- `./smackerel.sh test unit` — all tests pass (discord package: 0.234s, ran fresh)
+- `./smackerel.sh check` — clean (SST in sync)
+- All existing tests remain green — no regressions
+
+---
+
 ### Gaps-To-Doc Sweep — 2026-04-10
 
 **Trigger:** `gaps` probe via stochastic-quality-sweep
@@ -416,3 +450,74 @@ Hardening pass on the Discord connector after 5 stability, 5 improve, 11 gaps, 2
 - `./smackerel.sh test unit` — all tests pass (discord package: 0.520s, ran fresh)
 - `./smackerel.sh check` — SST in sync, clean
 - All 43 security/hardening tests continue to pass unchanged
+
+---
+
+### Stabilize-To-Doc Sweep 2 — 2026-04-12
+
+**Trigger:** `stabilize` probe via stochastic-quality-sweep
+**Mode:** `stabilize-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Context
+
+Second stabilize pass on the Discord connector after 11 prior sweeps (gaps, simplify x2, regression, stabilize, security x3, harden, simplify). Pass 1 fixed mutex races (ST1–ST2), context cancellation (ST3), error aggregation (ST4), and rate limiter memory leak (ST5). This pass probes for remaining stability, reliability, and operational visibility issues in the hardened codebase.
+
+#### Findings (4 stability issues identified)
+
+| # | Finding | Category | Severity | Status |
+|---|---------|----------|----------|--------|
+| ST6 | `Sync()` always restores health to `HealthHealthy` on completion, even after partial failures — masks degraded state from Supervisor monitoring and health-check consumers | Health reporting | Medium | Fixed |
+| ST7 | `Close()` doesn't prevent subsequent `Sync()` from executing on zeroed-out config — racing Close+Sync could attempt API calls with empty credentials | Lifecycle safety | Medium | Fixed |
+| ST8 | Cursor parse failure in `Sync()` logged at Debug level — silently falls back to full backfill, causing unnecessary API burst and potential duplicate ingestion without operator notification | Operational visibility | Low | Fixed |
+| ST9 | Cursor restoration failure in `Connect()` logged at Debug level — silently drops all stored cursor state without operator notification | Operational visibility | Low | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+
+- `internal/connector/discord/discord.go`:
+  - ST6: `Sync()` defer now checks `syncErrors` — sets `HealthDegraded` when partial failures occurred, `HealthHealthy` only on clean sync. Supervisor and health-check consumers now see accurate degraded state.
+  - ST7: Added `closed bool` field to `Connector`. `Close()` sets it to `true`. `Sync()` checks at entry and returns an error immediately if the connector is closed. Prevents executing sync logic on stale/zeroed config.
+  - ST8: Promoted cursor parse failure log in `Sync()` from `slog.Debug` to `slog.Warn` with descriptive message "falling back to stored cursors". Operators now get visibility into cursor corruption.
+  - ST9: Promoted cursor restoration failure log in `Connect()` from `slog.Debug` to `slog.Warn` with descriptive message "starting without stored cursors". Operators now get visibility into stored cursor corruption.
+
+- `internal/connector/discord/discord_test.go`:
+  - Added `TestSync_AfterClose_ReturnsError` — verifies Sync on a closed connector returns error
+  - Added `TestSync_HealthDegradedOnPartialFailure` — verifies clean sync leaves health as HealthHealthy
+  - Added `TestClose_SetsClosed` — verifies closed flag is set by Close()
+  - Added `TestSync_HealthTransitionsDuringSyncLifecycle` — verifies health transitions: Healthy → Syncing → Healthy
+
+#### Validation
+
+- `./smackerel.sh test unit` — all packages pass (discord: 0.342s, ran fresh)
+- Zero regressions across all prior fixes (gaps G1–G11, simplify S1–S5, stabilize ST1–ST5, security SEC-1–SEC3-4, harden H-1–H-6)
+
+---
+
+### Simplify-To-Doc Sweep 3 — 2026-04-13
+
+**Trigger:** `simplify` probe via stochastic-quality-sweep (Round R14)
+**Mode:** `simplify-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Context
+
+Third simplify pass on the Discord connector after 12 prior sweeps (gaps, simplify x2, regression, stabilize x2, security x3, harden, chaos). Prior simplify passes found S1–S5 (consolidated channel loops, dead continue removal, redundant empty-string guard, `min()` builtin, EnableGateway TODO). This pass probes the hardened 980-line codebase for remaining structural duplication.
+
+#### Findings (1 simplification opportunity identified)
+
+| # | Finding | Severity | Status |
+|---|---------|----------|--------|
+| S6 | Rate-limit-wait-with-context-cancellation pattern duplicated 3× in `Sync()` — identical 7-line `ShouldWait` + `select/case ctx.Done/case time.After` block repeated for messages, pins, and threads routes | Low | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+- `internal/connector/discord/discord.go`:
+  - S6: Extracted `awaitRateLimit(ctx, route)` method on `*Connector` that encapsulates the rate-limit wait + context cancellation select. Three 7-line inline blocks in `Sync()` replaced with 4-line calls to the helper. Single definition point for the wait logic — if rate-limit behavior needs changes (jitter, logging, backoff), it changes in one place. Sync() body reduced by ~9 lines of duplicated select/case boilerplate.
+
+#### Validation
+
+- `./smackerel.sh test unit` — all packages pass (discord: 0.227s, ran fresh)
+- All 70+ discord tests continue to pass unchanged — zero regressions

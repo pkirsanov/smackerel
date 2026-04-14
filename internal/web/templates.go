@@ -65,6 +65,9 @@ const allTemplates = `
         .digest-text { white-space: pre-wrap; line-height: 1.8; }
         .htmx-indicator { display: none; text-align: center; padding: 1rem; color: var(--muted); }
         @media (max-width: 600px) { body { padding: 0.5rem; } .status-card { grid-template-columns: 1fr; } }
+        .theme-toggle { background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted); cursor: pointer; padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .theme-toggle:hover { color: var(--fg); }
+        html[data-theme="dark"] { --bg: #1a1a18; --fg: #e8e8e4; --muted: #8b8b88; --border: #3a3a38; --accent: #d4d4d0; --card-bg: #242422; --success: #5a8b5a; --warning: #c49b1f; --error: #c44848; --shadow: 0 1px 3px rgba(0,0,0,0.3); }
     </style>
 </head>
 <body>
@@ -74,7 +77,12 @@ const allTemplates = `
         <a href="/topics">Topics</a>
         <a href="/settings">Settings</a>
         <a href="/status">Status</a>
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">Light / Dark</button>
     </nav>
+    <script>
+        (function(){var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}else if(t==='light'){document.documentElement.removeAttribute('data-theme');}})();
+        function toggleTheme(){var h=document.documentElement;if(h.getAttribute('data-theme')==='dark'){h.removeAttribute('data-theme');localStorage.setItem('theme','light');}else{h.setAttribute('data-theme','dark');localStorage.setItem('theme','dark');}}
+    </script>
 {{end}}
 
 {{define "foot"}}</body></html>{{end}}

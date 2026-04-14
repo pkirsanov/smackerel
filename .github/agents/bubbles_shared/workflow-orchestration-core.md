@@ -46,6 +46,12 @@ When a phase fails and retry limits are approaching or exhausted, orchestration 
 3. Resume the original phase after that repair.
 4. Mark the spec `blocked` only if the inline repair path also exhausts its own retry limits.
 
+**⚠️ PLANNING-MODE CONSTRAINT (NON-NEGOTIABLE):** When the active workflow mode has `statusCeiling` below `done` (i.e., planning-only modes like `spec-scope-hardening`):
+- Auto-escalation MUST NOT escalate into implementation specialists (`bubbles.implement`, `bubbles.simplify` code changes, `bubbles.gaps` code changes)
+- If the recovery path requires implementation → set status to `route_required` with `nextRequiredOwner: bubbles.implement` and STOP
+- Planning-only auto-escalation is limited to: `bubbles.analyst`, `bubbles.ux`, `bubbles.design`, `bubbles.plan`, `bubbles.clarify`, `bubbles.harden` (artifact-only)
+- This constraint also applies when the user's original request implied planning-only intent (see workflow-mode-resolution.md → Reciprocal Status Ceiling Warning)
+
 Default routing map:
 
 - Weak planning: `bubbles.design` + `bubbles.plan`

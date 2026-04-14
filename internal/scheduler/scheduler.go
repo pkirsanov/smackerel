@@ -39,13 +39,17 @@ type Scheduler struct {
 	stopOnce sync.Once // guards Stop() against double-close panic on done channel
 
 	// Per-group concurrency guards — prevents cron job overlap within each group
-	muDigest  sync.Mutex
-	muHourly  sync.Mutex
-	muDaily   sync.Mutex
-	muWeekly  sync.Mutex
-	muMonthly sync.Mutex
-	muBriefs  sync.Mutex // pre-meeting briefs (every 5 min)
-	muAlerts  sync.Mutex // alert delivery sweep (every 15 min)
+	muDigest    sync.Mutex
+	muHourly    sync.Mutex
+	muDaily     sync.Mutex
+	muWeekly    sync.Mutex
+	muMonthly   sync.Mutex
+	muBriefs    sync.Mutex // pre-meeting briefs (every 5 min)
+	muAlerts    sync.Mutex // alert delivery sweep (every 15 min)
+	muAlertProd sync.Mutex // daily alert producers (bill, trip, return window)
+	muResurface sync.Mutex // resurfacing (daily 8 AM — separate from synthesis/lookups)
+	muLookups   sync.Mutex // frequent lookup detection (daily 4 AM)
+	muSubs      sync.Mutex // subscription detection (weekly Monday 3 AM)
 }
 
 // New creates a new scheduler.
@@ -205,12 +209,13 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}
 
 		// Schedule resurfacing — daily at 8 AM (after digest)
+		// Uses dedicated muResurface to avoid contention with synthesis/lookups on muDaily.
 		if _, err := s.cron.AddFunc("0 8 * * *", func() {
-			if !s.muDaily.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "daily", "job", "resurfacing")
+			if !s.muResurface.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "resurface", "job", "resurfacing")
 				return
 			}
-			defer s.muDaily.Unlock()
+			defer s.muResurface.Unlock()
 
 			ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 			defer cancel()
@@ -225,6 +230,17 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 					msg += "- " + c.Title + " (" + c.Reason + ")\n"
 				}
 				s.bot.SendDigest(msg)
+
+				// Mark delivered artifacts so dormancy scores update and the same
+				// items are not resurfaced on subsequent runs.
+				ids := make([]string, len(candidates))
+				for i, c := range candidates {
+					ids[i] = c.ArtifactID
+				}
+				if err := s.engine.MarkResurfaced(ctx, ids); err != nil {
+					slog.Warn("failed to mark resurfaced artifacts", "error", err)
+				}
+
 				slog.Info("resurfaced artifacts delivered", "count", len(candidates))
 			}
 		}); err != nil {
@@ -306,12 +322,14 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}
 
 		// Schedule subscription detection — weekly on Mondays at 3 AM (R-504)
+		// Uses dedicated muSubs to avoid contention with weekly synthesis/relationship
+		// cooling on muWeekly. Same pattern as muResurface/muLookups from 013_phase5_stability.
 		if _, err := s.cron.AddFunc("0 3 * * 1", func() {
-			if !s.muWeekly.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "weekly", "job", "subscription-detection")
+			if !s.muSubs.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "subscriptions", "job", "subscription-detection")
 				return
 			}
-			defer s.muWeekly.Unlock()
+			defer s.muSubs.Unlock()
 
 			ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 			defer cancel()
@@ -327,12 +345,13 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}
 
 		// Schedule frequent lookup detection — daily at 4 AM (R-507)
+		// Uses dedicated muLookups to avoid contention with synthesis on muDaily.
 		if _, err := s.cron.AddFunc("0 4 * * *", func() {
-			if !s.muDaily.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "daily", "job", "frequent-lookups")
+			if !s.muLookups.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "lookups", "job", "frequent-lookups")
 				return
 			}
-			defer s.muDaily.Unlock()
+			defer s.muLookups.Unlock()
 
 			ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 			defer cancel()
@@ -343,9 +362,16 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			} else {
 				slog.Info("frequent lookup detection complete", "detected", len(lookups))
 				// Auto-create quick references for frequent lookups that don't have one yet (R-507)
+				// Cap at 5 per run to avoid flooding the user with Telegram messages.
+				const maxQuickRefsPerRun = 5
+				created := 0
 				for _, fl := range lookups {
 					if fl.HasReference {
 						continue
+					}
+					if created >= maxQuickRefsPerRun {
+						slog.Info("quick reference creation cap reached, remaining deferred to next run", "cap", maxQuickRefsPerRun)
+						break
 					}
 					content := fmt.Sprintf("Quick reference for: %s (looked up %d times in 30 days)", fl.SampleQuery, fl.LookupCount)
 					qr, err := s.engine.CreateQuickReference(ctx, fl.SampleQuery, content, nil)
@@ -353,12 +379,22 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 						slog.Warn("quick reference creation failed", "query", fl.SampleQuery, "error", err)
 						continue
 					}
+					created++
 					slog.Info("quick reference auto-created", "concept", qr.Concept, "lookups", fl.LookupCount)
 					if s.bot != nil {
 						msg := fmt.Sprintf("📌 You've looked up \"%s\" %d times. Created a pinned quick reference.", fl.SampleQuery, fl.LookupCount)
 						s.bot.SendDigest(msg)
 					}
 				}
+			}
+
+			// Purge search_log entries older than 60 days (2× the 30-day detection window).
+			// Runs after lookup detection so the purge does not affect the current run.
+			purged, err := s.engine.PurgeOldSearchLogs(ctx, 60)
+			if err != nil {
+				slog.Warn("search log purge failed", "error", err)
+			} else if purged > 0 {
+				slog.Info("search log purged", "rows_deleted", purged)
 			}
 		}); err != nil {
 			slog.Warn("failed to schedule frequent lookup detection", "error", err)
@@ -381,13 +417,15 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}
 
 		// Schedule daily alert production — 6 AM (R-021-002, R-021-003, R-021-004)
-		// All three producers run sequentially in one job to avoid muDaily contention.
+		// All three producers run sequentially in one job. Uses dedicated muAlertProd
+		// to avoid muDaily contention with synthesis/lookups/resurfacing which could
+		// starve alert production if a preceding daily job runs long.
 		if _, err := s.cron.AddFunc("0 6 * * *", func() {
-			if !s.muDaily.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "daily", "job", "alert-producers")
+			if !s.muAlertProd.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "alert-prod", "job", "alert-producers")
 				return
 			}
-			defer s.muDaily.Unlock()
+			defer s.muAlertProd.Unlock()
 
 			ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 			defer cancel()
@@ -439,10 +477,21 @@ func (s *Scheduler) Stop() {
 		// Signal background goroutines (e.g., digest polling) to exit.
 		close(s.done)
 		// Stop the cron scheduler and wait for running callbacks to finish.
-		ctx := s.cron.Stop()
-		<-ctx.Done()
-		// Wait for tracked background goroutines to drain.
-		s.wg.Wait()
+		cronCtx := s.cron.Stop()
+		<-cronCtx.Done()
+		// Wait for tracked background goroutines to drain, with a bounded timeout
+		// so a stuck job doesn't block shutdown forever.
+		done := make(chan struct{})
+		go func() {
+			s.wg.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+			slog.Info("scheduler stopped cleanly")
+		case <-time.After(30 * time.Second):
+			slog.Warn("scheduler stop timed out waiting for in-flight jobs")
+		}
 	})
 }
 
@@ -495,6 +544,10 @@ func FormatAlertMessage(alertType string, title string, body string) string {
 // deliverPendingAlerts fetches pending alerts and delivers them via Telegram.
 // Extracted from the cron callback for testability.
 func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
+	if s.engine == nil {
+		return
+	}
+
 	alerts, err := s.engine.GetPendingAlerts(ctx)
 	if err != nil {
 		slog.Error("alert delivery sweep failed", "error", err)
@@ -520,12 +573,22 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 					"alert_id", a.ID, "error", err)
 				continue
 			}
+		} else {
+			// No bot configured — keep alert pending for when bot becomes available
+			slog.Debug("alert delivery skipped, no Telegram bot configured", "alert_id", a.ID)
+			continue
 		}
 
-		if err := s.engine.MarkAlertDelivered(ctx, a.ID); err != nil {
+		// Use a detached context for marking delivered so that context cancellation
+		// between send and mark doesn't leave sent-but-unmarked alerts (causing
+		// duplicate delivery on the next sweep cycle).
+		markCtx, markCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := s.engine.MarkAlertDelivered(markCtx, a.ID); err != nil {
+			markCancel()
 			slog.Warn("failed to mark alert delivered", "alert_id", a.ID, "error", err)
 			continue
 		}
+		markCancel()
 
 		slog.Info("alert delivered", "alert_id", a.ID, "type", a.AlertType, "title", a.Title)
 	}

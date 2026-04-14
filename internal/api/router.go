@@ -64,12 +64,13 @@ func NewRouter(deps *Dependencies) http.Handler {
 	})
 
 	// OAuth routes — no Bearer auth (browser redirect flow)
+	// Both start and callback are rate-limited to prevent abuse (SEC-SWEEP-001).
 	if deps.OAuthHandler != nil {
 		r.Group(func(r chi.Router) {
 			r.Use(httprate.LimitByIP(10, 1*time.Minute))
 			r.Get("/auth/{provider}/start", deps.OAuthHandler.StartHandler)
+			r.Get("/auth/{provider}/callback", deps.OAuthHandler.CallbackHandler)
 		})
-		r.Get("/auth/{provider}/callback", deps.OAuthHandler.CallbackHandler)
 	}
 
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes

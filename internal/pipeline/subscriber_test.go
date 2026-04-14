@@ -281,3 +281,115 @@ func TestPublishToDeadLetter_PublishFailure(t *testing.T) {
 		t.Error("expected error when publish fails")
 	}
 }
+
+// --- handleMessage validation tests ---
+
+func TestHandleMessage_EmptyArtifactID_AckedAsInvalid(t *testing.T) {
+	// A payload with empty artifact_id should fail ValidateProcessedPayload
+	payload := `{"artifact_id":"","success":true}`
+	msg := &mockJetStreamMsg{
+		data:     []byte(payload),
+		metadata: &jetstream.MsgMetadata{NumDelivered: 1},
+	}
+
+	rs := &ResultSubscriber{
+		NATS:      &smacknats.Client{JetStream: &mockJetStream{}},
+		Processor: NewProcessor(nil, nil),
+	}
+	rs.handleMessage(context.Background(), msg)
+
+	// Empty artifact_id fails validation → Ack to prevent infinite redelivery
+	if !msg.acked {
+		t.Error("expected Ack for payload failing ValidateProcessedPayload (empty artifact_id)")
+	}
+	if msg.naked {
+		t.Error("should NOT Nak a validation-failed message — Ack to prevent redelivery")
+	}
+}
+
+func TestHandleMessage_MalformedJSON_Acked(t *testing.T) {
+	msg := &mockJetStreamMsg{
+		data:     []byte(`{invalid json`),
+		metadata: &jetstream.MsgMetadata{NumDelivered: 1},
+	}
+
+	rs := &ResultSubscriber{
+		NATS:      &smacknats.Client{JetStream: &mockJetStream{}},
+		Processor: NewProcessor(nil, nil),
+	}
+	rs.handleMessage(context.Background(), msg)
+
+	if !msg.acked {
+		t.Error("expected Ack for malformed JSON to prevent infinite redelivery")
+	}
+}
+
+// TestHandleMessage_FinalDelivery_ProcessesBeforeDeadLetter verifies that on the
+// final delivery attempt (NumDelivered == MaxDeliver), the handler still ATTEMPTS
+// processing before routing to dead-letter. This is adversarial: if processing
+// is skipped on the final delivery, we lose one attempt and the dead-letter
+// Smackerel-Last-Error only says "MaxDeliver exhausted" instead of the real error.
+func TestHandleMessage_FinalDelivery_ProcessesBeforeDeadLetter(t *testing.T) {
+	js := &mockJetStream{}
+	// Payload with a valid artifact_id that will fail at HandleProcessedResult
+	// because the DB pool is nil (causes a real error, not a validation skip).
+	payload := `{"artifact_id":"test-final","title":"Test","artifact_type":"url","summary":"s","topics":["t"],"success":true}`
+	msg := &mockJetStreamMsg{
+		data:     []byte(payload),
+		metadata: &jetstream.MsgMetadata{NumDelivered: uint64(DefaultMaxDeliver), Consumer: "test-consumer"},
+	}
+
+	rs := &ResultSubscriber{
+		NATS:      &smacknats.Client{JetStream: js},
+		Processor: NewProcessor(nil, nil), // nil DB pool → HandleProcessedResult returns error
+	}
+	rs.handleMessage(context.Background(), msg)
+
+	// The message MUST be acked (routed to dead-letter), not naked
+	if !msg.acked {
+		t.Error("expected Ack after dead-letter routing on final delivery")
+	}
+	if msg.naked {
+		t.Error("should NOT Nak on final delivery — should dead-letter instead")
+	}
+
+	// Verify dead-letter was published with a REAL error, not generic "MaxDeliver exhausted"
+	if len(js.published) != 1 {
+		t.Fatalf("expected exactly 1 dead-letter publish, got %d", len(js.published))
+	}
+	dlMsg := js.published[0]
+	lastErr := dlMsg.Header.Get("Smackerel-Last-Error")
+	if lastErr == "" {
+		t.Fatal("expected Smackerel-Last-Error header in dead-letter message")
+	}
+	if lastErr == "MaxDeliver exhausted" {
+		t.Error("Smackerel-Last-Error should contain the actual processing error, not generic 'MaxDeliver exhausted'")
+	}
+}
+
+// TestHandleMessage_BeforeMaxDeliver_Naks verifies that processing failures
+// before the final delivery are Nak'd for retry, NOT dead-lettered.
+func TestHandleMessage_BeforeMaxDeliver_Naks(t *testing.T) {
+	js := &mockJetStream{}
+	payload := `{"artifact_id":"test-retry","title":"Test","artifact_type":"url","summary":"s","topics":["t"],"success":true}`
+	msg := &mockJetStreamMsg{
+		data:     []byte(payload),
+		metadata: &jetstream.MsgMetadata{NumDelivered: uint64(DefaultMaxDeliver - 1)},
+	}
+
+	rs := &ResultSubscriber{
+		NATS:      &smacknats.Client{JetStream: js},
+		Processor: NewProcessor(nil, nil), // nil DB pool → error
+	}
+	rs.handleMessage(context.Background(), msg)
+
+	if !msg.naked {
+		t.Error("expected Nak for processing failure before MaxDeliver (retry)")
+	}
+	if msg.acked {
+		t.Error("should NOT Ack before MaxDeliver — Nak for retry")
+	}
+	if len(js.published) != 0 {
+		t.Error("should NOT publish to dead-letter before MaxDeliver")
+	}
+}

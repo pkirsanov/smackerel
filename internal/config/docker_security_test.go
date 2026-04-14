@@ -156,3 +156,36 @@ func TestDockerignore_ML_ExcludesTests(t *testing.T) {
 		t.Error("ml/.dockerignore missing exclusion for __pycache__/")
 	}
 }
+
+// --- SEC-SWEEP-002: Application containers drop all Linux capabilities ---
+
+func TestDockerCompose_CapDropAll(t *testing.T) {
+	content := readRepoFile(t, "docker-compose.yml")
+
+	// Application services that must have cap_drop: ALL
+	services := []string{"nats", "smackerel-core", "smackerel-ml"}
+
+	for _, svc := range services {
+		t.Run(svc, func(t *testing.T) {
+			// Find the service block
+			idx := strings.Index(content, "  "+svc+":")
+			if idx == -1 {
+				t.Fatalf("service %s not found in docker-compose.yml", svc)
+			}
+
+			// Get the service block text (up to next top-level service or EOF)
+			rest := content[idx:]
+			svcHeader := "  " + svc + ":"
+			afterHeader := rest[len(svcHeader):]
+			sections := regexp.MustCompile(`\n  \S`)
+			svcBlock := rest
+			if loc := sections.FindStringIndex(afterHeader); loc != nil {
+				svcBlock = rest[:len(svcHeader)+loc[0]]
+			}
+
+			if !strings.Contains(svcBlock, "cap_drop:") || !strings.Contains(svcBlock, "- ALL") {
+				t.Errorf("service %s missing cap_drop: [ALL]", svc)
+			}
+		})
+	}
+}

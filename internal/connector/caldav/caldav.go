@@ -55,6 +55,9 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	if c.health == connector.HealthDisconnected {
+		return nil, "", fmt.Errorf("CalDAV connector %q: Sync called before Connect", c.id)
+	}
 	c.health = connector.HealthSyncing
 	defer func() {
 		if c.health == connector.HealthSyncing {
@@ -350,6 +353,10 @@ func parseCalendarEvents(raw interface{}) ([]CalendarEvent, error) {
 			Summary: getStr(em, "summary"),
 			Status:  "confirmed",
 			Updated: time.Now(),
+		}
+
+		if evt.UID == "" {
+			continue
 		}
 
 		if desc := getStr(em, "description"); desc != "" {

@@ -148,3 +148,136 @@ A stochastic quality sweep (trigger: test, mode: test-to-doc) analyzed unit test
 - `./smackerel.sh check` — pass (config SST + go vet/build)
 - `./smackerel.sh test unit` — all packages pass, `internal/api` re-ran (not cached) at 0.930s
 - Total test functions: `capture_test.go` 22, `health_test.go` 40
+
+## Regression Sweep (2026-04-12, regression trigger)
+
+A stochastic quality sweep (trigger: regression, mode: regression-to-doc) performed a full regression analysis across all spec 023 surfaces.
+
+### Method
+
+1. **Grep-based invariant checks** — verified all 9 original findings remain resolved
+2. **Cross-spec conflict analysis** — examined `git diff ebe3d1c..HEAD` for all files touched by spec 023
+3. **Build check** — `./smackerel.sh check` (config SST + go vet/build)
+4. **Full unit test suite** — `./smackerel.sh test unit` (33 Go packages + Python ML sidecar)
+5. **Design contradiction scan** — verified post-certification changes from specs 020/021 follow spec 023 patterns
+
+### Invariant Verification
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| `checkAuth` removed | Pass | `grep -rn "checkAuth" internal/api/` — zero hits |
+| `interface{}` removed from Dependencies | Pass | `grep "interface{}" internal/api/health.go` — zero hits |
+| Zero runtime type assertions in api package | Pass | `grep '\.\(\*\|\.\(' internal/api/*.go` — zero hits |
+| Zero `os.Getenv` for BOOKMARKS/BROWSER/MAPS in cmd/ | Pass | grep returns zero hits |
+| Zero `json.NewEncoder` in intelligence.go | Pass | All 8 handlers use `writeJSON`/`writeError` |
+| Zero hardcoded `time.After(5 * time.Minute)` in supervisor sync loop | Pass | replaced with `getSyncInterval()` |
+| `sync.Once` guards `mlClient()` | Pass | `health.go` — `d.mlClientOnce.Do(func(){...})` |
+| Health log exclusion active | Pass | `structuredLogger` early return for `/api/health` and `/ping` |
+
+### Cross-Spec Conflict Analysis
+
+Post-certification changes from 5 commits examined. All changes are additive:
+
+| File | Changes Since Certification | Regression? |
+|------|---------------------------|-------------|
+| `health.go` | Added `ArtifactQuerier` interface + `ArtifactStore`/`ContextHandler` fields (gaps sweep); version/commit fingerprint protection (spec 020); HTTP response body drain improvement | No |
+| `intelligence.go` | Added 4 new handlers (ContentFuel, QuickReferences, MonthlyReport, SeasonalPatterns) from spec 021 — all follow `writeJSON`/`writeError` pattern | No |
+| `supervisor.go` | Added `publisher` field + `SetPublisher()` + artifact publishing in sync loop (spec 019) | No |
+| `router.go` | Added new routes for intelligence endpoints, context-for endpoint, web auth middleware | No |
+| `config.go` | No changes to spec 023 fields | No |
+| `capture.go` | `ArtifactQuerier` handlers added (gaps sweep fix) | No |
+| `main.go` | Additional connector wiring, OAuth handler, ContextHandler — spec 023 fields preserved | No |
+
+### Build & Test Results
+
+- `./smackerel.sh check` — **Pass** (config SST in sync + go vet/build clean)
+- `./smackerel.sh test unit` — **Pass** (33 Go packages ok, Python 53 passed/1 skipped)
+- Zero test failures, zero regressions
+
+### Findings
+
+**None.** All 9 original findings remain resolved. Post-certification changes from other specs (019-connector-wiring, 020-security-hardening, 021-intelligence-delivery) are additive and follow the patterns spec 023 established (typed interfaces, writeJSON, SST compliance). No design contradictions or baseline test decreases detected.
+
+## Gap Analysis (2026-04-13, bubbles.gaps)
+
+A holistic gap analysis examined the codebase against spec 023 requirements and broader engineering quality concerns.
+
+### Baseline
+
+- `./smackerel.sh test unit` — **Pass** (all 33 Go packages + Python ML sidecar)
+- All 3 scopes marked Done with reconciliation evidence
+
+### Spec 023 DoD Verification
+
+All 27 DoD items across 3 scopes verified against live code. Items confirmed:
+
+| Scope | DoD Items | Verified | Status |
+|-------|-----------|----------|--------|
+| 1 | 9 items (race fix, typed deps, dead code) | 9/9 | ✅ |
+| 2 | 9 items (SST, writeJSON, health probes) | 9/9 | ✅ |
+| 3 | 9 items (log exclusion, sync schedule) | 9/9 | ✅ |
+
+### Gaps Found and Fixed (≤30 lines each)
+
+| # | Type | Location | Description | Fix Applied |
+|---|------|----------|-------------|------------|
+| GAP-EQ-1 | 🟡 PARTIAL | `capture.go:296` RecentHandler | Returns `null` instead of `[]` for empty results — nil slice serializes as JSON `null`, breaking API consumers expecting an array | Changed `var results []RecentItem` → `results := make([]RecentItem, 0, len(items))` |
+| GAP-EQ-2 | 🟡 PARTIAL | `capture.go:319` ArtifactDetailHandler | Missing artifact ID length validation at system boundary — accepts arbitrarily long IDs from URL path | Added `maxArtifactIDLen = 128` constant and length check before DB query |
+| GAP-EQ-3 | 🟣 DIVERGENT | `health.go:210-214` HealthHandler | Manual `json.NewEncoder(w).Encode()` instead of `writeJSON()` — R-ENG-013 established writeJSON as the standard pattern for all handlers | Replaced with `writeJSON(w, http.StatusOK, resp)`; removed unused `encoding/json` import |
+
+### Tests Added
+
+| Test | Purpose | Validates |
+|------|---------|-----------|
+| `TestRecentHandler_EmptyResults_ReturnsEmptyArray` | Verifies empty results serialize as `[]` not `null` | GAP-EQ-1 |
+| `TestArtifactDetailHandler_OversizedID` | Verifies oversized artifact ID returns 400 | GAP-EQ-2 |
+
+### Documented Gaps (Not Fixed — Outside Spec 023 Scope)
+
+| # | Type | Location | Description | Owner |
+|---|------|----------|-------------|-------|
+| GAP-EQ-4 | 🔵 UNDOCUMENTED | `cmd/core/main.go` lines 234-373 | 39 remaining `os.Getenv()` calls for connector configs (Discord, Twitter, Weather, Gov Alerts, Financial Markets, Maps source config). These are SST violations per project policy but each connector was introduced by its own spec (010-018) and should be fixed in a dedicated SST cleanup scope. | Connector specs or new SST sweep spec |
+| GAP-EQ-5 | ⬛ UNTESTED | `internal/graph/hospitality_linker.go` | `HospitalityLinker` has no dedicated test file — only `linker_test.go` covers the base `Linker`. DB-dependent, requires integration test. | `bubbles.test` |
+| GAP-EQ-6 | ⬛ UNTESTED | `internal/auth/handler.go`, `store.go` | `OAuthHandler` and `TokenStore` have no unit tests for `handler.go` or `store.go` (only `oauth_test.go` covers `OAuth2Provider`). Crypto operations (AES-256-GCM) are untested. | `bubbles.test` |
+
+### Verification
+
+**Claim Source:** Direct execution in terminal session
+
+```
+./smackerel.sh test unit — Pass (internal/api re-ran, not cached, 0.563s)
+All 33 Go packages: ok
+Python ML sidecar: pass
+```
+
+### Verdict
+
+⚠️ MINOR_GAPS_REMAIN
+
+All spec 023 DoD items verified and intact. 3 production-impacting gaps found and fixed inline (null array, missing input validation, inconsistent writeJSON usage). 3 additional gaps documented for routing to other agents (SST violations in connector wiring, missing test coverage for hospitality linker and OAuth store).
+
+## Improvement Sweep (2026-04-13, improve trigger)
+
+A stochastic quality sweep (trigger: improve, mode: improve-existing) probed the spec 023 implementation for consistency, resilience, and test coverage improvements.
+
+### Findings and Fixes
+
+| # | Type | Location | Description | Fix Applied |
+|---|------|----------|-------------|------------|
+| IMP-023-01 | 🟡 CONSISTENCY | `health.go` `checkMLSidecar()` | Returns `"down"` when `baseURL` is empty, while `checkOllama()` correctly returns `"not_configured"`. This causes false `"degraded"` overall status when ML sidecar is simply not configured (not actually down). | Changed empty-URL return from `"down"` to `"not_configured"` — consistent with `checkOllama` pattern |
+| IMP-023-02 | 🟡 RESILIENCE | `health.go` `checkMLSidecar()` | Missing `context.WithTimeout` — `checkOllama()` creates a dedicated 2s timeout context for the probe, but `checkMLSidecar()` relies only on the HTTP client timeout. Under DNS resolution delays or slow TLS handshakes, the client timeout alone may not cover the full request lifecycle. | Added `context.WithTimeout(ctx, 2*time.Second)` matching `checkOllama` pattern |
+| IMP-023-03 | ⬛ TEST GAP | `health_test.go` | `TestHealthHandler_VersionAndCommitHash` only tests dev mode (no AuthToken), missing coverage for the fingerprint protection feature where version/commit are hidden from unauthenticated callers when AuthToken is configured. | Added `TestHealthHandler_VersionHiddenWithoutAuth` and `TestHealthHandler_VersionVisibleWithAuth` |
+| IMP-023-04 | ⬛ TEST GAP | `health_test.go` | No test verifying that unconfigured ML sidecar doesn't falsely degrade overall health status. | Added `TestHealthHandler_MLSidecarNotConfigured_OverallHealthy` |
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `internal/api/health.go` | `checkMLSidecar`: empty URL → `"not_configured"` (was `"down"`); added `context.WithTimeout` for probe resilience |
+| `internal/api/health_test.go` | Updated `TestCheckMLSidecar_EmptyURL` assertion; added 4 new tests (IMP-023-01 through IMP-023-04) |
+
+### Verification
+
+- `./smackerel.sh test unit` — **Pass** (all 33 Go packages + Python ML sidecar)
+- `internal/api` re-ran (not cached) — 0.565s
+- All existing tests continue to pass — no regressions

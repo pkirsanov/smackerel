@@ -157,3 +157,46 @@ func TestBackoff_ResetAfterExhaustion(t *testing.T) {
 		}
 	}
 }
+
+// Chaos regression: backoff with extreme attempt counts must not overflow or panic.
+// math.Pow(2, 62) * 1s exceeds int64 range; the fix clamps before conversion.
+func TestBackoff_OverflowProtection(t *testing.T) {
+	b := &Backoff{
+		BaseDelay:  1 * time.Second,
+		MaxDelay:   30 * time.Second,
+		MaxRetries: 100,
+	}
+
+	for i := 0; i < 100; i++ {
+		delay, ok := b.Next()
+		if !ok {
+			t.Fatalf("attempt %d: expected more retries", i)
+		}
+		if delay <= 0 {
+			t.Fatalf("attempt %d: delay must be positive, got %v", i, delay)
+		}
+		// With jitter, absolute max is MaxDelay + 25%
+		if delay > 40*time.Second {
+			t.Fatalf("attempt %d: delay %v exceeds safe cap", i, delay)
+		}
+	}
+}
+
+// Chaos regression: tiny BaseDelay must not cause jitter to panic via rand.Int63n(0).
+func TestBackoff_TinyBaseDelay(t *testing.T) {
+	b := &Backoff{
+		BaseDelay:  1 * time.Nanosecond,
+		MaxDelay:   10 * time.Nanosecond,
+		MaxRetries: 5,
+	}
+
+	for i := 0; i < 5; i++ {
+		delay, ok := b.Next()
+		if !ok {
+			t.Fatalf("attempt %d: expected more retries", i)
+		}
+		if delay <= 0 {
+			t.Fatalf("attempt %d: delay must be positive, got %v", i, delay)
+		}
+	}
+}

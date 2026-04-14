@@ -78,18 +78,23 @@ type SearchEngine struct {
 	healthProbeMu sync.Mutex
 }
 
+// maxQueryLen limits search query length to prevent abuse.
+const maxQueryLen = 10000
+
 // SearchHandler handles POST /api/search.
 func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 	var req SearchRequest
-	// Limit request body to 1MB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON body")
+	if !decodeJSONBody(w, r, &req, "INVALID_INPUT", "Invalid JSON body") {
 		return
 	}
 
 	if req.Query == "" {
 		writeError(w, http.StatusBadRequest, "EMPTY_QUERY", "Query text is required")
+		return
+	}
+
+	if len(req.Query) > maxQueryLen {
+		writeError(w, http.StatusBadRequest, "QUERY_TOO_LONG", "Query exceeds maximum length")
 		return
 	}
 
@@ -211,13 +216,13 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		return results, total, "text_fallback", err
 	}
 
-	// Step 3: Vector similarity search with pgvector
+	// Step 4: Vector similarity search with pgvector
 	results, total, err := s.vectorSearch(ctx, embedding, req)
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("vector search: %w", err)
 	}
 
-	// Step 4: Graph expansion — find related artifacts via knowledge graph edges
+	// Step 5: Graph expansion — find related artifacts via knowledge graph edges
 	if len(results) > 0 && len(results) < req.Limit {
 		expanded := s.graphExpand(ctx, results, req.Limit-len(results))
 		if len(expanded) > 0 {
@@ -226,7 +231,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		}
 	}
 
-	// Step 5: LLM re-ranking via ML sidecar (best-effort, skip on failure)
+	// Step 6: LLM re-ranking via ML sidecar (best-effort, skip on failure)
 	if len(results) > 1 {
 		reranked, err := s.rerankViaML(ctx, req.Query, results)
 		if err != nil {

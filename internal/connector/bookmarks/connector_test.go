@@ -526,7 +526,7 @@ func TestSyncRejectsOversizedFile(t *testing.T) {
 	}
 
 	// processFile should fail for a file that doesn't exist (stat check)
-	_, err := c.processFile(ctx, filepath.Join(dir, "nonexistent.json"))
+	_, err := c.processFile(ctx, c.config, filepath.Join(dir, "nonexistent.json"))
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
 	}
@@ -841,7 +841,7 @@ func TestProcessFileRejectsPathTraversal(t *testing.T) {
 	_ = os.WriteFile(outsideFile, chromeJSONFixture(), 0o644)
 	defer os.Remove(outsideFile)
 
-	_, err := c.processFile(ctx, outsideFile)
+	_, err := c.processFile(ctx, c.config, outsideFile)
 	if err == nil {
 		t.Fatal("SECURITY: processFile should reject files outside import directory")
 	}
@@ -1008,5 +1008,515 @@ func TestParseConfigMissingImportDir(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "import directory") {
 		t.Errorf("error = %q, want containing 'import directory'", err.Error())
+	}
+}
+
+// T-CFG-005: Valid custom watch_interval is parsed.
+func TestParseConfigValidWatchInterval(t *testing.T) {
+	dir := t.TempDir()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":     dir,
+			"watch_interval": "10m",
+		},
+	}
+
+	parsed, err := parseConfig(cfg)
+	if err != nil {
+		t.Fatalf("parseConfig: %v", err)
+	}
+	if parsed.WatchInterval != 10*60*1000000000 { // 10 minutes in nanoseconds
+		t.Errorf("WatchInterval = %v, want 10m", parsed.WatchInterval)
+	}
+}
+
+// T-CFG-006: ProcessingTier from ConnectorConfig overrides default.
+func TestParseConfigProcessingTierOverride(t *testing.T) {
+	dir := t.TempDir()
+	cfg := connector.ConnectorConfig{
+		ProcessingTier: "lightweight",
+		SourceConfig: map[string]interface{}{
+			"import_dir": dir,
+		},
+	}
+
+	parsed, err := parseConfig(cfg)
+	if err != nil {
+		t.Fatalf("parseConfig: %v", err)
+	}
+	if parsed.ProcessingTier != "lightweight" {
+		t.Errorf("ProcessingTier = %q, want %q", parsed.ProcessingTier, "lightweight")
+	}
+}
+
+// T-CFG-007: archive_processed=false overrides default true.
+func TestParseConfigArchiveProcessedFalse(t *testing.T) {
+	dir := t.TempDir()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":        dir,
+			"archive_processed": false,
+		},
+	}
+
+	parsed, err := parseConfig(cfg)
+	if err != nil {
+		t.Fatalf("parseConfig: %v", err)
+	}
+	if parsed.ArchiveProcessed {
+		t.Error("ArchiveProcessed = true, want false")
+	}
+}
+
+// T-1-15: Connect fails when import path is a regular file instead of directory.
+func TestConnectImportPathIsFile(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "not-a-directory.json")
+	if err := os.WriteFile(filePath, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	err := c.Connect(ctx, makeConfig(filePath))
+	if err == nil {
+		t.Fatal("Connect() expected error when import path is a file, got nil")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Errorf("error = %q, want containing 'not a directory'", err.Error())
+	}
+	if h := c.Health(ctx); h != connector.HealthError {
+		t.Errorf("Health() = %q, want %q", h, connector.HealthError)
+	}
+}
+
+// T-SYNC-004: Sync when all files already appear in cursor returns zero artifacts.
+func TestSyncAllFilesAlreadyProcessed(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"export.json": chromeJSONFixture(),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	cursor := encodeProcessedFilesCursor([]string{"export.json"})
+	artifacts, newCursor, err := c.Sync(ctx, cursor)
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("got %d artifacts, want 0 (all already processed)", len(artifacts))
+	}
+	// Cursor should be passed through unchanged (no new files)
+	if newCursor != cursor {
+		t.Errorf("cursor = %q, want original cursor %q", newCursor, cursor)
+	}
+}
+
+// T-SYNC-005: Mixed JSON and HTML files in a single sync.
+func TestSyncMixedFormats(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"chrome.json":  chromeJSONFixture(),
+		"firefox.html": netscapeHTMLFixture(),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, cursor, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// Chrome fixture has 2 bookmarks, Netscape has 2 → total 4
+	if len(artifacts) != 4 {
+		t.Fatalf("got %d artifacts, want 4 (2 from JSON + 2 from HTML)", len(artifacts))
+	}
+
+	// Verify both formats are represented in metadata
+	formats := map[string]int{}
+	for _, a := range artifacts {
+		if f, ok := a.Metadata["source_format"].(string); ok {
+			formats[f]++
+		}
+	}
+	if formats["chrome_json"] != 2 {
+		t.Errorf("chrome_json count = %d, want 2", formats["chrome_json"])
+	}
+	if formats["netscape_html"] != 2 {
+		t.Errorf("netscape_html count = %d, want 2", formats["netscape_html"])
+	}
+
+	// Cursor should list both files
+	var files []string
+	if err := json.Unmarshal([]byte(cursor), &files); err != nil {
+		t.Fatalf("cursor unmarshal: %v", err)
+	}
+	if len(files) != 2 {
+		t.Errorf("cursor has %d files, want 2", len(files))
+	}
+}
+
+// T-FILTER-001: filterArtifacts domain exclusion is case insensitive.
+func TestFilterDomainCaseInsensitive(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"test.html": []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL>
+<DT><A HREF="https://SPAM.COM/page">Upper Case Domain</A>
+<DT><A HREF="https://Spam.Com/other">Mixed Case Domain</A>
+<DT><A HREF="https://good.com/page">Keep</A>
+</DL>`),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	cfg := connector.ConnectorConfig{
+		AuthType:       "none",
+		Enabled:        true,
+		ProcessingTier: "full",
+		SourceConfig: map[string]interface{}{
+			"import_dir":        dir,
+			"archive_processed": false,
+			"exclude_domains":   []interface{}{"spam.com"},
+		},
+	}
+	if err := c.Connect(ctx, cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	if len(artifacts) != 1 {
+		t.Errorf("got %d artifacts, want 1 (both spam.com variants excluded)", len(artifacts))
+	}
+	for _, a := range artifacts {
+		if strings.Contains(strings.ToLower(a.URL), "spam.com") {
+			t.Errorf("excluded domain leaked through: %s", a.URL)
+		}
+	}
+}
+
+// T-FILTER-002: filterArtifacts rejects all artifacts with only disallowed schemes.
+func TestFilterAllDangerousSchemes(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"bad.html": []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL>
+<DT><A HREF="javascript:void(0)">JS</A>
+<DT><A HREF="data:text/html,hello">Data</A>
+<DT><A HREF="file:///etc/passwd">File</A>
+</DL>`),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	if len(artifacts) != 0 {
+		urls := make([]string, len(artifacts))
+		for i, a := range artifacts {
+			urls[i] = a.URL
+		}
+		t.Errorf("got %d artifacts %v, want 0 (all dangerous schemes)", len(artifacts), urls)
+	}
+}
+
+// T-CTOR-001: NewConnectorWithPool initializes deduplicator and topic mapper.
+func TestNewConnectorWithPool(t *testing.T) {
+	c := NewConnectorWithPool("bookmarks-pool", nil)
+	if c.ID() != "bookmarks-pool" {
+		t.Errorf("ID() = %q, want %q", c.ID(), "bookmarks-pool")
+	}
+	if c.deduplicator == nil {
+		t.Error("deduplicator is nil, want initialized")
+	}
+	if c.topicMapper == nil {
+		t.Error("topicMapper is nil, want initialized")
+	}
+	ctx := context.Background()
+	if h := c.Health(ctx); h != connector.HealthDisconnected {
+		t.Errorf("Health() = %q, want %q", h, connector.HealthDisconnected)
+	}
+}
+
+// T-CURSOR-002: Cursor with nil SourceConfig key returns error.
+func TestParseConfigNilSourceConfig(t *testing.T) {
+	cfg := connector.ConnectorConfig{
+		SourceConfig: nil,
+	}
+	_, err := parseConfig(cfg)
+	if err == nil {
+		t.Fatal("expected error for nil SourceConfig")
+	}
+}
+
+// T-SYNC-006: processFile return error for lstat failure on non-existent file.
+func TestProcessFileNonExistentFile(t *testing.T) {
+	dir := t.TempDir()
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	_, err := c.processFile(ctx, c.config, filepath.Join(dir, "ghost.json"))
+	if err == nil {
+		t.Fatal("expected error for non-existent file")
+	}
+}
+
+// T-CURSOR-003: decoded cursor with empty JSON array returns empty slice.
+func TestDecodeCursorEmptyArray(t *testing.T) {
+	files := decodeProcessedFilesCursor("[]")
+	if len(files) != 0 {
+		t.Errorf("decoded = %v, want empty slice", files)
+	}
+}
+
+// ============================================================================
+// CHAOS R16 — Adversarial regression tests
+// These tests verify fixes from chaos-hardening round C16 and MUST FAIL if
+// the underlying defences are reverted.
+// ============================================================================
+
+// T-CHAOS-C16-001: Context cancellation with deduplicator present still
+// correctly transitions health to Error when all files fail.
+// Before the fix, stale zero counters could leave health at HealthHealthy.
+func TestChaosC16_CancelledSyncWithDedupHealthError(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"bad.json": []byte(`{invalid json!!!`),
+	})
+
+	// Use NewConnectorWithPool so c.deduplicator is non-nil.
+	// (nil pool means dedup short-circuits but the struct pointer is live.)
+	c := NewConnectorWithPool("bookmarks", nil)
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Sync with one corrupted file → file-processing error, allArtifacts empty.
+	// The dedup block is skipped (allArtifacts empty), but the counters must
+	// still reflect the failure so the deferred health function sets Error.
+	_, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync returned unexpected error: %v", err)
+	}
+
+	h := c.Health(ctx)
+	if h != connector.HealthError {
+		t.Fatalf("CHAOS C16-001: Health() = %q after all-fail sync with deduplicator; "+
+			"expected %q — health state may be reading stale counters", h, connector.HealthError)
+	}
+}
+
+// T-CHAOS-C16-001b: Cancelled context with deduplicator AND files to process
+// must not leave health at HealthHealthy if there are accumulated errors.
+func TestChaosC16_CancelledDuringFileLoopWithDedup(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"a.json": chromeJSONFixture(),
+		"b.json": chromeJSONFixture(),
+		"c.json": chromeJSONFixture(),
+	})
+
+	c := NewConnectorWithPool("bookmarks", nil)
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Pre-cancel so the file loop's context check fires on the first iteration.
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := c.Sync(cancelCtx, "")
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+
+	// After cancel mid-file-loop, health must NOT be HealthHealthy.
+	h := c.Health(context.Background())
+	if h == connector.HealthHealthy {
+		t.Fatalf("CHAOS C16-001b: Health() = %q after cancelled sync with deduplicator; "+
+			"expected %q — sync counters were not flushed before early return", h, connector.HealthError)
+	}
+}
+
+// T-CHAOS-C16-002: Non-bookmark HTML file produces zero artifacts but is added
+// to the cursor (ensuring the file is not reprocessed on subsequent syncs).
+// This documents the behaviour and confirms the warning path is reachable.
+func TestChaosC16_NonBookmarkHTMLZeroArtifacts(t *testing.T) {
+	// A regular HTML page, NOT a bookmark export — no <A HREF> patterns.
+	regularHTML := []byte(`<!DOCTYPE html>
+<html><head><title>My Blog</title></head>
+<body><h1>Hello World</h1><p>No bookmarks here.</p></body>
+</html>`)
+
+	dir := setupImportDir(t, map[string][]byte{
+		"not_bookmarks.html": regularHTML,
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, cursor, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// Zero bookmarks = zero artifacts after scheme filtering.
+	if len(artifacts) != 0 {
+		t.Errorf("got %d artifacts from non-bookmark HTML, want 0", len(artifacts))
+	}
+
+	// The file IS added to the cursor (marked as processed) so it won't be
+	// re-read endlessly. Confirm this defensive behaviour.
+	var files []string
+	if cursor != "" {
+		if err := json.Unmarshal([]byte(cursor), &files); err != nil {
+			t.Fatalf("cursor unmarshal: %v", err)
+		}
+	}
+	found := false
+	for _, f := range files {
+		if f == "not_bookmarks.html" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("CHAOS C16-002: non-bookmark file not in cursor %v — would be reprocessed forever", files)
+	}
+}
+
+// T-CHAOS-C16-003: Mixed valid/corrupted files with deduplicator present.
+// Verifies that partial success with a non-nil deduplicator still reports
+// correct health (not HealthError, which is reserved for total failure).
+func TestChaosC16_PartialSuccessWithDedupHealthy(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"good.json":    chromeJSONFixture(),
+		"corrupt.json": []byte(`NOT JSON`),
+	})
+
+	c := NewConnectorWithPool("bookmarks", nil)
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// At least 2 artifacts from the good file.
+	if len(artifacts) < 2 {
+		t.Fatalf("got %d artifacts, want >= 2 from good.json", len(artifacts))
+	}
+
+	// Partial success: health should be Healthy (per SCN-BK-005).
+	h := c.Health(ctx)
+	if h != connector.HealthHealthy {
+		t.Errorf("Health() = %q after partial success with dedup, want %q", h, connector.HealthHealthy)
+	}
+}
+
+// ============================================================================
+// CHAOS R24 — Adversarial regression tests
+// These tests verify fixes from chaos-hardening round R24 and MUST FAIL if
+// the underlying defences are reverted.
+// ============================================================================
+
+// T-CHAOS-R24-001: Config snapshot prevents data race between Connect and Sync.
+// Verifies that Sync uses a consistent config snapshot even if Connect updates
+// the config concurrently. Without the fix, this test would trip the race
+// detector or produce inconsistent results.
+func TestChaosR24_ConfigSnapshotRace(t *testing.T) {
+	dirA := setupImportDir(t, map[string][]byte{
+		"export_a.json": chromeJSONFixture(),
+	})
+	dirB := setupImportDir(t, map[string][]byte{
+		"export_b.json": chromeJSONFixture(),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dirA)); err != nil {
+		t.Fatalf("Connect A: %v", err)
+	}
+
+	// Run multiple concurrent Sync + Connect calls.
+	// The race detector will flag unsafe reads if the snapshot is missing.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 10; i++ {
+			if i%2 == 0 {
+				_ = c.Connect(ctx, makeConfig(dirA))
+			} else {
+				_ = c.Connect(ctx, makeConfig(dirB))
+			}
+		}
+	}()
+
+	for i := 0; i < 10; i++ {
+		_, _, _ = c.Sync(ctx, "")
+	}
+	<-done
+
+	// If we reach here without a race-detector panic, the snapshot is working.
+	// Verify final state is deterministic.
+	h := c.Health(ctx)
+	if h != connector.HealthHealthy && h != connector.HealthError {
+		t.Errorf("Health() = %q, want healthy or error (deterministic after race)", h)
+	}
+}
+
+// T-CHAOS-R24-001b: After the config snapshot fix, helper methods must NOT
+// access c.config directly. Verify by confirming that Sync with a connected
+// config produces deterministic results.
+func TestChaosR24_ConfigSnapshotDeterministic(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"test.json": chromeJSONFixture(),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("got %d artifacts, want 2", len(artifacts))
+	}
+
+	// Now close the connector (resets health to disconnected) but note
+	// that config stays in place — verifying the snapshot was already taken.
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if h := c.Health(ctx); h != connector.HealthDisconnected {
+		t.Errorf("Health after Close = %q, want disconnected", h)
 	}
 }

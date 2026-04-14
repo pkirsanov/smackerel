@@ -455,7 +455,7 @@ Scenario: SCN-GK-011 Database migration creates Keep tables
 
 ### Description
 
-Implement the full source qualifier engine that drives processing tier assignment per R-008. The qualifier evaluation order is: trashed→skip, pinned→full, labeled→full, images→full, recent(<30d)→standard, archived→light, old(>30d)→light. Wire tier assignment into the sync flow so that published artifacts carry the correct `processing_tier` value, and verify that the existing pipeline (`pipeline/tier.go`) respects the tier when processing Keep artifacts.
+Implement the full source qualifier engine that drives processing tier assignment per R-008. The qualifier evaluation order is: trashed→skip, pinned→full, labeled→full, images→full, archived→light, recent(<30d)→standard, old(>30d)→light. Archived is evaluated before recent because archiving is an intentional user deprioritization signal that overrides recency (R-008: "Archived note → light" without qualification). Wire tier assignment into the sync flow so that published artifacts carry the correct `processing_tier` value, and verify that the existing pipeline (`pipeline/tier.go`) respects the tier when processing Keep artifacts.
 
 ### Use Cases (Gherkin)
 
@@ -483,6 +483,14 @@ Scenario: SCN-GK-014 Health reporting includes qualifier breakdown
     | tier_standard | 40 |
     | tier_light | 30 |
     | tier_skip | 5 |
+
+Scenario: SCN-GK-030 Recently-archived note gets light tier despite recency
+  Given a Keep note was modified 5 days ago (within the 30-day recent threshold)
+  And the user archived the note in Google Keep
+  When the qualifier engine evaluates the note
+  Then the tier is "light" because archived overrides recent per R-008
+  And the reason is "archived"
+  And the note does NOT get "standard" tier from the recent rule
 
 Scenario: SCN-GK-015 Incremental sync preserves tier assignment accuracy
   Given a note was previously synced with tier "standard" (recent, unmodified in 10 days)
@@ -520,6 +528,7 @@ Scenario: SCN-GK-015 Incremental sync preserves tier assignment accuracy
 | T-3-06 | TestQualifierOldGetsLight | unit | `internal/connector/keep/normalizer_test.go` | Undecorated note modified 60 days ago → `light` | SCN-GK-012 |
 | T-3-07 | TestQualifierArchivedGetsLight | unit | `internal/connector/keep/normalizer_test.go` | Archived note → `light` regardless of age | SCN-GK-012 |
 | T-3-08 | TestQualifierTrashedGetsSkip | unit | `internal/connector/keep/normalizer_test.go` | Trashed note → `skip` | SCN-GK-012 |
+| T-3-08b | TestQualifierRecentArchivedGetsLight | unit | `internal/connector/keep/qualifiers_test.go` | Recently-modified archived note → `light` (archived overrides recent per R-008) | SCN-GK-030 |
 | T-3-09 | TestTierBreakdownInSyncMetadata | integration | `internal/connector/keep/qualifiers_test.go` | 100-note sync → tier counts in sync metadata match expectations | SCN-GK-014 |
 | T-3-10 | TestPipelineRespectsLightTier | integration | `internal/connector/keep/qualifiers_test.go` | Light-tier artifact → no LLM summarization, only embedding | SCN-GK-013 |
 | T-3-11 | TestPipelineRespectsFullTier | integration | `internal/connector/keep/qualifiers_test.go` | Full-tier artifact → summarization + entities + embedding + linking | SCN-GK-013 |
@@ -529,8 +538,8 @@ Scenario: SCN-GK-015 Incremental sync preserves tier assignment accuracy
 
 ### Definition of Done
 
-- [x] `assignTier()` evaluation order matches R-008 exactly: trashed→skip, pinned→full, labeled→full, images→full, recent→standard, archived→light, old→light
-  > Evidence: TestQualifierEvaluationOrder PASS — pinned AND archived → full
+- [x] `assignTier()` evaluation order matches R-008 exactly: trashed→skip, pinned→full, labeled→full, images→full, archived→light, recent→standard, old→light
+  > Evidence: TestQualifierEvaluationOrder PASS — pinned AND archived → full; TestQualifierRecentArchivedGetsLight PASS — recently-modified archived → light
 - [x] Each qualifier rule has a dedicated unit test
   > Evidence: 8 individual rule tests all PASS
 - [x] Tier value is set in `RawArtifact.Metadata["processing_tier"]` before NATS publish

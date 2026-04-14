@@ -148,45 +148,42 @@ context_permits_concrete_tool_reference() {
 
 run_rule_on_file() {
   local file="$1"
-  local line_num=0
-  local line
-  local line_lc
   local is_markdown="false"
-  local project_name_pattern
+  local grep_project_name
+  local grep_abs_path
+  local grep_concrete_tool
 
   [[ "$file" == *.md ]] && is_markdown="true"
 
-  project_name_pattern="$(printf '%s|' "wander""aide" "guest""host" "quantitative""finance")"
-  project_name_pattern="${project_name_pattern%|}"
+  grep_project_name="$(printf '%s|' "wander""aide" "guest""host" "quantitative""finance")"
+  grep_project_name="${grep_project_name%|}"
 
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line_num=$((line_num + 1))
-    line_lc="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
-
-    if [[ "$line_lc" =~ (^|[^[:alnum:]_])(${project_name_pattern})([^[:alnum:]_]|$) ]]; then
-      if ! is_allowlisted "$file" "PROJECT_NAME" "$line"; then
-        violation "$file" "$line_num" "PROJECT_NAME" "$line"
-      fi
+  # PROJECT_NAME rule — case-insensitive grep for project names
+  while IFS=: read -r line_num line; do
+    [[ -z "$line_num" ]] && continue
+    if ! is_allowlisted "$file" "PROJECT_NAME" "$line"; then
+      violation "$file" "$line_num" "PROJECT_NAME" "$line"
     fi
+  done < <(grep -niE "(^|[^[:alnum:]_])(${grep_project_name})([^[:alnum:]_]|$)" "$REPO_ROOT/$file" 2>/dev/null || true)
 
-    if [[ "$line" =~ /home/[[:alnum:]_.\/-]+ ]] || [[ "$line" =~ /Users/[[:alnum:]_.\/-]+ ]] || [[ "$line" =~ (^|[^[:alnum:]_])[A-Za-z]:\\[[:alnum:]_.\\/-]+ ]]; then
-      if ! is_allowlisted "$file" "ABSOLUTE_PATH" "$line"; then
-        violation "$file" "$line_num" "ABSOLUTE_PATH" "$line"
-      fi
+  # ABSOLUTE_PATH rule — system home dirs or Windows drive letters
+  while IFS=: read -r line_num line; do
+    [[ -z "$line_num" ]] && continue
+    if ! is_allowlisted "$file" "ABSOLUTE_PATH" "$line"; then
+      violation "$file" "$line_num" "ABSOLUTE_PATH" "$line"
     fi
+  done < <(grep -nE '/home/[[:alnum:]_./\-]+|/Users/[[:alnum:]_./\-]+|(^|[^[:alnum:]_])[A-Za-z]:\\' "$REPO_ROOT/$file" 2>/dev/null || true)
 
-    if [[ "$is_markdown" == "true" ]]; then
-      if [[ "$line" =~ (Playwright|Cypress|kubectl|docker[[:space:]]compose|cargo[[:space:]]test|go[[:space:]]test|npm[[:space:]]test|npx[[:space:]]playwright) ]] \
-        || [[ "$line" =~ curl[[:space:]]--max-time[[:space:]][0-9]+ ]] \
-        || [[ "$line" =~ localhost:[0-9]+ ]] \
-        || [[ "$line" =~ 127\.0\.0\.1:[0-9]+ ]]; then
-        if ! context_permits_concrete_tool_reference "$file" "$line_num" \
-          && ! is_allowlisted "$file" "CONCRETE_TOOL" "$line"; then
-          violation "$file" "$line_num" "CONCRETE_TOOL" "$line"
-        fi
+  # CONCRETE_TOOL rule — only for markdown files
+  if [[ "$is_markdown" == "true" ]]; then
+    while IFS=: read -r line_num line; do
+      [[ -z "$line_num" ]] && continue
+      if ! context_permits_concrete_tool_reference "$file" "$line_num" \
+        && ! is_allowlisted "$file" "CONCRETE_TOOL" "$line"; then
+        violation "$file" "$line_num" "CONCRETE_TOOL" "$line"
       fi
-    fi
-  done < "$REPO_ROOT/$file"
+    done < <(grep -nE 'Playwright|Cypress|kubectl|docker[[:space:]]compose|cargo[[:space:]]test|go[[:space:]]test|npm[[:space:]]test|npx[[:space:]]playwright|curl[[:space:]]--max-time[[:space:]][0-9]+|localhost:[0-9]+|127\.0\.0\.1:[0-9]+' "$REPO_ROOT/$file" 2>/dev/null || true)
+  fi
 
   scanned=$((scanned + 1))
 }

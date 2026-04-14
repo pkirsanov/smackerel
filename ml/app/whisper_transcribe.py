@@ -7,6 +7,8 @@ from typing import Any
 
 import httpx
 
+from .url_validator import SSRFError, validate_fetch_url
+
 logger = logging.getLogger("smackerel-ml.whisper")
 
 
@@ -17,6 +19,9 @@ async def transcribe_voice(voice_url: str, ollama_url: str | None = None) -> dic
     HTTP-based approach if Whisper is not available locally.
     """
     try:
+        # Validate URL against SSRF (SEC-004-002)
+        validate_fetch_url(voice_url)
+
         # Download the audio file
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(voice_url)
@@ -45,6 +50,9 @@ async def transcribe_voice(voice_url: str, ollama_url: str | None = None) -> dic
         finally:
             os.unlink(temp_path)
 
+    except SSRFError as e:
+        logger.warning("Voice URL blocked by SSRF validation: %s — %s", voice_url, e)
+        return {"success": False, "error": f"URL validation failed: {e}"}
     except httpx.HTTPError as e:
         logger.error("Failed to download voice note: %s", e)
         return {"success": False, "error": f"Download failed: {e}"}

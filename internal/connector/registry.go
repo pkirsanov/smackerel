@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -34,21 +35,30 @@ func (r *Registry) Register(c Connector) error {
 }
 
 // Unregister removes a connector from the registry.
+// Close() is called outside the lock to prevent blocking concurrent reads.
+// A panic in Close() is recovered so a buggy connector cannot crash the caller.
 func (r *Registry) Unregister(id string) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	c, exists := r.connectors[id]
 	if !exists {
+		r.mu.Unlock()
 		return fmt.Errorf("connector %q not registered", id)
 	}
-
-	if err := c.Close(); err != nil {
-		return fmt.Errorf("close connector %q: %w", id, err)
-	}
-
 	delete(r.connectors, id)
-	return nil
+	r.mu.Unlock()
+
+	var closeErr error
+	func() {
+		defer func() {
+			if p := recover(); p != nil {
+				closeErr = fmt.Errorf("close connector %q panicked: %v", id, p)
+			}
+		}()
+		if err := c.Close(); err != nil {
+			closeErr = fmt.Errorf("close connector %q: %w", id, err)
+		}
+	}()
+	return closeErr
 }
 
 // Get returns a registered connector by ID.
@@ -60,7 +70,7 @@ func (r *Registry) Get(id string) (Connector, bool) {
 	return c, ok
 }
 
-// List returns all registered connector IDs.
+// List returns all registered connector IDs in sorted order.
 func (r *Registry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -69,6 +79,7 @@ func (r *Registry) List() []string {
 	for id := range r.connectors {
 		ids = append(ids, id)
 	}
+	sort.Strings(ids)
 	return ids
 }
 
@@ -80,11 +91,18 @@ func (r *Registry) Count() int {
 }
 
 // ListConnectorHealth returns a map of connector ID → health status string.
+// Snapshots connectors under lock, then calls Health() outside the lock so
+// a slow or blocking Health() implementation cannot stall Register/Unregister.
 func (r *Registry) ListConnectorHealth(ctx context.Context) map[string]string {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
-	result := make(map[string]string, len(r.connectors))
+	snapshot := make(map[string]Connector, len(r.connectors))
 	for id, c := range r.connectors {
+		snapshot[id] = c
+	}
+	r.mu.RUnlock()
+
+	result := make(map[string]string, len(snapshot))
+	for id, c := range snapshot {
 		result[id] = string(c.Health(ctx))
 	}
 	return result

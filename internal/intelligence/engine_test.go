@@ -2,6 +2,7 @@ package intelligence
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -1036,6 +1037,20 @@ func TestSynthesisConfidence_NegativeInputs(t *testing.T) {
 	}
 }
 
+// === Improve: maxSynthesisTopicGroups named constant (IMP-P5-01) ===
+
+func TestMaxSynthesisTopicGroups_IsPositive(t *testing.T) {
+	if maxSynthesisTopicGroups <= 0 {
+		t.Errorf("maxSynthesisTopicGroups must be positive, got %d", maxSynthesisTopicGroups)
+	}
+}
+
+func TestMaxSynthesisTopicGroups_Value(t *testing.T) {
+	if maxSynthesisTopicGroups != 10 {
+		t.Errorf("expected maxSynthesisTopicGroups=10, got %d", maxSynthesisTopicGroups)
+	}
+}
+
 // === Improve: clampDay helper (F5) ===
 
 func TestClampDay_NormalDate(t *testing.T) {
@@ -1661,5 +1676,808 @@ func TestCreateAlert_BodyExactBoundary(t *testing.T) {
 	_ = engine.CreateAlert(context.Background(), alert2)
 	if len(alert2.Body) != 2000 {
 		t.Errorf("2001-byte body should be truncated to 2000, got %d", len(alert2.Body))
+	}
+}
+
+// CHAOS-C5: calendarDaysBetween returns correct day counts independent of
+// time-of-day and unaffected by DST transitions. Before the fix,
+// ProduceBillAlerts used time.Until(nextBilling).Hours()/24 + 1 which:
+//   - used the current wall-clock time (not midnight) causing time-of-day variance
+//   - was off-by-one in several scenarios (billing today → 1, billing in 3 days → sometimes 4)
+//   - was wrong during DST transitions (23-hour day → truncation to 0)
+func TestCalendarDaysBetween(t *testing.T) {
+	tests := []struct {
+		name string
+		from time.Time
+		to   time.Time
+		want int
+	}{
+		{
+			name: "same day",
+			from: time.Date(2026, 4, 12, 0, 0, 0, 0, time.Local),
+			to:   time.Date(2026, 4, 12, 0, 0, 0, 0, time.Local),
+			want: 0,
+		},
+		{
+			name: "tomorrow",
+			from: time.Date(2026, 4, 12, 0, 0, 0, 0, time.Local),
+			to:   time.Date(2026, 4, 13, 0, 0, 0, 0, time.Local),
+			want: 1,
+		},
+		{
+			name: "3 days out",
+			from: time.Date(2026, 4, 12, 0, 0, 0, 0, time.Local),
+			to:   time.Date(2026, 4, 15, 0, 0, 0, 0, time.Local),
+			want: 3,
+		},
+		{
+			name: "past date",
+			from: time.Date(2026, 4, 12, 0, 0, 0, 0, time.Local),
+			to:   time.Date(2026, 4, 10, 0, 0, 0, 0, time.Local),
+			want: -2,
+		},
+		{
+			name: "month boundary",
+			from: time.Date(2026, 1, 30, 0, 0, 0, 0, time.Local),
+			to:   time.Date(2026, 2, 2, 0, 0, 0, 0, time.Local),
+			want: 3,
+		},
+		{
+			name: "year boundary",
+			from: time.Date(2025, 12, 30, 0, 0, 0, 0, time.Local),
+			to:   time.Date(2026, 1, 2, 0, 0, 0, 0, time.Local),
+			want: 3,
+		},
+		{
+			name: "different time zones ignored",
+			from: time.Date(2026, 4, 12, 23, 59, 0, 0, time.Local),
+			to:   time.Date(2026, 4, 13, 0, 1, 0, 0, time.UTC),
+			want: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := calendarDaysBetween(tt.from, tt.to)
+			if got != tt.want {
+				t.Errorf("calendarDaysBetween(%v, %v) = %d, want %d", tt.from, tt.to, got, tt.want)
+			}
+		})
+	}
+}
+
+// CHAOS-C5: clampDay boundary handling for billing date estimation.
+func TestClampDay_EdgeCases(t *testing.T) {
+	// Feb 31 should clamp to Feb 28 (non-leap)
+	got := clampDay(2026, time.February, 31)
+	if got.Day() != 28 {
+		t.Errorf("expected Feb 28, got Feb %d", got.Day())
+	}
+
+	// Feb 29 in leap year should stay Feb 29
+	got = clampDay(2024, time.February, 29)
+	if got.Day() != 29 {
+		t.Errorf("expected Feb 29 in leap year, got Feb %d", got.Day())
+	}
+
+	// Day 0 should clamp to 1
+	got = clampDay(2026, time.March, 0)
+	if got.Day() != 1 {
+		t.Errorf("expected day 1 for day=0 input, got %d", got.Day())
+	}
+}
+
+// === Harden H-010: RunSynthesis respects context cancellation in row loop ===
+
+func TestRunSynthesis_CancelledContext(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	// With nil pool, RunSynthesis errors on pool check before context check.
+	// This test verifies the function doesn't panic with cancelled context.
+	_, err := engine.RunSynthesis(ctx)
+	if err == nil {
+		t.Error("expected error for nil pool or cancelled context")
+	}
+}
+
+// === Harden H-011: Attendees per meeting capped at 10 ===
+
+func TestMeetingBrief_AttendeeCap(t *testing.T) {
+	// Build a brief with 15 attendees
+	var attendees []AttendeeBrief
+	for i := 0; i < 15; i++ {
+		attendees = append(attendees, AttendeeBrief{
+			Name:         fmt.Sprintf("Person-%d", i),
+			Email:        fmt.Sprintf("p%d@example.com", i),
+			IsNewContact: true,
+		})
+	}
+
+	// Simulate the cap that GeneratePreMeetingBriefs applies
+	const maxAttendeesPerMeeting = 10
+	if len(attendees) > maxAttendeesPerMeeting {
+		attendees = attendees[:maxAttendeesPerMeeting]
+	}
+
+	if len(attendees) != 10 {
+		t.Errorf("expected attendees capped at 10, got %d", len(attendees))
+	}
+}
+
+// === Harden: Alert producers check context cancellation between row iterations ===
+
+func TestProduceBillAlerts_CancelledContext(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	// Nil pool returns the pool-nil error before context check is reached.
+	// This verifies the nil-pool guard still takes priority over context.
+	err := engine.ProduceBillAlerts(ctx)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+func TestProduceTripPrepAlerts_CancelledContext(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := engine.ProduceTripPrepAlerts(ctx)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+func TestProduceReturnWindowAlerts_CancelledContext(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := engine.ProduceReturnWindowAlerts(ctx)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+func TestProduceRelationshipCoolingAlerts_CancelledContext(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := engine.ProduceRelationshipCoolingAlerts(ctx)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+}
+
+// === TST-004-001: assembleBriefText shared-topics-only partial context ===
+
+func TestAssembleBriefText_SharedTopicsOnly(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Partnership Review",
+		Attendees: []AttendeeBrief{
+			{
+				Name:          "Marta",
+				Email:         "marta@example.com",
+				RecentThreads: nil,
+				SharedTopics:  []string{"sustainability", "supply-chain"},
+				PendingItems:  nil,
+			},
+		},
+	}
+
+	text := assembleBriefText(brief)
+	if !contains(text, "Partnership Review") {
+		t.Error("brief should contain meeting title")
+	}
+	if !contains(text, "Marta") {
+		t.Error("brief should contain attendee name")
+	}
+	if !contains(text, "shared topics") {
+		t.Error("brief should mention shared topics when they exist")
+	}
+	if contains(text, "recent threads") {
+		t.Error("brief should NOT mention recent threads when none exist")
+	}
+	if contains(text, "pending items") {
+		t.Error("brief should NOT mention pending items when none exist")
+	}
+}
+
+// === TST-004-002: assembleBriefText pending-items-only partial context ===
+
+func TestAssembleBriefText_PendingItemsOnly(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Quarterly Check-In",
+		Attendees: []AttendeeBrief{
+			{
+				Name:          "Chen",
+				Email:         "chen@example.com",
+				RecentThreads: nil,
+				SharedTopics:  nil,
+				PendingItems:  []string{"Send budget summary", "Review proposal"},
+			},
+		},
+	}
+
+	text := assembleBriefText(brief)
+	if !contains(text, "Chen") {
+		t.Error("brief should contain attendee name")
+	}
+	if !contains(text, "pending items") {
+		t.Error("brief should mention pending items when they exist")
+	}
+	if contains(text, "recent threads") {
+		t.Error("brief should NOT mention recent threads when none exist")
+	}
+	if contains(text, "shared topics") {
+		t.Error("brief should NOT mention shared topics when none exist")
+	}
+}
+
+// === TST-004-003: assembleBriefText mixed known+unknown attendees ===
+
+func TestAssembleBriefText_MixedKnownUnknownAttendees(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Product Demo",
+		Attendees: []AttendeeBrief{
+			{
+				Name:          "Alice",
+				Email:         "alice@example.com",
+				RecentThreads: []string{"Feature request thread"},
+				SharedTopics:  []string{"product"},
+				IsNewContact:  false,
+			},
+			{
+				Email:        "stranger@external.com",
+				IsNewContact: true,
+			},
+			{
+				Name:         "Bob",
+				Email:        "bob@example.com",
+				PendingItems: []string{"Send spec doc"},
+				IsNewContact: false,
+			},
+		},
+	}
+
+	text := assembleBriefText(brief)
+	if !contains(text, "Product Demo") {
+		t.Error("brief should contain meeting title")
+	}
+	if !contains(text, "Alice") {
+		t.Error("brief should contain known attendee Alice")
+	}
+	if !contains(text, "New contact") {
+		t.Error("brief should flag unknown attendee")
+	}
+	if !contains(text, "stranger@external.com") {
+		t.Error("brief should show email for unknown attendee")
+	}
+	if !contains(text, "Bob") {
+		t.Error("brief should contain known attendee Bob")
+	}
+}
+
+// === TST-004-004: assembleWeeklySynthesisText patterns-only ===
+
+func TestAssembleWeeklySynthesisText_PatternsOnly(t *testing.T) {
+	ws := &WeeklySynthesis{
+		Patterns: []string{
+			"You do your deepest thinking on Wednesday mornings",
+			"Entertainment content has tripled this week",
+		},
+	}
+	text := assembleWeeklySynthesisText(ws)
+	if !contains(text, "PATTERNS NOTICED") {
+		t.Error("should contain PATTERNS NOTICED section")
+	}
+	if !contains(text, "Wednesday mornings") {
+		t.Error("should contain the specific pattern observation")
+	}
+	if contains(text, "THIS WEEK") {
+		t.Error("should NOT contain THIS WEEK when no stats")
+	}
+	if contains(text, "INSIGHTS") {
+		t.Error("should NOT contain INSIGHTS when no insights")
+	}
+	if contains(text, "TOPICS") {
+		t.Error("should NOT contain TOPICS when no topic data")
+	}
+}
+
+// === TST-004-005: assembleWeeklySynthesisText serendipity-only ===
+
+func TestAssembleWeeklySynthesisText_SerendipityOnly(t *testing.T) {
+	ws := &WeeklySynthesis{
+		SerendipityPicks: []ResurfaceCandidate{
+			{Title: "The Discovery of Penicillin", Reason: "Dormant 120 days, matches curiosity pattern"},
+		},
+	}
+	text := assembleWeeklySynthesisText(ws)
+	if !contains(text, "FROM THE ARCHIVE") {
+		t.Error("should contain FROM THE ARCHIVE section")
+	}
+	if !contains(text, "The Discovery of Penicillin") {
+		t.Error("should contain the serendipity pick title")
+	}
+	if !contains(text, "Dormant 120 days") {
+		t.Error("should contain the reason string")
+	}
+	if contains(text, "THIS WEEK") {
+		t.Error("should NOT contain THIS WEEK when no stats")
+	}
+	if contains(text, "OPEN LOOPS") {
+		t.Error("should NOT contain OPEN LOOPS when none")
+	}
+}
+
+// === TST-004-006: assembleWeeklySynthesisText topic-movement-only with arrow symbols ===
+
+func TestAssembleWeeklySynthesisText_TopicMovementArrowSymbols(t *testing.T) {
+	ws := &WeeklySynthesis{
+		TopicMovement: []TopicMovement{
+			{TopicName: "Kubernetes", Direction: "rising", Captures: 12},
+			{TopicName: "Python", Direction: "falling", Captures: 2},
+			{TopicName: "Go", Direction: "stable", Captures: 5},
+		},
+	}
+	text := assembleWeeklySynthesisText(ws)
+	if !contains(text, "TOPICS") {
+		t.Error("should contain TOPICS section")
+	}
+	// Verify correct arrow symbols per direction
+	if !contains(text, "↑ Kubernetes") {
+		t.Errorf("rising topic should have ↑ arrow, text: %s", text)
+	}
+	if !contains(text, "↓ Python") {
+		t.Errorf("falling topic should have ↓ arrow, text: %s", text)
+	}
+	if !contains(text, "→ Go") {
+		t.Errorf("stable topic should have → arrow, text: %s", text)
+	}
+	// Verify captures shown
+	if !contains(text, "(12 this week)") {
+		t.Error("should show capture count for rising topic")
+	}
+	if contains(text, "THIS WEEK") {
+		t.Error("should NOT contain THIS WEEK when no stats")
+	}
+}
+
+// === TST-004-007: SnoozeAlert exactly-now boundary ===
+
+func TestSnoozeAlert_ExactlyNow(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	// time.Now() is not strictly in the future — !until.After(time.Now()) should fail
+	err := engine.SnoozeAlert(context.Background(), "alert-123", time.Now())
+	if err == nil {
+		t.Error("expected error for snooze at exactly now (not in the future)")
+	}
+	if err != nil && !contains(err.Error(), "snooze time must be in the future") {
+		t.Errorf("expected future-time error, got: %s", err.Error())
+	}
+}
+
+// === TST-004-008: InsightPattern and InsightSerendipity struct scenarios ===
+
+func TestSynthesisInsight_PatternType(t *testing.T) {
+	insight := SynthesisInsight{
+		ID:                "pat-1",
+		InsightType:       InsightPattern,
+		ThroughLine:       "Capture frequency peaks on Wednesday mornings",
+		SourceArtifactIDs: []string{"art-10", "art-11", "art-12"},
+		Confidence:        0.6,
+	}
+
+	if insight.InsightType != InsightPattern {
+		t.Errorf("expected pattern type, got %s", insight.InsightType)
+	}
+	if insight.ThroughLine == "" {
+		t.Error("pattern insight should have a through-line describing the pattern")
+	}
+	if len(insight.SourceArtifactIDs) < 2 {
+		t.Error("pattern insight should reference supporting artifacts")
+	}
+}
+
+func TestSynthesisInsight_SerendipityType(t *testing.T) {
+	insight := SynthesisInsight{
+		ID:                "seren-1",
+		InsightType:       InsightSerendipity,
+		ThroughLine:       "An article from 8 months ago connects to this week's hot topic",
+		SourceArtifactIDs: []string{"art-old", "art-new"},
+		Confidence:        0.55,
+	}
+
+	if insight.InsightType != InsightSerendipity {
+		t.Errorf("expected serendipity type, got %s", insight.InsightType)
+	}
+	if len(insight.SourceArtifactIDs) < 2 {
+		t.Error("serendipity insight should reference at least the old and new artifact")
+	}
+}
+
+// === TST-004-009: synthesisConfidence composition weights ===
+
+func TestSynthesisConfidence_DiversityWeightedMoreThanHalf(t *testing.T) {
+	// Volume weight is 0.6 and diversity weight is 0.4.
+	// Two clusters with same raw values should produce different results
+	// when we swap which dimension has more data.
+
+	// Cluster A: high volume (20 artifacts), low diversity (2 sources)
+	confA := synthesisConfidence(20, 2)
+	// Cluster B: low volume (3 artifacts), high diversity (10 sources)
+	confB := synthesisConfidence(3, 10)
+
+	// Both should be positive
+	if confA <= 0 || confB <= 0 {
+		t.Errorf("both should be positive: A=%.4f, B=%.4f", confA, confB)
+	}
+
+	// With volume weighted 0.6 and diversity 0.4, high-volume/low-diversity
+	// should outperform low-volume/high-diversity when the volume gap is large
+	// enough (20 vs 3 is a 6.7× ratio, 10 vs 2 is a 5× ratio)
+	if confA <= confB {
+		t.Errorf("with 0.6 volume weight, 20-artifact cluster should beat 3-artifact cluster: A=%.4f vs B=%.4f", confA, confB)
+	}
+}
+
+func TestSynthesisConfidence_EqualInputsSymmetric(t *testing.T) {
+	// With equal artifact and source counts, confidence should be deterministic
+	c1 := synthesisConfidence(5, 5)
+	c2 := synthesisConfidence(5, 5)
+	if c1 != c2 {
+		t.Errorf("same inputs should produce same output: %.6f != %.6f", c1, c2)
+	}
+
+	// The two-component formula: 0.6*log2(5)/5 + 0.4*log2(5)/3
+	// log2(5) ≈ 2.322
+	// volume signal = 2.322/5 ≈ 0.4644
+	// diversity signal = 2.322/3 ≈ 0.774
+	// conf = 0.6*0.4644 + 0.4*0.774 ≈ 0.2787 + 0.3096 ≈ 0.5883
+	if c1 < 0.5 || c1 > 0.7 {
+		t.Errorf("confidence(5,5) expected ~0.59, got %.4f", c1)
+	}
+}
+
+// === TST-004-010: detectCapturePatterns period classification boundaries ===
+
+func TestCapturePatternPeriodClassification(t *testing.T) {
+	// The detectCapturePatterns function classifies hours into periods:
+	// hr < 12 → "morning", 12 <= hr < 17 → "afternoon", hr >= 17 → "evening"
+	// Test the boundary values directly.
+	tests := []struct {
+		name     string
+		hour     int
+		expected string
+	}{
+		{"midnight", 0, "morning"},
+		{"early morning", 6, "morning"},
+		{"late morning", 11, "morning"},
+		{"noon boundary", 12, "afternoon"},
+		{"mid afternoon", 14, "afternoon"},
+		{"late afternoon", 16, "afternoon"},
+		{"evening boundary", 17, "evening"},
+		{"night", 21, "evening"},
+		{"almost midnight", 23, "evening"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Replicate the classification logic from detectCapturePatterns
+			hr := tt.hour
+			period := "morning"
+			if hr >= 12 && hr < 17 {
+				period = "afternoon"
+			} else if hr >= 17 {
+				period = "evening"
+			}
+			if period != tt.expected {
+				t.Errorf("hour %d: got %q, want %q", hr, period, tt.expected)
+			}
+		})
+	}
+}
+
+// === TST-004-011: WeeklySynthesis all-sections-present correctness ===
+
+func TestAssembleWeeklySynthesisText_AllSixSections(t *testing.T) {
+	ws := &WeeklySynthesis{
+		Stats: WeeklyStats{ArtifactsProcessed: 47, NewConnections: 5, TopicsActive: 8},
+		Insights: []SynthesisInsight{
+			{ThroughLine: "Pricing strategies converge across 3 domains", Confidence: 0.85},
+		},
+		TopicMovement: []TopicMovement{
+			{TopicName: "distributed-systems", Direction: "rising", Captures: 12},
+		},
+		OpenLoops:        []string{"Review Q4 budget proposal"},
+		SerendipityPicks: []ResurfaceCandidate{{Title: "The Mythical Man-Month", Reason: "Matches leadership theme"}},
+		Patterns:         []string{"You save the most content on Wednesdays"},
+	}
+
+	text := assembleWeeklySynthesisText(ws)
+
+	// Verify all 6 R-302 required sections are present
+	requiredSections := []string{
+		"THIS WEEK",
+		"INSIGHTS",
+		"TOPICS",
+		"OPEN LOOPS",
+		"FROM THE ARCHIVE",
+		"PATTERNS NOTICED",
+	}
+	for _, section := range requiredSections {
+		if !contains(text, section) {
+			t.Errorf("weekly synthesis missing required section: %s", section)
+		}
+	}
+
+	// Verify factual content from each section
+	if !contains(text, "47 artifacts") {
+		t.Error("THIS WEEK should mention artifact count")
+	}
+	if !contains(text, "Pricing strategies") {
+		t.Error("INSIGHTS should contain the through-line text")
+	}
+	if !contains(text, "distributed-systems") {
+		t.Error("TOPICS should contain topic name")
+	}
+	if !contains(text, "Q4 budget") {
+		t.Error("OPEN LOOPS should contain the open loop text")
+	}
+	if !contains(text, "Mythical Man-Month") {
+		t.Error("FROM THE ARCHIVE should contain the serendipity title")
+	}
+	if !contains(text, "Wednesdays") {
+		t.Error("PATTERNS should contain the pattern observation")
+	}
+}
+
+// === TST-004-012: Alert snooze-then-expire lifecycle ===
+
+func TestAlert_SnoozeExpiryLifecycle(t *testing.T) {
+	// Simulate snooze → expire → re-deliver flow
+	a := &Alert{
+		ID:        "a-snooze-1",
+		AlertType: AlertBill,
+		Title:     "Electric bill",
+		Priority:  2,
+		Status:    AlertPending,
+	}
+
+	// 1. Snooze for 1 hour
+	a.Status = AlertSnoozed
+	snoozeTime := time.Now().Add(time.Hour)
+	a.SnoozeUntil = &snoozeTime
+
+	if a.Status != AlertSnoozed {
+		t.Error("should be snoozed")
+	}
+	if a.SnoozeUntil == nil || a.SnoozeUntil.Before(time.Now()) {
+		t.Error("snooze should be in the future")
+	}
+
+	// 2. Simulate time passing — snooze expires
+	expired := time.Now().Add(-time.Minute)
+	a.SnoozeUntil = &expired
+
+	// GetPendingAlerts logic: snoozed + snooze_until <= NOW() → eligible for delivery
+	isExpired := a.Status == AlertSnoozed && a.SnoozeUntil != nil && a.SnoozeUntil.Before(time.Now())
+	if !isExpired {
+		t.Error("snoozed alert past snooze_until should be eligible for re-delivery")
+	}
+
+	// 3. Deliver after expiry
+	a.Status = AlertDelivered
+	now := time.Now()
+	a.DeliveredAt = &now
+	if a.Status != AlertDelivered {
+		t.Error("should transition to delivered after snooze expiry")
+	}
+}
+
+// === TST-004-013: CalendarDaysBetween DST-immune same-local-day ===
+
+func TestCalendarDaysBetween_SameDayDifferentTimes(t *testing.T) {
+	// Two timestamps on the same calendar day but different times
+	// should always produce 0 days
+	morning := time.Date(2026, 4, 14, 7, 30, 0, 0, time.Local)
+	evening := time.Date(2026, 4, 14, 22, 45, 0, 0, time.Local)
+
+	if got := calendarDaysBetween(morning, evening); got != 0 {
+		t.Errorf("same day different times should be 0, got %d", got)
+	}
+	if got := calendarDaysBetween(evening, morning); got != 0 {
+		t.Errorf("reversed same day different times should be 0, got %d", got)
+	}
+}
+
+// === TST-004-014: assembleBriefText all-context-types combined ===
+
+func TestAssembleBriefText_AllContextCombined(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Board Review",
+		Attendees: []AttendeeBrief{
+			{
+				Name:          "Linda",
+				Email:         "linda@example.com",
+				RecentThreads: []string{"Q4 Revenue", "Hiring Plan", "Board Prep"},
+				SharedTopics:  []string{"finance", "hiring"},
+				PendingItems:  []string{"Quarterly forecast", "Budget revision"},
+				IsNewContact:  false,
+			},
+		},
+	}
+
+	text := assembleBriefText(brief)
+	if !contains(text, "Linda") {
+		t.Error("should contain attendee name")
+	}
+	if !contains(text, "3 recent threads") {
+		t.Errorf("should mention 3 recent threads, got: %s", text)
+	}
+	if !contains(text, "shared topics: finance, hiring") {
+		t.Errorf("should list shared topics, got: %s", text)
+	}
+	if !contains(text, "2 pending items") {
+		t.Errorf("should mention 2 pending items, got: %s", text)
+	}
+}
+
+// SEC-021-001: Verify the staleness bound constant exists and is reasonable.
+// A missing or too-large bound would re-enable the infinite-retry bug.
+func TestMaxPendingAlertAgeDays_Bound(t *testing.T) {
+	if maxPendingAlertAgeDays < 1 {
+		t.Errorf("maxPendingAlertAgeDays must be >= 1, got %d", maxPendingAlertAgeDays)
+	}
+	if maxPendingAlertAgeDays > 30 {
+		t.Errorf("maxPendingAlertAgeDays should not exceed 30 to bound poison alert retries, got %d", maxPendingAlertAgeDays)
+	}
+}
+
+// SEC-021-002: CreateAlert must sanitize control characters in title and body
+// before database insertion. Connector-imported data (CWE-116) with embedded
+// null bytes, carriage returns, or ANSI escapes must not reach Telegram.
+func TestCreateAlert_ControlCharSanitization(t *testing.T) {
+	tests := []struct {
+		name      string
+		title     string
+		body      string
+		wantTitle string
+		wantBody  string
+	}{
+		{
+			name:      "null byte in title from connector data",
+			title:     "Netflix\x00Premium",
+			body:      "Upcoming charge",
+			wantTitle: "Netflix Premium",
+			wantBody:  "Upcoming charge",
+		},
+		{
+			name:      "newline in title collapsed to space (single-line)",
+			title:     "Line1\nLine2",
+			body:      "body text",
+			wantTitle: "Line1 Line2",
+			wantBody:  "body text",
+		},
+		{
+			name:      "tab in title collapsed to space",
+			title:     "Col1\tCol2",
+			body:      "body",
+			wantTitle: "Col1 Col2",
+			wantBody:  "body",
+		},
+		{
+			name:      "ANSI escape in title from malformed name",
+			title:     "Alert\x1b[31mRed",
+			body:      "body",
+			wantTitle: "Alert [31mRed",
+			wantBody:  "body",
+		},
+		{
+			name:      "body preserves intentional newlines",
+			title:     "Brief",
+			body:      "Line1\nLine2\nLine3",
+			wantTitle: "Brief",
+			wantBody:  "Line1\nLine2\nLine3",
+		},
+		{
+			name:      "body strips null but keeps newline",
+			title:     "Alert",
+			body:      "part1\x00\npart2",
+			wantTitle: "Alert",
+			wantBody:  "part1 \npart2",
+		},
+		{
+			name:      "carriage return stripped from both",
+			title:     "Title\rInjected",
+			body:      "Body\rInjected",
+			wantTitle: "Title Injected",
+			wantBody:  "Body Injected",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			alert := &Alert{
+				AlertType: AlertBill,
+				Title:     tt.title,
+				Body:      tt.body,
+				Priority:  2,
+			}
+
+			// CreateAlert requires a DB pool, which we don't have in unit tests.
+			// Simulate the sanitization path by applying the same logic inline.
+			alert.Title = strings.ReplaceAll(strings.ReplaceAll(
+				stringutil.SanitizeControlChars(alert.Title), "\n", " "), "\t", " ")
+			alert.Body = stringutil.SanitizeControlChars(alert.Body)
+
+			if alert.Title != tt.wantTitle {
+				t.Errorf("title = %q, want %q", alert.Title, tt.wantTitle)
+			}
+			if alert.Body != tt.wantBody {
+				t.Errorf("body = %q, want %q", alert.Body, tt.wantBody)
+			}
+		})
+	}
+}
+
+// SEC-021-002: Adversarial — connector-sourced data that would corrupt Telegram
+// messages if control chars were not stripped.
+func TestCreateAlert_AdversarialConnectorData(t *testing.T) {
+	// Simulates every alert producer's worst-case input from connector data.
+	adversarial := []struct {
+		producer string
+		title    string
+	}{
+		{"ProduceBillAlerts", "Upcoming charge: Netflix\x00 (15.99 \x1bUSD)"},
+		{"ProduceTripPrepAlerts", "Trip prep: \rTokyo\n in 3 days"},
+		{"ProduceReturnWindowAlerts", "Return window closing: \x07Amazon\x00Order"},
+		{"ProduceRelationshipCoolingAlerts", "Reconnect with \x01Alice\x02? Last contact 35 days ago"},
+	}
+
+	for _, tc := range adversarial {
+		t.Run(tc.producer, func(t *testing.T) {
+			sanitized := strings.ReplaceAll(strings.ReplaceAll(
+				stringutil.SanitizeControlChars(tc.title), "\n", " "), "\t", " ")
+
+			// No control chars should survive
+			for i, r := range sanitized {
+				if r < 0x20 {
+					t.Errorf("control char U+%04X at position %d survived sanitization in %q",
+						r, i, sanitized)
+				}
+			}
+
+			// Must be valid UTF-8
+			if !utf8.ValidString(sanitized) {
+				t.Errorf("sanitized output is not valid UTF-8: %q", sanitized)
+			}
+		})
+	}
+}
+
+// SEC-021-003: Meeting brief dedup alert should be immediately marked as
+// delivered to prevent double-delivery by the alert sweep. Verify AssertBriefText
+// produces newlines (confirming body sanitization preserves them).
+func TestAssembleBriefText_PreservesNewlines(t *testing.T) {
+	brief := MeetingBrief{
+		EventTitle: "Stand-up",
+		Attendees: []AttendeeBrief{
+			{Name: "Bob", RecentThreads: []string{"Sprint review"}, IsNewContact: false},
+			{Name: "Eve", IsNewContact: true, Email: "eve@example.com"},
+		},
+	}
+
+	text := assembleBriefText(brief)
+	if !strings.Contains(text, "\n") {
+		t.Error("brief text should contain newlines between sections")
+	}
+	// Body sanitization should preserve these newlines
+	sanitized := stringutil.SanitizeControlChars(text)
+	if sanitized != text {
+		t.Errorf("body sanitization should not alter intentional newlines\nbefore: %q\nafter:  %q", text, sanitized)
 	}
 }

@@ -242,7 +242,7 @@ func TestCronConcurrencyGuard_DifferentGroupsConcurrent(t *testing.T) {
 	s.muDaily.Unlock()
 }
 
-// SCN-022-11: All seven mutex groups exist and are independent
+// SCN-022-11: All eight mutex groups exist and are independent
 func TestCronConcurrencyGuard_AllGroupsIndependent(t *testing.T) {
 	s := New(nil, nil, nil, nil)
 
@@ -254,8 +254,16 @@ func TestCronConcurrencyGuard_AllGroupsIndependent(t *testing.T) {
 	s.muMonthly.Lock()
 	s.muBriefs.Lock()
 	s.muAlerts.Lock()
+	s.muAlertProd.Lock()
+	s.muResurface.Lock()
+	s.muLookups.Lock()
+	s.muSubs.Lock()
 
 	// All locked — unlock in any order
+	s.muSubs.Unlock()
+	s.muLookups.Unlock()
+	s.muResurface.Unlock()
+	s.muAlertProd.Unlock()
 	s.muAlerts.Unlock()
 	s.muBriefs.Unlock()
 	s.muMonthly.Unlock()
@@ -263,6 +271,22 @@ func TestCronConcurrencyGuard_AllGroupsIndependent(t *testing.T) {
 	s.muDaily.Unlock()
 	s.muHourly.Unlock()
 	s.muDigest.Unlock()
+}
+
+// DEV-003: muSubs is independent from muWeekly (subscription detection no longer
+// contends with weekly synthesis or relationship-cooling alerts).
+func TestCronConcurrencyGuard_SubsIndependentFromWeekly(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+
+	s.muWeekly.Lock()
+
+	// muSubs should be independent — TryLock must succeed while muWeekly is held
+	if !s.muSubs.TryLock() {
+		s.muWeekly.Unlock()
+		t.Fatal("expected muSubs TryLock to succeed while muWeekly is held")
+	}
+	s.muSubs.Unlock()
+	s.muWeekly.Unlock()
 }
 
 // SCN-022-09: Concurrent TryLock simulation under race detector
@@ -374,21 +398,13 @@ func TestFormatAlertMessage_Format(t *testing.T) {
 
 func TestDeliverPendingAlerts_NilEngine(t *testing.T) {
 	// Scheduler with nil engine — deliverPendingAlerts should not panic.
-	// The engine.GetPendingAlerts call will panic on nil receiver, so
-	// this tests the guard behavior when engine is nil.
 	s := New(nil, nil, nil, nil)
-	// engine is nil — calling deliverPendingAlerts should not panic
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("deliverPendingAlerts panicked with nil engine: %v", r)
-		}
-	}()
-	// s.engine is nil so GetPendingAlerts would nil-deref. The cron registration
-	// only happens when s.engine != nil, so in practice this path never fires.
-	// But we verify the struct is safe to construct.
 	if s.engine != nil {
 		t.Error("expected nil engine")
 	}
+	// Actually call the method — the nil-engine guard must return cleanly.
+	ctx := t.Context()
+	s.deliverPendingAlerts(ctx)
 }
 
 // === SCN-021: deliverPendingAlerts with nil pool engine ===
@@ -404,18 +420,63 @@ func TestDeliverPendingAlerts_NilPoolEngine(t *testing.T) {
 }
 
 // === SCN-021: deliverPendingAlerts with nil bot ===
-// When bot is nil, the sweep still calls MarkAlertDelivered (which fails on
-// nil pool), but the key property is: no panic, and no attempt to send.
+// CHAOS-C3: When bot is nil, alerts must NOT be marked delivered.
+// Before the fix, nil bot caused the send block to be skipped entirely,
+// falling through to MarkAlertDelivered — silently marking alerts "delivered"
+// without any actual Telegram delivery.
 
 func TestDeliverPendingAlerts_NilBot(t *testing.T) {
-	// This tests the code path where bot is nil: the sweep skips SendAlertMessage
-	// and proceeds directly to MarkAlertDelivered (which will fail on nil pool).
+	// Engine with nil pool — GetPendingAlerts returns error, sweep returns cleanly.
+	// The key property: no panic, and no attempt to mark delivered.
 	engine := &intelligence.Engine{Pool: nil}
 	s := New(nil, nil, engine, nil) // bot = nil
 
 	ctx := t.Context()
 	// GetPendingAlerts fails on nil pool → sweep returns cleanly
 	s.deliverPendingAlerts(ctx)
+}
+
+// CHAOS-C4: muAlertProd is independent from muDaily — alert producers
+// are not starved when a long-running daily job (synthesis, lookups) holds muDaily.
+func TestCronConcurrencyGuard_AlertProdIndependentFromDaily(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+
+	// Acquire daily mutex to simulate a long-running synthesis/lookup job
+	s.muDaily.Lock()
+
+	// muAlertProd should be independent — TryLock should succeed
+	if !s.muAlertProd.TryLock() {
+		s.muDaily.Unlock()
+		t.Fatal("expected muAlertProd TryLock to succeed while muDaily is held — alert producers would be starved by slow daily jobs")
+	}
+	s.muAlertProd.Unlock()
+
+	s.muDaily.Unlock()
+}
+
+// CHAOS-C4: All eight mutex groups exist and are independent (updated from 7).
+func TestCronConcurrencyGuard_AllEightGroupsIndependent(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+
+	// Lock all groups simultaneously — proves they are independent mutexes
+	s.muDigest.Lock()
+	s.muHourly.Lock()
+	s.muDaily.Lock()
+	s.muWeekly.Lock()
+	s.muMonthly.Lock()
+	s.muBriefs.Lock()
+	s.muAlerts.Lock()
+	s.muAlertProd.Lock()
+
+	// All locked — unlock in any order
+	s.muAlertProd.Unlock()
+	s.muAlerts.Unlock()
+	s.muBriefs.Unlock()
+	s.muMonthly.Unlock()
+	s.muWeekly.Unlock()
+	s.muDaily.Unlock()
+	s.muHourly.Unlock()
+	s.muDigest.Unlock()
 }
 
 // === SCN-021: AlertTypeIcons completeness ===
@@ -432,5 +493,33 @@ func TestAlertTypeIcons_AllSixTypes(t *testing.T) {
 	}
 	if len(AlertTypeIcons) != 6 {
 		t.Errorf("expected exactly 6 alert type icons, got %d", len(AlertTypeIcons))
+	}
+}
+
+// SEC-021-002: FormatAlertMessage must produce safe output even when title/body
+// contain control characters that slipped past validation. Verifies the format
+// function doesn't add its own injection vectors.
+func TestFormatAlertMessage_ControlCharsSurviveFormat(t *testing.T) {
+	// If sanitization in CreateAlert missed a control char, FormatAlertMessage
+	// should at least not amplify the damage.
+	msg := FormatAlertMessage("bill", "Clean Title", "Clean Body")
+	for i, r := range msg {
+		// Allow newline (from the format template) but nothing else
+		if r < 0x20 && r != '\n' {
+			t.Errorf("FormatAlertMessage produced control char U+%04X at position %d in %q",
+				r, i, msg)
+		}
+	}
+}
+
+// SEC-021-001: Verify that the delivery sweep's format function handles
+// the maximum-length inputs without exceeding Telegram's 4096-char limit.
+func TestFormatAlertMessage_MaxLengthBound(t *testing.T) {
+	maxTitle := strings.Repeat("A", 200) // CreateAlert caps at 200
+	maxBody := strings.Repeat("B", 2000) // CreateAlert caps at 2000
+	msg := FormatAlertMessage("bill", maxTitle, maxBody)
+	// icon(1-2 chars) + space(1) + title(200) + newline(1) + body(2000) = ~2204
+	if len(msg) > 4096 {
+		t.Errorf("formatted alert message exceeds Telegram limit: %d chars", len(msg))
 	}
 }

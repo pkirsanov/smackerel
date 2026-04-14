@@ -14,12 +14,12 @@
   },
   "certification": {
     "status": "done",
-    "completedScopes": [1, 2, 3, 4],
+    "completedScopes": [1, 2],
     "certifiedCompletedPhases": ["analyze", "design", "plan", "implement", "docs", "validate"],
     "scopeProgress": [
       {
         "scope": 1,
-        "name": "OpenClaw Reconciliation",
+        "name": "OpenClaw + Storage Reconciliation",
         "status": "done",
         "dependsOn": [],
         "scopeDir": null,
@@ -28,27 +28,9 @@
       },
       {
         "scope": 2,
-        "name": "Storage Layer Update",
+        "name": "Competitive Matrix + Phased Plan + Connectors",
         "status": "done",
-        "dependsOn": [],
-        "scopeDir": null,
-        "evidenceFile": "report.md",
-        "certifiedAt": "2026-04-10T14:00:00Z"
-      },
-      {
-        "scope": 3,
-        "name": "Competitive Matrix Audit",
-        "status": "done",
-        "dependsOn": [],
-        "scopeDir": null,
-        "evidenceFile": "report.md",
-        "certifiedAt": "2026-04-10T14:30:00Z"
-      },
-      {
-        "scope": 4,
-        "name": "Phased Plan and Connector Accuracy",
-        "status": "done",
-        "dependsOn": [1, 2],
+        "dependsOn": [1],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-10T14:30:00Z"

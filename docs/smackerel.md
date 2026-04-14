@@ -1893,8 +1893,7 @@ gantt
 | 1.7 | Build daily digest | Digest generation + Telegram delivery |
 | 1.8 | Connect Telegram bot | Primary active capture + delivery channel |
 | 1.9 | Build repo CLI | `./smackerel.sh` for all runtime operations |
-| 1.10 | Test with 50 captures | Verify processing, search, digest quality |
-| 1.10 | Connect 1-2 channels | WhatsApp or Telegram (user's preferred) |
+| 1.10 | Connect Telegram bot | Primary active capture + delivery channel |
 | 1.11 | Test with 50 captures | Verify processing, search, digest quality |
 
 **Exit criteria:** Can capture URLs/text from a chat channel. Can find them later with vague queries. Gets a useful daily digest.
@@ -2164,9 +2163,9 @@ All connectors are built from **proven, well-maintained open-source libraries** 
 | RSS / Podcasts | `github.com/mmcdole/gofeed` | Go | MIT | 2.5k stars | Universal RSS/Atom/JSON Feed parser. Pair with Whisper for audio. |
 | PDF text | `github.com/ledongthuc/pdf` or `pdfcpu` | Go | MIT | Active | Extract text from PDFs natively in Go |
 
-### 22.7 Committed Connector Inventory (14 connectors)
+### 22.7 Committed Connector Inventory (15 connectors)
 
-All 14 connectors are implemented under `internal/connector/` in Go:
+All 15 connectors are implemented under `internal/connector/` in Go:
 
 | # | Connector | Directory | Category | Description |
 |---|-----------|-----------|----------|-------------|
@@ -2175,15 +2174,16 @@ All 14 connectors are implemented under `internal/connector/` in Go:
 | 3 | Browser History | `browser/` | Web | Browsing history with dwell-time-based processing |
 | 4 | CalDAV | `caldav/` | Calendar | RFC4791-compliant calendar sync (Google, iCloud, Nextcloud) |
 | 5 | Discord | `discord/` | Chat | Channel/thread/attachment ingestion via discordgo |
-| 6 | Hospitable | `hospitable/` | STR | Short-term rental reservation knowledge, guest communications, multi-OTA aggregation |
-| 7 | IMAP | `imap/` | Email | Generic email ingestion via go-imap v2 (Gmail, Fastmail, self-hosted) |
-| 8 | Google Keep | `keep/` | Notes | Notes, labels, and sync state from Google Keep |
-| 9 | Google Maps | `maps/` | Location | Timeline, saved places, routes, activity tracking |
-| 10 | Financial Markets | `markets/` | Finance | Market data, watchlist items, price tracking |
-| 11 | RSS / Podcasts | `rss/` | Content | RSS/Atom/JSON Feed parsing via gofeed |
-| 12 | Twitter / X | `twitter/` | Social | Tweet and thread ingestion |
-| 13 | Weather | `weather/` | Environmental | Local weather data for location context and trail enrichment |
-| 14 | YouTube | `youtube/` | Video | Watch history, liked videos, transcript fetching |
+| 6 | GuestHost | `guesthost/` | STR | Property management activity feed, booking events, guest communications |
+| 7 | Hospitable | `hospitable/` | STR | Short-term rental reservation knowledge, guest communications, multi-OTA aggregation |
+| 8 | IMAP | `imap/` | Email | Generic email ingestion via go-imap v2 (Gmail, Fastmail, self-hosted) |
+| 9 | Google Keep | `keep/` | Notes | Notes, labels, and sync state from Google Keep |
+| 10 | Google Maps | `maps/` | Location | Timeline, saved places, routes, activity tracking |
+| 11 | Financial Markets | `markets/` | Finance | Market data, watchlist items, price tracking |
+| 12 | RSS / Podcasts | `rss/` | Content | RSS/Atom/JSON Feed parsing via gofeed |
+| 13 | Twitter / X | `twitter/` | Social | Tweet and thread ingestion |
+| 14 | Weather | `weather/` | Environmental | Local weather data for location context and trail enrichment |
+| 15 | YouTube | `youtube/` | Video | Watch history, liked videos, transcript fetching |
 
 ### 22.8 Connector Framework Assessment
 

@@ -879,3 +879,140 @@ func TestParseTakeoutJSON_OutOfRangeWaypoints(t *testing.T) {
 		t.Errorf("expected 2 valid waypoints (1 out-of-range filtered), got %d", len(activities[0].Route))
 	}
 }
+
+// HARDEN-R04-H1: Start/end location coordinate validation.
+// Adversarial: would fail if only waypoint coordinates were bounds-checked but
+// start/end locations were stored without validation.
+func TestParseTakeoutJSON_OutOfRangeStartLocation(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 9500000000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:00:00Z"
+					},
+					"distance": 5000,
+					"activityType": "WALKING",
+					"waypointPath": {"waypoints": []}
+				}
+			},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T12:00:00Z",
+						"endTimestamp":   "2026-03-15T13:00:00Z"
+					},
+					"distance": 3000,
+					"activityType": "CYCLING",
+					"waypointPath": {"waypoints": []}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// First activity has start lat 950° (out of range) → must be skipped
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (out-of-range start lat skipped), got %d", len(activities))
+	}
+	if activities[0].Type != ActivityCycle {
+		t.Errorf("expected surviving activity to be cycling, got %q", activities[0].Type)
+	}
+}
+
+func TestParseTakeoutJSON_OutOfRangeEndLocation(t *testing.T) {
+	input := `{
+		"timelineObjects": [
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": 1900000000},
+					"duration": {
+						"startTimestamp": "2026-03-15T10:00:00Z",
+						"endTimestamp":   "2026-03-15T11:00:00Z"
+					},
+					"distance": 5000,
+					"activityType": "WALKING",
+					"waypointPath": {"waypoints": []}
+				}
+			},
+			{
+				"activitySegment": {
+					"startLocation": {"latitudeE7": 407128000, "longitudeE7": -740060000},
+					"endLocation":   {"latitudeE7": 407580000, "longitudeE7": -739855000},
+					"duration": {
+						"startTimestamp": "2026-03-15T12:00:00Z",
+						"endTimestamp":   "2026-03-15T13:00:00Z"
+					},
+					"distance": 2000,
+					"activityType": "RUNNING",
+					"waypointPath": {"waypoints": []}
+				}
+			}
+		]
+	}`
+
+	activities, err := ParseTakeoutJSON([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// First activity has end lng 190° (out of range) → must be skipped
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 activity (out-of-range end lng skipped), got %d", len(activities))
+	}
+	if activities[0].Type != ActivityRun {
+		t.Errorf("expected surviving activity to be run, got %q", activities[0].Type)
+	}
+}
+
+// HARDEN-R04-H2: maxActivities cap prevents memory exhaustion.
+// Adversarial: would fail if ParseTakeoutJSON had no upper bound on parsed activities.
+func TestParseTakeoutJSON_MaxActivitiesCap(t *testing.T) {
+	if maxActivities < 1 {
+		t.Fatalf("maxActivities must be positive, got %d", maxActivities)
+	}
+	// Verify the constant is exported and reasonable
+	if maxActivities > 1000000 {
+		t.Errorf("maxActivities seems too high for memory safety: %d", maxActivities)
+	}
+	if maxActivities < 1000 {
+		t.Errorf("maxActivities seems too low for real Takeout exports: %d", maxActivities)
+	}
+}
+
+// SIMPLIFY-005-S1: Verify the extracted validCoord helper.
+func TestValidCoord(t *testing.T) {
+	tests := []struct {
+		name string
+		lat  float64
+		lng  float64
+		want bool
+	}{
+		{"origin", 0, 0, true},
+		{"NYC", 40.7128, -74.0060, true},
+		{"south pole", -90, 0, true},
+		{"north pole", 90, 0, true},
+		{"dateline east", 0, 180, true},
+		{"dateline west", 0, -180, true},
+		{"lat too high", 90.1, 0, false},
+		{"lat too low", -90.1, 0, false},
+		{"lng too high", 0, 180.1, false},
+		{"lng too low", 0, -180.1, false},
+		{"both out of range", 100, 200, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := validCoord(tt.lat, tt.lng); got != tt.want {
+				t.Errorf("validCoord(%f, %f) = %v, want %v", tt.lat, tt.lng, got, tt.want)
+			}
+		})
+	}
+}

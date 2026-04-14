@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"html"
 	"log/slog"
 	"net/http"
@@ -50,7 +51,12 @@ func (h *OAuthHandler) StartHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate CSRF state token
-	state := generateState()
+	state, err := generateState()
+	if err != nil {
+		slog.Error("failed to generate CSRF state", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 	h.mu.Lock()
 	// Evict entries older than 10 minutes
 	cutoff := time.Now().Add(-10 * time.Minute)
@@ -102,10 +108,14 @@ func (h *OAuthHandler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate CSRF state
+	// Validate CSRF state and enforce TTL
 	h.mu.Lock()
 	providerName, ok := h.states[state]
+	var stateExpired bool
 	if ok {
+		if created, hasTime := h.stateCreated[state]; hasTime && time.Since(created) > 10*time.Minute {
+			stateExpired = true
+		}
 		delete(h.states, state)
 		delete(h.stateCreated, state)
 	}
@@ -113,6 +123,11 @@ func (h *OAuthHandler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	if !ok {
 		http.Error(w, "invalid state parameter", http.StatusBadRequest)
+		return
+	}
+	if stateExpired {
+		slog.Warn("OAuth callback with expired state token", "provider", providerName)
+		http.Error(w, "authorization request expired — please try again", http.StatusBadRequest)
 		return
 	}
 
@@ -167,8 +182,11 @@ func (h *OAuthHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // generateState creates a random hex string for CSRF protection.
-func generateState() string {
+// Returns an error if the cryptographic random source is unavailable.
+func generateState() (string, error) {
 	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate CSRF state: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }

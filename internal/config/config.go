@@ -38,9 +38,11 @@ type Config struct {
 	MLHealthCacheTTLS int
 
 	// Optional connector path fields (SST-compliant — read from env, sourced from smackerel.yaml)
-	BookmarksImportDir string
-	BrowserHistoryPath string
-	MapsImportDir      string
+	BookmarksImportDir    string
+	BookmarksEnabled      bool
+	BookmarksSyncSchedule string
+	BrowserHistoryPath    string
+	MapsImportDir         string
 
 	// Telegram assembly config (SST-compliant — from smackerel.yaml via config generate)
 	TelegramAssemblyWindowSeconds   int
@@ -68,9 +70,11 @@ func Load() (*Config, error) {
 		MLSidecarURL:     os.Getenv("ML_SIDECAR_URL"),
 		CoreAPIURL:       os.Getenv("CORE_API_URL"),
 
-		BookmarksImportDir: os.Getenv("BOOKMARKS_IMPORT_DIR"),
-		BrowserHistoryPath: os.Getenv("BROWSER_HISTORY_PATH"),
-		MapsImportDir:      os.Getenv("MAPS_IMPORT_DIR"),
+		BookmarksImportDir:    os.Getenv("BOOKMARKS_IMPORT_DIR"),
+		BookmarksEnabled:      os.Getenv("BOOKMARKS_ENABLED") == "true",
+		BookmarksSyncSchedule: os.Getenv("BOOKMARKS_SYNC_SCHEDULE"),
+		BrowserHistoryPath:    os.Getenv("BROWSER_HISTORY_PATH"),
+		MapsImportDir:         os.Getenv("MAPS_IMPORT_DIR"),
 	}
 
 	if chatIDs := os.Getenv("TELEGRAM_CHAT_IDS"); chatIDs != "" {
@@ -123,6 +127,11 @@ func Load() (*Config, error) {
 
 	if len(parseErrors) > 0 {
 		return nil, fmt.Errorf("missing or invalid required configuration: %s", strings.Join(parseErrors, ", "))
+	}
+
+	// Cross-validate: DBMinConns must not exceed DBMaxConns
+	if cfg.DBMinConns > cfg.DBMaxConns {
+		return nil, fmt.Errorf("DB_MIN_CONNS (%d) must not exceed DB_MAX_CONNS (%d)", cfg.DBMinConns, cfg.DBMaxConns)
 	}
 
 	// Parse optional telegram assembly config (SST-compliant — defaults in smackerel.yaml)

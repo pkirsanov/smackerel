@@ -1532,3 +1532,35 @@ func TestSyncRespectsContextCancellation(t *testing.T) {
 		t.Errorf("expected at most 1 request with cancelled context, got %d", requestCount)
 	}
 }
+
+// --- SEC-012-003: page_size upper bound (CWE-400) ---
+
+func TestConfigPageSizeCappedAtMax(t *testing.T) {
+	cfg, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"access_token": "test"},
+		SourceConfig: map[string]interface{}{
+			"page_size": float64(999999),
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.PageSize != maxPageSize {
+		t.Errorf("SEC-012-003: page_size %d must be capped at maxPageSize %d (CWE-400)", cfg.PageSize, maxPageSize)
+	}
+}
+
+func TestConfigPageSizeBelowCapPreserved(t *testing.T) {
+	cfg, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"access_token": "test"},
+		SourceConfig: map[string]interface{}{
+			"page_size": float64(50),
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.PageSize != 50 {
+		t.Errorf("page_size = %d, want 50 (below cap should be preserved)", cfg.PageSize)
+	}
+}

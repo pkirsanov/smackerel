@@ -126,6 +126,9 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 	// affecting the deferred health decision.
 	c.lastSyncCount = 0
 	c.lastSyncErrors = 0
+	// F-CHAOS-R24-001: Snapshot config under lock to prevent data races with
+	// concurrent Connect(). All config reads in Sync and its helpers use cfg.
+	cfg := c.config
 	c.mu.Unlock()
 
 	defer func() {
@@ -143,7 +146,7 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 	processedFiles := decodeProcessedFilesCursor(cursor)
 
 	// Scan import directory for new files
-	newFiles, err := c.findNewFiles(processedFiles)
+	newFiles, err := c.findNewFiles(cfg, processedFiles)
 	if err != nil {
 		c.mu.Lock()
 		c.lastSyncErrors = 1
@@ -167,7 +170,7 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 			return allArtifacts, encodeProcessedFilesCursor(processedFiles), fmt.Errorf("sync cancelled: %w", err)
 		}
 
-		artifacts, err := c.processFile(ctx, file)
+		artifacts, err := c.processFile(ctx, cfg, file)
 		if err != nil {
 			slog.Warn("failed to process bookmark export file",
 				"file", file,
@@ -181,8 +184,8 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 		processedFiles = append(processedFiles, filepath.Base(file))
 
 		// Archive processed file if configured
-		if c.config.ArchiveProcessed {
-			if err := c.archiveFile(file); err != nil {
+		if cfg.ArchiveProcessed {
+			if err := c.archiveFile(cfg, file); err != nil {
 				slog.Warn("failed to archive processed file",
 					"file", file,
 					"error", err,
@@ -198,6 +201,12 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 	dedupCount := 0
 	if c.deduplicator != nil && len(allArtifacts) > 0 {
 		if err := ctx.Err(); err != nil {
+			// F-CHAOS-C16-001: Flush counters before early return so the deferred
+			// health-transition function reads correct values instead of stale zeros.
+			c.mu.Lock()
+			c.lastSyncCount = len(allArtifacts)
+			c.lastSyncErrors = syncErrors
+			c.mu.Unlock()
 			return allArtifacts, encodeProcessedFilesCursor(processedFiles), fmt.Errorf("sync cancelled before dedup: %w", err)
 		}
 		var err error
@@ -270,13 +279,13 @@ func (c *BookmarksConnector) Close() error {
 }
 
 // findNewFiles scans the import directory for bookmark export files not yet processed.
-func (c *BookmarksConnector) findNewFiles(processedFiles []string) ([]string, error) {
+func (c *BookmarksConnector) findNewFiles(cfg Config, processedFiles []string) ([]string, error) {
 	processed := make(map[string]bool, len(processedFiles))
 	for _, f := range processedFiles {
 		processed[f] = true
 	}
 
-	entries, err := os.ReadDir(c.config.ImportDir)
+	entries, err := os.ReadDir(cfg.ImportDir)
 	if err != nil {
 		return nil, fmt.Errorf("read import directory: %w", err)
 	}
@@ -305,20 +314,20 @@ func (c *BookmarksConnector) findNewFiles(processedFiles []string) ([]string, er
 			continue
 		}
 
-		newFiles = append(newFiles, filepath.Join(c.config.ImportDir, name))
+		newFiles = append(newFiles, filepath.Join(cfg.ImportDir, name))
 	}
 
 	return newFiles, nil
 }
 
 // processFile reads and parses a bookmark export file, returning RawArtifacts.
-func (c *BookmarksConnector) processFile(ctx context.Context, filePath string) ([]connector.RawArtifact, error) {
+func (c *BookmarksConnector) processFile(ctx context.Context, cfg Config, filePath string) ([]connector.RawArtifact, error) {
 	// F-CHAOS-006: Verify the resolved path stays within the import directory boundary.
 	resolved, err := filepath.Abs(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve path %s: %w", filePath, err)
 	}
-	importAbs, err := filepath.Abs(c.config.ImportDir)
+	importAbs, err := filepath.Abs(cfg.ImportDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve import dir: %w", err)
 	}
@@ -370,7 +379,7 @@ func (c *BookmarksConnector) processFile(ctx context.Context, filePath string) (
 	artifacts := ToRawArtifacts(bookmarks)
 
 	// F-STAB-007/008: apply domain exclusion and minimum URL length filters
-	artifacts = c.filterArtifacts(artifacts)
+	artifacts = c.filterArtifacts(cfg, artifacts)
 
 	// Enrich metadata
 	fileName := filepath.Base(filePath)
@@ -385,11 +394,20 @@ func (c *BookmarksConnector) processFile(ctx context.Context, filePath string) (
 		}
 		artifacts[i].Metadata["source_format"] = sourceFormat
 		artifacts[i].Metadata["import_file"] = fileName
-		artifacts[i].Metadata["processing_tier"] = c.config.ProcessingTier
+		artifacts[i].Metadata["processing_tier"] = cfg.ProcessingTier
 		// folder_path is already set by ToRawArtifacts via the "folder" key
 		if folder, ok := artifacts[i].Metadata["folder"]; ok {
 			artifacts[i].Metadata["folder_path"] = folder
 		}
+	}
+
+	// F-CHAOS-C16-002: Warn when a recognised export file yields zero bookmarks,
+	// hinting it may not actually be a bookmark export.
+	if len(artifacts) == 0 {
+		slog.Warn("bookmark export file produced zero bookmarks — may not be a bookmark export",
+			"file", fileName,
+			"format", sourceFormat,
+		)
 	}
 
 	slog.Info("processed bookmark export",
@@ -403,8 +421,8 @@ func (c *BookmarksConnector) processFile(ctx context.Context, filePath string) (
 }
 
 // archiveFile moves a processed file to the archive/ subdirectory.
-func (c *BookmarksConnector) archiveFile(filePath string) error {
-	archiveDir := filepath.Join(c.config.ImportDir, "archive")
+func (c *BookmarksConnector) archiveFile(cfg Config, filePath string) error {
+	archiveDir := filepath.Join(cfg.ImportDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 		return fmt.Errorf("create archive directory: %w", err)
 	}
@@ -523,9 +541,9 @@ var allowedSchemes = map[string]bool{
 }
 
 // filterArtifacts applies ExcludeDomains, MinURLLength, and URL-scheme safety filters.
-func (c *BookmarksConnector) filterArtifacts(artifacts []connector.RawArtifact) []connector.RawArtifact {
-	excludeSet := make(map[string]bool, len(c.config.ExcludeDomains))
-	for _, d := range c.config.ExcludeDomains {
+func (c *BookmarksConnector) filterArtifacts(cfg Config, artifacts []connector.RawArtifact) []connector.RawArtifact {
+	excludeSet := make(map[string]bool, len(cfg.ExcludeDomains))
+	for _, d := range cfg.ExcludeDomains {
 		excludeSet[strings.ToLower(d)] = true
 	}
 
@@ -537,7 +555,7 @@ func (c *BookmarksConnector) filterArtifacts(artifacts []connector.RawArtifact) 
 			continue
 		}
 
-		if c.config.MinURLLength > 0 && len(a.URL) < c.config.MinURLLength {
+		if cfg.MinURLLength > 0 && len(a.URL) < cfg.MinURLLength {
 			continue
 		}
 		if len(excludeSet) > 0 && excludeSet[strings.ToLower(u.Hostname())] {

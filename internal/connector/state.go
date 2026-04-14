@@ -71,5 +71,8 @@ func (s *StateStore) RecordError(ctx context.Context, sourceID string, errMsg st
 			last_error = $2,
 			updated_at = NOW()
 	`, sourceID, errMsg)
-	return err
+	if err != nil {
+		return fmt.Errorf("record error: %w", err)
+	}
+	return nil
 }

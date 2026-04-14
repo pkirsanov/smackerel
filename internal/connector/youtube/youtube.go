@@ -55,6 +55,9 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	if c.health == connector.HealthDisconnected {
+		return nil, "", fmt.Errorf("YouTube connector %q: Sync called before Connect", c.id)
+	}
 	c.health = connector.HealthSyncing
 	defer func() {
 		if c.health == connector.HealthSyncing {
@@ -389,6 +392,10 @@ func parseVideoItems(raw interface{}) ([]VideoItem, error) {
 			Title:     getStr(vm, "title"),
 			Channel:   getStr(vm, "channel"),
 			Published: time.Now(),
+		}
+
+		if vid.VideoID == "" {
+			continue
 		}
 
 		if desc := getStr(vm, "description"); desc != "" {

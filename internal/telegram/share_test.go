@@ -220,6 +220,26 @@ func TestChaos_ExtractAllURLs_OnlyWhitespace(t *testing.T) {
 	}
 }
 
+func TestExtractAllURLs_URLsWithQueryParams(t *testing.T) {
+	urls := extractAllURLs("Check https://example.com/search?foo=bar&baz=1 for results")
+	if len(urls) != 1 {
+		t.Fatalf("expected 1 URL, got %d: %v", len(urls), urls)
+	}
+	if urls[0] != "https://example.com/search?foo=bar&baz=1" {
+		t.Errorf("expected URL with query params preserved, got %q", urls[0])
+	}
+}
+
+func TestExtractAllURLs_URLsWithFragment(t *testing.T) {
+	urls := extractAllURLs("See https://example.com/page#section2 for details")
+	if len(urls) != 1 {
+		t.Fatalf("expected 1 URL, got %d: %v", len(urls), urls)
+	}
+	if urls[0] != "https://example.com/page#section2" {
+		t.Errorf("expected URL with fragment preserved, got %q", urls[0])
+	}
+}
+
 func TestChaos_ExtractAllURLs_UnicodeAroundURL(t *testing.T) {
 	// URL preceded/followed by Unicode text
 	urls := extractAllURLs("日本語 https://example.com/ページ 中文")

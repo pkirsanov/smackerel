@@ -2,6 +2,36 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Stabilization Pass (April 12, 2026)
+
+### Trigger: stabilize-to-doc
+
+### Findings (3 total, 3 resolved)
+
+| # | Finding | Severity | File | Fix |
+|---|---------|----------|------|-----|
+| S-001 | Scheduler `muDaily` shared across synthesis, resurfacing, and lookups — after system recovery or time adjustment, concurrent fires silently skip resurfacing or lookups | Medium | `internal/scheduler/scheduler.go` | Added dedicated `muResurface` and `muLookups` mutexes so each daily job has its own concurrency guard |
+| S-002 | Resurfacing scheduler never calls `MarkResurfaced` after delivery — same artifacts resurface repeatedly because dormancy scores never update | High | `internal/scheduler/scheduler.go` | Added `MarkResurfaced` call with delivered artifact IDs after Telegram delivery |
+| S-003 | Subscription `ON CONFLICT (id) DO NOTHING` uses ULID primary key — same email artifact triggers duplicate subscription inserts across scheduler runs | Medium | `internal/intelligence/subscriptions.go`, `internal/db/migrations/013_phase5_stability.sql` | Changed conflict key to `detected_from` (artifact ID) with new unique index; added learning_progress unique constraint |
+
+### Key Files Changed
+- `internal/scheduler/scheduler.go` — new `muResurface`, `muLookups` mutex fields; `MarkResurfaced` call after delivery
+- `internal/scheduler/scheduler_test.go` — updated `TestCronConcurrencyGuard_AllGroupsIndependent` for new mutex groups
+- `internal/intelligence/subscriptions.go` — `ON CONFLICT (detected_from)` replacing `ON CONFLICT (id)`
+- `internal/db/migrations/013_phase5_stability.sql` — unique indexes for `subscriptions.detected_from` and `learning_progress(topic_id, artifact_id)`
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/scheduler   0.022s
+ok  github.com/smackerel/smackerel/internal/intelligence 0.082s
+ok  github.com/smackerel/smackerel/internal/db           0.034s
+33 Go packages PASS, 69 Python tests PASS, 1 skipped
+Exit code: 0
+```
+
+---
+
 ## Scope 01: Expertise Mapping
 ### Summary
 Implementation complete. Multi-dimensional expertise scoring via RunSynthesis with topic_groups query computing capture count, source diversity, and connection density per topic. Expertise tiers (Novice through Expert) mapped via InsightType constants. Blind spot detection through cross-domain cluster analysis. Growth trajectory via time-weighted artifact aggregation.
@@ -489,3 +519,37 @@ Exit code: 0
 - `internal/intelligence/learning_test.go` — Removed `TestResurfaceScore_Phase5` cross-reference test
 - `internal/intelligence/people.go` — Replaced N+1 loop queries with 2 batch queries using `ANY($1)` and window functions
 - `internal/intelligence/monthly.go` — Consolidated 3 interest-evolution queries into 1 using `CASE`/`ROW_NUMBER` windowing
+
+---
+
+## DevOps Probe R17 (Stochastic Quality Sweep)
+
+**Trigger:** devops
+**Date:** 2026-04-13
+**Scope:** Scheduler operational safety, resource retention, notification flooding, mutex consistency for Phase 5 intelligence subsystem
+
+### Findings (3 total, 3 resolved)
+
+| # | Finding | Severity | File | Fix |
+|---|---------|----------|------|-----|
+| DEV-001 | `search_log` table grows unboundedly — no retention cleanup for entries beyond the 30-day detection window. Over months of use this table accumulates dead weight indefinitely. | Medium | `internal/intelligence/lookups.go`, `internal/scheduler/scheduler.go` | Added `PurgeOldSearchLogs(ctx, retentionDays)` method with 30-day minimum clamp; wired into the daily `0 4 * * *` lookups cron job to purge entries older than 60 days after detection completes |
+| DEV-002 | `DetectFrequentLookups` scheduler loop unbounded — creates unlimited quick references and sends unlimited Telegram messages per cron run. If hundreds of distinct queries cross the 3× threshold simultaneously, the user receives a notification flood. | Medium | `internal/intelligence/lookups.go`, `internal/scheduler/scheduler.go` | Added `LIMIT 20` to the SQL query; added `maxQuickRefsPerRun = 5` cap in the scheduler loop with deferred remainder to next run |
+| DEV-003 | Subscription detection shares `muWeekly` — inconsistent with the dedicated-mutex pattern established by the stability fix (013) that already split `muResurface` and `muLookups` from `muDaily`. | Low | `internal/scheduler/scheduler.go` | Added `muSubs sync.Mutex` field; switched subscription detection cron from `muWeekly` to `muSubs` |
+
+### Key Files Changed
+- `internal/intelligence/lookups.go` — Added `PurgeOldSearchLogs` method (17 lines); added `LIMIT 20` to `DetectFrequentLookups` query
+- `internal/intelligence/lookups_test.go` — Added 3 tests: `TestPurgeOldSearchLogs_NilPool`, `TestPurgeOldSearchLogs_MinRetentionDays`, `TestPurgeOldSearchLogs_ZeroDays`
+- `internal/scheduler/scheduler.go` — Added `muSubs` mutex field; switched subscription detection to `muSubs`; added `maxQuickRefsPerRun` cap in lookups loop; added search_log purge call after detection
+- `internal/scheduler/scheduler_test.go` — Updated `TestCronConcurrencyGuard_AllGroupsIndependent` to include `muSubs`; added `TestCronConcurrencyGuard_SubsIndependentFromWeekly`
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence  0.035s
+ok  github.com/smackerel/smackerel/internal/scheduler     0.059s
+34 Go packages PASS, 72 Python tests PASS, 1 skipped
+Exit code: 0
+
+$ ./smackerel.sh lint
+Exit code: 0
+```

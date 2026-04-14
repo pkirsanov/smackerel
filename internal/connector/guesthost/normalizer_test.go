@@ -17,11 +17,11 @@ func TestNormalizeBookingCreated(t *testing.T) {
 			"guestId": "g1",
 			"guestEmail": "alice@example.com",
 			"guestName": "Alice Smith",
-			"checkIn": "2026-05-01",
-			"checkOut": "2026-05-05",
+			"checkinDate": "2026-05-01",
+			"checkoutDate": "2026-05-05",
 			"source": "direct",
 			"status": "confirmed",
-			"totalPrice": 1200.50
+			"totalAmount": 1200.50
 		}`),
 	}
 
@@ -58,8 +58,8 @@ func TestNormalizeBookingCreated(t *testing.T) {
 	if a.Metadata["booking_source"] != "direct" {
 		t.Errorf("metadata booking_source = %v", a.Metadata["booking_source"])
 	}
-	if a.Metadata["revenue"] != 1200.50 {
-		t.Errorf("metadata revenue = %v, want 1200.50", a.Metadata["revenue"])
+	if a.Metadata["total_price"] != 1200.50 {
+		t.Errorf("metadata total_price = %v, want 1200.50", a.Metadata["total_price"])
 	}
 	if a.CapturedAt.IsZero() {
 		t.Error("CapturedAt should not be zero")
@@ -214,9 +214,9 @@ func TestNormalizeAllEventTypes(t *testing.T) {
 		data        string
 		wantContent string
 	}{
-		{"booking.created", `{"propertyId":"p","propertyName":"P","guestName":"G","guestEmail":"g@e","checkIn":"2026-01-01","checkOut":"2026-01-03","source":"direct","totalPrice":100}`, "booking"},
-		{"booking.updated", `{"propertyId":"p","propertyName":"P","guestName":"G","guestEmail":"g@e","checkIn":"2026-01-01","checkOut":"2026-01-03","source":"direct","totalPrice":100}`, "booking"},
-		{"booking.cancelled", `{"propertyId":"p","propertyName":"P","guestName":"G","guestEmail":"g@e","checkIn":"2026-01-01","checkOut":"2026-01-03","source":"direct","totalPrice":100}`, "booking"},
+		{"booking.created", `{"propertyId":"p","propertyName":"P","guestName":"G","guestEmail":"g@e","checkinDate":"2026-01-01","checkoutDate":"2026-01-03","source":"direct","totalAmount":100}`, "booking"},
+		{"booking.updated", `{"propertyId":"p","propertyName":"P","guestName":"G","guestEmail":"g@e","checkinDate":"2026-01-01","checkoutDate":"2026-01-03","source":"direct","totalAmount":100}`, "booking"},
+		{"booking.cancelled", `{"propertyId":"p","propertyName":"P","guestName":"G","guestEmail":"g@e","checkinDate":"2026-01-01","checkoutDate":"2026-01-03","source":"direct","totalAmount":100}`, "booking"},
 		{"guest.created", `{"email":"g@e","name":"G"}`, "guest"},
 		{"guest.updated", `{"email":"g@e","name":"G"}`, "guest"},
 		{"review.received", `{"propertyId":"p","propertyName":"P","guestEmail":"g@e","guestName":"G","rating":"4","text":"ok"}`, "review"},

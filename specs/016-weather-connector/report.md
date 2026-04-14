@@ -78,3 +78,30 @@ Links: [uservalidation.md](uservalidation.md)
 - `./smackerel.sh check` passes clean
 - `./smackerel.sh test unit` — weather package: 0.753s, all pass (down from 88s)
 - Total weather test functions: 29 existing + 17 new = 46
+
+---
+
+### Improve Pass — 2026-04-12
+
+**Trigger:** stochastic-quality-sweep → improve-existing
+**Target:** `internal/connector/weather/weather.go`
+
+#### Findings
+
+| # | Issue | Severity | Fix |
+|---|-------|----------|-----|
+| F1 | Missing User-Agent header on HTTP requests — violates Open-Meteo ToS recommendations and NWS API requirements | Medium | Added `userAgent` constant; `doFetch` sets `User-Agent` header on every request |
+| F2 | Weather description absent from artifact metadata — downstream consumers must parse Title string to get condition description | Low | Added `"description"` field to `Metadata` map in `Sync()` artifact construction |
+| F3 | No sync summary log — zero observability into sync outcomes without checking health externally | Low | Added structured `slog.Info("weather sync complete", ...)` with artifact count, failure count, duration |
+| F4 | Error body drain uses magic number (4096) — inconsistent with named `maxWeatherResponseSize` constant | Low | Extracted `maxErrorBodyDrain` (64 KiB) named constant; replaces inline literal in `doFetch` |
+
+#### Tests Added (2 new/modified test assertions)
+
+1. `TestDoFetch_SetsUserAgent` — verifies User-Agent header is sent on every request
+2. `TestSync_ProducesArtifacts` — extended with assertion that `metadata["description"]` = `"Clear sky"`
+
+#### Evidence
+
+- `./smackerel.sh check` passes clean
+- `./smackerel.sh test unit` — weather package: 0.195s, all pass
+- Total weather test functions: 46 existing + 1 new = 47

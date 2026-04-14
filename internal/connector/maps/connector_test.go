@@ -725,9 +725,10 @@ func TestFindNewFilesSorted(t *testing.T) {
 	writeTakeoutFile(t, dir, "m-export.json", makeTakeoutJSON(1))
 
 	c := New("google-maps-timeline")
-	c.config = MapsConfig{ImportDir: dir}
+	_ = c // findNewFiles is now a package function
+	cfg := MapsConfig{ImportDir: dir}
 
-	files, err := c.findNewFiles(nil)
+	files, err := findNewFiles(cfg.ImportDir, nil)
 	if err != nil {
 		t.Fatalf("findNewFiles: %v", err)
 	}
@@ -757,10 +758,7 @@ func TestCursorPruningRemovesArchivedFiles(t *testing.T) {
 	writeTakeoutFile(t, dir, "current.json", makeTakeoutJSON(1))
 	// "old.json" is in cursor but not on disk (was archived)
 
-	c := New("google-maps-timeline")
-	c.config = MapsConfig{ImportDir: dir}
-
-	pruned := c.pruneCursor([]string{"old.json", "current.json", "deleted.json"})
+	pruned := pruneCursor(dir, []string{"old.json", "current.json", "deleted.json"})
 	if len(pruned) != 1 {
 		t.Fatalf("expected 1 pruned entry, got %d: %v", len(pruned), pruned)
 	}
@@ -771,11 +769,8 @@ func TestCursorPruningRemovesArchivedFiles(t *testing.T) {
 
 // IMPROVE-011: Cursor pruning keeps all entries when import dir can't be read
 func TestCursorPruningFallbackOnError(t *testing.T) {
-	c := New("google-maps-timeline")
-	c.config = MapsConfig{ImportDir: "/nonexistent/path/that/does/not/exist"}
-
 	files := []string{"a.json", "b.json"}
-	pruned := c.pruneCursor(files)
+	pruned := pruneCursor("/nonexistent/path/that/does/not/exist", files)
 	if len(pruned) != 2 {
 		t.Errorf("expected all entries preserved on error, got %d", len(pruned))
 	}
@@ -987,4 +982,90 @@ func makeMixedThresholdJSON() string {
 		}`
 	}
 	return `{"timelineObjects": [` + objects + `]}`
+}
+
+func TestConfigFloat64NonNeg(t *testing.T) {
+	tests := []struct {
+		name    string
+		sc      map[string]interface{}
+		key     string
+		wantVal float64
+		wantErr bool
+	}{
+		{"absent key", map[string]interface{}{}, "x", -1, false},
+		{"float64 zero", map[string]interface{}{"x": float64(0)}, "x", 0, false},
+		{"float64 positive", map[string]interface{}{"x": float64(42)}, "x", 42, false},
+		{"float64 negative", map[string]interface{}{"x": float64(-1)}, "x", 0, true},
+		{"int zero", map[string]interface{}{"x": int(0)}, "x", 0, false},
+		{"int positive", map[string]interface{}{"x": int(7)}, "x", 7, false},
+		{"int negative", map[string]interface{}{"x": int(-3)}, "x", 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := configFloat64NonNeg(tt.sc, tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && v != tt.wantVal {
+				t.Errorf("value = %v, want %v", v, tt.wantVal)
+			}
+		})
+	}
+}
+
+func TestConfigFloat64Positive(t *testing.T) {
+	tests := []struct {
+		name    string
+		sc      map[string]interface{}
+		key     string
+		wantVal float64
+		wantErr bool
+	}{
+		{"absent key", map[string]interface{}{}, "x", -1, false},
+		{"float64 positive", map[string]interface{}{"x": float64(5)}, "x", 5, false},
+		{"float64 zero", map[string]interface{}{"x": float64(0)}, "x", 0, true},
+		{"float64 negative", map[string]interface{}{"x": float64(-1)}, "x", 0, true},
+		{"int positive", map[string]interface{}{"x": int(10)}, "x", 10, false},
+		{"int zero", map[string]interface{}{"x": int(0)}, "x", 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := configFloat64Positive(tt.sc, tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && v != tt.wantVal {
+				t.Errorf("value = %v, want %v", v, tt.wantVal)
+			}
+		})
+	}
+}
+
+func TestConfigIntMin(t *testing.T) {
+	tests := []struct {
+		name    string
+		sc      map[string]interface{}
+		key     string
+		min     int
+		wantVal int
+		wantErr bool
+	}{
+		{"absent key", map[string]interface{}{}, "x", 1, -1, false},
+		{"float64 at min", map[string]interface{}{"x": float64(1)}, "x", 1, 1, false},
+		{"float64 above min", map[string]interface{}{"x": float64(5)}, "x", 1, 5, false},
+		{"float64 below min", map[string]interface{}{"x": float64(0)}, "x", 1, 0, true},
+		{"int at min", map[string]interface{}{"x": int(3)}, "x", 3, 3, false},
+		{"int below min", map[string]interface{}{"x": int(0)}, "x", 1, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := configIntMin(tt.sc, tt.key, tt.min)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && v != tt.wantVal {
+				t.Errorf("value = %v, want %v", v, tt.wantVal)
+			}
+		})
+	}
 }

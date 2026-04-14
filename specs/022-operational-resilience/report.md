@@ -277,3 +277,87 @@ Feature 022 is complete. All 4 scopes implemented and verified with unit tests. 
 - Lint: `./smackerel.sh lint` — all checks passed
 - New tests verified: `TestStop_CancelsBaseCtx` PASS (baseCtx.Err() != nil after Stop), `TestStop_DoubleStopSafe` PASS (no panic)
 - Zero `context.Background()` remaining in cron callbacks (only in `New()` constructor for the lifecycle root context)
+
+## Improve-Existing Pass (stochastic sweep)
+
+**Date:** 2026-04-12
+**Trigger:** Stochastic quality sweep — improve
+**Scope:** Operational quality improvements for backup safety and shutdown observability
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File | Fix |
+|----|---------|----------|------|-----|
+| IMP-001 | Backup script suppresses pg_dump stderr with `2>/dev/null` — hides diagnostic errors (permission problems, partial table dumps, encoding warnings) from the user. For a feature whose express purpose is data safety, invisible error output undermines confidence in the backup. | Medium | `scripts/commands/backup.sh` | pg_dump stderr now captured to a temp file; displayed on failure, shown as warnings on success; temp file cleaned up in all paths |
+| IMP-002 | Backup script validates dump only by file size (>100 bytes) — a corrupt gzip file could pass this check. No integrity validation of the gzip container. | Low | `scripts/commands/backup.sh` | Added `gunzip -t` integrity check after size validation; corrupt file removed with clear error message |
+| IMP-003 | `shutdownAll` logs per-step budgets but not total elapsed shutdown time — makes it hard to verify the 30s Docker budget is met during debugging | Low | `cmd/core/main.go` | Added `shutdownStart` timestamp and defer-based log line reporting total `elapsed_ms` and `budget_s` at shutdown completion |
+
+### Evidence
+
+- Unit tests: `./smackerel.sh test unit` — all 33 Go packages PASS
+- Lint: `./smackerel.sh lint` — all checks passed
+- No new tests required — IMP-001/002 are shell script improvements (validated by existing E2E backup tests), IMP-003 is a log-only addition
+
+## Hardening Pass 3 (stochastic sweep — harden-to-doc)
+
+**Date:** 2026-04-13
+**Trigger:** Stochastic quality sweep — harden (child workflow)
+**Scope:** Dead-letter routing correctness, config cross-validation, shutdown resilience
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File(s) | Fix |
+|----|---------|----------|---------|-----|
+| H-006 | Dead-letter routing skips final processing attempt (off-by-one). `handleMessage`/`handleDigestMessage` check `isDeliveryExhausted` BEFORE processing — at delivery #5 (== MaxDeliver), processing is skipped and message goes to DL with generic "MaxDeliver exhausted". Only 4 real processing attempts instead of 5, and actual error is lost in DL metadata. Contradicts design Section 7.2 flow: "attempt processing → failure at MaxDeliver → dead-letter" | High | `internal/pipeline/subscriber.go` | Moved dead-letter check AFTER processing failure. Now: unmarshal → validate → process → on failure + exhausted → dead-letter with actual error → Ack; on failure + not exhausted → Nak for retry |
+| H-007 | No `DB_MIN_CONNS <= DB_MAX_CONNS` cross-validation. Config validates each independently but doesn't catch `DB_MIN_CONNS > DB_MAX_CONNS`, which causes undefined pgxpool behavior (may silently ignore MinConns or error at runtime) | Medium | `internal/config/config.go` | Added cross-check after parsing both values: `DB_MIN_CONNS (N) must not exceed DB_MAX_CONNS (M)` |
+| H-008 | `ResultSubscriber.Stop()` has unbounded `wg.Wait()`. If a consumer goroutine hangs despite `done` channel close, `Stop()` blocks indefinitely, causing `shutdownAll` step 4 to leak via `runWithTimeout` while subsequent steps proceed | Medium | `internal/pipeline/subscriber.go` | Added 10s bounded timeout with log warning on expiry, matching `shutdownAll` pattern |
+| H-009 | `HandleProcessedResult` and `HandleDigestResult` panic on nil DB pool instead of returning error. While nil pool is a production-impossible edge case, a controlled error prevents cascading panics during initialization races | Low | `internal/pipeline/processor.go`, `internal/digest/generator.go` | Added nil pool guard returning `fmt.Errorf("database pool is nil")` at function entry |
+
+### New Tests
+
+| Test | File | Purpose |
+|------|------|---------|
+| `TestHandleMessage_FinalDelivery_ProcessesBeforeDeadLetter` | `internal/pipeline/subscriber_test.go` | Adversarial: verifies processing IS attempted on delivery #5, and dead-letter carries real error (not "MaxDeliver exhausted") |
+| `TestHandleMessage_BeforeMaxDeliver_Naks` | `internal/pipeline/subscriber_test.go` | Adversarial: verifies Nak (not dead-letter) on processing failure before MaxDeliver |
+| `TestValidate_DBMinConns_ExceedsMaxConns` | `internal/config/validate_test.go` | Adversarial: DB_MIN_CONNS > DB_MAX_CONNS must be rejected |
+| `TestValidate_DBMinConns_EqualsMaxConns` | `internal/config/validate_test.go` | Boundary: DB_MIN_CONNS == DB_MAX_CONNS is valid |
+
+### Updated Existing Tests
+
+| Test | File | Change |
+|------|------|--------|
+| `TestHandleDigestMessage_DeliveryExhausted_RoutesToDeadLetter` | `subscriber_lifecycle_test.go` | Updated to provide real DigestGen (nil pool → controlled error), verifies actual error in DL headers |
+| `TestHandleMessage_DeliveryExhausted_RoutesToDeadLetter` | `subscriber_lifecycle_test.go` | Updated to provide real Processor (nil pool → controlled error), verifies actual error in DL headers |
+| `TestHandleDigestMessage_DeliveryExhausted_DeadLetterFails_Naks` | `subscriber_lifecycle_test.go` | Updated to provide real DigestGen |
+| `TestHandleMessage_DeliveryExhausted_DeadLetterFails_Naks` | `subscriber_lifecycle_test.go` | Updated to provide real Processor |
+
+### Evidence
+
+- Build: `./smackerel.sh build` — PASS (exit 0)
+- Unit tests: `./smackerel.sh test unit` — all 33 Go packages PASS, 4 new tests PASS, 4 updated tests PASS
+- Config tests fresh: `internal/config` 0.254s — `TestValidate_DBMinConns_ExceedsMaxConns` PASS, `TestValidate_DBMinConns_EqualsMaxConns` PASS
+- Pipeline tests fresh: `internal/pipeline` 1.353s — all dead-letter routing tests PASS with new process-first ordering
+- Digest tests fresh: `internal/digest` 0.235s — nil pool guard verified
+
+## Improve-Existing Pass 2 (stochastic sweep R05)
+
+**Date:** 2026-04-13
+**Trigger:** Stochastic quality sweep — improve (child workflow)
+**Scope:** Code quality, shutdown observability, search code clarity, script robustness
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File(s) | Fix |
+|----|---------|----------|---------|-----|
+| IMP2-001 | Dead-letter routing logic duplicated verbatim (14 identical lines) in `handleMessage` and `handleDigestMessage` — any future behavior change (e.g., adding a retry counter header or adjusting escalation policy) must be applied twice, risking divergence | Medium | `internal/pipeline/subscriber.go` | Extracted `handleDeliveryFailure(ctx, msg, subject, stream, lastErr)` helper; both handlers now call the single method |
+| IMP2-002 | `runWithTimeout` logs step budgets but not per-step elapsed time — during incident response, operators cannot tell which step consumed the most shutdown budget without external timing | Low | `cmd/core/main.go` | Added `stepStart` timestamp and `elapsed_ms` field to both success and timeout log messages in `runWithTimeout` |
+| IMP2-003 | Search method has duplicate "Step 3" comments (embed wait and vector search both labeled Step 3) — misleads code readers about the actual flow | Low | `internal/api/search.go` | Renumbered: Step 3 (embed wait), Step 4 (vector search), Step 5 (graph expansion), Step 6 (LLM re-ranking) |
+| IMP2-004 | Backup script temp file (`PGDUMP_STDERR_FILE`) leaks on SIGINT/SIGTERM between `mktemp` and manual `rm -f` cleanup. Two separate `rm -f` calls were also fragile — any new early exit between them would leak. | Low | `scripts/commands/backup.sh` | Added `trap 'rm -f "$PGDUMP_STDERR_FILE"' EXIT` immediately after `mktemp`; removed manual `rm -f` calls since the trap covers all exit paths |
+
+### Evidence
+
+- Check: `./smackerel.sh check` — PASS (config in sync with SST, go vet clean)
+- Unit tests: `./smackerel.sh test unit` — all 33 Go packages PASS, 53 Python tests PASS
+- Pipeline tests freshly compiled (1.284s, not cached) — all dead-letter routing tests PASS with the extracted helper
+- `cmd/core` freshly compiled (0.034s) — `runWithTimeout` builds correctly with new elapsed logging
+- No new tests required — IMP2-001 is a pure refactor (existing 11 dead-letter tests exercise the extracted helper), IMP2-002/003 are logging/comment fixes, IMP2-004 is shell script cleanup

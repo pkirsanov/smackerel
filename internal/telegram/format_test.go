@@ -5,6 +5,7 @@ import (
 )
 
 // Verify marker constants are distinct two-char strings: symbol + space.
+// SCN-001-004: Full set of 8 markers (. ? ! > - ~ # @).
 func TestMarkerConstants_Unique(t *testing.T) {
 	markers := []string{
 		MarkerSuccess,
@@ -13,6 +14,11 @@ func TestMarkerConstants_Unique(t *testing.T) {
 		MarkerInfo,
 		MarkerListItem,
 		MarkerContinued,
+		MarkerHeading,
+		MarkerMention,
+	}
+	if len(markers) != 8 {
+		t.Errorf("expected 8 markers per spec, got %d", len(markers))
 	}
 	seen := make(map[string]bool)
 	for _, m := range markers {
@@ -36,6 +42,8 @@ func TestMarkerConstants_NoEmoji(t *testing.T) {
 		MarkerInfo,
 		MarkerListItem,
 		MarkerContinued,
+		MarkerHeading,
+		MarkerMention,
 	}
 	for _, m := range markers {
 		for _, r := range m {

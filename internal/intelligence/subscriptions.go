@@ -96,7 +96,7 @@ func (e *Engine) DetectSubscriptions(ctx context.Context) ([]Subscription, error
 		_, err := e.Pool.Exec(ctx, `
 			INSERT INTO subscriptions (id, service_name, amount, currency, billing_freq, category, status, detected_from, first_seen, created_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			ON CONFLICT (id) DO NOTHING
+			ON CONFLICT (detected_from) DO NOTHING
 		`, sub.ID, sub.ServiceName, sub.Amount, sub.Currency, sub.BillingFreq,
 			sub.Category, sub.Status, sub.DetectedFrom, sub.FirstSeen, sub.CreatedAt)
 		if err != nil {
@@ -217,7 +217,14 @@ func extractServiceName(sender, title string) string {
 }
 
 func extractAmount(text string) float64 {
-	matches := amountPattern.FindStringSubmatch(text)
+	// Limit input to first 2000 chars to bound regex cost on large emails.
+	const maxExtractLen = 2000
+	if len(text) > maxExtractLen {
+		text = text[:maxExtractLen]
+	}
+	// Strip commas from amounts like "$1,299.99" before matching.
+	normalized := strings.ReplaceAll(text, ",", "")
+	matches := amountPattern.FindStringSubmatch(normalized)
 	if len(matches) == 0 {
 		return 0
 	}
@@ -232,6 +239,11 @@ func extractAmount(text string) float64 {
 }
 
 func detectFrequency(text string) string {
+	// Limit input to first 2000 chars to bound scan cost on large emails.
+	const maxScanLen = 2000
+	if len(text) > maxScanLen {
+		text = text[:maxScanLen]
+	}
 	lower := strings.ToLower(text)
 	switch {
 	case strings.Contains(lower, "annual") || strings.Contains(lower, "yearly"):

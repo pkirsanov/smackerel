@@ -102,6 +102,16 @@ func (p *RawArtifactPublisher) PublishRawArtifact(ctx context.Context, artifact 
 		return "", fmt.Errorf("marshal NATS payload: %w", err)
 	}
 
+	if len(data) > MaxNATSMessageSize {
+		slog.Warn("NATS payload exceeds max message size",
+			"artifact_id", artifactID,
+			"payload_size", len(data),
+			"max_size", MaxNATSMessageSize,
+			"source_id", artifact.SourceID,
+		)
+		return "", fmt.Errorf("NATS payload too large: %d bytes exceeds max %d", len(data), MaxNATSMessageSize)
+	}
+
 	if err := p.NATS.Publish(ctx, smacknats.SubjectArtifactsProcess, data); err != nil {
 		// Clean up orphaned artifact on NATS publish failure
 		if _, cleanupErr := p.DB.Exec(ctx, "DELETE FROM artifacts WHERE id = $1", artifactID); cleanupErr != nil {

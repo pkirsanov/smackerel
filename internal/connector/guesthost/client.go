@@ -20,10 +20,12 @@ const maxPaginationPages = 1000
 // maxResponseSize limits each response body to 10 MiB (OOM defence).
 const maxResponseSize = 10 << 20
 
+// maxTotalEvents caps total accumulated events across all pages (OOM defence).
+const maxTotalEvents = 10000
+
 // Client wraps the GuestHost REST API.
 type Client struct {
 	baseURL    string
-	baseOrigin string // scheme+host for same-origin pagination checks
 	apiKey     string
 	httpClient *http.Client
 	backoff    *connector.Backoff
@@ -31,14 +33,9 @@ type Client struct {
 
 // NewClient creates a new GuestHost API client.
 func NewClient(baseURL, apiKey string) *Client {
-	origin := ""
-	if parsed, err := url.Parse(baseURL); err == nil {
-		origin = parsed.Scheme + "://" + parsed.Host
-	}
 	return &Client{
-		baseURL:    baseURL,
-		baseOrigin: origin,
-		apiKey:     apiKey,
+		baseURL: baseURL,
+		apiKey:  apiKey,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -74,26 +71,32 @@ func (c *Client) Validate(ctx context.Context) error {
 //   - types: comma-separated event types to filter; empty string for all types
 //   - limit: max events per page request
 func (c *Client) FetchActivity(ctx context.Context, since string, types string, limit int) (*ActivityFeedResponse, error) {
-	params := url.Values{}
-	if since != "" {
-		params.Set("since", since)
-	}
-	if types != "" {
-		params.Set("types", types)
-	}
-	if limit > 0 {
-		params.Set("limit", strconv.Itoa(limit))
-	}
-
-	fullURL := c.baseURL + "/api/v1/activity"
-	if len(params) > 0 {
-		fullURL += "?" + params.Encode()
+	buildURL := func(cursor string) string {
+		params := url.Values{}
+		if since != "" {
+			params.Set("since", since)
+		}
+		if types != "" {
+			params.Set("types", types)
+		}
+		if limit > 0 {
+			params.Set("limit", strconv.Itoa(limit))
+		}
+		if cursor != "" {
+			params.Set("cursor", cursor)
+		}
+		u := c.baseURL + "/api/v1/activity"
+		if len(params) > 0 {
+			u += "?" + params.Encode()
+		}
+		return u
 	}
 
 	var allEvents []ActivityEvent
+	cursor := ""
 
 	for page := 0; page < maxPaginationPages; page++ {
-		body, err := c.doGet(ctx, fullURL)
+		body, err := c.doGet(ctx, buildURL(cursor))
 		if err != nil {
 			return nil, fmt.Errorf("fetch activity page %d: %w", page, err)
 		}
@@ -105,23 +108,16 @@ func (c *Client) FetchActivity(ctx context.Context, since string, types string, 
 
 		allEvents = append(allEvents, resp.Events...)
 
+		if len(allEvents) >= maxTotalEvents {
+			slog.Warn("guesthost: event accumulation cap reached", "cap", maxTotalEvents)
+			break
+		}
+
 		if !resp.HasMore || resp.Cursor == "" {
 			break
 		}
 
-		// Build next page URL with the returned cursor
-		nextParams := url.Values{}
-		if since != "" {
-			nextParams.Set("since", since)
-		}
-		if types != "" {
-			nextParams.Set("types", types)
-		}
-		if limit > 0 {
-			nextParams.Set("limit", strconv.Itoa(limit))
-		}
-		nextParams.Set("cursor", resp.Cursor)
-		fullURL = c.baseURL + "/api/v1/activity?" + nextParams.Encode()
+		cursor = resp.Cursor
 	}
 
 	return &ActivityFeedResponse{

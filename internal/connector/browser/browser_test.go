@@ -147,7 +147,7 @@ func TestChromeTimeToGo(t *testing.T) {
 	// ChromeTime = UnixMicro + 11644473600000000
 	expectedTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	chromeTime := expectedTime.UnixMicro() + 11644473600000000
-	got := chromeTimeToGo(chromeTime)
+	got := ChromeTimeToGo(chromeTime)
 
 	if !got.Equal(expectedTime) {
 		t.Errorf("chromeTimeToGo() = %v, want %v", got, expectedTime)

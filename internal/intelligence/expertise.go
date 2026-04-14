@@ -120,6 +120,7 @@ func (e *Engine) GenerateExpertiseMap(ctx context.Context) (*ExpertiseMap, error
 		FROM topic_artifacts ta
 		LEFT JOIN topic_connections tc ON tc.topic_id = ta.topic_id
 		ORDER BY ta.capture_count DESC
+		LIMIT 100
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query expertise dimensions: %w", err)
