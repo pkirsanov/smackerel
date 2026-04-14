@@ -9,6 +9,7 @@ Use this table to select the correct mode based on the execution goal.
 | Your Goal | Mode | Ceiling | Phases |
 |-----------|------|---------|--------|
 | Improve spec/scope quality only (no code changes) | `spec-scope-hardening` | `specs_hardened` | select -> bootstrap -> harden -> docs -> validate -> audit -> finalize |
+| Full planning pipeline from analysis to scopes (no code changes) | `product-to-planning` | `specs_hardened` | analyze -> select -> bootstrap -> harden -> docs -> validate -> audit -> finalize |
 | Find and fix code issues against existing specs | `harden-to-doc` | `done` | select -> bootstrap -> validate -> harden -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> chaos -> validate -> audit -> docs -> finalize |
 | Fix performance, infra, config, reliability, security issues | `stabilize-to-doc` | `done` | select -> bootstrap -> validate -> stabilize -> devops -> implement -> test -> regression -> simplify -> security -> chaos -> validate -> audit -> docs -> finalize |
 | Close design-vs-code gaps and fix | `gaps-to-doc` | `done` | select -> bootstrap -> validate -> gaps -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> chaos -> validate -> audit -> docs -> finalize |
@@ -72,6 +73,8 @@ Minimal syntax anchors retained in the workflow shell:
 /bubbles.workflow specs/050-new-feature mode: product-to-delivery socratic: true socraticQuestions: 4
 /bubbles.workflow specs/050-new-feature mode: product-to-delivery grillMode: required-on-ambiguity tdd: true
 /bubbles.workflow specs/050-new-feature mode: spec-scope-hardening analyze: true
+/bubbles.workflow specs/050-new-feature mode: product-to-planning
+/bubbles.workflow 011-037 mode: product-to-planning
 /bubbles.workflow specs/019-visual-page-builder mode: improve-existing
 /bubbles.workflow specs/019-visual-page-builder mode: product-to-delivery
 /bubbles.workflow specs/019-visual-page-builder mode: simplify-to-doc
@@ -99,9 +102,11 @@ When the user's request implies planning-only intent (contains "plan", "planning
 1. If the selected mode has `statusCeiling: done` → warn and suggest planning-capped alternative
 2. Example warning: "Your request 'plan scope 027' implies planning-only work. Selected mode 'full-delivery' includes implementation. Switching to spec-scope-hardening mode."
 3. If user explicitly provides `mode: full-delivery` alongside planning language → respect the explicit mode but log the intent mismatch
-4. If no explicit `mode:` is provided → auto-select the planning-capped mode
+4. If no explicit `mode:` is provided → auto-select the planning-capped mode:
+   - If the request explicitly names the full analysis chain (analyst, ux, design, plan) or uses phrases like "full planning workflow", "planning cycle", "convert findings to specs/bugs" → select `product-to-planning` (includes `analyze` phase for analyst/ux invocation)
+   - If the request is about hardening, improving, or expanding existing specs/scopes only → select `spec-scope-hardening`
 
-**Planning-intent keywords:** plan, planning, design, scope, analyze, create specs, create bugs, convert findings to specs, planning cycle, planning workflow
+**Planning-intent keywords:** plan, planning, design, scope, analyze, create specs, create bugs, convert findings to specs, planning cycle, planning workflow, full planning
 **Delivery-intent keywords:** implement, build, fix, deliver, ship, deploy, full delivery, bugfix
 
 ### Status Ceiling Warning Details
@@ -109,5 +114,5 @@ When the user's request implies planning-only intent (contains "plan", "planning
 When resolving mode in Phase 0, `bubbles.workflow` MUST check whether the user's requested outcome conflicts with the selected mode's `statusCeiling`.
 
 - If the user's prompt contains words like `complete`, `implement`, `fix`, `test`, or `done` and the selected mode has `statusCeiling` below `done`, warn before starting and suggest a delivery-capable mode instead of silently proceeding.
-- Modes that cannot reach `done`: `spec-scope-hardening` (`specs_hardened`), `docs-only` (`docs_updated`), `validate-only` (`validated`), `audit-only` (`validated`), `validate-to-doc` (`validated`), `resume-only` (`in_progress`).
+- Modes that cannot reach `done`: `spec-scope-hardening` (`specs_hardened`), `product-to-planning` (`specs_hardened`), `docs-only` (`docs_updated`), `validate-only` (`validated`), `audit-only` (`validated`), `validate-to-doc` (`validated`), `resume-only` (`in_progress`).
 - Modes that can reach `done`: all delivery modes, including `full-delivery`, `delivery-lockdown`, `bugfix-fastlane`, `product-to-delivery`, `stochastic-quality-sweep`, and `iterate`.

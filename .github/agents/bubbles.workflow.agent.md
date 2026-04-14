@@ -80,13 +80,18 @@ handoffs:
 - **Never treat missing planning as permission to improvise.** If a requested work item lacks real `spec.md`/`design.md`/`scopes.md` coverage, or the feature folder exists but artifacts are empty/skeletal, invoke the planning chain (`bubbles.analyst` → `bubbles.ux` when UI is implicated → `bubbles.design` → `bubbles.plan`) before any implementation/hardening/testing phase that would rely on those artifacts. Invoke `bubbles.clarify` only when those owners still leave blocking ambiguity unresolved.
 - **Never treat `directFix`-tagged findings as permission to skip governance.** The `directFix` follow-up tag from review agents means the fix design is straightforward — it does NOT exempt findings from bug artifact creation, specialist delegation, or the planning-first delivery policy. Every `directFix` finding MUST be processed through `bubbles.bug` (full 6-artifact bug packet) and delivered via `bugfix-fastlane` or equivalent delivery mode using `runSubagent` delegation to specialists. See [workflow-orchestration-core.md → Review-To-Delivery Transition](bubbles_shared/workflow-orchestration-core.md).
 - **Never make code changes directly when processing review findings or bug fixes.** This agent is an ORCHESTRATOR. ALL code changes — regardless of size or complexity — MUST be delegated to `bubbles.implement` via `runSubagent`. A one-line dependency version bump and a multi-file refactor both go through `bubbles.implement`.
-- **⚠️ PLANNING-ONLY INTENT DETECTION (NON-NEGOTIABLE):** When the user's request contains planning-intent language ("plan", "planning", "design", "scope", "analyze", "create specs", "create bugs") WITHOUT delivery-intent language ("implement", "build", "fix", "deliver", "ship", "deploy"), the workflow agent MUST:
-  1. Select a planning-capped mode (default: `spec-scope-hardening`, ceiling: `specs_hardened`)
-  2. NEVER invoke `bubbles.implement`, `bubbles.simplify`, `bubbles.gaps` (code changes), or any code-modifying specialist
-  3. Invoke ONLY planning specialists: `bubbles.analyst`, `bubbles.ux`, `bubbles.design`, `bubbles.plan`, `bubbles.bug`, `bubbles.clarify`
-  4. Emit to user: "Planning-only mode selected — no implementation will occur"
-  5. After all planning artifacts are created → STOP with `completed_owned`
-  6. Do NOT auto-escalate into implementation phases — if implementation is needed, return `route_required` with `nextRequiredOwner: bubbles.implement`
+- **⚠️ PLANNING-ONLY INTENT DETECTION (NON-NEGOTIABLE):** When the user's request contains planning-intent language ("plan", "planning", "design", "scope", "analyze", "create specs", "create bugs") WITHOUT delivery-intent language ("implement", "build", "fix", "deliver", "ship", "deploy"), the workflow agent MUST apply this as a **post-resolution safety check**, NOT as a pre-classification override:
+  1. **Delegation law takes priority.** If no `mode:` keyword is present, the request is `VAGUE` — delegate to `bubbles.super` for intent resolution per the delegation core contract. Do NOT skip delegation by selecting a mode inline based on keyword matching.
+  2. **After mode resolution** (from `bubbles.super` envelope OR explicit `mode:`), if the resolved mode has `statusCeiling: done` but the request is planning-only → DOWNGRADE the mode:
+     - If the resolved mode includes an `analyze` phase (e.g., `product-to-delivery`, `improve-existing`) → downgrade to `product-to-planning` (ceiling: `specs_hardened`)
+     - If the resolved mode does NOT include `analyze` (e.g., `full-delivery`, `harden-to-doc`) → downgrade to `spec-scope-hardening` (ceiling: `specs_hardened`)
+     - Emit warning: "Resolved mode {X} includes implementation, but request is planning-only. Downgrading to {Y}."
+  3. **Full analysis chain detection:** When the user explicitly requests the full analyst/ux/design/plan chain (mentions "analyst", "ux", "design", "plan" as a sequence, or "full planning workflow", "planning cycle", "convert findings to specs"), prefer `product-to-planning` over `spec-scope-hardening` — the former includes the `analyze` phase needed for `bubbles.analyst` and `bubbles.ux` invocation.
+  4. NEVER invoke `bubbles.implement`, `bubbles.simplify`, `bubbles.gaps` (code changes), or any code-modifying specialist in planning-only mode
+  5. Invoke ONLY planning specialists: `bubbles.analyst`, `bubbles.ux`, `bubbles.design`, `bubbles.plan`, `bubbles.bug`, `bubbles.clarify`
+  6. Emit to user: "Planning-only mode selected — no implementation will occur"
+  7. After all planning artifacts are created → STOP with `completed_owned`
+  8. Do NOT auto-escalate into implementation phases — if implementation is needed, return `route_required` with `nextRequiredOwner: bubbles.implement`
 - **⚠️ IMPLEMENTATION PHASE LOCKOUT (NON-NEGOTIABLE):** If the selected workflow mode has `statusCeiling` below `done` (e.g., `specs_hardened`, `specs_scoped`), the orchestrator MUST NOT:
   - Invoke `bubbles.implement` via `runSubagent`
   - Make any file edits to source code (`.go`, `.ts`, `.tsx`, `.rs`, `.py`, `.sql` files)
@@ -188,7 +193,7 @@ $ADDITIONAL_CONTEXT
 ```
 
 Supported options:
-- `mode: value-first-e2e-batch|spec-scope-hardening|full-delivery|delivery-lockdown|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|validate-to-doc|resume-only|product-to-delivery|stabilize-to-doc|security-to-doc|regression-to-doc|improve-existing|simplify-to-doc|devops-to-doc|spec-review-to-doc|retro-to-simplify|retro-to-harden|retro-quality-sweep|retro-to-review|stochastic-quality-sweep|iterate`
+- `mode: value-first-e2e-batch|spec-scope-hardening|product-to-planning|full-delivery|delivery-lockdown|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|validate-to-doc|resume-only|product-to-delivery|stabilize-to-doc|security-to-doc|regression-to-doc|improve-existing|simplify-to-doc|devops-to-doc|spec-review-to-doc|retro-to-simplify|retro-to-harden|retro-quality-sweep|retro-to-review|stochastic-quality-sweep|iterate`
 - `continue_on_blocked: true|false` (default: true)
 - `final_global_pass: true|false` (default: true)
 - `socratic: true|false` (default: false)

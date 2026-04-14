@@ -44,6 +44,9 @@ func NewRouter(deps *Dependencies) http.Handler {
 				r.Post("/context-for", deps.ContextHandler.HandleContextFor)
 			}
 
+			// Bookmark import endpoint (Phase 2)
+			r.Post("/bookmarks/import", deps.BookmarkImportHandler)
+
 			// Phase 5 intelligence endpoints (R-501..R-508)
 			if deps.IntelligenceEngine != nil {
 				r.Get("/expertise", ExpertiseHandler(deps.IntelligenceEngine))
@@ -85,6 +88,8 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Get("/digest", deps.WebHandler.DigestPage)
 			r.Get("/topics", deps.WebHandler.TopicsPage)
 			r.Get("/settings", deps.WebHandler.SettingsPage)
+			r.Post("/settings/connectors/{id}/sync", deps.WebHandler.SyncConnectorHandler)
+			r.Post("/settings/bookmarks/import", deps.WebHandler.BookmarkUploadHandler)
 			r.Get("/status", deps.WebHandler.StatusPage)
 		})
 	}

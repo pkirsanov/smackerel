@@ -1068,6 +1068,21 @@ modes:
       focus: specs_and_scopes_only
       allowImplementationForFindings: false
 
+  product-to-planning:
+    description: Full analysis and planning pipeline from business analysis through UX, design, and scope planning — no implementation. Use when creating specs, designs, scopes, or bug artifacts from findings, requirements, or review outputs.
+    statusCeiling: specs_hardened
+    phaseOrder: [ analyze, select, bootstrap, harden, docs, validate, audit, finalize ]
+    requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016, G032 ]
+    constraints:
+      requireBusinessAnalysis: true
+      requireUXDesign: true
+      requireDetailedStoriesAndGherkin: true
+      requireGherkinToE2ETraceability: true
+      requireDoDE2EExpansion: true
+      requireScenarioCoverageAcrossDeclaredUseCases: true
+      focus: planning_only
+      allowImplementationForFindings: false
+
   full-delivery:
     description: Default complete delivery workflow. Includes bootstrap phase to ensure design/scopes exist before implementation.
     statusCeiling: done

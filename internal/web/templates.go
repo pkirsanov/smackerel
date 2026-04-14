@@ -141,8 +141,9 @@ const allTemplates = `
 <h1>Settings</h1>
 <div class="card"><h3>LLM Configuration</h3><p class="meta">Provider: {{.LLMProvider}} / Model: {{.LLMModel}}</p></div>
 <div class="card"><h3>Digest Schedule</h3><p class="meta">Cron: {{.DigestCron}}</p></div>
-{{if .Connectors}}<div class="card"><h3>Connectors</h3>{{range .Connectors}}<p><span class="health {{if .Enabled}}up{{else}}down{{end}}"></span> {{.Name}}{{if .LastErr}} <span class="meta">({{.LastErr}})</span>{{end}}</p>{{end}}</div>{{else}}<div class="card"><h3>Connectors</h3><p class="meta">No connectors registered</p></div>{{end}}
+{{if .Connectors}}<div class="card"><h3>Connectors</h3>{{range .Connectors}}<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--border)"><div><span class="health {{if .Enabled}}up{{else}}down{{end}}"></span> {{.Name}}<span class="meta"> — {{.ItemsSynced}} items{{if .LastSync}}, last sync: {{.LastSync}}{{end}}{{if .LastErr}} ({{.LastErr}}){{end}}</span></div><form method="POST" action="/settings/connectors/{{.Name}}/sync" style="margin:0"><button type="submit" style="font-size:0.8rem;padding:0.2rem 0.6rem;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius);background:var(--card-bg);color:var(--fg)">Sync Now</button></form></div>{{end}}</div>{{else}}<div class="card"><h3>Connectors</h3><p class="meta">No connectors registered</p></div>{{end}}
 {{if .OAuth}}<div class="card"><h3>OAuth Connections</h3>{{range .OAuth}}<p><span class="health {{if .Connected}}up{{else}}down{{end}}"></span> {{.Provider}}</p>{{end}}</div>{{end}}
+<div class="card"><h3>Import Bookmarks</h3><form method="POST" action="/settings/bookmarks/import" enctype="multipart/form-data"><p class="meta">Upload a Chrome JSON or Netscape HTML bookmark file</p><input type="file" name="file" accept=".json,.html,.htm" style="margin:0.5rem 0;display:block"><button type="submit" style="padding:0.4rem 1rem;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius);background:var(--card-bg);color:var(--fg)">Import</button></form></div>
 {{template "foot"}}
 {{end}}
 
@@ -160,6 +161,13 @@ const allTemplates = `
     <p><span class="health {{if .DBHealthy}}up{{else}}down{{end}}"></span> PostgreSQL</p>
     <p><span class="health {{if .NATSHealthy}}up{{else}}down{{end}}"></span> NATS</p>
 </div>
+{{template "foot"}}
+{{end}}
+
+{{define "bookmark-import-result.html"}}
+{{template "head" .}}
+<h1>Bookmark Import</h1>
+<div class="card"><p>Imported {{.Imported}} bookmarks.</p><a href="/settings" class="back-link">Back to Settings</a></div>
 {{template "foot"}}
 {{end}}
 `

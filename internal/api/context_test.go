@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/db"
 )
 
 func TestHandleContextForInvalidEntityType(t *testing.T) {
@@ -173,5 +175,195 @@ func TestHandleContextForOversizedBody(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for oversized body, got %d", rec.Code)
+	}
+}
+
+// --- Communication hints unit tests ---
+
+func TestCommunicationHintsReturningGuest(t *testing.T) {
+	guest := &db.GuestNode{
+		Email:      "sarah@example.com",
+		Name:       "Sarah",
+		TotalStays: 3,
+		TotalSpend: 1200,
+	}
+	hints := generateBaseGuestHints(guest)
+
+	found := false
+	for _, h := range hints {
+		if h.HintType == "repeat_guest" {
+			found = true
+			if h.Priority != "medium" {
+				t.Errorf("repeat_guest priority = %q, want medium", h.Priority)
+			}
+			if !strings.Contains(h.Description, "3") {
+				t.Errorf("expected description to mention 3 stays, got %q", h.Description)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected repeat_guest hint for guest with 3 stays")
+	}
+}
+
+func TestCommunicationHintsVIP(t *testing.T) {
+	guest := &db.GuestNode{
+		Email:      "vip@example.com",
+		Name:       "VIP Guest",
+		TotalStays: 1,
+		TotalSpend: 6000,
+	}
+	hints := generateBaseGuestHints(guest)
+
+	found := false
+	for _, h := range hints {
+		if h.HintType == "vip" {
+			found = true
+			if h.Priority != "high" {
+				t.Errorf("vip priority = %q, want high", h.Priority)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected vip hint for guest with spend > 5000")
+	}
+}
+
+func TestCommunicationHintsPositiveReviewer(t *testing.T) {
+	rating := 4.5
+	guest := &db.GuestNode{
+		Email:      "reviewer@example.com",
+		Name:       "Happy Reviewer",
+		TotalStays: 1,
+		TotalSpend: 500,
+		AvgRating:  &rating,
+	}
+	hints := generateBaseGuestHints(guest)
+
+	found := false
+	for _, h := range hints {
+		if h.HintType == "positive_reviewer" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected positive_reviewer hint for guest with avg rating >= 4")
+	}
+}
+
+func TestCommunicationHintsNoHintsForNewGuest(t *testing.T) {
+	guest := &db.GuestNode{
+		Email:      "new@example.com",
+		Name:       "New Guest",
+		TotalStays: 1,
+		TotalSpend: 200,
+	}
+	hints := generateBaseGuestHints(guest)
+
+	if len(hints) != 0 {
+		t.Errorf("expected 0 hints for basic guest, got %d", len(hints))
+	}
+}
+
+func TestCommunicationHintsEarlyCheckin(t *testing.T) {
+	stats := &GuestBookingStats{
+		HasUpcomingCheckin: true,
+		DirectBookingPct:   30,
+	}
+	hints := generateBookingHints(stats)
+
+	found := false
+	for _, h := range hints {
+		if h.HintType == "early_checkin" {
+			found = true
+			if h.Priority != "high" {
+				t.Errorf("early_checkin priority = %q, want high", h.Priority)
+			}
+			if !strings.Contains(h.Description, "checking in today") {
+				t.Errorf("expected early_checkin description to mention checking in today, got %q", h.Description)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected early_checkin hint when HasUpcomingCheckin is true")
+	}
+	// Should NOT produce direct_booker at 30%
+	for _, h := range hints {
+		if h.HintType == "direct_booker" {
+			t.Error("direct_booker should not fire at 30%")
+		}
+	}
+}
+
+func TestCommunicationHintsDirectBooker(t *testing.T) {
+	stats := &GuestBookingStats{
+		HasUpcomingCheckin: false,
+		DirectBookingPct:   67,
+	}
+	hints := generateBookingHints(stats)
+
+	found := false
+	for _, h := range hints {
+		if h.HintType == "direct_booker" {
+			found = true
+			if h.Priority != "medium" {
+				t.Errorf("direct_booker priority = %q, want medium", h.Priority)
+			}
+			if !strings.Contains(h.Description, "67%") {
+				t.Errorf("expected direct_booker description to contain 67%%, got %q", h.Description)
+			}
+			if !strings.Contains(h.Description, "loyalty program") {
+				t.Errorf("expected direct_booker description to mention loyalty program, got %q", h.Description)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected direct_booker hint when DirectBookingPct > 50")
+	}
+}
+
+func TestCommunicationHintsDirectBookerAtThreshold(t *testing.T) {
+	stats := &GuestBookingStats{
+		HasUpcomingCheckin: false,
+		DirectBookingPct:   50,
+	}
+	hints := generateBookingHints(stats)
+
+	for _, h := range hints {
+		if h.HintType == "direct_booker" {
+			t.Error("direct_booker should not fire at exactly 50%")
+		}
+	}
+}
+
+func TestCommunicationHintsBothBookingHints(t *testing.T) {
+	stats := &GuestBookingStats{
+		HasUpcomingCheckin: true,
+		DirectBookingPct:   80,
+	}
+	hints := generateBookingHints(stats)
+
+	if len(hints) != 2 {
+		t.Errorf("expected 2 booking hints, got %d", len(hints))
+	}
+}
+
+func TestBookingHintsNilStats(t *testing.T) {
+	hints := generateBookingHints(nil)
+	if len(hints) != 0 {
+		t.Errorf("expected 0 hints for nil stats, got %d", len(hints))
+	}
+}
+
+func TestGuestBookingStatsStructure(t *testing.T) {
+	stats := GuestBookingStats{
+		HasUpcomingCheckin: true,
+		DirectBookingPct:   65.5,
+	}
+	if !stats.HasUpcomingCheckin {
+		t.Error("HasUpcomingCheckin should be true")
+	}
+	if stats.DirectBookingPct != 65.5 {
+		t.Errorf("DirectBookingPct = %f, want 65.5", stats.DirectBookingPct)
 	}
 }

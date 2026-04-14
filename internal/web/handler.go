@@ -1,9 +1,11 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,9 +16,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/connector/bookmarks"
 	"github.com/smackerel/smackerel/internal/graph"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
+
+// SyncTrigger triggers an immediate sync for a connector.
+type SyncTrigger interface {
+	TriggerSync(ctx context.Context, id string)
+}
 
 // Handler serves the web UI pages.
 type Handler struct {
@@ -25,6 +33,7 @@ type Handler struct {
 	Templates    *template.Template
 	StartTime    time.Time
 	SearchEngine *api.SearchEngine
+	Supervisor   SyncTrigger
 }
 
 // NewHandler creates a web UI handler with embedded templates.
@@ -317,18 +326,20 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 
 	// Connector status from sync_state
 	type ConnectorStatus struct {
-		Name    string
-		Enabled bool
-		LastErr string
+		Name        string
+		Enabled     bool
+		LastErr     string
+		LastSync    string
+		ItemsSynced int
 	}
 	var connectors []ConnectorStatus
 	if h.Pool != nil {
-		rows, err := h.Pool.Query(ctx, `SELECT source_id, enabled, COALESCE(last_error, '') FROM sync_state ORDER BY source_id`)
+		rows, err := h.Pool.Query(ctx, `SELECT source_id, enabled, COALESCE(last_error, ''), COALESCE(last_sync::text, ''), items_synced FROM sync_state ORDER BY source_id`)
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var cs ConnectorStatus
-				if err := rows.Scan(&cs.Name, &cs.Enabled, &cs.LastErr); err == nil {
+				if err := rows.Scan(&cs.Name, &cs.Enabled, &cs.LastErr, &cs.LastSync, &cs.ItemsSynced); err == nil {
 					connectors = append(connectors, cs)
 				}
 			}
@@ -384,5 +395,72 @@ func (h *Handler) StatusPage(w http.ResponseWriter, r *http.Request) {
 		"Uptime":        fmt.Sprintf("%dh %dm", int(uptime.Hours()), int(uptime.Minutes())%60),
 		"DBHealthy":     h.Pool.Ping(r.Context()) == nil,
 		"NATSHealthy":   h.NATS != nil && h.NATS.Healthy(),
+	})
+}
+
+// SyncConnectorHandler handles POST /settings/connectors/{id}/sync — triggers immediate sync.
+func (h *Handler) SyncConnectorHandler(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+
+	if h.Supervisor != nil {
+		h.Supervisor.TriggerSync(r.Context(), id)
+		slog.Info("manual sync triggered", "connector", id)
+	} else {
+		slog.Warn("sync trigger unavailable — no supervisor configured", "connector", id)
+	}
+
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+// BookmarkUploadHandler handles POST /settings/bookmarks/import — web UI bookmark file upload.
+func (h *Handler) BookmarkUploadHandler(w http.ResponseWriter, r *http.Request) {
+	const maxUploadSize = 10 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		http.Error(w, "File too large or invalid form", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Missing bookmark file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "Failed to read file", http.StatusBadRequest)
+		return
+	}
+
+	if len(data) == 0 {
+		http.Error(w, "File is empty", http.StatusBadRequest)
+		return
+	}
+
+	// Try Chrome JSON first, then Netscape HTML.
+	parsed, err := bookmarks.ParseChromeJSON(data)
+	if err != nil || len(parsed) == 0 {
+		parsed, _ = bookmarks.ParseNetscapeHTML(data)
+	}
+
+	count := len(parsed)
+	if count == 0 {
+		http.Error(w, "No bookmarks found — unsupported format", http.StatusBadRequest)
+		return
+	}
+
+	slog.Info("web bookmark upload parsed", "count", count)
+
+	// Render result page.
+	h.Templates.ExecuteTemplate(w, "bookmark-import-result.html", map[string]interface{}{
+		"Title":    "Bookmark Import",
+		"Imported": count,
 	})
 }

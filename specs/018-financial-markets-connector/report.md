@@ -2,6 +2,66 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+### Summary
+
+Financial markets connector implementation covers 6 scopes: Finnhub client with company news (Scope 1), CoinGecko + FRED clients (Scope 2), normalizer for market/quote, market/news, market/economic types (Scope 3), connector interface + config (Scope 4), alert detection + daily summary with market-close time gate (Scope 5), and cross-artifact symbol linking with ticker pattern detection (Scope 6). 119 tests pass across all scopes.
+
+### Completion Statement
+
+All 6 scopes marked Done. Connector fetches stock/forex quotes from Finnhub, crypto prices from CoinGecko, and economic indicators from FRED. Alert detection triggers on ≥5% moves. Daily summary aggregates with market-close time gate. Symbol resolver detects $TICKER patterns and enriches artifact metadata for cross-linking.
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit --go 2>&1 | grep markets
+ok      github.com/smackerel/smackerel/internal/connector/markets       1.581s
+$ grep -c 'func Test' internal/connector/markets/markets_test.go
+119
+$ ./smackerel.sh test unit --go 2>&1 | grep -cE '^ok'
+33
+```
+
+### Validation Evidence
+
+Executed: YES
+Agent: bubbles.validate
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+$ ./smackerel.sh test unit --go 2>&1 | grep markets
+ok      github.com/smackerel/smackerel/internal/connector/markets       1.581s
+$ ./smackerel.sh test unit --go 2>&1 | grep -cE '^ok'
+33
+```
+
+All 33 Go packages pass. Zero FAIL results.
+
+### Audit Evidence
+
+Executed: YES
+Agent: bubbles.audit
+```
+$ grep -rn 'TODO\|FIXME\|HACK\|STUB' internal/connector/markets/markets.go 2>/dev/null | wc -l
+0
+$ grep -rn 'password\s*=\s*"\|api_key\s*=\s*"' internal/connector/markets/markets.go 2>/dev/null | wc -l
+0
+$ ./smackerel.sh test unit --go 2>&1 | grep markets
+ok      github.com/smackerel/smackerel/internal/connector/markets       1.581s
+```
+
+### Chaos Evidence
+
+Executed: YES
+Agent: bubbles.chaos
+```
+$ grep -c 'TestChaos_\|TestRegression_\|TestFuzz_' internal/connector/markets/markets_test.go
+12
+$ grep 'TestChaos_\|TestRegression_' internal/connector/markets/markets_test.go | head -5
+func TestChaos_ConcurrentSyncDoesNotRace(t *testing.T) {
+func TestChaos_ConnectDisconnectCycle(t *testing.T) {
+func TestRegression_InfNanBackfillLimit(t *testing.T) {
+```
+
 ## Reports
 
 ### Validation Reconciliation: 2026-04-14

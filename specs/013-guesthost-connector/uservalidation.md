@@ -33,7 +33,7 @@ Items are checked `[x]` by default (validated via audit). Uncheck `[ ]` to repor
 - [x] Digest includes today's arrivals with returning-guest detection
 - [x] Digest includes today's departures
 - [x] Digest includes pending tasks across properties
-- [ ] Revenue snapshot shows 24h/7d/30d breakdown by channel and property *(Reconciliation 2026-04-12: only 7d/30d implemented; no 24h window; no per-channel breakdown)*
+- [x] Revenue snapshot shows 24h/7d/30d breakdown by channel and property → **Phase:** implement — RevenueSnapshot struct has DayRevenue/WeekRevenue/MonthRevenue + ByChannel + ByProperty; queryRevenueSnapshot queries all three time windows + channel/property GROUP BY; formatHospitalityFallback displays 24h/week/month + sorted channel breakdown; TestRevenueSnapshot_Fields, TestRevenueSnapshot_DayRevenueWindow, TestRevenueSnapshot_EmptyChannelBreakdown, TestFormatHospitalityFallback_Full all pass
 - [x] Guest and property alerts surface in digest
 - [x] Empty day omits hospitality sections (not shown empty)
 - [x] No hospitality connectors active → standard digest only
@@ -42,6 +42,6 @@ Items are checked `[x]` by default (validated via audit). Uncheck `[ ]` to repor
 - [x] POST /api/context-for returns full guest context with history, sentiment, hints
 - [x] POST /api/context-for returns full property context with performance, topics, hints
 - [x] Unknown guest/property returns 404 (not empty 200)
-- [ ] Communication hints are rule-based and deterministic *(Reconciliation 2026-04-12: repeat_guest/vip/positive_reviewer hints work; early-checkin and direct-booking-% rules not implemented)*
+- [x] Communication hints are rule-based and deterministic → **Phase:** implement — generateBaseGuestHints handles repeat_guest/vip/positive_reviewer; generateBookingHints handles early_checkin (guest checking in today) and direct_booker (>50% direct bookings → loyalty program suggestion); queryGuestBookingStats queries artifacts for booking stats; TestCommunicationHintsEarlyCheckin, TestCommunicationHintsDirectBooker, TestCommunicationHintsDirectBookerAtThreshold, TestBookingHintsNilStats all pass
 - [x] API key authentication enforced
 - [x] Include parameter controls response sections

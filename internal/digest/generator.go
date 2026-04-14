@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -329,8 +330,18 @@ func formatHospitalityFallback(h *HospitalityDigestContext) string {
 	if len(h.PendingTasks) > 0 {
 		parts = append(parts, fmt.Sprintf("Pending tasks: %d", len(h.PendingTasks)))
 	}
-	if h.Revenue.WeekRevenue > 0 || h.Revenue.MonthRevenue > 0 {
-		parts = append(parts, fmt.Sprintf("Revenue — week: $%.2f, month: $%.2f", h.Revenue.WeekRevenue, h.Revenue.MonthRevenue))
+	if h.Revenue.DayRevenue > 0 || h.Revenue.WeekRevenue > 0 || h.Revenue.MonthRevenue > 0 {
+		parts = append(parts, fmt.Sprintf("Revenue — 24h: $%.2f, week: $%.2f, month: $%.2f", h.Revenue.DayRevenue, h.Revenue.WeekRevenue, h.Revenue.MonthRevenue))
+		if len(h.Revenue.ByChannel) > 0 {
+			channels := make([]string, 0, len(h.Revenue.ByChannel))
+			for ch := range h.Revenue.ByChannel {
+				channels = append(channels, ch)
+			}
+			sort.Strings(channels)
+			for _, ch := range channels {
+				parts = append(parts, fmt.Sprintf("  • %s: $%.2f", ch, h.Revenue.ByChannel[ch]))
+			}
+		}
 	}
 	if len(h.GuestAlerts) > 0 {
 		parts = append(parts, fmt.Sprintf("Guest alerts: %d", len(h.GuestAlerts)))

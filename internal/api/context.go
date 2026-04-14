@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -222,7 +223,7 @@ func (h *ContextHandler) buildGuestContext(ctx context.Context, resp *ContextRes
 	resp.Guest = gc
 
 	if includeAll || includeSet["hints"] {
-		resp.Hints = h.generateGuestHints(guest)
+		resp.Hints = h.generateGuestHints(ctx, guest)
 	}
 
 	if includeAll || includeSet["alerts"] {
@@ -324,7 +325,7 @@ func (h *ContextHandler) buildBookingContext(ctx context.Context, resp *ContextR
 				AvgRating:  guest.AvgRating,
 			}
 			if includeAll || includeSet["hints"] {
-				resp.Hints = append(resp.Hints, h.generateGuestHints(guest)...)
+				resp.Hints = append(resp.Hints, h.generateGuestHints(ctx, guest)...)
 			}
 			if includeAll || includeSet["alerts"] {
 				resp.Alerts = append(resp.Alerts, h.generateGuestAlerts(guest)...)
@@ -388,8 +389,24 @@ func (h *ContextHandler) recentArtifactsForEntity(ctx context.Context, entityTyp
 	return summaries, rows.Err()
 }
 
+// GuestBookingStats holds pre-computed booking statistics for communication hints.
+type GuestBookingStats struct {
+	HasUpcomingCheckin bool    // Guest has a booking checking in today
+	DirectBookingPct   float64 // Percentage of bookings via direct channel (0-100)
+}
+
 // generateGuestHints produces rule-based communication hints for a guest.
-func (h *ContextHandler) generateGuestHints(guest *db.GuestNode) []CommunicationHint {
+func (h *ContextHandler) generateGuestHints(ctx context.Context, guest *db.GuestNode) []CommunicationHint {
+	hints := generateBaseGuestHints(guest)
+
+	stats := h.queryGuestBookingStats(ctx, guest.Email)
+	hints = append(hints, generateBookingHints(stats)...)
+
+	return hints
+}
+
+// generateBaseGuestHints produces hints from the guest node data alone.
+func generateBaseGuestHints(guest *db.GuestNode) []CommunicationHint {
 	var hints []CommunicationHint
 
 	if guest.TotalStays > 1 {
@@ -417,6 +434,71 @@ func (h *ContextHandler) generateGuestHints(guest *db.GuestNode) []Communication
 	}
 
 	return hints
+}
+
+// generateBookingHints produces hints from pre-computed booking statistics.
+func generateBookingHints(stats *GuestBookingStats) []CommunicationHint {
+	if stats == nil {
+		return nil
+	}
+	var hints []CommunicationHint
+
+	if stats.HasUpcomingCheckin {
+		hints = append(hints, CommunicationHint{
+			HintType:    "early_checkin",
+			Description: "Guest checking in today — proactively offer early check-in options",
+			Priority:    "high",
+		})
+	}
+
+	if stats.DirectBookingPct > 50 {
+		hints = append(hints, CommunicationHint{
+			HintType:    "direct_booker",
+			Description: fmt.Sprintf("Books direct %.0f%% of the time — suggest loyalty program", stats.DirectBookingPct),
+			Priority:    "medium",
+		})
+	}
+
+	return hints
+}
+
+// queryGuestBookingStats queries booking artifacts for guest-specific statistics.
+func (h *ContextHandler) queryGuestBookingStats(ctx context.Context, guestEmail string) *GuestBookingStats {
+	if h.pool == nil {
+		return nil
+	}
+	stats := &GuestBookingStats{}
+	today := time.Now().Format("2006-01-02")
+
+	// Check for upcoming check-in today
+	var hasToday int
+	err := h.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM artifacts
+		WHERE source_id = 'guesthost'
+		  AND artifact_type = 'booking'
+		  AND metadata->>'guest_email' = $1
+		  AND metadata->>'checkin_date' = $2
+	`, guestEmail, today).Scan(&hasToday)
+	if err == nil && hasToday > 0 {
+		stats.HasUpcomingCheckin = true
+	}
+
+	// Compute direct booking percentage
+	var totalBookings, directBookings int
+	err = h.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(*) FILTER (WHERE metadata->>'booking_source' = 'direct')
+		FROM artifacts
+		WHERE source_id = 'guesthost'
+		  AND artifact_type = 'booking'
+		  AND metadata->>'guest_email' = $1
+	`, guestEmail).Scan(&totalBookings, &directBookings)
+	if err == nil && totalBookings > 0 {
+		stats.DirectBookingPct = float64(directBookings) / float64(totalBookings) * 100
+	}
+
+	return stats
 }
 
 // generatePropertyHints produces rule-based communication hints for a property.

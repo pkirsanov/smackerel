@@ -38,6 +38,8 @@ type WebUI interface {
 	TopicsPage(w http.ResponseWriter, r *http.Request)
 	SettingsPage(w http.ResponseWriter, r *http.Request)
 	StatusPage(w http.ResponseWriter, r *http.Request)
+	SyncConnectorHandler(w http.ResponseWriter, r *http.Request)
+	BookmarkUploadHandler(w http.ResponseWriter, r *http.Request)
 }
 
 // OAuthFlow handles OAuth2 authorization flows and status.
@@ -82,6 +84,7 @@ type Dependencies struct {
 	ConnectorRegistry  ConnectorHealthLister
 	ArtifactStore      ArtifactQuerier
 	ContextHandler     *ContextHandler
+	BookmarkPub        BookmarkPublisher
 	OllamaURL          string
 	AuthToken          string
 	Version            string

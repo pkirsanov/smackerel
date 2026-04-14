@@ -118,14 +118,62 @@ func TestRevenueSnapshot_Fields(t *testing.T) {
 	snap := RevenueSnapshot{
 		TodayCheckIns:  3,
 		TodayCheckOuts: 2,
+		DayRevenue:     800.00,
 		WeekRevenue:    2500.00,
 		MonthRevenue:   9800.00,
+		ByChannel: map[string]float64{
+			"direct": 5000.00,
+			"airbnb": 4800.00,
+		},
+		ByProperty: map[string]float64{
+			"Beach House":    6000.00,
+			"Mountain Cabin": 3800.00,
+		},
 	}
 	if snap.TodayCheckIns != 3 {
 		t.Errorf("expected 3 check-ins, got %d", snap.TodayCheckIns)
 	}
+	if snap.DayRevenue != 800.00 {
+		t.Errorf("expected day revenue 800, got %f", snap.DayRevenue)
+	}
 	if snap.MonthRevenue != 9800.00 {
 		t.Errorf("expected month revenue 9800, got %f", snap.MonthRevenue)
+	}
+	if snap.ByChannel["direct"] != 5000.00 {
+		t.Errorf("expected direct channel 5000, got %f", snap.ByChannel["direct"])
+	}
+	if snap.ByChannel["airbnb"] != 4800.00 {
+		t.Errorf("expected airbnb channel 4800, got %f", snap.ByChannel["airbnb"])
+	}
+	if snap.ByProperty["Beach House"] != 6000.00 {
+		t.Errorf("expected Beach House property 6000, got %f", snap.ByProperty["Beach House"])
+	}
+}
+
+func TestRevenueSnapshot_DayRevenueWindow(t *testing.T) {
+	snap := RevenueSnapshot{
+		DayRevenue:   150.00,
+		WeekRevenue:  1200.00,
+		MonthRevenue: 4500.00,
+	}
+	if snap.DayRevenue != 150.00 {
+		t.Errorf("expected day revenue 150, got %f", snap.DayRevenue)
+	}
+	if snap.DayRevenue > snap.WeekRevenue {
+		t.Error("24h revenue should not exceed week revenue")
+	}
+	if snap.WeekRevenue > snap.MonthRevenue {
+		t.Error("week revenue should not exceed month revenue")
+	}
+}
+
+func TestRevenueSnapshot_EmptyChannelBreakdown(t *testing.T) {
+	snap := RevenueSnapshot{
+		WeekRevenue:  500.00,
+		MonthRevenue: 500.00,
+	}
+	if snap.ByChannel != nil && len(snap.ByChannel) > 0 {
+		t.Error("expected nil or empty channel breakdown when not set")
 	}
 }
 
@@ -165,8 +213,13 @@ func TestFormatHospitalityFallback_Full(t *testing.T) {
 			{PropertyName: "Cabin", Title: "Clean pool"},
 		},
 		Revenue: RevenueSnapshot{
+			DayRevenue:   400,
 			WeekRevenue:  1500,
 			MonthRevenue: 6200,
+			ByChannel: map[string]float64{
+				"direct": 3800,
+				"airbnb": 2400,
+			},
 		},
 		GuestAlerts: []GuestAlert{
 			{GuestName: "Dave", AlertType: "repeat_guest"},
@@ -190,8 +243,11 @@ func TestFormatHospitalityFallback_Full(t *testing.T) {
 		"Carol from Beach House",
 		"Pending tasks: 1",
 		"Revenue",
+		"24h: $400.00",
 		"$1500.00",
 		"$6200.00",
+		"airbnb: $2400.00",
+		"direct: $3800.00",
 		"Guest alerts: 1",
 		"Property alerts: 1",
 	}
