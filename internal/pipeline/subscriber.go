@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
@@ -170,6 +171,7 @@ func (rs *ResultSubscriber) Start(ctx context.Context) error {
 // Stop signals the background goroutines to exit and waits for them to finish.
 // Uses a bounded timeout to prevent blocking shutdown indefinitely if a consumer
 // goroutine hangs despite the done channel being closed.
+// Timeout is 5s to fit within the 6s shutdown step budget in shutdownAll (IMP-022-002).
 func (rs *ResultSubscriber) Stop() {
 	rs.mu.Lock()
 	if !rs.started || rs.stopped {
@@ -188,7 +190,7 @@ func (rs *ResultSubscriber) Stop() {
 	select {
 	case <-done:
 		slog.Info("result subscriber stopped cleanly")
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		slog.Warn("result subscriber stop timed out waiting for consumer goroutines")
 	}
 }
@@ -294,9 +296,11 @@ func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstre
 	headers.Set("Smackerel-Original-Stream", originalStream)
 	headers.Set("Smackerel-Failed-At", time.Now().UTC().Format(time.RFC3339))
 	if lastError != "" {
-		// Truncate to 256 bytes per design contract to prevent oversized headers
+		// Truncate to 256 bytes per design contract to prevent oversized headers.
+		// Use UTF-8-safe truncation to avoid splitting multi-byte characters
+		// which would produce invalid UTF-8 in NATS headers (IMP-022-R29-003).
 		if len(lastError) > 256 {
-			lastError = lastError[:256]
+			lastError = truncateUTF8(lastError, 256)
 		}
 		headers.Set("Smackerel-Last-Error", lastError)
 	}
@@ -332,10 +336,30 @@ func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstre
 }
 
 // truncateBytes returns a string representation of data, truncated to maxLen bytes.
-// Used for safe logging of potentially large or corrupt payloads.
+// Uses UTF-8-safe truncation to avoid splitting multi-byte characters which would
+// produce invalid UTF-8 in structured log output (IMP-022-R29-003).
 func truncateBytes(data []byte, maxLen int) string {
 	if len(data) <= maxLen {
 		return string(data)
 	}
-	return string(data[:maxLen]) + "...(truncated)"
+	// Walk backwards from maxLen to find a valid UTF-8 boundary
+	truncated := maxLen
+	for truncated > 0 && !utf8.RuneStart(data[truncated]) {
+		truncated--
+	}
+	return string(data[:truncated]) + "...(truncated)"
+}
+
+// truncateUTF8 truncates a string to at most maxBytes bytes without splitting
+// multi-byte UTF-8 characters.
+func truncateUTF8(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	// Walk backwards from maxBytes to find a valid UTF-8 rune boundary
+	truncated := maxBytes
+	for truncated > 0 && !utf8.RuneStart(s[truncated]) {
+		truncated--
+	}
+	return s[:truncated]
 }

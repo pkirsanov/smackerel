@@ -562,7 +562,7 @@ func TestClassifyCommutesEmptyClusters(t *testing.T) {
 }
 
 func TestDetermineLinkTypeEmptyRoute(t *testing.T) {
-	// Activity with no route + artifact with real location → temporal-only (no route to match against)
+	// Activity with no route and no start/end location → temporal-only
 	activity := TakeoutActivity{
 		StartTime: time.Date(2026, 3, 15, 13, 0, 0, 0, time.UTC),
 		EndTime:   time.Date(2026, 3, 15, 15, 0, 0, 0, time.UTC),
@@ -571,7 +571,57 @@ func TestDetermineLinkTypeEmptyRoute(t *testing.T) {
 
 	linkType := determineLinkType(activity, 47.500, 8.700, 1.0)
 	if linkType != "temporal-only" {
-		t.Errorf("expected temporal-only for empty route, got %q", linkType)
+		t.Errorf("expected temporal-only for empty route with no locations, got %q", linkType)
+	}
+}
+
+// --- IMP-011-R14-002: determineLinkType uses StartLocation/EndLocation fallback ---
+
+func TestImprove_DetermineLinkTypeStartLocationFallback(t *testing.T) {
+	// Activity with no route but StartLocation near the artifact → temporal-spatial.
+	activity := TakeoutActivity{
+		StartTime:     time.Date(2026, 3, 15, 13, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2026, 3, 15, 15, 0, 0, 0, time.UTC),
+		Route:         nil,
+		StartLocation: LatLng{Lat: 47.500, Lng: 8.700},
+		EndLocation:   LatLng{Lat: 47.600, Lng: 8.800},
+	}
+
+	linkType := determineLinkType(activity, 47.501, 8.701, 1.0) // ~0.1km from start
+	if linkType != "temporal-spatial" {
+		t.Errorf("expected temporal-spatial for artifact near StartLocation, got %q", linkType)
+	}
+}
+
+func TestImprove_DetermineLinkTypeEndLocationFallback(t *testing.T) {
+	// Activity with no route but EndLocation near the artifact → temporal-spatial.
+	activity := TakeoutActivity{
+		StartTime:     time.Date(2026, 3, 15, 13, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2026, 3, 15, 15, 0, 0, 0, time.UTC),
+		Route:         nil,
+		StartLocation: LatLng{Lat: 40.000, Lng: 5.000}, // far from artifact
+		EndLocation:   LatLng{Lat: 47.500, Lng: 8.700},  // near artifact
+	}
+
+	linkType := determineLinkType(activity, 47.501, 8.701, 1.0)
+	if linkType != "temporal-spatial" {
+		t.Errorf("expected temporal-spatial for artifact near EndLocation, got %q", linkType)
+	}
+}
+
+func TestImprove_DetermineLinkTypeLocationsFarAway(t *testing.T) {
+	// Activity with no route, StartLocation and EndLocation both far → temporal-only.
+	activity := TakeoutActivity{
+		StartTime:     time.Date(2026, 3, 15, 13, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2026, 3, 15, 15, 0, 0, 0, time.UTC),
+		Route:         nil,
+		StartLocation: LatLng{Lat: 40.000, Lng: 5.000},
+		EndLocation:   LatLng{Lat: 41.000, Lng: 6.000},
+	}
+
+	linkType := determineLinkType(activity, 47.500, 8.700, 1.0) // far from both
+	if linkType != "temporal-only" {
+		t.Errorf("expected temporal-only for artifact far from both locations, got %q", linkType)
 	}
 }
 

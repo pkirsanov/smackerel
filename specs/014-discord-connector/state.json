@@ -2,8 +2,8 @@
   "version": 3,
   "featureDir": "specs/014-discord-connector",
   "featureName": "Discord Connector",
-  "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "status": "in_progress",
+  "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.workflow",
     "currentPhase": "finalize",
@@ -21,7 +21,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [],
     "certifiedCompletedPhases": [
       "select",
@@ -70,7 +70,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-09T00:00:00Z",
+  "lastUpdatedAt": "2026-04-14T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

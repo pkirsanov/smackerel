@@ -2,8 +2,8 @@
   "version": 3,
   "featureDir": "specs/010-browser-history-connector",
   "featureName": "Browser History Connector",
-  "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "status": "in_progress",
+  "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -166,6 +166,15 @@
       "startedAt": "2026-04-09T02:00:00Z",
       "completedAt": "2026-04-09T02:05:00Z",
       "summary": "All unit tests pass (43 tests across 2 test files), lint passes, format passes, check passes. Both scopes marked Done with verified DoD items. Delivery lockdown certification complete."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["validate", "docs"],
+      "statusBefore": "done",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-14T00:00:00Z",
+      "completedAt": "2026-04-14T00:15:00Z",
+      "summary": "Stochastic quality sweep R08 validate trigger (reconcile-to-doc). V-010-001: 7 integration/E2E DoD items unchecked — referenced Go test files (tests/integration/browser_history_test.go, tests/e2e/browser_history_e2e_test.go) do not exist. V-010-002: Fixed ParseChromeHistorySince description from 'no LIMIT' to 'LIMIT 10000'. V-010-003: Fixed stale test counts (44+15=59 actual vs 33/55 claimed). Scopes downgraded Done→In Progress. Spec downgraded done→in_progress."
     }
   ],
   "policySnapshot": {
@@ -179,15 +188,16 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-09T02:05:00Z",
+  "lastUpdatedAt": "2026-04-14T00:15:00Z",
   "certification": {
-    "status": "done",
-    "completedScopes": ["scope-01", "scope-02"],
+    "status": "in_progress",
+    "completedScopes": [],
     "certifiedCompletedPhases": ["analyze", "bootstrap", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"],
     "scopeProgress": [
-      { "scope": 1, "name": "Connector Implementation, Config & Registration", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:40:00Z" },
-      { "scope": 2, "name": "Social Media Aggregation, Repeat Visits & Privacy Gate", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:40:00Z" }
+      { "scope": 1, "name": "Connector Implementation, Config & Registration", "status": "In Progress", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 2, "name": "Social Media Aggregation, Repeat Visits & Privacy Gate", "status": "In Progress", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
     ],
-    "lockdownState": { "active": true, "lockedScenarioIds": ["SCN-BH-001", "SCN-BH-002", "SCN-BH-003", "SCN-BH-004", "SCN-BH-005", "SCN-BH-006", "SCN-BH-007", "SCN-BH-008", "SCN-BH-009", "SCN-BH-010"] }
+    "lockdownState": { "active": false, "lockedScenarioIds": ["SCN-BH-001", "SCN-BH-002", "SCN-BH-003", "SCN-BH-004", "SCN-BH-005", "SCN-BH-006", "SCN-BH-007", "SCN-BH-008", "SCN-BH-009", "SCN-BH-010"] },
+    "reconciliationNote": "V-010-001: 7 integration/E2E DoD items unchecked — referenced Go test files do not exist. Scopes downgraded from Done to In Progress. Pre-existing F002/R003 SQLite driver dependency unresolved."
   }
 }

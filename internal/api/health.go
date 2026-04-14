@@ -144,11 +144,27 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	services["nats"] = natsStatus
 
-	// ML sidecar status
-	mlStatus := checkMLSidecar(ctx, d.MLSidecarURL, d.mlClient())
-	services["ml_sidecar"] = mlStatus
+	// Start external health probes in parallel (IMP-023-R19-001).
+	// Each probe has a 2s context timeout; sequential execution would
+	// bottleneck at 4s+ when both services are unreachable, exceeding
+	// Docker HEALTHCHECK's typical 3s timeout and causing false restarts.
+	var (
+		mlStatus     ServiceStatus
+		ollamaStatus ServiceStatus
+		probeWg      sync.WaitGroup
+	)
+	client := d.mlClient() // safe: sync.Once guarantees single init
+	probeWg.Add(2)
+	go func() {
+		defer probeWg.Done()
+		mlStatus = checkMLSidecar(ctx, d.MLSidecarURL, client)
+	}()
+	go func() {
+		defer probeWg.Done()
+		ollamaStatus = checkOllama(ctx, d.OllamaURL, client)
+	}()
 
-	// Intelligence engine status — includes synthesis freshness check
+	// Intelligence engine status — runs while external probes are in flight
 	if d.IntelligenceEngine != nil {
 		if d.IntelligenceEngine.Pool == nil {
 			services["intelligence"] = ServiceStatus{Status: "down"}
@@ -168,15 +184,17 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Telegram bot health
+	// Telegram bot health — local check, no network I/O
 	if d.TelegramBot != nil && d.TelegramBot.Healthy() {
 		services["telegram_bot"] = ServiceStatus{Status: "connected"}
 	} else {
 		services["telegram_bot"] = ServiceStatus{Status: "disconnected"}
 	}
 
-	// Ollama health (live probe)
-	services["ollama"] = checkOllama(ctx, d.OllamaURL, d.mlClient())
+	// Wait for external probes and record results
+	probeWg.Wait()
+	services["ml_sidecar"] = mlStatus
+	services["ollama"] = ollamaStatus
 
 	// Connector health
 	if d.ConnectorRegistry != nil {

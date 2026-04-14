@@ -56,6 +56,9 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 		return fmt.Errorf("guesthost connect: base_url must be a valid http(s) URL: %s", baseURL)
 	}
 
+	// IMP-013-001: Strip trailing slashes to prevent double-slash in API paths.
+	baseURL = strings.TrimRight(baseURL, "/")
+
 	apiKey, err := extractString(cfg.SourceConfig, "api_key")
 	if err != nil {
 		c.setHealth(connector.HealthError)

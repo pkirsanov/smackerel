@@ -50,6 +50,7 @@ type Scheduler struct {
 	muResurface sync.Mutex // resurfacing (daily 8 AM — separate from synthesis/lookups)
 	muLookups   sync.Mutex // frequent lookup detection (daily 4 AM)
 	muSubs      sync.Mutex // subscription detection (weekly Monday 3 AM)
+	muRelCool   sync.Mutex // relationship cooling alert production (weekly Monday 7 AM)
 }
 
 // New creates a new scheduler.
@@ -444,12 +445,14 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}
 
 		// Schedule relationship cooling alert production — weekly Monday 7 AM (R-021-005)
+		// Uses dedicated muRelCool to avoid contention with weekly synthesis on muWeekly,
+		// matching the dedicated-mutex pattern used by muAlertProd, muResurface, muLookups, muSubs.
 		if _, err := s.cron.AddFunc("0 7 * * 1", func() {
-			if !s.muWeekly.TryLock() {
-				slog.Warn("skipping overlapping job", "group", "weekly", "job", "relationship-cooling-alerts")
+			if !s.muRelCool.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "rel-cool", "job", "relationship-cooling-alerts")
 				return
 			}
-			defer s.muWeekly.Unlock()
+			defer s.muRelCool.Unlock()
 
 			ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 			defer cancel()
@@ -547,6 +550,10 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 	if s.engine == nil {
 		return
 	}
+	if s.bot == nil {
+		slog.Debug("alert delivery skipped, no Telegram bot configured")
+		return
+	}
 
 	alerts, err := s.engine.GetPendingAlerts(ctx)
 	if err != nil {
@@ -567,15 +574,9 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 
 		msg := FormatAlertMessage(string(a.AlertType), a.Title, a.Body)
 
-		if s.bot != nil {
-			if err := s.bot.SendAlertMessage(msg); err != nil {
-				slog.Warn("alert delivery failed, will retry next sweep",
-					"alert_id", a.ID, "error", err)
-				continue
-			}
-		} else {
-			// No bot configured — keep alert pending for when bot becomes available
-			slog.Debug("alert delivery skipped, no Telegram bot configured", "alert_id", a.ID)
+		if err := s.bot.SendAlertMessage(msg); err != nil {
+			slog.Warn("alert delivery failed, will retry next sweep",
+				"alert_id", a.ID, "error", err)
 			continue
 		}
 

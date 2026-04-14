@@ -1,0 +1,12 @@
+{
+  "version": 3,
+  "featureDir": "specs/019-connector-wiring/bugs/BUG-001-parseFloatEnv-accepts-inf-nan",
+  "featureName": "BUG-019-001: parseFloatEnv Accepts Inf/NaN",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-14T00:00:00Z"
+  }
+}

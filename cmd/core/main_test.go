@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
+	"os"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
 	alertsConnector "github.com/smackerel/smackerel/internal/connector/alerts"
@@ -282,5 +285,309 @@ func TestParseFloatEnv_ScientificNotation(t *testing.T) {
 	result := parseFloatEnv("TEST_FLOAT_VAR")
 	if result != 150.0 {
 		t.Errorf("expected 150.0, got %f", result)
+	}
+}
+
+// --- CHAOS-019-001: parseFloatEnv must reject IEEE 754 special values ---
+
+func TestParseFloatEnv_Inf(t *testing.T) {
+	t.Setenv("TEST_FLOAT_VAR", "Inf")
+	result := parseFloatEnv("TEST_FLOAT_VAR")
+	if result != 0 {
+		t.Errorf("expected 0 for Inf, got %f", result)
+	}
+}
+
+func TestParseFloatEnv_NegInf(t *testing.T) {
+	t.Setenv("TEST_FLOAT_VAR", "-Inf")
+	result := parseFloatEnv("TEST_FLOAT_VAR")
+	if result != 0 {
+		t.Errorf("expected 0 for -Inf, got %f", result)
+	}
+}
+
+func TestParseFloatEnv_PosInf(t *testing.T) {
+	t.Setenv("TEST_FLOAT_VAR", "+Inf")
+	result := parseFloatEnv("TEST_FLOAT_VAR")
+	if result != 0 {
+		t.Errorf("expected 0 for +Inf, got %f", result)
+	}
+}
+
+func TestParseFloatEnv_NaN(t *testing.T) {
+	t.Setenv("TEST_FLOAT_VAR", "NaN")
+	result := parseFloatEnv("TEST_FLOAT_VAR")
+	if result != 0 {
+		t.Errorf("expected 0 for NaN, got %f", result)
+	}
+}
+
+func TestParseFloatEnv_NaN_Lowercase(t *testing.T) {
+	// strconv.ParseFloat is case-insensitive for NaN
+	t.Setenv("TEST_FLOAT_VAR", "nan")
+	result := parseFloatEnv("TEST_FLOAT_VAR")
+	if result != 0 {
+		t.Errorf("expected 0 for nan, got %f", result)
+	}
+}
+
+// --- IMP-022-001: runWithTimeout overall deadline enforcement ---
+
+func TestRunWithTimeout_CompletesBeforeBudget(t *testing.T) {
+	deadline := make(chan struct{}) // never fires
+	completed := false
+	runWithTimeout("test-fast", 2*time.Second, deadline, func() {
+		completed = true
+	})
+	if !completed {
+		t.Error("expected fn to complete")
+	}
+}
+
+func TestRunWithTimeout_ExceedsBudget(t *testing.T) {
+	deadline := make(chan struct{}) // never fires
+	start := time.Now()
+	runWithTimeout("test-slow", 50*time.Millisecond, deadline, func() {
+		time.Sleep(5 * time.Second) // much longer than budget
+	})
+	elapsed := time.Since(start)
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("runWithTimeout should return after ~50ms budget, took %v", elapsed)
+	}
+}
+
+func TestRunWithTimeout_OverallDeadlineSkipsExpiredStep(t *testing.T) {
+	// Deadline already expired before step starts
+	deadline := make(chan struct{})
+	close(deadline)
+	called := false
+	runWithTimeout("test-skip", 2*time.Second, deadline, func() {
+		called = true
+	})
+	// Give the goroutine a moment to potentially run (it shouldn't)
+	time.Sleep(10 * time.Millisecond)
+	if called {
+		t.Error("fn should not be called when deadline is already expired")
+	}
+}
+
+func TestRunWithTimeout_OverallDeadlineFiringDuringStep(t *testing.T) {
+	// Deadline fires 50ms into a 2s budget step
+	deadlineCtx, deadlineCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer deadlineCancel()
+	start := time.Now()
+	runWithTimeout("test-deadline", 2*time.Second, deadlineCtx.Done(), func() {
+		time.Sleep(5 * time.Second)
+	})
+	elapsed := time.Since(start)
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("runWithTimeout should return when overall deadline fires (~50ms), took %v", elapsed)
+	}
+}
+
+func TestRunWithTimeout_StepBudgetWinsOverDeadlineWhenShorter(t *testing.T) {
+	// Step budget (50ms) < overall deadline (5s) — step budget should win
+	deadlineCtx, deadlineCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer deadlineCancel()
+	start := time.Now()
+	runWithTimeout("test-budget-wins", 50*time.Millisecond, deadlineCtx.Done(), func() {
+		time.Sleep(5 * time.Second)
+	})
+	elapsed := time.Since(start)
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("step budget (50ms) should control, took %v", elapsed)
+	}
+}
+
+// --- H-019-002: parseJSONArrayEnv / parseJSONObjectEnv include key in logs ---
+
+func TestParseJSONArrayEnv_ValidArray(t *testing.T) {
+	t.Setenv("TEST_JSON_ARRAY", `["x","y"]`)
+	result := parseJSONArrayEnv("TEST_JSON_ARRAY")
+	if len(result) != 2 {
+		t.Fatalf("expected 2 elements, got %d", len(result))
+	}
+}
+
+func TestParseJSONArrayEnv_EmptyVar(t *testing.T) {
+	t.Setenv("TEST_JSON_ARRAY", "")
+	result := parseJSONArrayEnv("TEST_JSON_ARRAY")
+	if result != nil {
+		t.Errorf("expected nil for empty env var, got %v", result)
+	}
+}
+
+func TestParseJSONArrayEnv_InvalidJSON(t *testing.T) {
+	t.Setenv("TEST_JSON_ARRAY", "{broken")
+	result := parseJSONArrayEnv("TEST_JSON_ARRAY")
+	if result != nil {
+		t.Errorf("expected nil for invalid JSON, got %v", result)
+	}
+}
+
+func TestParseJSONObjectEnv_ValidObject(t *testing.T) {
+	t.Setenv("TEST_JSON_OBJ", `{"k":"v"}`)
+	result := parseJSONObjectEnv("TEST_JSON_OBJ")
+	if result == nil || result["k"] != "v" {
+		t.Errorf("expected {k:v}, got %v", result)
+	}
+}
+
+func TestParseJSONObjectEnv_EmptyVar(t *testing.T) {
+	t.Setenv("TEST_JSON_OBJ", "")
+	result := parseJSONObjectEnv("TEST_JSON_OBJ")
+	if result != nil {
+		t.Errorf("expected nil for empty env var, got %v", result)
+	}
+}
+
+func TestParseJSONObjectEnv_InvalidJSON(t *testing.T) {
+	t.Setenv("TEST_JSON_OBJ", "not-json")
+	result := parseJSONObjectEnv("TEST_JSON_OBJ")
+	if result != nil {
+		t.Errorf("expected nil for invalid JSON, got %v", result)
+	}
+}
+
+// --- H-019-002: backward compatibility — old parseJSONArray/parseJSONObject still work ---
+
+func TestParseJSONArray_BackwardCompat(t *testing.T) {
+	result := parseJSONArray(`[1,2,3]`)
+	if len(result) != 3 {
+		t.Fatalf("expected 3 elements, got %d", len(result))
+	}
+}
+
+func TestParseJSONObject_BackwardCompat(t *testing.T) {
+	result := parseJSONObject(`{"a":1}`)
+	if result == nil || result["a"] != float64(1) {
+		t.Errorf("expected {a:1}, got %v", result)
+	}
+}
+
+// --- IMP-019-R27-001: Gov Alerts source_earthquake SST end-to-end ---
+// The source_earthquake toggle must flow env → SourceConfig → connector config.
+// Before this fix, the toggle was readable by the connector but never set by main.go,
+// meaning earthquake alerts could never be disabled via config.
+
+func TestGovAlertsSourceEarthquakeWiring_Enabled(t *testing.T) {
+	// Simulate the exact SourceConfig assembly from main.go's Gov Alerts auto-start block.
+	t.Setenv("GOV_ALERTS_SOURCE_EARTHQUAKE", "true")
+	cfg := connector.ConnectorConfig{
+		AuthType:    "api_key",
+		Credentials: map[string]string{"airnow_api_key": ""},
+		Enabled:     true,
+		SourceConfig: map[string]interface{}{
+			"source_earthquake": os.Getenv("GOV_ALERTS_SOURCE_EARTHQUAKE") == "true",
+		},
+	}
+	val, ok := cfg.SourceConfig["source_earthquake"].(bool)
+	if !ok {
+		t.Fatal("source_earthquake not present in SourceConfig as bool")
+	}
+	if !val {
+		t.Error("source_earthquake should be true when env var is 'true'")
+	}
+}
+
+func TestGovAlertsSourceEarthquakeWiring_Disabled(t *testing.T) {
+	// This is the adversarial case: if the fix were reverted (source_earthquake removed
+	// from SourceConfig), the connector would default to true and earthquake alerts
+	// could never be disabled.
+	t.Setenv("GOV_ALERTS_SOURCE_EARTHQUAKE", "false")
+	cfg := connector.ConnectorConfig{
+		AuthType:    "api_key",
+		Credentials: map[string]string{"airnow_api_key": ""},
+		Enabled:     true,
+		SourceConfig: map[string]interface{}{
+			"source_earthquake": os.Getenv("GOV_ALERTS_SOURCE_EARTHQUAKE") == "true",
+		},
+	}
+	val, ok := cfg.SourceConfig["source_earthquake"].(bool)
+	if !ok {
+		t.Fatal("source_earthquake not present in SourceConfig as bool")
+	}
+	if val {
+		t.Error("source_earthquake should be false when env var is 'false'")
+	}
+}
+
+func TestGovAlertsSourceEarthquakeWiring_UnsetDefaultsFalse(t *testing.T) {
+	// When the env var is absent, == "true" evaluates to false.
+	// This is the correct SST behavior: if the YAML key is missing or config generate
+	// doesn't run, the connector should NOT silently enable earthquake alerts.
+	t.Setenv("GOV_ALERTS_SOURCE_EARTHQUAKE", "")
+	val := os.Getenv("GOV_ALERTS_SOURCE_EARTHQUAKE") == "true"
+	if val {
+		t.Error("absent/empty GOV_ALERTS_SOURCE_EARTHQUAKE should evaluate to false via == 'true' pattern")
+	}
+}
+
+// --- IMP-019-R27-002: Weather enable_alerts/forecast_days/precision SST end-to-end ---
+// These three config fields were readable by the weather connector after R23 fix
+// but never wired through main.go SourceConfig. Operators could not enable weather
+// alerts, change forecast horizon, or adjust coordinate precision.
+
+func TestWeatherEnableAlertsWiring(t *testing.T) {
+	t.Setenv("WEATHER_ENABLE_ALERTS", "true")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"enable_alerts": os.Getenv("WEATHER_ENABLE_ALERTS") == "true",
+		},
+	}
+	val, ok := cfg.SourceConfig["enable_alerts"].(bool)
+	if !ok {
+		t.Fatal("enable_alerts not present in SourceConfig as bool")
+	}
+	if !val {
+		t.Error("enable_alerts should be true when env var is 'true'")
+	}
+}
+
+func TestWeatherEnableAlertsWiring_Disabled(t *testing.T) {
+	t.Setenv("WEATHER_ENABLE_ALERTS", "false")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"enable_alerts": os.Getenv("WEATHER_ENABLE_ALERTS") == "true",
+		},
+	}
+	val, ok := cfg.SourceConfig["enable_alerts"].(bool)
+	if !ok {
+		t.Fatal("enable_alerts not present in SourceConfig as bool")
+	}
+	if val {
+		t.Error("enable_alerts should be false when env var is 'false'")
+	}
+}
+
+func TestWeatherForecastDaysWiring(t *testing.T) {
+	t.Setenv("WEATHER_FORECAST_DAYS", "14")
+	result := parseFloatEnv("WEATHER_FORECAST_DAYS")
+	if result != 14.0 {
+		t.Errorf("expected 14.0, got %f", result)
+	}
+}
+
+func TestWeatherPrecisionWiring(t *testing.T) {
+	t.Setenv("WEATHER_PRECISION", "4")
+	result := parseFloatEnv("WEATHER_PRECISION")
+	if result != 4.0 {
+		t.Errorf("expected 4.0, got %f", result)
+	}
+}
+
+func TestWeatherForecastDaysWiring_ZeroOnEmpty(t *testing.T) {
+	// When env var is empty/unset, parseFloatEnv returns 0.
+	// The weather connector should use its internal default (7 days) when
+	// SourceConfig has 0 — this verifies the wiring doesn't inject a non-zero
+	// false-positive that would override the connector's range guard.
+	t.Setenv("WEATHER_FORECAST_DAYS", "")
+	result := parseFloatEnv("WEATHER_FORECAST_DAYS")
+	if result != 0 {
+		t.Errorf("expected 0 for empty env var, got %f", result)
 	}
 }

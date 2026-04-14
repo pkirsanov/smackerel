@@ -785,3 +785,38 @@ Exit code: 0
 | Auth bypass | 0 | — | 0 |
 | Input validation | 0 (pre-existing hardening covers this) | — | 0 |
 | **Total** | **2** | **2** | **0** |
+
+---
+
+## Improve: Stochastic Quality Sweep R01 (2026-04-14)
+
+### Trigger
+`improve-existing` — stochastic quality sweep round R01
+
+### Findings
+
+| ID | Finding | Severity | Files |
+|----|---------|----------|-------|
+| IMP-R01-F1 | `CheckOverdueCommitments` used `time.Since().Hours()/24` for day calculation — gives fractional results and can be off-by-one near midnight or during DST transitions. `calendarDaysBetween` already exists and is purpose-built for calendar-day arithmetic. | Medium | `internal/intelligence/engine.go` |
+| IMP-R01-F2 | `detectCapturePatterns` ran two sequential DB queries without checking `ctx.Err()` between them, inconsistent with the pattern in `GenerateWeeklySynthesis` and `RunSynthesis`. | Low | `internal/intelligence/engine.go` |
+
+### Changes
+
+**IMP-R01-F1:** Replaced `time.Since(expectedDate).Hours() / 24` in `CheckOverdueCommitments` with `calendarDaysBetween(expectedDate, localToday)` using local-midnight normalization consistent with `ProduceBillAlerts`.
+
+**IMP-R01-F2:** Added `ctx.Err()` checks at function entry and between the two pattern-detection queries in `detectCapturePatterns`.
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence    0.470s
+--- PASS: TestOverdueDays_UsesCalendarDaysBetween (0.00s)
+--- PASS: TestDetectCapturePatterns_CancelledContext (0.00s)
+All 33 Go packages pass, 0 failures.
+
+$ ./smackerel.sh check
+Config is in sync with SST
+
+$ ./smackerel.sh lint
+All checks passed! Exit code: 0
+```

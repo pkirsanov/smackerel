@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 	"unicode/utf8"
 
@@ -107,6 +108,10 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal expense data: %w", err)
 		}
+		// IMP-013-002: Guard against IEEE 754 Inf/NaN from JSON 1e999.
+		if math.IsNaN(d.Amount) || math.IsInf(d.Amount, 0) {
+			return connector.RawArtifact{}, fmt.Errorf("expense amount is not a finite number")
+		}
 		contentType = "financial"
 		title = fmt.Sprintf("%s — Expense: %s $%.2f", d.PropertyName, d.Description, d.Amount)
 		metadata["property_id"] = d.PropertyID
@@ -161,7 +166,12 @@ func truncateStr(s string, maxLen int) string {
 }
 
 // bookingMetadata builds the common metadata map for all booking event types.
+// IMP-013-002: Guards TotalPrice against IEEE 754 Inf/NaN.
 func bookingMetadata(d BookingData) map[string]interface{} {
+	price := d.TotalPrice
+	if math.IsNaN(price) || math.IsInf(price, 0) {
+		price = 0
+	}
 	return map[string]interface{}{
 		"property_id":    d.PropertyID,
 		"property_name":  d.PropertyName,
@@ -170,6 +180,6 @@ func bookingMetadata(d BookingData) map[string]interface{} {
 		"checkin_date":   d.CheckIn,
 		"checkout_date":  d.CheckOut,
 		"booking_source": d.Source,
-		"total_price":    d.TotalPrice,
+		"total_price":    price,
 	}
 }

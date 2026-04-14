@@ -1161,3 +1161,99 @@ func TestHealthHandler_ConnectorErrorDegrades(t *testing.T) {
 		})
 	}
 }
+
+// IMP-023-R19-001: Health probes run in parallel — total latency stays under
+// the sum of individual timeouts. Two slow servers each delay 1s; sequential
+// execution would take ≥2s, parallel execution completes in ~1s.
+func TestHealthHandler_ParallelProbes(t *testing.T) {
+	const probeDelay = 1 * time.Second
+	slowHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(probeDelay)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mlServer := httptest.NewServer(slowHandler)
+	defer mlServer.Close()
+	ollamaServer := httptest.NewServer(slowHandler)
+	defer ollamaServer.Close()
+
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		MLSidecarURL: mlServer.URL,
+		OllamaURL:    ollamaServer.URL,
+		MLClient:     &http.Client{Timeout: 5 * time.Second},
+	}
+
+	start := time.Now()
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+	elapsed := time.Since(start)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// Both probes should succeed
+	if resp.Services["ml_sidecar"].Status != "up" {
+		t.Errorf("expected ml_sidecar up, got %s", resp.Services["ml_sidecar"].Status)
+	}
+	if resp.Services["ollama"].Status != "up" {
+		t.Errorf("expected ollama up, got %s", resp.Services["ollama"].Status)
+	}
+
+	// Sequential execution would take ≥2s (2×1s). Parallel should finish in ~1s.
+	// Use 1.8s as the boundary — generous enough for CI but catches sequential execution.
+	maxParallel := probeDelay + 800*time.Millisecond
+	if elapsed >= 2*probeDelay {
+		t.Errorf("health probes appear sequential: elapsed %v ≥ %v (2×probeDelay)", elapsed, 2*probeDelay)
+	}
+	if elapsed >= maxParallel {
+		t.Errorf("health probes too slow for parallel execution: elapsed %v ≥ %v", elapsed, maxParallel)
+	}
+}
+
+// IMP-023-R19-001: Parallel probes return correct statuses when one is down.
+func TestHealthHandler_ParallelProbes_MixedStatus(t *testing.T) {
+	mlServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mlServer.Close()
+
+	ollamaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ollamaServer.Close()
+
+	deps := &Dependencies{
+		DB:           &mockDB{healthy: true},
+		NATS:         &mockNATS{healthy: true},
+		StartTime:    time.Now(),
+		MLSidecarURL: mlServer.URL,
+		OllamaURL:    ollamaServer.URL,
+		MLClient:     &http.Client{Timeout: 5 * time.Second},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if resp.Services["ml_sidecar"].Status != "up" {
+		t.Errorf("expected ml_sidecar up, got %s", resp.Services["ml_sidecar"].Status)
+	}
+	if resp.Services["ollama"].Status != "down" {
+		t.Errorf("expected ollama down, got %s", resp.Services["ollama"].Status)
+	}
+}

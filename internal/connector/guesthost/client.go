@@ -23,6 +23,9 @@ const maxResponseSize = 10 << 20
 // maxTotalEvents caps total accumulated events across all pages (OOM defence).
 const maxTotalEvents = 10000
 
+// maxCursorLen caps server-returned pagination cursor length (OOM defence, IMP-013-003).
+const maxCursorLen = 4096
+
 // Client wraps the GuestHost REST API.
 type Client struct {
 	baseURL    string
@@ -115,6 +118,11 @@ func (c *Client) FetchActivity(ctx context.Context, since string, types string, 
 
 		if !resp.HasMore || resp.Cursor == "" {
 			break
+		}
+
+		// IMP-013-003: Reject unreasonably large cursors from server (OOM defence).
+		if len(resp.Cursor) > maxCursorLen {
+			return nil, fmt.Errorf("server returned oversized cursor (%d bytes, max %d)", len(resp.Cursor), maxCursorLen)
 		}
 
 		cursor = resp.Cursor

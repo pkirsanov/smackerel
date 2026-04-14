@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -210,7 +211,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.lastSyncSkipped = stats.skipped
 	c.lastSyncByTier = stats.byTier
 	c.lastSyncFetchFails = stats.fetchFails
-	c.lastSyncErrors = stats.fetchFails
+	c.lastSyncErrors = 0 // IMP-010-R18-002: content fetch failures are expected operational events, not sync errors
 	c.mu.Unlock()
 
 	slog.Info("browser history sync complete",
@@ -614,8 +615,14 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 		case int:
 			cfg.RepeatVisitThreshold = v
 		case float64:
+			if math.IsInf(v, 0) || math.IsNaN(v) {
+				return BrowserConfig{}, fmt.Errorf("repeat_visit_threshold must be a finite number, got %v", v)
+			}
 			cfg.RepeatVisitThreshold = int(v)
 		}
+	}
+	if cfg.RepeatVisitThreshold < 0 {
+		return BrowserConfig{}, fmt.Errorf("repeat_visit_threshold must be >= 0, got %d", cfg.RepeatVisitThreshold)
 	}
 
 	// content_fetch_timeout

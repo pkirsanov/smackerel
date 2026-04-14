@@ -137,3 +137,42 @@ All 3 test coverage gaps identified in the 2026-04-10 reconciliation have been c
 ## Completion Statement
 
 All 3 scopes implemented and code-verified. All security controls are correctly in place. All 3 test coverage gaps from prior reconciliation have been closed with targeted unit tests. 53 unit tests pass (Go 31 packages all green + Python 53 pytest all green).
+
+## Gaps Probe (2026-04-14) — Stochastic Quality Sweep R30
+
+### Sweep Methodology
+
+Full gap analysis of spec 020-security-hardening implementation covering:
+- NATS config generation pipeline for special character handling
+- ML sidecar auth middleware edge cases
+- Artifact integrity verification (DoD claims vs actual code)
+
+### Findings
+
+| ID | Severity | CWE | Description | Status |
+|----|----------|-----|-------------|--------|
+| GAP-020-R30-001 | Medium | CWE-74 | NATS config token not escaped for `"` and `\` — embedding special chars in auth token corrupts nats.conf or silently disables NATS authentication | **Fixed** |
+| GAP-020-R30-002 | Low | CWE-755 | ML sidecar `hmac.compare_digest` raises `TypeError` on non-ASCII token strings — attacker sends non-ASCII `Authorization: Bearer` header, gets 500 instead of 401 | **Fixed** |
+| GAP-020-R30-003 | Low | N/A | Scope 2 DoD "OAuth callback is NOT rate-limited" is wrong — code rate-limits both start + callback since SEC-SWEEP-001; artifact integrity mismatch | **Fixed** |
+
+### Fixes Implemented
+
+**GAP-020-R30-001: NATS config token escaping (CWE-74)**
+- File: [scripts/commands/config.sh](scripts/commands/config.sh) — escape `\` → `\\` and `"` → `\"` in token before interpolation into nats.conf
+- Tests: [internal/config/docker_security_test.go](internal/config/docker_security_test.go) — `TestNATSConfGenerator_EscapesSpecialCharsInToken` (verifies escape substitutions exist and are ordered correctly), `TestNATSConf_GeneratedFile_TokenProperlyQuoted` (validates generated nats.conf has no unescaped double-quotes inside the token value)
+- Rationale: R07-actual (IMP-020-002) added double-quoting but omitted intra-value escaping. A token containing `"` terminates the NATS string early; `\` is interpreted as escape prefix. Both can silently disable NATS auth or corrupt the effective token value.
+
+**GAP-020-R30-002: ML sidecar non-ASCII auth token handling (CWE-755)**
+- File: [ml/app/auth.py](ml/app/auth.py) — wrap `hmac.compare_digest` in try/except TypeError, treat as auth failure
+- Tests: [ml/tests/test_auth.py](ml/tests/test_auth.py) — `TestMLSidecarAuthAdversarial.test_non_ascii_bearer_returns_401`, `test_non_ascii_x_auth_token_returns_401`, `test_empty_bearer_prefix_returns_401`
+- Rationale: Python `hmac.compare_digest` raises TypeError on non-ASCII str args. Uvicorn delivers headers as Latin-1 decoded str, so non-ASCII bytes reach the auth code. Without the guard, an attacker gets 500 (information disclosure + DoS vector) instead of 401.
+
+**GAP-020-R30-003: OAuth callback rate-limit DoD correction**
+- File: [specs/020-security-hardening/scopes.md](specs/020-security-hardening/scopes.md) — corrected DoD item from "OAuth callback is NOT rate-limited" to "OAuth callback is rate-limited alongside start (SEC-SWEEP-001)"
+- Rationale: SEC-SWEEP-001 intentionally moved callback into the rate-limited group but the DoD was not updated to reflect the change.
+
+### Test Evidence
+
+| Command | Result | Timestamp |
+|---------|--------|-----------|
+| `./smackerel.sh test unit` | PASS — Go 33 packages all green + Python 75 tests (75 passed, 1 skipped) | 2026-04-14 (gaps probe) |

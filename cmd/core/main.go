@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -271,8 +272,8 @@ func run() error {
 				"backfill_limit":     parseFloatEnv("DISCORD_BACKFILL_LIMIT"),
 				"include_threads":    os.Getenv("DISCORD_INCLUDE_THREADS") == "true",
 				"include_pins":       os.Getenv("DISCORD_INCLUDE_PINS") == "true",
-				"capture_commands":   parseJSONArray(os.Getenv("DISCORD_CAPTURE_COMMANDS")),
-				"monitored_channels": parseJSONArray(os.Getenv("DISCORD_MONITORED_CHANNELS")),
+				"capture_commands":   parseJSONArrayEnv("DISCORD_CAPTURE_COMMANDS"),
+				"monitored_channels": parseJSONArrayEnv("DISCORD_MONITORED_CHANNELS"),
 			},
 		}
 		if err := discordConn.Connect(ctx, discordCfg); err == nil {
@@ -312,7 +313,10 @@ func run() error {
 			Enabled:      true,
 			SyncSchedule: os.Getenv("WEATHER_SYNC_SCHEDULE"),
 			SourceConfig: map[string]interface{}{
-				"locations": parseJSONArray(os.Getenv("WEATHER_LOCATIONS")),
+				"locations":     parseJSONArrayEnv("WEATHER_LOCATIONS"),
+				"enable_alerts": os.Getenv("WEATHER_ENABLE_ALERTS") == "true",
+				"forecast_days": parseFloatEnv("WEATHER_FORECAST_DAYS"),
+				"precision":     parseFloatEnv("WEATHER_PRECISION"),
 			},
 		}
 		if err := weatherConn.Connect(ctx, weatherCfg); err == nil {
@@ -333,20 +337,21 @@ func run() error {
 		}
 
 		alertsCfg := connector.ConnectorConfig{
-			AuthType:     "none",
+			AuthType:    "api_key",
+			Credentials: map[string]string{"airnow_api_key": os.Getenv("GOV_ALERTS_AIRNOW_API_KEY")},
 			Enabled:      true,
 			SyncSchedule: os.Getenv("GOV_ALERTS_SYNC_SCHEDULE"),
 			SourceConfig: map[string]interface{}{
-				"locations":                parseJSONArray(os.Getenv("GOV_ALERTS_LOCATIONS")),
+				"locations":                parseJSONArrayEnv("GOV_ALERTS_LOCATIONS"),
 				"min_earthquake_magnitude": parseFloatEnv("GOV_ALERTS_MIN_EARTHQUAKE_MAG"),
-				"travel_locations":         parseJSONArray(os.Getenv("GOV_ALERTS_TRAVEL_LOCATIONS")),
+				"travel_locations":         parseJSONArrayEnv("GOV_ALERTS_TRAVEL_LOCATIONS"),
+				"source_earthquake":        os.Getenv("GOV_ALERTS_SOURCE_EARTHQUAKE") == "true",
 				"source_weather":           os.Getenv("GOV_ALERTS_SOURCE_WEATHER") == "true",
 				"source_tsunami":           os.Getenv("GOV_ALERTS_SOURCE_TSUNAMI") == "true",
 				"source_volcano":           os.Getenv("GOV_ALERTS_SOURCE_VOLCANO") == "true",
 				"source_wildfire":          os.Getenv("GOV_ALERTS_SOURCE_WILDFIRE") == "true",
 				"source_airnow":            os.Getenv("GOV_ALERTS_SOURCE_AIRNOW") == "true",
 				"source_gdacs":             os.Getenv("GOV_ALERTS_SOURCE_GDACS") == "true",
-				"airnow_api_key":           os.Getenv("GOV_ALERTS_AIRNOW_API_KEY"),
 			},
 		}
 		if err := alertsConn.Connect(ctx, alertsCfg); err == nil {
@@ -369,7 +374,7 @@ func run() error {
 			Enabled:      true,
 			SyncSchedule: os.Getenv("FINANCIAL_MARKETS_SYNC_SCHEDULE"),
 			SourceConfig: map[string]interface{}{
-				"watchlist":         parseJSONObject(os.Getenv("FINANCIAL_MARKETS_WATCHLIST")),
+				"watchlist":         parseJSONObjectEnv("FINANCIAL_MARKETS_WATCHLIST"),
 				"alert_threshold":   parseFloatEnv("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
 				"coingecko_enabled": os.Getenv("FINANCIAL_MARKETS_COINGECKO_ENABLED") == "true",
 			},
@@ -529,6 +534,8 @@ func run() error {
 // shutdownAll performs explicit sequential shutdown in reverse-dependency order.
 // Sequence: scheduler → HTTP → Telegram → result subscribers → connectors → NATS → DB.
 // Each step gets a timeout budget; if a step hangs, a warning is logged and shutdown proceeds.
+// An overall deadline prevents individual step budgets from summing beyond the total timeout,
+// which would otherwise risk Docker SIGKILL (IMP-022-001).
 func shutdownAll(
 	timeoutS int,
 	sched *scheduler.Scheduler,
@@ -542,12 +549,19 @@ func shutdownAll(
 	shutdownStart := time.Now()
 	totalTimeout := time.Duration(timeoutS) * time.Second
 	slog.Info("starting graceful shutdown", "timeout_s", timeoutS)
+
+	// Overall deadline prevents individual step budgets from summing beyond totalTimeout.
+	// Once this context expires, all remaining steps are skipped immediately.
+	deadlineCtx, deadlineCancel := context.WithTimeout(context.Background(), totalTimeout)
+	defer deadlineCancel()
+	deadline := deadlineCtx.Done()
+
 	defer func() {
 		slog.Info("graceful shutdown complete", "elapsed_ms", time.Since(shutdownStart).Milliseconds(), "budget_s", timeoutS)
 	}()
 
 	// Step 1: Stop scheduler (no new cron jobs fire) — 2s budget
-	runWithTimeout("scheduler", 2*time.Second, func() {
+	runWithTimeout("scheduler", 2*time.Second, deadline, func() {
 		if sched != nil {
 			sched.Stop()
 		}
@@ -558,7 +572,7 @@ func shutdownAll(
 	if httpTimeout < 5*time.Second {
 		httpTimeout = 5 * time.Second
 	}
-	runWithTimeout("HTTP server", httpTimeout, func() {
+	runWithTimeout("HTTP server", httpTimeout, deadline, func() {
 		if srv != nil {
 			httpCtx, httpCancel := context.WithTimeout(context.Background(), httpTimeout)
 			defer httpCancel()
@@ -569,7 +583,7 @@ func shutdownAll(
 	})
 
 	// Step 3: Stop Telegram bot (cancel long-poll) — 2s budget
-	runWithTimeout("Telegram bot", 2*time.Second, func() {
+	runWithTimeout("Telegram bot", 2*time.Second, deadline, func() {
 		if tgBot != nil {
 			tgBot.Stop()
 		}
@@ -579,37 +593,46 @@ func shutdownAll(
 	// Budget covers NATS Fetch() MaxWait (5s) + processing margin (1s).
 	// If goroutines are still blocked in Fetch after 6s, step 6 (NATS close) will
 	// interrupt the call; the done channel ensures no new messages are processed.
-	runWithTimeout("result subscribers", 6*time.Second, func() {
+	runWithTimeout("result subscribers", 6*time.Second, deadline, func() {
 		if resultSub != nil {
 			resultSub.Stop()
 		}
 	})
 
 	// Step 5: Stop connector supervisor (all connectors) — 2s budget
-	runWithTimeout("connectors", 2*time.Second, func() {
+	runWithTimeout("connectors", 2*time.Second, deadline, func() {
 		if supervisor != nil {
 			supervisor.StopAll()
 		}
 	})
 
 	// Step 6: Drain NATS connection (after all NATS consumers are stopped) — 2s budget
-	runWithTimeout("NATS", 2*time.Second, func() {
+	runWithTimeout("NATS", 2*time.Second, deadline, func() {
 		if nc != nil {
 			nc.Close()
 		}
 	})
 
 	// Step 7: Close DB pool (last — all DB consumers are already stopped) — 1s budget
-	runWithTimeout("database pool", 1*time.Second, func() {
+	runWithTimeout("database pool", 1*time.Second, deadline, func() {
 		if pg != nil {
 			pg.Close()
 		}
 	})
 }
 
-// runWithTimeout runs fn with a timeout. If fn doesn't complete within budget,
-// a warning is logged and control returns immediately so shutdown can proceed.
-func runWithTimeout(step string, budget time.Duration, fn func()) {
+// runWithTimeout runs fn with a timeout. If fn doesn't complete within budget
+// or the overall shutdown deadline fires first, a warning is logged and control
+// returns immediately so shutdown can proceed.
+func runWithTimeout(step string, budget time.Duration, deadline <-chan struct{}, fn func()) {
+	// If overall deadline already expired, skip this step immediately.
+	select {
+	case <-deadline:
+		slog.Warn("shutdown: overall deadline exceeded, skipping step", "step", step)
+		return
+	default:
+	}
+
 	slog.Info("shutdown: stopping "+step, "budget", budget)
 	stepStart := time.Now()
 	done := make(chan struct{})
@@ -622,32 +645,58 @@ func runWithTimeout(step string, budget time.Duration, fn func()) {
 		slog.Info("shutdown: "+step+" stopped", "elapsed_ms", time.Since(stepStart).Milliseconds())
 	case <-time.After(budget):
 		slog.Warn("shutdown: step exceeded timeout, proceeding", "step", step, "budget", budget, "elapsed_ms", time.Since(stepStart).Milliseconds())
+	case <-deadline:
+		slog.Warn("shutdown: overall deadline exceeded during step, proceeding", "step", step, "elapsed_ms", time.Since(stepStart).Milliseconds())
 	}
 }
 
 // parseJSONArray parses a JSON array string into []interface{}.
-// Returns nil on empty string. Logs a warning and returns nil on parse error.
+// Returns nil on empty string. Logs a warning with the key name and returns nil on parse error.
 func parseJSONArray(s string) []interface{} {
+	return parseJSONArrayVal("", s)
+}
+
+// parseJSONArrayEnv reads an environment variable and parses it as a JSON array.
+// Returns nil on empty string. Logs a warning with the key name and returns nil on parse error.
+func parseJSONArrayEnv(key string) []interface{} {
+	s := os.Getenv(key)
+	return parseJSONArrayVal(key, s)
+}
+
+// parseJSONArrayVal parses a JSON array string with a key name for structured logging.
+func parseJSONArrayVal(key, s string) []interface{} {
 	if s == "" {
 		return nil
 	}
 	var result []interface{}
 	if err := json.Unmarshal([]byte(s), &result); err != nil {
-		slog.Warn("failed to parse JSON array from env var — using empty value", "error", err, "input_length", len(s))
+		slog.Warn("failed to parse JSON array from env var — using empty value", "key", key, "error", err, "input_length", len(s))
 		return nil
 	}
 	return result
 }
 
 // parseJSONObject parses a JSON object string into map[string]interface{}.
-// Returns nil on empty string. Logs a warning and returns nil on parse error.
+// Returns nil on empty string. Logs a warning with the key name and returns nil on parse error.
 func parseJSONObject(s string) map[string]interface{} {
+	return parseJSONObjectVal("", s)
+}
+
+// parseJSONObjectEnv reads an environment variable and parses it as a JSON object.
+// Returns nil on empty string. Logs a warning with the key name and returns nil on parse error.
+func parseJSONObjectEnv(key string) map[string]interface{} {
+	s := os.Getenv(key)
+	return parseJSONObjectVal(key, s)
+}
+
+// parseJSONObjectVal parses a JSON object string with a key name for structured logging.
+func parseJSONObjectVal(key, s string) map[string]interface{} {
 	if s == "" {
 		return nil
 	}
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(s), &result); err != nil {
-		slog.Warn("failed to parse JSON object from env var — using empty value", "error", err, "input_length", len(s))
+		slog.Warn("failed to parse JSON object from env var — using empty value", "key", key, "error", err, "input_length", len(s))
 		return nil
 	}
 	return result
@@ -663,6 +712,10 @@ func parseFloatEnv(key string) float64 {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		slog.Warn("failed to parse float from env var — using 0", "key", key, "error", err)
+		return 0
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		slog.Warn("non-finite float value in env var — using 0", "key", key, "value", s)
 		return 0
 	}
 	return f

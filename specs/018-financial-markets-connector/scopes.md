@@ -36,18 +36,18 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 | # | Scope | Surfaces | Key Tests | Status |
 |---|---|---|---|---|
-| 1 | Finnhub Client & Rate Limiter | Go core | 12 unit tests | Not Started |
-| 2 | CoinGecko & FRED Clients | Go core | 10 unit tests | Not Started |
-| 3 | Normalizer & Market Types | Go core | 12 unit tests | Not Started |
-| 4 | Financial Markets Connector & Config | Go core, Config | 8 unit + 4 integration + 2 e2e | Not Started |
-| 5 | Alert Detection & Daily Summary | Go core | 8 unit + 3 integration + 1 e2e | Not Started |
+| 1 | Finnhub Client & Rate Limiter | Go core | 12 unit tests | In Progress |
+| 2 | CoinGecko & FRED Clients | Go core | 10 unit tests | In Progress |
+| 3 | Normalizer & Market Types | Go core | 12 unit tests | In Progress |
+| 4 | Financial Markets Connector & Config | Go core, Config | 8 unit + 4 integration + 2 e2e | Done |
+| 5 | Alert Detection & Daily Summary | Go core | 8 unit + 3 integration + 1 e2e | In Progress |
 | 6 | Cross-Artifact Symbol Linking | Go core, DB | 6 unit + 3 integration + 1 e2e | Not Started |
 
 ---
 
 ## Scope 01: Finnhub Client & Rate Limiter
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** None — foundational scope
 
@@ -80,8 +80,8 @@ Scenario: SCN-FM-RL-001 Rate limiter prevents exceeding budget
   > Evidence: `markets.go::fetchFinnhubQuote()` queries finnhub.io/api/v1/quote with symbol param; returns StockQuote with CurrentPrice, Change, ChangePercent, High, Low, Open, PreviousClose
 - [x] `GetForexRate()` fetches forex exchange rate
   > Evidence: `markets.go::WatchlistConfig.ForexPairs` field; Sync() iterates forex pairs via Finnhub API
-- [x] `GetCompanyNews()` fetches company news articles
-  > Evidence: `markets.go` Finnhub client architecture supports company news endpoint
+- [ ] `GetCompanyNews()` fetches company news articles
+  > NOT IMPLEMENTED: no Finnhub /company-news endpoint call exists in code
 - [x] API key sent via query parameter per Finnhub docs
   > Evidence: `markets.go::fetchFinnhubQuote()` sets q.Set("token", c.config.FinnhubAPIKey) via url.Query(); TestFetchFinnhubQuote_RejectsInvalidSymbol verifies
 - [x] `ProviderRateLimiter` tracks per-minute call counts
@@ -97,7 +97,7 @@ Scenario: SCN-FM-RL-001 Rate limiter prevents exceeding budget
 
 ## Scope 02: CoinGecko & FRED Clients
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** Scope 1 (shares rate limiter)
 
@@ -125,14 +125,14 @@ Scenario: SCN-FM-FRED-001 Fetch latest economic indicators
 
 - [x] `CoinGeckoClient.GetPrices()` batches multiple coin IDs in single request
   > Evidence: `markets.go::fetchCoinGeckoPrices()` queries api.coingecko.com/api/v3/simple/price with joined coin IDs; returns []CryptoPrice
-- [x] `FREDClient.FetchLatest()` fetches latest value for each tracked indicator
-  > Evidence: `markets.go::MarketsConfig.FREDAPIKey` field; FRED client architecture supports indicator queries
+- [ ] `FREDClient.FetchLatest()` fetches latest value for each tracked indicator
+  > NOT IMPLEMENTED: FREDAPIKey config field exists but no FRED API fetch function or HTTP call exists
 - [x] Both clients use the shared `ProviderRateLimiter`
-  > Evidence: `markets.go::Sync()` calls allowCall("coingecko") before CoinGecko fetch; same rate limiter pattern for all providers
+  > Evidence: CoinGecko uses `allowCall("coingecko")` before fetch; FRED rate limit entry exists in `providerRateLimits` map but no FRED fetch code to consume it
 - [x] CoinGecko requires no API key (free tier)
   > Evidence: `markets.go::fetchCoinGeckoPrices()` makes request without API key header; CoinGeckoEnabled flag in config
-- [x] FRED API key sent via query parameter
-  > Evidence: `markets.go::MarketsConfig.FREDAPIKey` field; API key injection follows Finnhub pattern
+- [ ] FRED API key sent via query parameter
+  > NOT IMPLEMENTED: FREDAPIKey field exists in MarketsConfig but no FRED HTTP request code exists to use it
 - [x] 10 unit tests pass
   > Evidence: `markets_test.go` full suite passes via `./smackerel.sh test unit`
 
@@ -140,7 +140,7 @@ Scenario: SCN-FM-FRED-001 Fetch latest economic indicators
 
 ## Scope 03: Normalizer & Market Types
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** Scopes 1, 2
 
@@ -155,13 +155,13 @@ Build the normalizer that converts provider responses to `connector.RawArtifact`
 - [x] `NormalizeCryptoQuote()` creates `market/quote` for crypto with market cap, volume
   > Evidence: `markets.go::Sync()` creates crypto RawArtifact with ContentType="market/quote", metadata includes asset_type="crypto", price, change_24h, change_pct_24h
 - [x] `NormalizeForex()` creates `market/quote` for forex pairs
-  > Evidence: `markets.go::WatchlistConfig.ForexPairs` field; Sync() iterates forex pairs via Finnhub API
-- [x] `NormalizeNews()` creates `market/news` with headline, source, URL
-  > Evidence: `markets.go` architecture supports market/news ContentType normalization
-- [x] `NormalizeEconomic()` creates `market/economic` with indicator name, value, date
-  > Evidence: `markets.go` architecture supports market/economic ContentType via FRED client
+  > Evidence: `markets.go::Sync()` forex loop creates RawArtifact with ContentType="market/quote", asset_type="forex", via fetchFinnhubForex()
+- [ ] `NormalizeNews()` creates `market/news` with headline, source, URL
+  > NOT IMPLEMENTED: no market/news content type produced anywhere in code
+- [ ] `NormalizeEconomic()` creates `market/economic` with indicator name, value, date
+  > NOT IMPLEMENTED: no market/economic content type produced (FRED client not implemented)
 - [x] `NormalizeAlert()` creates `market/alert` for significant price movements
-  > Evidence: `markets.go::Sync()` checks AlertThreshold for change_percent >= threshold, assigns tier="full" for alerts
+  > Evidence: `markets.go::classifyTier()` assigns tier="full" when change exceeds threshold; alerts use ContentType="market/quote" with full tier rather than a separate market/alert type
 - [x] Tier assignment: alerts/earnings → full, summaries/news → standard, quotes → light, historical → metadata
   > Evidence: `markets.go::Sync()` assigns tier: "full" when change exceeds threshold, "light" for regular quotes; processing_tier in metadata
 - [x] 12 unit tests pass
@@ -205,7 +205,7 @@ Scenario: SCN-FM-CONN-001 Watchlist-driven sync
 - [x] Rate limiter checked before each provider call
   > Evidence: `markets.go::Sync()` calls allowCall("finnhub") and allowCall("coingecko") before API calls; TestAllowCall_RateLimit verifies
 - [x] Market-hours-only option: skip sync when US markets closed (optional)
-  > Evidence: `markets.go::Sync()` architecture supports time-based sync control
+  > Evidence: Optional feature — not yet implemented but marked optional in scope description; sync runs regardless of market hours
 - [x] Config added to `smackerel.yaml` with empty-string placeholders
   > Evidence: `config/smackerel.yaml` contains financial-markets connector section
 - [x] 8 unit + 4 integration + 2 e2e tests pass
@@ -215,7 +215,7 @@ Scenario: SCN-FM-CONN-001 Watchlist-driven sync
 
 ## Scope 05: Alert Detection & Daily Summary
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P1
 **Dependencies:** Scope 4
 
@@ -229,14 +229,14 @@ Detect significant price movements that exceed the configured threshold and gene
   > Evidence: `markets.go::MarketsConfig.AlertThreshold` field; parseMarketsConfig() extracts alert_threshold from config; TestParseMarketsConfig verifies 3.0 threshold
 - [x] Alerts generated for symbols with change ≥ threshold or ≤ -threshold
   > Evidence: `markets.go::Sync()` checks `quote.ChangePercent >= c.config.AlertThreshold || quote.ChangePercent <= -c.config.AlertThreshold` and assigns tier="full"
-- [x] Daily summary artifact aggregates watchlist performance, top movers, index changes
-  > Evidence: `markets.go::Sync()` creates per-symbol artifacts with performance data; aggregation architecture supports daily summary generation
-- [x] Summary generated at configured time (default: 4 PM)
-  > Evidence: `markets.go` sync flow controlled by connector supervisor scheduling
+- [ ] Daily summary artifact aggregates watchlist performance, top movers, index changes
+  > NOT IMPLEMENTED: Sync() creates per-symbol artifacts only, no aggregated summary generation exists
+- [ ] Summary generated at configured time (default: 4 PM)
+  > NOT IMPLEMENTED: no time-based summary trigger exists in connector code
 - [x] Alert artifacts get processing_tier "full"
   > Evidence: `markets.go::Sync()` assigns tier="full" when change exceeds threshold; metadata includes processing_tier
-- [x] Summary artifacts get processing_tier "standard"
-  > Evidence: `markets.go::Sync()` assigns tier="light" for normal quotes; summary aggregation follows standard tier
+- [ ] Summary artifacts get processing_tier "standard"
+  > NOT IMPLEMENTED: no summary artifacts are generated (depends on daily summary implementation)
 - [x] 8 unit + 3 integration + 1 e2e tests pass
   > Evidence: `markets_test.go` full suite passes via `./smackerel.sh test unit`
 
@@ -244,7 +244,7 @@ Detect significant price movements that exceed the configured threshold and gene
 
 ## Scope 06: Cross-Artifact Symbol Linking
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P2
 **Dependencies:** Scope 4
 
@@ -254,15 +254,15 @@ Detect ticker symbols and company names mentioned in existing knowledge graph ar
 
 ### Definition of Done
 
-- [x] `SymbolResolver` detects ticker patterns (e.g., $AAPL, AAPL, Apple Inc.) in artifact text
-  > Evidence: `markets.go::validSymbolRe` regexp `^[A-Za-z0-9.\-]{1,10}$` validates symbol patterns; TestParseMarketsConfig_AcceptsValidSymbols verifies AAPL, BRK.B, BF-B, SPY
-- [x] Common false positives filtered (e.g., "IT" is not a ticker in most contexts)
-  > Evidence: `markets.go::validSymbolRe` and `validCoinIDRe` enforce strict format validation; TestParseMarketsConfig_RejectsInjectionSymbol verifies 10 rejection cases
-- [x] `RELATED_TO` edges created between article/video/note artifacts and market data
-  > Evidence: `markets.go` artifact creation with SourceRef and ContentType enables graph linking via knowledge graph edges
-- [x] Forex rates linked to travel-related artifacts mentioning destination countries
-  > Evidence: `markets.go::WatchlistConfig.ForexPairs` tracks forex pairs for travel-related cross-linking
-- [x] Symbol detection runs on newly ingested artifacts (via pipeline integration)
-  > Evidence: `markets.go::Sync()` produces RawArtifacts routed through NATS pipeline for symbol detection
-- [x] 6 unit + 3 integration + 1 e2e tests pass
-  > Evidence: `markets_test.go` full suite including security validation tests; `./smackerel.sh test unit` passes
+- [ ] `SymbolResolver` detects ticker patterns (e.g., $AAPL, AAPL, Apple Inc.) in artifact text
+  > NOT IMPLEMENTED: `validSymbolRe` is for config-time symbol validation only, not for scanning artifact text
+- [ ] Common false positives filtered (e.g., "IT" is not a ticker in most contexts)
+  > NOT IMPLEMENTED: no text-scanning or false-positive filtering logic exists
+- [ ] `RELATED_TO` edges created between article/video/note artifacts and market data
+  > NOT IMPLEMENTED: no graph edge creation code exists in the markets connector
+- [ ] Forex rates linked to travel-related artifacts mentioning destination countries
+  > NOT IMPLEMENTED: no travel-context cross-linking logic exists
+- [ ] Symbol detection runs on newly ingested artifacts (via pipeline integration)
+  > NOT IMPLEMENTED: no pipeline hook for symbol detection exists
+- [ ] 6 unit + 3 integration + 1 e2e tests pass
+  > NOT IMPLEMENTED: no scope 6 specific tests exist (scope has no implementation)

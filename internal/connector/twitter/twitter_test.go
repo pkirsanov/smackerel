@@ -948,6 +948,254 @@ func TestTruncateUTF8_FourByteEmoji(t *testing.T) {
 	}
 }
 
+// --- Improve R16: IMP-015-R16-001 — bookmarked/liked signal file parsing ---
+
+func TestSyncArchive_LikeSignalElevatesTier(t *testing.T) {
+	// Before the fix, like.js was never parsed — all tweets got
+	// bookmarked=false, liked=false, so the full-tier fast path for
+	// user-curated content was dead code.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	// tweets.js with two tweets
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"10","full_text":"short","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}},{"tweet":{"id":"20","full_text":"also short","created_at":"Wed Mar 15 15:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	// like.js marks tweet 10 as liked
+	os.WriteFile(filepath.Join(dataDir, "like.js"),
+		[]byte(`window.YTD.like.part0 = [{"like":{"tweetId":"10","fullText":"short"}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	artifacts, _, err := c.syncArchive(context.Background(), "")
+	if err != nil {
+		t.Fatalf("syncArchive failed: %v", err)
+	}
+
+	for _, a := range artifacts {
+		id := a.Metadata["tweet_id"].(string)
+		tier := a.Metadata["processing_tier"].(string)
+		liked := a.Metadata["is_liked"].(bool)
+		if id == "10" {
+			if !liked {
+				t.Error("tweet 10 must be liked=true from like.js")
+			}
+			if tier != "full" {
+				t.Errorf("liked tweet must be full tier, got %q", tier)
+			}
+		}
+		if id == "20" {
+			if liked {
+				t.Error("tweet 20 must not be liked")
+			}
+			// Short tweet with 0 engagement: should be metadata tier
+			if tier != "metadata" {
+				t.Errorf("unloved short tweet expected metadata tier, got %q", tier)
+			}
+		}
+	}
+}
+
+func TestSyncArchive_BookmarkSignalElevatesTier(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"30","full_text":"tiny","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	// bookmark.js marks tweet 30 as bookmarked
+	os.WriteFile(filepath.Join(dataDir, "bookmark.js"),
+		[]byte(`window.YTD.bookmark.part0 = [{"bookmark":{"tweetId":"30"}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	artifacts, _, err := c.syncArchive(context.Background(), "")
+	if err != nil {
+		t.Fatalf("syncArchive failed: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+
+	a := artifacts[0]
+	if a.Metadata["is_bookmarked"] != true {
+		t.Error("tweet 30 must be bookmarked=true from bookmark.js")
+	}
+	if a.Metadata["processing_tier"] != "full" {
+		t.Errorf("bookmarked tweet must be full tier, got %q", a.Metadata["processing_tier"])
+	}
+}
+
+func TestSyncArchive_MissingSignalFilesGraceful(t *testing.T) {
+	// When like.js and bookmark.js don't exist (older exports), sync must
+	// still succeed — signals are best-effort.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"hello world tweet","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	artifacts, _, err := c.syncArchive(context.Background(), "")
+	if err != nil {
+		t.Fatalf("syncArchive must succeed without signal files: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+}
+
+func TestSyncArchive_CorruptSignalFileGraceful(t *testing.T) {
+	// A corrupt signal file must not crash or block the main tweet import.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"hello world tweet","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	os.WriteFile(filepath.Join(dataDir, "like.js"),
+		[]byte(`THIS IS NOT VALID JSON OR JS`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	artifacts, _, err := c.syncArchive(context.Background(), "")
+	if err != nil {
+		t.Fatalf("corrupt signal file must not break sync: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+}
+
+func TestParseSignalFile_SymlinkEscapeBlocked(t *testing.T) {
+	// Signal file that is a symlink escaping archive_dir must be rejected.
+	archiveDir := t.TempDir()
+	dataDir := filepath.Join(archiveDir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	outsideDir := t.TempDir()
+	outsideFile := filepath.Join(outsideDir, "secret.json")
+	os.WriteFile(outsideFile, []byte(`window.YTD.like.part0 = [{"like":{"tweetId":"999"}}]`), 0o600)
+
+	symlinkPath := filepath.Join(dataDir, "like.js")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skipf("cannot create symlinks on this OS: %v", err)
+	}
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: archiveDir}
+
+	ids := c.parseSignalFile(context.Background(), "like.js", "like")
+	if len(ids) != 0 {
+		t.Error("signal file escaping archive_dir must return empty set")
+	}
+}
+
+// --- Improve R16: IMP-015-R16-002 — mentions in metadata ---
+
+func TestNormalizeTweet_MentionsInMetadata(t *testing.T) {
+	// Before the fix, mentions were parsed from JSON but never stored
+	// in the artifact metadata — an R-005 compliance gap.
+	tweet := ArchiveTweet{
+		ID:       "400",
+		FullText: "Thanks @alice and @bob for the help!",
+		Entities: TweetEntities{
+			Mentions: []TweetMention{
+				{ScreenName: "alice"},
+				{ScreenName: "bob"},
+			},
+		},
+	}
+
+	artifact := normalizeTweet(tweet, false, false, nil)
+	mentions, ok := artifact.Metadata["mentions"].([]string)
+	if !ok {
+		t.Fatal("expected mentions metadata to be []string")
+	}
+	if len(mentions) != 2 {
+		t.Fatalf("expected 2 mentions, got %d", len(mentions))
+	}
+	if mentions[0] != "alice" || mentions[1] != "bob" {
+		t.Errorf("unexpected mentions: %v", mentions)
+	}
+}
+
+func TestNormalizeTweet_EmptyMentions(t *testing.T) {
+	tweet := ArchiveTweet{
+		ID:       "401",
+		FullText: "No mentions here",
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	mentions, ok := artifact.Metadata["mentions"].([]string)
+	if !ok {
+		t.Fatal("expected mentions metadata to be []string")
+	}
+	if len(mentions) != 0 {
+		t.Errorf("expected 0 mentions, got %d", len(mentions))
+	}
+}
+
+// --- Improve R16: IMP-015-R16-003 — control char sanitization in title (CWE-116) ---
+
+func TestBuildTweetTitle_NewlinesSanitized(t *testing.T) {
+	// Before the fix, control characters passed through verbatim into the
+	// artifact title, enabling potential log/output injection (CWE-116).
+	tweet := ArchiveTweet{
+		ID:       "500",
+		FullText: "Line one\nLine two\rLine three\tTabbed",
+	}
+	title := buildTweetTitle(tweet)
+	if strings.ContainsAny(title, "\n\r\t") {
+		t.Errorf("title must not contain control characters, got %q", title)
+	}
+	if !strings.Contains(title, "Line one") || !strings.Contains(title, "Line two") {
+		t.Error("title content must be preserved after sanitization")
+	}
+}
+
+func TestBuildTweetTitle_NullByteSanitized(t *testing.T) {
+	tweet := ArchiveTweet{
+		ID:       "501",
+		FullText: "Hello\x00World",
+	}
+	title := buildTweetTitle(tweet)
+	if strings.Contains(title, "\x00") {
+		t.Error("null byte must be sanitized from title")
+	}
+	if !strings.Contains(title, "Hello") || !strings.Contains(title, "World") {
+		t.Error("content around null byte must be preserved")
+	}
+}
+
+func TestSanitizeControlChars_PreservesUnicode(t *testing.T) {
+	input := "日本語のツイート 🐦"
+	got := sanitizeControlChars(input)
+	if got != input {
+		t.Errorf("Unicode content must be preserved, got %q", got)
+	}
+}
+
+func TestSanitizeControlChars_C1Range(t *testing.T) {
+	// C1 control characters (U+007F to U+009F) must be replaced.
+	input := "before\x7Fafter\u0085more"
+	got := sanitizeControlChars(input)
+	if strings.ContainsRune(got, 0x7F) {
+		t.Error("DEL (0x7F) must be sanitized")
+	}
+	if strings.ContainsRune(got, 0x85) {
+		t.Error("NEL (U+0085) must be sanitized")
+	}
+}
+
 func TestTruncateUTF8_ShortString(t *testing.T) {
 	got := truncateUTF8("hi", 80)
 	if got != "hi" {

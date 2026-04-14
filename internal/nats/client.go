@@ -145,9 +145,12 @@ func (c *Client) Healthy() bool {
 
 // Close drains and closes the NATS connection with a timeout
 // to prevent shutdown from hanging if drain cannot complete.
+// The drain timeout is 2s to stay within the shutdown step budget
+// allocated by shutdownAll (IMP-022-R29-002).
 func (c *Client) Close() {
-	// Start drain in background; if it doesn't complete within 5 seconds,
-	// force-close the connection so shutdown can proceed.
+	// Start drain in background; if it doesn't complete within 2 seconds,
+	// force-close the connection so shutdown can proceed without leaking
+	// a background goroutine that races with subsequent shutdown steps.
 	done := make(chan struct{})
 	go func() {
 		if err := c.Conn.Drain(); err != nil {
@@ -158,8 +161,8 @@ func (c *Client) Close() {
 	select {
 	case <-done:
 		// Drain completed
-	case <-time.After(5 * time.Second):
-		slog.Warn("NATS drain timed out after 5s, force-closing connection")
+	case <-time.After(2 * time.Second):
+		slog.Warn("NATS drain timed out after 2s, force-closing connection")
 		c.Conn.Close()
 	}
 }

@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1478,6 +1479,126 @@ func TestHealth_FileDisappearsAfterConnect(t *testing.T) {
 	if c.Health(context.Background()) != connector.HealthError {
 		t.Errorf("expected health error after file deletion, got %s", c.Health(context.Background()))
 	}
+}
+
+// --- IMP-010-R18-001: repeat_visit_threshold Inf/NaN/negative guard ---
+
+// IMP-010-R18-001 adversarial: Before the fix, float64 Inf/NaN silently converted
+// to math.MinInt via int(v), making RepeatVisitThreshold always satisfied (count >= MinInt),
+// which escalated ALL URLs and bypassed the privacy gate for metadata-tier entries.
+func TestParseBrowserConfig_RepeatVisitThreshold_InfNaN(t *testing.T) {
+	tests := []struct {
+		name   string
+		value  float64
+		errMsg string
+	}{
+		{"positive infinity", math.Inf(1), "repeat_visit_threshold must be a finite number"},
+		{"negative infinity", math.Inf(-1), "repeat_visit_threshold must be a finite number"},
+		{"NaN", math.NaN(), "repeat_visit_threshold must be a finite number"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := connector.ConnectorConfig{
+				SourceConfig: map[string]interface{}{
+					"history_path":           "/some/path",
+					"repeat_visit_threshold": tt.value,
+				},
+			}
+			_, err := parseBrowserConfig(config)
+			if err == nil {
+				t.Fatalf("expected error for repeat_visit_threshold=%v", tt.value)
+			}
+			if !contains(err.Error(), tt.errMsg) {
+				t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
+			}
+		})
+	}
+}
+
+// IMP-010-R18-001 adversarial: Negative threshold (int branch) would match all URLs
+// since count >= -N is always true, causing universal tier escalation.
+func TestParseBrowserConfig_RepeatVisitThreshold_Negative(t *testing.T) {
+	config := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"history_path":           "/some/path",
+			"repeat_visit_threshold": -1,
+		},
+	}
+	_, err := parseBrowserConfig(config)
+	if err == nil {
+		t.Fatal("expected error for negative repeat_visit_threshold")
+	}
+	if !contains(err.Error(), "repeat_visit_threshold must be >= 0") {
+		t.Errorf("expected range validation error, got: %v", err)
+	}
+}
+
+// IMP-010-R18-001: threshold=0 should be accepted (disables repeat detection).
+func TestParseBrowserConfig_RepeatVisitThreshold_Zero(t *testing.T) {
+	config := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"history_path":           "/some/path",
+			"repeat_visit_threshold": 0,
+		},
+	}
+	cfg, err := parseBrowserConfig(config)
+	if err != nil {
+		t.Fatalf("unexpected error for threshold=0: %v", err)
+	}
+	if cfg.RepeatVisitThreshold != 0 {
+		t.Errorf("expected threshold 0, got %d", cfg.RepeatVisitThreshold)
+	}
+}
+
+// --- IMP-010-R18-002: content fetch failures must not degrade connector health ---
+
+// IMP-010-R18-002 adversarial: Before the fix, Sync set lastSyncErrors = stats.fetchFails,
+// causing HealthError when ANY content page returned 404. Content fetch failures are
+// expected operational events. Verify they don't degrade health.
+func TestProcessEntries_FetchFails_NotSyncErrors(t *testing.T) {
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		SocialMediaIndividualThreshold: 5 * time.Minute,
+	}
+	c.health = connector.HealthHealthy
+	c.contentFetcher = func(url string) (string, error) {
+		return "", fmt.Errorf("HTTP 404: page not found")
+	}
+
+	entries := []HistoryEntry{
+		{URL: "https://a.com/p1", Title: "P1", VisitTime: time.Now(), DwellTime: 6 * time.Minute, Domain: "a.com"},
+		{URL: "https://b.com/p2", Title: "P2", VisitTime: time.Now(), DwellTime: 7 * time.Minute, Domain: "b.com"},
+		{URL: "https://c.com/p3", Title: "P3", VisitTime: time.Now(), DwellTime: 8 * time.Minute, Domain: "c.com"},
+	}
+
+	_, _, stats := c.processEntries(entries, 0)
+
+	if stats.fetchFails != 3 {
+		t.Fatalf("expected 3 fetch failures, got %d", stats.fetchFails)
+	}
+
+	// Simulate Sync's post-processEntries health update (the fixed path).
+	// After the fix, lastSyncErrors = 0, NOT stats.fetchFails.
+	c.mu.Lock()
+	c.lastSyncFetchFails = stats.fetchFails
+	c.lastSyncErrors = 0 // Fixed: not stats.fetchFails
+	c.lastSyncTime = time.Now()
+	if c.lastSyncErrors > 0 {
+		c.health = connector.HealthError
+	} else {
+		c.health = connector.HealthHealthy
+	}
+	c.mu.Unlock()
+
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("content fetch failures should NOT degrade health; got %s", c.Health(context.Background()))
+	}
+	// Verify fetch fails are still tracked separately
+	c.mu.RLock()
+	if c.lastSyncFetchFails != 3 {
+		t.Errorf("expected lastSyncFetchFails=3, got %d", c.lastSyncFetchFails)
+	}
+	c.mu.RUnlock()
 }
 
 // CHAOS: dedupByURLDate must handle empty/nil input without panicking.

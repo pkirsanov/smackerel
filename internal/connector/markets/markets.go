@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -199,6 +200,15 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 		tier := classifyTier(cfg.AlertThreshold, quote.ChangePercent)
 
+		// Determine asset_type: ETFs are listed separately in config.
+		assetType := "stock"
+		for _, etf := range cfg.Watchlist.ETFs {
+			if etf == symbol {
+				assetType = "etf"
+				break
+			}
+		}
+
 		artifacts = append(artifacts, connector.RawArtifact{
 			SourceID:    "financial-markets",
 			SourceRef:   fmt.Sprintf("quote-%s-%s", symbol, now.Format("2006-01-02")),
@@ -207,6 +217,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			RawContent:  fmt.Sprintf("%s: $%.2f (change: %+.2f / %+.1f%%), range: $%.2f–$%.2f", symbol, quote.CurrentPrice, quote.Change, quote.ChangePercent, quote.Low, quote.High),
 			Metadata: map[string]interface{}{
 				"symbol":          symbol,
+				"asset_type":      assetType,
 				"price":           quote.CurrentPrice,
 				"change":          quote.Change,
 				"change_percent":  quote.ChangePercent,
@@ -294,7 +305,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					"price":           quote.CurrentPrice,
 					"change":          quote.Change,
 					"change_percent":  quote.ChangePercent,
-					"processing_tier": "light",
+					"processing_tier": classifyTier(cfg.AlertThreshold, quote.ChangePercent),
 				},
 				CapturedAt: now,
 			})
@@ -480,9 +491,14 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 		price := data["usd"]
 		changePct := data["usd_24h_change"]
 		// Calculate absolute 24h change from percentage and current price.
+		// Guard: if changePct <= -100, the denominator (1 + pct/100) is zero or negative,
+		// producing Inf/NaN which corrupts JSON serialization downstream.
 		var change24h float64
-		if changePct != 0 {
+		if changePct != 0 && changePct > -100 {
 			change24h = price - (price / (1 + changePct/100))
+		} else if changePct <= -100 {
+			// Total loss: change equals the entire previous price.
+			change24h = -price
 		}
 		prices = append(prices, CryptoPrice{
 			ID:           id,
@@ -496,7 +512,11 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 }
 
 // classifyTier returns the processing tier based on threshold and change percent.
+// NaN/Inf changePct is treated as "full" to avoid silently suppressing alerts on corrupt data.
 func classifyTier(threshold, changePct float64) string {
+	if math.IsNaN(changePct) || math.IsInf(changePct, 0) {
+		return "full"
+	}
 	if threshold > 0 && (changePct >= threshold || changePct <= -threshold) {
 		return "full"
 	}
@@ -614,6 +634,9 @@ func parseMarketsConfig(config connector.ConnectorConfig) (MarketsConfig, error)
 	}
 
 	if threshold, ok := config.SourceConfig["alert_threshold"].(float64); ok {
+		if math.IsNaN(threshold) || math.IsInf(threshold, 0) {
+			return MarketsConfig{}, fmt.Errorf("alert_threshold must be a finite number, got %v", threshold)
+		}
 		if threshold < 0 {
 			return MarketsConfig{}, fmt.Errorf("alert_threshold must be non-negative, got %v", threshold)
 		}

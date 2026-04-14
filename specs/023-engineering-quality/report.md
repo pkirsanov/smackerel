@@ -281,3 +281,28 @@ A stochastic quality sweep (trigger: improve, mode: improve-existing) probed the
 - `./smackerel.sh test unit` — **Pass** (all 33 Go packages + Python ML sidecar)
 - `internal/api` re-ran (not cached) — 0.565s
 - All existing tests continue to pass — no regressions
+
+## Improvement Sweep R19 (2026-04-14, improve trigger)
+
+A stochastic quality sweep (trigger: improve, mode: improve-existing, Round R19) probed the spec 023 implementation for operational resilience improvements.
+
+### Findings and Fixes
+
+| # | Type | Location | Description | Fix Applied |
+|---|------|----------|-------------|------------|
+| IMP-023-R19-001 | 🟡 PERFORMANCE | `health.go` HealthHandler | `checkMLSidecar()` and `checkOllama()` run sequentially, each with 2s timeout. When both services are unreachable, the health endpoint takes 4+ seconds — exceeding Docker HEALTHCHECK's typical 3s `--timeout` and causing false container restarts. | Parallelized both external HTTP probes using `sync.WaitGroup` goroutines; local checks (intelligence, telegram, connectors) run concurrently with the probes. Worst-case latency drops from ~4s to ~2s. |
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `internal/api/health.go` | Replaced sequential ML sidecar + Ollama probes with parallel goroutine execution via `sync.WaitGroup`; interleaved local checks (intelligence, telegram) during probe wait |
+| `internal/api/health_test.go` | Added `TestHealthHandler_ParallelProbes` (timing-based assertion: two 1s-delay probes complete in <1.8s, not ≥2s), `TestHealthHandler_ParallelProbes_MixedStatus` (one up + one down returns correct per-probe statuses) |
+
+### Verification
+
+- `./smackerel.sh check` — **Pass** (config SST in sync + go vet/build clean)
+- `./smackerel.sh test unit` — **Pass** (all 33 Go packages + Python ML sidecar)
+- `internal/api` re-ran (not cached) — 1.791s
+- All existing tests continue to pass — no regressions
+- Parallel probe test validates timing boundary (sequential would fail the <1.8s assertion)
