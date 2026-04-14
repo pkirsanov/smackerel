@@ -2303,3 +2303,1445 @@ func TestSyncMixedAssetTypes(t *testing.T) {
 		}
 	}
 }
+
+// --- Scope 1 Tests: Finnhub Company News ---
+
+func TestFetchFinnhubCompanyNews_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/company-news" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("symbol") != "AAPL" {
+			t.Errorf("unexpected symbol: %s", r.URL.Query().Get("symbol"))
+		}
+		if r.URL.Query().Get("token") != "test-key" {
+			t.Errorf("unexpected token: %s", r.URL.Query().Get("token"))
+		}
+		if r.URL.Query().Get("from") != "2024-01-15" {
+			t.Errorf("unexpected from: %s", r.URL.Query().Get("from"))
+		}
+		if r.URL.Query().Get("to") != "2024-01-15" {
+			t.Errorf("unexpected to: %s", r.URL.Query().Get("to"))
+		}
+		json.NewEncoder(w).Encode([]map[string]interface{}{
+			{
+				"category": "company",
+				"datetime": 1705334400,
+				"headline": "Apple Reports Record Revenue",
+				"id":       12345,
+				"image":    "https://example.com/image.jpg",
+				"related":  "AAPL",
+				"source":   "Reuters",
+				"summary":  "Apple Inc reported record quarterly revenue.",
+				"url":      "https://example.com/article",
+			},
+			{
+				"category": "company",
+				"datetime": 1705338000,
+				"headline": "Apple Launches New Product",
+				"id":       12346,
+				"image":    "",
+				"related":  "AAPL",
+				"source":   "Bloomberg",
+				"summary":  "Apple announced a new product line.",
+				"url":      "https://example.com/article2",
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	articles, err := c.fetchFinnhubCompanyNews(context.Background(), "AAPL", "2024-01-15", "2024-01-15")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(articles) != 2 {
+		t.Fatalf("expected 2 articles, got %d", len(articles))
+	}
+	if articles[0].Headline != "Apple Reports Record Revenue" {
+		t.Errorf("unexpected headline: %s", articles[0].Headline)
+	}
+	if articles[0].Source != "Reuters" {
+		t.Errorf("unexpected source: %s", articles[0].Source)
+	}
+	if articles[0].URL != "https://example.com/article" {
+		t.Errorf("unexpected URL: %s", articles[0].URL)
+	}
+	if articles[1].Source != "Bloomberg" {
+		t.Errorf("unexpected source for second article: %s", articles[1].Source)
+	}
+}
+
+func TestFetchFinnhubCompanyNews_RejectsInvalidSymbol(t *testing.T) {
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+
+	cases := []string{"AAPL&inject", "../etc/passwd", "", strings.Repeat("A", 11)}
+	for _, sym := range cases {
+		_, err := c.fetchFinnhubCompanyNews(context.Background(), sym, "2024-01-15", "2024-01-15")
+		if err == nil {
+			t.Errorf("expected error for invalid symbol %q", sym)
+		}
+	}
+}
+
+func TestFetchFinnhubCompanyNews_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"error":"unauthorized"}`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "bad-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	_, err := c.fetchFinnhubCompanyNews(context.Background(), "AAPL", "2024-01-15", "2024-01-15")
+	if err == nil {
+		t.Fatal("expected error for 403 response")
+	}
+	if !strings.Contains(err.Error(), "403") {
+		t.Errorf("error should mention 403, got: %v", err)
+	}
+}
+
+func TestFetchFinnhubCompanyNews_EmptyResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode([]map[string]interface{}{})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	articles, err := c.fetchFinnhubCompanyNews(context.Background(), "AAPL", "2024-01-15", "2024-01-15")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(articles) != 0 {
+		t.Errorf("expected 0 articles, got %d", len(articles))
+	}
+}
+
+func TestFetchFinnhubCompanyNews_MalformedJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{not valid`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	_, err := c.fetchFinnhubCompanyNews(context.Background(), "AAPL", "2024-01-15", "2024-01-15")
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+	if !strings.Contains(err.Error(), "decode") {
+		t.Errorf("error should mention decode, got: %v", err)
+	}
+}
+
+func TestFetchFinnhubCompanyNews_RateLimitIntegration(t *testing.T) {
+	// Verify company news calls count toward Finnhub rate budget.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode([]map[string]interface{}{})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	// Fill rate limit to near capacity.
+	for i := 0; i < 54; i++ {
+		c.tryRecordCall("finnhub")
+	}
+	// One more should succeed.
+	if !c.tryRecordCall("finnhub") {
+		t.Fatal("55th call should succeed")
+	}
+	// Now limit is exhausted — news fetch should fail in Sync context.
+	if c.tryRecordCall("finnhub") {
+		t.Error("56th call should be denied")
+	}
+}
+
+// --- Scope 2 Tests: FRED Client ---
+
+func TestFetchFREDLatest_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/fred/series/observations" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("series_id") != "UNRATE" {
+			t.Errorf("unexpected series_id: %s", r.URL.Query().Get("series_id"))
+		}
+		if r.URL.Query().Get("api_key") != "fred-test-key" {
+			t.Errorf("unexpected api_key: %s", r.URL.Query().Get("api_key"))
+		}
+		if r.URL.Query().Get("file_type") != "json" {
+			t.Errorf("unexpected file_type: %s", r.URL.Query().Get("file_type"))
+		}
+		if r.URL.Query().Get("limit") != "1" {
+			t.Errorf("unexpected limit: %s", r.URL.Query().Get("limit"))
+		}
+		if r.URL.Query().Get("sort_order") != "desc" {
+			t.Errorf("unexpected sort_order: %s", r.URL.Query().Get("sort_order"))
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2024-01-01", "value": "3.7"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FREDAPIKey = "fred-test-key"
+	c.httpClient = srv.Client()
+	c.fredBaseURL = srv.URL
+
+	obs, err := c.fetchFREDLatest(context.Background(), "UNRATE")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obs.SeriesID != "UNRATE" {
+		t.Errorf("expected UNRATE, got %s", obs.SeriesID)
+	}
+	if obs.Date != "2024-01-01" {
+		t.Errorf("expected 2024-01-01, got %s", obs.Date)
+	}
+	if obs.NumValue != 3.7 {
+		t.Errorf("expected 3.7, got %f", obs.NumValue)
+	}
+	if obs.Value != "3.7" {
+		t.Errorf("expected raw '3.7', got %q", obs.Value)
+	}
+}
+
+func TestFetchFREDLatest_RejectsInvalidSeriesID(t *testing.T) {
+	c := New("financial-markets")
+	c.config.FREDAPIKey = "test"
+
+	cases := []string{"", "lowercase", "AAPL&inject", "../passwd", strings.Repeat("A", 21), "GDP RATE"}
+	for _, id := range cases {
+		_, err := c.fetchFREDLatest(context.Background(), id)
+		if err == nil {
+			t.Errorf("expected error for invalid series ID %q", id)
+		}
+	}
+}
+
+func TestFetchFREDLatest_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"error_message":"bad api key"}`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FREDAPIKey = "bad-key"
+	c.httpClient = srv.Client()
+	c.fredBaseURL = srv.URL
+
+	_, err := c.fetchFREDLatest(context.Background(), "GDP")
+	if err == nil {
+		t.Fatal("expected error for 403 response")
+	}
+	if !strings.Contains(err.Error(), "403") {
+		t.Errorf("error should mention 403, got: %v", err)
+	}
+}
+
+func TestFetchFREDLatest_NoObservations(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{},
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FREDAPIKey = "test"
+	c.httpClient = srv.Client()
+	c.fredBaseURL = srv.URL
+
+	_, err := c.fetchFREDLatest(context.Background(), "GDP")
+	if err == nil {
+		t.Fatal("expected error for empty observations")
+	}
+	if !strings.Contains(err.Error(), "no observations") {
+		t.Errorf("error should mention no observations, got: %v", err)
+	}
+}
+
+func TestFetchFREDLatest_MissingDataMarker(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2024-01-01", "value": "."},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FREDAPIKey = "test"
+	c.httpClient = srv.Client()
+	c.fredBaseURL = srv.URL
+
+	_, err := c.fetchFREDLatest(context.Background(), "GDP")
+	if err == nil {
+		t.Fatal("expected error for missing data marker")
+	}
+	if !strings.Contains(err.Error(), "missing data") {
+		t.Errorf("error should mention missing data, got: %v", err)
+	}
+}
+
+func TestFetchFREDLatest_InvalidValueFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2024-01-01", "value": "not-a-number"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FREDAPIKey = "test"
+	c.httpClient = srv.Client()
+	c.fredBaseURL = srv.URL
+
+	_, err := c.fetchFREDLatest(context.Background(), "GDP")
+	if err == nil {
+		t.Fatal("expected error for non-numeric value")
+	}
+	if !strings.Contains(err.Error(), "parse FRED value") {
+		t.Errorf("error should mention parse, got: %v", err)
+	}
+}
+
+func TestFetchFREDLatest_MalformedJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{bad json`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.config.FREDAPIKey = "test"
+	c.httpClient = srv.Client()
+	c.fredBaseURL = srv.URL
+
+	_, err := c.fetchFREDLatest(context.Background(), "GDP")
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+}
+
+func TestFetchFREDLatest_MalformedBaseURL(t *testing.T) {
+	c := New("financial-markets")
+	c.config.FREDAPIKey = "test"
+	c.fredBaseURL = "://invalid"
+
+	_, err := c.fetchFREDLatest(context.Background(), "GDP")
+	if err == nil {
+		t.Fatal("expected error for malformed base URL")
+	}
+	if !strings.Contains(err.Error(), "parse FRED URL") {
+		t.Errorf("error should mention URL parse, got: %v", err)
+	}
+}
+
+func TestParseMarketsConfig_FREDEnabled(t *testing.T) {
+	cases := []struct {
+		name        string
+		credentials map[string]string
+		source      map[string]interface{}
+		wantEnabled bool
+		wantErr     bool
+	}{
+		{
+			name:        "enabled by API key presence",
+			credentials: map[string]string{"finnhub_api_key": "test", "fred_api_key": "fred-key"},
+			source:      map[string]interface{}{},
+			wantEnabled: true,
+		},
+		{
+			name:        "disabled when no API key",
+			credentials: map[string]string{"finnhub_api_key": "test"},
+			source:      map[string]interface{}{},
+			wantEnabled: false,
+		},
+		{
+			name:        "explicitly enabled with key",
+			credentials: map[string]string{"finnhub_api_key": "test", "fred_api_key": "fred-key"},
+			source:      map[string]interface{}{"fred_enabled": true},
+			wantEnabled: true,
+		},
+		{
+			name:        "explicitly disabled overrides key",
+			credentials: map[string]string{"finnhub_api_key": "test", "fred_api_key": "fred-key"},
+			source:      map[string]interface{}{"fred_enabled": false},
+			wantEnabled: false,
+		},
+		{
+			name:        "enabled without key is error",
+			credentials: map[string]string{"finnhub_api_key": "test"},
+			source:      map[string]interface{}{"fred_enabled": true},
+			wantErr:     true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := parseMarketsConfig(connector.ConnectorConfig{
+				Credentials:  tc.credentials,
+				SourceConfig: tc.source,
+			})
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.FREDEnabled != tc.wantEnabled {
+				t.Errorf("FREDEnabled = %v, want %v", cfg.FREDEnabled, tc.wantEnabled)
+			}
+		})
+	}
+}
+
+func TestParseMarketsConfig_FREDSeriesDefaults(t *testing.T) {
+	cfg, err := parseMarketsConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "test", "fred_api_key": "key"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := []string{"GDP", "UNRATE", "CPIAUCSL", "DFF", "FEDFUNDS"}
+	if len(cfg.FREDSeries) != len(expected) {
+		t.Fatalf("expected %d default series, got %d", len(expected), len(cfg.FREDSeries))
+	}
+	for i, s := range expected {
+		if cfg.FREDSeries[i] != s {
+			t.Errorf("FREDSeries[%d] = %q, want %q", i, cfg.FREDSeries[i], s)
+		}
+	}
+}
+
+func TestParseMarketsConfig_FREDSeriesCustom(t *testing.T) {
+	cfg, err := parseMarketsConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "test"},
+		SourceConfig: map[string]interface{}{
+			"fred_series": []interface{}{"GDP", "CPI"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.FREDSeries) != 2 {
+		t.Fatalf("expected 2 series, got %d", len(cfg.FREDSeries))
+	}
+}
+
+func TestParseMarketsConfig_FREDSeriesRejectsInvalid(t *testing.T) {
+	cases := []struct {
+		name  string
+		value interface{}
+	}{
+		{"lowercase", "gdp"},
+		{"injection", "GDP&x=1"},
+		{"too long", strings.Repeat("A", 21)},
+		{"non-string", 42},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseMarketsConfig(connector.ConnectorConfig{
+				Credentials: map[string]string{"finnhub_api_key": "test"},
+				SourceConfig: map[string]interface{}{
+					"fred_series": []interface{}{tc.value},
+				},
+			})
+			if err == nil {
+				t.Errorf("expected error for invalid FRED series %v", tc.value)
+			}
+		})
+	}
+}
+
+// --- Scope 3 Tests: market/news and market/economic normalizer ---
+
+func TestSyncProducesNewsArtifacts(t *testing.T) {
+	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/company-news" {
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{
+					"category": "company",
+					"datetime": 1705334400,
+					"headline": "Apple Q4 Results",
+					"id":       99001,
+					"image":    "",
+					"related":  "AAPL",
+					"source":   "MarketWatch",
+					"summary":  "Apple beat expectations.",
+					"url":      "https://example.com/news1",
+				},
+			})
+			return
+		}
+		// Quote endpoint for stock quotes.
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer finnhubSrv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = finnhubSrv.Client()
+	c.finnhubBaseURL = finnhubSrv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var newsArtifacts []connector.RawArtifact
+	for _, a := range artifacts {
+		if a.ContentType == "market/news" {
+			newsArtifacts = append(newsArtifacts, a)
+		}
+	}
+	if len(newsArtifacts) == 0 {
+		t.Fatal("expected at least one market/news artifact")
+	}
+
+	news := newsArtifacts[0]
+	if news.Title != "Apple Q4 Results" {
+		t.Errorf("expected 'Apple Q4 Results', got %q", news.Title)
+	}
+	if news.URL != "https://example.com/news1" {
+		t.Errorf("expected URL, got %q", news.URL)
+	}
+	if news.Metadata["source"] != "MarketWatch" {
+		t.Errorf("expected MarketWatch source, got %v", news.Metadata["source"])
+	}
+	if news.Metadata["symbol"] != "AAPL" {
+		t.Errorf("expected AAPL symbol, got %v", news.Metadata["symbol"])
+	}
+	if news.Metadata["processing_tier"] != "standard" {
+		t.Errorf("expected standard tier for news, got %v", news.Metadata["processing_tier"])
+	}
+}
+
+func TestSyncProducesEconomicArtifacts(t *testing.T) {
+	fredSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seriesID := r.URL.Query().Get("series_id")
+		values := map[string]string{
+			"GDP":    "25000.5",
+			"UNRATE": "3.7",
+			"DFF":    "5.33",
+		}
+		val, ok := values[seriesID]
+		if !ok {
+			val = "100.0"
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2024-01-01", "value": val},
+			},
+		})
+	}))
+	defer fredSrv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = fredSrv.Client()
+	c.fredBaseURL = fredSrv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		FREDAPIKey:     "fred-key",
+		FREDEnabled:    true,
+		FREDSeries:     []string{"GDP", "UNRATE", "DFF"},
+		AlertThreshold: 5.0,
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var econArtifacts []connector.RawArtifact
+	for _, a := range artifacts {
+		if a.ContentType == "market/economic" {
+			econArtifacts = append(econArtifacts, a)
+		}
+	}
+	if len(econArtifacts) != 3 {
+		t.Fatalf("expected 3 market/economic artifacts, got %d", len(econArtifacts))
+	}
+
+	// Check one artifact in detail.
+	var gdpFound bool
+	for _, a := range econArtifacts {
+		if a.Metadata["series_id"] == "GDP" {
+			gdpFound = true
+			if a.Metadata["value"] != 25000.5 {
+				t.Errorf("expected GDP value 25000.5, got %v", a.Metadata["value"])
+			}
+			if a.Metadata["date"] != "2024-01-01" {
+				t.Errorf("expected date 2024-01-01, got %v", a.Metadata["date"])
+			}
+			if a.Metadata["processing_tier"] != "standard" {
+				t.Errorf("expected standard tier, got %v", a.Metadata["processing_tier"])
+			}
+			if !strings.Contains(a.Title, "GDP") {
+				t.Errorf("title should contain GDP, got %q", a.Title)
+			}
+		}
+	}
+	if !gdpFound {
+		t.Error("GDP artifact not found")
+	}
+}
+
+func TestSyncFREDDisabledSkipsFetch(t *testing.T) {
+	srvCalled := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		srvCalled = true
+		json.NewEncoder(w).Encode(map[string]interface{}{})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.fredBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey: "test-key",
+		FREDEnabled:   false,
+		FREDSeries:    []string{"GDP"},
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if srvCalled {
+		t.Error("FRED server should not be called when FREDEnabled=false")
+	}
+}
+
+func TestSyncFREDTotalFailureSetsHealthDegraded(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"down"}`))
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.fredBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		FREDAPIKey:     "fred-key",
+		FREDEnabled:    true,
+		FREDSeries:     []string{"GDP", "UNRATE"},
+		AlertThreshold: 5.0,
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// FRED is the only provider with actual fetch calls, so total failure → HealthError.
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected HealthError after total FRED failure, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestSyncAllProvidersCombined(t *testing.T) {
+	// Full integration: stocks + crypto + forex + news + FRED in a single Sync.
+	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/company-news":
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{"category": "company", "datetime": 1705334400, "headline": "Test News", "id": 1, "related": "AAPL", "source": "Test", "summary": "Summary", "url": "https://example.com"},
+			})
+		default:
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
+			})
+		}
+	}))
+	defer finnhubSrv.Close()
+
+	coingeckoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]map[string]float64{
+			"bitcoin": {"usd": 67000.0, "usd_24h_change": 2.5},
+		})
+	}))
+	defer coingeckoSrv.Close()
+
+	fredSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2024-01-01", "value": "3.7"},
+			},
+		})
+	}))
+	defer fredSrv.Close()
+
+	c := New("financial-markets")
+	c.finnhubBaseURL = finnhubSrv.URL
+	c.coingeckoBaseURL = coingeckoSrv.URL
+	c.fredBaseURL = fredSrv.URL
+	c.httpClient = &http.Client{Timeout: 5 * time.Second}
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:    "test-key",
+		CoinGeckoEnabled: true,
+		FREDAPIKey:       "fred-key",
+		FREDEnabled:      true,
+		FREDSeries:       []string{"UNRATE"},
+		AlertThreshold:   5.0,
+		Watchlist: WatchlistConfig{
+			Stocks:     []string{"AAPL"},
+			Crypto:     []string{"bitcoin"},
+			ForexPairs: []string{"USD/JPY"},
+		},
+	}
+
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cursor == "" {
+		t.Error("cursor should be set")
+	}
+
+	// Count by content type.
+	types := map[string]int{}
+	for _, a := range artifacts {
+		types[a.ContentType]++
+	}
+
+	// Expect: 1 stock quote + 1 forex quote + 1 crypto quote + 1 news + 1 FRED = 5
+	if types["market/quote"] < 3 {
+		t.Errorf("expected at least 3 market/quote artifacts, got %d", types["market/quote"])
+	}
+	if types["market/news"] != 1 {
+		t.Errorf("expected 1 market/news artifact, got %d", types["market/news"])
+	}
+	if types["market/economic"] != 1 {
+		t.Errorf("expected 1 market/economic artifact, got %d", types["market/economic"])
+	}
+}
+
+func TestDefaultFREDSeries(t *testing.T) {
+	expected := []string{"GDP", "UNRATE", "CPIAUCSL", "DFF", "FEDFUNDS"}
+	if len(defaultFREDSeries) != len(expected) {
+		t.Fatalf("expected %d default FRED series, got %d", len(expected), len(defaultFREDSeries))
+	}
+	for i, s := range expected {
+		if defaultFREDSeries[i] != s {
+			t.Errorf("defaultFREDSeries[%d] = %q, want %q", i, defaultFREDSeries[i], s)
+		}
+	}
+}
+
+func TestValidFREDSeriesRe(t *testing.T) {
+	valid := []string{"GDP", "UNRATE", "CPIAUCSL", "DFF", "FEDFUNDS", "T10Y2Y"}
+	for _, s := range valid {
+		if !validFREDSeriesRe.MatchString(s) {
+			t.Errorf("expected %q to be valid FRED series ID", s)
+		}
+	}
+	invalid := []string{"", "gdp", "GDP RATE", "GDP&x=1", "../admin", strings.Repeat("A", 21)}
+	for _, s := range invalid {
+		if validFREDSeriesRe.MatchString(s) {
+			t.Errorf("expected %q to be invalid FRED series ID", s)
+		}
+	}
+}
+
+// --- Scope 5 Tests: Daily Summary ---
+
+func TestBuildDailySummary_Structure(t *testing.T) {
+	now := time.Date(2024, 6, 10, 17, 0, 0, 0, time.UTC)
+	artifacts := []connector.RawArtifact{
+		{
+			ContentType: "market/quote",
+			Title:       "AAPL: $175.00 (+1.3%)",
+			Metadata: map[string]interface{}{
+				"symbol":          "AAPL",
+				"change_percent":  1.3,
+				"processing_tier": "light",
+			},
+		},
+		{
+			ContentType: "market/quote",
+			Title:       "TSLA: $250.00 (-2.5%)",
+			Metadata: map[string]interface{}{
+				"symbol":          "TSLA",
+				"change_percent":  -2.5,
+				"processing_tier": "light",
+			},
+		},
+		{
+			ContentType: "market/news",
+			Title:       "Apple Reports Record Revenue",
+		},
+		{
+			ContentType: "market/economic",
+			Metadata: map[string]interface{}{
+				"series_id": "GDP",
+				"value":     25000.5,
+				"date":      "2024-01-01",
+			},
+		},
+	}
+
+	summary := buildDailySummary(artifacts, now)
+
+	if summary.ContentType != "market/daily-summary" {
+		t.Errorf("expected market/daily-summary, got %s", summary.ContentType)
+	}
+	if !strings.Contains(summary.Title, "Market Summary") {
+		t.Errorf("title should contain 'Market Summary', got %q", summary.Title)
+	}
+	if summary.Metadata["processing_tier"] != "standard" {
+		t.Errorf("expected standard tier (no alerts), got %v", summary.Metadata["processing_tier"])
+	}
+	if summary.Metadata["gainers_count"] != 1 {
+		t.Errorf("expected 1 gainer, got %v", summary.Metadata["gainers_count"])
+	}
+	if summary.Metadata["losers_count"] != 1 {
+		t.Errorf("expected 1 loser, got %v", summary.Metadata["losers_count"])
+	}
+	if summary.Metadata["alerts_count"] != 0 {
+		t.Errorf("expected 0 alerts, got %v", summary.Metadata["alerts_count"])
+	}
+	if summary.Metadata["news_count"] != 1 {
+		t.Errorf("expected 1 news, got %v", summary.Metadata["news_count"])
+	}
+	if !strings.Contains(summary.RawContent, "Gainers:") {
+		t.Error("summary should contain Gainers section")
+	}
+	if !strings.Contains(summary.RawContent, "Losers:") {
+		t.Error("summary should contain Losers section")
+	}
+	if !strings.Contains(summary.RawContent, "News:") {
+		t.Error("summary should contain News section")
+	}
+	if !strings.Contains(summary.RawContent, "Economic Indicators:") {
+		t.Error("summary should contain Economic Indicators section")
+	}
+	if !strings.Contains(summary.RawContent, "AAPL") {
+		t.Error("summary should mention AAPL")
+	}
+	if !strings.Contains(summary.RawContent, "GDP") {
+		t.Error("summary should mention GDP")
+	}
+
+	syms, ok := summary.Metadata["related_symbols"].([]string)
+	if !ok {
+		t.Fatal("related_symbols should be []string")
+	}
+	if len(syms) != 2 {
+		t.Errorf("expected 2 symbols in summary, got %d", len(syms))
+	}
+}
+
+func TestBuildDailySummary_AlertUpgradesTier(t *testing.T) {
+	now := time.Date(2024, 6, 10, 17, 0, 0, 0, time.UTC)
+	artifacts := []connector.RawArtifact{
+		{
+			ContentType: "market/quote",
+			Metadata: map[string]interface{}{
+				"symbol":          "AAPL",
+				"change_percent":  1.3,
+				"processing_tier": "light",
+			},
+		},
+		{
+			ContentType: "market/quote",
+			Metadata: map[string]interface{}{
+				"symbol":          "TSLA",
+				"change_percent":  7.5,
+				"processing_tier": "full", // alert triggered
+			},
+		},
+	}
+
+	summary := buildDailySummary(artifacts, now)
+
+	if summary.Metadata["processing_tier"] != "full" {
+		t.Errorf("expected full tier when alert present, got %v", summary.Metadata["processing_tier"])
+	}
+	if summary.Metadata["alerts_count"] != 1 {
+		t.Errorf("expected 1 alert, got %v", summary.Metadata["alerts_count"])
+	}
+	if !strings.Contains(summary.RawContent, "ALERTS:") {
+		t.Error("summary should contain ALERTS section when alerts present")
+	}
+}
+
+func TestBuildDailySummary_EmptyArtifacts(t *testing.T) {
+	now := time.Date(2024, 6, 10, 17, 0, 0, 0, time.UTC)
+	summary := buildDailySummary(nil, now)
+
+	if summary.ContentType != "market/daily-summary" {
+		t.Errorf("expected market/daily-summary, got %s", summary.ContentType)
+	}
+	if summary.Metadata["processing_tier"] != "standard" {
+		t.Errorf("expected standard tier for empty summary, got %v", summary.Metadata["processing_tier"])
+	}
+}
+
+func TestBuildDailySummary_CryptoChangePct(t *testing.T) {
+	now := time.Date(2024, 6, 10, 17, 0, 0, 0, time.UTC)
+	artifacts := []connector.RawArtifact{
+		{
+			ContentType: "market/quote",
+			Metadata: map[string]interface{}{
+				"symbol":          "bitcoin",
+				"change_pct_24h":  -8.5,
+				"processing_tier": "full",
+				"asset_type":      "crypto",
+			},
+		},
+	}
+
+	summary := buildDailySummary(artifacts, now)
+	if summary.Metadata["losers_count"] != 1 {
+		t.Errorf("expected 1 loser (crypto), got %v", summary.Metadata["losers_count"])
+	}
+	if summary.Metadata["processing_tier"] != "full" {
+		t.Errorf("expected full tier (crypto alert), got %v", summary.Metadata["processing_tier"])
+	}
+}
+
+func TestDailySummary_TimeGate(t *testing.T) {
+	et, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal("failed to load timezone")
+	}
+
+	cases := []struct {
+		name    string
+		now     time.Time
+		lastDay string
+		want    bool
+	}{
+		{
+			name:    "weekday after 16:30 ET, no previous summary",
+			now:     time.Date(2024, 6, 10, 17, 0, 0, 0, et), // Monday 5pm ET
+			lastDay: "",
+			want:    true,
+		},
+		{
+			name:    "weekday at exactly 16:30 ET",
+			now:     time.Date(2024, 6, 10, 16, 30, 0, 0, et), // Monday 4:30pm ET
+			lastDay: "",
+			want:    true,
+		},
+		{
+			name:    "weekday before 16:30 ET",
+			now:     time.Date(2024, 6, 10, 14, 0, 0, 0, et), // Monday 2pm ET
+			lastDay: "",
+			want:    false,
+		},
+		{
+			name:    "Saturday after 16:30 ET",
+			now:     time.Date(2024, 6, 8, 17, 0, 0, 0, et), // Saturday
+			lastDay: "",
+			want:    false,
+		},
+		{
+			name:    "Sunday after 16:30 ET",
+			now:     time.Date(2024, 6, 9, 17, 0, 0, 0, et), // Sunday
+			lastDay: "",
+			want:    false,
+		},
+		{
+			name:    "already generated today",
+			now:     time.Date(2024, 6, 10, 18, 0, 0, 0, et),
+			lastDay: "2024-06-10",
+			want:    false,
+		},
+		{
+			name:    "generated yesterday, new day after close",
+			now:     time.Date(2024, 6, 11, 17, 0, 0, 0, et), // Tuesday
+			lastDay: "2024-06-10",
+			want:    true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := New("financial-markets")
+			c.lastSummaryDate = tc.lastDay
+
+			got := c.shouldGenerateDailySummary(tc.now)
+			if got != tc.want {
+				t.Errorf("shouldGenerateDailySummary() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSyncGeneratesDailySummary(t *testing.T) {
+	// Set up a mock time after market close on a weekday.
+	et, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal("failed to load timezone")
+	}
+	mockNow := time.Date(2024, 6, 10, 17, 0, 0, 0, et) // Monday 5pm ET
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.3, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+	c.nowFunc = func() time.Time { return mockNow }
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var summaryFound bool
+	for _, a := range artifacts {
+		if a.ContentType == "market/daily-summary" {
+			summaryFound = true
+			if a.Metadata["processing_tier"] != "standard" {
+				t.Errorf("expected standard tier, got %v", a.Metadata["processing_tier"])
+			}
+		}
+	}
+	if !summaryFound {
+		t.Error("expected a market/daily-summary artifact after market close")
+	}
+
+	// Verify lastSummaryDate was set.
+	c.mu.RLock()
+	lastDate := c.lastSummaryDate
+	c.mu.RUnlock()
+	if lastDate != "2024-06-10" {
+		t.Errorf("expected lastSummaryDate=2024-06-10, got %q", lastDate)
+	}
+
+	// Second sync same day should NOT generate another summary.
+	artifacts2, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, a := range artifacts2 {
+		if a.ContentType == "market/daily-summary" {
+			t.Error("should not generate duplicate daily summary on same day")
+		}
+	}
+}
+
+func TestSyncNoDailySummaryBeforeMarketClose(t *testing.T) {
+	et, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal("failed to load timezone")
+	}
+	mockNow := time.Date(2024, 6, 10, 14, 0, 0, 0, et) // Monday 2pm ET
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.3, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+	c.nowFunc = func() time.Time { return mockNow }
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, a := range artifacts {
+		if a.ContentType == "market/daily-summary" {
+			t.Error("should not generate daily summary before market close")
+		}
+	}
+}
+
+// --- Scope 6 Tests: Cross-Artifact Symbol Linking ---
+
+func TestResolveSymbols_TickerNotation(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{
+			name: "single $TICKER",
+			text: "Check out $AAPL today",
+			want: []string{"AAPL"},
+		},
+		{
+			name: "multiple $TICKERs",
+			text: "$AAPL and $TSLA are up, $MSFT is flat",
+			want: []string{"AAPL", "TSLA", "MSFT"},
+		},
+		{
+			name: "crypto tickers",
+			text: "$BTC hit $67k and $ETH is climbing",
+			want: []string{"BTC", "ETH"},
+		},
+		{
+			name: "no duplicates",
+			text: "$AAPL is great, $AAPL rocks",
+			want: []string{"AAPL"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ResolveSymbols(tc.text)
+			if len(got) != len(tc.want) {
+				t.Fatalf("ResolveSymbols(%q) = %v (len %d), want %v (len %d)", tc.text, got, len(got), tc.want, len(tc.want))
+			}
+			for _, w := range tc.want {
+				found := false
+				for _, g := range got {
+					if g == w {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected %q in result %v", w, got)
+				}
+			}
+		})
+	}
+}
+
+func TestResolveSymbols_CompanyNames(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want []string
+	}{
+		{
+			name: "Apple → AAPL",
+			text: "Apple reported strong earnings this quarter",
+			want: []string{"AAPL"},
+		},
+		{
+			name: "Tesla and Google",
+			text: "Tesla deliveries beat expectations. Google announces new AI.",
+			want: []string{"TSLA", "GOOGL"},
+		},
+		{
+			name: "Bitcoin mention",
+			text: "Bitcoin surges past $60k as institutional demand grows",
+			want: []string{"BTC"},
+		},
+		{
+			name: "Alphabet maps to GOOGL",
+			text: "Alphabet Inc earnings call scheduled for Thursday",
+			want: []string{"GOOGL"},
+		},
+		{
+			name: "mixed ticker and name",
+			text: "$NVDA surges after Nvidia announces new chip",
+			want: []string{"NVDA"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ResolveSymbols(tc.text)
+			if len(got) != len(tc.want) {
+				t.Fatalf("ResolveSymbols(%q) = %v (len %d), want %v (len %d)", tc.text, got, len(got), tc.want, len(tc.want))
+			}
+			for _, w := range tc.want {
+				found := false
+				for _, g := range got {
+					if g == w {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected %q in result %v", w, got)
+				}
+			}
+		})
+	}
+}
+
+func TestResolveSymbols_NoFalsePositives(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+	}{
+		{"common words", "IT is great and $IT should be filtered"},
+		{"two-letter words", "I went $TO the store $AT noon"},
+		{"articles", "we $DO $GO $IN $UP $BY $IF"},
+		{"time markers", "$AM and $PM are not tickers"},
+		{"abbreviations", "$CEO gave $IPO speech on $TV in $UK and $EU"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ResolveSymbols(tc.text)
+			if len(got) != 0 {
+				t.Errorf("expected no symbols from %q, got %v", tc.text, got)
+			}
+		})
+	}
+}
+
+func TestResolveSymbols_EmptyText(t *testing.T) {
+	got := ResolveSymbols("")
+	if len(got) != 0 {
+		t.Errorf("expected no symbols from empty text, got %v", got)
+	}
+}
+
+func TestResolveSymbols_NoTickersInPlainText(t *testing.T) {
+	got := ResolveSymbols("The market went up today with strong volume.")
+	if len(got) != 0 {
+		t.Errorf("expected no symbols from plain text, got %v", got)
+	}
+}
+
+func TestSync_DetectsSymbolsInNews(t *testing.T) {
+	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/company-news" {
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{
+					"category": "company",
+					"datetime": 1705334400,
+					"headline": "Apple and $TSLA stocks surge",
+					"id":       50001,
+					"related":  "AAPL",
+					"source":   "Reuters",
+					"summary":  "Tesla deliveries beat expectations. Apple launched new products.",
+					"url":      "https://example.com/news",
+				},
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer finnhubSrv.Close()
+
+	// Use a time before market close so no daily summary is generated.
+	et, _ := time.LoadLocation("America/New_York")
+	mockNow := time.Date(2024, 6, 10, 10, 0, 0, 0, et)
+
+	c := New("financial-markets")
+	c.httpClient = finnhubSrv.Client()
+	c.finnhubBaseURL = finnhubSrv.URL
+	c.nowFunc = func() time.Time { return mockNow }
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Find the news artifact.
+	var newsArtifact *connector.RawArtifact
+	for i := range artifacts {
+		if artifacts[i].ContentType == "market/news" {
+			newsArtifact = &artifacts[i]
+			break
+		}
+	}
+	if newsArtifact == nil {
+		t.Fatal("expected a news artifact")
+	}
+
+	detected, ok := newsArtifact.Metadata["detected_symbols"]
+	if !ok {
+		t.Fatal("news artifact should have detected_symbols metadata")
+	}
+	detectedSlice, ok := detected.([]string)
+	if !ok {
+		t.Fatal("detected_symbols should be []string")
+	}
+
+	// Should detect AAPL (from "Apple" in headline+summary), TSLA (from "$TSLA" and "Tesla")
+	wantSymbols := map[string]bool{"AAPL": false, "TSLA": false}
+	for _, s := range detectedSlice {
+		if _, exists := wantSymbols[s]; exists {
+			wantSymbols[s] = true
+		}
+	}
+	for sym, found := range wantSymbols {
+		if !found {
+			t.Errorf("expected %q in detected_symbols %v", sym, detectedSlice)
+		}
+	}
+
+	// Quote artifact should have related_symbols.
+	var quoteArtifact *connector.RawArtifact
+	for i := range artifacts {
+		if artifacts[i].ContentType == "market/quote" {
+			quoteArtifact = &artifacts[i]
+			break
+		}
+	}
+	if quoteArtifact == nil {
+		t.Fatal("expected a quote artifact")
+	}
+	related, ok := quoteArtifact.Metadata["related_symbols"]
+	if !ok {
+		t.Fatal("quote artifact should have related_symbols metadata")
+	}
+	relatedSlice, ok := related.([]string)
+	if !ok {
+		t.Fatal("related_symbols should be []string")
+	}
+	if len(relatedSlice) != 1 || relatedSlice[0] != "AAPL" {
+		t.Errorf("quote related_symbols should be [AAPL], got %v", relatedSlice)
+	}
+}
+
+func TestSync_EconomicArtifactsHaveAllWatchlistSymbols(t *testing.T) {
+	fredSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2024-01-01", "value": "3.7"},
+			},
+		})
+	}))
+	defer fredSrv.Close()
+
+	et, _ := time.LoadLocation("America/New_York")
+	mockNow := time.Date(2024, 6, 10, 10, 0, 0, 0, et)
+
+	c := New("financial-markets")
+	c.httpClient = fredSrv.Client()
+	c.fredBaseURL = fredSrv.URL
+	c.nowFunc = func() time.Time { return mockNow }
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		FREDAPIKey:     "fred-key",
+		FREDEnabled:    true,
+		FREDSeries:     []string{"GDP"},
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL"},
+			Crypto: []string{"bitcoin"},
+		},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var econArtifact *connector.RawArtifact
+	for i := range artifacts {
+		if artifacts[i].ContentType == "market/economic" {
+			econArtifact = &artifacts[i]
+			break
+		}
+	}
+	if econArtifact == nil {
+		t.Fatal("expected an economic artifact")
+	}
+
+	related, ok := econArtifact.Metadata["related_symbols"]
+	if !ok {
+		t.Fatal("economic artifact should have related_symbols metadata")
+	}
+	relatedSlice, ok := related.([]string)
+	if !ok {
+		t.Fatal("related_symbols should be []string")
+	}
+
+	// Should include AAPL and BITCOIN (uppercase)
+	wantSymbols := map[string]bool{"AAPL": false, "BITCOIN": false}
+	for _, s := range relatedSlice {
+		if _, exists := wantSymbols[s]; exists {
+			wantSymbols[s] = true
+		}
+	}
+	for sym, found := range wantSymbols {
+		if !found {
+			t.Errorf("expected %q in economic related_symbols %v", sym, relatedSlice)
+		}
+	}
+}
+
+func TestEnrichArtifactsWithSymbols_QuoteArtifact(t *testing.T) {
+	artifacts := []connector.RawArtifact{
+		{
+			ContentType: "market/quote",
+			Metadata: map[string]interface{}{
+				"symbol": "AAPL",
+			},
+		},
+	}
+	cfg := MarketsConfig{}
+	enrichArtifactsWithSymbols(artifacts, cfg)
+
+	related, ok := artifacts[0].Metadata["related_symbols"].([]string)
+	if !ok {
+		t.Fatal("expected related_symbols as []string")
+	}
+	if len(related) != 1 || related[0] != "AAPL" {
+		t.Errorf("expected [AAPL], got %v", related)
+	}
+}

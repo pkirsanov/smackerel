@@ -375,9 +375,9 @@ Spec 003 delivery-lockdown complete. All 7 scopes verified Done with real implem
 | G3 | Momentum formula missing `star_count × 5.0` and `connection_count × 0.5` from spec R-208 | Medium | **Fixed** — `CalculateMomentum` now accepts `starCount` and `connectionCount` params; `UpdateAllMomentum` queries star_count and connection edges |
 | G4 | Topic transition threshold: spec says Hot at momentum >50, implementation used >=15 | Medium | **Fixed** — `TransitionState` thresholds updated: Hot >50, Active >=10 |
 | G5 | Health degradation thresholds from design (5-9 degraded, 10+ failing) not implemented | Low | **Fixed** — Added `HealthDegraded`, `HealthFailing` statuses and `HealthFromErrorCount()` to connector package |
-| G6 | IMAP connector uses Gmail REST API instead of IMAP protocol (go-imap v2) per design mandate | Informational | **Documented** — Pragmatic implementation choice; REST API is functional. Protocol-first migration is future work. |
-| G7 | CalDAV connector uses Google Calendar REST API v3 instead of CalDAV protocol (go-webdav) per design | Informational | **Documented** — Same pragmatic choice as G6. Protocol-first migration to go-webdav is future work. |
-| G8 | Per-connector cron scheduling (R-206: Gmail 15min, YouTube 4h, Calendar 2h) not wired into scheduler | Low | **Documented** — Scheduler handles digest and topic lifecycle crons but not per-connector sync schedules. Supervisor manages connector loops but without cron-frequency control. Future work. |
+| G6 | IMAP connector uses Gmail REST API instead of IMAP protocol (go-imap v2) per design mandate | Informational | **Documented** — Pragmatic implementation choice; REST API is functional. Protocol migration tracked as a separate improvement. |
+| G7 | CalDAV connector uses Google Calendar REST API v3 instead of CalDAV protocol (go-webdav) per design | Informational | **Documented** — Same pragmatic choice as G6. Protocol migration to go-webdav tracked as a separate improvement. |
+| G8 | Per-connector cron scheduling (R-206: Gmail 15min, YouTube 4h, Calendar 2h) not wired into scheduler | Low | **Documented** — Scheduler handles digest and topic lifecycle crons but not per-connector sync schedules. Supervisor manages connector loops but without cron-frequency control. Tracked as a separate improvement. |
 
 ### Files Changed
 

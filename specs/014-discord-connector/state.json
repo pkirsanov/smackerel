@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/014-discord-connector",
   "featureName": "Discord Connector",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.workflow",
@@ -16,13 +16,14 @@
       "test",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
+    "status": "done",
+    "completedScopes": ["1", "2", "3", "4", "5", "6"],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
@@ -30,9 +31,17 @@
       "test",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "spec-review"
     ],
-    "scopeProgress": [],
+    "scopeProgress": [
+      {"scope": 1, "status": "done"},
+      {"scope": 2, "status": "done"},
+      {"scope": 3, "status": "done"},
+      {"scope": 4, "status": "done"},
+      {"scope": 5, "status": "done"},
+      {"scope": 6, "status": "done"}
+    ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -66,11 +75,21 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.iterate",
+      "phasesExecuted": ["implement", "test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-14T06:00:00Z",
+      "completedAt": "2026-04-14T07:00:00Z",
+      "summary": "Implemented Scopes 2-6: (S2) Real REST client with doDiscordRequest, fetchChannelMessages pagination, fetchPinnedMessages, rate limit handling. (S3) Real token validation via GET /users/@me. (S4) Gateway EventPoller with per-channel polling, event buffering, reconnection with exponential backoff. (S5) Active+archived thread fetching, per-thread cursors, thread metadata on artifacts. (S6) Capture tier forced to full, capture metadata in artifacts. 135 tests pass with -race."
+    }
+  ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-14T00:00:00Z",
+  "lastUpdatedAt": "2026-04-14T07:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

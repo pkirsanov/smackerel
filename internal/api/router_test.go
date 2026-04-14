@@ -25,6 +25,12 @@ func (m *mockWebUI) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 func (m *mockWebUI) StatusPage(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }
+func (m *mockWebUI) SyncConnectorHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) BookmarkUploadHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
 
 // mockOAuth implements OAuthFlow with 200 OK stubs.
 type mockOAuth struct{}
