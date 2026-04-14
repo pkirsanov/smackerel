@@ -1481,3 +1481,42 @@ func TestIsMLHealthy_Chaos_ConcurrentFlapping(t *testing.T) {
 	wg.Wait()
 	// Success = no panics, no data races (verified by -race flag)
 }
+
+// TestIsMLHealthy_CancelledContext_DoesNotTaintCache verifies that a cancelled
+// request context does not cause the ML health probe to cache a false-unhealthy
+// result. Before the fix (IMP-022-R29-001), probeMLHealth used the caller's
+// request context — a cancelled request would fail the probe and cache false
+// for the entire TTL, degrading all subsequent searches to text_fallback.
+func TestIsMLHealthy_CancelledContext_DoesNotTaintCache(t *testing.T) {
+	// Set up a healthy ML sidecar
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	engine := &SearchEngine{
+		MLSidecarURL:   ts.URL,
+		HealthCacheTTL: 30 * time.Second,
+	}
+
+	// Create an already-cancelled context (simulates a disconnected client)
+	cancelledCtx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	// Force TTL expiry so isMLHealthy will probe
+	engine.mlHealthAt.Store(0)
+
+	// Call with the cancelled context — the probe should still succeed
+	// because it uses a detached context internally (IMP-022-R29-001 fix)
+	result := engine.isMLHealthy(cancelledCtx)
+	if !result {
+		t.Error("expected healthy result even with cancelled request context — " +
+			"probeMLHealth should use a detached context so cancelled requests " +
+			"don't taint the shared ML health cache")
+	}
+
+	// Verify the cache was set to healthy
+	if !engine.mlHealthy.Load() {
+		t.Error("ML health cache should be true after successful probe with cancelled context")
+	}
+}

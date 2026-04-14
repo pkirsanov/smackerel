@@ -250,6 +250,53 @@ $
 
 ---
 
+## Regression Sweep (R03 — Stochastic Quality Sweep)
+
+**Date:** April 14, 2026
+**Trigger:** `regression`
+**Mode:** `regression-to-doc`
+
+### Findings
+
+| ID | Severity | Finding | Fix |
+|----|----------|---------|-----|
+| REG-008-001 | Bug | `extractContext` corrupts longer URLs when a shorter URL is a prefix (e.g., `https://x.com/a` removed from `https://x.com/a/b` leaves `/b` as context) | Sort URLs by descending length before `ReplaceAll` |
+| REG-008-002 | Bug | `handleShareCapture` multi-URL all-fail reply uses success marker (`. Saved 0 of N URLs`) | Use error marker `?` when `saved == 0` |
+| REG-008-003 | Doc | Anonymous forward assembly key collision — two completely anonymous senders in same chat map to identical key `{chatID, 0, "Anonymous"}` | Known limitation; documented in regression test |
+| REG-008-004 | Doc | `maxMessages=1` config does not immediately flush — first message creates buffer, overflow triggers on 2nd Add | Documented behavior in regression test |
+| REG-008-005 | Doc | `FormatConversation` with empty SourceChat and empty SenderName produces valid but minimal output | Regression guard test added |
+| REG-008-006 | Doc | `FlushChat` iterates-and-deletes map — safe in Go but regression guard ensures multiple buffers flushed | Regression guard test added |
+
+### Fixes Applied
+
+**`internal/telegram/share.go`:**
+- `extractContext`: added `sort.Slice(sorted, ...)` to remove URLs longest-first, preventing prefix collision (REG-008-001)
+- `handleShareCapture`: added `if saved == 0` branch to reply with error marker instead of success marker (REG-008-002)
+
+### Regression Tests Added (8 tests)
+
+| Test | File | Finding | Adversarial? |
+|------|------|---------|-------------|
+| `TestREG008001_ExtractContext_PrefixURLCollision` | `share_test.go` | REG-008-001 | Yes — would fail if sort removed |
+| `TestREG008001b_ExtractContext_PrefixURLCollision_ReversedInput` | `share_test.go` | REG-008-001 | Yes — tests input-order independence |
+| `TestREG008001c_ExtractContext_TriplePrefixChain` | `share_test.go` | REG-008-001 | Yes — triple nested prefix |
+| `TestREG008002_ExtractForwardMeta_ZeroDate` | `share_test.go` | REG-008-002 | Yes — epoch date guard |
+| `TestREG008003_AnonymousForwardKeyCollision` | `share_test.go` | REG-008-003 | Yes — documents known collision |
+| `TestREG008004_AssemblyMaxMessages1_SecondMsgTriggersOverflow` | `share_test.go` | REG-008-004 | Yes — edge config guard |
+| `TestREG008005_FormatConversation_EmptySourceAndParticipants` | `share_test.go` | REG-008-005 | Yes — degenerate input guard |
+| `TestREG008006_FlushChat_MultipleBuffersSameChat` | `share_test.go` | REG-008-006 | Yes — map iteration safety |
+| `TestREG008007_ExtractAllURLs_MarkdownLink` | `share_test.go` | Doc | Known limitation guard |
+| `TestREG008008_ExtractContext_DoesNotMutateInput` | `share_test.go` | Doc | Immutability guard |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit — all 34 packages pass, including telegram (24.090s)
+$ ./smackerel.sh check — Config is in sync with SST
+```
+
+---
+
 ### Validation Evidence
 
 **Phase Agent:** `bubbles.validate`

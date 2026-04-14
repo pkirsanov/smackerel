@@ -449,6 +449,20 @@ func determineLinkType(activity TakeoutActivity, artifactLat, artifactLng, proxi
 		}
 	}
 
+	// When Route is empty, fall back to StartLocation/EndLocation.
+	if len(activity.Route) == 0 {
+		if activity.StartLocation.Lat != 0 || activity.StartLocation.Lng != 0 {
+			if Haversine(artifactPt, activity.StartLocation) <= proximityKm {
+				return "temporal-spatial"
+			}
+		}
+		if activity.EndLocation.Lat != 0 || activity.EndLocation.Lng != 0 {
+			if Haversine(artifactPt, activity.EndLocation) <= proximityKm {
+				return "temporal-spatial"
+			}
+		}
+	}
+
 	return "temporal-only"
 }
 

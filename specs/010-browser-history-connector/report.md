@@ -1,12 +1,44 @@
 # Report: 010 — Browser History Connector
 
-> **Status:** Done
+> **Status:** In Progress (downgraded from Done — 7 DoD items overclaimed, see V-010 reconciliation)
 
 ---
 
 ## Summary
 
-Browser History Connector delivered under delivery-lockdown mode. 2 scopes completed: (1) Connector Implementation, Config & Registration; (2) Social Media Aggregation, Repeat Visits & Privacy Gate. Implementation: connector.go (580+ lines) with full Connector interface, social media aggregation, repeat visit detection, privacy gate, content fetch failure handling, URL+date dedup (R-010), and social aggregate peak page tracking (R-005). connector_test.go with 35 tests, browser_test.go with 10 tests — all pass. Lint, format, check clean. Config SST pipeline extended for browser-history connector section. Stochastic quality sweeps fixed pipeline SourceID routing (R001), configurable dwell thresholds dead code (R002), added 6 additional test quality tests (F001/F003–F007), implemented R-010 URL+date dedup, added R-005 social aggregate peak tracking, and corrected artifact documentation drift (config location claims).
+Browser History Connector delivered under delivery-lockdown mode. 2 scopes in progress: (1) Connector Implementation, Config & Registration; (2) Social Media Aggregation, Repeat Visits & Privacy Gate. Implementation: connector.go (580+ lines) with full Connector interface, social media aggregation, repeat visit detection, privacy gate, content fetch failure handling, URL+date dedup (R-010), and social aggregate peak page tracking (R-005). connector_test.go with 44 tests, browser_test.go with 15 tests — all 59 unit tests pass. Lint, format, check clean. Config SST pipeline extended for browser-history connector section. Stochastic quality sweeps fixed pipeline SourceID routing (R001), configurable dwell thresholds dead code (R002), added 6 additional test quality tests (F001/F003–F007), implemented R-010 URL+date dedup, added R-005 social aggregate peak tracking, and corrected artifact documentation drift (config location claims). V-010 reconciliation (April 14 2026) unchecked 7 overclaimed integration/E2E DoD items that referenced non-existent Go test files; scopes downgraded to In Progress.
+
+## Reconciliation Pass (stochastic-quality-sweep, validate trigger, April 14 2026)
+
+### Findings Detected
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| V-010-001 | Medium | 7 DoD items across both scopes checked `[x]` for integration/E2E tests that reference non-existent Go test files (`tests/integration/browser_history_test.go`, `tests/e2e/browser_history_e2e_test.go`). Evidence text honestly admitted "requires live stack" but checkboxes were marked complete. | Unchecked all 7 overclaimed DoD items. Scopes downgraded from Done to In Progress. Spec status downgraded from done to in_progress. |
+| V-010-002 | Low | scopes.md described `ParseChromeHistorySince` as "no LIMIT" but actual implementation has `LIMIT 10000` per batch for memory safety (confirmed by `TestParseChromeHistorySince_HasLimit`). | Updated scopes.md Scope 1 description and DoD item to say "LIMIT 10000 per batch". |
+| V-010-003 | Low | Test counts stale: DoD evidence said "33 tests in connector_test.go" but actual count is 44 top-level test functions. Report said 55 total; actual is 59 (44 + 15). | Updated all test count references in scopes.md and report.md. |
+
+### Remaining Unchecked DoD Items
+| Scope | DoD Item | Blocker |
+|-------|----------|---------|
+| 1 | Integration tests T-15 through T-17 | `tests/integration/browser_history_test.go` does not exist; requires live stack + SQLite driver |
+| 1 | E2E tests T-18, T-19 | `tests/e2e/browser_history_e2e_test.go` does not exist; requires live stack |
+| 1 | `./smackerel.sh test integration` passes | No Go integration test files for this connector |
+| 2 | Integration tests T-30 through T-32 | Same as Scope 1 |
+| 2 | E2E tests T-33, T-34 | Same as Scope 1 |
+| 2 | E2E regression suite from Scope 1 (T-18, T-19) | Scope 1 E2E files do not exist |
+| 2 | `./smackerel.sh test integration` passes | Same as Scope 1 |
+
+### Pre-existing Deferred Finding
+| ID | Finding | First Documented |
+|----|---------|-----------------|
+| F002/R003 | `ParseChromeHistorySince` requires SQLite driver (`modernc.org/sqlite` or `mattn/go-sqlite3`) not in `go.mod`. Runtime `sql.Open("sqlite3", ...)` will fail with "unknown driver". | Round 3 test-to-doc, Round 5 regression-to-doc |
+
+### Verification
+```
+$ ./smackerel.sh test unit — all 33 Go packages pass, 72 Python tests pass
+$ ./smackerel.sh lint — exit 0
+$ ./smackerel.sh check — config in sync
+```
 
 ## Reconciliation Pass (stochastic-quality-sweep, validate trigger, April 10 2026)
 
@@ -74,9 +106,9 @@ ok      github.com/smackerel/smackerel/internal/web/icons       0.005s
 44 passed in 0.79s
 ```
 
-Browser-specific tests (55 tests across 2 files):
+Browser-specific tests (59 tests across 2 files):
 
-- `connector_test.go` (40 tests): TestProcessEntries_DwellTimeTiering, TestProcessEntries_SkipFiltering, TestConnect_HistoryFileNotFound, TestCopyHistoryFileFrom_RetryOnFailure, TestParseBrowserConfig_Defaults, TestParseBrowserConfig_ValidationErrors, TestCursorConversion_RoundTrip, TestConnector_HealthLifecycle, TestClose_SetsDisconnected, TestSync_EmptyCursor_UsesLookback, TestGoTimeToChrome_ChromeTimeToGo_RoundTrip, TestProcessEntries_CursorAdvances, TestProcessEntries_SourceID, TestParseDurationWithDays, TestParseBrowserConfig_CustomSkipDomains, TestProcessEntries_SocialMediaAggregation, TestProcessEntries_SocialMediaHighDwellIndividual, TestDetectRepeatVisits_TierEscalation, TestEscalateTier_AllTransitions, TestProcessEntries_PrivacyGate_MetadataTierNoArtifact, TestProcessEntries_ContentFetchFailure, TestBuildSocialAggregate_ArtifactFields, TestDetectRepeatVisits_BelowThreshold_NoEscalation, TestDetectRepeatVisits_SocialMediaExcluded, TestProcessEntries_PrivacyGate_LightTierStoresURL, TestProcessEntries_ContentFetchSuccess, TestProcessEntries_RepeatEscalation_MetadataToLight_SurvivesPrivacyGate, TestProcessEntries_SocialMediaAggregation_MultiDay, TestProcessEntries_CustomDwellThresholds, TestParseBrowserConfig_DwellTimeThresholds, TestParseBrowserConfig_DwellTimeThresholds_Invalid, TestDedupByURLDate, TestProcessEntries_DedupSameURLSameDay, TestDetectRepeatVisits_RespectsWindow, TestDetectRepeatVisits_AllWithinWindow_Escalates, TestParseCursorToChromeSafe_CorruptedInput, TestSync_RespectsContextCancellation, TestConnector_ConfigSnapshotIsolation, TestProcessEntries_ZeroDwellTime, TestDedupByURLDate_EmptyInput
+- `connector_test.go` (44 tests): TestProcessEntries_DwellTimeTiering, TestProcessEntries_SkipFiltering, TestConnect_HistoryFileNotFound, TestCopyHistoryFileFrom_RetryOnFailure, TestParseBrowserConfig_Defaults, TestParseBrowserConfig_ValidationErrors, TestCursorConversion_RoundTrip, TestConnector_HealthLifecycle, TestClose_SetsDisconnected, TestSync_EmptyCursor_UsesLookback, TestGoTimeToChrome_ChromeTimeToGo_RoundTrip, TestProcessEntries_CursorAdvances, TestProcessEntries_SourceID, TestParseDurationWithDays, TestParseBrowserConfig_CustomSkipDomains, TestProcessEntries_SocialMediaAggregation, TestProcessEntries_SocialMediaHighDwellIndividual, TestDetectRepeatVisits_TierEscalation, TestEscalateTier_AllTransitions, TestProcessEntries_PrivacyGate_MetadataTierNoArtifact, TestProcessEntries_ContentFetchFailure, TestBuildSocialAggregate_ArtifactFields, TestDetectRepeatVisits_BelowThreshold_NoEscalation, TestDetectRepeatVisits_SocialMediaExcluded, TestProcessEntries_PrivacyGate_LightTierStoresURL, TestProcessEntries_ContentFetchSuccess, TestProcessEntries_RepeatEscalation_MetadataToLight_SurvivesPrivacyGate, TestProcessEntries_SocialMediaAggregation_MultiDay, TestProcessEntries_CustomDwellThresholds, TestParseBrowserConfig_DwellTimeThresholds, TestParseBrowserConfig_DwellTimeThresholds_Invalid, TestDedupByURLDate, TestProcessEntries_DedupSameURLSameDay, TestDetectRepeatVisits_RespectsWindow, TestDetectRepeatVisits_AllWithinWindow_Escalates, TestParseCursorToChromeSafe_CorruptedInput, TestSync_RespectsContextCancellation, TestConnector_ConfigSnapshotIsolation, TestProcessEntries_ZeroDwellTime, TestConnect_HistoryFileNotReadable, TestParseBrowserConfig_InitialLookbackDaysValidation, TestParseBrowserConfig_ContentFetchConcurrencyValidation, TestHealth_FileDisappearsAfterConnect, TestDedupByURLDate_EmptyInput
 - `browser_test.go` (15 tests): TestDwellTimeTier, TestDwellTimeTier_BoundaryValues, TestIsSocialMedia, TestIsSocialMedia_Subdomains, TestShouldSkip, TestExtractDomain, TestExtractDomain_EdgeCases, TestChromeTimeToGo, TestOptInRequired, TestShouldSkip_SchemePrefixedLocalhost, TestIsSocialMedia_AllRegisteredDomains, TestGoTimeToChrome_RoundTrip, TestParseChromeHistorySince_HasLimit, TestExtractDomain_NonHTTPSchemes, TestDwellTimeTier_NegativeDwell
 
 ### Validation Evidence
@@ -131,8 +163,8 @@ Resilience verification from unit tests:
 
 ### Delivery Lockdown Certification
 
-- **Scopes completed:** 2/2 (Scope 01: Connector Implementation, Config & Registration; Scope 02: Social Media Aggregation, Repeat Visits & Privacy Gate)
-- **Unit tests:** 43 tests across 2 test files — all pass
+- **Scopes completed:** 0/2 — downgraded to In Progress (7 integration/E2E DoD items unchecked per V-010-001 reconciliation)
+- **Unit tests:** 59 tests across 2 test files — all pass
 - **Lint:** Pass
 - **Format:** Pass
 - **Check:** Pass

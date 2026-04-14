@@ -304,8 +304,11 @@ func (s *SearchEngine) isMLHealthy(ctx context.Context) bool {
 }
 
 // probeMLHealth performs a quick HTTP GET to the ML sidecar health endpoint.
-func (s *SearchEngine) probeMLHealth(ctx context.Context) bool {
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+// Uses a detached context (not the caller's request context) because the result
+// is cached and shared across all search requests for the TTL period. A cancelled
+// request must not taint the shared cache with a false-unhealthy result.
+func (s *SearchEngine) probeMLHealth(_ context.Context) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.MLSidecarURL+"/health", nil)

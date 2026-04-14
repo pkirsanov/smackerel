@@ -177,6 +177,9 @@ connectors:
   weather:
     enabled: false
     sync_schedule: "0 */3 * * *"
+    enable_alerts: false
+    forecast_days: 7
+    precision: 2
     locations:
     - name: ""
       latitude: 0.0
@@ -186,6 +189,7 @@ connectors:
     enabled: false
     sync_schedule: "*/30 * * * *"
     min_earthquake_magnitude: 2.5
+    source_earthquake: true
     source_weather: true
     source_tsunami: false
     source_volcano: false

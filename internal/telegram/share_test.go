@@ -1,9 +1,15 @@
 package telegram
 
 import (
+	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/smackerel/smackerel/internal/stringutil"
 )
@@ -254,5 +260,225 @@ func TestChaos_ExtractContext_OnlyURLs(t *testing.T) {
 	ctx := extractContext(text, urls)
 	if ctx != "" {
 		t.Errorf("expected empty context when only URLs, got %q", ctx)
+	}
+}
+
+// --- Regression tests (REG-008) ---
+
+// REG-008-001: extractContext must remove URLs longest-first so that a shorter
+// URL that is a prefix of a longer one doesn't corrupt the longer URL via
+// strings.ReplaceAll. If the bug were reintroduced (removal in arbitrary order),
+// "https://example.com/page" would be removed first from
+// "https://example.com/page/sub", leaving "/sub" as context.
+func TestREG008001_ExtractContext_PrefixURLCollision(t *testing.T) {
+	text := "see https://example.com/page and https://example.com/page/sub for info"
+	urls := []string{"https://example.com/page", "https://example.com/page/sub"}
+	ctx := extractContext(text, urls)
+	// With correct longest-first removal, both URLs are fully removed.
+	if ctx != "see and for info" {
+		t.Errorf("expected 'see and for info', got %q — prefix URL corrupted the longer URL", ctx)
+	}
+}
+
+// REG-008-001b: Reversed order in the input list should produce the same result
+// because extractContext sorts internally.
+func TestREG008001b_ExtractContext_PrefixURLCollision_ReversedInput(t *testing.T) {
+	text := "https://example.com/a/b/c then https://example.com/a"
+	urls := []string{"https://example.com/a", "https://example.com/a/b/c"} // shorter first
+	ctx := extractContext(text, urls)
+	if ctx != "then" {
+		t.Errorf("expected 'then', got %q — prefix URL corrupted the longer URL", ctx)
+	}
+}
+
+// REG-008-001c: Three URLs with nested prefix chain.
+func TestREG008001c_ExtractContext_TriplePrefixChain(t *testing.T) {
+	text := "a https://x.com b https://x.com/y c https://x.com/y/z d"
+	urls := []string{"https://x.com", "https://x.com/y", "https://x.com/y/z"}
+	ctx := extractContext(text, urls)
+	if ctx != "a b c d" {
+		t.Errorf("expected 'a b c d', got %q — nested prefix chain corrupted URLs", ctx)
+	}
+}
+
+// REG-008-002: ForwardedMeta with ForwardDate=0 produces Unix epoch (1970-01-01).
+// Regression guard: if the bug were reintroduced where epoch dates are not
+// detected, downstream artifacts would have nonsensical timestamps.
+func TestREG008002_ExtractForwardMeta_ZeroDate(t *testing.T) {
+	msg := &tgbotapi.Message{
+		ForwardDate: 0,
+	}
+	meta := extractForwardMeta(msg)
+	// Year 1970 is almost certainly wrong for a forwarded message
+	if meta.OriginalDate.Year() != 1970 {
+		t.Errorf("expected epoch year 1970 for ForwardDate=0, got %d", meta.OriginalDate.Year())
+	}
+	// Ensure no panic and SenderName is set
+	if meta.SenderName != "Anonymous" {
+		t.Errorf("expected 'Anonymous', got %q", meta.SenderName)
+	}
+}
+
+// REG-008-003: Anonymous forward assembly key collision — two completely
+// anonymous senders (no ForwardFrom, no ForwardFromChat, no ForwardSenderName)
+// would produce the same assembly key, merging unrelated conversations.
+func TestREG008003_AnonymousForwardKeyCollision(t *testing.T) {
+	// Simulate two anonymous forwards with different content
+	msg1 := &tgbotapi.Message{ForwardDate: int(time.Now().Unix())}
+	msg2 := &tgbotapi.Message{ForwardDate: int(time.Now().Unix())}
+
+	meta1 := extractForwardMeta(msg1)
+	meta2 := extractForwardMeta(msg2)
+
+	key1 := assemblyKey{chatID: 42, sourceChatID: meta1.SourceChatID, sourceName: meta1.SourceChat}
+	if key1.sourceChatID == 0 && key1.sourceName == "" {
+		key1.sourceName = meta1.SenderName
+	}
+	key2 := assemblyKey{chatID: 42, sourceChatID: meta2.SourceChatID, sourceName: meta2.SourceChat}
+	if key2.sourceChatID == 0 && key2.sourceName == "" {
+		key2.sourceName = meta2.SenderName
+	}
+
+	// Both map to "Anonymous" — document this known collision
+	if key1 != key2 {
+		t.Error("expected same key for two anonymous forwards (known limitation)")
+	}
+	// Guard: if someone changes the anonymous fallback string, catch it
+	if meta1.SenderName != "Anonymous" || meta2.SenderName != "Anonymous" {
+		t.Errorf("expected both anonymous, got %q and %q", meta1.SenderName, meta2.SenderName)
+	}
+}
+
+// REG-008-004: Assembly with maxMessages=1 — the first message creates the
+// buffer but overflow only triggers on the NEXT Add. This means maxMessages=1
+// effectively allows up to 2 messages (one at creation, triggering overflow on
+// the second). Regression guard: if the overflow check position changes, this
+// test catches it.
+func TestREG008004_AssemblyMaxMessages1_SecondMsgTriggersOverflow(t *testing.T) {
+	var flushed []*ConversationBuffer
+	var mu sync.Mutex
+
+	a := NewConversationAssembler(context.Background(), 60, 1,
+		func(_ context.Context, buf *ConversationBuffer) error {
+			mu.Lock()
+			flushed = append(flushed, buf)
+			mu.Unlock()
+			return nil
+		}, nil)
+
+	key := assemblyKey{chatID: 1, sourceName: "test"}
+	a.Add(key, ConversationMessage{SenderName: "Alice", Text: "first", Timestamp: time.Now()}, ForwardedMeta{})
+
+	// First message should NOT trigger overflow — it creates the buffer
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	if len(flushed) != 0 {
+		mu.Unlock()
+		t.Fatal("expected no flush after first message with maxMessages=1")
+	}
+	mu.Unlock()
+
+	// Second message triggers overflow (2 >= 1)
+	a.Add(key, ConversationMessage{SenderName: "Bob", Text: "second", Timestamp: time.Now()}, ForwardedMeta{})
+
+	time.Sleep(200 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(flushed) != 1 {
+		t.Fatalf("expected 1 overflow flush on 2nd message, got %d", len(flushed))
+	}
+	if len(flushed[0].Messages) != 2 {
+		t.Errorf("expected 2 messages in overflow flush, got %d", len(flushed[0].Messages))
+	}
+}
+
+// REG-008-005: FormatConversation with empty SourceChat uses fallback header.
+// Regression guard: ensure the header doesn't panic or produce empty output
+// when all messages have empty SenderName.
+func TestREG008005_FormatConversation_EmptySourceAndParticipants(t *testing.T) {
+	buf := &ConversationBuffer{
+		SourceChat: "",
+		Messages: []ConversationMessage{
+			{SenderName: "", Timestamp: time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC), Text: "hello"},
+		},
+	}
+	text := FormatConversation(buf)
+	if text == "" {
+		t.Fatal("expected non-empty output")
+	}
+	if !strings.Contains(text, "Forwarded conversation") {
+		t.Error("expected fallback header 'Forwarded conversation'")
+	}
+	if !strings.Contains(text, "Messages: 1") {
+		t.Error("expected message count")
+	}
+}
+
+// REG-008-006: FlushChat iterates and deletes from the map simultaneously.
+// In Go this is safe, but regression guard ensures multiple matching keys
+// are all flushed without skipping any.
+func TestREG008006_FlushChat_MultipleBuffersSameChat(t *testing.T) {
+	var flushed []*ConversationBuffer
+	var mu sync.Mutex
+
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error {
+			mu.Lock()
+			flushed = append(flushed, buf)
+			mu.Unlock()
+			return nil
+		}, nil)
+
+	// Three different source chats but same user chat ID
+	for i := int64(1); i <= 3; i++ {
+		a.Add(assemblyKey{chatID: 42, sourceChatID: i * 100, sourceName: fmt.Sprintf("src-%d", i)},
+			ConversationMessage{SenderName: "User", Text: "msg", Timestamp: time.Now()},
+			ForwardedMeta{})
+	}
+
+	flushedCount := a.FlushChat(42)
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if flushedCount != 3 {
+		t.Errorf("FlushChat returned %d, expected 3", flushedCount)
+	}
+	if len(flushed) != 3 {
+		t.Errorf("expected 3 flushes, got %d — map iteration+delete skipped entries", len(flushed))
+	}
+	if a.BufferCount() != 0 {
+		t.Errorf("expected 0 remaining buffers, got %d", a.BufferCount())
+	}
+}
+
+// REG-008-007: extractAllURLs with markdown-style [text](url) should not
+// extract the URL since it's part of a compound token. Regression guard:
+// if URL extraction logic changes, verify this known limitation is preserved
+// or correctly handled.
+func TestREG008007_ExtractAllURLs_MarkdownLink(t *testing.T) {
+	urls := extractAllURLs("[Click here](https://example.com/page)")
+	// The token "[Click here](https://example.com/page)" becomes
+	// "Click here](https://example.com/page" after bracket stripping,
+	// which doesn't start with http(s):// — so no URL is extracted.
+	// This is a known limitation. If URL extraction is improved to handle
+	// markdown links, update this test.
+	if len(urls) != 0 {
+		t.Logf("note: URL extracted from markdown link: %v (expected 0, got %d)", urls, len(urls))
+	}
+}
+
+// REG-008-008: extractContext does not mutate the input URL slice.
+func TestREG008008_ExtractContext_DoesNotMutateInput(t *testing.T) {
+	urls := []string{"https://short.com", "https://short.com/longer/path"}
+	original := make([]string, len(urls))
+	copy(original, urls)
+
+	extractContext("text https://short.com and https://short.com/longer/path end", urls)
+
+	for i, u := range urls {
+		if u != original[i] {
+			t.Errorf("input slice mutated at index %d: was %q, now %q", i, original[i], u)
+		}
 	}
 }

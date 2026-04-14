@@ -1367,6 +1367,12 @@ func TestConnect_CursorRestorationValidatesSnowflakes(t *testing.T) {
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "900000000000000001",
+					"channel_ids": []interface{}{"100000000000000001", "400000000000000001"},
+				},
+			},
 			"cursors": `{"100000000000000001":"200000000000000001","../etc/passwd":"300000000000000001","400000000000000001":"not-a-snowflake"}`,
 		},
 	})
@@ -2013,6 +2019,114 @@ func TestChaos_DoubleClose(t *testing.T) {
 	}
 	if h := c.Health(context.Background()); h != connector.HealthDisconnected {
 		t.Errorf("expected disconnected after double close, got %s", h)
+	}
+}
+
+// --- Regression Tests (REG-014-R22) ---
+
+// REG-014-R22-001: Connect() cursor restoration must reject channels
+// not in the current MonitoredChannels config. Without the scope check,
+// stale channel cursors from a previous config would leak into Sync()
+// output, disclosing channel IDs the user is no longer monitoring.
+func TestRegression_ConnectCursorScopeEnforcement(t *testing.T) {
+	c := New("discord")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+			// Cursor JSON contains a monitored channel AND a stale channel
+			"cursors": `{"200000000000000001":"300000000000000001","999000000000000001":"400000000000000001"}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Configured channel cursor should be restored
+	if v, ok := c.cursors["200000000000000001"]; !ok || v != "300000000000000001" {
+		t.Errorf("monitored channel cursor should be restored, got cursors=%v", c.cursors)
+	}
+	// Unconfigured channel cursor must NOT be restored
+	if _, ok := c.cursors["999000000000000001"]; ok {
+		t.Error("cursor for unconfigured channel 999000000000000001 must not be restored (scope enforcement gap)")
+	}
+}
+
+// REG-014-R22-001b: Connect() stale cursors must not leak into Sync() output.
+func TestRegression_ConnectStaleCursorsNotInSyncOutput(t *testing.T) {
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+			// Stale cursor for a channel that is NOT monitored
+			"cursors": `{"200000000000000001":"300000000000000001","888000000000000001":"500000000000000001"}`,
+		},
+	})
+
+	_, cursorOut, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var outputCursors map[string]string
+	if err := json.Unmarshal([]byte(cursorOut), &outputCursors); err != nil {
+		t.Fatalf("failed to parse output cursor: %v", err)
+	}
+	if _, found := outputCursors["888000000000000001"]; found {
+		t.Error("stale channel cursor from Connect() leaked into Sync() output (scope enforcement bypass)")
+	}
+}
+
+// REG-014-R22-002: parseDiscordConfig must reject IEEE 754 Inf for backfill_limit.
+func TestRegression_BackfillLimitRejectsInf(t *testing.T) {
+	_, err := parseDiscordConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"backfill_limit": math.Inf(1),
+		},
+	})
+	if err == nil {
+		t.Error("expected error for +Inf backfill_limit")
+	}
+}
+
+// REG-014-R22-002b: parseDiscordConfig must reject IEEE 754 -Inf for backfill_limit.
+func TestRegression_BackfillLimitRejectsNegInf(t *testing.T) {
+	_, err := parseDiscordConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"backfill_limit": math.Inf(-1),
+		},
+	})
+	if err == nil {
+		t.Error("expected error for -Inf backfill_limit")
+	}
+}
+
+// REG-014-R22-002c: parseDiscordConfig must reject IEEE 754 NaN for backfill_limit.
+func TestRegression_BackfillLimitRejectsNaN(t *testing.T) {
+	_, err := parseDiscordConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"backfill_limit": math.NaN(),
+		},
+	})
+	if err == nil {
+		t.Error("expected error for NaN backfill_limit")
 	}
 }
 

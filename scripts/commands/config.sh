@@ -184,19 +184,29 @@ def extract(filepath, dotpath):
 
 def parse_array(lines):
     arr, cur = [], {}
+    scalar_mode = False
     for ln in lines:
         s = ln.lstrip()
         if s.startswith('- '):
             if cur:
                 arr.append(cur)
+            elif scalar_mode:
+                pass  # previous scalar already appended
             cur = {}
-            kv = s[2:]
+            kv = s[2:].strip()
             if ':' in kv:
                 k, v = kv.split(':', 1)
                 cur[k.strip()] = scalar(v.strip())
+                scalar_mode = False
+            else:
+                # H-019-003: Block-format scalar array item (e.g., "- value")
+                arr.append(scalar(kv))
+                cur = {}
+                scalar_mode = True
         elif ':' in s:
             k, v = s.split(':', 1)
             cur[k.strip()] = scalar(v.strip())
+            scalar_mode = False
     if cur:
         arr.append(cur)
     return arr
@@ -352,12 +362,16 @@ TWITTER_SYNC_SCHEDULE="$(yaml_get connectors.twitter.sync_schedule 2>/dev/null)"
 # Weather connector
 WEATHER_ENABLED="$(yaml_get connectors.weather.enabled 2>/dev/null)" || WEATHER_ENABLED="false"
 WEATHER_SYNC_SCHEDULE="$(yaml_get connectors.weather.sync_schedule 2>/dev/null)" || WEATHER_SYNC_SCHEDULE=""
+WEATHER_ENABLE_ALERTS="$(yaml_get connectors.weather.enable_alerts 2>/dev/null)" || WEATHER_ENABLE_ALERTS="false"
+WEATHER_FORECAST_DAYS="$(yaml_get connectors.weather.forecast_days 2>/dev/null)" || WEATHER_FORECAST_DAYS=""
+WEATHER_PRECISION="$(yaml_get connectors.weather.precision 2>/dev/null)" || WEATHER_PRECISION=""
 WEATHER_LOCATIONS="$(yaml_get_json connectors.weather.locations 2>/dev/null)" || WEATHER_LOCATIONS=""
 
 # Gov Alerts connector
 GOV_ALERTS_ENABLED="$(yaml_get connectors.gov-alerts.enabled 2>/dev/null)" || GOV_ALERTS_ENABLED="false"
 GOV_ALERTS_SYNC_SCHEDULE="$(yaml_get connectors.gov-alerts.sync_schedule 2>/dev/null)" || GOV_ALERTS_SYNC_SCHEDULE=""
 GOV_ALERTS_MIN_EARTHQUAKE_MAG="$(yaml_get connectors.gov-alerts.min_earthquake_magnitude 2>/dev/null)" || GOV_ALERTS_MIN_EARTHQUAKE_MAG=""
+GOV_ALERTS_SOURCE_EARTHQUAKE="$(yaml_get connectors.gov-alerts.source_earthquake 2>/dev/null)" || GOV_ALERTS_SOURCE_EARTHQUAKE=""
 GOV_ALERTS_SOURCE_WEATHER="$(yaml_get connectors.gov-alerts.source_weather 2>/dev/null)" || GOV_ALERTS_SOURCE_WEATHER=""
 GOV_ALERTS_SOURCE_TSUNAMI="$(yaml_get connectors.gov-alerts.source_tsunami 2>/dev/null)" || GOV_ALERTS_SOURCE_TSUNAMI=""
 GOV_ALERTS_SOURCE_VOLCANO="$(yaml_get connectors.gov-alerts.source_volcano 2>/dev/null)" || GOV_ALERTS_SOURCE_VOLCANO=""
@@ -471,10 +485,14 @@ TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
 TWITTER_SYNC_SCHEDULE=${TWITTER_SYNC_SCHEDULE}
 WEATHER_ENABLED=${WEATHER_ENABLED}
 WEATHER_SYNC_SCHEDULE=${WEATHER_SYNC_SCHEDULE}
+WEATHER_ENABLE_ALERTS=${WEATHER_ENABLE_ALERTS}
+WEATHER_FORECAST_DAYS=${WEATHER_FORECAST_DAYS}
+WEATHER_PRECISION=${WEATHER_PRECISION}
 WEATHER_LOCATIONS=${WEATHER_LOCATIONS}
 GOV_ALERTS_ENABLED=${GOV_ALERTS_ENABLED}
 GOV_ALERTS_SYNC_SCHEDULE=${GOV_ALERTS_SYNC_SCHEDULE}
 GOV_ALERTS_MIN_EARTHQUAKE_MAG=${GOV_ALERTS_MIN_EARTHQUAKE_MAG}
+GOV_ALERTS_SOURCE_EARTHQUAKE=${GOV_ALERTS_SOURCE_EARTHQUAKE}
 GOV_ALERTS_SOURCE_WEATHER=${GOV_ALERTS_SOURCE_WEATHER}
 GOV_ALERTS_SOURCE_TSUNAMI=${GOV_ALERTS_SOURCE_TSUNAMI}
 GOV_ALERTS_SOURCE_VOLCANO=${GOV_ALERTS_SOURCE_VOLCANO}
@@ -513,9 +531,14 @@ NATS_CONF_FILE="$REPO_ROOT/config/generated/nats.conf"
 # Build NATS auth section only when a token is set
 NATS_AUTH_SECTION=""
 if [[ -n "$SMACKEREL_AUTH_TOKEN" ]]; then
+  # Escape backslash and double-quote inside the token value for NATS
+  # double-quoted string syntax. Without this, a token containing " or \
+  # corrupts the config file or silently disables authentication (CWE-74).
+  ESCAPED_NATS_TOKEN="${SMACKEREL_AUTH_TOKEN//\\/\\\\}"
+  ESCAPED_NATS_TOKEN="${ESCAPED_NATS_TOKEN//\"/\\\"}"
   NATS_AUTH_SECTION="
 authorization {
-  token: ${SMACKEREL_AUTH_TOKEN}
+  token: \"${ESCAPED_NATS_TOKEN}\"
 }"
 fi
 

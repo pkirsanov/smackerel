@@ -378,6 +378,60 @@ func containsSubstring(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(s) > 0 && len(sub) > 0 && stringContains(s, sub))
 }
 
+// --- IMP-020-001: Bearer auth direct constant-time compare (no double extraction) ---
+
+func TestBearerAuth_SubtleDifferences_Rejected(t *testing.T) {
+	// Ensures the direct subtle.ConstantTimeCompare path correctly rejects
+	// tokens that differ by trailing whitespace, case, or one character.
+	// If bearerAuthMiddleware used a double-extraction path, subtle differences
+	// in extraction could lead to inconsistent behavior between checks.
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		AuthToken: "correct-token-value",
+	}
+
+	router := NewRouter(deps)
+
+	cases := []struct {
+		name  string
+		token string
+	}{
+		{"trailing_space", "correct-token-value "},
+		{"leading_space", " correct-token-value"},
+		{"case_flip", "Correct-token-value"},
+		{"one_char_off", "correct-token-valuf"},
+		{"prefix_only", "correct-token"},
+		{"extended", "correct-token-value-extra"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/digest", nil)
+			req.Header.Set("Authorization", "Bearer "+tc.token)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusUnauthorized {
+				t.Errorf("expected 401 for token %q, got %d", tc.token, rec.Code)
+			}
+		})
+	}
+
+	// Correct token must still be accepted (auth passes — handler may return non-200 without full mock)
+	t.Run("correct_token_accepted", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/digest", nil)
+		req.Header.Set("Authorization", "Bearer correct-token-value")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusUnauthorized {
+			t.Errorf("expected auth to pass for correct token, got 401")
+		}
+	})
+}
+
 func stringContains(s, sub string) bool {
 	for i := 0; i <= len(s)-len(sub); i++ {
 		if s[i:i+len(sub)] == sub {

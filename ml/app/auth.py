@@ -30,7 +30,19 @@ async def verify_auth(request: Request) -> None:
     if token is None:
         token = request.headers.get("x-auth-token")
 
-    if token is None or not hmac.compare_digest(token, _AUTH_TOKEN):
+    if token is None:
+        client_host = request.client.host if request.client else "unknown"
+        logger.warning("Auth failure: %s %s from %s", request.method, request.url.path, client_host)
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        match = hmac.compare_digest(token, _AUTH_TOKEN)
+    except TypeError:
+        # hmac.compare_digest raises TypeError on non-ASCII str args (CWE-755).
+        # Treat as auth failure instead of leaking a 500 Internal Server Error.
+        match = False
+
+    if not match:
         client_host = request.client.host if request.client else "unknown"
         logger.warning("Auth failure: %s %s from %s", request.method, request.url.path, client_host)
         raise HTTPException(status_code=401, detail="Unauthorized")

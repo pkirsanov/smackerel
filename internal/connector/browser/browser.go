@@ -99,6 +99,13 @@ func ShouldSkip(url string, skipDomains []string) bool {
 // Unlike ParseChromeHistory, this orders ASC for cursor-based incremental sync
 // and limits results to 10000 entries per batch to prevent memory exhaustion.
 func ParseChromeHistorySince(dbPath string, chromeTimeCursor int64) ([]HistoryEntry, error) {
+	// SEC-005-001 (CWE-74): Validate dbPath doesn't contain SQLite DSN query
+	// string characters. The function appends "?mode=ro" to enforce read-only
+	// access, but a dbPath containing "?" would inject parameters that could
+	// override mode=ro or set arbitrary PRAGMA values.
+	if strings.ContainsAny(dbPath, "?#") {
+		return nil, fmt.Errorf("invalid Chrome history path: contains query string characters")
+	}
 	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
 	if err != nil {
 		return nil, fmt.Errorf("open Chrome history: %w", err)

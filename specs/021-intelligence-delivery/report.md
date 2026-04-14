@@ -236,3 +236,89 @@ All 3 scopes implemented and unit tests passing. The intelligence delivery pipel
 |------------|---------|--------|-----------|
 | Go unit (33 packages) | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |
 | Python ML sidecar | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |
+
+## Improvement Sweep (2026-04-14, improve-existing R13)
+
+### Findings
+
+| ID | Finding | Severity | File | Status |
+|----|---------|----------|------|--------|
+| IMP-021-R13-001 | `ProduceTripPrepAlerts` uses `time.Until(startDate).Hours()/24` for day counting — inconsistent with `ProduceBillAlerts` and `CheckOverdueCommitments` which both use the DST-safe `calendarDaysBetween()`. Produces wrong day counts near midnight (e.g., 23:59 → trip tomorrow gives 0 days) and across DST transitions (23-hour spring-forward day). | Medium | `internal/intelligence/engine.go` | Fixed |
+| IMP-021-R13-002 | Relationship cooling alert production (Monday 7 AM) shares `muWeekly` with weekly synthesis (Sunday 4 PM). If weekly synthesis holds `muWeekly` when the cooling job fires, cooling is silently skipped via TryLock. All other producer groups already have dedicated mutexes (`muAlertProd`, `muResurface`, `muLookups`, `muSubs`). | Medium | `internal/scheduler/scheduler.go` | Fixed |
+| IMP-021-R13-003 | `deliverPendingAlerts` queries `GetPendingAlerts()` (DB round-trip) then iterates all results doing nothing when `s.bot == nil`. The bot-nil check was inside the loop instead of short-circuiting before the DB query. Wastes a DB round-trip every 15 minutes on deployments without Telegram configured. | Low | `internal/scheduler/scheduler.go` | Fixed |
+
+### Fixes Applied
+
+| Fix | File | Change |
+|-----|------|--------|
+| IMP-021-R13-001 | `internal/intelligence/engine.go` | Replaced `int(time.Until(startDate).Hours() / 24)` with `calendarDaysBetween(localToday, startDate)` in `ProduceTripPrepAlerts`, computing `localToday` via `time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)` — consistent with `ProduceBillAlerts` and `CheckOverdueCommitments`. |
+| IMP-021-R13-002 | `internal/scheduler/scheduler.go` | Added dedicated `muRelCool sync.Mutex` for relationship cooling production. Changed cron callback from `s.muWeekly.TryLock()` to `s.muRelCool.TryLock()` with group label `"rel-cool"`. |
+| IMP-021-R13-003 | `internal/scheduler/scheduler.go` | Added `if s.bot == nil { return }` short-circuit at the top of `deliverPendingAlerts` (after the engine-nil guard, before `GetPendingAlerts`). Removed redundant bot-nil branch inside the delivery loop. |
+
+### Tests Added
+
+| Test | File | Covers |
+|------|------|--------|
+| `TestTripPrepDaysUntil_UsesCalendarDays` | `engine_test.go` | IMP-021-R13-001: 3 scenarios — near-midnight (23:59→tomorrow=1), 6AM→3 days, same-day=0 |
+| `TestTripPrepDaysUntil_DSTSpringForward` | `engine_test.go` | IMP-021-R13-001: Spring-forward 23-hour day (March 8→10 = 2 calendar days) |
+| `TestRelationshipCoolingUsesOwnMutex` | `scheduler_test.go` | IMP-021-R13-002: `muRelCool` independently lockable while `muWeekly` is held |
+| `TestDeliverPendingAlerts_NilBotShortCircuit` | `scheduler_test.go` | IMP-021-R13-003: Engine with nil pool + nil bot → returns without DB query or panic |
+| `TestDeliverPendingAlerts_NilBotNilEngine` | `scheduler_test.go` | IMP-021-R13-003: Both nil → engine-nil guard fires first |
+
+### Full Suite Results
+
+| Test Suite | Command | Result | Timestamp |
+|------------|---------|--------|-----------|
+| Go unit (33 packages) | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |
+| Python ML sidecar | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |
+
+## Regression Sweep (2026-04-14, regression-to-doc R17)
+
+### Findings
+
+| ID | Finding | Severity | File | Status |
+|----|---------|----------|------|--------|
+| REG-021-R17-001 | `GeneratePreMeetingBriefs` calls `MarkAlertDelivered(ctx, ...)` with the caller's context. The C2 chaos fix established that `MarkAlertDelivered` must use a detached `context.Background()` to prevent context-cancellation between send-and-mark. SEC-021-003 added `MarkAlertDelivered` but didn't apply C2's protection — if the 1-minute cron timeout expires between `CreateAlert` and `MarkAlertDelivered`, the alert stays pending while the scheduler still sends the brief, resulting in double-delivery on the next sweep. | Medium | `internal/intelligence/engine.go` | Fixed |
+| REG-021-R17-002 | `maxPendingAlertAgeDays = 7` constant exists (SEC-021-001) but `GetPendingAlerts` SQL hardcoded `INTERVAL '7 days'` as a literal. The constant and SQL were disconnected — changing the constant would not change behavior, silently regressing the SEC-021-001 security bound. | Medium | `internal/intelligence/engine.go` | Fixed |
+
+### Fixes Applied
+
+| Fix | File | Change |
+|-----|------|--------|
+| REG-021-R17-001 | `internal/intelligence/engine.go` | Changed `GeneratePreMeetingBriefs` to use `context.WithTimeout(context.Background(), 5*time.Second)` for `MarkAlertDelivered`, matching the C2 detached-context pattern from `deliverPendingAlerts`. |
+| REG-021-R17-002 | `internal/intelligence/engine.go` | Changed `GetPendingAlerts` SQL from hardcoded `INTERVAL '7 days'` to `fmt.Sprintf(... '%d days', maxPendingAlertAgeDays)`, so the constant governs the query. |
+
+### Tests Added
+
+| Test | File | Covers |
+|------|------|--------|
+| `TestMaxPendingAlertAgeDays_UsedInGetPendingAlerts` | `engine_test.go` | REG-021-R17-002: Verifies SQL format string produces correct interval from constant |
+| `TestMaxPendingAlertAgeDays_ConstantMatchesQueryShape` | `engine_test.go` | REG-021-R17-002: Guards constant value at 7 per SEC-021-001 design |
+| `TestDeliverPendingAlerts_DetachedMarkContext` | `scheduler_test.go` | REG-021-R17-001: Pre-cancelled context doesn't panic in deliverPendingAlerts |
+| `TestMeetingBriefDeliveredMarkMustBeDetached` | `scheduler_test.go` | REG-021-R17-001: Structural regression tripwire for C2 detached-context pattern |
+
+### Prior Fix Regression Matrix
+
+| Prior Fix | Area | Status |
+|-----------|------|--------|
+| C1: Fresh install stale guard | `health.go` — epoch/zero time guard | Intact |
+| C2: Detached mark context | `scheduler.go` — `deliverPendingAlerts` uses `context.Background()` | Intact |
+| C3: Bot-nil alert skip | `scheduler.go` — bot-nil returns early | Intact |
+| C4: muAlertProd dedicated mutex | `scheduler.go` — independent from muDaily | Intact |
+| C5: calendarDaysBetween | `engine.go` — used by ProduceBillAlerts + ProduceTripPrepAlerts | Intact |
+| H1: ctx.Err() in producer loops | `engine.go` — all 4 producers check context | Intact |
+| H2: return_deadline regex guard | `engine.go` — regex before `::date` cast | Intact |
+| H3: deliverPendingAlerts nil-engine guard | `scheduler.go` — nil engine early return | Intact |
+| SEC-021-001: maxPendingAlertAgeDays | `engine.go` — now `fmt.Sprintf` with constant | Fixed (was disconnected) |
+| SEC-021-002: SanitizeControlChars | `engine.go` — title and body sanitization | Intact |
+| SEC-021-003: Meeting brief mark-delivered | `engine.go` — CreateAlert + MarkAlertDelivered | Fixed (now detached ctx) |
+| IMP-021-R13-001: calendarDaysBetween in trip prep | `engine.go` — consistent with ProduceBillAlerts | Intact |
+| IMP-021-R13-002: muRelCool dedicated mutex | `scheduler.go` — relationship cooling independent | Intact |
+| IMP-021-R13-003: bot-nil short-circuit | `scheduler.go` — before GetPendingAlerts query | Intact |
+
+### Full Suite Results
+
+| Test Suite | Command | Result | Timestamp |
+|------------|---------|--------|-----------|
+| Go unit (33 packages) | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |
+| Python ML sidecar (72 tests) | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |

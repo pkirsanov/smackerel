@@ -300,6 +300,47 @@ All checks passed!
 
 ---
 
+## Validate Reconciliation Sweep (2026-04-14) — Stochastic Quality Sweep R09
+
+**Trigger:** validate (reconcile-to-doc)
+**Purpose:** Verify all 4 scope DoD claims against actual implemented code and running tests.
+
+### Validation Method
+
+1. Verified every claimed file exists on disk
+2. Verified implementation code matches DoD evidence descriptions
+3. Ran `./smackerel.sh check` — passed (Config is in sync with SST)
+4. Ran `./smackerel.sh test unit` — all 34 Go packages pass, 72 Python tests pass (1 skipped)
+5. Confirmed E2E test count: 56 scripts in `tests/e2e/` (matches report claim)
+6. Confirmed stress test count: 2 scripts in `tests/stress/` (matches report claim)
+7. Cross-referenced DoD evidence paths against actual file contents
+
+### Findings (2)
+
+| # | ID | Severity | Finding | Resolution |
+|---|-----|----------|---------|------------|
+| 1 | V-001-001 | Low | Scope 04 test plan row 5 references non-existent `tests/benchmark/test_search_accuracy.sh` — actual file is `tests/stress/test_search_stress.sh` | Fixed stale path in `scopes.md` test plan table |
+| 2 | V-001-002 | Info | Scope 03 implementation plan mentions `MicrosoftOAuth2` as planned implementation, but only `GenericOAuth2` and `GoogleOAuth2Scopes()` were built. DoD correctly reflects "Google, Generic implementations" — no overclaim. | No fix needed — DoD is accurate; implementation plan is aspirational design-phase text |
+
+### Scope-by-Scope Verification
+
+| Scope | Claimed | Verified | Delta |
+|-------|---------|----------|-------|
+| 01 — Monochrome Icon System | 12 DoD items `[x]` | All 32 icons in `icons.go`, 8 markers in `format.go`, tests pass | Clean |
+| 02 — Design System CSS | 12 DoD items `[x]` | CSS variables, dark mode toggle, system fonts, no accents in `templates.go` | Clean |
+| 03 — Generic Connector Framework | 20 DoD items `[x]` | Connector interface, Registry, StateStore, Backoff, Supervisor all verified | Clean |
+| 04 — Product-Level Testing | 10 DoD items `[x]` | 56 E2E scripts, 2 stress scripts, run_all.sh orchestrator all exist | 1 stale test plan path fixed |
+
+### Files Changed
+- `specs/001-smackerel-mvp/scopes.md` — Fixed Scope 04 test plan row 5 file path
+- `specs/001-smackerel-mvp/report.md` — Added this validation evidence section
+
+### Conclusion
+
+Spec 001 status **confirmed done**. All 54 DoD items across 4 scopes verified against real code and passing tests. No overclaims detected. One stale artifact reference corrected.
+
+---
+
 ## Regression Verification (2026-04-10)
 
 **Trigger:** Stochastic quality sweep — regression round after 20-round prior sweep, 6 new specs (019-024) delivered, and 12 prior sweep rounds in current cycle.

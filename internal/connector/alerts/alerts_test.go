@@ -2893,7 +2893,7 @@ func TestNormalizeGDACSAlert(t *testing.T) {
 		Severity:    "extreme",
 	}
 
-	artifact := normalizeGDACSAlert(alert)
+	artifact := normalizeGDACSAlert(alert, &ProximityMatch{LocationName: "Home", DistanceKm: 150})
 	if artifact.ContentType != "alert/disaster" {
 		t.Errorf("ContentType = %q", artifact.ContentType)
 	}
@@ -2915,6 +2915,12 @@ func TestNormalizeGDACSAlert(t *testing.T) {
 	if artifact.Metadata["longitude"] != 110.4 {
 		t.Errorf("longitude = %v", artifact.Metadata["longitude"])
 	}
+	if artifact.Metadata["distance_km"] != 150.0 {
+		t.Errorf("distance_km = %v, want 150", artifact.Metadata["distance_km"])
+	}
+	if artifact.Metadata["nearest_location"] != "Home" {
+		t.Errorf("nearest_location = %v, want Home", artifact.Metadata["nearest_location"])
+	}
 }
 
 func TestNormalizeGDACSAlert_NoGeoPoint(t *testing.T) {
@@ -2924,12 +2930,18 @@ func TestNormalizeGDACSAlert_NoGeoPoint(t *testing.T) {
 		Severity: "moderate",
 	}
 
-	artifact := normalizeGDACSAlert(alert)
+	artifact := normalizeGDACSAlert(alert, nil)
 	if _, exists := artifact.Metadata["geo_point"]; exists {
 		t.Error("geo_point should not be present when GeoPoint is empty")
 	}
 	if _, exists := artifact.Metadata["latitude"]; exists {
 		t.Error("latitude should not be present when GeoPoint is empty")
+	}
+	if _, exists := artifact.Metadata["distance_km"]; exists {
+		t.Error("distance_km should not be present when match is nil")
+	}
+	if _, exists := artifact.Metadata["nearest_location"]; exists {
+		t.Error("nearest_location should not be present when match is nil")
 	}
 }
 
@@ -2939,6 +2951,7 @@ func TestNormalizeGDACSAlert_NoGeoPoint(t *testing.T) {
 
 func TestParseAlertsConfig_NewSourceFlags(t *testing.T) {
 	cfg, err := parseAlertsConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"airnow_api_key": "test-key-123"},
 		SourceConfig: map[string]interface{}{
 			"locations": []interface{}{
 				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
@@ -2948,7 +2961,6 @@ func TestParseAlertsConfig_NewSourceFlags(t *testing.T) {
 			"source_wildfire": true,
 			"source_airnow":   true,
 			"source_gdacs":    true,
-			"airnow_api_key":  "test-key-123",
 		},
 	})
 	if err != nil {
@@ -3444,6 +3456,7 @@ func TestNATSAlertNotifier_PublishesJSON(t *testing.T) {
 // wire GOV_ALERTS_SOURCE_* env vars into SourceConfig, causing user config to be ignored.
 func TestParseAlertsConfig_AllSourceFlags(t *testing.T) {
 	cfg, err := parseAlertsConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"airnow_api_key": "test-key-123"},
 		SourceConfig: map[string]interface{}{
 			"locations": []interface{}{
 				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
@@ -3454,7 +3467,6 @@ func TestParseAlertsConfig_AllSourceFlags(t *testing.T) {
 			"source_wildfire": true,
 			"source_airnow":   true,
 			"source_gdacs":    true,
-			"airnow_api_key":  "test-key-123",
 		},
 	})
 	if err != nil {
@@ -3895,7 +3907,7 @@ func TestNormalizeGDACSAlert_InvalidCoordinatesRejected(t *testing.T) {
 				GeoPoint: tt.geoPoint,
 				Severity: "moderate",
 			}
-			artifact := normalizeGDACSAlert(alert)
+			artifact := normalizeGDACSAlert(alert, nil)
 			_, hasLat := artifact.Metadata["latitude"]
 			_, hasLon := artifact.Metadata["longitude"]
 			if hasLat != tt.wantLat || hasLon != tt.wantLat {
@@ -3906,5 +3918,822 @@ func TestNormalizeGDACSAlert_InvalidCoordinatesRejected(t *testing.T) {
 				t.Error("geo_point should always be present when GeoPoint is non-empty")
 			}
 		})
+	}
+}
+
+// =====================================================
+// Hardening Tests (H-017 — Round R02)
+// =====================================================
+
+// TestParseGeoPoint verifies georss:point parsing.
+func TestParseGeoPoint(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		lat    float64
+		lon    float64
+		wantOK bool
+	}{
+		{"valid point", "-6.5 110.4", -6.5, 110.4, true},
+		{"positive coords", "35.6 139.7", 35.6, 139.7, true},
+		{"empty string", "", 0, 0, false},
+		{"single value", "37.7", 0, 0, false},
+		{"three values", "37.7 -122.4 10.0", 0, 0, false},
+		{"non-numeric lat", "abc 110.4", 0, 0, false},
+		{"non-numeric lon", "-6.5 xyz", 0, 0, false},
+		{"whitespace only", "   ", 0, 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lat, lon, ok := parseGeoPoint(tt.input)
+			if ok != tt.wantOK {
+				t.Fatalf("parseGeoPoint(%q) ok = %v, want %v", tt.input, ok, tt.wantOK)
+			}
+			if ok {
+				if lat != tt.lat || lon != tt.lon {
+					t.Errorf("parseGeoPoint(%q) = (%v, %v), want (%v, %v)", tt.input, lat, lon, tt.lat, tt.lon)
+				}
+			}
+		})
+	}
+}
+
+// TestSync_GDACS_ProximityFiltered verifies GDACS alerts outside user radius are skipped (H-017-001).
+func TestSync_GDACS_ProximityFiltered(t *testing.T) {
+	items := []string{
+		// Nearby alert: Jakarta (-6.2, 106.8) — ~0km from configured location
+		makeGDACSItem("gdacs-nearby", "EQ Jakarta", "Earthquake in Jakarta.", "https://gdacs.org/1", "Mon, 15 Jul 2024 10:30:00 +0000", "Red", "-6.2 106.8"),
+		// Distant alert: Tokyo (35.7, 139.7) — ~5000km from Jakarta
+		makeGDACSItem("gdacs-distant", "EQ Tokyo", "Earthquake in Tokyo.", "https://gdacs.org/2", "Mon, 15 Jul 2024 11:00:00 +0000", "Orange", "35.7 139.7"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, gdacsRSSXML(items))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.gdacsBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:   []LocationConfig{{Name: "Jakarta-Office", Latitude: -6.2, Longitude: 106.8, RadiusKm: 500}},
+		SourceGDACS: true,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	// Only the nearby alert should pass proximity filtering
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 artifact (distant filtered out), got %d", len(arts))
+	}
+	if arts[0].SourceRef != "gdacs-nearby" {
+		t.Errorf("expected gdacs-nearby, got %s", arts[0].SourceRef)
+	}
+	// Verify proximity metadata
+	if dist, ok := arts[0].Metadata["distance_km"].(float64); !ok || dist > 500 {
+		t.Errorf("expected distance_km <= 500, got %v", arts[0].Metadata["distance_km"])
+	}
+	if loc, ok := arts[0].Metadata["nearest_location"].(string); !ok || loc != "Jakarta-Office" {
+		t.Errorf("expected nearest_location Jakarta-Office, got %v", arts[0].Metadata["nearest_location"])
+	}
+}
+
+// TestSync_GDACS_NoGeoPoint_Skipped verifies GDACS alerts without coordinates are skipped (H-017-001).
+func TestSync_GDACS_NoGeoPoint_Skipped(t *testing.T) {
+	items := []string{
+		makeGDACSItem("gdacs-no-geo", "Flood Alert", "Flooding in unknown area.", "https://gdacs.org/3", "Mon, 15 Jul 2024 10:30:00 +0000", "Orange", ""),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, gdacsRSSXML(items))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.gdacsBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:   []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 500}},
+		SourceGDACS: true,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 0 {
+		t.Errorf("expected 0 artifacts (no geo_point → skipped), got %d", len(arts))
+	}
+}
+
+// TestSync_GDACS_InvalidGeoPoint_Skipped verifies GDACS alerts with unparseable coordinates are skipped.
+func TestSync_GDACS_InvalidGeoPoint_Skipped(t *testing.T) {
+	items := []string{
+		makeGDACSItem("gdacs-bad-coords", "Quake", "Bad coords.", "https://gdacs.org/4", "Mon, 15 Jul 2024 10:30:00 +0000", "Red", "not-a-number also-bad"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, gdacsRSSXML(items))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.gdacsBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:   []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 500}},
+		SourceGDACS: true,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 0 {
+		t.Errorf("expected 0 artifacts (invalid geo_point → skipped), got %d", len(arts))
+	}
+}
+
+// TestSync_NWS_LocationNameInMatch verifies NWS proximity match uses the querying location name (H-017-002).
+func TestSync_NWS_LocationNameInMatch(t *testing.T) {
+	features := []map[string]interface{}{
+		makeNWSFeature(
+			"urn:oid:nws-loc-name", "Heat Advisory", "Moderate", "Likely", "Expected",
+			"Heat Advisory", "Stay cool.", "", "Metro Area",
+			"2024-01-15T14:30:00-06:00", "2024-01-15T18:30:00-06:00",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := newNWSTestConnector(ts.URL, []LocationConfig{
+		{Name: "MyOffice", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(arts))
+	}
+	// Verify the proximity match uses the querying location name, not a random match
+	if loc, ok := arts[0].Metadata["nearest_location"].(string); !ok || loc != "MyOffice" {
+		t.Errorf("nearest_location = %v, want MyOffice", arts[0].Metadata["nearest_location"])
+	}
+	if dist, ok := arts[0].Metadata["distance_km"].(float64); !ok || dist != 0 {
+		t.Errorf("distance_km = %v, want 0 (NWS point-filtered)", arts[0].Metadata["distance_km"])
+	}
+}
+
+// TestFetchAirNowAQI_APIKeyRedacted verifies the API key is not exposed in error messages (H-017-003, CWE-532).
+func TestFetchAirNowAQI_APIKeyRedacted(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.airnowBaseURL = ts.URL
+
+	secretKey := "super-secret-api-key-12345"
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := c.fetchAirNowAQI(ctx, 37.77, -122.42, secretKey)
+	if err == nil {
+		t.Fatal("expected error for timeout")
+	}
+	if strings.Contains(err.Error(), secretKey) {
+		t.Errorf("error message contains API key (CWE-532): %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "[REDACTED]") {
+		t.Errorf("error message should contain [REDACTED]: %s", err.Error())
+	}
+}
+
+// TestSync_Volcano_NoNotification verifies volcano alerts don't trigger proactive notifications
+// because they lack coordinates for proximity verification (H-017-004).
+func TestSync_Volcano_NoNotification(t *testing.T) {
+	entries := []map[string]interface{}{
+		{"id": "vol-severe-1", "volcanoName": "Mount Danger", "alertLevel": "WARNING", "colorCode": "RED", "issuedDate": "2024-04-01T12:00:00Z"},
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(volcanoJSON(entries))
+	}))
+	defer ts.Close()
+
+	mn := &mockNotifier{}
+	c := New("test")
+	c.volcanoBaseURL = ts.URL
+	c.Notifier = mn
+	c.config = AlertsConfig{
+		Locations:     []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceVolcano: true,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 volcano artifact, got %d", len(arts))
+	}
+	// Volcano alerts should NOT trigger notifications (no proximity check possible)
+	if mn.count() != 0 {
+		t.Errorf("expected 0 notifications for volcano (no proximity data), got %d", mn.count())
+	}
+}
+
+// TestSync_Wildfire_NoNotification verifies wildfire alerts don't trigger proactive notifications
+// because they lack coordinates for proximity verification (H-017-004).
+func TestSync_Wildfire_NoNotification(t *testing.T) {
+	items := []string{
+		makeWildfireItem("fire-evac-1", "Major Fire", "Evacuation ordered for area.", "https://inciweb.wildfire.gov/fire-evac-1", "Mon, 15 Jul 2024 10:30:00 +0000"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, wildfireRSSXML(items))
+	}))
+	defer ts.Close()
+
+	mn := &mockNotifier{}
+	c := New("test")
+	c.wildfireBaseURL = ts.URL
+	c.Notifier = mn
+	c.config = AlertsConfig{
+		Locations:      []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceWildfire: true,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 wildfire artifact, got %d", len(arts))
+	}
+	// Wildfire alerts should NOT trigger notifications (no proximity check possible)
+	if mn.count() != 0 {
+		t.Errorf("expected 0 notifications for wildfire (no proximity data), got %d", mn.count())
+	}
+}
+
+// TestSync_GDACS_NearbyNotifies verifies that proximity-checked GDACS alerts DO trigger notifications.
+func TestSync_GDACS_NearbyNotifies(t *testing.T) {
+	items := []string{
+		makeGDACSItem("gdacs-red-nearby", "Major Earthquake", "Devastating quake.", "https://gdacs.org/5", "Mon, 15 Jul 2024 10:30:00 +0000", "Red", "37.77 -122.42"),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, gdacsRSSXML(items))
+	}))
+	defer ts.Close()
+
+	mn := &mockNotifier{}
+	c := New("test")
+	c.gdacsBaseURL = ts.URL
+	c.Notifier = mn
+	c.config = AlertsConfig{
+		Locations:   []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 500}},
+		SourceGDACS: true,
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 GDACS artifact, got %d", len(arts))
+	}
+	// Red-level GDACS alert near user SHOULD trigger notification after proximity check
+	if mn.count() != 1 {
+		t.Errorf("expected 1 notification for nearby Red GDACS alert, got %d", mn.count())
+	}
+}
+
+// --- IMP-017-R24-001: source_earthquake config toggle must be readable ---
+
+func TestParseAlertsConfig_SourceEarthquakeToggle(t *testing.T) {
+	// Default: SourceEarthquake is true.
+	cfg, err := parseAlertsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.SourceEarthquake {
+		t.Error("SourceEarthquake should default to true")
+	}
+
+	// Explicit disable.
+	cfg, err = parseAlertsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+			"source_earthquake": false,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SourceEarthquake {
+		t.Error("SourceEarthquake should be false when source_earthquake=false in config")
+	}
+
+	// Explicit enable.
+	cfg, err = parseAlertsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+			"source_earthquake": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.SourceEarthquake {
+		t.Error("SourceEarthquake should be true when source_earthquake=true in config")
+	}
+}
+
+// TestSync_EarthquakeDisabledViaConfig verifies that setting source_earthquake=false stops USGS polling.
+func TestSync_EarthquakeDisabledViaConfig(t *testing.T) {
+	called := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"type":"FeatureCollection","features":[]}`)
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.baseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:        []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceEarthquake: false,
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if called {
+		t.Error("USGS endpoint was called despite source_earthquake=false; earthquake polling was not disabled")
+	}
+}
+
+// --- IMP-017-R24-002: radius_km Inf/NaN must be rejected ---
+
+func TestParseAlertsConfig_RadiusInfNaN(t *testing.T) {
+	tests := []struct {
+		name     string
+		radius   float64
+		wantLocs int
+	}{
+		{"valid radius", 200.0, 1},
+		{"+Inf radius", math.Inf(1), 0},
+		{"-Inf radius", math.Inf(-1), 0},
+		{"NaN radius", math.NaN(), 0},
+		{"zero radius", 0.0, 0},
+		{"negative radius", -50.0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := parseAlertsConfig(connector.ConnectorConfig{
+				SourceConfig: map[string]interface{}{
+					"locations": []interface{}{
+						map[string]interface{}{
+							"name":      "Home",
+							"latitude":  37.77,
+							"longitude": -122.42,
+							"radius_km": tt.radius,
+						},
+					},
+				},
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(cfg.Locations) != tt.wantLocs {
+				t.Errorf("radius_km=%v: expected %d locations, got %d", tt.radius, tt.wantLocs, len(cfg.Locations))
+			}
+		})
+	}
+}
+
+func TestParseAlertsConfig_TravelRadiusInfNaN(t *testing.T) {
+	tests := []struct {
+		name     string
+		radius   float64
+		wantLocs int
+	}{
+		{"valid travel radius", 300.0, 1},
+		{"+Inf travel radius", math.Inf(1), 0},
+		{"NaN travel radius", math.NaN(), 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := parseAlertsConfig(connector.ConnectorConfig{
+				SourceConfig: map[string]interface{}{
+					"locations": []interface{}{
+						map[string]interface{}{
+							"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0,
+						},
+					},
+					"travel_locations": []interface{}{
+						map[string]interface{}{
+							"name":      "Tokyo",
+							"latitude":  35.68,
+							"longitude": 139.69,
+							"radius_km": tt.radius,
+						},
+					},
+				},
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(cfg.TravelLocations) != tt.wantLocs {
+				t.Errorf("travel radius_km=%v: expected %d travel locations, got %d", tt.radius, tt.wantLocs, len(cfg.TravelLocations))
+			}
+		})
+	}
+}
+
+// TestIsFinitePositiveRadius directly tests the guard function.
+func TestIsFinitePositiveRadius(t *testing.T) {
+	tests := []struct {
+		r    float64
+		want bool
+	}{
+		{200.0, true},
+		{0.001, true},
+		{0, false},
+		{-1, false},
+		{math.Inf(1), false},
+		{math.Inf(-1), false},
+		{math.NaN(), false},
+	}
+	for _, tt := range tests {
+		if got := isFinitePositiveRadius(tt.r); got != tt.want {
+			t.Errorf("isFinitePositiveRadius(%v) = %v, want %v", tt.r, got, tt.want)
+		}
+	}
+}
+
+// --- IMP-017-R24-003: AirNow dedup ID must include observation date ---
+
+func TestFetchAirNowAQI_IDIncludesDate(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[{"DateObserved":"2024-07-15 ","HourObserved":12,"AQI":42,"ParameterName":"PM2.5","ReportingArea":"San Francisco","Category":{"Name":"Good"}}]`)
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.airnowBaseURL = ts.URL
+	obs, err := c.fetchAirNowAQI(context.Background(), 37.77, -122.42, "test-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(obs) != 1 {
+		t.Fatalf("expected 1 observation, got %d", len(obs))
+	}
+	// The ID must contain the date so that same-AQI observations on different days
+	// are not deduped by the 7-day eviction window.
+	if !strings.Contains(obs[0].ID, "2024-07-15") {
+		t.Errorf("AirNow observation ID %q must include date '2024-07-15' for temporal dedup isolation", obs[0].ID)
+	}
+}
+
+func TestAirNowDedup_SameAQIDifferentDays(t *testing.T) {
+	// Simulate two observations with identical AQI but different days.
+	// Both should produce artifacts if date is in the ID.
+	day1Items := `[{"DateObserved":"2024-07-15 ","HourObserved":12,"AQI":50,"ParameterName":"PM2.5","ReportingArea":"Boston","Category":{"Name":"Good"}}]`
+	day2Items := `[{"DateObserved":"2024-07-16 ","HourObserved":12,"AQI":50,"ParameterName":"PM2.5","ReportingArea":"Boston","Category":{"Name":"Good"}}]`
+
+	callCount := 0
+	responses := []string{day1Items, day2Items}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if callCount < len(responses) {
+			fmt.Fprint(w, responses[callCount])
+		} else {
+			fmt.Fprint(w, `[]`)
+		}
+		callCount++
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.airnowBaseURL = ts.URL
+	c.config = AlertsConfig{
+		Locations:    []LocationConfig{{Name: "Home", Latitude: 42.36, Longitude: -71.06, RadiusKm: 100}},
+		SourceAirNow: true,
+		AirNowAPIKey: "test-key",
+	}
+
+	// First sync — day 1
+	arts1, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync 1 error: %v", err)
+	}
+	if len(arts1) != 1 {
+		t.Fatalf("sync 1: expected 1 artifact, got %d", len(arts1))
+	}
+
+	// Second sync — day 2 same AQI. Must produce a NEW artifact, not be deduped.
+	arts2, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync 2 error: %v", err)
+	}
+	if len(arts2) != 1 {
+		t.Errorf("sync 2: expected 1 artifact (different date should not dedup), got %d — IMP-017-R24-003 regression", len(arts2))
+	}
+}
+
+// --- Chaos Tests (C-017-001, C-017-002, C-017-003) ---
+
+// panicNotifier is a test notifier that panics on NotifyAlert.
+type panicNotifier struct{}
+
+func (p *panicNotifier) NotifyAlert(ctx context.Context, payload AlertNotification) error {
+	panic("notifier exploded")
+}
+
+// badTravelProvider returns invalid locations to test validation bypass.
+type badTravelProvider struct {
+	locations []LocationConfig
+}
+
+func (b *badTravelProvider) GetTravelLocations(ctx context.Context) ([]LocationConfig, error) {
+	return b.locations, nil
+}
+
+// TestSync_NotifierPanic_DoesNotCrashSync verifies that a panicking Notifier is recovered
+// and does not crash the Sync goroutine (C-017-002).
+func TestSync_NotifierPanic_DoesNotCrashSync(t *testing.T) {
+	// Build a USGS response with an extreme earthquake (triggers notification).
+	feature := makeFeature("panic-eq", 8.0, -122.10, 37.50, 10.0, "Near test site")
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(usgsResponse([]map[string]interface{}{feature}))
+	}))
+	defer ts.Close()
+
+	c := newTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+	c.Notifier = &panicNotifier{}
+
+	// Sync must NOT panic — it should recover and continue.
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error after notifier panic: %v", err)
+	}
+	if len(arts) != 1 {
+		t.Errorf("expected 1 artifact despite notifier panic, got %d", len(arts))
+	}
+	// Health should be healthy (successful sync), not stuck on syncing.
+	if h := c.Health(context.Background()); h != connector.HealthHealthy {
+		t.Errorf("expected HealthHealthy after recovered panic, got %v", h)
+	}
+}
+
+// TestSync_NotifierPanic_ArtifactStillReturned verifies that the artifact that triggered
+// the panic is still included in the Sync results (C-017-002).
+func TestSync_NotifierPanic_ArtifactStillReturned(t *testing.T) {
+	feature := makeFeature("panic-eq-2", 7.5, -122.10, 37.50, 10.0, "Near test site")
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(usgsResponse([]map[string]interface{}{feature}))
+	}))
+	defer ts.Close()
+
+	c := newTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+	c.Notifier = &panicNotifier{}
+
+	arts, _, _ := c.Sync(context.Background(), "")
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(arts))
+	}
+	if arts[0].SourceRef != "panic-eq-2" {
+		t.Errorf("expected SourceRef panic-eq-2, got %s", arts[0].SourceRef)
+	}
+}
+
+// TestClose_DuringSync_HealthRemainsDisconnected verifies that Close() during Sync()
+// does not have its HealthDisconnected overwritten by Sync's deferred health restoration (C-017-003).
+func TestClose_DuringSync_HealthRemainsDisconnected(t *testing.T) {
+	// Use a slow server so Sync is still running when we Close.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.Write(usgsResponse(nil))
+	}))
+	defer ts.Close()
+
+	c := newTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _, _ = c.Sync(context.Background(), "")
+	}()
+
+	// Give Sync time to start, then Close.
+	time.Sleep(20 * time.Millisecond)
+	_ = c.Close()
+
+	wg.Wait()
+
+	// After Sync completes post-Close, health MUST remain Disconnected.
+	h := c.Health(context.Background())
+	if h != connector.HealthDisconnected {
+		t.Errorf("expected HealthDisconnected after Close during Sync, got %v", h)
+	}
+}
+
+// TestSync_AfterClose_ReturnsError verifies that Sync on a closed connector returns an error (C-017-003).
+func TestSync_AfterClose_ReturnsError(t *testing.T) {
+	c := New("gov-alerts")
+	c.config = AlertsConfig{
+		Locations:        []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceEarthquake: false,
+	}
+	_ = c.Close()
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Error("expected error when syncing a closed connector")
+	}
+	if !strings.Contains(err.Error(), "closed") {
+		t.Errorf("expected 'closed' in error message, got: %v", err)
+	}
+}
+
+// TestConnect_AfterClose_ResetsClosedFlag verifies that Connect after Close re-enables Sync (C-017-003).
+func TestConnect_AfterClose_ResetsClosedFlag(t *testing.T) {
+	c := New("gov-alerts")
+	validConfig := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
+			},
+			"source_earthquake": false,
+		},
+	}
+
+	// Connect → Close → Connect should work.
+	if err := c.Connect(context.Background(), validConfig); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.Close()
+
+	// Sync should fail on closed connector.
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error on closed connector")
+	}
+
+	// Reconnect should clear closed flag.
+	if err := c.Connect(context.Background(), validConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Sync should succeed now.
+	_, _, err = c.Sync(context.Background(), "")
+	if err != nil {
+		t.Errorf("expected successful Sync after reconnect, got: %v", err)
+	}
+}
+
+// TestMergedLocations_TravelProviderNaNCoords_Skipped verifies that TravelProvider locations
+// with NaN coordinates are rejected before being used in proximity filtering (C-017-001).
+func TestMergedLocations_TravelProviderNaNCoords_Skipped(t *testing.T) {
+	c := New("gov-alerts")
+	c.config = AlertsConfig{
+		Locations: []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+	}
+	c.TravelProvider = &badTravelProvider{
+		locations: []LocationConfig{
+			{Name: "NaN-Land", Latitude: math.NaN(), Longitude: -122.0, RadiusKm: 200},
+			{Name: "Valid-Travel", Latitude: 40.0, Longitude: -74.0, RadiusKm: 300},
+		},
+	}
+
+	merged := c.mergedLocations(context.Background(), c.config)
+	// Home + Valid-Travel only; NaN-Land must be rejected.
+	if len(merged) != 2 {
+		t.Errorf("expected 2 merged locations (Home + Valid-Travel), got %d", len(merged))
+	}
+	for _, loc := range merged {
+		if loc.Name == "NaN-Land" {
+			t.Error("NaN-Land should have been filtered out")
+		}
+	}
+}
+
+// TestMergedLocations_TravelProviderInfRadius_Skipped verifies that a TravelProvider location
+// with very large radius that overflows to +Inf when doubled is rejected (C-017-001).
+func TestMergedLocations_TravelProviderInfRadius_Skipped(t *testing.T) {
+	c := New("gov-alerts")
+	c.config = AlertsConfig{
+		Locations: []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+	}
+	c.TravelProvider = &badTravelProvider{
+		locations: []LocationConfig{
+			{Name: "Overflow-City", Latitude: 35.0, Longitude: 139.0, RadiusKm: math.MaxFloat64},
+		},
+	}
+
+	merged := c.mergedLocations(context.Background(), c.config)
+	// Only Home; Overflow-City must be rejected because radius*2 = +Inf.
+	if len(merged) != 1 {
+		t.Errorf("expected 1 merged location (Home only), got %d", len(merged))
+	}
+	for _, loc := range merged {
+		if loc.Name == "Overflow-City" {
+			t.Error("Overflow-City with +Inf radius should have been filtered out")
+		}
+	}
+}
+
+// TestMergedLocations_TravelProviderZeroRadius_Skipped verifies that a TravelProvider
+// location with zero radius is rejected (C-017-001).
+func TestMergedLocations_TravelProviderZeroRadius_Skipped(t *testing.T) {
+	c := New("gov-alerts")
+	c.config = AlertsConfig{
+		Locations: []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+	}
+	c.TravelProvider = &badTravelProvider{
+		locations: []LocationConfig{
+			{Name: "Zero-Radius", Latitude: 35.0, Longitude: 139.0, RadiusKm: 0},
+		},
+	}
+
+	merged := c.mergedLocations(context.Background(), c.config)
+	if len(merged) != 1 {
+		t.Errorf("expected 1 merged location (Home only), got %d", len(merged))
+	}
+}
+
+// TestMergedLocations_TravelProviderNegativeRadius_Skipped verifies that a TravelProvider
+// location with negative radius is rejected (C-017-001).
+func TestMergedLocations_TravelProviderNegativeRadius_Skipped(t *testing.T) {
+	c := New("gov-alerts")
+	c.config = AlertsConfig{
+		Locations: []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+	}
+	c.TravelProvider = &badTravelProvider{
+		locations: []LocationConfig{
+			{Name: "Negative-Radius", Latitude: 35.0, Longitude: 139.0, RadiusKm: -100},
+		},
+	}
+
+	merged := c.mergedLocations(context.Background(), c.config)
+	if len(merged) != 1 {
+		t.Errorf("expected 1 merged location (Home only), got %d", len(merged))
+	}
+}
+
+// TestSync_TravelProviderInfRadius_NoGlobalMatches verifies end-to-end that a TravelProvider
+// returning an overflow radius does NOT cause worldwide earthquake matching (C-017-001).
+func TestSync_TravelProviderInfRadius_NoGlobalMatches(t *testing.T) {
+	// Return a distant earthquake (Tokyo) that should NOT match Home (SF) or the bad travel loc.
+	distantFeature := makeFeature("distant-eq", 5.0, 139.69, 35.68, 10.0, "Tokyo")
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(usgsResponse([]map[string]interface{}{distantFeature}))
+	}))
+	defer ts.Close()
+
+	c := newTestConnector(ts.URL, []LocationConfig{
+		{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+	})
+	c.TravelProvider = &badTravelProvider{
+		locations: []LocationConfig{
+			{Name: "Overflow", Latitude: 35.0, Longitude: 139.0, RadiusKm: math.MaxFloat64},
+		},
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Distant earthquake must NOT match — the overflow radius should be filtered.
+	if len(arts) != 0 {
+		t.Errorf("expected 0 artifacts (distant eq + bad travel loc filtered), got %d — C-017-001 regression", len(arts))
 	}
 }

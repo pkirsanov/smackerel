@@ -240,3 +240,189 @@ func TestNewClientNoBaseOriginField(t *testing.T) {
 		t.Errorf("apiKey mismatch")
 	}
 }
+
+// --- IMP-013-001: Trailing slash in base_url produces double-slash in API paths ---
+
+func TestConnectTrailingSlashStripped(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"base_url": srv.URL + "/", // trailing slash
+			"api_key":  "key",
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Before fix: gotPath would be "//health" (double slash).
+	// After fix: gotPath should be "/health".
+	if gotPath != "/health" {
+		t.Errorf("trailing slash in base_url caused malformed path: got %q, want /health", gotPath)
+	}
+}
+
+func TestConnectMultipleTrailingSlashesStripped(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := New()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"base_url": srv.URL + "///", // multiple trailing slashes
+			"api_key":  "key",
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	if gotPath != "/health" {
+		t.Errorf("multiple trailing slashes not stripped: got path %q, want /health", gotPath)
+	}
+}
+
+// --- IMP-013-002: Expense Amount and Booking TotalPrice IEEE 754 Inf/NaN guards ---
+
+func TestNormalizeExpenseInfAmount(t *testing.T) {
+	// Go 1.22+ rejects 1e999 at json.Unmarshal level; code guard is defense-in-depth.
+	event := ActivityEvent{
+		ID:        "evt-inf-expense",
+		Type:      "expense.created",
+		Timestamp: "2026-04-10T18:00:00Z",
+		EntityID:  "x1",
+		Data:      json.RawMessage(`{"propertyId":"p1","propertyName":"Lodge","category":"utilities","description":"Power","amount":1e999}`),
+	}
+
+	_, err := NormalizeEvent(event)
+	if err == nil {
+		t.Fatal("expected error for Inf expense amount, got nil — overflow must not poison downstream financial aggregation")
+	}
+}
+
+func TestNormalizeExpenseNegativeInfAmount(t *testing.T) {
+	event := ActivityEvent{
+		ID:        "evt-neginf-expense",
+		Type:      "expense.created",
+		Timestamp: "2026-04-10T18:00:00Z",
+		EntityID:  "x2",
+		Data:      json.RawMessage(`{"propertyId":"p1","propertyName":"Lodge","category":"repair","description":"Roof","amount":-1e999}`),
+	}
+
+	_, err := NormalizeEvent(event)
+	if err == nil {
+		t.Fatal("expected error for -Inf expense amount")
+	}
+}
+
+func TestNormalizeBookingInfTotalPrice(t *testing.T) {
+	// Go 1.22+ rejects 1e999 at json.Unmarshal level; bookingMetadata guard is defense-in-depth.
+	// Verify the error IS caught at some level.
+	event := ActivityEvent{
+		ID:        "evt-inf-booking",
+		Type:      "booking.created",
+		Timestamp: "2026-04-10T14:00:00Z",
+		EntityID:  "b1",
+		Data:      json.RawMessage(`{"propertyId":"p1","propertyName":"Lodge","guestName":"Eve","guestEmail":"e@t.com","checkinDate":"2026-05-01","checkoutDate":"2026-05-03","source":"direct","totalAmount":1e999}`),
+	}
+
+	_, err := NormalizeEvent(event)
+	if err == nil {
+		t.Fatal("expected error for Inf booking totalPrice — overflow must not reach metadata")
+	}
+}
+
+func TestNormalizeExpenseFiniteAmountPasses(t *testing.T) {
+	// Verify that normal finite expense amounts still work after the guard.
+	event := ActivityEvent{
+		ID:        "evt-normal-expense",
+		Type:      "expense.created",
+		Timestamp: "2026-04-10T18:00:00Z",
+		EntityID:  "x3",
+		Data:      json.RawMessage(`{"propertyId":"p1","propertyName":"Lodge","category":"supplies","description":"Soap","amount":42.50}`),
+	}
+
+	a, err := NormalizeEvent(event)
+	if err != nil {
+		t.Fatalf("NormalizeEvent: %v", err)
+	}
+	amount, ok := a.Metadata["amount"].(float64)
+	if !ok {
+		t.Fatalf("metadata amount not float64")
+	}
+	if amount != -42.50 {
+		t.Errorf("amount = %v, want -42.50", amount)
+	}
+}
+
+// --- IMP-013-003: Pagination cursor length cap (OOM defence) ---
+
+func TestFetchActivityOversizedCursorRejected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Return a response with HasMore=true and an absurdly large cursor.
+		bigCursor := strings.Repeat("A", 5000) // exceeds maxCursorLen (4096)
+		json.NewEncoder(w).Encode(ActivityFeedResponse{
+			Events: []ActivityEvent{
+				{ID: "e1", Type: "guest.created", Timestamp: "2026-04-01T10:00:00Z", EntityID: "g1", Data: json.RawMessage(`{"email":"a@b.com","name":"A"}`)},
+			},
+			HasMore: true,
+			Cursor:  bigCursor,
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token")
+	_, err := client.FetchActivity(context.Background(), "", "", 10)
+	if err == nil {
+		t.Fatal("expected error for oversized cursor — without this cap, a malicious server can OOM the client via cursor inflation")
+	}
+	if !strings.Contains(err.Error(), "oversized cursor") {
+		t.Errorf("error should mention oversized cursor, got: %v", err)
+	}
+}
+
+func TestFetchActivityNormalCursorAccepted(t *testing.T) {
+	page := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/json")
+		if page == 1 {
+			json.NewEncoder(w).Encode(ActivityFeedResponse{
+				Events:  []ActivityEvent{{ID: "e1", Type: "guest.created", Timestamp: "2026-04-01T10:00:00Z", EntityID: "g1", Data: json.RawMessage(`{"email":"a@b.com","name":"A"}`)}},
+				HasMore: true,
+				Cursor:  "normal-cursor-value",
+			})
+		} else {
+			json.NewEncoder(w).Encode(ActivityFeedResponse{
+				Events:  []ActivityEvent{{ID: "e2", Type: "guest.created", Timestamp: "2026-04-01T11:00:00Z", EntityID: "g2", Data: json.RawMessage(`{"email":"b@c.com","name":"B"}`)}},
+				HasMore: false,
+			})
+		}
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token")
+	resp, err := client.FetchActivity(context.Background(), "", "", 10)
+	if err != nil {
+		t.Fatalf("normal cursor should be accepted: %v", err)
+	}
+	if len(resp.Events) != 2 {
+		t.Errorf("expected 2 events across 2 pages, got %d", len(resp.Events))
+	}
+}

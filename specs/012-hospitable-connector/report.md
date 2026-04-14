@@ -345,3 +345,50 @@ While `maxPropertyNameCacheSize` capped the number of entries in the property na
 **Total new tests:** 8 adversarial security tests
 **All tests pass:** `./smackerel.sh test unit` — hospitable package ok 9.755s
 **No regressions:** All 33 Go packages pass, 44 Python tests pass
+
+## Security Sweep Pass 3 (security-to-doc, 2026-04-14)
+
+**Trigger:** stochastic-quality-sweep R12 → security (third pass)
+**Agent:** bubbles.workflow (child) → security-to-doc mode
+**Scope:** Residual defense-in-depth audit following R23 and R30 remediations
+
+### SEC-012-008: Cursor PropertyNames Deserialization Bypasses Cache Size Cap (CWE-770) — MEDIUM
+
+The `maxPropertyNameCacheSize` cap was enforced when WRITING PropertyNames to the cursor during Sync(), but NOT when READING them from a deserialized cursor at the start of the next Sync(). A crafted or corrupted cursor JSON with more than 10,000 PropertyName entries would bypass the write-side cap and inflate the in-memory `propertyNames` map without limit, causing excessive memory consumption proportional to the cursor payload.
+
+**Fix:** Added entry counting during cursor PropertyNames loading. When the loaded count reaches `maxPropertyNameCacheSize`, remaining entries are discarded with a warning log.
+
+**Files changed:** `connector.go` (cursor load loop gains `loaded` counter + cap check)
+**Tests added:** `TestSEC012008_CursorPropertyNamesCappedOnLoad`, `TestSEC012008_CursorBelowCapLoadsAll`
+
+### SEC-012-009: Address Fields Bypass Control Character Sanitization (CWE-116) — MEDIUM
+
+SEC-012-005 (R30) applied `SanitizeControlChars()` to user-facing text fields — GuestName, Sender, Body, ReviewText, HostResponse, PropertyName — but missed the `Address` struct fields (Street, City, State, Country, Zip). These fields flow into property content via `formatAddress()` and into metadata as the `"address"` value. A compromised API injecting null bytes or ANSI escape sequences into address fields would bypass the sanitization boundary.
+
+**Fix:** Applied `stringutil.SanitizeControlChars()` to all five Address fields in `NormalizeProperty()` before content and metadata formatting.
+
+**Files changed:** `normalizer.go` (5 new sanitization calls in NormalizeProperty)
+**Tests added:** `TestSEC012009_AddressControlChars`, `TestSEC012009_AddressFieldsCleaned`
+
+### SEC-012-010: Reservation/Review Channel and Status Fields Bypass Sanitization (CWE-116) — LOW
+
+`Reservation.Channel`, `Reservation.Status`, and `Review.Channel` were embedded in content strings via `buildReservationContent()` and `buildReviewContent()` without control character sanitization. While these fields are typically short strings from a controlled vocabulary (e.g., "Airbnb", "confirmed"), a compromised API could inject arbitrary values including control characters, inconsistent with the SEC-012-005 sanitization pattern applied to other text fields.
+
+**Fix:** Applied `stringutil.SanitizeControlChars()` to Channel and Status fields in `NormalizeReservation()` and Channel in `NormalizeReview()`.
+
+**Files changed:** `normalizer.go` (3 new sanitization calls)
+**Tests added:** `TestSEC012010_ReservationChannelControlChars`, `TestSEC012010_ReviewChannelControlChars`, `TestSEC012010_CleanChannelStatusPreserved`
+
+### Security Sweep Pass 3 Summary
+
+| Finding | Severity | CWE | Category | Fixed |
+|---------|----------|-----|----------|-------|
+| SEC-012-008 | Medium | CWE-770 | Unbounded cursor deserialization | Yes |
+| SEC-012-009 | Medium | CWE-116 | Address field sanitization gap | Yes |
+| SEC-012-010 | Low | CWE-116 | Channel/Status sanitization gap | Yes |
+
+**Total new tests:** 7 adversarial security tests
+**All tests pass:** `./smackerel.sh test unit` — hospitable package ok 9.103s
+**No regressions:** All 33 Go packages pass, 44 Python tests pass
+**Lint:** Pass
+**Check:** Config in sync with SST

@@ -437,7 +437,7 @@ Scenario: SCN-001-017 Data persistence and portability
 | 2 | Gmail + search cross-phase | E2E | tests/e2e/test_cross_phase.sh | SCN-001-015 |
 | 3 | Digest includes cross-source data | E2E | tests/e2e/test_digest_pipeline.sh | SCN-001-016 |
 | 4 | Data survives compose restart | E2E | tests/e2e/test_persistence.sh | SCN-001-017 |
-| 5 | Search accuracy benchmark | Stress | tests/benchmark/test_search_accuracy.sh | SCN-001-014 |
+| 5 | Search accuracy benchmark | Stress | tests/stress/test_search_stress.sh | SCN-001-014 |
 | 6 | Regression E2E: product flows | E2E | tests/e2e/test_product_flows.sh | SCN-001-014 |
 
 ### Definition of Done

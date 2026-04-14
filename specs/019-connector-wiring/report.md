@@ -161,3 +161,67 @@ Scope 1 implementation is complete. All 15 connectors are imported, instantiated
 | Unit | `./smackerel.sh test unit` | PASS — 33 Go packages (core recompiled), Python tests cached | 2026-04-13 |
 | Check | `./smackerel.sh check` | PASS — config in sync | 2026-04-13 |
 | Lint | `./smackerel.sh lint` | PASS — all checks passed | 2026-04-13 |
+
+---
+
+## Hardening Sweep R21 (2026-04-14)
+
+**Trigger:** Stochastic quality sweep R21 — harden trigger on connector wiring.
+**Scope:** `cmd/core/main.go` connector auto-start blocks, JSON/float parse helpers, config generation pipeline (`config.sh`), alerts connector credential channel.
+
+### Findings
+
+| ID | Severity | CWE | Description | Status |
+|----|----------|-----|-------------|--------|
+| H-019-R21-001 | Medium | CWE-522 | Gov Alerts `airnow_api_key` wired through `SourceConfig` instead of `Credentials` map. API key is a third-party secret but was placed in the non-credential configuration map, bypassing any credential-aware serialization/logging safeguards. Financial Markets correctly routes its API keys (`finnhub_api_key`, `fred_api_key`) through `Credentials`. | **Fixed** — Moved `airnow_api_key` from `SourceConfig` to `Credentials` in `main.go` auto-start block. Updated `parseAlertConfig()` to read from `config.Credentials["airnow_api_key"]`. Changed `AuthType` from `"none"` to `"api_key"` for consistency. |
+| H-019-R21-002 | Low | CWE-778 | `parseJSONArray` and `parseJSONObject` logged parse failures without including the env var key name — made error correlation impossible at startup when multiple JSON env vars are configured. `parseFloatEnv` already included key in its logs, creating an asymmetry in the helper API. | **Fixed** — Added `parseJSONArrayEnv(key)` and `parseJSONObjectEnv(key)` that read the env var internally and include the key in structured log warnings. Updated all 5 auto-start blocks to use the `Env` variants. Kept backward-compat wrappers `parseJSONArray(s)` / `parseJSONObject(s)` for existing callers. |
+| H-019-R21-003 | Medium | CWE-1286 | `yaml_get_json.parse_array()` in `config.sh` could not handle block-format scalar YAML arrays. Items like `- "!save"` without a `:` separator were silently dropped, producing empty JSON arrays. Inline YAML arrays `[a, b]` and object arrays `- key: val` were unaffected. User switching from inline to block format would silently lose all values. | **Fixed** — `parse_array()` now detects scalar items (no `:` in value after `- `) and appends them directly via `scalar()` instead of skipping. |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `cmd/core/main.go` | H-019-R21-001: Moved `airnow_api_key` to Credentials, set `AuthType: "api_key"`. H-019-R21-002: Added `parseJSONArrayEnv`, `parseJSONObjectEnv`, `parseJSONArrayVal`, `parseJSONObjectVal` helpers; updated 5 call sites to `Env` variants. |
+| `internal/connector/alerts/alerts.go` | H-019-R21-001: `parseAlertConfig()` reads `airnow_api_key` from `config.Credentials` instead of `config.SourceConfig`. |
+| `internal/connector/alerts/alerts_test.go` | H-019-R21-001: Updated 2 test fixtures to place `airnow_api_key` in `Credentials`. |
+| `scripts/commands/config.sh` | H-019-R21-003: `parse_array()` now handles scalar-only items in block-format YAML arrays. |
+| `cmd/core/main_test.go` | H-019-R21-002: Added 9 adversarial tests for `parseJSONArrayEnv`, `parseJSONObjectEnv`, and backward-compat wrappers. |
+
+### Test Evidence
+
+| Test Type | Command | Result | Timestamp |
+|-----------|---------|--------|-----------|
+| Unit | `./smackerel.sh test unit` | PASS — 33 Go packages (core + alerts recompiled), Python cached | 2026-04-14 |
+| Check | `./smackerel.sh check` | PASS — config in sync | 2026-04-14 |
+
+---
+
+## Improvement Sweep R27 (2026-04-14)
+
+**Trigger:** Stochastic quality sweep R27 — improve trigger on connector wiring.
+**Scope:** SST end-to-end wiring completeness — verifying every configurable field in the 5 wired connectors has a full YAML → config.sh → env → main.go → SourceConfig pipeline.
+
+### Findings
+
+| ID | Severity | Description | Status |
+|----|----------|-------------|--------|
+| IMP-019-R27-001 | High | Gov Alerts `source_earthquake` entirely missing from SST pipeline. The connector's `parseAlertsConfig()` was fixed in R24-017 to read `source_earthquake` from SourceConfig, but the main.go auto-start block never set it, config.sh never extracted it, and smackerel.yaml had no entry. All 6 other source toggles (weather, tsunami, volcano, wildfire, airnow, gdacs) had complete 3-layer wiring. Consequence: USGS earthquake alerts — the primary use case of the gov-alerts connector — could never be disabled via config. | **Fixed** — Added `source_earthquake: true` to `config/smackerel.yaml`, extraction line in `scripts/commands/config.sh`, env var output, and `"source_earthquake": os.Getenv("GOV_ALERTS_SOURCE_EARTHQUAKE") == "true"` in main.go Gov Alerts SourceConfig. |
+| IMP-019-R27-002 | Medium | Weather `enable_alerts`, `forecast_days`, `precision` missing from SST pipeline. The weather connector's `parseWeatherConfig()` was fixed in R23-016 to read these 3 fields from SourceConfig, but main.go, config.sh, and smackerel.yaml had no entries. Consequence: weather alert notifications could not be enabled via config; forecast day horizon (default 7) and coordinate precision (default 2) were not configurable. | **Fixed** — Added `enable_alerts: false`, `forecast_days: 7`, `precision: 2` to `config/smackerel.yaml` under `weather:`. Added 3 extraction lines and env var outputs in `scripts/commands/config.sh`. Added `"enable_alerts"`, `"forecast_days"`, `"precision"` to main.go Weather SourceConfig. |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `config/smackerel.yaml` | IMP-019-R27-001: Added `source_earthquake: true` under `gov-alerts:`. IMP-019-R27-002: Added `enable_alerts: false`, `forecast_days: 7`, `precision: 2` under `weather:`. |
+| `scripts/commands/config.sh` | IMP-019-R27-001: Added `GOV_ALERTS_SOURCE_EARTHQUAKE` extraction and env var output. IMP-019-R27-002: Added `WEATHER_ENABLE_ALERTS`, `WEATHER_FORECAST_DAYS`, `WEATHER_PRECISION` extraction and env var outputs. |
+| `cmd/core/main.go` | IMP-019-R27-001: Added `"source_earthquake"` to Gov Alerts SourceConfig. IMP-019-R27-002: Added `"enable_alerts"`, `"forecast_days"`, `"precision"` to Weather SourceConfig. |
+| `cmd/core/main_test.go` | Added 9 adversarial tests: 3 for `source_earthquake` wiring (enabled/disabled/unset), 3 for `enable_alerts` wiring (enabled/disabled), 2 for `forecast_days`/`precision` via `parseFloatEnv`, 1 for empty `forecast_days` zero-fallback. |
+
+### Test Evidence
+
+| Test Type | Command | Result | Timestamp |
+|-----------|---------|--------|-----------|
+| Unit | `./smackerel.sh test unit` | PASS — 33 Go packages (core recompiled), 72 Python tests | 2026-04-14 |
+| Build | `./smackerel.sh build` | PASS — both images built | 2026-04-14 |
+| Check | `./smackerel.sh check` | PASS — config in sync | 2026-04-14 |
+| Config generate | `./smackerel.sh config generate` | PASS — 4 new env vars confirmed: `GOV_ALERTS_SOURCE_EARTHQUAKE=true`, `WEATHER_ENABLE_ALERTS=false`, `WEATHER_FORECAST_DAYS=7`, `WEATHER_PRECISION=2` | 2026-04-14 |

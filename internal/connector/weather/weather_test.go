@@ -1274,3 +1274,274 @@ func TestSync_RedirectDoesNotProduceArtifacts(t *testing.T) {
 		t.Errorf("health should be error when all locations fail due to redirect, got %s", c.Health(context.Background()))
 	}
 }
+
+// --- IMP-016-R23-001: decodeCurrent rejects IEEE 754 Inf/NaN ---
+
+func TestDecodeCurrent_InfTemperature(t *testing.T) {
+	// JSON 1e309 exceeds float64 range → Go's json.Decoder decodes it as +Inf.
+	// If not rejected, artifact metadata silently carries +Inf temperature.
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{
+		"current": {
+			"temperature_2m": 1e309,
+			"apparent_temperature": 20.0,
+			"relative_humidity_2m": 50,
+			"wind_speed_10m": 5.0,
+			"weather_code": 0,
+			"is_day": 1
+		}
+	}`))
+	_, err := c.decodeCurrent(body, "inf-temp-key")
+	if err == nil {
+		t.Fatal("expected error for +Inf temperature — artifact metadata would carry +Inf")
+	}
+	if !strings.Contains(err.Error(), "temperature") {
+		t.Errorf("error should identify the invalid field, got: %v", err)
+	}
+}
+
+func TestDecodeCurrent_InfWindSpeed(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{
+		"current": {
+			"temperature_2m": 20.0,
+			"apparent_temperature": 20.0,
+			"relative_humidity_2m": 50,
+			"wind_speed_10m": 1e309,
+			"weather_code": 0,
+			"is_day": 1
+		}
+	}`))
+	_, err := c.decodeCurrent(body, "inf-wind-key")
+	if err == nil {
+		t.Fatal("expected error for +Inf wind_speed — artifact metadata would carry +Inf")
+	}
+	if !strings.Contains(err.Error(), "wind_speed") {
+		t.Errorf("error should identify wind_speed, got: %v", err)
+	}
+}
+
+func TestDecodeCurrent_InfHumidity(t *testing.T) {
+	// +Inf humidity → int(math.Round(+Inf)) produces math.MinInt — negative humidity.
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{
+		"current": {
+			"temperature_2m": 20.0,
+			"apparent_temperature": 20.0,
+			"relative_humidity_2m": 1e309,
+			"wind_speed_10m": 5.0,
+			"weather_code": 0,
+			"is_day": 1
+		}
+	}`))
+	_, err := c.decodeCurrent(body, "inf-humidity-key")
+	if err == nil {
+		t.Fatal("expected error for +Inf humidity — int conversion produces math.MinInt")
+	}
+	if !strings.Contains(err.Error(), "humidity") {
+		t.Errorf("error should identify humidity, got: %v", err)
+	}
+}
+
+func TestDecodeCurrent_InfApparentTemp(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{
+		"current": {
+			"temperature_2m": 20.0,
+			"apparent_temperature": -1e309,
+			"relative_humidity_2m": 50,
+			"wind_speed_10m": 5.0,
+			"weather_code": 0,
+			"is_day": 1
+		}
+	}`))
+	_, err := c.decodeCurrent(body, "inf-apparent-key")
+	if err == nil {
+		t.Fatal("expected error for -Inf apparent_temperature")
+	}
+	if !strings.Contains(err.Error(), "apparent_temperature") {
+		t.Errorf("error should identify apparent_temperature, got: %v", err)
+	}
+}
+
+func TestSync_InfTemperature_NoArtifact(t *testing.T) {
+	// End-to-end: +Inf in upstream response must not produce an artifact.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{"temperature_2m":1e309,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "InfCity", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("Sync should fail when all locations return Inf values")
+	}
+}
+
+// --- IMP-016-R23-002: parseWeatherConfig reads user-configurable fields ---
+
+func TestParseWeatherConfig_EnableAlertsFalse(t *testing.T) {
+	cfg, err := parseWeatherConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"enable_alerts": false,
+			"locations": []interface{}{
+				map[string]interface{}{"name": "X", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EnableAlerts {
+		t.Error("EnableAlerts should be false when user sets enable_alerts: false")
+	}
+}
+
+func TestParseWeatherConfig_ForecastDays(t *testing.T) {
+	cfg, err := parseWeatherConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"forecast_days": float64(14),
+			"locations": []interface{}{
+				map[string]interface{}{"name": "X", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ForecastDays != 14 {
+		t.Errorf("ForecastDays = %d, want 14", cfg.ForecastDays)
+	}
+}
+
+func TestParseWeatherConfig_ForecastDaysOutOfRange(t *testing.T) {
+	_, err := parseWeatherConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"forecast_days": float64(30),
+		},
+	})
+	if err == nil {
+		t.Error("expected error for forecast_days > 16")
+	}
+}
+
+func TestParseWeatherConfig_ForecastDaysInf(t *testing.T) {
+	_, err := parseWeatherConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"forecast_days": math.Inf(1),
+		},
+	})
+	if err == nil {
+		t.Error("expected error for +Inf forecast_days")
+	}
+}
+
+func TestParseWeatherConfig_Precision(t *testing.T) {
+	cfg, err := parseWeatherConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"precision": float64(4),
+			"locations": []interface{}{
+				map[string]interface{}{"name": "X", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Precision != 4 {
+		t.Errorf("Precision = %d, want 4", cfg.Precision)
+	}
+}
+
+// --- IMP-016-R23-003: configGen guard prevents Sync health clobber ---
+
+func TestSync_ConfigGenGuard_ConnectDuringSync(t *testing.T) {
+	// Simulate: Sync starts with gen=N, then Connect runs (gen=N+1), then Sync
+	// finishes and tries to update health. The stale Sync must NOT overwrite
+	// the Connect health.
+	syncStarted := make(chan struct{})
+	proceed := make(chan struct{})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(syncStarted)
+		<-proceed
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{"temperature_2m":20,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "A", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+
+	done := make(chan struct{})
+	go func() {
+		c.Sync(context.Background(), "")
+		close(done)
+	}()
+
+	<-syncStarted
+	// While Sync is blocked on HTTP, run Connect with new config → increments configGen.
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "B", "latitude": 30.0, "longitude": 40.0},
+			},
+		},
+	})
+
+	close(proceed)
+	<-done
+
+	// After Sync finishes, health should be what Connect set (Healthy), not what
+	// the stale Sync would have computed. The configGen guard prevents clobbering.
+	health := c.Health(context.Background())
+	if health != connector.HealthHealthy {
+		t.Errorf("health = %q after Connect-during-Sync, want %q — configGen guard failed", health, connector.HealthHealthy)
+	}
+}
+
+func TestValidateWeatherValues(t *testing.T) {
+	tests := []struct {
+		name     string
+		temp     float64
+		apparent float64
+		humidity float64
+		wind     float64
+		wantErr  bool
+	}{
+		{"all valid", 20.0, 22.0, 50.0, 5.0, false},
+		{"negative temp valid", -40.0, -45.0, 90.0, 2.0, false},
+		{"zero values valid", 0, 0, 0, 0, false},
+		{"temp +Inf", math.Inf(1), 20.0, 50.0, 5.0, true},
+		{"temp -Inf", math.Inf(-1), 20.0, 50.0, 5.0, true},
+		{"temp NaN", math.NaN(), 20.0, 50.0, 5.0, true},
+		{"apparent +Inf", 20.0, math.Inf(1), 50.0, 5.0, true},
+		{"humidity NaN", 20.0, 22.0, math.NaN(), 5.0, true},
+		{"wind +Inf", 20.0, 22.0, 50.0, math.Inf(1), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateWeatherValues(tt.temp, tt.apparent, tt.humidity, tt.wind)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateWeatherValues() error = %v, wantErr = %v", err, tt.wantErr)
+			}
+		})
+	}
+}
