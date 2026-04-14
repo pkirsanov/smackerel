@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -289,5 +290,48 @@ func TestDwellTimeTier_NegativeDwell(t *testing.T) {
 	got := DwellTimeTier(-5 * time.Minute)
 	if got != "metadata" {
 		t.Errorf("DwellTimeTier(-5m) = %q, want \"metadata\" (negative dwell must not escalate)", got)
+	}
+}
+
+// SEC-005-001 (CWE-74): ParseChromeHistorySince must reject dbPath containing
+// SQLite DSN query string characters. Without this guard, a path like
+// "/path/to/History?mode=rw" would inject parameters that override the
+// appended "?mode=ro", bypassing read-only enforcement.
+func TestParseChromeHistorySince_DSNInjection(t *testing.T) {
+	// Paths with "?" should be rejected to prevent parameter injection
+	injectionPaths := []string{
+		"/tmp/History?mode=rw",
+		"/tmp/History?_pragma=journal_mode(wal)",
+		"/tmp/History?mode=rw&_busy_timeout=0",
+		"/tmp/History#fragment",
+	}
+	for _, p := range injectionPaths {
+		_, err := ParseChromeHistorySince(p, 0)
+		if err == nil {
+			t.Errorf("ParseChromeHistorySince(%q, 0) = nil error, want rejection (DSN injection)", p)
+		}
+	}
+
+	// Clean paths must still be accepted (they'll fail for other reasons like missing file)
+	cleanPaths := []string{
+		"/home/user/.config/google-chrome/Default/History",
+		"/tmp/Chrome-History-Copy",
+	}
+	for _, p := range cleanPaths {
+		_, err := ParseChromeHistorySince(p, 0)
+		if err != nil && strings.Contains(err.Error(), "query string characters") {
+			t.Errorf("ParseChromeHistorySince(%q, 0) rejected clean path as DSN injection", p)
+		}
+	}
+}
+
+// SEC-005-001: Verify the error message is descriptive for DSN injection rejection.
+func TestParseChromeHistorySince_DSNInjectionMessage(t *testing.T) {
+	_, err := ParseChromeHistorySince("/tmp/History?mode=rw", 0)
+	if err == nil {
+		t.Fatal("expected error for DSN injection path")
+	}
+	if !strings.Contains(err.Error(), "query string characters") {
+		t.Errorf("error message should mention query string characters, got: %v", err)
 	}
 }

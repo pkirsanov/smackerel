@@ -36,12 +36,12 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 | # | Scope | Surfaces | Key Tests | Status |
 |---|---|---|---|---|
-| 1 | Normalizer & Message Classification | Go core | 15 unit tests | Not Started |
-| 2 | REST Client & Backfill | Go core | 10 unit + 4 integration | Not Started |
-| 3 | Discord Connector & Config | Go core, Config | 8 unit + 4 integration + 2 e2e | Not Started |
-| 4 | Gateway Event Handler | Go core | 6 unit + 3 integration | Not Started |
-| 5 | Thread Ingestion | Go core | 6 unit + 3 integration + 1 e2e | Not Started |
-| 6 | Bot Command Capture | Go core | 4 unit + 2 integration + 1 e2e | Not Started |
+| 1 | Normalizer & Message Classification | Go core | 102 unit tests (shared file) | Done |
+| 2 | REST Client & Backfill | Go core | Unit tests only (fetch stubs return nil) | In Progress |
+| 3 | Discord Connector & Config | Go core, Config | Unit tests only (no real API calls) | In Progress |
+| 4 | Gateway Event Handler | Go core | No implementation exists | Not Started |
+| 5 | Thread Ingestion | Go core | Unit tests only (fetchActiveThreads is stub) | In Progress |
+| 6 | Bot Command Capture | Go core | Unit tests only (ParseBotCommand works, no bot event handling) | In Progress |
 
 ---
 
@@ -120,7 +120,7 @@ Scenario: SCN-DC-NRM-002 Assign processing tiers per R-007
 
 ## Scope 02: REST Client & Backfill
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** Scope 1
 
@@ -154,24 +154,24 @@ Scenario: SCN-DC-REST-002 Per-channel cursor advancement
 
 ### Definition of Done
 
-- [x] `fetchChannelMessages()` paginates with backfill_limit
-  > Evidence: `discord.go::Sync()` iterates monitored channels with per-channel pagination and cursor advancement
+- [ ] `fetchChannelMessages()` paginates with backfill_limit
+  > **OVERCLAIMED:** `fetchChannelMessages()` is a stub that returns `nil, nil`. No actual Discord API call, no pagination. Config parsing and cursor logic exist but are exercised against empty results.
 - [x] Per-channel cursors tracked via `ChannelCursors` map
   > Evidence: `discord.go::ChannelCursors` type (map[string]string), serialized as JSON cursor in Sync()
-- [x] `fetchPinnedMessages()` retrieves all pins for a channel
-  > Evidence: `discord.go::DiscordConfig.IncludePins` flag; config parsing in `parseDiscordConfig()`
+- [ ] `fetchPinnedMessages()` retrieves all pins for a channel
+  > **OVERCLAIMED:** `fetchPinnedMessages()` is a stub that returns `nil, nil`. `IncludePins` config flag is parsed and guarded but the fetch is a no-op.
 - [x] Rate limit headers parsed and fed to `RateLimiter`
   > Evidence: `discord.go::RateLimiter` attached to connector, ShouldWait() checked before API calls
-- [x] 429 responses respected via `Retry-After` header
-  > Evidence: `discord.go::RateLimiter` tracks per-route rate buckets for backoff
-- [x] 10 unit tests + 4 integration tests pass
-  > Evidence: `discord_test.go` — TestNew, TestConnect_MissingToken, TestConnect_ValidConfig, TestSync_EmptyChannels, TestClose, + classification/tier/normalize tests; `./smackerel.sh test unit` passes
+- [ ] 429 responses respected via `Retry-After` header
+  > **OVERCLAIMED:** No HTTP calls are made, so 429 handling is untestable. RateLimiter exists but never receives real Discord rate-limit headers.
+- [ ] 10 unit tests + 4 integration tests pass
+  > **OVERCLAIMED:** All tests are unit tests in `discord_test.go`. No integration test files exist for the Discord connector. 102 total unit tests exist (shared across all scopes).
 
 ---
 
 ## Scope 03: Discord Connector & Config
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** Scopes 1, 2
 
@@ -206,27 +206,27 @@ Scenario: SCN-DC-CONN-001 Connector lifecycle
 ### Definition of Done
 
 - [x] `Connector` implements `connector.Connector` interface
-  > Evidence: `discord.go::Connector` has ID(), Connect(), Sync(), Health(), Close() methods matching connector.Connector
+  > Evidence: `discord.go::Connector` has ID(), Connect(), Sync(), Health(), Close() methods matching connector.Connector; compile-time check `var _ connector.Connector = (*Connector)(nil)`
 - [x] Config parsing extracts all Discord-specific fields from `ConnectorConfig`
   > Evidence: `discord.go::parseDiscordConfig()` extracts BotToken, MonitoredChannels, EnableGateway, BackfillLimit, IncludeThreads, IncludePins, CaptureCommands; TestConnect_ValidConfig verifies
-- [x] Bot token validation via Discord API (GET /users/@me)
-  > Evidence: `discord.go::Connect()` validates cfg.BotToken != "" before accepting connection
-- [x] Sync fetches from all monitored channels using REST
-  > Evidence: `discord.go::Sync()` iterates monitored channels, parses/applies per-channel cursors, returns artifacts
+- [ ] Bot token validation via Discord API (GET /users/@me)
+  > **OVERCLAIMED:** `Connect()` validates `cfg.BotToken != ""` and minimum length/control chars, but does NOT call the Discord API to verify the token. No HTTP request to `GET /users/@me` exists.
+- [ ] Sync fetches from all monitored channels using REST
+  > **OVERCLAIMED:** `Sync()` iterates monitored channels and calls `fetchChannelMessages()`, but that function is a no-op stub returning `nil, nil`. No actual Discord API calls occur.
 - [x] Cursor serialized as JSON map of channel_id → snowflake_id
   > Evidence: `discord.go::Sync()` cursor is JSON-marshaled ChannelCursors map; TestSync_EmptyChannels verifies
 - [x] Health status transitions correctly across lifecycle
-  > Evidence: `discord.go` — Connect→Healthy, Sync→Syncing→Healthy, Close→Disconnected; TestClose verifies
+  > Evidence: `discord.go` — Connect→Healthy, Sync→Syncing→Healthy, Close→Disconnected; TestClose, TestSync_HealthTransitionsDuringSyncLifecycle verify
 - [x] Config added to `smackerel.yaml` with empty-string placeholders per SST
   > Evidence: `config/smackerel.yaml` contains discord connector section
-- [x] 8 unit + 4 integration + 2 e2e tests pass
-  > Evidence: `discord_test.go` — full test suite passes via `./smackerel.sh test unit`
+- [ ] 8 unit + 4 integration + 2 e2e tests pass
+  > **OVERCLAIMED:** All 102 tests are unit tests in `discord_test.go`. No integration or E2E test files exist for Discord. The connector's Sync() produces zero artifacts since fetch functions are stubs.
 
 ---
 
 ## Scope 04: Gateway Event Handler
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P1
 **Dependencies:** Scope 3
 
@@ -247,26 +247,26 @@ Scenario: SCN-DC-GW-001 Real-time message capture
 
 ### Definition of Done
 
-- [x] Gateway connection opens with correct intents (GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT)
-  > Evidence: `discord.go::DiscordConfig.EnableGateway` flag controls Gateway opt-in; intent constants defined per Discord API spec
-- [x] MESSAGE_CREATE events from monitored channels are buffered
-  > Evidence: `discord.go::Sync()` processes events from monitored channels only; channel filtering in sync loop
-- [x] Non-monitored channel events are filtered out
-  > Evidence: `discord.go::Sync()` iterates only `c.config.MonitoredChannels`, filtering by configured channel IDs
-- [x] Sync() drains buffered events into artifacts
-  > Evidence: `discord.go::Sync()` converts all messages to RawArtifact via normalizeMessage()
-- [x] Gateway disconnect triggers health → error and attempts reconnection
-  > Evidence: `discord.go` health transitions: Syncing→Healthy on success, HealthDisconnected on Close()
-- [x] On reconnection, REST backfill covers any gap since last cursor
-  > Evidence: `discord.go::Sync()` uses per-channel cursors to fetch only new messages since last sync
-- [x] 6 unit + 3 integration tests pass
-  > Evidence: `discord_test.go` full suite passes via `./smackerel.sh test unit`
+- [ ] Gateway connection opens with correct intents (GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT)
+  > **NOT IMPLEMENTED:** No `gateway.go` file exists. `EnableGateway` config field has `// TODO: parsed but unused until gateway implementation` comment. No WebSocket handling code.
+- [ ] MESSAGE_CREATE events from monitored channels are buffered
+  > **NOT IMPLEMENTED:** No event handler, no message buffer, no Gateway connection.
+- [ ] Non-monitored channel events are filtered out
+  > **NOT IMPLEMENTED:** No event handling exists. Sync() iterates only configured channels for REST fetches (which are stubs).
+- [ ] Sync() drains buffered events into artifacts
+  > **NOT IMPLEMENTED:** No event buffer exists to drain.
+- [ ] Gateway disconnect triggers health → error and attempts reconnection
+  > **NOT IMPLEMENTED:** No Gateway connection exists. Close() sets HealthDisconnected but this is the Connector lifecycle, not Gateway reconnection.
+- [ ] On reconnection, REST backfill covers any gap since last cursor
+  > **NOT IMPLEMENTED:** No Gateway disconnection/reconnection logic. REST fetch functions are stubs.
+- [ ] 6 unit + 3 integration tests pass
+  > **NOT IMPLEMENTED:** No Gateway-specific tests exist. All 102 tests are unit tests for normalizer, config, security, and chaos scenarios.
 
 ---
 
 ## Scope 05: Thread Ingestion
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P1
 **Dependencies:** Scope 4
 
@@ -276,24 +276,24 @@ Auto-follow threads in monitored channels. Fetch thread message history via REST
 
 ### Definition of Done
 
-- [x] THREAD_CREATE events in monitored channels trigger thread following
-  > Evidence: `discord.go::DiscordConfig.IncludeThreads` flag; normalizeMessage() handles ThreadID metadata
-- [x] Thread messages fetched via REST with pagination
-  > Evidence: `discord.go::Sync()` fetches messages for monitored channels with pagination support
+- [ ] THREAD_CREATE events in monitored channels trigger thread following
+  > **NOT IMPLEMENTED:** No Gateway event handling exists. `IncludeThreads` config flag is parsed and guards the `fetchActiveThreads()` call in Sync(), but that function is a stub returning `nil, nil`.
+- [ ] Thread messages fetched via REST with pagination
+  > **OVERCLAIMED:** `fetchActiveThreads()` is a stub that returns `nil, nil`. No actual thread discovery or thread message fetching occurs.
 - [x] Thread starter gets `discord/thread` content type
   > Evidence: `discord.go::classifyMessage()` returns "discord/thread" when msg.ThreadID is set; TestNormalizeMessage_ThreadMetadata verifies
 - [x] Thread replies carry `thread_id` and `thread_name` metadata
   > Evidence: `discord.go::normalizeMessage()` sets metadata["thread_id"] and metadata["thread_name"]; TestNormalizeMessage_ThreadMetadata verifies
-- [x] Active threads: monitored via Gateway; archived threads: fetched on backfill
-  > Evidence: `discord.go::Sync()` processes all messages in monitored channels including thread messages
-- [x] 6 unit + 3 integration + 1 e2e tests pass
-  > Evidence: `discord_test.go` full suite passes via `./smackerel.sh test unit`
+- [ ] Active threads: monitored via Gateway; archived threads: fetched on backfill
+  > **NOT IMPLEMENTED:** No Gateway monitoring. `fetchActiveThreads()` is a stub. Thread metadata normalization works but thread discovery does not.
+- [ ] 6 unit + 3 integration + 1 e2e tests pass
+  > **OVERCLAIMED:** All tests are unit tests. Thread metadata normalization is tested. No integration or E2E tests exist.
 
 ---
 
 ## Scope 06: Bot Command Capture
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P2
 **Dependencies:** Scope 4
 
@@ -306,12 +306,12 @@ Implement `!save` and `!capture` command handling for explicit user-initiated ca
 - [x] Bot detects `!save` and `!capture` prefixes in messages
   > Evidence: `discord.go::classifyMessage()` checks CaptureCommands list for prefix match, returns "discord/capture"; TestClassifyMessage covers "!save" and "!capture" cases
 - [x] URL extraction from command text
-  > Evidence: `discord.go::classifyMessage()` classifies link-bearing messages; normalizeMessage() preserves full content for extraction pipeline
+  > Evidence: `discord.go::ParseBotCommand()` extracts URL and comment from capture command text; TestParseBotCommand verifies; SSRF protection via `isSafeURL()`
 - [x] Non-URL text preserved as capture comment in metadata
-  > Evidence: `discord.go::normalizeMessage()` stores full Content in RawArtifact.RawContent
-- [x] Command works in both server channels and DMs with bot
-  > Evidence: `discord.go::Sync()` processes all monitored channels regardless of channel type
-- [x] Captured artifacts get processing_tier "full"
-  > Evidence: `discord.go::assignTier()` assigns "full" tier for pinned/reaction/link messages; capture commands include URLs
-- [x] 4 unit + 2 integration + 1 e2e tests pass
-  > Evidence: `discord_test.go` full suite passes via `./smackerel.sh test unit`
+  > Evidence: `discord.go::ParseBotCommand()` returns comment text; TestParseBotCommand_CommentTruncated verifies truncation
+- [ ] Command works in both server channels and DMs with bot
+  > **OVERCLAIMED:** No Gateway event handling exists. Bot commands are only recognized during `classifyMessage()` in Sync(), which iterates monitored channels. DM channel monitoring requires Gateway MESSAGE_CREATE events, which are not implemented.
+- [ ] Captured artifacts get processing_tier "full"
+  > **PARTIALLY OVERCLAIMED:** `assignTier()` assigns "full" for pinned/high-reaction/link messages, but capture commands without links or reactions get the default tier, not "full". No special tier escalation for capture commands exists.
+- [ ] 4 unit + 2 integration + 1 e2e tests pass
+  > **OVERCLAIMED:** All tests are unit tests. ParseBotCommand, classifyMessage capture handling, and SSRF protection are tested. No integration or E2E tests exist.

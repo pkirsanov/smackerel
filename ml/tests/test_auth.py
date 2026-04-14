@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 import pytest
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 
@@ -88,3 +88,72 @@ class TestMLSidecarAuthDevMode:
         """SCN-020-008: Health still works in dev mode."""
         resp = self.client.get("/health")
         assert resp.status_code == 200
+
+
+class TestMLSidecarAuthAdversarial:
+    """GAP-020-R30-002: Non-ASCII tokens must get 401, not 500 (CWE-755)."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.app = _make_app("test-secret")
+        self.client = TestClient(self.app)
+
+    def test_non_ascii_bearer_returns_401(self):
+        """Non-ASCII str in Bearer token must raise 401, not TypeError (CWE-755).
+
+        Uvicorn decodes headers as Latin-1, so non-ASCII bytes arrive as
+        extended Python str. hmac.compare_digest raises TypeError on non-ASCII
+        str. The auth dependency must catch this and return 401.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        import importlib
+        import app.auth as auth_mod
+        with patch.dict("os.environ", {"SMACKEREL_AUTH_TOKEN": "test-secret"}):
+            importlib.reload(auth_mod)
+
+        # Build a mock Request with a non-ASCII Authorization header
+        # (simulating what uvicorn delivers for Latin-1 encoded bytes)
+        mock_request = MagicMock()
+        mock_request.headers = {
+            "authorization": "Bearer caf\u00e9-tok\u00ebn",
+        }
+        mock_request.method = "GET"
+        mock_request.url.path = "/process"
+        mock_request.client.host = "127.0.0.1"
+
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.get_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))
+        assert exc_info.value.status_code == 401
+
+    def test_non_ascii_x_auth_token_returns_401(self):
+        """Non-ASCII str in X-Auth-Token must raise 401, not TypeError."""
+        from unittest.mock import MagicMock
+
+        import importlib
+        import app.auth as auth_mod
+        with patch.dict("os.environ", {"SMACKEREL_AUTH_TOKEN": "test-secret"}):
+            importlib.reload(auth_mod)
+
+        mock_request = MagicMock()
+        mock_request.headers = {
+            "authorization": "",
+            "x-auth-token": "\u00fc\u00f1\u00ee\u00e7\u00f8\u00f0\u00e9",
+        }
+        mock_request.method = "GET"
+        mock_request.url.path = "/process"
+        mock_request.client.host = "127.0.0.1"
+
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.get_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))
+        assert exc_info.value.status_code == 401
+
+    def test_empty_bearer_prefix_returns_401(self):
+        """'Bearer ' with no actual token value must return 401."""
+        resp = self.client.get(
+            "/process",
+            headers={"Authorization": "Bearer "},
+        )
+        assert resp.status_code == 401

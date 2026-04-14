@@ -12,6 +12,21 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
+// maxEntitiesPerArtifact caps the number of entity names (people) processed per
+// artifact to prevent resource exhaustion from ML-extracted data influenced by
+// adversarial content (SEC-005-002, CWE-770).
+const maxEntitiesPerArtifact = 100
+
+// maxEntityNameLen caps each entity name to prevent excessive DB storage (SEC-005-002).
+const maxEntityNameLen = 200
+
+// maxTopicsPerArtifact caps the number of topic names processed per artifact
+// to prevent resource exhaustion (SEC-005-003, CWE-770).
+const maxTopicsPerArtifact = 50
+
+// maxTopicNameLen caps each topic name to prevent excessive DB storage (SEC-005-003).
+const maxTopicNameLen = 100
+
 // Linker creates knowledge graph edges after artifact processing.
 type Linker struct {
 	Pool *pgxpool.Pool
@@ -144,12 +159,21 @@ func (l *Linker) linkByEntities(ctx context.Context, artifactID string) (int, er
 		return 0, nil // No parseable entities
 	}
 
-	// Collect unique non-empty names
+	// Collect unique non-empty names, capped per artifact (SEC-005-002, CWE-770).
 	var names []string
 	for _, name := range entities.People {
 		name = strings.TrimSpace(name)
-		if name != "" {
-			names = append(names, name)
+		if name == "" {
+			continue
+		}
+		if len(name) > maxEntityNameLen {
+			name = name[:maxEntityNameLen]
+		}
+		names = append(names, name)
+		if len(names) >= maxEntitiesPerArtifact {
+			slog.Warn("entity names capped per artifact",
+				"artifact_id", artifactID, "cap", maxEntitiesPerArtifact)
+			break
 		}
 	}
 	if len(names) == 0 {
@@ -205,12 +229,21 @@ func (l *Linker) linkByTopics(ctx context.Context, artifactID string) (int, erro
 		return 0, nil
 	}
 
-	// Collect unique non-empty names
+	// Collect unique non-empty names, capped per artifact (SEC-005-003, CWE-770).
 	var cleaned []string
 	for _, name := range topicNames {
 		name = strings.TrimSpace(strings.ToLower(name))
-		if name != "" {
-			cleaned = append(cleaned, name)
+		if name == "" {
+			continue
+		}
+		if len(name) > maxTopicNameLen {
+			name = name[:maxTopicNameLen]
+		}
+		cleaned = append(cleaned, name)
+		if len(cleaned) >= maxTopicsPerArtifact {
+			slog.Warn("topic names capped per artifact",
+				"artifact_id", artifactID, "cap", maxTopicsPerArtifact)
+			break
 		}
 	}
 	if len(cleaned) == 0 {

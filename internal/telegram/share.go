@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -75,7 +76,11 @@ func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, tex
 		saved++
 	}
 
-	b.reply(msg.Chat.ID, fmt.Sprintf(". Saved %d of %d URLs", saved, len(urls)))
+	if saved == 0 {
+		b.reply(msg.Chat.ID, "? Failed to save URLs. Try again in a moment.")
+	} else {
+		b.reply(msg.Chat.ID, fmt.Sprintf(". Saved %d of %d URLs", saved, len(urls)))
+	}
 }
 
 // extractAllURLs returns all http:// and https:// URLs found in text.
@@ -96,9 +101,19 @@ func extractAllURLs(text string) []string {
 }
 
 // extractContext removes all URLs from text and returns the remaining context.
+// URLs are removed longest-first so that a shorter URL that is a prefix of a
+// longer one does not corrupt the longer URL during replacement.
 func extractContext(text string, urls []string) string {
+	// Sort URLs by descending length so longer URLs are removed before any
+	// shorter URL that happens to be a prefix of them.
+	sorted := make([]string, len(urls))
+	copy(sorted, urls)
+	sort.Slice(sorted, func(i, j int) bool {
+		return len(sorted[i]) > len(sorted[j])
+	})
+
 	result := text
-	for _, u := range urls {
+	for _, u := range sorted {
 		result = strings.ReplaceAll(result, u, "")
 	}
 	// Collapse multiple whitespace

@@ -284,18 +284,18 @@ func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
 	}
 	// Single query: compute remaining delivery slots and fetch pending alerts in one round-trip.
 	// The age filter (SEC-021-001) prevents poison alerts from retrying indefinitely.
-	rows, err := e.Pool.Query(ctx, `
+	rows, err := e.Pool.Query(ctx, fmt.Sprintf(`
 		SELECT id, alert_type, title, body, priority, status, artifact_id, created_at
 		FROM alerts
 		WHERE (status = 'pending'
 		   OR (status = 'snoozed' AND snooze_until <= NOW()))
-		  AND created_at > NOW() - INTERVAL '7 days'
+		  AND created_at > NOW() - INTERVAL '%d days'
 		ORDER BY priority, created_at
 		LIMIT GREATEST(0, 2 - (
 			SELECT COUNT(*) FROM alerts
 			WHERE status = 'delivered' AND delivered_at >= CURRENT_DATE
 		))
-	`)
+	`, maxPendingAlertAgeDays))
 	if err != nil {
 		return nil, fmt.Errorf("query pending alerts: %w", err)
 	}
@@ -350,7 +350,8 @@ func (e *Engine) CheckOverdueCommitments(ctx context.Context) error {
 			continue
 		}
 
-		daysOverdue := int(time.Since(expectedDate).Hours() / 24)
+		localToday := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local)
+		daysOverdue := calendarDaysBetween(expectedDate, localToday)
 		if err := e.CreateAlert(ctx, &Alert{
 			AlertType:  AlertCommitmentOverdue,
 			Title:      fmt.Sprintf("Overdue: %s", text),
@@ -464,8 +465,15 @@ func (e *Engine) GeneratePreMeetingBriefs(ctx context.Context) ([]MeetingBrief, 
 		}
 		if err := e.CreateAlert(ctx, briefAlert); err != nil {
 			slog.Warn("failed to create meeting brief alert", "event", eventID, "error", err)
-		} else if err := e.MarkAlertDelivered(ctx, briefAlert.ID); err != nil {
-			slog.Warn("failed to mark brief alert delivered", "event", eventID, "error", err)
+		} else {
+			// Use a detached context for marking delivered so that context cancellation
+			// between CreateAlert and MarkAlertDelivered doesn't leave sent-but-unmarked
+			// alerts (matching the C2 fix pattern from deliverPendingAlerts).
+			markCtx, markCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			if err := e.MarkAlertDelivered(markCtx, briefAlert.ID); err != nil {
+				slog.Warn("failed to mark brief alert delivered", "event", eventID, "error", err)
+			}
+			markCancel()
 		}
 
 		briefs = append(briefs, brief)
@@ -719,6 +727,9 @@ func (e *Engine) detectCapturePatterns(ctx context.Context) []string {
 	if e.Pool == nil {
 		return nil
 	}
+	if ctx.Err() != nil {
+		return nil
+	}
 	var patterns []string
 
 	// Day-of-week pattern
@@ -742,6 +753,10 @@ func (e *Engine) detectCapturePatterns(ctx context.Context) []string {
 		if err := rows.Err(); err != nil {
 			slog.Warn("capture pattern day-of-week iteration failed", "error", err)
 		}
+	}
+
+	if ctx.Err() != nil {
+		return patterns
 	}
 
 	// Hour-of-day pattern
@@ -996,7 +1011,11 @@ func (e *Engine) ProduceTripPrepAlerts(ctx context.Context) error {
 			continue
 		}
 
-		daysUntil := int(time.Until(startDate).Hours() / 24)
+		// Use calendarDaysBetween for DST-safe, time-of-day-independent day counting
+		// consistent with ProduceBillAlerts and CheckOverdueCommitments.
+		now := time.Now()
+		localToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+		daysUntil := calendarDaysBetween(localToday, startDate)
 		if daysUntil < 0 {
 			daysUntil = 0
 		}

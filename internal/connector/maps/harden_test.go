@@ -3,6 +3,7 @@ package maps
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -224,5 +225,91 @@ func TestHarden_CrossFileArtifactCap(t *testing.T) {
 	// Verify the cap constant is reasonable.
 	if maxActivities < 1000 || maxActivities > 200000 {
 		t.Errorf("maxActivities = %d, expected a reasonable cap between 1000 and 200000", maxActivities)
+	}
+}
+
+// --- IMP-011-R14-001: Config helpers reject IEEE 754 Inf/NaN ---
+// Inf/NaN values in config break comparison operators (NaN < x is always false)
+// and would silently disable distance/duration filtering in Sync.
+
+func TestImprove_ConfigFloat64NonNegRejectsNaN(t *testing.T) {
+	_, err := configFloat64NonNeg(map[string]interface{}{"x": math.NaN()}, "x")
+	if err == nil {
+		t.Fatal("expected error for NaN float64 config value")
+	}
+}
+
+func TestImprove_ConfigFloat64NonNegRejectsInf(t *testing.T) {
+	_, err := configFloat64NonNeg(map[string]interface{}{"x": math.Inf(1)}, "x")
+	if err == nil {
+		t.Fatal("expected error for +Inf float64 config value")
+	}
+}
+
+func TestImprove_ConfigFloat64NonNegRejectsNegInf(t *testing.T) {
+	_, err := configFloat64NonNeg(map[string]interface{}{"x": math.Inf(-1)}, "x")
+	if err == nil {
+		t.Fatal("expected error for -Inf float64 config value")
+	}
+}
+
+func TestImprove_ConfigFloat64PositiveRejectsNaN(t *testing.T) {
+	_, err := configFloat64Positive(map[string]interface{}{"x": math.NaN()}, "x")
+	if err == nil {
+		t.Fatal("expected error for NaN positive float64 config value")
+	}
+}
+
+func TestImprove_ConfigFloat64PositiveRejectsInf(t *testing.T) {
+	_, err := configFloat64Positive(map[string]interface{}{"x": math.Inf(1)}, "x")
+	if err == nil {
+		t.Fatal("expected error for +Inf positive float64 config value")
+	}
+}
+
+func TestImprove_ParseMapsConfigRejectsNaNMinDistance(t *testing.T) {
+	_, err := parseMapsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":     "/tmp/test",
+			"min_distance_m": math.NaN(),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error when min_distance_m is NaN")
+	}
+}
+
+func TestImprove_ParseMapsConfigRejectsInfTripDistance(t *testing.T) {
+	_, err := parseMapsConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"import_dir":           "/tmp/test",
+			"trip_min_distance_km": math.Inf(1),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error when trip_min_distance_km is +Inf")
+	}
+}
+
+// --- IMP-011-R14-003: configIntMin rejects overflow-range float64 ---
+
+func TestImprove_ConfigIntMinRejectsHugeFloat(t *testing.T) {
+	_, err := configIntMin(map[string]interface{}{"x": 1e18}, "x", 1)
+	if err == nil {
+		t.Fatal("expected error for overflow-range float64 in int config")
+	}
+}
+
+func TestImprove_ConfigIntMinRejectsNaN(t *testing.T) {
+	_, err := configIntMin(map[string]interface{}{"x": math.NaN()}, "x", 1)
+	if err == nil {
+		t.Fatal("expected error for NaN in int config")
+	}
+}
+
+func TestImprove_ConfigIntMinRejectsInf(t *testing.T) {
+	_, err := configIntMin(map[string]interface{}{"x": math.Inf(1)}, "x", 1)
+	if err == nil {
+		t.Fatal("expected error for +Inf in int config")
 	}
 }

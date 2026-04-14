@@ -137,12 +137,21 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	// Load persisted property name cache from cursor (R-018)
 	if len(syncCursor.PropertyNames) > 0 {
 		c.mu.Lock()
+		loaded := 0
 		for id, name := range syncCursor.PropertyNames {
 			// SEC-012-007: Skip entries with oversized strings (CWE-400).
 			if len(id) > maxCacheStringLen || len(name) > maxCacheStringLen {
 				continue
 			}
+			// SEC-012-008: Cap entries loaded from cursor to prevent a crafted
+			// cursor from inflating the in-memory cache beyond the write cap (CWE-770).
+			if loaded >= maxPropertyNameCacheSize {
+				slog.Warn("hospitable: cursor PropertyNames exceeds cache cap, truncating",
+					"cursor_size", len(syncCursor.PropertyNames), "cap", maxPropertyNameCacheSize)
+				break
+			}
 			c.propertyNames[id] = name
+			loaded++
 		}
 		c.mu.Unlock()
 	}

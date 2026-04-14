@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/018-financial-markets-connector",
   "featureName": "Financial Markets Connector",
-  "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "status": "in_progress",
+  "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.workflow",
-    "currentPhase": "finalize",
+    "currentPhase": "docs",
     "currentScope": null,
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedPhaseClaims": [

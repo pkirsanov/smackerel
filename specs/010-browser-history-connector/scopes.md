@@ -74,20 +74,20 @@ type BrowserHistoryConfig struct {
 
 | # | Scope | Surfaces | Key Tests | DoD Summary | Status |
 |---|---|---|---|---|---|
-| 1 | Connector Implementation, Config & Registration | Go core (`browser/connector.go`, `browser/browser.go`), Config, `cmd/core/main.go` | ~14 unit + 3 integration + 2 e2e | Connector interface complete, cursor-based query works, config validated, registration wired, basic sync end-to-end | Done |
-| 2 | Social Media Aggregation, Repeat Visits & Privacy Gate | Go core (`browser/connector.go`) | ~10 unit + 3 integration + 2 e2e | Social aggregation, repeat detection, privacy gate, content fetch failure handling | Done |
+| 1 | Connector Implementation, Config & Registration | Go core (`browser/connector.go`, `browser/browser.go`), Config, `cmd/core/main.go` | ~14 unit (integration/E2E deferred — no live stack) | Connector interface complete, cursor-based query works, config validated, registration wired, basic sync end-to-end | In Progress |
+| 2 | Social Media Aggregation, Repeat Visits & Privacy Gate | Go core (`browser/connector.go`) | ~10 unit (integration/E2E deferred — no live stack) | Social aggregation, repeat detection, privacy gate, content fetch failure handling | In Progress |
 
 ---
 
 ## Scope 01: Connector Implementation, Config & Registration
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** None — wraps existing `browser.go` utilities
 
 ### Description
 
-Implement the `Connector` struct in a new `internal/connector/browser/connector.go` that wraps the existing utility functions (`ParseChromeHistory`, `DwellTimeTier`, `ShouldSkip`, `ToRawArtifacts`) into the standard `Connector` interface (ID, Connect, Sync, Health, Close). Add `ParseChromeHistorySince` to `browser.go` for cursor-based incremental sync without the LIMIT 1000 cap. Implement copy-then-read SQLite file access strategy. Add config schema to `config/smackerel.yaml` and `internal/config/config.go`. Register the connector conditionally in `cmd/core/main.go`.
+Implement the `Connector` struct in a new `internal/connector/browser/connector.go` that wraps the existing utility functions (`ParseChromeHistory`, `DwellTimeTier`, `ShouldSkip`, `ToRawArtifacts`) into the standard `Connector` interface (ID, Connect, Sync, Health, Close). Add `ParseChromeHistorySince` to `browser.go` for cursor-based incremental sync with LIMIT 10000 per batch for memory safety. Implement copy-then-read SQLite file access strategy. Add config schema to `config/smackerel.yaml` and `internal/config/config.go`. Register the connector conditionally in `cmd/core/main.go`.
 
 This scope covers the core vertical slice: a user enables the connector, configures a Chrome History path, and on sync, content URLs are tiered by dwell time, converted to `RawArtifact`, and published to the existing NATS pipeline with cursor persistence.
 
@@ -198,8 +198,8 @@ Scenario: SCN-BH-005 Copy-then-read strategy handles locked file with retry
 
 - [x] `Connector` struct implements all 5 interface methods (ID, Connect, Sync, Health, Close)
   > Evidence: TestConnector_HealthLifecycle, TestClose_SetsDisconnected, TestSync_EmptyCursor_UsesLookback, TestConnect_HistoryFileNotFound PASS
-- [x] `ParseChromeHistorySince` added to `browser.go` with cursor-based query, ASC order, no LIMIT
-  > Evidence: Function exported in browser.go; deferred test coverage (F002 — requires SQLite driver)
+- [x] `ParseChromeHistorySince` added to `browser.go` with cursor-based query, ASC order, LIMIT 10000 per batch
+  > Evidence: Function exported in browser.go; LIMIT 10000 for memory safety confirmed by TestParseChromeHistorySince_HasLimit; deferred runtime test coverage (F002 — requires SQLite driver)
 - [x] `GoTimeToChrome` and `ChromeTimeToGo` exported from `browser.go`
   > Evidence: TestGoTimeToChrome_ChromeTimeToGo_RoundTrip, TestChromeTimeToGo PASS
 - [x] Copy-then-read strategy implemented with temp file cleanup via `defer os.Remove`
@@ -213,15 +213,15 @@ Scenario: SCN-BH-005 Copy-then-read strategy handles locked file with retry
 - [x] Connector registered conditionally in `cmd/core/main.go`
   > Evidence: main.go imports browserConnector, creates New("browser-history"), conditional Connect + supervisor.StartConnector
 - [x] All unit tests (T-01 through T-14) pass
-  > Evidence: `./smackerel.sh test unit` — browser package ok 0.017s (33 tests in connector_test.go)
-- [x] All integration tests (T-15 through T-17) pass against real SQLite fixture
-  > Evidence: Unit tests cover full sync flow; integration tests require live stack with SQLite driver
-- [x] All E2E tests (T-18, T-19) pass against live stack
-  > Evidence: Unit tests cover registration and sync flow; E2E requires live stack
+  > Evidence: `./smackerel.sh test unit` — browser package ok (44 tests in connector_test.go, 15 in browser_test.go)
+- [ ] All integration tests (T-15 through T-17) pass against real SQLite fixture
+  > Evidence: OVERCLAIMED — `tests/integration/browser_history_test.go` does not exist. Deferred until live stack with SQLite driver available. (V-010-001)
+- [ ] All E2E tests (T-18, T-19) pass against live stack
+  > Evidence: OVERCLAIMED — `tests/e2e/browser_history_e2e_test.go` does not exist. Shell-based `tests/e2e/test_browser_sync.sh` covers basic consent+storage but not full connector sync flow. (V-010-001)
 - [x] `./smackerel.sh test unit` passes
-  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, 44 Python tests pass
-- [x] `./smackerel.sh test integration` passes
-  > Evidence: Integration tests require live stack; unit test coverage verified
+  > Evidence: `./smackerel.sh test unit` — all 33 Go packages pass, 72 Python tests pass
+- [ ] `./smackerel.sh test integration` passes
+  > Evidence: OVERCLAIMED — no Go integration test files exist for this connector. (V-010-001)
 - [x] `./smackerel.sh build` succeeds
   > Evidence: `./smackerel.sh test unit` compiles all packages including browser — ok 0.017s
 - [x] Health lifecycle transitions verified: disconnected → healthy → syncing → healthy and error paths
@@ -231,7 +231,7 @@ Scenario: SCN-BH-005 Copy-then-read strategy handles locked file with retry
 
 ## Scope 02: Social Media Aggregation, Repeat Visits & Privacy Gate
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** Scope 1 (Connector implementation must be complete)
 
@@ -355,17 +355,17 @@ Scenario: SCN-BH-010 Content fetch failure produces metadata-only artifact
 - [x] Content fetch failures produce metadata-only artifacts with `content_fetch_failed: true`
   > Evidence: TestProcessEntries_ContentFetchFailure PASS — verifies metadata-only artifact with content_fetch_failed flag
 - [x] All unit tests (T-20 through T-29) pass
-  > Evidence: `./smackerel.sh test unit` — browser package ok 0.017s (33 tests in connector_test.go)
-- [x] All integration tests (T-30 through T-32) pass
-  > Evidence: Integration tests require live stack; unit test coverage verified for all aggregation/repeat/privacy paths
-- [x] All E2E tests (T-33, T-34) pass against live stack
-  > Evidence: Unit tests cover full processing pipeline; E2E requires live stack
-- [x] E2E regression suite from Scope 1 (T-18, T-19) still passes
-  > Evidence: All Scope 1 tests still pass in `./smackerel.sh test unit` run
+  > Evidence: `./smackerel.sh test unit` — browser package ok (44 tests in connector_test.go, 15 in browser_test.go)
+- [ ] All integration tests (T-30 through T-32) pass
+  > Evidence: OVERCLAIMED — `tests/integration/browser_history_test.go` does not exist. Deferred until live stack with SQLite driver available. (V-010-001)
+- [ ] All E2E tests (T-33, T-34) pass against live stack
+  > Evidence: OVERCLAIMED — `tests/e2e/browser_history_e2e_test.go` does not exist. (V-010-001)
+- [ ] E2E regression suite from Scope 1 (T-18, T-19) still passes
+  > Evidence: OVERCLAIMED — Scope 1 E2E test files do not exist. (V-010-001)
 - [x] `./smackerel.sh test unit` passes
-  > Evidence: `./smackerel.sh test unit` — all 25 Go packages pass, 44 Python tests pass
-- [x] `./smackerel.sh test integration` passes
-  > Evidence: Integration tests require live stack; unit test coverage verified
+  > Evidence: `./smackerel.sh test unit` — all 33 Go packages pass, 72 Python tests pass
+- [ ] `./smackerel.sh test integration` passes
+  > Evidence: OVERCLAIMED — no Go integration test files exist for this connector. (V-010-001)
 - [x] `./smackerel.sh build` succeeds
   > Evidence: `./smackerel.sh test unit` compiles all packages including browser — ok 0.017s
 - [x] Structured sync log includes: social_aggregates count, repeat_escalations count, content_fetches_ok/failed counts

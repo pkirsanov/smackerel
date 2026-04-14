@@ -8,6 +8,144 @@ _No scopes have been implemented yet._
 
 ---
 
+## Chaos Report — 2026-04-14
+
+**Trigger:** `chaos` (stochastic-quality-sweep R26 child workflow)
+**Mode:** `chaos-hardening`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Chaos probe of the Government Alerts connector. Found 3 issues: TravelProvider can inject unvalidated locations that bypass proximity filtering (including radius overflow to +Inf matching all alerts worldwide), a panicking Notifier crashes the Sync goroutine without recovery, and Close() during Sync() causes health state corruption where the connector falsely reports as alive after being closed. All 3 fixed with 9 adversarial tests.
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| C-017-001 | Input Validation Bypass | High | `mergedLocations()` did NOT validate coordinates/radius from `TravelProvider.GetTravelLocations()`. Config-sourced locations go through `isFiniteCoord`/`isFinitePositiveRadius` in `parseAlertsConfig`, but runtime TravelProvider results bypassed all validation. A provider returning `{RadiusKm: math.MaxFloat64}` got doubled to +Inf, making `findNearestLocation` match ALL alerts worldwide. NaN/Inf coords generate garbage NWS API requests. | Fixed |
+| C-017-002 | Panic Safety | High | `maybeNotify()` had no `recover()` guard. If `Notifier.NotifyAlert()` panics (nil pointer, runtime error), the panic propagates through `Sync()`, crashing the goroutine. The supervisor/scheduler calling Sync would crash without ever receiving an error return. | Fixed |
+| C-017-003 | State Corruption | Medium | If `Close()` was called while `Sync()` was in progress, Close set `health = HealthDisconnected`, but Sync's deferred function later overwrote it to `HealthHealthy` or `HealthDegraded`. Post-close, the connector falsely reported as alive. Additionally, `Sync()` on a closed connector succeeded with empty config, returning misleading empty results instead of an error. | Fixed |
+
+### Remediation
+
+**C-017-001 Fix — TravelProvider Location Validation:**
+- `mergedLocations()` now validates all TravelProvider locations with `isFiniteCoord` and `isFinitePositiveRadius` before inclusion
+- After doubling radius, checks `isFinitePositiveRadius(expandedRadius)` to catch overflow to +Inf
+- Invalid locations are logged and skipped
+
+**C-017-002 Fix — Notifier Panic Recovery:**
+- Added `defer func() { if r := recover()... }()` at the top of `maybeNotify`
+- Panics are logged via `slog.Error` with alert ID and recovered value
+- Sync continues normally after recovering from a panicking notifier
+
+**C-017-003 Fix — Close/Sync Health State Coordination:**
+- Added `closed` boolean field to `Connector` struct
+- `Close()` sets `closed = true` alongside `HealthDisconnected`
+- `Sync()` checks `closed` at entry and returns `"connector is closed"` error
+- Sync's deferred health restoration only runs when `!c.closed`, preserving Disconnected state
+- `Connect()` resets `closed = false`, allowing reconnection after close
+
+### New Tests (9)
+
+| Test | Finding | Description |
+|------|---------|-------------|
+| `TestSync_NotifierPanic_DoesNotCrashSync` | C-017-002 | Extreme earthquake triggers panicking notifier; Sync recovers, returns artifact, health is Healthy |
+| `TestSync_NotifierPanic_ArtifactStillReturned` | C-017-002 | Verifies the artifact that triggered the panic is still in the Sync results |
+| `TestClose_DuringSync_HealthRemainsDisconnected` | C-017-003 | Close mid-Sync; after Sync completes, health is Disconnected not Healthy |
+| `TestSync_AfterClose_ReturnsError` | C-017-003 | Sync on closed connector returns error containing "closed" |
+| `TestConnect_AfterClose_ResetsClosedFlag` | C-017-003 | Connect → Close → Connect → Sync succeeds |
+| `TestMergedLocations_TravelProviderNaNCoords_Skipped` | C-017-001 | NaN-latitude travel location rejected; valid travel location accepted |
+| `TestMergedLocations_TravelProviderInfRadius_Skipped` | C-017-001 | MaxFloat64 radius (overflows to +Inf when doubled) rejected |
+| `TestMergedLocations_TravelProviderZeroRadius_Skipped` | C-017-001 | Zero radius travel location rejected |
+| `TestSync_TravelProviderInfRadius_NoGlobalMatches` | C-017-001 | E2E: distant earthquake does NOT match with overflow radius travel location |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/alerts/alerts.go` | Added `closed` field to Connector, Close/Sync/Connect coordination, `recover()` in `maybeNotify`, travel location validation in `mergedLocations` |
+| `internal/connector/alerts/alerts_test.go` | Added 9 adversarial chaos tests + test helpers (panicNotifier, badTravelProvider) |
+| `specs/017-gov-alerts-connector/report.md` | Added this chaos report |
+
+### Validation
+
+- `./smackerel.sh test unit` — all Go and Python tests pass (alerts: 3.431s)
+- No existing tests broken or weakened
+- 153 test functions total in alerts package (144 existing + 9 new)
+
+---
+
+## Hardening Report — 2026-04-14
+
+**Trigger:** `harden` (stochastic-quality-sweep R02 child workflow)
+**Mode:** `harden-to-doc`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Hardening probe of the Government Alerts connector. Found 4 issues: GDACS alerts bypassed proximity filtering despite having parseable coordinates, NWS proximity matching used a tautological self-lookup, AirNow API key leaked into error messages, and volcano/wildfire alerts triggered global proactive notifications without proximity verification. All 4 fixed with 10 adversarial tests.
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| H-017-001 | Missing Proximity Filter | High | GDACS sync loop accepted ALL global disaster alerts without proximity filtering despite `georss:point` coordinates being parsed. A user in San Francisco received every GDACS alert worldwide (Indonesia earthquakes, Indian Ocean cyclones, etc.), violating spec Goal 2: "Location-aware filtering." | Fixed |
+| H-017-002 | Tautological Logic | Medium | NWS weather Sync used `findNearestLocation(loc.Latitude, loc.Longitude, allLocations)` — looking up the querying location against all locations. This always trivially matched itself at distance ~0, making `distance_km` metadata misleading and `nearest_location` potentially wrong when multiple locations are configured. | Fixed |
+| H-017-003 | Credential Leak (CWE-532) | High | `fetchAirNowAQI()` embedded the API key in the URL query string. On HTTP failure, Go's `*url.Error` includes the full URL in `Error()`, leaking the key into `slog.Warn` log messages and returned error chains. | Fixed |
+| H-017-004 | Unfiltered Notifications | Medium | `maybeNotify()` was called for volcano and wildfire alerts without any proximity verification. A WARNING-level volcano in Alaska or an evacuation-level wildfire in Montana would trigger proactive notifications to a user in San Francisco. | Fixed |
+
+### Remediation
+
+**H-017-001 Fix — GDACS Proximity Filtering:**
+- Added `parseGeoPoint()` helper to extract lat/lon from georss:point strings
+- GDACS Sync loop now: parses geo_point → validates with `isFiniteCoord` → checks `findNearestLocation` → skips alerts outside all user location radii
+- GDACS alerts without parseable coordinates are skipped entirely
+- `normalizeGDACSAlert()` updated to accept `*ProximityMatch` and include `distance_km`/`nearest_location` metadata
+
+**H-017-002 Fix — NWS Proximity Match:**
+- Replaced tautological `findNearestLocation(loc.Latitude, loc.Longitude, allLocations)` with direct `ProximityMatch{LocationName: loc.Name, DistanceKm: 0}`
+- NWS alerts are already point-filtered server-side via `?point=lat,lon`; the querying location IS the correct match
+
+**H-017-003 Fix — AirNow Key Redaction:**
+- Error path in `fetchAirNowAQI` now redacts the API key from error messages using `strings.ReplaceAll(errMsg, apiKey, "[REDACTED]")`
+- Uses `%s` format verb instead of `%w` to prevent the original `*url.Error` (containing the key) from being unwrapped
+
+**H-017-004 Fix — Notification Suppression:**
+- Removed `c.maybeNotify(ctx, art)` from volcano and wildfire Sync loops
+- These sources ingest globally without coordinates; proactive notifications require proximity verification
+- GDACS alerts that pass the new proximity filter DO still trigger notifications (verified by `TestSync_GDACS_NearbyNotifies`)
+
+### New Tests (10)
+
+| Test | Finding | Description |
+|------|---------|-------------|
+| `TestParseGeoPoint` | H-017-001 | 8 cases: valid, empty, single value, three values, non-numeric, whitespace |
+| `TestSync_GDACS_ProximityFiltered` | H-017-001 | Nearby GDACS alert accepted, distant alert filtered out; verifies proximity metadata |
+| `TestSync_GDACS_NoGeoPoint_Skipped` | H-017-001 | GDACS alert without geo_point skipped entirely |
+| `TestSync_GDACS_InvalidGeoPoint_Skipped` | H-017-001 | GDACS alert with unparseable coordinates skipped |
+| `TestSync_NWS_LocationNameInMatch` | H-017-002 | Verifies location name and distance=0 in NWS proximity metadata |
+| `TestFetchAirNowAQI_APIKeyRedacted` | H-017-003 | Error on timeout contains [REDACTED], not the secret key |
+| `TestSync_Volcano_NoNotification` | H-017-004 | WARNING-level volcano does NOT trigger notification |
+| `TestSync_Wildfire_NoNotification` | H-017-004 | Evacuation-level wildfire does NOT trigger notification |
+| `TestSync_GDACS_NearbyNotifies` | H-017-001/004 | Red-level GDACS alert near user DOES trigger notification after proximity check |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/alerts/alerts.go` | Added `parseGeoPoint()`, GDACS proximity filtering, NWS match fix, AirNow key redaction, volcano/wildfire notification suppression, `normalizeGDACSAlert` signature update |
+| `internal/connector/alerts/alerts_test.go` | Updated 3 existing `normalizeGDACSAlert` calls, added 10 adversarial tests |
+| `specs/017-gov-alerts-connector/report.md` | Added this hardening report |
+
+### Validation
+
+- `./smackerel.sh test unit` — all Go and Python tests pass (alerts: 2.689s)
+- No existing tests broken or weakened
+
+---
+
 ## Regression Report — 2026-04-12
 
 **Trigger:** `regression` (stochastic-quality-sweep child workflow)
@@ -158,6 +296,70 @@ To reach genuine `done` status, the following scopes need implementation:
 
 **Implementation details:**
 1. **RACE-001/002/003:** Added mutex protection around all `known`, `health`, and `config` accesses. `Connect()` and `Close()` now hold `mu.Lock()`. `Sync()` uses fine-grained locking for dedup map reads/writes.
+
+---
+
+## Improvement Report — 2026-04-14
+
+**Trigger:** `improve` (stochastic-quality-sweep R24 child workflow)
+**Mode:** `improve-existing`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Improvement probe of the Government Alerts connector. Found 3 issues: earthquake source toggle permanently hardcoded to enabled (user cannot disable), location `radius_km` accepts IEEE 754 Inf bypassing all proximity filtering, and AirNow observation IDs lack a date component causing stale dedup across days at the same AQI value. All 3 fixed with 9 adversarial tests (plus subtests).
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| IMP-017-R24-001 | Config Gap | High | `parseAlertsConfig()` never reads a `source_earthquake` key from SourceConfig. All other 6 sources (weather, tsunami, volcano, wildfire, airnow, gdacs) have their toggle read, but `SourceEarthquake` always defaults to `true` with no override. Users cannot disable earthquake alerts. The `GOV_ALERTS_SOURCE_EARTHQUAKE` env var wired in `main.go` is silently ignored. | Fixed |
+| IMP-017-R24-002 | IEEE 754 Bypass | High | Location `radius_km` validation only checks `> 0`, which accepts `math.Inf(1)`. An infinite radius makes `haversineKm(…) <= Inf` always true, so ALL alerts globally match that location — completely defeating the proximity filter (spec Goal 2). Same for `NaN` (`<= NaN` is always false, rejecting everything). Affects both regular and travel locations. | Fixed |
+| IMP-017-R24-003 | Dedup Regression | Medium | AirNow observation IDs are formatted as `airnow-{area}-{param}-{aqi}` with no temporal component. If AQI stays at the same integer value across sync cycles (common during stable conditions), all observations after the first are silently dropped by the 7-day eviction dedup map. The `DateObserved` field is available but not included in the ID. | Fixed |
+
+### Remediation
+
+**IMP-017-R24-001 Fix — Earthquake Config Toggle:**
+- Added `source_earthquake` config key parsing in `parseAlertsConfig()`, matching the pattern used by all other 6 source toggles
+- Default remains `true` (backward compatible)
+- `GOV_ALERTS_SOURCE_EARTHQUAKE=false` in env now actually disables earthquake polling
+
+**IMP-017-R24-002 Fix — Finite Positive Radius Guard:**
+- Added `isFinitePositiveRadius(r float64)` helper that rejects NaN, Inf, zero, and negative values
+- Replaced `lc.RadiusKm > 0` with `isFinitePositiveRadius(lc.RadiusKm)` in both regular and travel location parsing
+- Invalid-radius locations are silently dropped (matching existing invalid-coordinate behavior)
+
+**IMP-017-R24-003 Fix — AirNow Temporal Dedup:**
+- Changed AirNow ID format from `airnow-{area}-{param}-{aqi}` to `airnow-{area}-{param}-{aqi}-{date}`
+- The `DateObserved` field (e.g. "2024-07-15 ") is sanitized and included, isolating dedup per observation day
+- Same-AQI observations on different days now produce separate artifacts
+
+### New Tests (9 test functions, 24+ subtests)
+
+| Test | Finding | Description |
+|------|---------|-------------|
+| `TestParseAlertsConfig_SourceEarthquakeToggle` | IMP-017-R24-001 | 3 cases: default true, explicit false, explicit true |
+| `TestSync_EarthquakeDisabledViaConfig` | IMP-017-R24-001 | USGS endpoint not called when SourceEarthquake=false |
+| `TestParseAlertsConfig_RadiusInfNaN` | IMP-017-R24-002 | 6 subtests: valid, +Inf, -Inf, NaN, zero, negative |
+| `TestParseAlertsConfig_TravelRadiusInfNaN` | IMP-017-R24-002 | 3 subtests: valid travel, +Inf travel, NaN travel |
+| `TestIsFinitePositiveRadius` | IMP-017-R24-002 | 7 cases including edge values |
+| `TestFetchAirNowAQI_IDIncludesDate` | IMP-017-R24-003 | Observation ID contains date component |
+| `TestAirNowDedup_SameAQIDifferentDays` | IMP-017-R24-003 | Two syncs at identical AQI on different days both produce artifacts |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/alerts/alerts.go` | Added `source_earthquake` config parsing, `isFinitePositiveRadius()`, radius guard on both location types, AirNow ID date component |
+| `internal/connector/alerts/alerts_test.go` | Added 9 adversarial test functions |
+| `specs/017-gov-alerts-connector/report.md` | Added this improvement report |
+
+### Validation
+
+- `./smackerel.sh test unit` — All Go and Python tests pass
+- `internal/connector/alerts`: 144 test functions, all pass (4.845s)
+- No existing tests broken or weakened
 2. **MEM-001:** Added `knownEvictionAge` (7 days) constant. `Sync()` evicts entries older than 7 days from the dedup map at the start of each sync cycle.
 3. **INPUT-001:** Added `io.LimitReader(resp.Body, maxResponseBytes)` with 10MB limit before JSON decoding.
 4. **INPUT-002:** Added `isFiniteCoord()` validation function (NaN, Inf, lat/lon range checks). Applied in `Sync()` loop and `parseAlertsConfig()`. Config also rejects zero/negative radius.

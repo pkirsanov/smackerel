@@ -42,6 +42,7 @@ const minMagnitudeUpper = 10.0
 type Connector struct {
 	id              string
 	health          connector.HealthStatus
+	closed          bool
 	mu              sync.RWMutex
 	config          AlertsConfig
 	httpClient      *http.Client
@@ -142,6 +143,7 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	c.mu.Lock()
 	c.config = cfg
 	c.health = connector.HealthHealthy
+	c.closed = false
 	c.mu.Unlock()
 	slog.Info("gov-alerts connector connected", "id", c.id, "locations", len(cfg.Locations))
 	return nil
@@ -149,6 +151,10 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil, "", fmt.Errorf("connector is closed")
+	}
 	c.health = connector.HealthSyncing
 	cfg := c.config
 	c.mu.Unlock()
@@ -156,10 +162,12 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var syncErr error
 	defer func() {
 		c.mu.Lock()
-		if syncErr != nil {
-			c.health = connector.HealthDegraded
-		} else {
-			c.health = connector.HealthHealthy
+		if !c.closed {
+			if syncErr != nil {
+				c.health = connector.HealthDegraded
+			} else {
+				c.health = connector.HealthHealthy
+			}
 		}
 		c.mu.Unlock()
 	}()
@@ -229,18 +237,19 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					syncErr = ctx.Err()
 					return allArtifacts, now.Format(time.RFC3339), syncErr
 				}
-				if match := findNearestLocation(loc.Latitude, loc.Longitude, allLocations); match != nil {
-					c.mu.Lock()
-					_, seen := c.known[alert.ID]
-					if !seen {
-						c.known[alert.ID] = now
-					}
-					c.mu.Unlock()
-					if !seen {
-						art := normalizeNWSAlert(alert, match)
-						allArtifacts = append(allArtifacts, art)
-						c.maybeNotify(ctx, art)
-					}
+				// NWS alerts are already point-filtered server-side; use the querying
+				// location directly instead of a tautological findNearestLocation call (H-017-002).
+				match := &ProximityMatch{LocationName: loc.Name, DistanceKm: 0}
+				c.mu.Lock()
+				_, seen := c.known[alert.ID]
+				if !seen {
+					c.known[alert.ID] = now
+				}
+				c.mu.Unlock()
+				if !seen {
+					art := normalizeNWSAlert(alert, match)
+					allArtifacts = append(allArtifacts, art)
+					c.maybeNotify(ctx, art)
 				}
 			}
 		}
@@ -299,7 +308,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			if !seen {
 				art := normalizeVolcanoAlert(v)
 				allArtifacts = append(allArtifacts, art)
-				c.maybeNotify(ctx, art)
+				// Volcano alerts lack coordinates; suppress proactive notifications
+				// until proximity can be verified (H-017-004).
 			}
 		}
 	}
@@ -329,7 +339,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			if !seen {
 				art := normalizeWildfireAlert(w)
 				allArtifacts = append(allArtifacts, art)
-				c.maybeNotify(ctx, art)
+				// Wildfire alerts lack coordinates; suppress proactive notifications
+				// until proximity can be verified (H-017-004).
 			}
 		}
 	}
@@ -383,6 +394,15 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				syncErr = ctx.Err()
 				return allArtifacts, now.Format(time.RFC3339), syncErr
 			}
+			// Proximity filter: GDACS provides georss:point — skip alerts outside user locations (H-017-001).
+			lat, lon, hasCoords := parseGeoPoint(d.GeoPoint)
+			if !hasCoords || !isFiniteCoord(lat, lon) {
+				continue
+			}
+			match := findNearestLocation(lat, lon, allLocations)
+			if match == nil {
+				continue
+			}
 			c.mu.Lock()
 			_, seen := c.known[d.ID]
 			if !seen {
@@ -390,7 +410,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			}
 			c.mu.Unlock()
 			if !seen {
-				art := normalizeGDACSAlert(d)
+				art := normalizeGDACSAlert(d, match)
 				allArtifacts = append(allArtifacts, art)
 				c.maybeNotify(ctx, art)
 			}
@@ -409,6 +429,7 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 func (c *Connector) Close() error {
 	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.closed = true
 	c.mu.Unlock()
 	return nil
 }
@@ -564,6 +585,12 @@ func isFiniteCoord(lat, lon float64) bool {
 	return true
 }
 
+// isFinitePositiveRadius returns true if r is a finite positive number.
+// Rejects NaN, Inf, zero, and negative values to prevent proximity filter bypass (IMP-017-R24-002).
+func isFinitePositiveRadius(r float64) bool {
+	return !math.IsNaN(r) && !math.IsInf(r, 0) && r > 0
+}
+
 // sanitizeStringField strips control characters and truncates to maxStringFieldLen
 // to prevent log injection and memory abuse from untrusted API responses.
 func sanitizeStringField(s string) string {
@@ -616,6 +643,21 @@ func sanitizeExternalURL(rawURL string) string {
 	return ""
 }
 
+// parseGeoPoint extracts lat/lon from a "lat lon" space-separated string
+// (georss:point format). Returns (lat, lon, true) on success.
+func parseGeoPoint(geoPoint string) (float64, float64, bool) {
+	parts := strings.Fields(geoPoint)
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	lat, latErr := strconv.ParseFloat(parts[0], 64)
+	lon, lonErr := strconv.ParseFloat(parts[1], 64)
+	if latErr != nil || lonErr != nil {
+		return 0, 0, false
+	}
+	return lat, lon, true
+}
+
 func classifyEarthquakeSeverity(magnitude, distanceKm float64) string {
 	switch {
 	case magnitude >= 7.0:
@@ -660,7 +702,7 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 				if r, ok := lm["radius_km"].(float64); ok {
 					lc.RadiusKm = r
 				}
-				if lc.Name != "" && latOK && lonOK && isFiniteCoord(lc.Latitude, lc.Longitude) && lc.RadiusKm > 0 {
+				if lc.Name != "" && latOK && lonOK && isFiniteCoord(lc.Latitude, lc.Longitude) && isFinitePositiveRadius(lc.RadiusKm) {
 					cfg.Locations = append(cfg.Locations, lc)
 				}
 			}
@@ -672,6 +714,10 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 			return AlertsConfig{}, fmt.Errorf("min_earthquake_magnitude %.1f out of valid range [%.0f, %.0f]", mag, minMagnitudeLower, minMagnitudeUpper)
 		}
 		cfg.MinEarthquakeMag = mag
+	}
+
+	if se, ok := config.SourceConfig["source_earthquake"].(bool); ok {
+		cfg.SourceEarthquake = se
 	}
 
 	if sw, ok := config.SourceConfig["source_weather"].(bool); ok {
@@ -698,7 +744,8 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 		cfg.SourceGDACS = sg
 	}
 
-	if key, ok := config.SourceConfig["airnow_api_key"].(string); ok {
+	// H-019-001: Read airnow_api_key from Credentials (secret channel), not SourceConfig.
+	if key, ok := config.Credentials["airnow_api_key"]; ok {
 		cfg.AirNowAPIKey = key
 	}
 
@@ -723,7 +770,7 @@ func parseAlertsConfig(config connector.ConnectorConfig) (AlertsConfig, error) {
 				if r, ok := lm["radius_km"].(float64); ok {
 					lc.RadiusKm = r
 				}
-				if lc.Name != "" && latOK && lonOK && isFiniteCoord(lc.Latitude, lc.Longitude) && lc.RadiusKm > 0 {
+				if lc.Name != "" && latOK && lonOK && isFiniteCoord(lc.Latitude, lc.Longitude) && isFinitePositiveRadius(lc.RadiusKm) {
 					cfg.TravelLocations = append(cfg.TravelLocations, lc)
 				}
 			}
@@ -1327,7 +1374,12 @@ func (c *Connector) fetchAirNowAQI(ctx context.Context, lat, lon float64, apiKey
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("AirNow request failed: %w", err)
+		// Redact API key from error context to prevent credential leak (CWE-532, H-017-003).
+		errMsg := err.Error()
+		if apiKey != "" {
+			errMsg = strings.ReplaceAll(errMsg, apiKey, "[REDACTED]")
+		}
+		return nil, fmt.Errorf("AirNow request failed: %s", errMsg)
 	}
 	defer drainBody(resp.Body)
 
@@ -1354,7 +1406,9 @@ func (c *Connector) fetchAirNowAQI(ctx context.Context, lat, lon float64, apiKey
 
 	var observations []AirNowObservation
 	for _, e := range entries {
-		id := fmt.Sprintf("airnow-%s-%s-%d", sanitizeStringField(e.ReportingArea), sanitizeStringField(e.ParameterName), e.AQI)
+		// Include DateObserved in ID so observations at the same AQI are not
+		// silently deduped across days (IMP-017-R24-003).
+		id := fmt.Sprintf("airnow-%s-%s-%d-%s", sanitizeStringField(e.ReportingArea), sanitizeStringField(e.ParameterName), e.AQI, sanitizeStringField(e.DateObserved))
 		sanitizedID, valid := sanitizeAlertID(id)
 		if !valid {
 			continue
@@ -1536,7 +1590,7 @@ func classifyGDACSAlertLevel(level string) string {
 	}
 }
 
-func normalizeGDACSAlert(alert GDACSAlert) connector.RawArtifact {
+func normalizeGDACSAlert(alert GDACSAlert, match *ProximityMatch) connector.RawArtifact {
 	tier := "standard"
 	if alert.Severity == "extreme" || alert.Severity == "severe" {
 		tier = "full"
@@ -1554,16 +1608,15 @@ func normalizeGDACSAlert(alert GDACSAlert) connector.RawArtifact {
 		"severity":        alert.Severity,
 		"processing_tier": tier,
 	}
+	if match != nil {
+		metadata["distance_km"] = match.DistanceKm
+		metadata["nearest_location"] = match.LocationName
+	}
 	if alert.GeoPoint != "" {
 		metadata["geo_point"] = alert.GeoPoint
-		parts := strings.Fields(alert.GeoPoint)
-		if len(parts) == 2 {
-			lat, latErr := strconv.ParseFloat(parts[0], 64)
-			lon, lonErr := strconv.ParseFloat(parts[1], 64)
-			if latErr == nil && lonErr == nil && isFiniteCoord(lat, lon) {
-				metadata["latitude"] = lat
-				metadata["longitude"] = lon
-			}
+		if lat, lon, ok := parseGeoPoint(alert.GeoPoint); ok && isFiniteCoord(lat, lon) {
+			metadata["latitude"] = lat
+			metadata["longitude"] = lon
 		}
 	}
 
@@ -1581,6 +1634,7 @@ func normalizeGDACSAlert(alert GDACSAlert) connector.RawArtifact {
 
 // mergedLocations returns cfg.Locations combined with travel locations (2x radius).
 // Travel locations come from TravelProvider (if set) or cfg.TravelLocations.
+// All travel locations are validated before inclusion to prevent proximity filter bypass (C-017-001).
 func (c *Connector) mergedLocations(ctx context.Context, cfg AlertsConfig) []LocationConfig {
 	merged := make([]LocationConfig, len(cfg.Locations))
 	copy(merged, cfg.Locations)
@@ -1599,11 +1653,24 @@ func (c *Connector) mergedLocations(ctx context.Context, cfg AlertsConfig) []Loc
 	}
 
 	for _, loc := range travelLocs {
+		if !isFiniteCoord(loc.Latitude, loc.Longitude) {
+			slog.Warn("skipping travel location with invalid coordinates", "name", loc.Name, "lat", loc.Latitude, "lon", loc.Longitude)
+			continue
+		}
+		if !isFinitePositiveRadius(loc.RadiusKm) {
+			slog.Warn("skipping travel location with invalid radius", "name", loc.Name, "radius_km", loc.RadiusKm)
+			continue
+		}
+		expandedRadius := loc.RadiusKm * 2
+		if !isFinitePositiveRadius(expandedRadius) {
+			slog.Warn("skipping travel location with overflow radius after doubling", "name", loc.Name, "radius_km", loc.RadiusKm)
+			continue
+		}
 		expanded := LocationConfig{
 			Name:      loc.Name,
 			Latitude:  loc.Latitude,
 			Longitude: loc.Longitude,
-			RadiusKm:  loc.RadiusKm * 2, // travel destinations use expanded radius
+			RadiusKm:  expandedRadius,
 			IsTravel:  true,
 		}
 		merged = append(merged, expanded)
@@ -1612,7 +1679,14 @@ func (c *Connector) mergedLocations(ctx context.Context, cfg AlertsConfig) []Loc
 }
 
 // maybeNotify sends an alert notification if severity is extreme or severe and Notifier is set.
+// Panics from the Notifier are recovered so a faulty notification implementation cannot crash Sync (C-017-002).
 func (c *Connector) maybeNotify(ctx context.Context, art connector.RawArtifact) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic in alert notifier recovered", "alert_id", art.SourceRef, "panic", r)
+		}
+	}()
+
 	if c.Notifier == nil {
 		return
 	}

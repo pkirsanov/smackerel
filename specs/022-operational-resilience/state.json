@@ -77,12 +77,21 @@
       "runStartedAt": "2026-04-13T05:40:00Z",
       "runCompletedAt": "2026-04-13T05:50:00Z",
       "summary": "Harden-to-doc pass 3: 4 findings (H-006 High: dead-letter off-by-one — skipped final processing attempt, H-007 Medium: no DBMinConns<=DBMaxConns cross-validation, H-008 Medium: ResultSubscriber.Stop() unbounded wg.Wait, H-009 Low: nil pool panic guard). All fixed. 4 new tests, 4 updated tests. All 33 Go packages PASS."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["improve", "implement", "test", "docs"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-14T00:00:00Z",
+      "runCompletedAt": "2026-04-14T00:10:00Z",
+      "summary": "Improve-existing pass 4 (stochastic R29): 3 findings (IMP-022-R29-001 Medium: probeMLHealth uses request context — cancelled request taints shared ML health cache for TTL; IMP-022-R29-002 Medium: NATS Close() 5s drain timeout exceeds shutdownAll 2s step budget — background goroutine leak; IMP-022-R29-003 Low: truncateBytes and dead-letter lastError byte-position truncation breaks multi-byte UTF-8). All fixed. 6 new adversarial tests. All 33 Go packages PASS."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-13T05:50:00Z",
+  "lastUpdatedAt": "2026-04-14T00:10:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

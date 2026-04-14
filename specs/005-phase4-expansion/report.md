@@ -1015,3 +1015,59 @@ Exit code: 0
 $ ./smackerel.sh format --check
 Exit code: 0
 ```
+
+---
+
+## Security Probe (Stochastic Sweep R28 — security trigger) — 2026-04-14
+
+**Trigger:** Stochastic quality sweep Round R28 — security trigger
+**Agent:** bubbles.security → bubbles.workflow (security-to-doc)
+
+### Findings
+
+| ID | CWE | Severity | Component | Finding |
+|----|-----|----------|-----------|---------|
+| SEC-005-001 | CWE-74 | HIGH | `browser/browser.go::ParseChromeHistorySince` | SQLite DSN injection bypasses `?mode=ro` read-only enforcement. `dbPath+"?mode=ro"` — if `dbPath` contains `?` or `#`, the caller can inject SQLite connection parameters (e.g., `?mode=rw`) that override the appended read-only mode, enabling write access to the Chrome history database. |
+| SEC-005-002 | CWE-770 | MEDIUM | `graph/linker.go::linkByEntities` | Unbounded entity name array from artifact JSON. ML-extracted people names from adversarial email/article content had no cap on array length or per-name length, enabling resource exhaustion via massive batch INSERT and edge creation. |
+| SEC-005-003 | CWE-770 | MEDIUM | `graph/linker.go::linkByTopics` | Unbounded topic name array from artifact JSON. Same issue as SEC-005-002 but for topic tags — no cap on topic count or name length per artifact. |
+
+### Fix Details
+
+**SEC-005-001 — SQLite DSN injection guard:**
+- Added `strings.ContainsAny(dbPath, "?#")` validation before `sql.Open` to reject paths containing query string characters
+- Returns descriptive error: "invalid Chrome history path: contains query string characters"
+- Clean paths (e.g., `/home/user/.config/google-chrome/Default/History`) pass through unchanged
+
+**SEC-005-002 — Entity name array cap (CWE-770):**
+- Added `maxEntitiesPerArtifact = 100` constant — caps number of people names processed per artifact
+- Added `maxEntityNameLen = 200` constant — truncates individual entity names exceeding 200 bytes
+- Logged warning on truncation with original count and cap value
+
+**SEC-005-003 — Topic name array cap (CWE-770):**
+- Added `maxTopicsPerArtifact = 50` constant — caps number of topic names processed per artifact
+- Added `maxTopicNameLen = 100` constant — truncates individual topic names exceeding 100 bytes
+- Logged warning on truncation with original count and cap value
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/browser/browser.go` | DSN injection guard in `ParseChromeHistorySince` |
+| `internal/connector/browser/browser_test.go` | `TestParseChromeHistorySince_DSNInjection`, `TestParseChromeHistorySince_DSNInjectionMessage` |
+| `internal/graph/linker.go` | `maxEntitiesPerArtifact`, `maxEntityNameLen`, `maxTopicsPerArtifact`, `maxTopicNameLen` constants; cap enforcement in `linkByEntities` and `linkByTopics` |
+| `internal/graph/linker_test.go` | `TestSEC005002_EntityNamesCappedPerArtifact`, `TestSEC005002_EntityNameLengthCapped`, `TestSEC005003_TopicNamesCappedPerArtifact`, `TestSEC005003_TopicNameLengthCapped`, `TestSEC005_CapConsistency` |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/browser  0.164s
+ok  github.com/smackerel/smackerel/internal/graph              0.051s
+33 Go packages ok, 0 failures
+72 Python tests passed
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+Exit code: 0
+```

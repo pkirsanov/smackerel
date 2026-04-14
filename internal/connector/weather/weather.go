@@ -47,6 +47,7 @@ type Connector struct {
 	health     connector.HealthStatus
 	mu         sync.RWMutex
 	config     WeatherConfig
+	configGen  uint64                 // incremented on Connect; Sync uses it to skip stale health writes
 	httpClient *http.Client
 	cache      map[string]*cacheEntry
 	baseURL    string // overridable for testing; defaults to Open-Meteo API
@@ -101,15 +102,21 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	if len(cfg.Locations) == 0 {
 		return fmt.Errorf("at least one location must be configured")
 	}
+	c.mu.Lock()
 	c.config = cfg
 	c.health = connector.HealthHealthy
+	c.configGen++
+	c.mu.Unlock()
 	slog.Info("weather connector connected", "id", c.id, "locations", len(cfg.Locations))
 	return nil
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	// Snapshot config under lock to prevent data race with concurrent Connect().
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
+	cfg := c.config
+	gen := c.configGen
 	c.mu.Unlock()
 
 	// Bound total sync duration to prevent unbounded blocking under API failures.
@@ -121,7 +128,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	now := time.Now()
 	syncStart := time.Now()
 
-	for _, loc := range c.config.Locations {
+	for _, loc := range cfg.Locations {
 		// Check for context cancellation between locations.
 		if err := syncCtx.Err(); err != nil {
 			c.mu.Lock()
@@ -163,20 +170,23 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	// Reflect health based on failure ratio relative to total locations.
+	// Only update health if no concurrent Connect() has occurred since Sync started.
 	c.mu.Lock()
-	c.health = healthFromFailureRatio(failCount, len(c.config.Locations))
+	if c.configGen == gen {
+		c.health = healthFromFailureRatio(failCount, len(cfg.Locations))
+	}
 	c.mu.Unlock()
 
 	slog.Info("weather sync complete",
 		"id", c.id,
-		"locations", len(c.config.Locations),
+		"locations", len(cfg.Locations),
 		"artifacts", len(artifacts),
 		"failures", failCount,
 		"duration", time.Since(syncStart),
 	)
 
 	// Return an error when ALL locations failed so callers can detect total failure.
-	if failCount > 0 && failCount >= len(c.config.Locations) {
+	if failCount > 0 && failCount >= len(cfg.Locations) {
 		return artifacts, cursor, fmt.Errorf("all %d weather locations failed to sync", failCount)
 	}
 
@@ -307,6 +317,14 @@ func (c *Connector) decodeCurrent(body io.ReadCloser, cacheKey string) (*Current
 	// Drain remaining body after successful decode to allow HTTP connection reuse.
 	_, _ = io.Copy(io.Discard, limitedBody)
 
+	// Validate decoded float64 values — JSON numbers exceeding float64 range
+	// (e.g. 1e309) decode as ±Inf, and upstream bugs can produce NaN upstream.
+	// Propagating Inf/NaN into artifact metadata silently corrupts enrichment.
+	if err := validateWeatherValues(result.Current.Temperature, result.Current.ApparentTemp,
+		result.Current.Humidity, result.Current.WindSpeed); err != nil {
+		return nil, fmt.Errorf("open-meteo returned invalid weather values: %w", err)
+	}
+
 	cw := &CurrentWeather{
 		Temperature:  result.Current.Temperature,
 		ApparentTemp: result.Current.ApparentTemp,
@@ -339,6 +357,26 @@ func (c *Connector) evictExpiredLocked() {
 			delete(c.cache, key)
 		}
 	}
+}
+
+// validateWeatherValues rejects IEEE 754 Inf and NaN in decoded weather data.
+// JSON numbers exceeding float64 range (e.g. 1e309) silently decode as ±Inf
+// in Go's encoding/json, and upstream API bugs can produce pathological values.
+func validateWeatherValues(temperature, apparentTemp, humidity, windSpeed float64) error {
+	for _, pair := range []struct {
+		name string
+		val  float64
+	}{
+		{"temperature", temperature},
+		{"apparent_temperature", apparentTemp},
+		{"humidity", humidity},
+		{"wind_speed", windSpeed},
+	} {
+		if math.IsNaN(pair.val) || math.IsInf(pair.val, 0) {
+			return fmt.Errorf("%s is %v", pair.name, pair.val)
+		}
+	}
+	return nil
 }
 
 // healthFromFailureRatio computes health from the proportion of failed locations
@@ -418,6 +456,27 @@ func parseWeatherConfig(config connector.ConnectorConfig) (WeatherConfig, error)
 		EnableAlerts: true,
 		ForecastDays: 7,
 		Precision:    2,
+	}
+
+	// Read user-configurable fields from SourceConfig.
+	if ea, ok := config.SourceConfig["enable_alerts"].(bool); ok {
+		cfg.EnableAlerts = ea
+	}
+	if fd, ok := config.SourceConfig["forecast_days"].(float64); ok {
+		if math.IsNaN(fd) || math.IsInf(fd, 0) {
+			return cfg, fmt.Errorf("forecast_days must be a finite number")
+		}
+		v := int(fd)
+		if v < 1 || v > 16 {
+			return cfg, fmt.Errorf("forecast_days %d out of range [1, 16]", v)
+		}
+		cfg.ForecastDays = v
+	}
+	if p, ok := config.SourceConfig["precision"].(float64); ok {
+		if math.IsNaN(p) || math.IsInf(p, 0) {
+			return cfg, fmt.Errorf("precision must be a finite number")
+		}
+		cfg.Precision = int(p)
 	}
 
 	if locs, ok := config.SourceConfig["locations"].([]interface{}); ok {

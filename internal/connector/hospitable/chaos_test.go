@@ -2175,3 +2175,223 @@ func TestSEC012007_OversizedCursorPropertyNamesSkippedOnLoad(t *testing.T) {
 		t.Errorf("SEC-012-007: normal cursor entry should be loaded, got: %q", c.propertyNames["ok-key"])
 	}
 }
+
+// --- SEC-012-008: Cursor PropertyNames deserialization cap (CWE-770) ---
+
+func TestSEC012008_CursorPropertyNamesCappedOnLoad(t *testing.T) {
+	// Build a cursor with more PropertyNames than maxPropertyNameCacheSize.
+	oldCap := maxPropertyNameCacheSize
+	maxPropertyNameCacheSize = 5 // Use small cap for test speed
+	defer func() { maxPropertyNameCacheSize = oldCap }()
+
+	oversizedCache := make(map[string]string, 20)
+	for i := 0; i < 20; i++ {
+		oversizedCache[fmt.Sprintf("p-%04d", i)] = fmt.Sprintf("Prop %d", i)
+	}
+	craftedCursor := SyncCursor{PropertyNames: oversizedCache}
+	cursorJSON, _ := json.Marshal(craftedCursor)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: false, SyncMessages: false, SyncReviews: false,
+		TierProperties: "light", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	_, _, err := c.Sync(context.Background(), string(cursorJSON))
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	c.mu.RLock()
+	loaded := len(c.propertyNames)
+	c.mu.RUnlock()
+
+	// In-memory cache must be capped at maxPropertyNameCacheSize.
+	if loaded > maxPropertyNameCacheSize {
+		t.Errorf("SEC-012-008: cursor deserialization loaded %d entries, exceeding cap %d (CWE-770)",
+			loaded, maxPropertyNameCacheSize)
+	}
+}
+
+func TestSEC012008_CursorBelowCapLoadsAll(t *testing.T) {
+	// A cursor with entries below the cap should load all entries.
+	smallCache := map[string]string{"p-a": "House A", "p-b": "House B"}
+	cursorJSON, _ := json.Marshal(SyncCursor{PropertyNames: smallCache})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: false, SyncMessages: false, SyncReviews: false,
+		TierProperties: "light", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	_, _, err := c.Sync(context.Background(), string(cursorJSON))
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.propertyNames["p-a"] != "House A" {
+		t.Errorf("SEC-012-008: small cursor entry p-a should load, got %q", c.propertyNames["p-a"])
+	}
+	if c.propertyNames["p-b"] != "House B" {
+		t.Errorf("SEC-012-008: small cursor entry p-b should load, got %q", c.propertyNames["p-b"])
+	}
+}
+
+// --- SEC-012-009: Address fields bypass control char sanitization (CWE-116) ---
+
+func TestSEC012009_AddressControlChars(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:   "prop-addr-ctrl",
+		Name: "Clean Name",
+		Address: Address{
+			Street:  "123\x00Main\rSt",
+			City:    "Evil\x1BCity",
+			State:   "Bad\x01State",
+			Country: "Null\x00Land",
+			Zip:     "ZIP\x02CODE",
+		},
+		UpdatedAt: time.Now(),
+	}
+
+	a := NormalizeProperty(p, cfg)
+
+	// Address in content must have control chars stripped
+	if strings.ContainsAny(a.RawContent, "\x00\x01\x02\r\x1B") {
+		t.Errorf("SEC-012-009: property content contains control chars from address: %q", a.RawContent)
+	}
+
+	// Address in metadata must be clean
+	if addr, ok := a.Metadata["address"].(string); ok {
+		if strings.ContainsAny(addr, "\x00\x01\x02\r\x1B") {
+			t.Errorf("SEC-012-009: metadata address contains control chars: %q", addr)
+		}
+	}
+}
+
+func TestSEC012009_AddressFieldsCleaned(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:   "prop-addr-ok",
+		Name: "Test Property",
+		Address: Address{
+			Street:  "456 Oak Ave",
+			City:    "Portland",
+			State:   "OR",
+			Country: "US",
+			Zip:     "97201",
+		},
+		UpdatedAt: time.Now(),
+	}
+
+	a := NormalizeProperty(p, cfg)
+
+	// Clean addresses should pass through unchanged
+	if addr, ok := a.Metadata["address"].(string); ok {
+		if !strings.Contains(addr, "456 Oak Ave") {
+			t.Errorf("SEC-012-009: clean address should be preserved, got %q", addr)
+		}
+	}
+}
+
+// --- SEC-012-010: Reservation Channel/Status bypass control char sanitization (CWE-116) ---
+
+func TestSEC012010_ReservationChannelControlChars(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard"}
+	r := Reservation{
+		ID:         "res-chan-ctrl",
+		PropertyID: "p1",
+		GuestName:  "Alice",
+		Channel:    "Airbnb\x00Direct\x1B[31m",
+		Status:     "confirmed\x00\rinjected",
+		CheckIn:    "2026-04-15",
+		CheckOut:   "2026-04-18",
+		BookedAt:   time.Now(),
+	}
+
+	a := NormalizeReservation(r, "Beach House", cfg)
+
+	if strings.ContainsAny(a.RawContent, "\x00\x01\r\x1B") {
+		t.Errorf("SEC-012-010: reservation content has control chars from Channel/Status: %q", a.RawContent)
+	}
+	if ch, ok := a.Metadata["channel"].(string); ok {
+		if strings.ContainsAny(ch, "\x00\x1B") {
+			t.Errorf("SEC-012-010: metadata channel contains control chars: %q", ch)
+		}
+	}
+	if st, ok := a.Metadata["status"].(string); ok {
+		if strings.ContainsAny(st, "\x00\r") {
+			t.Errorf("SEC-012-010: metadata status contains control chars: %q", st)
+		}
+	}
+}
+
+func TestSEC012010_ReviewChannelControlChars(t *testing.T) {
+	cfg := HospitableConfig{TierReviews: "full"}
+	r := Review{
+		ID:          "rev-chan-ctrl",
+		PropertyID:  "p1",
+		Rating:      4.0,
+		ReviewText:  "Great stay",
+		Channel:     "Booking\x00.com\x1B",
+		SubmittedAt: time.Now(),
+	}
+
+	a := NormalizeReview(r, "Beach House", cfg)
+
+	if strings.ContainsAny(a.RawContent, "\x00\x1B") {
+		t.Errorf("SEC-012-010: review content has control chars from Channel: %q", a.RawContent)
+	}
+	if ch, ok := a.Metadata["channel"].(string); ok {
+		if strings.ContainsAny(ch, "\x00\x1B") {
+			t.Errorf("SEC-012-010: review metadata channel contains control chars: %q", ch)
+		}
+	}
+}
+
+func TestSEC012010_CleanChannelStatusPreserved(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard"}
+	r := Reservation{
+		ID:         "res-chan-ok",
+		PropertyID: "p1",
+		GuestName:  "Bob",
+		Channel:    "Airbnb",
+		Status:     "confirmed",
+		CheckIn:    "2026-04-15",
+		CheckOut:   "2026-04-18",
+		BookedAt:   time.Now(),
+	}
+
+	a := NormalizeReservation(r, "Beach House", cfg)
+
+	if ch, ok := a.Metadata["channel"].(string); ok {
+		if ch != "Airbnb" {
+			t.Errorf("SEC-012-010: clean channel should be preserved, got %q", ch)
+		}
+	}
+	if st, ok := a.Metadata["status"].(string); ok {
+		if st != "confirmed" {
+			t.Errorf("SEC-012-010: clean status should be preserved, got %q", st)
+		}
+	}
+}

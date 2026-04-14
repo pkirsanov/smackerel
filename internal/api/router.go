@@ -202,7 +202,7 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if !matchBearerToken(r, d.AuthToken) {
+		if subtle.ConstantTimeCompare([]byte(token), []byte(d.AuthToken)) != 1 {
 			slog.Warn("bearer auth failure", "path", r.URL.Path, "remote_addr", r.RemoteAddr, "reason", "invalid token")
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 			return

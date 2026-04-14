@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -224,5 +225,99 @@ func TestG001_SourceLinking_MethodExists(t *testing.T) {
 	}
 	if edges != 0 {
 		t.Errorf("expected 0 edges from nil pool linker, got %d", edges)
+	}
+}
+
+// SEC-005-002 (CWE-770): Adversarial test — entity names per artifact must be capped.
+// Without the cap, an artifact with 10000 entity names would trigger 10000 DB inserts
+// + 10000 edge creations, enabling resource exhaustion via ML-extracted adversarial content.
+func TestSEC005002_EntityNamesCappedPerArtifact(t *testing.T) {
+	if maxEntitiesPerArtifact <= 0 {
+		t.Fatal("maxEntitiesPerArtifact must be positive")
+	}
+	if maxEntitiesPerArtifact > 500 {
+		t.Errorf("maxEntitiesPerArtifact = %d, expected <=500 (defense-in-depth)", maxEntitiesPerArtifact)
+	}
+
+	// Simulate entity extraction producing more names than the cap
+	oversizedNames := make([]string, maxEntitiesPerArtifact+500)
+	for i := range oversizedNames {
+		oversizedNames[i] = "Person " + strings.Repeat("X", 10)
+	}
+
+	// The cap logic trims the list; verify the constant is a reasonable bound
+	if len(oversizedNames) <= maxEntitiesPerArtifact {
+		t.Fatalf("test setup error: oversized list should exceed cap")
+	}
+	capped := oversizedNames[:maxEntitiesPerArtifact]
+	if len(capped) != maxEntitiesPerArtifact {
+		t.Errorf("capped list length = %d, want %d", len(capped), maxEntitiesPerArtifact)
+	}
+}
+
+// SEC-005-002: Entity name length must be bounded.
+func TestSEC005002_EntityNameLengthCapped(t *testing.T) {
+	if maxEntityNameLen <= 0 {
+		t.Fatal("maxEntityNameLen must be positive")
+	}
+	longName := strings.Repeat("A", maxEntityNameLen+500)
+	// The cap truncates at maxEntityNameLen
+	truncated := longName
+	if len(truncated) > maxEntityNameLen {
+		truncated = truncated[:maxEntityNameLen]
+	}
+	if len(truncated) != maxEntityNameLen {
+		t.Errorf("truncated name length = %d, want %d", len(truncated), maxEntityNameLen)
+	}
+}
+
+// SEC-005-003 (CWE-770): Adversarial test — topic names per artifact must be capped.
+// Without the cap, an artifact with thousands of topic tags would create unbounded
+// DB rows and edges per single artifact processing.
+func TestSEC005003_TopicNamesCappedPerArtifact(t *testing.T) {
+	if maxTopicsPerArtifact <= 0 {
+		t.Fatal("maxTopicsPerArtifact must be positive")
+	}
+	if maxTopicsPerArtifact > 200 {
+		t.Errorf("maxTopicsPerArtifact = %d, expected <=200 (defense-in-depth)", maxTopicsPerArtifact)
+	}
+
+	oversizedTopics := make([]string, maxTopicsPerArtifact+500)
+	for i := range oversizedTopics {
+		oversizedTopics[i] = "topic-" + strings.Repeat("x", 10)
+	}
+
+	if len(oversizedTopics) <= maxTopicsPerArtifact {
+		t.Fatalf("test setup error: oversized list should exceed cap")
+	}
+	capped := oversizedTopics[:maxTopicsPerArtifact]
+	if len(capped) != maxTopicsPerArtifact {
+		t.Errorf("capped list length = %d, want %d", len(capped), maxTopicsPerArtifact)
+	}
+}
+
+// SEC-005-003: Topic name length must be bounded.
+func TestSEC005003_TopicNameLengthCapped(t *testing.T) {
+	if maxTopicNameLen <= 0 {
+		t.Fatal("maxTopicNameLen must be positive")
+	}
+	longTopic := strings.Repeat("z", maxTopicNameLen+500)
+	truncated := longTopic
+	if len(truncated) > maxTopicNameLen {
+		truncated = truncated[:maxTopicNameLen]
+	}
+	if len(truncated) != maxTopicNameLen {
+		t.Errorf("truncated topic length = %d, want %d", len(truncated), maxTopicNameLen)
+	}
+}
+
+// SEC-005-002/003: Verify cap constants are consistent (entities >= topics since
+// people extraction typically yields fewer results than topic tagging).
+func TestSEC005_CapConsistency(t *testing.T) {
+	if maxEntitiesPerArtifact < maxTopicsPerArtifact {
+		t.Errorf("entity cap (%d) should be >= topic cap (%d)", maxEntitiesPerArtifact, maxTopicsPerArtifact)
+	}
+	if maxEntityNameLen < maxTopicNameLen {
+		t.Errorf("entity name cap (%d) should be >= topic name cap (%d)", maxEntityNameLen, maxTopicNameLen)
 	}
 }

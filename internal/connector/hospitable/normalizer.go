@@ -42,6 +42,12 @@ func clampRating(r float64) float64 {
 func NormalizeProperty(p Property, config HospitableConfig) connector.RawArtifact {
 	// SEC-012-005: Sanitize control characters in API-supplied text (CWE-116).
 	p.Name = stringutil.SanitizeControlChars(p.Name)
+	// SEC-012-009: Sanitize Address fields that flow into content and metadata (CWE-116).
+	p.Address.Street = stringutil.SanitizeControlChars(p.Address.Street)
+	p.Address.City = stringutil.SanitizeControlChars(p.Address.City)
+	p.Address.State = stringutil.SanitizeControlChars(p.Address.State)
+	p.Address.Country = stringutil.SanitizeControlChars(p.Address.Country)
+	p.Address.Zip = stringutil.SanitizeControlChars(p.Address.Zip)
 
 	content := buildPropertyContent(p)
 	metadata := map[string]interface{}{
@@ -82,6 +88,9 @@ func NormalizeReservation(r Reservation, propertyName string, config HospitableC
 	// SEC-012-005: Sanitize control characters in API-supplied text (CWE-116).
 	r.GuestName = stringutil.SanitizeControlChars(r.GuestName)
 	propertyName = stringutil.SanitizeControlChars(propertyName)
+	// SEC-012-010: Sanitize Channel and Status fields (CWE-116).
+	r.Channel = stringutil.SanitizeControlChars(r.Channel)
+	r.Status = stringutil.SanitizeControlChars(r.Status)
 
 	if propertyName == "" {
 		propertyName = r.PropertyID
@@ -179,6 +188,8 @@ func NormalizeReview(r Review, propertyName string, config HospitableConfig) con
 	r.ReviewText = stringutil.SanitizeControlChars(r.ReviewText)
 	r.HostResponse = stringutil.SanitizeControlChars(r.HostResponse)
 	propertyName = stringutil.SanitizeControlChars(propertyName)
+	// SEC-012-010: Sanitize Channel field (CWE-116).
+	r.Channel = stringutil.SanitizeControlChars(r.Channel)
 
 	if propertyName == "" {
 		propertyName = r.PropertyID

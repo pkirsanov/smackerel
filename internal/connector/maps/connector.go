@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -625,6 +626,9 @@ func configFloat64NonNeg(sc map[string]interface{}, key string) (float64, error)
 	}
 	switch v := val.(type) {
 	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, fmt.Errorf("%s must be a finite number, got %v", key, v)
+		}
 		if v < 0 {
 			return 0, fmt.Errorf("%s must be non-negative, got %v", key, v)
 		}
@@ -650,6 +654,9 @@ func configFloat64Positive(sc map[string]interface{}, key string) (float64, erro
 	}
 	switch v := val.(type) {
 	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, fmt.Errorf("%s must be a finite number, got %v", key, v)
+		}
 		if v <= 0 {
 			return 0, fmt.Errorf("%s must be positive, got %v", key, v)
 		}
@@ -675,6 +682,12 @@ func configIntMin(sc map[string]interface{}, key string, min int) (int, error) {
 	}
 	switch v := val.(type) {
 	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, fmt.Errorf("%s must be a finite number, got %v", key, v)
+		}
+		if v > 1e9 || v < -1e9 {
+			return 0, fmt.Errorf("%s value out of safe integer range, got %v", key, v)
+		}
 		if int(v) < min {
 			return 0, fmt.Errorf("%s must be >= %d, got %v", key, min, v)
 		}

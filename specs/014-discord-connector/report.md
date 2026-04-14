@@ -521,3 +521,125 @@ Third simplify pass on the Discord connector after 12 prior sweeps (gaps, simpli
 
 - `./smackerel.sh test unit` — all packages pass (discord: 0.227s, ran fresh)
 - All 70+ discord tests continue to pass unchanged — zero regressions
+
+---
+
+### Regression-To-Doc Sweep 2 — 2026-04-14
+
+**Trigger:** `regression` probe via stochastic-quality-sweep (Round R22)
+**Mode:** `regression-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Context
+
+Second regression probe on the Discord connector after 13 prior sweeps (gaps, simplify x3, regression, stabilize x2, security x3, harden, chaos). This pass applies patterns from cross-connector regression findings (IEEE 754 Inf/NaN guards, cursor scope enforcement consistency, config validation depth) to identify latent regression vectors.
+
+#### Findings (2 regression vectors identified)
+
+| # | Finding | Category | Severity | Status |
+|---|---------|----------|----------|--------|
+| REG-014-R22-001 | `Connect()` cursor restoration bypasses cursor scope enforcement — restores cursors for ANY valid snowflake channel ID from `SourceConfig["cursors"]` without checking if the channel is in `MonitoredChannels`. Stale-channel cursors persist in `c.cursors`, get copied into `localCursors` at the start of `Sync()`, survive the sync loop (since only configured channels are iterated), and leak into the serialized output cursor. Impact: (1) cursor output discloses channel IDs the user is no longer monitoring, (2) stale cursors grow unboundedly across reconnections. Note: `Sync()`'s own cursor input path already has scope enforcement (added in SEC2-1), but `Connect()` lacked the same guard. | Scope enforcement gap | Medium | Fixed |
+| REG-014-R22-002 | `parseDiscordConfig` accepts IEEE 754 `Inf`/`NaN` for `backfill_limit` — `int(math.Inf(1))` produces implementation-defined behavior per Go spec. On amd64 with Go 1.17+, `+Inf` → `MaxInt64` (caught by `> maxBackfillLimit`), `-Inf` → `MinInt64` (caught by `≤ 0`), `NaN` → `0` (caught by `≤ 0`). However, this relies on platform-specific behavior of an undefined conversion. Explicit `math.IsInf`/`math.IsNaN` rejection before `int()` is the standard defense pattern (same as IMP-011-R14-001, IMP-018-R15-002, IMP-010-R18-001 from this sweep). | IEEE 754 guard | Low | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+
+- `internal/connector/discord/discord.go`:
+  - REG-014-R22-001: Added `configuredChannels` map construction in `Connect()` (before cursor restoration) from `cfg.MonitoredChannels`. Cursor restoration loop now checks `configuredChannels[k]` and skips channels not in the current configuration with a warning log. This matches the existing scope enforcement in `Sync()`.
+  - REG-014-R22-002: Added `math.IsInf(limit, 0) || math.IsNaN(limit)` guard before `int(limit)` conversion in `parseDiscordConfig()`. Returns descriptive error "backfill_limit must be a finite number". Added `"math"` import.
+  - Updated existing test `TestConnect_CursorRestorationValidatesSnowflakes` to include matching `monitored_channels` config so the cursor scope enforcement doesn't reject the test's valid cursors.
+
+- `internal/connector/discord/discord_test.go`:
+  - Added `TestRegression_ConnectCursorScopeEnforcement` — configures channel A as monitored, provides cursors for A and B; verifies A's cursor is restored and B's is rejected
+  - Added `TestRegression_ConnectStaleCursorsNotInSyncOutput` — verifies stale cursors from Connect don't leak into Sync() output
+  - Added `TestRegression_BackfillLimitRejectsInf` — `+Inf` backfill_limit rejected
+  - Added `TestRegression_BackfillLimitRejectsNegInf` — `-Inf` backfill_limit rejected
+  - Added `TestRegression_BackfillLimitRejectsNaN` — `NaN` backfill_limit rejected
+
+#### Prior Fix Durability
+
+| Fix | Round | Status |
+|-----|-------|--------|
+| G1–G11: Gaps fixes | gaps-to-doc | Durable — all 11 items verified in code |
+| S1–S6: Simplify fixes | simplify x3 | Durable — unified loops, min() builtin, awaitRateLimit helper confirmed |
+| ST1–ST9: Stabilize fixes | stabilize x2 | Durable — race fixes, closed guard, health reporting confirmed |
+| SEC-1–SEC3-4: Security fixes | security x3 | Durable — 30 security tests all pass |
+| H-1–H-6: Harden fixes | harden | Durable — 13 hardening tests all pass |
+| C1–C7: Chaos fixes | chaos | Durable — 10 chaos tests all pass |
+
+#### Validation
+
+- `./smackerel.sh test unit` — all packages pass (discord: 0.092s, ran fresh)
+- Zero regressions across all prior fixes
+- 5 new regression tests all pass
+
+---
+
+### Validate Reconciliation — 2026-04-14
+
+**Trigger:** `validate` probe via stochastic-quality-sweep (Round R25)
+**Mode:** `reconcile-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Context
+
+Validation reconciliation probe on the Discord connector. The spec claims `status: "done"` with all 6 scopes marked Done. This audit compares claimed DoD evidence against actual implementation.
+
+#### Findings (5 reconciliation issues identified)
+
+| # | Finding | Category | Severity | Status |
+|---|---------|----------|----------|--------|
+| V-014-R25-001 | Scope summary table showed "Not Started" for all 6 scopes while detail sections claimed "Done" — documentation drift | Artifact consistency | Low | Fixed |
+| V-014-R25-002 | All integration/E2E test counts overclaimed — 102 tests exist but ALL are unit tests in `discord_test.go`; no integration or E2E test files exist for Discord anywhere in `tests/integration/` or `tests/e2e/` | DoD overclaim | High | Fixed |
+| V-014-R25-003 | REST fetch functions (`fetchChannelMessages`, `fetchPinnedMessages`, `fetchActiveThreads`) are no-op stubs returning `nil, nil` — the connector compiles and passes unit tests but never actually communicates with the Discord API; Sync() always produces zero artifacts against a real server | Implementation gap | Critical | Fixed (artifact correction) |
+| V-014-R25-004 | Gateway Event Handler (Scope 4) has zero implementation — no `gateway.go` file, no WebSocket handling, `EnableGateway` has `// TODO: parsed but unused` comment; all 7 DoD items for Scope 4 were checked with fabricated evidence mapping REST/config behavior to Gateway-specific claims | DoD fabrication | Critical | Fixed (artifact correction) |
+| V-014-R25-005 | `uservalidation.md` status "Not Started" contradicts spec `status: "done"` | Artifact consistency | Low | Noted (no change — uservalidation is user-facing) |
+
+#### What Is Real
+
+The Discord connector has significant, well-hardened implementation in its **in-memory processing layer**:
+
+| Component | Status | Test Coverage |
+|-----------|--------|---------------|
+| Message normalization (`normalizeMessage()`) | Fully implemented | Extensive — 30+ tests |
+| Content classification (8 types) | Fully implemented | TestClassifyMessage (10 cases) |
+| Tier assignment (R-007 rules) | Fully implemented | TestAssignTier (10 cases) |
+| Config parsing + validation | Fully implemented | 15+ config tests |
+| Security hardening (SSRF, snowflake, sanitization) | Fully implemented | 43 security/hardening tests |
+| Concurrency safety (mutex, sync serialization) | Fully implemented | 10 chaos + 4 stabilize tests |
+| Rate limiter (in-memory, route-based) | Fully implemented | 2 rate limiter tests |
+| Cursor scope enforcement | Fully implemented | 5 regression tests |
+| Bot command parsing (`ParseBotCommand()`) | Fully implemented | 5+ ParseBotCommand tests |
+| Connector interface (ID/Connect/Sync/Health/Close) | Structural shell | Interface compliance verified |
+
+#### What Is Not Real
+
+| Component | Claimed Status | Actual Status |
+|-----------|---------------|---------------|
+| `fetchChannelMessages()` | "fetches messages via REST" | Stub returning `nil, nil` |
+| `fetchPinnedMessages()` | "retrieves all pins" | Stub returning `nil, nil` |
+| `fetchActiveThreads()` | "retrieves active threads" | Stub returning `nil, nil` |
+| Gateway WebSocket connection | "Done" (Scope 4) | Not started — no code exists |
+| MESSAGE_CREATE event buffering | "Done" (Scope 4) | Not started — no code exists |
+| Gateway reconnect + REST backfill | "Done" (Scope 4) | Not started — no code exists |
+| Bot token validation via Discord API | "validates with Discord API" | Only checks string format (length, control chars) |
+| Integration/E2E tests | "4 integration + 2 e2e" per scope | All 102 tests are unit tests |
+
+#### Remediation
+
+- **Scope summary table:** Corrected to reflect actual status per scope
+- **Scope 1 (Normalizer):** Stays Done — genuinely implemented with comprehensive tests
+- **Scope 2 (REST Client):** Downgraded to In Progress — cursor/config logic exists but fetch functions are stubs; 3 DoD items unchecked
+- **Scope 3 (Connector & Config):** Downgraded to In Progress — interface/config/health are real but actual API interaction is zero; 3 DoD items unchecked
+- **Scope 4 (Gateway):** Downgraded to Not Started — zero implementation exists; all 7 DoD items unchecked
+- **Scope 5 (Thread Ingestion):** Downgraded to In Progress — metadata normalization works but thread discovery is a stub; 4 DoD items unchecked
+- **Scope 6 (Bot Command):** Downgraded to In Progress — ParseBotCommand works but DM/tier claims overclaimed; 3 DoD items unchecked
+- **state.json:** Downgraded from `done` to `in_progress`
+- **DoD evidence:** All overclaimed items annotated with `**OVERCLAIMED**` or `**NOT IMPLEMENTED**` tags explaining what actually exists vs what was claimed
+
+#### Validation
+
+- `./smackerel.sh test unit` — all packages pass (102 discord tests, no regressions)
+- No code changes made — this is artifact-only reconciliation
+- All prior hardening/security/chaos fixes remain durable

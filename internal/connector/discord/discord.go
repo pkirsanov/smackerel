@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/url"
 	"path/filepath"
@@ -198,7 +199,16 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	// drift when re-connecting with a different channel configuration.
 	c.cursors = make(ChannelCursors)
 
+	// Build set of configured channel IDs for cursor scope enforcement
+	configuredChannels := make(map[string]struct{})
+	for _, chCfg := range cfg.MonitoredChannels {
+		for _, chID := range chCfg.ChannelIDs {
+			configuredChannels[chID] = struct{}{}
+		}
+	}
+
 	// Restore cursors from source config, validating snowflake IDs
+	// and enforcing cursor scope against configured channels (REG-014-R22-001).
 	if cursorJSON, ok := config.SourceConfig["cursors"].(string); ok && cursorJSON != "" {
 		var restored ChannelCursors
 		if err := json.Unmarshal([]byte(cursorJSON), &restored); err != nil {
@@ -211,6 +221,11 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 				}
 				if v != "" && !isValidSnowflake(v) {
 					slog.Warn("discord stored cursor has invalid snowflake value, skipping", "connector_id", c.id, "channel_id", k, "value", v)
+					continue
+				}
+				// Cursor scope enforcement: only restore cursors for currently configured channels
+				if _, ok := configuredChannels[k]; !ok {
+					slog.Warn("discord stored cursor references unconfigured channel, skipping", "connector_id", c.id, "channel_id", k)
 					continue
 				}
 				c.cursors[k] = v
@@ -888,6 +903,11 @@ func parseDiscordConfig(config connector.ConnectorConfig) (DiscordConfig, error)
 	}
 
 	if limit, ok := config.SourceConfig["backfill_limit"].(float64); ok {
+		// Reject IEEE 754 special values before int conversion to avoid
+		// implementation-defined behavior (REG-014-R22-002).
+		if math.IsInf(limit, 0) || math.IsNaN(limit) {
+			return DiscordConfig{}, fmt.Errorf("backfill_limit must be a finite number")
+		}
 		cfg.BackfillLimit = int(limit)
 	}
 	if gw, ok := config.SourceConfig["enable_gateway"].(bool); ok {

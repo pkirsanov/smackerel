@@ -199,7 +199,7 @@ Scenario: SCN-020-012 OAuth start endpoint allows traffic within rate limit
 - [x] `webAuthMiddleware` applied to Web UI route group in `internal/api/router.go`
 - [x] Web UI requires auth when `auth_token` configured, passthrough when empty
 - [x] `httprate.LimitByIP(10, 1*time.Minute)` applied to OAuth start endpoint
-- [x] OAuth callback is NOT rate-limited
+- [x] OAuth callback is rate-limited alongside start (SEC-SWEEP-001)
 - [x] `go.mod` includes `github.com/go-chi/httprate`
 - [x] Auth failures logged at WARN level with request path and IP (no token values in logs)
 - [x] `./smackerel.sh test unit` passes (Go + Python)

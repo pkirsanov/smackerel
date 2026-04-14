@@ -264,6 +264,12 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 		return nil, cursor, fmt.Errorf("tweets.js contains %d tweets, exceeding max %d", len(tweets), maxTweetCount)
 	}
 
+	// Parse like.js and bookmark.js to build bookmarked/liked ID sets.
+	// Without these, all tweets are normalized as bookmarked=false, liked=false
+	// and the tier elevation for user-curated content never fires.
+	likedIDs := c.parseSignalFile(ctx, "like.js", "like")
+	bookmarkedIDs := c.parseSignalFile(ctx, "bookmark.js", "bookmark")
+
 	// Build thread map for thread reconstruction
 	threads := buildThreads(tweets)
 	threadMap := make(map[string]*Thread)
@@ -297,7 +303,9 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 			newCursor = tsCursor
 		}
 
-		artifact := normalizeTweet(tweet, false, false, threadMap[tweet.ID])
+		bookmarked := bookmarkedIDs[tweet.ID]
+		liked := likedIDs[tweet.ID]
+		artifact := normalizeTweet(tweet, bookmarked, liked, threadMap[tweet.ID])
 		artifacts = append(artifacts, artifact)
 	}
 
@@ -306,6 +314,71 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 	}
 
 	return artifacts, newCursor, nil
+}
+
+// parseSignalFile reads a Twitter archive signal file (like.js or bookmark.js)
+// and returns a set of tweet IDs. Signal files use the same JS wrapper format
+// as tweets.js but wrap individual signal entries (like or bookmark) that
+// contain a tweetId field. Returns an empty map on any error — signals are
+// best-effort and must not block the main tweet import.
+func (c *Connector) parseSignalFile(ctx context.Context, filename, signalType string) map[string]bool {
+	ids := make(map[string]bool)
+
+	filePath := filepath.Join(c.config.ArchiveDir, "data", filename)
+	resolved, err := filepath.EvalSymlinks(filePath)
+	if err != nil {
+		// File not present is expected (bookmarks may not exist in older exports).
+		return ids
+	}
+	if !strings.HasPrefix(resolved, c.config.ArchiveDir+string(filepath.Separator)) {
+		slog.Warn("signal file path escapes archive directory, skipping",
+			"file", filename, "signal_type", signalType)
+		return ids
+	}
+	if ctx.Err() != nil {
+		return ids
+	}
+
+	info, err := os.Stat(resolved)
+	if err != nil || info.Size() > maxArchiveFileSize {
+		return ids
+	}
+
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		slog.Warn("failed to read signal file", "file", filename, "error", err)
+		return ids
+	}
+
+	idx := bytes.Index(data, []byte("["))
+	if idx < 0 {
+		return ids
+	}
+
+	var entries []map[string]json.RawMessage
+	if err := json.Unmarshal(data[idx:], &entries); err != nil {
+		slog.Warn("failed to parse signal file", "file", filename, "error", err)
+		return ids
+	}
+
+	for _, entry := range entries {
+		raw, ok := entry[signalType]
+		if !ok {
+			continue
+		}
+		var signal struct {
+			TweetID string `json:"tweetId"`
+		}
+		if err := json.Unmarshal(raw, &signal); err != nil {
+			continue
+		}
+		if signal.TweetID != "" {
+			ids[signal.TweetID] = true
+		}
+	}
+
+	slog.Info("parsed signal file", "file", filename, "signal_type", signalType, "count", len(ids))
+	return ids
 }
 
 // parseTweetsJS strips the JS wrapper and parses the JSON array.
@@ -411,6 +484,12 @@ func normalizeTweet(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread) 
 	}
 	metadata["hashtags"] = hashtags
 
+	mentions := make([]string, len(tweet.Entities.Mentions))
+	for i, m := range tweet.Entities.Mentions {
+		mentions[i] = m.ScreenName
+	}
+	metadata["mentions"] = mentions
+
 	urls := make([]string, 0, len(tweet.Entities.URLs))
 	for _, u := range tweet.Entities.URLs {
 		if isSafeURL(u.ExpandedURL) {
@@ -488,13 +567,29 @@ func assignTweetTier(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread)
 }
 
 func buildTweetTitle(tweet ArchiveTweet) string {
-	title := tweet.FullText
+	title := sanitizeControlChars(tweet.FullText)
 	if len(title) > 80 {
 		// Truncate at a valid UTF-8 boundary to avoid producing invalid
 		// byte sequences from multi-byte characters (CWE-838).
 		title = truncateUTF8(title, 80) + "..."
 	}
 	return title
+}
+
+// sanitizeControlChars replaces control characters (\n, \r, \t, and C0/C1
+// controls) with spaces to prevent injection via artifact titles (CWE-116).
+// Preserves printable Unicode.
+func sanitizeControlChars(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r < 0x20 || (r >= 0x7F && r <= 0x9F) {
+			b.WriteRune(' ')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // truncateUTF8 truncates s to at most maxBytes while respecting UTF-8

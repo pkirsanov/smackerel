@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1463,7 +1464,7 @@ func TestSyncForexPairsProduceArtifacts(t *testing.T) {
 			t.Errorf("expected asset_type=forex, got %v", a.Metadata["asset_type"])
 		}
 		if a.Metadata["processing_tier"] != "light" {
-			t.Errorf("forex should always be light tier, got %v", a.Metadata["processing_tier"])
+			t.Errorf("forex with small change should be light tier, got %v", a.Metadata["processing_tier"])
 		}
 	}
 }
@@ -1840,6 +1841,199 @@ func TestSync_StocksRateLimitedMidLoop_HealthDegraded(t *testing.T) {
 	}
 }
 
+// --- Regression Tests: REG-018-001 through REG-018-002 ---
+
+func TestCryptoChange24h_NegHundredPercentNoDivByZero(t *testing.T) {
+	// REG-018-001: When CoinGecko returns -100% change, the formula
+	// price / (1 + changePct/100) has denominator 0, producing Inf.
+	// This corrupts JSON serialization downstream.
+	// The fix clamps to -price instead of computing Inf.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]map[string]float64{
+			"rugpull-coin": {"usd": 0.0, "usd_24h_change": -100.0},
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.coingeckoBaseURL = srv.URL
+
+	prices, err := c.fetchCoinGeckoPrices(context.Background(), []string{"rugpull-coin"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(prices) != 1 {
+		t.Fatalf("expected 1 price, got %d", len(prices))
+	}
+
+	p := prices[0]
+	// change24h must be finite — Inf/NaN would corrupt JSON.
+	if p.Change24h != p.Change24h { // NaN != NaN
+		t.Fatal("Change24h is NaN — would corrupt JSON serialization")
+	}
+	if p.Change24h > 1e18 || p.Change24h < -1e18 {
+		t.Fatalf("Change24h is Inf-like (%v) — would corrupt JSON serialization", p.Change24h)
+	}
+}
+
+func TestCryptoChange24h_ExtremeNegativePercentFinite(t *testing.T) {
+	// REG-018-001: Even -99.99% must not produce extreme values.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]map[string]float64{
+			"crash-coin": {"usd": 0.01, "usd_24h_change": -99.99},
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.coingeckoBaseURL = srv.URL
+
+	prices, err := c.fetchCoinGeckoPrices(context.Background(), []string{"crash-coin"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(prices) != 1 {
+		t.Fatalf("expected 1 price, got %d", len(prices))
+	}
+
+	// Must be finite and negative.
+	p := prices[0]
+	if p.Change24h >= 0 {
+		t.Errorf("expected negative change24h for -99.99%%, got %v", p.Change24h)
+	}
+	if p.Change24h != p.Change24h {
+		t.Fatal("Change24h is NaN")
+	}
+}
+
+func TestCryptoChange24h_BeyondNeg100Clamped(t *testing.T) {
+	// REG-018-001: If API returns worse than -100% (data error), must still be finite.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]map[string]float64{
+			"glitch-coin": {"usd": 50.0, "usd_24h_change": -150.0},
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.coingeckoBaseURL = srv.URL
+
+	prices, err := c.fetchCoinGeckoPrices(context.Background(), []string{"glitch-coin"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(prices) != 1 {
+		t.Fatalf("expected 1 price, got %d", len(prices))
+	}
+
+	p := prices[0]
+	// Must be finite — pre-fix code would produce negative Inf.
+	if p.Change24h != p.Change24h {
+		t.Fatal("Change24h is NaN")
+	}
+	if p.Change24h > 1e18 || p.Change24h < -1e18 {
+		t.Fatalf("Change24h is Inf-like (%v)", p.Change24h)
+	}
+}
+
+func TestSyncForex_AlertTierOnExtremeMove(t *testing.T) {
+	// REG-018-002: Forex artifacts must use classifyTier, not hardcoded "light".
+	// A forex pair with >threshold% change must get "full" tier.
+	// Pre-fix: all forex was "light" regardless of change magnitude.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		symbol := r.URL.Query().Get("symbol")
+		switch symbol {
+		case "OANDA:USD_TRY":
+			// 12% move — extreme but happens in emerging market currencies.
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 32.50, "d": 3.50, "dp": 12.0, "h": 33.0, "l": 29.0, "o": 29.0, "pc": 29.0,
+			})
+		case "OANDA:EUR_USD":
+			// 0.2% move — normal day.
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 1.0821, "d": 0.002, "dp": 0.2, "h": 1.085, "l": 1.08, "o": 1.08, "pc": 1.08,
+			})
+		default:
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 100.0, "d": 1.0, "dp": 1.0, "h": 101.0, "l": 99.0, "o": 99.0, "pc": 99.0,
+			})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			ForexPairs: []string{"USD/TRY", "EUR/USD"},
+		},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 forex artifacts, got %d", len(artifacts))
+	}
+
+	for _, a := range artifacts {
+		sym := a.Metadata["symbol"].(string)
+		tier := a.Metadata["processing_tier"].(string)
+		switch sym {
+		case "USD/TRY":
+			if tier != "full" {
+				t.Errorf("USD/TRY 12%% move should be full tier, got %q — regression: forex bypasses classifyTier", tier)
+			}
+		case "EUR/USD":
+			if tier != "light" {
+				t.Errorf("EUR/USD 0.2%% move should be light tier, got %q", tier)
+			}
+		}
+	}
+}
+
+func TestSyncForex_NegativeAlertTier(t *testing.T) {
+	// REG-018-002: Forex pair with large negative move must also get "full" tier.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// -8% crash.
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 120.0, "d": -10.4, "dp": -8.0, "h": 131.0, "l": 119.0, "o": 130.4, "pc": 130.4,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{ForexPairs: []string{"GBP/USD"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+
+	tier := artifacts[0].Metadata["processing_tier"].(string)
+	if tier != "full" {
+		t.Errorf("GBP/USD -8%% move should be full tier, got %q — regression: forex alert detection broken", tier)
+	}
+}
+
 func TestSync_ForexRateLimitedMidLoop_HealthDegraded(t *testing.T) {
 	// STB-018-003: When Finnhub rate limit exhausts mid-loop for forex pairs,
 	// health must be Degraded, not Healthy.
@@ -1881,5 +2075,231 @@ func TestSync_ForexRateLimitedMidLoop_HealthDegraded(t *testing.T) {
 	// Health MUST be Degraded — before the fix it was Healthy.
 	if c.Health(context.Background()) != connector.HealthDegraded {
 		t.Errorf("expected HealthDegraded when forex rate-limited mid-loop, got %v", c.Health(context.Background()))
+	}
+}
+
+// --- Improve Tests: IMP-018-R15-001 through IMP-018-R15-003 ---
+
+func TestClassifyTier_NaN_PromotesToFull(t *testing.T) {
+	// IMP-018-R15-001: NaN changePct must NOT silently return "light" and suppress alerts.
+	// NaN comparisons are always false, so without the guard, both
+	// changePct >= threshold and changePct <= -threshold return false → "light".
+	// This silently hides corrupt data from alert processing.
+	nan := math.NaN()
+
+	tier := classifyTier(5.0, nan)
+	if tier != "full" {
+		t.Errorf("classifyTier(5.0, NaN) = %q, want \"full\" — NaN must not silently suppress alerts", tier)
+	}
+
+	// Also verify with threshold 0 (alerts "disabled") — NaN is still corrupt data.
+	tier = classifyTier(0, nan)
+	if tier != "full" {
+		t.Errorf("classifyTier(0, NaN) = %q, want \"full\" — NaN is always corrupt", tier)
+	}
+}
+
+func TestClassifyTier_Inf_PromotesToFull(t *testing.T) {
+	// IMP-018-R15-001: +Inf and -Inf changePct must map to "full" for safety.
+	posInf := math.Inf(1)
+	negInf := math.Inf(-1)
+
+	if tier := classifyTier(5.0, posInf); tier != "full" {
+		t.Errorf("classifyTier(5.0, +Inf) = %q, want \"full\"", tier)
+	}
+	if tier := classifyTier(5.0, negInf); tier != "full" {
+		t.Errorf("classifyTier(5.0, -Inf) = %q, want \"full\"", tier)
+	}
+}
+
+func TestClassifyTier_NormalValuesUnchanged(t *testing.T) {
+	// IMP-018-R15-001: Normal values must still behave identically.
+	if tier := classifyTier(5.0, 2.0); tier != "light" {
+		t.Errorf("classifyTier(5.0, 2.0) = %q, want \"light\"", tier)
+	}
+	if tier := classifyTier(5.0, 7.0); tier != "full" {
+		t.Errorf("classifyTier(5.0, 7.0) = %q, want \"full\"", tier)
+	}
+	if tier := classifyTier(5.0, -5.0); tier != "full" {
+		t.Errorf("classifyTier(5.0, -5.0) = %q, want \"full\"", tier)
+	}
+}
+
+func TestParseMarketsConfig_RejectsNaNAlertThreshold(t *testing.T) {
+	// IMP-018-R15-002: NaN alert_threshold silently disables ALL alerts.
+	// In classifyTier, `threshold > 0` is false for NaN, so all quotes get "light".
+	// This must be rejected at config parse time.
+	_, err := parseMarketsConfig(connector.ConnectorConfig{
+		Credentials:  map[string]string{"finnhub_api_key": "test"},
+		SourceConfig: map[string]interface{}{"alert_threshold": math.NaN()},
+	})
+	if err == nil {
+		t.Fatal("expected error for NaN alert_threshold — silently disables all alerts")
+	}
+	if !strings.Contains(err.Error(), "finite") {
+		t.Errorf("error should mention 'finite', got: %v", err)
+	}
+}
+
+func TestParseMarketsConfig_RejectsInfAlertThreshold(t *testing.T) {
+	// IMP-018-R15-002: +Inf alert_threshold means all changes are below threshold,
+	// silently suppressing every alert forever.
+	cases := []struct {
+		name  string
+		value float64
+	}{
+		{"positive infinity", math.Inf(1)},
+		{"negative infinity", math.Inf(-1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseMarketsConfig(connector.ConnectorConfig{
+				Credentials:  map[string]string{"finnhub_api_key": "test"},
+				SourceConfig: map[string]interface{}{"alert_threshold": tc.value},
+			})
+			if err == nil {
+				t.Fatalf("expected error for %s alert_threshold", tc.name)
+			}
+			if !strings.Contains(err.Error(), "finite") {
+				t.Errorf("error should mention 'finite', got: %v", err)
+			}
+		})
+	}
+}
+
+func TestSyncStocksHaveAssetType(t *testing.T) {
+	// IMP-018-R15-003: Stock quotes must include asset_type="stock" in metadata.
+	// Previously stocks had no asset_type, forcing consumers to use field-absence as a type check.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+	at, ok := artifacts[0].Metadata["asset_type"]
+	if !ok {
+		t.Fatal("stock artifact missing asset_type metadata — consumers cannot distinguish asset types")
+	}
+	if at != "stock" {
+		t.Errorf("stock asset_type = %q, want \"stock\"", at)
+	}
+}
+
+func TestSyncETFsHaveAssetType(t *testing.T) {
+	// IMP-018-R15-003: ETF quotes must include asset_type="etf" in metadata.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 450.0, "d": 3.0, "dp": 0.7, "h": 452.0, "l": 448.0, "o": 449.0, "pc": 447.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL"},
+			ETFs:   []string{"SPY", "QQQ"},
+		},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 3 {
+		t.Fatalf("expected 3 artifacts, got %d", len(artifacts))
+	}
+
+	for _, a := range artifacts {
+		sym := a.Metadata["symbol"].(string)
+		at := a.Metadata["asset_type"].(string)
+		switch sym {
+		case "AAPL":
+			if at != "stock" {
+				t.Errorf("AAPL asset_type = %q, want \"stock\"", at)
+			}
+		case "SPY", "QQQ":
+			if at != "etf" {
+				t.Errorf("%s asset_type = %q, want \"etf\"", sym, at)
+			}
+		}
+	}
+}
+
+func TestSyncMixedAssetTypes(t *testing.T) {
+	// IMP-018-R15-003: All asset types (stock, etf, crypto, forex) appear in a single Sync.
+	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer finnhubSrv.Close()
+
+	coingeckoSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]map[string]float64{
+			"bitcoin": {"usd": 67000.0, "usd_24h_change": 2.5},
+		})
+	}))
+	defer coingeckoSrv.Close()
+
+	c := New("financial-markets")
+	c.finnhubBaseURL = finnhubSrv.URL
+	c.coingeckoBaseURL = coingeckoSrv.URL
+	c.httpClient = &http.Client{Timeout: 5 * time.Second}
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:    "test-key",
+		CoinGeckoEnabled: true,
+		AlertThreshold:   5.0,
+		Watchlist: WatchlistConfig{
+			Stocks:     []string{"AAPL"},
+			ETFs:       []string{"SPY"},
+			Crypto:     []string{"bitcoin"},
+			ForexPairs: []string{"USD/JPY"},
+		},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(artifacts) != 4 {
+		t.Fatalf("expected 4 artifacts, got %d", len(artifacts))
+	}
+
+	seen := map[string]bool{}
+	for _, a := range artifacts {
+		at, ok := a.Metadata["asset_type"]
+		if !ok {
+			t.Errorf("artifact %q missing asset_type", a.Metadata["symbol"])
+			continue
+		}
+		seen[at.(string)] = true
+	}
+	for _, want := range []string{"stock", "etf", "crypto", "forex"} {
+		if !seen[want] {
+			t.Errorf("missing asset_type %q in artifacts", want)
+		}
 	}
 }

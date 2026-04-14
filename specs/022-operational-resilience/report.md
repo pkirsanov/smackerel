@@ -361,3 +361,65 @@ Feature 022 is complete. All 4 scopes implemented and verified with unit tests. 
 - Pipeline tests freshly compiled (1.284s, not cached) — all dead-letter routing tests PASS with the extracted helper
 - `cmd/core` freshly compiled (0.034s) — `runWithTimeout` builds correctly with new elapsed logging
 - No new tests required — IMP2-001 is a pure refactor (existing 11 dead-letter tests exercise the extracted helper), IMP2-002/003 are logging/comment fixes, IMP2-004 is shell script cleanup
+
+## Improve-Existing Pass 3 (stochastic sweep R10)
+
+**Date:** 2026-04-14
+**Trigger:** Stochastic quality sweep — improve (child workflow)
+**Scope:** Shutdown budget safety and subscriber timeout alignment
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File(s) | Fix |
+|----|---------|----------|---------|-----|
+| IMP3-001 | `shutdownAll` lacks overall deadline enforcement — individual step budgets sum to 30s (2+15+2+6+2+2+1) but Go-side `SHUTDOWN_TIMEOUT_S` is 25s. If multiple steps hit their budgets, total shutdown time reaches 30s with zero margin before Docker SIGKILL, contradicting the design doc's "7s margin" claim | High | `cmd/core/main.go` | Added `context.WithTimeout(totalTimeout)` overall deadline. `runWithTimeout` now accepts a `deadline <-chan struct{}` parameter and races each step against both its own budget and the overall deadline. When the deadline fires, all remaining steps are skipped immediately. |
+| IMP3-002 | `ResultSubscriber.Stop()` internal timeout (10s) exceeds `shutdownAll` subscriber step budget (6s). When `runWithTimeout` returns at 6s, the subscriber's `Stop()` goroutine continues running for up to 4s, during which connectors and NATS may be closed underneath it. | Medium | `internal/pipeline/subscriber.go` | Reduced internal timeout from 10s to 5s, fitting within the 6s shutdown step budget with 1s margin for `done` close + goroutine overhead. |
+
+### New Tests
+
+| Test | File | Purpose |
+|------|------|---------|
+| `TestRunWithTimeout_CompletesBeforeBudget` | `cmd/core/main_test.go` | Fast fn completes normally |
+| `TestRunWithTimeout_ExceedsBudget` | `cmd/core/main_test.go` | Slow fn returns after step budget, not blocked |
+| `TestRunWithTimeout_OverallDeadlineSkipsExpiredStep` | `cmd/core/main_test.go` | Adversarial: expired deadline skips fn entirely (prevents post-deadline resource access) |
+| `TestRunWithTimeout_OverallDeadlineFiringDuringStep` | `cmd/core/main_test.go` | Adversarial: deadline fires mid-step → early return (prevents step budget summing beyond total) |
+| `TestRunWithTimeout_StepBudgetWinsOverDeadlineWhenShorter` | `cmd/core/main_test.go` | Step budget controls when it expires before overall deadline |
+
+### Evidence
+
+- Check: `./smackerel.sh check` — PASS (config in sync with SST, go vet clean)
+- Unit tests: `./smackerel.sh test unit` — all 33 Go packages PASS (cmd/core 0.199s fresh), 53 Python tests PASS
+- All 5 new tests PASS
+- `internal/pipeline` freshly compiled (0.397s) — subscriber timeout change verified
+
+## Improve-Existing Pass 4 (stochastic sweep R29)
+
+**Date:** 2026-04-14
+**Trigger:** Stochastic quality sweep — improve (child workflow, second improve pass)
+**Scope:** ML health cache context isolation, NATS drain timeout alignment, UTF-8 safe truncation
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File(s) | Fix |
+|----|---------|----------|---------|-----|
+| IMP-022-R29-001 | `probeMLHealth` uses the caller's request context — if the request is cancelled (client disconnect) during the health probe, the probe fails and caches `false` for the entire TTL period. All subsequent searches degrade to text_fallback even though the ML sidecar is healthy. The health result is a shared cache, so a single cancelled request taints the entire system. | Medium | `internal/api/search.go` | Changed `probeMLHealth` to use `context.Background()` instead of the caller's request context. The 1s probe timeout is now derived from a detached context, isolating the shared health cache from individual request lifecycle. |
+| IMP-022-R29-002 | NATS `Close()` has a hardcoded 5s internal drain timeout, but `shutdownAll` allocates only 2s for the NATS step. When `runWithTimeout` returns at 2s, the drain goroutine continues running in the background for up to 3s more. During this period, NATS drain may still be interacting with the connection while the DB pool close step has already started — defeating the explicit sequential ordering. | Medium | `internal/nats/client.go` | Reduced the NATS drain timeout from 5s to 2s to match the shutdown step budget. If drain doesn't complete in 2s, force-close the connection immediately so no background goroutine leaks into subsequent shutdown steps. |
+| IMP-022-R29-003 | `truncateBytes` (log truncation) and `publishToDeadLetter` (NATS header error truncation) cut at raw byte positions, which can split multi-byte UTF-8 characters. Corrupted UTF-8 in structured log output can break JSON log parsing tools. Corrupted UTF-8 in NATS headers violates header encoding expectations. | Low | `internal/pipeline/subscriber.go` | Added `truncateUTF8` helper that walks backwards from the cut point to find a valid rune boundary. Applied to both `truncateBytes` and `lastError` header truncation. |
+
+### New Tests
+
+| Test | File | Purpose |
+|------|------|---------|
+| `TestIsMLHealthy_CancelledContext_DoesNotTaintCache` | `internal/api/search_test.go` | Adversarial: cancelled request context must not cache false-unhealthy for the TTL period |
+| `TestTruncateBytes_MultiByte_DoesNotSplitRune` | `internal/pipeline/subscriber_test.go` | Adversarial: 2-byte UTF-8 char at truncation boundary stays valid |
+| `TestTruncateBytes_FourByteEmoji_DoesNotSplit` | `internal/pipeline/subscriber_test.go` | Adversarial: 4-byte emoji at truncation boundary stays valid |
+| `TestTruncateUTF8_MultiByte_DoesNotSplitRune` | `internal/pipeline/subscriber_test.go` | Adversarial: string truncation at 256 bytes preserves 2-byte chars |
+| `TestTruncateUTF8_CJK_DoesNotSplitRune` | `internal/pipeline/subscriber_test.go` | Adversarial: 3-byte CJK char excluded when it would split the boundary |
+| `TestPublishToDeadLetter_MultiByte_ErrorTruncation` | `internal/pipeline/subscriber_test.go` | Adversarial: dead-letter Last-Error header with CJK near 256-byte boundary produces valid UTF-8 |
+
+### Evidence
+
+- Unit tests: `./smackerel.sh test unit` — all 33 Go packages PASS
+- `internal/api` freshly compiled (2.381s) — search health cache context fix verified
+- `internal/pipeline` freshly compiled (0.387s) — all 6 new UTF-8 truncation tests PASS
+- `internal/nats` compiled (cached, no new tests — timeout constant change)

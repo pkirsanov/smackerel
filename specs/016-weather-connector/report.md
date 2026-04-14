@@ -105,3 +105,38 @@ Links: [uservalidation.md](uservalidation.md)
 - `./smackerel.sh check` passes clean
 - `./smackerel.sh test unit` — weather package: 0.195s, all pass
 - Total weather test functions: 46 existing + 1 new = 47
+
+---
+
+### Improve Pass (R23) — 2026-04-14
+
+**Trigger:** stochastic-quality-sweep R23 → improve-existing
+**Target:** `internal/connector/weather/weather.go`, `internal/connector/weather/weather_test.go`
+
+#### Findings
+
+| # | ID | Issue | Severity | Fix |
+|---|------|-------|----------|-----|
+| F1 | IMP-016-R23-001 | `decodeCurrent` accepts IEEE 754 Inf on decoded temperature/wind/humidity — JSON numbers exceeding float64 range (e.g. `1e309`) silently decode as ±Inf via Go's `encoding/json`; `int(math.Round(+Inf))` produces `math.MinInt` for humidity | High | Added `validateWeatherValues()` that rejects NaN/Inf on temperature, apparent_temperature, humidity, wind_speed before caching or returning |
+| F2 | IMP-016-R23-002 | `parseWeatherConfig` silently ignores user-configurable fields (`enable_alerts`, `forecast_days`, `precision`) — design declares them configurable but they were never read from SourceConfig | Medium | Added SourceConfig reads for `enable_alerts` (bool), `forecast_days` (float64→int, range [1,16], Inf/NaN guard), `precision` (float64→int, Inf/NaN guard) |
+| F3 | IMP-016-R23-003 | Sync health update can clobber concurrent Connect health — no configGen guard; also Sync reads `c.config.Locations` without atomic config snapshot, risking inconsistent iteration if Connect runs concurrently | Medium | Added `configGen uint64` counter (incremented in Connect, snapshot+guarded in Sync); Sync now snapshots `cfg := c.config` under lock and uses `cfg.Locations` throughout |
+
+#### Tests Added (12 new test functions)
+
+1. `TestDecodeCurrent_InfTemperature` — +Inf temperature rejected (IMP-016-R23-001)
+2. `TestDecodeCurrent_InfWindSpeed` — +Inf wind_speed rejected (IMP-016-R23-001)
+3. `TestDecodeCurrent_InfHumidity` — +Inf humidity rejected; prevents math.MinInt (IMP-016-R23-001)
+4. `TestDecodeCurrent_InfApparentTemp` — -Inf apparent_temperature rejected (IMP-016-R23-001)
+5. `TestSync_InfTemperature_NoArtifact` — E2E: +Inf upstream produces no artifact (IMP-016-R23-001)
+6. `TestParseWeatherConfig_EnableAlertsFalse` — `enable_alerts: false` honored (IMP-016-R23-002)
+7. `TestParseWeatherConfig_ForecastDays` — `forecast_days: 14` honored (IMP-016-R23-002)
+8. `TestParseWeatherConfig_ForecastDaysOutOfRange` — `forecast_days: 30` rejected (IMP-016-R23-002)
+9. `TestParseWeatherConfig_ForecastDaysInf` — +Inf forecast_days rejected (IMP-016-R23-002)
+10. `TestParseWeatherConfig_Precision` — `precision: 4` honored (IMP-016-R23-002)
+11. `TestSync_ConfigGenGuard_ConnectDuringSync` — concurrent Connect during Sync doesn't clobber health (IMP-016-R23-003)
+12. `TestValidateWeatherValues` — 9 subtests covering valid, ±Inf, NaN for all four weather fields (IMP-016-R23-001)
+
+#### Evidence
+
+- `./smackerel.sh test unit` — all pass, weather package: 33.6s (includes configGen concurrency test)
+- All 12 adversarial tests would fail if their respective fixes were reverted
