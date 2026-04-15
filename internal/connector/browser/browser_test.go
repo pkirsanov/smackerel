@@ -335,3 +335,41 @@ func TestParseChromeHistorySince_DSNInjectionMessage(t *testing.T) {
 		t.Errorf("error message should mention query string characters, got: %v", err)
 	}
 }
+
+// IMP-010-SQS-002: Custom skip domains must match subdomains, consistent with
+// IsSocialMedia. Adversarial: would fail if ShouldSkip used exact-match only
+// for user-provided skip domains, allowing www.corp.com or sub.corp.com through
+// when "corp.com" is in the skip list.
+func TestShouldSkip_CustomSkipDomains_SubdomainMatch(t *testing.T) {
+	customSkip := []string{"corp.com", "intranet.local"}
+
+	// Exact match must work
+	if !ShouldSkip("https://corp.com/page", customSkip) {
+		t.Error("exact match corp.com should be skipped")
+	}
+	// Subdomain match must work
+	if !ShouldSkip("https://www.corp.com/page", customSkip) {
+		t.Error("www.corp.com should be skipped (subdomain of corp.com)")
+	}
+	if !ShouldSkip("https://internal.corp.com/secret", customSkip) {
+		t.Error("internal.corp.com should be skipped (subdomain of corp.com)")
+	}
+	if !ShouldSkip("https://deep.sub.corp.com/page", customSkip) {
+		t.Error("deep.sub.corp.com should be skipped (nested subdomain of corp.com)")
+	}
+	if !ShouldSkip("https://mail.intranet.local/inbox", customSkip) {
+		t.Error("mail.intranet.local should be skipped (subdomain of intranet.local)")
+	}
+
+	// Must NOT match domains that merely contain the skip domain as a substring
+	if ShouldSkip("https://notcorp.com/page", customSkip) {
+		t.Error("notcorp.com must NOT be skipped (not a subdomain of corp.com)")
+	}
+	if ShouldSkip("https://mycorp.com/page", customSkip) {
+		t.Error("mycorp.com must NOT be skipped (not a subdomain of corp.com)")
+	}
+	// Unrelated domain must not be skipped
+	if ShouldSkip("https://example.com/page", customSkip) {
+		t.Error("example.com should not be skipped")
+	}
+}

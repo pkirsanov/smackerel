@@ -1612,3 +1612,54 @@ func TestDedupByURLDate_EmptyInput(t *testing.T) {
 		t.Errorf("expected 0 entries for empty input, got %d", len(result))
 	}
 }
+
+// IMP-010-SQS-001: Social media aggregates must be in deterministic order.
+// Adversarial: would fail if processEntries iterated an unsorted map, producing
+// different artifact orderings on successive runs with the same input.
+func TestProcessEntries_SocialAggregates_DeterministicOrder(t *testing.T) {
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		SocialMediaIndividualThreshold: 5 * time.Minute,
+	}
+
+	baseTime := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
+	entries := []HistoryEntry{
+		{URL: "https://twitter.com/user/status/1", Title: "Tweet", VisitTime: baseTime, DwellTime: 30 * time.Second, Domain: "twitter.com"},
+		{URL: "https://reddit.com/r/golang/post1", Title: "Reddit", VisitTime: baseTime, DwellTime: 90 * time.Second, Domain: "reddit.com"},
+		{URL: "https://facebook.com/post/1", Title: "FB", VisitTime: baseTime, DwellTime: 45 * time.Second, Domain: "facebook.com"},
+		{URL: "https://linkedin.com/feed/1", Title: "LI", VisitTime: baseTime, DwellTime: 60 * time.Second, Domain: "linkedin.com"},
+		{URL: "https://tiktok.com/video/1", Title: "TT", VisitTime: baseTime, DwellTime: 20 * time.Second, Domain: "tiktok.com"},
+	}
+
+	// Run 20 times — without deterministic sorting, Go's map randomization
+	// would produce at least one different ordering in 20 iterations.
+	var firstOrder []string
+	for i := 0; i < 20; i++ {
+		artifacts, _, _ := c.processEntries(entries, 0)
+		var order []string
+		for _, a := range artifacts {
+			domain, _ := a.Metadata["domain"].(string)
+			order = append(order, domain)
+		}
+		if i == 0 {
+			firstOrder = order
+		} else {
+			if len(order) != len(firstOrder) {
+				t.Fatalf("iteration %d: different artifact count %d vs %d", i, len(order), len(firstOrder))
+			}
+			for j := range order {
+				if order[j] != firstOrder[j] {
+					t.Fatalf("iteration %d: non-deterministic ordering at index %d: %v vs %v", i, j, order, firstOrder)
+				}
+			}
+		}
+	}
+
+	// Verify alphabetical domain ordering
+	for i := 1; i < len(firstOrder); i++ {
+		if firstOrder[i] < firstOrder[i-1] {
+			t.Errorf("aggregates not in alphabetical domain order: %v", firstOrder)
+			break
+		}
+	}
+}
