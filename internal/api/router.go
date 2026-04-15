@@ -122,7 +122,7 @@ func structuredLogger(next http.Handler) http.Handler {
 }
 
 // securityHeadersMiddleware sets security headers on all responses.
-// Covers OWASP recommended headers: CSP, clickjacking, MIME sniffing, referrer leakage.
+// Covers OWASP recommended headers: CSP, clickjacking, MIME sniffing, referrer leakage, cache control.
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://unpkg.com; img-src 'self' data:; connect-src 'self'")
@@ -130,6 +130,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
 }

@@ -422,3 +422,59 @@ All 33 Go packages pass, Python tests pass, 0 regressions
 $ ./smackerel.sh lint
 All checks passed
 ```
+
+### Improve-Existing Quality Sweep (Stochastic Quality Sweep)
+
+**Date:** 2026-04-14
+**Trigger:** improve
+**Mode:** improve-existing
+
+#### Pre-Sweep Assessment
+
+- **Prior sweeps:** delivery-lockdown complete, devops (D001-D006), regression (R001), test (T001-T011), chaos R16 (C16-001/C16-002), chaos R24 (R24-001/R24-003)
+- **Focus areas:** Correctness of Netscape HTML folder parsing vs Chrome JSON parity, URL normalization completeness for dedup
+
+#### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| IMP-009-R-001 | Correctness | Medium | `ParseNetscapeHTML` used flat `currentFolder` variable — lost nested folder hierarchy. `<H3>Tech</H3><DL>...<H3>Go</H3><DL>...<A>link</A>` produced folder `"Go"` instead of `"Tech/Go"`. Bookmarks after `</DL>` incorrectly retained the closed folder. This corrupted folder-to-topic mapping for any non-flat bookmark structure. Chrome JSON parser handled nesting correctly via recursion, creating a parity gap. | Fixed |
+| IMP-009-R-002 | Dedup Completeness | Medium | `NormalizeURL` did not strip `www.` prefix. `https://www.example.com/page` and `https://example.com/page` treated as distinct URLs, producing duplicate artifacts. Users commonly bookmark the same page with and without `www.` across browsers. | Fixed |
+
+#### Fixes Applied
+
+**IMP-009-R-001 — Stack-Based Netscape HTML Folder Tracking** (`internal/connector/bookmarks/bookmarks.go`):
+- Replaced flat `currentFolder` string with `folderStack []string` + `pendingFolder` mechanism
+- `<H3>FolderName</H3>` sets `pendingFolder`; next `<DL>` pushes it onto stack; `</DL>` pops
+- `Folder` field now uses `strings.Join(folderStack, "/")` producing correct hierarchical paths
+- Handles 3+ level nesting, sibling folders, and root-level bookmarks after folder closure
+
+**IMP-009-R-002 — Strip www. Prefix in URL Normalization** (`internal/connector/bookmarks/dedup.go`):
+- Added `strings.HasPrefix(u.Host, "www.")` check after host lowercasing
+- Strips exactly `www.` prefix (not `www2.`, `wwwx.`, etc.)
+- Works correctly with port numbers (`www.example.com:8080` → `example.com:8080`)
+
+#### Adversarial Regression Tests Added (8 tests)
+
+| Test | File | Finding | Assertion | Would Fail Without Fix |
+|------|------|---------|-----------|----------------------|
+| `TestParseNetscapeHTML_FolderResetAfterClose` | bookmarks_test.go | IMP-009-R-001 | Bookmark after `</DL>` has empty folder, not the closed folder | Yes — leaked folder name |
+| `TestParseNetscapeHTML_ThreeLevelHierarchy` | bookmarks_test.go | IMP-009-R-001 | 7 bookmarks at root/"Tech"/"Tech/Go"/"Tech/Go/Libraries" levels, all correct paths | Yes — flat folder names |
+| `TestParseNetscapeHTML_SiblingFolders` | bookmarks_test.go | IMP-009-R-001 | "Work" and "Personal" sibling folders produce independent paths | Yes — second folder merged with first |
+| `TestParseNetscapeHTML_NestedFolders` (updated) | bookmarks_test.go | IMP-009-R-001 | "Outer/Inner" hierarchical path instead of just "Inner" | Yes — returned "Inner" only |
+| `TestNormalizeURL_StripWWW` (6 subtests) | dedup_test.go | IMP-009-R-002 | www stripped, www+port stripped, WWW uppercase, no-www unchanged, www2 not stripped, wwwexample not stripped | Yes (for www cases) — www variant preserved |
+| `TestNormalizeURL_WWWDedup` | dedup_test.go | IMP-009-R-002 | www and non-www variants normalize to identical string | Yes — different normalized URLs |
+
+#### Verification Evidence
+
+```
+$ ./smackerel.sh test unit (2026-04-14)
+ok  github.com/smackerel/smackerel/internal/connector/bookmarks  0.076s
+All 33 Go packages pass, 0 regressions
+
+$ ./smackerel.sh check
+Config is in sync with SST
+
+$ ./smackerel.sh lint
+All checks passed (Go); 3 pre-existing Python import sort warnings unchanged
+```

@@ -158,6 +158,7 @@ func TestDockerignore_ML_ExcludesTests(t *testing.T) {
 }
 
 // --- SEC-SWEEP-002: Application containers drop all Linux capabilities ---
+// (Test: TestDockerCompose_CapDropAll — defined below after NATS config tests)
 
 // --- IMP-020-002: NATS config file quotes token value to prevent metachar injection ---
 

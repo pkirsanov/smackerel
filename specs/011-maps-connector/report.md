@@ -73,6 +73,7 @@ Maps Timeline Connector (spec 011) implements a complete Google Takeout Semantic
 | stabilize | PASS | 2 findings fixed: pool exhaustion (rows collected before close), file size limit (200MB hard cap) |
 | stabilize (sweep R18) | PASS | 2 findings fixed: STB-011-001 config race in Sync/PostSync (snapshot under RLock), STB-011-002 PostSync error opacity (errors.Join aggregation). 7 new stabilize tests. |
 | security | PASS | 2 findings fixed: symlink follow (EvalSymlinks + entry.Type check), path TOCTOU (canonical path resolution) |
+| improve-existing (sweep) | PASS | 3 findings: IMP-011-001 Sync reads c.config.MinDistanceM without lock → use cfg snapshot, IMP-011-002 Sync reads c.config.MinDurationMin without lock → use cfg snapshot, IMP-011-003 archiveFile reads c.config.ImportDir without lock → converted to free function with explicit importDir parameter. 2 regression tests added. |
 | lint | PASS | Exit Code: 0 |
 | format | PASS | All files clean |
 | validate | PASS | All unit-testable DoD items verified, integration items infrastructure-gated |
@@ -87,7 +88,7 @@ Maps Timeline Connector (spec 011) implements a complete Google Takeout Semantic
 | Pool exhaustion in LinkTemporalSpatial | Rows collected into `[]artifactMatch` slice before `rows.Close()`, then edges inserted outside row iteration |
 | SQL injection | All queries use parameterized `$N` placeholders, zero string concatenation |
 | Context cancellation | `ctx.Err()` checked between files in Sync and between activities in LinkTemporalSpatial |
-| Config data race | `Sync()` and `PostSync()` snapshot `c.config` under `c.mu.RLock()` before reading any config fields. `findNewFiles` and `pruneCursor` accept explicit `importDir` parameter instead of reading from the receiver |
+| Config data race | `Sync()` and `PostSync()` snapshot `c.config` under `c.mu.RLock()` before reading any config fields. `findNewFiles` and `pruneCursor` accept explicit `importDir` parameter instead of reading from the receiver. `archiveFile` converted to free function with explicit `importDir` parameter. All threshold checks (`MinDistanceM`, `MinDurationMin`) use snapshot `cfg` variable. |
 | PostSync error opacity | `PostSync()` returns aggregated `errors.Join()` instead of always `nil`, enabling callers to track error rates and distinguish "no patterns" from "all operations failed" |
 | Idempotent operations | `ON CONFLICT DO NOTHING` on location_clusters insert and edges insert |
 

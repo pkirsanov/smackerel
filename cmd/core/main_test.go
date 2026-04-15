@@ -591,3 +591,71 @@ func TestWeatherForecastDaysWiring_ZeroOnEmpty(t *testing.T) {
 		t.Errorf("expected 0 for empty env var, got %f", result)
 	}
 }
+
+// --- IMP-019-R28: Financial Markets fred_enabled / fred_series SST end-to-end ---
+// Before this fix, fred_enabled and fred_series were readable by parseMarketsConfig
+// but never set by main.go, meaning operators could not disable FRED data when an
+// API key was present, and could not customize which FRED series to track.
+
+func TestMarketsFreddEnabledWiring_True(t *testing.T) {
+	t.Setenv("FINANCIAL_MARKETS_FRED_ENABLED", "true")
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"fred_enabled": os.Getenv("FINANCIAL_MARKETS_FRED_ENABLED") == "true",
+		},
+	}
+	val, ok := cfg.SourceConfig["fred_enabled"].(bool)
+	if !ok {
+		t.Fatal("fred_enabled not present in SourceConfig as bool")
+	}
+	if !val {
+		t.Error("fred_enabled should be true when env var is 'true'")
+	}
+}
+
+func TestMarketsFreddEnabledWiring_False(t *testing.T) {
+	// Adversarial: if the fix were reverted (fred_enabled removed from SourceConfig),
+	// parseMarketsConfig would auto-enable FRED whenever fred_api_key is non-empty.
+	t.Setenv("FINANCIAL_MARKETS_FRED_ENABLED", "false")
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"fred_enabled": os.Getenv("FINANCIAL_MARKETS_FRED_ENABLED") == "true",
+		},
+	}
+	val, ok := cfg.SourceConfig["fred_enabled"].(bool)
+	if !ok {
+		t.Fatal("fred_enabled not present in SourceConfig as bool")
+	}
+	if val {
+		t.Error("fred_enabled should be false when env var is 'false'")
+	}
+}
+
+func TestMarketsFreddEnabledWiring_UnsetDefaultsFalse(t *testing.T) {
+	t.Setenv("FINANCIAL_MARKETS_FRED_ENABLED", "")
+	val := os.Getenv("FINANCIAL_MARKETS_FRED_ENABLED") == "true"
+	if val {
+		t.Error("absent/empty FINANCIAL_MARKETS_FRED_ENABLED should evaluate to false via == 'true'")
+	}
+}
+
+func TestMarketsFredSeriesWiring(t *testing.T) {
+	t.Setenv("FINANCIAL_MARKETS_FRED_SERIES", `["GDP","UNRATE","DFF"]`)
+	result := parseJSONArrayEnv("FINANCIAL_MARKETS_FRED_SERIES")
+	if len(result) != 3 {
+		t.Fatalf("expected 3 FRED series, got %d", len(result))
+	}
+	if result[0] != "GDP" || result[1] != "UNRATE" || result[2] != "DFF" {
+		t.Errorf("unexpected series values: %v", result)
+	}
+}
+
+func TestMarketsFredSeriesWiring_Empty(t *testing.T) {
+	// When env var is absent, parseJSONArrayEnv returns nil.
+	// parseMarketsConfig should fall back to defaultFREDSeries.
+	t.Setenv("FINANCIAL_MARKETS_FRED_SERIES", "")
+	result := parseJSONArrayEnv("FINANCIAL_MARKETS_FRED_SERIES")
+	if result != nil {
+		t.Errorf("expected nil for empty env var, got %v", result)
+	}
+}

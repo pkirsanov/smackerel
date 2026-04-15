@@ -324,3 +324,60 @@ func TestNormalizeBadTimestamp(t *testing.T) {
 		t.Fatal("expected error for bad timestamp")
 	}
 }
+
+// IMP-013-SQS-002: Verify control character sanitization across event types.
+func TestNormalize_ControlCharsSanitized(t *testing.T) {
+	tests := []struct {
+		name      string
+		eventType string
+		data      string
+		checkChar rune // control character that MUST NOT appear in sanitized title
+	}{
+		{
+			name:      "booking with null byte in guest name",
+			eventType: "booking.created",
+			data:      `{"propertyId":"p1","propertyName":"House","guestId":"g1","guestEmail":"a@b.com","guestName":"Alice\u0000Bob","checkinDate":"2026-05-01","checkoutDate":"2026-05-05","source":"direct","status":"confirmed","totalAmount":100}`,
+			checkChar: 0x00,
+		},
+		{
+			name:      "review with escape char in property name",
+			eventType: "review.received",
+			data:      `{"propertyId":"p1","propertyName":"House\u001bName","guestId":"g1","guestEmail":"a@b.com","guestName":"Alice","rating":"5"}`,
+			checkChar: 0x1b,
+		},
+		{
+			name:      "guest with bell in name",
+			eventType: "guest.created",
+			data:      `{"email":"a@b.com","name":"Al\u0007ice"}`,
+			checkChar: 0x07,
+		},
+		{
+			name:      "message with carriage return",
+			eventType: "message.received",
+			data:      `{"propertyId":"p1","propertyName":"House","guestId":"g1","guestEmail":"a@b.com","guestName":"Bob\rEvil","bookingId":"b1"}`,
+			checkChar: '\r',
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := ActivityEvent{
+				ID:        "evt-ctrl-" + tt.eventType,
+				Type:      tt.eventType,
+				Timestamp: "2026-04-10T14:00:00Z",
+				EntityID:  "x1",
+				Data:      json.RawMessage(tt.data),
+			}
+			a, err := NormalizeEvent(event)
+			if err != nil {
+				t.Fatalf("NormalizeEvent: %v", err)
+			}
+			for _, c := range a.Title {
+				if c == tt.checkChar {
+					t.Errorf("IMP-013-SQS-002: title should not contain control char %U, got %q", tt.checkChar, a.Title)
+					break
+				}
+			}
+		})
+	}
+}

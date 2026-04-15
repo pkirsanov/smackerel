@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -30,6 +31,7 @@ type Connector struct {
 	id       string
 	feedURLs []string
 	health   connector.HealthStatus
+	mu       sync.RWMutex // IMP-003-SQS-002: Protect concurrent access to feedURLs/health
 }
 
 // New creates a new RSS connector.
@@ -40,6 +42,8 @@ func New(id string, feedURLs []string) *Connector {
 func (c *Connector) ID() string { return c.id }
 
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if urls, ok := config.SourceConfig["feed_urls"].([]interface{}); ok {
 		for _, u := range urls {
 			if s, ok := u.(string); ok {
@@ -52,17 +56,25 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	c.mu.Lock()
 	c.health = connector.HealthSyncing
+	// Snapshot feed URLs under lock to avoid data race (IMP-003-SQS-002).
+	feedURLs := make([]string, len(c.feedURLs))
+	copy(feedURLs, c.feedURLs)
+	c.mu.Unlock()
+
 	defer func() {
+		c.mu.Lock()
 		if c.health == connector.HealthSyncing {
 			c.health = connector.HealthHealthy
 		}
+		c.mu.Unlock()
 	}()
 
 	var artifacts []connector.RawArtifact
 	latestTime := cursor
 
-	for _, feedURL := range c.feedURLs {
+	for _, feedURL := range feedURLs {
 		items, err := FetchFeed(ctx, feedURL)
 		if err != nil {
 			slog.Warn("feed fetch failed", "url", feedURL, "error", err)
@@ -97,9 +109,15 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	return artifacts, latestTime, nil
 }
 
-func (c *Connector) Health(ctx context.Context) connector.HealthStatus { return c.health }
+func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.health
+}
 func (c *Connector) Close() error {
+	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.mu.Unlock()
 	return nil
 }
 

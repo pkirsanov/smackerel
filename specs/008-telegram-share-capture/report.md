@@ -603,3 +603,60 @@ Cross-referenced:
 | 4 (Pipeline) | Covered by api/pipeline/db tests | Covered by api/pipeline/db tests | — |
 | 5 (Media) | 9 scenario + 3 stabilization | 9 scenario + 3 stabilization | — |
 | 6 (Config) | Chat ID validation only | Chat ID + assembly config validation | +7 range/default tests |
+
+---
+
+## Improve-Existing Sweep (Stochastic Sweep, 2026-04-14)
+
+**Trigger:** `improve-existing` via stochastic-quality-sweep
+**Scope:** Telegram bot package (`internal/telegram/`)
+
+### Analysis Summary
+
+Analyzed against competitive best practices (Pocket, Readwise, Save to Notion) and Telegram Bot API share-sheet patterns. Identified 3 actionable improvements.
+
+### Findings & Remediation
+
+| ID | Severity | Finding | File | Remediation |
+|----|----------|---------|------|-------------|
+| IMP-008-IMP-001 | Medium | `extractAllURLs` strips trailing `)` via `TrimRight("...)]")` which breaks Wikipedia-style URLs like `Go_(programming_language)` — the balanced closing paren is part of the URL | `share.go` | Replaced `TrimRight` with `trimTrailingPunctuation()` that preserves balanced parentheses: only strips `)` when `Count("(") < Count(")")` |
+| IMP-008-IMP-002 | Medium | Duplicate URL capture reply says generic `. Already saved` instead of spec SC-TSC04's required `. Already saved: 'Title' — updated with new context`. `callCapture` returns 409 body with title, but `captureErrorReply` discards it | `share.go` | Added `replyDuplicate()` method that extracts title from 409 response and includes context-merge indicator. `handleShareCapture` now intercepts `errDuplicate` before `captureErrorReply` |
+| IMP-008-IMP-003 | Low | `flushConversation` error reply `? Failed to save conversation. Try again.` has no context — user cannot identify which conversation failed when multiple assemblies are active | `bot.go` | Error reply now includes source chat name and message count: `? Failed to save Tech Discussion (12 messages). Try again.` |
+
+### Code Changes
+
+**`internal/telegram/share.go`:**
+- Replaced `strings.TrimRight(word, ".,;:!?\"')>]")` with new `trimTrailingPunctuation()` function
+- `trimTrailingPunctuation`: iterates trailing chars, applies balanced-paren-aware stripping (checks `strings.Count` for `()/[]` balance)
+- Added `replyDuplicate(chatID, result, contextText)` — extracts title from 409 response, emits SC-TSC04-compliant reply
+- `handleShareCapture` single-URL path: intercepts `errDuplicate` separately before generic `captureErrorReply`
+- Added `"errors"` import
+
+**`internal/telegram/bot.go`:**
+- `flushConversation` error reply includes `buf.SourceChat` and `len(buf.Messages)` context
+
+### New Tests Added (5 tests)
+
+| Test | File | Finding |
+|------|------|---------|
+| `TestIMP001_ExtractAllURLs_WikipediaURL` | `share_test.go` | IMP-001: Wikipedia URL with balanced parens preserved |
+| `TestIMP001b_ExtractAllURLs_NestedParensURL` | `share_test.go` | IMP-001: Nested parens in URL path preserved |
+| `TestIMP001c_ExtractAllURLs_UnbalancedTrailingParen` | `share_test.go` | IMP-001: Wrapping paren still stripped when unbalanced |
+| `TestIMP001d_ExtractAllURLs_WikipediaInParens` | `share_test.go` | IMP-001: Wikipedia URL wrapped in parens — URL parens kept, wrapper stripped |
+| `TestIMP001e_ExtractAllURLs_WikipediaWithTrailingPeriod` | `share_test.go` | IMP-001: Trailing period after balanced parens stripped cleanly |
+
+### Backward Compatibility
+
+All existing tests pass — the balanced-paren logic only changes behavior for URLs that contain `()`. URLs without parens produce identical results to the old `TrimRight` approach. Verified by:
+- `TestExtractAllURLs_TrailingPunctuation` — still strips `.` and `!`
+- `TestChaos_ExtractAllURLs_ParenthesizedURL` — wrapped URLs still cleaned
+- `TestChaos_ExtractAllURLs_AngleBracketURL` — angle brackets still stripped
+- `TestChaos_ExtractAllURLs_SquareBracketURL` — square brackets still stripped
+
+### Test Evidence
+
+```
+./smackerel.sh test unit → all 33 Go packages pass
+  internal/telegram  24.068s (non-cached, new tests executed)
+./smackerel.sh check → Config is in sync with SST
+```

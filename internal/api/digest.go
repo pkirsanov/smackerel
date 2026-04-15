@@ -1,8 +1,12 @@
 package api
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // DigestHandler handles GET /api/digest.
@@ -23,7 +27,12 @@ func (d *Dependencies) DigestHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := d.DigestGen.GetLatest(r.Context(), date)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "NO_DIGEST", "No digest generated for this date")
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "NO_DIGEST", "No digest generated for this date")
+			return
+		}
+		slog.Error("digest lookup failed", "error", err, "date", date)
+		writeError(w, http.StatusInternalServerError, "DIGEST_ERROR", "Failed to retrieve digest")
 		return
 	}
 

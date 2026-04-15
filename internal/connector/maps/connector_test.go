@@ -308,10 +308,7 @@ func TestArchiveFile(t *testing.T) {
 		t.Fatalf("write test file: %v", err)
 	}
 
-	c := New("google-maps-timeline")
-	c.config = MapsConfig{ImportDir: dir, ArchiveProcessed: true}
-
-	if err := c.archiveFile(testFile); err != nil {
+	if err := archiveFile(testFile, dir); err != nil {
 		t.Fatalf("archiveFile: %v", err)
 	}
 

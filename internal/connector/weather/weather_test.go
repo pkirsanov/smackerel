@@ -758,11 +758,64 @@ func TestSync_ProducesArtifacts(t *testing.T) {
 	if a.Metadata["description"] != "Clear sky" {
 		t.Errorf("metadata description = %v, want %q", a.Metadata["description"], "Clear sky")
 	}
+	// IMP-016-R4-001: SourceRef must include sub-daily granularity to prevent dedup collision
+	if !strings.Contains(a.SourceRef, "T") {
+		t.Errorf("SourceRef should contain RFC3339 time (sub-daily granularity), got %q", a.SourceRef)
+	}
+	// IMP-016-R4-003: RawContent must include weather description
+	if !strings.Contains(a.RawContent, "Clear sky") {
+		t.Errorf("RawContent should contain weather description, got %q", a.RawContent)
+	}
 	if cursor == "" {
 		t.Error("cursor should not be empty after successful sync")
 	}
 	if c.Health(context.Background()) != connector.HealthHealthy {
 		t.Errorf("health should be healthy after full success, got %s", c.Health(context.Background()))
+	}
+}
+
+// IMP-016-R4-001: Adversarial — consecutive syncs must produce distinct SourceRefs
+func TestSync_SourceRefUniquePerSync(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{"temperature_2m":20,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "City", "latitude": 10.0, "longitude": 20.0},
+			},
+		},
+	})
+
+	// First sync
+	a1, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("first sync error: %v", err)
+	}
+	// Clear cache to force second HTTP call
+	c.mu.Lock()
+	c.cache = make(map[string]*cacheEntry)
+	c.mu.Unlock()
+
+	// Tiny sleep so time.Now() differs (RFC3339 has second precision)
+	time.Sleep(time.Second)
+
+	// Second sync
+	a2, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("second sync error: %v", err)
+	}
+
+	if len(a1) != 1 || len(a2) != 1 {
+		t.Fatalf("expected 1 artifact per sync, got %d and %d", len(a1), len(a2))
+	}
+	if a1[0].SourceRef == a2[0].SourceRef {
+		t.Errorf("consecutive syncs produced identical SourceRef %q — would cause pipeline dedup collision", a1[0].SourceRef)
 	}
 }
 

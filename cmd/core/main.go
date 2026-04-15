@@ -337,8 +337,8 @@ func run() error {
 		}
 
 		alertsCfg := connector.ConnectorConfig{
-			AuthType:    "api_key",
-			Credentials: map[string]string{"airnow_api_key": os.Getenv("GOV_ALERTS_AIRNOW_API_KEY")},
+			AuthType:     "api_key",
+			Credentials:  map[string]string{"airnow_api_key": os.Getenv("GOV_ALERTS_AIRNOW_API_KEY")},
 			Enabled:      true,
 			SyncSchedule: os.Getenv("GOV_ALERTS_SYNC_SCHEDULE"),
 			SourceConfig: map[string]interface{}{
@@ -377,6 +377,8 @@ func run() error {
 				"watchlist":         parseJSONObjectEnv("FINANCIAL_MARKETS_WATCHLIST"),
 				"alert_threshold":   parseFloatEnv("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
 				"coingecko_enabled": os.Getenv("FINANCIAL_MARKETS_COINGECKO_ENABLED") == "true",
+				"fred_enabled":      os.Getenv("FINANCIAL_MARKETS_FRED_ENABLED") == "true",
+				"fred_series":       parseJSONArrayEnv("FINANCIAL_MARKETS_FRED_SERIES"),
 			},
 		}
 		if err := marketsConn.Connect(ctx, marketsCfg); err == nil {

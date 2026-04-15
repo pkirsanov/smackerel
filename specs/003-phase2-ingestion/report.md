@@ -465,3 +465,69 @@ Go lint: PASS, Python lint: PASS
 All checks passed!
 Exit code: 0
 ```
+
+---
+
+## Improve-Existing Pass (April 14, 2026)
+
+Stochastic quality sweep triggered an improve-existing analysis of the Phase 2 ingestion surface. Five concrete improvements were identified against spec requirements, best practices, and correctness analysis.
+
+### I-001: IMAP UID numeric comparison (correctness bug)
+
+**Finding:** `imap.go` Sync() compared message UIDs as strings (`msg.UID <= cursor`). IMAP UIDs are numeric — string comparison gives wrong results (e.g. "9" > "100" lexicographically). Could cause missed emails or reprocessing.
+
+**Fix:** Added `compareUIDs()` function that parses UIDs as int64 for numeric comparison, with lexicographic fallback for non-numeric IDs (Gmail API hex IDs). Updated Sync() to use it for both cursor filtering and cursor advancement.
+
+**Files:** `internal/connector/imap/imap.go`
+**Tests:** `TestCompareUIDs_Numeric`, `TestCompareUIDs_NonNumericFallback` in `imap_test.go`
+
+### I-002: YouTube completion rate for tier assignment (spec gap)
+
+**Finding:** Spec R-203 explicitly requires engagement-based tiers using completion rate (>80% completed → full, regular completed → standard, <20% → light), but EngagementTier only used liked/watchLater/playlist. CompletionRate field was missing from VideoItem.
+
+**Fix:** Added `CompletionRate float64` field to VideoItem. Updated `EngagementTier` signature to accept completionRate. Tier logic: liked/playlist → full, completion >= 80% → full, watchLater/completion >= 50% → standard, otherwise → light. Updated parseVideoItems to read completion_rate from source config. Added completion_rate to sync metadata.
+
+**Files:** `internal/connector/youtube/youtube.go`
+**Tests:** `TestEngagementTier_HighCompletion`, `TestEngagementTier_MidCompletion`, `TestEngagementTier_LowCompletion` in `youtube_test.go`; updated all existing EngagementTier callers in `youtube_test.go` and `chaos_test.go`
+
+### I-003: Supervisor sync state on zero-item sync
+
+**Finding:** Supervisor only saved sync state when `len(items) > 0`. A successful sync with no new items did not update `last_sync` timestamp or reset `errors_count`. This left stale error counts in the health display.
+
+**Fix:** Removed the `len(items) > 0` guard on state save. Now all successful syncs persist state, ensuring last_sync is current and errors_count resets to 0.
+
+**Files:** `internal/connector/supervisor.go`
+
+### I-004: Case-insensitive email tier assignment
+
+**Finding:** AssignTier in the IMAP connector used exact-case string comparison for sender addresses, labels, and domains. Gmail returns labels as "IMPORTANT" while user config might say "important". Missed matches caused incorrect tier assignment.
+
+**Fix:** Updated AssignTier to use `strings.EqualFold` for sender comparison and `strings.ToLower` for label/domain matching.
+
+**Files:** `internal/connector/imap/imap.go`
+**Tests:** `TestAssignTier_CaseInsensitiveSender`, `TestAssignTier_CaseInsensitiveLabel`, `TestAssignTier_CaseInsensitiveDomain` in `imap_test.go`
+
+### I-005: Topic lifecycle conditional DB writes
+
+**Finding:** `UpdateAllMomentum` had `if State(state) != newState || true` which always wrote to DB regardless of whether momentum or state changed. For large topic sets this causes unnecessary write amplification.
+
+**Fix:** Removed `|| true` and moved the UPDATE query to use a WHERE clause that skips the write when both state and momentum_score are unchanged: `WHERE id = $1 AND (state != $3 OR momentum_score IS DISTINCT FROM $2)`.
+
+**Files:** `internal/topics/lifecycle.go`
+
+### Verification
+
+```
+$ ./smackerel.sh test unit
+33 Go packages PASS, 0 failures
+11 Python tests PASS
+Exit code: 0
+
+$ ./smackerel.sh check
+Config is in sync with SST
+Exit code: 0
+
+$ ./smackerel.sh lint
+Go lint: PASS, Python lint: PASS
+Exit code: 0
+```

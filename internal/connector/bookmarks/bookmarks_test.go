@@ -600,7 +600,8 @@ func TestFolderToTopicMapping_MultiLevel(t *testing.T) {
 	}
 }
 
-// T-PARSE-002: Netscape HTML with nested folders preserves folder context.
+// T-PARSE-002: Netscape HTML with nested folders preserves full folder hierarchy.
+// IMP-009-R-001: Stack-based parsing builds hierarchical paths like "Outer/Inner".
 func TestParseNetscapeHTML_NestedFolders(t *testing.T) {
 	data := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <DL>
@@ -621,10 +622,9 @@ func TestParseNetscapeHTML_NestedFolders(t *testing.T) {
 		t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
 	}
 
-	// The folder should reflect the innermost H3 encountered before the link.
-	// Current implementation sets folder to the most recent H3 — "Inner".
-	if bookmarks[0].Folder != "Inner" {
-		t.Errorf("Folder = %q, want %q", bookmarks[0].Folder, "Inner")
+	// IMP-009-R-001: The folder should reflect the FULL hierarchy, not just the innermost name.
+	if bookmarks[0].Folder != "Outer/Inner" {
+		t.Errorf("Folder = %q, want %q (full hierarchical path)", bookmarks[0].Folder, "Outer/Inner")
 	}
 }
 
@@ -741,5 +741,126 @@ func TestChaosR24_ChromeDateAddedMaxInt64(t *testing.T) {
 	if !bookmarks[0].AddedAt.IsZero() {
 		t.Errorf("CHAOS R24-003c: AddedAt = %v for MaxInt64 date_added; "+
 			"expected zero — integer overflow timestamp leaked through", bookmarks[0].AddedAt)
+	}
+}
+
+// ============================================================================
+// IMP-009-R-001 — Adversarial regression tests for Netscape HTML folder hierarchy
+// ============================================================================
+
+// T-IMP-009-R-001-A: Bookmarks after a closed folder must NOT inherit
+// the closed folder's name. Without the stack-based fix, `currentFolder`
+// leaked across `</DL>` boundaries.
+func TestParseNetscapeHTML_FolderResetAfterClose(t *testing.T) {
+	data := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+<DT><H3>Work</H3>
+<DL><p>
+<DT><A HREF="https://example.com/inside">Inside Work</A>
+</DL><p>
+<DT><A HREF="https://example.com/outside">Outside Work</A>
+</DL><p>`)
+
+	bookmarks, err := ParseNetscapeHTML(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 2 {
+		t.Fatalf("expected 2 bookmarks, got %d", len(bookmarks))
+	}
+
+	if bookmarks[0].Folder != "Work" {
+		t.Errorf("bookmarks[0].Folder = %q, want %q", bookmarks[0].Folder, "Work")
+	}
+	// This is the adversarial check: without the fix, this would be "Work"
+	if bookmarks[1].Folder != "" {
+		t.Errorf("IMP-009-R-001: bookmarks[1].Folder = %q, want empty string "+
+			"(bookmark after </DL> must not inherit closed folder)", bookmarks[1].Folder)
+	}
+}
+
+// T-IMP-009-R-001-B: Three-level deep nesting with bookmarks at each level
+// verifies correct folder paths at all depths.
+func TestParseNetscapeHTML_ThreeLevelHierarchy(t *testing.T) {
+	data := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+<DT><A HREF="https://example.com/root">Root Bookmark</A>
+<DT><H3>Tech</H3>
+<DL><p>
+<DT><A HREF="https://example.com/tech">Tech Bookmark</A>
+<DT><H3>Go</H3>
+<DL><p>
+<DT><A HREF="https://example.com/go">Go Bookmark</A>
+<DT><H3>Libraries</H3>
+<DL><p>
+<DT><A HREF="https://example.com/chi">Chi Router</A>
+</DL><p>
+<DT><A HREF="https://example.com/go-after">Go After Libraries</A>
+</DL><p>
+<DT><A HREF="https://example.com/tech-after">Tech After Go</A>
+</DL><p>
+<DT><A HREF="https://example.com/after-all">After Everything</A>
+</DL><p>`)
+
+	bookmarks, err := ParseNetscapeHTML(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 7 {
+		t.Fatalf("expected 7 bookmarks, got %d", len(bookmarks))
+	}
+
+	expected := []struct {
+		url    string
+		folder string
+	}{
+		{"https://example.com/root", ""},
+		{"https://example.com/tech", "Tech"},
+		{"https://example.com/go", "Tech/Go"},
+		{"https://example.com/chi", "Tech/Go/Libraries"},
+		{"https://example.com/go-after", "Tech/Go"},
+		{"https://example.com/tech-after", "Tech"},
+		{"https://example.com/after-all", ""},
+	}
+
+	for i, want := range expected {
+		if bookmarks[i].URL != want.url {
+			t.Errorf("bookmarks[%d].URL = %q, want %q", i, bookmarks[i].URL, want.url)
+		}
+		if bookmarks[i].Folder != want.folder {
+			t.Errorf("IMP-009-R-001: bookmarks[%d].Folder = %q, want %q (url: %s)",
+				i, bookmarks[i].Folder, want.folder, want.url)
+		}
+	}
+}
+
+// T-IMP-009-R-001-C: Sibling folders at the same level get independent paths.
+func TestParseNetscapeHTML_SiblingFolders(t *testing.T) {
+	data := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+<DT><H3>Work</H3>
+<DL><p>
+<DT><A HREF="https://example.com/work">Work Link</A>
+</DL><p>
+<DT><H3>Personal</H3>
+<DL><p>
+<DT><A HREF="https://example.com/personal">Personal Link</A>
+</DL><p>
+</DL><p>`)
+
+	bookmarks, err := ParseNetscapeHTML(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(bookmarks) != 2 {
+		t.Fatalf("expected 2 bookmarks, got %d", len(bookmarks))
+	}
+
+	if bookmarks[0].Folder != "Work" {
+		t.Errorf("bookmarks[0].Folder = %q, want %q", bookmarks[0].Folder, "Work")
+	}
+	if bookmarks[1].Folder != "Personal" {
+		t.Errorf("IMP-009-R-001: bookmarks[1].Folder = %q, want %q "+
+			"(sibling folders must not merge)", bookmarks[1].Folder, "Personal")
 	}
 }

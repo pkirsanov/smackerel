@@ -600,7 +600,7 @@ func TestImprove_DetermineLinkTypeEndLocationFallback(t *testing.T) {
 		EndTime:       time.Date(2026, 3, 15, 15, 0, 0, 0, time.UTC),
 		Route:         nil,
 		StartLocation: LatLng{Lat: 40.000, Lng: 5.000}, // far from artifact
-		EndLocation:   LatLng{Lat: 47.500, Lng: 8.700},  // near artifact
+		EndLocation:   LatLng{Lat: 47.500, Lng: 8.700}, // near artifact
 	}
 
 	linkType := determineLinkType(activity, 47.501, 8.701, 1.0)

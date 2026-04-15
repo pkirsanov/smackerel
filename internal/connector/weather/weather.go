@@ -47,7 +47,7 @@ type Connector struct {
 	health     connector.HealthStatus
 	mu         sync.RWMutex
 	config     WeatherConfig
-	configGen  uint64                 // incremented on Connect; Sync uses it to skip stale health writes
+	configGen  uint64 // incremented on Connect; Sync uses it to skip stale health writes
 	httpClient *http.Client
 	cache      map[string]*cacheEntry
 	baseURL    string // overridable for testing; defaults to Open-Meteo API
@@ -126,7 +126,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var artifacts []connector.RawArtifact
 	var failCount int
 	now := time.Now()
-	syncStart := time.Now()
+	syncStart := now
 
 	for _, loc := range cfg.Locations {
 		// Check for context cancellation between locations.
@@ -149,10 +149,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 		artifacts = append(artifacts, connector.RawArtifact{
 			SourceID:    "weather",
-			SourceRef:   fmt.Sprintf("current-%s-%s", loc.Name, now.Format("2006-01-02")),
+			SourceRef:   fmt.Sprintf("current-%s-%s", loc.Name, now.Format(time.RFC3339)),
 			ContentType: "weather/current",
 			Title:       fmt.Sprintf("Weather: %s — %s", loc.Name, current.Description),
-			RawContent:  fmt.Sprintf("Temperature: %.1f°C (feels like %.1f°C), Humidity: %d%%, Wind: %.1f km/h", current.Temperature, current.ApparentTemp, current.Humidity, current.WindSpeed),
+			RawContent:  fmt.Sprintf("%s — Temperature: %.1f°C (feels like %.1f°C), Humidity: %d%%, Wind: %.1f km/h", current.Description, current.Temperature, current.ApparentTemp, current.Humidity, current.WindSpeed),
 			Metadata: map[string]interface{}{
 				"location":             loc.Name,
 				"latitude":             lat,

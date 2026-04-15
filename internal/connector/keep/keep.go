@@ -149,7 +149,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		c.mu.Lock()
 		c.lastSyncTime = time.Now()
 		if c.lastSyncErrors > 0 && c.lastSyncCount == 0 {
-			// Complete failure: no artifacts produced — escalate with consecutive count
+			// Complete failure: no artifacts produced — escalate with consecutive count.
+			// Complete-failure escalation is more aggressive than per-error escalation
+			// (HealthFromErrorCount) because producing zero artifacts means the entire
+			// sync path is broken, not just individual items.
 			c.consecutiveErrors++
 			switch {
 			case c.consecutiveErrors >= 10:
@@ -388,6 +391,9 @@ func parseKeepConfig(config connector.ConnectorConfig) (KeepConfig, error) {
 	}
 
 	if minLen, ok := sc["min_content_length"].(float64); ok {
+		if minLen < 0 {
+			return kc, fmt.Errorf("min_content_length must be non-negative, got %v", minLen)
+		}
 		kc.MinContentLength = int(minLen)
 	}
 

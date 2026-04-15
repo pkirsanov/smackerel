@@ -4,11 +4,11 @@ Links: [uservalidation.md](uservalidation.md)
 
 ### Summary
 
-Discord connector implementation covers 6 scopes: normalizer/classifier (Scope 1), REST client with pagination and rate limiting (Scope 2), connector interface and config (Scope 3), Gateway event poller (Scope 4), thread ingestion (Scope 5), and bot command capture (Scope 6). The codebase has been hardened through 14+ stochastic quality sweeps including 3 security passes, 2 stabilize passes, chaos hardening, and regression analysis.
+Discord connector implementation covers 6 scopes: normalizer/classifier (Scope 1), REST client with pagination and rate limiting (Scope 2), connector interface and config (Scope 3), Gateway event poller (Scope 4), thread ingestion (Scope 5), and bot command capture (Scope 6). The codebase has been hardened through 16+ stochastic quality sweeps including 3 security passes, 2 stabilize passes, chaos hardening, regression analysis, and an improve-existing pass.
 
 ### Completion Statement
 
-All 6 scopes marked Done. 135 test runs pass across `discord.go`, `gateway.go`, `discord_test.go`, `gateway_test.go`. 43 security/hardening tests cover SSRF, snowflake validation, cursor scope enforcement, content sanitization, and resource exhaustion caps. All prior sweep fixes (gaps G1-G11, simplify S1-S6, stabilize ST1-ST9, security SEC-1 through SEC3-4, harden H-1 through H-6, chaos C1-C4, regression REG-014-R22-001/002) remain durable.
+All 6 scopes marked Done. 135+ test runs pass across `discord.go`, `gateway.go`, `discord_test.go`, `gateway_test.go`. 43 security/hardening tests cover SSRF, snowflake validation, cursor scope enforcement, content sanitization, and resource exhaustion caps. All prior sweep fixes (gaps G1-G11, simplify S1-S6, stabilize ST1-ST9, security SEC-1 through SEC3-4, harden H-1 through H-6, chaos C1-C4, regression REG-014-R22-001/002, improve IMP-014-IE-001/002/003) remain durable.
 
 ### Test Evidence
 
@@ -728,3 +728,53 @@ The Discord connector has significant, well-hardened implementation in its **in-
 - `./smackerel.sh test unit` — all packages pass (102 discord tests, no regressions)
 - No code changes made — this is artifact-only reconciliation
 - All prior hardening/security/chaos fixes remain durable
+
+---
+
+### Improve-Existing Sweep — 2026-04-14
+
+**Trigger:** `improve` probe via stochastic-quality-sweep
+**Mode:** `improve-existing`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Context
+
+Improvement analysis pass on the Discord connector after 15+ prior quality sweeps. The connector has 1511 LOC in `discord.go`, 260 in `gateway.go`, and 3115 lines of tests. This pass analyzes against competitor bot libraries, Discord API best practices, and production connector patterns from the project's other connectors.
+
+#### Findings (3 improvements identified)
+
+| # | Finding | Category | Severity | Status |
+|---|---------|----------|----------|--------|
+| IMP-014-IE-001 | HTTP client uses default transport with no `MaxConnsPerHost` — during high-backfill sync of many channels (up to 1000 supported), unbounded concurrent connections could exhaust file descriptors | Resource exhaustion | Medium | Fixed |
+| IMP-014-IE-002 | Discord API error responses (4xx/5xx) only include status code in error messages — Discord returns structured error payloads with message and code fields (`{"message":"Missing Access","code":50001}`) that are critical for diagnosing channel permission issues and intent verification failures | Debugging/Operability | Medium | Fixed |
+| IMP-014-IE-003 | Snowflake cursor comparison uses raw string ordering (`msg.ID > maxID`) — while current snowflake IDs are 18-19 digits making lexicographic ordering work, string comparison fails for variable-length numeric strings (e.g., `"99" > "100"` is true lexicographically but false numerically) | Correctness/Robustness | Low | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+
+- `internal/connector/discord/discord.go`:
+  - IMP-014-IE-001: `New()` now creates `http.Client` with custom `http.Transport{MaxConnsPerHost: 10, MaxIdleConnsPerHost: 10, IdleConnTimeout: 90s}`. Bounds concurrent connections to Discord's API during burst backfill periods.
+  - IMP-014-IE-002: Added `truncateErrorBody()` helper that sanitizes (control chars stripped) and truncates (256 byte cap) Discord error response bodies. All 4xx/5xx error returns in `doDiscordRequest()` now include the truncated body excerpt. Error messages now read e.g. `discord API forbidden (403): {"message":"Missing Access","code":50001}` instead of just `discord API forbidden (403)`.
+  - IMP-014-IE-003: Added `snowflakeGreater(a, b string) bool` helper using length-first comparison (longer string = numerically larger for positive integers), then lexicographic fallback for same-length strings. Replaced all 7 raw string comparisons across `discord.go` (5 sites) and `gateway.go` (2 sites) with `snowflakeGreater()`.
+
+- `internal/connector/discord/discord_test.go`:
+  - Added `TestNew_HTTPClientHasBoundedTransport` — verifies MaxConnsPerHost and MaxIdleConnsPerHost are set (adversarial: catches removal of transport config)
+  - Added `TestDoDiscordRequest_ErrorIncludesBodyExcerpt` — verifies 403/401/500 errors include Discord's diagnostic payload
+  - Added `TestDoDiscordRequest_ErrorBodySanitizedAndTruncated` — verifies long bodies are truncated and control chars are sanitized (adversarial: catches log injection via error body)
+  - Added `TestSnowflakeGreater` — 11 cases covering same-length, different-length, edge cases (adversarial: "9" vs "10", "99" vs "100")
+  - Added `TestCursorAdvancement_MixedLengthSnowflakes` — end-to-end Sync with mixed-length IDs verifies cursor advances to the numerically larger ID
+
+- `internal/connector/discord/gateway.go`:
+  - Replaced 2 raw string comparisons in `pollChannel()` with `snowflakeGreater()`
+
+#### Test Evidence
+
+```
+./smackerel.sh test unit — 33 Go packages ok, 0 FAIL
+./smackerel.sh build — clean
+```
+
+#### Validation
+
+All prior 130+ discord tests continue to pass. 5 new improvement tests added. Zero regressions.

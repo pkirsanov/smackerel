@@ -1230,3 +1230,295 @@ func TestMaxTweetCount_ConstantSet(t *testing.T) {
 		t.Errorf("maxTweetCount should be 500000, got %d", maxTweetCount)
 	}
 }
+
+// --- Improve: IMP-001 — Graduated health escalation with consecutive error tracking ---
+
+func TestSync_ConsecutiveErrorsEscalateToDegraded(t *testing.T) {
+	c := New("twitter")
+	dir := t.TempDir()
+	// No data/ subdir — every sync will fail
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// First failure: should be degraded (consecutiveErrors=1, <5)
+	c.Sync(context.Background(), "")
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected degraded after 1 failure, got %s", c.Health(context.Background()))
+	}
+}
+
+func TestSync_ConsecutiveErrorsEscalateToFailing(t *testing.T) {
+	c := New("twitter")
+	dir := t.TempDir()
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 5 consecutive failures: should escalate to failing
+	for i := 0; i < 5; i++ {
+		c.Sync(context.Background(), "")
+	}
+	if c.Health(context.Background()) != connector.HealthFailing {
+		t.Errorf("expected failing after 5 consecutive failures, got %s", c.Health(context.Background()))
+	}
+}
+
+func TestSync_ConsecutiveErrorsEscalateToError(t *testing.T) {
+	c := New("twitter")
+	dir := t.TempDir()
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 10 consecutive failures: should escalate to error
+	for i := 0; i < 10; i++ {
+		c.Sync(context.Background(), "")
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected error after 10 consecutive failures, got %s", c.Health(context.Background()))
+	}
+}
+
+func TestSync_SuccessResetsConsecutiveErrors(t *testing.T) {
+	c := New("twitter")
+	dir := t.TempDir()
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 4 consecutive failures
+	for i := 0; i < 4; i++ {
+		c.Sync(context.Background(), "")
+	}
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Fatalf("expected degraded after 4 failures, got %s", c.Health(context.Background()))
+	}
+
+	// Create data so next sync succeeds
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"recovery","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	c.Sync(context.Background(), "")
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected healthy after successful sync, got %s", c.Health(context.Background()))
+	}
+
+	// Verify consecutive errors reset — next failure should be degraded, not failing
+	os.Remove(filepath.Join(dataDir, "tweets.js"))
+	os.Remove(dataDir)
+	c.Sync(context.Background(), "")
+	if c.Health(context.Background()) != connector.HealthDegraded {
+		t.Errorf("expected degraded (reset counter) after new failure, got %s", c.Health(context.Background()))
+	}
+}
+
+// --- Improve: IMP-002 — Sync metrics for operational observability ---
+
+func TestSyncMetrics_TracksSuccessfulSync(t *testing.T) {
+	c := New("twitter")
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"hello world tweet","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	before := time.Now()
+	c.Sync(context.Background(), "")
+	lastSync, count, errors, consec := c.SyncMetrics()
+
+	if lastSync.Before(before) {
+		t.Error("lastSyncTime should be after sync started")
+	}
+	if count != 1 {
+		t.Errorf("expected count=1, got %d", count)
+	}
+	if errors != 0 {
+		t.Errorf("expected errors=0, got %d", errors)
+	}
+	if consec != 0 {
+		t.Errorf("expected consecutiveErrors=0, got %d", consec)
+	}
+}
+
+func TestSyncMetrics_TracksFailedSync(t *testing.T) {
+	c := New("twitter")
+	dir := t.TempDir()
+
+	if err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": dir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	c.Sync(context.Background(), "")
+	_, count, errors, consec := c.SyncMetrics()
+
+	if count != 0 {
+		t.Errorf("expected count=0 on failure, got %d", count)
+	}
+	if errors != 1 {
+		t.Errorf("expected errors=1, got %d", errors)
+	}
+	if consec != 1 {
+		t.Errorf("expected consecutiveErrors=1, got %d", consec)
+	}
+}
+
+// --- Improve: IMP-003 — Connect sets HealthError on config validation failure ---
+
+func TestConnect_SetsHealthErrorOnFailure(t *testing.T) {
+	c := New("twitter")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": ""},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected HealthError after failed connect, got %s", c.Health(context.Background()))
+	}
+}
+
+func TestConnect_NonexistentDir_SetsHealthError(t *testing.T) {
+	c := New("twitter")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "archive", "archive_dir": "/nonexistent/path"},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Errorf("expected HealthError after nonexistent dir, got %s", c.Health(context.Background()))
+	}
+}
+
+// --- Improve: IMP-004 — Media content type detection (tweet/image, tweet/video) ---
+
+func TestClassifyTweet_Image(t *testing.T) {
+	tweet := ArchiveTweet{
+		FullText: "Check out this photo!",
+		Entities: TweetEntities{
+			Media: []TweetMedia{{Type: "photo"}},
+		},
+	}
+	got := classifyTweet(tweet, nil)
+	if got != "tweet/image" {
+		t.Errorf("expected tweet/image, got %s", got)
+	}
+}
+
+func TestClassifyTweet_Video(t *testing.T) {
+	tweet := ArchiveTweet{
+		FullText: "Watch this video!",
+		Entities: TweetEntities{
+			Media: []TweetMedia{{Type: "video"}},
+		},
+	}
+	got := classifyTweet(tweet, nil)
+	if got != "tweet/video" {
+		t.Errorf("expected tweet/video, got %s", got)
+	}
+}
+
+func TestClassifyTweet_AnimatedGif(t *testing.T) {
+	tweet := ArchiveTweet{
+		FullText: "Funny gif!",
+		Entities: TweetEntities{
+			Media: []TweetMedia{{Type: "animated_gif"}},
+		},
+	}
+	got := classifyTweet(tweet, nil)
+	if got != "tweet/video" {
+		t.Errorf("expected tweet/video for animated_gif, got %s", got)
+	}
+}
+
+func TestClassifyTweet_MediaPrecedenceOverURL(t *testing.T) {
+	// When a tweet has both media and URLs, media takes precedence.
+	tweet := ArchiveTweet{
+		FullText: "Photo with link",
+		Entities: TweetEntities{
+			URLs:  []TweetURL{{ExpandedURL: "https://example.com"}},
+			Media: []TweetMedia{{Type: "photo"}},
+		},
+	}
+	got := classifyTweet(tweet, nil)
+	if got != "tweet/image" {
+		t.Errorf("expected tweet/image (media precedence), got %s", got)
+	}
+}
+
+func TestClassifyTweet_ThreadPrecedenceOverMedia(t *testing.T) {
+	// Threads take highest precedence even with media.
+	tweet := ArchiveTweet{
+		FullText: "Thread with photo",
+		Entities: TweetEntities{
+			Media: []TweetMedia{{Type: "photo"}},
+		},
+	}
+	thread := &Thread{RootID: "1"}
+	got := classifyTweet(tweet, thread)
+	if got != "tweet/thread" {
+		t.Errorf("expected tweet/thread (thread precedence), got %s", got)
+	}
+}
+
+func TestNormalizeTweet_MediaMetadata(t *testing.T) {
+	tweet := ArchiveTweet{
+		ID:       "700",
+		FullText: "Photo tweet",
+		Entities: TweetEntities{
+			Media: []TweetMedia{{Type: "photo"}, {Type: "photo"}},
+		},
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	if artifact.ContentType != "tweet/image" {
+		t.Errorf("expected tweet/image, got %s", artifact.ContentType)
+	}
+	mediaTypes, ok := artifact.Metadata["media_types"].([]string)
+	if !ok {
+		t.Fatal("expected media_types metadata to be []string")
+	}
+	if len(mediaTypes) != 2 {
+		t.Errorf("expected 2 media types, got %d", len(mediaTypes))
+	}
+	count, ok := artifact.Metadata["media_count"].(int)
+	if !ok || count != 2 {
+		t.Errorf("expected media_count=2, got %v", artifact.Metadata["media_count"])
+	}
+}
+
+func TestNormalizeTweet_NoMediaNoMetadata(t *testing.T) {
+	tweet := ArchiveTweet{
+		ID:       "701",
+		FullText: "Text only tweet",
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	if _, ok := artifact.Metadata["media_types"]; ok {
+		t.Error("tweets without media should not have media_types metadata")
+	}
+	if _, ok := artifact.Metadata["media_count"]; ok {
+		t.Error("tweets without media should not have media_count metadata")
+	}
+}

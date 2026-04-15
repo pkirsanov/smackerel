@@ -319,6 +319,56 @@ $ git diff --stat HEAD~1 -- internal/connector/keep/
  internal/connector/keep/takeout_test.go    | 256 +
  10 files changed, 2169 insertions(+)
 ```
+
+---
+
+## Improve-Existing: Stochastic Quality Sweep (2026-04-14)
+
+### Analysis Findings
+
+| # | Finding | Severity | Action |
+|---|---------|----------|--------|
+| IMP-1 | Labels filter (R-012 `labels_filter` config) parsed but never enforced in shouldSkip() | Medium | **Fixed** — Implemented label filter enforcement |
+| IMP-2 | Health escalation thresholds documented for review (complete-failure uses aggressive escalation vs. shared `HealthFromErrorCount`) | Low | **Documented** — Kept intentional divergence with justification comment |
+| IMP-3 | `parseKeepConfig` accepted negative `min_content_length` values | Low | **Fixed** — Added validation rejecting negative values |
+| IMP-4 | `syncGkeepapi` is a stub (always returns error) | Info | **Deferred** — Requires NATS Client `Request()` method; Python bridge functional |
+| IMP-5 | `processedExports` in-memory map lost on restart | Info | **Deferred** — DB table exists in migration but not wired; cursor-based filter provides partial protection |
+
+### Changes Made
+
+**`internal/connector/keep/normalizer.go`:**
+- Added `matchesLabelFilter()` — case-insensitive label matching against `KeepConfig.LabelsFilter`
+- Added `noteHasImages()` — helper for R-008 priority check in filter logic
+- Extended `shouldSkip()` with labels filter enforcement: non-matching labeled notes are skipped when filter is active; pinned and image notes exempt per R-008 priority hierarchy
+- Added documentation comment clarifying R-012 + R-008 priority interaction
+
+**`internal/connector/keep/keep.go`:**
+- Added comment documenting why complete-failure health escalation is intentionally more aggressive than `HealthFromErrorCount`
+- Added `min_content_length >= 0` validation in `parseKeepConfig()`
+
+### New Tests
+
+| Test | File | Assertion |
+|------|------|-----------|
+| TestLabelsFilterSkipsNonMatchingLabeledNotes | normalizer_test.go | Non-matching labeled note → skipped |
+| TestLabelsFilterAllowsMatchingLabeledNotes | normalizer_test.go | Matching labeled note → NOT skipped |
+| TestLabelsFilterIsCaseInsensitive | normalizer_test.go | "work" matches filter "Work" |
+| TestLabelsFilterPassesUnlabeledNotes | normalizer_test.go | Unlabeled notes pass through filter |
+| TestLabelsFilterExemptsPinnedNotes | normalizer_test.go | Pinned + non-matching label → NOT skipped |
+| TestLabelsFilterExemptsImageNotes | normalizer_test.go | Image + non-matching label → NOT skipped |
+| TestLabelsFilterEmptyFilterPassesAll | normalizer_test.go | Empty filter → all notes pass |
+| TestParseKeepConfigNegativeMinContentLength | keep_test.go | Negative min_content_length → error |
+
+### Test Evidence
+
+```
+$ go test -v ./internal/connector/keep/ 2>&1 | grep -c PASS
+140+
+$ go test -v ./internal/connector/keep/ 2>&1 | grep -c FAIL
+0
+$ ./smackerel.sh check → "Config is in sync with SST"
+$ ./smackerel.sh format --check → "21 files left unchanged"
+```
 - `internal/connector/keep/takeout.go` — Takeout JSON parser
 - `internal/connector/keep/normalizer.go` — Note → RawArtifact normalizer
 - `internal/connector/keep/keep.go` — Connector interface implementation

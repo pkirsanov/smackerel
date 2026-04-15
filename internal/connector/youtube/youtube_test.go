@@ -141,30 +141,54 @@ func TestSync_Empty(t *testing.T) {
 }
 
 func TestEngagementTier_Liked(t *testing.T) {
-	tier := EngagementTier(true, false, "")
+	tier := EngagementTier(true, false, "", 0.0)
 	if tier != "full" {
 		t.Errorf("expected full for liked, got %q", tier)
 	}
 }
 
 func TestEngagementTier_Playlist(t *testing.T) {
-	tier := EngagementTier(false, false, "SaaS Content")
+	tier := EngagementTier(false, false, "SaaS Content", 0.0)
 	if tier != "full" {
 		t.Errorf("expected full for playlist, got %q", tier)
 	}
 }
 
 func TestEngagementTier_WatchLater(t *testing.T) {
-	tier := EngagementTier(false, true, "")
+	tier := EngagementTier(false, true, "", 0.0)
 	if tier != "standard" {
 		t.Errorf("expected standard for watch later, got %q", tier)
 	}
 }
 
 func TestEngagementTier_Default(t *testing.T) {
-	tier := EngagementTier(false, false, "")
+	tier := EngagementTier(false, false, "", 0.0)
 	if tier != "light" {
 		t.Errorf("expected light by default, got %q", tier)
+	}
+}
+
+func TestEngagementTier_HighCompletion(t *testing.T) {
+	// R-203: >80% completed → full tier even without liked/playlist
+	tier := EngagementTier(false, false, "", 0.85)
+	if tier != "full" {
+		t.Errorf("expected full for 85%% completion, got %q", tier)
+	}
+}
+
+func TestEngagementTier_MidCompletion(t *testing.T) {
+	// 50-79% completed → standard tier
+	tier := EngagementTier(false, false, "", 0.6)
+	if tier != "standard" {
+		t.Errorf("expected standard for 60%% completion, got %q", tier)
+	}
+}
+
+func TestEngagementTier_LowCompletion(t *testing.T) {
+	// <50% completed without other signals → light tier
+	tier := EngagementTier(false, false, "", 0.15)
+	if tier != "light" {
+		t.Errorf("expected light for 15%% completion, got %q", tier)
 	}
 }
 

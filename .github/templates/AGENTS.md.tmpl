@@ -1,0 +1,43 @@
+# {{PROJECT_NAME}}
+
+> Root-level guardrails for all AI agents working in this repository.
+> This file is loaded automatically by VS Code Copilot, Claude Code, Cursor, and other AI coding tools.
+> For detailed project policies, see `.github/copilot-instructions.md`.
+
+## Architecture
+
+> **TODO:** Briefly describe your project's architecture (languages, key services, layers).
+
+## Key Rules
+
+### Build & Test
+
+- Use `{{CLI_ENTRYPOINT}}` for all build, test, lint, and deploy operations.
+- Never run ecosystem tools directly (`cargo`, `npm`, `go`, `python`, `docker compose`).
+- All commands must produce full, unfiltered output — no piping through `head`, `tail`, or filters.
+
+### Code Quality
+
+- No default values, fallbacks, or stubs in production code.
+- No dead code, `TODO` comments, or `unimplemented!()` markers.
+- No commented-out code — git has history.
+- Every public function must be tested.
+
+### File Operations
+
+- Use IDE file tools (create_file, replace_string_in_file) for all file writes.
+- Never use shell redirection (`>`, `>>`, `tee`, heredoc-to-file) to write files.
+
+## Project References
+
+| Document | Purpose |
+|----------|---------|
+| `.github/copilot-instructions.md` | Full project policies, commands, testing requirements |
+| `.specify/memory/agents.md` | Command registry (CLI commands, test commands) |
+| `.specify/memory/constitution.md` | Project governance principles |
+| `.github/agents/bubbles_shared/agent-common.md` | Universal agent governance |
+
+## Specialist Agents
+
+This project uses [Bubbles](https://github.com/philipkd/bubbles) for structured AI development.
+Use `/bubbles.workflow` for full orchestration, `/bubbles.status` to check progress.

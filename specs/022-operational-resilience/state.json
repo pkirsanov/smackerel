@@ -86,12 +86,21 @@
       "runStartedAt": "2026-04-14T00:00:00Z",
       "runCompletedAt": "2026-04-14T00:10:00Z",
       "summary": "Improve-existing pass 4 (stochastic R29): 3 findings (IMP-022-R29-001 Medium: probeMLHealth uses request context — cancelled request taints shared ML health cache for TTL; IMP-022-R29-002 Medium: NATS Close() 5s drain timeout exceeds shutdownAll 2s step budget — background goroutine leak; IMP-022-R29-003 Low: truncateBytes and dead-letter lastError byte-position truncation breaks multi-byte UTF-8). All fixed. 6 new adversarial tests. All 33 Go packages PASS."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["improve", "implement", "test"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-14T10:00:00Z",
+      "runCompletedAt": "2026-04-14T10:15:00Z",
+      "summary": "Improve-existing pass 5 (stochastic R30): 3 findings (IMP-022-R30-001 Medium: Supervisor.StopAll() unbounded wg.Wait — hanging connector blocks shutdown indefinitely; IMP-022-R30-002 Medium: panic recovery restart uses fixed 5s delay with no jitter — thundering herd on simultaneous multi-connector panics; IMP-022-R30-003 Low: health endpoint ArtifactCount runs COUNT(*) full table scan — replace with pg_class.reltuples estimate). All fixed. 2 new adversarial tests. All 33 Go packages PASS."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-14T00:10:00Z",
+  "lastUpdatedAt": "2026-04-14T10:15:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

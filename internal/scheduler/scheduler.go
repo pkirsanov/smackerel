@@ -565,6 +565,7 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		return
 	}
 
+	var delivered, failed int
 	for i, a := range alerts {
 		if ctx.Err() != nil {
 			slog.Warn("alert delivery sweep context expired, remaining alerts deferred",
@@ -577,6 +578,7 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		if err := s.bot.SendAlertMessage(msg); err != nil {
 			slog.Warn("alert delivery failed, will retry next sweep",
 				"alert_id", a.ID, "error", err)
+			failed++
 			continue
 		}
 
@@ -587,10 +589,14 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		if err := s.engine.MarkAlertDelivered(markCtx, a.ID); err != nil {
 			markCancel()
 			slog.Warn("failed to mark alert delivered", "alert_id", a.ID, "error", err)
+			failed++
 			continue
 		}
 		markCancel()
 
+		delivered++
 		slog.Info("alert delivered", "alert_id", a.ID, "type", a.AlertType, "title", a.Title)
 	}
+
+	slog.Info("alert delivery sweep complete", "delivered", delivered, "failed", failed, "total", len(alerts))
 }

@@ -85,16 +85,13 @@ func TestChaos_PipeInFilenameSkipped(t *testing.T) {
 func TestChaos_ArchiveCollisionPreservesBoth(t *testing.T) {
 	dir := t.TempDir()
 
-	c := New("google-maps-timeline")
-	c.config = MapsConfig{ImportDir: dir, ArchiveProcessed: true}
-
 	// Create and archive the first version.
 	firstContent := []byte(`{"version": 1}`)
 	firstFile := filepath.Join(dir, "export.json")
 	if err := os.WriteFile(firstFile, firstContent, 0o644); err != nil {
 		t.Fatalf("write first: %v", err)
 	}
-	if err := c.archiveFile(firstFile); err != nil {
+	if err := archiveFile(firstFile, dir); err != nil {
 		t.Fatalf("archive first: %v", err)
 	}
 
@@ -114,7 +111,7 @@ func TestChaos_ArchiveCollisionPreservesBoth(t *testing.T) {
 	if err := os.WriteFile(secondFile, secondContent, 0o644); err != nil {
 		t.Fatalf("write second: %v", err)
 	}
-	if err := c.archiveFile(secondFile); err != nil {
+	if err := archiveFile(secondFile, dir); err != nil {
 		t.Fatalf("archive second: %v", err)
 	}
 
@@ -474,10 +471,7 @@ func TestChaos_ArchiveCollisionLoopBounded(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 
-	c := New("google-maps-timeline")
-	c.config = MapsConfig{ImportDir: dir, ArchiveProcessed: true}
-
-	err := c.archiveFile(srcFile)
+	err := archiveFile(srcFile, dir)
 	if err == nil {
 		t.Fatal("expected error when collision limit exceeded, got nil")
 	}

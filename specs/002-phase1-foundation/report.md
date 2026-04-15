@@ -2,6 +2,32 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Scope: improve-existing (stochastic-quality-sweep, 2026-04-14)
+### Summary
+Two improvements to the Phase 1 foundation layer:
+
+1. **`RecentArtifacts` silent scan error logging** — `db/postgres.go:RecentArtifacts` had `continue` on scan errors with no logging, identical to the pattern previously fixed in `ExportArtifacts` (scope 17). Added `slog.Warn` logging with error count tracking and returned a partial-result error when scan errors occur, matching the `ExportArtifacts` contract.
+
+2. **`DigestHandler` error conflation** — `api/digest.go:DigestHandler` returned HTTP 404 for all `GetLatest` errors, masking database failures (connection refused, timeout) as "no digest found". Now distinguishes `pgx.ErrNoRows` (404) from other errors (500 with logging).
+
+### Findings Addressed
+- IMPROVE-002-SQS-001 (MEDIUM): `RecentArtifacts` silently skips scan errors — same pattern fixed in `ExportArtifacts` (scope 17)
+- IMPROVE-002-SQS-002 (LOW): `DigestHandler` conflates `pgx.ErrNoRows` (404) with database errors (500)
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/db/postgres.go` | Added `slog.Warn` logging and scan error counting to `RecentArtifacts`, matching `ExportArtifacts` pattern |
+| `internal/api/digest.go` | Added `errors.Is(err, pgx.ErrNoRows)` check to differentiate 404 from 500; added `slog.Error` for DB failures |
+| `internal/api/search_test.go` | Added `mockDigestGen`, `TestDigestHandler_NotFound_Returns404`, `TestDigestHandler_DBError_Returns500` |
+
+### Test Evidence
+- `./smackerel.sh test unit` — all 33 Go packages pass, 75 Python tests pass, 0 failures
+- `./smackerel.sh check` — config in sync with SST
+
+---
+
 ## Scope: improve-existing (stochastic-quality-sweep, 2026-04-12)
 ### Summary
 Added missing `ValidateProcessedPayload` call in `handleMessage` for the `artifacts.processed` NATS path. The digest path (`handleDigestMessage`) already called `ValidateDigestGeneratedPayload`, but the primary artifact processing path skipped boundary validation after unmarshal — going directly to `HandleProcessedResult`. This created an asymmetric validation gap: Go validated outbound payloads to Python but not inbound results from Python on the most critical NATS path.

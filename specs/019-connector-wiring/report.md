@@ -225,3 +225,35 @@ Scope 1 implementation is complete. All 15 connectors are imported, instantiated
 | Build | `./smackerel.sh build` | PASS — both images built | 2026-04-14 |
 | Check | `./smackerel.sh check` | PASS — config in sync | 2026-04-14 |
 | Config generate | `./smackerel.sh config generate` | PASS — 4 new env vars confirmed: `GOV_ALERTS_SOURCE_EARTHQUAKE=true`, `WEATHER_ENABLE_ALERTS=false`, `WEATHER_FORECAST_DAYS=7`, `WEATHER_PRECISION=2` | 2026-04-14 |
+
+---
+
+## Improvement Sweep R28 (2026-04-14)
+
+**Trigger:** Stochastic quality sweep — improve trigger on connector wiring (child workflow).
+**Scope:** SST end-to-end wiring completeness — verifying every configurable field in the Financial Markets connector has a full YAML → config.sh → env → main.go → SourceConfig pipeline.
+
+### Findings
+
+| ID | Severity | Description | Status |
+|----|----------|-------------|--------|
+| IMP-019-R28-001 | High | Financial Markets `fred_enabled` entirely missing from SST pipeline. The connector's `parseMarketsConfig()` reads `SourceConfig["fred_enabled"].(bool)` to allow explicit enable/disable of FRED economic data, but main.go never set it, config.sh never extracted it, and smackerel.yaml had no entry. Consequence: FRED is always auto-enabled whenever `fred_api_key` is non-empty — operators cannot disable FRED data while keeping their API key configured. Identical pattern to R27's `source_earthquake` gap. | **Fixed** — Added `fred_enabled: true` to `config/smackerel.yaml`, extraction line `FINANCIAL_MARKETS_FRED_ENABLED` in `scripts/commands/config.sh`, env var output, and `"fred_enabled": os.Getenv("FINANCIAL_MARKETS_FRED_ENABLED") == "true"` in main.go Financial Markets SourceConfig. |
+| IMP-019-R28-002 | Medium | Financial Markets `fred_series` entirely missing from SST pipeline. The connector's `parseMarketsConfig()` reads `SourceConfig["fred_series"].([]interface{})` to allow customizing which FRED economic indicator series are tracked, but main.go, config.sh, and smackerel.yaml had no entries. Consequence: FRED series always defaults to `["GDP", "UNRATE", "CPIAUCSL", "DFF", "FEDFUNDS"]` with no operator override path via config. | **Fixed** — Added `fred_series: ["GDP", "UNRATE", "CPIAUCSL", "DFF", "FEDFUNDS"]` to YAML, extraction via `yaml_get_json` in config.sh, env var output, and `"fred_series": parseJSONArrayEnv("FINANCIAL_MARKETS_FRED_SERIES")` in main.go Financial Markets SourceConfig. |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `config/smackerel.yaml` | IMP-019-R28-001: Added `fred_enabled: true` under `financial-markets:`. IMP-019-R28-002: Added `fred_series: [...]` under `financial-markets:`. |
+| `scripts/commands/config.sh` | IMP-019-R28-001: Added `FINANCIAL_MARKETS_FRED_ENABLED` extraction and env var output. IMP-019-R28-002: Added `FINANCIAL_MARKETS_FRED_SERIES` extraction via `yaml_get_json` and env var output. |
+| `cmd/core/main.go` | IMP-019-R28-001: Added `"fred_enabled"` to Financial Markets SourceConfig. IMP-019-R28-002: Added `"fred_series"` to Financial Markets SourceConfig. |
+| `cmd/core/main_test.go` | Added 5 adversarial tests: 3 for `fred_enabled` wiring (enabled/disabled/unset), 2 for `fred_series` wiring (valid array/empty). |
+
+### Test Evidence
+
+| Test Type | Command | Result | Timestamp |
+|-----------|---------|--------|-----------|
+| Unit | `./smackerel.sh test unit` | PASS — 33 Go packages (core recompiled), 75 Python tests | 2026-04-14 |
+| Build | `./smackerel.sh build` | PASS — both images built | 2026-04-14 |
+| Check | `./smackerel.sh check` | PASS — config in sync | 2026-04-14 |
+| Config generate | `./smackerel.sh config generate` | PASS — 2 new env vars confirmed: `FINANCIAL_MARKETS_FRED_ENABLED=true`, `FINANCIAL_MARKETS_FRED_SERIES=["GDP", "UNRATE", "CPIAUCSL", "DFF", "FEDFUNDS"]` | 2026-04-14 |
