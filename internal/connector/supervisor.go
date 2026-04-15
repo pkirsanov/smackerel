@@ -290,11 +290,12 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 					"connector", id,
 				)
 				backoff.Reset()
-				// Wait for next scheduled cycle
+				// Wait for next scheduled cycle using configured interval
+				interval := s.getSyncInterval(id)
 				select {
 				case <-connCtx.Done():
 					return
-				case <-time.After(60 * time.Second):
+				case <-time.After(interval):
 				}
 				continue
 			}

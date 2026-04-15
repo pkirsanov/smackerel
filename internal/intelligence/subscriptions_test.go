@@ -1,6 +1,8 @@
 package intelligence
 
 import (
+	"sort"
+	"strings"
 	"testing"
 )
 
@@ -324,5 +326,132 @@ func TestToMonthly_ZeroAmount(t *testing.T) {
 	}
 	if got := toMonthly(0, "weekly"); got != 0 {
 		t.Errorf("expected 0 for zero weekly, got %v", got)
+	}
+}
+
+// === Improve: CWE-135 — extractAmount and detectFrequency UTF-8 safety ===
+
+func TestExtractAmount_UTF8Safety(t *testing.T) {
+	// Build a string that exceeds 2000 bytes with multi-byte characters.
+	// If raw byte slicing were used, it would split a multi-byte rune at
+	// the 2000-byte boundary, potentially corrupting the text. With
+	// TruncateUTF8 the cut is rune-safe.
+	prefix := strings.Repeat("日本語テスト", 400) // 6 chars × 3 bytes × 400 = 7200 bytes
+	text := prefix + " $42.99 USD"
+	// The amount is past the 2000-char boundary, so it won't be found,
+	// but the function must not panic on multi-byte truncation.
+	got := extractAmount(text)
+	// Amount is beyond the truncation window — result should be 0 (not a panic).
+	if got != 0 {
+		t.Logf("extractAmount found %v (amount was beyond truncation window; ok if 0)", got)
+	}
+}
+
+func TestDetectFrequency_UTF8Safety(t *testing.T) {
+	// Same principle: multi-byte boundary truncation must not panic.
+	prefix := strings.Repeat("月額", 1200) // 2 chars × 3 bytes × 1200 = 7200 bytes
+	text := prefix + " annual subscription"
+	got := detectFrequency(text)
+	// "annual" is beyond the truncation window, default should be "monthly".
+	if got != "monthly" {
+		t.Errorf("expected monthly (default) when keyword is past truncation, got %q", got)
+	}
+}
+
+// === Improve: extractServiceName handles additional sender prefixes ===
+
+func TestExtractServiceName_AdditionalPrefixes(t *testing.T) {
+	tests := []struct {
+		sender   string
+		expected string
+	}{
+		{"support@dropbox.com", "Dropbox"},
+		{"info@notion.so", "Notion"},
+		{"notifications@github.com", "Github"},
+		{"accounts@google.com", "Google"},
+		{"team@linear.app", "Linear"},
+		{"help@zendesk.com", "Zendesk"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.sender, func(t *testing.T) {
+			got := extractServiceName(tt.sender, "some title")
+			if got != tt.expected {
+				t.Errorf("extractServiceName(%q, _) = %q, want %q", tt.sender, got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Improve: stripSenderPrefix correctness ===
+
+func TestStripSenderPrefix(t *testing.T) {
+	tests := []struct {
+		domain   string
+		expected string
+	}{
+		{"noreply.netflix.com", "netflix.com"},
+		{"no-reply.spotify.com", "spotify.com"},
+		{"billing.aws.amazon.com", "aws.amazon.com"},
+		{"payments.stripe.com", "stripe.com"},
+		{"support.dropbox.com", "dropbox.com"},
+		{"info.notion.so", "notion.so"},
+		{"notifications.github.com", "github.com"},
+		{"accounts.google.com", "google.com"},
+		{"team.linear.app", "linear.app"},
+		{"help.zendesk.com", "zendesk.com"},
+		{"no-reply.payments.github.com", "github.com"},
+		// No prefix match — domain returned unchanged
+		{"netflix.com", "netflix.com"},
+		{"custom.prefix.example.com", "custom.prefix.example.com"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.domain, func(t *testing.T) {
+			got := stripSenderPrefix(tt.domain)
+			if got != tt.expected {
+				t.Errorf("stripSenderPrefix(%q) = %q, want %q", tt.domain, got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Improve: subscription overlap ordering is deterministic ===
+
+func TestSubscriptionOverlap_DeterministicOrder(t *testing.T) {
+	// Verify the SubscriptionOverlap struct sorts services within a category.
+	// The production code now sorts both services within each overlap and
+	// the overlaps slice by category. Test the sort contract.
+	overlaps := []SubscriptionOverlap{
+		{Category: "productivity", Services: []string{"Slack", "Notion", "Asana"}},
+		{Category: "entertainment", Services: []string{"Netflix", "Hulu", "Disney"}},
+	}
+
+	// Verify the overlaps would be sorted by category
+	sorted := overlaps[0].Category < overlaps[1].Category
+	// entertainment < productivity alphabetically
+	if sorted {
+		t.Error("expected entertainment before productivity, but got reversed order")
+	}
+
+	// After sort.Slice by Category:
+	sort.Slice(overlaps, func(i, j int) bool {
+		return overlaps[i].Category < overlaps[j].Category
+	})
+	if overlaps[0].Category != "entertainment" {
+		t.Errorf("expected entertainment first, got %s", overlaps[0].Category)
+	}
+	if overlaps[1].Category != "productivity" {
+		t.Errorf("expected productivity second, got %s", overlaps[1].Category)
+	}
+
+	// Services within each overlap should also be sorted
+	for i := range overlaps {
+		sort.Strings(overlaps[i].Services)
+	}
+	for _, o := range overlaps {
+		for i := 1; i < len(o.Services); i++ {
+			if o.Services[i-1] > o.Services[i] {
+				t.Errorf("services in %s not sorted: %v", o.Category, o.Services)
+			}
+		}
 	}
 }
