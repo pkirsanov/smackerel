@@ -300,6 +300,43 @@ All checks passed!
 
 ---
 
+## Improve-Existing Sweep (2026-04-15)
+
+**Trigger:** improve-existing (stochastic quality sweep child workflow)
+**Target:** Scope 03 — Generic Connector Framework
+
+### Analysis
+
+Reviewed connector framework implementation against best practices for concurrent systems, production resilience, and API latency:
+- `Registry.ListConnectorHealth` called `Health()` sequentially — O(sum of all health check durations)
+- `Supervisor` used hardcoded `60 * time.Second` wait after backoff exhaustion instead of the connector's configured sync interval
+- Both issues degrade production behavior: slow health endpoints and misaligned retry timing
+
+### Findings (2)
+
+| # | Finding | File | Severity | Fix |
+|---|---------|------|----------|-----|
+| I-004 | `Registry.ListConnectorHealth` calls Health() sequentially — latency is O(sum) for N connectors with slow health probes | `internal/connector/registry.go` | Medium | Fan out Health() calls concurrently via goroutines; latency becomes O(max) |
+| I-005 | Supervisor uses hardcoded 60s after backoff exhaustion instead of connector's configured sync interval | `internal/connector/supervisor.go` | Medium | Replace `time.After(60 * time.Second)` with `time.After(s.getSyncInterval(id))` |
+
+### Files Changed
+- `internal/connector/registry.go` — `ListConnectorHealth` now fans out Health() calls concurrently
+- `internal/connector/supervisor.go` — backoff-exhaustion wait uses `getSyncInterval(id)` instead of hardcoded 60s
+- `internal/connector/connector_test.go` — 3 new tests: `TestRegistry_ListConnectorHealth_Concurrent`, `TestRegistry_ListConnectorHealth_Empty`, `TestSupervisor_BackoffExhaustion_UsesConfiguredInterval`
+
+### Verification
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+$ ./smackerel.sh test unit 2>&1 | grep connector
+ok      github.com/smackerel/smackerel/internal/connector       15.023s
+$ ./smackerel.sh lint
+(pre-existing Python import-order issues only; Go clean)
+```
+
+---
+
 ## Validate Reconciliation Sweep (2026-04-14) — Stochastic Quality Sweep R09
 
 **Trigger:** validate (reconcile-to-doc)
