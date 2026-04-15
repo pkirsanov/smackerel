@@ -480,8 +480,16 @@ func (s *Scheduler) Stop() {
 		// Signal background goroutines (e.g., digest polling) to exit.
 		close(s.done)
 		// Stop the cron scheduler and wait for running callbacks to finish.
+		// Bounded at 5s to prevent indefinite blocking if a callback ignores
+		// context cancellation (e.g., stuck on an unresponsive external API).
+		// Without this timeout, <-cronCtx.Done() would block forever (IMP-022-R31-001).
 		cronCtx := s.cron.Stop()
-		<-cronCtx.Done()
+		select {
+		case <-cronCtx.Done():
+			// All running cron callbacks completed
+		case <-time.After(5 * time.Second):
+			slog.Warn("scheduler: cron.Stop() timed out waiting for running callbacks")
+		}
 		// Wait for tracked background goroutines to drain, with a bounded timeout
 		// so a stuck job doesn't block shutdown forever.
 		done := make(chan struct{})
@@ -492,8 +500,8 @@ func (s *Scheduler) Stop() {
 		select {
 		case <-done:
 			slog.Info("scheduler stopped cleanly")
-		case <-time.After(30 * time.Second):
-			slog.Warn("scheduler stop timed out waiting for in-flight jobs")
+		case <-time.After(5 * time.Second):
+			slog.Warn("scheduler stop timed out waiting for background goroutines")
 		}
 	})
 }

@@ -221,12 +221,14 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := HealthResponse{
-		Status:   overall,
-		Services: services,
+		Status: overall,
 	}
 
-	// Only expose version/commit to authenticated callers to prevent fingerprinting.
+	// Only expose service topology, version, and commit to authenticated callers
+	// to prevent infrastructure reconnaissance (CWE-200). Unauthenticated callers
+	// (including Docker healthcheck) only see the overall status.
 	if d.isAuthenticated(r) {
+		resp.Services = services
 		resp.Version = d.Version
 		resp.CommitHash = d.CommitHash
 	}

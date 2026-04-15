@@ -1267,6 +1267,92 @@ func TestSanitizeStringField_Truncation(t *testing.T) {
 	}
 }
 
+// TestSanitizeContentField_HigherLimit verifies content fields use maxContentFieldLen (IMP-017-IMPROVE-008).
+func TestSanitizeContentField_HigherLimit(t *testing.T) {
+	// A 3000-char description should survive sanitizeContentField but be truncated by sanitizeStringField.
+	long := strings.Repeat("A severe thunderstorm warning. ", 120) // ~3600 chars
+	if len(long) <= maxStringFieldLen {
+		t.Fatal("test setup: need input longer than maxStringFieldLen")
+	}
+
+	// sanitizeStringField truncates at 1024
+	shortResult := sanitizeStringField(long)
+	if len(shortResult) > maxStringFieldLen {
+		t.Errorf("sanitizeStringField should truncate at %d, got %d", maxStringFieldLen, len(shortResult))
+	}
+
+	// sanitizeContentField preserves up to maxContentFieldLen
+	longResult := sanitizeContentField(long)
+	if len(longResult) < len(shortResult) {
+		t.Error("sanitizeContentField should preserve more than sanitizeStringField")
+	}
+	if len(longResult) != len(long) {
+		t.Errorf("sanitizeContentField should preserve full %d-char content, got %d", len(long), len(longResult))
+	}
+
+	// Very long content (>maxContentFieldLen) IS truncated
+	veryLong := strings.Repeat("x", maxContentFieldLen+1000)
+	veryLongResult := sanitizeContentField(veryLong)
+	if len(veryLongResult) > maxContentFieldLen {
+		t.Errorf("expected max content length %d, got %d", maxContentFieldLen, len(veryLongResult))
+	}
+}
+
+// TestSanitizeContentField_ControlChars verifies content field sanitization strips control chars.
+func TestSanitizeContentField_ControlChars(t *testing.T) {
+	input := "Line 1\x00Line 2\x07Line 3"
+	got := sanitizeContentField(input)
+	if strings.ContainsAny(got, "\x00\x07") {
+		t.Errorf("sanitizeContentField should strip control chars: %q", got)
+	}
+	if got != "Line 1Line 2Line 3" {
+		t.Errorf("unexpected result: %q", got)
+	}
+}
+
+// TestNWSDescription_LongContentPreserved verifies that long NWS descriptions are not truncated
+// at 1024 chars, preserving critical safety information (IMP-017-IMPROVE-008).
+func TestNWSDescription_LongContentPreserved(t *testing.T) {
+	// Simulate a realistic NWS description that exceeds 1024 chars.
+	longDesc := strings.Repeat("Tornado spotted moving northeast. Affected areas include multiple counties. ", 20)
+	if len(longDesc) <= maxStringFieldLen {
+		t.Fatal("test setup: description must exceed maxStringFieldLen")
+	}
+
+	features := []map[string]interface{}{
+		makeNWSFeature(
+			"urn:oid:long-desc-1", "Tornado Warning", "Extreme", "Observed", "Immediate",
+			"Tornado Warning headline", longDesc, "TAKE COVER NOW",
+			"Central Oklahoma",
+			"2024-01-15T14:30:00-06:00", "2024-01-15T15:30:00-06:00",
+		),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/geo+json")
+		w.Write(nwsResponse(features))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.nwsBaseURL = ts.URL
+
+	alerts, err := c.fetchNWSAlerts(context.Background(), 35.47, -97.52)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+	// Description should be preserved beyond 1024 chars.
+	if len(alerts[0].Description) <= maxStringFieldLen {
+		t.Errorf("long NWS description was truncated at %d chars (IMP-017-IMPROVE-008); got %d chars",
+			maxStringFieldLen, len(alerts[0].Description))
+	}
+	if len(alerts[0].Description) != len(longDesc) {
+		t.Errorf("expected description length %d, got %d", len(longDesc), len(alerts[0].Description))
+	}
+}
+
 // TestSanitizeAlertID verifies ID sanitization and empty rejection.
 func TestSanitizeAlertID(t *testing.T) {
 	tests := []struct {
@@ -1808,6 +1894,62 @@ func TestNormalizeNWSAlert(t *testing.T) {
 			t.Errorf("metadata[%q] = %v, want %v", key, got, want)
 		}
 	}
+
+	// IMP-017-IMPROVE-007: Verify effective/expires timestamps in metadata.
+	if eff, ok := artifact.Metadata["effective"].(string); !ok || eff == "" {
+		t.Error("missing effective timestamp in metadata (IMP-017-IMPROVE-007)")
+	}
+	if exp, ok := artifact.Metadata["expires"].(string); !ok || exp == "" {
+		t.Error("missing expires timestamp in metadata (IMP-017-IMPROVE-007)")
+	}
+}
+
+// TestNormalizeNWSAlert_ExpiresInMetadata verifies effective/expires are stored in metadata (IMP-017-IMPROVE-007).
+func TestNormalizeNWSAlert_ExpiresInMetadata(t *testing.T) {
+	eff := time.Date(2024, 1, 15, 20, 30, 0, 0, time.UTC)
+	exp := time.Date(2024, 1, 15, 21, 30, 0, 0, time.UTC)
+	alert := NWSAlert{
+		ID:        "test-expires",
+		Event:     "Heat Advisory",
+		Severity:  "Moderate",
+		Effective: eff,
+		Expires:   exp,
+	}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 0}
+
+	artifact := normalizeNWSAlert(alert, match)
+
+	if got, ok := artifact.Metadata["effective"].(string); !ok {
+		t.Error("effective metadata missing")
+	} else if got != eff.Format(time.RFC3339) {
+		t.Errorf("effective = %q, want %q", got, eff.Format(time.RFC3339))
+	}
+
+	if got, ok := artifact.Metadata["expires"].(string); !ok {
+		t.Error("expires metadata missing")
+	} else if got != exp.Format(time.RFC3339) {
+		t.Errorf("expires = %q, want %q", got, exp.Format(time.RFC3339))
+	}
+}
+
+// TestNormalizeNWSAlert_ZeroTimesOmitted verifies that zero-value times are not stored (IMP-017-IMPROVE-007).
+func TestNormalizeNWSAlert_ZeroTimesOmitted(t *testing.T) {
+	alert := NWSAlert{
+		ID:       "test-zero-times",
+		Event:    "Test",
+		Severity: "Minor",
+		// Effective and Expires left as zero values
+	}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 0}
+
+	artifact := normalizeNWSAlert(alert, match)
+
+	if _, exists := artifact.Metadata["effective"]; exists {
+		t.Error("zero Effective should not be stored in metadata")
+	}
+	if _, exists := artifact.Metadata["expires"]; exists {
+		t.Error("zero Expires should not be stored in metadata")
+	}
 }
 
 func TestNormalizeNWSAlert_TierAssignment(t *testing.T) {
@@ -2142,6 +2284,9 @@ func TestFetchNWSAlerts_PointInURL(t *testing.T) {
 	}
 	if !strings.Contains(requestedURL, "status=actual") {
 		t.Errorf("expected status=actual in URL, got: %s", requestedURL)
+	}
+	if !strings.Contains(requestedURL, "limit=50") {
+		t.Errorf("expected limit=50 in URL (IMP-017-IMPROVE-006), got: %s", requestedURL)
 	}
 }
 
@@ -4603,6 +4748,7 @@ func TestConnect_AfterClose_ResetsClosedFlag(t *testing.T) {
 				map[string]interface{}{"name": "Home", "latitude": 37.77, "longitude": -122.42, "radius_km": 200.0},
 			},
 			"source_earthquake": false,
+			"source_weather":    false,
 		},
 	}
 

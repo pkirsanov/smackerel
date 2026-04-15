@@ -77,11 +77,12 @@ const allTemplates = `
         <a href="/topics">Topics</a>
         <a href="/settings">Settings</a>
         <a href="/status">Status</a>
-        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">Light / Dark</button>
+        <button class="theme-toggle" id="themeBtn" aria-label="Toggle dark mode">Light / Dark</button>
     </nav>
     <script>
         (function(){var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}else if(t==='light'){document.documentElement.removeAttribute('data-theme');}})();
         function toggleTheme(){var h=document.documentElement;if(h.getAttribute('data-theme')==='dark'){h.removeAttribute('data-theme');localStorage.setItem('theme','light');}else{h.setAttribute('data-theme','dark');localStorage.setItem('theme','dark');}}
+        document.getElementById('themeBtn').addEventListener('click',toggleTheme);
     </script>
 {{end}}
 

@@ -801,3 +801,74 @@ func TestHealthEndpoint_NoAuthRequired(t *testing.T) {
 		t.Error("/api/health should not require authentication")
 	}
 }
+
+// --- IMP-020-CSP-001: CSP script-src includes hash for inline theme toggle script ---
+
+func TestSecurityHeaders_CSP_ScriptHashPresent(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+
+	// CSP must include a sha256 hash for the inline theme toggle script
+	// (no 'unsafe-inline' in script-src, so hash is required for inline scripts to execute).
+	if !stringContains(csp, "'sha256-") {
+		t.Errorf("CSP script-src should contain a sha256 hash for inline scripts, got: %s", csp)
+	}
+
+	// Must NOT contain 'unsafe-inline' in script-src — hash-based approach is preferred
+	// Extract the script-src directive
+	scriptSrcIdx := -1
+	for i, c := range csp {
+		if c == 's' && stringContains(csp[i:], "script-src") {
+			scriptSrcIdx = i
+			break
+		}
+	}
+	if scriptSrcIdx >= 0 {
+		// Find the next directive boundary (;) or end of string
+		scriptSrc := csp[scriptSrcIdx:]
+		semiIdx := len(scriptSrc)
+		for i, c := range scriptSrc {
+			if c == ';' {
+				semiIdx = i
+				break
+			}
+		}
+		scriptSrcDirective := scriptSrc[:semiIdx]
+		if stringContains(scriptSrcDirective, "'unsafe-inline'") {
+			t.Errorf("CSP script-src should NOT contain 'unsafe-inline' (use hash instead), got: %s", scriptSrcDirective)
+		}
+	}
+}
+
+// --- IMP-020-CSP-002: CSP hash must NOT contain 'unsafe-eval' ---
+
+func TestSecurityHeaders_CSP_NoUnsafeEvalOrInline(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+
+	if stringContains(csp, "'unsafe-eval'") {
+		t.Errorf("CSP must not contain 'unsafe-eval', got: %s", csp)
+	}
+}

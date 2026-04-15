@@ -306,3 +306,35 @@ A stochastic quality sweep (trigger: improve, mode: improve-existing, Round R19)
 - `internal/api` re-ran (not cached) — 1.791s
 - All existing tests continue to pass — no regressions
 - Parallel probe test validates timing boundary (sequential would fail the <1.8s assertion)
+
+## Improvement Sweep R30 (2026-04-15, improve trigger)
+
+A stochastic quality sweep (trigger: improve, mode: improve-existing, Round R30) analyzed the spec 023 code surfaces for remaining compile-time safety, pattern consistency, and Go modernization improvements.
+
+### Findings and Fixes
+
+| # | Type | Location | Description | Fix Applied |
+|---|------|----------|-------------|------------|
+| IMP-023-R30-001 | 🟡 TYPE SAFETY | `digest.go` DigestHandler | Returns `map[string]interface{}{}` instead of a typed struct — field name typos silently produce wrong JSON. Inconsistent with intelligence handlers which use typed structs. | Defined `DigestResponse` struct with JSON tags; replaced map literal with typed construction |
+| IMP-023-R30-002 | 🟡 TYPE SAFETY | `capture.go` RecentHandler | Returns `map[string]interface{}{"results": results}` with locally-scoped `RecentItem` type — type not reusable for tests or docs. | Promoted `RecentItem` to package level; defined `RecentResponse` struct; replaced map literal |
+| IMP-023-R30-003 | 🟡 TYPE SAFETY | `capture.go` ArtifactDetailHandler | Returns `map[string]interface{}{}` with 10 fields — highest risk of field name typo among all handlers. | Defined `ArtifactDetailResponse` struct with JSON tags; replaced map literal |
+| IMP-023-R30-004 | 🟡 CONSISTENCY | `bookmarks.go` BookmarkImportHandler | 5 error responses use inline `ErrorResponse{Error: ErrorDetail{...}}` construction instead of `writeError()` — inconsistent with spec 023's R-ENG-005 writeJSON/writeError standardization. | Replaced all 5 inline constructions with `writeError()` calls |
+| IMP-023-R30-005 | 🟢 MODERNIZE | `capture.go` writeJSON, decodeJSONBody | `interface{}` parameter type — Go 1.18+ `any` alias is the standard modern style. | Replaced `interface{}` → `any` in both signatures |
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `internal/api/digest.go` | Added `DigestResponse` struct; replaced `map[string]interface{}` with typed construction |
+| `internal/api/capture.go` | Added `RecentItem`, `RecentResponse`, `ArtifactDetailResponse` structs at package level; replaced 2 `map[string]interface{}` with typed construction; modernized `interface{}` → `any` in `writeJSON` and `decodeJSONBody` |
+| `internal/api/bookmarks.go` | Replaced 5 inline `ErrorResponse{Error: ErrorDetail{...}}` with `writeError()` calls |
+
+### Verification
+
+- `./smackerel.sh check` — **Pass** (config SST in sync + go vet/build clean)
+- `./smackerel.sh test unit` — **Pass** (all 33 Go packages + Python ML sidecar)
+- `internal/api` re-ran (not cached) — 1.966s
+- `cmd/core` re-ran (not cached) — 0.210s
+- `grep 'map\[string\]interface{}' internal/api/*.go` — only 2 remaining: `capture_test.go` (test-only JSON decode) and `search.go` (outbound ML sidecar payload) — both appropriate uses
+- Zero `ErrorResponse{` inline constructions remaining in `bookmarks.go`
+- All existing tests continue to pass — no regressions

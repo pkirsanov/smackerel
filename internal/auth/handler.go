@@ -158,12 +158,12 @@ func (h *OAuthHandler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		"expires_at", token.ExpiresAt,
 	)
 
-	// Return success page — use html.EscapeString to prevent XSS
+	// Return success page — use html.EscapeString to prevent XSS.
+	// No inline script: CSP script-src blocks inline JS; the user can close the tab manually.
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(`<!DOCTYPE html><html><body>
 		<h2>Authorization successful</h2>
 		<p>` + html.EscapeString(providerName) + ` connected. You can close this window.</p>
-		<script>setTimeout(function(){window.close()}, 3000)</script>
 	</body></html>`))
 }
 

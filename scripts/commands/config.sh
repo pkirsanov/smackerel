@@ -153,7 +153,21 @@ def extract(filepath, dotpath):
             if len(parts) == 1:
                 val = stripped.split(':', 1)[1].strip()
                 if val:
-                    print(val)
+                    # Strip inline YAML comments from the value
+                    if val.startswith('"'):
+                        close = val.find('"', 1)
+                        if close >= 0:
+                            val = val[:close + 1]
+                    elif val.startswith("'"):
+                        close = val.find("'", 1)
+                        if close >= 0:
+                            val = val[:close + 1]
+                    else:
+                        ci = val.find(' #')
+                        if ci >= 0:
+                            val = val[:ci].rstrip()
+                    if val:
+                        print(val)
                     return
                 target_line = i
                 target_indent = -1
@@ -163,6 +177,7 @@ def extract(filepath, dotpath):
     if target_line < 0:
         return
     block = []
+    is_list = False
     for i in range(target_line + 1, len(lines)):
         text = lines[i].rstrip('\n')
         stripped = text.lstrip()
@@ -171,7 +186,11 @@ def extract(filepath, dotpath):
         indent = len(text) - len(stripped)
         if target_indent < 0:
             target_indent = indent
+            is_list = stripped.startswith('- ')
         if indent < target_indent:
+            break
+        # Sibling keys at the same indent as list items are not part of the list
+        if is_list and indent == target_indent and not stripped.startswith('- '):
             break
         block.append(text[target_indent:])
     if not block:
@@ -221,6 +240,20 @@ def parse_object(lines):
     return obj
 
 def scalar(v):
+    # Strip inline YAML comments before processing
+    if v:
+        if v.startswith('"'):
+            close = v.find('"', 1)
+            if close >= 0:
+                v = v[:close + 1]
+        elif v.startswith("'"):
+            close = v.find("'", 1)
+            if close >= 0:
+                v = v[:close + 1]
+        else:
+            ci = v.find(' #')
+            if ci >= 0:
+                v = v[:ci].rstrip()
     if v in ('', '""', "''"):
         return ''
     if v == '[]':
