@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/smackerel/smackerel/internal/intelligence"
 )
@@ -620,4 +621,63 @@ func TestMeetingBriefDeliveredMarkMustBeDetached(t *testing.T) {
 	if !strings.Contains(err.Error(), "database connection") {
 		t.Errorf("unexpected error: %v", err)
 	}
+}
+
+// IMP-022-R31-001: Scheduler Stop() bounds the cron.Stop() wait.
+// Before the fix, <-cronCtx.Done() had no timeout and would block indefinitely
+// if a cron callback ignored context cancellation.
+func TestStop_CronStopBounded(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+	if err := s.Start(nil, "0 0 * * *"); err != nil {
+		t.Fatalf("unexpected start error: %v", err)
+	}
+
+	// Stop must complete within a reasonable time (the bounded timeouts are
+	// 5s + 5s = 10s max, but with no stuck callbacks it should be near-instant).
+	done := make(chan struct{})
+	go func() {
+		s.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// Stop completed — bounded wait works
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop() did not complete within 3s — cron.Stop() timeout may be unbounded")
+	}
+}
+
+// IMP-022-R31-003: Scheduler Stop() wg.Wait timeout is bounded (not 30s).
+// Verifies that the wg.Wait phase uses a bounded timeout proportional to the
+// shutdown step budget (5s), not the previous 30s which vastly exceeded the
+// 2s shutdown step allocation.
+func TestStop_WgWaitBounded(t *testing.T) {
+	s := New(nil, nil, nil, nil)
+	if err := s.Start(nil, "0 0 * * *"); err != nil {
+		t.Fatalf("unexpected start error: %v", err)
+	}
+
+	// Simulate a stuck background goroutine tracked by the WaitGroup.
+	// This should NOT cause Stop() to block for 30s.
+	s.wg.Add(1)
+	// Intentionally never call s.wg.Done() — this simulates a goroutine
+	// that is stuck and does not respond to the done channel.
+
+	stopDone := make(chan struct{})
+	go func() {
+		s.Stop()
+		close(stopDone)
+	}()
+
+	// Stop should complete within ~10s (5s cron + 5s wg), not 30s.
+	// Use 12s as the upper bound to account for timer jitter.
+	select {
+	case <-stopDone:
+		// Good — Stop returned despite stuck goroutine
+	case <-time.After(12 * time.Second):
+		t.Fatal("Stop() blocked >12s — wg.Wait timeout is likely still 30s instead of 5s")
+	}
+
+	// Clean up the orphaned wg counter so the test doesn't leak
+	s.wg.Done()
 }

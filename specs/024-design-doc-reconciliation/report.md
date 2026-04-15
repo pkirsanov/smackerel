@@ -106,3 +106,42 @@ $ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite|LanceDB/{print NR": "$0}' d
 # state.json scope count matches scopes.md
 $ python3 -c "import json; d=json.load(open('specs/024-design-doc-reconciliation/state.json')); print(len(d['certification']['scopeProgress']))" → 2
 ```
+
+---
+
+## Improve-Existing Pass (2026-04-15, stochastic-quality-sweep round)
+
+### Analysis
+
+An `improve-existing` sweep examined `docs/smackerel.md` for remaining drift between the design document and committed codebase since the original reconciliation (024) and subsequent hardening.
+
+### Findings & Resolutions
+
+| # | Severity | Finding | Resolution |
+|---|----------|---------|------------|
+| I1 | HIGH | §3.1 Passive Ingestion diagram listed `Gmail API`, `Outlook/Teams`, `Notion/Obsidian` as present alongside committed connectors — no distinction between committed and planned | Replaced with two subgraphs: "✅ Committed" (15 actual connectors) and "🔜 Planned" (Gmail SDK, Outlook, Notion/Obsidian) |
+| I2 | HIGH | §3.1 Active Capture diagram listed `Slack Bot`, `Browser Extension`, `Voice Input`, `Mobile Share Sheet` as committed when only Telegram, Discord, Email Forward, and Web UI are | Added 🔜 indicator to planned channels; added `WEB_CAP[Smackerel Web UI]` as committed |
+| I3 | HIGH | §23.4 Architecture tree listed 6 planned connectors (Gmail API, Google Calendar API, Outlook, Slack, Notion, Obsidian) while missing 10 committed ones (alerts, bookmarks, browser, guesthost, hospitable, keep, maps, markets, twitter, weather) | Replaced connector list with all 15 committed connectors by directory name, plus planned connectors labeled with 🔜 |
+| I4 | MEDIUM | "Chi/Gin" references in §3.1, §3.2, §23.3, §23.4, §24-A — codebase only uses Chi (confirmed in `router.go`) | Changed all 5 occurrences from "Chi/Gin" or "Gin or Chi" to "Chi" |
+| I5 | LOW | Phase 1 table had duplicate step: steps 1.8 and 1.10 both "Connect Telegram bot" (introduced during reconciliation) | Removed duplicate, renumbered: 1.8 → Telegram, 1.9 → CLI, 1.10 → Test |
+| I6 | MEDIUM | §3.1 Mermaid node ID collision: `ALERTS` used for both Gov Alerts connector and Contextual Alerts in Surfacing Layer | Renamed connector node to `ALERTS_CONN`, preserved surfacing `ALERTS` |
+| I7 | MEDIUM | §3.2 Layer Separation diagram showed Slack as committed channel alongside Telegram/Discord | Added 🔜 indicator to Slack and Voice in §3.2; reordered to show committed (Telegram, Discord, WebChat) before planned |
+
+### Verification
+
+```
+# No Chi/Gin references remain
+$ grep -c "Chi/Gin\|Gin or Chi" docs/smackerel.md → 0
+
+# No duplicate Phase 1 steps
+$ grep -c "Connect Telegram bot" docs/smackerel.md → 1 (step 1.8 only)
+
+# Only doc file modified
+$ git diff --stat -- docs/smackerel.md → 1 file changed, 67 insertions(+), 35 deletions(-)
+
+# OpenClaw outside §4 (re-verified)
+$ awk check → only TOC link (line 23)
+
+# All unit tests green (docs-only change)
+$ ./smackerel.sh test unit → all PASS
+```

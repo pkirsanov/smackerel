@@ -423,3 +423,32 @@ Feature 022 is complete. All 4 scopes implemented and verified with unit tests. 
 - `internal/api` freshly compiled (2.381s) — search health cache context fix verified
 - `internal/pipeline` freshly compiled (0.387s) — all 6 new UTF-8 truncation tests PASS
 - `internal/nats` compiled (cached, no new tests — timeout constant change)
+
+## Improve-Existing Pass 5 (stochastic sweep R31)
+
+**Date:** 2026-04-15
+**Trigger:** Stochastic quality sweep — improve (child workflow)
+**Scope:** Scheduler shutdown liveness, connector state accuracy
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File(s) | Fix |
+|----|---------|----------|---------|-----|
+| IMP-022-R31-001 | `Scheduler.Stop()` calls `<-cronCtx.Done()` with no timeout — blocks indefinitely if a cron callback ignores `baseCtx` cancellation (e.g., stuck on an unresponsive external API call that doesn't respect context). The STAB-001 fix (baseCtx cancellation) helps, but a callback in a third-party library that ignores context would still block shutdown forever. | Medium | `internal/scheduler/scheduler.go` | Added `select` with 5s timeout around `<-cronCtx.Done()`, matching the bounded-wait pattern already used for `wg.Wait()`. |
+| IMP-022-R31-002 | Connector `state.ItemsSynced` records `len(items)` (total items returned by Sync) instead of the `published` count (items that actually entered the NATS pipeline). When the publisher is failing, the cumulative `items_synced` counter in the state store is inflated, giving a false impression of healthy sync cycles while no artifacts reach the pipeline. | Low | `internal/connector/supervisor.go` | Lifted `published` counter out of the publisher-nil guard block; state now records `published` (0 when no publisher configured, or actual count when publisher is present). |
+| IMP-022-R31-003 | `Scheduler.Stop()` wg.Wait timeout was 30s — vastly exceeds the 2s shutdown step budget allocated by `shutdownAll`. While the leaked goroutine doesn't directly block shutdown (runWithTimeout returns after 2s), the 30s timeout is disproportionate and keeps a goroutine alive for 30s after the scheduler is considered stopped. | Low | `internal/scheduler/scheduler.go` | Reduced from 30s to 5s (matched to cron.Stop timeout for proportionality). |
+
+### New Tests
+
+| Test | File | Purpose |
+|------|------|---------|
+| `TestStop_CronStopBounded` | `internal/scheduler/scheduler_test.go` | Verifies `Stop()` completes within 3s with no stuck callbacks — would fail if `<-cronCtx.Done()` had no timeout |
+| `TestStop_WgWaitBounded` | `internal/scheduler/scheduler_test.go` | Adversarial: simulates stuck background goroutine (never calls `wg.Done()`); verifies `Stop()` returns after ~5s timeout, not 30s |
+| `TestSupervisor_ItemsSynced_RecordsPublishedNotTotal` | `internal/connector/connector_test.go` | Adversarial: publisher fails on 2 of 4 items; verifies `published==2` not `len(items)==4` is the count used for state |
+
+### Evidence
+
+- Unit tests: `./smackerel.sh test unit` — all 33 Go packages PASS, 53 Python tests PASS
+- `internal/scheduler` freshly compiled (5.116s) — both new tests PASS
+- `internal/connector` freshly compiled (14.894s) — new test PASS
+- Explicit verification: `go test -v -count=1 -run "TestStop_CronStopBounded|TestStop_WgWaitBounded|TestSupervisor_ItemsSynced" ./internal/scheduler/... ./internal/connector/...` — all 3 PASS

@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -363,4 +364,24 @@ func makeWebMultipartRequest(t *testing.T, filename string, content []byte) *htt
 	req := httptest.NewRequest(http.MethodPost, "/settings/bookmarks/import", &buf)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	return req
+}
+
+// --- IMP-020-CSP-005: Templates must not use inline event handlers (blocked by CSP) ---
+
+func TestTemplates_NoInlineEventHandlers(t *testing.T) {
+	// CSP script-src without 'unsafe-hashes' blocks inline event handlers
+	// like onclick="...", onload="...", etc. All event binding must use
+	// addEventListener inside a hashed <script> block.
+	if strings.Contains(allTemplates, "onclick=") {
+		t.Error("templates contain onclick= attribute — blocked by CSP without 'unsafe-hashes'; use addEventListener instead")
+	}
+	if strings.Contains(allTemplates, "onload=") {
+		t.Error("templates contain onload= attribute — blocked by CSP; use addEventListener instead")
+	}
+	if strings.Contains(allTemplates, "onerror=") {
+		t.Error("templates contain onerror= attribute — blocked by CSP; use addEventListener instead")
+	}
+	if strings.Contains(allTemplates, "onsubmit=") {
+		t.Error("templates contain onsubmit= attribute — blocked by CSP; use addEventListener instead")
+	}
 }

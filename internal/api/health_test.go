@@ -906,7 +906,7 @@ func TestHealthHandler_UnauthenticatedHidesVersionAndCommit(t *testing.T) {
 		AuthToken:  "secret-token",
 	}
 
-	// Request WITHOUT auth header — should not expose version/commit
+	// Request WITHOUT auth header — should not expose version/commit or services
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	rec := httptest.NewRecorder()
 
@@ -923,6 +923,10 @@ func TestHealthHandler_UnauthenticatedHidesVersionAndCommit(t *testing.T) {
 	if resp.CommitHash != "" {
 		t.Errorf("unauthenticated health must not expose commit hash, got %q", resp.CommitHash)
 	}
+	// SEC-IMPROVE-R2-001: Services map must be hidden from unauthenticated callers
+	if resp.Services != nil {
+		t.Errorf("unauthenticated health must not expose services map, got %d services", len(resp.Services))
+	}
 }
 
 func TestHealthHandler_AuthenticatedShowsVersionAndCommit(t *testing.T) {
@@ -935,7 +939,7 @@ func TestHealthHandler_AuthenticatedShowsVersionAndCommit(t *testing.T) {
 		AuthToken:  "secret-token",
 	}
 
-	// Request WITH valid Bearer token — should expose version/commit
+	// Request WITH valid Bearer token — should expose version/commit and services
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")
 	rec := httptest.NewRecorder()
@@ -952,6 +956,13 @@ func TestHealthHandler_AuthenticatedShowsVersionAndCommit(t *testing.T) {
 	}
 	if resp.CommitHash != "abc123" {
 		t.Errorf("authenticated health should show commit hash, got %q", resp.CommitHash)
+	}
+	// SEC-IMPROVE-R2-001: Services map must be present for authenticated callers
+	if resp.Services == nil {
+		t.Error("authenticated health should include services map")
+	}
+	if _, ok := resp.Services["api"]; !ok {
+		t.Error("authenticated health should include api service status")
 	}
 }
 

@@ -317,9 +317,11 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 			lastCursor = newCursor
 		}
 
-		// Publish returned artifacts to the processing pipeline
+		// Publish returned artifacts to the processing pipeline.
+		// Track published count separately from total items so state accurately
+		// reflects items that entered the pipeline (IMP-022-R31-002).
+		published := 0
 		if s.publisher != nil && len(items) > 0 {
-			published := 0
 			for _, item := range items {
 				if _, pubErr := s.publisher.PublishRawArtifact(connCtx, item); pubErr != nil {
 					slog.Warn("failed to publish connector artifact",
@@ -345,7 +347,7 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 				SourceID:    id,
 				Enabled:     true,
 				SyncCursor:  newCursor,
-				ItemsSynced: len(items),
+				ItemsSynced: published,
 			}
 			if err := s.stateStore.Save(connCtx, saveState); err != nil {
 				slog.Warn("failed to save connector sync state", "connector", id, "error", err)

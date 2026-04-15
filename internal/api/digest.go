@@ -9,6 +9,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// DigestResponse is the JSON response for GET /api/digest.
+type DigestResponse struct {
+	Date        string `json:"date"`
+	Text        string `json:"text"`
+	WordCount   int    `json:"word_count"`
+	IsQuiet     bool   `json:"is_quiet"`
+	GeneratedAt string `json:"generated_at"`
+}
+
 // DigestHandler handles GET /api/digest.
 func (d *Dependencies) DigestHandler(w http.ResponseWriter, r *http.Request) {
 	// Check for date parameter and validate format first (before service check)
@@ -36,11 +45,11 @@ func (d *Dependencies) DigestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"date":         result.DigestDate.Format("2006-01-02"),
-		"text":         result.DigestText,
-		"word_count":   result.WordCount,
-		"is_quiet":     result.IsQuiet,
-		"generated_at": result.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	writeJSON(w, http.StatusOK, DigestResponse{
+		Date:        result.DigestDate.Format("2006-01-02"),
+		Text:        result.DigestText,
+		WordCount:   result.WordCount,
+		IsQuiet:     result.IsQuiet,
+		GeneratedAt: result.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	})
 }

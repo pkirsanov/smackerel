@@ -550,3 +550,74 @@ Updated `normalizeGDACSAlert()` to validate parsed lat/lon with `isFiniteCoord()
 
 - `./smackerel.sh test unit` — all Go and Python tests pass (alerts package: 2.233s, ran fresh)
 - `./smackerel.sh lint` — clean, no errors
+
+---
+
+## Improve-Existing Report — 2026-04-15
+
+**Trigger:** `improve-existing` (stochastic-quality-sweep child workflow)
+**Mode:** `improve-existing`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Best-practice analysis of the Government Alerts connector (1770 LOC, 4749 test LOC). Found 3 improvements: NWS API query lacked a `limit` parameter (risking unbounded responses), NWS `effective`/`expires` timestamps were not stored in artifact metadata (losing alert lifecycle data), and content-field sanitization truncated safety-critical description/instruction text at 1024 chars (matching short-field limits). Also fixed a latent test fragility exposed by the NWS URL change. All 3 improvements implemented with 7 new tests.
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| IMP-017-IMPROVE-006 | API Robustness | Medium | `fetchNWSAlerts()` URL lacked a `limit` parameter. While USGS queries use `limit=20`, NWS queries had no cap, risking unbounded response sizes under pathological conditions. The 10MB `LimitReader` is a safety net, but a server-side limit reduces bandwidth and parse time. | Fixed |
+| IMP-017-IMPROVE-007 | Data Completeness | Medium | `normalizeNWSAlert()` parsed `Effective` and `Expires` timestamps into the `NWSAlert` struct but did not propagate them to artifact metadata. This prevents temporal queries ("were there active alerts during my trip?") and alert lifecycle display in digests. Spec R-004 requires alert lifecycle management. | Fixed |
+| IMP-017-IMPROVE-008 | Safety Information Loss | High | `sanitizeStringField()` truncated ALL fields at `maxStringFieldLen=1024` including NWS Description and Instruction, tsunami Summary, wildfire Description, and GDACS Description. NWS tornado descriptions can be 3000+ chars with county-by-county impact, tornado path details, and shelter instructions. Truncation at 1024 silently loses actionable safety information. | Fixed |
+| IMP-017-IMPROVE-009 | Test Fragility | Low | `TestConnect_AfterClose_ResetsClosedFlag` did not disable `source_weather`, causing it to hit the real NWS API. The `limit=50` URL addition invalidated the test cache and exposed this. | Fixed |
+
+### Remediation
+
+**IMP-017-IMPROVE-006 Fix — NWS Limit Parameter:**
+- Added `&limit=50` to the NWS fetch URL in `fetchNWSAlerts()`
+- Consistent with USGS which uses `limit=20`
+- 50 alerts per location per poll is generous for point-based queries
+
+**IMP-017-IMPROVE-007 Fix — NWS Lifecycle Timestamps:**
+- `normalizeNWSAlert()` now stores `effective` and `expires` as RFC3339 strings in artifact metadata
+- Zero-value timestamps are omitted from metadata (no spurious `0001-01-01` values)
+- Enables temporal queries and alert expiration display
+
+**IMP-017-IMPROVE-008 Fix — Content Field Sanitization:**
+- Introduced `maxContentFieldLen = 8192` constant for long-form content fields
+- Added `sanitizeContentField()` using the higher limit
+- Applied to: NWS Headline/Description/Instruction, tsunami Summary, wildfire Description, GDACS Description
+- Short fields (ID, event, severity, place, area) retain existing `maxStringFieldLen = 1024`
+- Both functions share a `sanitizeField(s, limit)` implementation
+
+**IMP-017-IMPROVE-009 Fix — Test Fragility:**
+- Added `"source_weather": false` to `TestConnect_AfterClose_ResetsClosedFlag` config
+- Prevents the test from hitting real NWS API when network-dependent test caching invalidates
+
+### New Tests (7)
+
+| Test | Finding | Description |
+|------|---------|-------------|
+| `TestNormalizeNWSAlert_ExpiresInMetadata` | IMP-017-IMPROVE-007 | Verifies effective/expires RFC3339 strings in NWS artifact metadata |
+| `TestNormalizeNWSAlert_ZeroTimesOmitted` | IMP-017-IMPROVE-007 | Verifies zero-value times are not stored in metadata |
+| `TestNormalizeNWSAlert` (updated) | IMP-017-IMPROVE-007 | Existing test now checks for effective/expires keys |
+| `TestFetchNWSAlerts_PointInURL` (updated) | IMP-017-IMPROVE-006 | Existing test now checks for limit=50 in URL |
+| `TestSanitizeContentField_HigherLimit` | IMP-017-IMPROVE-008 | 3000-char input preserved by sanitizeContentField, truncated by sanitizeStringField |
+| `TestSanitizeContentField_ControlChars` | IMP-017-IMPROVE-008 | Content field sanitization still strips control characters |
+| `TestNWSDescription_LongContentPreserved` | IMP-017-IMPROVE-008 | E2E: long NWS description survives fetch → normalize pipeline above 1024 chars |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/alerts/alerts.go` | Added `maxContentFieldLen`, `sanitizeContentField()`, `sanitizeField()`. NWS URL `limit=50`. NWS metadata `effective`/`expires`. Applied `sanitizeContentField` to Description/Instruction/Summary fields across all 4 XML/JSON sources. |
+| `internal/connector/alerts/alerts_test.go` | Added 5 new test functions + updated 2 existing tests. Fixed `TestConnect_AfterClose_ResetsClosedFlag` fragility. |
+| `specs/017-gov-alerts-connector/report.md` | Added this improve-existing report |
+
+### Validation
+
+- `./smackerel.sh test unit` — all 35 Go packages pass, all Python tests pass
+- `./smackerel.sh check` — clean
+- No existing tests broken or weakened

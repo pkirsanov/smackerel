@@ -248,7 +248,7 @@ func toPipelineForwardMeta(fm *ForwardMetaPayload) *pipeline.ForwardMetaPayload 
 // decodeJSONBody validates Content-Type, limits body size to 1MB, and decodes
 // JSON into dst. Returns true on success. On failure it writes an error
 // response to w and returns false so callers can simply return.
-func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst interface{}, errCode, errMsg string) bool {
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any, errCode, errMsg string) bool {
 	ct := r.Header.Get("Content-Type")
 	if ct != "" && !strings.HasPrefix(ct, "application/json") {
 		writeError(w, http.StatusUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json")
@@ -270,12 +270,40 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 // writeJSON writes a JSON response with the given status code.
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Error("failed to encode JSON response", "error", err)
 	}
+}
+
+// RecentItem represents a single recent artifact in the response.
+type RecentItem struct {
+	ID           string `json:"artifact_id"`
+	Title        string `json:"title"`
+	ArtifactType string `json:"artifact_type"`
+	Summary      string `json:"summary"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// RecentResponse is the JSON response for GET /api/recent.
+type RecentResponse struct {
+	Results []RecentItem `json:"results"`
+}
+
+// ArtifactDetailResponse is the JSON response for GET /api/artifact/{id}.
+type ArtifactDetailResponse struct {
+	ArtifactID     string `json:"artifact_id"`
+	Title          string `json:"title"`
+	ArtifactType   string `json:"artifact_type"`
+	Summary        string `json:"summary"`
+	SourceURL      string `json:"source_url"`
+	Sentiment      string `json:"sentiment"`
+	SourceQuality  string `json:"source_quality"`
+	ProcessingTier string `json:"processing_tier"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
 }
 
 // RecentHandler handles GET /api/recent.
@@ -302,14 +330,6 @@ func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type RecentItem struct {
-		ID           string `json:"artifact_id"`
-		Title        string `json:"title"`
-		ArtifactType string `json:"artifact_type"`
-		Summary      string `json:"summary"`
-		CreatedAt    string `json:"created_at"`
-	}
-
 	results := make([]RecentItem, 0, len(items))
 	for _, a := range items {
 		results = append(results, RecentItem{
@@ -321,8 +341,8 @@ func (d *Dependencies) RecentHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"results": results,
+	writeJSON(w, http.StatusOK, RecentResponse{
+		Results: results,
 	})
 }
 
@@ -352,17 +372,17 @@ func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"artifact_id":     a.ID,
-		"title":           a.Title,
-		"artifact_type":   a.ArtifactType,
-		"summary":         a.Summary,
-		"source_url":      a.SourceURL,
-		"sentiment":       a.Sentiment,
-		"source_quality":  a.SourceQuality,
-		"processing_tier": a.ProcessingTier,
-		"created_at":      a.CreatedAt.Format(time.RFC3339),
-		"updated_at":      a.UpdatedAt.Format(time.RFC3339),
+	writeJSON(w, http.StatusOK, ArtifactDetailResponse{
+		ArtifactID:     a.ID,
+		Title:          a.Title,
+		ArtifactType:   a.ArtifactType,
+		Summary:        a.Summary,
+		SourceURL:      a.SourceURL,
+		Sentiment:      a.Sentiment,
+		SourceQuality:  a.SourceQuality,
+		ProcessingTier: a.ProcessingTier,
+		CreatedAt:      a.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:      a.UpdatedAt.Format(time.RFC3339),
 	})
 }
 

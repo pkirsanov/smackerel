@@ -29,8 +29,13 @@ const knownEvictionAge = 7 * 24 * time.Hour
 // userAgent identifies outbound requests to government APIs.
 const userAgent = "Smackerel/1.0 (gov-alerts-connector)"
 
-// maxStringFieldLen caps untrusted string fields from external APIs to prevent memory abuse.
+// maxStringFieldLen caps untrusted short string fields from external APIs to prevent memory abuse.
 const maxStringFieldLen = 1024
+
+// maxContentFieldLen caps untrusted content/description fields that may contain multi-paragraph
+// safety-critical information (e.g., NWS tornado paths, shelter instructions). Higher than
+// maxStringFieldLen to avoid losing actionable safety details (IMP-017-IMPROVE-008).
+const maxContentFieldLen = 8192
 
 // minMagnitudeLower is the floor for configured minimum earthquake magnitude.
 const minMagnitudeLower = 0.0
@@ -616,12 +621,24 @@ func isFinitePositiveRadius(r float64) bool {
 // sanitizeStringField strips control characters and truncates to maxStringFieldLen
 // to prevent log injection and memory abuse from untrusted API responses.
 func sanitizeStringField(s string) string {
+	return sanitizeField(s, maxStringFieldLen)
+}
+
+// sanitizeContentField strips control characters and truncates to maxContentFieldLen.
+// Used for description/instruction fields that may contain multi-paragraph safety-critical
+// information (IMP-017-IMPROVE-008).
+func sanitizeContentField(s string) string {
+	return sanitizeField(s, maxContentFieldLen)
+}
+
+// sanitizeField strips control characters and truncates to the given limit.
+func sanitizeField(s string, limit int) string {
 	var b strings.Builder
 	for _, r := range s {
 		if unicode.IsControl(r) && r != ' ' {
 			continue // strip control characters except space
 		}
-		if b.Len() >= maxStringFieldLen {
+		if b.Len() >= limit {
 			break
 		}
 		b.WriteRune(r)
@@ -819,7 +836,7 @@ type NWSAlert struct {
 
 // fetchNWSAlerts fetches active weather alerts from the NWS API for a given point.
 func (c *Connector) fetchNWSAlerts(ctx context.Context, lat, lon float64) ([]NWSAlert, error) {
-	reqURL := fmt.Sprintf("%s/alerts/active?point=%.4f,%.4f&status=actual", c.nwsBaseURL, lat, lon)
+	reqURL := fmt.Sprintf("%s/alerts/active?point=%.4f,%.4f&status=actual&limit=50", c.nwsBaseURL, lat, lon)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
@@ -876,9 +893,9 @@ func (c *Connector) fetchNWSAlerts(ctx context.Context, lat, lon float64) ([]NWS
 			Severity:    sanitizeStringField(f.Properties.Severity),
 			Certainty:   sanitizeStringField(f.Properties.Certainty),
 			Urgency:     sanitizeStringField(f.Properties.Urgency),
-			Headline:    sanitizeStringField(f.Properties.Headline),
-			Description: sanitizeStringField(f.Properties.Description),
-			Instruction: sanitizeStringField(f.Properties.Instruction),
+			Headline:    sanitizeContentField(f.Properties.Headline),
+			Description: sanitizeContentField(f.Properties.Description),
+			Instruction: sanitizeContentField(f.Properties.Instruction),
 			AreaDesc:    sanitizeStringField(f.Properties.AreaDesc),
 		}
 
@@ -958,6 +975,28 @@ func normalizeNWSAlert(alert NWSAlert, match *ProximityMatch) connector.RawArtif
 		rawContent += "\n\nInstruction: " + alert.Instruction
 	}
 
+	metadata := map[string]interface{}{
+		"alert_id":         alert.ID,
+		"source":           "nws",
+		"event_type":       eventType,
+		"event":            alert.Event,
+		"severity":         severity,
+		"certainty":        alert.Certainty,
+		"urgency":          alert.Urgency,
+		"area_desc":        alert.AreaDesc,
+		"distance_km":      match.DistanceKm,
+		"nearest_location": match.LocationName,
+		"processing_tier":  tier,
+	}
+	// Store effective/expires timestamps for alert lifecycle management
+	// and temporal queries (IMP-017-IMPROVE-007).
+	if !alert.Effective.IsZero() {
+		metadata["effective"] = alert.Effective.Format(time.RFC3339)
+	}
+	if !alert.Expires.IsZero() {
+		metadata["expires"] = alert.Expires.Format(time.RFC3339)
+	}
+
 	return connector.RawArtifact{
 		SourceID:    "gov-alerts",
 		SourceRef:   alert.ID,
@@ -965,20 +1004,8 @@ func normalizeNWSAlert(alert NWSAlert, match *ProximityMatch) connector.RawArtif
 		Title:       fmt.Sprintf("%s — %s (near %s)", alert.Event, alert.AreaDesc, match.LocationName),
 		RawContent:  rawContent,
 		URL:         "",
-		Metadata: map[string]interface{}{
-			"alert_id":         alert.ID,
-			"source":           "nws",
-			"event_type":       eventType,
-			"event":            alert.Event,
-			"severity":         severity,
-			"certainty":        alert.Certainty,
-			"urgency":          alert.Urgency,
-			"area_desc":        alert.AreaDesc,
-			"distance_km":      match.DistanceKm,
-			"nearest_location": match.LocationName,
-			"processing_tier":  tier,
-		},
-		CapturedAt: capturedAt,
+		Metadata:    metadata,
+		CapturedAt:  capturedAt,
 	}
 }
 
@@ -1053,7 +1080,7 @@ func (c *Connector) fetchTsunamiAlerts(ctx context.Context) ([]TsunamiAlert, err
 		alert := TsunamiAlert{
 			ID:       sanitizedID,
 			Title:    sanitizeStringField(entry.Title),
-			Summary:  sanitizeStringField(entry.Summary),
+			Summary:  sanitizeContentField(entry.Summary),
 			Link:     sanitizeExternalURL(sanitizeStringField(entry.Link.Href)),
 			Severity: classifyTsunamiSeverity(entry.Title),
 			GeoPoint: sanitizeStringField(entry.GeoPoint),
@@ -1320,7 +1347,7 @@ func (c *Connector) fetchWildfireAlerts(ctx context.Context) ([]WildfireAlert, e
 		alert := WildfireAlert{
 			ID:          sanitizedID,
 			Title:       sanitizeStringField(item.Title),
-			Description: sanitizeStringField(item.Description),
+			Description: sanitizeContentField(item.Description),
 			Link:        sanitizeExternalURL(sanitizeStringField(item.Link)),
 			Severity:    classifyWildfireSeverity(item.Title, item.Description),
 		}
@@ -1583,7 +1610,7 @@ func (c *Connector) fetchGDACSAlerts(ctx context.Context) ([]GDACSAlert, error) 
 		alert := GDACSAlert{
 			ID:          sanitizedID,
 			Title:       sanitizeStringField(item.Title),
-			Description: sanitizeStringField(item.Description),
+			Description: sanitizeContentField(item.Description),
 			Link:        sanitizeExternalURL(sanitizeStringField(item.Link)),
 			GeoPoint:    sanitizeStringField(item.GeoPoint),
 			Severity:    classifyGDACSAlertLevel(item.AlertLevel),

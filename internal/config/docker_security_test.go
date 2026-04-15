@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -351,5 +353,54 @@ func TestDockerCompose_ImportVolumesMounted(t *testing.T) {
 					tc.connector, tc.containerPath)
 			}
 		})
+	}
+}
+
+// --- IMP-020-CSP-004: CSP script hash in router.go matches actual inline script in templates ---
+
+func TestCSP_ScriptHashMatchesInlineScript(t *testing.T) {
+	// The securityHeadersMiddleware CSP contains a sha256 hash that must match
+	// the inline <script> block in templates.go. If the script content changes
+	// but the hash is not updated, the CSP will block the inline script.
+
+	routerCode := readRepoFile(t, "internal/api/router.go")
+	templateCode := readRepoFile(t, "internal/web/templates.go")
+
+	// Extract the sha256 hash from the CSP in router.go
+	hashPrefix := "'sha256-"
+	hashIdx := strings.Index(routerCode, hashPrefix)
+	if hashIdx == -1 {
+		t.Fatal("router.go CSP does not contain a sha256 hash — inline scripts will be blocked")
+	}
+	hashStart := hashIdx + len(hashPrefix)
+	hashEnd := strings.Index(routerCode[hashStart:], "'")
+	if hashEnd == -1 {
+		t.Fatal("malformed sha256 hash in router.go CSP — missing closing quote")
+	}
+	cspHash := routerCode[hashStart : hashStart+hashEnd]
+
+	// Extract the inline script content from templates.go
+	scriptOpen := "<script>"
+	scriptClose := "</script>"
+	// Find the first (and should be only) inline script in templates
+	soIdx := strings.Index(templateCode, scriptOpen)
+	if soIdx == -1 {
+		t.Fatal("templates.go does not contain an inline <script> block")
+	}
+	scIdx := strings.Index(templateCode[soIdx:], scriptClose)
+	if scIdx == -1 {
+		t.Fatal("templates.go inline <script> has no closing </script>")
+	}
+	scriptContent := templateCode[soIdx+len(scriptOpen) : soIdx+scIdx]
+
+	// Compute SHA-256 of the script content
+	hash := sha256.Sum256([]byte(scriptContent))
+	computedHash := base64.StdEncoding.EncodeToString(hash[:])
+
+	if computedHash != cspHash {
+		t.Errorf("CSP script hash mismatch!\n  CSP hash:      %s\n  Computed hash: %s\n  "+
+			"The inline script in templates.go was changed but the CSP hash in router.go was not updated.\n  "+
+			"Run: echo -n '<script content>' | openssl dgst -sha256 -binary | base64",
+			cspHash, computedHash)
 	}
 }
