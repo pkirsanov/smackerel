@@ -294,6 +294,7 @@ func TestSecurityHeaders_Present(t *testing.T) {
 		"X-Content-Type-Options":  "nosniff",
 		"Referrer-Policy":         "strict-origin-when-cross-origin",
 		"Permissions-Policy":      "camera=(), microphone=(), geolocation=()",
+		"Cache-Control":           "no-store",
 	}
 
 	for header, expectedSubstr := range expectedHeaders {

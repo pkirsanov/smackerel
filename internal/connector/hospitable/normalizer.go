@@ -151,13 +151,21 @@ func NormalizeMessage(m Message, reservationID string, config HospitableConfig) 
 	m.Sender = stringutil.SanitizeControlChars(m.Sender)
 	m.Body = stringutil.SanitizeControlChars(m.Body)
 
+	// IMP-I-001: Use the parameter as authoritative reservation ID (it comes
+	// from the sync loop's per-reservation fetch). Fall back to the embedded
+	// field only when the parameter is empty to fix the dual-source-of-truth
+	// issue identified in H-003.
+	if reservationID == "" {
+		reservationID = m.ReservationID
+	}
+
 	role := classifySender(m)
 	title := fmt.Sprintf("Message from %s (%s)", m.Sender, role)
 	content := buildMessageContent(m, reservationID)
 
 	metadata := map[string]interface{}{
 		"message_id":      m.ID,
-		"reservation_id":  m.ReservationID,
+		"reservation_id":  reservationID,
 		"sender":          m.Sender,
 		"sender_role":     role,
 		"is_automated":    m.IsAutomated,
@@ -171,11 +179,19 @@ func NormalizeMessage(m Message, reservationID string, config HospitableConfig) 
 		capturedAt = time.Now().UTC()
 	}
 
+	// IMP-I-002: Generate app URL for messages pointing to the reservation's
+	// conversation page, consistent with NormalizeReservation URL generation.
+	var messageURL string
+	if reservationID != "" && strings.Contains(config.BaseURL, "api.hospitable.com") {
+		messageURL = "https://app.hospitable.com/reservations/" + url.PathEscape(reservationID)
+	}
+
 	return connector.RawArtifact{
 		SourceID:    "hospitable",
 		SourceRef:   "message:" + m.ID,
 		ContentType: "message/str-conversation",
 		Title:       title,
+		URL:         messageURL,
 		RawContent:  content,
 		Metadata:    metadata,
 		CapturedAt:  capturedAt,
@@ -216,11 +232,19 @@ func NormalizeReview(r Review, propertyName string, config HospitableConfig) con
 		capturedAt = time.Now().UTC()
 	}
 
+	// IMP-I-003: Generate app URL for reviews pointing to the reservation page
+	// when a ReservationID is available, consistent with NormalizeReservation.
+	var reviewURL string
+	if r.ReservationID != "" && strings.Contains(config.BaseURL, "api.hospitable.com") {
+		reviewURL = "https://app.hospitable.com/reservations/" + url.PathEscape(r.ReservationID)
+	}
+
 	return connector.RawArtifact{
 		SourceID:    "hospitable",
 		SourceRef:   "review:" + r.ID,
 		ContentType: "review/str-guest",
 		Title:       title,
+		URL:         reviewURL,
 		RawContent:  content,
 		Metadata:    metadata,
 		CapturedAt:  capturedAt,

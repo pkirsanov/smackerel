@@ -57,27 +57,46 @@ func ParseChromeJSON(data []byte) ([]Bookmark, error) {
 }
 
 // ParseNetscapeHTML parses the Netscape HTML bookmark format (exported by most browsers).
+// IMP-009-R-001: Uses stack-based folder tracking so nested <DL>/<H3> structures
+// produce correct hierarchical folder paths (e.g. "Tech/Go" instead of just "Go").
 func ParseNetscapeHTML(data []byte) ([]Bookmark, error) {
 	var bookmarks []Bookmark
 	content := string(data)
 
-	currentFolder := ""
+	var folderStack []string
+	pendingFolder := ""
 	lines := strings.Split(content, "\n")
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
+		// Detect folder headers — the next <DL> enters this folder.
+		// F-CHAOS-005: Decode HTML entities in folder names.
 		if matches := netscapeFolderRe.FindStringSubmatch(line); len(matches) > 1 {
-			// F-CHAOS-005: Decode HTML entities in folder names.
-			currentFolder = html.UnescapeString(matches[1])
-			continue
+			pendingFolder = html.UnescapeString(matches[1])
 		}
 
+		// Detect <DL> — push pending folder onto the hierarchy stack.
+		if strings.HasPrefix(line, "<DL") {
+			if pendingFolder != "" {
+				folderStack = append(folderStack, pendingFolder)
+				pendingFolder = ""
+			}
+		}
+
+		// Detect </DL> — pop the innermost folder from the stack.
+		if strings.HasPrefix(line, "</DL") {
+			if len(folderStack) > 0 {
+				folderStack = folderStack[:len(folderStack)-1]
+			}
+		}
+
+		// Detect bookmark links — assign the current folder hierarchy.
 		if matches := netscapeLinkRe.FindStringSubmatch(line); len(matches) > 2 {
 			b := Bookmark{
 				URL:    html.UnescapeString(matches[1]),
 				Title:  html.UnescapeString(matches[2]),
-				Folder: currentFolder,
+				Folder: strings.Join(folderStack, "/"),
 			}
 			// Parse ADD_DATE attribute (unix timestamp) when present.
 			if dateMatch := netscapeAddDateRe.FindStringSubmatch(line); len(dateMatch) > 1 {

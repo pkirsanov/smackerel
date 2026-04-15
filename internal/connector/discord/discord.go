@@ -73,6 +73,12 @@ const (
 	maxResponseBody = 10 * 1024 * 1024 // 10MB
 	// httpClientTimeout is the default timeout for Discord API HTTP requests.
 	httpClientTimeout = 30 * time.Second
+	// maxConnsPerHost limits concurrent connections to Discord's API to prevent
+	// file descriptor exhaustion during high-backfill-limit syncs with many channels.
+	maxConnsPerHost = 10
+	// maxErrorBodyExcerpt is the max bytes of an API error response body
+	// included in error messages for diagnostics.
+	maxErrorBodyExcerpt = 256
 )
 
 // Compile-time interface check.
@@ -122,11 +128,18 @@ type ChannelCursors map[string]string
 // New creates a new Discord connector.
 func New(id string) *Connector {
 	return &Connector{
-		id:         id,
-		health:     connector.HealthDisconnected,
-		cursors:    make(ChannelCursors),
-		limiter:    NewRateLimiter(),
-		httpClient: &http.Client{Timeout: httpClientTimeout},
+		id:      id,
+		health:  connector.HealthDisconnected,
+		cursors: make(ChannelCursors),
+		limiter: NewRateLimiter(),
+		httpClient: &http.Client{
+			Timeout: httpClientTimeout,
+			Transport: &http.Transport{
+				MaxConnsPerHost:     maxConnsPerHost,
+				MaxIdleConnsPerHost: maxConnsPerHost,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
 	}
 }
 
@@ -388,7 +401,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		tier := channelTier[ev.Message.ChannelID]
 		artifact := normalizeMessage(ev.Message, tier, cfgSnapshot.CaptureCommands)
 		allArtifacts = append(allArtifacts, artifact)
-		if ev.Message.ID > localCursors[ev.Message.ChannelID] {
+		if snowflakeGreater(ev.Message.ID, localCursors[ev.Message.ChannelID]) {
 			localCursors[ev.Message.ChannelID] = ev.Message.ID
 		}
 	}
@@ -428,7 +441,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				seen[msg.ID] = struct{}{}
 				artifact := normalizeMessage(msg, chCfg.ProcessingTier, cfgSnapshot.CaptureCommands)
 				allArtifacts = append(allArtifacts, artifact)
-				if msg.ID > localCursors[chID] {
+				if snowflakeGreater(msg.ID, localCursors[chID]) {
 					localCursors[chID] = msg.ID
 				}
 			}
@@ -650,7 +663,7 @@ func (c *Connector) fetchChannelMessages(ctx context.Context, apiURL, botToken, 
 			}
 			dm := apiMessageToInternal(msg)
 			allMessages = append(allMessages, dm)
-			if dm.ID > maxID {
+			if snowflakeGreater(dm.ID, maxID) {
 				maxID = dm.ID
 			}
 		}
@@ -744,7 +757,7 @@ func (c *Connector) fetchActiveThreads(ctx context.Context, apiURL, botToken, gu
 		allMessages = append(allMessages, msgs...)
 		// Advance thread cursor
 		for _, msg := range msgs {
-			if msg.ID > cursors[thread.ID] {
+			if snowflakeGreater(msg.ID, cursors[thread.ID]) {
 				cursors[thread.ID] = msg.ID
 			}
 		}
@@ -785,7 +798,7 @@ func (c *Connector) fetchArchivedThreads(ctx context.Context, apiURL, botToken, 
 		}
 		allMessages = append(allMessages, msgs...)
 		for _, msg := range msgs {
-			if msg.ID > cursors[thread.ID] {
+			if snowflakeGreater(msg.ID, cursors[thread.ID]) {
 				cursors[thread.ID] = msg.ID
 			}
 		}
@@ -957,22 +970,44 @@ func (c *Connector) doDiscordRequest(ctx context.Context, method, apiURL, botTok
 		}
 
 		if resp.StatusCode == 401 {
-			return nil, fmt.Errorf("discord API unauthorized (401)")
+			return nil, fmt.Errorf("discord API unauthorized (401): %s", truncateErrorBody(body))
 		}
 		if resp.StatusCode == 403 {
-			return nil, fmt.Errorf("discord API forbidden (403)")
+			return nil, fmt.Errorf("discord API forbidden (403): %s", truncateErrorBody(body))
 		}
 		if resp.StatusCode == 404 {
-			return nil, fmt.Errorf("discord API not found (404): %s", path)
+			return nil, fmt.Errorf("discord API not found (404) %s: %s", path, truncateErrorBody(body))
 		}
 		if resp.StatusCode >= 400 {
-			return nil, fmt.Errorf("discord API error: status %d", resp.StatusCode)
+			return nil, fmt.Errorf("discord API error status %d: %s", resp.StatusCode, truncateErrorBody(body))
 		}
 
 		return body, nil
 	}
 
 	return nil, fmt.Errorf("discord request exhausted retries")
+}
+
+// truncateErrorBody returns a sanitized, truncated excerpt of a Discord API
+// error response body for inclusion in error messages. Control characters are
+// stripped and the output is capped at maxErrorBodyExcerpt bytes.
+func truncateErrorBody(body []byte) string {
+	s := sanitizeControlChars(string(body))
+	if len(s) > maxErrorBodyExcerpt {
+		return stringutil.TruncateUTF8(s, maxErrorBodyExcerpt)
+	}
+	return s
+}
+
+// snowflakeGreater returns true if snowflake ID a is numerically greater than b.
+// Both a and b must be non-empty numeric strings (validated by isValidSnowflake).
+// Uses length-first comparison to avoid lexicographic ordering bugs for
+// variable-length numeric strings (e.g., "99" > "100" is wrong lexicographically).
+func snowflakeGreater(a, b string) bool {
+	if len(a) != len(b) {
+		return len(a) > len(b)
+	}
+	return a > b
 }
 
 // updateRateLimits parses Discord rate limit headers and updates the rate limiter.

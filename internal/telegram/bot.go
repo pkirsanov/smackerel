@@ -755,7 +755,12 @@ func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) er
 	}
 	result, err := b.callCapture(ctx, body)
 	if err != nil {
-		b.reply(buf.Key.chatID, "? Failed to save conversation. Try again.")
+		source := buf.SourceChat
+		if source == "" {
+			source = "forwarded conversation"
+		}
+		b.reply(buf.Key.chatID, fmt.Sprintf("? Failed to save %s (%d messages). Try again.",
+			source, len(buf.Messages)))
 		return err
 	}
 

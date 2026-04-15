@@ -13,8 +13,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
 )
+
+// mockDigestGen implements DigestGenerator for testing.
+type mockDigestGen struct {
+	result *digest.Digest
+	err    error
+}
+
+func (m *mockDigestGen) GetLatest(_ context.Context, _ string) (*digest.Digest, error) {
+	return m.result, m.err
+}
 
 func TestSearchHandler_EmptyQuery(t *testing.T) {
 	deps := &Dependencies{
@@ -175,6 +187,64 @@ func TestDigestHandler_InvalidDateFormat(t *testing.T) {
 				t.Errorf("date=%q: expected %d, got %d", tt.date, tt.code, rec.Code)
 			}
 		})
+	}
+}
+
+// === IMPROVE-002-SQS-002: DigestHandler differentiates not-found from database errors ===
+
+func TestDigestHandler_NotFound_Returns404(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		DigestGen: &mockDigestGen{
+			err: fmt.Errorf("get digest: %w", pgx.ErrNoRows),
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/digest?date=2026-04-01", nil)
+	rec := httptest.NewRecorder()
+
+	deps.DigestHandler(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for no-rows, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Error.Code != "NO_DIGEST" {
+		t.Errorf("expected error code NO_DIGEST, got %q", resp.Error.Code)
+	}
+}
+
+func TestDigestHandler_DBError_Returns500(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		DigestGen: &mockDigestGen{
+			err: fmt.Errorf("get digest: connection refused"),
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/digest", nil)
+	rec := httptest.NewRecorder()
+
+	deps.DigestHandler(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for DB error, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Error.Code != "DIGEST_ERROR" {
+		t.Errorf("expected error code DIGEST_ERROR, got %q", resp.Error.Code)
 	}
 }
 

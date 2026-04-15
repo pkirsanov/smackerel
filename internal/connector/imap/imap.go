@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -101,8 +102,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	newCursor := cursor
 
 	for _, msg := range messages {
-		// Skip messages at or before cursor
-		if msg.UID <= cursor && cursor != "" {
+		// Skip messages at or before cursor.
+		// UIDs are numeric in IMAP; compare as integers to avoid
+		// string-ordering bugs (e.g. "9" > "100" lexicographically).
+		if cursor != "" && compareUIDs(msg.UID, cursor) <= 0 {
 			continue
 		}
 
@@ -147,7 +150,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			CapturedAt:  msg.Date,
 		})
 
-		if msg.UID > newCursor {
+		if compareUIDs(msg.UID, newCursor) > 0 {
 			newCursor = msg.UID
 		}
 	}
@@ -505,18 +508,23 @@ func ParseQualifiers(q map[string]interface{}) QualifierConfig {
 }
 
 // AssignTier determines processing tier for an email based on qualifiers.
+// Comparisons are case-insensitive to handle IMAP label variations (e.g.
+// Gmail returns "IMPORTANT" while user config may say "important").
 func AssignTier(from string, labels []string, qualifiers QualifierConfig) string {
+	fromLower := strings.ToLower(from)
+
 	// Check skip domains first
 	for _, d := range qualifiers.SkipDomains {
-		if strings.HasSuffix(from, "@"+d) {
+		if strings.HasSuffix(fromLower, "@"+strings.ToLower(d)) {
 			return "skip"
 		}
 	}
 
 	// Check skip labels
 	for _, l := range labels {
+		ll := strings.ToLower(l)
 		for _, sl := range qualifiers.SkipLabels {
-			if l == sl {
+			if ll == strings.ToLower(sl) {
 				return "metadata"
 			}
 		}
@@ -524,15 +532,16 @@ func AssignTier(from string, labels []string, qualifiers QualifierConfig) string
 
 	// Check priority senders
 	for _, s := range qualifiers.PrioritySenders {
-		if s == from {
+		if strings.EqualFold(s, from) {
 			return "full"
 		}
 	}
 
 	// Check priority labels
 	for _, l := range labels {
+		ll := strings.ToLower(l)
 		for _, pl := range qualifiers.PriorityLabels {
-			if l == pl {
+			if ll == strings.ToLower(pl) {
 				return "full"
 			}
 		}
@@ -561,6 +570,25 @@ func ExtractActionItems(text string) []string {
 		}
 	}
 	return items
+}
+
+// compareUIDs compares two IMAP UID strings numerically.
+// Falls back to lexicographic comparison when UIDs are not purely numeric.
+func compareUIDs(a, b string) int {
+	na, errA := strconv.ParseInt(a, 10, 64)
+	nb, errB := strconv.ParseInt(b, 10, 64)
+	if errA == nil && errB == nil {
+		switch {
+		case na < nb:
+			return -1
+		case na > nb:
+			return 1
+		default:
+			return 0
+		}
+	}
+	// Fallback: lexicographic comparison for non-numeric UIDs (e.g. Gmail API IDs)
+	return strings.Compare(a, b)
 }
 
 var _ connector.Connector = (*Connector)(nil)

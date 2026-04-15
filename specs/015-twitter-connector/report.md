@@ -249,3 +249,57 @@ Links: [uservalidation.md](uservalidation.md)
 
 - `./smackerel.sh test unit` — PASS (config: 0.032s including 2 new tests)
 - `./smackerel.sh check` — PASS (config in sync with SST)
+
+---
+
+### Improve Pass (Round 2) — 2026-04-14
+
+**Trigger:** stochastic-quality-sweep → improve-existing
+**Scope:** `internal/connector/twitter/`
+**Prior sweep history:** 5 security fixes, 4 chaos fixes, 3 simplify fixes, 3 improve fixes, 3 devops fixes — all durable
+
+#### Findings
+
+| # | Finding | Severity | Disposition |
+|---|---------|----------|-------------|
+| IMP-015-001 | No consecutive error tracking / graduated health escalation — Keep connector has `consecutiveErrors` with degraded→failing→error progression (thresholds: <5, 5-9, 10+); Twitter binary-toggled healthy/degraded with no escalation path regardless of failure count | Medium | Fixed — added `consecutiveErrors` counter with graduated escalation matching Keep connector pattern: <5→degraded, 5-9→failing, 10+→error; success resets counter |
+| IMP-015-002 | No sync metrics for operational observability — Keep connector tracks `lastSyncTime`, `lastSyncCount`, `lastSyncErrors`, `consecutiveErrors`; Twitter had none, giving operations zero visibility into sync health | Medium | Fixed — added all four metrics fields to Connector struct; added `SyncMetrics()` accessor method; Sync defer block tracks all metrics |
+| IMP-015-003 | Connect leaves HealthDisconnected on config validation failure — Keep connector sets HealthError on failed Connect to distinguish "never connected" from "connection failed"; Twitter left HealthDisconnected making status ambiguous for supervisor/health endpoints | Low | Fixed — all Connect failure paths now set HealthError before returning error |
+| IMP-015-004 | Missing `tweet/image` and `tweet/video` content types from R-004 — spec defines these but ArchiveTweet had no Media field; archive exports include media entities but they were never parsed | Medium | Fixed — added `TweetMedia` struct with `Type` field to `TweetEntities`; `classifyTweet()` now detects photo→tweet/image, video/animated_gif→tweet/video; `normalizeTweet()` adds `media_types` and `media_count` metadata |
+
+#### Changes
+
+- **`internal/connector/twitter/twitter.go`**:
+  - Added `TweetMedia` struct and `Media []TweetMedia` field to `TweetEntities` (IMP-015-004)
+  - Added `lastSyncTime`, `lastSyncCount`, `lastSyncErrors`, `consecutiveErrors` fields to `Connector` struct (IMP-015-001/002)
+  - Added `SyncMetrics()` method returning all four metrics (IMP-015-002)
+  - `Sync()` defer: graduated health escalation matching Keep pattern — <5 degraded, 5-9 failing, 10+ error (IMP-015-001)
+  - `Sync()` defer: tracks `syncCount`, `lastSyncTime`, `lastSyncErrors`, `consecutiveErrors` (IMP-015-002)
+  - `Connect()`: all failure paths set `HealthError` before returning (IMP-015-003)
+  - `classifyTweet()`: detects `tweet/image` (photo) and `tweet/video` (video, animated_gif) from media entities (IMP-015-004)
+  - `normalizeTweet()`: adds `media_types` and `media_count` metadata when media present (IMP-015-004)
+- **`internal/connector/twitter/twitter_test.go`** (20 new tests):
+  - `TestSync_ConsecutiveErrorsEscalateToDegraded`: 1 failure → degraded
+  - `TestSync_ConsecutiveErrorsEscalateToFailing`: 5 failures → failing
+  - `TestSync_ConsecutiveErrorsEscalateToError`: 10 failures → error
+  - `TestSync_SuccessResetsConsecutiveErrors`: recovery resets counter
+  - `TestSyncMetrics_TracksSuccessfulSync`: verifies counts/times after success
+  - `TestSyncMetrics_TracksFailedSync`: verifies error counts after failure
+  - `TestConnect_SetsHealthErrorOnFailure`: empty archive_dir → HealthError
+  - `TestConnect_NonexistentDir_SetsHealthError`: bad path → HealthError
+  - `TestClassifyTweet_Image`: photo → tweet/image
+  - `TestClassifyTweet_Video`: video → tweet/video
+  - `TestClassifyTweet_AnimatedGif`: animated_gif → tweet/video
+  - `TestClassifyTweet_MediaPrecedenceOverURL`: media > URL precedence
+  - `TestClassifyTweet_ThreadPrecedenceOverMedia`: thread > media precedence
+  - `TestNormalizeTweet_MediaMetadata`: media_types and media_count populated
+  - `TestNormalizeTweet_NoMediaNoMetadata`: no media → no media metadata keys
+
+#### Evidence
+
+- `./smackerel.sh test unit` — PASS (twitter: 0.160s, all tests green including 20 new)
+- `./smackerel.sh check` — PASS (config in sync with SST)
+- `./smackerel.sh lint` — PASS (Go checks clean; 3 pre-existing Python warnings unrelated)
+- `./smackerel.sh format --check` — PASS (21 files unchanged)
+- All prior security/chaos/simplify/improve/devops tests remain green (no regressions)
+- Every finding has adversarial tests that would fail if the improvement were reverted

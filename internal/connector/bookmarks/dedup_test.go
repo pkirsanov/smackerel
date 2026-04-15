@@ -268,6 +268,72 @@ func TestNormalizeURL_OnlyFragment(t *testing.T) {
 	}
 }
 
+// ============================================================================
+// IMP-009-R-002 — www. prefix normalization for cross-variant dedup
+// ============================================================================
+
+// T-IMP-009-R-002-A: www. prefix is stripped so www and non-www normalize to same URL.
+func TestNormalizeURL_StripWWW(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "www prefix stripped",
+			in:   "https://www.example.com/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "www with port",
+			in:   "https://www.example.com:8080/page",
+			want: "https://example.com:8080/page",
+		},
+		{
+			name: "www uppercase",
+			in:   "HTTPS://WWW.Example.COM/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "already without www",
+			in:   "https://example.com/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "www2 not stripped",
+			in:   "https://www2.example.com/page",
+			want: "https://www2.example.com/page",
+		},
+		{
+			name: "wwwexample not stripped",
+			in:   "https://wwwexample.com/page",
+			want: "https://wwwexample.com/page",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeURL(tt.in)
+			if got != tt.want {
+				t.Errorf("NormalizeURL(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// T-IMP-009-R-002-B: Adversarial — www and non-www variants normalize identically.
+// Without the fix, these would produce different normalized URLs, causing
+// duplicate artifacts when the same page is bookmarked from different browsers
+// that add or omit the www prefix.
+func TestNormalizeURL_WWWDedup(t *testing.T) {
+	www := NormalizeURL("https://www.example.com/article?id=42")
+	noWWW := NormalizeURL("https://example.com/article?id=42")
+	if www != noWWW {
+		t.Errorf("IMP-009-R-002: www variant %q != non-www variant %q — "+
+			"same page would create duplicate artifacts", www, noWWW)
+	}
+}
+
 // T-2-20: NormalizeURL with empty path (just host).
 func TestNormalizeURL_HostOnly(t *testing.T) {
 	got := NormalizeURL("https://example.com")

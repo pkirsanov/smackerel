@@ -3113,3 +3113,196 @@ func TestSync_CaptureCommand_ProducesFullTierArtifact(t *testing.T) {
 		t.Error("short normal message should not get 'full' tier")
 	}
 }
+
+// --- IMP-014-IE Improvement Tests ---
+
+// IMP-014-IE-001: HTTP client uses bounded connection pool.
+// Adversarial: without the transport limit, >maxConnsPerHost concurrent requests
+// would open unlimited connections to Discord's API during high-backfill sync.
+func TestNew_HTTPClientHasBoundedTransport(t *testing.T) {
+	c := New("discord")
+	transport, ok := c.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("expected httpClient to use *http.Transport")
+	}
+	if transport.MaxConnsPerHost != maxConnsPerHost {
+		t.Errorf("expected MaxConnsPerHost=%d, got %d", maxConnsPerHost, transport.MaxConnsPerHost)
+	}
+	if transport.MaxIdleConnsPerHost != maxConnsPerHost {
+		t.Errorf("expected MaxIdleConnsPerHost=%d, got %d", maxConnsPerHost, transport.MaxIdleConnsPerHost)
+	}
+}
+
+// IMP-014-IE-002: Discord API error responses include diagnostic body excerpt.
+// Adversarial: without the body excerpt, a 403 "Missing Access" error is
+// indistinguishable from a 403 "Missing Permissions" error, making channel
+// permission debugging impossible from logs alone.
+func TestDoDiscordRequest_ErrorIncludesBodyExcerpt(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		body       string
+		wantSubstr string
+	}{
+		{
+			name:       "403 with Discord error code",
+			status:     403,
+			body:       `{"message":"Missing Access","code":50001}`,
+			wantSubstr: "Missing Access",
+		},
+		{
+			name:       "401 with details",
+			status:     401,
+			body:       `{"message":"401: Unauthorized"}`,
+			wantSubstr: "Unauthorized",
+		},
+		{
+			name:       "500 server error",
+			status:     500,
+			body:       `{"message":"Internal Server Error"}`,
+			wantSubstr: "Internal Server Error",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.status)
+				w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(ts.Close)
+
+			c := New("discord")
+			_, err := c.doDiscordRequest(context.Background(), http.MethodGet, ts.URL, testBotToken, "/test")
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tt.wantSubstr) {
+				t.Errorf("error message %q should contain diagnostic body excerpt %q", err.Error(), tt.wantSubstr)
+			}
+		})
+	}
+}
+
+// IMP-014-IE-002b: Error body excerpt is sanitized and truncated.
+// Adversarial: a malicious Discord API response could inject control characters
+// or arbitrarily large payloads into error messages, causing log injection or OOM.
+func TestDoDiscordRequest_ErrorBodySanitizedAndTruncated(t *testing.T) {
+	longBody := strings.Repeat("A", 1000)
+	controlBody := "error\x00with\x07control\x1bchars"
+
+	tests := []struct {
+		name        string
+		body        string
+		checkLength bool
+		checkSanity bool
+	}{
+		{"long body truncated", longBody, true, false},
+		{"control chars sanitized", controlBody, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(500)
+				w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(ts.Close)
+
+			c := New("discord")
+			_, err := c.doDiscordRequest(context.Background(), http.MethodGet, ts.URL, testBotToken, "/test")
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			errMsg := err.Error()
+			if tt.checkLength && len(errMsg) > maxErrorBodyExcerpt+100 {
+				t.Errorf("error message too long (%d bytes), body excerpt should be truncated", len(errMsg))
+			}
+			if tt.checkSanity {
+				for _, r := range errMsg {
+					if r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+						t.Errorf("error message contains unsanitized control char: %U", r)
+						break
+					}
+				}
+			}
+		})
+	}
+}
+
+// IMP-014-IE-003: snowflakeGreater handles variable-length numeric strings.
+// Adversarial: raw string comparison "99" > "100" is true (lexicographic),
+// but numerically 99 < 100. Without length-first comparison, cursor advancement
+// would regress, causing message re-ingestion.
+func TestSnowflakeGreater(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want bool
+	}{
+		// Same length — lexicographic is correct
+		{"200000000000000001", "100000000000000001", true},
+		{"100000000000000001", "200000000000000001", false},
+		{"100000000000000001", "100000000000000001", false},
+		// Different length — longer is bigger
+		{"100000000000000001", "99999999999999999", true},  // 18 digits > 17 digits
+		{"99999999999999999", "100000000000000001", false}, // 17 digits < 18 digits
+		// Edge cases
+		{"1", "2", false},
+		{"2", "1", true},
+		{"10", "9", true},  // length-first: "10" (2 chars) > "9" (1 char)
+		{"9", "10", false}, // length-first: "9" (1 char) < "10" (2 chars)
+		// Equal
+		{"0", "0", false},
+		{"18446744073709551615", "18446744073709551615", false},
+	}
+	for _, tt := range tests {
+		got := snowflakeGreater(tt.a, tt.b)
+		if got != tt.want {
+			t.Errorf("snowflakeGreater(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.want)
+		}
+	}
+}
+
+// IMP-014-IE-003b: Cursor advancement uses snowflakeGreater and handles mixed-length IDs.
+// Adversarial: if a hypothetical short snowflake "99" were compared as string
+// against "100", the cursor would regress to "99" and re-fetch messages.
+func TestCursorAdvancement_MixedLengthSnowflakes(t *testing.T) {
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/200000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			// Return messages with different-length IDs
+			w.Write([]byte(`[
+				{"id":"100000000000000001","content":"long id","author":{"id":"1","username":"a"},"channel_id":"200000000000000001","guild_id":"100000000000000001","timestamp":"2024-01-01T00:00:00Z"},
+				{"id":"9999999999999999","content":"shorter id","author":{"id":"1","username":"a"},"channel_id":"200000000000000001","guild_id":"100000000000000001","timestamp":"2024-01-01T00:01:00Z"}
+			]`))
+		})
+	})
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":         ts.URL,
+			"include_pins":    false,
+			"include_threads": false,
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+
+	_, cursorOut, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	var cursors map[string]string
+	if err := json.Unmarshal([]byte(cursorOut), &cursors); err != nil {
+		t.Fatalf("parse cursor: %v", err)
+	}
+
+	// The longer (numerically larger) ID must win as cursor
+	if cursors["200000000000000001"] != "100000000000000001" {
+		t.Errorf("cursor should be the numerically larger ID '100000000000000001', got %q (snowflakeGreater handles mixed-length correctly)", cursors["200000000000000001"])
+	}
+}

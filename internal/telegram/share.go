@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -38,6 +39,10 @@ func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, tex
 
 		result, err := b.callCapture(ctx, body)
 		if err != nil {
+			if errors.Is(err, errDuplicate) {
+				b.replyDuplicate(msg.Chat.ID, result, contextText)
+				return
+			}
 			b.captureErrorReply(msg.Chat.ID, err, "share capture failed", "url", urls[0])
 			return
 		}
@@ -90,14 +95,44 @@ func extractAllURLs(text string) []string {
 	for _, word := range strings.Fields(text) {
 		// Strip leading brackets/parens that wrap URLs
 		word = strings.TrimLeft(word, "(<[")
-		// Strip trailing punctuation that's not part of URLs
-		word = strings.TrimRight(word, ".,;:!?\"')>]")
+		// Strip trailing punctuation that's not part of URLs,
+		// but preserve balanced parentheses (e.g. Wikipedia URLs).
+		word = trimTrailingPunctuation(word)
 		if (strings.HasPrefix(word, "http://") || strings.HasPrefix(word, "https://")) && !seen[word] {
 			urls = append(urls, word)
 			seen[word] = true
 		}
 	}
 	return urls
+}
+
+// trimTrailingPunctuation strips trailing punctuation from a URL-candidate word,
+// preserving balanced parentheses that are part of the URL (e.g. Wikipedia links
+// like https://en.wikipedia.org/wiki/Go_(programming_language)).
+func trimTrailingPunctuation(word string) string {
+	for len(word) > 0 {
+		last := word[len(word)-1]
+		switch last {
+		case '.', ',', ';', ':', '!', '?', '"', '\'', '>':
+			word = word[:len(word)-1]
+		case ')':
+			// Only strip ')' if it's unbalanced (more closing than opening)
+			if strings.Count(word, "(") < strings.Count(word, ")") {
+				word = word[:len(word)-1]
+			} else {
+				return word
+			}
+		case ']':
+			if strings.Count(word, "[") < strings.Count(word, "]") {
+				word = word[:len(word)-1]
+			} else {
+				return word
+			}
+		default:
+			return word
+		}
+	}
+	return word
 }
 
 // extractContext removes all URLs from text and returns the remaining context.
@@ -119,4 +154,19 @@ func extractContext(text string, urls []string) string {
 	// Collapse multiple whitespace
 	fields := strings.Fields(result)
 	return strings.Join(fields, " ")
+}
+
+// replyDuplicate sends a rich duplicate-detection reply per spec SC-TSC04.
+// It extracts the title from the capture API 409 response when available and
+// indicates whether new context was merged.
+func (b *Bot) replyDuplicate(chatID int64, result map[string]interface{}, contextText string) {
+	title, _ := result["title"].(string)
+	if title == "" {
+		title = "item"
+	}
+	if contextText != "" {
+		b.reply(chatID, fmt.Sprintf(". Already saved: \"%s\" — updated with new context", title))
+	} else {
+		b.reply(chatID, fmt.Sprintf(". Already saved: \"%s\"", title))
+	}
 }

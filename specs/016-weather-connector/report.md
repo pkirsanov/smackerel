@@ -140,3 +140,29 @@ Links: [uservalidation.md](uservalidation.md)
 
 - `./smackerel.sh test unit` — all pass, weather package: 33.6s (includes configGen concurrency test)
 - All 12 adversarial tests would fail if their respective fixes were reverted
+
+---
+
+### Improve Pass (R4) — 2026-04-14
+
+**Trigger:** stochastic-quality-sweep → improve-existing (child workflow)
+**Target:** `internal/connector/weather/weather.go`, `internal/connector/weather/weather_test.go`
+
+#### Findings
+
+| # | ID | Issue | Severity | Fix |
+|---|------|-------|----------|-----|
+| F1 | IMP-016-R4-001 | SourceRef uses date-only granularity (`"2006-01-02"`), causing daily dedup collision — all intra-day syncs for a location produce the same SourceRef, so the pipeline deduplicates and discards 11 of 12 daily weather updates, leaving stale morning data in the knowledge graph through evening | Medium | Changed SourceRef timestamp format from `now.Format("2006-01-02")` to `now.Format(time.RFC3339)` for per-sync uniqueness |
+| F2 | IMP-016-R4-002 | Redundant `time.Now()` call — `syncStart := time.Now()` called one line after `now := time.Now()`, creating unnecessary clock skew in duration logging | Low | Replaced `syncStart := time.Now()` with `syncStart := now` |
+| F3 | IMP-016-R4-003 | RawContent missing weather description — `RawContent` included temperature/humidity/wind but not the weather condition description (e.g., "Clear sky", "Rain"); downstream text consumers that only read `RawContent` miss the most human-readable condition summary | Low | Prepended `current.Description + " — "` to RawContent format string |
+
+#### Tests Added (1 new adversarial test + 2 assertion extensions)
+
+1. `TestSync_SourceRefUniquePerSync` — **adversarial**: two consecutive syncs must produce distinct SourceRefs; would fail if SourceRef reverted to date-only format (IMP-016-R4-001)
+2. `TestSync_ProducesArtifacts` — extended with assertion that SourceRef contains `"T"` (RFC3339 sub-daily marker) (IMP-016-R4-001)
+3. `TestSync_ProducesArtifacts` — extended with assertion that RawContent contains `"Clear sky"` (IMP-016-R4-003)
+
+#### Evidence
+
+- `./smackerel.sh check` passes clean
+- `./smackerel.sh test unit` — all 34 Go packages pass; weather package: 32.6s

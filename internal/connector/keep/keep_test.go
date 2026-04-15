@@ -415,6 +415,18 @@ func TestParseKeepConfigTypeMismatchesUseDefaults(t *testing.T) {
 
 // --- Connect edge cases ---
 
+func TestParseKeepConfigNegativeMinContentLength(t *testing.T) {
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"min_content_length": float64(-5),
+		},
+	}
+	_, err := parseKeepConfig(cfg)
+	if err == nil {
+		t.Error("expected error for negative min_content_length")
+	}
+}
+
 func TestConnectEmptyImportDirString(t *testing.T) {
 	c := New("google-keep")
 	err := c.Connect(context.Background(), testConnectorConfig("", "takeout", false, false))

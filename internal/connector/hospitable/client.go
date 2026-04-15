@@ -128,6 +128,11 @@ func fetchPaginated[T any](c *Client, ctx context.Context, path string, params u
 	currentURL := c.baseURL + path + "?" + params.Encode()
 
 	for page := 0; currentURL != "" && page < maxPaginationPages; page++ {
+		// IMP-012-001: Short-circuit pagination on context cancellation to avoid
+		// unnecessary request setup/teardown for remaining pages.
+		if err := ctx.Err(); err != nil {
+			return all, err
+		}
 		body, nextURL, err := c.doGetPaginated(ctx, currentURL)
 		if err != nil {
 			return all, err
@@ -139,6 +144,14 @@ func fetchPaginated[T any](c *Client, ctx context.Context, path string, params u
 		}
 
 		all = append(all, resp.Data...)
+
+		// IMP-012-SQS-003: Break early when the server returns an empty data page
+		// to avoid chasing pagination links that yield no results. This prevents
+		// wasted network calls against servers that return empty pages with a
+		// "next" link indefinitely.
+		if len(resp.Data) == 0 {
+			break
+		}
 
 		candidateURL := resp.NextURL
 		if candidateURL == "" {

@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // NormalizeEvent converts a GuestHost ActivityEvent into a RawArtifact.
@@ -37,6 +38,11 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal booking data: %w", err)
 		}
+		// IMP-013-SQS-002: Sanitize API-supplied text fields (CWE-116).
+		d.PropertyName = stringutil.SanitizeControlChars(d.PropertyName)
+		d.GuestName = stringutil.SanitizeControlChars(d.GuestName)
+		d.GuestEmail = stringutil.SanitizeControlChars(d.GuestEmail)
+		d.Source = stringutil.SanitizeControlChars(d.Source)
 		contentType = "booking"
 		switch event.Type {
 		case "booking.created":
@@ -53,6 +59,9 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal guest data: %w", err)
 		}
+		// IMP-013-SQS-002: Sanitize API-supplied text fields (CWE-116).
+		d.Name = stringutil.SanitizeControlChars(d.Name)
+		d.Email = stringutil.SanitizeControlChars(d.Email)
 		contentType = "guest"
 		if event.Type == "guest.created" {
 			title = fmt.Sprintf("Guest: %s (%s)", d.Name, d.Email)
@@ -67,6 +76,11 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal review data: %w", err)
 		}
+		// IMP-013-SQS-002: Sanitize API-supplied text fields (CWE-116).
+		d.PropertyName = stringutil.SanitizeControlChars(d.PropertyName)
+		d.GuestName = stringutil.SanitizeControlChars(d.GuestName)
+		d.GuestEmail = stringutil.SanitizeControlChars(d.GuestEmail)
+		d.Rating = stringutil.SanitizeControlChars(d.Rating)
 		contentType = "review"
 		title = fmt.Sprintf("%s — %s★ review from %s", d.PropertyName, d.Rating, d.GuestName)
 		metadata["property_id"] = d.PropertyID
@@ -80,6 +94,10 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal message data: %w", err)
 		}
+		// IMP-013-SQS-002: Sanitize API-supplied text fields (CWE-116).
+		d.PropertyName = stringutil.SanitizeControlChars(d.PropertyName)
+		d.GuestName = stringutil.SanitizeControlChars(d.GuestName)
+		d.GuestEmail = stringutil.SanitizeControlChars(d.GuestEmail)
 		contentType = "guest_message"
 		title = fmt.Sprintf("%s — Message from %s", d.PropertyName, d.GuestName)
 		metadata["property_id"] = d.PropertyID
@@ -93,6 +111,10 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal task data: %w", err)
 		}
+		// IMP-013-SQS-002: Sanitize API-supplied text fields (CWE-116).
+		d.PropertyName = stringutil.SanitizeControlChars(d.PropertyName)
+		d.Title = stringutil.SanitizeControlChars(d.Title)
+		d.Category = stringutil.SanitizeControlChars(d.Category)
 		contentType = "task"
 		if event.Type == "task.created" {
 			title = fmt.Sprintf("%s — Task: %s", d.PropertyName, d.Title)
@@ -108,10 +130,13 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal expense data: %w", err)
 		}
-		// IMP-013-002: Guard against IEEE 754 Inf/NaN from JSON 1e999.
+		// IMP-013-SQS-002: Guard against IEEE 754 Inf/NaN from JSON 1e999.
 		if math.IsNaN(d.Amount) || math.IsInf(d.Amount, 0) {
 			return connector.RawArtifact{}, fmt.Errorf("expense amount is not a finite number")
 		}
+		// IMP-013-SQS-002: Sanitize API-supplied text fields (CWE-116).
+		d.PropertyName = stringutil.SanitizeControlChars(d.PropertyName)
+		d.Description = stringutil.SanitizeControlChars(d.Description)
 		contentType = "financial"
 		title = fmt.Sprintf("%s — Expense: %s $%.2f", d.PropertyName, d.Description, d.Amount)
 		metadata["property_id"] = d.PropertyID
@@ -123,6 +148,8 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		if err := json.Unmarshal(event.Data, &d); err != nil {
 			return connector.RawArtifact{}, fmt.Errorf("unmarshal property data: %w", err)
 		}
+		// IMP-013-SQS-002: Sanitize API-supplied text fields (CWE-116).
+		d.Name = stringutil.SanitizeControlChars(d.Name)
 		contentType = "property"
 		title = fmt.Sprintf("Property updated: %s", d.Name)
 		metadata["property_id"] = d.ID

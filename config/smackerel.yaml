@@ -213,6 +213,9 @@ connectors:
     sync_schedule: "*/15 * * * *"
     finnhub_api_key: "" # REQUIRED when enabled: free tier at finnhub.io
     fred_api_key: "" # Optional: FRED economic data
+    fred_enabled: true # Enable FRED economic indicators (requires fred_api_key)
+    # FRED series IDs to track (default: major economic indicators)
+    fred_series: [ "GDP", "UNRATE", "CPIAUCSL", "DFF", "FEDFUNDS" ]
     coingecko_enabled: true
     alert_threshold: 5.0
     watchlist:

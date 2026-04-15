@@ -50,14 +50,23 @@ func (p *Postgres) Close() {
 	p.Pool.Close()
 }
 
-// ArtifactCount returns the number of rows in the artifacts table.
+// ArtifactCount returns the estimated number of rows in the artifacts table.
+// Uses pg_class.reltuples (updated by ANALYZE/autovacuum) instead of COUNT(*)
+// to avoid a full sequential scan on every health check (IMP-022-R30-003).
+// The estimate is accurate within a few percent for tables with regular writes.
 func (p *Postgres) ArtifactCount(ctx context.Context) (int64, error) {
-	var count int64
-	err := p.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM artifacts").Scan(&count)
+	var count float64
+	err := p.Pool.QueryRow(ctx,
+		"SELECT COALESCE(reltuples, 0) FROM pg_class WHERE relname = 'artifacts'",
+	).Scan(&count)
 	if err != nil {
-		return 0, fmt.Errorf("count artifacts: %w", err)
+		return 0, fmt.Errorf("estimate artifact count: %w", err)
 	}
-	return count, nil
+	// reltuples can be -1 before the first ANALYZE; treat as 0
+	if count < 0 {
+		count = 0
+	}
+	return int64(count), nil
 }
 
 // Healthy checks if the database is reachable.
@@ -177,15 +186,21 @@ func (p *Postgres) RecentArtifacts(ctx context.Context, limit int) ([]RecentArti
 	defer rows.Close()
 
 	var items []RecentArtifact
+	var scanErrors int
 	for rows.Next() {
 		var a RecentArtifact
 		if err := rows.Scan(&a.ID, &a.Title, &a.ArtifactType, &a.Summary, &a.CreatedAt); err != nil {
+			scanErrors++
+			slog.Warn("recent artifacts scan error", "error", err, "scan_errors_so_far", scanErrors)
 			continue
 		}
 		items = append(items, a)
 	}
 	if err := rows.Err(); err != nil {
 		return items, fmt.Errorf("recent artifacts iteration: %w", err)
+	}
+	if scanErrors > 0 {
+		return items, fmt.Errorf("recent artifacts completed with %d scan errors", scanErrors)
 	}
 	return items, nil
 }

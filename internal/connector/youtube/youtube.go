@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -20,21 +21,23 @@ type Connector struct {
 	id     string
 	config connector.ConnectorConfig
 	health connector.HealthStatus
+	mu     sync.RWMutex // IMP-005-SQS-002: Protect concurrent access to config/health
 }
 
 // VideoItem represents a YouTube video from a playlist or activity feed.
 type VideoItem struct {
-	VideoID     string    `json:"video_id"`
-	Title       string    `json:"title"`
-	Channel     string    `json:"channel"`
-	Description string    `json:"description"`
-	Duration    string    `json:"duration"`
-	Published   time.Time `json:"published"`
-	Liked       bool      `json:"liked"`
-	WatchLater  bool      `json:"watch_later"`
-	Playlist    string    `json:"playlist"`
-	Categories  []string  `json:"categories"`
-	Tags        []string  `json:"tags"`
+	VideoID        string    `json:"video_id"`
+	Title          string    `json:"title"`
+	Channel        string    `json:"channel"`
+	Description    string    `json:"description"`
+	Duration       string    `json:"duration"`
+	Published      time.Time `json:"published"`
+	Liked          bool      `json:"liked"`
+	WatchLater     bool      `json:"watch_later"`
+	Playlist       string    `json:"playlist"`
+	CompletionRate float64   `json:"completion_rate"` // 0.0-1.0; R-203 engagement qualifier
+	Categories     []string  `json:"categories"`
+	Tags           []string  `json:"tags"`
 }
 
 // New creates a new YouTube connector.
@@ -45,29 +48,44 @@ func New(id string) *Connector {
 func (c *Connector) ID() string { return c.id }
 
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
-	c.config = config
 	if config.AuthType != "oauth2" && config.AuthType != "api_key" {
+		c.mu.Lock()
+		c.health = connector.HealthError
+		c.mu.Unlock()
 		return fmt.Errorf("YouTube connector requires oauth2 or api_key auth")
 	}
+	c.mu.Lock()
+	c.config = config
 	c.health = connector.HealthHealthy
+	c.mu.Unlock()
 	slog.Info("YouTube connector connected", "id", c.id)
 	return nil
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	c.mu.Lock()
 	if c.health == connector.HealthDisconnected {
+		c.mu.Unlock()
 		return nil, "", fmt.Errorf("YouTube connector %q: Sync called before Connect", c.id)
 	}
 	c.health = connector.HealthSyncing
+	// Snapshot config under lock to avoid data race (IMP-005-SQS-002).
+	cfg := c.config
+	c.mu.Unlock()
+
 	defer func() {
+		c.mu.Lock()
 		if c.health == connector.HealthSyncing {
 			c.health = connector.HealthHealthy
 		}
+		c.mu.Unlock()
 	}()
 
-	videos, err := c.fetchVideos(ctx, cursor)
+	videos, err := c.fetchVideosFrom(ctx, cfg, cursor)
 	if err != nil {
+		c.mu.Lock()
 		c.health = connector.HealthError
+		c.mu.Unlock()
 		return nil, cursor, fmt.Errorf("fetch videos: %w", err)
 	}
 
@@ -90,7 +108,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			continue
 		}
 
-		tier := EngagementTier(vid.Liked, vid.WatchLater, vid.Playlist)
+		tier := EngagementTier(vid.Liked, vid.WatchLater, vid.Playlist, vid.CompletionRate)
 
 		// Build content from video metadata
 		var contentParts []string
@@ -116,6 +134,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			"liked":           vid.Liked,
 			"watch_later":     vid.WatchLater,
 			"playlist":        vid.Playlist,
+			"completion_rate": vid.CompletionRate,
 			"categories":      vid.Categories,
 			"tags":            vid.Tags,
 			"processing_tier": tier,
@@ -147,16 +166,17 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	return artifacts, newCursor, nil
 }
 
-// fetchVideos retrieves videos from source config or live API.
-func (c *Connector) fetchVideos(ctx context.Context, cursor string) ([]VideoItem, error) {
+// fetchVideosFrom retrieves videos from source config or live API.
+// IMP-005-SQS-002: Takes config as parameter to avoid reading c.config without lock.
+func (c *Connector) fetchVideosFrom(ctx context.Context, cfg connector.ConnectorConfig, cursor string) ([]VideoItem, error) {
 	// Check for local/test videos in source_config (testing path)
-	rawVideos, ok := c.config.SourceConfig["videos"]
+	rawVideos, ok := cfg.SourceConfig["videos"]
 	if ok {
 		return parseVideoItems(rawVideos)
 	}
 
 	// Check for OAuth access token (live API path)
-	accessToken := getCredential(c.config.Credentials, "access_token")
+	accessToken := getCredential(cfg.Credentials, "access_token")
 	if accessToken == "" {
 		slog.Debug("YouTube: no source_config videos and no access_token", "id", c.id)
 		return nil, nil
@@ -418,6 +438,9 @@ func parseVideoItems(raw interface{}) ([]VideoItem, error) {
 		if wl, ok := vm["watch_later"].(bool); ok {
 			vid.WatchLater = wl
 		}
+		if cr, ok := vm["completion_rate"].(float64); ok {
+			vid.CompletionRate = cr
+		}
 		if cats, ok := vm["categories"].([]interface{}); ok {
 			for _, c := range cats {
 				if s, ok := c.(string); ok {
@@ -445,18 +468,28 @@ func getStr(m map[string]interface{}, key string) string {
 	return ""
 }
 
-func (c *Connector) Health(ctx context.Context) connector.HealthStatus { return c.health }
+func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.health
+}
 func (c *Connector) Close() error {
+	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.mu.Unlock()
 	return nil
 }
 
 // EngagementTier assigns processing tier based on YouTube engagement signals.
-func EngagementTier(liked bool, watchLater bool, playlistName string) string {
+// Per spec R-203: liked/80%+ completed/named playlist → full, completed → standard, <20% → light.
+func EngagementTier(liked bool, watchLater bool, playlistName string, completionRate float64) string {
 	if liked || playlistName != "" {
 		return "full"
 	}
-	if watchLater {
+	if completionRate >= 0.8 {
+		return "full"
+	}
+	if watchLater || completionRate >= 0.5 {
 		return "standard"
 	}
 	return "light"

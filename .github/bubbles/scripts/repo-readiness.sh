@@ -299,6 +299,10 @@ if [[ "$is_bubbles_source" == true ]]; then
 else
   if [[ -f "$TARGET_ROOT/.github/copilot-instructions.md" || -f "$TARGET_ROOT/AGENTS.md" ]]; then
     add_check pass "Agent-facing instructions" "Found repo guidance for coding agents"
+    # Recommend both files for maximum AI tool coverage
+    if [[ -f "$TARGET_ROOT/.github/copilot-instructions.md" && ! -f "$TARGET_ROOT/AGENTS.md" ]]; then
+      add_check info "Root AGENTS.md" "Consider adding AGENTS.md for broader AI tool coverage (Claude Code, Cursor, Gemini)"
+    fi
   else
     add_profiled_missing_check "agentFacingInstructions" "Agent-facing instructions" "Neither .github/copilot-instructions.md nor AGENTS.md is present" warn
   fi

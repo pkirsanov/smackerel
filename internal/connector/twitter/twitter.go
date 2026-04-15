@@ -70,6 +70,7 @@ type TweetEntities struct {
 	URLs     []TweetURL     `json:"urls"`
 	Hashtags []TweetHashtag `json:"hashtags"`
 	Mentions []TweetMention `json:"user_mentions"`
+	Media    []TweetMedia   `json:"media"`
 }
 
 // TweetURL is a URL entity in a tweet.
@@ -87,6 +88,11 @@ type TweetMention struct {
 	ScreenName string `json:"screen_name"`
 }
 
+// TweetMedia is a media attachment entity.
+type TweetMedia struct {
+	Type string `json:"type"` // "photo", "video", "animated_gif"
+}
+
 // Thread represents a reconstructed tweet thread.
 type Thread struct {
 	RootID string
@@ -100,6 +106,12 @@ type Connector struct {
 	mu      sync.RWMutex
 	config  TwitterConfig
 	syncing bool
+
+	// Sync metrics for operational observability (mirrors Keep connector pattern).
+	lastSyncTime      time.Time
+	lastSyncCount     int
+	lastSyncErrors    int
+	consecutiveErrors int
 }
 
 // New creates a new Twitter connector.
@@ -118,6 +130,9 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	// Validate archive directory exists for archive/hybrid mode
 	if cfg.SyncMode == SyncModeArchive || cfg.SyncMode == SyncModeHybrid {
 		if cfg.ArchiveDir == "" {
+			c.mu.Lock()
+			c.health = connector.HealthError
+			c.mu.Unlock()
 			return fmt.Errorf("archive_dir is required for sync_mode %s", cfg.SyncMode)
 		}
 		// Canonicalize archive path and resolve symlinks to prevent traversal (CWE-22).
@@ -127,6 +142,9 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		}
 		resolvedDir, err := filepath.EvalSymlinks(absDir)
 		if err != nil {
+			c.mu.Lock()
+			c.health = connector.HealthError
+			c.mu.Unlock()
 			if os.IsNotExist(err) {
 				return fmt.Errorf("archive directory does not exist: %s", cfg.ArchiveDir)
 			}
@@ -134,9 +152,15 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		}
 		info, err := os.Stat(resolvedDir)
 		if err != nil {
+			c.mu.Lock()
+			c.health = connector.HealthError
+			c.mu.Unlock()
 			return fmt.Errorf("archive directory does not exist: %s", cfg.ArchiveDir)
 		}
 		if !info.IsDir() {
+			c.mu.Lock()
+			c.health = connector.HealthError
+			c.mu.Unlock()
 			return fmt.Errorf("archive path is not a directory: %s", cfg.ArchiveDir)
 		}
 		cfg.ArchiveDir = resolvedDir
@@ -165,14 +189,36 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.mu.Unlock()
 
 	var syncFailed bool
+	var syncCount int
 	defer func() {
 		c.mu.Lock()
 		c.syncing = false
+		c.lastSyncTime = time.Now()
+		c.lastSyncCount = syncCount
 		// Only restore health if connector was not closed during sync.
 		if c.health != connector.HealthDisconnected {
-			if syncFailed {
+			if syncFailed && syncCount == 0 {
+				// Complete failure: escalate with consecutive count.
+				// Matches Keep connector pattern: <5 degraded, 5-9 failing, 10+ error.
+				c.consecutiveErrors++
+				c.lastSyncErrors = 1
+				switch {
+				case c.consecutiveErrors >= 10:
+					c.health = connector.HealthError
+				case c.consecutiveErrors >= 5:
+					c.health = connector.HealthFailing
+				default:
+					c.health = connector.HealthDegraded
+				}
+			} else if syncFailed {
+				// Partial success: some artifacts produced despite errors.
+				c.consecutiveErrors = 0
+				c.lastSyncErrors = 1
 				c.health = connector.HealthDegraded
 			} else {
+				// Full success.
+				c.consecutiveErrors = 0
+				c.lastSyncErrors = 0
 				c.health = connector.HealthHealthy
 			}
 		}
@@ -198,6 +244,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 	}
 
+	syncCount = len(allArtifacts)
+
 	// Propagate error when all sync sources failed and no artifacts collected.
 	if syncFailed && len(allArtifacts) == 0 {
 		return nil, cursor, syncErr
@@ -210,6 +258,14 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.health
+}
+
+// SyncMetrics returns the last sync time, artifact count, error count, and
+// consecutive error count for operational monitoring.
+func (c *Connector) SyncMetrics() (lastSync time.Time, count, errors, consecutiveErrors int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastSyncTime, c.lastSyncCount, c.lastSyncErrors, c.consecutiveErrors
 }
 
 func (c *Connector) Close() error {
@@ -499,6 +555,16 @@ func normalizeTweet(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread) 
 	metadata["urls"] = urls
 	metadata["url_count"] = len(urls)
 
+	// Media type summary for downstream processing.
+	if len(tweet.Entities.Media) > 0 {
+		mediaTypes := make([]string, len(tweet.Entities.Media))
+		for i, m := range tweet.Entities.Media {
+			mediaTypes[i] = m.Type
+		}
+		metadata["media_types"] = mediaTypes
+		metadata["media_count"] = len(tweet.Entities.Media)
+	}
+
 	if thread != nil {
 		metadata["is_thread"] = true
 		metadata["thread_id"] = thread.RootID
@@ -537,6 +603,15 @@ func classifyTweet(tweet ArchiveTweet, thread *Thread) string {
 	}
 	if strings.HasPrefix(tweet.FullText, "RT @") {
 		return "tweet/retweet"
+	}
+	// Check for media attachments (photo, video, animated_gif) per R-004.
+	for _, m := range tweet.Entities.Media {
+		switch m.Type {
+		case "video", "animated_gif":
+			return "tweet/video"
+		case "photo":
+			return "tweet/image"
+		}
 	}
 	if len(tweet.Entities.URLs) > 0 {
 		return "tweet/link"

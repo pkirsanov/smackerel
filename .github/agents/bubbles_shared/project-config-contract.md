@@ -26,10 +26,13 @@ Every project using Bubbles MUST have these files:
 
 | File | Purpose | Required |
 |------|---------|----------|
+| `AGENTS.md` | **Root-level AI guardrails** — short, high-impact rules loaded by all AI tools (VS Code Copilot, Claude Code, Cursor, Gemini) | **YES** |
 | `.specify/memory/agents.md` | **Command registry** — CLI entrypoint, build/test/lint/format commands, file organization, naming conventions, tech stack declaration | **YES** |
 | `.specify/memory/constitution.md` | **Governance principles** — project-specific principles layered on top of universal governance | **YES** |
 | `.github/copilot-instructions.md` | **Project policies** — project-specific rules, testing requirements, Docker config, port allocation, command tables | **YES** |
 | `.github/bubbles-project.yaml` | **Project-owned framework extensions** — scan-pattern overrides, managed-doc registry overrides, and custom gates (G100+) | **OPTIONAL** |
+| `.vscode/mcp.json` | **MCP server configuration** — team-shared AI tool access (cross-repo search, issue trackers, etc.) | **OPTIONAL** |
+| `.vscode/extensions.json` | **Recommended extensions** — team-consistent AI tooling (Copilot, etc.) | **OPTIONAL** |
 
 ---
 
@@ -311,12 +314,15 @@ Agent needs to determine required test types for a scope change
 
 When adopting Bubbles for a new project, populate these files:
 
+- [ ] `AGENTS.md` — Customize root-level guardrails (architecture summary, key prohibitions, project references)
 - [ ] `.specify/memory/agents.md` — Fill in CLI entrypoint, all commands, file organization, naming
 - [ ] `.specify/memory/constitution.md` — Adapt principles for your project's domain (keep universal ones, add domain-specific ones)
 - [ ] `.github/copilot-instructions.md` — Fill in testing requirements, Docker config, language rules, framework-specific rules
 - [ ] `config/<project>.yaml` — Create the SST config file with ports, services, infrastructure, environments
 - [ ] `scripts/commands/config.sh` (or equivalent) — Create the config generator that parses SST and writes derived files
 - [ ] `.github/copilot-instructions.md` → SST section — Document generated files, per-language enforcement, port allocation
+- [ ] `.vscode/mcp.json` — (Optional) Configure team-shared MCP servers for cross-repo AI tool access
+- [ ] `.vscode/extensions.json` — (Optional) Recommend AI extensions for the team
 - [ ] `bubbles/workflows.yaml` — Copy as-is (project-agnostic) or customize modes
 - [ ] `agents/` — Copy all `bubbles.*.agent.md` files as-is (project-agnostic)
 - [ ] `agents/bubbles_shared/` — Copy all shared files as-is (project-agnostic)
