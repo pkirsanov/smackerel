@@ -271,6 +271,16 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				syncErr = ctx.Err()
 				return allArtifacts, now.Format(time.RFC3339), syncErr
 			}
+			// Proximity filter: NOAA tsunami feeds include georss:point — skip alerts
+			// outside user locations, consistent with GDACS filtering (IMP-017-IMPROVE-005).
+			lat, lon, hasCoords := parseGeoPoint(t.GeoPoint)
+			if !hasCoords || !isFiniteCoord(lat, lon) {
+				continue
+			}
+			match := findNearestLocation(lat, lon, allLocations)
+			if match == nil {
+				continue
+			}
 			c.mu.Lock()
 			_, seen := c.known[t.ID]
 			if !seen {
@@ -278,7 +288,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			}
 			c.mu.Unlock()
 			if !seen {
-				allArtifacts = append(allArtifacts, normalizeTsunamiAlert(t))
+				art := normalizeTsunamiAlert(t, match)
+				allArtifacts = append(allArtifacts, art)
+				c.maybeNotify(ctx, art)
 			}
 		}
 	}
@@ -542,12 +554,22 @@ func haversineKm(lat1, lon1, lat2, lon2 float64) float64 {
 	return R * c
 }
 
+// processingTier maps CAP severity to processing tier per spec R-004.
+// Extreme/Severe → full, Moderate → standard, Minor/Unknown/Info → light.
+func processingTier(severity string) string {
+	switch severity {
+	case "extreme", "severe":
+		return "full"
+	case "moderate":
+		return "standard"
+	default:
+		return "light"
+	}
+}
+
 func normalizeEarthquake(eq Earthquake, match *ProximityMatch) connector.RawArtifact {
 	severity := classifyEarthquakeSeverity(eq.Magnitude, match.DistanceKm)
-	tier := "standard"
-	if severity == "extreme" || severity == "severe" {
-		tier = "full"
-	}
+	tier := processingTier(severity)
 
 	return connector.RawArtifact{
 		SourceID:    "gov-alerts",
@@ -797,7 +819,7 @@ type NWSAlert struct {
 
 // fetchNWSAlerts fetches active weather alerts from the NWS API for a given point.
 func (c *Connector) fetchNWSAlerts(ctx context.Context, lat, lon float64) ([]NWSAlert, error) {
-	reqURL := fmt.Sprintf("%s/alerts/active?point=%.4f,%.4f", c.nwsBaseURL, lat, lon)
+	reqURL := fmt.Sprintf("%s/alerts/active?point=%.4f,%.4f&status=actual", c.nwsBaseURL, lat, lon)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
@@ -905,6 +927,8 @@ func classifyNWSEventType(event string) string {
 		return "thunderstorm"
 	case strings.Contains(lower, "heat"):
 		return "heat"
+	case strings.Contains(lower, "cold") || strings.Contains(lower, "frost") || strings.Contains(lower, "freeze") || strings.Contains(lower, "chill"):
+		return "cold"
 	case strings.Contains(lower, "wind"):
 		return "wind"
 	case strings.Contains(lower, "fire") || strings.Contains(lower, "red flag"):
@@ -919,10 +943,7 @@ func classifyNWSEventType(event string) string {
 func normalizeNWSAlert(alert NWSAlert, match *ProximityMatch) connector.RawArtifact {
 	severity := mapNWSSeverity(alert.Severity)
 	eventType := classifyNWSEventType(alert.Event)
-	tier := "standard"
-	if severity == "extreme" || severity == "severe" {
-		tier = "full"
-	}
+	tier := processingTier(severity)
 
 	capturedAt := alert.Effective
 	if capturedAt.IsZero() {
@@ -971,6 +992,7 @@ type TsunamiAlert struct {
 	Link      string
 	Published time.Time
 	Severity  string
+	GeoPoint  string
 }
 
 // tsunamiAtomFeed represents the Atom XML structure from tsunami.gov.
@@ -986,6 +1008,7 @@ type tsunamiAtomEntry struct {
 	Link      tsunamiAtomLink `xml:"link"`
 	Published string          `xml:"published"`
 	Updated   string          `xml:"updated"`
+	GeoPoint  string          `xml:"point"`
 }
 
 type tsunamiAtomLink struct {
@@ -1033,6 +1056,7 @@ func (c *Connector) fetchTsunamiAlerts(ctx context.Context) ([]TsunamiAlert, err
 			Summary:  sanitizeStringField(entry.Summary),
 			Link:     sanitizeExternalURL(sanitizeStringField(entry.Link.Href)),
 			Severity: classifyTsunamiSeverity(entry.Title),
+			GeoPoint: sanitizeStringField(entry.GeoPoint),
 		}
 
 		if t, err := time.Parse(time.RFC3339, entry.Published); err == nil {
@@ -1062,15 +1086,31 @@ func classifyTsunamiSeverity(title string) string {
 	}
 }
 
-func normalizeTsunamiAlert(alert TsunamiAlert) connector.RawArtifact {
-	tier := "standard"
-	if alert.Severity == "severe" || alert.Severity == "extreme" {
-		tier = "full"
-	}
+func normalizeTsunamiAlert(alert TsunamiAlert, match *ProximityMatch) connector.RawArtifact {
+	tier := processingTier(alert.Severity)
 
 	capturedAt := alert.Published
 	if capturedAt.IsZero() {
 		capturedAt = time.Now()
+	}
+
+	metadata := map[string]interface{}{
+		"alert_id":        alert.ID,
+		"source":          "noaa_tsunami",
+		"event_type":      "tsunami",
+		"severity":        alert.Severity,
+		"processing_tier": tier,
+	}
+	if match != nil {
+		metadata["distance_km"] = match.DistanceKm
+		metadata["nearest_location"] = match.LocationName
+	}
+	if alert.GeoPoint != "" {
+		metadata["geo_point"] = alert.GeoPoint
+		if lat, lon, ok := parseGeoPoint(alert.GeoPoint); ok && isFiniteCoord(lat, lon) {
+			metadata["latitude"] = lat
+			metadata["longitude"] = lon
+		}
 	}
 
 	return connector.RawArtifact{
@@ -1080,14 +1120,8 @@ func normalizeTsunamiAlert(alert TsunamiAlert) connector.RawArtifact {
 		Title:       alert.Title,
 		RawContent:  alert.Summary,
 		URL:         alert.Link,
-		Metadata: map[string]interface{}{
-			"alert_id":        alert.ID,
-			"source":          "noaa_tsunami",
-			"event_type":      "tsunami",
-			"severity":        alert.Severity,
-			"processing_tier": tier,
-		},
-		CapturedAt: capturedAt,
+		Metadata:    metadata,
+		CapturedAt:  capturedAt,
 	}
 }
 
@@ -1186,10 +1220,7 @@ func classifyVolcanoSeverity(alertLevel string) string {
 }
 
 func normalizeVolcanoAlert(alert VolcanoAlert) connector.RawArtifact {
-	tier := "standard"
-	if alert.Severity == "severe" || alert.Severity == "extreme" {
-		tier = "full"
-	}
+	tier := processingTier(alert.Severity)
 
 	capturedAt := alert.Issued
 	if capturedAt.IsZero() {
@@ -1320,10 +1351,7 @@ func classifyWildfireSeverity(title, description string) string {
 }
 
 func normalizeWildfireAlert(alert WildfireAlert) connector.RawArtifact {
-	tier := "standard"
-	if alert.Severity == "extreme" || alert.Severity == "severe" {
-		tier = "full"
-	}
+	tier := processingTier(alert.Severity)
 
 	capturedAt := alert.PubDate
 	if capturedAt.IsZero() {
@@ -1450,10 +1478,7 @@ func classifyAQISeverity(aqi int) string {
 }
 
 func normalizeAirNowAlert(obs AirNowObservation, match *ProximityMatch) connector.RawArtifact {
-	tier := "standard"
-	if obs.Severity == "extreme" || obs.Severity == "severe" {
-		tier = "full"
-	}
+	tier := processingTier(obs.Severity)
 
 	capturedAt := obs.ObservationTime
 	if capturedAt.IsZero() {
@@ -1463,7 +1488,7 @@ func normalizeAirNowAlert(obs AirNowObservation, match *ProximityMatch) connecto
 	return connector.RawArtifact{
 		SourceID:    "gov-alerts",
 		SourceRef:   obs.ID,
-		ContentType: "alert/air_quality",
+		ContentType: "alert/air-quality",
 		Title:       fmt.Sprintf("Air Quality: %s — AQI %d (%s) near %s", obs.Pollutant, obs.AQI, obs.Category, match.LocationName),
 		RawContent:  fmt.Sprintf("AQI %d (%s) for %s in %s. Pollutant: %s.", obs.AQI, obs.Category, match.LocationName, obs.ReportingArea, obs.Pollutant),
 		URL:         "",
@@ -1591,10 +1616,7 @@ func classifyGDACSAlertLevel(level string) string {
 }
 
 func normalizeGDACSAlert(alert GDACSAlert, match *ProximityMatch) connector.RawArtifact {
-	tier := "standard"
-	if alert.Severity == "extreme" || alert.Severity == "severe" {
-		tier = "full"
-	}
+	tier := processingTier(alert.Severity)
 
 	capturedAt := alert.PubDate
 	if capturedAt.IsZero() {

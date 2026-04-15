@@ -402,7 +402,7 @@ func TestNormalizeEarthquake_TierAssignment(t *testing.T) {
 		{"extreme severity gets full tier", 7.5, 200, "full"},
 		{"severe severity gets full tier", 5.5, 50, "full"},
 		{"moderate severity gets standard tier", 3.5, 30, "standard"},
-		{"minor severity gets standard tier", 2.0, 500, "standard"},
+		{"minor severity gets light tier", 2.0, 500, "light"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1819,8 +1819,8 @@ func TestNormalizeNWSAlert_TierAssignment(t *testing.T) {
 		{"extreme gets full", "Extreme", "full"},
 		{"severe gets full", "Severe", "full"},
 		{"moderate gets standard", "Moderate", "standard"},
-		{"minor gets standard", "Minor", "standard"},
-		{"unknown gets standard", "FooBar", "standard"},
+		{"minor gets light", "Minor", "light"},
+		{"unknown gets light", "FooBar", "light"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2140,6 +2140,9 @@ func TestFetchNWSAlerts_PointInURL(t *testing.T) {
 	if !strings.Contains(requestedURL, "point=35.4700,-97.5200") {
 		t.Errorf("expected point=35.4700,-97.5200 in URL, got: %s", requestedURL)
 	}
+	if !strings.Contains(requestedURL, "status=actual") {
+		t.Errorf("expected status=actual in URL, got: %s", requestedURL)
+	}
 }
 
 // =====================================================
@@ -2158,6 +2161,11 @@ func tsunamiAtomXML(entries []string) string {
 func makeTsunamiEntry(id, title, summary, link, published string) string {
 	return fmt.Sprintf(`<entry><id>%s</id><title>%s</title><summary>%s</summary><link href="%s"/><published>%s</published></entry>`,
 		id, title, summary, link, published)
+}
+
+func makeTsunamiEntryWithGeo(id, title, summary, link, published, geoPoint string) string {
+	return fmt.Sprintf(`<entry><id>%s</id><title>%s</title><summary>%s</summary><link href="%s"/><published>%s</published><point xmlns="http://www.georss.org/georss">%s</point></entry>`,
+		id, title, summary, link, published, geoPoint)
 }
 
 func TestFetchTsunamiAlerts_ValidResponse(t *testing.T) {
@@ -2266,9 +2274,11 @@ func TestNormalizeTsunamiAlert(t *testing.T) {
 		Link:      "https://www.tsunami.gov/events/tsunami-test-001",
 		Published: time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC),
 		Severity:  "severe",
+		GeoPoint:  "61.2181 -149.9003",
 	}
 
-	artifact := normalizeTsunamiAlert(alert)
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 50}
+	artifact := normalizeTsunamiAlert(alert, match)
 	if artifact.SourceID != "gov-alerts" {
 		t.Errorf("SourceID = %q", artifact.SourceID)
 	}
@@ -2288,7 +2298,7 @@ func TestNormalizeTsunamiAlert(t *testing.T) {
 
 func TestSync_TsunamiSource(t *testing.T) {
 	entries := []string{
-		makeTsunamiEntry("tsunami-sync-1", "Tsunami Watch — West Coast", "Watch issued.", "https://example.com/1", "2024-03-15T10:30:00Z"),
+		makeTsunamiEntryWithGeo("tsunami-sync-1", "Tsunami Watch — West Coast", "Watch issued.", "https://example.com/1", "2024-03-15T10:30:00Z", "37.50 -122.10"),
 	}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -2708,7 +2718,7 @@ func TestNormalizeAirNowAlert(t *testing.T) {
 	match := &ProximityMatch{LocationName: "Home", DistanceKm: 5}
 
 	artifact := normalizeAirNowAlert(obs, match)
-	if artifact.ContentType != "alert/air_quality" {
+	if artifact.ContentType != "alert/air-quality" {
 		t.Errorf("ContentType = %q", artifact.ContentType)
 	}
 	if artifact.Metadata["source"] != "airnow" {
@@ -3803,7 +3813,7 @@ func TestSanitizeExternalURL(t *testing.T) {
 // TestTsunamiAlerts_JavascriptURLRejected verifies malicious URLs in tsunami feeds are sanitized.
 func TestTsunamiAlerts_JavascriptURLRejected(t *testing.T) {
 	entries := []string{
-		makeTsunamiEntry("tsunami-xss-1", "Tsunami Warning", "XSS test", "javascript:alert(document.cookie)", "2024-03-15T10:30:00Z"),
+		makeTsunamiEntryWithGeo("tsunami-xss-1", "Tsunami Warning", "XSS test", "javascript:alert(document.cookie)", "2024-03-15T10:30:00Z", "37.50 -122.10"),
 	}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")

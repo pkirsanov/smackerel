@@ -76,9 +76,11 @@ var DefaultSkipDomains = []string{
 func ShouldSkip(url string, skipDomains []string) bool {
 	domain := extractDomain(url)
 
-	// Match user skip domains against the extracted domain
+	// Match user skip domains against the extracted domain.
+	// Supports exact match and subdomain match (same pattern as IsSocialMedia)
+	// so that skip domain "corp.com" also blocks "www.corp.com" and "sub.corp.com".
 	for _, skip := range skipDomains {
-		if domain == skip {
+		if domain == skip || strings.HasSuffix(domain, "."+skip) {
 			return true
 		}
 	}
