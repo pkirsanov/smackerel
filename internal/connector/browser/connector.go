@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -384,8 +385,24 @@ func (c *Connector) processEntries(entries []HistoryEntry, prevCursor int64) ([]
 		socialGroups[key] = append(socialGroups[key], e)
 	}
 
+	// Sort social group keys for deterministic artifact ordering across runs.
+	// Go map iteration is intentionally randomized; without sorting, the same
+	// input produces artifacts in different orders, complicating debugging and
+	// downstream ordering-sensitive processing.
+	var socialKeys []domainDay
+	for key := range socialGroups {
+		socialKeys = append(socialKeys, key)
+	}
+	sort.Slice(socialKeys, func(i, j int) bool {
+		if socialKeys[i].domain != socialKeys[j].domain {
+			return socialKeys[i].domain < socialKeys[j].domain
+		}
+		return socialKeys[i].day < socialKeys[j].day
+	})
+
 	var artifacts []connector.RawArtifact
-	for key, group := range socialGroups {
+	for _, key := range socialKeys {
+		group := socialGroups[key]
 		day, _ := time.Parse("2006-01-02", key.day)
 		agg := c.buildSocialAggregate(key.domain, group, day)
 		artifacts = append(artifacts, agg)
