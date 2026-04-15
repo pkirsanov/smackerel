@@ -29,33 +29,25 @@ func (d *Dependencies) BookmarkImportHandler(w http.ResponseWriter, r *http.Requ
 	r.Body = http.MaxBytesReader(w, r.Body, maxBookmarkUploadSize)
 
 	if err := r.ParseMultipartForm(maxBookmarkUploadSize); err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{Code: "INVALID_INPUT", Message: "Failed to parse multipart form"},
-		})
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Failed to parse multipart form")
 		return
 	}
 
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{Code: "INVALID_INPUT", Message: "Missing 'file' field in upload"},
-		})
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Missing 'file' field in upload")
 		return
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(file)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{Code: "INVALID_INPUT", Message: "Failed to read uploaded file"},
-		})
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Failed to read uploaded file")
 		return
 	}
 
 	if len(data) == 0 {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{Code: "INVALID_INPUT", Message: "Uploaded file is empty"},
-		})
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Uploaded file is empty")
 		return
 	}
 
@@ -66,9 +58,7 @@ func (d *Dependencies) BookmarkImportHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	if len(parsed) == 0 {
-		writeJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{Code: "UNSUPPORTED_FORMAT", Message: "File is neither Chrome JSON nor Netscape HTML bookmark format"},
-		})
+		writeError(w, http.StatusBadRequest, "UNSUPPORTED_FORMAT", "File is neither Chrome JSON nor Netscape HTML bookmark format")
 		return
 	}
 

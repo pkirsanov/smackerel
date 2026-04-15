@@ -141,29 +141,43 @@ Smackerel is **not** a to-do app, not a note-taking app, not a bookmarking tool,
 
 ```mermaid
 graph TB
-    subgraph "Passive Ingestion Layer"
-        GMAIL[Gmail API - google-api-go]
+    subgraph "Passive Ingestion Layer (✅ Committed)"
+        IMAP[Email - go-imap]
         YOUTUBE[YouTube Data API]
-        GCAL[Google Calendar API - google-api-go]
-        OUTLOOK[Outlook/Teams - msgraph-sdk-go]
+        CALDAV[CalDAV - go-webdav]
         GMAPS[Google Maps Timeline]
         BROWSER[Browser History]
         PODCASTS[Podcast RSS - gofeed]
+        KEEP[Google Keep]
+        BOOKMARKS[Bookmarks]
+        WEATHER[Weather API]
+        ALERTS_CONN[Gov Alerts]
+        MARKETS[Financial Markets]
+        TWITTER[Twitter / X]
+        DISCORD_CONN[Discord - discordgo]
+        HOSPITABLE[Hospitable]
+        GUESTHOST[GuestHost]
+    end
+
+    subgraph "Passive Ingestion Layer (🔜 Planned)"
+        GMAIL_SDK[Gmail SDK - google-api-go]
+        OUTLOOK[Outlook/Teams - msgraph-sdk-go]
         NOTES[Notion - notionapi / Obsidian - filesystem]
     end
 
     subgraph "Active Capture Layer"
-        SHARE[Mobile Share Sheet]
-        BEXT[Browser Extension]
         TG_CAP[Telegram Bot - telegram-bot-api]
-        SLACK_CAP[Slack Bot - slack-go]
         DISC_CAP[Discord Bot - discordgo]
         FWD[Email Forward - go-imap]
-        VOICE[Voice Input]
+        WEB_CAP[Smackerel Web UI]
+        SHARE[Mobile Share Sheet 🔜]
+        BEXT[Browser Extension 🔜]
+        SLACK_CAP[Slack Bot - slack-go 🔜]
+        VOICE[Voice Input 🔜]
     end
 
     subgraph "smackerel-core — Go"
-        API[HTTP API - Chi/Gin]
+        API[HTTP API - Chi]
         CONNECTORS[Connector Plugins]
         SCHEDULER[Cron Scheduler]
         EXTRACT[Content Extraction - go-readability]
@@ -204,14 +218,21 @@ graph TB
         VOICE_OUT[Voice / Talk Mode]
     end
 
-    GMAIL --> CONNECTORS
+    IMAP --> CONNECTORS
     YOUTUBE --> CONNECTORS
-    GCAL --> CONNECTORS
-    OUTLOOK --> CONNECTORS
+    CALDAV --> CONNECTORS
     GMAPS --> CONNECTORS
     BROWSER --> CONNECTORS
     PODCASTS --> CONNECTORS
-    NOTES --> CONNECTORS
+    KEEP --> CONNECTORS
+    BOOKMARKS --> CONNECTORS
+    WEATHER --> CONNECTORS
+    ALERTS_CONN --> CONNECTORS
+    MARKETS --> CONNECTORS
+    TWITTER --> CONNECTORS
+    DISCORD_CONN --> CONNECTORS
+    HOSPITABLE --> CONNECTORS
+    GUESTHOST --> CONNECTORS
 
     SHARE --> API
     BEXT --> API
@@ -220,6 +241,7 @@ graph TB
     DISC_CAP --> API
     FWD --> CONNECTORS
     VOICE --> API
+    WEB_CAP --> API
 
     SCHEDULER --> CONNECTORS
     CONNECTORS --> EXTRACT
@@ -259,14 +281,14 @@ graph TB
 graph LR
     subgraph "Channels (Go SDKs)"
         A1[Telegram - go-telegram-bot-api]
-        A2[Slack - slack-go]
-        A3[Discord - discordgo]
-        A4[WebChat]
-        A5[Voice]
+        A2[Discord - discordgo]
+        A3[WebChat]
+        A4[Slack - slack-go 🔜]
+        A5[Voice 🔜]
     end
 
     subgraph "Core Runtime (Go)"
-        B1[HTTP API - Chi/Gin]
+        B1[HTTP API - Chi]
         B2[Connectors]
         B3[Cron Scheduler]
         B4[Knowledge Graph Engine]
@@ -1893,8 +1915,7 @@ gantt
 | 1.7 | Build daily digest | Digest generation + Telegram delivery |
 | 1.8 | Connect Telegram bot | Primary active capture + delivery channel |
 | 1.9 | Build repo CLI | `./smackerel.sh` for all runtime operations |
-| 1.10 | Connect Telegram bot | Primary active capture + delivery channel |
-| 1.11 | Test with 50 captures | Verify processing, search, digest quality |
+| 1.10 | Test with 50 captures | Verify processing, search, digest quality |
 
 **Exit criteria:** Can capture URLs/text from a chat channel. Can find them later with vague queries. Gets a useful daily digest.
 
@@ -2246,7 +2267,7 @@ In addition to technology selection, the runtime implementation must satisfy the
 
 | Layer | Technology | Language | License | Stars / Scale Proof |
 |-------|-----------|----------|---------|---------------------|
-| **Core service** | Custom (Gin or Chi router) | Go | MIT | Go runs Docker, K8s, half the cloud |
+| **Core service** | Custom (Chi router) | Go | MIT | Go runs Docker, K8s, half the cloud |
 | **ML sidecar** | Custom (FastAPI) | Python | MIT | Only for embeddings + LLM calls (~5% of codebase) |
 | **Database** | PostgreSQL + pgvector | C | PostgreSQL License | 40 years proven, billions of rows, pgvector 14k stars |
 | **Message bus** | NATS JetStream | Go | Apache 2.0 | 17k stars. Tesla, Huawei, Ericsson. |
@@ -2265,23 +2286,34 @@ In addition to technology selection, the runtime implementation must satisfy the
 ```
 docker-compose.yml
 ├── smackerel-core (Go)            # API + connectors + scheduler + knowledge graph
-│   ├── HTTP API (Chi/Gin)
+│   ├── HTTP API (Chi)
 │   │   ├── POST /api/capture      # Active capture
 │   │   ├── POST /api/search       # Semantic search
 │   │   ├── GET  /api/digest       # Daily/weekly digest
 │   │   └── GET  /api/health       # Health check
-│   ├── Connector plugins
-│   │   ├── Gmail (google-api-go)
-│   │   ├── Google Calendar (google-api-go)
-│   │   ├── Outlook/Teams (msgraph-sdk-go)
-│   │   ├── Slack (slack-go)
-│   │   ├── Telegram (telegram-bot-api)
-│   │   ├── Discord (discordgo)
-│   │   ├── Notion (notionapi)
-│   │   ├── IMAP generic (go-imap)
-│   │   ├── CalDAV (go-webdav)
-│   │   ├── RSS/Podcasts (gofeed)
-│   │   └── Obsidian (filesystem)
+│   ├── Connector plugins (15 committed)
+│   │   ├── Gov Alerts (alerts/)
+│   │   ├── Bookmarks (bookmarks/)
+│   │   ├── Browser History (browser/)
+│   │   ├── CalDAV (caldav/ — go-webdav)
+│   │   ├── Discord (discord/ — discordgo)
+│   │   ├── GuestHost (guesthost/)
+│   │   ├── Hospitable (hospitable/)
+│   │   ├── IMAP Email (imap/ — go-imap v2)
+│   │   ├── Google Keep (keep/)
+│   │   ├── Google Maps (maps/)
+│   │   ├── Financial Markets (markets/)
+│   │   ├── RSS/Podcasts (rss/ — gofeed)
+│   │   ├── Twitter/X (twitter/)
+│   │   ├── Weather (weather/)
+│   │   └── YouTube (youtube/)
+│   │   Planned connectors:
+│   │   ├── Gmail SDK (google-api-go) 🔜
+│   │   ├── Google Calendar SDK (google-api-go) 🔜
+│   │   ├── Outlook/Teams (msgraph-sdk-go) 🔜
+│   │   ├── Slack (slack-go) 🔜
+│   │   ├── Notion (notionapi) 🔜
+│   │   └── Obsidian (filesystem) 🔜
 │   ├── Content extraction (go-readability)
 │   ├── Knowledge graph engine
 │   ├── Topic lifecycle & momentum scoring
@@ -2361,7 +2393,7 @@ When the MVP outgrows the monolith:
 
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| Core Runtime | Go (Chi/Gin) | Compiled, high-performance, single binary, goroutine concurrency |
+| Core Runtime | Go (Chi) | Compiled, high-performance, single binary, goroutine concurrency |
 | ML Sidecar | Python (FastAPI) | Embedding + LLM inference only, <5% of codebase |
 | Database | PostgreSQL + pgvector | 40-year proven track record, structured + vector in one DB |
 | Message Bus | NATS JetStream | Go-native, Apache 2.0, proven at Tesla/Ericsson scale |
