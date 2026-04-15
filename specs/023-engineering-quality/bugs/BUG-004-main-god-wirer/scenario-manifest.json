@@ -1,0 +1,25 @@
+{
+  "scenarios": [
+    {
+      "id": "SCN-BUG-004-001",
+      "title": "Application starts successfully after extraction",
+      "status": "planned",
+      "testFile": null,
+      "testName": null
+    },
+    {
+      "id": "SCN-BUG-004-002",
+      "title": "main.go contains only lifecycle code",
+      "status": "planned",
+      "testFile": null,
+      "testName": null
+    },
+    {
+      "id": "SCN-BUG-004-003",
+      "title": "All existing main_test.go tests pass unchanged",
+      "status": "planned",
+      "testFile": null,
+      "testName": null
+    }
+  ]
+}

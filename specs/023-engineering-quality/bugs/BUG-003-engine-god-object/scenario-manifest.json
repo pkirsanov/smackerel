@@ -1,0 +1,25 @@
+{
+  "scenarios": [
+    {
+      "id": "SCN-BUG-003-001",
+      "title": "All Engine methods remain callable after split",
+      "status": "planned",
+      "testFile": null,
+      "testName": null
+    },
+    {
+      "id": "SCN-BUG-003-002",
+      "title": "engine.go contains only struct and constructor",
+      "status": "planned",
+      "testFile": null,
+      "testName": null
+    },
+    {
+      "id": "SCN-BUG-003-003",
+      "title": "All existing engine tests pass unchanged",
+      "status": "planned",
+      "testFile": null,
+      "testName": null
+    }
+  ]
+}
