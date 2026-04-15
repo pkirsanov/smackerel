@@ -195,14 +195,14 @@ func (ep *EventPoller) pollChannel(ctx context.Context, channelID string) {
 				slog.Warn("discord event poller buffer full, dropping event",
 					"channel", channelID, "message_id", msg.ID)
 			}
-			if msg.ID > maxID {
+			if snowflakeGreater(msg.ID, maxID) {
 				maxID = msg.ID
 			}
 		}
 
 		if maxID != "" {
 			ep.mu.Lock()
-			if maxID > ep.cursors[channelID] {
+			if snowflakeGreater(maxID, ep.cursors[channelID]) {
 				ep.cursors[channelID] = maxID
 			}
 			ep.mu.Unlock()

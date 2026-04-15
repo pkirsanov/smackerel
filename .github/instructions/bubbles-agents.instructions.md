@@ -76,6 +76,19 @@ Brief statement of what this agent does.
 Description of expected output structure.
 ```
 
+### Writing Effective Rules (Negative Rules First)
+
+**Explicit prohibitions yield the biggest quality improvements.** When defining agent rules, prioritize what the agent must NEVER do over what it should do. The AI can often infer positive patterns from code context, but it cannot infer architectural boundaries, security constraints, or project-specific prohibitions.
+
+| Rule Type | Effectiveness | Example |
+|-----------|--------------|----------|
+| **Prohibition** ("NEVER", "FORBIDDEN") | Highest impact | "NEVER use `unwrap()` in production code" |
+| **Boundary** ("ONLY", "MUST NOT cross") | High impact | "Python services MUST NOT access databases directly" |
+| **Constraint** ("MUST", "REQUIRED") | Medium impact | "All operations MUST have explicit timeouts" |
+| **Preference** ("Prefer", "Use") | Lower impact | "Prefer borrowing over cloning" |
+
+Focus instruction content on rules the AI cannot infer from the code alone — security guardrails, cross-layer restrictions, naming conventions, and architectural boundaries.
+
 ## Agent Definition Best Practices
 
 - Start with **Agent Identity** so readers immediately know who/what is acting.

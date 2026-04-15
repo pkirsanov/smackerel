@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -20,6 +21,7 @@ type Connector struct {
 	id     string
 	config connector.ConnectorConfig
 	health connector.HealthStatus
+	mu     sync.RWMutex // IMP-005-SQS-001: Protect concurrent access to config/health
 }
 
 // CalendarEvent represents a parsed calendar event.
@@ -45,29 +47,44 @@ func New(id string) *Connector {
 func (c *Connector) ID() string { return c.id }
 
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
-	c.config = config
 	if config.AuthType != "oauth2" {
+		c.mu.Lock()
+		c.health = connector.HealthError
+		c.mu.Unlock()
 		return fmt.Errorf("CalDAV connector requires oauth2 auth")
 	}
+	c.mu.Lock()
+	c.config = config
 	c.health = connector.HealthHealthy
+	c.mu.Unlock()
 	slog.Info("CalDAV connector connected", "id", c.id)
 	return nil
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+	c.mu.Lock()
 	if c.health == connector.HealthDisconnected {
+		c.mu.Unlock()
 		return nil, "", fmt.Errorf("CalDAV connector %q: Sync called before Connect", c.id)
 	}
 	c.health = connector.HealthSyncing
+	// Snapshot config under lock to avoid data race with concurrent Connect (IMP-005-SQS-001).
+	cfg := c.config
+	c.mu.Unlock()
+
 	defer func() {
+		c.mu.Lock()
 		if c.health == connector.HealthSyncing {
 			c.health = connector.HealthHealthy
 		}
+		c.mu.Unlock()
 	}()
 
-	events, err := c.fetchEvents(ctx, cursor)
+	events, err := c.fetchEventsFrom(ctx, cfg, cursor)
 	if err != nil {
+		c.mu.Lock()
 		c.health = connector.HealthError
+		c.mu.Unlock()
 		return nil, cursor, fmt.Errorf("fetch events: %w", err)
 	}
 
@@ -155,16 +172,17 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	return artifacts, newCursor, nil
 }
 
-// fetchEvents retrieves events from source config (for testing/local)
+// fetchEventsFrom retrieves events from source config (for testing/local)
 // or from the Google Calendar REST API when OAuth credentials are present.
-func (c *Connector) fetchEvents(ctx context.Context, cursor string) ([]CalendarEvent, error) {
-	rawEvents, ok := c.config.SourceConfig["events"]
+// IMP-005-SQS-001: Takes config as parameter to avoid reading c.config without lock.
+func (c *Connector) fetchEventsFrom(ctx context.Context, cfg connector.ConnectorConfig, cursor string) ([]CalendarEvent, error) {
+	rawEvents, ok := cfg.SourceConfig["events"]
 	if ok {
 		return parseCalendarEvents(rawEvents)
 	}
 
 	// Check for OAuth access token (live API path)
-	accessToken := getCredential(c.config.Credentials, "access_token")
+	accessToken := getCredential(cfg.Credentials, "access_token")
 	if accessToken == "" {
 		slog.Debug("CalDAV: no source_config events and no access_token", "id", c.id)
 		return nil, nil
@@ -409,9 +427,15 @@ func getStr(m map[string]interface{}, key string) string {
 	return ""
 }
 
-func (c *Connector) Health(ctx context.Context) connector.HealthStatus { return c.health }
+func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.health
+}
 func (c *Connector) Close() error {
+	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	c.mu.Unlock()
 	return nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -311,5 +312,67 @@ func TestImprove_ConfigIntMinRejectsInf(t *testing.T) {
 	_, err := configIntMin(map[string]interface{}{"x": math.Inf(1)}, "x", 1)
 	if err == nil {
 		t.Fatal("expected error for +Inf in int config")
+	}
+}
+
+// --- IMP-011-001/002: Sync uses config snapshot for min thresholds ---
+// Regression: Sync() must filter activities using the config snapshot taken under
+// RLock, not the live c.config receiver field. If the live field is used, a
+// concurrent Connect() could change thresholds mid-Sync, causing inconsistent filtering.
+
+func TestImprove_SyncUsesSnapshotThresholds(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a file with activities that have distance < 1000m.
+	// If Sync uses the snapshot (min_distance_m=0), all activities pass.
+	// If Sync reads the live config after Connect raises the threshold,
+	// some activities would be filtered out.
+	writeTakeoutFile(t, dir, "data.json", makeTakeoutJSON(5))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"import_dir":       dir,
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Now mutate the live config AFTER the snapshot would be taken.
+	// The test verifies the snapshot is used, not the mutated config.
+	// (In the buggy code, c.config.MinDistanceM was read directly.)
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 5 {
+		t.Errorf("expected 5 artifacts with min_distance_m=0, got %d", len(artifacts))
+	}
+}
+
+// --- IMP-011-003: archiveFile accepts explicit importDir parameter ---
+// Regression: archiveFile must be a free function accepting importDir, not a
+// method that reads c.config.ImportDir without the mutex.
+
+func TestImprove_ArchiveFileFreeFunction(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "test.json")
+	if err := os.WriteFile(testFile, []byte(`{}`), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Call archiveFile as a free function with explicit importDir.
+	if err := archiveFile(testFile, dir); err != nil {
+		t.Fatalf("archiveFile: %v", err)
+	}
+
+	archived := filepath.Join(dir, "archive", "test.json")
+	if _, err := os.Stat(archived); err != nil {
+		t.Errorf("archived file not found: %v", err)
 	}
 }

@@ -198,6 +198,108 @@ func TestShouldSkipShortContent(t *testing.T) {
 	}
 }
 
+// --- Labels Filter Tests (R-012) ---
+
+func TestLabelsFilterSkipsNonMatchingLabeledNotes(t *testing.T) {
+	n := NewNormalizer(KeepConfig{LabelsFilter: []string{"Work", "Personal"}})
+	note := &TakeoutNote{
+		Title:                   "Travel Note",
+		TextContent:             "Some travel thoughts that are long enough",
+		Labels:                  []TakeoutLabel{{Name: "Travel"}},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if !n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("note with non-matching label should be skipped when labels filter is active")
+	}
+}
+
+func TestLabelsFilterAllowsMatchingLabeledNotes(t *testing.T) {
+	n := NewNormalizer(KeepConfig{LabelsFilter: []string{"Work", "Personal"}})
+	note := &TakeoutNote{
+		Title:                   "Work Note",
+		TextContent:             "Some work thoughts that are long enough",
+		Labels:                  []TakeoutLabel{{Name: "Work"}},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("note with matching label should NOT be skipped")
+	}
+}
+
+func TestLabelsFilterIsCaseInsensitive(t *testing.T) {
+	n := NewNormalizer(KeepConfig{LabelsFilter: []string{"Work"}})
+	note := &TakeoutNote{
+		Title:                   "Work Note",
+		TextContent:             "Case insensitive match content here",
+		Labels:                  []TakeoutLabel{{Name: "work"}},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("label filter should match case-insensitively")
+	}
+}
+
+func TestLabelsFilterPassesUnlabeledNotes(t *testing.T) {
+	n := NewNormalizer(KeepConfig{LabelsFilter: []string{"Work"}})
+	note := &TakeoutNote{
+		Title:                   "Unlabeled Note",
+		TextContent:             "No labels on this note at all",
+		Labels:                  nil,
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("unlabeled notes should pass through label filter (filter only restricts labeled notes)")
+	}
+}
+
+func TestLabelsFilterExemptsPinnedNotes(t *testing.T) {
+	n := NewNormalizer(KeepConfig{LabelsFilter: []string{"Work"}})
+	note := &TakeoutNote{
+		Title:                   "Pinned Travel Note",
+		TextContent:             "Pinned note with non-matching label",
+		Labels:                  []TakeoutLabel{{Name: "Travel"}},
+		IsPinned:                true,
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("pinned notes should be exempt from label filter per R-008 priority")
+	}
+}
+
+func TestLabelsFilterExemptsImageNotes(t *testing.T) {
+	n := NewNormalizer(KeepConfig{LabelsFilter: []string{"Work"}})
+	note := &TakeoutNote{
+		Title:                   "Photo with non-matching label",
+		TextContent:             "Photo description here",
+		Labels:                  []TakeoutLabel{{Name: "Travel"}},
+		Attachments:             []TakeoutAttachment{{FilePath: "photo.jpg", MimeType: "image/jpeg"}},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("image notes should be exempt from label filter per R-008 priority")
+	}
+}
+
+func TestLabelsFilterEmptyFilterPassesAll(t *testing.T) {
+	n := NewNormalizer(KeepConfig{LabelsFilter: nil})
+	note := &TakeoutNote{
+		Title:                   "Any Label Note",
+		TextContent:             "Should pass with any label when filter is empty",
+		Labels:                  []TakeoutLabel{{Name: "Random"}},
+		UserEditedTimestampUsec: time.Now().UnixMicro(),
+		CreatedTimestampUsec:    time.Now().UnixMicro(),
+	}
+	if n.shouldSkip(note, n.buildContent(note)) {
+		t.Error("empty labels filter should allow all notes through")
+	}
+}
+
 func TestAudioAttachmentInContent(t *testing.T) {
 	n := NewNormalizer(KeepConfig{})
 	note := &TakeoutNote{

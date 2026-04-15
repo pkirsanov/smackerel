@@ -166,13 +166,17 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			slog.Error("hospitable: property sync failed", "error", err)
 			syncErrors++
 		} else {
+			// IMP-012-SQS-001: Batch property name cache writes under a single
+			// lock acquisition instead of per-property lock/unlock churn.
+			c.mu.Lock()
 			for _, p := range props {
 				// SEC-012-007: Skip oversized ID/name strings (CWE-400).
 				if len(p.ID) <= maxCacheStringLen && len(p.Name) <= maxCacheStringLen {
-					c.mu.Lock()
 					c.propertyNames[p.ID] = p.Name
-					c.mu.Unlock()
 				}
+			}
+			c.mu.Unlock()
+			for _, p := range props {
 				allArtifacts = append(allArtifacts, NormalizeProperty(p, config))
 			}
 			syncCursor.Properties = time.Now().UTC()
@@ -242,6 +246,19 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		}
 		var msgCount int
 		for _, resID := range reservationIDs {
+			// IMP-012-002: Short-circuit on context cancellation to avoid up to
+			// maxMessageSyncReservations unnecessary API calls after timeout.
+			if err := syncCtx.Err(); err != nil {
+				slog.Warn("hospitable: message sync cancelled", "error", err,
+					"fetched", msgCount, "remaining", len(reservationIDs))
+				msgAnyFailed = true
+				break
+			}
+			// IMP-012-003: Skip empty reservation IDs to prevent malformed API paths.
+			if resID == "" {
+				slog.Warn("hospitable: skipping empty reservation ID in message fetch")
+				continue
+			}
 			messages, err := client.ListMessages(syncCtx, resID, syncCursor.Messages)
 			if err != nil {
 				slog.Warn("hospitable: message sync failed for reservation",
@@ -355,6 +372,19 @@ func (c *Connector) Health(_ context.Context) connector.HealthStatus {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.health
+}
+
+// SyncMetrics returns the last sync time, per-resource counts, and error count
+// for monitoring and health observability (IMP-012-SQS-002).
+func (c *Connector) SyncMetrics() (lastSync time.Time, counts map[string]int, errors int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	// Return a copy of the counts map to prevent data races on the caller side.
+	copy := make(map[string]int, len(c.lastSyncCounts))
+	for k, v := range c.lastSyncCounts {
+		copy[k] = v
+	}
+	return c.lastSyncTime, copy, c.lastSyncErrors
 }
 
 func (c *Connector) Close() error {

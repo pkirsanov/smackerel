@@ -2369,6 +2369,177 @@ func TestSEC012010_ReviewChannelControlChars(t *testing.T) {
 	}
 }
 
+// --- IMP-012-001: Context cancellation check in fetchPaginated loop ---
+
+func TestIMP012001_PaginationStopsOnContextCancel(t *testing.T) {
+	// Server returns 100 pages; client must stop promptly after context cancellation.
+	// Without the ctx.Err() check at loop top, the client would attempt to create
+	// and execute HTTP requests for many more pages.
+	var pageCount atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pageCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		resp := PaginatedResponse[Property]{
+			Data:  []Property{{ID: fmt.Sprintf("p%d", pageCount.Load()), Name: "House"}},
+			Total: 100,
+		}
+		resp.NextURL = fmt.Sprintf("%s/properties?page=%d", r.Host, pageCount.Load()+1)
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 10)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel after 3 pages to test early termination
+	go func() {
+		for pageCount.Load() < 3 {
+			time.Sleep(1 * time.Millisecond)
+		}
+		cancel()
+	}()
+
+	props, err := client.ListProperties(ctx, time.Time{})
+	if err == nil {
+		t.Logf("IMP-012-001: got %d pages without error (stopped naturally)", len(props))
+	}
+
+	// The key assertion: we should NOT have fetched all 100+ pages.
+	// With the ctx.Err() check, we stop almost immediately after cancellation.
+	pages := pageCount.Load()
+	if pages > 10 {
+		t.Errorf("IMP-012-001: fetched %d pages after cancellation — should stop promptly (got %d props)", pages, len(props))
+	}
+	_ = err // error is expected (context cancelled)
+}
+
+// --- IMP-012-002: Context cancellation check in per-reservation message loop ---
+
+func TestIMP012002_MessageLoopStopsOnContextCancel(t *testing.T) {
+	// Connector has 50 reservations; context is cancelled after 3 message fetches.
+	// Without the syncCtx.Err() check, all 50 reservations would be attempted.
+	var msgFetches atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/properties":
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+		case r.URL.Path == "/reservations":
+			var reservations []Reservation
+			for i := 0; i < 50; i++ {
+				reservations = append(reservations, Reservation{
+					ID: fmt.Sprintf("r%d", i), PropertyID: "p1",
+					GuestName: fmt.Sprintf("Guest %d", i),
+					CheckIn:   "2026-04-15", CheckOut: "2026-04-18",
+					BookedAt: time.Now(),
+				})
+			}
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: reservations, Total: 50})
+		case strings.Contains(r.URL.Path, "/messages"):
+			msgFetches.Add(1)
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{
+				Data:  []Message{{ID: fmt.Sprintf("m%d", msgFetches.Load()), Sender: "Test", Body: "hi", SentAt: time.Now()}},
+				Total: 1,
+			})
+		case r.URL.Path == "/reviews":
+			json.NewEncoder(w).Encode(PaginatedResponse[Review]{Data: []Review{}, Total: 0})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 100,
+		SyncProperties: true, SyncReservations: true, SyncMessages: true, SyncReviews: true,
+		TierProperties: "light", TierReservations: "standard",
+		TierMessages: "full", TierReviews: "full", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 100)
+	c.health = connector.HealthHealthy
+
+	// Use a context that cancels after a few message fetches
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for msgFetches.Load() < 3 {
+			time.Sleep(1 * time.Millisecond)
+		}
+		cancel()
+	}()
+
+	_, _, _ = c.Sync(ctx, "")
+
+	fetches := msgFetches.Load()
+	// Should stop well before 50 (the total reservation count)
+	if fetches > 15 {
+		t.Errorf("IMP-012-002: %d message fetches after context cancel — should stop promptly (50 reservations)", fetches)
+	}
+}
+
+// --- IMP-012-003: Empty reservation IDs skipped in message fetch ---
+
+func TestIMP012003_EmptyReservationIDSkipped(t *testing.T) {
+	// If the API returns a reservation with empty ID, message fetch should skip it
+	// instead of creating a malformed /reservations//messages request.
+	var msgPaths []string
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/properties":
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+		case r.URL.Path == "/reservations":
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{
+				Data: []Reservation{
+					{ID: "", PropertyID: "p1", GuestName: "Empty ID", CheckIn: "2026-04-15", CheckOut: "2026-04-18", BookedAt: time.Now()},
+					{ID: "r1", PropertyID: "p1", GuestName: "Valid", CheckIn: "2026-04-15", CheckOut: "2026-04-18", BookedAt: time.Now()},
+				},
+				Total: 2,
+			})
+		case strings.Contains(r.URL.Path, "/messages"):
+			mu.Lock()
+			msgPaths = append(msgPaths, r.URL.Path)
+			mu.Unlock()
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		case r.URL.Path == "/reviews":
+			json.NewEncoder(w).Encode(PaginatedResponse[Review]{Data: []Review{}, Total: 0})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: true, SyncMessages: true, SyncReviews: true,
+		TierProperties: "light", TierReservations: "standard",
+		TierMessages: "full", TierReviews: "full", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Should have fetched messages only for "r1", not for empty ID
+	for _, path := range msgPaths {
+		if strings.Contains(path, "/reservations//messages") {
+			t.Errorf("IMP-012-003: malformed message path with empty reservation ID: %s", path)
+		}
+	}
+	// Should have exactly 1 message fetch (for r1), not 2
+	if len(msgPaths) != 1 {
+		t.Errorf("IMP-012-003: expected 1 message fetch (skip empty ID), got %d: %v", len(msgPaths), msgPaths)
+	}
+}
+
 func TestSEC012010_CleanChannelStatusPreserved(t *testing.T) {
 	cfg := HospitableConfig{TierReservations: "standard"}
 	r := Reservation{

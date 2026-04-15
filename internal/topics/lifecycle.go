@@ -133,23 +133,22 @@ func (l *Lifecycle) UpdateAllMomentum(ctx context.Context) error {
 		momentum := CalculateMomentum(cap30, cap90, search30, starCount, connCount, daysSince, l.Config)
 		newState := TransitionState(State(state), momentum)
 
-		if State(state) != newState || true { // Always update momentum_score
-			_, err := l.Pool.Exec(ctx, `
-				UPDATE topics SET momentum_score = $2, state = $3, updated_at = NOW()
-				WHERE id = $1
-			`, id, momentum, string(newState))
-			if err != nil {
-				slog.Warn("update topic momentum", "id", id, "error", err)
-			}
+		// Update momentum score in DB; skip write when state and momentum are unchanged.
+		_, err := l.Pool.Exec(ctx, `
+			UPDATE topics SET momentum_score = $2, state = $3, updated_at = NOW()
+			WHERE id = $1 AND (state != $3 OR momentum_score IS DISTINCT FROM $2)
+		`, id, momentum, string(newState))
+		if err != nil {
+			slog.Warn("update topic momentum", "id", id, "error", err)
+		}
 
-			if State(state) != newState {
-				slog.Info("topic state transition",
-					"topic", name,
-					"from", state,
-					"to", newState,
-					"momentum", momentum,
-				)
-			}
+		if State(state) != newState {
+			slog.Info("topic state transition",
+				"topic", name,
+				"from", state,
+				"to", newState,
+				"momentum", momentum,
+			)
 		}
 	}
 

@@ -74,6 +74,7 @@ applyTo: agent  # or "prompt"
 - Use **imperative language**: "Run validation" not "You should run validation"
 - Be **action-oriented**: Focus on what to do, not background
 - Keep **short**: If a section exceeds 50 lines, split into references/
+- **Prioritize negative rules**: Explicit prohibitions ("NEVER do X", "FORBIDDEN: Y") yield the biggest quality improvements. Focus on rules the AI cannot infer from code alone — architectural boundaries, cross-layer restrictions, naming conventions, and security guardrails. Studies show negative rules are more effective than positive guidance at preventing AI mistakes.
 
 ### Example SKILL.md Structure
 

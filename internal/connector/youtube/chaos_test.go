@@ -198,21 +198,21 @@ func TestChaos_Sync_UnicodeVideoFields(t *testing.T) {
 // --- Chaos: EngagementTier edge cases ---
 
 func TestChaos_EngagementTier_BothLikedAndPlaylist(t *testing.T) {
-	tier := EngagementTier(true, true, "My Playlist")
+	tier := EngagementTier(true, true, "My Playlist", 0.0)
 	if tier != "full" {
 		t.Errorf("both liked and playlist should give full, got %q", tier)
 	}
 }
 
 func TestChaos_EngagementTier_AllFlagsTrue(t *testing.T) {
-	tier := EngagementTier(true, true, "Playlist")
+	tier := EngagementTier(true, true, "Playlist", 1.0)
 	if tier != "full" {
 		t.Errorf("all flags true should give full, got %q", tier)
 	}
 }
 
 func TestChaos_EngagementTier_EmptyPlaylistName(t *testing.T) {
-	tier := EngagementTier(false, false, "")
+	tier := EngagementTier(false, false, "", 0.0)
 	if tier != "light" {
 		t.Errorf("empty playlist should give light, got %q", tier)
 	}
@@ -220,7 +220,7 @@ func TestChaos_EngagementTier_EmptyPlaylistName(t *testing.T) {
 
 func TestChaos_EngagementTier_WhitespacePlaylist(t *testing.T) {
 	// Playlist name is whitespace-only — still non-empty string
-	tier := EngagementTier(false, false, "   ")
+	tier := EngagementTier(false, false, "   ", 0.0)
 	if tier != "full" {
 		t.Errorf("whitespace playlist still non-empty → full, got %q", tier)
 	}

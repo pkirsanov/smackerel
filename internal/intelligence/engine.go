@@ -284,18 +284,19 @@ func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
 	}
 	// Single query: compute remaining delivery slots and fetch pending alerts in one round-trip.
 	// The age filter (SEC-021-001) prevents poison alerts from retrying indefinitely.
-	rows, err := e.Pool.Query(ctx, fmt.Sprintf(`
+	// Uses MAKE_INTERVAL instead of fmt.Sprintf to keep all SQL parameterized.
+	rows, err := e.Pool.Query(ctx, `
 		SELECT id, alert_type, title, body, priority, status, artifact_id, created_at
 		FROM alerts
 		WHERE (status = 'pending'
 		   OR (status = 'snoozed' AND snooze_until <= NOW()))
-		  AND created_at > NOW() - INTERVAL '%d days'
+		  AND created_at > NOW() - MAKE_INTERVAL(days => $1)
 		ORDER BY priority, created_at
 		LIMIT GREATEST(0, 2 - (
 			SELECT COUNT(*) FROM alerts
 			WHERE status = 'delivered' AND delivered_at >= CURRENT_DATE
 		))
-	`, maxPendingAlertAgeDays))
+	`, maxPendingAlertAgeDays)
 	if err != nil {
 		return nil, fmt.Errorf("query pending alerts: %w", err)
 	}
@@ -317,14 +318,55 @@ func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
 	return alerts, nil
 }
 
+// overdueItem holds the fields needed to create an overdue-commitment alert.
+type overdueItem struct {
+	id           string
+	text         string
+	expectedDate time.Time
+	person       string
+}
+
 // CheckOverdueCommitments finds action items past their expected date.
 func (e *Engine) CheckOverdueCommitments(ctx context.Context) error {
 	if e.Pool == nil {
 		return fmt.Errorf("commitment check requires a database connection")
 	}
 
-	// Query overdue items, excluding those that already have a pending/delivered commitment_overdue alert.
-	// This prevents duplicate alerts when CheckOverdueCommitments runs on consecutive days.
+	// Collect overdue items first, then close the cursor before creating
+	// alerts. This avoids holding a SELECT cursor open while performing
+	// INSERT operations, which would pin two pool connections simultaneously
+	// per iteration under high overdue counts (IMP-004-SQS-001).
+	items, err := e.collectOverdueItems(ctx)
+	if err != nil {
+		return err
+	}
+
+	localToday := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local)
+	for _, item := range items {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		daysOverdue := calendarDaysBetween(item.expectedDate, localToday)
+		if err := e.CreateAlert(ctx, &Alert{
+			AlertType:  AlertCommitmentOverdue,
+			Title:      fmt.Sprintf("Overdue: %s", item.text),
+			Body:       fmt.Sprintf("%s — %d days overdue (from %s)", item.text, daysOverdue, item.person),
+			Priority:   1,
+			ArtifactID: item.id,
+		}); err != nil {
+			slog.Warn("failed to create overdue alert", "action_item_id", item.id, "error", err)
+		}
+	}
+
+	return nil
+}
+
+// collectOverdueItems queries overdue action items and returns them as a slice,
+// closing the cursor before the caller performs any write operations.
+func (e *Engine) collectOverdueItems(ctx context.Context) ([]overdueItem, error) {
+	if e.Pool == nil {
+		return nil, fmt.Errorf("commitment check requires a database connection")
+	}
 	rows, err := e.Pool.Query(ctx, `
 		SELECT ai.id, ai.text, ai.expected_date, COALESCE(p.name, 'unknown')
 		FROM action_items ai
@@ -338,36 +380,23 @@ func (e *Engine) CheckOverdueCommitments(ctx context.Context) error {
 		  )
 	`)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
 
+	var items []overdueItem
 	for rows.Next() {
-		var id, text, person string
-		var expectedDate time.Time
-		if err := rows.Scan(&id, &text, &expectedDate, &person); err != nil {
+		var item overdueItem
+		if err := rows.Scan(&item.id, &item.text, &item.expectedDate, &item.person); err != nil {
 			slog.Warn("overdue commitment scan failed", "error", err)
 			continue
 		}
-
-		localToday := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local)
-		daysOverdue := calendarDaysBetween(expectedDate, localToday)
-		if err := e.CreateAlert(ctx, &Alert{
-			AlertType:  AlertCommitmentOverdue,
-			Title:      fmt.Sprintf("Overdue: %s", text),
-			Body:       fmt.Sprintf("%s — %d days overdue (from %s)", text, daysOverdue, person),
-			Priority:   1,
-			ArtifactID: id,
-		}); err != nil {
-			slog.Warn("failed to create overdue alert", "action_item_id", id, "error", err)
-		}
+		items = append(items, item)
 	}
-
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("overdue commitments row iteration: %w", err)
+		return items, fmt.Errorf("overdue commitments row iteration: %w", err)
 	}
-
-	return nil
+	return items, nil
 }
 
 // MeetingBrief is a pre-meeting context brief per R-306.
@@ -483,8 +512,17 @@ func (e *Engine) GeneratePreMeetingBriefs(ctx context.Context) ([]MeetingBrief, 
 }
 
 // buildAttendeeBrief assembles context for a single meeting attendee.
+// Checks ctx.Err() between sequential DB queries to abort early on
+// cancellation instead of running all 3 queries unconditionally
+// (IMP-004-SQS-002).
 func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeBrief {
 	ab := AttendeeBrief{Email: email}
+
+	if e.Pool == nil {
+		ab.IsNewContact = true
+		ab.Name = email
+		return ab
+	}
 
 	// Check if known contact
 	var personName string
@@ -518,6 +556,10 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 		}
 	}
 
+	if ctx.Err() != nil {
+		return ab
+	}
+
 	// Shared topics
 	topicRows, err := e.Pool.Query(ctx, `
 		SELECT DISTINCT t.name FROM topics t
@@ -534,6 +576,10 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 				ab.SharedTopics = append(ab.SharedTopics, t)
 			}
 		}
+	}
+
+	if ctx.Err() != nil {
+		return ab
 	}
 
 	// Pending action items from/to this person
@@ -800,16 +846,16 @@ func assembleWeeklySynthesisText(ws *WeeklySynthesis) string {
 			ws.Stats.ArtifactsProcessed, ws.Stats.NewConnections, ws.Stats.TopicsActive))
 	}
 
-	// INSIGHTS
+	// CONNECTION DISCOVERED (R-302 §2: highest-value cross-domain insight)
 	if len(ws.Insights) > 0 {
 		var lines []string
 		for _, i := range ws.Insights {
 			lines = append(lines, fmt.Sprintf("• %s (confidence: %.0f%%)", i.ThroughLine, i.Confidence*100))
 		}
-		sections = append(sections, "INSIGHTS:\n"+strings.Join(lines, "\n"))
+		sections = append(sections, "CONNECTION DISCOVERED:\n"+strings.Join(lines, "\n"))
 	}
 
-	// TOPICS
+	// TOPIC MOMENTUM (R-302 §3: rising, steady, declining with capture counts)
 	if len(ws.TopicMovement) > 0 {
 		var lines []string
 		for _, tm := range ws.TopicMovement {
@@ -821,7 +867,7 @@ func assembleWeeklySynthesisText(ws *WeeklySynthesis) string {
 			}
 			lines = append(lines, fmt.Sprintf("• %s %s (%d this week)", arrow, tm.TopicName, tm.Captures))
 		}
-		sections = append(sections, "TOPICS:\n"+strings.Join(lines, "\n"))
+		sections = append(sections, "TOPIC MOMENTUM:\n"+strings.Join(lines, "\n"))
 	}
 
 	// OPEN LOOPS
@@ -1049,11 +1095,13 @@ func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
 
 	// Use a safe date cast so a single artifact with a malformed return_deadline
 	// doesn't cause the entire query to fail (killing all return window detection).
+	// The regex validates month (01-12) and day (01-31) ranges to prevent
+	// dates like "2026-13-45" from reaching the ::date cast and crashing the query.
 	rows, err := e.Pool.Query(ctx, `
 		SELECT id, title, metadata->>'return_deadline' AS return_deadline
 		FROM artifacts
 		WHERE metadata->>'return_deadline' IS NOT NULL
-		  AND metadata->>'return_deadline' ~ '^\d{4}-\d{2}-\d{2}$'
+		  AND metadata->>'return_deadline' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$'
 		  AND (metadata->>'return_deadline')::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '5 days'
 		  AND NOT EXISTS (
 		    SELECT 1 FROM alerts

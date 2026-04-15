@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"log/slog"
+	"math/rand"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -108,6 +109,8 @@ func (s *Supervisor) TriggerSync(ctx context.Context, id string) {
 }
 
 // StopAll stops all running connectors, waits for goroutines to drain, and clears the running map.
+// Uses a bounded timeout (10s) to prevent blocking shutdown indefinitely if a connector's
+// Sync() hangs on an unresponsive external API (IMP-022-R30-001).
 func (s *Supervisor) StopAll() {
 	s.mu.Lock()
 	s.stopped = true
@@ -119,7 +122,18 @@ func (s *Supervisor) StopAll() {
 
 	// Wait for all goroutines to finish so downstream resources (NATS, DB)
 	// are not closed while connectors are still in-flight.
-	s.wg.Wait()
+	// Bounded at 10s to prevent indefinite hang if a Sync() call is stuck.
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// All connector goroutines exited cleanly
+	case <-time.After(10 * time.Second):
+		slog.Warn("connector supervisor stop timed out waiting for goroutines — proceeding with shutdown")
+	}
 }
 
 // runWithRecovery runs a connector sync loop and recovers from panics.
@@ -176,16 +190,20 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 				return
 			}
 
+			// Jitter the restart delay (3-7s) to prevent thundering herd when
+			// multiple connectors panic simultaneously (IMP-022-R30-002).
+			restartDelay := 3*time.Second + time.Duration(rand.Int63n(int64(4*time.Second)))
 			slog.Warn("restarting connector after panic",
 				"connector", id,
 				"panic_count", count,
 				"max_before_disable", maxPanicsBeforeDisable,
+				"restart_delay", restartDelay,
 			)
 			select {
 			case <-parentCtx.Done():
 				slog.Warn("skipping restart — context cancelled during delay", "connector", id)
 				return
-			case <-time.After(5 * time.Second):
+			case <-time.After(restartDelay):
 			}
 			// Re-check after sleep: shutdown may have started during the delay
 			if s.stopped || parentCtx.Err() != nil {
@@ -321,13 +339,14 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 			}
 		}
 
-		if s.stateStore != nil && len(items) > 0 {
-			if err := s.stateStore.Save(connCtx, &SyncState{
+		if s.stateStore != nil {
+			saveState := &SyncState{
 				SourceID:    id,
 				Enabled:     true,
 				SyncCursor:  newCursor,
 				ItemsSynced: len(items),
-			}); err != nil {
+			}
+			if err := s.stateStore.Save(connCtx, saveState); err != nil {
 				slog.Warn("failed to save connector sync state", "connector", id, "error", err)
 			}
 		}

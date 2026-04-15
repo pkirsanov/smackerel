@@ -1564,3 +1564,100 @@ func TestConfigPageSizeBelowCapPreserved(t *testing.T) {
 		t.Errorf("page_size = %d, want 50 (below cap should be preserved)", cfg.PageSize)
 	}
 }
+
+// --- IMP-012-SQS-002: SyncMetrics accessor ---
+
+func TestSyncMetrics_ReturnsCountsAfterSync(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data:  []Property{{ID: "p1", Name: "Beach House"}},
+				Total: 1,
+			})
+		case strings.Contains(r.URL.Path, "/messages"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		case strings.HasPrefix(r.URL.Path, "/reservations"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: []Reservation{}, Total: 0})
+		case strings.HasPrefix(r.URL.Path, "/reviews"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Review]{Data: []Review{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("metrics-test")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "tok"},
+		SourceConfig: map[string]interface{}{"base_url": srv.URL},
+	})
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+
+	_, _, err = c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	lastSync, counts, syncErrors := c.SyncMetrics()
+
+	if lastSync.IsZero() {
+		t.Error("IMP-012-SQS-002: SyncMetrics lastSync should not be zero after Sync")
+	}
+	if counts["properties"] != 1 {
+		t.Errorf("IMP-012-SQS-002: expected 1 property in counts, got %d", counts["properties"])
+	}
+	if syncErrors != 0 {
+		t.Errorf("IMP-012-SQS-002: expected 0 sync errors, got %d", syncErrors)
+	}
+
+	// Verify the returned map is a copy — mutating it should not affect the connector.
+	counts["properties"] = 999
+	_, counts2, _ := c.SyncMetrics()
+	if counts2["properties"] == 999 {
+		t.Error("IMP-012-SQS-002: SyncMetrics must return a copy, not the internal map")
+	}
+}
+
+// --- IMP-012-SQS-003: Empty page pagination early break ---
+
+func TestPagination_EmptyPageBreaksEarly(t *testing.T) {
+	pageCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pageCount++
+		w.Header().Set("Content-Type", "application/json")
+		// First page has data, second page is empty but still has a "next" link
+		switch pageCount {
+		case 1:
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data:    []Property{{ID: "p1", Name: "House"}},
+				Total:   1,
+				NextURL: fmt.Sprintf("%s/properties?page=2", r.Host),
+			})
+			w.Header().Set("Link", fmt.Sprintf(`<%s/properties?page=2>; rel="next"`, "http://"+r.Host))
+		default:
+			// Empty data but with pagination link — should trigger early break
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data:    []Property{},
+				Total:   1,
+				NextURL: fmt.Sprintf("%s/properties?page=3", r.Host),
+			})
+		}
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "tok", 10)
+	props, err := client.ListProperties(context.Background(), time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(props) != 1 {
+		t.Errorf("expected 1 property, got %d", len(props))
+	}
+	// Without the fix, pageCount would be 3+ (chasing the infinite empty page links).
+	// With the fix, it should stop at 2 (first page with data, second page empty → break).
+	if pageCount > 2 {
+		t.Errorf("IMP-012-SQS-003: expected at most 2 pages fetched, got %d (empty page should break early)", pageCount)
+	}
+}

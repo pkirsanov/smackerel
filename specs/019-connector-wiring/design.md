@@ -297,8 +297,12 @@ financial-markets:
 | `FINANCIAL_MARKETS_FRED_API_KEY` | `connectors.financial-markets.fred_api_key` | FRED auth (optional) |
 | `FINANCIAL_MARKETS_ALERT_THRESHOLD` | `connectors.financial-markets.alert_threshold` | Alert pct |
 | `FINANCIAL_MARKETS_WATCHLIST` | `connectors.financial-markets.watchlist` | JSON object `{stocks, etfs, crypto, forex_pairs}` |
+| `FINANCIAL_MARKETS_FRED_ENABLED` | `connectors.financial-markets.fred_enabled` | Enable FRED economic indicators |
+| `FINANCIAL_MARKETS_FRED_SERIES` | `connectors.financial-markets.fred_series` | JSON array of FRED series IDs |
 
 > **SST Gap (fixed 2026-04-10):** `connectors.financial-markets.coingecko_enabled` is now extracted as `FINANCIAL_MARKETS_COINGECKO_ENABLED` in the config pipeline, passed via `SourceConfig["coingecko_enabled"]` in main.go, and read by `parseMarketsConfig` instead of hardcoding `true`.
+
+> **SST Gap (fixed 2026-04-14, IMP-019-R28):** `connectors.financial-markets.fred_enabled` and `connectors.financial-markets.fred_series` are now extracted as `FINANCIAL_MARKETS_FRED_ENABLED` and `FINANCIAL_MARKETS_FRED_SERIES` in the config pipeline, passed via `SourceConfig["fred_enabled"]` and `SourceConfig["fred_series"]` in main.go, and read by `parseMarketsConfig`. Previously, FRED was always auto-enabled when `fred_api_key` was non-empty with no operator disable path.
 
 **ConnectorConfig mapping:**
 
@@ -312,13 +316,16 @@ ConnectorConfig{
     Enabled:      os.Getenv("FINANCIAL_MARKETS_ENABLED") == "true",
     SyncSchedule: os.Getenv("FINANCIAL_MARKETS_SYNC_SCHEDULE"),
     SourceConfig: map[string]interface{}{
-        "watchlist":       parseJSONObject(os.Getenv("FINANCIAL_MARKETS_WATCHLIST")),
-        "alert_threshold": parseFloatEnv("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
+        "watchlist":         parseJSONObject(os.Getenv("FINANCIAL_MARKETS_WATCHLIST")),
+        "alert_threshold":   parseFloatEnv("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
+        "coingecko_enabled": os.Getenv("FINANCIAL_MARKETS_COINGECKO_ENABLED") == "true",
+        "fred_enabled":     os.Getenv("FINANCIAL_MARKETS_FRED_ENABLED") == "true",
+        "fred_series":      parseJSONArrayEnv("FINANCIAL_MARKETS_FRED_SERIES"),
     },
 }
 ```
 
-**`parseMarketsConfig` reads from:** `Credentials["finnhub_api_key"]`, `Credentials["fred_api_key"]`, `SourceConfig["watchlist"]` (map with `stocks`, `etfs`, `crypto` arrays), `SourceConfig["alert_threshold"]`.
+**`parseMarketsConfig` reads from:** `Credentials["finnhub_api_key"]`, `Credentials["fred_api_key"]`, `SourceConfig["watchlist"]` (map with `stocks`, `etfs`, `crypto` arrays), `SourceConfig["alert_threshold"]`, `SourceConfig["coingecko_enabled"]`, `SourceConfig["fred_enabled"]`, `SourceConfig["fred_series"]`.
 
 **Connect() validates:** `finnhub_api_key` must not be empty. Watchlist symbols must match `^[A-Za-z0-9.\-]{1,10}$` (stocks/ETFs) or `^[a-z0-9\-]{1,64}$` (crypto). Each category capped at 100 entries.
 

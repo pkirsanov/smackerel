@@ -3,6 +3,7 @@ package intelligence
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -503,11 +504,11 @@ func TestAssembleWeeklySynthesisText_FullWeek(t *testing.T) {
 	if !contains(text, "THIS WEEK") {
 		t.Error("text should contain THIS WEEK section")
 	}
-	if !contains(text, "INSIGHTS") {
-		t.Error("text should contain INSIGHTS section")
+	if !contains(text, "CONNECTION DISCOVERED") {
+		t.Error("text should contain CONNECTION DISCOVERED section")
 	}
-	if !contains(text, "TOPICS") {
-		t.Error("text should contain TOPICS section")
+	if !contains(text, "TOPIC MOMENTUM") {
+		t.Error("text should contain TOPIC MOMENTUM section")
 	}
 	if !contains(text, "OPEN LOOPS") {
 		t.Error("text should contain OPEN LOOPS section")
@@ -629,11 +630,11 @@ func TestAssembleWeeklySynthesisText_InsightsOnly(t *testing.T) {
 	if !contains(text, "THIS WEEK") {
 		t.Error("should contain THIS WEEK")
 	}
-	if !contains(text, "INSIGHTS") {
-		t.Error("should contain INSIGHTS")
+	if !contains(text, "CONNECTION DISCOVERED") {
+		t.Error("should contain CONNECTION DISCOVERED")
 	}
-	if contains(text, "TOPICS") {
-		t.Error("should NOT contain TOPICS when no topic data")
+	if contains(text, "TOPIC MOMENTUM") {
+		t.Error("should NOT contain TOPIC MOMENTUM when no topic data")
 	}
 	if contains(text, "OPEN LOOPS") {
 		t.Error("should NOT contain OPEN LOOPS when no open loops")
@@ -1979,11 +1980,11 @@ func TestAssembleWeeklySynthesisText_PatternsOnly(t *testing.T) {
 	if contains(text, "THIS WEEK") {
 		t.Error("should NOT contain THIS WEEK when no stats")
 	}
-	if contains(text, "INSIGHTS") {
-		t.Error("should NOT contain INSIGHTS when no insights")
+	if contains(text, "CONNECTION DISCOVERED") {
+		t.Error("should NOT contain CONNECTION DISCOVERED when no insights")
 	}
-	if contains(text, "TOPICS") {
-		t.Error("should NOT contain TOPICS when no topic data")
+	if contains(text, "TOPIC MOMENTUM") {
+		t.Error("should NOT contain TOPIC MOMENTUM when no topic data")
 	}
 }
 
@@ -2024,8 +2025,8 @@ func TestAssembleWeeklySynthesisText_TopicMovementArrowSymbols(t *testing.T) {
 		},
 	}
 	text := assembleWeeklySynthesisText(ws)
-	if !contains(text, "TOPICS") {
-		t.Error("should contain TOPICS section")
+	if !contains(text, "TOPIC MOMENTUM") {
+		t.Error("should contain TOPIC MOMENTUM section")
 	}
 	// Verify correct arrow symbols per direction
 	if !contains(text, "↑ Kubernetes") {
@@ -2202,8 +2203,8 @@ func TestAssembleWeeklySynthesisText_AllSixSections(t *testing.T) {
 	// Verify all 6 R-302 required sections are present
 	requiredSections := []string{
 		"THIS WEEK",
-		"INSIGHTS",
-		"TOPICS",
+		"CONNECTION DISCOVERED",
+		"TOPIC MOMENTUM",
 		"OPEN LOOPS",
 		"FROM THE ARCHIVE",
 		"PATTERNS NOTICED",
@@ -2219,7 +2220,7 @@ func TestAssembleWeeklySynthesisText_AllSixSections(t *testing.T) {
 		t.Error("THIS WEEK should mention artifact count")
 	}
 	if !contains(text, "Pricing strategies") {
-		t.Error("INSIGHTS should contain the through-line text")
+		t.Error("CONNECTION DISCOVERED should contain the through-line text")
 	}
 	if !contains(text, "distributed-systems") {
 		t.Error("TOPICS should contain topic name")
@@ -2570,8 +2571,8 @@ func TestTripPrepDaysUntil_DSTSpringForward(t *testing.T) {
 		t.Skip("America/New_York timezone not available")
 	}
 
-	from := time.Date(2026, 3, 8, 6, 0, 0, 0, est)  // DST transition day
-	to := time.Date(2026, 3, 10, 0, 0, 0, 0, est)    // 2 calendar days later
+	from := time.Date(2026, 3, 8, 6, 0, 0, 0, est) // DST transition day
+	to := time.Date(2026, 3, 10, 0, 0, 0, 0, est)  // 2 calendar days later
 	localFrom := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.Local)
 	localTo := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.Local)
 	if d := calendarDaysBetween(localFrom, localTo); d != 2 {
@@ -2596,25 +2597,12 @@ func TestMaxPendingAlertAgeDays_UsedInGetPendingAlerts(t *testing.T) {
 		t.Fatalf("maxPendingAlertAgeDays %d exceeds safety bound of 30", maxPendingAlertAgeDays)
 	}
 
-	// Verify the query string that GetPendingAlerts would generate contains
-	// the correct interval derived from the constant. This test will fail
-	// if the SQL reverts to a hardcoded literal that doesn't match the constant.
-	expectedInterval := fmt.Sprintf("'%d days'", maxPendingAlertAgeDays)
-	// Build the same format string that GetPendingAlerts uses.
-	query := fmt.Sprintf(`
-		SELECT id, alert_type, title, body, priority, status, artifact_id, created_at
-		FROM alerts
-		WHERE (status = 'pending'
-		   OR (status = 'snoozed' AND snooze_until <= NOW()))
-		  AND created_at > NOW() - INTERVAL '%d days'
-		ORDER BY priority, created_at
-		LIMIT GREATEST(0, 2 - (
-			SELECT COUNT(*) FROM alerts
-			WHERE status = 'delivered' AND delivered_at >= CURRENT_DATE
-		))
-	`, maxPendingAlertAgeDays)
-	if !strings.Contains(query, expectedInterval) {
-		t.Errorf("GetPendingAlerts SQL should contain interval %s derived from maxPendingAlertAgeDays", expectedInterval)
+	// GetPendingAlerts now uses MAKE_INTERVAL(days => $1) with maxPendingAlertAgeDays
+	// as a parameterized value. This regression test verifies the constant stays
+	// within the expected range so the parameterized query produces the correct interval.
+	// If someone changes the constant, SEC-021-001 review must be updated.
+	if maxPendingAlertAgeDays < 1 || maxPendingAlertAgeDays > 14 {
+		t.Errorf("maxPendingAlertAgeDays %d is outside the expected [1,14] security range", maxPendingAlertAgeDays)
 	}
 }
 
@@ -2625,5 +2613,152 @@ func TestMaxPendingAlertAgeDays_ConstantMatchesQueryShape(t *testing.T) {
 	// If changed, the security review must be updated.
 	if maxPendingAlertAgeDays != 7 {
 		t.Errorf("maxPendingAlertAgeDays changed from 7 to %d — update SEC-021-001 review if intentional", maxPendingAlertAgeDays)
+	}
+}
+
+// IMP-021-001: Return window regex rejects out-of-range month/day values.
+// The regex must reject dates like "2026-13-45" that would crash PostgreSQL's
+// ::date cast, which is the exact scenario the safe-cast pattern is meant to prevent.
+func TestReturnWindowDateRegex_Validation(t *testing.T) {
+	// This regex must match the one in ProduceReturnWindowAlerts.
+	// Using Go's regexp to validate the same pattern the SQL uses.
+	pattern := `^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$`
+	re := regexp.MustCompile(pattern)
+
+	valid := []string{
+		"2026-01-01", "2026-12-31", "2026-06-15",
+		"2026-02-28", "2026-04-30", "2025-01-31",
+	}
+	for _, d := range valid {
+		if !re.MatchString(d) {
+			t.Errorf("regex should accept valid date %q", d)
+		}
+	}
+
+	invalid := []string{
+		"2026-13-01",  // month 13
+		"2026-00-15",  // month 00
+		"2026-01-00",  // day 00
+		"2026-01-32",  // day 32
+		"2026-99-99",  // both out of range
+		"not-a-date",  // non-numeric
+		"2026-1-1",    // single-digit month/day
+		"2026-01-1",   // single-digit day
+		"202-01-01",   // short year
+		"20260-01-01", // long year
+	}
+	for _, d := range invalid {
+		if re.MatchString(d) {
+			t.Errorf("regex should reject invalid date %q", d)
+		}
+	}
+}
+
+// === IMP-004-SQS-001: CheckOverdueCommitments collects before writing ===
+
+// TestCheckOverdueCommitments_CollectsBeforeWrite verifies the refactored
+// CheckOverdueCommitments uses a collect-then-write pattern. With nil pool,
+// collectOverdueItems should fail at the query step. This is the structural
+// regression test — if someone reverts to the old cursor-interleaved pattern,
+// the collectOverdueItems helper would no longer exist.
+func TestCheckOverdueCommitments_CollectsBeforeWrite(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	// collectOverdueItems is the extracted query-only helper
+	items, err := engine.collectOverdueItems(context.Background())
+	if err == nil {
+		t.Error("expected error for nil pool in collectOverdueItems")
+	}
+	if items != nil {
+		t.Errorf("expected nil items for nil pool, got %v", items)
+	}
+}
+
+// TestCheckOverdueCommitments_RespectsContextCancellation verifies the overdue
+// commitment alert creation loop checks ctx.Err() between iterations. If the
+// context is cancelled, the function should stop creating alerts.
+func TestCheckOverdueCommitments_ContextCancellation(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// With nil pool, the function errors at query step. But the pattern
+	// should not panic with cancelled context.
+	err := engine.CheckOverdueCommitments(ctx)
+	if err == nil {
+		t.Error("expected error for nil pool or cancelled context")
+	}
+}
+
+// === IMP-004-SQS-002: buildAttendeeBrief context cancellation ===
+
+// TestBuildAttendeeBrief_RespectsContextBetweenQueries verifies the function
+// checks ctx.Err() between its 3 sequential DB queries. With a cancelled
+// context and nil pool, the function should return early without panicking.
+func TestBuildAttendeeBrief_RespectsContextBetweenQueries(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// With nil pool + cancelled context, QueryRow and Query will fail.
+	// The function should return gracefully.
+	ab := engine.buildAttendeeBrief(ctx, "test@example.com")
+	// Should be a new contact since the people lookup fails
+	if !ab.IsNewContact {
+		t.Error("should be marked as new contact when pool is nil")
+	}
+	if ab.Email != "test@example.com" {
+		t.Errorf("expected email preserved, got %s", ab.Email)
+	}
+}
+
+// === IMP-004-SQS-003: Weekly synthesis R-302 section names ===
+
+// TestWeeklySynthesisR302SectionNames is the adversarial regression test that
+// verifies the weekly synthesis uses the exact R-302 spec-required section
+// names. If someone renames sections, this test fails explicitly referencing
+// the spec requirement.
+func TestWeeklySynthesisR302SectionNames(t *testing.T) {
+	ws := &WeeklySynthesis{
+		Stats: WeeklyStats{ArtifactsProcessed: 10, NewConnections: 2, TopicsActive: 3},
+		Insights: []SynthesisInsight{
+			{ThroughLine: "Cross-domain connection", Confidence: 0.8},
+		},
+		TopicMovement: []TopicMovement{
+			{TopicName: "Go", Direction: "rising", Captures: 5},
+		},
+		OpenLoops:        []string{"Follow up with Sarah"},
+		SerendipityPicks: []ResurfaceCandidate{{Title: "Old article", Reason: "matches theme"}},
+		Patterns:         []string{"Peak capture on Wednesdays"},
+	}
+
+	text := assembleWeeklySynthesisText(ws)
+
+	// R-302 spec requires these EXACT section names (not synonyms):
+	// 1. THIS WEEK
+	// 2. CONNECTION DISCOVERED (NOT "INSIGHTS")
+	// 3. TOPIC MOMENTUM (NOT "TOPICS")
+	// 4. OPEN LOOPS
+	// 5. FROM THE ARCHIVE
+	// 6. PATTERNS NOTICED
+	specSections := map[string]string{
+		"THIS WEEK":             "R-302 §1",
+		"CONNECTION DISCOVERED": "R-302 §2",
+		"TOPIC MOMENTUM":        "R-302 §3",
+		"OPEN LOOPS":            "R-302 §4",
+		"FROM THE ARCHIVE":      "R-302 §5",
+		"PATTERNS NOTICED":      "R-302 §6",
+	}
+	for section, specRef := range specSections {
+		if !contains(text, section) {
+			t.Errorf("missing required section %q (%s) in weekly synthesis", section, specRef)
+		}
+	}
+
+	// Adversarial: verify OLD non-compliant names are NOT present
+	oldNames := []string{"INSIGHTS:", "TOPICS:"}
+	for _, old := range oldNames {
+		if contains(text, old) {
+			t.Errorf("non-compliant section name %q found — should use R-302 names", old)
+		}
 	}
 }

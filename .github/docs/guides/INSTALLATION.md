@@ -40,6 +40,7 @@ This installs:
 - Governance scripts → `.github/bubbles/scripts/*.sh`
 
 And with `--bootstrap`, also creates:
+- `AGENTS.md` — root-level AI guardrails (newer VS Code convention)
 - `.github/copilot-instructions.md` — project policies and commands
 - `.github/instructions/terminal-discipline.instructions.md` — CLI discipline rules
 - `.specify/memory/constitution.md` — project governance principles

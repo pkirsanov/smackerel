@@ -159,6 +159,15 @@
       "summary": "Chaos R24 probe. Found and fixed 3 findings: R24-001 (Sync reads c.config without lock — data race with concurrent Connect; snapshot cfg := c.config under lock, aligned with maps/browser/markets/alerts pattern), R24-002 (NormalizeURL preserves userinfo — credential leak into SourceRef/DB; u.User = nil, CWE-522), R24-003 (Chrome date_added uncapped far-future timestamps; added maxReasonableUnixSec year-2100 ceiling). Added 8 adversarial regression tests. All bookmarks tests pass. Lint passes."
     },
     {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["analyze", "implement", "test", "docs"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-04-14T22:00:00Z",
+      "completedAt": "2026-04-14T22:30:00Z",
+      "summary": "Improve-existing sweep (stochastic-quality-sweep child). Found and fixed 2 findings: IMP-009-R-001 (ParseNetscapeHTML flat folder tracking lost nested hierarchy — replaced with stack-based DL/H3 tracking), IMP-009-R-002 (NormalizeURL missing www. prefix stripping — added 4-char prefix strip after host lowercasing). Added 8 adversarial regression tests across bookmarks_test.go and dedup_test.go. All 33 Go packages pass. Lint passes."
+    },
+    {
       "agent": "bubbles.docs",
       "phasesExecuted": ["docs"],
       "statusBefore": "in_progress",

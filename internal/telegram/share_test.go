@@ -263,6 +263,79 @@ func TestChaos_ExtractContext_OnlyURLs(t *testing.T) {
 	}
 }
 
+// --- IMP-008-IMP-001: Balanced parentheses in URLs ---
+
+// IMP-008-IMP-001: Wikipedia-style URLs with balanced parentheses must be
+// preserved intact. The old TrimRight("...)]") would strip the closing paren,
+// breaking the URL.
+func TestIMP001_ExtractAllURLs_WikipediaURL(t *testing.T) {
+	text := "Read https://en.wikipedia.org/wiki/Go_(programming_language) for details"
+	urls := extractAllURLs(text)
+	if len(urls) != 1 {
+		t.Fatalf("expected 1 URL, got %d: %v", len(urls), urls)
+	}
+	expected := "https://en.wikipedia.org/wiki/Go_(programming_language)"
+	if urls[0] != expected {
+		t.Errorf("expected %q, got %q — balanced parens were corrupted", expected, urls[0])
+	}
+}
+
+// IMP-008-IMP-001b: Nested parentheses in URLs (e.g. MDN docs).
+func TestIMP001b_ExtractAllURLs_NestedParensURL(t *testing.T) {
+	text := "See https://example.com/path/(section)/page for info"
+	urls := extractAllURLs(text)
+	if len(urls) != 1 {
+		t.Fatalf("expected 1 URL, got %d: %v", len(urls), urls)
+	}
+	if urls[0] != "https://example.com/path/(section)/page" {
+		t.Errorf("expected nested parens preserved, got %q", urls[0])
+	}
+}
+
+// IMP-008-IMP-001c: Unbalanced trailing paren (wrapping) should still be stripped.
+func TestIMP001c_ExtractAllURLs_UnbalancedTrailingParen(t *testing.T) {
+	text := "(see https://example.com/simple)"
+	urls := extractAllURLs(text)
+	if len(urls) != 1 {
+		t.Fatalf("expected 1 URL, got %d: %v", len(urls), urls)
+	}
+	// The leading "(" was stripped by TrimLeft, so the URL doesn't contain
+	// an opening "(". The trailing ")" is unbalanced and should be stripped.
+	if urls[0] != "https://example.com/simple" {
+		t.Errorf("expected trailing unbalanced paren stripped, got %q", urls[0])
+	}
+}
+
+// IMP-008-IMP-001d: Wikipedia URL wrapped in parens — opening stripped by
+// TrimLeft, but URL itself has balanced parens, so closing paren of the URL
+// should be kept while the wrapping paren should be stripped.
+func TestIMP001d_ExtractAllURLs_WikipediaInParens(t *testing.T) {
+	text := "(https://en.wikipedia.org/wiki/Go_(programming_language))"
+	urls := extractAllURLs(text)
+	if len(urls) != 1 {
+		t.Fatalf("expected 1 URL, got %d: %v", len(urls), urls)
+	}
+	// After TrimLeft of "(", word is "https://en.wikipedia.org/wiki/Go_(programming_language))"
+	// URL has 1 "(" and the word has 2 ")". One ")" is unbalanced and should be stripped.
+	expected := "https://en.wikipedia.org/wiki/Go_(programming_language)"
+	if urls[0] != expected {
+		t.Errorf("expected %q, got %q", expected, urls[0])
+	}
+}
+
+// IMP-008-IMP-001e: URL with trailing period after balanced parens.
+func TestIMP001e_ExtractAllURLs_WikipediaWithTrailingPeriod(t *testing.T) {
+	text := "Check https://en.wikipedia.org/wiki/Go_(programming_language)."
+	urls := extractAllURLs(text)
+	if len(urls) != 1 {
+		t.Fatalf("expected 1 URL, got %d: %v", len(urls), urls)
+	}
+	expected := "https://en.wikipedia.org/wiki/Go_(programming_language)"
+	if urls[0] != expected {
+		t.Errorf("expected %q, got %q", expected, urls[0])
+	}
+}
+
 // --- Regression tests (REG-008) ---
 
 // REG-008-001: extractContext must remove URLs longest-first so that a shorter

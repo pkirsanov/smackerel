@@ -574,3 +574,58 @@ func TestParseEmailMessages_SkipsEmptyUID(t *testing.T) {
 		t.Errorf("expected UID 'valid', got %q", msgs[0].UID)
 	}
 }
+
+// I-IMPROVE-001: compareUIDs uses numeric ordering for IMAP UIDs.
+func TestCompareUIDs_Numeric(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want int
+	}{
+		{"1", "2", -1},
+		{"10", "2", 1},   // string compare would say "10" < "2"
+		{"9", "100", -1}, // string compare would say "9" > "100"
+		{"100", "100", 0},
+		{"999", "1000", -1},
+	}
+	for _, tt := range tests {
+		got := compareUIDs(tt.a, tt.b)
+		if got != tt.want {
+			t.Errorf("compareUIDs(%q, %q) = %d, want %d", tt.a, tt.b, got, tt.want)
+		}
+	}
+}
+
+func TestCompareUIDs_NonNumericFallback(t *testing.T) {
+	// Gmail API message IDs are hex-like strings; fall back to lexicographic
+	if got := compareUIDs("abc", "def"); got >= 0 {
+		t.Errorf("expected abc < def, got %d", got)
+	}
+	if got := compareUIDs("same", "same"); got != 0 {
+		t.Errorf("expected 0 for equal strings, got %d", got)
+	}
+}
+
+// I-IMPROVE-002: AssignTier is case-insensitive for labels and senders.
+func TestAssignTier_CaseInsensitiveSender(t *testing.T) {
+	q := QualifierConfig{PrioritySenders: []string{"Boss@Example.COM"}}
+	tier := AssignTier("boss@example.com", nil, q)
+	if tier != "full" {
+		t.Errorf("expected full for case-insensitive sender match, got %q", tier)
+	}
+}
+
+func TestAssignTier_CaseInsensitiveLabel(t *testing.T) {
+	q := QualifierConfig{SkipLabels: []string{"Promotions"}}
+	tier := AssignTier("a@b.com", []string{"PROMOTIONS"}, q)
+	if tier != "metadata" {
+		t.Errorf("expected metadata for case-insensitive label match, got %q", tier)
+	}
+}
+
+func TestAssignTier_CaseInsensitiveDomain(t *testing.T) {
+	q := QualifierConfig{SkipDomains: []string{"Spam.COM"}}
+	tier := AssignTier("newsletter@spam.com", nil, q)
+	if tier != "skip" {
+		t.Errorf("expected skip for case-insensitive domain match, got %q", tier)
+	}
+}

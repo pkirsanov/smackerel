@@ -322,3 +322,48 @@ All 3 scopes implemented and unit tests passing. The intelligence delivery pipel
 |------------|---------|--------|-----------|
 | Go unit (33 packages) | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |
 | Python ML sidecar (72 tests) | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |
+
+## Improve-Existing Sweep (2026-04-14, stochastic-quality-sweep)
+
+### Findings
+
+| ID | Finding | Severity | File | Status |
+|----|---------|----------|------|--------|
+| IMP-021-R20-001 | `ProduceReturnWindowAlerts` regex `^\d{4}-\d{2}-\d{2}$` accepts out-of-range month/day values (e.g., `2026-13-45`) that crash PostgreSQL's `::date` cast with "date/time field value out of range", aborting the entire query — exactly the failure the safe-cast comment says it prevents | Medium | `internal/intelligence/engine.go` | Fixed |
+| IMP-021-R20-002 | `GetPendingAlerts` uses `fmt.Sprintf` to interpolate `maxPendingAlertAgeDays` into SQL. While safe (compile-time constant), this is inconsistent with the parameterized query pattern used in all other methods. Replaced with `MAKE_INTERVAL(days => $1)` | Low | `internal/intelligence/engine.go` | Fixed |
+| IMP-021-R20-003 | `deliverPendingAlerts` lacks a delivery summary log. All 4 alert producers log `slog.Info("... complete", "created", N)` but the delivery sweep logs individual events without a sweep-complete summary showing delivered/failed/total counts | Low | `internal/scheduler/scheduler.go` | Fixed |
+
+### Fixes Applied
+
+| Fix | File | Change |
+|-----|------|--------|
+| IMP-021-R20-001 | `internal/intelligence/engine.go` | Tightened return window regex from `^\d{4}-\d{2}-\d{2}$` to `^\d{4}-(0[1-9]\|1[0-2])-(0[1-9]\|[12]\d\|3[01])$` — validates month (01-12) and day (01-31) ranges before `::date` cast |
+| IMP-021-R20-002 | `internal/intelligence/engine.go` | Replaced `fmt.Sprintf(... INTERVAL '%d days' ...)` with parameterized `MAKE_INTERVAL(days => $1)` in `GetPendingAlerts` — consistent with parameterized pattern used across all other queries |
+| IMP-021-R20-003 | `internal/scheduler/scheduler.go` | Added `delivered`/`failed` counters and `slog.Info("alert delivery sweep complete", "delivered", delivered, "failed", failed, "total", len(alerts))` at end of sweep |
+
+### Tests Added
+
+| Test | File | Covers |
+|------|------|--------|
+| `TestReturnWindowDateRegex_Validation` | `engine_test.go` | IMP-021-R20-001: Validates regex accepts valid dates and rejects out-of-range month/day, single-digit, short/long year patterns |
+| `TestMaxPendingAlertAgeDays_UsedInGetPendingAlerts` (updated) | `engine_test.go` | IMP-021-R20-002: Updated to verify constant range instead of obsolete `fmt.Sprintf` SQL pattern |
+
+### Prior Fix Regression Matrix
+
+| Prior Fix | Area | Status |
+|-----------|------|--------|
+| C1-C5 chaos fixes | health, scheduler, engine | Intact |
+| H1-H3 hardening fixes | engine, scheduler | Intact |
+| REG-021-R17-001 detached ctx for meeting briefs | engine | Intact |
+| REG-021-R17-002 constant-governed age interval | engine | Updated (now MAKE_INTERVAL instead of fmt.Sprintf) |
+| SEC-021-001 poison alert age limit | engine | Intact (constant still 7, now parameterized) |
+| SEC-021-002 control char sanitization | engine | Intact |
+| SEC-021-003 meeting brief mark-delivered | engine | Intact |
+
+### Full Suite Results
+
+| Test Suite | Command | Result | Timestamp |
+|------------|---------|--------|-----------|
+| Go unit (33 packages) | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |
+| Python ML sidecar | `./smackerel.sh test unit` | ALL PASS | 2026-04-14 |
+| Check (config SST) | `./smackerel.sh check` | Config in sync | 2026-04-14 |

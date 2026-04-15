@@ -15,15 +15,28 @@ import (
 	"github.com/smackerel/smackerel/internal/connector"
 )
 
+// stableTestTime is a fixed time (Saturday 10 AM UTC) used by tests to prevent
+// daily summary generation from producing unexpected extra artifacts.
+// IMP-018-SQS-002: Fix time-dependent test flakiness.
+var stableTestTime = time.Date(2026, 4, 11, 10, 0, 0, 0, time.UTC) // Saturday
+
+// newTestConnector creates a connector with a stable nowFunc to prevent
+// time-dependent test flakiness from shouldGenerateDailySummary.
+func newTestConnector(id string) *Connector {
+	c := New(id)
+	c.nowFunc = func() time.Time { return stableTestTime }
+	return c
+}
+
 func TestNew(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	if c.ID() != "financial-markets" {
 		t.Errorf("expected financial-markets, got %s", c.ID())
 	}
 }
 
 func TestConnect_MissingAPIKey(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{},
 	})
@@ -33,7 +46,7 @@ func TestConnect_MissingAPIKey(t *testing.T) {
 }
 
 func TestConnect_Valid(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"finnhub_api_key": "test-key"},
 		SourceConfig: map[string]interface{}{
@@ -56,7 +69,7 @@ func TestConnect_Valid(t *testing.T) {
 }
 
 func TestTryRecordCall_RateLimit(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test"
 
 	// Should allow first call
@@ -83,7 +96,7 @@ func TestTryRecordCall_RateLimit(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.health = connector.HealthHealthy
 	c.Close()
 	if c.Health(context.Background()) != connector.HealthDisconnected {
@@ -243,7 +256,7 @@ func TestParseMarketsConfig_CoinGeckoEnabled(t *testing.T) {
 }
 
 func TestFetchFinnhubQuote_RejectsInvalidSymbol(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 
 	cases := []string{
@@ -270,7 +283,7 @@ func TestFetchFinnhubQuote_RejectsZeroPriceResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -327,7 +340,7 @@ func TestCryptoChange24hCalculation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 
 	// Override the URL by using fetchCoinGeckoPrices with the test server
@@ -361,7 +374,7 @@ func TestCryptoChange24hCalculation(t *testing.T) {
 }
 
 func TestConnect_ThreadSafety(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	cfg := connector.ConnectorConfig{
 		Credentials: map[string]string{"finnhub_api_key": "test-key"},
 	}
@@ -383,7 +396,7 @@ func TestConnect_ThreadSafety(t *testing.T) {
 
 func TestRateLimit_AtBoundary(t *testing.T) {
 	// Verify that filling to exactly the limit denies the next call.
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test"
 
 	// Fill to exactly the limit (55 for finnhub)
@@ -400,7 +413,7 @@ func TestRateLimit_AtBoundary(t *testing.T) {
 }
 
 func TestTryRecordCall_Atomic(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 
 	// Should allow and record first call
 	if !c.tryRecordCall("finnhub") {
@@ -434,7 +447,7 @@ func TestSyncContextCancellation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 	c.config = MarketsConfig{
@@ -459,7 +472,7 @@ func TestSyncContextCancellation(t *testing.T) {
 
 func TestSyncConfigSnapshotSafety(t *testing.T) {
 	// Verify Sync does not corrupt the original Stocks slice via append.
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config = MarketsConfig{
 		FinnhubAPIKey: "test-key",
 		Watchlist: WatchlistConfig{
@@ -495,7 +508,7 @@ func TestHTTPErrorResponseDrain(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -513,7 +526,7 @@ func TestHTTPErrorResponseDrain(t *testing.T) {
 }
 
 func TestCloseCleanup(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.health = connector.HealthHealthy
 
 	err := c.Close()
@@ -531,7 +544,7 @@ func TestCloseCleanup(t *testing.T) {
 }
 
 func TestTryRecordCall_ConcurrentSafety(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 
 	// Run 100 concurrent tryRecordCall attempts.
 	// With limit 55, exactly 55 should succeed.
@@ -654,7 +667,7 @@ func TestParseMarketsConfig_ForexPairsSizeLimit(t *testing.T) {
 }
 
 func TestCloseResetsCallCounts(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test"
 
 	// Record some calls
@@ -677,7 +690,7 @@ func TestFinnhubErrorResponseIncludesBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "bad-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -723,7 +736,7 @@ func TestProviderRateLimitsConsistency(t *testing.T) {
 }
 
 func TestSyncEmptyWatchlist(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config = MarketsConfig{
 		FinnhubAPIKey: "test-key",
 		Watchlist:     WatchlistConfig{}, // all empty
@@ -764,7 +777,7 @@ func TestSyncRateLimitExhaustion(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -804,7 +817,7 @@ func TestSyncDegradedHealthOnTotalFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -841,7 +854,7 @@ func TestSyncHealthyOnPartialFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -888,7 +901,7 @@ func TestSyncFinnhubIntegrationViaHTTPTest(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -941,7 +954,7 @@ func TestSyncCoinGeckoIntegrationViaHTTPTest(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.coingeckoBaseURL = srv.URL
 
@@ -979,7 +992,7 @@ func TestSyncCoinGeckoIntegrationViaHTTPTest(t *testing.T) {
 }
 
 func TestConnectThenCloseAndReconnect(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	cfg := connector.ConnectorConfig{
 		Credentials: map[string]string{"finnhub_api_key": "test-key"},
 		SourceConfig: map[string]interface{}{
@@ -1014,7 +1027,7 @@ func TestFetchCoinGeckoPrices_HTTPError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.coingeckoBaseURL = srv.URL
 
@@ -1028,7 +1041,7 @@ func TestFetchCoinGeckoPrices_HTTPError(t *testing.T) {
 }
 
 func TestFetchCoinGeckoPrices_AllInvalidIDs(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	// All IDs fail validation — should error before any HTTP call.
 	_, err := c.fetchCoinGeckoPrices(context.Background(), []string{"BITCOIN", "../admin", ""})
 	if err == nil {
@@ -1046,7 +1059,7 @@ func TestFetchCoinGeckoPrices_MalformedJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.coingeckoBaseURL = srv.URL
 
@@ -1069,7 +1082,7 @@ func TestSyncCoinGeckoDisabledSkipsCrypto(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.coingeckoBaseURL = srv.URL
 
@@ -1100,7 +1113,7 @@ func TestSyncETFsMergedWithStocks(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -1149,7 +1162,7 @@ func TestSyncMultiProviderCombined(t *testing.T) {
 	}))
 	defer coingeckoSrv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	// Can't easily split HTTP clients per host, so use one client.
 	// Instead, point both base URLs to their respective servers.
 	c.finnhubBaseURL = finnhubSrv.URL
@@ -1198,7 +1211,7 @@ func TestSyncMultiProviderCombined(t *testing.T) {
 }
 
 func TestConnect_SetsHealthErrorOnInvalidConfig(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 
 	// Missing API key should set health to HealthError.
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
@@ -1213,7 +1226,7 @@ func TestConnect_SetsHealthErrorOnInvalidConfig(t *testing.T) {
 }
 
 func TestConnect_SetsHealthErrorOnBadSymbol(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"finnhub_api_key": "test"},
@@ -1238,7 +1251,7 @@ func TestFetchFinnhubQuote_MalformedJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -1267,7 +1280,7 @@ func TestFetchCoinGeckoPrices_BatchTruncationViaHTTPTest(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.coingeckoBaseURL = srv.URL
 
@@ -1307,7 +1320,7 @@ func TestSyncDegradedHealthOnPartialProviderFailure(t *testing.T) {
 	}))
 	defer coingeckoSrv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.finnhubBaseURL = finnhubSrv.URL
 	c.coingeckoBaseURL = coingeckoSrv.URL
 	c.httpClient = &http.Client{Timeout: 5 * time.Second}
@@ -1352,7 +1365,7 @@ func TestSyncHealthRestoredAfterRecovery(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 	c.config = MarketsConfig{
@@ -1384,7 +1397,7 @@ func TestSyncHealthRestoredAfterRecovery(t *testing.T) {
 
 func TestFetchFinnhubQuote_MalformedBaseURL(t *testing.T) {
 	// H-018-001: url.Parse error must be returned, not silently discarded.
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.finnhubBaseURL = "://invalid-url"
 
@@ -1399,7 +1412,7 @@ func TestFetchFinnhubQuote_MalformedBaseURL(t *testing.T) {
 
 func TestFetchCoinGeckoPrices_MalformedBaseURL(t *testing.T) {
 	// H-018-001: url.Parse error must be returned for CoinGecko too.
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.coingeckoBaseURL = "://invalid-url"
 
 	_, err := c.fetchCoinGeckoPrices(context.Background(), []string{"bitcoin"})
@@ -1432,7 +1445,7 @@ func TestSyncForexPairsProduceArtifacts(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -1478,7 +1491,7 @@ func TestSyncForexOnlyNoStocks(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -1502,7 +1515,7 @@ func TestSyncForexOnlyNoStocks(t *testing.T) {
 
 func TestFetchFinnhubForex_RejectsInvalidPair(t *testing.T) {
 	// H-018-002: fetchFinnhubForex defense-in-depth validates pair format.
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 
 	cases := []string{"usd/jpy", "USDJPY", "", "USD/JPYX", "USD/JPY&x=1", "123/456"}
@@ -1525,7 +1538,7 @@ func TestFetchFinnhubForex_ConvertsToOANDAFormat(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -1576,7 +1589,7 @@ func TestParseMarketsConfig_RejectsNonStringEntries(t *testing.T) {
 
 func TestConnectResetsRateLimits(t *testing.T) {
 	// H-018-004: Connect() must reset callCounts so stale entries don't carry over.
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	cfg := connector.ConnectorConfig{
 		Credentials: map[string]string{"finnhub_api_key": "test-key"},
 	}
@@ -1611,7 +1624,7 @@ func TestSyncForexTotalFailureSetsHealthDegraded(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -1639,7 +1652,7 @@ func TestSyncStocksAndForexMixed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -1698,7 +1711,7 @@ func TestSync_ConnectDuringSyncSkipsStaleHealthWrite(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 	c.config = MarketsConfig{
@@ -1756,7 +1769,7 @@ func TestSync_CoinGeckoRateLimited_HealthDegraded(t *testing.T) {
 	}))
 	defer coingeckoSrv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.finnhubBaseURL = finnhubSrv.URL
 	c.coingeckoBaseURL = coingeckoSrv.URL
 	c.httpClient = &http.Client{Timeout: 5 * time.Second}
@@ -1806,7 +1819,7 @@ func TestSync_StocksRateLimitedMidLoop_HealthDegraded(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -1855,7 +1868,7 @@ func TestCryptoChange24h_NegHundredPercentNoDivByZero(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.coingeckoBaseURL = srv.URL
 
@@ -1886,7 +1899,7 @@ func TestCryptoChange24h_ExtremeNegativePercentFinite(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.coingeckoBaseURL = srv.URL
 
@@ -1917,7 +1930,7 @@ func TestCryptoChange24h_BeyondNeg100Clamped(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.coingeckoBaseURL = srv.URL
 
@@ -1964,7 +1977,7 @@ func TestSyncForex_AlertTierOnExtremeMove(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -2010,7 +2023,7 @@ func TestSyncForex_NegativeAlertTier(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -2045,7 +2058,7 @@ func TestSync_ForexRateLimitedMidLoop_HealthDegraded(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 
@@ -2177,7 +2190,7 @@ func TestSyncStocksHaveAssetType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 	c.config = MarketsConfig{
@@ -2211,7 +2224,7 @@ func TestSyncETFsHaveAssetType(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 	c.config = MarketsConfig{
@@ -2263,7 +2276,7 @@ func TestSyncMixedAssetTypes(t *testing.T) {
 	}))
 	defer coingeckoSrv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.finnhubBaseURL = finnhubSrv.URL
 	c.coingeckoBaseURL = coingeckoSrv.URL
 	c.httpClient = &http.Client{Timeout: 5 * time.Second}
@@ -2350,7 +2363,7 @@ func TestFetchFinnhubCompanyNews_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -2377,7 +2390,7 @@ func TestFetchFinnhubCompanyNews_Success(t *testing.T) {
 }
 
 func TestFetchFinnhubCompanyNews_RejectsInvalidSymbol(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 
 	cases := []string{"AAPL&inject", "../etc/passwd", "", strings.Repeat("A", 11)}
@@ -2396,7 +2409,7 @@ func TestFetchFinnhubCompanyNews_HTTPError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "bad-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -2416,7 +2429,7 @@ func TestFetchFinnhubCompanyNews_EmptyResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -2436,7 +2449,7 @@ func TestFetchFinnhubCompanyNews_MalformedJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -2457,7 +2470,7 @@ func TestFetchFinnhubCompanyNews_RateLimitIntegration(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FinnhubAPIKey = "test-key"
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -2506,7 +2519,7 @@ func TestFetchFREDLatest_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FREDAPIKey = "fred-test-key"
 	c.httpClient = srv.Client()
 	c.fredBaseURL = srv.URL
@@ -2530,7 +2543,7 @@ func TestFetchFREDLatest_Success(t *testing.T) {
 }
 
 func TestFetchFREDLatest_RejectsInvalidSeriesID(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FREDAPIKey = "test"
 
 	cases := []string{"", "lowercase", "AAPL&inject", "../passwd", strings.Repeat("A", 21), "GDP RATE"}
@@ -2549,7 +2562,7 @@ func TestFetchFREDLatest_HTTPError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FREDAPIKey = "bad-key"
 	c.httpClient = srv.Client()
 	c.fredBaseURL = srv.URL
@@ -2571,7 +2584,7 @@ func TestFetchFREDLatest_NoObservations(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FREDAPIKey = "test"
 	c.httpClient = srv.Client()
 	c.fredBaseURL = srv.URL
@@ -2595,7 +2608,7 @@ func TestFetchFREDLatest_MissingDataMarker(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FREDAPIKey = "test"
 	c.httpClient = srv.Client()
 	c.fredBaseURL = srv.URL
@@ -2619,7 +2632,7 @@ func TestFetchFREDLatest_InvalidValueFormat(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FREDAPIKey = "test"
 	c.httpClient = srv.Client()
 	c.fredBaseURL = srv.URL
@@ -2639,7 +2652,7 @@ func TestFetchFREDLatest_MalformedJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FREDAPIKey = "test"
 	c.httpClient = srv.Client()
 	c.fredBaseURL = srv.URL
@@ -2651,7 +2664,7 @@ func TestFetchFREDLatest_MalformedJSON(t *testing.T) {
 }
 
 func TestFetchFREDLatest_MalformedBaseURL(t *testing.T) {
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.config.FREDAPIKey = "test"
 	c.fredBaseURL = "://invalid"
 
@@ -2810,7 +2823,7 @@ func TestSyncProducesNewsArtifacts(t *testing.T) {
 	}))
 	defer finnhubSrv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = finnhubSrv.Client()
 	c.finnhubBaseURL = finnhubSrv.URL
 
@@ -2873,7 +2886,7 @@ func TestSyncProducesEconomicArtifacts(t *testing.T) {
 	}))
 	defer fredSrv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = fredSrv.Client()
 	c.fredBaseURL = fredSrv.URL
 
@@ -2932,7 +2945,7 @@ func TestSyncFREDDisabledSkipsFetch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.fredBaseURL = srv.URL
 
@@ -2958,7 +2971,7 @@ func TestSyncFREDTotalFailureSetsHealthDegraded(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.fredBaseURL = srv.URL
 
@@ -3012,7 +3025,7 @@ func TestSyncAllProvidersCombined(t *testing.T) {
 	}))
 	defer fredSrv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.finnhubBaseURL = finnhubSrv.URL
 	c.coingeckoBaseURL = coingeckoSrv.URL
 	c.fredBaseURL = fredSrv.URL
@@ -3300,7 +3313,7 @@ func TestDailySummary_TimeGate(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := New("financial-markets")
+			c := newTestConnector("financial-markets")
 			c.lastSummaryDate = tc.lastDay
 
 			got := c.shouldGenerateDailySummary(tc.now)
@@ -3326,7 +3339,7 @@ func TestSyncGeneratesDailySummary(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 	c.nowFunc = func() time.Time { return mockNow }
@@ -3389,7 +3402,7 @@ func TestSyncNoDailySummaryBeforeMarketClose(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 	c.nowFunc = func() time.Time { return mockNow }
@@ -3582,7 +3595,7 @@ func TestSync_DetectsSymbolsInNews(t *testing.T) {
 	et, _ := time.LoadLocation("America/New_York")
 	mockNow := time.Date(2024, 6, 10, 10, 0, 0, 0, et)
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = finnhubSrv.Client()
 	c.finnhubBaseURL = finnhubSrv.URL
 	c.nowFunc = func() time.Time { return mockNow }
@@ -3669,7 +3682,7 @@ func TestSync_EconomicArtifactsHaveAllWatchlistSymbols(t *testing.T) {
 	et, _ := time.LoadLocation("America/New_York")
 	mockNow := time.Date(2024, 6, 10, 10, 0, 0, 0, et)
 
-	c := New("financial-markets")
+	c := newTestConnector("financial-markets")
 	c.httpClient = fredSrv.Client()
 	c.fredBaseURL = fredSrv.URL
 	c.nowFunc = func() time.Time { return mockNow }

@@ -42,6 +42,11 @@ func NormalizeURL(rawURL string) string {
 	// F-CHAOS-R24-002: Strip userinfo to prevent credential leaks into SourceRef.
 	u.User = nil
 
+	// IMP-009-R-002: Strip www. prefix for consistent dedup across www/non-www variants.
+	if strings.HasPrefix(u.Host, "www.") {
+		u.Host = u.Host[4:]
+	}
+
 	// Strip trailing slash from path (unless path is just "/")
 	if len(u.Path) > 1 && strings.HasSuffix(u.Path, "/") {
 		u.Path = strings.TrimRight(u.Path, "/")

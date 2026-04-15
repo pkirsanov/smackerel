@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 const (
@@ -382,17 +383,22 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			if watchlistSet[symbol] {
 				tier = "standard"
 			}
+			// IMP-018-SQS-001: Sanitize API-supplied text fields (CWE-116).
+			headline := stringutil.SanitizeControlChars(article.Headline)
+			summary := stringutil.SanitizeControlChars(article.Summary)
+			source := stringutil.SanitizeControlChars(article.Source)
+			category := stringutil.SanitizeControlChars(article.Category)
 			artifacts = append(artifacts, connector.RawArtifact{
 				SourceID:    "financial-markets",
 				SourceRef:   fmt.Sprintf("news-%s-%d", symbol, article.ID),
 				ContentType: "market/news",
-				Title:       article.Headline,
-				RawContent:  article.Summary,
+				Title:       headline,
+				RawContent:  summary,
 				URL:         article.URL,
 				Metadata: map[string]interface{}{
 					"symbol":          symbol,
-					"source":          article.Source,
-					"category":        article.Category,
+					"source":          source,
+					"category":        category,
 					"related":         article.Related,
 					"datetime":        article.Datetime,
 					"processing_tier": tier,

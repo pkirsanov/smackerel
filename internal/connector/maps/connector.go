@@ -220,10 +220,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				break
 			}
 
-			if activity.DistanceKm*1000 < c.config.MinDistanceM {
+			if activity.DistanceKm*1000 < cfg.MinDistanceM {
 				continue
 			}
-			if activity.DurationMin < c.config.MinDurationMin {
+			if activity.DurationMin < cfg.MinDurationMin {
 				continue
 			}
 
@@ -261,7 +261,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		processedThisCycle = append(processedThisCycle, filename)
 
 		if cfg.ArchiveProcessed {
-			if err := c.archiveFile(file); err != nil {
+			if err := archiveFile(file, cfg.ImportDir); err != nil {
 				slog.Warn("failed to archive processed file", "file", file, "error", err)
 			}
 		}
@@ -436,8 +436,9 @@ func findNewFiles(importDir string, processedFiles []string) ([]string, error) {
 // archiveFile moves a processed file to the archive/ subdirectory.
 // If a file with the same name already exists in the archive, a numeric
 // suffix is appended to prevent silent data loss from overwriting.
-func (c *Connector) archiveFile(filePath string) error {
-	archiveDir := filepath.Join(c.config.ImportDir, "archive")
+// importDir is passed explicitly to avoid reading c.config without lock.
+func archiveFile(filePath string, importDir string) error {
+	archiveDir := filepath.Join(importDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 		return fmt.Errorf("create archive directory: %w", err)
 	}

@@ -347,6 +347,7 @@ func (n *Normalizer) buildMetadata(note *TakeoutNote, noteID, sourcePath string)
 // Priority mirrors R-008 qualifier evaluation order:
 // trashed → skip always (highest priority)
 // pinned/labeled/has-images → never skip (these are high-signal notes)
+// labels filter → skip notes that don't match configured label restriction (R-012)
 // archived + !IncludeArchived → skip (user-deprioritized)
 // empty/short content → skip
 func (n *Normalizer) shouldSkip(note *TakeoutNote, content string) bool {
@@ -374,12 +375,47 @@ func (n *Normalizer) shouldSkip(note *TakeoutNote, content string) bool {
 		}
 		return true
 	}
+	// Labels filter: when configured, skip notes whose labels don't intersect
+	// the allowed set. Unlabeled notes pass through (filter applies to labeled
+	// notes only — an unlabeled note cannot be excluded by label filter).
+	// Pinned/image notes are exempt from label filtering since they are
+	// high-signal regardless of label state (R-012 + R-008 priority).
+	if len(n.config.LabelsFilter) > 0 && len(note.Labels) > 0 {
+		if !note.IsPinned && !n.noteHasImages(note) {
+			if !n.matchesLabelFilter(note) {
+				return true
+			}
+		}
+	}
 	// Skip completely empty notes (no text, no list, no attachments, no annotations, no title)
 	if content == "" && note.Title == "" {
 		return true
 	}
 	if n.config.MinContentLength > 0 && len(content) < n.config.MinContentLength {
 		return true
+	}
+	return false
+}
+
+// matchesLabelFilter checks whether any of the note's labels match the configured filter.
+// Matching is case-insensitive per R-009 label matching convention.
+func (n *Normalizer) matchesLabelFilter(note *TakeoutNote) bool {
+	for _, noteLabel := range note.Labels {
+		for _, allowed := range n.config.LabelsFilter {
+			if strings.EqualFold(noteLabel.Name, allowed) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// noteHasImages checks whether a note has any image attachments.
+func (n *Normalizer) noteHasImages(note *TakeoutNote) bool {
+	for _, a := range note.Attachments {
+		if strings.HasPrefix(a.MimeType, "image/") {
+			return true
+		}
 	}
 	return false
 }

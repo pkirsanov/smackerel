@@ -109,6 +109,7 @@ class TestMLSidecarAuthAdversarial:
 
         import importlib
         import app.auth as auth_mod
+
         with patch.dict("os.environ", {"SMACKEREL_AUTH_TOKEN": "test-secret"}):
             importlib.reload(auth_mod)
 
@@ -123,6 +124,7 @@ class TestMLSidecarAuthAdversarial:
         mock_request.client.host = "127.0.0.1"
 
         import asyncio
+
         with pytest.raises(HTTPException) as exc_info:
             asyncio.get_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))
         assert exc_info.value.status_code == 401
@@ -133,6 +135,7 @@ class TestMLSidecarAuthAdversarial:
 
         import importlib
         import app.auth as auth_mod
+
         with patch.dict("os.environ", {"SMACKEREL_AUTH_TOKEN": "test-secret"}):
             importlib.reload(auth_mod)
 
@@ -146,6 +149,7 @@ class TestMLSidecarAuthAdversarial:
         mock_request.client.host = "127.0.0.1"
 
         import asyncio
+
         with pytest.raises(HTTPException) as exc_info:
             asyncio.get_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))
         assert exc_info.value.status_code == 401
