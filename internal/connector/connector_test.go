@@ -841,3 +841,99 @@ func TestRegistry_Unregister_ClosePanicRecovery(t *testing.T) {
 		t.Errorf("connector should still be removed from registry even when Close panics, got count=%d", reg.Count())
 	}
 }
+
+// --- Improve: I-002 — ListConnectorHealth calls Health() concurrently ---
+
+// TestRegistry_ListConnectorHealth_Concurrent verifies that health checks run
+// concurrently so total latency is O(max) not O(sum). With 5 connectors each
+// taking 100ms, sequential would take 500ms+ but concurrent should finish in ~100ms.
+func TestRegistry_ListConnectorHealth_Concurrent(t *testing.T) {
+	reg := NewRegistry()
+	const count = 5
+	for i := 0; i < count; i++ {
+		reg.Register(&slowHealthConnector{
+			id:    fmt.Sprintf("concurrent-%d", i),
+			delay: 100 * time.Millisecond,
+		})
+	}
+
+	start := time.Now()
+	result := reg.ListConnectorHealth(context.Background())
+	elapsed := time.Since(start)
+
+	if len(result) != count {
+		t.Errorf("expected %d health results, got %d", count, len(result))
+	}
+	for id, status := range result {
+		if status != string(HealthHealthy) {
+			t.Errorf("connector %s: expected healthy, got %s", id, status)
+		}
+	}
+
+	// Sequential would take ~500ms; concurrent should be ~100-200ms
+	if elapsed > 350*time.Millisecond {
+		t.Errorf("ListConnectorHealth took %v — health checks may not be concurrent (expected <350ms for 5x100ms)", elapsed)
+	}
+}
+
+// TestRegistry_ListConnectorHealth_Empty verifies empty registry returns empty map.
+func TestRegistry_ListConnectorHealth_Empty(t *testing.T) {
+	reg := NewRegistry()
+	result := reg.ListConnectorHealth(context.Background())
+	if result == nil {
+		t.Error("expected non-nil map for empty registry")
+	}
+	if len(result) != 0 {
+		t.Errorf("expected 0 entries, got %d", len(result))
+	}
+}
+
+// --- Improve: I-003 — Backoff exhaustion uses configured sync interval ---
+
+// TestSupervisor_BackoffExhaustion_UsesConfiguredInterval verifies that after
+// backoff retries are exhausted, the supervisor waits using the connector's
+// configured interval rather than a hardcoded constant.
+func TestSupervisor_BackoffExhaustion_UsesConfiguredInterval(t *testing.T) {
+	reg := NewRegistry()
+	syncCalls := &atomic.Int32{}
+
+	conn := &testConnector{
+		id:     "interval-test",
+		health: HealthHealthy,
+		syncFn: func(_ context.Context, _ string) ([]RawArtifact, string, error) {
+			syncCalls.Add(1)
+			return nil, "", errors.New("always fails")
+		},
+	}
+	reg.Register(conn)
+
+	sup := NewSupervisor(reg, nil)
+	sup.maxSyncErrors = 1000 // prevent sync error circuit breaker
+	sup.backoffFactory = func() *Backoff {
+		return &Backoff{
+			BaseDelay:  time.Millisecond,
+			MaxDelay:   time.Millisecond,
+			MaxRetries: 1, // exhaust after 1 retry → triggers interval wait
+		}
+	}
+	// Configure a very short interval so the test doesn't take long
+	sup.SetConfig("interval-test", ConnectorConfig{SyncSchedule: "50ms"})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sup.StartConnector(ctx, "interval-test")
+
+	// After 1 retry exhaustion, supervisor should wait ~50ms then resume.
+	// Give enough time for backoff exhaustion + interval wait + next retry round.
+	time.Sleep(300 * time.Millisecond)
+	cancel()
+	time.Sleep(50 * time.Millisecond)
+
+	calls := syncCalls.Load()
+	// With 1 retry, then ~50ms interval, then another round of 1 retry, etc.
+	// In 300ms we should see multiple "rounds" — at least 3 calls.
+	if calls < 3 {
+		t.Errorf("expected at least 3 sync calls (proving interval-based retry), got %d", calls)
+	}
+}

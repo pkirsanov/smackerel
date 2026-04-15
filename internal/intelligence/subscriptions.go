@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/oklog/ulid/v2"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // Subscription represents a detected recurring service charge.
@@ -156,6 +159,7 @@ func (e *Engine) GetSubscriptionSummary(ctx context.Context) (*SubscriptionSumma
 	// Overlap detection: 2+ services in same category
 	for cat, services := range categoryMap {
 		if len(services) >= 2 {
+			sort.Strings(services)
 			summary.Overlaps = append(summary.Overlaps, SubscriptionOverlap{
 				Category:     cat,
 				Services:     services,
@@ -163,6 +167,11 @@ func (e *Engine) GetSubscriptionSummary(ctx context.Context) (*SubscriptionSumma
 			})
 		}
 	}
+
+	// Sort overlaps by category for deterministic API output.
+	sort.Slice(summary.Overlaps, func(i, j int) bool {
+		return summary.Overlaps[i].Category < summary.Overlaps[j].Category
+	})
 
 	return summary, rows.Err()
 }
@@ -198,15 +207,32 @@ func parseSubscription(artifactID, title, content, sender string) *Subscription 
 	}
 }
 
+// senderPrefixes is the list of common automated-email subdomain prefixes
+// that should be stripped to reveal the actual service domain.
+// IMP-006-SQS-001: Ordered longest-first so compound prefixes like
+// "no-reply.payments." match before shorter "no-reply." prefix.
+var senderPrefixes = []string{
+	"no-reply.payments.", "noreply.", "no-reply.", "billing.", "payments.",
+	"support.", "info.", "notifications.", "accounts.",
+	"team.", "help.",
+}
+
+// stripSenderPrefix removes known automated-email subdomain prefixes from a domain.
+func stripSenderPrefix(domain string) string {
+	for _, prefix := range senderPrefixes {
+		if strings.HasPrefix(domain, prefix) {
+			return domain[len(prefix):]
+		}
+	}
+	return domain
+}
+
 func extractServiceName(sender, title string) string {
 	// Try to get service name from sender domain
 	if at := strings.LastIndex(sender, "@"); at >= 0 {
 		domain := sender[at+1:]
 		// Strip common email prefixes
-		domain = strings.TrimPrefix(domain, "noreply.")
-		domain = strings.TrimPrefix(domain, "no-reply.")
-		domain = strings.TrimPrefix(domain, "billing.")
-		domain = strings.TrimPrefix(domain, "payments.")
+		domain = stripSenderPrefix(domain)
 		// Use domain without TLD as service name
 		parts := strings.Split(domain, ".")
 		if len(parts) >= 2 {
@@ -218,9 +244,10 @@ func extractServiceName(sender, title string) string {
 
 func extractAmount(text string) float64 {
 	// Limit input to first 2000 chars to bound regex cost on large emails.
+	// Use TruncateUTF8 to avoid splitting multi-byte runes (CWE-135).
 	const maxExtractLen = 2000
 	if len(text) > maxExtractLen {
-		text = text[:maxExtractLen]
+		text = stringutil.TruncateUTF8(text, maxExtractLen)
 	}
 	// Strip commas from amounts like "$1,299.99" before matching.
 	normalized := strings.ReplaceAll(text, ",", "")
@@ -240,9 +267,10 @@ func extractAmount(text string) float64 {
 
 func detectFrequency(text string) string {
 	// Limit input to first 2000 chars to bound scan cost on large emails.
+	// Use TruncateUTF8 to avoid splitting multi-byte runes (CWE-135).
 	const maxScanLen = 2000
 	if len(text) > maxScanLen {
-		text = text[:maxScanLen]
+		text = stringutil.TruncateUTF8(text, maxScanLen)
 	}
 	lower := strings.ToLower(text)
 	switch {

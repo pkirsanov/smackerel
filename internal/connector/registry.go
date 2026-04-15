@@ -91,8 +91,9 @@ func (r *Registry) Count() int {
 }
 
 // ListConnectorHealth returns a map of connector ID → health status string.
-// Snapshots connectors under lock, then calls Health() outside the lock so
-// a slow or blocking Health() implementation cannot stall Register/Unregister.
+// Snapshots connectors under lock, then calls Health() concurrently outside
+// the lock so latency is O(slowest) instead of O(sum). A slow or blocking
+// Health() implementation cannot stall Register/Unregister.
 func (r *Registry) ListConnectorHealth(ctx context.Context) map[string]string {
 	r.mu.RLock()
 	snapshot := make(map[string]Connector, len(r.connectors))
@@ -101,9 +102,26 @@ func (r *Registry) ListConnectorHealth(ctx context.Context) map[string]string {
 	}
 	r.mu.RUnlock()
 
-	result := make(map[string]string, len(snapshot))
+	if len(snapshot) == 0 {
+		return map[string]string{}
+	}
+
+	type healthResult struct {
+		id     string
+		status string
+	}
+
+	ch := make(chan healthResult, len(snapshot))
 	for id, c := range snapshot {
-		result[id] = string(c.Health(ctx))
+		go func(id string, c Connector) {
+			ch <- healthResult{id: id, status: string(c.Health(ctx))}
+		}(id, c)
+	}
+
+	result := make(map[string]string, len(snapshot))
+	for range snapshot {
+		hr := <-ch
+		result[hr.id] = hr.status
 	}
 	return result
 }
