@@ -1,0 +1,92 @@
+{
+  "version": 3,
+  "featureDir": "specs/025-knowledge-synthesis-layer",
+  "featureName": "Knowledge Synthesis Layer (LLM Wiki Pattern)",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.ux",
+    "currentPhase": "analyze",
+    "currentScope": null,
+    "runStartedAt": "2026-04-15T17:30:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-15T17:30:00Z",
+      "runFinishedAt": "2026-04-15T17:45:00Z",
+      "summary": "Created spec.md with 5 use cases, 10 business scenarios, 10 requirements (R-2501 to R-2510), 10 Gherkin scenarios, 26 acceptance criteria, competitive analysis, and 5 improvement proposals addressing all identified LLM Wiki pattern gaps"
+    },
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-15T18:00:00Z",
+      "runFinishedAt": "2026-04-15T18:30:00Z",
+      "summary": "Added UI Wireframes and User Flows to spec.md: 12 screens (6 new web, 4 new Telegram, 2 modified), 4 user flow diagrams (web discovery, health monitoring, Telegram query, system pipeline). Covers both HTMX web surface and Telegram bot surface with full accessibility, responsive, and interaction specifications."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-15T18:30:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Addresses 5 gaps identified from Karpathy LLM Wiki pattern analysis: pre-synthesis layer, prompt contract implementation, incremental knowledge building, lint/quality maintenance, cross-source synthesis at ingest time."
+}
