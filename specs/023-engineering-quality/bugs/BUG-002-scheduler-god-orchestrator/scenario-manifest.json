@@ -1,0 +1,25 @@
+{
+  "scenarios": [
+    {
+      "id": "SCN-BUG-002-001",
+      "title": "All cron jobs registered after Start()",
+      "status": "planned",
+      "testFile": null,
+      "testName": null
+    },
+    {
+      "id": "SCN-BUG-002-002",
+      "title": "Scheduler Stop() drains all jobs cleanly",
+      "status": "planned",
+      "testFile": null,
+      "testName": null
+    },
+    {
+      "id": "SCN-BUG-002-003",
+      "title": "New job added without modifying scheduler.go",
+      "status": "planned",
+      "testFile": null,
+      "testName": null
+    }
+  ]
+}
