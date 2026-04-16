@@ -97,6 +97,7 @@ func (c *Client) FetchActivity(ctx context.Context, since string, types string, 
 
 	var allEvents []ActivityEvent
 	cursor := ""
+	previousCursor := ""
 
 	for page := 0; page < maxPaginationPages; page++ {
 		body, err := c.doGet(ctx, buildURL(cursor))
@@ -125,6 +126,13 @@ func (c *Client) FetchActivity(ctx context.Context, since string, types string, 
 			return nil, fmt.Errorf("server returned oversized cursor (%d bytes, max %d)", len(resp.Cursor), maxCursorLen)
 		}
 
+		// R27-H23-05: Detect cursor regression — if the server returns the same
+		// cursor twice, pagination is stuck; break to prevent infinite loop.
+		if resp.Cursor == previousCursor {
+			slog.Warn("guesthost: cursor did not advance, breaking pagination", "cursor", resp.Cursor)
+			break
+		}
+		previousCursor = cursor
 		cursor = resp.Cursor
 	}
 

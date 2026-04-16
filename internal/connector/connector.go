@@ -38,8 +38,8 @@ type RawArtifact struct {
 	Title       string                 `json:"title"`
 	RawContent  string                 `json:"raw_content"`
 	URL         string                 `json:"url,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CapturedAt  time.Time              `json:"captured_at"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	CapturedAt  time.Time      `json:"captured_at"`
 }
 
 // Connector defines the interface that all source connectors must implement.
@@ -73,10 +73,10 @@ type ConnectorConfig struct {
 
 	// Processing configuration
 	ProcessingTier string                 `json:"processing_tier"` // full, standard, light, metadata
-	Qualifiers     map[string]interface{} `json:"qualifiers"`
+	Qualifiers     map[string]any `json:"qualifiers"`
 
 	// Source-specific configuration
-	SourceConfig map[string]interface{} `json:"source_config"`
+	SourceConfig map[string]any `json:"source_config"`
 }
 
 // ArtifactPublisher bridges connector-produced RawArtifacts into the processing

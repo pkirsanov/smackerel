@@ -18,6 +18,23 @@ Classify incoming workflow requests into exactly one of these buckets before Pha
 4. `CONTINUE` — generic keep-going language with no recoverable active workflow target. Delegate to `bubbles.iterate` and consume a `WORK-ENVELOPE`.
 5. `FRAMEWORK` — framework operations such as doctor, hooks, upgrade, status, metrics, lessons, gates, or install. Delegate to `bubbles.super` and consume a `FRAMEWORK-ENVELOPE`.
 
+### ⛔ Literal `mode:` Gate (MANDATORY — NON-NEGOTIABLE)
+
+Before applying the classification contract, perform this literal substring check:
+
+1. **Scan the raw user input for the exact token `mode:`**
+2. If `mode:` is NOT present anywhere in the input → classify as `VAGUE` → delegate to `bubbles.super`
+3. If `mode:` IS present → continue to the classification rules above
+
+**There are ZERO exceptions.** The following do NOT constitute structured input:
+- Action verbs: "execute", "plan", "deliver", "implement", "run", "complete", "invoke"
+- Spec references: "specs/099-108", "each recommendation", "all features"
+- Phase language: "full planning workflow", "planning chain", "planning phases"
+- Agent references: "invoke correct workflow/agent"
+- Numbered lists of work items
+
+**Known failure pattern:** `bubbles.workflow` receives NL input → skips this gate → self-selects a mode based on keyword matching → proceeds without `bubbles.super` resolution. This is the #1 observed violation and MUST be mechanically prevented by checking for `mode:` FIRST.
+
 ### Required Delegation Rules
 
 - When the request is `VAGUE`, invoke `bubbles.super` as a subagent and require a `## RESOLUTION-ENVELOPE` only.

@@ -19,6 +19,8 @@ import (
 type TokenStore struct {
 	pool   *pgxpool.Pool
 	encKey []byte // 32 bytes derived from auth token for AES-256
+	block  cipher.Block
+	gcm    cipher.AEAD
 }
 
 // NewTokenStore creates a token store backed by PostgreSQL.
@@ -33,38 +35,44 @@ func NewTokenStore(pool *pgxpool.Pool, encryptionKey string) *TokenStore {
 	} else {
 		slog.Warn("TokenStore: encryption key is empty — OAuth tokens will be stored in PLAINTEXT. Set SMACKEREL_AUTH_TOKEN for encrypted storage.")
 	}
-	return &TokenStore{pool: pool, encKey: key}
+	ts := &TokenStore{pool: pool, encKey: key}
+	if len(key) > 0 {
+		// R24-S1: Pre-compute cipher.Block and AEAD once — encKey is immutable.
+		block, err := aes.NewCipher(key)
+		if err != nil {
+			slog.Error("TokenStore: failed to create cipher block", "error", err)
+			return ts // graceful fallback: encrypt/decrypt will return early on nil block
+		}
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			slog.Error("TokenStore: failed to create GCM", "error", err)
+			return ts
+		}
+		ts.block = block
+		ts.gcm = gcm
+	}
+	return ts
 }
 
 // encrypt encrypts plaintext using AES-256-GCM. Returns base64-encoded ciphertext.
 func (s *TokenStore) encrypt(plaintext string) (string, error) {
-	if len(s.encKey) == 0 || plaintext == "" {
-		return plaintext, nil // No encryption key configured
+	if s.gcm == nil || plaintext == "" {
+		return plaintext, nil // No encryption configured
 	}
 
-	block, err := aes.NewCipher(s.encKey)
-	if err != nil {
-		return "", fmt.Errorf("create cipher: %w", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("create GCM: %w", err)
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
+	nonce := make([]byte, s.gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", fmt.Errorf("generate nonce: %w", err)
 	}
 
-	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
+	ciphertext := s.gcm.Seal(nonce, nonce, []byte(plaintext), nil)
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
 // decrypt decrypts base64-encoded AES-256-GCM ciphertext.
 func (s *TokenStore) decrypt(encoded string) (string, error) {
-	if len(s.encKey) == 0 || encoded == "" {
-		return encoded, nil // No encryption key or empty value
+	if s.gcm == nil || encoded == "" {
+		return encoded, nil // No encryption configured or empty value
 	}
 
 	data, err := base64.StdEncoding.DecodeString(encoded)
@@ -72,23 +80,13 @@ func (s *TokenStore) decrypt(encoded string) (string, error) {
 		return "", fmt.Errorf("token is not valid base64: %w", err)
 	}
 
-	block, err := aes.NewCipher(s.encKey)
-	if err != nil {
-		return "", fmt.Errorf("create cipher: %w", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("create GCM: %w", err)
-	}
-
-	nonceSize := gcm.NonceSize()
+	nonceSize := s.gcm.NonceSize()
 	if len(data) < nonceSize {
 		return "", fmt.Errorf("encrypted token data too short (got %d bytes, need at least %d)", len(data), nonceSize)
 	}
 
 	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	plaintext, err := s.gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		return "", fmt.Errorf("token decryption failed: %w", err)
 	}
