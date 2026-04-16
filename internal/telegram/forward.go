@@ -21,6 +21,16 @@ type ForwardedMeta struct {
 	IsFromChannel bool      `json:"is_from_channel,omitempty"`
 }
 
+// ToMap returns forward metadata as a map suitable for the capture API payload.
+func (m ForwardedMeta) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"sender_name":   m.SenderName,
+		"source_chat":   m.SourceChat,
+		"original_date": m.OriginalDate,
+		"is_channel":    m.IsFromChannel,
+	}
+}
+
 // msgTextTruncated returns the message's text (or caption as fallback),
 // truncated to maxShareTextLen bytes.
 func msgTextTruncated(msg *tgbotapi.Message) string {
@@ -133,12 +143,7 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 	}
 	forwardContext += fmt.Sprintf(" (originally sent %s)", meta.OriginalDate.Format("2006-01-02 15:04"))
 
-	fwdMeta := map[string]interface{}{
-		"sender_name":   meta.SenderName,
-		"source_chat":   meta.SourceChat,
-		"original_date": meta.OriginalDate,
-		"is_channel":    meta.IsFromChannel,
-	}
+	fwdMeta := meta.ToMap()
 
 	// Check if the forwarded message contains a URL
 	if containsURL(text) {

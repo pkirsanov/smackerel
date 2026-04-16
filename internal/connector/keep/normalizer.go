@@ -99,22 +99,33 @@ func (n *Normalizer) NormalizeGkeep(note *GkeepNote) (*connector.RawArtifact, er
 	return n.Normalize(takeout, note.NoteID, "gkeepapi")
 }
 
+// hasImageAttachment reports whether a note has any image attachments.
+func hasImageAttachment(note *TakeoutNote) bool {
+	for _, a := range note.Attachments {
+		if strings.HasPrefix(a.MimeType, "image/") {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAudioAttachment reports whether a note has any audio attachments.
+func hasAudioAttachment(note *TakeoutNote) bool {
+	for _, a := range note.Attachments {
+		if strings.HasPrefix(a.MimeType, "audio/") {
+			return true
+		}
+	}
+	return false
+}
+
 // classifyNote determines the note type based on content.
 // Priority: mixed > checklist > image > audio > text
 func (n *Normalizer) classifyNote(note *TakeoutNote) NoteType {
 	hasText := note.TextContent != ""
 	hasList := len(note.ListContent) > 0
-	hasImages := false
-	hasAudio := false
-
-	for _, a := range note.Attachments {
-		if strings.HasPrefix(a.MimeType, "image/") {
-			hasImages = true
-		}
-		if strings.HasPrefix(a.MimeType, "audio/") {
-			hasAudio = true
-		}
-	}
+	hasImages := hasImageAttachment(note)
+	hasAudio := hasAudioAttachment(note)
 
 	// Mixed: has text/list AND attachments, or has both text and list
 	mixedCount := 0
@@ -363,14 +374,7 @@ func (n *Normalizer) shouldSkip(note *TakeoutNote, content string) bool {
 		if len(note.Labels) > 0 {
 			return false
 		}
-		hasImages := false
-		for _, a := range note.Attachments {
-			if strings.HasPrefix(a.MimeType, "image/") {
-				hasImages = true
-				break
-			}
-		}
-		if hasImages {
+		if hasImageAttachment(note) {
 			return false
 		}
 		return true
@@ -381,7 +385,7 @@ func (n *Normalizer) shouldSkip(note *TakeoutNote, content string) bool {
 	// Pinned/image notes are exempt from label filtering since they are
 	// high-signal regardless of label state (R-012 + R-008 priority).
 	if len(n.config.LabelsFilter) > 0 && len(note.Labels) > 0 {
-		if !note.IsPinned && !n.noteHasImages(note) {
+		if !note.IsPinned && !hasImageAttachment(note) {
 			if !n.matchesLabelFilter(note) {
 				return true
 			}
@@ -410,15 +414,7 @@ func (n *Normalizer) matchesLabelFilter(note *TakeoutNote) bool {
 	return false
 }
 
-// noteHasImages checks whether a note has any image attachments.
-func (n *Normalizer) noteHasImages(note *TakeoutNote) bool {
-	for _, a := range note.Attachments {
-		if strings.HasPrefix(a.MimeType, "image/") {
-			return true
-		}
-	}
-	return false
-}
+
 
 // assignTier delegates processing tier assignment to the Qualifier engine
 // to ensure a single source of truth for R-008 evaluation rules.

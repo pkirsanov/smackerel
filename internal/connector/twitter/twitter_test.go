@@ -1522,3 +1522,369 @@ func TestNormalizeTweet_NoMediaNoMetadata(t *testing.T) {
 		t.Error("tweets without media should not have media_count metadata")
 	}
 }
+
+// --- Test coverage gap closure ---
+
+func TestSyncArchive_UnparseableTimestampSkipped(t *testing.T) {
+	// Tweets with unparseable timestamps must be skipped; valid tweets processed.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"good tweet with enough text to be standard","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}},{"tweet":{"id":"2","full_text":"bad timestamp tweet","created_at":"NOT-A-DATE","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	artifacts, _, err := c.syncArchive(context.Background(), "")
+	if err != nil {
+		t.Fatalf("syncArchive should succeed despite bad timestamps: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Errorf("expected 1 artifact (bad timestamp skipped), got %d", len(artifacts))
+	}
+	if len(artifacts) > 0 && artifacts[0].SourceRef != "1" {
+		t.Errorf("expected tweet ID 1, got %s", artifacts[0].SourceRef)
+	}
+}
+
+func TestSyncArchive_CursorSkipsOlderTweets(t *testing.T) {
+	// Tweets at or before the cursor must be skipped.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"old tweet with enough chars for standard tier assignment","created_at":"Wed Mar 15 10:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}},{"tweet":{"id":"2","full_text":"new tweet with enough chars for standard tier assignment","created_at":"Wed Mar 15 20:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	// Cursor set after tweet 1, before tweet 2
+	artifacts, newCursor, err := c.syncArchive(context.Background(), "2026-03-15T15:00:00Z")
+	if err != nil {
+		t.Fatalf("syncArchive failed: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 new artifact, got %d", len(artifacts))
+	}
+	if artifacts[0].SourceRef != "2" {
+		t.Errorf("expected tweet 2 (newer than cursor), got %s", artifacts[0].SourceRef)
+	}
+	if newCursor <= "2026-03-15T15:00:00Z" {
+		t.Error("cursor should advance past the new tweet")
+	}
+}
+
+func TestParseSignalFile_ContextCancelled(t *testing.T) {
+	// When context is cancelled, parseSignalFile must return empty set.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "like.js"),
+		[]byte(`window.YTD.like.part0 = [{"like":{"tweetId":"10"}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	ids := c.parseSignalFile(ctx, "like.js", "like")
+	if len(ids) != 0 {
+		t.Errorf("expected empty set on cancelled context, got %d IDs", len(ids))
+	}
+}
+
+func TestParseSignalFile_EmptyTweetIDSkipped(t *testing.T) {
+	// Signal entries with empty tweetId should be ignored.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "like.js"),
+		[]byte(`window.YTD.like.part0 = [{"like":{"tweetId":""}},{"like":{"tweetId":"42"}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	ids := c.parseSignalFile(context.Background(), "like.js", "like")
+	if len(ids) != 1 {
+		t.Errorf("expected 1 ID (empty tweetId skipped), got %d", len(ids))
+	}
+	if !ids["42"] {
+		t.Error("expected tweet 42 in signal set")
+	}
+}
+
+func TestParseSignalFile_MalformedSignalEntry(t *testing.T) {
+	// Entries that don't match the expected signal key are silently skipped.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "like.js"),
+		[]byte(`window.YTD.like.part0 = [{"wrong_key":{"tweetId":"10"}},{"like":{"tweetId":"20"}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	ids := c.parseSignalFile(context.Background(), "like.js", "like")
+	if len(ids) != 1 {
+		t.Errorf("expected 1 ID (wrong key skipped), got %d", len(ids))
+	}
+	if !ids["20"] {
+		t.Error("expected tweet 20 in signal set")
+	}
+}
+
+func TestParseSignalFile_NoArrayBracket(t *testing.T) {
+	// Signal file without JSON array bracket returns empty set.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "like.js"),
+		[]byte(`window.YTD.like.part0 = {}`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	ids := c.parseSignalFile(context.Background(), "like.js", "like")
+	if len(ids) != 0 {
+		t.Errorf("expected empty set for non-array signal file, got %d", len(ids))
+	}
+}
+
+func TestAssignTweetTier_StandardDefault(t *testing.T) {
+	// Medium-length tweet with no special attributes gets standard tier.
+	tweet := ArchiveTweet{
+		FullText:      "This is a regular tweet that is definitely longer than fifty characters in length",
+		FavoriteCount: 5,
+		RetweetCount:  0,
+	}
+	tier := assignTweetTier(tweet, false, false, nil)
+	if tier != "standard" {
+		t.Errorf("expected standard tier for default tweet, got %s", tier)
+	}
+}
+
+func TestNormalizeTweet_InReplyToMetadata(t *testing.T) {
+	// Verify in_reply_to metadata is set for reply tweets.
+	tweet := ArchiveTweet{
+		ID:                "300",
+		FullText:          "This is a reply to another tweet",
+		InReplyToStatusID: "200",
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	replyTo, ok := artifact.Metadata["in_reply_to"].(string)
+	if !ok || replyTo != "200" {
+		t.Errorf("expected in_reply_to=200, got %v", artifact.Metadata["in_reply_to"])
+	}
+}
+
+func TestNormalizeTweet_ThreadMetadata(t *testing.T) {
+	// Verify thread metadata fields are correctly set.
+	tweet := ArchiveTweet{
+		ID:       "301",
+		FullText: "Part of a thread",
+	}
+	thread := &Thread{RootID: "300"}
+	artifact := normalizeTweet(tweet, false, false, thread)
+	if artifact.Metadata["is_thread"] != true {
+		t.Error("expected is_thread=true")
+	}
+	if artifact.Metadata["thread_id"] != "300" {
+		t.Errorf("expected thread_id=300, got %v", artifact.Metadata["thread_id"])
+	}
+}
+
+func TestConnect_APIModeWithBearerToken(t *testing.T) {
+	// API mode with bearer token should connect successfully (no archive validation).
+	c := New("twitter")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "api"},
+		Credentials:  map[string]string{"bearer_token": "test-token-value"},
+	})
+	if err != nil {
+		t.Errorf("API mode with bearer token should succeed: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected healthy after API connect, got %s", c.Health(context.Background()))
+	}
+}
+
+func TestConnect_HybridModeWithBearerToken(t *testing.T) {
+	// Hybrid mode with bearer token and valid archive dir.
+	c := New("twitter")
+	dir := t.TempDir()
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "hybrid", "archive_dir": dir},
+		Credentials:  map[string]string{"bearer_token": "test-token"},
+	})
+	if err != nil {
+		t.Errorf("hybrid mode with token and dir should succeed: %v", err)
+	}
+}
+
+func TestIsSafeURL_SchemeOnly(t *testing.T) {
+	// URL with no host — still has a scheme, but it's safe by scheme check.
+	if !isSafeURL("https:") {
+		t.Error("https: with no host should still be scheme-safe")
+	}
+}
+
+func TestIsSafeURL_FTPRejected(t *testing.T) {
+	if isSafeURL("ftp://example.com/file") {
+		t.Error("ftp: scheme must be rejected")
+	}
+}
+
+func TestIsSafeURL_MixedCaseScheme(t *testing.T) {
+	if !isSafeURL("HTTPS://example.com") {
+		t.Error("HTTPS (uppercase) should be accepted")
+	}
+}
+
+func TestSyncArchive_TweetsJSNotFound(t *testing.T) {
+	// Archive dir exists with data/ subdir but no tweets.js.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	// data/ exists but tweets.js does not
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	_, _, err := c.syncArchive(context.Background(), "")
+	if err == nil {
+		t.Error("expected error when tweets.js is missing")
+	}
+	if !strings.Contains(err.Error(), "tweets.js") {
+		t.Errorf("expected error mentioning tweets.js, got: %v", err)
+	}
+}
+
+func TestSync_APIModeSkipsArchive(t *testing.T) {
+	// API-only mode should not try to read archive files.
+	c := New("twitter")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"sync_mode": "api"},
+		Credentials:  map[string]string{"bearer_token": "test-token"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Sync in API mode with no API implementation yet — should return empty, no error.
+	artifacts, cursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Errorf("API mode sync should not error (no archive access): %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts from API-only sync (not implemented), got %d", len(artifacts))
+	}
+	if cursor != "" {
+		t.Errorf("expected empty cursor, got %q", cursor)
+	}
+}
+
+func TestParseSignalFile_MalformedInnerJSON(t *testing.T) {
+	// Signal entry where the inner JSON (under the signal key) is malformed.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	os.WriteFile(filepath.Join(dataDir, "like.js"),
+		[]byte(`window.YTD.like.part0 = [{"like":"not-an-object"},{"like":{"tweetId":"50"}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	ids := c.parseSignalFile(context.Background(), "like.js", "like")
+	if len(ids) != 1 {
+		t.Errorf("expected 1 ID (malformed entry skipped), got %d", len(ids))
+	}
+	if !ids["50"] {
+		t.Error("expected tweet 50 in signal set")
+	}
+}
+
+func TestIsSafeURL_InvalidIPv6(t *testing.T) {
+	// Unterminated IPv6 literal triggers a url.Parse error.
+	if isSafeURL("http://[::1") {
+		t.Error("malformed URL (unterminated IPv6) should not be safe")
+	}
+}
+
+func TestParseSignalFile_DirectoryInsteadOfFile(t *testing.T) {
+	// If the signal "file" is actually a directory, ReadFile will fail.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+	// Create like.js as a directory instead of a file
+	os.MkdirAll(filepath.Join(dataDir, "like.js"), 0o755)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	ids := c.parseSignalFile(context.Background(), "like.js", "like")
+	if len(ids) != 0 {
+		t.Errorf("expected empty set when signal path is a directory, got %d", len(ids))
+	}
+}
+
+func TestSyncArchive_FullRoundTrip(t *testing.T) {
+	// End-to-end: archive with tweets, likes, bookmarks, threads; verify all
+	// metadata propagation and cursor advancement in a single sync.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [`+
+			`{"tweet":{"id":"100","full_text":"Thread start with enough text for standard","created_at":"Wed Mar 15 14:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"in_reply_to_status_id":"","entities":{"urls":[],"hashtags":[],"user_mentions":[]}}},`+
+			`{"tweet":{"id":"101","full_text":"Thread reply with enough text to be standard tier","created_at":"Wed Mar 15 14:05:00 +0000 2026","favorite_count":0,"retweet_count":0,"in_reply_to_status_id":"100","entities":{"urls":[],"hashtags":[],"user_mentions":[]}}},`+
+			`{"tweet":{"id":"200","full_text":"RT @other: retweeted content that should be light tier","created_at":"Wed Mar 15 15:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}},`+
+			`{"tweet":{"id":"300","full_text":"A tweet with a link for you","created_at":"Wed Mar 15 16:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[{"expanded_url":"https://example.com/article"}],"hashtags":[{"text":"golang"}],"user_mentions":[{"screen_name":"gopher"}]}}}`+
+			`]`), 0o600)
+
+	os.WriteFile(filepath.Join(dataDir, "like.js"),
+		[]byte(`window.YTD.like.part0 = [{"like":{"tweetId":"200"}}]`), 0o600)
+	os.WriteFile(filepath.Join(dataDir, "bookmark.js"),
+		[]byte(`window.YTD.bookmark.part0 = [{"bookmark":{"tweetId":"300"}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	artifacts, cursor, err := c.syncArchive(context.Background(), "")
+	if err != nil {
+		t.Fatalf("syncArchive failed: %v", err)
+	}
+	if len(artifacts) != 4 {
+		t.Fatalf("expected 4 artifacts, got %d", len(artifacts))
+	}
+	if cursor == "" {
+		t.Error("expected non-empty cursor")
+	}
+
+	// Check thread tweets have thread metadata
+	for _, a := range artifacts {
+		id := a.SourceRef
+		switch id {
+		case "100", "101":
+			if a.Metadata["is_thread"] != true {
+				t.Errorf("tweet %s should have thread metadata", id)
+			}
+		case "200":
+			if a.Metadata["is_liked"] != true {
+				t.Errorf("tweet 200 should be liked")
+			}
+		case "300":
+			if a.Metadata["is_bookmarked"] != true {
+				t.Error("tweet 300 should be bookmarked")
+			}
+			urls := a.Metadata["urls"].([]string)
+			if len(urls) != 1 || urls[0] != "https://example.com/article" {
+				t.Errorf("expected 1 URL, got %v", urls)
+			}
+		}
+	}
+}

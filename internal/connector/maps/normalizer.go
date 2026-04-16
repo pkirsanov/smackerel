@@ -62,6 +62,8 @@ func buildContent(activity TakeoutActivity) string {
 
 // buildMetadata creates the full metadata map per R-007.
 func buildMetadata(activity TakeoutActivity, sourceFile string) map[string]interface{} {
+	startLat, startLng, endLat, endLng := activityCoords(activity)
+
 	meta := map[string]interface{}{
 		"activity_type":   string(activity.Type),
 		"start_time":      activity.StartTime.Format("2006-01-02T15:04:05Z07:00"),
@@ -74,49 +76,54 @@ func buildMetadata(activity TakeoutActivity, sourceFile string) map[string]inter
 		"source_file":     sourceFile,
 		"dedup_hash":      computeDedupHash(activity),
 		"processing_tier": assignTier(activity),
+		"start_lat":       startLat,
+		"start_lng":       startLng,
+		"end_lat":         endLat,
+		"end_lng":         endLng,
 	}
 
 	if len(activity.Route) > 0 {
-		meta["start_lat"] = activity.Route[0].Lat
-		meta["start_lng"] = activity.Route[0].Lng
-		meta["end_lat"] = activity.Route[len(activity.Route)-1].Lat
-		meta["end_lng"] = activity.Route[len(activity.Route)-1].Lng
 		meta["route_geojson"] = ToGeoJSON(activity.Route)
-	} else if activity.StartLocation.Lat != 0 || activity.StartLocation.Lng != 0 ||
-		activity.EndLocation.Lat != 0 || activity.EndLocation.Lng != 0 {
-		meta["start_lat"] = activity.StartLocation.Lat
-		meta["start_lng"] = activity.StartLocation.Lng
-		meta["end_lat"] = activity.EndLocation.Lat
-		meta["end_lng"] = activity.EndLocation.Lng
-		meta["route_geojson"] = nil
 	} else {
-		meta["start_lat"] = 0.0
-		meta["start_lng"] = 0.0
-		meta["end_lat"] = 0.0
-		meta["end_lng"] = 0.0
 		meta["route_geojson"] = nil
 	}
 
 	return meta
 }
 
-// activityGridCoords returns the start and end route coordinates snapped to a ~500m grid.
-// Falls back to StartLocation/EndLocation when route is empty.
-// Returns zeroes when neither route nor start/end locations are available.
-func activityGridCoords(activity TakeoutActivity) (startLat, startLng, endLat, endLng float64) {
+// activityCoords returns the start and end coordinates from an activity,
+// falling back to StartLocation/EndLocation when Route is empty,
+// and returning zeroes when neither is available.
+func activityCoords(activity TakeoutActivity) (startLat, startLng, endLat, endLng float64) {
 	if len(activity.Route) > 0 {
-		startLat = roundToGrid(activity.Route[0].Lat)
-		startLng = roundToGrid(activity.Route[0].Lng)
-		endLat = roundToGrid(activity.Route[len(activity.Route)-1].Lat)
-		endLng = roundToGrid(activity.Route[len(activity.Route)-1].Lng)
+		startLat = activity.Route[0].Lat
+		startLng = activity.Route[0].Lng
+		endLat = activity.Route[len(activity.Route)-1].Lat
+		endLng = activity.Route[len(activity.Route)-1].Lng
 	} else if activity.StartLocation.Lat != 0 || activity.StartLocation.Lng != 0 ||
 		activity.EndLocation.Lat != 0 || activity.EndLocation.Lng != 0 {
-		startLat = roundToGrid(activity.StartLocation.Lat)
-		startLng = roundToGrid(activity.StartLocation.Lng)
-		endLat = roundToGrid(activity.EndLocation.Lat)
-		endLng = roundToGrid(activity.EndLocation.Lng)
+		startLat = activity.StartLocation.Lat
+		startLng = activity.StartLocation.Lng
+		endLat = activity.EndLocation.Lat
+		endLng = activity.EndLocation.Lng
 	}
 	return
+}
+
+// activityGridCoords returns the start and end route coordinates snapped to a ~500m grid.
+func activityGridCoords(activity TakeoutActivity) (startLat, startLng, endLat, endLng float64) {
+	startLat, startLng, endLat, endLng = activityCoords(activity)
+	startLat = roundToGrid(startLat)
+	startLng = roundToGrid(startLng)
+	endLat = roundToGrid(endLat)
+	endLng = roundToGrid(endLng)
+	return
+}
+
+// sourceRefHash produces a deterministic 16-hex-char hash prefix for dedup source references.
+func sourceRefHash(input string) string {
+	hash := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("%x", hash[:8])
 }
 
 // computeDedupHash generates a dedup key from date + activity type + start hour + rounded coords.
@@ -129,8 +136,7 @@ func computeDedupHash(activity TakeoutActivity) string {
 
 	input := fmt.Sprintf("%s:%s:%d:%.3f,%.3f:%.3f,%.3f",
 		date, string(activity.Type), hour, startLat, startLng, endLat, endLng)
-	hash := sha256.Sum256([]byte(input))
-	return fmt.Sprintf("%x", hash[:8]) // first 16 hex chars
+	return sourceRefHash(input)
 }
 
 // assignTier determines the processing tier for an activity.

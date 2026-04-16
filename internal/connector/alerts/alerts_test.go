@@ -4846,6 +4846,212 @@ func TestMergedLocations_TravelProviderZeroRadius_Skipped(t *testing.T) {
 	}
 }
 
+// TestProcessingTier_Direct verifies processingTier mapping for all severity levels.
+func TestProcessingTier_Direct(t *testing.T) {
+	tests := []struct {
+		severity string
+		want     string
+	}{
+		{"extreme", "full"},
+		{"severe", "full"},
+		{"moderate", "standard"},
+		{"minor", "light"},
+		{"unknown", "light"},
+		{"info", "light"},
+		{"", "light"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.severity, func(t *testing.T) {
+			got := processingTier(tt.severity)
+			if got != tt.want {
+				t.Errorf("processingTier(%q) = %q, want %q", tt.severity, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestExtractInstructions_Direct verifies instruction extraction from raw content.
+func TestExtractInstructions_Direct(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"with instruction prefix", "Headline\n\nInstruction: Take shelter now", "Take shelter now"},
+		{"instruction with newline after", "Headline\n\nInstruction: Take cover\nMore info", "Take cover"},
+		{"no instruction prefix", "Just a description with no instructions", ""},
+		{"empty string", "", ""},
+		{"instruction at start", "Instruction: Move to higher ground", "Move to higher ground"},
+		{"multiple instruction prefixes", "Instruction: First\nInstruction: Second", "First"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractInstructions(tt.content)
+			if got != tt.want {
+				t.Errorf("extractInstructions(%q) = %q, want %q", tt.content, got, tt.want)
+			}
+		})
+	}
+}
+
+// errTravelProvider returns an error from GetTravelLocations.
+type errTravelProvider struct{}
+
+func (e *errTravelProvider) GetTravelLocations(ctx context.Context) ([]LocationConfig, error) {
+	return nil, fmt.Errorf("calendar integration unavailable")
+}
+
+// TestMergedLocations_TravelProviderError_FallsBackToConfig verifies that when
+// TravelProvider returns an error, mergedLocations falls back to cfg.TravelLocations.
+func TestMergedLocations_TravelProviderError_FallsBackToConfig(t *testing.T) {
+	c := New("gov-alerts")
+	c.config = AlertsConfig{
+		Locations: []LocationConfig{
+			{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200},
+		},
+		TravelLocations: []LocationConfig{
+			{Name: "Config-Travel", Latitude: 40.71, Longitude: -74.01, RadiusKm: 150},
+		},
+	}
+	c.TravelProvider = &errTravelProvider{}
+
+	merged := c.mergedLocations(context.Background(), c.config)
+	// Should have Home + Config-Travel (from fallback).
+	if len(merged) != 2 {
+		t.Fatalf("expected 2 merged locations (Home + fallback travel), got %d", len(merged))
+	}
+	if merged[1].Name != "Config-Travel" {
+		t.Errorf("expected Config-Travel from fallback, got %s", merged[1].Name)
+	}
+	if merged[1].RadiusKm != 300 { // 150 * 2 = 300
+		t.Errorf("travel radius should be doubled to 300, got %.0f", merged[1].RadiusKm)
+	}
+}
+
+// TestFetchVolcanoAlerts_FallbackToVolcanoNameAsID verifies that when a volcano alert
+// has an empty ID, it falls back to using the volcano name as the alert ID.
+func TestFetchVolcanoAlerts_FallbackToVolcanoNameAsID(t *testing.T) {
+	entries := []map[string]interface{}{
+		{"id": "", "volcanoName": "Mount Erebus", "alertLevel": "ADVISORY", "colorCode": "YELLOW", "issuedDate": "2024-04-01T12:00:00Z"},
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(volcanoJSON(entries))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.volcanoBaseURL = ts.URL
+
+	alerts, err := c.fetchVolcanoAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert (ID fallback to volcano name), got %d", len(alerts))
+	}
+	if alerts[0].ID != "Mount Erebus" {
+		t.Errorf("expected ID 'Mount Erebus' (fallback), got %q", alerts[0].ID)
+	}
+}
+
+// TestFetchVolcanoAlerts_BothIDAndNameEmpty_Skipped verifies that alerts with both
+// empty ID and empty volcano name are skipped.
+func TestFetchVolcanoAlerts_BothIDAndNameEmpty_Skipped(t *testing.T) {
+	entries := []map[string]interface{}{
+		{"id": "", "volcanoName": "", "alertLevel": "WATCH", "colorCode": "ORANGE", "issuedDate": "2024-04-01T12:00:00Z"},
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(volcanoJSON(entries))
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.volcanoBaseURL = ts.URL
+
+	alerts, err := c.fetchVolcanoAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts (both ID and name empty), got %d", len(alerts))
+	}
+}
+
+// TestFetchWildfireAlerts_GUIDFallbackToLink verifies that when GUID is empty,
+// the wildfire alert uses the link URL as the ID.
+func TestFetchWildfireAlerts_GUIDFallbackToLink(t *testing.T) {
+	// Item with empty GUID but valid link — should use link as ID.
+	xml := `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>` +
+		`<item><guid></guid><title>Ridge Fire</title><description>Fire near ridge.</description>` +
+		`<link>https://inciweb.wildfire.gov/incident/12345</link>` +
+		`<pubDate>Mon, 15 Jul 2024 10:30:00 +0000</pubDate></item>` +
+		`</channel></rss>`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		fmt.Fprint(w, xml)
+	}))
+	defer ts.Close()
+
+	c := New("test")
+	c.wildfireBaseURL = ts.URL
+
+	alerts, err := c.fetchWildfireAlerts(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert (GUID fallback to link), got %d", len(alerts))
+	}
+	if alerts[0].ID != "https://inciweb.wildfire.gov/incident/12345" {
+		t.Errorf("expected ID from link fallback, got %q", alerts[0].ID)
+	}
+}
+
+// TestSync_AirNow_ProducesArtifacts verifies full Sync flow with AirNow source producing artifacts.
+func TestSync_AirNow_ProducesArtifacts(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(airnowJSON([]map[string]interface{}{
+			{
+				"DateObserved":  "2024-07-15 ",
+				"HourObserved":  14,
+				"AQI":           210,
+				"ParameterName": "PM2.5",
+				"ReportingArea": "San Francisco",
+				"Category":      map[string]interface{}{"Name": "Very Unhealthy"},
+			},
+		}))
+	}))
+	defer ts.Close()
+
+	mn := &mockNotifier{}
+	c := New("test")
+	c.airnowBaseURL = ts.URL
+	c.Notifier = mn
+	c.config = AlertsConfig{
+		Locations:    []LocationConfig{{Name: "Home", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceAirNow: true,
+		AirNowAPIKey: "test-key",
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(arts) != 1 {
+		t.Fatalf("expected 1 AirNow artifact, got %d", len(arts))
+	}
+	if arts[0].ContentType != "alert/air-quality" {
+		t.Errorf("ContentType = %q, want alert/air-quality", arts[0].ContentType)
+	}
+	// AQI 210 = severe → should trigger notification
+	if mn.count() != 1 {
+		t.Errorf("expected 1 notification for severe AQI, got %d", mn.count())
+	}
+}
+
 // TestMergedLocations_TravelProviderNegativeRadius_Skipped verifies that a TravelProvider
 // location with negative radius is rejected (C-017-001).
 func TestMergedLocations_TravelProviderNegativeRadius_Skipped(t *testing.T) {

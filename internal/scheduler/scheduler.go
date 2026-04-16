@@ -440,8 +440,16 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			if err := s.engine.ProduceBillAlerts(ctx); err != nil {
 				slog.Error("bill alert production failed", "error", err)
 			}
+			if ctx.Err() != nil {
+				slog.Warn("daily alert production context expired after bill alerts, remaining producers skipped")
+				return
+			}
 			if err := s.engine.ProduceTripPrepAlerts(ctx); err != nil {
 				slog.Error("trip prep alert production failed", "error", err)
+			}
+			if ctx.Err() != nil {
+				slog.Warn("daily alert production context expired after trip prep alerts, remaining producers skipped")
+				return
 			}
 			if err := s.engine.ProduceReturnWindowAlerts(ctx); err != nil {
 				slog.Error("return window alert production failed", "error", err)

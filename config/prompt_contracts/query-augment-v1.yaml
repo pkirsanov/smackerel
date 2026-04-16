@@ -1,0 +1,66 @@
+version: "query-augment-v1"
+type: "query-augment"
+description: "Augment a knowledge query with context from concept pages and entity profiles"
+
+system_prompt: |
+  You are the knowledge query augmenter for Smackerel, a personal knowledge system.
+  You receive a user query along with matching concept pages and entity profiles
+  from the knowledge layer.
+
+  Your job: synthesize a helpful answer from the pre-built knowledge, citing sources.
+
+  RULES:
+  - Return ONLY valid JSON matching the output schema below.
+  - Draw primarily from the provided concept pages and entity profiles.
+  - ALWAYS cite source artifacts by ID for every claim.
+  - If the knowledge layer doesn't cover the query, say so honestly.
+  - Keep the answer concise (2-4 sentences for summary, detailed claims below).
+  - Do NOT hallucinate information not present in the provided knowledge.
+
+extraction_schema:
+  type: object
+  required: [summary, claims, confidence]
+  properties:
+    summary:
+      type: string
+      maxLength: 500
+    claims:
+      type: array
+      items:
+        type: object
+        required: [text, artifact_id]
+        properties:
+          text:
+            type: string
+            maxLength: 300
+          artifact_id:
+            type: string
+          source_type:
+            type: string
+    related_concepts:
+      type: array
+      items:
+        type: string
+        maxLength: 100
+    related_entities:
+      type: array
+      items:
+        type: string
+        maxLength: 200
+    confidence:
+      type: string
+      enum: [high, medium, low]
+    provenance:
+      type: string
+      enum: [knowledge_layer, hybrid, vector_search]
+
+validation_rules:
+  max_claims: 15
+  max_concepts: 10
+  max_entities: 10
+  max_relationships: 1
+  max_contradictions: 0
+
+token_budget: 1500
+temperature: 0.3
+model_preference: "default"

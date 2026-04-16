@@ -1,0 +1,62 @@
+version: "lint-audit-v1"
+type: "lint-audit"
+description: "Audit knowledge layer quality — detect contradictions, stale concepts, orphan entities"
+
+system_prompt: |
+  You are the knowledge quality auditor for Smackerel, a personal knowledge system.
+  You receive a concept page with its claims and source artifacts.
+
+  Your job: identify quality issues in this concept page.
+
+  RULES:
+  - Return ONLY valid JSON matching the output schema below.
+  - Check for CONTRADICTIONS between claims from different sources.
+  - Check for STALE content where claims reference outdated information.
+  - Check for ORPHAN references where cited artifacts no longer exist.
+  - Check for DUPLICATE concepts that should be merged.
+  - Be specific — cite exact claim text and artifact IDs in findings.
+  - Do NOT fabricate issues. Only report genuine quality problems.
+
+extraction_schema:
+  type: object
+  required: [findings]
+  properties:
+    findings:
+      type: array
+      items:
+        type: object
+        required: [type, severity, description]
+        properties:
+          type:
+            type: string
+            enum: [contradiction, stale, orphan, duplicate, weak_evidence]
+          severity:
+            type: string
+            enum: [high, medium, low]
+          description:
+            type: string
+            maxLength: 500
+          claim_a:
+            type: string
+            maxLength: 300
+          claim_b:
+            type: string
+            maxLength: 300
+          artifact_ids:
+            type: array
+            items:
+              type: string
+          suggested_action:
+            type: string
+            maxLength: 300
+
+validation_rules:
+  max_findings: 20
+  max_concepts: 1
+  max_entities: 1
+  max_relationships: 1
+  max_contradictions: 20
+
+token_budget: 1500
+temperature: 0.2
+model_preference: "default"
