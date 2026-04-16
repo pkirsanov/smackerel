@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/013-guesthost-connector",
   "featureName": "GuestHost Connector & Hospitality Intelligence",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.workflow",
@@ -96,8 +96,14 @@
     ]
   },
   "certification": {
-    "status": "done",
-    "completedScopes": ["1", "2", "3", "4", "5"],
+    "status": "in_progress",
+    "completedScopes": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
     "certifiedCompletedPhases": [
       "analyze",
       "plan",
@@ -113,11 +119,26 @@
       "chaos"
     ],
     "scopeProgress": [
-      {"scope": 1, "status": "done"},
-      {"scope": 2, "status": "done"},
-      {"scope": 3, "status": "done"},
-      {"scope": 4, "status": "done"},
-      {"scope": 5, "status": "done"}
+      {
+        "scope": 1,
+        "status": "done"
+      },
+      {
+        "scope": 2,
+        "status": "done"
+      },
+      {
+        "scope": 3,
+        "status": "done"
+      },
+      {
+        "scope": 4,
+        "status": "done"
+      },
+      {
+        "scope": 5,
+        "status": "done"
+      }
     ],
     "lockdownState": {
       "roundNumber": 2,

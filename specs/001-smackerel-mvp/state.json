@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/001-smackerel-mvp",
   "featureName": "Smackerel MVP",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.iterate",
@@ -29,7 +29,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "1",
       "2",
@@ -67,7 +67,9 @@
         "scope": 2,
         "name": "Design System CSS",
         "status": "Done",
-        "dependsOn": [1],
+        "dependsOn": [
+          1
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-07T09:25:00Z"
@@ -85,7 +87,11 @@
         "scope": 4,
         "name": "Product-Level Testing",
         "status": "Done",
-        "dependsOn": [1, 2, 3],
+        "dependsOn": [
+          1,
+          2,
+          3
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-07T09:50:00Z"
@@ -97,12 +103,30 @@
     }
   },
   "policySnapshot": {
-    "grill": { "mode": "off", "source": "repo-default" },
-    "tdd": { "mode": "scenario-first", "source": "repo-default" },
-    "autoCommit": { "mode": "off", "source": "repo-default" },
-    "lockdown": { "mode": "off", "source": "repo-default" },
-    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
-    "validation": { "mode": "certification-required", "source": "repo-default" }
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
@@ -115,7 +139,10 @@
       "completedAt": "2026-04-06T14:30:00Z",
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["select", "bootstrap"],
+      "phasesExecuted": [
+        "select",
+        "bootstrap"
+      ],
       "scopesCompleted": [],
       "summary": "Spec-scope hardening: elaborated spec.md with 21 Gherkin scenarios across 4 scopes. Created design.md, scopes.md, scenario-manifest.json. All artifacts structured."
     },
@@ -127,7 +154,9 @@
       "completedAt": "2026-04-07T08:05:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["select"],
+      "phasesExecuted": [
+        "select"
+      ],
       "scopesCompleted": [],
       "summary": "Scope selection: all 4 scopes identified for delivery-lockdown. All code already exists, need DoD reconciliation."
     },
@@ -139,7 +168,9 @@
       "completedAt": "2026-04-07T08:12:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "scopesCompleted": [],
       "summary": "Bootstrap verification: design.md, scopes.md, spec.md all contain substantive content. 21 Gherkin scenarios with test plans and DoD checklists verified."
     },
@@ -151,9 +182,16 @@
       "completedAt": "2026-04-07T08:40:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["implement"],
-      "scopesCompleted": [1, 2, 3, 4],
-      "summary": "Implementation verification: Scope 01 — 32 icons in icons.go, 8 markers in format.go. Scope 02 — CSS in templates.go with light/dark themes. Scope 03 — Connector interface, Registry, StateStore, OAuth2Provider, Backoff, Supervisor. Scope 04 — 56 E2E scripts, 2 stress tests."
+      "phasesExecuted": [
+        "implement"
+      ],
+      "scopesCompleted": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "summary": "Implementation verification: Scope 01 \u2014 32 icons in icons.go, 8 markers in format.go. Scope 02 \u2014 CSS in templates.go with light/dark themes. Scope 03 \u2014 Connector interface, Registry, StateStore, OAuth2Provider, Backoff, Supervisor. Scope 04 \u2014 56 E2E scripts, 2 stress tests."
     },
     {
       "id": "5",
@@ -163,7 +201,9 @@
       "completedAt": "2026-04-07T09:05:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "scopesCompleted": [],
       "summary": "Test execution: 23 Go packages PASS (icons, telegram, connector, auth, scheduler, web all green). Python 11 tests PASS. Build and lint clean. Zero skipped tests."
     },
@@ -175,7 +215,9 @@
       "completedAt": "2026-04-07T09:12:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["regression"],
+      "phasesExecuted": [
+        "regression"
+      ],
       "scopesCompleted": [],
       "summary": "Regression check: no prior specs broken. All 23 Go packages pass. Test count stable. No previously-passing tests regressed."
     },
@@ -187,7 +229,9 @@
       "completedAt": "2026-04-07T09:17:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["simplify"],
+      "phasesExecuted": [
+        "simplify"
+      ],
       "scopesCompleted": [],
       "summary": "Simplification: code well-structured, no dead code, no excessive abstractions. Icons use simple map[string]string. Backoff uses clean exponential math."
     },
@@ -199,7 +243,9 @@
       "completedAt": "2026-04-07T09:23:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["gaps"],
+      "phasesExecuted": [
+        "gaps"
+      ],
       "scopesCompleted": [],
       "summary": "Gap analysis: all 21 Gherkin scenarios mapped to implementations. No missing connectors. All icon categories covered. CSS themes complete."
     },
@@ -211,7 +257,9 @@
       "completedAt": "2026-04-07T09:30:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["harden"],
+      "phasesExecuted": [
+        "harden"
+      ],
       "scopesCompleted": [],
       "summary": "Hardening: all DoD items verified with evidence blocks. No format manipulation. No deferral language. Scope statuses canonical."
     },
@@ -223,7 +271,9 @@
       "completedAt": "2026-04-07T09:37:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["stabilize"],
+      "phasesExecuted": [
+        "stabilize"
+      ],
       "scopesCompleted": [],
       "summary": "Stability check: no flaky tests. Backoff jitter within bounds. Registry thread-safe with RWMutex. Supervisor recovers from panics."
     },
@@ -235,7 +285,9 @@
       "completedAt": "2026-04-07T09:43:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["security"],
+      "phasesExecuted": [
+        "security"
+      ],
       "scopesCompleted": [],
       "summary": "Security review: OAuth2 uses URL encoding via url.Values. No SQL injection (parameterized queries in state.go). No XSS (Go template auto-escaping). Bearer auth on API."
     },
@@ -247,7 +299,9 @@
       "completedAt": "2026-04-07T09:50:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["validate"],
+      "phasesExecuted": [
+        "validate"
+      ],
       "scopesCompleted": [],
       "summary": "Validation pass: build PASS, lint PASS, 23 Go + 11 Python unit tests PASS. All 4 scopes verified. 55 DoD items checked. Zero unchecked."
     },
@@ -259,7 +313,9 @@
       "completedAt": "2026-04-07T09:56:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["audit"],
+      "phasesExecuted": [
+        "audit"
+      ],
       "scopesCompleted": [],
       "summary": "Audit pass: all DoD items have evidence blocks. Scenario-manifest covers 21 scenarios. No fabrication. No deferral language. Code matches design."
     },
@@ -271,7 +327,9 @@
       "completedAt": "2026-04-07T10:03:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["chaos"],
+      "phasesExecuted": [
+        "chaos"
+      ],
       "scopesCompleted": [],
       "summary": "Chaos round: Supervisor recover/restart verified. Backoff exhaustion skips sync cleanly. Registry concurrent access safe."
     },
@@ -283,7 +341,9 @@
       "completedAt": "2026-04-07T10:12:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
-      "phasesExecuted": ["docs"],
+      "phasesExecuted": [
+        "docs"
+      ],
       "scopesCompleted": [],
       "summary": "Documentation: updated report.md with per-scope evidence, Code Diff Evidence, test results. Updated scenario-manifest.json to v2 format. All 55 DoD items have inline evidence."
     },
@@ -295,7 +355,9 @@
       "completedAt": "2026-04-07T10:16:00Z",
       "statusBefore": "in_progress",
       "statusAfter": "done",
-      "phasesExecuted": ["spec-review"],
+      "phasesExecuted": [
+        "spec-review"
+      ],
       "scopesCompleted": [],
       "summary": "Spec review: verified spec.md, design.md, scopes.md aligned with implementation. All 21 scenarios mapped. No stale claims."
     }
