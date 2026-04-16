@@ -8,16 +8,16 @@ Committed:
 
 - `README.md`
 - `docs/smackerel.md`
-- `specs/` (002-018, all with spec, design, scopes, reports)
+- `specs/` (001-025, all with spec, design, scopes, reports)
 - `.github/`
 - `.specify/memory/`
-- Go core runtime sources under `cmd/` and `internal/` (76 source files, 70 test files)
-- Python ML sidecar sources under `ml/` (11 files, 2 test files)
+- Go core runtime sources under `cmd/` and `internal/` (105 source files, 104 test files)
+- Python ML sidecar sources under `ml/` (14 files, 9 test files)
 - `docker-compose.yml` with health checks, resource limits, restart policies, NATS auth
 - `config/smackerel.yaml`
 - Generated environment files under `config/generated/` via `./smackerel.sh config generate`
 - `./smackerel.sh`
-- E2E test scripts under `tests/e2e/` (57 scripts)
+- E2E test scripts under `tests/e2e/` (59 scripts)
 - Stress test scripts under `tests/stress/` (2 scripts)
 
 Implemented runtime capabilities:
@@ -26,13 +26,14 @@ Implemented runtime capabilities:
 - 5-stage semantic search (temporal intent → embed → pgvector → graph expand → LLM rerank)
 - Daily digest generation with Telegram delivery and retry
 - Knowledge graph linking (4 strategies: similarity, entity, topic, temporal) — wired into pipeline
-- Telegram bot (share-sheet, forwards, conversation assembly, media groups, 7 commands)
-- Web UI (HTMX semantic search, artifact detail, digest, topics, settings, status)
+- Telegram bot (share-sheet, forwards, conversation assembly, media groups, 9 commands)
+- Web UI (HTMX semantic search, artifact detail, digest, topics, settings, status, knowledge dashboard)
 - 14 passive connectors (Gmail API, Google Calendar API, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps, Hospitable STR, Discord, Twitter/X archive, Weather via Open-Meteo, Government Alerts via USGS, Financial Markets via Finnhub/CoinGecko)
 - Intelligence engine (synthesis at 2AM, momentum hourly, resurfacing at 8AM, overdue alerts)
+- Knowledge synthesis layer (concept pages, entity profiles, cross-source connections, lint auditing, prompt contract validation)
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)
-- Database migrations (8 SQL files)
+- Database migrations (14 SQL files)
 - NATS JetStream with token authentication (5 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, SYNTHESIS)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 

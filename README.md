@@ -204,6 +204,9 @@ telegram:
    - **Forwarded conversation** → multiple forwarded messages from the same source are assembled into a single conversation artifact with participant extraction and timeline
    - **Media groups** → photos/videos shared together are assembled into a single multi-attachment artifact
    - `/find <query>` → semantic search (top 3 results)
+   - `/concept [name]` → browse concept pages (no arg = top 10 list)
+   - `/person [name]` → browse entity profiles
+   - `/lint` → knowledge quality report
    - `/digest` → today's daily digest
    - `/done` → finalize conversation assembly (flush all open buffers)
    - `/status` → system stats
@@ -571,6 +574,12 @@ All API endpoints except `/api/health` require a Bearer token in the `Authorizat
 | `GET` | `/api/recent` | Yes | Most recent artifacts (optional `?limit=N`, max 50) |
 | `GET` | `/api/artifact/{id}` | Yes | Full artifact detail |
 | `GET` | `/api/export` | Yes | Bulk export as JSONL with cursor pagination (`?cursor=&limit=`) |
+| `GET` | `/api/knowledge/concepts` | Yes | List knowledge concepts (optional `?q=&sort=&limit=&offset=`) |
+| `GET` | `/api/knowledge/concepts/{id}` | Yes | Concept detail with claims and sources |
+| `GET` | `/api/knowledge/entities` | Yes | List entity profiles (optional `?q=&sort=&limit=&offset=`) |
+| `GET` | `/api/knowledge/entities/{id}` | Yes | Entity profile detail |
+| `GET` | `/api/knowledge/lint` | Yes | Knowledge quality lint findings |
+| `GET` | `/api/knowledge/stats` | Yes | Knowledge layer statistics |
 | `GET` | `/api/auth/status` | Yes | OAuth provider token status |
 | `GET` | `/auth/{provider}/start` | No | Start OAuth flow (browser redirect) |
 | `GET` | `/auth/{provider}/callback` | No | OAuth callback handler |
@@ -733,14 +742,21 @@ Open **http://127.0.0.1:40001** in a browser. Pages:
 - **/artifact/{id}** — Artifact detail with summary, key ideas, entities, connections
 - **/topics** — Topic lifecycle view with pagination (emerging → active → hot → cooling → dormant)
 - **/digest** — Today's daily digest
-- **/status** — System status (DB, NATS, ML sidecar health)
+- **/knowledge** — Knowledge dashboard with concept and entity counts
+- **/knowledge/concepts** — Concept pages with search, sort, and pagination
+- **/knowledge/concepts/{id}** — Concept detail with claims, sources, and related concepts
+- **/knowledge/entities** — Entity profiles with search and pagination
+- **/knowledge/entities/{id}** — Entity detail with artifact associations
+- **/knowledge/lint** — Knowledge quality lint report with findings
+- **/knowledge/lint/{id}** — Individual lint finding detail
+- **/status** — System status (DB, NATS, ML sidecar, knowledge health)
 - **/settings** — Connector status and configuration
 
 The web search uses the same semantic search engine as the API (pgvector + embedding + LLM re-ranking). Dark/light theme follows OS preference. Monochrome design — no accent colors, no emoji.
 
 ## Runtime Standards
 
-Smackerel has a complete runtime with a repo CLI, YAML-backed config generation, a Go core (76 source files, 70 test files), a Python ML sidecar (11 files), and Docker Compose orchestration. The operational surface is standardized:
+Smackerel has a complete runtime with a repo CLI, YAML-backed config generation, a Go core (105 source files, 104 test files), a Python ML sidecar (14 files), and Docker Compose orchestration. The operational surface is standardized:
 
 - Docker-only runtime and test execution
 - One repo CLI for build, test, config generation, stack lifecycle, logs, and cleanup: `./smackerel.sh`

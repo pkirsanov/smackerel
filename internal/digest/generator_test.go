@@ -1,6 +1,7 @@
 package digest
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -223,5 +224,124 @@ func TestSCN002043_DigestLLMFailureFallback(t *testing.T) {
 	// Verify topics mentioned
 	if !strings.Contains(text, "pricing") {
 		t.Error("fallback should mention hot topics")
+	}
+}
+
+// T8-01 (SCN-025-23): DigestContext includes knowledge health when critical lint findings exist
+func TestSCN02523_DigestContextIncludesKnowledgeHealth(t *testing.T) {
+	ctx := &DigestContext{
+		DigestDate: "2026-04-15",
+		ActionItems: []ActionItem{
+			{Text: "Review proposal", Person: "Sarah", DaysWaiting: 1},
+		},
+		KnowledgeHealth: &KnowledgeHealthDigestContext{
+			CriticalFindings: []KnowledgeDigestFinding{
+				{Type: "contradiction", Description: "Conflicting claims about project timeline"},
+				{Type: "synthesis_backlog", Description: "15 artifacts pending synthesis"},
+			},
+			SynthesisBacklog: 15,
+		},
+	}
+
+	if ctx.KnowledgeHealth == nil {
+		t.Fatal("expected knowledge health section in digest context")
+	}
+	if len(ctx.KnowledgeHealth.CriticalFindings) != 2 {
+		t.Errorf("expected 2 critical findings, got %d", len(ctx.KnowledgeHealth.CriticalFindings))
+	}
+	if ctx.KnowledgeHealth.CriticalFindings[0].Type != "contradiction" {
+		t.Errorf("expected first finding type 'contradiction', got %q", ctx.KnowledgeHealth.CriticalFindings[0].Type)
+	}
+	if ctx.KnowledgeHealth.SynthesisBacklog != 15 {
+		t.Errorf("expected synthesis backlog 15, got %d", ctx.KnowledgeHealth.SynthesisBacklog)
+	}
+
+	// Verify JSON serialisation includes knowledge_health
+	data, err := json.Marshal(ctx)
+	if err != nil {
+		t.Fatalf("failed to marshal digest context: %v", err)
+	}
+	if !strings.Contains(string(data), `"knowledge_health"`) {
+		t.Error("serialised DigestContext should contain knowledge_health key")
+	}
+	if !strings.Contains(string(data), `"contradiction"`) {
+		t.Error("serialised DigestContext should contain contradiction finding")
+	}
+}
+
+// T8-02: DigestContext skips knowledge section when no critical lint findings
+func TestDigestContext_SkipsKnowledgeHealthWhenClean(t *testing.T) {
+	ctx := &DigestContext{
+		DigestDate: "2026-04-15",
+		ActionItems: []ActionItem{
+			{Text: "Review proposal", Person: "Sarah", DaysWaiting: 1},
+		},
+		// KnowledgeHealth deliberately nil — clean lint report, no critical findings
+	}
+
+	if ctx.KnowledgeHealth != nil {
+		t.Error("expected nil knowledge health section when no critical findings")
+	}
+
+	// Verify JSON serialisation omits knowledge_health (omitempty)
+	data, err := json.Marshal(ctx)
+	if err != nil {
+		t.Fatalf("failed to marshal digest context: %v", err)
+	}
+	if strings.Contains(string(data), `"knowledge_health"`) {
+		t.Error("serialised DigestContext should NOT contain knowledge_health when nil")
+	}
+}
+
+// T8-01 continued: Test the fallback formatting of knowledge health context
+func TestFormatKnowledgeHealthFallback(t *testing.T) {
+	kh := &KnowledgeHealthDigestContext{
+		CriticalFindings: []KnowledgeDigestFinding{
+			{Type: "contradiction", Description: "Conflicting claims on project deadline"},
+		},
+		SynthesisBacklog: 15,
+	}
+
+	text := formatKnowledgeHealthFallback(kh)
+	if !strings.Contains(text, "Knowledge Health") {
+		t.Error("fallback should include 'Knowledge Health' header")
+	}
+	if !strings.Contains(text, "contradiction") {
+		t.Error("fallback should mention the finding type")
+	}
+	if !strings.Contains(text, "15 items pending") {
+		t.Error("fallback should mention backlog count")
+	}
+}
+
+// Verify knowledge health does not appear in quiet day check when nil
+func TestDigestContext_QuietDayWithKnowledgeHealthNil(t *testing.T) {
+	ctx := &DigestContext{
+		DigestDate: "2026-04-15",
+	}
+	hasHospitality := ctx.Hospitality != nil
+	hasKnowledgeHealth := ctx.KnowledgeHealth != nil
+	isQuiet := len(ctx.ActionItems) == 0 && len(ctx.OvernightArtifacts) == 0 && len(ctx.HotTopics) == 0 && !hasHospitality && !hasKnowledgeHealth
+	if !isQuiet {
+		t.Error("should be quiet when no items and no knowledge health")
+	}
+}
+
+// Verify knowledge health prevents quiet day detection
+func TestDigestContext_NotQuietWithKnowledgeHealth(t *testing.T) {
+	ctx := &DigestContext{
+		DigestDate: "2026-04-15",
+		KnowledgeHealth: &KnowledgeHealthDigestContext{
+			CriticalFindings: []KnowledgeDigestFinding{
+				{Type: "stale_concept", Description: "3 concepts need refresh"},
+			},
+			SynthesisBacklog: 12,
+		},
+	}
+	hasHospitality := ctx.Hospitality != nil
+	hasKnowledgeHealth := ctx.KnowledgeHealth != nil
+	isQuiet := len(ctx.ActionItems) == 0 && len(ctx.OvernightArtifacts) == 0 && len(ctx.HotTopics) == 0 && !hasHospitality && !hasKnowledgeHealth
+	if isQuiet {
+		t.Error("should NOT be quiet when knowledge health has findings")
 	}
 }

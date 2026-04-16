@@ -11,6 +11,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
+	"github.com/smackerel/smackerel/internal/knowledge"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/topics"
 )
@@ -39,18 +40,23 @@ type Scheduler struct {
 	stopOnce sync.Once // guards Stop() against double-close panic on done channel
 
 	// Per-group concurrency guards — prevents cron job overlap within each group
-	muDigest    sync.Mutex
-	muHourly    sync.Mutex
-	muDaily     sync.Mutex
-	muWeekly    sync.Mutex
-	muMonthly   sync.Mutex
-	muBriefs    sync.Mutex // pre-meeting briefs (every 5 min)
-	muAlerts    sync.Mutex // alert delivery sweep (every 15 min)
-	muAlertProd sync.Mutex // daily alert producers (bill, trip, return window)
-	muResurface sync.Mutex // resurfacing (daily 8 AM — separate from synthesis/lookups)
-	muLookups   sync.Mutex // frequent lookup detection (daily 4 AM)
-	muSubs      sync.Mutex // subscription detection (weekly Monday 3 AM)
-	muRelCool   sync.Mutex // relationship cooling alert production (weekly Monday 7 AM)
+	muDigest        sync.Mutex
+	muHourly        sync.Mutex
+	muDaily         sync.Mutex
+	muWeekly        sync.Mutex
+	muMonthly       sync.Mutex
+	muBriefs        sync.Mutex // pre-meeting briefs (every 5 min)
+	muAlerts        sync.Mutex // alert delivery sweep (every 15 min)
+	muAlertProd     sync.Mutex // daily alert producers (bill, trip, return window)
+	muResurface     sync.Mutex // resurfacing (daily 8 AM — separate from synthesis/lookups)
+	muLookups       sync.Mutex // frequent lookup detection (daily 4 AM)
+	muSubs          sync.Mutex // subscription detection (weekly Monday 3 AM)
+	muRelCool       sync.Mutex // relationship cooling alert production (weekly Monday 7 AM)
+	muKnowledgeLint sync.Mutex // knowledge lint (configurable cron)
+
+	// Knowledge layer linter (nil if knowledge layer is disabled)
+	knowledgeLinter   *knowledge.Linter
+	knowledgeLintCron string
 }
 
 // New creates a new scheduler.
@@ -465,6 +471,28 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}
 	}
 
+	// Schedule knowledge lint — configurable cron from config (default daily 3 AM)
+	if s.knowledgeLinter != nil && s.knowledgeLintCron != "" {
+		if _, err := s.cron.AddFunc(s.knowledgeLintCron, func() {
+			if !s.muKnowledgeLint.TryLock() {
+				slog.Warn("skipping overlapping job", "group", "knowledge-lint", "job", "knowledge-lint")
+				return
+			}
+			defer s.muKnowledgeLint.Unlock()
+
+			ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
+			defer cancel()
+
+			if err := s.knowledgeLinter.RunLint(ctx); err != nil {
+				slog.Error("knowledge lint failed", "error", err)
+			}
+		}); err != nil {
+			slog.Warn("failed to schedule knowledge lint", "error", err)
+		} else {
+			slog.Info("knowledge lint scheduled", "cron", s.knowledgeLintCron)
+		}
+	}
+
 	s.cron.Start()
 	slog.Info("scheduler started", "digest_cron", cronExpr)
 	return nil
@@ -511,6 +539,13 @@ func (s *Scheduler) DigestPendingRetry() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.digestPendingRetry
+}
+
+// SetKnowledgeLinter configures the knowledge linter and its cron expression.
+// Must be called before Start().
+func (s *Scheduler) SetKnowledgeLinter(linter *knowledge.Linter, cronExpr string) {
+	s.knowledgeLinter = linter
+	s.knowledgeLintCron = cronExpr
 }
 
 // DigestPendingDate returns the current pending date (thread-safe).

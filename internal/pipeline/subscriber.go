@@ -16,7 +16,9 @@ import (
 
 	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/digest"
+	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // DefaultMaxDeliver is the maximum delivery attempts before dead-letter routing.
@@ -24,15 +26,18 @@ import (
 const DefaultMaxDeliver = 5
 
 type ResultSubscriber struct {
-	DB        *pgxpool.Pool
-	NATS      *smacknats.Client
-	Processor *Processor
-	DigestGen *digest.Generator
-	done      chan struct{}
-	wg        sync.WaitGroup
-	mu        sync.Mutex
-	started   bool
-	stopped   bool
+	DB                    *pgxpool.Pool
+	NATS                  *smacknats.Client
+	Processor             *Processor
+	DigestGen             *digest.Generator
+	KnowledgeEnabled      bool
+	KnowledgeStore        *knowledge.KnowledgeStore
+	PromptContractVersion string
+	done                  chan struct{}
+	wg                    sync.WaitGroup
+	mu                    sync.Mutex
+	started               bool
+	stopped               bool
 }
 
 // NewResultSubscriber creates a subscriber for artifacts.processed messages.
@@ -226,6 +231,16 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 		return
 	}
 
+	// Best-effort knowledge synthesis — fail-open, never blocks ingestion (SCN-025-06)
+	if rs.KnowledgeEnabled && payload.Success {
+		if err := rs.publishSynthesisRequest(ctx, &payload); err != nil {
+			slog.Warn("synthesis publish failed (fail-open)",
+				"artifact_id", payload.ArtifactID,
+				"error", err,
+			)
+		}
+	}
+
 	_ = msg.Ack()
 	slog.Debug("processed result stored", "artifact_id", payload.ArtifactID)
 }
@@ -351,7 +366,7 @@ func truncateBytes(data []byte, maxLen int) string {
 }
 
 // truncateUTF8 truncates a string to at most maxBytes bytes without splitting
-// multi-byte UTF-8 characters.
+// multi-byte UTF-8 rune boundaries.
 func truncateUTF8(s string, maxBytes int) string {
 	if len(s) <= maxBytes {
 		return s
@@ -362,4 +377,107 @@ func truncateUTF8(s string, maxBytes int) string {
 		truncated--
 	}
 	return s[:truncated]
+}
+
+// maxSynthesisContentChars is the maximum character count for content_raw sent to the LLM.
+const maxSynthesisContentChars = 8000
+
+// maxSynthesisContextItems caps existing concepts/entities included in extraction requests.
+const maxSynthesisContextItems = 50
+
+// publishSynthesisRequest builds and publishes a SynthesisExtractRequest for an artifact.
+// Fail-open: errors are returned for logging but must never block ingestion.
+func (rs *ResultSubscriber) publishSynthesisRequest(ctx context.Context, payload *NATSProcessedPayload) error {
+	if rs.KnowledgeStore == nil || rs.PromptContractVersion == "" {
+		return nil
+	}
+
+	artifact, err := rs.KnowledgeStore.GetArtifactForSynthesis(ctx, payload.ArtifactID)
+	if err != nil {
+		return fmt.Errorf("load artifact: %w", err)
+	}
+
+	// Truncate content to 8000 chars for LLM context window budget
+	contentRaw := artifact.ContentRaw
+	if len(contentRaw) > maxSynthesisContentChars {
+		contentRaw = stringutil.TruncateUTF8(contentRaw, maxSynthesisContentChars)
+	}
+
+	// Parse ML-extracted fields
+	var keyIdeas []string
+	_ = json.Unmarshal(artifact.KeyIdeasJSON, &keyIdeas)
+
+	var entities map[string][]string
+	_ = json.Unmarshal(artifact.EntitiesJSON, &entities)
+
+	var topics []string
+	_ = json.Unmarshal(artifact.TopicsJSON, &topics)
+
+	// Load existing concepts for context (up to 50)
+	existingConcepts, _, err := rs.KnowledgeStore.ListConcepts(ctx, maxSynthesisContextItems, 0)
+	if err != nil {
+		slog.Debug("failed to load existing concepts for synthesis context", "error", err)
+	}
+	var conceptSummaries []SynthesisConceptSummary
+	for _, c := range existingConcepts {
+		conceptSummaries = append(conceptSummaries, SynthesisConceptSummary{
+			ID:      c.ID,
+			Title:   c.Title,
+			Summary: c.Summary,
+		})
+	}
+
+	// Load existing entities for context (up to 50)
+	existingEntities, _, err := rs.KnowledgeStore.ListEntities(ctx, maxSynthesisContextItems, 0)
+	if err != nil {
+		slog.Debug("failed to load existing entities for synthesis context", "error", err)
+	}
+	var entitySummaries []SynthesisEntitySummary
+	for _, e := range existingEntities {
+		entitySummaries = append(entitySummaries, SynthesisEntitySummary{
+			ID:   e.ID,
+			Name: e.Name,
+			Type: e.EntityType,
+		})
+	}
+
+	req := &SynthesisExtractRequest{
+		ArtifactID:            payload.ArtifactID,
+		ContentType:           artifact.ArtifactType,
+		Title:                 artifact.Title,
+		Summary:               artifact.Summary,
+		ContentRaw:            contentRaw,
+		KeyIdeas:              keyIdeas,
+		Entities:              entities,
+		Topics:                topics,
+		SourceID:              artifact.SourceID,
+		SourceType:            artifact.ArtifactType,
+		ExistingConcepts:      conceptSummaries,
+		ExistingEntities:      entitySummaries,
+		PromptContractVersion: rs.PromptContractVersion,
+		RetryCount:            artifact.RetryCount,
+	}
+
+	if err := ValidateSynthesisExtractRequest(req); err != nil {
+		return fmt.Errorf("validate synthesis request: %w", err)
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal synthesis request: %w", err)
+	}
+
+	if len(data) > MaxNATSMessageSize {
+		return fmt.Errorf("synthesis request too large: %d bytes", len(data))
+	}
+
+	if err := rs.NATS.Publish(ctx, smacknats.SubjectSynthesisExtract, data); err != nil {
+		return fmt.Errorf("publish to synthesis.extract: %w", err)
+	}
+
+	slog.Info("synthesis request published",
+		"artifact_id", payload.ArtifactID,
+		"contract_version", rs.PromptContractVersion,
+	)
+	return nil
 }

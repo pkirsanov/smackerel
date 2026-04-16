@@ -18,9 +18,10 @@ import (
 
 // Generator assembles and generates daily digests.
 type Generator struct {
-	Pool     *pgxpool.Pool
-	NATS     *smacknats.Client
-	Registry *connector.Registry
+	Pool             *pgxpool.Pool
+	NATS             *smacknats.Client
+	Registry         *connector.Registry
+	KnowledgeEnabled bool
 }
 
 // NewGenerator creates a new digest generator.
@@ -30,11 +31,24 @@ func NewGenerator(pool *pgxpool.Pool, nats *smacknats.Client, registry *connecto
 
 // DigestContext is the context payload sent to the ML sidecar for digest generation.
 type DigestContext struct {
-	DigestDate         string                    `json:"digest_date"`
-	ActionItems        []ActionItem              `json:"action_items"`
-	OvernightArtifacts []ArtifactBrief           `json:"overnight_artifacts"`
-	HotTopics          []TopicBrief              `json:"hot_topics"`
-	Hospitality        *HospitalityDigestContext `json:"hospitality,omitempty"`
+	DigestDate         string                        `json:"digest_date"`
+	ActionItems        []ActionItem                  `json:"action_items"`
+	OvernightArtifacts []ArtifactBrief               `json:"overnight_artifacts"`
+	HotTopics          []TopicBrief                  `json:"hot_topics"`
+	Hospitality        *HospitalityDigestContext     `json:"hospitality,omitempty"`
+	KnowledgeHealth    *KnowledgeHealthDigestContext `json:"knowledge_health,omitempty"`
+}
+
+// KnowledgeHealthDigestContext holds critical knowledge lint findings for the digest.
+type KnowledgeHealthDigestContext struct {
+	CriticalFindings []KnowledgeDigestFinding `json:"critical_findings"`
+	SynthesisBacklog int                      `json:"synthesis_backlog"`
+}
+
+// KnowledgeDigestFinding is a summary of a critical lint finding for the digest.
+type KnowledgeDigestFinding struct {
+	Type        string `json:"type"`
+	Description string `json:"description"`
 }
 
 // ActionItem is a pending action item for the digest.
@@ -108,9 +122,18 @@ func (g *Generator) Generate(ctx context.Context) (*DigestContext, error) {
 		}
 	}
 
+	// Assemble knowledge health context if knowledge layer is enabled
+	if g.KnowledgeEnabled {
+		khCtx := g.assembleKnowledgeHealthContext(ctx)
+		if khCtx != nil {
+			digestCtx.KnowledgeHealth = khCtx
+		}
+	}
+
 	// Check for quiet day
 	hasHospitality := digestCtx.Hospitality != nil
-	if len(actionItems) == 0 && len(overnight) == 0 && len(hotTopics) == 0 && !hasHospitality {
+	hasKnowledgeHealth := digestCtx.KnowledgeHealth != nil
+	if len(actionItems) == 0 && len(overnight) == 0 && len(hotTopics) == 0 && !hasHospitality && !hasKnowledgeHealth {
 		return digestCtx, g.storeQuietDigest(ctx, today)
 	}
 
@@ -288,6 +311,9 @@ func (g *Generator) storeFallbackDigest(ctx context.Context, date string, digest
 	if digestCtx.Hospitality != nil {
 		lines = append(lines, formatHospitalityFallback(digestCtx.Hospitality))
 	}
+	if digestCtx.KnowledgeHealth != nil {
+		lines = append(lines, formatKnowledgeHealthFallback(digestCtx.KnowledgeHealth))
+	}
 
 	text := strings.Join(lines, "\n")
 	wordCount := len(strings.Fields(text))
@@ -348,6 +374,88 @@ func formatHospitalityFallback(h *HospitalityDigestContext) string {
 	}
 	if len(h.PropertyAlerts) > 0 {
 		parts = append(parts, fmt.Sprintf("Property alerts: %d", len(h.PropertyAlerts)))
+	}
+	return strings.Join(parts, "\n")
+}
+
+// assembleKnowledgeHealthContext queries the latest lint report and synthesis backlog.
+// Returns nil if no critical findings exist (high-severity lint findings or backlog > 10).
+func (g *Generator) assembleKnowledgeHealthContext(ctx context.Context) *KnowledgeHealthDigestContext {
+	if g.Pool == nil {
+		return nil
+	}
+
+	// Query latest lint report summary and findings
+	row := g.Pool.QueryRow(ctx, `
+		SELECT findings, summary FROM knowledge_lint_reports
+		ORDER BY run_at DESC LIMIT 1`)
+
+	var findingsJSON, summaryJSON json.RawMessage
+	if err := row.Scan(&findingsJSON, &summaryJSON); err != nil {
+		slog.Warn("failed to get latest lint report for digest", "error", err)
+		return nil
+	}
+
+	// Parse summary to check for high-severity findings
+	var summary struct {
+		High int `json:"high"`
+	}
+	if err := json.Unmarshal(summaryJSON, &summary); err != nil {
+		slog.Warn("failed to parse lint summary for digest", "error", err)
+		return nil
+	}
+
+	// Check synthesis backlog
+	var backlog int
+	if err := g.Pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM artifacts WHERE synthesis_status = 'pending'").Scan(&backlog); err != nil {
+		slog.Warn("failed to count synthesis backlog for digest", "error", err)
+	}
+
+	// Only include when critical: high-severity findings or backlog > 10
+	if summary.High == 0 && backlog <= 10 {
+		return nil
+	}
+
+	// Parse individual high-severity findings for the digest
+	var findings []struct {
+		Type        string `json:"type"`
+		Severity    string `json:"severity"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(findingsJSON, &findings); err != nil {
+		slog.Warn("failed to parse lint findings for digest", "error", err)
+	}
+
+	var critical []KnowledgeDigestFinding
+	for _, f := range findings {
+		if f.Severity == "high" {
+			critical = append(critical, KnowledgeDigestFinding{
+				Type:        f.Type,
+				Description: f.Description,
+			})
+		}
+	}
+
+	return &KnowledgeHealthDigestContext{
+		CriticalFindings: critical,
+		SynthesisBacklog: backlog,
+	}
+}
+
+// formatKnowledgeHealthFallback produces a plain-text knowledge health section for the
+// fallback digest (used when the ML sidecar is unreachable).
+func formatKnowledgeHealthFallback(kh *KnowledgeHealthDigestContext) string {
+	var parts []string
+	parts = append(parts, "--- Knowledge Health ---")
+	if len(kh.CriticalFindings) > 0 {
+		parts = append(parts, fmt.Sprintf("Critical findings: %d", len(kh.CriticalFindings)))
+		for _, f := range kh.CriticalFindings {
+			parts = append(parts, fmt.Sprintf("  • [%s] %s", f.Type, f.Description))
+		}
+	}
+	if kh.SynthesisBacklog > 10 {
+		parts = append(parts, fmt.Sprintf("Synthesis backlog: %d items pending", kh.SynthesisBacklog))
 	}
 	return strings.Join(parts, "\n")
 }

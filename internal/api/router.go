@@ -47,6 +47,16 @@ func NewRouter(deps *Dependencies) http.Handler {
 			// Bookmark import endpoint (Phase 2)
 			r.Post("/bookmarks/import", deps.BookmarkImportHandler)
 
+			// Knowledge layer endpoints (Scope 3)
+			r.Route("/knowledge", func(r chi.Router) {
+				r.Get("/concepts", deps.KnowledgeConceptsHandler)
+				r.Get("/concepts/{id}", deps.KnowledgeConceptDetailHandler)
+				r.Get("/entities", deps.KnowledgeEntitiesHandler)
+				r.Get("/entities/{id}", deps.KnowledgeEntityDetailHandler)
+				r.Get("/lint", deps.KnowledgeLintHandler)
+				r.Get("/stats", deps.KnowledgeStatsHandler)
+			})
+
 			// Phase 5 intelligence endpoints (R-501..R-508)
 			if deps.IntelligenceEngine != nil {
 				r.Get("/expertise", ExpertiseHandler(deps.IntelligenceEngine))
@@ -91,6 +101,15 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Post("/settings/connectors/{id}/sync", deps.WebHandler.SyncConnectorHandler)
 			r.Post("/settings/bookmarks/import", deps.WebHandler.BookmarkUploadHandler)
 			r.Get("/status", deps.WebHandler.StatusPage)
+
+			// Knowledge layer web routes
+			r.Get("/knowledge", deps.WebHandler.KnowledgeDashboard)
+			r.Get("/knowledge/concepts", deps.WebHandler.ConceptsList)
+			r.Get("/knowledge/concepts/{id}", deps.WebHandler.ConceptDetail)
+			r.Get("/knowledge/entities", deps.WebHandler.EntitiesList)
+			r.Get("/knowledge/entities/{id}", deps.WebHandler.EntityDetail)
+			r.Get("/knowledge/lint", deps.WebHandler.LintReport)
+			r.Get("/knowledge/lint/{id}", deps.WebHandler.LintFindingDetail)
 		})
 	}
 

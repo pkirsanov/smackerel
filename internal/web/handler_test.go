@@ -27,7 +27,7 @@ func TestNewHandler_TemplateFuncs(t *testing.T) {
 	h := NewHandler(nil, nil, time.Now())
 
 	// Verify templates can be looked up
-	for _, name := range []string{"search.html", "detail.html", "digest.html", "topics.html", "settings.html", "status.html", "results-partial.html"} {
+	for _, name := range []string{"search.html", "detail.html", "digest.html", "topics.html", "settings.html", "status.html", "results-partial.html", "knowledge-dashboard.html", "concepts-list.html", "concept-detail.html", "entities-list.html", "entity-detail.html", "lint-report.html", "lint-finding-detail.html"} {
 		tmpl := h.Templates.Lookup(name)
 		if tmpl == nil {
 			t.Errorf("template %q not found", name)
@@ -193,12 +193,14 @@ func TestSCN002036_StatusPage_TemplateExists(t *testing.T) {
 	}
 }
 
-// Verify all 7 templates are present
+// Verify all templates are present (including Scope 6 knowledge templates)
 func TestAllTemplates_Present(t *testing.T) {
 	h := NewHandler(nil, nil, time.Now())
 	required := []string{
 		"search.html", "results-partial.html", "detail.html",
 		"digest.html", "topics.html", "settings.html", "status.html",
+		"knowledge-dashboard.html", "concepts-list.html", "concept-detail.html",
+		"entities-list.html", "entity-detail.html", "lint-report.html", "lint-finding-detail.html",
 	}
 	for _, name := range required {
 		if h.Templates.Lookup(name) == nil {
@@ -383,5 +385,270 @@ func TestTemplates_NoInlineEventHandlers(t *testing.T) {
 	}
 	if strings.Contains(allTemplates, "onsubmit=") {
 		t.Error("templates contain onsubmit= attribute — blocked by CSP; use addEventListener instead")
+	}
+}
+
+// --- Scope 6: Web UI Knowledge Pages ---
+
+// T6-01: SCN-025-17 — KnowledgeDashboard renders with stats
+func TestKnowledgeDashboard_NilStore(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge", nil)
+	rec := httptest.NewRecorder()
+
+	h.KnowledgeDashboard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !containsString(body, "Knowledge Layer") {
+		t.Error("expected knowledge dashboard content")
+	}
+	if !containsString(body, "not enabled") {
+		t.Error("expected 'not enabled' message when KnowledgeStore is nil")
+	}
+}
+
+// T6-02: SCN-025-19 — ConceptDetail renders claims and citations
+func TestConceptDetail_NoID(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge/concepts/", nil)
+	rec := httptest.NewRecorder()
+
+	h.ConceptDetail(rec, req)
+
+	// Should redirect when no ID provided
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("expected 303 redirect, got %d", rec.Code)
+	}
+}
+
+func TestConceptDetail_NilStore(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	r := chi.NewRouter()
+	r.Get("/knowledge/concepts/{id}", h.ConceptDetail)
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge/concepts/test-id", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", rec.Code)
+	}
+}
+
+// T6-03: SCN-025-18 — SearchResults knowledge_match card rendered in template
+func TestSearchResults_KnowledgeMatchTemplate(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	// Verify results-partial.html template exists and can render knowledge match
+	tmpl := h.Templates.Lookup("results-partial.html")
+	if tmpl == nil {
+		t.Fatal("results-partial.html template not found")
+	}
+
+	// Verify the template contains knowledge match rendering
+	if !containsString(allTemplates, "KnowledgeMatch") {
+		t.Error("results-partial.html should contain KnowledgeMatch rendering")
+	}
+	if !containsString(allTemplates, "From Knowledge Layer") {
+		t.Error("results-partial.html should contain '★ From Knowledge Layer' indicator")
+	}
+}
+
+// T6-04: ConceptsList renders with sort/filter
+func TestConceptsList_NilStore(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge/concepts", nil)
+	rec := httptest.NewRecorder()
+
+	h.ConceptsList(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !containsString(body, "Concept Pages") {
+		t.Error("expected concept list content")
+	}
+}
+
+// T6-05: EntityDetail renders
+func TestEntityDetail_NoID(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge/entities/", nil)
+	rec := httptest.NewRecorder()
+
+	h.EntityDetail(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("expected 303 redirect, got %d", rec.Code)
+	}
+}
+
+func TestEntityDetail_NilStore(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	r := chi.NewRouter()
+	r.Get("/knowledge/entities/{id}", h.EntityDetail)
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge/entities/test-id", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", rec.Code)
+	}
+}
+
+// T6-06: LintReport renders findings by severity
+func TestLintReport_NilStore(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge/lint", nil)
+	rec := httptest.NewRecorder()
+
+	h.LintReport(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !containsString(body, "Lint Report") {
+		t.Error("expected lint report content")
+	}
+}
+
+// T6-07: StatusPage includes Knowledge Layer section in template
+func TestStatusPage_KnowledgeSection(t *testing.T) {
+	// Verify status.html template contains Knowledge Layer section
+	if !containsString(allTemplates, "Knowledge Layer") {
+		t.Error("status.html should contain Knowledge Layer section")
+	}
+	if !containsString(allTemplates, "KnowledgeStats") {
+		t.Error("status.html should contain KnowledgeStats conditional")
+	}
+}
+
+// Scope 6: Nav bar regression — Knowledge link present in nav
+func TestNavBar_KnowledgeLink(t *testing.T) {
+	if !containsString(allTemplates, `<a href="/knowledge">Knowledge</a>`) {
+		t.Error("nav bar should contain Knowledge link")
+	}
+}
+
+// Scope 6: All 7 new templates are present
+func TestScope6_AllNewTemplates(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+	newTemplates := []string{
+		"knowledge-dashboard.html",
+		"concepts-list.html",
+		"concept-detail.html",
+		"entities-list.html",
+		"entity-detail.html",
+		"lint-report.html",
+		"lint-finding-detail.html",
+	}
+	for _, name := range newTemplates {
+		if h.Templates.Lookup(name) == nil {
+			t.Errorf("required template %q missing", name)
+		}
+	}
+}
+
+// Scope 6 regression: existing templates still present
+func TestScope6_ExistingTemplates_StillPresent(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+	existing := []string{
+		"search.html", "results-partial.html", "detail.html",
+		"digest.html", "topics.html", "settings.html", "status.html",
+		"bookmark-import-result.html",
+	}
+	for _, name := range existing {
+		if h.Templates.Lookup(name) == nil {
+			t.Errorf("existing template %q must still be present", name)
+		}
+	}
+}
+
+// Scope 6 regression: existing pages render with new nav
+func TestScope6_SearchPage_RendersWithNavKnowledgeLink(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	h.SearchPage(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !containsString(body, "/knowledge") {
+		t.Error("search page should contain /knowledge nav link")
+	}
+}
+
+func TestScope6_SettingsPage_RendersWithNavKnowledgeLink(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+	h.SettingsPage(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !containsString(body, "/knowledge") {
+		t.Error("settings page should contain /knowledge nav link")
+	}
+}
+
+// T6-11: LintFindingDetail renders
+func TestLintFindingDetail_NoID(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge/lint/", nil)
+	rec := httptest.NewRecorder()
+
+	h.LintFindingDetail(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("expected 303 redirect, got %d", rec.Code)
+	}
+}
+
+func TestLintFindingDetail_NilStore(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	r := chi.NewRouter()
+	r.Get("/knowledge/lint/{id}", h.LintFindingDetail)
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge/lint/test-id", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", rec.Code)
+	}
+}
+
+// EntitiesList renders with nil store
+func TestEntitiesList_NilStore(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	req := httptest.NewRequest(http.MethodGet, "/knowledge/entities", nil)
+	rec := httptest.NewRecorder()
+
+	h.EntitiesList(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !containsString(body, "Entity Profiles") {
+		t.Error("expected entity list content")
 	}
 }

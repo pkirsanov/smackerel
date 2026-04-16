@@ -105,9 +105,10 @@ class TestMLSidecarAuthAdversarial:
         extended Python str. hmac.compare_digest raises TypeError on non-ASCII
         str. The auth dependency must catch this and return 401.
         """
-        from unittest.mock import AsyncMock, MagicMock
-
+        import asyncio
         import importlib
+        from unittest.mock import MagicMock
+
         import app.auth as auth_mod
 
         with patch.dict("os.environ", {"SMACKEREL_AUTH_TOKEN": "test-secret"}):
@@ -123,17 +124,16 @@ class TestMLSidecarAuthAdversarial:
         mock_request.url.path = "/process"
         mock_request.client.host = "127.0.0.1"
 
-        import asyncio
-
         with pytest.raises(HTTPException) as exc_info:
             asyncio.get_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))
         assert exc_info.value.status_code == 401
 
     def test_non_ascii_x_auth_token_returns_401(self):
         """Non-ASCII str in X-Auth-Token must raise 401, not TypeError."""
+        import asyncio
+        import importlib
         from unittest.mock import MagicMock
 
-        import importlib
         import app.auth as auth_mod
 
         with patch.dict("os.environ", {"SMACKEREL_AUTH_TOKEN": "test-secret"}):
@@ -147,8 +147,6 @@ class TestMLSidecarAuthAdversarial:
         mock_request.method = "GET"
         mock_request.url.path = "/process"
         mock_request.client.host = "127.0.0.1"
-
-        import asyncio
 
         with pytest.raises(HTTPException) as exc_info:
             asyncio.get_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))

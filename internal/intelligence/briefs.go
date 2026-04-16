@@ -121,16 +121,16 @@ func (e *Engine) GeneratePreMeetingBriefs(ctx context.Context) ([]MeetingBrief, 
 
 	// 1. Find calendar events starting in 25-35 minutes
 	rows, err := e.Pool.Query(ctx, `
-		SELECT a.id, a.title, a.captured_at,
+		SELECT a.id, a.title, a.created_at,
 		       COALESCE(a.metadata->>'attendees', '[]') AS attendees
 		FROM artifacts a
 		WHERE a.source_id IN ('caldav', 'google-calendar', 'outlook-calendar')
-		  AND a.captured_at BETWEEN NOW() + INTERVAL '25 minutes' AND NOW() + INTERVAL '35 minutes'
+		  AND a.created_at BETWEEN NOW() + INTERVAL '25 minutes' AND NOW() + INTERVAL '35 minutes'
 		  AND NOT EXISTS (
 			SELECT 1 FROM alerts al
 			WHERE al.alert_type = 'meeting_brief' AND al.artifact_id = a.id
 		  )
-		ORDER BY a.captured_at ASC
+		ORDER BY a.created_at ASC
 		LIMIT 5
 	`)
 	if err != nil {

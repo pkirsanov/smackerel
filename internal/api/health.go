@@ -11,6 +11,7 @@ import (
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
+	"github.com/smackerel/smackerel/internal/knowledge"
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
 
@@ -40,6 +41,13 @@ type WebUI interface {
 	StatusPage(w http.ResponseWriter, r *http.Request)
 	SyncConnectorHandler(w http.ResponseWriter, r *http.Request)
 	BookmarkUploadHandler(w http.ResponseWriter, r *http.Request)
+	KnowledgeDashboard(w http.ResponseWriter, r *http.Request)
+	ConceptsList(w http.ResponseWriter, r *http.Request)
+	ConceptDetail(w http.ResponseWriter, r *http.Request)
+	EntitiesList(w http.ResponseWriter, r *http.Request)
+	EntityDetail(w http.ResponseWriter, r *http.Request)
+	LintReport(w http.ResponseWriter, r *http.Request)
+	LintFindingDetail(w http.ResponseWriter, r *http.Request)
 }
 
 // OAuthFlow handles OAuth2 authorization flows and status.
@@ -89,6 +97,16 @@ type Dependencies struct {
 	AuthToken          string
 	Version            string
 	CommitHash         string
+
+	// Knowledge layer (optional — nil when knowledge is disabled)
+	KnowledgeStore                  KnowledgeSearcher
+	KnowledgeConceptSearchThreshold float64
+	KnowledgeHealthCacheTTL         time.Duration
+
+	// Knowledge health cache
+	knowledgeHealthMu    sync.Mutex
+	knowledgeHealthCache *KnowledgeHealthSection
+	knowledgeHealthAt    time.Time
 }
 
 // DBHealthChecker is the interface for database health checks.
@@ -102,12 +120,33 @@ type NATSHealthChecker interface {
 	Healthy() bool
 }
 
+// KnowledgeSearcher abstracts knowledge store operations needed by API handlers.
+type KnowledgeSearcher interface {
+	SearchConcepts(ctx context.Context, query string, threshold float64) (*knowledge.ConceptMatch, error)
+	GetConceptByID(ctx context.Context, id string) (*knowledge.ConceptPage, error)
+	GetEntityByID(ctx context.Context, id string) (*knowledge.EntityProfile, error)
+	ListConceptsFiltered(ctx context.Context, q, sort string, limit, offset int) ([]*knowledge.ConceptPage, int, error)
+	ListEntitiesFiltered(ctx context.Context, q, sort string, limit, offset int) ([]*knowledge.EntityProfile, int, error)
+	GetLatestLintReport(ctx context.Context) (*knowledge.LintReport, error)
+	GetStats(ctx context.Context) (*knowledge.KnowledgeStats, error)
+	GetKnowledgeHealthStats(ctx context.Context) (*knowledge.KnowledgeHealthStats, error)
+}
+
 // HealthResponse is the JSON response for GET /api/health.
 type HealthResponse struct {
 	Status     string                   `json:"status"`
 	Version    string                   `json:"version,omitempty"`
 	CommitHash string                   `json:"commit_hash,omitempty"`
 	Services   map[string]ServiceStatus `json:"services"`
+	Knowledge  *KnowledgeHealthSection  `json:"knowledge,omitempty"`
+}
+
+// KnowledgeHealthSection represents knowledge layer stats in the health response.
+type KnowledgeHealthSection struct {
+	ConceptCount     int        `json:"concept_count"`
+	EntityCount      int        `json:"entity_count"`
+	SynthesisPending int        `json:"synthesis_pending"`
+	LastSynthesisAt  *time.Time `json:"last_synthesis_at,omitempty"`
 }
 
 // ServiceStatus represents the health of a single service.
@@ -231,9 +270,40 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		resp.Services = services
 		resp.Version = d.Version
 		resp.CommitHash = d.CommitHash
+
+		// Knowledge layer health (optional — nil when knowledge is disabled)
+		if d.KnowledgeStore != nil {
+			resp.Knowledge = d.getCachedKnowledgeHealth(ctx)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// getCachedKnowledgeHealth returns cached knowledge health stats, refreshing when stale.
+func (d *Dependencies) getCachedKnowledgeHealth(ctx context.Context) *KnowledgeHealthSection {
+	d.knowledgeHealthMu.Lock()
+	defer d.knowledgeHealthMu.Unlock()
+
+	if d.KnowledgeHealthCacheTTL > 0 && d.knowledgeHealthCache != nil && time.Since(d.knowledgeHealthAt) < d.KnowledgeHealthCacheTTL {
+		return d.knowledgeHealthCache
+	}
+
+	stats, err := d.KnowledgeStore.GetKnowledgeHealthStats(ctx)
+	if err != nil {
+		slog.Warn("knowledge health stats query failed", "error", err)
+		return d.knowledgeHealthCache // return stale cache if available
+	}
+
+	section := &KnowledgeHealthSection{
+		ConceptCount:     stats.ConceptCount,
+		EntityCount:      stats.EntityCount,
+		SynthesisPending: stats.SynthesisPending,
+		LastSynthesisAt:  stats.LastSynthesisAt,
+	}
+	d.knowledgeHealthCache = section
+	d.knowledgeHealthAt = time.Now()
+	return section
 }
 
 // isAuthenticated checks whether the request carries a valid Bearer token.

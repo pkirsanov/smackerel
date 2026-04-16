@@ -33,6 +33,7 @@ import (
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/graph"
 	"github.com/smackerel/smackerel/internal/intelligence"
+	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/pipeline"
 	"github.com/smackerel/smackerel/internal/scheduler"
@@ -126,8 +127,33 @@ func run() error {
 	// Start result subscriber for ML processing results
 	resultSub := pipeline.NewResultSubscriber(pg.Pool, nc, registry)
 	resultSub.Processor.HospitalityLinker = hospitalityLinker
+
+	// Wire knowledge synthesis into pipeline if enabled
+	var knowledgeStore *knowledge.KnowledgeStore
+	var synthesisSub *pipeline.SynthesisResultSubscriber
+	if cfg.KnowledgeEnabled {
+		knowledgeStore = knowledge.NewKnowledgeStore(pg.Pool)
+		resultSub.KnowledgeEnabled = true
+		resultSub.KnowledgeStore = knowledgeStore
+		resultSub.PromptContractVersion = cfg.KnowledgePromptContractIngestSynthesis
+		slog.Info("knowledge synthesis pipeline enabled",
+			"contract", cfg.KnowledgePromptContractIngestSynthesis,
+		)
+
+		synthesisSub = pipeline.NewSynthesisResultSubscriber(pg.Pool, nc, knowledgeStore)
+		synthesisSub.CrossSourceConfidenceThreshold = cfg.KnowledgeCrossSourceConfidenceThreshold
+		synthesisSub.CrossSourcePromptContractVersion = cfg.KnowledgePromptContractCrossSource
+	}
+
 	if err := resultSub.Start(ctx); err != nil {
 		return fmt.Errorf("start result subscriber: %w", err)
+	}
+
+	// Start synthesis result subscriber after NATS streams are ready
+	if synthesisSub != nil {
+		if err := synthesisSub.Start(ctx); err != nil {
+			slog.Warn("synthesis result subscriber failed to start", "error", err)
+		}
 	}
 
 	// Create pipeline processor
@@ -144,6 +170,7 @@ func run() error {
 
 	// Create digest generator
 	digestGen := digest.NewGenerator(pg.Pool, nc, registry)
+	digestGen.KnowledgeEnabled = cfg.KnowledgeEnabled
 
 	// Create intelligence engine for synthesis, alerts, and resurfacing
 	intEngine := intelligence.NewEngine(pg.Pool, nc)
@@ -438,29 +465,33 @@ func run() error {
 
 	// Create web UI handler
 	webHandler := web.NewHandler(pg.Pool, nc, time.Now())
+	webHandler.KnowledgeStore = knowledgeStore
 
 	// Create context enrichment handler for GuestHost connector
 	contextHandler := api.NewContextHandler(guestRepo, propertyRepo, pg.Pool)
 
 	// Set up API
 	deps := &api.Dependencies{
-		DB:                 pg,
-		NATS:               nc,
-		IntelligenceEngine: intEngine,
-		StartTime:          time.Now(),
-		MLSidecarURL:       cfg.MLSidecarURL,
-		Pipeline:           proc,
-		SearchEngine:       searchEngine,
-		DigestGen:          digestGen,
-		WebHandler:         webHandler,
-		OAuthHandler:       oauthHandler,
-		ContextHandler:     contextHandler,
-		ArtifactStore:      pg,
-		OllamaURL:          cfg.OllamaURL,
-		AuthToken:          cfg.AuthToken,
-		ConnectorRegistry:  registry,
-		Version:            version,
-		CommitHash:         commitHash,
+		DB:                              pg,
+		NATS:                            nc,
+		IntelligenceEngine:              intEngine,
+		StartTime:                       time.Now(),
+		MLSidecarURL:                    cfg.MLSidecarURL,
+		Pipeline:                        proc,
+		SearchEngine:                    searchEngine,
+		DigestGen:                       digestGen,
+		WebHandler:                      webHandler,
+		OAuthHandler:                    oauthHandler,
+		ContextHandler:                  contextHandler,
+		ArtifactStore:                   pg,
+		OllamaURL:                       cfg.OllamaURL,
+		AuthToken:                       cfg.AuthToken,
+		ConnectorRegistry:               registry,
+		Version:                         version,
+		CommitHash:                      commitHash,
+		KnowledgeStore:                  knowledgeStore,
+		KnowledgeConceptSearchThreshold: cfg.KnowledgeConceptSearchThreshold,
+		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 	}
 
 	router := api.NewRouter(deps)
@@ -489,6 +520,21 @@ func run() error {
 
 	// Start digest scheduler + intelligence jobs
 	sched := scheduler.New(digestGen, tgBot, intEngine, topicLifecycle)
+
+	// Wire knowledge linter into scheduler if knowledge layer is enabled
+	if cfg.KnowledgeEnabled && knowledgeStore != nil {
+		linterCfg := knowledge.LinterConfig{
+			StaleDays:           cfg.KnowledgeLintStaleDays,
+			MaxSynthesisRetries: cfg.KnowledgeMaxSynthesisRetries,
+		}
+		knowledgeLinter := knowledge.NewLinter(knowledgeStore, pg.Pool, linterCfg, nc)
+		sched.SetKnowledgeLinter(knowledgeLinter, cfg.KnowledgeLintCron)
+		slog.Info("knowledge linter configured", "cron", cfg.KnowledgeLintCron,
+			"stale_days", cfg.KnowledgeLintStaleDays,
+			"max_retries", cfg.KnowledgeMaxSynthesisRetries,
+		)
+	}
+
 	if err := sched.Start(ctx, cfg.DigestCron); err != nil {
 		slog.Warn("digest scheduler failed to start", "error", err)
 	}
@@ -524,7 +570,7 @@ func run() error {
 	// Explicit sequential shutdown — replaces defer-based ordering to prevent
 	// resource races (e.g., NATS drain racing DB pool close).
 	// Timeout budget: cfg.ShutdownTimeoutS with 5s margin before Docker SIGKILL.
-	shutdownAll(cfg.ShutdownTimeoutS, sched, srv, tgBot, resultSub, supervisor, nc, pg)
+	shutdownAll(cfg.ShutdownTimeoutS, sched, srv, tgBot, resultSub, synthesisSub, supervisor, nc, pg)
 
 	slog.Info("smackerel-core stopped")
 	return nil
