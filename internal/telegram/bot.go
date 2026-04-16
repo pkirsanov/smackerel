@@ -802,8 +802,7 @@ func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) er
 			"messages": msgs,
 		},
 	}
-	result, err := b.callCapture(ctx, body)
-	if err != nil {
+	if _, err := b.callCapture(ctx, body); err != nil {
 		source := buf.SourceChat
 		if source == "" {
 			source = "forwarded conversation"
@@ -813,11 +812,9 @@ func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) er
 		return err
 	}
 
-	title, _ := result["title"].(string)
 	participantList := strings.Join(participants, ", ")
 	b.reply(buf.Key.chatID, fmt.Sprintf(". Saved: conversation with %s (%d messages, %d participants)",
 		participantList, len(buf.Messages), len(participants)))
-	_ = title // title available but spec R-006 prescribes participant-based confirmation
 	return nil
 }
 
@@ -852,22 +849,14 @@ func (b *Bot) flushMediaGroup(ctx context.Context, buf *MediaGroupBuffer) error 
 	}
 	if buf.ForwardMeta != nil {
 		body["context"] = fmt.Sprintf("Forwarded media group from %s", buf.ForwardMeta.SenderName)
-		body["forward_meta"] = map[string]interface{}{
-			"sender_name":   buf.ForwardMeta.SenderName,
-			"source_chat":   buf.ForwardMeta.SourceChat,
-			"original_date": buf.ForwardMeta.OriginalDate,
-			"is_channel":    buf.ForwardMeta.IsFromChannel,
-		}
+		body["forward_meta"] = buf.ForwardMeta.ToMap()
 	}
 
-	result, err := b.callCapture(ctx, body)
-	if err != nil {
+	if _, err := b.callCapture(ctx, body); err != nil {
 		b.reply(buf.ChatID, "? Failed to save media group. Try again.")
 		return err
 	}
 
-	title, _ := result["title"].(string)
-	_ = title
 	b.reply(buf.ChatID, fmt.Sprintf(". Saved: %d items (media group)", len(buf.Items)))
 	return nil
 }

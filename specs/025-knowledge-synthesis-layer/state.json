@@ -2,18 +2,18 @@
   "version": 3,
   "featureDir": "specs/025-knowledge-synthesis-layer",
   "featureName": "Knowledge Synthesis Layer (LLM Wiki Pattern)",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "validate",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-15T17:30:00Z",
-    "completedPhaseClaims": ["implement", "test", "docs", "validate", "simplify", "security", "regression", "stabilize", "audit", "chaos"],
+    "completedPhaseClaims": ["implement", "test", "docs", "validate", "simplify", "security", "regression", "stabilize", "audit", "chaos", "finalize"],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "scope-1-knowledge-store-schema",
       "scope-2-synthesis-pipeline",

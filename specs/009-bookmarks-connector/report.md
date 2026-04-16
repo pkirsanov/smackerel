@@ -478,3 +478,57 @@ Config is in sync with SST
 $ ./smackerel.sh lint
 All checks passed (Go); 3 pre-existing Python import sort warnings unchanged
 ```
+
+### Chaos Quality Sweep C17 (chaos-to-doc)
+
+**Date:** 2026-04-16
+**Trigger:** chaos
+**Mode:** chaos-to-doc
+
+#### Pre-Sweep Assessment
+
+- **Prior chaos sweeps:** R16 (health state on cancellation), R24 (concurrency, credential leak, date bounds)
+- **Focus areas:** Pre-Connect invariants, minified HTML parsing, adversarial field types, special character filenames, credential stripping verification
+
+#### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| C17-001 | Security / State | High | `Sync()` before `Connect()` — `config.ImportDir` is empty string, causing `os.ReadDir("")` to scan the current working directory. Leaks file names from the process CWD. | Fixed |
+| C17-002 | Correctness | Medium | `ParseNetscapeHTML` used `FindStringSubmatch` (single match per line). Minified HTML exports with multiple `<A>` tags on one line drop all bookmarks after the first. Common in programmatically-generated exports. | Fixed |
+
+#### Fixes Applied
+
+**C17-001 — Guard Sync Against Unconfigured State** (`internal/connector/bookmarks/connector.go`):
+- Added empty-`ImportDir` check at start of `Sync()` after config snapshot, before `decodeProcessedFilesCursor`
+- Returns clear error: `"bookmarks connector not connected: import directory not configured"`
+- Sets `lastSyncErrors = 1` so deferred health transitions to `HealthError`
+- Tagged `F-CHAOS-C17-001`
+
+**C17-002 — Multi-Bookmark Per Line Parsing** (`internal/connector/bookmarks/bookmarks.go`):
+- Changed `netscapeLinkRe.FindStringSubmatch(line)` → `netscapeLinkRe.FindAllStringSubmatch(line, -1)`
+- Iterates all matches per line, capturing every `<A HREF>` tag regardless of line layout
+- Tagged `F-CHAOS-C17-002`
+
+#### Adversarial Regression Tests Added (8 tests)
+
+| Test | File | Finding | Assertion | Would Fail Without Fix |
+|------|------|---------|-----------|----------------------|
+| `TestChaosC17_SyncBeforeConnect` | connector_test.go | C17-001 | Sync() before Connect() returns error containing "not connected" | Yes — would scan CWD |
+| `TestChaosC17_SyncAfterClose` | connector_test.go | C17-001 | Sync() after Close() still works (config.ImportDir remains set) | Validates Close doesn't break valid config |
+| `TestChaosC17_MinifiedNetscapeHTML` | bookmarks_test.go | C17-002 | 2 bookmarks on one line + 1 on separate line → 3 total parsed | Yes — only 2 found |
+| `TestChaosC17_FullyMinifiedNetscapeHTML` | bookmarks_test.go | C17-002 | Fully single-line HTML with folder structure → 2 bookmarks | Yes — only 1 found |
+| `TestChaosC17_NormalizeURLWwwStripping` | connector_test.go | Prior R24-002 | www. prefix stripped consistently across variants | Regression guard |
+| `TestChaosC17_EmptyFileHandling` | connector_test.go | — | Empty/whitespace-only files don't crash, good file still processed | Edge case coverage |
+| `TestChaosC17_SpecialCharFilenames` | connector_test.go | — | Filenames with parens, brackets, spaces survive cursor round-trip | Encoding correctness |
+| `TestChaosC17_NormalizeURLStripsUserinfo` | connector_test.go | Prior R24-002 | `user:pass@host` credentials removed from normalized output | Regression guard |
+| `TestChaosC17_ChromeJSONAdversarialFieldTypes` | bookmarks_test.go | — | null/boolean/array in name/type fields → no panic | Robustness |
+| `TestChaosC17_NetscapeHTMLXSSPayloads` | bookmarks_test.go | — | javascript:/data: URLs parsed but filtered at connector level | Documents security boundary |
+
+#### Verification Evidence
+
+```
+$ ./smackerel.sh test unit (2026-04-16)
+ok  github.com/smackerel/smackerel/internal/connector/bookmarks  0.123s
+All 35 Go packages pass, 0 regressions
+```

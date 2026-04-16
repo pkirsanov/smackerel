@@ -167,21 +167,27 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		resp.Message = "I don't have anything about that yet"
 	}
 
-	// Log search for frequency tracking (non-blocking — failures don't affect response).
-	// Use a detached context so the log insert completes even if the client disconnects.
+	// Write the response immediately so search latency is not affected by logging.
+	writeJSON(w, http.StatusOK, resp)
+
+	// Log search for frequency tracking in a goroutine (truly non-blocking).
+	// Uses a detached context so the log insert completes even if the client disconnects.
 	if d.IntelligenceEngine != nil {
 		topResultID := ""
 		if len(results) > 0 {
 			topResultID = results[0].ArtifactID
 		}
-		logCtx, logCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer logCancel()
-		if err := d.IntelligenceEngine.LogSearch(logCtx, req.Query, len(results), topResultID); err != nil {
-			slog.Warn("search logging failed", "error", err, "query", req.Query)
-		}
+		engine := d.IntelligenceEngine
+		queryStr := req.Query
+		resultCount := len(results)
+		go func() {
+			logCtx, logCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer logCancel()
+			if err := engine.LogSearch(logCtx, queryStr, resultCount, topResultID); err != nil {
+				slog.Warn("search logging failed", "error", err, "query", queryStr)
+			}
+		}()
 	}
-
-	writeJSON(w, http.StatusOK, resp)
 }
 
 // Search performs a semantic search: embed query → pgvector similarity → filters → graph expansion.

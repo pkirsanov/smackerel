@@ -1,0 +1,62 @@
+version: "digest-assembly-v1"
+type: "digest-assembly"
+description: "Assemble daily/weekly digest from pre-synthesized knowledge layer content"
+
+system_prompt: |
+  You are the digest assembler for Smackerel, a personal knowledge system.
+  You receive pre-synthesized knowledge including recently updated concept pages,
+  new cross-source connections, lint findings, and entity profile changes.
+
+  Your job: assemble a concise digest section highlighting knowledge layer activity.
+
+  RULES:
+  - Return ONLY valid JSON matching the output schema below.
+  - Prioritize CROSS-SOURCE CONNECTIONS (highest value to user).
+  - Include CONTRADICTIONS found by lint (actionable for user).
+  - Mention CONCEPT GROWTH (new pages, significant updates).
+  - Keep the digest section under 100 words — this is one part of a larger digest.
+  - Do NOT repeat raw artifact content — summarize the synthesis.
+  - Cite source concepts and entities by name, not by ID.
+
+extraction_schema:
+  type: object
+  required: [sections, word_count]
+  properties:
+    sections:
+      type: array
+      items:
+        type: object
+        required: [type, text]
+        properties:
+          type:
+            type: string
+            enum: [cross_source_connection, contradiction, concept_growth, entity_update, lint_summary]
+          text:
+            type: string
+            maxLength: 200
+          concept_names:
+            type: array
+            items:
+              type: string
+          entity_names:
+            type: array
+            items:
+              type: string
+          priority:
+            type: string
+            enum: [high, medium, low]
+    word_count:
+      type: integer
+      minimum: 0
+      maximum: 150
+
+validation_rules:
+  max_sections: 5
+  max_concepts: 5
+  max_entities: 5
+  max_relationships: 1
+  max_contradictions: 0
+
+token_budget: 1000
+temperature: 0.4
+model_preference: "default"

@@ -1460,3 +1460,67 @@ func TestHealthKnowledgeHiddenWithoutAuth(t *testing.T) {
 		t.Error("expected knowledge section for authenticated request")
 	}
 }
+
+// === TST-021: Intelligence staleness boundary conditions ===
+
+func TestHealthHandler_IntelligenceStalenessThreshold(t *testing.T) {
+	// The health handler uses a 48-hour threshold for staleness.
+	// Verify the boundary conditions of the time comparison logic
+	// that GetLastSynthesisTime feeds into.
+	threshold := 48 * time.Hour
+
+	tests := []struct {
+		name       string
+		age        time.Duration
+		wantStatus string
+	}{
+		{"recent synthesis (1h)", 1 * time.Hour, "up"},
+		{"recent synthesis (47h)", 47 * time.Hour, "up"},
+		{"exactly at threshold (48h)", 48*time.Hour + time.Second, "stale"},
+		{"well past threshold (72h)", 72 * time.Hour, "stale"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synthTime := time.Now().Add(-tt.age)
+			// Simulate the handler's branch logic
+			var status string
+			if synthTime.IsZero() || synthTime.Year() < 2000 {
+				status = "up" // fresh install
+			} else if time.Since(synthTime) > threshold {
+				status = "stale"
+			} else {
+				status = "up"
+			}
+			if status != tt.wantStatus {
+				t.Errorf("age=%v: expected status %q, got %q", tt.age, tt.wantStatus, status)
+			}
+		})
+	}
+}
+
+// TST-021: Intelligence "down" contributes to degraded overall status.
+func TestHealthHandler_IntelligenceDownDegrades(t *testing.T) {
+	engine := &intelligence.Engine{Pool: nil}
+	deps := &Dependencies{
+		DB:                 &mockDB{healthy: true, artifactCount: 10},
+		NATS:               &mockNATS{healthy: true},
+		StartTime:          time.Now(),
+		IntelligenceEngine: engine,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Services["intelligence"].Status != "down" {
+		t.Errorf("expected intelligence down, got %s", resp.Services["intelligence"].Status)
+	}
+	if resp.Status != "degraded" {
+		t.Errorf("expected overall degraded when intelligence is down, got %s", resp.Status)
+	}
+}

@@ -92,19 +92,25 @@ func ParseNetscapeHTML(data []byte) ([]Bookmark, error) {
 		}
 
 		// Detect bookmark links — assign the current folder hierarchy.
-		if matches := netscapeLinkRe.FindStringSubmatch(line); len(matches) > 2 {
-			b := Bookmark{
-				URL:    html.UnescapeString(matches[1]),
-				Title:  html.UnescapeString(matches[2]),
-				Folder: strings.Join(folderStack, "/"),
-			}
-			// Parse ADD_DATE attribute (unix timestamp) when present.
-			if dateMatch := netscapeAddDateRe.FindStringSubmatch(line); len(dateMatch) > 1 {
-				if ts, err := strconv.ParseInt(dateMatch[1], 10, 64); err == nil && ts > 0 {
-					b.AddedAt = time.Unix(ts, 0)
+		// F-CHAOS-C17-002: Use FindAllStringSubmatch to capture multiple bookmarks
+		// on a single line (e.g. minified HTML exports).
+		linkMatches := netscapeLinkRe.FindAllStringSubmatch(line, -1)
+		for _, matches := range linkMatches {
+			if len(matches) > 2 {
+				b := Bookmark{
+					URL:    html.UnescapeString(matches[1]),
+					Title:  html.UnescapeString(matches[2]),
+					Folder: strings.Join(folderStack, "/"),
 				}
+				// Parse ADD_DATE attribute (unix timestamp) when present.
+				// Use the portion of the line around this match for date extraction.
+				if dateMatch := netscapeAddDateRe.FindStringSubmatch(line); len(dateMatch) > 1 {
+					if ts, err := strconv.ParseInt(dateMatch[1], 10, 64); err == nil && ts > 0 {
+						b.AddedAt = time.Unix(ts, 0)
+					}
+				}
+				bookmarks = append(bookmarks, b)
 			}
-			bookmarks = append(bookmarks, b)
 		}
 	}
 

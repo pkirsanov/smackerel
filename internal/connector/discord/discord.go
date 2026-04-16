@@ -125,6 +125,41 @@ type ChannelConfig struct {
 // ChannelCursors tracks per-channel sync cursors (channel_id → last message snowflake).
 type ChannelCursors map[string]string
 
+// configuredChannelIDs returns the set of all channel IDs across all monitored
+// server entries. Used for cursor scope enforcement and gateway channel filtering.
+func (cfg DiscordConfig) configuredChannelIDs() map[string]struct{} {
+	result := make(map[string]struct{})
+	for _, chCfg := range cfg.MonitoredChannels {
+		for _, chID := range chCfg.ChannelIDs {
+			result[chID] = struct{}{}
+		}
+	}
+	return result
+}
+
+// validateAndScopeCursors validates restored cursor entries and filters them to
+// only include currently configured channels. Invalid snowflake keys/values and
+// out-of-scope channels are logged and skipped.
+func validateAndScopeCursors(restored ChannelCursors, configuredChannels map[string]struct{}, connectorID string) ChannelCursors {
+	scoped := make(ChannelCursors, len(restored))
+	for k, v := range restored {
+		if !isValidSnowflake(k) {
+			slog.Warn("discord stored cursor has invalid channel ID, skipping", "connector_id", connectorID, "channel_id", k)
+			continue
+		}
+		if v != "" && !isValidSnowflake(v) {
+			slog.Warn("discord stored cursor has invalid snowflake value, skipping", "connector_id", connectorID, "channel_id", k, "value", v)
+			continue
+		}
+		if _, ok := configuredChannels[k]; !ok {
+			slog.Warn("discord stored cursor references unconfigured channel, skipping", "connector_id", connectorID, "channel_id", k)
+			continue
+		}
+		scoped[k] = v
+	}
+	return scoped
+}
+
 // New creates a new Discord connector.
 func New(id string) *Connector {
 	return &Connector{
@@ -176,9 +211,9 @@ func isSafeURL(rawURL string) bool {
 	if host == "169.254.169.254" || host == "metadata.google.internal" {
 		return false
 	}
-	// Block RFC 1918 private ranges and link-local
+	// Block RFC 1918 private ranges, link-local, and unspecified addresses
 	if ip := net.ParseIP(host); ip != nil {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
 			return false
 		}
 	}
@@ -195,6 +230,16 @@ func (c *Connector) setHealth(status connector.HealthStatus) {
 func (c *Connector) ID() string { return c.id }
 
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
+	// Close existing gateway before re-configuring to prevent goroutine leak
+	// when Connect is called a second time without an intervening Close.
+	c.mu.Lock()
+	oldGw := c.gateway
+	c.gateway = nil
+	c.mu.Unlock()
+	if oldGw != nil {
+		oldGw.Close()
+	}
+
 	cfg, err := parseDiscordConfig(config)
 	if err != nil {
 		c.setHealth(connector.HealthError)
@@ -232,13 +277,7 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	// drift when re-connecting with a different channel configuration.
 	c.cursors = make(ChannelCursors)
 
-	// Build set of configured channel IDs for cursor scope enforcement
-	configuredChannels := make(map[string]struct{})
-	for _, chCfg := range cfg.MonitoredChannels {
-		for _, chID := range chCfg.ChannelIDs {
-			configuredChannels[chID] = struct{}{}
-		}
-	}
+	configuredChannels := cfg.configuredChannelIDs()
 
 	// Restore cursors from source config, validating snowflake IDs
 	// and enforcing cursor scope against configured channels (REG-014-R22-001).
@@ -247,20 +286,7 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 		if err := json.Unmarshal([]byte(cursorJSON), &restored); err != nil {
 			slog.Warn("failed to unmarshal discord cursors from config, starting without stored cursors", "connector_id", c.id, "error", err)
 		} else {
-			for k, v := range restored {
-				if !isValidSnowflake(k) {
-					slog.Warn("discord stored cursor has invalid channel ID, skipping", "connector_id", c.id, "channel_id", k)
-					continue
-				}
-				if v != "" && !isValidSnowflake(v) {
-					slog.Warn("discord stored cursor has invalid snowflake value, skipping", "connector_id", c.id, "channel_id", k, "value", v)
-					continue
-				}
-				// Cursor scope enforcement: only restore cursors for currently configured channels
-				if _, ok := configuredChannels[k]; !ok {
-					slog.Warn("discord stored cursor references unconfigured channel, skipping", "connector_id", c.id, "channel_id", k)
-					continue
-				}
+			for k, v := range validateAndScopeCursors(restored, configuredChannels, c.id) {
 				c.cursors[k] = v
 			}
 		}
@@ -272,12 +298,7 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 
 	// Start gateway event poller if enabled
 	if cfg.EnableGateway && len(cfg.MonitoredChannels) > 0 {
-		channelSet := make(map[string]struct{})
-		for _, chCfg := range cfg.MonitoredChannels {
-			for _, chID := range chCfg.ChannelIDs {
-				channelSet[chID] = struct{}{}
-			}
-		}
+		channelSet := cfg.configuredChannelIDs()
 		fetcher := func(fctx context.Context, channelID, afterID string, limit int) ([]DiscordMessage, error) {
 			return c.fetchChannelMessages(fctx, cfg.APIURL, cfg.BotToken, channelID, afterID, limit)
 		}
@@ -346,11 +367,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 	// Build set of configured channel IDs for cursor scope enforcement
 	// and per-channel processing tier map for gateway event normalization
-	configuredChannels := make(map[string]struct{})
+	configuredChannels := cfgSnapshot.configuredChannelIDs()
 	channelTier := make(map[string]string)
 	for _, chCfg := range cfgSnapshot.MonitoredChannels {
 		for _, chID := range chCfg.ChannelIDs {
-			configuredChannels[chID] = struct{}{}
 			channelTier[chID] = chCfg.ProcessingTier
 		}
 	}
@@ -361,21 +381,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		if err := json.Unmarshal([]byte(cursor), &parsedCursors); err != nil {
 			slog.Warn("failed to unmarshal discord sync cursor, falling back to stored cursors", "connector_id", c.id, "error", err)
 		} else {
-			// Validate cursor keys are valid snowflake IDs and values are valid snowflakes
-			for k, v := range parsedCursors {
-				if !isValidSnowflake(k) {
-					slog.Warn("discord cursor contains invalid channel ID, skipping", "connector_id", c.id, "channel_id", k)
-					continue
-				}
-				if v != "" && !isValidSnowflake(v) {
-					slog.Warn("discord cursor contains invalid snowflake value, skipping", "connector_id", c.id, "channel_id", k, "value", v)
-					continue
-				}
-				// Cursor scope enforcement: only accept cursors for configured channels
-				if _, ok := configuredChannels[k]; !ok {
-					slog.Warn("discord cursor references unconfigured channel, skipping", "connector_id", c.id, "channel_id", k)
-					continue
-				}
+			for k, v := range validateAndScopeCursors(parsedCursors, configuredChannels, c.id) {
 				localCursors[k] = v
 			}
 		}
@@ -719,6 +725,32 @@ type apiArchivedThreadsResponse struct {
 	HasMore bool               `json:"has_more"`
 }
 
+// collectThreadMessages fetches messages for a slice of threads via
+// fetchChannelMessages, stamps thread metadata, and advances cursors.
+// Shared by fetchActiveThreads and fetchArchivedThreads.
+func (c *Connector) collectThreadMessages(ctx context.Context, apiURL, botToken string, threads []apiThreadChannel, cursors ChannelCursors, backfillLimit int) []DiscordMessage {
+	var allMessages []DiscordMessage
+	for _, thread := range threads {
+		afterID := cursors[thread.ID]
+		msgs, err := c.fetchChannelMessages(ctx, apiURL, botToken, thread.ID, afterID, backfillLimit)
+		if err != nil {
+			slog.Warn("discord thread message fetch failed", "thread_id", thread.ID, "error", err)
+			continue
+		}
+		for i := range msgs {
+			msgs[i].ThreadID = thread.ID
+			msgs[i].ThreadName = thread.Name
+		}
+		allMessages = append(allMessages, msgs...)
+		for _, msg := range msgs {
+			if snowflakeGreater(msg.ID, cursors[thread.ID]) {
+				cursors[thread.ID] = msg.ID
+			}
+		}
+	}
+	return allMessages
+}
+
 // fetchActiveThreads retrieves active threads for a guild, filtered to those
 // whose parent_id matches one of the monitoredChannels. For each matching thread,
 // it fetches messages via fetchChannelMessages using the thread's ID (Discord
@@ -739,31 +771,15 @@ func (c *Connector) fetchActiveThreads(ctx context.Context, apiURL, botToken, gu
 		return nil, fmt.Errorf("parse active threads for guild %s: %w", guildID, err)
 	}
 
-	var allMessages []DiscordMessage
+	var filtered []apiThreadChannel
 	for _, thread := range resp.Threads {
 		if _, monitored := monitoredChannels[thread.ParentID]; !monitored {
 			continue
 		}
-		afterID := cursors[thread.ID]
-		msgs, err := c.fetchChannelMessages(ctx, apiURL, botToken, thread.ID, afterID, backfillLimit)
-		if err != nil {
-			slog.Warn("discord thread message fetch failed", "thread_id", thread.ID, "error", err)
-			continue
-		}
-		for i := range msgs {
-			msgs[i].ThreadID = thread.ID
-			msgs[i].ThreadName = thread.Name
-		}
-		allMessages = append(allMessages, msgs...)
-		// Advance thread cursor
-		for _, msg := range msgs {
-			if snowflakeGreater(msg.ID, cursors[thread.ID]) {
-				cursors[thread.ID] = msg.ID
-			}
-		}
+		filtered = append(filtered, thread)
 	}
 
-	return allMessages, nil
+	return c.collectThreadMessages(ctx, apiURL, botToken, filtered, cursors, backfillLimit), nil
 }
 
 // fetchArchivedThreads retrieves public archived threads for a channel.
@@ -784,27 +800,7 @@ func (c *Connector) fetchArchivedThreads(ctx context.Context, apiURL, botToken, 
 		return nil, fmt.Errorf("parse archived threads for channel %s: %w", channelID, err)
 	}
 
-	var allMessages []DiscordMessage
-	for _, thread := range resp.Threads {
-		afterID := cursors[thread.ID]
-		msgs, err := c.fetchChannelMessages(ctx, apiURL, botToken, thread.ID, afterID, backfillLimit)
-		if err != nil {
-			slog.Warn("discord archived thread message fetch failed", "thread_id", thread.ID, "error", err)
-			continue
-		}
-		for i := range msgs {
-			msgs[i].ThreadID = thread.ID
-			msgs[i].ThreadName = thread.Name
-		}
-		allMessages = append(allMessages, msgs...)
-		for _, msg := range msgs {
-			if snowflakeGreater(msg.ID, cursors[thread.ID]) {
-				cursors[thread.ID] = msg.ID
-			}
-		}
-	}
-
-	return allMessages, nil
+	return c.collectThreadMessages(ctx, apiURL, botToken, resp.Threads, cursors, backfillLimit), nil
 }
 
 // --- Discord REST API response types ---
