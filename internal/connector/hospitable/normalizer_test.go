@@ -775,3 +775,79 @@ func TestNormalizeReviewOverflowRatingClamped(t *testing.T) {
 		t.Errorf("SEC-012-004: overflow rating must be clamped to 5, got %v", a.Metadata["rating"])
 	}
 }
+
+// --- Coverage gap: NormalizeMessage with production BaseURL generates app URL ---
+
+func TestNormalizeMessageURLProduction(t *testing.T) {
+	cfg := HospitableConfig{TierMessages: "full", BaseURL: "https://api.hospitable.com"}
+	m := Message{
+		ID:            "msg-prod",
+		ReservationID: "res-100",
+		Sender:        "Guest",
+		Body:          "Hello",
+		SentAt:        time.Now(),
+	}
+	a := NormalizeMessage(m, "res-100", cfg)
+	if a.URL != "https://app.hospitable.com/reservations/res-100" {
+		t.Errorf("Message URL = %q, want production dashboard URL", a.URL)
+	}
+}
+
+func TestNormalizeMessageURLNonProduction(t *testing.T) {
+	cfg := HospitableConfig{TierMessages: "full", BaseURL: "http://localhost:8080"}
+	m := Message{
+		ID:     "msg-local",
+		Sender: "Guest",
+		Body:   "Hello",
+		SentAt: time.Now(),
+	}
+	a := NormalizeMessage(m, "res-100", cfg)
+	if a.URL != "" {
+		t.Errorf("Message URL = %q, want empty for non-production", a.URL)
+	}
+}
+
+// --- Coverage gap: NormalizeReview with production BaseURL + ReservationID generates app URL ---
+
+func TestNormalizeReviewURLProduction(t *testing.T) {
+	cfg := HospitableConfig{TierReviews: "full", BaseURL: "https://api.hospitable.com"}
+	r := Review{
+		ID:            "rev-prod",
+		PropertyID:    "p1",
+		ReservationID: "res-200",
+		Rating:        4,
+		ReviewText:    "Nice stay",
+		SubmittedAt:   time.Now(),
+	}
+	a := NormalizeReview(r, "Beach House", cfg)
+	if a.URL != "https://app.hospitable.com/reservations/res-200" {
+		t.Errorf("Review URL = %q, want production dashboard URL", a.URL)
+	}
+}
+
+func TestNormalizeReviewURLNoReservationID(t *testing.T) {
+	cfg := HospitableConfig{TierReviews: "full", BaseURL: "https://api.hospitable.com"}
+	r := Review{
+		ID:          "rev-nores",
+		PropertyID:  "p1",
+		Rating:      4,
+		ReviewText:  "Nice stay",
+		SubmittedAt: time.Now(),
+	}
+	a := NormalizeReview(r, "Beach House", cfg)
+	if a.URL != "" {
+		t.Errorf("Review URL = %q, want empty when no ReservationID", a.URL)
+	}
+}
+
+// --- Coverage gap: isSafeURL with unparseable URL ---
+
+func TestIsSafeURLUnparseable(t *testing.T) {
+	// url.Parse is very lenient, but we can test the general logic
+	if isSafeURL("") {
+		t.Error("empty string should not be safe")
+	}
+	if isSafeURL("://missing-scheme") {
+		t.Error("URL without valid scheme should not be safe")
+	}
+}

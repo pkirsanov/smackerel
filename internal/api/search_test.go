@@ -1704,3 +1704,93 @@ func TestSearchHandler_NoKnowledgeMatch_SemanticFallback(t *testing.T) {
 		t.Errorf("expected search_mode=semantic, got %q", resp.SearchMode)
 	}
 }
+
+// === TST-021: LogSearch goroutine completes without panic for multi-result search ===
+
+func TestSearchHandler_LogSearchCalledWithMultipleResults(t *testing.T) {
+	se := &mockSearchEngine{
+		results: []SearchResult{
+			{ArtifactID: "art-1", Title: "First", Relevance: "high"},
+			{ArtifactID: "art-2", Title: "Second", Relevance: "medium"},
+			{ArtifactID: "art-3", Title: "Third", Relevance: "low"},
+		},
+		total: 3,
+		mode:  "semantic",
+	}
+
+	deps := &Dependencies{
+		DB:                 &mockDB{healthy: true},
+		NATS:               &mockNATS{healthy: true},
+		StartTime:          time.Now(),
+		SearchEngine:       se,
+		IntelligenceEngine: intelligence.NewEngine(nil, nil), // nil pool → LogSearch fails gracefully
+	}
+
+	body := `{"query": "multi result search"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp SearchResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Results) != 3 {
+		t.Errorf("expected 3 results, got %d", len(resp.Results))
+	}
+	// Allow goroutine to complete — LogSearch runs async in a detached goroutine
+	time.Sleep(50 * time.Millisecond)
+}
+
+// TST-021: LogSearch topResultID is correctly set to first result's ArtifactID.
+// Verifies the search handler passes the first result's ArtifactID (not empty) when
+// results are non-empty. Since IntelligenceEngine is a concrete type, we verify
+// indirectly: the handler writes the response before LogSearch runs, so the response
+// must contain the correct first result that LogSearch would receive.
+func TestSearchHandler_LogSearchTopResultIDFromFirstResult(t *testing.T) {
+	se := &mockSearchEngine{
+		results: []SearchResult{
+			{ArtifactID: "top-result-123", Title: "Top", Relevance: "high"},
+			{ArtifactID: "art-2", Title: "Second", Relevance: "low"},
+		},
+		total: 2,
+		mode:  "semantic",
+	}
+
+	deps := &Dependencies{
+		DB:                 &mockDB{healthy: true},
+		NATS:               &mockNATS{healthy: true},
+		StartTime:          time.Now(),
+		SearchEngine:       se,
+		IntelligenceEngine: intelligence.NewEngine(nil, nil),
+	}
+
+	body := `{"query": "top result test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp SearchResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Results) == 0 {
+		t.Fatal("expected at least 1 result")
+	}
+	if resp.Results[0].ArtifactID != "top-result-123" {
+		t.Errorf("first result should be top-result-123, got %q", resp.Results[0].ArtifactID)
+	}
+	time.Sleep(50 * time.Millisecond)
+}

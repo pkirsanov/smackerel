@@ -843,6 +843,9 @@ func TestProduceBillAlerts_NilPool(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for nil pool")
 	}
+	if err != nil && !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected database connection error, got: %s", err)
+	}
 }
 
 // === Scope 1: ProduceTripPrepAlerts ===
@@ -852,6 +855,9 @@ func TestProduceTripPrepAlerts_NilPool(t *testing.T) {
 	err := engine.ProduceTripPrepAlerts(context.Background())
 	if err == nil {
 		t.Error("expected error for nil pool")
+	}
+	if err != nil && !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected database connection error, got: %s", err)
 	}
 }
 
@@ -863,6 +869,9 @@ func TestProduceReturnWindowAlerts_NilPool(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for nil pool")
 	}
+	if err != nil && !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected database connection error, got: %s", err)
+	}
 }
 
 // === Scope 1: ProduceRelationshipCoolingAlerts ===
@@ -872,6 +881,9 @@ func TestProduceRelationshipCoolingAlerts_NilPool(t *testing.T) {
 	err := engine.ProduceRelationshipCoolingAlerts(context.Background())
 	if err == nil {
 		t.Error("expected error for nil pool")
+	}
+	if err != nil && !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected database connection error, got: %s", err)
 	}
 }
 
@@ -2760,5 +2772,104 @@ func TestWeeklySynthesisR302SectionNames(t *testing.T) {
 		if contains(text, old) {
 			t.Errorf("non-compliant section name %q found — should use R-302 names", old)
 		}
+	}
+}
+
+// === TST-021: CreateAlert sanitizes control characters from title (SEC-021-002) ===
+
+func TestCreateAlert_SanitizesControlCharsInTitle(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     "AWS\x00Invoice\r\nMonthly",
+		Body:      "Normal body",
+		Priority:  2,
+	}
+	// CreateAlert will sanitize then fail on nil pool — check the alert struct was sanitized
+	_ = engine.CreateAlert(context.Background(), alert)
+	// After sanitization: null bytes removed, \r removed, \n replaced with space in title
+	if strings.ContainsAny(alert.Title, "\x00\r") {
+		t.Errorf("title should have control chars stripped, got %q", alert.Title)
+	}
+	if strings.Contains(alert.Title, "\n") {
+		t.Errorf("title should have newlines replaced with spaces, got %q", alert.Title)
+	}
+	if !strings.Contains(alert.Title, "AWS") || !strings.Contains(alert.Title, "Invoice") {
+		t.Errorf("title should preserve content, got %q", alert.Title)
+	}
+}
+
+func TestCreateAlert_SanitizesControlCharsInBody(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     "Normal Title",
+		Body:      "Line one\x00hidden\x1Bescaped",
+		Priority:  2,
+	}
+	_ = engine.CreateAlert(context.Background(), alert)
+	if strings.ContainsAny(alert.Body, "\x00\x1B") {
+		t.Errorf("body should have control chars stripped, got %q", alert.Body)
+	}
+}
+
+func TestCreateAlert_TitleNewlinesReplacedWithSpaces(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	alert := &Alert{
+		AlertType: AlertBill,
+		Title:     "Line1\nLine2\tLine3",
+		Body:      "body",
+		Priority:  2,
+	}
+	_ = engine.CreateAlert(context.Background(), alert)
+	if strings.Contains(alert.Title, "\n") {
+		t.Errorf("title newlines should be replaced with spaces, got %q", alert.Title)
+	}
+	if strings.Contains(alert.Title, "\t") {
+		t.Errorf("title tabs should be replaced with spaces, got %q", alert.Title)
+	}
+	if !strings.Contains(alert.Title, "Line1") || !strings.Contains(alert.Title, "Line2") || !strings.Contains(alert.Title, "Line3") {
+		t.Errorf("title should preserve content words, got %q", alert.Title)
+	}
+}
+
+// === TST-021: CreateAlert body preserves intentional newlines ===
+
+func TestCreateAlert_BodyPreservesNewlines(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	alert := &Alert{
+		AlertType: AlertMeetingBrief,
+		Title:     "Meeting Brief",
+		Body:      "Attendee: Sarah\nTopics: budget, roadmap\nAction items pending",
+		Priority:  2,
+	}
+	_ = engine.CreateAlert(context.Background(), alert)
+	// Body should preserve intentional newlines (meeting briefs use them)
+	if !strings.Contains(alert.Body, "\n") {
+		t.Errorf("body should preserve newlines, got %q", alert.Body)
+	}
+}
+
+// === TST-021: maxPendingAlertAgeDays constant value ===
+
+func TestMaxPendingAlertAgeDays_Value(t *testing.T) {
+	if maxPendingAlertAgeDays != 7 {
+		t.Errorf("expected maxPendingAlertAgeDays = 7, got %d", maxPendingAlertAgeDays)
+	}
+	if maxPendingAlertAgeDays < 1 {
+		t.Error("maxPendingAlertAgeDays must be positive")
+	}
+}
+
+// === TST-021: GetLastSynthesisTime error message validation ===
+
+func TestGetLastSynthesisTime_NilPoolErrorMessage(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	_, err := engine.GetLastSynthesisTime(context.Background())
+	if err == nil {
+		t.Fatal("expected error for nil pool")
+	}
+	if !strings.Contains(err.Error(), "synthesis freshness check requires a database connection") {
+		t.Errorf("expected specific error message, got: %s", err)
 	}
 }

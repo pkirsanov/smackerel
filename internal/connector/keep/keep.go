@@ -90,37 +90,33 @@ func New(id string) *Connector {
 
 func (c *Connector) ID() string { return c.id }
 
+// connectError sets health to error and returns a formatted error.
+func (c *Connector) connectError(format string, args ...interface{}) error {
+	c.mu.Lock()
+	c.health = connector.HealthError
+	c.mu.Unlock()
+	return fmt.Errorf(format, args...)
+}
+
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
 	keepCfg, err := parseKeepConfig(config)
 	if err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
-		return fmt.Errorf("parse keep config: %w", err)
+		return c.connectError("parse keep config: %w", err)
 	}
 
 	// Validate gkeepapi acknowledgment
 	if (keepCfg.SyncMode == SyncModeGkeepapi || keepCfg.SyncMode == SyncModeHybrid) &&
 		keepCfg.GkeepEnabled && !keepCfg.GkeepWarningAck {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
-		return fmt.Errorf("gkeepapi uses an unofficial API — set warning_acknowledged: true to proceed")
+		return c.connectError("gkeepapi uses an unofficial API — set warning_acknowledged: true to proceed")
 	}
 
 	// Validate Takeout import directory
 	if keepCfg.SyncMode == SyncModeTakeout || keepCfg.SyncMode == SyncModeHybrid {
 		if keepCfg.TakeoutImportDir == "" {
-			c.mu.Lock()
-			c.health = connector.HealthError
-			c.mu.Unlock()
-			return fmt.Errorf("takeout import directory not configured")
+			return c.connectError("takeout import directory not configured")
 		}
 		if _, err := os.Stat(keepCfg.TakeoutImportDir); os.IsNotExist(err) {
-			c.mu.Lock()
-			c.health = connector.HealthError
-			c.mu.Unlock()
-			return fmt.Errorf("takeout import directory does not exist: %s", keepCfg.TakeoutImportDir)
+			return c.connectError("takeout import directory does not exist: %s", keepCfg.TakeoutImportDir)
 		}
 	}
 

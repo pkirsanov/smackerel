@@ -191,30 +191,33 @@ func (a *ConversationAssembler) flushBufferLocked(key assemblyKey) {
 		return buf.Messages[i].Timestamp.Before(buf.Messages[j].Timestamp)
 	})
 
-	if a.flushFn != nil {
-		a.wg.Add(1)
-		go func() {
-			defer a.wg.Done()
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Error("assembly flush panic recovered",
-						"chat_id", key.chatID,
-						"source", key.sourceName,
-						"panic", r,
-					)
-				}
-			}()
-			flushCtx, cancel := context.WithTimeout(context.Background(), flushTimeout)
-			defer cancel()
-			if err := a.flushFn(flushCtx, buf); err != nil {
-				slog.Error("assembly flush failed",
-					"chat_id", key.chatID,
-					"source", key.sourceName,
-					"error", err,
+	a.asyncFlush(buf, "assembly flush failed",
+		"chat_id", key.chatID, "source", key.sourceName)
+}
+
+// asyncFlush runs the flush callback in a background goroutine with panic recovery.
+func (a *ConversationAssembler) asyncFlush(buf *ConversationBuffer, logMsg string, logArgs ...any) {
+	if a.flushFn == nil {
+		return
+	}
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("assembly flush panic recovered",
+					"chat_id", buf.Key.chatID,
+					"source", buf.Key.sourceName,
+					"panic", r,
 				)
 			}
 		}()
-	}
+		flushCtx, cancel := context.WithTimeout(context.Background(), flushTimeout)
+		defer cancel()
+		if err := a.flushFn(flushCtx, buf); err != nil {
+			slog.Error(logMsg, append([]any{"error", err}, logArgs...)...)
+		}
+	}()
 }
 
 // FlushChat flushes all buffers for a specific chat ID (triggered by /done).

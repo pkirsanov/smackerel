@@ -142,6 +142,15 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 		c.mu.Unlock()
 	}()
 
+	// F-CHAOS-C17-001: Reject Sync before Connect — empty ImportDir would cause
+	// os.ReadDir("") to scan the working directory, leaking unrelated file names.
+	if cfg.ImportDir == "" {
+		c.mu.Lock()
+		c.lastSyncErrors = 1
+		c.mu.Unlock()
+		return nil, cursor, fmt.Errorf("bookmarks connector not connected: import directory not configured")
+	}
+
 	// Decode cursor: JSON list of processed file names
 	processedFiles := decodeProcessedFilesCursor(cursor)
 

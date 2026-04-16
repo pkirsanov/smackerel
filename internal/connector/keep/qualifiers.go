@@ -1,7 +1,6 @@
 package keep
 
 import (
-	"strings"
 	"time"
 )
 
@@ -39,10 +38,8 @@ func (q *Qualifier) Evaluate(note *TakeoutNote) QualifierResult {
 		return QualifierResult{Tier: TierFull, Reason: "labeled"}
 	}
 
-	for _, a := range note.Attachments {
-		if strings.HasPrefix(a.MimeType, "image/") {
-			return QualifierResult{Tier: TierFull, Reason: "has_images"}
-		}
+	if hasImageAttachment(note) {
+		return QualifierResult{Tier: TierFull, Reason: "has_images"}
 	}
 
 	// Archived notes are always light — archiving is an intentional user

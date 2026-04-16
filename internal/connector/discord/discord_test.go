@@ -3261,6 +3261,207 @@ func TestSnowflakeGreater(t *testing.T) {
 	}
 }
 
+// --- Chaos-to-doc Edge Case Tests ---
+
+// CHAOS-014-001: drainGatewayEvents must not infinite-loop on a closed events channel.
+// Adversarial: a GatewayClient that closes its events channel (e.g. on disconnect)
+// would cause the select{case ev := <-ch} branch to win every iteration with a
+// zero-value event, never hitting default, spinning until OOM.
+func TestChaos_DrainGatewayEvents_ClosedChannel(t *testing.T) {
+	ch := make(chan GatewayEvent, 5)
+	ch <- GatewayEvent{Type: "MESSAGE_CREATE", Message: DiscordMessage{ID: "100000000000000001", Content: "before close"}}
+	close(ch)
+
+	mgw := &mockGateway{events: ch, healthy: true}
+
+	done := make(chan []GatewayEvent, 1)
+	go func() {
+		done <- drainGatewayEvents(mgw)
+	}()
+
+	select {
+	case events := <-done:
+		// Should return the one buffered event, then stop on closed channel.
+		if len(events) != 1 {
+			t.Errorf("expected 1 event from closed channel drain, got %d", len(events))
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("drainGatewayEvents hung on closed channel — infinite loop bug")
+	}
+}
+
+// CHAOS-014-002: isSafeURL must block IPv6 unspecified address [::].
+// Adversarial: http://[::]:8080/ resolves to localhost on most systems but
+// bypasses loopback/private/link-local checks since :: is the unspecified address.
+func TestChaos_IsSafeURL_IPv6Unspecified(t *testing.T) {
+	targets := []string{
+		"http://[::]/",
+		"http://[::]:8080/admin",
+		"http://[::ffff:0.0.0.0]/",
+		"http://[0:0:0:0:0:0:0:0]/",
+	}
+	for _, u := range targets {
+		if isSafeURL(u) {
+			t.Errorf("isSafeURL(%q) = true, want false (unspecified address SSRF bypass)", u)
+		}
+	}
+}
+
+// CHAOS-014-003: Re-Connect must close the old gateway to prevent goroutine leak.
+// Adversarial: calling Connect twice without Close leaks the first EventPoller's
+// polling goroutines, which continue making REST calls to Discord's API forever.
+func TestChaos_ReConnect_ClosesOldGateway(t *testing.T) {
+	ts := newTestDiscordAPI(t)
+	c := New("discord-gw-leak-test")
+
+	// First connect with gateway enabled
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":        ts.URL,
+			"enable_gateway": true,
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("first Connect: %v", err)
+	}
+
+	c.mu.RLock()
+	firstGW := c.gateway
+	c.mu.RUnlock()
+	if firstGW == nil {
+		t.Fatal("expected gateway to be started on first connect")
+	}
+
+	// Inject a mock gateway so we can observe Close calls
+	mgw := &mockGateway{events: make(chan GatewayEvent, 1), healthy: true}
+	c.mu.Lock()
+	c.gateway = mgw
+	c.mu.Unlock()
+
+	// Second connect should close the old gateway
+	err = c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":        ts.URL,
+			"enable_gateway": false,
+		},
+	})
+	if err != nil {
+		t.Fatalf("second Connect: %v", err)
+	}
+
+	if !mgw.closed {
+		t.Error("re-Connect did not close the old gateway — goroutine leak")
+	}
+}
+
+// CHAOS-014-004: ParseBotCommand with whitespace-only content after prefix.
+func TestChaos_ParseBotCommand_WhitespaceOnly(t *testing.T) {
+	cmds := []string{"!save"}
+	_, _, ok := ParseBotCommand("!save    ", cmds)
+	// Should return false (no URL or meaningful text after trimming)
+	if ok {
+		t.Error("expected ok=false for whitespace-only content after command prefix")
+	}
+}
+
+// CHAOS-014-005: normalizeMessage with completely empty DiscordMessage.
+func TestChaos_NormalizeMessage_ZeroValue(t *testing.T) {
+	artifact := normalizeMessage(DiscordMessage{}, "light", nil)
+	if artifact.SourceID != "discord" {
+		t.Errorf("expected source_id 'discord', got %q", artifact.SourceID)
+	}
+	if artifact.Title != "Discord message" {
+		t.Errorf("expected fallback title 'Discord message', got %q", artifact.Title)
+	}
+	if artifact.URL != "" {
+		t.Errorf("expected empty URL for zero-value message, got %q", artifact.URL)
+	}
+	if artifact.SourceRef != "" {
+		t.Errorf("expected empty source_ref for zero-value message, got %q", artifact.SourceRef)
+	}
+}
+
+// CHAOS-014-006: classifyMessage priority when message matches multiple criteria.
+// Capture > thread-starter > attachment > embed > link > code > reply > message.
+func TestChaos_ClassifyMessage_MultiCriteriaPriority(t *testing.T) {
+	// Capture takes highest priority even with attachments, embeds, thread, code
+	msg := DiscordMessage{
+		Content:     "!save https://example.com ```code```",
+		ThreadID:    "111111111111111111",
+		Attachments: []Attachment{{ID: "a1"}},
+		Embeds:      []Embed{{Title: "E"}},
+	}
+	got := classifyMessage(msg, []string{"!save"})
+	if got != "discord/capture" {
+		t.Errorf("expected capture priority, got %s", got)
+	}
+
+	// Thread-starter (ThreadID set, no MessageReference) > attachment
+	msg2 := DiscordMessage{
+		Content:     "thread topic",
+		ThreadID:    "111111111111111111",
+		Attachments: []Attachment{{ID: "a1"}},
+		Embeds:      []Embed{{Title: "E"}},
+	}
+	got = classifyMessage(msg2, nil)
+	if got != "discord/thread" {
+		t.Errorf("expected thread-starter priority over attachment, got %s", got)
+	}
+
+	// Thread reply (ThreadID + MessageReference) is NOT a thread-starter;
+	// attachment takes priority over embed/link/code/reply
+	msg3 := DiscordMessage{
+		Content:          "reply in thread",
+		ThreadID:         "111111111111111111",
+		Attachments:      []Attachment{{ID: "a1"}},
+		MessageReference: &MessageRef{MessageID: "222222222222222222"},
+	}
+	got = classifyMessage(msg3, nil)
+	if got != "discord/attachment" {
+		t.Errorf("expected attachment for thread-reply with attachment, got %s", got)
+	}
+}
+
+// CHAOS-014-007: Sync with deeply nested malformed cursor JSON.
+func TestChaos_Sync_MalformedCursorVariants(t *testing.T) {
+	ts := newTestDiscordAPI(t)
+	c := New("discord")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url": ts.URL,
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+
+	malformed := []string{
+		`{"200000000000000001": 12345}`,         // int value instead of string
+		`{"200000000000000001": null}`,           // null value
+		`{"200000000000000001": true}`,           // bool value
+		`{"200000000000000001": []}`,             // array value
+		`[["200000000000000001","300"]]`,         // array instead of object
+		string(make([]byte, 10000)),              // large zero bytes
+		`{"` + strings.Repeat("A", 5000) + `":"300000000000000001"}`, // huge key
+	}
+	for _, cursor := range malformed {
+		// Must not panic
+		_, _, _ = c.Sync(context.Background(), cursor)
+	}
+}
+
 // IMP-014-IE-003b: Cursor advancement uses snowflakeGreater and handles mixed-length IDs.
 // Adversarial: if a hypothetical short snowflake "99" were compared as string
 // against "100", the cursor would regress to "99" and re-fetch messages.

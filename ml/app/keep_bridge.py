@@ -4,6 +4,7 @@ Handles keep.sync.request NATS messages using the gkeepapi library.
 This is an OPTIONAL, opt-in feature that uses an UNOFFICIAL Google API.
 """
 
+import datetime
 import logging
 import os
 import time
@@ -169,8 +170,6 @@ async def handle_sync_request(data: dict) -> dict:
 
                 # Filter by cursor if provided
                 if cursor and serialized["modified_usec"] > 0:
-                    import datetime
-
                     cursor_time = datetime.datetime.fromisoformat(cursor.replace("Z", "+00:00"))
                     cursor_usec = int(cursor_time.timestamp() * 1_000_000)
                     if serialized["modified_usec"] <= cursor_usec:
@@ -189,8 +188,6 @@ async def handle_sync_request(data: dict) -> dict:
             if notes:
                 latest_usec = max(n["modified_usec"] for n in notes)
                 if latest_usec > 0:
-                    import datetime
-
                     new_cursor = (
                         datetime.datetime.fromtimestamp(
                             latest_usec / 1_000_000,

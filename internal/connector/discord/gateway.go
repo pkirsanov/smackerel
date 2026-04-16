@@ -219,7 +219,7 @@ func (ep *EventPoller) pollChannel(ctx context.Context, channelID string) {
 }
 
 // drainGatewayEvents reads all buffered events from a GatewayClient without blocking.
-// Returns nil if gw is nil.
+// Returns nil if gw is nil. Handles closed channels safely to prevent infinite loops.
 func drainGatewayEvents(gw GatewayClient) []GatewayEvent {
 	if gw == nil {
 		return nil
@@ -227,7 +227,12 @@ func drainGatewayEvents(gw GatewayClient) []GatewayEvent {
 	var events []GatewayEvent
 	for {
 		select {
-		case ev := <-gw.Events():
+		case ev, ok := <-gw.Events():
+			if !ok {
+				// Channel closed — stop draining to prevent infinite loop
+				// (closed channels return zero-value immediately, never blocking).
+				return events
+			}
 			events = append(events, ev)
 		default:
 			return events

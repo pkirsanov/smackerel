@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -1299,6 +1300,167 @@ func TestPaginationRejectsCrossOriginLinkHeader(t *testing.T) {
 	}
 }
 
+// --- Coverage gap: isSameOrigin with empty baseOrigin ---
+
+func TestIsSameOriginEmptyOrigin(t *testing.T) {
+	// Client with unparseable base URL → baseOrigin is empty → isSameOrigin must return false
+	client := &Client{baseOrigin: ""}
+	if client.isSameOrigin("https://example.com/page2") {
+		t.Error("isSameOrigin should return false when baseOrigin is empty")
+	}
+}
+
+// --- Coverage gap: context cancellation during 429 retry wait ---
+
+func TestClientContextCancelledDuring429Retry(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel after 50ms to interrupt the retry wait
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := client.ListProperties(ctx, time.Time{})
+	if err == nil {
+		t.Fatal("expected error from context cancellation")
+	}
+	if !strings.Contains(err.Error(), "context canceled") {
+		t.Errorf("error should mention context canceled: %v", err)
+	}
+}
+
+// --- Coverage gap: context cancellation during 5xx retry wait ---
+
+func TestClientContextCancelledDuring5xxRetry(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel after 50ms to interrupt the retry wait
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := client.ListProperties(ctx, time.Time{})
+	if err == nil {
+		t.Fatal("expected error from context cancellation")
+	}
+	if !strings.Contains(err.Error(), "context canceled") {
+		t.Errorf("error should mention context canceled: %v", err)
+	}
+}
+
+// --- Coverage gap: Sync cancelled before reservations phase ---
+
+func TestSyncCancelledBeforeReservations(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":[],"total":0}`))
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken:         "token",
+		BaseURL:             srv.URL,
+		PageSize:            10,
+		SyncProperties:      false, // skip so cancellation check hits reservations first
+		SyncReservations:    true,
+		SyncMessages:        false,
+		SyncReviews:         false,
+		TierReservations:    "standard",
+		InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+
+	_, _, err := c.Sync(ctx, "")
+	if err == nil {
+		t.Fatal("expected error from context cancellation before reservations")
+	}
+}
+
+// --- Coverage gap: Sync cancelled before reviews phase ---
+
+func TestSyncCancelledBeforeReviews(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":[],"total":0}`))
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken:         "token",
+		BaseURL:             srv.URL,
+		PageSize:            10,
+		SyncProperties:      false, // skip all prior phases
+		SyncReservations:    false,
+		SyncMessages:        false,
+		SyncReviews:         true, // cancellation check hits reviews first
+		TierReviews:         "full",
+		InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+
+	_, _, err := c.Sync(ctx, "")
+	if err == nil {
+		t.Fatal("expected error from context cancellation before reviews")
+	}
+}
+
+// --- Coverage gap: invalid base_url config (non-HTTP scheme) ---
+
+func TestConfigValidationInvalidBaseURL(t *testing.T) {
+	_, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "test"},
+		SourceConfig: map[string]interface{}{"base_url": "ftp://evil.com/api"},
+	})
+	if err == nil {
+		t.Fatal("expected error for non-HTTP base_url")
+	}
+	if !strings.Contains(err.Error(), "base_url") {
+		t.Errorf("error should mention base_url: %v", err)
+	}
+}
+
+// --- Coverage gap: doGetPaginated with invalid URL (create request error) ---
+
+func TestClientInvalidURLCreateRequestError(t *testing.T) {
+	client := NewClient("http://valid.example.com", "token", 10)
+	// Use a raw URL with control characters that will fail NewRequestWithContext
+	_, err := fetchPaginated[Property](client, context.Background(), "", url.Values{})
+	// This should succeed since the path is just base + "" + "?"
+	// Instead, test with a URL that has NUL byte which HTTP rejects
+	ctx := context.Background()
+	_, _, err = client.doGetPaginated(ctx, "http://example.com/\x00bad")
+	if err == nil {
+		t.Fatal("expected error for invalid URL with NUL byte")
+	}
+}
+
 func TestPaginationRejectsMetadataEndpoint(t *testing.T) {
 	// Simulate redirect to cloud metadata endpoint (common SSRF target)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1659,5 +1821,93 @@ func TestPagination_EmptyPageBreaksEarly(t *testing.T) {
 	// With the fix, it should stop at 2 (first page with data, second page empty → break).
 	if pageCount > 2 {
 		t.Errorf("IMP-012-SQS-003: expected at most 2 pages fetched, got %d (empty page should break early)", pageCount)
+	}
+}
+
+// --- Coverage gap: unexpected HTTP status code (default case in doGetPaginated) ---
+
+func TestClientUnexpectedStatusCode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"bad request"}`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 10)
+	_, err := client.ListProperties(context.Background(), time.Time{})
+	if err == nil {
+		t.Fatal("expected error for 400 status code")
+	}
+	if !strings.Contains(err.Error(), "unexpected status 400") {
+		t.Errorf("error should mention unexpected status: %v", err)
+	}
+}
+
+// --- Coverage gap: reservation ID cap truncation in Sync ---
+
+func TestSyncActiveReservationIDsCapped(t *testing.T) {
+	// Temporarily lower the cap to make this testable
+	origCap := maxMessageSyncReservations
+	maxMessageSyncReservations = 3
+	defer func() { maxMessageSyncReservations = origCap }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+		case strings.Contains(r.URL.Path, "/messages"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		case r.URL.Query().Get("checkout_after") != "":
+			// Active reservations: return 5 (exceeds cap of 3)
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: []Reservation{
+				{ID: "r1", PropertyID: "p1", CheckIn: "2026-04-10", CheckOut: "2026-04-20", BookedAt: time.Now()},
+				{ID: "r2", PropertyID: "p1", CheckIn: "2026-04-10", CheckOut: "2026-04-20", BookedAt: time.Now()},
+				{ID: "r3", PropertyID: "p1", CheckIn: "2026-04-10", CheckOut: "2026-04-20", BookedAt: time.Now()},
+				{ID: "r4", PropertyID: "p1", CheckIn: "2026-04-10", CheckOut: "2026-04-20", BookedAt: time.Now()},
+				{ID: "r5", PropertyID: "p1", CheckIn: "2026-04-10", CheckOut: "2026-04-20", BookedAt: time.Now()},
+			}, Total: 5})
+		case strings.Contains(r.URL.Path, "/reservations"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: []Reservation{}, Total: 0})
+		case strings.Contains(r.URL.Path, "/reviews"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Review]{Data: []Review{}, Total: 0})
+		default:
+			w.Write([]byte(`{"data":[],"total":0}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	config := connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "token"},
+		SourceConfig: map[string]interface{}{"base_url": srv.URL},
+	}
+	c.Connect(context.Background(), config)
+
+	_, cursorStr, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	// ActiveReservationIDs in cursor should be capped at 3
+	var sc SyncCursor
+	json.Unmarshal([]byte(cursorStr), &sc)
+	if len(sc.ActiveReservationIDs) > 3 {
+		t.Errorf("ActiveReservationIDs should be capped at %d, got %d", 3, len(sc.ActiveReservationIDs))
+	}
+}
+
+// --- Coverage gap: sync_schedule config parsing ---
+
+func TestConfigSyncSchedule(t *testing.T) {
+	cfg, err := parseHospitableConfig(connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "test"},
+		SourceConfig: map[string]interface{}{"sync_schedule": "*/15 * * * *"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SyncSchedule != "*/15 * * * *" {
+		t.Errorf("SyncSchedule = %q, want */15 * * * *", cfg.SyncSchedule)
 	}
 }

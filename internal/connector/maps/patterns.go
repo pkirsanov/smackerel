@@ -2,7 +2,6 @@ package maps
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -538,8 +537,7 @@ func normalizeTripEvent(t TripEvent) connector.RawArtifact {
 // commuteSourceRef produces a deterministic sourceRef for dedup of commute patterns.
 func commuteSourceRef(p CommutePattern) string {
 	input := fmt.Sprintf("commute:%.3f,%.3f:%.3f,%.3f", p.StartLat, p.StartLng, p.EndLat, p.EndLng)
-	hash := sha256.Sum256([]byte(input))
-	return fmt.Sprintf("commute-%x", hash[:8])
+	return "commute-" + sourceRefHash(input)
 }
 
 // tripSourceRef produces a deterministic sourceRef for dedup of trip events.
@@ -547,8 +545,7 @@ func tripSourceRef(t TripEvent) string {
 	input := fmt.Sprintf("trip:%.3f,%.3f:%s:%s",
 		t.DestinationLat, t.DestinationLng,
 		t.StartDate.Format("2006-01-02"), t.EndDate.Format("2006-01-02"))
-	hash := sha256.Sum256([]byte(input))
-	return fmt.Sprintf("trip-%x", hash[:8])
+	return "trip-" + sourceRefHash(input)
 }
 
 // typicalHour finds the most frequent hour among departure hours.
