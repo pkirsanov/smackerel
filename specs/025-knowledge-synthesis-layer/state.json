@@ -9,7 +9,7 @@
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-15T17:30:00Z",
-    "completedPhaseClaims": ["implement", "test", "docs", "validate", "simplify", "security", "regression", "stabilize", "audit", "chaos", "finalize"],
+    "completedPhaseClaims": ["implement", "test", "docs", "validate", "simplify", "security", "regression", "stabilize", "audit", "chaos"],
     "pendingTransitionRequests": []
   },
   "certification": {
@@ -24,7 +24,7 @@
       "scope-7-telegram-commands",
       "scope-8-digest-integration-health"
     ],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": ["implement", "test", "docs", "validate", "simplify", "security", "regression", "stabilize", "audit", "chaos"],
     "scopeProgress": [],
     "lockdownState": {
       "active": false,
