@@ -25,6 +25,7 @@ func shutdownAll(
 	srv *http.Server,
 	tgBot *telegram.Bot,
 	resultSub *pipeline.ResultSubscriber,
+	synthesisSub *pipeline.SynthesisResultSubscriber,
 	supervisor *connector.Supervisor,
 	nc *smacknats.Client,
 	pg *db.Postgres,
@@ -79,6 +80,9 @@ func shutdownAll(
 	runWithTimeout("result subscribers", 6*time.Second, deadline, func() {
 		if resultSub != nil {
 			resultSub.Stop()
+		}
+		if synthesisSub != nil {
+			synthesisSub.Stop()
 		}
 	})
 

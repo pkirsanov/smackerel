@@ -13,7 +13,7 @@ e2e_start
 
 # --- SCN-002-035: Settings page ---
 echo "Test: Settings page..."
-BODY=$(curl -sf --max-time 15 "$CORE_URL/settings" 2>/dev/null || true)
+BODY=$(curl -sf --max-time 15 -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/settings" 2>/dev/null || true)
 e2e_assert_contains "$BODY" "Settings" "Settings page has title"
 e2e_pass "SCN-002-035: Settings page renders"
 
@@ -26,7 +26,7 @@ if [ -n "$BODY" ]; then
   e2e_pass "SCN-002-036: Status page renders"
 else
   # Try /status as fallback
-  BODY=$(curl -sf --max-time 15 "$CORE_URL/status" 2>/dev/null || true)
+  BODY=$(curl -sf --max-time 15 -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/status" 2>/dev/null || true)
   if [ -n "$BODY" ]; then
     e2e_pass "SCN-002-036: Status page renders at /status"
   else

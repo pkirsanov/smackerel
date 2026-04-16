@@ -349,6 +349,19 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("DB_MIN_CONNS", "2")
 	t.Setenv("SHUTDOWN_TIMEOUT_S", "25")
 	t.Setenv("ML_HEALTH_CACHE_TTL_S", "30")
+	t.Setenv("KNOWLEDGE_ENABLED", "true")
+	t.Setenv("KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS", "30")
+	t.Setenv("KNOWLEDGE_LINT_CRON", "0 3 * * *")
+	t.Setenv("KNOWLEDGE_LINT_STALE_DAYS", "90")
+	t.Setenv("KNOWLEDGE_CONCEPT_MAX_TOKENS", "4000")
+	t.Setenv("KNOWLEDGE_CONCEPT_SEARCH_THRESHOLD", "0.4")
+	t.Setenv("KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD", "0.7")
+	t.Setenv("KNOWLEDGE_MAX_SYNTHESIS_RETRIES", "3")
+	t.Setenv("KNOWLEDGE_PROMPT_CONTRACT_INGEST_SYNTHESIS", "ingest-synthesis-v1")
+	t.Setenv("KNOWLEDGE_PROMPT_CONTRACT_CROSS_SOURCE", "cross-source-connection-v1")
+	t.Setenv("KNOWLEDGE_PROMPT_CONTRACT_LINT_AUDIT", "lint-audit-v1")
+	t.Setenv("KNOWLEDGE_PROMPT_CONTRACT_QUERY_AUGMENT", "query-augment-v1")
+	t.Setenv("KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASSEMBLY", "digest-assembly-v1")
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {
@@ -568,5 +581,130 @@ func TestValidate_LogLevel_ValidValues(t *testing.T) {
 				t.Fatalf("expected no error for LOG_LEVEL=%s, got: %v", level, err)
 			}
 		})
+	}
+}
+
+// --- Knowledge layer config validation tests (spec 025) ---
+
+func TestValidate_KnowledgeEnabled_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("KNOWLEDGE_ENABLED", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing KNOWLEDGE_ENABLED")
+	}
+	if !strings.Contains(err.Error(), "KNOWLEDGE_ENABLED") {
+		t.Errorf("error should name KNOWLEDGE_ENABLED, got: %v", err)
+	}
+}
+
+func TestValidate_KnowledgeEnabled_False_SkipsValidation(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("KNOWLEDGE_ENABLED", "false")
+	// Clear all knowledge-specific env vars — should still pass because disabled
+	for _, key := range []string{
+		"KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS",
+		"KNOWLEDGE_LINT_CRON",
+		"KNOWLEDGE_LINT_STALE_DAYS",
+		"KNOWLEDGE_CONCEPT_MAX_TOKENS",
+		"KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD",
+		"KNOWLEDGE_MAX_SYNTHESIS_RETRIES",
+		"KNOWLEDGE_PROMPT_CONTRACT_INGEST_SYNTHESIS",
+		"KNOWLEDGE_PROMPT_CONTRACT_CROSS_SOURCE",
+		"KNOWLEDGE_PROMPT_CONTRACT_LINT_AUDIT",
+		"KNOWLEDGE_PROMPT_CONTRACT_QUERY_AUGMENT",
+		"KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASSEMBLY",
+	} {
+		t.Setenv(key, "")
+	}
+	_, err := Load()
+	if err != nil {
+		t.Fatalf("knowledge disabled should skip sub-field validation, got: %v", err)
+	}
+}
+
+func TestValidate_KnowledgeEnabled_True_MissingSynthesisTimeout(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS")
+	}
+	if !strings.Contains(err.Error(), "KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS") {
+		t.Errorf("error should name KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS, got: %v", err)
+	}
+}
+
+func TestValidate_KnowledgeEnabled_True_MissingPromptContract(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("KNOWLEDGE_PROMPT_CONTRACT_INGEST_SYNTHESIS", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing KNOWLEDGE_PROMPT_CONTRACT_INGEST_SYNTHESIS")
+	}
+	if !strings.Contains(err.Error(), "KNOWLEDGE_PROMPT_CONTRACT_INGEST_SYNTHESIS") {
+		t.Errorf("error should name KNOWLEDGE_PROMPT_CONTRACT_INGEST_SYNTHESIS, got: %v", err)
+	}
+}
+
+func TestValidate_KnowledgeConfig_AllFieldsParsed(t *testing.T) {
+	setRequiredEnv(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.KnowledgeEnabled {
+		t.Error("expected KnowledgeEnabled=true")
+	}
+	if cfg.KnowledgeSynthesisTimeoutSeconds != 30 {
+		t.Errorf("expected SynthesisTimeoutSeconds=30, got %d", cfg.KnowledgeSynthesisTimeoutSeconds)
+	}
+	if cfg.KnowledgeLintCron != "0 3 * * *" {
+		t.Errorf("expected LintCron='0 3 * * *', got %q", cfg.KnowledgeLintCron)
+	}
+	if cfg.KnowledgeLintStaleDays != 90 {
+		t.Errorf("expected LintStaleDays=90, got %d", cfg.KnowledgeLintStaleDays)
+	}
+	if cfg.KnowledgeConceptMaxTokens != 4000 {
+		t.Errorf("expected ConceptMaxTokens=4000, got %d", cfg.KnowledgeConceptMaxTokens)
+	}
+	if cfg.KnowledgeConceptSearchThreshold != 0.4 {
+		t.Errorf("expected ConceptSearchThreshold=0.4, got %f", cfg.KnowledgeConceptSearchThreshold)
+	}
+	if cfg.KnowledgeCrossSourceConfidenceThreshold != 0.7 {
+		t.Errorf("expected CrossSourceConfidenceThreshold=0.7, got %f", cfg.KnowledgeCrossSourceConfidenceThreshold)
+	}
+	if cfg.KnowledgeMaxSynthesisRetries != 3 {
+		t.Errorf("expected MaxSynthesisRetries=3, got %d", cfg.KnowledgeMaxSynthesisRetries)
+	}
+	if cfg.KnowledgePromptContractIngestSynthesis != "ingest-synthesis-v1" {
+		t.Errorf("expected PromptContractIngestSynthesis='ingest-synthesis-v1', got %q", cfg.KnowledgePromptContractIngestSynthesis)
+	}
+	if cfg.KnowledgePromptContractCrossSource != "cross-source-connection-v1" {
+		t.Errorf("expected PromptContractCrossSource='cross-source-connection-v1', got %q", cfg.KnowledgePromptContractCrossSource)
+	}
+}
+
+func TestValidate_KnowledgeLintCron_Invalid(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("KNOWLEDGE_LINT_CRON", "every day")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid KNOWLEDGE_LINT_CRON")
+	}
+	if !strings.Contains(err.Error(), "KNOWLEDGE_LINT_CRON") {
+		t.Errorf("error should name KNOWLEDGE_LINT_CRON, got: %v", err)
+	}
+}
+
+func TestValidate_KnowledgeCrossSourceConfidence_OutOfRange(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD", "1.5")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for out-of-range KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD")
+	}
+	if !strings.Contains(err.Error(), "KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD") {
+		t.Errorf("error should name KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD, got: %v", err)
 	}
 }

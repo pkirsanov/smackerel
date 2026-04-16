@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/intelligence"
+	"github.com/smackerel/smackerel/internal/knowledge"
 )
 
 // mockDB implements DBHealthChecker for testing.
@@ -1266,5 +1267,196 @@ func TestHealthHandler_ParallelProbes_MixedStatus(t *testing.T) {
 	}
 	if resp.Services["ollama"].Status != "down" {
 		t.Errorf("expected ollama down, got %s", resp.Services["ollama"].Status)
+	}
+}
+
+// T8-03 (SCN-025-24): Health response includes knowledge section with correct counts.
+func TestSCN02524_HealthIncludesKnowledgeSection(t *testing.T) {
+	synthTime := time.Date(2026, 4, 15, 10, 27, 0, 0, time.UTC)
+	store := &mockKnowledgeStore{
+		healthStats: &knowledge.KnowledgeHealthStats{
+			ConceptCount:     32,
+			EntityCount:      87,
+			SynthesisPending: 8,
+			LastSynthesisAt:  &synthTime,
+		},
+	}
+
+	deps := &Dependencies{
+		DB:                      &mockDB{healthy: true, artifactCount: 10},
+		NATS:                    &mockNATS{healthy: true},
+		StartTime:               time.Now(),
+		KnowledgeStore:          store,
+		KnowledgeHealthCacheTTL: 30 * time.Second,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Knowledge == nil {
+		t.Fatal("expected knowledge section in health response")
+	}
+	if resp.Knowledge.ConceptCount != 32 {
+		t.Errorf("expected concept_count 32, got %d", resp.Knowledge.ConceptCount)
+	}
+	if resp.Knowledge.EntityCount != 87 {
+		t.Errorf("expected entity_count 87, got %d", resp.Knowledge.EntityCount)
+	}
+	if resp.Knowledge.SynthesisPending != 8 {
+		t.Errorf("expected synthesis_pending 8, got %d", resp.Knowledge.SynthesisPending)
+	}
+	if resp.Knowledge.LastSynthesisAt == nil {
+		t.Fatal("expected last_synthesis_at to be set")
+	}
+	if !resp.Knowledge.LastSynthesisAt.Equal(synthTime) {
+		t.Errorf("expected last_synthesis_at %v, got %v", synthTime, *resp.Knowledge.LastSynthesisAt)
+	}
+}
+
+// T8-04: Health response omits knowledge section when knowledge layer is disabled.
+func TestHealthOmitsKnowledgeWhenDisabled(t *testing.T) {
+	deps := &Dependencies{
+		DB:             &mockDB{healthy: true, artifactCount: 10},
+		NATS:           &mockNATS{healthy: true},
+		StartTime:      time.Now(),
+		KnowledgeStore: nil, // knowledge layer disabled
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	deps.HealthHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Knowledge != nil {
+		t.Error("expected nil knowledge section when knowledge layer is disabled")
+	}
+}
+
+// T8-03 continued: Knowledge health uses cache for repeated requests.
+func TestHealthKnowledgeCache(t *testing.T) {
+	callCount := 0
+	synthTime := time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC)
+	store := &mockKnowledgeStore{
+		healthStats: &knowledge.KnowledgeHealthStats{
+			ConceptCount:     10,
+			EntityCount:      20,
+			SynthesisPending: 3,
+			LastSynthesisAt:  &synthTime,
+		},
+	}
+
+	deps := &Dependencies{
+		DB:                      &mockDB{healthy: true},
+		NATS:                    &mockNATS{healthy: true},
+		StartTime:               time.Now(),
+		KnowledgeStore:          store,
+		KnowledgeHealthCacheTTL: 60 * time.Second,
+	}
+
+	// First call populates cache
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp1 HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp1); err != nil {
+		t.Fatalf("first call decode: %v", err)
+	}
+	if resp1.Knowledge == nil {
+		t.Fatal("expected knowledge section on first call")
+	}
+	_ = callCount
+
+	// Update store to return different values
+	store.healthStats = &knowledge.KnowledgeHealthStats{
+		ConceptCount:     99,
+		EntityCount:      99,
+		SynthesisPending: 99,
+	}
+
+	// Second call within TTL should return cached data
+	req2 := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec2 := httptest.NewRecorder()
+	deps.HealthHandler(rec2, req2)
+
+	var resp2 HealthResponse
+	if err := json.Unmarshal(rec2.Body.Bytes(), &resp2); err != nil {
+		t.Fatalf("second call decode: %v", err)
+	}
+	if resp2.Knowledge == nil {
+		t.Fatal("expected knowledge section on second call")
+	}
+	// Should still have cached values, not 99
+	if resp2.Knowledge.ConceptCount != 10 {
+		t.Errorf("expected cached concept_count 10, got %d (cache miss?)", resp2.Knowledge.ConceptCount)
+	}
+}
+
+// T8-04 continued: Knowledge section hidden from unauthenticated callers when auth enabled.
+func TestHealthKnowledgeHiddenWithoutAuth(t *testing.T) {
+	synthTime := time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC)
+	store := &mockKnowledgeStore{
+		healthStats: &knowledge.KnowledgeHealthStats{
+			ConceptCount:     5,
+			EntityCount:      10,
+			SynthesisPending: 2,
+			LastSynthesisAt:  &synthTime,
+		},
+	}
+
+	deps := &Dependencies{
+		DB:                      &mockDB{healthy: true},
+		NATS:                    &mockNATS{healthy: true},
+		StartTime:               time.Now(),
+		KnowledgeStore:          store,
+		KnowledgeHealthCacheTTL: 30 * time.Second,
+		AuthToken:               "secret-token",
+	}
+
+	// Unauthenticated request — knowledge should be hidden
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Knowledge != nil {
+		t.Error("expected nil knowledge section for unauthenticated request")
+	}
+
+	// Authenticated request — knowledge should be visible
+	req2 := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req2.Header.Set("Authorization", "Bearer secret-token")
+	rec2 := httptest.NewRecorder()
+	deps.HealthHandler(rec2, req2)
+
+	var resp2 HealthResponse
+	if err := json.Unmarshal(rec2.Body.Bytes(), &resp2); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp2.Knowledge == nil {
+		t.Error("expected knowledge section for authenticated request")
 	}
 }

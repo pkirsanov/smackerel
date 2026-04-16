@@ -224,6 +224,23 @@ connectors:
       crypto: []
       forex_pairs: []
 
+knowledge:
+  enabled: true
+  synthesis_timeout_seconds: 30
+  lint_cron: "0 3 * * *"
+  lint_stale_days: 90
+  concept_max_tokens: 4000
+  concept_search_threshold: 0.4
+  cross_source_confidence_threshold: 0.7
+  max_synthesis_retries: 3
+  prompt_contracts_dir: "config/prompt_contracts"
+  prompt_contracts:
+    ingest_synthesis: "ingest-synthesis-v1"
+    cross_source_connection: "cross-source-connection-v1"
+    lint_audit: "lint-audit-v1"
+    query_augment: "query-augment-v1"
+    digest_assembly: "digest-assembly-v1"
+
 services:
   core:
     container_port: 8080

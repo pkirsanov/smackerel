@@ -48,6 +48,21 @@ type Config struct {
 	TelegramAssemblyWindowSeconds   int
 	TelegramAssemblyMaxMessages     int
 	TelegramMediaGroupWindowSeconds int
+
+	// Knowledge layer config (SST-compliant — from smackerel.yaml via config generate)
+	KnowledgeEnabled                        bool
+	KnowledgeSynthesisTimeoutSeconds        int
+	KnowledgeLintCron                       string
+	KnowledgeLintStaleDays                  int
+	KnowledgeConceptMaxTokens               int
+	KnowledgeConceptSearchThreshold         float64
+	KnowledgeCrossSourceConfidenceThreshold float64
+	KnowledgeMaxSynthesisRetries            int
+	KnowledgePromptContractIngestSynthesis  string
+	KnowledgePromptContractCrossSource      string
+	KnowledgePromptContractLintAudit        string
+	KnowledgePromptContractQueryAugment     string
+	KnowledgePromptContractDigestAssembly   string
 }
 
 // Load reads configuration from environment variables.
@@ -154,6 +169,107 @@ func Load() (*Config, error) {
 			cfg.TelegramMediaGroupWindowSeconds = n
 		} else {
 			return nil, fmt.Errorf("TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS must be an integer in range [2, 10] (got %q)", v)
+		}
+	}
+
+	// Parse knowledge layer config (SST-compliant — from smackerel.yaml via config generate)
+	knowledgeEnabledStr := os.Getenv("KNOWLEDGE_ENABLED")
+	if knowledgeEnabledStr == "" {
+		return nil, fmt.Errorf("missing required configuration: KNOWLEDGE_ENABLED")
+	}
+	cfg.KnowledgeEnabled = knowledgeEnabledStr == "true"
+
+	if cfg.KnowledgeEnabled {
+		var knowledgeErrors []string
+
+		synthTimeoutStr := os.Getenv("KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS")
+		if synthTimeoutStr == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS")
+		} else if v, err := strconv.Atoi(synthTimeoutStr); err != nil || v < 1 {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS (must be a positive integer)")
+		} else {
+			cfg.KnowledgeSynthesisTimeoutSeconds = v
+		}
+
+		cfg.KnowledgeLintCron = os.Getenv("KNOWLEDGE_LINT_CRON")
+		if cfg.KnowledgeLintCron == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_LINT_CRON")
+		} else if !isValidCronExpr(cfg.KnowledgeLintCron) {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_LINT_CRON (not a valid cron expression)")
+		}
+
+		staleDaysStr := os.Getenv("KNOWLEDGE_LINT_STALE_DAYS")
+		if staleDaysStr == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_LINT_STALE_DAYS")
+		} else if v, err := strconv.Atoi(staleDaysStr); err != nil || v < 1 {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_LINT_STALE_DAYS (must be a positive integer)")
+		} else {
+			cfg.KnowledgeLintStaleDays = v
+		}
+
+		maxTokensStr := os.Getenv("KNOWLEDGE_CONCEPT_MAX_TOKENS")
+		if maxTokensStr == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_CONCEPT_MAX_TOKENS")
+		} else if v, err := strconv.Atoi(maxTokensStr); err != nil || v < 1 {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_CONCEPT_MAX_TOKENS (must be a positive integer)")
+		} else {
+			cfg.KnowledgeConceptMaxTokens = v
+		}
+
+		conceptSearchThresholdStr := os.Getenv("KNOWLEDGE_CONCEPT_SEARCH_THRESHOLD")
+		if conceptSearchThresholdStr == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_CONCEPT_SEARCH_THRESHOLD")
+		} else if v, err := strconv.ParseFloat(conceptSearchThresholdStr, 64); err != nil || v < 0 || v > 1 {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_CONCEPT_SEARCH_THRESHOLD (must be a float in [0, 1])")
+		} else {
+			cfg.KnowledgeConceptSearchThreshold = v
+		}
+
+		crossSourceThresholdStr := os.Getenv("KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD")
+		if crossSourceThresholdStr == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD")
+		} else if v, err := strconv.ParseFloat(crossSourceThresholdStr, 64); err != nil || v < 0 || v > 1 {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD (must be a float in [0, 1])")
+		} else {
+			cfg.KnowledgeCrossSourceConfidenceThreshold = v
+		}
+
+		maxRetriesStr := os.Getenv("KNOWLEDGE_MAX_SYNTHESIS_RETRIES")
+		if maxRetriesStr == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_MAX_SYNTHESIS_RETRIES")
+		} else if v, err := strconv.Atoi(maxRetriesStr); err != nil || v < 0 {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_MAX_SYNTHESIS_RETRIES (must be a non-negative integer)")
+		} else {
+			cfg.KnowledgeMaxSynthesisRetries = v
+		}
+
+		cfg.KnowledgePromptContractIngestSynthesis = os.Getenv("KNOWLEDGE_PROMPT_CONTRACT_INGEST_SYNTHESIS")
+		if cfg.KnowledgePromptContractIngestSynthesis == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_PROMPT_CONTRACT_INGEST_SYNTHESIS")
+		}
+
+		cfg.KnowledgePromptContractCrossSource = os.Getenv("KNOWLEDGE_PROMPT_CONTRACT_CROSS_SOURCE")
+		if cfg.KnowledgePromptContractCrossSource == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_PROMPT_CONTRACT_CROSS_SOURCE")
+		}
+
+		cfg.KnowledgePromptContractLintAudit = os.Getenv("KNOWLEDGE_PROMPT_CONTRACT_LINT_AUDIT")
+		if cfg.KnowledgePromptContractLintAudit == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_PROMPT_CONTRACT_LINT_AUDIT")
+		}
+
+		cfg.KnowledgePromptContractQueryAugment = os.Getenv("KNOWLEDGE_PROMPT_CONTRACT_QUERY_AUGMENT")
+		if cfg.KnowledgePromptContractQueryAugment == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_PROMPT_CONTRACT_QUERY_AUGMENT")
+		}
+
+		cfg.KnowledgePromptContractDigestAssembly = os.Getenv("KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASSEMBLY")
+		if cfg.KnowledgePromptContractDigestAssembly == "" {
+			knowledgeErrors = append(knowledgeErrors, "KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASSEMBLY")
+		}
+
+		if len(knowledgeErrors) > 0 {
+			return nil, fmt.Errorf("missing or invalid required knowledge configuration: %s", strings.Join(knowledgeErrors, ", "))
 		}
 	}
 

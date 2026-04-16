@@ -33,6 +33,8 @@ SUBSCRIBE_SUBJECTS = [
     "monthly.generate",
     "quickref.generate",
     "seasonal.analyze",
+    "synthesis.extract",
+    "synthesis.crosssource",
 ]
 
 # Subjects this sidecar publishes to
@@ -48,6 +50,8 @@ PUBLISH_SUBJECTS = [
     "monthly.generated",
     "quickref.generated",
     "seasonal.analyzed",
+    "synthesis.extracted",
+    "synthesis.crosssource.result",
 ]
 
 # Map of subscribe subject -> publish response subject
@@ -63,11 +67,13 @@ SUBJECT_RESPONSE_MAP = {
     "monthly.generate": "monthly.generated",
     "quickref.generate": "quickref.generated",
     "seasonal.analyze": "seasonal.analyzed",
+    "synthesis.extract": "synthesis.extracted",
+    "synthesis.crosssource": "synthesis.crosssource.result",
 }
 
 
 # Subjects that are critical — failure to subscribe is fatal
-CRITICAL_SUBJECTS = {"artifacts.process", "search.embed"}
+CRITICAL_SUBJECTS = {"artifacts.process", "search.embed", "synthesis.extract"}
 
 
 class NATSClient:
@@ -243,6 +249,26 @@ class NATSClient:
                         from .ocr import handle_ocr_request
 
                         result = await handle_ocr_request(data)
+                    elif subject == "synthesis.extract":
+                        from .synthesis import handle_extract
+
+                        result = await handle_extract(
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                            ollama_url,
+                        )
+                    elif subject == "synthesis.crosssource":
+                        from .synthesis import handle_crosssource
+
+                        result = await handle_crosssource(
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                            ollama_url,
+                        )
                     else:
                         logger.warning("Unknown subject: %s", subject)
                         await msg.ack()

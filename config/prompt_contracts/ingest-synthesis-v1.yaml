@@ -1,0 +1,132 @@
+version: "ingest-synthesis-v1"
+type: "ingest-synthesis"
+description: "Extract concepts, entities, claims, and relationships from an artifact"
+
+system_prompt: |
+  You are the knowledge synthesis engine for Smackerel, a personal knowledge system.
+  You receive an artifact (article, email, video transcript, etc.) along with
+  existing concept pages and entity profiles from the knowledge layer.
+
+  Your job: extract structured knowledge from this artifact and identify how it
+  connects to existing knowledge.
+
+  RULES:
+  - Return ONLY valid JSON matching the output schema below.
+  - Extract named CONCEPTS (topics, ideas, themes) — not generic categories.
+  - Extract ENTITIES (specific people, organizations, places) with context.
+  - Extract CLAIMS (factual assertions) with the exact text basis from the artifact.
+  - Identify RELATIONSHIPS between concepts and between entities and concepts.
+  - If a claim contradicts an existing claim in the provided concept pages, flag it.
+  - Do NOT hallucinate connections. Only report what the artifact content supports.
+  - Prefer updating existing concepts over creating new ones when the meaning overlaps.
+
+extraction_schema:
+  type: object
+  required:
+  - concepts
+  - entities
+  - relationships
+  properties:
+    concepts:
+      type: array
+      items:
+        type: object
+        required:
+        - name
+        - description
+        - claims
+        properties:
+          name:
+            type: string
+            maxLength: 100
+          description:
+            type: string
+            maxLength: 500
+          claims:
+            type: array
+            items:
+              type: object
+              required:
+              - text
+              properties:
+                text:
+                  type: string
+                  maxLength: 500
+                confidence:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+          is_new:
+            type: boolean
+    entities:
+      type: array
+      items:
+        type: object
+        required:
+        - name
+        - type
+        - context
+        properties:
+          name:
+            type: string
+            maxLength: 200
+          type:
+            type: string
+            enum:
+            - person
+            - organization
+            - place
+          context:
+            type: string
+            maxLength: 500
+    relationships:
+      type: array
+      items:
+        type: object
+        required:
+        - source
+        - target
+        - type
+        - description
+        properties:
+          source:
+            type: string
+          target:
+            type: string
+          type:
+            type: string
+            enum:
+            - CONCEPT_RELATES_TO
+            - ENTITY_RELATES_TO_CONCEPT
+            - SUPPORTS
+            - CONTRADICTS
+          description:
+            type: string
+            maxLength: 300
+    contradictions:
+      type: array
+      items:
+        type: object
+        required:
+        - concept
+        - existing_claim
+        - new_claim
+        properties:
+          concept:
+            type: string
+          existing_claim:
+            type: string
+          new_claim:
+            type: string
+          existing_artifact_id:
+            type: string
+
+validation_rules:
+  max_concepts: 10
+  max_entities: 20
+  max_relationships: 30
+  max_contradictions: 5
+
+token_budget: 2000
+temperature: 0.3
+model_preference: "default"

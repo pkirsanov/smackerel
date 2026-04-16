@@ -1,0 +1,440 @@
+{
+  "version": 1,
+  "specId": "025",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-04-15T22:30:00Z",
+  "scopes": [
+    {
+      "scopeId": "01-knowledge-store-schema",
+      "scopeName": "Knowledge Store & Schema",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-01",
+          "scenario": "Knowledge layer tables are created by migration",
+          "requiredTestType": "unit",
+          "file": "internal/knowledge/store_test.go",
+          "linkedTests": ["TestNormalizeName"],
+          "evidenceRefs": ["scopes.md#scope-1-dod-migration"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-02",
+          "scenario": "Concept page can be created and retrieved",
+          "requiredTestType": "unit",
+          "file": "internal/knowledge/store_test.go",
+          "linkedTests": ["TestNormalizeName"],
+          "evidenceRefs": ["scopes.md#scope-1-dod-store"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-03",
+          "scenario": "Prompt contract is loaded from YAML and validated",
+          "requiredTestType": "unit",
+          "file": "internal/knowledge/contract_test.go",
+          "linkedTests": ["TestLoadContract_ValidIngestSynthesis", "TestLoadContract_InvalidYAML", "TestLoadContract_MissingFields"],
+          "evidenceRefs": ["scopes.md#scope-1-dod-contract"],
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "02-synthesis-pipeline",
+      "scopeName": "Synthesis Pipeline (NATS + ML Sidecar)",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-04",
+          "scenario": "Artifact ingestion triggers knowledge synthesis",
+          "requiredTestType": "unit",
+          "file": "internal/pipeline/synthesis_subscriber_test.go",
+          "linkedTests": ["TestHandleSynthesized_Success"],
+          "evidenceRefs": ["scopes.md#scope-2-dod-pipeline"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-05",
+          "scenario": "Incremental concept page update preserves existing knowledge",
+          "requiredTestType": "unit",
+          "file": "internal/knowledge/upsert_test.go",
+          "linkedTests": ["TestMergeClaimsDedup"],
+          "evidenceRefs": ["scopes.md#scope-2-dod-upsert"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-06",
+          "scenario": "Synthesis failure does not block ingestion",
+          "requiredTestType": "unit",
+          "file": "internal/pipeline/synthesis_subscriber_test.go",
+          "linkedTests": ["TestHandleSynthesized_Failure"],
+          "evidenceRefs": ["scopes.md#scope-2-dod-failopen"],
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "03-knowledge-query-api",
+      "scopeName": "Knowledge-First Query & Search API",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-07",
+          "scenario": "Knowledge query returns pre-synthesized answer",
+          "requiredTestType": "unit",
+          "file": "internal/api/search_test.go",
+          "linkedTests": ["TestSearchHandler_KnowledgeMatchPopulated"],
+          "evidenceRefs": ["scopes.md#scope-3-dod-query"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-08",
+          "scenario": "No concept match falls back to existing RAG",
+          "requiredTestType": "unit",
+          "file": "internal/api/search_test.go",
+          "linkedTests": ["TestSearchHandler_NoKnowledgeMatch_SemanticFallback"],
+          "evidenceRefs": ["scopes.md#scope-3-dod-fallback"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-09",
+          "scenario": "Knowledge API lists concept pages",
+          "requiredTestType": "unit",
+          "file": "internal/api/knowledge_test.go",
+          "linkedTests": ["TestKnowledgeConceptsHandler"],
+          "evidenceRefs": ["scopes.md#scope-3-dod-endpoints"],
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "04-cross-source-connections",
+      "scopeName": "Cross-Source Connection Detection",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-10",
+          "scenario": "Cross-source connection detected at ingest time",
+          "requiredTestType": "unit",
+          "file": "internal/pipeline/synthesis_subscriber_test.go",
+          "linkedTests": ["TestCheckCrossSource_MultipleSourceTypes"],
+          "evidenceRefs": ["scopes.md#scope-4-dod-crosssource"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-11",
+          "scenario": "Surface-level overlap is discarded",
+          "requiredTestType": "unit",
+          "file": "ml/tests/test_synthesis.py",
+          "linkedTests": ["test_crosssource_surface_level_discarded"],
+          "evidenceRefs": ["scopes.md#scope-4-dod-discard"],
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "05-knowledge-lint-scheduler",
+      "scopeName": "Knowledge Lint & Scheduler",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-12",
+          "scenario": "Lint detects orphan concepts",
+          "requiredTestType": "unit",
+          "file": "internal/knowledge/lint_test.go",
+          "linkedTests": ["TestCheckOrphanConcepts"],
+          "evidenceRefs": ["scopes.md#scope-5-dod-lint"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-13",
+          "scenario": "Lint detects contradictions",
+          "requiredTestType": "unit",
+          "file": "internal/knowledge/lint_test.go",
+          "linkedTests": ["TestCheckContradictions"],
+          "evidenceRefs": ["scopes.md#scope-5-dod-lint"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-14",
+          "scenario": "Lint retries failed synthesis",
+          "requiredTestType": "unit",
+          "file": "internal/knowledge/lint_test.go",
+          "linkedTests": ["TestRetrySynthesisBacklog"],
+          "evidenceRefs": ["scopes.md#scope-5-dod-retry"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-15",
+          "scenario": "Lint abandons after max retries",
+          "requiredTestType": "unit",
+          "file": "internal/knowledge/lint_test.go",
+          "linkedTests": ["TestRetrySynthesisBacklog_Abandon"],
+          "evidenceRefs": ["scopes.md#scope-5-dod-abandon"],
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "06-web-ui-knowledge-pages",
+      "scopeName": "Web UI Knowledge Pages",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-16",
+          "scenario": "Knowledge dashboard shows stats and activity",
+          "requiredTestType": "unit",
+          "file": "internal/web/handler_test.go",
+          "linkedTests": ["TestKnowledgeDashboard_NilStore"],
+          "evidenceRefs": ["scopes.md#scope-6-dod-dashboard"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-17",
+          "scenario": "Search results show knowledge provenance",
+          "requiredTestType": "unit",
+          "file": "internal/web/handler_test.go",
+          "linkedTests": ["TestSearchResults_KnowledgeMatchTemplate"],
+          "evidenceRefs": ["scopes.md#scope-6-dod-provenance"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-18",
+          "scenario": "Concept detail page shows claims with citations",
+          "requiredTestType": "unit",
+          "file": "internal/web/handler_test.go",
+          "linkedTests": ["TestConceptDetail_NilStore"],
+          "evidenceRefs": ["scopes.md#scope-6-dod-detail"],
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "07-telegram-commands",
+      "scopeName": "Telegram Knowledge Commands",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-19",
+          "scenario": "/concept lists top concepts",
+          "requiredTestType": "unit",
+          "file": "internal/telegram/knowledge_test.go",
+          "linkedTests": ["TestHandleConcept_NoArgs"],
+          "evidenceRefs": ["scopes.md#scope-7-dod-concept"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-20",
+          "scenario": "/concept <name> shows concept detail",
+          "requiredTestType": "unit",
+          "file": "internal/telegram/knowledge_test.go",
+          "linkedTests": ["TestHandleConcept_WithName"],
+          "evidenceRefs": ["scopes.md#scope-7-dod-concept-detail"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-21",
+          "scenario": "/find enhanced with knowledge provenance",
+          "requiredTestType": "unit",
+          "file": "internal/telegram/bot_test.go",
+          "linkedTests": ["TestHandleFind_KnowledgeMatch"],
+          "evidenceRefs": ["scopes.md#scope-7-dod-find"],
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "08-digest-integration-health",
+      "scopeName": "Digest Integration & Health",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-22",
+          "scenario": "Lint findings surfaced in daily digest",
+          "requiredTestType": "unit",
+          "file": "internal/digest/generator_test.go",
+          "linkedTests": ["TestSCN02523_DigestContextIncludesKnowledgeHealth"],
+          "evidenceRefs": ["scopes.md#scope-8-dod-digest"],
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-23",
+          "scenario": "Health endpoint includes knowledge stats",
+          "requiredTestType": "unit",
+          "file": "internal/api/health_test.go",
+          "linkedTests": ["TestSCN02524_HealthIncludesKnowledgeSection"],
+          "evidenceRefs": ["scopes.md#scope-8-dod-health"],
+          "liveSystem": false
+        }
+      ]
+    }
+  ]
+}
+          "type": "unit",
+          "file": "internal/pipeline/synthesis_subscriber_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-05",
+          "scenario": "Incremental concept page update preserves existing knowledge",
+          "type": "unit",
+          "file": "internal/knowledge/upsert_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-06",
+          "scenario": "Synthesis failure does not block ingestion",
+          "type": "unit",
+          "file": "internal/pipeline/synthesis_subscriber_test.go",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "03-knowledge-query-api",
+      "scopeName": "Knowledge-First Query & Search API",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-07",
+          "scenario": "Knowledge query returns pre-synthesized answer",
+          "type": "unit",
+          "file": "internal/api/search_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-08",
+          "scenario": "No concept match falls back to existing RAG",
+          "type": "unit",
+          "file": "internal/api/search_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-09",
+          "scenario": "Knowledge API lists concept pages",
+          "type": "unit",
+          "file": "internal/api/knowledge_test.go",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "04-cross-source-connections",
+      "scopeName": "Cross-Source Connection Detection",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-10",
+          "scenario": "Cross-source connection detected at ingest time",
+          "type": "unit",
+          "file": "internal/pipeline/synthesis_subscriber_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-11",
+          "scenario": "Surface-level overlap is discarded",
+          "type": "unit",
+          "file": "ml/tests/test_synthesis.py",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "05-knowledge-lint-scheduler",
+      "scopeName": "Knowledge Lint & Scheduler",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-12",
+          "scenario": "Lint detects orphan concepts",
+          "type": "unit",
+          "file": "internal/knowledge/lint_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-13",
+          "scenario": "Lint detects contradictions",
+          "type": "unit",
+          "file": "internal/knowledge/lint_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-14",
+          "scenario": "Lint retries failed synthesis",
+          "type": "unit",
+          "file": "internal/knowledge/lint_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-15",
+          "scenario": "Lint abandons after max retries",
+          "type": "unit",
+          "file": "internal/knowledge/lint_test.go",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "06-web-ui-knowledge-pages",
+      "scopeName": "Web UI Knowledge Pages",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-16",
+          "scenario": "Knowledge dashboard shows stats and activity",
+          "type": "unit",
+          "file": "internal/web/handler_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-17",
+          "scenario": "Search results show knowledge provenance",
+          "type": "unit",
+          "file": "internal/web/handler_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-18",
+          "scenario": "Concept detail page shows claims with citations",
+          "type": "unit",
+          "file": "internal/web/handler_test.go",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "07-telegram-commands",
+      "scopeName": "Telegram Knowledge Commands",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-19",
+          "scenario": "/concept lists top concepts",
+          "type": "unit",
+          "file": "internal/telegram/knowledge_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-20",
+          "scenario": "/concept <name> shows concept detail",
+          "type": "unit",
+          "file": "internal/telegram/knowledge_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-21",
+          "scenario": "/find enhanced with knowledge provenance",
+          "type": "unit",
+          "file": "internal/telegram/bot_test.go",
+          "liveSystem": false
+        }
+      ]
+    },
+    {
+      "scopeId": "08-digest-integration-health",
+      "scopeName": "Digest Integration & Health",
+      "tests": [
+        {
+          "scenarioId": "SCN-025-22",
+          "scenario": "Lint findings surfaced in daily digest",
+          "type": "unit",
+          "file": "internal/digest/generator_test.go",
+          "liveSystem": false
+        },
+        {
+          "scenarioId": "SCN-025-23",
+          "scenario": "Health endpoint includes knowledge stats",
+          "type": "unit",
+          "file": "internal/api/health_test.go",
+          "liveSystem": false
+        }
+      ]
+    }
+  ]
+}
