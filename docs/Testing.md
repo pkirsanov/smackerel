@@ -6,9 +6,9 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 
 | Language | Packages/Files | Test Count | Type |
 |----------|---------------|------------|------|
-| Go | 30 packages | 450+ test functions | Unit (behavioral + structural) |
-| Python | 2 test files | 20+ tests | Unit |
-| Shell (E2E) | 57 scripts | End-to-end | Live-stack |
+| Go | 33 packages | 2850+ test functions | Unit (behavioral + structural) |
+| Python | 9 test files | 90+ tests | Unit |
+| Shell (E2E) | 59 scripts | End-to-end | Live-stack |
 | Shell (Stress) | 2 scripts | Stress | Live-stack |
 
 ### Key Test Areas
@@ -18,7 +18,8 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 - **Connector tests**: IMAP tier assignment, CalDAV event parsing, YouTube engagement tiers, RSS/Atom parsing, bookmarks parsing, browser dwell time, Keep takeout parsing + label mapping + qualifiers, Hospitable PAT auth + pagination + rate-limit retry + multi-resource sync + cursor management + sender classification + rating precision, Discord channel monitoring + token validation + message classification, Twitter archive parsing + thread reconstruction + entity extraction, Weather location config + coordinate rounding + WMO code mapping, Government Alerts haversine proximity + magnitude filtering + deduplication, Financial Markets watchlist parsing + rate limiting + alert threshold
 - **Telegram tests**: share capture, forward metadata, conversation assembly (timer/overflow/concurrent), media group assembly
 - **Intelligence tests**: synthesis insights, alert lifecycle, resurfacing scoring
-- **Pipeline tests**: dedup, processing, embedding format, tier assignment
+- **Knowledge tests**: concept store CRUD, entity profiles, contract validation, lint auditing (stale/orphan/contradiction detection), upsert conflict resolution
+- **Pipeline tests**: dedup, processing, embedding format, tier assignment, synthesis subscriber
 
 ## Current Validation Surface
 
@@ -51,7 +52,7 @@ The current CLI-owned runtime surface exposes these categories today:
 
 ### Go Package Coverage
 
-All 30 Go packages have tests:
+All 33 Go packages have tests:
 
 - `internal/api` — capture, search, health, digest, recent handlers
 - `internal/auth` — OAuth2 provider, token exchange
@@ -76,6 +77,7 @@ All 30 Go packages have tests:
 - `internal/extract` — readability, SSRF protection, content hashing
 - `internal/graph` — similarity, entity, topic, temporal linking
 - `internal/intelligence` — synthesis, alerts, commitments, resurfacing
+- `internal/knowledge` — concept store, entity profiles, contract validation, lint auditing, upsert conflict resolution
 - `internal/nats` — JetStream client, stream management
 - `internal/pipeline` — processing, dedup, tier assignment
 - `internal/scheduler` — cron scheduling

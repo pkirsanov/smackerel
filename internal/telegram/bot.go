@@ -26,11 +26,13 @@ type Bot struct {
 	digestURL      string // internal API URL for digest
 	recentURL      string // internal API URL for recent
 	healthURL      string // internal API URL for health check
+	knowledgeURL   string // internal API URL for knowledge endpoints
 	authToken      string
 	httpClient     *http.Client
 	assembler      *ConversationAssembler
 	mediaAssembler *MediaGroupAssembler
-	done           chan struct{} // closed when the update goroutine exits
+	done           chan struct{}                   // closed when the update goroutine exits
+	replyFunc      func(chatID int64, text string) // test hook: overrides reply()
 }
 
 // Config holds Telegram bot configuration.
@@ -80,6 +82,7 @@ func NewBot(cfg Config) (*Bot, error) {
 		digestURL:    baseURL + "/api/digest",
 		recentURL:    baseURL + "/api/recent",
 		healthURL:    baseURL + "/api/health",
+		knowledgeURL: baseURL + "/api/knowledge",
 		authToken:    cfg.AuthToken,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
 		done:         make(chan struct{}),
@@ -110,6 +113,9 @@ func (b *Bot) Start(ctx context.Context) {
 	// Register commands so they appear in Telegram's autocomplete menu
 	commands := tgbotapi.NewSetMyCommands(
 		tgbotapi.BotCommand{Command: "find", Description: "Search your knowledge"},
+		tgbotapi.BotCommand{Command: "concept", Description: "Browse concept pages"},
+		tgbotapi.BotCommand{Command: "person", Description: "Browse entity profiles"},
+		tgbotapi.BotCommand{Command: "lint", Description: "Knowledge quality report"},
 		tgbotapi.BotCommand{Command: "digest", Description: "Get today's digest"},
 		tgbotapi.BotCommand{Command: "done", Description: "Finalize conversation assembly"},
 		tgbotapi.BotCommand{Command: "status", Description: "System status"},
@@ -184,6 +190,12 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		switch msg.Command() {
 		case "find":
 			b.handleFind(ctx, msg, msg.CommandArguments())
+		case "concept":
+			b.handleConcept(ctx, msg, msg.CommandArguments())
+		case "person":
+			b.handlePerson(ctx, msg, msg.CommandArguments())
+		case "lint":
+			b.handleLint(ctx, msg)
 		case "digest":
 			b.handleDigest(ctx, msg)
 		case "status":
@@ -195,7 +207,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		case "start", "help":
 			b.handleHelp(ctx, msg)
 		default:
-			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /digest, /done, /status, or /recent")
+			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /concept, /person, /lint, /digest, /done, /status, or /recent")
 		}
 		return
 	}
@@ -322,8 +334,38 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 		return
 	}
 
+	var lines []string
+
+	// Check for knowledge layer match and prepend if present
+	if km, ok := results["knowledge_match"]; ok && km != nil {
+		if kmMap, ok := km.(map[string]interface{}); ok {
+			var match knowledgeMatchResponse
+			match.Title, _ = kmMap["title"].(string)
+			match.Summary, _ = kmMap["summary"].(string)
+			if cc, ok := kmMap["citation_count"].(float64); ok {
+				match.CitationCount = int(cc)
+			}
+			if st, ok := kmMap["source_types"].([]interface{}); ok {
+				for _, s := range st {
+					if sv, ok := s.(string); ok {
+						match.SourceTypes = append(match.SourceTypes, sv)
+					}
+				}
+			}
+			if match.Title != "" {
+				lines = append(lines, formatKnowledgeMatch(match))
+				lines = append(lines, "")
+			}
+		}
+	}
+
 	resultList, ok := results["results"].([]interface{})
 	if !ok || len(resultList) == 0 {
+		if len(lines) > 0 {
+			// We have knowledge match but no vector results
+			b.reply(msg.Chat.ID, strings.Join(lines, "\n"))
+			return
+		}
 		if m, ok := results["message"].(string); ok && m != "" {
 			b.reply(msg.Chat.ID, "> "+m)
 		} else {
@@ -332,7 +374,6 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 		return
 	}
 
-	var lines []string
 	for i, r := range resultList {
 		if i >= 3 {
 			break
@@ -483,6 +524,9 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 - Send a voice note to transcribe and save
 - Forward messages to assemble conversations
 - /find <query> - Search your knowledge
+- /concept - Browse concept pages
+- /person - Browse entity profiles
+- /lint - Knowledge quality report
 - /digest - Get today's digest
 - /done - Finalize conversation assembly
 - /status - System status
@@ -605,7 +649,12 @@ func (b *Bot) callSearch(ctx context.Context, query string) (map[string]interfac
 }
 
 // reply sends a text message to a chat.
+// If replyFunc is set (for testing), it delegates to that function instead.
 func (b *Bot) reply(chatID int64, text string) {
+	if b.replyFunc != nil {
+		b.replyFunc(chatID, text)
+		return
+	}
 	msg := tgbotapi.NewMessage(chatID, text)
 	if _, err := b.api.Send(msg); err != nil {
 		slog.Error("telegram send failed", "chat_id", chatID, "error", err)

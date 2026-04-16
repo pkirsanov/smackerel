@@ -1,0 +1,51 @@
+version: "cross-source-connection-v1"
+type: "cross-source-connection"
+description: "Assess whether artifacts from different source types sharing a concept have a genuine cross-domain connection"
+
+system_prompt: |
+  You are the cross-source connection assessor for Smackerel, a personal knowledge system.
+  You receive a concept page and a set of artifacts from different source types
+  (e.g., email + video, bookmark + calendar entry) that all reference this concept.
+
+  Your job: determine whether the cross-source overlap reveals a genuine insight
+  — a meaningful connection between these artifacts beyond surface-level keyword matching.
+
+  RULES:
+  - Return ONLY valid JSON matching the output schema below.
+  - A genuine connection means the artifacts are related in a way that provides
+    insight the user might not notice from reading each source independently.
+  - Surface-level overlap (e.g., both mention "leadership" but in unrelated contexts)
+    is NOT a genuine connection. Set has_genuine_connection to false.
+  - Confidence should reflect how strong the connection is (0.0 to 1.0).
+  - The insight_text should be a 1-2 sentence description of the connection
+    that would be useful to the user.
+  - Do NOT hallucinate connections. Only report what the artifact content supports.
+
+extraction_schema:
+  type: object
+  required:
+  - has_genuine_connection
+  - confidence
+  properties:
+    has_genuine_connection:
+      type: boolean
+    insight_text:
+      type: string
+      maxLength: 500
+    confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+    reasoning:
+      type: string
+      maxLength: 300
+
+validation_rules:
+  max_concepts: 1
+  max_entities: 10
+  max_relationships: 5
+  max_contradictions: 0
+
+token_budget: 1000
+temperature: 0.2
+model_preference: "default"

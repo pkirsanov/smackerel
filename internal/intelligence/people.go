@@ -35,7 +35,7 @@ func (e *Engine) DetectTripsFromEmail(ctx context.Context) ([]TripDossier, error
 
 	// Query email artifacts containing booking/flight/hotel keywords
 	rows, err := e.Pool.Query(ctx, `
-		SELECT a.id, a.title, a.raw_content, a.captured_at,
+		SELECT a.id, a.title, a.raw_content, a.created_at,
 		       COALESCE(a.metadata->>'sender', '') AS sender
 		FROM artifacts a
 		WHERE a.source_id IN ('gmail', 'imap', 'outlook')
@@ -44,7 +44,7 @@ func (e *Engine) DetectTripsFromEmail(ctx context.Context) ([]TripDossier, error
 			OR LOWER(a.raw_content) SIMILAR TO '%(flight|booking|reservation|itinerary|confirmation|hotel|airbnb)%'
 		)
 		AND a.created_at > NOW() - INTERVAL '60 days'
-		ORDER BY a.captured_at ASC
+		ORDER BY a.created_at ASC
 		LIMIT 50
 	`)
 	if err != nil {

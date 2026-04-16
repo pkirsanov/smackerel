@@ -37,11 +37,23 @@ type SearchFilters struct {
 
 // SearchResponse is the response for POST /api/search.
 type SearchResponse struct {
-	Results         []SearchResult `json:"results"`
-	TotalCandidates int            `json:"total_candidates"`
-	SearchTimeMs    int64          `json:"search_time_ms"`
-	SearchMode      string         `json:"search_mode"`
-	Message         string         `json:"message,omitempty"`
+	Results         []SearchResult        `json:"results"`
+	TotalCandidates int                   `json:"total_candidates"`
+	SearchTimeMs    int64                 `json:"search_time_ms"`
+	SearchMode      string                `json:"search_mode"`
+	Message         string                `json:"message,omitempty"`
+	KnowledgeMatch  *ConceptMatchResponse `json:"knowledge_match,omitempty"`
+}
+
+// ConceptMatchResponse is the knowledge layer match in a search response.
+type ConceptMatchResponse struct {
+	ConceptID     string   `json:"concept_id"`
+	Title         string   `json:"title"`
+	Summary       string   `json:"summary"`
+	CitationCount int      `json:"citation_count"`
+	SourceTypes   []string `json:"source_types"`
+	UpdatedAt     string   `json:"updated_at"`
+	MatchScore    float64  `json:"match_score"`
 }
 
 // SearchResult is a single search result.
@@ -104,6 +116,25 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 
+	// Step 0: Knowledge-layer-first — check for pre-synthesized concept page match
+	var knowledgeMatch *ConceptMatchResponse
+	if d.KnowledgeStore != nil && d.KnowledgeConceptSearchThreshold > 0 {
+		match, err := d.KnowledgeStore.SearchConcepts(r.Context(), req.Query, d.KnowledgeConceptSearchThreshold)
+		if err != nil {
+			slog.Warn("knowledge concept search failed", "error", err, "query", req.Query)
+		} else if match != nil {
+			knowledgeMatch = &ConceptMatchResponse{
+				ConceptID:     match.ConceptID,
+				Title:         match.Title,
+				Summary:       match.Summary,
+				CitationCount: match.CitationCount,
+				SourceTypes:   match.SourceTypes,
+				UpdatedAt:     match.UpdatedAt.Format(time.RFC3339),
+				MatchScore:    match.MatchScore,
+			}
+		}
+	}
+
 	// Get the search engine from dependencies
 	if d.SearchEngine == nil {
 		writeError(w, http.StatusServiceUnavailable, "ML_UNAVAILABLE", "Search sidecar is not responding")
@@ -117,6 +148,11 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Override search_mode when knowledge match is present
+	if knowledgeMatch != nil {
+		searchMode = "knowledge_first"
+	}
+
 	elapsed := time.Since(start).Milliseconds()
 
 	resp := SearchResponse{
@@ -124,9 +160,10 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		TotalCandidates: totalCandidates,
 		SearchTimeMs:    elapsed,
 		SearchMode:      searchMode,
+		KnowledgeMatch:  knowledgeMatch,
 	}
 
-	if len(results) == 0 {
+	if len(results) == 0 && knowledgeMatch == nil {
 		resp.Message = "I don't have anything about that yet"
 	}
 

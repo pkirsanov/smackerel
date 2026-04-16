@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
+	"github.com/smackerel/smackerel/internal/knowledge"
 )
 
 // mockDigestGen implements DigestGenerator for testing.
@@ -1588,5 +1589,118 @@ func TestIsMLHealthy_CancelledContext_DoesNotTaintCache(t *testing.T) {
 	// Verify the cache was set to healthy
 	if !engine.mlHealthy.Load() {
 		t.Error("ML health cache should be true after successful probe with cancelled context")
+	}
+}
+
+// === T3-03: Search with KnowledgeStore → knowledge_match populated ===
+
+func TestSearchHandler_KnowledgeMatchPopulated(t *testing.T) {
+	se := &mockSearchEngine{
+		results: []SearchResult{
+			{ArtifactID: "art-1", Title: "Pricing Article", Relevance: "high"},
+		},
+		total: 1,
+		mode:  "semantic",
+	}
+
+	ks := &mockKnowledgeStore{
+		searchResult: &knowledge.ConceptMatch{
+			ConceptID:     "concept-1",
+			Title:         "Negotiation",
+			Summary:       "Art of negotiation",
+			CitationCount: 6,
+			SourceTypes:   []string{"email", "video"},
+			UpdatedAt:     time.Date(2026, 4, 15, 12, 0, 0, 0, time.UTC),
+			MatchScore:    0.72,
+		},
+	}
+
+	deps := &Dependencies{
+		DB:                              &mockDB{healthy: true},
+		NATS:                            &mockNATS{healthy: true},
+		StartTime:                       time.Now(),
+		SearchEngine:                    se,
+		KnowledgeStore:                  ks,
+		KnowledgeConceptSearchThreshold: 0.4,
+	}
+
+	body := `{"query": "what do I know about negotiation?"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp SearchResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if resp.KnowledgeMatch == nil {
+		t.Fatal("expected knowledge_match to be populated")
+	}
+	if resp.KnowledgeMatch.ConceptID != "concept-1" {
+		t.Errorf("expected concept_id=concept-1, got %q", resp.KnowledgeMatch.ConceptID)
+	}
+	if resp.KnowledgeMatch.Title != "Negotiation" {
+		t.Errorf("expected title=Negotiation, got %q", resp.KnowledgeMatch.Title)
+	}
+	if resp.SearchMode != "knowledge_first" {
+		t.Errorf("expected search_mode=knowledge_first, got %q", resp.SearchMode)
+	}
+	if resp.KnowledgeMatch.CitationCount != 6 {
+		t.Errorf("expected citation_count=6, got %d", resp.KnowledgeMatch.CitationCount)
+	}
+}
+
+// === T3-04: Search no concept match → knowledge_match nil, semantic mode ===
+
+func TestSearchHandler_NoKnowledgeMatch_SemanticFallback(t *testing.T) {
+	se := &mockSearchEngine{
+		results: []SearchResult{
+			{ArtifactID: "art-1", Title: "Quantum Article", Relevance: "medium"},
+		},
+		total: 1,
+		mode:  "semantic",
+	}
+
+	ks := &mockKnowledgeStore{
+		searchResult: nil, // No concept match
+	}
+
+	deps := &Dependencies{
+		DB:                              &mockDB{healthy: true},
+		NATS:                            &mockNATS{healthy: true},
+		StartTime:                       time.Now(),
+		SearchEngine:                    se,
+		KnowledgeStore:                  ks,
+		KnowledgeConceptSearchThreshold: 0.4,
+	}
+
+	body := `{"query": "quantum computing"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp SearchResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if resp.KnowledgeMatch != nil {
+		t.Error("expected knowledge_match to be nil when no concept matches")
+	}
+	if resp.SearchMode != "semantic" {
+		t.Errorf("expected search_mode=semantic, got %q", resp.SearchMode)
 	}
 }

@@ -123,13 +123,13 @@ func (pd *PatternDetector) LinkTemporalSpatial(ctx context.Context, activities [
 
 		// Query artifacts that overlap the time window.
 		rows, err := pd.pool.Query(ctx, `
-			SELECT id, captured_at,
+			SELECT id, created_at,
 				COALESCE((metadata->>'lat')::double precision, 0) AS lat,
 				COALESCE((metadata->>'lng')::double precision, 0) AS lng
 			FROM artifacts
 			WHERE source_id != 'google-maps-timeline'
-				AND captured_at >= $1
-				AND captured_at <= $2`,
+				AND created_at >= $1
+				AND created_at <= $2`,
 			windowStart, windowEnd,
 		)
 		if err != nil {

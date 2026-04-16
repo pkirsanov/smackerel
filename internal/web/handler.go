@@ -18,6 +18,7 @@ import (
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/connector/bookmarks"
 	"github.com/smackerel/smackerel/internal/graph"
+	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
@@ -28,12 +29,13 @@ type SyncTrigger interface {
 
 // Handler serves the web UI pages.
 type Handler struct {
-	Pool         *pgxpool.Pool
-	NATS         *smacknats.Client
-	Templates    *template.Template
-	StartTime    time.Time
-	SearchEngine *api.SearchEngine
-	Supervisor   SyncTrigger
+	Pool           *pgxpool.Pool
+	NATS           *smacknats.Client
+	Templates      *template.Template
+	StartTime      time.Time
+	SearchEngine   *api.SearchEngine
+	Supervisor     SyncTrigger
+	KnowledgeStore *knowledge.KnowledgeStore
 }
 
 // NewHandler creates a web UI handler with embedded templates.
@@ -45,8 +47,20 @@ func NewHandler(pool *pgxpool.Pool, nc *smacknats.Client, startTime time.Time) *
 			}
 			return s[:n] + "..."
 		},
-		"timeAgo": func(t time.Time) string {
-			d := time.Since(t)
+		"timeAgo": func(t interface{}) string {
+			var ts time.Time
+			switch v := t.(type) {
+			case time.Time:
+				ts = v
+			case *time.Time:
+				if v == nil {
+					return "never"
+				}
+				ts = *v
+			default:
+				return "unknown"
+			}
+			d := time.Since(ts)
 			switch {
 			case d < time.Minute:
 				return "just now"
@@ -141,20 +155,29 @@ func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(viewResults) == 0 {
-		if err := h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
+		templateData := map[string]interface{}{
 			"Results": nil,
 			"Empty":   "No results found. Try a different query.",
-		}); err != nil {
+		}
+		if knowledgeMatch := h.searchKnowledgeMatch(r.Context(), query); knowledgeMatch != nil {
+			templateData["KnowledgeMatch"] = knowledgeMatch
+			delete(templateData, "Empty")
+		}
+		if err := h.Templates.ExecuteTemplate(w, "results-partial.html", templateData); err != nil {
 			slog.Error("template error", "error", err)
 			http.Error(w, "Internal error", 500)
 		}
 		return
 	}
 
-	if err := h.Templates.ExecuteTemplate(w, "results-partial.html", map[string]interface{}{
+	templateData := map[string]interface{}{
 		"Results": viewResults,
 		"Query":   query,
-	}); err != nil {
+	}
+	if knowledgeMatch := h.searchKnowledgeMatch(r.Context(), query); knowledgeMatch != nil {
+		templateData["KnowledgeMatch"] = knowledgeMatch
+	}
+	if err := h.Templates.ExecuteTemplate(w, "results-partial.html", templateData); err != nil {
 		slog.Error("template error", "error", err)
 		http.Error(w, "Internal error", 500)
 	}
@@ -387,7 +410,7 @@ func (h *Handler) StatusPage(w http.ResponseWriter, r *http.Request) {
 
 	uptime := time.Since(h.StartTime)
 
-	h.Templates.ExecuteTemplate(w, "status.html", map[string]interface{}{
+	data := map[string]interface{}{
 		"Title":         "System Status",
 		"ArtifactCount": artifactCount,
 		"TopicCount":    topicCount,
@@ -395,7 +418,18 @@ func (h *Handler) StatusPage(w http.ResponseWriter, r *http.Request) {
 		"Uptime":        fmt.Sprintf("%dh %dm", int(uptime.Hours()), int(uptime.Minutes())%60),
 		"DBHealthy":     h.Pool.Ping(r.Context()) == nil,
 		"NATSHealthy":   h.NATS != nil && h.NATS.Healthy(),
-	})
+	}
+
+	if h.KnowledgeStore != nil {
+		stats, err := h.KnowledgeStore.GetStats(r.Context())
+		if err != nil {
+			slog.Warn("knowledge stats fetch failed", "error", err)
+		} else {
+			data["KnowledgeStats"] = stats
+		}
+	}
+
+	h.Templates.ExecuteTemplate(w, "status.html", data)
 }
 
 // SyncConnectorHandler handles POST /settings/connectors/{id}/sync — triggers immediate sync.
@@ -462,5 +496,325 @@ func (h *Handler) BookmarkUploadHandler(w http.ResponseWriter, r *http.Request) 
 	h.Templates.ExecuteTemplate(w, "bookmark-import-result.html", map[string]interface{}{
 		"Title":    "Bookmark Import",
 		"Imported": count,
+	})
+}
+
+// searchKnowledgeMatch searches the knowledge layer for a concept match.
+// Returns nil if KnowledgeStore is not configured or no match is found.
+func (h *Handler) searchKnowledgeMatch(ctx context.Context, query string) *struct {
+	ConceptID     string
+	Title         string
+	Summary       string
+	CitationCount int
+	UpdatedAt     time.Time
+} {
+	if h.KnowledgeStore == nil {
+		return nil
+	}
+	match, err := h.KnowledgeStore.SearchConcepts(ctx, query, 0.3)
+	if err != nil {
+		slog.Warn("web knowledge search failed", "error", err)
+		return nil
+	}
+	if match == nil {
+		return nil
+	}
+	return &struct {
+		ConceptID     string
+		Title         string
+		Summary       string
+		CitationCount int
+		UpdatedAt     time.Time
+	}{
+		ConceptID:     match.ConceptID,
+		Title:         match.Title,
+		Summary:       match.Summary,
+		CitationCount: match.CitationCount,
+		UpdatedAt:     match.UpdatedAt,
+	}
+}
+
+// KnowledgeDashboard handles GET /knowledge — knowledge layer dashboard.
+func (h *Handler) KnowledgeDashboard(w http.ResponseWriter, r *http.Request) {
+	if h.KnowledgeStore == nil {
+		h.Templates.ExecuteTemplate(w, "knowledge-dashboard.html", map[string]interface{}{
+			"Title": "Knowledge Layer",
+			"Empty": "Knowledge layer is not enabled.",
+		})
+		return
+	}
+
+	stats, err := h.KnowledgeStore.GetStats(r.Context())
+	if err != nil {
+		slog.Error("knowledge stats failed", "error", err)
+		h.Templates.ExecuteTemplate(w, "knowledge-dashboard.html", map[string]interface{}{
+			"Title": "Knowledge Layer",
+			"Empty": "Unable to load knowledge dashboard. Check system status.",
+		})
+		return
+	}
+
+	if stats.ConceptCount == 0 && stats.EntityCount == 0 {
+		h.Templates.ExecuteTemplate(w, "knowledge-dashboard.html", map[string]interface{}{
+			"Title": "Knowledge Layer",
+			"Empty": "No knowledge synthesized yet. Connect sources and ingest content to start building your knowledge layer.",
+		})
+		return
+	}
+
+	// Fetch recent concepts for activity section
+	recent, _, _ := h.KnowledgeStore.ListConceptsFiltered(r.Context(), "", "updated", 5, 0)
+
+	h.Templates.ExecuteTemplate(w, "knowledge-dashboard.html", map[string]interface{}{
+		"Title":          "Knowledge Layer",
+		"Stats":          stats,
+		"RecentConcepts": recent,
+	})
+}
+
+// ConceptsList handles GET /knowledge/concepts — searchable concept list.
+func (h *Handler) ConceptsList(w http.ResponseWriter, r *http.Request) {
+	if h.KnowledgeStore == nil {
+		h.Templates.ExecuteTemplate(w, "concepts-list.html", map[string]interface{}{
+			"Title": "Concept Pages", "Total": 0, "Sort": "updated",
+		})
+		return
+	}
+
+	q := r.URL.Query().Get("q")
+	if len(q) > 1000 {
+		q = q[:1000]
+	}
+	sort := r.URL.Query().Get("sort")
+	if sort == "" {
+		sort = "updated"
+	}
+
+	concepts, total, err := h.KnowledgeStore.ListConceptsFiltered(r.Context(), q, sort, 20, 0)
+	if err != nil {
+		slog.Error("list concepts failed", "error", err)
+	}
+
+	h.Templates.ExecuteTemplate(w, "concepts-list.html", map[string]interface{}{
+		"Title":    "Concept Pages",
+		"Concepts": concepts,
+		"Total":    total,
+		"Sort":     sort,
+		"Query":    q,
+	})
+}
+
+// ConceptDetail handles GET /knowledge/concepts/{id} — concept page detail.
+func (h *Handler) ConceptDetail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Redirect(w, r, "/knowledge/concepts", http.StatusSeeOther)
+		return
+	}
+
+	if h.KnowledgeStore == nil {
+		http.Error(w, "Knowledge layer not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	concept, err := h.KnowledgeStore.GetConceptByID(r.Context(), id)
+	if err != nil || concept == nil {
+		http.Error(w, "Concept not found", http.StatusNotFound)
+		return
+	}
+
+	// Parse claims from JSON
+	var claims []knowledge.Claim
+	if concept.Claims != nil {
+		json.Unmarshal(concept.Claims, &claims)
+	}
+
+	// Fetch related concepts
+	var relatedConcepts []*knowledge.ConceptPage
+	for _, relID := range concept.RelatedConceptIDs {
+		rel, err := h.KnowledgeStore.GetConceptByID(r.Context(), relID)
+		if err == nil && rel != nil {
+			relatedConcepts = append(relatedConcepts, rel)
+		}
+	}
+
+	// Fetch connected entities — entities that reference this concept
+	var entities []*knowledge.EntityProfile
+	allEntities, _, _ := h.KnowledgeStore.ListEntitiesFiltered(r.Context(), "", "updated", 100, 0)
+	for _, e := range allEntities {
+		for _, cid := range e.RelatedConceptIDs {
+			if cid == id {
+				entities = append(entities, e)
+				break
+			}
+		}
+	}
+
+	h.Templates.ExecuteTemplate(w, "concept-detail.html", map[string]interface{}{
+		"Title":           concept.Title,
+		"Concept":         concept,
+		"Claims":          claims,
+		"RelatedConcepts": relatedConcepts,
+		"Entities":        entities,
+	})
+}
+
+// EntitiesList handles GET /knowledge/entities — searchable entity list.
+func (h *Handler) EntitiesList(w http.ResponseWriter, r *http.Request) {
+	if h.KnowledgeStore == nil {
+		h.Templates.ExecuteTemplate(w, "entities-list.html", map[string]interface{}{
+			"Title": "Entity Profiles", "Total": 0, "Sort": "updated",
+		})
+		return
+	}
+
+	q := r.URL.Query().Get("q")
+	if len(q) > 1000 {
+		q = q[:1000]
+	}
+	sort := r.URL.Query().Get("sort")
+	if sort == "" {
+		sort = "updated"
+	}
+
+	entities, total, err := h.KnowledgeStore.ListEntitiesFiltered(r.Context(), q, sort, 20, 0)
+	if err != nil {
+		slog.Error("list entities failed", "error", err)
+	}
+
+	h.Templates.ExecuteTemplate(w, "entities-list.html", map[string]interface{}{
+		"Title":    "Entity Profiles",
+		"Entities": entities,
+		"Total":    total,
+		"Sort":     sort,
+		"Query":    q,
+	})
+}
+
+// EntityDetail handles GET /knowledge/entities/{id} — entity profile detail.
+func (h *Handler) EntityDetail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Redirect(w, r, "/knowledge/entities", http.StatusSeeOther)
+		return
+	}
+
+	if h.KnowledgeStore == nil {
+		http.Error(w, "Knowledge layer not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	entity, err := h.KnowledgeStore.GetEntityByID(r.Context(), id)
+	if err != nil || entity == nil {
+		http.Error(w, "Entity not found", http.StatusNotFound)
+		return
+	}
+
+	// Parse mentions from JSON
+	var mentions []knowledge.Mention
+	if entity.Mentions != nil {
+		json.Unmarshal(entity.Mentions, &mentions)
+	}
+
+	// Fetch related concepts
+	var relatedConcepts []*knowledge.ConceptPage
+	for _, cid := range entity.RelatedConceptIDs {
+		c, err := h.KnowledgeStore.GetConceptByID(r.Context(), cid)
+		if err == nil && c != nil {
+			relatedConcepts = append(relatedConcepts, c)
+		}
+	}
+
+	h.Templates.ExecuteTemplate(w, "entity-detail.html", map[string]interface{}{
+		"Title":           entity.Name,
+		"Entity":          entity,
+		"Mentions":        mentions,
+		"RelatedConcepts": relatedConcepts,
+	})
+}
+
+// LintReport handles GET /knowledge/lint — lint findings report.
+func (h *Handler) LintReport(w http.ResponseWriter, r *http.Request) {
+	if h.KnowledgeStore == nil {
+		h.Templates.ExecuteTemplate(w, "lint-report.html", map[string]interface{}{
+			"Title": "Knowledge Lint Report",
+		})
+		return
+	}
+
+	report, err := h.KnowledgeStore.GetLatestLintReport(r.Context())
+	if err != nil {
+		slog.Warn("lint report fetch failed", "error", err)
+		h.Templates.ExecuteTemplate(w, "lint-report.html", map[string]interface{}{
+			"Title": "Knowledge Lint Report",
+		})
+		return
+	}
+
+	var findings []knowledge.LintFinding
+	if report.Findings != nil {
+		json.Unmarshal(report.Findings, &findings)
+	}
+	var summary knowledge.LintSummary
+	if report.Summary != nil {
+		json.Unmarshal(report.Summary, &summary)
+	}
+
+	h.Templates.ExecuteTemplate(w, "lint-report.html", map[string]interface{}{
+		"Title":    "Knowledge Lint Report",
+		"Report":   report,
+		"Findings": findings,
+		"Summary":  summary,
+	})
+}
+
+// LintFindingDetail handles GET /knowledge/lint/{id} — individual lint finding detail.
+func (h *Handler) LintFindingDetail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Redirect(w, r, "/knowledge/lint", http.StatusSeeOther)
+		return
+	}
+
+	if h.KnowledgeStore == nil {
+		http.Error(w, "Knowledge layer not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Get the latest lint report and find the specific finding
+	report, err := h.KnowledgeStore.GetLatestLintReport(r.Context())
+	if err != nil {
+		http.Error(w, "Lint report not available", http.StatusNotFound)
+		return
+	}
+
+	var findings []knowledge.LintFinding
+	if report.Findings != nil {
+		json.Unmarshal(report.Findings, &findings)
+	}
+
+	var found *knowledge.LintFinding
+	for i := range findings {
+		if findings[i].TargetID == id {
+			found = &findings[i]
+			break
+		}
+	}
+
+	if found == nil {
+		http.Error(w, "Finding not found", http.StatusNotFound)
+		return
+	}
+
+	// Try to load the associated concept
+	var concept *knowledge.ConceptPage
+	if found.TargetType == "concept" {
+		concept, _ = h.KnowledgeStore.GetConceptByID(r.Context(), found.TargetID)
+	}
+
+	h.Templates.ExecuteTemplate(w, "lint-finding-detail.html", map[string]interface{}{
+		"Title":   found.TargetTitle,
+		"Finding": found,
+		"Concept": concept,
 	})
 }

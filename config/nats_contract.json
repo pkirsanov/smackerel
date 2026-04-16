@@ -137,6 +137,30 @@
       "direction": "core_to_external",
       "stream": "ALERTS",
       "critical": true
+    },
+    "synthesis.extract": {
+      "direction": "core_to_ml",
+      "response": "synthesis.extracted",
+      "stream": "SYNTHESIS",
+      "critical": true
+    },
+    "synthesis.extracted": {
+      "direction": "ml_to_core",
+      "request": "synthesis.extract",
+      "stream": "SYNTHESIS",
+      "critical": false
+    },
+    "synthesis.crosssource": {
+      "direction": "core_to_ml",
+      "response": "synthesis.crosssource.result",
+      "stream": "SYNTHESIS",
+      "critical": false
+    },
+    "synthesis.crosssource.result": {
+      "direction": "ml_to_core",
+      "request": "synthesis.crosssource",
+      "stream": "SYNTHESIS",
+      "critical": false
     }
   },
   "streams": {
@@ -146,6 +170,7 @@
     "KEEP": { "subjects_pattern": "keep.>" },
     "INTELLIGENCE": { "subjects_pattern": "learning.>", "additional_subjects": ["content.>", "monthly.>", "quickref.>", "seasonal.>"] },
     "ALERTS": { "subjects_pattern": "alerts.>" },
+    "SYNTHESIS": { "subjects_pattern": "synthesis.>" },
     "DEADLETTER": { "subjects_pattern": "deadletter.>" }
   },
   "request_response_pairs": [
@@ -159,6 +184,8 @@
     { "request": "content.analyze", "response": "content.analyzed" },
     { "request": "monthly.generate", "response": "monthly.generated" },
     { "request": "quickref.generate", "response": "quickref.generated" },
-    { "request": "seasonal.analyze", "response": "seasonal.analyzed" }
+    { "request": "seasonal.analyze", "response": "seasonal.analyzed" },
+    { "request": "synthesis.extract", "response": "synthesis.extracted" },
+    { "request": "synthesis.crosssource", "response": "synthesis.crosssource.result" }
   ]
 }
