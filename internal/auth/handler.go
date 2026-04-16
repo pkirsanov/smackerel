@@ -169,10 +169,10 @@ func (h *OAuthHandler) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 // StatusHandler returns the connection status of all providers — GET /auth/status
 func (h *OAuthHandler) StatusHandler(w http.ResponseWriter, r *http.Request) {
-	status := make(map[string]interface{})
+	status := make(map[string]any)
 	for name := range h.providers {
 		connected := h.store.HasToken(r.Context(), name)
-		status[name] = map[string]interface{}{
+		status[name] = map[string]any{
 			"connected": connected,
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,16 +19,44 @@ func TestConnectorID(t *testing.T) {
 	}
 }
 
+// testMapsSourceConfig returns a full SourceConfig with all required
+// google-maps-timeline fields matching smackerel.yaml defaults.
+func testMapsSourceConfig(importDir string) map[string]interface{} {
+	return map[string]interface{}{
+		"import_dir":               importDir,
+		"watch_interval":           "5m",
+		"archive_processed":        false,
+		"min_distance_m":           float64(100),
+		"min_duration_min":         float64(2),
+		"location_radius_m":        float64(500),
+		"home_detection":           "frequency",
+		"commute_min_occurrences":  float64(3),
+		"commute_window_days":      float64(14),
+		"commute_weekdays_only":    true,
+		"trip_min_distance_km":     float64(50),
+		"trip_min_overnight_hours": float64(18),
+		"link_time_extend_min":     float64(30),
+		"link_proximity_radius_m":  float64(1000),
+	}
+}
+
+// testMapsSourceConfigWith returns a full SourceConfig with specific overrides applied.
+func testMapsSourceConfigWith(importDir string, overrides map[string]interface{}) map[string]interface{} {
+	sc := testMapsSourceConfig(importDir)
+	for k, v := range overrides {
+		sc[k] = v
+	}
+	return sc
+}
+
 func TestConnectValidConfig(t *testing.T) {
 	dir := t.TempDir()
 	c := New("google-maps-timeline")
 
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir": dir,
-		},
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfig(dir),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect failed: %v", err)
@@ -70,26 +99,17 @@ func TestConnectEmptyImportDir(t *testing.T) {
 	}
 }
 
-func TestParseMapsConfigDefaults(t *testing.T) {
-	cfg, err := parseMapsConfig(connector.ConnectorConfig{
+func TestParseMapsConfigRejectsMissingFields(t *testing.T) {
+	_, err := parseMapsConfig(connector.ConnectorConfig{
 		SourceConfig: map[string]interface{}{
 			"import_dir": "/tmp/test",
 		},
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error for missing required config fields")
 	}
-	if cfg.MinDistanceM != 100 {
-		t.Errorf("expected default MinDistanceM 100, got %v", cfg.MinDistanceM)
-	}
-	if cfg.MinDurationMin != 2 {
-		t.Errorf("expected default MinDurationMin 2, got %v", cfg.MinDurationMin)
-	}
-	if cfg.CommuteMinOccurrences != 3 {
-		t.Errorf("expected default CommuteMinOccurrences 3, got %v", cfg.CommuteMinOccurrences)
-	}
-	if cfg.TripMinDistanceKm != 50 {
-		t.Errorf("expected default TripMinDistanceKm 50, got %v", cfg.TripMinDistanceKm)
+	if !strings.Contains(err.Error(), "missing") {
+		t.Errorf("expected missing-fields error, got: %v", err)
 	}
 }
 
@@ -111,13 +131,12 @@ func TestSyncProducesArtifacts(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -148,13 +167,12 @@ func TestSyncCursorSkipsProcessed(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -179,13 +197,12 @@ func TestSyncEmptyCursorFullScan(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -207,13 +224,9 @@ func TestSyncMinThresholdFiltering(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
-			"min_distance_m":   float64(100),
-			"min_duration_min": float64(2),
-		},
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfig(dir),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -243,11 +256,9 @@ func TestHealthTransitions(t *testing.T) {
 	// After Connect: healthy
 	dir := t.TempDir()
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir": dir,
-		},
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfig(dir),
 	}
 	if err := c.Connect(ctx, cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -341,14 +352,13 @@ func TestArchiveDisabled(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":        dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"archive_processed": false,
 			"min_distance_m":    float64(0),
 			"min_duration_min":  float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -380,11 +390,9 @@ func TestConnectImportDirIsFile(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir": filePath,
-		},
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfig(filePath),
 	}
 	err := c.Connect(context.Background(), cfg)
 	if err == nil {
@@ -409,10 +417,9 @@ func TestParseMapsConfigNegativeMinDuration(t *testing.T) {
 
 func TestParseMapsConfigInvalidWatchInterval(t *testing.T) {
 	_, err := parseMapsConfig(connector.ConnectorConfig{
-		SourceConfig: map[string]interface{}{
-			"import_dir":     "/tmp/test",
+		SourceConfig: testMapsSourceConfigWith("/tmp/test", map[string]interface{}{
 			"watch_interval": "not-a-duration",
-		},
+		}),
 	})
 	if err == nil {
 		t.Fatal("expected validation error for invalid watch_interval")
@@ -421,11 +428,10 @@ func TestParseMapsConfigInvalidWatchInterval(t *testing.T) {
 
 func TestParseMapsConfigIntTypes(t *testing.T) {
 	cfg, err := parseMapsConfig(connector.ConnectorConfig{
-		SourceConfig: map[string]interface{}{
-			"import_dir":       "/tmp/test",
+		SourceConfig: testMapsSourceConfigWith("/tmp/test", map[string]interface{}{
 			"min_distance_m":   int(200),
 			"min_duration_min": int(5),
-		},
+		}),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -440,8 +446,7 @@ func TestParseMapsConfigIntTypes(t *testing.T) {
 
 func TestParseMapsConfigCustomOverrides(t *testing.T) {
 	cfg, err := parseMapsConfig(connector.ConnectorConfig{
-		SourceConfig: map[string]interface{}{
-			"import_dir":               "/tmp/test",
+		SourceConfig: testMapsSourceConfigWith("/tmp/test", map[string]interface{}{
 			"archive_processed":        true,
 			"location_radius_m":        float64(250),
 			"home_detection":           "manual",
@@ -452,7 +457,7 @@ func TestParseMapsConfigCustomOverrides(t *testing.T) {
 			"trip_min_overnight_hours": float64(24),
 			"link_time_extend_min":     float64(60),
 			"link_proximity_radius_m":  float64(2000),
-		},
+		}),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -497,13 +502,12 @@ func TestSyncMalformedFileContinues(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -525,14 +529,13 @@ func TestSyncArchiveEnabled(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":        dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"archive_processed": true,
 			"min_distance_m":    float64(0),
 			"min_duration_min":  float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -566,13 +569,12 @@ func TestSyncSkipsNonJSONFiles(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -607,13 +609,9 @@ func TestSyncAllFilteredStillAdvancesCursor(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
-			"min_distance_m":   float64(100),
-			"min_duration_min": float64(2),
-		},
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfig(dir),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -653,13 +651,12 @@ func TestSyncContextCancellation(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -684,13 +681,12 @@ func TestSyncOversizedFileSkipped(t *testing.T) {
 	// file size check path exists by confirming a normal file passes.
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -780,14 +776,13 @@ func TestSyncCursorPrunedAfterArchive(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":        dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"archive_processed": true,
 			"min_distance_m":    float64(0),
 			"min_duration_min":  float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -810,14 +805,13 @@ func TestSyncCursorPrunedAfterArchive(t *testing.T) {
 // IMPROVE-011-R09: parseMapsConfig int-type handling for trip/link/location fields.
 func TestParseMapsConfigIntTypesExtended(t *testing.T) {
 	cfg, err := parseMapsConfig(connector.ConnectorConfig{
-		SourceConfig: map[string]interface{}{
-			"import_dir":               "/tmp/test",
+		SourceConfig: testMapsSourceConfigWith("/tmp/test", map[string]interface{}{
 			"location_radius_m":        int(250),
 			"trip_min_distance_km":     int(100),
 			"trip_min_overnight_hours": int(24),
 			"link_time_extend_min":     int(60),
 			"link_proximity_radius_m":  int(2000),
-		},
+		}),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -872,10 +866,9 @@ func TestParseMapsConfigValidationLocationLink(t *testing.T) {
 // IMPROVE-011-R09: zero location_radius_m is accepted (non-negative, not positive).
 func TestParseMapsConfigZeroLocationRadiusAllowed(t *testing.T) {
 	cfg, err := parseMapsConfig(connector.ConnectorConfig{
-		SourceConfig: map[string]interface{}{
-			"import_dir":        "/tmp/test",
+		SourceConfig: testMapsSourceConfigWith("/tmp/test", map[string]interface{}{
 			"location_radius_m": float64(0),
-		},
+		}),
 	})
 	if err != nil {
 		t.Fatalf("zero location_radius_m should be accepted: %v", err)
@@ -888,10 +881,9 @@ func TestParseMapsConfigZeroLocationRadiusAllowed(t *testing.T) {
 // IMPROVE-011-R09: zero link_time_extend_min is accepted (non-negative, not positive).
 func TestParseMapsConfigZeroLinkTimeExtendAllowed(t *testing.T) {
 	cfg, err := parseMapsConfig(connector.ConnectorConfig{
-		SourceConfig: map[string]interface{}{
-			"import_dir":           "/tmp/test",
+		SourceConfig: testMapsSourceConfigWith("/tmp/test", map[string]interface{}{
 			"link_time_extend_min": float64(0),
-		},
+		}),
 	})
 	if err != nil {
 		t.Fatalf("zero link_time_extend_min should be accepted: %v", err)

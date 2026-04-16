@@ -370,7 +370,7 @@ func (e *Engine) GenerateContentFuel(ctx context.Context) ([]ContentAngle, error
 
 		// Publish to NATS for LLM-enhanced angle generation (R-503)
 		if e.NATS != nil {
-			payload := map[string]interface{}{
+			payload := map[string]any{
 				"topic_id":         topicID,
 				"topic_name":       topicName,
 				"capture_count":    captureCount,

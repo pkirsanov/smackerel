@@ -81,7 +81,10 @@ func Connect(ctx context.Context, url string, authToken string) (*Client, error)
 	opts := []nats.Option{
 		nats.Name("smackerel-core"),
 		nats.ReconnectWait(2 * time.Second),
-		nats.MaxReconnects(60),
+		// Infinite reconnect (-1): NATS is co-deployed in Docker Compose and should
+		// always be reachable eventually; a finite cap risks permanent disconnection
+		// during container restarts or brief network blips.
+		nats.MaxReconnects(-1),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
 			slog.Warn("NATS disconnected", "error", err)
 		}),

@@ -30,13 +30,12 @@ func TestChaos_PipeInFilenameSkipped(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -230,13 +229,12 @@ func TestChaos_ConcurrentSyncClose(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -274,13 +272,12 @@ func TestChaos_FileDisappearsBetweenScanAndRead(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -344,14 +341,13 @@ func TestChaos_ArchivedFilesNotRediscovered(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":        dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"archive_processed": true,
 			"min_distance_m":    float64(0),
 			"min_duration_min":  float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -406,13 +402,12 @@ func TestChaos_CancelledSyncRecovery(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -560,13 +555,12 @@ func TestStabilize_SyncUsesConfigSnapshot(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -587,13 +581,12 @@ func TestStabilize_SyncUsesConfigSnapshot(t *testing.T) {
 		defer wg.Done()
 		otherDir := t.TempDir()
 		otherCfg := connector.ConnectorConfig{
-			AuthType: "none",
-			Enabled:  true,
-			SourceConfig: map[string]interface{}{
-				"import_dir":       otherDir,
+			AuthType:     "none",
+			Enabled:      true,
+			SourceConfig: testMapsSourceConfigWith(otherDir, map[string]interface{}{
 				"min_distance_m":   float64(0),
 				"min_duration_min": float64(0),
-			},
+			}),
 		}
 		_ = c.Connect(context.Background(), otherCfg)
 	}()
@@ -611,17 +604,9 @@ func TestStabilize_PostSyncUsesConfigSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":               dir,
-			"commute_min_occurrences":  float64(3),
-			"commute_window_days":      float64(14),
-			"trip_min_distance_km":     float64(50),
-			"trip_min_overnight_hours": float64(18),
-			"link_time_extend_min":     float64(30),
-			"link_proximity_radius_m":  float64(1000),
-		},
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfig(dir),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -658,11 +643,9 @@ func TestStabilize_PostSyncNoPoolReturnsNil(t *testing.T) {
 	c := New("google-maps-timeline")
 	dir := t.TempDir()
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir": dir,
-		},
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfig(dir),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)

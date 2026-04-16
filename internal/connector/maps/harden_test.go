@@ -22,13 +22,12 @@ func TestHarden_SyncErrorResetsHealthAfterPreviousSuccess(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -201,13 +200,12 @@ func TestHarden_CrossFileArtifactCap(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -331,13 +329,12 @@ func TestImprove_SyncUsesSnapshotThresholds(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType: "none",
-		Enabled:  true,
-		SourceConfig: map[string]interface{}{
-			"import_dir":       dir,
+		AuthType:     "none",
+		Enabled:      true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
-		},
+		}),
 	}
 	if err := c.Connect(context.Background(), cfg); err != nil {
 		t.Fatalf("Connect: %v", err)

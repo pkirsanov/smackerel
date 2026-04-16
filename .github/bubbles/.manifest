@@ -82,6 +82,7 @@ docs/guides/CONTROL_PLANE_DESIGN.md
 docs/guides/CONTROL_PLANE_ROLLOUT.md
 docs/guides/CONTROL_PLANE_SCHEMAS.md
 docs/guides/DOCKER_VERSION_CONSOLIDATION.md
+docs/guides/FRAMEWORK_CONCEPTS.md
 docs/guides/INSTALLATION.md
 docs/guides/INTEROP_MIGRATION.md
 docs/guides/WORKFLOW_MODES.md

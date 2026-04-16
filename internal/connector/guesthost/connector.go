@@ -83,7 +83,22 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 }
 
 // Sync fetches new activity events since the last cursor position.
-func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.RawArtifact, newCur string, retErr error) {
+	// R27-H23-01: Recover from panics so health is not stuck on "syncing".
+	defer func() {
+		if r := recover(); r != nil {
+			c.setHealth(connector.HealthError)
+			retErr = fmt.Errorf("guesthost sync panic: %v", r)
+			slog.Error("guesthost: panic recovered in Sync", "panic", r)
+		}
+	}()
+	// If Sync returns an error, ensure health transitions from syncing to error.
+	defer func() {
+		if retErr != nil {
+			c.setHealth(connector.HealthError)
+		}
+	}()
+
 	c.mu.Lock()
 	if c.client == nil {
 		c.mu.Unlock()

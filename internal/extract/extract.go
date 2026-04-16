@@ -168,6 +168,22 @@ func ssrfSafeTransport() *http.Transport {
 	}
 }
 
+// defaultClient is the package-level HTTP client with SSRF-safe transport, reused
+// across extractions to avoid per-call client/transport allocation.
+var defaultClient = &http.Client{
+	Timeout:   15 * time.Second,
+	Transport: ssrfSafeTransport(),
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return http.ErrUseLastResponse
+		}
+		if err := validateURLSafety(req.URL); err != nil {
+			return fmt.Errorf("redirect blocked: %w", err)
+		}
+		return nil
+	},
+}
+
 // ExtractArticle fetches and extracts readable content from an article URL using go-readability.
 func ExtractArticle(ctx context.Context, articleURL string) (*Result, error) {
 	parsedURL, err := url.Parse(articleURL)
@@ -180,27 +196,13 @@ func ExtractArticle(ctx context.Context, articleURL string) (*Result, error) {
 		return nil, fmt.Errorf("URL blocked: %w", err)
 	}
 
-	client := &http.Client{
-		Timeout:   15 * time.Second,
-		Transport: ssrfSafeTransport(),
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return http.ErrUseLastResponse
-			}
-			if err := validateURLSafety(req.URL); err != nil {
-				return fmt.Errorf("redirect blocked: %w", err)
-			}
-			return nil
-		},
-	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, articleURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Smackerel/1.0 (content indexer)")
 
-	resp, err := client.Do(req)
+	resp, err := defaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch URL: %w", err)
 	}

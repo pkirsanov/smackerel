@@ -181,11 +181,11 @@ func (g *Generator) HandleDigestResult(ctx context.Context, digestDate, text str
 func (g *Generator) GetLatest(ctx context.Context, date string) (*Digest, error) {
 	var d Digest
 	var query string
-	var args []interface{}
+	var args []any
 
 	if date != "" {
 		query = "SELECT id, digest_date, digest_text, word_count, is_quiet, COALESCE(model_used, ''), created_at FROM digests WHERE digest_date = $1"
-		args = []interface{}{date}
+		args = []any{date}
 	} else {
 		query = "SELECT id, digest_date, digest_text, word_count, is_quiet, COALESCE(model_used, ''), created_at FROM digests ORDER BY digest_date DESC LIMIT 1"
 	}

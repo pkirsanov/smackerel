@@ -68,6 +68,7 @@ handoffs:
 **Behavioral Rules:**
 - Load and enforce `bubbles/workflows.yaml` first.
 - Orchestrate phases by workflow mode; do not hardcode a single forced flow.
+- **⛔ MANDATORY SUPER DELEGATION FOR NATURAL LANGUAGE (NON-NEGOTIABLE):** If the user input does NOT contain the literal keyword `mode:`, this agent MUST invoke `bubbles.super` via `runSubagent` for intent resolution BEFORE doing anything else. This is the single most critical behavioral rule. This agent MUST NOT: (a) interpret natural language to infer a workflow mode, (b) select modes based on keywords like "planning", "execute", "deliver", "full workflow", (c) classify NL input as `STRUCTURED`, or (d) proceed to Phase 0 without a `RESOLUTION-ENVELOPE` from `bubbles.super`. The presence of spec targets, feature names, or action verbs does NOT make input structured — only the literal `mode:` keyword does. **Known failure pattern:** Agent receives NL like "execute full planning workflows for each recommendation" → incorrectly classifies as STRUCTURED → skips super delegation → proceeds with self-selected mode. This is WRONG. The correct behavior is: no `mode:` keyword → classify as VAGUE → delegate to `bubbles.super` → consume RESOLUTION-ENVELOPE → then proceed.
 - Stay autonomous by default. Only enter a Socratic questioning loop when the workflow input explicitly sets `socratic: true`.
 - **This agent is a DRIVER, not an observer.** It MUST actively invoke specialist agents for every phase via `runSubagent`. It does NOT passively analyze state and report blockers — it executes work by delegating to specialists.
 - **Execute each phase autonomously using `runSubagent`** — embed the specialist agent's role, full context, and governance references in the subagent prompt. Do NOT rely on handoffs for phase execution; handoffs are for escalation only.
@@ -286,6 +287,22 @@ Follow [workflow-mode-resolution.md](bubbles_shared/workflow-mode-resolution.md)
 ### Phase -1: Intent Resolution (MANDATORY — runs before Phase 0)
 
 Before Phase 0, follow [workflow-delegation-core.md](bubbles_shared/workflow-delegation-core.md) and classify the request as `STRUCTURED`, `CONTINUATION`, `VAGUE`, `CONTINUE`, or `FRAMEWORK`.
+
+**⛔ HARD STOP GATE — MANDATORY BEFORE ANY CLASSIFICATION:**
+
+Perform this literal check FIRST:
+1. Scan the raw user input for the exact substring `mode:`
+2. If `mode:` is NOT present → the request is `VAGUE` → invoke `bubbles.super` via `runSubagent` → consume `RESOLUTION-ENVELOPE` → proceed to Phase 0 with resolved mode
+3. If `mode:` IS present → continue to classification below
+4. **There is NO exception to this gate.** Natural language descriptions, action verbs ("execute", "plan", "deliver", "implement"), spec references, feature names, and numbered lists do NOT constitute structured input. Only the literal `mode:` keyword does.
+
+**⛔ ANTI-PATTERNS (each is a policy violation):**
+- ❌ Input: "execute full planning workflows for each recommendation" → Agent classifies as STRUCTURED → **WRONG** (no `mode:`)
+- ❌ Input: "invoke correct workflow/agent for each recommendation to complete full planning phases" → Agent selects mode inline → **WRONG** (no `mode:`)
+- ❌ Input: "create specs and run the planning chain" → Agent proceeds without super delegation → **WRONG** (no `mode:`)
+- ❌ Input: "specs/099-108 plan these features" → Agent treats spec targets as structured input → **WRONG** (no `mode:`)
+- ✅ Input: "specs/099-108 mode: product-to-planning" → Agent classifies as STRUCTURED → **CORRECT** (`mode:` present)
+- ✅ Input: "execute full planning workflows for each recommendation" → Agent classifies as VAGUE → delegates to super → **CORRECT**
 
 Delegation boundary:
 

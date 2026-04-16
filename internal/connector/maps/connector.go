@@ -302,22 +302,32 @@ func (c *Connector) PostSync(ctx context.Context, activities []TakeoutActivity) 
 
 	pd := NewPatternDetector(pool, cfg)
 	var allArtifacts []connector.RawArtifact
+	var commuteCount, tripCount int
 	var errs []error
 
-	commuteArtifacts, err := pd.DetectCommutes(ctx)
+	// R18-S3: Fetch clusters once and reuse for both commute and trip detection.
+	clusters, err := pd.queryRecentClusters(ctx)
 	if err != nil {
-		slog.Warn("commute detection failed", "error", err)
-		errs = append(errs, fmt.Errorf("commute detection: %w", err))
+		slog.Warn("cluster query failed, skipping commute+trip detection", "error", err)
+		errs = append(errs, fmt.Errorf("query recent clusters: %w", err))
 	} else {
+		commutePatterns := classifyCommutes(clusters, cfg)
+		commuteArtifacts := normalizeCommutePatterns(commutePatterns)
 		allArtifacts = append(allArtifacts, commuteArtifacts...)
-	}
+		commuteCount = len(commuteArtifacts)
 
-	tripArtifacts, err := pd.DetectTrips(ctx)
-	if err != nil {
-		slog.Warn("trip detection failed", "error", err)
-		errs = append(errs, fmt.Errorf("trip detection: %w", err))
-	} else {
-		allArtifacts = append(allArtifacts, tripArtifacts...)
+		home, err := pd.InferHome(ctx)
+		if err != nil {
+			slog.Warn("home inference failed", "error", err)
+			errs = append(errs, fmt.Errorf("infer home: %w", err))
+		} else if home != nil {
+			trips := classifyTrips(clusters, *home, cfg)
+			tripArtifacts := normalizeTripEvents(trips)
+			allArtifacts = append(allArtifacts, tripArtifacts...)
+			tripCount = len(tripArtifacts)
+		} else {
+			slog.Info("no home location inferred, skipping trip detection")
+		}
 	}
 
 	linkedCount, err := pd.LinkTemporalSpatial(ctx, activities)
@@ -327,8 +337,8 @@ func (c *Connector) PostSync(ctx context.Context, activities []TakeoutActivity) 
 	}
 
 	slog.Info("post-sync patterns complete",
-		"commute_patterns", len(commuteArtifacts),
-		"trip_events", len(tripArtifacts),
+		"commute_patterns", commuteCount,
+		"trip_events", tripCount,
 		"links_created", linkedCount)
 	return allArtifacts, errors.Join(errs...)
 }
@@ -512,107 +522,123 @@ func pruneCursor(importDir string, files []string) []string {
 }
 
 // parseMapsConfig extracts Maps-specific fields from ConnectorConfig.SourceConfig.
+// SST: All config values must be provided via smackerel.yaml → env → SourceConfig.
+// No hardcoded Go-side fallback defaults; missing required fields fail loud.
 func parseMapsConfig(config connector.ConnectorConfig) (MapsConfig, error) {
-	cfg := MapsConfig{
-		WatchInterval:         5 * time.Minute,
-		ArchiveProcessed:      false,
-		MinDistanceM:          100,
-		MinDurationMin:        2,
-		LocationRadiusM:       500,
-		HomeDetection:         "frequency",
-		CommuteMinOccurrences: 3,
-		CommuteWindowDays:     14,
-		CommuteWeekdaysOnly:   true,
-		TripMinDistanceKm:     50,
-		TripMinOvernightHours: 18,
-		LinkTimeExtendMin:     30,
-		LinkProximityRadiusM:  1000,
-	}
-
+	var cfg MapsConfig
 	sc := config.SourceConfig
+	var missing []string
 
-	// Import directory (required)
+	// Import directory (required — fail immediately)
 	if importDir, ok := sc["import_dir"].(string); ok && importDir != "" {
 		cfg.ImportDir = importDir
 	} else {
 		return MapsConfig{}, fmt.Errorf("import directory is required")
 	}
 
-	// Watch interval
+	// Watch interval (required)
 	if wi, ok := sc["watch_interval"].(string); ok && wi != "" {
 		d, err := time.ParseDuration(wi)
 		if err != nil {
 			return MapsConfig{}, fmt.Errorf("invalid watch_interval %q: %w", wi, err)
 		}
 		cfg.WatchInterval = d
+	} else {
+		missing = append(missing, "watch_interval")
 	}
 
-	// Archive processed
+	// Archive processed (optional boolean, zero-value false is safe)
 	if ap, ok := sc["archive_processed"].(bool); ok {
 		cfg.ArchiveProcessed = ap
 	}
 
-	// Min distance
+	// Min distance (required)
 	if v, err := configFloat64NonNeg(sc, "min_distance_m"); err != nil {
 		return MapsConfig{}, err
 	} else if v >= 0 {
 		cfg.MinDistanceM = v
+	} else {
+		missing = append(missing, "min_distance_m")
 	}
 
-	// Min duration
+	// Min duration (required)
 	if v, err := configFloat64NonNeg(sc, "min_duration_min"); err != nil {
 		return MapsConfig{}, err
 	} else if v >= 0 {
 		cfg.MinDurationMin = v
+	} else {
+		missing = append(missing, "min_duration_min")
 	}
 
-	// Clustering config
+	// Clustering config (required)
 	if v, err := configFloat64NonNeg(sc, "location_radius_m"); err != nil {
 		return MapsConfig{}, err
 	} else if v >= 0 {
 		cfg.LocationRadiusM = v
+	} else {
+		missing = append(missing, "location_radius_m")
 	}
 	if hd, ok := sc["home_detection"].(string); ok && hd != "" {
 		cfg.HomeDetection = hd
+	} else {
+		missing = append(missing, "home_detection")
 	}
 
-	// Commute config
+	// Commute config (required)
 	if v, err := configIntMin(sc, "commute_min_occurrences", 1); err != nil {
 		return MapsConfig{}, err
 	} else if v >= 0 {
 		cfg.CommuteMinOccurrences = v
+	} else {
+		missing = append(missing, "commute_min_occurrences")
 	}
 	if v, err := configIntMin(sc, "commute_window_days", 1); err != nil {
 		return MapsConfig{}, err
 	} else if v >= 0 {
 		cfg.CommuteWindowDays = v
+	} else {
+		missing = append(missing, "commute_window_days")
 	}
+	// Commute weekdays-only (optional boolean, zero-value false is safe)
 	if cwo, ok := sc["commute_weekdays_only"].(bool); ok {
 		cfg.CommuteWeekdaysOnly = cwo
 	}
 
-	// Trip config
+	// Trip config (required)
 	if v, err := configFloat64Positive(sc, "trip_min_distance_km"); err != nil {
 		return MapsConfig{}, err
 	} else if v >= 0 {
 		cfg.TripMinDistanceKm = v
+	} else {
+		missing = append(missing, "trip_min_distance_km")
 	}
 	if v, err := configFloat64Positive(sc, "trip_min_overnight_hours"); err != nil {
 		return MapsConfig{}, err
 	} else if v >= 0 {
 		cfg.TripMinOvernightHours = v
+	} else {
+		missing = append(missing, "trip_min_overnight_hours")
 	}
 
-	// Link config
+	// Link config (required)
 	if v, err := configFloat64NonNeg(sc, "link_time_extend_min"); err != nil {
 		return MapsConfig{}, err
 	} else if v >= 0 {
 		cfg.LinkTimeExtendMin = v
+	} else {
+		missing = append(missing, "link_time_extend_min")
 	}
 	if v, err := configFloat64Positive(sc, "link_proximity_radius_m"); err != nil {
 		return MapsConfig{}, err
 	} else if v >= 0 {
 		cfg.LinkProximityRadiusM = v
+	} else {
+		missing = append(missing, "link_proximity_radius_m")
+	}
+
+	// SST: fail-loud if any required config values were not provided in smackerel.yaml
+	if len(missing) > 0 {
+		return MapsConfig{}, fmt.Errorf("required google-maps-timeline config values missing: %s", strings.Join(missing, ", "))
 	}
 
 	return cfg, nil

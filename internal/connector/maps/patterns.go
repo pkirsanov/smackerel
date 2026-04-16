@@ -111,6 +111,10 @@ func (pd *PatternDetector) LinkTemporalSpatial(ctx context.Context, activities [
 	extend := time.Duration(pd.config.LinkTimeExtendMin) * time.Minute
 	proximityKm := pd.config.LinkProximityRadiusM / 1000.0
 
+	// NOTE(R18-S2): This loop issues one SELECT per activity (N+1 pattern).
+	// Batching is non-trivial because each activity has a distinct time window.
+	// A future optimization could compute a global [min(windowStart), max(windowEnd)]
+	// range, fetch all candidate artifacts in one query, and filter per-activity in Go.
 	for _, activity := range activities {
 		// Check for context cancellation between activities.
 		if err := ctx.Err(); err != nil {

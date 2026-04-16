@@ -52,7 +52,11 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		case "booking.cancelled":
 			title = fmt.Sprintf("%s — Booking cancelled: %s", d.PropertyName, d.GuestName)
 		}
-		metadata = bookingMetadata(d)
+		var metaErr error
+		metadata, metaErr = bookingMetadata(d)
+		if metaErr != nil {
+			return connector.RawArtifact{}, fmt.Errorf("booking metadata: %w", metaErr)
+		}
 
 	case "guest.created", "guest.updated":
 		var d GuestData
@@ -193,11 +197,10 @@ func truncateStr(s string, maxLen int) string {
 }
 
 // bookingMetadata builds the common metadata map for all booking event types.
-// IMP-013-002: Guards TotalPrice against IEEE 754 Inf/NaN.
-func bookingMetadata(d BookingData) map[string]interface{} {
-	price := d.TotalPrice
-	if math.IsNaN(price) || math.IsInf(price, 0) {
-		price = 0
+// R27-H23-03: Rejects Inf/NaN with an error (consistent with expense.created).
+func bookingMetadata(d BookingData) (map[string]interface{}, error) {
+	if math.IsNaN(d.TotalPrice) || math.IsInf(d.TotalPrice, 0) {
+		return nil, fmt.Errorf("booking total_price is not a finite number")
 	}
 	return map[string]interface{}{
 		"property_id":    d.PropertyID,
@@ -207,6 +210,6 @@ func bookingMetadata(d BookingData) map[string]interface{} {
 		"checkin_date":   d.CheckIn,
 		"checkout_date":  d.CheckOut,
 		"booking_source": d.Source,
-		"total_price":    price,
-	}
+		"total_price":    d.TotalPrice,
+	}, nil
 }
