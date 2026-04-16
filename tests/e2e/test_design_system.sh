@@ -18,8 +18,7 @@ echo "Test: CSS custom properties for theming..."
 if echo "$BODY" | grep -q -- "--bg\|--fg\|--border"; then
   e2e_pass "SCN-001-005/006: CSS custom properties present for theming"
 else
-  echo "  CSS properties may be inlined differently"
-  e2e_pass "SCN-001-005/006: Theme CSS present (styles embedded)"
+  e2e_fail "SCN-001-005/006: CSS custom properties (--bg, --fg, --border) not found in response"
 fi
 
 # --- SCN-001-008: System fonts ---
@@ -27,7 +26,7 @@ echo "Test: System font stack..."
 if echo "$BODY" | grep -q "system-ui\|-apple-system\|BlinkMacSystemFont"; then
   e2e_pass "SCN-001-008: System font stack used"
 else
-  e2e_pass "SCN-001-008: Font verification (may require browser rendering)"
+  e2e_fail "SCN-001-008: System font stack (system-ui, -apple-system, BlinkMacSystemFont) not found in CSS"
 fi
 
 # --- SCN-001-009: No accent colors ---
@@ -42,7 +41,7 @@ done
 if [ "$ACCENT_FOUND" -eq 0 ]; then
   e2e_pass "SCN-001-009: No accent colors in web UI"
 else
-  e2e_pass "SCN-001-009: Monochrome palette check complete"
+  e2e_fail "SCN-001-009: Non-monochrome accent colors found in web UI (violates monochrome palette)"
 fi
 
 # --- Responsive meta tag ---

@@ -105,7 +105,7 @@ type NATSProcessPayload struct {
 	SourceID       string                 `json:"source_id"`
 	RetryCount     int                    `json:"retry_count"`
 	TraceID        string                 `json:"trace_id,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
 }
 
 // NATSProcessedPayload is what ML sidecar publishes to artifacts.processed.

@@ -31,6 +31,11 @@ const (
 )
 
 var (
+	// nyLocation caches the America/New_York timezone, loaded once at first use.
+	nyLocation     *time.Location
+	nyLocationOnce sync.Once
+	nyLocationErr  error
+
 	// validSymbolRe matches standard stock/ETF ticker symbols (1-10 alphanumeric chars, dots, hyphens).
 	validSymbolRe = regexp.MustCompile(`^[A-Za-z0-9.\-]{1,10}$`)
 	// validCoinIDRe matches CoinGecko coin IDs (lowercase alphanumeric, hyphens).
@@ -457,10 +462,9 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		summary := buildDailySummary(artifacts, now)
 		artifacts = append(artifacts, summary)
 		c.mu.Lock()
-		et, _ := time.LoadLocation("America/New_York")
-		if et != nil {
-			c.lastSummaryDate = now.In(et).Format("2006-01-02")
-		}
+		// nyLocation is guaranteed non-nil here because shouldGenerateDailySummary
+		// returned true, which requires successful LoadLocation.
+		c.lastSummaryDate = now.In(nyLocation).Format("2006-01-02")
 		c.mu.Unlock()
 	}
 
@@ -971,12 +975,14 @@ var (
 // shouldGenerateDailySummary returns true if a daily summary should be appended.
 // Summary is generated on weekdays after 16:30 ET if not already generated today.
 func (c *Connector) shouldGenerateDailySummary(now time.Time) bool {
-	et, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		slog.Warn("failed to load America/New_York timezone, skipping daily summary", "error", err)
+	nyLocationOnce.Do(func() {
+		nyLocation, nyLocationErr = time.LoadLocation("America/New_York")
+	})
+	if nyLocationErr != nil {
+		slog.Warn("failed to load America/New_York timezone, skipping daily summary", "error", nyLocationErr)
 		return false
 	}
-	nowET := now.In(et)
+	nowET := now.In(nyLocation)
 
 	// Skip weekends.
 	day := nowET.Weekday()

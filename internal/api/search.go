@@ -396,7 +396,7 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		FROM artifacts
 		WHERE embedding IS NOT NULL`
 
-	args := []interface{}{embStr}
+	args := []any{embStr}
 	argN := 2
 
 	if req.Filters.Type != "" {
@@ -546,7 +546,7 @@ func (s *SearchEngine) rerankViaML(ctx context.Context, query string, candidates
 	defer sub.Unsubscribe()
 	sub.AutoUnsubscribe(1)
 
-	payload, _ := json.Marshal(map[string]interface{}{
+	payload, _ := json.Marshal(map[string]any{
 		"query":         query,
 		"candidates":    cands,
 		"reply_subject": replySubject,
@@ -732,7 +732,7 @@ func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) (
 		FROM artifacts
 		WHERE 1=1`
 
-	args := []interface{}{}
+	args := []any{}
 	argN := 1
 
 	if req.Filters.DateFrom != "" {
