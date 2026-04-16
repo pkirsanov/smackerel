@@ -52,3 +52,4 @@ tmp/
 
 # Prevent Bubbles framework README from overriding project README on GitHub
 .github/README.md
+core
