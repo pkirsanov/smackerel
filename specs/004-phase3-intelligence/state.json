@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/004-phase3-intelligence",
   "featureName": "Phase 3: Intelligence",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": "bubbles.workflow",
@@ -21,7 +21,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "1",
       "2",

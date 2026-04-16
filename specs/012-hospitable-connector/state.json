@@ -2,21 +2,46 @@
   "version": 3,
   "featureDir": "specs/012-hospitable-connector",
   "featureName": "Hospitable Connector",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-09T00:00:00Z",
-    "completedScopes": ["scope-01", "scope-02", "scope-03", "scope-04", "scope-05"],
-    "completedPhaseClaims": ["analyze", "bootstrap", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"],
+    "completedScopes": [
+      "scope-01",
+      "scope-02",
+      "scope-03",
+      "scope-04",
+      "scope-05"
+    ],
+    "completedPhaseClaims": [
+      "analyze",
+      "bootstrap",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "chaos",
+      "docs",
+      "spec-review"
+    ],
     "pendingTransitionRequests": []
   },
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:00:00Z",
@@ -25,7 +50,9 @@
     },
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T12:00:00Z",
@@ -34,7 +61,9 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:10:00Z",
@@ -43,7 +72,9 @@
     },
     {
       "agent": "bubbles.plan",
-      "phasesExecuted": ["plan"],
+      "phasesExecuted": [
+        "plan"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:20:00Z",
@@ -52,7 +83,9 @@
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:30:00Z",
@@ -61,16 +94,20 @@
     },
     {
       "agent": "bubbles.test",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:50:00Z",
       "completedAt": "2026-04-09T01:00:00Z",
-      "summary": "All 52 unit tests pass across 2 test files (connector_test.go: 32 tests, normalizer_test.go: 20 tests). ./smackerel.sh test unit — hospitable package ok 2.952s."
+      "summary": "All 52 unit tests pass across 2 test files (connector_test.go: 32 tests, normalizer_test.go: 20 tests). ./smackerel.sh test unit \u2014 hospitable package ok 2.952s."
     },
     {
       "agent": "bubbles.regression",
-      "phasesExecuted": ["regression"],
+      "phasesExecuted": [
+        "regression"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:00:00Z",
@@ -79,7 +116,9 @@
     },
     {
       "agent": "bubbles.simplify",
-      "phasesExecuted": ["simplify"],
+      "phasesExecuted": [
+        "simplify"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:10:00Z",
@@ -88,7 +127,9 @@
     },
     {
       "agent": "bubbles.gaps",
-      "phasesExecuted": ["gaps"],
+      "phasesExecuted": [
+        "gaps"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:15:00Z",
@@ -97,7 +138,9 @@
     },
     {
       "agent": "bubbles.harden",
-      "phasesExecuted": ["harden"],
+      "phasesExecuted": [
+        "harden"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:20:00Z",
@@ -106,43 +149,53 @@
     },
     {
       "agent": "bubbles.stabilize",
-      "phasesExecuted": ["stabilize"],
+      "phasesExecuted": [
+        "stabilize"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:25:00Z",
       "completedAt": "2026-04-09T01:30:00Z",
-      "summary": "Stabilization pass completed. All tests deterministic — no flaky failures. Mock HTTP servers use httptest.NewServer with deterministic responses. No time-dependent assertions. No external network calls in unit tests."
+      "summary": "Stabilization pass completed. All tests deterministic \u2014 no flaky failures. Mock HTTP servers use httptest.NewServer with deterministic responses. No time-dependent assertions. No external network calls in unit tests."
     },
     {
       "agent": "bubbles.security",
-      "phasesExecuted": ["security"],
+      "phasesExecuted": [
+        "security"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:30:00Z",
       "completedAt": "2026-04-09T01:35:00Z",
-      "summary": "Security review complete. PAT stored in config SST pipeline — no hardcoded secrets. API client uses Bearer token auth with TLS. No SQL injection vectors. Rate limiting respects API contract. No user input passes directly to API URLs without validation."
+      "summary": "Security review complete. PAT stored in config SST pipeline \u2014 no hardcoded secrets. API client uses Bearer token auth with TLS. No SQL injection vectors. Rate limiting respects API contract. No user input passes directly to API URLs without validation."
     },
     {
       "agent": "bubbles.validate",
-      "phasesExecuted": ["validate"],
+      "phasesExecuted": [
+        "validate"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:35:00Z",
       "completedAt": "2026-04-09T01:40:00Z",
-      "summary": "Validation complete. ./smackerel.sh test unit — all 25 packages pass. ./smackerel.sh lint — exit 0. ./smackerel.sh check — config in sync. All 5 scopes Done with all DoD items verified."
+      "summary": "Validation complete. ./smackerel.sh test unit \u2014 all 25 packages pass. ./smackerel.sh lint \u2014 exit 0. ./smackerel.sh check \u2014 config in sync. All 5 scopes Done with all DoD items verified."
     },
     {
       "agent": "bubbles.audit",
-      "phasesExecuted": ["audit"],
+      "phasesExecuted": [
+        "audit"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:40:00Z",
       "completedAt": "2026-04-09T01:45:00Z",
-      "summary": "Audit pass completed. Code follows existing connector patterns (Keep, Maps, Browser). No config SST violations. NATS contract not modified. No new migrations — uses existing tables. Connector registration is additive."
+      "summary": "Audit pass completed. Code follows existing connector patterns (Keep, Maps, Browser). No config SST violations. NATS contract not modified. No new migrations \u2014 uses existing tables. Connector registration is additive."
     },
     {
       "agent": "bubbles.chaos",
-      "phasesExecuted": ["chaos"],
+      "phasesExecuted": [
+        "chaos"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:45:00Z",
@@ -151,7 +204,9 @@
     },
     {
       "agent": "bubbles.docs",
-      "phasesExecuted": ["docs"],
+      "phasesExecuted": [
+        "docs"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:50:00Z",
@@ -160,7 +215,9 @@
     },
     {
       "agent": "bubbles.spec-review",
-      "phasesExecuted": ["spec-review"],
+      "phasesExecuted": [
+        "spec-review"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:55:00Z",
@@ -169,7 +226,9 @@
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["finalize"],
+      "phasesExecuted": [
+        "finalize"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "done",
       "startedAt": "2026-04-09T02:00:00Z",
@@ -178,28 +237,151 @@
     }
   ],
   "policySnapshot": {
-    "grill": { "mode": "off", "source": "repo-default" },
-    "tdd": { "mode": "scenario-first", "source": "repo-default" },
-    "autoCommit": { "mode": "off", "source": "repo-default" },
-    "lockdown": { "mode": "active", "source": "delivery-lockdown" },
-    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
-    "validation": { "mode": "certification-required", "source": "repo-default" }
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "active",
+      "source": "delivery-lockdown"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-09T02:05:00Z",
   "certification": {
-    "status": "done",
-    "completedScopes": ["scope-01", "scope-02", "scope-03", "scope-04", "scope-05"],
-    "certifiedCompletedPhases": ["analyze", "bootstrap", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"],
-    "scopeProgress": [
-      { "scope": 1, "name": "API Client, Types & Config", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:40:00Z" },
-      { "scope": 2, "name": "Connector Implementation & Normalizer", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:40:00Z" },
-      { "scope": 3, "name": "Edge Hints, Cross-Domain Linking & Hardening", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:40:00Z" },
-      { "scope": 4, "name": "Message Sync Reliability & Client Hardening", "status": "Done", "dependsOn": [3], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:40:00Z" },
-      { "scope": 5, "name": "Normalizer Quality Fixes", "status": "Done", "dependsOn": [3], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:40:00Z" }
+    "status": "in_progress",
+    "completedScopes": [
+      "scope-01",
+      "scope-02",
+      "scope-03",
+      "scope-04",
+      "scope-05"
     ],
-    "lockdownState": { "active": true, "lockedScenarioIds": ["SCN-HC-001", "SCN-HC-002", "SCN-HC-003", "SCN-HC-004", "SCN-HC-005", "SCN-HC-006", "SCN-HC-007", "SCN-HC-008", "SCN-HC-009", "SCN-HC-010", "SCN-HC-011", "SCN-HC-012", "SCN-HC-013", "SCN-HC-014", "SCN-HC-015", "SCN-HC-016", "SCN-HC-017", "SCN-HC-018", "SCN-HC-019", "SCN-HC-020", "SCN-HC-021", "SCN-HC-022", "SCN-HC-023", "SCN-HC-024", "SCN-HC-025", "SCN-HC-026", "SCN-HC-027", "SCN-HC-028", "SCN-HC-029", "SCN-HC-030"] }
+    "certifiedCompletedPhases": [
+      "analyze",
+      "bootstrap",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "chaos",
+      "docs",
+      "spec-review"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "API Client, Types & Config",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:40:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "Connector Implementation & Normalizer",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:40:00Z"
+      },
+      {
+        "scope": 3,
+        "name": "Edge Hints, Cross-Domain Linking & Hardening",
+        "status": "Done",
+        "dependsOn": [
+          2
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:40:00Z"
+      },
+      {
+        "scope": 4,
+        "name": "Message Sync Reliability & Client Hardening",
+        "status": "Done",
+        "dependsOn": [
+          3
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:40:00Z"
+      },
+      {
+        "scope": 5,
+        "name": "Normalizer Quality Fixes",
+        "status": "Done",
+        "dependsOn": [
+          3
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:40:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": true,
+      "lockedScenarioIds": [
+        "SCN-HC-001",
+        "SCN-HC-002",
+        "SCN-HC-003",
+        "SCN-HC-004",
+        "SCN-HC-005",
+        "SCN-HC-006",
+        "SCN-HC-007",
+        "SCN-HC-008",
+        "SCN-HC-009",
+        "SCN-HC-010",
+        "SCN-HC-011",
+        "SCN-HC-012",
+        "SCN-HC-013",
+        "SCN-HC-014",
+        "SCN-HC-015",
+        "SCN-HC-016",
+        "SCN-HC-017",
+        "SCN-HC-018",
+        "SCN-HC-019",
+        "SCN-HC-020",
+        "SCN-HC-021",
+        "SCN-HC-022",
+        "SCN-HC-023",
+        "SCN-HC-024",
+        "SCN-HC-025",
+        "SCN-HC-026",
+        "SCN-HC-027",
+        "SCN-HC-028",
+        "SCN-HC-029",
+        "SCN-HC-030"
+      ]
+    }
   }
 }

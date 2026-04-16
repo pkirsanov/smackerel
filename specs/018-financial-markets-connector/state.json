@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/018-financial-markets-connector",
   "featureName": "Financial Markets Connector",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": "bubbles.workflow",
@@ -22,8 +22,15 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
-    "completedScopes": ["1", "2", "3", "4", "5", "6"],
+    "status": "in_progress",
+    "completedScopes": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
@@ -35,12 +42,30 @@
       "spec-review"
     ],
     "scopeProgress": [
-      {"scope": 1, "status": "done"},
-      {"scope": 2, "status": "done"},
-      {"scope": 3, "status": "done"},
-      {"scope": 4, "status": "done"},
-      {"scope": 5, "status": "done"},
-      {"scope": 6, "status": "done"}
+      {
+        "scope": 1,
+        "status": "done"
+      },
+      {
+        "scope": 2,
+        "status": "done"
+      },
+      {
+        "scope": 3,
+        "status": "done"
+      },
+      {
+        "scope": 4,
+        "status": "done"
+      },
+      {
+        "scope": 5,
+        "status": "done"
+      },
+      {
+        "scope": 6,
+        "status": "done"
+      }
     ],
     "lockdownState": {
       "active": false,
@@ -89,7 +114,10 @@
     },
     {
       "agent": "bubbles.iterate",
-      "phasesExecuted": ["implement", "test"],
+      "phasesExecuted": [
+        "implement",
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "done",
       "runStartedAt": "2026-04-14T07:00:00Z",
