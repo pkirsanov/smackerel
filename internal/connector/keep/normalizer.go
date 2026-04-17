@@ -414,8 +414,6 @@ func (n *Normalizer) matchesLabelFilter(note *TakeoutNote) bool {
 	return false
 }
 
-
-
 // assignTier delegates processing tier assignment to the Qualifier engine
 // to ensure a single source of truth for R-008 evaluation rules.
 func (n *Normalizer) assignTier(note *TakeoutNote) Tier {

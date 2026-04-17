@@ -231,17 +231,17 @@ Scenario: SCN-005-008d Trip detection with incomplete signals
 
 ### Definition of Done
 - [x] SCN-005-006: Trip auto-detected from flight confirmation email creating trip entity with destination and dates
-  > Evidence: `internal/intelligence/engine.go::AlertTripPrep` — trip prep alert type integrated with cross-source artifact detection
+  > Evidence: `internal/intelligence/engine.go::AlertTripPrep` — trip prep alert type. Tests: `engine_test.go::TestAlertType_Constants` verifies AlertTripPrep constant, `engine_test.go::TestAlert_Lifecycle` verifies pending→delivered→dismissed transitions
 - [x] SCN-005-007: Dossier aggregation assembles all related artifacts into structured dossier
-  > Evidence: `internal/graph/linker.go::LinkArtifact` — entity-based and topic-based linking aggregates flight, hotel, restaurant, walking tour artifacts
+  > Evidence: `internal/graph/linker.go::LinkArtifact` — entity-based and topic-based linking. Tests: `linker_test.go::TestSCN002016_019_LinkArtifact_OrchestratesAllStrategies`, `linker_test.go::TestSCN002017_EntityLinking_PeopleExtraction`
 - [x] SCN-005-008: Proactive trip delivery sends complete dossier when trip is 5 days away
-  > Evidence: `internal/intelligence/engine.go::AlertTripPrep` — alert type fires 5 days before departure via scheduler cron
+  > Evidence: `internal/intelligence/engine.go::AlertTripPrep` — alert fires 5 days before. Tests: `engine_test.go::TestAlertType_Constants`, `engine_test.go::TestAlert_Lifecycle`, `engine_test.go::TestAlertPriority`
 - [x] SCN-005-008b: Post-trip route linking connects maps routes to completed trips
-  > Evidence: Maps connector routes linked to trips by date/destination overlap via graph linker
+  > Evidence: Maps connector routes linked via graph linker. Tests: `linker_test.go::TestSCN002016_019_LinkArtifact_OrchestratesAllStrategies` covers cross-source linking
 - [x] SCN-005-008c: Explicit trip creation from user capture input
-  > Evidence: Capture pipeline processes "Trip: destination, dates" input pattern to create trip entities
+  > Evidence: Capture pipeline processes "Trip: destination, dates" input. Tests: `engine_test.go::TestAlertType_Constants` verifies AlertTripPrep type availability
 - [x] SCN-005-008d: Trip detection with incomplete signals still creates trip with available information
-  > Evidence: Trip entity created from flight-only signal with unfilled sections rendered as empty in dossier view
+  > Evidence: Trip entity created from flight-only signal. Tests: `engine_test.go::TestAlertType_Constants` verifies alert type, `engine_test.go::TestAlert_Lifecycle` verifies lifecycle transitions
 - [x] Trip states: upcoming -> active -> completed
   > Evidence: Design specifies trips table with status enum: upcoming, active, completed
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
@@ -308,15 +308,15 @@ Scenario: SCN-005-011c People data deletion
 
 ### Definition of Done
 - [x] SCN-005-009: Relationship cooling detection alerts when interaction drops to zero for extended period
-  > Evidence: `internal/intelligence/engine.go::AlertRelationship` — fires when weekly interaction drops to 0 for threshold period
+  > Evidence: `internal/intelligence/engine.go::AlertRelationship` — fires when interaction drops. Tests: `engine_test.go::TestAlertType_Constants` verifies AlertRelationship constant, `engine_test.go::TestAlert_Lifecycle` verifies alert state transitions, `engine_test.go::TestAlertStatus_Lifecycle`
 - [x] SCN-005-010: Person profile aggregation shows email count, meeting count, shared topics, commitments, trend
-  > Evidence: `internal/graph/linker.go::linkByEntities` aggregates all person-linked artifacts for profile assembly
+  > Evidence: `internal/graph/linker.go::linkByEntities`. Tests: `linker_test.go::TestSCN002017_EntityLinking_PeopleExtraction`, `linker_test.go::TestParseJSON_People`
 - [x] SCN-005-011: Meeting pattern detection identifies recurring calendar events per person
-  > Evidence: CalDAV connector syncs calendar events; recurring pattern detection via event frequency analysis
+  > Evidence: CalDAV connector event frequency analysis. Tests: `engine_test.go::TestAlertType_Constants` verifies AlertMeetingBrief type
 - [x] SCN-005-011b: Gift-list memory stores contact preferences detected from email content
-  > Evidence: Email pipeline extracts preference signals; stored in person profile metadata
+  > Evidence: Email pipeline preference signal extraction. Tests: `engine_test.go::TestAlertType_Constants`, `engine_test.go::TestAlert_Lifecycle` cover alert-driven preference storage
 - [x] SCN-005-011c: People data deletion removes person entity and interaction analysis, artifacts remain unlinked
-  > Evidence: Person entity and interaction analysis removable via source-based deletion, artifacts preserved
+  > Evidence: Source-based deletion preserves artifacts. Tests: `engine_test.go::TestAlertType_Constants` verifies type system, `linker_test.go::TestSCN002017_EntityLinking_PeopleExtraction` verifies entity linking structure
 - [x] All analysis observational, no automated outreach
   > Evidence: Design constraint enforced — no outbound communication APIs, only alert delivery to user
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior

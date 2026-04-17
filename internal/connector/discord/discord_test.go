@@ -3448,12 +3448,12 @@ func TestChaos_Sync_MalformedCursorVariants(t *testing.T) {
 	})
 
 	malformed := []string{
-		`{"200000000000000001": 12345}`,         // int value instead of string
-		`{"200000000000000001": null}`,           // null value
-		`{"200000000000000001": true}`,           // bool value
-		`{"200000000000000001": []}`,             // array value
-		`[["200000000000000001","300"]]`,         // array instead of object
-		string(make([]byte, 10000)),              // large zero bytes
+		`{"200000000000000001": 12345}`,                              // int value instead of string
+		`{"200000000000000001": null}`,                               // null value
+		`{"200000000000000001": true}`,                               // bool value
+		`{"200000000000000001": []}`,                                 // array value
+		`[["200000000000000001","300"]]`,                             // array instead of object
+		string(make([]byte, 10000)),                                  // large zero bytes
 		`{"` + strings.Repeat("A", 5000) + `":"300000000000000001"}`, // huge key
 	}
 	for _, cursor := range malformed {

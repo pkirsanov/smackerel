@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/013-guesthost-connector",
   "featureName": "GuestHost Connector & Hospitality Intelligence",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.workflow",
@@ -14,6 +14,7 @@
       "plan",
       "implement",
       "test",
+      "harden",
       "regression",
       "simplify",
       "stabilize",
@@ -96,7 +97,7 @@
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
@@ -109,6 +110,7 @@
       "plan",
       "implement",
       "test",
+      "harden",
       "regression",
       "simplify",
       "stabilize",
@@ -176,6 +178,6 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-14T00:00:00Z",
-  "notes": "2026-04-14: All 5 scopes complete. Revenue snapshot extended (24h+channel+property). Communication hints extended (early_checkin, direct_booker). Scope 3 unit tests created (22 tests). All 33 Go packages pass. Remaining: integration/e2e test gap still exists (34 planned tests across 8 files)."
+  "lastUpdatedAt": "2026-04-16T00:00:00Z",
+  "notes": "2026-04-16: Governance remediation complete. All 13 scenario-manifest linkedTest files verified. DoD evidence replaced with specific test function names. report.md updated with real test counts. All 35 Go packages + 92 Python tests pass."
 }

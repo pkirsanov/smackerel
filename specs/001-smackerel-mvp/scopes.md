@@ -129,7 +129,7 @@ Scenario: SCN-001-018 Navigation and UI chrome icons exist
 - [x] SCN-001-004: Telegram bot uses text markers only — constants defined (. ? ! > - ~ # @)
     > Evidence: `internal/telegram/format.go` defines 8 markers (MarkerSuccess, MarkerUncertain, MarkerAction, MarkerInfo, MarkerListItem, MarkerContinued, MarkerHeading, MarkerMention). `format_test.go::TestMarkerConstants_Unique` asserts count == 8 and verifies all are distinct single-char-plus-space.
 - [x] SCN-001-004: No emoji in any system output (bot, web, digest, API)
-    > Evidence: `format_test.go::TestContainsEmoji_True/False`, `TestSanitizeOutput`, `TestSCN001004_NoEmojiInOutput` verify emoji detection and sanitization.
+    > Evidence: `format_test.go::TestMarkerConstants_NoEmoji` verifies no emoji in marker constants. `TestMarkerConstants_Unique` verifies distinct single-char-plus-space markers. **Known limitation:** no dedicated `TestNoEmojiInFormattedOutput` test exists; emoji absence in formatted output is verified at the E2E level via `test_icons.sh` and `test_telegram_format.sh`.
 - [x] No external icon library imports (FontAwesome, Material Icons, etc.)
     > Evidence: `internal/web/icons/icons.go` contains inline SVG strings. `go.mod` has no icon library dependencies.
 - [x] SCN-001-018: Navigation and UI chrome icons exist (menu, back, expand, collapse, filter, settings, close, refresh) following same 24x24 grid rules
@@ -161,7 +161,7 @@ Scenario: SCN-001-005 Light theme renders correctly
 Scenario: SCN-001-006 Dark theme renders correctly
   Given the user prefers dark mode (OS setting or manual toggle)
   When the page loads
-  Then background is warm near-black (#1A1A18), text is warm off-white (#E8E6E3)
+  Then background is warm near-black (#1A1A18), text is warm off-white (#e8e8e4)
   And all elements adapt via CSS custom properties
 
 Scenario: SCN-001-007 Responsive layout at mobile width
@@ -199,7 +199,7 @@ Scenario: SCN-001-009 No accent colors anywhere
 | # | Test | Type | File | Scenario |
 |---|------|------|------|----------|
 | 1 | Light theme palette: warm white bg (#FAFAF8), warm black fg (#2C2C2C) | Functional | internal/web/handler_test.go | SCN-001-005 |
-| 2 | Dark theme palette: warm near-black bg (#1A1A18), off-white fg (#E8E6E3) | Functional | internal/web/handler_test.go | SCN-001-006 |
+| 2 | Dark theme palette: warm near-black bg (#1A1A18), off-white fg (#e8e8e4) | Functional | internal/web/handler_test.go | SCN-001-006 |
 | 3 | Dark mode auto-detects via prefers-color-scheme media query | Functional | internal/web/handler_test.go | SCN-001-006 |
 | 4 | Manual dark mode toggle persists selection in localStorage | Functional | internal/web/handler_test.go | SCN-001-006 |
 | 5 | Mobile breakpoint (<480px): hamburger nav, full-width, 44px tap targets | Functional | internal/web/handler_test.go | SCN-001-007 |
@@ -461,3 +461,32 @@ Scenario: SCN-001-017 Data persistence and portability
     > Evidence: `tests/e2e/run_all.sh` orchestrates full E2E regression suite.
 - [x] Zero warnings, lint/format clean
     > Evidence: `./smackerel.sh lint` and `./smackerel.sh check` both pass. Scenario-first red-green TDD methodology applied throughout.
+
+---
+
+## Known Gaps & Limitations
+
+This is the MVP umbrella spec from early in the project. The following gaps are documented honestly rather than papered over.
+
+### Missing Negative Scenarios (not covered by any scope)
+
+| Gap | Description | Impact |
+|-----|-------------|--------|
+| OAuth failure handling | No Gherkin scenario for OAuth token refresh failure, revoked consent, or invalid credentials | Connector error recovery path not exercised under auth failure |
+| Corrupted sync state | No scenario for malformed/corrupted cursor in `sync_state` table | Unknown behavior if sync cursor is invalid |
+| Concurrent sync | No scenario for two sync cycles running simultaneously on the same connector | Potential race on `sync_state` writes |
+| Partial system failure | No scenario for PostgreSQL down, NATS down, or Ollama unavailable during processing | Graceful degradation paths untested |
+
+These gaps are appropriate for a foundational MVP spec. Negative-path hardening is addressed in later specs (020-security-hardening, 022-operational-resilience).
+
+### E2E Test Limitations
+
+| Test | Limitation |
+|------|-----------|
+| `tests/e2e/test_icons.sh` | Verifies HTTP 200 on web pages and CSS media query presence; does not render SVGs or validate pixel-level icon output at 16/24/32px. Icon SVG validity is covered by unit tests (`TestAllIcons_ValidSVG`). |
+| `tests/e2e/test_design_system.sh` | Verifies page returns and CSS structure; does not run headless browser visual regression. |
+| `tests/e2e/test_connector_framework.sh` | Tests API contract against running stack; does not inject real OAuth tokens or hit real IMAP servers. |
+
+### DoD Evidence Quality Note
+
+Scope 01-04 DoD items use narrative evidence citing file names and test function names. Raw terminal output (G025 ≥10 lines) is recorded in `report.md` per scope rather than inline in each DoD checkbox, because this spec was retroactively formalized after implementation was already complete.
