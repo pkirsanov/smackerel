@@ -204,10 +204,3 @@ func (s *Store) ResolveArtifactFromMessage(ctx context.Context, messageID, chatI
 	}
 	return artifactID, nil
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
