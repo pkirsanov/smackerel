@@ -14,13 +14,13 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [1, 3],
+    "completedScopes": [1, 2, 3, 4],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {"scope": 1, "name": "DB Migration & List Types", "status": "Done", "dependsOn": []},
-      {"scope": 2, "name": "List Store (CRUD)", "status": "Not Started", "dependsOn": [1]},
+      {"scope": 2, "name": "List Store (CRUD)", "status": "Done", "dependsOn": [1]},
       {"scope": 3, "name": "Aggregator Interface & Recipe Aggregator", "status": "Done", "dependsOn": [1]},
-      {"scope": 4, "name": "Reading & Comparison Aggregators", "status": "Not Started", "dependsOn": [3]},
+      {"scope": 4, "name": "Reading & Comparison Aggregators", "status": "Done", "dependsOn": [3]},
       {"scope": 5, "name": "List Generator", "status": "Not Started", "dependsOn": [2, 3]},
       {"scope": 6, "name": "REST API Endpoints", "status": "Not Started", "dependsOn": [5]},
       {"scope": 7, "name": "Telegram /list Command & Inline Keyboard", "status": "Not Started", "dependsOn": [5]},
