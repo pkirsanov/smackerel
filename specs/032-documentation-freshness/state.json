@@ -1,0 +1,51 @@
+{
+  "version": 3,
+  "featureDir": "specs/032-documentation-freshness",
+  "featureName": "Documentation Freshness",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": null,
+    "currentScope": null,
+    "runStartedAt": null,
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {"scope": 1, "name": "README System Requirements", "status": "Not Started", "dependsOn": []},
+      {"scope": 2, "name": "Development.md Update", "status": "Not Started", "dependsOn": []},
+      {"scope": 3, "name": "Operations Runbook", "status": "Not Started", "dependsOn": []},
+      {"scope": 4, "name": "TLS Setup Guide", "status": "Not Started", "dependsOn": []}
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-17T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  }
+}
