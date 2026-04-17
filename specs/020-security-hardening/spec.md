@@ -1,7 +1,7 @@
 # Spec: Security Hardening — Docker Binding, Auth Enforcement, Crypto Hygiene
 
 **Feature:** 020-security-hardening
-**Status:** Draft
+**Status:** Done
 **Created:** 2026-04-10
 
 ---

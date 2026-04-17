@@ -43,13 +43,21 @@
         "statusAfter": "done",
         "timestamp": "2026-04-10T12:00:00Z",
         "summary": "Implemented all 3 scopes. Scope 1: Bound all 5 Docker service ports to 127.0.0.1, replaced NATS --auth CLI arg with config file mount, added host_bind_address to SST pipeline, generated nats.conf. Scope 2: Created ml/app/auth.py with verify_auth() FastAPI dependency using hmac.compare_digest, applied webAuthMiddleware to Web UI routes, added httprate.LimitByIP(10, 1min) to OAuth start endpoint, added go-chi/httprate dependency. Scope 3: Changed decrypt() to return errors on all 3 failure paths when encKey is non-nil, added startup WARN log for empty auth_token in cmd/core/main.go and ml/app/main.py. Updated 1 existing test (PlaintextFallback → FailClosed) and added 4 new Go tests + 7 new Python tests. All 51 unit tests pass (Go + Python)."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["finalize"],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "timestamp": "2026-04-17T00:00:00Z",
+        "summary": "Certified spec 020-security-hardening. All 6 artifacts present (spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json). 3 scopes all Done with 32/32 DoD items checked. Report contains code-verified reconciliation evidence for all 3 scopes plus 2 security sweeps (SEC-SWEEP-001/002 and GAP-020-R30-001/002/003). Uservalidation has all 26 acceptance items checked. 9 security findings addressed. Unit tests: Go 33 packages + Python 75 tests."
       }
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "certified",
     "completedScopes": [1, 2, 3],
-    "certifiedCompletedPhases": ["implement", "test"],
+    "certifiedCompletedPhases": ["implement", "test", "finalize"],
     "scopeProgress": [
       {"scope": 1, "status": "done", "dodChecked": 11, "dodTotal": 11},
       {"scope": 2, "status": "done", "dodChecked": 12, "dodTotal": 12},

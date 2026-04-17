@@ -16,6 +16,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/digest"
+	"github.com/smackerel/smackerel/internal/domain"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/stringutil"
@@ -33,6 +34,7 @@ type ResultSubscriber struct {
 	KnowledgeEnabled      bool
 	KnowledgeStore        *knowledge.KnowledgeStore
 	PromptContractVersion string
+	DomainRegistry        *domain.Registry
 	done                  chan struct{}
 	wg                    sync.WaitGroup
 	mu                    sync.Mutex
@@ -235,6 +237,16 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 	if rs.KnowledgeEnabled && payload.Success {
 		if err := rs.publishSynthesisRequest(ctx, &payload); err != nil {
 			slog.Warn("synthesis publish failed (fail-open)",
+				"artifact_id", payload.ArtifactID,
+				"error", err,
+			)
+		}
+	}
+
+	// Best-effort domain extraction — fail-open, never blocks ingestion (SCN-026-01)
+	if rs.DomainRegistry != nil && payload.Success {
+		if err := rs.publishDomainExtractionRequest(ctx, &payload); err != nil {
+			slog.Warn("domain extraction publish failed (fail-open)",
 				"artifact_id", payload.ArtifactID,
 				"error", err,
 			)
@@ -478,6 +490,142 @@ func (rs *ResultSubscriber) publishSynthesisRequest(ctx context.Context, payload
 	slog.Info("synthesis request published",
 		"artifact_id", payload.ArtifactID,
 		"contract_version", rs.PromptContractVersion,
+	)
+	return nil
+}
+
+// maxDomainContentChars is the maximum character count for content_raw sent to domain extraction.
+const maxDomainContentChars = 15000
+
+// publishDomainExtractionRequest matches the artifact against the domain registry
+// and publishes a domain extraction request if a contract is found.
+// Fail-open: errors are returned for logging but must never block ingestion.
+func (rs *ResultSubscriber) publishDomainExtractionRequest(ctx context.Context, payload *NATSProcessedPayload) error {
+	if rs.DomainRegistry == nil {
+		return nil
+	}
+
+	// Look up source URL from DB for URL qualifier matching
+	var sourceURL string
+	err := rs.DB.QueryRow(ctx, `SELECT COALESCE(source_url, '') FROM artifacts WHERE id = $1`, payload.ArtifactID).Scan(&sourceURL)
+	if err != nil {
+		return fmt.Errorf("load source_url: %w", err)
+	}
+
+	contract := rs.DomainRegistry.Match(payload.Result.ArtifactType, sourceURL)
+	if contract == nil {
+		return nil // no matching domain schema — skip silently
+	}
+
+	// Load content from DB
+	var contentRaw, title, summary string
+	err = rs.DB.QueryRow(ctx,
+		`SELECT COALESCE(content_raw, ''), COALESCE(title, ''), COALESCE(summary, '') FROM artifacts WHERE id = $1`,
+		payload.ArtifactID,
+	).Scan(&contentRaw, &title, &summary)
+	if err != nil {
+		return fmt.Errorf("load artifact content: %w", err)
+	}
+
+	// Content length gating
+	if contract.MinContentLen > 0 && len(contentRaw) < contract.MinContentLen && len(summary) < contract.MinContentLen {
+		// Mark as skipped
+		_, _ = rs.DB.Exec(ctx,
+			`UPDATE artifacts SET domain_extraction_status = 'skipped' WHERE id = $1`,
+			payload.ArtifactID,
+		)
+		slog.Debug("domain extraction skipped — content too short",
+			"artifact_id", payload.ArtifactID,
+			"content_len", len(contentRaw),
+			"min_required", contract.MinContentLen,
+		)
+		return nil
+	}
+
+	// Truncate content
+	if len(contentRaw) > maxDomainContentChars {
+		contentRaw = stringutil.TruncateUTF8(contentRaw, maxDomainContentChars)
+	}
+
+	req := &DomainExtractRequest{
+		ArtifactID:      payload.ArtifactID,
+		ContentType:     payload.Result.ArtifactType,
+		Title:           title,
+		Summary:         summary,
+		ContentRaw:      contentRaw,
+		SourceURL:       sourceURL,
+		ContractVersion: contract.Version,
+	}
+
+	if err := ValidateDomainExtractRequest(req); err != nil {
+		return fmt.Errorf("validate domain request: %w", err)
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal domain request: %w", err)
+	}
+
+	if len(data) > MaxNATSMessageSize {
+		return fmt.Errorf("domain request too large: %d bytes", len(data))
+	}
+
+	// Mark as pending before publish
+	_, _ = rs.DB.Exec(ctx,
+		`UPDATE artifacts SET domain_extraction_status = 'pending', domain_schema_version = $2 WHERE id = $1`,
+		payload.ArtifactID, contract.Version,
+	)
+
+	if err := rs.NATS.Publish(ctx, smacknats.SubjectDomainExtract, data); err != nil {
+		return fmt.Errorf("publish to domain.extract: %w", err)
+	}
+
+	slog.Info("domain extraction request published",
+		"artifact_id", payload.ArtifactID,
+		"contract_version", contract.Version,
+	)
+	return nil
+}
+
+// HandleDomainExtractedResult processes a domain.extracted response from the ML sidecar.
+func (rs *ResultSubscriber) HandleDomainExtractedResult(ctx context.Context, resp *DomainExtractResponse) error {
+	if err := ValidateDomainExtractResponse(resp); err != nil {
+		return fmt.Errorf("validate domain response: %w", err)
+	}
+
+	if !resp.Success {
+		_, err := rs.DB.Exec(ctx,
+			`UPDATE artifacts SET domain_extraction_status = 'failed', updated_at = NOW() WHERE id = $1`,
+			resp.ArtifactID,
+		)
+		if err != nil {
+			return fmt.Errorf("update artifact domain status to failed: %w", err)
+		}
+		slog.Warn("domain extraction failed",
+			"artifact_id", resp.ArtifactID,
+			"error", resp.Error,
+		)
+		return nil
+	}
+
+	_, err := rs.DB.Exec(ctx,
+		`UPDATE artifacts SET
+			domain_data = $2,
+			domain_extraction_status = 'completed',
+			domain_schema_version = $3,
+			domain_extracted_at = NOW(),
+			updated_at = NOW()
+		WHERE id = $1`,
+		resp.ArtifactID, resp.DomainData, resp.ContractVersion,
+	)
+	if err != nil {
+		return fmt.Errorf("store domain extraction result: %w", err)
+	}
+
+	slog.Info("domain extraction completed",
+		"artifact_id", resp.ArtifactID,
+		"contract_version", resp.ContractVersion,
+		"processing_ms", resp.ProcessingTimeMs,
 	)
 	return nil
 }

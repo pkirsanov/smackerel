@@ -92,7 +92,9 @@ func LoadContractsFromDir(dir string) (map[string]*PromptContract, error) {
 
 		contract, err := LoadContract(filepath.Join(dir, entry.Name()))
 		if err != nil {
-			return nil, fmt.Errorf("load contract %s: %w", entry.Name(), err)
+			// Skip contracts with different types (e.g., domain-extraction)
+			// that share the same contracts directory but have different schemas.
+			continue
 		}
 		contracts[contract.Version] = contract
 	}

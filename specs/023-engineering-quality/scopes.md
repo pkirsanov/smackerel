@@ -11,9 +11,9 @@
 ### New Types & Signatures
 
 - `api.Pipeliner` interface — replaces `interface{}` for Pipeline field
-- `api.Searcher` interface — replaces `interface{}` for SearchEngine field
-- `api.DigestGenerator` interface — replaces `interface{}` for DigestGen field
-- `api.WebUI` interface — replaces `interface{}` for WebHandler field
+- `api.Searcher` interface — `Search(ctx, req SearchRequest) ([]SearchResult, int, string, error)`; replaces `interface{}` for SearchEngine field
+- `api.DigestGenerator` interface — `GetLatest(ctx, date string) (*digest.Digest, error)`; replaces `interface{}` for DigestGen field
+- `api.WebUI` interface — 16 handler methods (7 original + 9 from specs 009/019/025); replaces `interface{}` for WebHandler field
 - `api.OAuthFlow` interface — replaces `interface{}` for OAuthHandler field
 - `api.TelegramHealthChecker` interface — new, for Telegram bot health
 - `Dependencies.mlClientOnce sync.Once` — race-safe lazy init
@@ -73,9 +73,9 @@ Scenario: SCN-023-03 Dead checkAuth method is removed
 
 **Interface definitions (in `internal/api/health.go` or a new `internal/api/interfaces.go`):**
 - `Pipeliner` — `Process(ctx, *pipeline.ProcessRequest) (*pipeline.ProcessResult, error)`
-- `Searcher` — `Search(ctx, query, opts) ([]SearchResult, int, string, error)`
-- `DigestGenerator` — `GetLatest(ctx, date) (*digest.Result, error)`
-- `WebUI` — 7 handler methods (SearchPage, SearchResults, ArtifactDetail, DigestPage, TopicsPage, SettingsPage, StatusPage)
+- `Searcher` — `Search(ctx, req SearchRequest) ([]SearchResult, int, string, error)`
+- `DigestGenerator` — `GetLatest(ctx, date) (*digest.Digest, error)`
+- `WebUI` — 16 handler methods (SearchPage, SearchResults, ArtifactDetail, DigestPage, TopicsPage, SettingsPage, StatusPage, SyncConnectorHandler, BookmarkUploadHandler, KnowledgeDashboard, ConceptsList, ConceptDetail, EntitiesList, EntityDetail, LintReport, LintFindingDetail)
 - `OAuthFlow` — 3 handler methods (StartHandler, CallbackHandler, StatusHandler)
 - `TelegramHealthChecker` — `Healthy() bool`
 

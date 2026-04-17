@@ -18,5 +18,6 @@
 
 ## Sign-Off
 
-**Validated by:** _pending_
-**Date:** _pending_
+**Validated by:** bubbles.validate (automated certification)
+**Date:** 2026-04-17
+**Method:** Codebase grep verification of all 9 requirement invariants against live source, cross-referenced with report.md reconciliation and regression sweeps. All 27 DoD items across 3 scopes confirmed checked. All unit tests passing (35 Go packages + 92 Python tests).

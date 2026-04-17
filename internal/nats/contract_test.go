@@ -82,6 +82,8 @@ func TestSCN002054_GoSubjectsMatchContract(t *testing.T) {
 		"SubjectSynthesisExtracted":         SubjectSynthesisExtracted,
 		"SubjectSynthesisCrossSource":       SubjectSynthesisCrossSource,
 		"SubjectSynthesisCrossSourceResult": SubjectSynthesisCrossSourceResult,
+		"SubjectDomainExtract":              SubjectDomainExtract,
+		"SubjectDomainExtracted":            SubjectDomainExtracted,
 	}
 
 	// Every Go constant must exist in the contract
@@ -163,6 +165,7 @@ func TestSCN002054_GoSubjectPairsMatchContract(t *testing.T) {
 		{SubjectSeasonalAnalyze, SubjectSeasonalAnalyzed},
 		{SubjectSynthesisExtract, SubjectSynthesisExtracted},
 		{SubjectSynthesisCrossSource, SubjectSynthesisCrossSourceResult},
+		{SubjectDomainExtract, SubjectDomainExtracted},
 	}
 
 	if len(contract.RequestResponsePairs) != len(goPairs) {

@@ -38,12 +38,12 @@ This is a wiring-only fix. No new connector logic is needed — only registratio
 
 **Intent:** All 15 connector packages are reachable at runtime — the 5 currently dead connectors (Discord, Twitter/X, Weather, Gov Alerts, Financial Markets) are registered with the supervisor and configurable via `smackerel.yaml`, following the same pattern as the existing 10 connectors.
 
-**Success Signal:** When `enabled: true` is set for any of the 5 connectors in `smackerel.yaml` with valid credentials/config, the connector starts, syncs, and reports health through the supervisor — identical to the existing 9 connectors.
+**Success Signal:** When `enabled: true` is set for any of the 5 connectors in `smackerel.yaml` with valid credentials/config, the connector starts, syncs, and reports health through the supervisor — identical to the existing 10 connectors.
 
 **Hard Constraints:**
 - All connectors default to `enabled: false` — no connector auto-starts without explicit opt-in
 - All config values originate from `config/smackerel.yaml` — zero hardcoded defaults (SST policy)
-- Existing 9 connectors are unaffected — no behavioral regression
+- Existing 10 connectors are unaffected — no behavioral regression
 - No new connector logic — only registration, instantiation, and config wiring
 
 **Failure Condition:** Any of the 5 connectors remains unreachable at runtime after this work, or enabling one causes a regression in existing connectors.
@@ -158,13 +158,13 @@ And none are in the "running" state (all disabled by default)
 Given the Discord connector was previously dead code
 When a Self-Hoster sets discord.enabled=true with valid bot_token and restarts
 Then the Discord connector starts, syncs channels, and reports healthy
-And its behavior is identical to any of the existing 9 connectors
+And its behavior is identical to any of the existing 10 connectors
 ```
 
 ### BS-003: Existing connectors are unaffected by new registrations
 
 ```
-Given the existing 9 connectors operate correctly
+Given the existing 10 connectors operate correctly
 When the 5 new connectors are registered alongside them
 Then no existing connector changes behavior, start order, health status, or sync schedule
 ```
@@ -240,7 +240,7 @@ And it appears as "disconnected" in the health endpoint
 
 ### R-001: Register all 5 connectors in main.go
 
-The 5 missing connectors MUST be instantiated and registered with the supervisor in `cmd/core/main.go`, following the exact same pattern as the existing 9 connectors:
+The 5 missing connectors MUST be instantiated and registered with the supervisor in `cmd/core/main.go`, following the exact same pattern as the existing 10 connectors:
 
 ```gherkin
 Scenario: Discord connector is registered at startup
@@ -355,7 +355,7 @@ Scenario: Health endpoint shows all 15 connectors
 
 ### R-006: No regression in existing connectors
 
-The registration of the 5 new connectors MUST NOT alter the behavior of the existing 9 connectors.
+The registration of the 5 new connectors MUST NOT alter the behavior of the existing 10 connectors.
 
 ```gherkin
 Scenario: Existing Gmail connector unaffected

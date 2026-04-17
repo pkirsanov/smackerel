@@ -36,12 +36,12 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 | # | Scope | Surfaces | Key Tests | Status |
 |---|---|---|---|---|
-| 1 | Archive Parser | Go core | 12 unit tests | Not Started |
-| 2 | Thread Reconstruction | Go core | 8 unit tests | Not Started |
-| 3 | Normalizer & Tier Assignment | Go core | 14 unit tests | Not Started |
-| 4 | Twitter Connector & Config | Go core, Config | 8 unit + 4 integration + 2 e2e | Not Started |
-| 5 | Tweet Link Extraction | Go core | 6 unit + 3 integration + 1 e2e | Not Started |
-| 6 | API Client (Opt-In) | Go core | 6 unit + 3 integration + 1 e2e | Not Started |
+| 1 | Archive Parser | Go core | 12 unit tests | Done |
+| 2 | Thread Reconstruction | Go core | 8 unit tests | Done |
+| 3 | Normalizer & Tier Assignment | Go core | 14 unit tests | Done |
+| 4 | Twitter Connector & Config | Go core, Config | 8 unit + 4 integration + 2 e2e | Done |
+| 5 | Tweet Link Extraction | Go core | 6 unit + 3 integration + 1 e2e | Done |
+| 6 | API Client (Opt-In) | Go core | 6 unit + 3 integration + 1 e2e | Done |
 
 ---
 

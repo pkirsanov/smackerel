@@ -161,6 +161,18 @@
       "request": "synthesis.crosssource",
       "stream": "SYNTHESIS",
       "critical": false
+    },
+    "domain.extract": {
+      "direction": "core_to_ml",
+      "response": "domain.extracted",
+      "stream": "DOMAIN",
+      "critical": false
+    },
+    "domain.extracted": {
+      "direction": "ml_to_core",
+      "request": "domain.extract",
+      "stream": "DOMAIN",
+      "critical": false
     }
   },
   "streams": {
@@ -171,6 +183,7 @@
     "INTELLIGENCE": { "subjects_pattern": "learning.>", "additional_subjects": ["content.>", "monthly.>", "quickref.>", "seasonal.>"] },
     "ALERTS": { "subjects_pattern": "alerts.>" },
     "SYNTHESIS": { "subjects_pattern": "synthesis.>" },
+    "DOMAIN": { "subjects_pattern": "domain.>" },
     "DEADLETTER": { "subjects_pattern": "deadletter.>" }
   },
   "request_response_pairs": [
@@ -186,6 +199,7 @@
     { "request": "quickref.generate", "response": "quickref.generated" },
     { "request": "seasonal.analyze", "response": "seasonal.analyzed" },
     { "request": "synthesis.extract", "response": "synthesis.extracted" },
-    { "request": "synthesis.crosssource", "response": "synthesis.crosssource.result" }
+    { "request": "synthesis.crosssource", "response": "synthesis.crosssource.result" },
+    { "request": "domain.extract", "response": "domain.extracted" }
   ]
 }

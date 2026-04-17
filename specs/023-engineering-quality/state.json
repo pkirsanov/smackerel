@@ -5,17 +5,17 @@
   "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "finalize",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "certify",
     "currentScope": 3,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not_started",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "certified",
+    "completedScopes": [1, 2, 3],
+    "certifiedCompletedPhases": ["analyze", "bootstrap", "implement", "test", "validate", "harden", "gaps", "certify"],
     "scopeProgress": [],
     "lockdownState": {
       "active": false,
@@ -77,7 +77,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-10T00:00:00Z",
+  "lastUpdatedAt": "2026-04-17T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

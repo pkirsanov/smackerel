@@ -32,7 +32,7 @@
 
 | # | Name | Surfaces | Tests | DoD Summary | Status |
 |---|------|----------|-------|-------------|--------|
-| 1 | Wire All 5 Connectors | Go core (`main.go`), Config (`smackerel.yaml`, `config.sh`), Generated env | Unit, Integration, E2E-API | All 15 connectors registered, config entries exist, health reports all 15 | In Progress |
+| 1 | Wire All 5 Connectors | Go core (`main.go`), Config (`smackerel.yaml`, `config.sh`), Generated env | Unit, Integration, E2E-API | All 15 connectors registered, config entries exist, health reports all 15 | Done |
 
 ---
 
@@ -73,7 +73,7 @@ Scenario: SCN-019-005 Health endpoint shows all 15 connectors
   And disabled connectors show status "disconnected"
 
 Scenario: SCN-019-006 Existing connectors unaffected by new registrations
-  Given the existing 9 connectors operate correctly
+  Given the existing 10 connectors operate correctly
   When the 5 new connectors are registered alongside them
   Then no existing connector changes behavior, start order, or health status
 ```
@@ -120,7 +120,7 @@ Scenario: SCN-019-006 Existing connectors unaffected by new registrations
 ### Definition of Done
 
 - [x] All 5 connectors imported, instantiated, and registered in `cmd/core/main.go`
-- [x] 5 conditional-start blocks follow exact pattern of existing 9 connectors
+- [x] 5 conditional-start blocks follow exact pattern of existing 10 connectors
 - [x] 4 new YAML config blocks added to `config/smackerel.yaml` (Discord already exists)
 - [x] `scripts/commands/config.sh` extracts all new env vars via `yaml_get`
 - [x] `./smackerel.sh config generate` produces env vars for all 5 connectors in `config/generated/dev.env`
@@ -129,5 +129,5 @@ Scenario: SCN-019-006 Existing connectors unaffected by new registrations
 - [x] No hardcoded fallback defaults anywhere (SST policy)
 - [x] Empty credentials cause `Connect()` to fail with descriptive error, not silent fallback
 - [x] All 5 connectors default to `enabled: false`
-- [x] Existing 9 connectors are completely unaffected (regression tests pass)
+- [x] Existing 10 connectors are completely unaffected (regression tests pass)
 - [x] Helper functions (`parseJSONArray`, `parseJSONObject`, `parseFloatEnv`) added to `main.go`

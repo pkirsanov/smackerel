@@ -4,7 +4,67 @@ Links: [uservalidation.md](uservalidation.md)
 
 ## Reports
 
-_No scopes have been implemented yet._
+All 6 scopes implemented. 166 test functions in `alerts_test.go`. See individual reports below for quality sweeps.
+
+---
+
+## Certification Report — 2026-04-17
+
+**Trigger:** `certify` (bubbles.validate)
+**Mode:** `certify`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.validate`
+
+### Decision: CERTIFIED
+
+All 6 scopes and 7 phases certified as done.
+
+### Certification Evidence
+
+| Criterion | Result | Evidence |
+|-----------|--------|----------|
+| All 6 scopes Done | PASS | scopes.md — all DoD items checked with evidence |
+| Unit tests pass | PASS | `./smackerel.sh test unit` — all 35 Go packages pass, 92 Python tests pass |
+| Test function count | 166 | `grep -c '^func Test' internal/connector/alerts/alerts_test.go` = 166 |
+| Implementation LOC | 1797 | `internal/connector/alerts/alerts.go` |
+| Test LOC | 5101 | `internal/connector/alerts/alerts_test.go` |
+| Quality probes completed | 10 | chaos (Apr 10), simplify (Apr 10), test-to-doc (Apr 11), reconcile (Apr 11), regression (Apr 12), security (Apr 13), harden (Apr 14), chaos R26 (Apr 14), improve R24 (Apr 14), improve-existing (Apr 15) |
+| Issues found and fixed | 27+ | Race conditions, memory leaks, input validation, fabricated evidence, config wiring, XSS, credential leaks, IEEE 754 bypass, dedup regression, tautological logic, notification suppression, content truncation |
+| Connector interface | Compliant | ID(), Connect(), Sync(), Health(), Close() |
+| Config SST | Compliant | smackerel.yaml → config.sh → dev.env → main.go, all 7 source flags wired |
+| NATS contract | Compliant | alerts.notify subject + ALERTS stream in nats_contract.json |
+| Security controls | 10 | Response size limiting, input sanitization, URL scheme allowlisting, coordinate validation, key redaction, HTTP timeout, User-Agent, dedup eviction, mutex protection, panic recovery |
+
+### Scopes Certified
+
+| Scope | Name | DoD Items | Tests |
+|-------|------|-----------|-------|
+| 1 | Proximity Filter & Alert Types | 8/8 checked | 12+ |
+| 2 | USGS Earthquake Source | 6/6 checked | 10+ |
+| 3 | NWS Weather Alerts Source | 7/7 checked | 17+ |
+| 4 | Gov Alerts Connector & Config | 8/8 checked | 77+ |
+| 5 | Additional Sources | 8/8 checked | 30+ |
+| 6 | Proactive Delivery & Travel Alerts | 6/6 checked | 10+ |
+
+### Phases Certified
+
+| Phase | Status |
+|-------|--------|
+| select | Certified |
+| bootstrap | Certified |
+| implement | Certified |
+| test | Certified |
+| validate | Certified |
+| audit | Certified |
+| docs | Certified |
+
+### State Changes
+
+| File | Change |
+|------|--------|
+| `state.json` | `status` → `done`, `certification.status` → `certified`, `certifiedCompletedPhases` → all 7 phases, `lastCertifiedAt` → 2026-04-17 |
+| `uservalidation.md` | Status → Done, final checklist item checked with certification evidence |
+| `report.md` | Added this certification report |
 
 ---
 

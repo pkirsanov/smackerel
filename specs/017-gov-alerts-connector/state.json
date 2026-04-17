@@ -5,11 +5,11 @@
   "status": "done",
   "workflowMode": "reconcile-to-doc",
   "execution": {
-    "activeAgent": "bubbles.workflow",
+    "activeAgent": "bubbles.validate",
     "currentPhase": "finalize",
     "currentScope": 6,
     "runStartedAt": "2026-04-09T00:00:00Z",
-    "completedScopes": [],
+    "completedScopes": [1, 2, 3, 4, 5, 6],
     "completedPhaseClaims": [
       "select",
       "bootstrap",
@@ -22,13 +22,18 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in-progress",
-    "completedScopes": [],
+    "status": "certified",
+    "completedScopes": [1, 2, 3, 4, 5, 6],
     "certifiedCompletedPhases": [
       "select",
-      "bootstrap"
+      "bootstrap",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
     ],
-    "lastCertifiedAt": null,
+    "lastCertifiedAt": "2026-04-17T00:00:00Z",
     "reopenHistory": []
   },
   "policySnapshot": {
