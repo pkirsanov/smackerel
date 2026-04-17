@@ -1,8 +1,8 @@
 {
-  "installedVersion": "3.4.29",
+  "installedVersion": "3.4.32",
   "installMode": "remote-ref",
   "sourceRef": "main",
-  "sourceGitSha": "7f296db8552228b91c50cc48a057e6658c1c752b",
+  "sourceGitSha": "874a608004359bc591c9a255d627120528e57ec7",
   "sourceDirty": false,
-  "installedAt": "2026-04-16T21:57:11Z"
+  "installedAt": "2026-04-17T02:33:26Z"
 }
