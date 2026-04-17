@@ -220,6 +220,7 @@ max_iterations = 5
 for iteration in 1..max_iterations:
     run Phase 1 (Task/Scope Verification)
     run Phase 1.5 (Scope Artifact Coherence)
+    run Phase 1.7 (Test Plan Audit)
     run Phase 2 (Code Quality Deep Review)
     run Phase 3 (Complete Test Execution)
     run Phase 3b (Test Compliance Review)
@@ -330,7 +331,101 @@ dod_test_items=$(grep -c '^\- \[[ x]\].*test.*pass\|^\- \[[ x]\].*E2E\|^\- \[[ x
 echo "Gherkin: $gherkin_count, Test Plan: $test_plan_rows, DoD test items: $dod_test_items"
 ```
 
-**STOP if any scope is incoherent. Fix the scope artifacts before proceeding to Phase 2.**
+**STOP if any scope is incoherent. Fix the scope artifacts before proceeding to Phase 1.7.**
+
+---
+
+### Phase 1.7: Test Plan Audit (MANDATORY)
+
+**Purpose:** Validate that the Test Plan in each scope is semantically complete, repo-realistic, and faithfully represents the Gherkin scenarios — catching test-planning weaknesses before implementation begins or before declaring implementation hardened.
+
+This phase runs in BOTH planning-only modes (`product-to-planning`, `spec-scope-hardening`) and delivery modes (`full-delivery`, `product-to-delivery`, etc.). In planning-only modes, it is the primary quality signal for test readiness. In delivery modes, it validates that the plan still holds against the implemented codebase.
+
+#### 1.7.1 Test Taxonomy Completeness
+
+For each scope, cross-reference the impacted surfaces (backend, frontend, infra, etc.) against the Canonical Test Taxonomy (`agent-common.md`). Every impacted surface MUST have all applicable test types in the Test Plan.
+
+| Impacted Surface | Required Test Types |
+|-----------------|---------------------|
+| Backend logic only | unit, functional (if DB), integration, e2e-api |
+| Frontend/UI only | unit, ui-unit, e2e-ui |
+| Backend + Frontend | unit, ui-unit, integration, e2e-api, e2e-ui |
+| API contract change | unit, integration, e2e-api |
+| Database schema change | unit, functional, integration, e2e-api |
+| Performance-sensitive path | unit, integration, stress, load, e2e-api |
+| Bug fix (any) | unit (regression), integration, e2e-api and/or e2e-ui (regression) |
+
+**Finding format:** `TEST_TAXONOMY_GAP: Scope N touches [surface] but Test Plan lacks [test type] rows.`
+
+Route missing test type rows to `bubbles.plan` via `runSubagent`.
+
+#### 1.7.2 Gherkin-to-Test Semantic Fidelity
+
+For each Gherkin scenario, verify that the mapped Test Plan entry **semantically validates the scenario's behavioral claim** — not just that a row exists.
+
+**Semantic match criteria:**
+- The test description references the same actor, action, and observable outcome as the Gherkin scenario
+- The test type matches the scenario's domain (UI scenarios → e2e-ui, API scenarios → e2e-api)
+- The test is not a proxy (status-code-only, existence-only, or element-visibility-only check when the scenario claims behavioral validation)
+
+**Finding format:** `SEMANTIC_MISMATCH: Scope N, SCN-XXX-YYY claims "[behavioral claim]" but mapped test only checks "[proxy signal]".`
+
+#### 1.7.3 Repo-Realistic Test Paths
+
+Scan the repo's actual test directory structure and verify that planned test file paths follow the existing conventions.
+
+**Checks:**
+- Test directory exists (e.g., `tests/`, `tests/e2e/`, `dashboard/e2e/tests/`, etc.)
+- File naming follows the repo's established pattern (e.g., `*_test.rs`, `*.spec.ts`, `*_test.go`)
+- Test command references match the commands in `.specify/memory/agents.md`
+
+**Finding format:** `UNREALISTIC_PATH: Scope N plans test at "[planned path]" but repo uses "[actual pattern]".`
+
+**In planning-only modes:** Route path corrections to `bubbles.plan` via `runSubagent`.
+**In delivery modes:** Verify the actual test files exist at the planned paths.
+
+#### 1.7.4 Regression Coverage Quality
+
+For each scope, verify that:
+- **Every new/changed behavior** has at least one persistent `Regression:` E2E row in the Test Plan
+- **Bug-fix scopes** have at least one adversarial regression entry (input that would fail if the bug were reintroduced)
+- **Renames/removals** have consumer-facing regression rows (not just producer-surface tests)
+- **Shared infrastructure changes** have an independent canary test row
+
+**Finding format:** `REGRESSION_GAP: Scope N changes [behavior] but Test Plan has no regression E2E row for it.`
+**Finding format:** `TAUTOLOGICAL_REGRESSION: Scope N (bug fix) has regression entries but all test data satisfies the broken code path — no adversarial case.`
+
+#### 1.7.5 Cross-Scope Test Deduplication
+
+Scan consecutive scopes for redundant identical test entries — the same test file, same scenario, same description appearing in multiple scopes without justified reason.
+
+**Finding format:** `DUPLICATE_TEST: Test "[description]" at "[path]" appears in Scope N and Scope M — deduplicate or justify.`
+
+#### 1.7.6 test-plan.json Sync Verification
+
+If `test-plan.json` exists in the feature directory, verify:
+- Every scope in `test-plan.json` maps to an active scope in `scopes.md`
+- Test entries in JSON match the Markdown Test Plan table rows (type, category, file path, scenario ID)
+- No orphaned entries exist in either direction
+
+**Finding format:** `PLAN_JSON_DRIFT: test-plan.json scope [X] has [N] entries but scopes.md has [M] rows — sync required.`
+
+#### 1.7.7 Test Plan Audit Summary
+
+```markdown
+### Test Plan Audit
+
+| Check | Scopes Audited | Findings | Severity |
+|-------|----------------|----------|----------|
+| Taxonomy completeness | N | [count] | [critical/warning] |
+| Semantic fidelity | N | [count] | [critical/warning] |
+| Repo-realistic paths | N | [count] | [warning] |
+| Regression coverage | N | [count] | [critical/warning] |
+| Cross-scope dedup | N | [count] | [info] |
+| test-plan.json sync | 1 | [count] | [warning] |
+```
+
+**STOP if any `critical` findings exist. Route to `bubbles.plan` for corrections before proceeding to Phase 2.**
 
 ---
 

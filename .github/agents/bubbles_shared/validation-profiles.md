@@ -125,6 +125,12 @@ Use these sections as the single source of truth for agent-specific Tier 2 compl
 | H1 | Findings classified with evidence | No speculative hardening claims |
 | H2 | Fixes verified | Impacted checks rerun after fixes |
 | H3 | Required artifact updates made | Scope/report/state outputs reflect new work |
+| H4 | Test taxonomy completeness | Every impacted surface has all required test types in Test Plan |
+| H5 | Gherkin-to-test semantic fidelity | Every Gherkin scenario maps to a test that validates its behavioral claim, not a proxy signal |
+| H6 | Repo-realistic test paths | Planned test file paths follow the repo's actual directory structure and naming conventions |
+| H7 | Regression coverage quality | Every new/changed behavior has regression E2E rows; bug-fix scopes have adversarial regression entries |
+| H8 | Cross-scope test deduplication | No redundant identical test entries across consecutive scopes without justification |
+| H9 | test-plan.json sync | JSON and Markdown Test Plan tables are consistent with zero orphaned entries |
 
 ## Gaps
 
