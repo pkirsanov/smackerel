@@ -47,6 +47,15 @@ func NewRouter(deps *Dependencies) http.Handler {
 			// Bookmark import endpoint (Phase 2)
 			r.Post("/bookmarks/import", deps.BookmarkImportHandler)
 
+			// Annotation endpoints (spec 027)
+			if deps.AnnotationHandlers != nil {
+				r.Route("/artifacts/{id}/annotations", func(r chi.Router) {
+					r.Post("/", deps.AnnotationHandlers.CreateAnnotation)
+					r.Get("/", deps.AnnotationHandlers.GetAnnotations)
+					r.Get("/summary", deps.AnnotationHandlers.GetAnnotationSummary)
+				})
+			}
+
 			// Knowledge layer endpoints (Scope 3)
 			r.Route("/knowledge", func(r chi.Router) {
 				r.Get("/concepts", deps.KnowledgeConceptsHandler)

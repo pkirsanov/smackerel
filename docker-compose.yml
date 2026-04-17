@@ -213,6 +213,7 @@ services:
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts
     volumes:
       - ./config/prompt_contracts:/app/prompt_contracts:ro
+    stop_grace_period: 15s
     depends_on:
       nats:
         condition: service_healthy
