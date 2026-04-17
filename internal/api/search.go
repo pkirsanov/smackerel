@@ -213,6 +213,24 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		)
 	}
 
+	// Step 0.5: Parse domain intent (e.g., "recipes with chicken", "cameras under $500")
+	if intent := parseDomainIntent(req.Query); intent != nil {
+		if req.Filters.Domain == "" {
+			req.Filters.Domain = intent.Domain
+		}
+		if len(intent.Attributes) > 0 && req.Filters.Ingredient == "" {
+			req.Filters.Ingredient = intent.Attributes[0]
+		}
+		if intent.Cleaned != "" {
+			req.Query = intent.Cleaned
+		}
+		slog.Info("domain intent parsed",
+			"domain", intent.Domain,
+			"attributes", intent.Attributes,
+			"price_max", intent.PriceMax,
+		)
+	}
+
 	// Temporal-only query — use time-range-filtered recency query, skip embedding
 	if req.Query == "" {
 		results, total, err := s.timeRangeSearch(ctx, req)

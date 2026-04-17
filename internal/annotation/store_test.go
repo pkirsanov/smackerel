@@ -62,24 +62,6 @@ func TestNewStore_NilPool(t *testing.T) {
 	}
 }
 
-func TestMin_EdgeCases(t *testing.T) {
-	cases := []struct {
-		a, b, expected int
-	}{
-		{8, 10, 8},
-		{8, 3, 3},
-		{0, 0, 0},
-		{8, 8, 8},
-		{1, 100, 1},
-	}
-	for _, tc := range cases {
-		got := min(tc.a, tc.b)
-		if got != tc.expected {
-			t.Errorf("min(%d, %d) = %d, want %d", tc.a, tc.b, got, tc.expected)
-		}
-	}
-}
-
 func TestAnnotationIDGeneration_ShortArtifactID(t *testing.T) {
 	// Verify min(8, len) doesn't panic on short artifact IDs
 	shortIDs := []string{"a", "ab", "abc", "abcd1234", "abcdefghijklmnop"}

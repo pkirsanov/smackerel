@@ -226,10 +226,3 @@ func (s *Store) ArchiveList(ctx context.Context, listID string) error {
 	}
 	return nil
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

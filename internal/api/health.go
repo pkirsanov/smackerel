@@ -98,6 +98,9 @@ type Dependencies struct {
 	Version            string
 	CommitHash         string
 
+	// Annotation handlers (optional — nil when annotations not configured)
+	AnnotationHandlers *AnnotationHandlers
+
 	// Knowledge layer (optional — nil when knowledge is disabled)
 	KnowledgeStore                  KnowledgeSearcher
 	KnowledgeConceptSearchThreshold float64
