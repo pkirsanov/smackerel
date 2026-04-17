@@ -76,7 +76,7 @@ Scenario: SCN-FM-RL-001 Rate limiter prevents exceeding budget
 
 ### Test Plan
 
-| ID | Test Name | Type | Location | Assertion | Mapped Scenario |
+| ID | Test Name | Type | Location | Assertion | Scenario ID |
 |---|---|---|---|---|---|
 | T-1-01 | TestFetchFinnhubQuote_RejectsInvalidSymbol | unit | `internal/connector/markets/markets_test.go` | Invalid symbols rejected before HTTP call | SCN-FM-FH-001 |
 | T-1-02 | TestFetchFinnhubQuote_RejectsZeroPriceResponse | unit | `internal/connector/markets/markets_test.go` | All-zero response detected as no-data | SCN-FM-FH-001 |
@@ -140,7 +140,7 @@ Scenario: SCN-FM-FRED-001 Fetch latest economic indicators
 
 ### Test Plan
 
-| ID | Test Name | Type | Location | Assertion | Mapped Scenario |
+| ID | Test Name | Type | Location | Assertion | Scenario ID |
 |---|---|---|---|---|---|
 | T-2-01 | TestSyncCoinGeckoIntegrationViaHTTPTest | unit | `internal/connector/markets/markets_test.go` | CoinGecko batch fetch + normalize via httptest | SCN-FM-CG-001 |
 | T-2-02 | TestFetchCoinGeckoPrices_HTTPError | unit | `internal/connector/markets/markets_test.go` | 429 error propagated | SCN-FM-CG-001 |
@@ -199,7 +199,7 @@ Scenario: SCN-FM-NORM-002 Tier classification promotes significant moves to full
 
 ### Test Plan
 
-| ID | Test Name | Type | Location | Assertion | Mapped Scenario |
+| ID | Test Name | Type | Location | Assertion | Scenario ID |
 |---|---|---|---|---|---|
 | T-3-01 | TestClassifyTier | unit | `internal/connector/markets/markets_test.go` | 10 threshold/change combinations produce correct tiers | SCN-FM-NORM-002 |
 | T-3-02 | TestClassifyTier_ZeroThresholdAlwaysLight | unit | `internal/connector/markets/markets_test.go` | Zero threshold disables alerts | SCN-FM-NORM-002 |
@@ -260,7 +260,7 @@ Scenario: SCN-FM-CONN-001 Watchlist-driven sync
 
 ### Test Plan
 
-| ID | Test Name | Type | Location | Assertion | Mapped Scenario |
+| ID | Test Name | Type | Location | Assertion | Scenario ID |
 |---|---|---|---|---|---|
 | T-4-01 | TestSyncFinnhubIntegrationViaHTTPTest | unit | `internal/connector/markets/markets_test.go` | Multi-symbol Sync via httptest produces artifacts | SCN-FM-CONN-001 |
 | T-4-02 | TestSyncMultiProviderCombined | unit | `internal/connector/markets/markets_test.go` | Finnhub + CoinGecko combined in single Sync | SCN-FM-CONN-001 |
@@ -329,7 +329,7 @@ Scenario: SCN-FM-SUMM-001 Daily summary generated after market close
 
 ### Test Plan
 
-| ID | Test Name | Type | Location | Assertion | Mapped Scenario |
+| ID | Test Name | Type | Location | Assertion | Scenario ID |
 |---|---|---|---|---|---|
 | T-5-01 | TestBuildDailySummary_Structure | unit | `internal/connector/markets/markets_test.go` | Summary has all sections (gainers, losers, alerts, news, economic) | SCN-FM-SUMM-001 |
 | T-5-02 | TestBuildDailySummary_AlertUpgradesTier | unit | `internal/connector/markets/markets_test.go` | Alert presence upgrades summary tier to "full" | SCN-FM-SUMM-001 |
@@ -390,7 +390,7 @@ Scenario: SCN-FM-SYM-002 Company name mapped to ticker
 
 ### Test Plan
 
-| ID | Test Name | Type | Location | Assertion | Mapped Scenario |
+| ID | Test Name | Type | Location | Assertion | Scenario ID |
 |---|---|---|---|---|---|
 | T-6-01 | TestResolveSymbols_TickerNotation | unit | `internal/connector/markets/markets_test.go` | $AAPL pattern detected | SCN-FM-SYM-001 |
 | T-6-02 | TestResolveSymbols_CompanyNames | unit | `internal/connector/markets/markets_test.go` | Company names mapped to tickers | SCN-FM-SYM-002 |
