@@ -23,6 +23,7 @@ from app.domain import (  # isort: skip
     _build_system_prompt,
     _build_user_prompt,
     _domain_from_contract,
+    _resolve_model,
     handle_domain_extract,
 )
 
@@ -231,3 +232,17 @@ class TestHandleDomainExtract:
         assert result["domain_data"]["domain"] == "product"
         assert result["domain_data"]["brand"] == "Sony"
         assert result["domain_data"]["price"]["amount"] == 349.99
+
+
+class TestResolveModel:
+    def test_ollama_provider(self):
+        assert _resolve_model("llama3", "ollama", "http://ollama:11434") == "ollama/llama3"
+
+    def test_openai_provider(self):
+        assert _resolve_model("gpt-4o", "openai", "") == "gpt-4o"
+
+    def test_anthropic_provider(self):
+        assert _resolve_model("claude-sonnet-4-20250514", "anthropic", "") == "anthropic/claude-sonnet-4-20250514"
+
+    def test_other_provider(self):
+        assert _resolve_model("gemini-pro", "google", "") == "google/gemini-pro"
