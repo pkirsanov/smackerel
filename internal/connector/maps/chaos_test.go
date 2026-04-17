@@ -30,8 +30,8 @@ func TestChaos_PipeInFilenameSkipped(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -229,8 +229,8 @@ func TestChaos_ConcurrentSyncClose(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -272,8 +272,8 @@ func TestChaos_FileDisappearsBetweenScanAndRead(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -341,8 +341,8 @@ func TestChaos_ArchivedFilesNotRediscovered(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"archive_processed": true,
 			"min_distance_m":    float64(0),
@@ -402,8 +402,8 @@ func TestChaos_CancelledSyncRecovery(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -555,8 +555,8 @@ func TestStabilize_SyncUsesConfigSnapshot(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -581,8 +581,8 @@ func TestStabilize_SyncUsesConfigSnapshot(t *testing.T) {
 		defer wg.Done()
 		otherDir := t.TempDir()
 		otherCfg := connector.ConnectorConfig{
-			AuthType:     "none",
-			Enabled:      true,
+			AuthType: "none",
+			Enabled:  true,
 			SourceConfig: testMapsSourceConfigWith(otherDir, map[string]interface{}{
 				"min_distance_m":   float64(0),
 				"min_duration_min": float64(0),

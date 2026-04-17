@@ -131,8 +131,8 @@ func TestSyncProducesArtifacts(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -167,8 +167,8 @@ func TestSyncCursorSkipsProcessed(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -197,8 +197,8 @@ func TestSyncEmptyCursorFullScan(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -352,8 +352,8 @@ func TestArchiveDisabled(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"archive_processed": false,
 			"min_distance_m":    float64(0),
@@ -502,8 +502,8 @@ func TestSyncMalformedFileContinues(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -529,8 +529,8 @@ func TestSyncArchiveEnabled(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"archive_processed": true,
 			"min_distance_m":    float64(0),
@@ -569,8 +569,8 @@ func TestSyncSkipsNonJSONFiles(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -651,8 +651,8 @@ func TestSyncContextCancellation(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -681,8 +681,8 @@ func TestSyncOversizedFileSkipped(t *testing.T) {
 	// file size check path exists by confirming a normal file passes.
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -776,8 +776,8 @@ func TestSyncCursorPrunedAfterArchive(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"archive_processed": true,
 			"min_distance_m":    float64(0),

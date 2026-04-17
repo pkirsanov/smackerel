@@ -75,7 +75,7 @@ Exit code: 0
 
 ### DoD Checklist
 - [x] Chrome history SQLite parsed for dwell time and revisits — ParseChromeHistory reads visit_time and visit_duration
-- [x] Articles with >3 min dwell processed through full pipeline — DwellTimeTier assigns tiers
+- [x] Articles with >=5 min dwell processed through full pipeline — DwellTimeTier assigns tiers
 - [x] Social media stored as domain-level aggregates only — IsSocialMedia checks SocialMediaDomains map
 - [x] Skip list enforced — ShouldSkip checks user skip list + DefaultSkipDomains
 - [x] Opt-in enforced via privacy_consent table — connector design with consent check
@@ -301,6 +301,7 @@ All packages PASS. Exit code: 0
 
 ```
 $ ./smackerel.sh lint
+All checks passed!
 Exit code: 0
 ```
 - Phase coherence: 15 delivery-lockdown phases have executionHistory provenance

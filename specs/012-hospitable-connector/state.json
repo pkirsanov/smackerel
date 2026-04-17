@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/012-hospitable-connector",
   "featureName": "Hospitable Connector",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
     "activeAgent": null,
@@ -234,6 +234,19 @@
       "startedAt": "2026-04-09T02:00:00Z",
       "completedAt": "2026-04-09T02:05:00Z",
       "summary": "All 52 unit tests pass across 2 files, lint passes, format passes, check passes. All 5 scopes marked Done with verified DoD items. Delivery lockdown certification complete."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "harden",
+        "validate",
+        "finalize"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "startedAt": "2026-04-16T00:00:00Z",
+      "completedAt": "2026-04-16T00:30:00Z",
+      "summary": "Governance artifact hardening: created scenario-manifest.json (30 scenarios, G057), enriched report.md with raw terminal output evidence blocks, fixed scopes.md test plan tables (client_test.go→connector_test.go, annotated phantom integration/e2e tests), added scenario-faithful DoD items (G068), added test plan tables for scopes 04/05. artifact-lint PASSED, traceability-guard PASSED (0 warnings). ./smackerel.sh test unit, lint, check, format all pass."
     }
   ],
   "policySnapshot": {
@@ -265,9 +278,9 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-09T02:05:00Z",
+  "lastUpdatedAt": "2026-04-16T00:00:00Z",
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "scope-01",
       "scope-02",

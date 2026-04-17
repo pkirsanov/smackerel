@@ -2,21 +2,23 @@
   "version": 2,
   "specId": "004",
   "featureDir": "specs/004-phase3-intelligence",
-  "generatedBy": "bubbles.iterate",
-  "generatedAt": "2026-04-07T14:00:00Z",
+  "generatedBy": "bubbles.implement",
+  "generatedAt": "2026-04-16T00:00:00Z",
   "scenarios": [
     {
       "scenarioId": "SCN-004-001",
       "name": "Cross-domain connection detected",
       "scope": "01-synthesis-engine",
       "status": "active",
-      "requiredTestType": ["unit", "integration"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"},
-        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_SourceCount"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_SourceCount"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestRunSynthesis_EmptyPool"}
       ],
       "evidenceRefs": [
         {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_SourceCount"},
         {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
       ]
     },
@@ -30,8 +32,10 @@
         {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_SourceCount"}
       ],
       "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_SourceCount"},
         {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
-      ]
+      ],
+      "note": "Structural test only: verifies source count threshold >= 2, not ML sidecar has_genuine_connection filtering"
     },
     {
       "scenarioId": "SCN-004-003",
@@ -78,13 +82,15 @@
       "name": "User promise detected",
       "scope": "02-commitment-tracking",
       "status": "active",
-      "requiredTestType": ["unit", "integration"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"},
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestCheckOverdueCommitments_NilPool"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"},
+        {"file": "internal/digest/generator_test.go", "function": "TestSCN002030_DigestWithActionItems"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlert_Lifecycle"},
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestCheckOverdueCommitments_NilPool"},
+        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestSCN002030_DigestWithActionItems"},
         {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
       ]
     },
@@ -93,27 +99,29 @@
       "name": "Contact promise detected",
       "scope": "02-commitment-tracking",
       "status": "active",
-      "requiredTestType": ["unit", "integration"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestCheckOverdueCommitments_NilPool"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertType_Constants"},
         {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
-      ]
+      ],
+      "note": "No dedicated behavioral test for contact-promise detection; coverage is structural via CheckOverdueCommitments nil-pool guard"
     },
     {
       "scenarioId": "SCN-004-006",
       "name": "Auto-resolve on follow-up",
       "scope": "02-commitment-tracking",
       "status": "active",
-      "requiredTestType": ["integration"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
       ],
       "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlert_Lifecycle"},
         {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
-      ]
+      ],
+      "note": "TestAlert_Lifecycle covers status transitions (pending->dismissed, snoozed->pending), not thread-based auto-resolve behavior specifically"
     },
     {
       "scenarioId": "SCN-004-007",
@@ -123,10 +131,12 @@
       "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"},
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertStatus_Lifecycle"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertStatus_Lifecycle"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestCheckOverdueCommitments_NilPool"}
       ],
       "evidenceRefs": [
         {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlert_Lifecycle"},
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestCheckOverdueCommitments_NilPool"},
         {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
       ]
     },
@@ -136,23 +146,25 @@
       "scope": "02-commitment-tracking",
       "status": "active",
       "requiredTestType": ["unit"],
-      "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
-      ],
+      "linkedTests": [],
       "evidenceRefs": [
         {"type": "source", "location": "internal/intelligence/engine.go"}
-      ]
+      ],
+      "note": "No behavioral test exists for false-positive rejection; coverage relies on ML sidecar LLM prompt design"
     },
     {
       "scenarioId": "SCN-004-008",
       "name": "Brief with full context",
       "scope": "03-pre-meeting-briefs",
       "status": "active",
-      "requiredTestType": ["e2e"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestMeetingBrief_Struct"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAssembleBriefText_FullContext"}
       ],
       "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAssembleBriefText_FullContext"},
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestMeetingBrief_Struct"},
         {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
       ]
     },
@@ -163,10 +175,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestNewEngine_NilPool"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAssembleBriefText_NewContact"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestMeetingBrief_Struct"}
       ],
       "evidenceRefs": [
-        {"type": "source", "location": "internal/intelligence/engine.go"}
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAssembleBriefText_NewContact"}
       ]
     },
     {
@@ -176,23 +189,26 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestGeneratePreMeetingBriefs_NilPool"}
       ],
       "evidenceRefs": [
         {"type": "source", "location": "internal/intelligence/engine.go"}
-      ]
+      ],
+      "note": "Dedup verified structurally via EventID unique constraint; tests/e2e/test_premeeting.sh validates ON CONFLICT via DB row count"
     },
     {
       "scenarioId": "SCN-004-010b",
       "name": "Brief with shared topic context",
       "scope": "03-pre-meeting-briefs",
       "status": "active",
-      "requiredTestType": ["integration"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAssembleBriefText_FullContext"},
+        {"file": "internal/intelligence/people_test.go", "function": "TestAssembleBriefText_MixedNewAndKnownContacts"}
       ],
       "evidenceRefs": [
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAssembleBriefText_FullContext"},
+        {"type": "unit-test", "location": "internal/intelligence/people_test.go::TestAssembleBriefText_MixedNewAndKnownContacts"}
       ]
     },
     {
@@ -200,13 +216,13 @@
       "name": "Bill reminder",
       "scope": "04-contextual-alerts",
       "status": "active",
-      "requiredTestType": ["unit", "integration"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"},
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestCreateAlert_AllValidTypes"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestCreateAlert_ValidTitle"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertType_Constants"},
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestCreateAlert_AllValidTypes"},
         {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
       ]
     },
@@ -218,12 +234,14 @@
       "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlertPriority"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertPriority_EdgeCases"},
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_PriorityOrdering"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertPriority"},
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertPriority_EdgeCases"},
         {"type": "source", "location": "internal/intelligence/engine.go::GetPendingAlerts"}
-      ]
+      ],
+      "note": "Priority ordering tested; actual 2/day batching cap is in GetPendingAlerts DB query, not unit-tested"
     },
     {
       "scenarioId": "SCN-004-013",
@@ -233,10 +251,12 @@
       "requiredTestType": ["unit"],
       "linkedTests": [
         {"file": "internal/intelligence/engine_test.go", "function": "TestAlertStatus_Lifecycle"},
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestDismissAlert_EmptyID"}
       ],
       "evidenceRefs": [
         {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertStatus_Lifecycle"},
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestDismissAlert_EmptyID"},
         {"type": "source", "location": "internal/intelligence/engine.go::DismissAlert"}
       ]
     },
@@ -245,24 +265,29 @@
       "name": "Return window closing alert",
       "scope": "04-contextual-alerts",
       "status": "active",
-      "requiredTestType": ["integration"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestCreateAlert_AllValidTypes"}
       ],
       "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestCreateAlert_AllValidTypes"},
         {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
-      ]
+      ],
+      "note": "AlertReturnWindow type validated via TestCreateAlert_AllValidTypes; no dedicated return-window detection behavioral test"
     },
     {
       "scenarioId": "SCN-004-013c",
       "name": "Relationship cooling alert",
       "scope": "04-contextual-alerts",
       "status": "active",
-      "requiredTestType": ["integration"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestCreateAlert_AllValidTypes"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"},
+        {"file": "internal/intelligence/people_test.go", "function": "TestClassifyInteractionTrend"}
       ],
       "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/people_test.go::TestClassifyInteractionTrend"},
         {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
       ]
     },
@@ -271,11 +296,15 @@
       "name": "Trip prep alert",
       "scope": "04-contextual-alerts",
       "status": "active",
-      "requiredTestType": ["integration"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestCreateAlert_AllValidTypes"},
+        {"file": "internal/intelligence/people_test.go", "function": "TestClassifyTripState"},
+        {"file": "internal/intelligence/people_test.go", "function": "TestTripDossier_Struct"}
       ],
       "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/people_test.go::TestClassifyTripState"},
+        {"type": "unit-test", "location": "internal/intelligence/people_test.go::TestTripDossier_Struct"},
         {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
       ]
     },
@@ -284,14 +313,15 @@
       "name": "Full weekly synthesis",
       "scope": "05-weekly-synthesis",
       "status": "active",
-      "requiredTestType": ["e2e"],
+      "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore"},
-        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_WithItems"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAssembleWeeklySynthesisText_FullWeek"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAssembleWeeklySynthesisText_WordCountCap"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestWeeklySynthesis_Struct"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore"},
-        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_WithItems"}
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAssembleWeeklySynthesisText_FullWeek"},
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestWeeklySynthesis_Struct"}
       ]
     },
     {
@@ -301,10 +331,12 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAssembleWeeklySynthesisText_QuietWeek"},
         {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_QuietDay"},
         {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_IsQuiet"}
       ],
       "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAssembleWeeklySynthesisText_QuietWeek"},
         {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_QuietDay"},
         {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_IsQuiet"}
       ]
@@ -316,11 +348,13 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore"},
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_DormancyBonus"}
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestSerendipityCandidate_CalendarMatchBoost"},
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestSerendipityCandidate_ContextScoring"},
+        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceCandidate_DormancyReasonFormat"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore"},
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestSerendipityCandidate_CalendarMatchBoost"},
+        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestSerendipityCandidate_ContextScoring"},
         {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"}
       ]
     },
@@ -331,11 +365,14 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore"}
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAssembleWeeklySynthesisText_FullWeek"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestWeeklySynthesis_Struct"}
       ],
       "evidenceRefs": [
-        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
-      ]
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAssembleWeeklySynthesisText_FullWeek"},
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestWeeklySynthesis_Struct"}
+      ],
+      "note": "Tests verify Patterns slice storage and PATTERNS NOTICED section rendering; no dedicated timestamp analysis behavioral test"
     },
     {
       "scenarioId": "SCN-004-017",

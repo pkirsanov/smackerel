@@ -276,5 +276,32 @@
       "evidenceRefs": ["report.md"],
       "linkedDoD": ["Connector supervisor with crash recovery", "Dead-letter handling for items failing delivery attempts"]
     }
-  ]
+  ],
+  "knownGaps": [
+    {
+      "id": "GAP-001-001",
+      "description": "No OAuth failure scenario (token refresh failure, revoked consent, invalid credentials)",
+      "severity": "medium",
+      "mitigatedBy": "Partial: H-003 state token TTL. Full coverage in spec 020-security-hardening."
+    },
+    {
+      "id": "GAP-001-002",
+      "description": "No corrupted sync state scenario (malformed cursor in sync_state table)",
+      "severity": "low",
+      "mitigatedBy": "Addressed in spec 022-operational-resilience."
+    },
+    {
+      "id": "GAP-001-003",
+      "description": "No concurrent sync scenario (two sync cycles on same connector)",
+      "severity": "medium",
+      "mitigatedBy": "Partial: TestSupervisor_StartConnector_AlreadyRunning guards double-start. Race window untested."
+    },
+    {
+      "id": "GAP-001-004",
+      "description": "No partial system failure scenario (DB/NATS/Ollama down during processing)",
+      "severity": "medium",
+      "mitigatedBy": "Addressed in spec 022-operational-resilience."
+    }
+  ],
+  "lastUpdatedAt": "2026-04-17T00:00:00Z"
 }

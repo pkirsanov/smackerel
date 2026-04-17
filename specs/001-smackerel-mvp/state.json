@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/001-smackerel-mvp",
   "featureName": "Smackerel MVP",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.iterate",
-    "currentPhase": "finalize",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "done",
     "currentScope": null,
     "runStartedAt": "2026-04-06T12:00:00Z",
     "completedPhaseClaims": [
@@ -29,7 +29,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
@@ -360,12 +360,26 @@
       ],
       "scopesCompleted": [],
       "summary": "Spec review: verified spec.md, design.md, scopes.md aligned with implementation. All 21 scenarios mapped. No stale claims."
+    },
+    {
+      "id": "17",
+      "agent": "bubbles.implement",
+      "workflowMode": "re-certification",
+      "startedAt": "2026-04-17T00:00:00Z",
+      "completedAt": "2026-04-17T00:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "scopesCompleted": [],
+      "summary": "Re-certification: Fixed spec/code color mismatch (#E8E6E3 → #e8e8e4 in design.md, scopes.md). Fixed fabricated test function references (TestContainsEmoji → TestMarkerConstants_NoEmoji). Documented known gaps (missing negative scenarios, E2E limitations). Enriched report.md with actual test function names. Added knownGaps to scenario-manifest.json."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-07T10:16:00Z",
+  "lastUpdatedAt": "2026-04-17T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

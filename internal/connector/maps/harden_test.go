@@ -22,8 +22,8 @@ func TestHarden_SyncErrorResetsHealthAfterPreviousSuccess(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -200,8 +200,8 @@ func TestHarden_CrossFileArtifactCap(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),
@@ -329,8 +329,8 @@ func TestImprove_SyncUsesSnapshotThresholds(t *testing.T) {
 
 	c := New("google-maps-timeline")
 	cfg := connector.ConnectorConfig{
-		AuthType:     "none",
-		Enabled:      true,
+		AuthType: "none",
+		Enabled:  true,
 		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
 			"min_distance_m":   float64(0),
 			"min_duration_min": float64(0),

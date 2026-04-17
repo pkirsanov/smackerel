@@ -36,7 +36,7 @@ This connector provides **market data as knowledge context**, not as a trading t
 - Rate limit compliance is non-negotiable — connectors must respect free-tier API limits and never exceed them
 - No financial advice, trading signals, buy/sell recommendations, or portfolio optimization in any artifact or digest content
 - All data stored locally — no cloud persistence beyond API calls to fetch public market data
-- Cursor-based incremental sync — only fetch new data points, not full history on every cycle
+- Timestamp-based sync tracking — Sync returns a cursor timestamp for scheduler tracking; point-in-time market data queries are inherently current-only and do not require cursor-based deduplication; news queries use today's date as the range filter
 
 **Failure Condition:** If a user has 10 symbols on their watchlist and after 48 hours of operation: price data is stale by more than 24 hours, no cross-references exist between saved financial articles and market data artifacts, or the connector exhausts free API limits within hours and goes silent for the rest of the day — the connector has failed regardless of technical health status.
 
@@ -68,6 +68,21 @@ This connector provides **market data as knowledge context**, not as a trading t
 - **Paid API tier features** — The connector operates on free-tier API limits; premium data feeds are a future enhancement, not a v1 requirement
 - **Social sentiment analysis** — No Reddit/Twitter/StockTwits sentiment scoring; the connector provides data, not opinions
 - **Backtesting or simulation** — No historical strategy testing or "what-if" portfolio analysis
+
+---
+
+## Future Work (Not Scoped in v1)
+
+The following goals from the spec are acknowledged but intentionally deferred from v1 scopes:
+
+| Item | Spec Goal Ref | Reason Deferred |
+|------|--------------|----------------|
+| **Earnings calendar integration** | Goal 4 | Finnhub earnings endpoint is available but v1 prioritizes price/quote data; add as separate scope when demand is validated |
+| **Market indices tracking** | Goal 3 | Index data (S&P 500, Dow, NASDAQ) available via Finnhub but not watchlist-driven; add when daily summary needs index context |
+| **Historical data for temporal queries** | Goal 8 | Requires historical price storage and query API; significant scope beyond point-in-time quotes; design as a separate feature |
+| **Market-hours-only sync option** | Scope 4 (optional) | Configurable sync suppression during off-hours; removed from Scope 4 DoD as unimplemented optional feature |
+| **Forex-travel artifact linking** | Scope 6 | Requires pipeline package changes (foreign surface); cross-connector artifact scanning is an architecture change |
+| **Pipeline symbol detection hook** | Scope 6 | Requires changes to pipeline package (foreign surface); deferred until pipeline extensibility is designed |
 
 ---
 
