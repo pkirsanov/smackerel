@@ -14,7 +14,7 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [1, 2, 3, 4, 5, 6, 7],
+    "completedScopes": [1, 2, 3, 4, 5, 6, 7, 8],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {"scope": 1, "name": "DB Migration & Domain Data Types", "status": "Done", "dependsOn": []},
@@ -24,7 +24,7 @@
       {"scope": 5, "name": "Recipe Extraction Prompt Contract", "status": "Done", "dependsOn": [2]},
       {"scope": 6, "name": "Product Extraction Prompt Contract", "status": "Done", "dependsOn": [2]},
       {"scope": 7, "name": "Pipeline Integration", "status": "Done", "dependsOn": [2, 3, 4]},
-      {"scope": 8, "name": "Search Extension", "status": "In Progress", "dependsOn": [7]},
+      {"scope": 8, "name": "Search Extension", "status": "Done", "dependsOn": [7]},
       {"scope": 9, "name": "Telegram Display", "status": "Not Started", "dependsOn": [8]}
     ],
     "lockdownState": {

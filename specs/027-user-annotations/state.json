@@ -14,13 +14,13 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [1, 2, 3],
+    "completedScopes": [1, 2, 3, 4],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {"scope": 1, "name": "DB Migration", "status": "Done", "dependsOn": []},
       {"scope": 2, "name": "Annotation Types & Parser", "status": "Done", "dependsOn": [1]},
       {"scope": 3, "name": "Annotation Store", "status": "Done", "dependsOn": [2]},
-      {"scope": 4, "name": "REST API Endpoints", "status": "Not Started", "dependsOn": [3]},
+      {"scope": 4, "name": "REST API Endpoints", "status": "Done", "dependsOn": [3]},
       {"scope": 5, "name": "Telegram Message-Artifact Mapping", "status": "Not Started", "dependsOn": [3]},
       {"scope": 6, "name": "Telegram Annotation Handler", "status": "Not Started", "dependsOn": [5]},
       {"scope": 7, "name": "Search Extension", "status": "Not Started", "dependsOn": [3]},
