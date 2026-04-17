@@ -197,17 +197,18 @@ type Pipeliner interface {
     Process(ctx context.Context, req *pipeline.ProcessRequest) (*pipeline.ProcessResult, error)
 }
 
-// Searcher executes semantic search queries.
+// Searcher handles semantic search operations.
 type Searcher interface {
-    Search(ctx context.Context, query string, opts SearchOptions) ([]SearchResult, error)
+    Search(ctx context.Context, req SearchRequest) ([]SearchResult, int, string, error)
 }
 
 // DigestGenerator produces daily/weekly digests.
 type DigestGenerator interface {
-    GetLatest(ctx context.Context, date string) (*digest.Result, error)
+    GetLatest(ctx context.Context, date string) (*digest.Digest, error)
 }
 
 // WebUI serves the HTMX web interface routes.
+// Note: 16 methods — original 7 plus 9 added by specs 009 (bookmarks), 019 (connector wiring), and 025 (knowledge layer).
 type WebUI interface {
     SearchPage(w http.ResponseWriter, r *http.Request)
     SearchResults(w http.ResponseWriter, r *http.Request)
@@ -216,6 +217,15 @@ type WebUI interface {
     TopicsPage(w http.ResponseWriter, r *http.Request)
     SettingsPage(w http.ResponseWriter, r *http.Request)
     StatusPage(w http.ResponseWriter, r *http.Request)
+    SyncConnectorHandler(w http.ResponseWriter, r *http.Request)
+    BookmarkUploadHandler(w http.ResponseWriter, r *http.Request)
+    KnowledgeDashboard(w http.ResponseWriter, r *http.Request)
+    ConceptsList(w http.ResponseWriter, r *http.Request)
+    ConceptDetail(w http.ResponseWriter, r *http.Request)
+    EntitiesList(w http.ResponseWriter, r *http.Request)
+    EntityDetail(w http.ResponseWriter, r *http.Request)
+    LintReport(w http.ResponseWriter, r *http.Request)
+    LintFindingDetail(w http.ResponseWriter, r *http.Request)
 }
 
 // OAuthFlow handles OAuth2 authorization flows and status.

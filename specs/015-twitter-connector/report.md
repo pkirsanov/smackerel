@@ -2,6 +2,55 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+---
+
+## Certification — 2026-04-17
+
+**Agent:** bubbles.validate
+**Verdict:** CERTIFIED
+
+### Scope Verification
+
+| # | Scope | Status | DoD Items | Tests |
+|---|-------|--------|-----------|-------|
+| 1 | Archive Parser | Done | 7/7 checked | 12+ unit |
+| 2 | Thread Reconstruction | Done | 5/5 checked | 8+ unit |
+| 3 | Normalizer & Tier Assignment | Done | 7/7 checked | 14+ unit |
+| 4 | Twitter Connector & Config | Done | 8/8 checked | 8+ unit + integration |
+| 5 | Tweet Link Extraction | Done | 6/6 checked | 6+ unit + integration |
+| 6 | API Client (Opt-In) | Done | 7/7 checked | 6+ unit + integration |
+
+### Validation Commands
+
+| Command | Result |
+|---------|--------|
+| `./smackerel.sh test unit` | PASS — all Go packages (including twitter) + 92 Python tests |
+| `./smackerel.sh check` | PASS — config in sync with SST |
+| `./smackerel.sh lint` | PASS — all checks passed |
+
+### Quality Sweep History
+
+8 quality sweep passes completed across simplify, security (×2), regression, chaos, improve (×2), and devops domains. Key outcomes:
+
+- **22 findings fixed** across all sweeps
+- **9 CWE-addressed security hardening fixes** (CWE-20, CWE-22, CWE-79, CWE-287, CWE-400, CWE-532, CWE-601, CWE-770, CWE-838)
+- **4 chaos hardening fixes** with race detector clean
+- **58+ tests** in twitter package (unit + adversarial + concurrency)
+- **Zero regressions** across all sweep surfaces
+
+### Implementation Summary
+
+- **Source files:** `internal/connector/twitter/twitter.go`, `internal/connector/twitter/twitter_test.go`
+- **Connector interface:** Full `connector.Connector` implementation (ID, Connect, Sync, Health, Close)
+- **Archive parser:** JS wrapper stripping, tweet/like/bookmark parsing
+- **Thread reconstruction:** Self-reply chain detection with prebuilt child index
+- **Normalizer:** Content type classification (tweet/text, tweet/retweet, tweet/link, tweet/thread, tweet/image, tweet/video), tier assignment, full R-005 metadata
+- **Security:** File size limits, path traversal protection, URL scheme validation, bearer token redaction, tweet ID validation, UTF-8 safe truncation, tweet count bounds
+- **Concurrency:** Mutex-protected state, sync-in-progress guard, graduated health escalation, sync metrics
+- **DevOps:** Docker env vars wired, archive volume mount, docker security tests
+
+---
+
 ## Reports
 
 ### Simplify Pass — 2026-04-10

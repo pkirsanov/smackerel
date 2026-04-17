@@ -8,7 +8,7 @@ Discord connector implementation covers 6 scopes: normalizer/classifier (Scope 1
 
 ### Completion Statement
 
-All 6 scopes marked Done. 135+ test runs pass across `discord.go`, `gateway.go`, `discord_test.go`, `gateway_test.go`. 43 security/hardening tests cover SSRF, snowflake validation, cursor scope enforcement, content sanitization, and resource exhaustion caps. All prior sweep fixes (gaps G1-G11, simplify S1-S6, stabilize ST1-ST9, security SEC-1 through SEC3-4, harden H-1 through H-6, chaos C1-C4, regression REG-014-R22-001/002, improve IMP-014-IE-001/002/003) remain durable.
+All 6 scopes marked Done. 147 test functions across `discord_test.go` (138) and `gateway_test.go` (9), all pass with `-race`. 43 security/hardening tests cover SSRF, snowflake validation, cursor scope enforcement, content sanitization, and resource exhaustion caps. All prior sweep fixes (gaps G1-G11, simplify S1-S6, stabilize ST1-ST9, security SEC-1 through SEC3-4, harden H-1 through H-6, chaos C1-C4, regression REG-014-R22-001/002, improve IMP-014-IE-001/002/003) remain durable. Note: all tests are unit-level with httptest mocking; no integration or E2E test suites exist for the Discord connector.
 
 ### Test Evidence
 
@@ -18,7 +18,7 @@ ok      github.com/smackerel/smackerel/internal/connector/discord       9.115s
 $ ./smackerel.sh test unit --go 2>&1 | grep -cE '^ok'
 33
 $ grep -c 'func Test' internal/connector/discord/discord_test.go internal/connector/discord/gateway_test.go
-internal/connector/discord/discord_test.go:126
+internal/connector/discord/discord_test.go:138
 internal/connector/discord/gateway_test.go:9
 ```
 
@@ -778,3 +778,53 @@ Improvement analysis pass on the Discord connector after 15+ prior quality sweep
 #### Validation
 
 All prior 130+ discord tests continue to pass. 5 new improvement tests added. Zero regressions.
+
+---
+
+### Certification — 2026-04-17
+
+**Agent:** `bubbles.validate`
+**Verdict:** CERTIFIED
+
+#### Certification Checklist
+
+| Gate | Check | Result |
+|------|-------|--------|
+| Artifacts exist | spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json | All 6 present |
+| Scope completion | 6/6 scopes marked Done with DoD evidence | All checked |
+| Unit tests | 147 test functions (138 discord_test.go + 9 gateway_test.go) | All pass |
+| Test suite | `./smackerel.sh test unit` — 35 Go packages + integration stub | All ok, 0 FAIL |
+| SST compliance | `./smackerel.sh check` | Config is in sync with SST |
+| Security posture | 43 security/hardening tests across 3 security passes + 1 harden pass | All pass |
+| Chaos resilience | 10 chaos tests (concurrency, overflow, state) | All pass |
+| Quality sweeps | 16+ stochastic sweeps (gaps, simplify x3, stabilize x2, security x3, harden, chaos, regression x2, validate, improve) | All findings resolved |
+| No TODOs/FIXMEs | `grep -rn 'TODO\|FIXME\|HACK\|STUB' discord.go gateway.go` | 0 hits |
+| No hardcoded secrets | `grep -rn 'password\|api_key\|secret' discord.go gateway.go` | 0 credential leaks |
+| state.json | status=done, certification.status=certified, all 6 scopes in completedScopes | Verified |
+
+#### Evidence Commands
+
+```
+$ ./smackerel.sh test unit --go 2>&1 | grep discord
+ok      github.com/smackerel/smackerel/internal/connector/discord       (cached)
+$ ./smackerel.sh check
+Config is in sync with SST
+$ grep -c 'func Test' internal/connector/discord/discord_test.go internal/connector/discord/gateway_test.go
+internal/connector/discord/discord_test.go:138
+internal/connector/discord/gateway_test.go:9
+```
+
+#### Implementation Summary
+
+| Metric | Value |
+|--------|-------|
+| Total LOC | 1807 (discord.go + gateway.go) |
+| Test functions | 147 |
+| Security tests | 43 |
+| Chaos tests | 10 |
+| Quality sweeps | 16+ |
+| Code quality grade | B+ |
+
+#### Notes
+
+All tests are unit-level with httptest mocking. No integration or E2E test suites exist for the Discord connector — this is accurately documented in scope DoD evidence. REST fetch functions and Gateway EventPoller use real HTTP calls via httptest servers, not stubs. The implementation includes defensive coding throughout: snowflake validation, SSRF protection, content sanitization, rate limiting, cursor scope enforcement, concurrency safety, and resource exhaustion caps.

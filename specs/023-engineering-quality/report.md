@@ -338,3 +338,32 @@ A stochastic quality sweep (trigger: improve, mode: improve-existing, Round R30)
 - `grep 'map\[string\]interface{}' internal/api/*.go` — only 2 remaining: `capture_test.go` (test-only JSON decode) and `search.go` (outbound ML sidecar payload) — both appropriate uses
 - Zero `ErrorResponse{` inline constructions remaining in `bookmarks.go`
 - All existing tests continue to pass — no regressions
+
+## Artifact Repair Pass (2026-04-17, improve-existing)
+
+A `bubbles.workflow` improve-existing pass reviewed spec 023 artifacts for drift between design.md interface signatures and the implemented code.
+
+### Artifacts Repaired
+
+| Artifact | Changes | Reason |
+|----------|---------|--------|
+| `design.md` | 3 interface signatures updated to match implemented code | Post-certification sweeps (gaps, improve R19, R30) added methods and changed signatures that design.md did not reflect |
+| `scopes.md` | Header signatures updated for consistency with design.md | Interface counts and names in scope headers drifted from current design |
+| `state.json` | Certification completed, `lastUpdatedAt` updated | Reflect current certified-done state after all sweeps |
+
+### Code Changes
+
+**None.** Implementation was already correct — only artifact text was stale.
+
+### Managed Docs Impact
+
+| Document | Update Needed | Reason |
+|----------|---------------|--------|
+| `docs/Development.md` | No | No new capabilities, commands, or config surfaces |
+| `docs/Testing.md` | No | No new test categories or coverage changes |
+| `README.md` | No | No user-visible changes |
+| `docs/smackerel.md` | No | No architecture changes |
+
+### Verdict
+
+Artifact-only repair. All 3 scopes remain Done. Spec 023 is certified complete.

@@ -36,9 +36,9 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 | # | Scope | Surfaces | Key Tests | Status |
 |---|---|---|---|---|
-| 1 | Normalizer & Message Classification | Go core | 102 unit tests (shared file) | Done |
-| 2 | REST Client & Backfill | Go core | Unit tests (real HTTP via httptest) | Done |
-| 3 | Discord Connector & Config | Go core, Config | Unit tests (real HTTP via httptest) | Done |
+| 1 | Normalizer & Message Classification | Go core | Unit tests (shared file, 30+ classification/tier/metadata tests) | Done |
+| 2 | REST Client & Backfill | Go core | Unit tests (real HTTP via httptest, 18+ tests) | Done |
+| 3 | Discord Connector & Config | Go core, Config | Unit tests (real HTTP via httptest, 15+ config/lifecycle tests) | Done |
 | 4 | Gateway Event Handler | Go core | 9 tests (EventPoller + Connector integration) | Done |
 | 5 | Thread Ingestion | Go core | 5 unit tests (active/archived threads, sync integration) | Done |
 | 6 | Bot Command Capture | Go core | 3 unit tests (tier force, normalize, sync integration) | Done |
@@ -114,7 +114,7 @@ Scenario: SCN-DC-NRM-002 Assign processing tiers per R-007
 - [x] Message URL is constructed as `https://discord.com/channels/{guild}/{channel}/{message}`
   > Evidence: `discord.go::normalizeMessage()` constructs URL from GuildID/ChannelID/ID fields
 - [x] 15+ unit tests pass with 100% coverage on classification/tier logic
-  > Evidence: `discord_test.go` — TestClassifyMessage (10), TestAssignTier (10), TestNormalizeMessage, TestNormalizeMessage_ThreadMetadata, TestNormalizeMessage_ReplyMetadata, TestBuildTitle; `./smackerel.sh test unit` passes
+  > Evidence: `discord_test.go` — TestClassifyMessage (10), TestAssignTier (10), TestNormalizeMessage, TestNormalizeMessage_ThreadMetadata, TestNormalizeMessage_ReplyMetadata, TestBuildTitle, plus 43 security/hardening tests covering input validation, sanitization, and edge cases; `./smackerel.sh test unit` passes
 
 ---
 
@@ -164,8 +164,8 @@ Scenario: SCN-DC-REST-002 Per-channel cursor advancement
   > Evidence: `updateRateLimits()` parses `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers and calls `RateLimiter.Update()`. Tested in `TestDoDiscordRequest_RateLimitHeaders`.
 - [x] 429 responses respected via `Retry-After` header
   > Evidence: `doDiscordRequest()` handles 429 status by parsing `Retry-After` header and retrying up to `maxRetries` times. Tested in `TestDoDiscordRequest_429Retry`, `TestParseRetryAfter`.
-- [x] 18+ new unit tests pass (148 total test runs)
-  > Evidence: New tests: `TestConnect_TokenValidationSuccess`, `TestConnect_TokenValidationUnauthorized`, `TestFetchChannelMessages_Basic`, `TestFetchChannelMessages_Pagination`, `TestFetchChannelMessages_RespectsBackfillLimit`, `TestFetchPinnedMessages_Basic`, `TestDoDiscordRequest_AuthHeader`, `TestDoDiscordRequest_RateLimitHeaders`, `TestDoDiscordRequest_429Retry`, `TestSyncEndToEnd_WithMessagesAndPins`, `TestSyncEndToEnd_CursorPreventsRefetch`, `TestApiMessageToInternal_*`, `TestParseRetryAfter`, `TestParseDiscordConfig_APIURLOverride`. All 148 test runs pass with `-race`.
+- [x] 18+ new unit tests pass (147 total test functions)
+  > Evidence: New tests: `TestConnect_TokenValidationSuccess`, `TestConnect_TokenValidationUnauthorized`, `TestFetchChannelMessages_Basic`, `TestFetchChannelMessages_Pagination`, `TestFetchChannelMessages_RespectsBackfillLimit`, `TestFetchPinnedMessages_Basic`, `TestDoDiscordRequest_AuthHeader`, `TestDoDiscordRequest_RateLimitHeaders`, `TestDoDiscordRequest_429Retry`, `TestSyncEndToEnd_WithMessagesAndPins`, `TestSyncEndToEnd_CursorPreventsRefetch`, `TestApiMessageToInternal_*`, `TestParseRetryAfter`, `TestParseDiscordConfig_APIURLOverride`. All test functions pass with `-race`.
 
 ---
 
@@ -260,7 +260,7 @@ Scenario: SCN-DC-GW-001 Real-time message capture
 - [x] On reconnection, REST backfill covers any gap since last cursor
   > Evidence: `EventPoller` maintains per-channel cursors (`ep.cursors`). On recovery after failures, polling resumes from the last successful cursor position, inherently backfilling missed messages via REST `?after={cursor}`. The Sync() drain also advances `localCursors` from gateway events so subsequent REST fetches skip covered messages.
 - [x] 6 unit + 3 integration tests pass
-  > Evidence: 9 new gateway tests all pass with `-race`: TestEventPoller_ConnectStartsPolling, TestEventPoller_EventsFilterToMonitoredChannels, TestEventPoller_SyncDrainsBufferedEvents, TestEventPoller_ReconnectOnPollingFailure, TestEventPoller_CloseStopsPolling, TestEventPoller_EventBufferOverflow, TestConnector_GatewayHealthDegradedOnPollFailure, TestConnector_CloseStopsGateway, TestConnector_GatewayStartsOnConnectWithEnabledFlag. Total discord package: 127 test runs pass.
+  > Evidence: 9 new gateway tests all pass with `-race`: TestEventPoller_ConnectStartsPolling, TestEventPoller_EventsFilterToMonitoredChannels, TestEventPoller_SyncDrainsBufferedEvents, TestEventPoller_ReconnectOnPollingFailure, TestEventPoller_CloseStopsPolling, TestEventPoller_EventBufferOverflow, TestConnector_GatewayHealthDegradedOnPollFailure, TestConnector_CloseStopsGateway, TestConnector_GatewayStartsOnConnectWithEnabledFlag. Total discord package: 147 test functions pass.
 
 ---
 
@@ -287,7 +287,7 @@ Auto-follow threads in monitored channels. Fetch thread message history via REST
 - [x] Active threads: monitored via Gateway; archived threads: fetched on backfill
   > Evidence: `fetchActiveThreads()` calls `GET /guilds/{guild_id}/threads/active` for active threads. `fetchArchivedThreads()` calls `GET /channels/{channel_id}/threads/archived/public` for archived threads. Discovered thread IDs are added to EventPoller via `AddChannels()`. TestSync_IncludesThreadMessages verifies.
 - [x] 5 unit tests for thread ingestion pass
-  > Evidence: TestFetchActiveThreads_ParsesResponse, TestFetchActiveThreads_FiltersToMonitoredChannels, TestSync_IncludesThreadMessages, TestSync_ThreadMetadataOnArtifacts, TestSync_IncludeThreadsFalse_SkipsThreads all pass with `-race`. Total discord package: 135 test runs.
+  > Evidence: TestFetchActiveThreads_ParsesResponse, TestFetchActiveThreads_FiltersToMonitoredChannels, TestSync_IncludesThreadMessages, TestSync_ThreadMetadataOnArtifacts, TestSync_IncludeThreadsFalse_SkipsThreads all pass with `-race`. Total discord package: 147 test functions.
 
 ---
 
@@ -314,4 +314,4 @@ Implement `!save` and `!capture` command handling for explicit user-initiated ca
 - [x] Captured artifacts get processing_tier "full"
   > Evidence: `normalizeMessage()` sets `tierDefault = "capture"` when content type is `discord/capture`. `assignTier()` returns "full" when defaultTier is "capture". TestAssignTier_CaptureContentType_ForceFull, TestNormalize_BotCommand_SetsCaptureType, TestSync_CaptureCommand_ProducesFullTierArtifact verify.
 - [x] 3 new unit tests for bot command capture pass
-  > Evidence: TestAssignTier_CaptureContentType_ForceFull, TestNormalize_BotCommand_SetsCaptureType, TestSync_CaptureCommand_ProducesFullTierArtifact all pass with `-race`. Total discord package: 135 test runs.
+  > Evidence: TestAssignTier_CaptureContentType_ForceFull, TestNormalize_BotCommand_SetsCaptureType, TestSync_CaptureCommand_ProducesFullTierArtifact all pass with `-race`. Total discord package: 147 test functions.

@@ -28,11 +28,13 @@ type SearchRequest struct {
 
 // SearchFilters are optional filters for search queries.
 type SearchFilters struct {
-	Type     string `json:"type,omitempty"`
-	DateFrom string `json:"date_from,omitempty"`
-	DateTo   string `json:"date_to,omitempty"`
-	Person   string `json:"person,omitempty"`
-	Topic    string `json:"topic,omitempty"`
+	Type       string `json:"type,omitempty"`
+	DateFrom   string `json:"date_from,omitempty"`
+	DateTo     string `json:"date_to,omitempty"`
+	Person     string `json:"person,omitempty"`
+	Topic      string `json:"topic,omitempty"`
+	Domain     string `json:"domain,omitempty"`
+	Ingredient string `json:"ingredient,omitempty"`
 }
 
 // SearchResponse is the response for POST /api/search.
@@ -58,16 +60,17 @@ type ConceptMatchResponse struct {
 
 // SearchResult is a single search result.
 type SearchResult struct {
-	ArtifactID   string   `json:"artifact_id"`
-	Title        string   `json:"title"`
-	ArtifactType string   `json:"artifact_type"`
-	Summary      string   `json:"summary"`
-	SourceURL    string   `json:"source_url,omitempty"`
-	Relevance    string   `json:"relevance"`
-	Explanation  string   `json:"explanation"`
-	CreatedAt    string   `json:"created_at"`
-	Topics       []string `json:"topics"`
-	Connections  int      `json:"connections"`
+	ArtifactID   string          `json:"artifact_id"`
+	Title        string          `json:"title"`
+	ArtifactType string          `json:"artifact_type"`
+	Summary      string          `json:"summary"`
+	SourceURL    string          `json:"source_url,omitempty"`
+	Relevance    string          `json:"relevance"`
+	Explanation  string          `json:"explanation"`
+	CreatedAt    string          `json:"created_at"`
+	Topics       []string        `json:"topics"`
+	Connections  int             `json:"connections"`
+	DomainData   json.RawMessage `json:"domain_data,omitempty"`
 }
 
 // SearchEngine handles semantic search operations.
@@ -426,6 +429,18 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 	if req.Filters.Topic != "" {
 		query += fmt.Sprintf(" AND topics ? $%d", argN)
 		args = append(args, req.Filters.Topic)
+		argN++
+	}
+
+	if req.Filters.Domain != "" {
+		query += fmt.Sprintf(" AND domain_data->>'domain' = $%d", argN)
+		args = append(args, req.Filters.Domain)
+		argN++
+	}
+
+	if req.Filters.Ingredient != "" {
+		query += fmt.Sprintf(` AND domain_data @> jsonb_build_object('ingredients', jsonb_build_array(jsonb_build_object('name', $%d)))`, argN)
+		args = append(args, req.Filters.Ingredient)
 		argN++
 	}
 

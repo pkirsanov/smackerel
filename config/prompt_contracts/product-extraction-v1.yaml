@@ -1,0 +1,86 @@
+version: "product-extraction-v1"
+type: "domain-extraction"
+description: "Extract structured product data from product pages and reviews"
+
+content_types:
+- "product"
+
+url_qualifiers:
+- "amazon.com"
+- "ebay.com"
+- "bestbuy.com"
+- "newegg.com"
+- "bhphoto"
+- "target.com"
+- "walmart.com"
+
+min_content_length: 100
+
+system_prompt: |
+  You are a product extraction engine. Extract structured product data from
+  the provided content. Return ONLY valid JSON matching the output schema below.
+
+  RULES:
+  - Extract product name, brand, and model separately.
+  - Parse price with currency code (USD, EUR, GBP, etc.).
+  - Extract key specifications as name-value pairs.
+  - Identify pros and cons from reviews or product descriptions.
+  - If a field cannot be determined, use null (not empty string or zero).
+
+extraction_schema:
+  type: object
+  required:
+  - domain
+  - product_name
+  properties:
+    domain:
+      type: string
+      const: "product"
+    product_name:
+      type: string
+    brand:
+      type: string
+    model:
+      type: string
+    category:
+      type: string
+    price:
+      type: object
+      properties:
+        amount:
+          type: number
+        currency:
+          type: string
+    specs:
+      type: array
+      items:
+        type: object
+        required:
+        - name
+        - value
+        properties:
+          name:
+            type: string
+          value:
+            type: string
+    pros:
+      type: array
+      items:
+        type: string
+    cons:
+      type: array
+      items:
+        type: string
+    rating:
+      type: object
+      properties:
+        score:
+          type: number
+        max:
+          type: number
+        count:
+          type: integer
+    availability:
+      type: string
+    comparison_notes:
+      type: string

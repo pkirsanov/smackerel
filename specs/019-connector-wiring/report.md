@@ -257,3 +257,34 @@ Scope 1 implementation is complete. All 15 connectors are imported, instantiated
 | Build | `./smackerel.sh build` | PASS — both images built | 2026-04-14 |
 | Check | `./smackerel.sh check` | PASS — config in sync | 2026-04-14 |
 | Config generate | `./smackerel.sh config generate` | PASS — 2 new env vars confirmed: `FINANCIAL_MARKETS_FRED_ENABLED=true`, `FINANCIAL_MARKETS_FRED_SERIES=["GDP", "UNRATE", "CPIAUCSL", "DFF", "FEDFUNDS"]` | 2026-04-14 |
+
+---
+
+## Certification (2026-04-17)
+
+**Agent:** bubbles.validate
+**Decision:** CERTIFIED
+
+### Evidence Summary
+
+| Check | Result |
+|-------|--------|
+| All 15 connector imports in `cmd/core/connectors.go` | VERIFIED — 15 aliased imports (imap, caldav, youtube, rss, keep, bookmarks, browser, maps, hospitable, guesthost, discord, twitter, weather, alerts, markets) |
+| All 15 connectors instantiated and registered | VERIFIED — `registerConnectors()` creates 15 instances and registers via `registry.Register()` loop |
+| 5 new auto-start blocks (Discord, Twitter, Weather, Gov Alerts, Financial Markets) | VERIFIED — env-var gated, SST-compliant, credential-routed correctly |
+| YAML config entries for all 5 connectors | VERIFIED — `config/smackerel.yaml` has discord, twitter, weather, gov-alerts, financial-markets blocks |
+| Config generation pipeline | VERIFIED — `./smackerel.sh check` returns "Config is in sync with SST" |
+| Unit tests | VERIFIED — 35 Go packages pass (all cached), 92 Python tests pass |
+| DoD items in scopes.md | VERIFIED — all 12 items checked |
+| BUG-001 (parseFloatEnv Inf/NaN) | VERIFIED — `state.json` shows `status: "done"`, regression tests in `main_test.go` |
+| Security sweep findings | VERIFIED — SEC-019-001/002/003 all resolved or documented |
+| Hardening sweep findings | VERIFIED — HARDEN-019-001/002, H-019-R21-001/002/003 all resolved |
+| Improvement sweep findings | VERIFIED — IMP-019-R27-001/002, IMP-019-R28-001/002 all resolved |
+| SST compliance | VERIFIED — zero hardcoded defaults, all config flows through YAML → config.sh → env → os.Getenv() |
+
+### Final Test Evidence
+
+| Test Type | Command | Result | Timestamp |
+|-----------|---------|--------|-----------|
+| Unit | `./smackerel.sh test unit` | PASS — 35 Go packages, 92 Python tests | 2026-04-17 |
+| Check | `./smackerel.sh check` | PASS — config in sync | 2026-04-17 |

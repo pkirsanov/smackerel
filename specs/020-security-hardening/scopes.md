@@ -185,7 +185,7 @@ Scenario: SCN-020-012 OAuth start endpoint allows traffic within rate limit
 |------|---------------|---------|-------------------|
 | Unit (Python) | `ml/tests/test_auth.py` | ML sidecar auth: reject without token, accept with valid token, health unauthenticated, dev mode passthrough | SCN-020-005, SCN-020-006, SCN-020-007, SCN-020-008 |
 | Unit (Go) | `internal/api/router_test.go` | Web UI auth enforcement when token configured, passthrough when empty | SCN-020-009, SCN-020-010 |
-| Unit (Go) | `internal/auth/oauth_test.go` | OAuth rate limiting: >10 req/min blocked, ≤10 allowed | SCN-020-011, SCN-020-012 |
+| Unit (Go) | `internal/api/router_test.go` | OAuth rate limiting: >10 req/min blocked, ≤10 allowed | SCN-020-011, SCN-020-012 |
 | Integration | `tests/integration/ml_auth_test.go` | Live ML sidecar: authenticated access, rejected unauthenticated | SCN-020-005, SCN-020-006 |
 | E2E-API | `tests/e2e/auth_enforcement_test.go` | Full stack: Web UI returns 401 without auth, ML sidecar returns 401 without auth, health endpoints remain open | SCN-020-005, SCN-020-007, SCN-020-009 |
 | Regression | `./smackerel.sh test unit` | All existing tests pass | All |
@@ -260,11 +260,11 @@ Scenario: SCN-020-018 No warning when auth_token is configured
 
 | Type | File/Location | Purpose | Scenarios Covered |
 |------|---------------|---------|-------------------|
-| Unit (Go) | `internal/auth/store_test.go` | `decrypt()` returns error on invalid base64 when key present | SCN-020-013 |
-| Unit (Go) | `internal/auth/store_test.go` | `decrypt()` returns error on too-short data when key present | SCN-020-013 |
-| Unit (Go) | `internal/auth/store_test.go` | `decrypt()` returns error on GCM failure when key present | SCN-020-013 |
-| Unit (Go) | `internal/auth/store_test.go` | `decrypt()` returns plaintext when no encryption key | SCN-020-014 |
-| Unit (Go) | `internal/auth/store_test.go` | `decrypt()` succeeds on valid encrypted data | SCN-020-015 |
+| Unit (Go) | `internal/auth/oauth_test.go` | `decrypt()` returns error on invalid base64 when key present | SCN-020-013 |
+| Unit (Go) | `internal/auth/oauth_test.go` | `decrypt()` returns error on too-short data when key present | SCN-020-013 |
+| Unit (Go) | `internal/auth/oauth_test.go` | `decrypt()` returns error on GCM failure when key present | SCN-020-013 |
+| Unit (Go) | `internal/auth/oauth_test.go` | `decrypt()` returns plaintext when no encryption key | SCN-020-014 |
+| Unit (Go) | `internal/auth/oauth_test.go` | `decrypt()` succeeds on valid encrypted data | SCN-020-015 |
 | Unit (Go) | `cmd/core/main_test.go` | Startup logs WARN when auth_token empty | SCN-020-016, SCN-020-018 |
 | Unit (Python) | `ml/tests/test_startup_warning.py` | ML sidecar logs WARNING when token empty, no warning when set | SCN-020-017, SCN-020-018 |
 | E2E-API | `tests/e2e/decrypt_failclosed_test.go` | With auth_token set, corrupted stored token returns error, not plaintext | SCN-020-013, SCN-020-015 |
