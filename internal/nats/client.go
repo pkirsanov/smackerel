@@ -47,6 +47,10 @@ const (
 	SubjectSynthesisExtracted         = "synthesis.extracted"
 	SubjectSynthesisCrossSource       = "synthesis.crosssource"
 	SubjectSynthesisCrossSourceResult = "synthesis.crosssource.result"
+
+	// Domain extraction subjects (spec 026)
+	SubjectDomainExtract   = "domain.extract"
+	SubjectDomainExtracted = "domain.extracted"
 )
 
 // StreamConfig defines a JetStream stream and its subjects.
@@ -65,6 +69,7 @@ func AllStreams() []StreamConfig {
 		{Name: "INTELLIGENCE", Subjects: []string{"learning.>", "content.>", "monthly.>", "quickref.>", "seasonal.>"}},
 		{Name: "ALERTS", Subjects: []string{"alerts.>"}},
 		{Name: "SYNTHESIS", Subjects: []string{"synthesis.>"}},
+		{Name: "DOMAIN", Subjects: []string{"domain.>"}},
 		{Name: "DEADLETTER", Subjects: []string{"deadletter.>"}},
 	}
 }

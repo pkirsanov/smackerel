@@ -1,0 +1,120 @@
+version: "recipe-extraction-v1"
+type: "domain-extraction"
+description: "Extract structured recipe data from recipe content"
+
+content_types:
+- "recipe"
+
+url_qualifiers:
+- "allrecipes"
+- "epicurious"
+- "foodnetwork"
+- "seriouseats"
+- "bonappetit"
+- "budgetbytes"
+- "simplyrecipes"
+- "delish"
+
+min_content_length: 200
+
+system_prompt: |
+  You are a recipe extraction engine. Extract structured recipe data from the
+  provided content. Return ONLY valid JSON matching the output schema below.
+
+  RULES:
+  - Extract ALL ingredients with quantities, units, and preparation notes.
+  - Group ingredients by section if the recipe has sections (e.g., "for the sauce").
+  - Number steps sequentially. Estimate duration per step if not stated.
+  - Identify cooking techniques used (e.g., sauteing, braising, blind baking).
+  - Extract timing, servings, cuisine, course, difficulty, and equipment.
+  - For dietary tags, infer from ingredients (e.g., no meat -> vegetarian).
+  - For nutrition, extract if stated; omit fields if not available.
+  - If a field cannot be determined, use null (not empty string or zero).
+
+extraction_schema:
+  type: object
+  required:
+  - domain
+  - ingredients
+  - steps
+  properties:
+    domain:
+      type: string
+      const: "recipe"
+    ingredients:
+      type: array
+      items:
+        type: object
+        required:
+        - name
+        properties:
+          name:
+            type: string
+          quantity:
+            type: string
+          unit:
+            type: string
+          preparation:
+            type: string
+          group:
+            type: string
+    steps:
+      type: array
+      items:
+        type: object
+        required:
+        - number
+        - instruction
+        properties:
+          number:
+            type: integer
+          instruction:
+            type: string
+          duration_minutes:
+            type: integer
+          technique:
+            type: string
+    techniques:
+      type: array
+      items:
+        type: string
+    prep_time_minutes:
+      type: integer
+    cook_time_minutes:
+      type: integer
+    total_time_minutes:
+      type: integer
+    servings:
+      type: integer
+    cuisine:
+      type: string
+    course:
+      type: string
+    dietary_tags:
+      type: array
+      items:
+        type: string
+    difficulty:
+      type: string
+      enum: [ "easy", "medium", "hard" ]
+    equipment:
+      type: array
+      items:
+        type: string
+    tips:
+      type: array
+      items:
+        type: string
+    nutrition_per_serving:
+      type: object
+      properties:
+        calories:
+          type: number
+        protein_g:
+          type: number
+        carbs_g:
+          type: number
+        fat_g:
+          type: number
+        fiber_g:
+          type: number

@@ -5,8 +5,8 @@
   "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "finalize",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "certify",
     "currentScope": 1,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [],
@@ -56,9 +56,9 @@
     ]
   },
   "certification": {
-    "status": "not-started",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "certified",
+    "completedScopes": [1],
+    "certifiedCompletedPhases": ["analyze", "bootstrap", "planning", "implement", "finalize", "certify"],
     "scopeProgress": [],
     "lockdownState": {
       "active": false,

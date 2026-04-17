@@ -1,0 +1,66 @@
+{
+  "version": 3,
+  "featureDir": "specs/026-domain-extraction",
+  "featureName": "Domain-Aware Structured Extraction",
+  "status": "specs_hardened",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "bootstrap",
+    "currentScope": null,
+    "runStartedAt": "2026-04-17T15:00:00Z",
+    "completedPhaseClaims": ["bootstrap"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {"scope": 1, "name": "DB Migration & Domain Data Types", "status": "not_started", "dependsOn": []},
+      {"scope": 2, "name": "Domain Schema Registry", "status": "not_started", "dependsOn": [1]},
+      {"scope": 3, "name": "NATS Domain Extraction Subjects & Go Publisher", "status": "not_started", "dependsOn": [1]},
+      {"scope": 4, "name": "ML Sidecar Domain Extraction Handler", "status": "not_started", "dependsOn": [3]},
+      {"scope": 5, "name": "Recipe Extraction Prompt Contract", "status": "not_started", "dependsOn": [2]},
+      {"scope": 6, "name": "Product Extraction Prompt Contract", "status": "not_started", "dependsOn": [2]},
+      {"scope": 7, "name": "Pipeline Integration", "status": "not_started", "dependsOn": [2, 3, 4]},
+      {"scope": 8, "name": "Search Extension", "status": "not_started", "dependsOn": [7]},
+      {"scope": 9, "name": "Telegram Display", "status": "not_started", "dependsOn": [8]}
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["bootstrap"],
+      "runStartedAt": "2026-04-17T15:00:00Z",
+      "runEndedAt": "2026-04-17T15:30:00Z",
+      "summary": "Created spec.md, design.md, scopes.md with 9 scopes. Created report.md, uservalidation.md, state.json."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-17T15:30:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  }
+}

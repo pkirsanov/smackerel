@@ -25,16 +25,16 @@ import (
 	youtubeConnector "github.com/smackerel/smackerel/internal/connector/youtube"
 )
 
-// --- SCN-019-001 / SCN-019-006: All 14 connectors register successfully ---
+// --- SCN-019-001 / SCN-019-006: All 15 connectors register successfully ---
 
-// TestAllConnectorsRegistered verifies that all 14 connector packages can be
+// TestAllConnectorsRegistered verifies that all 15 connector packages can be
 // instantiated and registered in a single Registry without collision, matching
 // the exact set in main.go's run() function. This is the unit-level proof for
 // SCN-019-001 (all 15 registered) and SCN-019-006 (no regression from new registrations).
 func TestAllConnectorsRegistered(t *testing.T) {
 	registry := connector.NewRegistry()
 
-	// Instantiate all 14 connectors using the same IDs and constructors as main.go.
+	// Instantiate all 15 connectors using the same IDs and constructors as main.go.
 	// bookmarksConnector.NewConnector (no pool) is used instead of NewConnectorWithPool
 	// because registration only requires the Connector interface — pool is not needed.
 	connectors := []connector.Connector{

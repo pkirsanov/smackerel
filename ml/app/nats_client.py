@@ -35,6 +35,7 @@ SUBSCRIBE_SUBJECTS = [
     "seasonal.analyze",
     "synthesis.extract",
     "synthesis.crosssource",
+    "domain.extract",
 ]
 
 # Subjects this sidecar publishes to
@@ -52,6 +53,7 @@ PUBLISH_SUBJECTS = [
     "seasonal.analyzed",
     "synthesis.extracted",
     "synthesis.crosssource.result",
+    "domain.extracted",
 ]
 
 # Map of subscribe subject -> publish response subject
@@ -69,6 +71,7 @@ SUBJECT_RESPONSE_MAP = {
     "seasonal.analyze": "seasonal.analyzed",
     "synthesis.extract": "synthesis.extracted",
     "synthesis.crosssource": "synthesis.crosssource.result",
+    "domain.extract": "domain.extracted",
 }
 
 
