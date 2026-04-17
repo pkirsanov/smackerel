@@ -1,0 +1,52 @@
+{
+  "version": 3,
+  "featureDir": "specs/030-observability",
+  "featureName": "Observability",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": null,
+    "currentScope": null,
+    "runStartedAt": null,
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {"scope": 1, "name": "Prometheus Metrics Endpoint", "status": "Not Started", "dependsOn": []},
+      {"scope": 2, "name": "Ingestion & Search Metrics Instrumentation", "status": "Not Started", "dependsOn": [1]},
+      {"scope": 3, "name": "Connector Sync Metrics", "status": "Not Started", "dependsOn": [1]},
+      {"scope": 4, "name": "ML Sidecar Metrics Endpoint", "status": "Not Started", "dependsOn": []},
+      {"scope": 5, "name": "OpenTelemetry Trace Propagation", "status": "Not Started", "dependsOn": [1, 4]}
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-17T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  }
+}
