@@ -33,6 +33,19 @@ Purpose: mandatory planning-time rules for `bubbles.plan` and other planning-ori
 - `e2e-regression.md`
 - `evidence-rules.md`
 
+## Test Plan Verification Layer
+
+Planning-time test artifacts (`Test Plan` tables, `test-plan.json`, DoD test items) are authored by `bubbles.plan` but **verified** by `bubbles.harden` during the `harden` phase. The harden agent's Phase 1.7 (Test Plan Audit) validates:
+
+- **Taxonomy completeness** — every impacted surface has all required test types
+- **Semantic fidelity** — each Gherkin scenario maps to a test that validates its behavioral claim (not a proxy)
+- **Repo-realistic paths** — planned test file paths match the repo's actual directory structure
+- **Regression coverage** — every changed behavior has regression E2E rows; bug-fix scopes have adversarial entries
+- **Cross-scope deduplication** — no redundant test entries across consecutive scopes
+- **test-plan.json sync** — JSON and Markdown Test Plan tables are consistent
+
+This separation preserves artifact ownership (plan writes, harden verifies) while ensuring test-domain expertise validates planning quality. The `product-to-planning` mode runs `harden` after `bootstrap`, so test plan quality is enforced before implementation begins.
+
 ## Test Plan Structured Handoff (test-plan.json)
 
 When `bubbles.plan` creates or updates Test Plan tables in scope artifacts, it MUST also write (or update) a machine-readable `test-plan.json` in the spec folder.

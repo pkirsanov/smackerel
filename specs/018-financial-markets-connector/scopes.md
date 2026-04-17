@@ -287,6 +287,8 @@ Scenario: SCN-FM-CONN-001 Watchlist-driven sync
   > Evidence: `markets.go::Connect()` returns error "finnhub_api_key is required" when empty; TestConnect_MissingAPIKey verifies
 - [x] Sync iterates watchlist symbols across all providers
   > Evidence: `markets.go::Sync()` iterates Stocks+ETFs via Finnhub, Crypto via CoinGecko, with per-provider rate limiting
+- [x] Watchlist-driven sync produces market artifacts for each configured symbol (SCN-FM-CONN-001)
+  > Evidence: `markets.go::Sync()` queries Finnhub for stock/ETF/forex quotes, CoinGecko for crypto prices, per watchlist config. TestSyncFinnhubIntegrationViaHTTPTest, TestSyncMultiProviderCombined, TestSyncAllProvidersCombined verify multi-symbol sync across providers.
 - [x] Rate limiter checked before each provider call
   > Evidence: `markets.go::Sync()` calls allowCall("finnhub") and allowCall("coingecko") before API calls; TestAllowCall_RateLimit verifies
 - [x] Config added to `smackerel.yaml` with empty-string placeholders
