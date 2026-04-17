@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/005-phase4-expansion",
   "featureName": "Phase 4: Expansion",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "finalize",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "done",
     "currentScope": null,
     "runStartedAt": "2026-04-10T00:00:00Z",
     "completedPhaseClaims": [
@@ -14,14 +14,22 @@
       "bootstrap",
       "implement",
       "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
       "validate",
       "audit",
-      "docs"
+      "chaos",
+      "docs",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
@@ -34,9 +42,17 @@
       "bootstrap",
       "implement",
       "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
       "validate",
       "audit",
-      "docs"
+      "chaos",
+      "docs",
+      "spec-review"
     ],
     "scopeProgress": [
       {

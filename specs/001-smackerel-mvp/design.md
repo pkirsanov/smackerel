@@ -439,7 +439,7 @@ Light theme:
   Divider:     #E0DFDD (borders, separators)
 
 Dark theme:
-  Foreground:  #E8E6E3 (warm off-white)
+  Foreground:  #e8e8e4 (warm off-white)
   Background:  #1A1A18 (warm near-black)
   Subtle:      #6B6862 (warm gray)
   Surface:     #242422 (card/panel background)

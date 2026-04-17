@@ -57,6 +57,12 @@ Phase 4 expands Smackerel's awareness into physical space (location history, tri
 - Hotel/restaurant booking integration
 - Photo content analysis beyond metadata (Phase 5 consideration)
 - Podcast/audiobook connectors (post-MVP)
+- Location-aware captures (R-406) — planned but not implemented in Phase 4; deferred to future phase
+- Source privacy controls settings UI (R-407) — planned but not implemented in Phase 4; deferred to future phase
+- Frequent revisit topic boosting (SC-E11) — deferred to future phase
+- Commute pattern detection (SC-E18) — deferred to future phase
+- Location-context tagging on captures (SC-E19) — deferred to future phase
+- Nearby saved place notifications (SC-E20) — deferred to future phase
 
 ---
 
@@ -88,12 +94,12 @@ Phase 4 expands Smackerel's awareness into physical space (location history, tri
 - **Opt-in required:** Not enabled by default; explicit consent with privacy explanation
 - **Scope:** Visited URLs with dwell time
 - **Source Qualifiers:**
-  - Dwell time: >3 min = intentional reading (trigger processing)
+  - Dwell time: >=5 min = intentional reading (trigger full processing)
   - Repeat visits to same URL = deep interest signal
   - Bookmarks → full processing
   - Domain categorization (news, reference, shopping, social, internal tools)
 - **Processing Rules:**
-  - Dwell >3 min: fetch content via readability, extract summary, tag topics
+  - Dwell >=5 min: fetch content via readability, extract summary, tag topics
   - Frequent revisits: detect deep-interest topics, boost topic momentum
   - Bookmarks: full pipeline processing
   - Skip: social media feeds, search result pages, internal tools (configurable skip-list)
@@ -171,7 +177,9 @@ Phase 4 expands Smackerel's awareness into physical space (location history, tri
   - Gift list: track when someone mentions wanting something ("Alex wanted the Ottolenghi cookbook in March") → surface before their birthday if known
 - **Privacy:** All analysis is observational. No automated outreach. User can delete any person's data.
 
-### R-406: Location-Aware Captures
+### R-406: Location-Aware Captures [DEFERRED]
+> **Status: Deferred to future phase.** This requirement was planned but not implemented in Phase 4. See Non-Goals.
+
 - When a capture happens and the user's device provides location:
   - Tag the artifact with location context: {lat, lng, name}
   - Link to nearby place entities
@@ -179,7 +187,9 @@ Phase 4 expands Smackerel's awareness into physical space (location history, tri
 - When user visits a location near a previously saved place:
   - Optional: "You saved a coffee shop 200m from here — you've been here 3 times and never went" (configurable, opt-in)
 
-### R-407: Source Privacy Controls
+### R-407: Source Privacy Controls [DEFERRED]
+> **Status: Deferred to future phase.** Settings UI not implemented in Phase 4. Backend primitives for opt-in enforcement, skip-list, and per-source deletion exist in scope code but the unified settings page is deferred. See Non-Goals.
+
 - Settings page must clearly distinguish opt-in sources (Maps, Browser) from standard sources
 - Privacy explanation shown before enabling: what data is collected, how it's stored, what's shared
 - Per-source data deletion: "Delete all browser history data" removes all artifacts from that source
@@ -270,7 +280,8 @@ Scenario: SC-E10 Deep reading detection
   And linked to the "microservices" topic
   And the topic's momentum score is updated
 
-Scenario: SC-E11 Frequent revisit detection
+Scenario: SC-E11 Frequent revisit detection [DEFERRED]
+  # Deferred to future phase — no scope implementation
   Given the user has visited the Go documentation page 8 times this month
   When the browser history sync detects this pattern
   Then the system notes "Go programming" as a deep-interest signal
@@ -319,7 +330,8 @@ Scenario: SC-E17 Meeting pattern detection
   Then Sarah's profile shows "Weekly 1:1, ongoing"
   And the team sync participants are all linked as team contacts
 
-Scenario: SC-E18 Commute pattern detection
+Scenario: SC-E18 Commute pattern detection [DEFERRED]
+  # Deferred to future phase — no scope implementation
   Given the Maps Timeline shows the user drives to the same location every weekday
   And on Tuesdays the commute is consistently 20 minutes longer
   When the location intelligence engine detects this pattern
@@ -327,17 +339,21 @@ Scenario: SC-E18 Commute pattern detection
   And surfaces this in the weekly synthesis under PATTERNS NOTICED
 ```
 
-### Location-Aware Captures
+### Location-Aware Captures [DEFERRED]
+
+> Deferred to future phase — R-406 not implemented. See Non-Goals.
 
 ```gherkin
-Scenario: SC-E19 Capture with location context
+Scenario: SC-E19 Capture with location context [DEFERRED]
+  # Deferred to future phase — R-406 not implemented
   Given the user captures an article while sitting in a coffee shop in Lisbon
   And the device provides location data
   When the artifact is stored
   Then it is tagged with the coffee shop location
   And linked to any "Lisbon" trip or place entities
 
-Scenario: SC-E20 Nearby saved place notification
+Scenario: SC-E20 Nearby saved place notification [DEFERRED]
+  # Deferred to future phase — R-406 not implemented
   Given the user saved a coffee shop "Fabrica Coffee Roasters" in Lisbon
   And the user has been within 200m of this location 3 times (from Maps Timeline)
   When the proximity detection runs
@@ -360,17 +376,17 @@ Scenario: SC-E20 Nearby saved place notification
 | AC-E07 | Trail search returns all trails sorted by date | SC-E07 | E2E |
 | AC-E08 | Location-filtered trail search works | SC-E08 | E2E |
 | AC-E09 | Captures during a hike are linked to the trail entry | SC-E09 | Integration |
-| AC-E10 | Deep reading (>3 min dwell) triggers full processing | SC-E10 | Integration |
-| AC-E11 | Frequent revisits boost topic momentum | SC-E11 | Integration |
+| AC-E10 | Deep reading (>=5 min dwell) triggers full processing | SC-E10 | Integration |
+| AC-E11 | ~~Frequent revisits boost topic momentum~~ | SC-E11 | **DEFERRED** |
 | AC-E12 | Social media stored as domain aggregate only, no individual URLs | SC-E12 | Unit |
 | AC-E13 | Skip list domains produce zero artifacts | SC-E13 | Unit |
 | AC-E14 | Relationship cooling detected and alert sent | SC-E14 | Integration |
 | AC-E15 | Gift list items surfaced near person's birthday | SC-E15 | Integration |
 | AC-E16 | Person search returns full interaction profile | SC-E16 | E2E |
 | AC-E17 | Meeting patterns detected and shown on People profile | SC-E17 | Integration |
-| AC-E18 | Commute pattern changes detected and reported | SC-E18 | Integration |
-| AC-E19 | Captures tagged with location context | SC-E19 | Integration |
-| AC-E20 | Nearby saved place detection works (opt-in only) | SC-E20 | Integration |
+| AC-E18 | ~~Commute pattern changes detected and reported~~ | SC-E18 | **DEFERRED** |
+| AC-E19 | ~~Captures tagged with location context~~ | SC-E19 | **DEFERRED** |
+| AC-E20 | ~~Nearby saved place detection works (opt-in only)~~ | SC-E20 | **DEFERRED** |
 
 ---
 

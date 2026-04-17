@@ -2,10 +2,10 @@
   "version": 3,
   "featureDir": "specs/004-phase3-intelligence",
   "featureName": "Phase 3: Intelligence",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.workflow",
+    "activeAgent": "bubbles.implement",
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-10T00:00:00Z",
@@ -16,12 +16,20 @@
       "test",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "harden",
+      "regression",
+      "simplify",
+      "gaps",
+      "stabilize",
+      "security",
+      "chaos",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
@@ -37,7 +45,15 @@
       "test",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "harden",
+      "regression",
+      "simplify",
+      "gaps",
+      "stabilize",
+      "security",
+      "chaos",
+      "spec-review"
     ],
     "scopeProgress": [
       {

@@ -32,12 +32,12 @@ func HealthFromErrorCount(count int) HealthStatus {
 
 // RawArtifact is the raw data produced by a connector sync.
 type RawArtifact struct {
-	SourceID    string                 `json:"source_id"`
-	SourceRef   string                 `json:"source_ref"`
-	ContentType string                 `json:"content_type"`
-	Title       string                 `json:"title"`
-	RawContent  string                 `json:"raw_content"`
-	URL         string                 `json:"url,omitempty"`
+	SourceID    string         `json:"source_id"`
+	SourceRef   string         `json:"source_ref"`
+	ContentType string         `json:"content_type"`
+	Title       string         `json:"title"`
+	RawContent  string         `json:"raw_content"`
+	URL         string         `json:"url,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	CapturedAt  time.Time      `json:"captured_at"`
 }
@@ -72,7 +72,7 @@ type ConnectorConfig struct {
 	Enabled      bool   `json:"enabled"`
 
 	// Processing configuration
-	ProcessingTier string                 `json:"processing_tier"` // full, standard, light, metadata
+	ProcessingTier string         `json:"processing_tier"` // full, standard, light, metadata
 	Qualifiers     map[string]any `json:"qualifiers"`
 
 	// Source-specific configuration

@@ -1,0 +1,261 @@
+{
+  "version": 2,
+  "specId": "018",
+  "featureDir": "specs/018-financial-markets-connector",
+  "generatedBy": "bubbles.workflow",
+  "generatedAt": "2026-04-16T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-FM-FH-001",
+      "name": "Fetch stock quote",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFinnhubQuote_RejectsInvalidSymbol"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFinnhubQuote_RejectsZeroPriceResponse"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncFinnhubIntegrationViaHTTPTest"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFinnhubQuote_MalformedJSON"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFinnhubQuote_MalformedBaseURL"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestHTTPErrorResponseDrain"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFinnhubErrorResponseIncludesBody"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestFetchFinnhubQuote_RejectsInvalidSymbol"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestFetchFinnhubQuote_RejectsZeroPriceResponse"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestSyncFinnhubIntegrationViaHTTPTest"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::fetchFinnhubQuote"}
+      ],
+      "linkedDoD": ["GetQuote() fetches stock/ETF quote from Finnhub", "API key sent via query parameter per Finnhub docs"]
+    },
+    {
+      "scenarioId": "SCN-FM-RL-001",
+      "name": "Rate limiter prevents exceeding budget",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestTryRecordCall_RateLimit"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestRateLimit_AtBoundary"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestTryRecordCall_Atomic"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestTryRecordCall_ConcurrentSafety"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncRateLimitExhaustion"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestCloseResetsCallCounts"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestConnectResetsRateLimits"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestProviderRateLimitsConsistency"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestTryRecordCall_RateLimit"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestRateLimit_AtBoundary"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestTryRecordCall_ConcurrentSafety"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::tryRecordCall"}
+      ],
+      "linkedDoD": ["ProviderRateLimiter tracks per-minute call counts", "Allow() returns false when budget exhausted", "Budget defaults: Finnhub=55, CoinGecko=25, FRED=100"]
+    },
+    {
+      "scenarioId": "SCN-FM-CG-001",
+      "name": "Fetch crypto prices in batch",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncCoinGeckoIntegrationViaHTTPTest"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchCoinGeckoPrices_HTTPError"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchCoinGeckoPrices_AllInvalidIDs"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchCoinGeckoPrices_MalformedJSON"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchCoinGeckoPrices_BatchTruncationViaHTTPTest"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchCoinGeckoPrices_MalformedBaseURL"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncCoinGeckoDisabledSkipsCrypto"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestCryptoChange24hCalculation"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestSyncCoinGeckoIntegrationViaHTTPTest"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestFetchCoinGeckoPrices_BatchTruncationViaHTTPTest"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::fetchCoinGeckoPrices"}
+      ],
+      "linkedDoD": ["CoinGeckoClient.GetPrices() batches multiple coin IDs in single request", "CoinGecko requires no API key (free tier)"]
+    },
+    {
+      "scenarioId": "SCN-FM-FRED-001",
+      "name": "Fetch latest economic indicators",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFREDLatest_Success"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFREDLatest_RejectsInvalidSeriesID"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFREDLatest_HTTPError"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFREDLatest_NoObservations"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFREDLatest_MissingDataMarker"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFREDLatest_InvalidValueFormat"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFREDLatest_MalformedJSON"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestFetchFREDLatest_MalformedBaseURL"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncProducesEconomicArtifacts"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncFREDDisabledSkipsFetch"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncFREDTotalFailureSetsHealthDegraded"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestFetchFREDLatest_Success"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestSyncProducesEconomicArtifacts"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::fetchFREDLatest"}
+      ],
+      "linkedDoD": ["FREDClient.FetchLatest() fetches latest value for each tracked indicator", "FRED API key sent via query parameter"]
+    },
+    {
+      "scenarioId": "SCN-FM-CONN-001",
+      "name": "Watchlist-driven sync",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncFinnhubIntegrationViaHTTPTest"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncCoinGeckoIntegrationViaHTTPTest"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncMultiProviderCombined"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncAllProvidersCombined"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncETFsMergedWithStocks"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncStocksAndForexMixed"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncForexPairsProduceArtifacts"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncForexOnlyNoStocks"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncEmptyWatchlist"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncContextCancellation"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncConfigSnapshotSafety"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncMixedAssetTypes"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestSyncAllProvidersCombined"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestSyncMixedAssetTypes"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestSyncContextCancellation"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::Sync"}
+      ],
+      "linkedDoD": ["Connector implements connector.Connector interface", "Sync iterates watchlist symbols across all providers", "Rate limiter checked before each provider call"]
+    },
+    {
+      "scenarioId": "SCN-FM-NORM-001",
+      "name": "Quote normalization assigns correct content type and metadata",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncProducesNewsArtifacts"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncProducesEconomicArtifacts"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncStocksHaveAssetType"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncETFsHaveAssetType"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncMixedAssetTypes"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestSyncProducesNewsArtifacts"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestSyncMixedAssetTypes"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::Sync"}
+      ],
+      "linkedDoD": ["NormalizeQuote() creates market/quote artifact", "NormalizeNews() creates market/news with headline, source, URL", "NormalizeEconomic() creates market/economic with indicator name, value, date"]
+    },
+    {
+      "scenarioId": "SCN-FM-NORM-002",
+      "name": "Tier classification promotes significant moves to full",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestClassifyTier"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestClassifyTier_NaN_PromotesToFull"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestClassifyTier_Inf_PromotesToFull"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncForex_AlertTierOnExtremeMove"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncForex_NegativeAlertTier"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestClassifyTier"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::classifyTier"}
+      ],
+      "linkedDoD": ["Tier assignment: alerts/earnings to full, summaries/news to standard, quotes to light"]
+    },
+    {
+      "scenarioId": "SCN-FM-ALERT-001",
+      "name": "Alert generated for significant price movement",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncFinnhubIntegrationViaHTTPTest"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestParseMarketsConfig"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestParseMarketsConfig_RejectsNegativeAlertThreshold"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestParseMarketsConfig_RejectsNaNAlertThreshold"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestParseMarketsConfig_RejectsInfAlertThreshold"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestSyncFinnhubIntegrationViaHTTPTest"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::classifyTier"}
+      ],
+      "linkedDoD": ["Alert threshold configurable (default: 5% daily change)", "Alerts generated for symbols with change >= threshold", "Alert artifacts get processing_tier full"]
+    },
+    {
+      "scenarioId": "SCN-FM-SUMM-001",
+      "name": "Daily summary generated after market close",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestBuildDailySummary_Structure"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestBuildDailySummary_AlertUpgradesTier"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestBuildDailySummary_EmptyArtifacts"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestBuildDailySummary_CryptoChangePct"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestDailySummary_TimeGate"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncGeneratesDailySummary"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSyncNoDailySummaryBeforeMarketClose"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestBuildDailySummary_Structure"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestDailySummary_TimeGate"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::buildDailySummary"}
+      ],
+      "linkedDoD": ["Daily summary artifact aggregates watchlist performance", "Summary generated at configured time (after 16:30 ET on weekdays)", "Summary artifacts get processing_tier standard normally, full if alerts triggered"]
+    },
+    {
+      "scenarioId": "SCN-FM-SYM-001",
+      "name": "Ticker notation detected in text",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestResolveSymbols_TickerNotation"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestResolveSymbols_NoFalsePositives"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestResolveSymbols_EmptyText"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestResolveSymbols_NoTickersInPlainText"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSync_DetectsSymbolsInNews"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestEnrichArtifactsWithSymbols_QuoteArtifact"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestResolveSymbols_TickerNotation"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestResolveSymbols_NoFalsePositives"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::ResolveSymbols"}
+      ],
+      "linkedDoD": ["SymbolResolver detects ticker patterns", "Common false positives filtered"]
+    },
+    {
+      "scenarioId": "SCN-FM-SYM-002",
+      "name": "Company name mapped to ticker",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestResolveSymbols_CompanyNames"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestSync_EconomicArtifactsHaveAllWatchlistSymbols"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestResolveSymbols_CompanyNames"},
+        {"type": "source", "location": "internal/connector/markets/markets.go::ResolveSymbols"}
+      ],
+      "linkedDoD": ["Symbol metadata enrichment for cross-artifact linking"]
+    }
+  ],
+  "classificationPolicy": {
+    "unit": "Tests using httptest.NewServer or pure in-memory validation. No live services required.",
+    "integration": "Tests requiring real running services (NATS, PostgreSQL, etc.). None exist for this connector yet.",
+    "e2e": "Tests hitting the live deployed stack via HTTP. None exist for this connector yet."
+  },
+  "hardeningNotes": [
+    "H-018-D06: All 119 tests reclassified as unit tests — all use httptest mocks, none hit real APIs or require live infrastructure.",
+    "H-018-D01: Market-hours-only DoD item removed from Scope 4 (unimplemented optional feature).",
+    "H-018-D03: Spec hard constraint updated from 'cursor-based incremental sync' to 'timestamp-based sync tracking'.",
+    "H-018-D04: Earnings calendar, market indices, historical data documented as future work in spec.md."
+  ]
+}

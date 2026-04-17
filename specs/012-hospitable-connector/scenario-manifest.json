@@ -1,0 +1,525 @@
+{
+  "version": 2,
+  "specId": "012",
+  "featureDir": "specs/012-hospitable-connector",
+  "generatedBy": "bubbles.workflow",
+  "generatedAt": "2026-04-16T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-HC-001",
+      "name": "API client authenticates with Personal Access Token",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientAuthHeader"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientValidateSuccess"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientValidateUnauthorized"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientValidateForbidden"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestClientAuthHeader"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestClientValidateSuccess"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestClientValidateUnauthorized"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestClientValidateForbidden"},
+        {"type": "source", "location": "internal/connector/hospitable/client.go::Validate"}
+      ],
+      "linkedDoD": ["Client sends Authorization: Bearer {token} header on every request", "Validate() distinguishes 200 (success), 401 (unauthorized), 403 (forbidden)"]
+    },
+    {
+      "scenarioId": "SCN-HC-002",
+      "name": "API client paginates property listings",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientPaginatesProperties"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestPaginationMaxPageLimit"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestParseLinkNextValid"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestParseLinkNextMultipleLinks"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestClientPaginatesProperties"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestPaginationMaxPageLimit"},
+        {"type": "source", "location": "internal/connector/hospitable/client.go::fetchPaginated"}
+      ],
+      "linkedDoD": ["fetchPaginated() follows next URLs until exhausted, collecting all items"]
+    },
+    {
+      "scenarioId": "SCN-HC-003",
+      "name": "API client retries on rate limit (429)",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientRetryOn429"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientMaxRetriesOn429"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestDefaultClientMaxRetries3"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestClientRetryOn429"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestClientMaxRetriesOn429"},
+        {"type": "source", "location": "internal/connector/hospitable/client.go::doGet"}
+      ],
+      "linkedDoD": ["Rate limit (429) triggers exponential backoff with max 3 retries"]
+    },
+    {
+      "scenarioId": "SCN-HC-004",
+      "name": "API client handles server errors with retry",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientRetryOnServerError"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestClientRetryOnServerError"},
+        {"type": "source", "location": "internal/connector/hospitable/client.go::doGet"}
+      ],
+      "linkedDoD": ["Server errors (5xx) trigger exponential backoff with max 3 retries"]
+    },
+    {
+      "scenarioId": "SCN-HC-005",
+      "name": "Config validation rejects invalid settings",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestConfigValidationMissingToken"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestConfigValidationDefaults"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestConfigRejectsInvalidBaseURLScheme"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestConfigAcceptsValidBaseURL"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestConfigValidationMissingToken"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestConfigValidationDefaults"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::parseHospitableConfig"}
+      ],
+      "linkedDoD": ["Config parsing validates required fields, applies defaults for optional fields"]
+    },
+    {
+      "scenarioId": "SCN-HC-006",
+      "name": "API client constructs correct request URLs",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientURLConstruction"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestSyncCursorMarshal"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientListMessagesPathEscaping"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientListActiveReservationsParam"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestClientURLConstruction"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestSyncCursorMarshal"},
+        {"type": "source", "location": "internal/connector/hospitable/client.go::doRequest"}
+      ],
+      "linkedDoD": ["Request URLs correctly include base path, updated_since, and page_size parameters"]
+    },
+    {
+      "scenarioId": "SCN-HC-007",
+      "name": "Connector implements full lifecycle",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestConnectorID"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestConnectValidConfig"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestConnectInvalidToken"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestHealthTransitions"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestCloseIdempotent"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestSyncFullLifecycle"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestSyncNotConnected"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestConnectorID"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestConnectValidConfig"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestSyncFullLifecycle"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::Connector"}
+      ],
+      "linkedDoD": ["Connector lifecycle: Connect validates PAT, Sync orchestrates multi-resource fetch, Health reports status, Close cleans up"]
+    },
+    {
+      "scenarioId": "SCN-HC-008",
+      "name": "Normalizer produces correct property artifact",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeProperty"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizePropertyCapturedAtCreatedAt"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizePropertyCapturedAtFallbackNow"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeProperty"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeProperty"}
+      ],
+      "linkedDoD": ["Normalizer produces correct RawArtifact for property with correct content type and tier=light"]
+    },
+    {
+      "scenarioId": "SCN-HC-009",
+      "name": "Normalizer produces correct reservation artifact",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservation"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservationLeadTime"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservationZeroBookedAt"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservationFallbackPropertyID"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeReservation"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeReservationLeadTime"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeReservation"}
+      ],
+      "linkedDoD": ["Normalizer produces correct RawArtifact for reservation with correct title format and tier=standard"]
+    },
+    {
+      "scenarioId": "SCN-HC-010",
+      "name": "Normalizer produces correct message artifact",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeMessage"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeMessageCapturedAtFallbackNow"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeMessage"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeMessage"}
+      ],
+      "linkedDoD": ["Normalizer produces correct RawArtifact for message with correct content type and tier=full"]
+    },
+    {
+      "scenarioId": "SCN-HC-011",
+      "name": "Normalizer produces correct review artifact",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReview"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReviewFallbackPropertyID"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReviewNoHostResponse"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeReview"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeReview"}
+      ],
+      "linkedDoD": ["Normalizer produces correct RawArtifact for review with star rating in title and tier=full"]
+    },
+    {
+      "scenarioId": "SCN-HC-012",
+      "name": "Incremental cursor advances per resource type",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestSyncCursorMarshal"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestCursorEmptyAppliesLookback"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestSyncFullLifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestSyncCursorMarshal"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestCursorEmptyAppliesLookback"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::encodeCursor"}
+      ],
+      "linkedDoD": ["Cursor management: JSON per-resource timestamps, empty→full scan with lookback, incremental on subsequent syncs"]
+    },
+    {
+      "scenarioId": "SCN-HC-013",
+      "name": "Initial sync applies lookback window",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestCursorEmptyAppliesLookback"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestCursorEmptyAppliesLookback"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::Sync"}
+      ],
+      "linkedDoD": ["Empty cursor applies initial_lookback_days for reservations/messages/reviews"]
+    },
+    {
+      "scenarioId": "SCN-HC-014",
+      "name": "Disabled resource types are skipped",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestDisabledResourceSkipped"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestConfigSyncFlagOverrides"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestDisabledResourceSkipped"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::Sync"}
+      ],
+      "linkedDoD": ["Disabled resource types skipped, cursor not updated for skipped types"]
+    },
+    {
+      "scenarioId": "SCN-HC-015",
+      "name": "Reservation artifact contains BELONGS_TO edge hint",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservation"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservationLeadTime"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeReservation"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeReservation"}
+      ],
+      "linkedDoD": ["Reservation metadata includes edge_belongs_to, stay_window_start, stay_window_end, stay_property_id"]
+    },
+    {
+      "scenarioId": "SCN-HC-016",
+      "name": "Message artifact contains PART_OF edge hint",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeMessage"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeMessage"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeMessage"}
+      ],
+      "linkedDoD": ["Message metadata includes edge_part_of pointing to parent reservation"]
+    },
+    {
+      "scenarioId": "SCN-HC-017",
+      "name": "Review artifact contains REVIEW_OF edge hint",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReview"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeReview"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeReview"}
+      ],
+      "linkedDoD": ["Review metadata includes edge_review_of pointing to property"]
+    },
+    {
+      "scenarioId": "SCN-HC-018",
+      "name": "Temporal DURING_STAY window enables cross-domain linking",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservation"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservationLeadTime"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeReservation"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeReservation"}
+      ],
+      "linkedDoD": ["DURING_STAY temporal window enables cross-domain artifact linking via stay_window_start/end metadata"]
+    },
+    {
+      "scenarioId": "SCN-HC-019",
+      "name": "Property name cache enriches reservation titles",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestPropertyNameCacheEnrichesTitle"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservationFallbackPropertyID"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReviewFallbackPropertyID"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestPropertyNameCacheEnrichesTitle"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeReservationFallbackPropertyID"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::syncProperties"}
+      ],
+      "linkedDoD": ["Property name cache populated during property sync, used for title enrichment; cache miss falls back to raw property ID"]
+    },
+    {
+      "scenarioId": "SCN-HC-020",
+      "name": "Partial failure: message sync error does not block reservations",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestPartialFailureReturnsSuccessful"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestPartialFailureReturnsSuccessful"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::Sync"}
+      ],
+      "linkedDoD": ["Partial failure isolation: one resource type failing does not block others"]
+    },
+    {
+      "scenarioId": "SCN-HC-021",
+      "name": "All resource type failures set health to error",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestAllFailuresSetHealthError"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestAllFailuresSetHealthError"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::Sync"}
+      ],
+      "linkedDoD": ["All resource types failing sets health to error"]
+    },
+    {
+      "scenarioId": "SCN-HC-022",
+      "name": "Connect with empty token returns clear error",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestConnectEmptyToken"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestConnectEmptyToken"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::Connect"}
+      ],
+      "linkedDoD": ["Empty token returns clear error containing access_token is required"]
+    },
+    {
+      "scenarioId": "SCN-HC-023",
+      "name": "Messages fetched for active reservations outside incremental window",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestActiveReservationMessageSync"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestClientListActiveReservationsParam"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestActiveReservationMessageSync"},
+        {"type": "source", "location": "internal/connector/hospitable/client.go::ListActiveReservations"}
+      ],
+      "linkedDoD": ["ListActiveReservations method added, Sync() merges incremental + active-window reservation IDs for message fetch"]
+    },
+    {
+      "scenarioId": "SCN-HC-024",
+      "name": "Retry-After header respected on 429",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestParseRetryAfterSeconds"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestParseRetryAfterHTTPDate"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestParseRetryAfterEmpty"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestParseRetryAfterInvalid"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestRetryAfterUsedOn429"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestParseRetryAfterSeconds"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestRetryAfterUsedOn429"},
+        {"type": "source", "location": "internal/connector/hospitable/client.go::parseRetryAfter"}
+      ],
+      "linkedDoD": ["parseRetryAfter parses integer seconds and HTTP-date formats per RFC 7231; 429 handler uses max(Retry-After, backoff)"]
+    },
+    {
+      "scenarioId": "SCN-HC-025",
+      "name": "Property name cache survives across syncs",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestPropertyNameCachePersistsInCursor"},
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestPropertyNameCacheLoadedFromCursor"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestPropertyNameCachePersistsInCursor"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestPropertyNameCacheLoadedFromCursor"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::parseCursor"}
+      ],
+      "linkedDoD": ["SyncCursor.PropertyNames persists property names in cursor JSON; loaded at sync start when no properties updated"]
+    },
+    {
+      "scenarioId": "SCN-HC-026",
+      "name": "Message cursor not advanced on partial failure",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/connector_test.go", "function": "TestMessageCursorNotAdvancedOnFailure"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/connector_test.go::TestMessageCursorNotAdvancedOnFailure"},
+        {"type": "source", "location": "internal/connector/hospitable/connector.go::Sync"}
+      ],
+      "linkedDoD": ["Message cursor does NOT advance when any reservation message fetch fails"]
+    },
+    {
+      "scenarioId": "SCN-HC-027",
+      "name": "Host messages classified correctly",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestClassifySenderGuest"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestClassifySenderHost"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestClassifySenderAutomated"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestClassifySenderDefaultGuest"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeMessageHostSender"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestClassifySenderHost"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeMessageHostSender"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::classifySender"}
+      ],
+      "linkedDoD": ["classifySender() correctly returns guest, host, or automated; message title and metadata include sender role"]
+    },
+    {
+      "scenarioId": "SCN-HC-028",
+      "name": "Property artifact has listing URL",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizePropertyURL"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizePropertyNoURL"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizePropertyURL"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeProperty"}
+      ],
+      "linkedDoD": ["Property artifact URL populated from first listing URL"]
+    },
+    {
+      "scenarioId": "SCN-HC-029",
+      "name": "Reservation artifact has dashboard URL in production",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservationURLProduction"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReservationURLTest"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeReservationURLProduction"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::NormalizeReservation"}
+      ],
+      "linkedDoD": ["Reservation artifact URL populated with dashboard URL for production base URL"]
+    },
+    {
+      "scenarioId": "SCN-HC-030",
+      "name": "Fractional review rating preserved",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestFormatRatingWhole"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestFormatRatingFractional"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestFormatRatingZero"},
+        {"file": "internal/connector/hospitable/normalizer_test.go", "function": "TestNormalizeReviewFractionalRating"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestFormatRatingFractional"},
+        {"type": "unit-test", "location": "internal/connector/hospitable/normalizer_test.go::TestNormalizeReviewFractionalRating"},
+        {"type": "source", "location": "internal/connector/hospitable/normalizer.go::formatRating"}
+      ],
+      "linkedDoD": ["formatRating() displays whole numbers as 5★ and fractional as 4.5★; both title and content use formatRating"]
+    }
+  ]
+}
