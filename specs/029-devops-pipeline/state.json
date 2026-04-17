@@ -20,7 +20,8 @@
       {"scope": 1, "name": "GitHub Actions CI Workflow", "status": "Not Started", "dependsOn": []},
       {"scope": 2, "name": "Docker Image Versioning", "status": "Not Started", "dependsOn": [1]},
       {"scope": 3, "name": "Branch Protection Documentation", "status": "Not Started", "dependsOn": []},
-      {"scope": 4, "name": "Build Metadata", "status": "Not Started", "dependsOn": [1]}
+      {"scope": 4, "name": "Build Metadata", "status": "Not Started", "dependsOn": [1]},
+      {"scope": 5, "name": "ML Sidecar Image Optimization", "status": "Not Started", "dependsOn": []}
     ],
     "lockdownState": {
       "active": false,

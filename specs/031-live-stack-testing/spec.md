@@ -29,6 +29,7 @@ All 38 Go packages and 173 Python tests pass at the unit level using mocks, but 
 5. Verify pgvector similarity search with real embeddings
 6. Create E2E test suite for complete user journeys
 7. Verify capture → process → search flow end-to-end
+8. Add ML sidecar readiness gate to prevent search timeouts during cold start
 
 ## Non-Goals
 
@@ -73,6 +74,12 @@ Scenario: Test isolation
   Given integration tests have run
   When checking the database for test artifacts
   Then no test artifacts remain (cleanup completed)
+
+Scenario: ML sidecar readiness gate prevents cold-start timeouts
+  Given the ML sidecar container has just started
+  When a search request arrives before the sidecar is ready
+  Then the core waits for sidecar health before attempting NATS embed
+  And the search falls back to text mode if readiness times out
 ```
 
 ## Acceptance Criteria
@@ -85,3 +92,4 @@ Scenario: Test isolation
 - [ ] `./smackerel.sh test e2e` verifies capture → process → search flow
 - [ ] All test data cleaned up after test run
 - [ ] Tests are idempotent (re-runnable without manual cleanup)
+- [ ] ML sidecar readiness gate prevents search embed timeouts during container cold start
