@@ -2,29 +2,29 @@
   "version": 3,
   "featureDir": "specs/027-user-annotations",
   "featureName": "User Annotations & Interaction Tracking",
-  "status": "specs_hardened",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "bootstrap",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
     "currentScope": null,
     "runStartedAt": "2026-04-17T15:30:00Z",
-    "completedPhaseClaims": ["bootstrap"],
+    "completedPhaseClaims": ["bootstrap", "implement"],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not_started",
-    "completedScopes": [],
+    "status": "in_progress",
+    "completedScopes": [1, 2, 3],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
-      {"scope": 1, "name": "DB Migration", "status": "not_started", "dependsOn": []},
-      {"scope": 2, "name": "Annotation Types & Parser", "status": "not_started", "dependsOn": [1]},
-      {"scope": 3, "name": "Annotation Store", "status": "not_started", "dependsOn": [2]},
-      {"scope": 4, "name": "REST API Endpoints", "status": "not_started", "dependsOn": [3]},
-      {"scope": 5, "name": "Telegram Message-Artifact Mapping", "status": "not_started", "dependsOn": [3]},
-      {"scope": 6, "name": "Telegram Annotation Handler", "status": "not_started", "dependsOn": [5]},
-      {"scope": 7, "name": "Search Extension", "status": "not_started", "dependsOn": [3]},
-      {"scope": 8, "name": "Intelligence Integration", "status": "not_started", "dependsOn": [3]}
+      {"scope": 1, "name": "DB Migration", "status": "Done", "dependsOn": []},
+      {"scope": 2, "name": "Annotation Types & Parser", "status": "Done", "dependsOn": [1]},
+      {"scope": 3, "name": "Annotation Store", "status": "Done", "dependsOn": [2]},
+      {"scope": 4, "name": "REST API Endpoints", "status": "Not Started", "dependsOn": [3]},
+      {"scope": 5, "name": "Telegram Message-Artifact Mapping", "status": "Not Started", "dependsOn": [3]},
+      {"scope": 6, "name": "Telegram Annotation Handler", "status": "Not Started", "dependsOn": [5]},
+      {"scope": 7, "name": "Search Extension", "status": "Not Started", "dependsOn": [3]},
+      {"scope": 8, "name": "Intelligence Integration", "status": "Not Started", "dependsOn": [3]}
     ],
     "lockdownState": {
       "active": false,
@@ -53,7 +53,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T16:00:00Z",
+  "lastUpdatedAt": "2026-04-17T20:30:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

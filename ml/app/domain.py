@@ -10,6 +10,8 @@ import logging
 import time
 from typing import Any
 
+import asyncio
+
 import litellm
 from litellm.exceptions import (
     InternalServerError,
@@ -108,8 +110,6 @@ async def handle_domain_extract(
             break  # Don't retry unexpected errors
 
         if attempt < MAX_RETRIES:
-            import asyncio
-
             await asyncio.sleep(RETRY_DELAYS[attempt])
 
     elapsed_ms = int((time.monotonic() - start_time) * 1000)

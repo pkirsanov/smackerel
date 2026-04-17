@@ -322,6 +322,43 @@ system_prompt: "test"
 	}
 }
 
+func TestLoadRegistry_RealContractFiles(t *testing.T) {
+	// Test against the actual committed prompt contracts to catch structural issues
+	reg, err := LoadRegistry("../../config/prompt_contracts")
+	if err != nil {
+		t.Fatalf("LoadRegistry with real contracts: %v", err)
+	}
+
+	if reg.Count() < 2 {
+		t.Fatalf("expected at least 2 domain contracts, got %d", reg.Count())
+	}
+
+	recipe := reg.Match("recipe", "")
+	if recipe == nil {
+		t.Fatal("expected recipe contract to match content_type=recipe")
+	}
+	if recipe.Version != "recipe-extraction-v1" {
+		t.Errorf("recipe contract version: %s", recipe.Version)
+	}
+	if recipe.SystemPrompt == "" {
+		t.Error("recipe contract has empty system_prompt")
+	}
+
+	product := reg.Match("product", "")
+	if product == nil {
+		t.Fatal("expected product contract to match content_type=product")
+	}
+	if product.Version != "product-extraction-v1" {
+		t.Errorf("product contract version: %s", product.Version)
+	}
+
+	// URL qualifier test with real contract
+	recipeByURL := reg.Match("article", "https://www.allrecipes.com/recipe/123")
+	if recipeByURL == nil {
+		t.Fatal("expected allrecipes URL to match recipe contract via URL qualifier")
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
 }
