@@ -2,29 +2,29 @@
   "version": 3,
   "featureDir": "specs/028-actionable-lists",
   "featureName": "Actionable Lists & Resource Tracking",
-  "status": "specs_hardened",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "bootstrap",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
     "currentScope": null,
     "runStartedAt": "2026-04-17T16:00:00Z",
-    "completedPhaseClaims": ["bootstrap"],
+    "completedPhaseClaims": ["bootstrap", "implement"],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not_started",
-    "completedScopes": [],
+    "status": "in_progress",
+    "completedScopes": [1, 3],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
-      {"scope": 1, "name": "DB Migration & List Types", "status": "not_started", "dependsOn": []},
-      {"scope": 2, "name": "List Store (CRUD)", "status": "not_started", "dependsOn": [1]},
-      {"scope": 3, "name": "Aggregator Interface & Recipe Aggregator", "status": "not_started", "dependsOn": [1]},
-      {"scope": 4, "name": "Reading & Comparison Aggregators", "status": "not_started", "dependsOn": [3]},
-      {"scope": 5, "name": "List Generator", "status": "not_started", "dependsOn": [2, 3]},
-      {"scope": 6, "name": "REST API Endpoints", "status": "not_started", "dependsOn": [5]},
-      {"scope": 7, "name": "Telegram /list Command & Inline Keyboard", "status": "not_started", "dependsOn": [5]},
-      {"scope": 8, "name": "Intelligence Integration", "status": "not_started", "dependsOn": [2]}
+      {"scope": 1, "name": "DB Migration & List Types", "status": "Done", "dependsOn": []},
+      {"scope": 2, "name": "List Store (CRUD)", "status": "Not Started", "dependsOn": [1]},
+      {"scope": 3, "name": "Aggregator Interface & Recipe Aggregator", "status": "Done", "dependsOn": [1]},
+      {"scope": 4, "name": "Reading & Comparison Aggregators", "status": "Not Started", "dependsOn": [3]},
+      {"scope": 5, "name": "List Generator", "status": "Not Started", "dependsOn": [2, 3]},
+      {"scope": 6, "name": "REST API Endpoints", "status": "Not Started", "dependsOn": [5]},
+      {"scope": 7, "name": "Telegram /list Command & Inline Keyboard", "status": "Not Started", "dependsOn": [5]},
+      {"scope": 8, "name": "Intelligence Integration", "status": "Not Started", "dependsOn": [2]}
     ],
     "lockdownState": {
       "active": false,
@@ -53,7 +53,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T16:30:00Z",
+  "lastUpdatedAt": "2026-04-17T20:30:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
