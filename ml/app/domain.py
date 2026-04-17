@@ -5,12 +5,11 @@ builds a domain-specific prompt, calls the LLM, validates output,
 and publishes to domain.extracted.
 """
 
+import asyncio
 import json
 import logging
 import time
 from typing import Any
-
-import asyncio
 
 import litellm
 from litellm.exceptions import (
