@@ -25,6 +25,7 @@ Smackerel has zero CI/CD automation. All testing, linting, and building is manua
 2. Add Docker image version tagging based on git tags and commit SHA
 3. Add branch protection rules documentation for `main`
 4. Add build metadata (version, commit, build time) to Docker image labels
+5. Optimize ML sidecar Docker image size (currently 8.63GB — target < 3GB)
 
 ## Non-Goals
 
@@ -57,6 +58,13 @@ Scenario: Rollback to previous version
   Given a production issue is discovered after a release
   When the operator runs docker compose with a previous version tag
   Then the system runs the known-good version
+
+Scenario: ML sidecar image is optimized
+  Given the ML sidecar Dockerfile uses multi-stage build
+  When the image is built
+  Then the final image size is under 3GB
+  And all runtime dependencies are present
+  And no training-only or build-only packages remain
 ```
 
 ## Acceptance Criteria
@@ -67,3 +75,4 @@ Scenario: Rollback to previous version
 - [ ] CI completes in under 10 minutes
 - [ ] Docker images include version label from git tag/SHA
 - [ ] `docker-compose.yml` supports pinned image versions via environment variable
+- [ ] ML sidecar image size < 3GB (down from 8.63GB) via multi-stage build and dependency pruning
