@@ -13,6 +13,8 @@ import (
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/knowledge"
+	"github.com/smackerel/smackerel/internal/list"
+	"github.com/smackerel/smackerel/internal/mealplan"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
 )
@@ -143,6 +145,50 @@ func run() error {
 		slog.Info("knowledge linter configured", "cron", cfg.KnowledgeLintCron,
 			"stale_days", cfg.KnowledgeLintStaleDays,
 			"max_retries", cfg.KnowledgeMaxSynthesisRetries,
+		)
+	}
+
+	// Wire meal planning services (spec 036)
+	if cfg.MealPlanEnabled {
+		mealPlanStore := mealplan.NewStore(svc.pg.Pool)
+		mealPlanService := mealplan.NewService(
+			mealPlanStore,
+			cfg.MealPlanMealTypes,
+			cfg.MealPlanDefaultServings,
+			cfg.MealPlanCalendarSync,
+			cfg.MealPlanAutoComplete,
+			cfg.MealPlanAutoCompleteCron,
+		)
+
+		// Build shopping bridge using existing list infrastructure (spec 028)
+		resolver := list.NewPostgresArtifactResolver(svc.pg.Pool)
+		listStore := list.NewStore(svc.pg.Pool)
+		aggregator := &list.RecipeAggregator{}
+		shoppingBridge := mealplan.NewShoppingBridge(resolver, aggregator, listStore)
+
+		mealPlanHandler := api.NewMealPlanHandler(mealPlanService, shoppingBridge, nil)
+		deps.MealPlanHandler = mealPlanHandler
+
+		// Wire auto-complete scheduler
+		if cfg.MealPlanAutoComplete && cfg.MealPlanAutoCompleteCron != "" {
+			sched.SetMealPlanAutoComplete(mealPlanService, cfg.MealPlanAutoCompleteCron)
+			slog.Info("meal plan auto-complete configured", "cron", cfg.MealPlanAutoCompleteCron)
+		}
+
+		// Wire Telegram meal plan handler
+		if tgBot != nil {
+			tgMealPlan := telegram.NewMealPlanCommandHandler(mealPlanService, shoppingBridge)
+			tgMealPlan.CookDelegate = func(chatID int64, recipeName string, servings int) {
+				tgBot.TriggerCookMode(chatID, recipeName, servings)
+			}
+			tgBot.SetMealPlanHandler(tgMealPlan)
+			slog.Info("telegram meal plan handler configured")
+		}
+
+		slog.Info("meal planning enabled",
+			"meal_types", cfg.MealPlanMealTypes,
+			"default_servings", cfg.MealPlanDefaultServings,
+			"calendar_sync", cfg.MealPlanCalendarSync,
 		)
 	}
 

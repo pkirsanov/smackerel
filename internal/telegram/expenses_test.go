@@ -296,4 +296,138 @@ func TestExpenseStateStore_TTLExpiry(t *testing.T) {
 	}
 }
 
+// Round 7: Sweep removes expired entries from the map
+func TestExpenseStateStore_Sweep(t *testing.T) {
+	store := newExpenseStateStore(1) // 1-second TTL
+
+	store.Set(100, &expenseConversationState{LastExpenseID: "exp-100"})
+	store.Set(200, &expenseConversationState{LastExpenseID: "exp-200"})
+
+	// Manually expire entry 100
+	store.mu.Lock()
+	store.store[100].ExpiresAt = store.store[100].ExpiresAt.Add(-2 * store.ttl)
+	store.mu.Unlock()
+
+	store.sweep()
+
+	// Entry 100 should be gone, 200 should remain
+	store.mu.RLock()
+	_, has100 := store.store[100]
+	_, has200 := store.store[200]
+	store.mu.RUnlock()
+
+	if has100 {
+		t.Error("expected expired entry 100 to be swept")
+	}
+	if !has200 {
+		t.Error("expected active entry 200 to be preserved")
+	}
+}
+
+// Round 7: Stop is idempotent
+func TestExpenseStateStore_StopIdempotent(t *testing.T) {
+	store := newExpenseStateStore(120)
+	store.StartCleanup()
+	store.Stop()
+	store.Stop() // second call should not panic
+}
+
 func strPtr(s string) *string { return &s }
+
+// CHAOS: Vendor name 10,000 chars must be truncated in formatters
+func TestFormatExpenseConfirmation_HugeVendor(t *testing.T) {
+	hugeVendor := strings.Repeat("V", 10000)
+	amt := "50.00"
+	expense := &domain.ExpenseMetadata{
+		Vendor:         hugeVendor,
+		Amount:         &amt,
+		Classification: "business",
+		LineItems:      []domain.ExpenseLineItem{},
+	}
+	result := FormatExpenseConfirmation(expense)
+	if len(result) > 4096 {
+		t.Errorf("confirmation message too long for Telegram: %d chars", len(result))
+	}
+	if !strings.Contains(result, "…") {
+		t.Error("expected truncation marker in huge vendor confirmation")
+	}
+}
+
+// CHAOS: FormatPartialExtraction with huge vendor
+func TestFormatPartialExtraction_HugeVendor(t *testing.T) {
+	hugeVendor := strings.Repeat("X", 10000)
+	amt := "10.00"
+	expense := &domain.ExpenseMetadata{
+		Vendor: hugeVendor,
+		Amount: &amt,
+	}
+	result := FormatPartialExtraction(expense)
+	if len(result) > 4096 {
+		t.Errorf("partial extraction message too long: %d chars", len(result))
+	}
+}
+
+// CHAOS: FormatAmountMissing with huge vendor
+func TestFormatAmountMissing_HugeVendor(t *testing.T) {
+	hugeVendor := strings.Repeat("Z", 10000)
+	expense := &domain.ExpenseMetadata{Vendor: hugeVendor}
+	result := FormatAmountMissing(expense)
+	if len(result) > 4096 {
+		t.Errorf("amount missing message too long: %d chars", len(result))
+	}
+}
+
+// CHAOS: FormatExpenseList with huge vendor names
+func TestFormatExpenseList_HugeVendors(t *testing.T) {
+	hugeVendor := strings.Repeat("L", 10000)
+	date := "2026-04-01"
+	amt := "1.00"
+	expenses := make([]domain.ExpenseMetadata, 10)
+	for i := range expenses {
+		expenses[i] = domain.ExpenseMetadata{Vendor: hugeVendor, Date: &date, Amount: &amt}
+	}
+	result := FormatExpenseList(expenses, "Test", "10.00")
+	// Each line should have truncated vendor
+	if len(result) > 4096 {
+		t.Errorf("list message too long: %d chars", len(result))
+	}
+}
+
+// CHAOS: truncateVendor boundary cases
+func TestTruncateVendor(t *testing.T) {
+	// Exact boundary
+	exact := strings.Repeat("A", maxTelegramVendorLen)
+	if truncateVendor(exact) != exact {
+		t.Error("exact-boundary vendor should not be truncated")
+	}
+	// One over
+	over := strings.Repeat("A", maxTelegramVendorLen+1)
+	result := truncateVendor(over)
+	if len(result) > maxTelegramVendorLen+len("…") {
+		t.Errorf("truncated result too long: %d", len(result))
+	}
+	if !strings.HasSuffix(result, "…") {
+		t.Error("expected ellipsis suffix")
+	}
+	// Empty
+	if truncateVendor("") != "" {
+		t.Error("empty vendor should stay empty")
+	}
+}
+
+// CHAOS: All-emoji vendor name
+func TestFormatExpenseConfirmation_EmojiVendor(t *testing.T) {
+	emojiVendor := strings.Repeat("🏪", 500)
+	amt := "5.00"
+	expense := &domain.ExpenseMetadata{
+		Vendor:         emojiVendor,
+		Amount:         &amt,
+		Classification: "personal",
+		LineItems:      []domain.ExpenseLineItem{},
+	}
+	result := FormatExpenseConfirmation(expense)
+	// Must not panic and must produce valid output
+	if !strings.Contains(result, "Saved") {
+		t.Error("expected Saved in confirmation")
+	}
+}

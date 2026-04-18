@@ -22,12 +22,51 @@ type expenseStateStore struct {
 	mu    sync.RWMutex
 	store map[int64]*expenseConversationState
 	ttl   time.Duration
+	done  chan struct{}
 }
 
 func newExpenseStateStore(ttlSeconds int) *expenseStateStore {
 	return &expenseStateStore{
 		store: make(map[int64]*expenseConversationState),
 		ttl:   time.Duration(ttlSeconds) * time.Second,
+		done:  make(chan struct{}),
+	}
+}
+
+// StartCleanup begins the background sweep goroutine that removes expired entries.
+func (s *expenseStateStore) StartCleanup() {
+	ticker := time.NewTicker(2 * time.Minute)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.done:
+				return
+			case <-ticker.C:
+				s.sweep()
+			}
+		}
+	}()
+}
+
+// Stop signals the cleanup goroutine to exit.
+func (s *expenseStateStore) Stop() {
+	select {
+	case <-s.done:
+	default:
+		close(s.done)
+	}
+}
+
+// sweep removes expired entries from the store.
+func (s *expenseStateStore) sweep() {
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for chatID, state := range s.store {
+		if now.After(state.ExpiresAt) {
+			delete(s.store, chatID)
+		}
 	}
 }
 
@@ -77,10 +116,13 @@ func isExpenseExport(text string) bool {
 	return expenseExportPattern.MatchString(text)
 }
 
+// expenseEntryAmountRe matches dollar amounts in expense entry text.
+var expenseEntryAmountRe = regexp.MustCompile(`\$\d+\.?\d*`)
+
 // isExpenseEntry checks if text looks like a manual expense entry.
 func isExpenseEntry(text string) bool {
 	lower := strings.ToLower(text)
-	hasAmount := regexp.MustCompile(`\$\d+\.?\d*`).MatchString(text)
+	hasAmount := expenseEntryAmountRe.MatchString(text)
 	hasExpenseKeyword := strings.Contains(lower, "expense") || strings.Contains(lower, "spent") || strings.Contains(lower, "cost") || strings.Contains(lower, "receipt")
 	// Also match simple patterns like "Lunch at Place $XX.XX"
 	hasFoodWord := strings.Contains(lower, "lunch") || strings.Contains(lower, "dinner") || strings.Contains(lower, "breakfast") || strings.Contains(lower, "coffee")
@@ -101,11 +143,23 @@ func isSuggestionDismiss(text string) bool {
 
 // Format functions per UX spec T-001 through T-011
 
+// maxTelegramVendorLen caps vendor names in Telegram messages to prevent
+// oversized messages (Telegram limit: 4096 chars).
+const maxTelegramVendorLen = 100
+
+// truncateVendor caps vendor display length for Telegram messages.
+func truncateVendor(vendor string) string {
+	if len(vendor) <= maxTelegramVendorLen {
+		return vendor
+	}
+	return vendor[:maxTelegramVendorLen] + "…"
+}
+
 // FormatExpenseConfirmation produces the T-001 confirmation format.
 func FormatExpenseConfirmation(expense *domain.ExpenseMetadata) string {
 	var sb strings.Builder
 	sb.WriteString("✅ Saved: ")
-	sb.WriteString(expense.Vendor)
+	sb.WriteString(truncateVendor(expense.Vendor))
 	if expense.Amount != nil {
 		sb.WriteString(fmt.Sprintf(" $%s", *expense.Amount))
 	}
@@ -132,7 +186,7 @@ func FormatOCRFailure() string {
 func FormatPartialExtraction(expense *domain.ExpenseMetadata) string {
 	var sb strings.Builder
 	sb.WriteString("✅ Saved: ")
-	sb.WriteString(expense.Vendor)
+	sb.WriteString(truncateVendor(expense.Vendor))
 	if expense.Amount != nil {
 		sb.WriteString(fmt.Sprintf(" $%s", *expense.Amount))
 	}
@@ -142,7 +196,7 @@ func FormatPartialExtraction(expense *domain.ExpenseMetadata) string {
 
 // FormatAmountMissing produces the T-004 amount-missing prompt.
 func FormatAmountMissing(expense *domain.ExpenseMetadata) string {
-	return fmt.Sprintf("✅ Saved: %s · amount not detected\nReply with the amount to add it, e.g. '$23.50'", expense.Vendor)
+	return fmt.Sprintf("✅ Saved: %s · amount not detected\nReply with the amount to add it, e.g. '$23.50'", truncateVendor(expense.Vendor))
 }
 
 // FormatExpenseList produces the T-006 formatted list (max 10 items).
@@ -167,7 +221,7 @@ func FormatExpenseList(expenses []domain.ExpenseMetadata, filter string, total s
 		if e.Amount != nil {
 			amount = "$" + *e.Amount
 		}
-		sb.WriteString(fmt.Sprintf("  %s  %s  %s\n", date, e.Vendor, amount))
+		sb.WriteString(fmt.Sprintf("  %s  %s  %s\n", date, truncateVendor(e.Vendor), amount))
 	}
 	if len(expenses) > 10 {
 		sb.WriteString(fmt.Sprintf("\n...and %d more. Reply 'all' to see the full list", len(expenses)-10))
@@ -189,7 +243,7 @@ func FormatExpenseCSVMessage(count int, total string, incomplete int) string {
 func FormatFixPrompt(expense *domain.ExpenseMetadata) string {
 	var sb strings.Builder
 	sb.WriteString("📝 Current expense details:\n")
-	sb.WriteString(fmt.Sprintf("  vendor: %s\n", expense.Vendor))
+	sb.WriteString(fmt.Sprintf("  vendor: %s\n", truncateVendor(expense.Vendor)))
 	if expense.Date != nil {
 		sb.WriteString(fmt.Sprintf("  date: %s\n", *expense.Date))
 	}

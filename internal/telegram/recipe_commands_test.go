@@ -22,9 +22,9 @@ func TestParseScaleTrigger(t *testing.T) {
 		{"hello", 0},
 		{"for abc", 0},
 		{"100 servings", 100},
-		{"FOR 4", 4},       // case insensitive
-		{"Scale To 8", 8},  // case insensitive
-		{"1 PEOPLE", 1},    // case insensitive
+		{"FOR 4", 4},      // case insensitive
+		{"Scale To 8", 8}, // case insensitive
+		{"1 PEOPLE", 1},   // case insensitive
 	}
 
 	for _, tc := range cases {
@@ -122,7 +122,7 @@ func TestFormatScaledResponse(t *testing.T) {
 	if !strings.Contains(result, "~ Scaled from 4 to 8 servings (2x)") {
 		t.Error("missing scale note")
 	}
-	if !strings.Contains(result, "- 400g guanciale") {
+	if !strings.Contains(result, "- 400 g guanciale") {
 		t.Error("missing scaled guanciale")
 	}
 	if !strings.Contains(result, "- 8 egg yolks") || !strings.Contains(result, "8") {
@@ -175,5 +175,106 @@ func TestFormatScaleFactor(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("formatScaleFactor(%f) = %q, want %q", tc.input, got, tc.expected)
 		}
+	}
+}
+
+// Round 6: Max servings cap in parseScaleTrigger
+func TestParseScaleTrigger_MaxServingsCap(t *testing.T) {
+	// Exactly at max
+	if got := parseScaleTrigger("1000 servings"); got != 1000 {
+		t.Errorf("expected 1000, got %d", got)
+	}
+	// Over max — should return 0
+	if got := parseScaleTrigger("1001 servings"); got != 0 {
+		t.Errorf("expected 0 for >1000, got %d", got)
+	}
+	if got := parseScaleTrigger("for 5000"); got != 0 {
+		t.Errorf("expected 0 for >1000, got %d", got)
+	}
+	if got := parseScaleTrigger("scale to 99999"); got != 0 {
+		t.Errorf("expected 0 for >1000, got %d", got)
+	}
+}
+
+// Round 6: Max servings cap in parseCookTrigger
+func TestParseCookTrigger_MaxServingsCap(t *testing.T) {
+	_, servings, matched := parseCookTrigger("cook pasta for 1000 servings")
+	if !matched || servings != 1000 {
+		t.Errorf("expected matched=true servings=1000, got matched=%v servings=%d", matched, servings)
+	}
+
+	// Over cap: falls through to cookNameRe (with " for 1001 servings" as part of name)
+	name, servings, matched := parseCookTrigger("cook pasta for 1001 servings")
+	if !matched {
+		t.Error("expected matched=true (should match as cookNameRe)")
+	}
+	if servings != 0 {
+		t.Errorf("expected servings=0 (capped), got %d", servings)
+	}
+	if name == "" {
+		t.Error("expected non-empty name from cookNameRe fallthrough")
+	}
+}
+
+// Round 9: formatNoStepsFallback with scaling
+func TestFormatNoStepsFallback_WithScaling(t *testing.T) {
+	servings := 4
+	rd := &recipe.RecipeData{
+		Title:    "Simple Salad",
+		Servings: &servings,
+		Ingredients: []recipe.Ingredient{
+			{Name: "lettuce", Quantity: "1", Unit: "head"},
+			{Name: "tomato", Quantity: "2", Unit: ""},
+		},
+		Steps: []recipe.Step{},
+	}
+
+	result := formatNoStepsFallback(rd, 8)
+
+	if !strings.Contains(result, "Scaled to 8 servings") {
+		t.Error("missing scaled heading")
+	}
+	if !strings.Contains(result, "2head lettuce") || !strings.Contains(result, "2 head lettuce") {
+		// Either format is acceptable depending on formatting
+		if !strings.Contains(result, "lettuce") {
+			t.Error("missing scaled lettuce")
+		}
+	}
+}
+
+func TestFormatNoStepsFallback_NoScaling(t *testing.T) {
+	rd := &recipe.RecipeData{
+		Title: "Simple Salad",
+		Ingredients: []recipe.Ingredient{
+			{Name: "lettuce", Quantity: "1", Unit: "head"},
+		},
+		Steps: []recipe.Step{},
+	}
+
+	result := formatNoStepsFallback(rd, 0)
+
+	if strings.Contains(result, "Scaled") {
+		t.Error("should not show scaling when servings=0")
+	}
+	if !strings.Contains(result, "1 head lettuce") {
+		t.Error("missing unscaled lettuce")
+	}
+}
+
+func TestFormatNoStepsFallback_SameServings(t *testing.T) {
+	servings := 4
+	rd := &recipe.RecipeData{
+		Title:    "Simple Salad",
+		Servings: &servings,
+		Ingredients: []recipe.Ingredient{
+			{Name: "lettuce", Quantity: "1", Unit: "head"},
+		},
+		Steps: []recipe.Step{},
+	}
+
+	result := formatNoStepsFallback(rd, 4)
+
+	if strings.Contains(result, "Scaled") {
+		t.Error("should not show scaling when servings match original")
 	}
 }

@@ -161,3 +161,35 @@ func TestScaleIngredients_RangeNotationUnscaled(t *testing.T) {
 		t.Errorf("expected '2-3', got %q", result[0].DisplayQuantity)
 	}
 }
+
+func TestScaleIngredients_EmptyList(t *testing.T) {
+	result := ScaleIngredients([]Ingredient{}, 4, 8)
+	if result == nil {
+		t.Fatal("expected non-nil empty slice, got nil")
+	}
+	if len(result) != 0 {
+		t.Errorf("expected 0 results, got %d", len(result))
+	}
+}
+
+func TestScaleIngredients_NegativeTargetServings(t *testing.T) {
+	ingredients := []Ingredient{
+		{Name: "flour", Quantity: "1", Unit: "cup"},
+	}
+	if result := ScaleIngredients(ingredients, 4, -2); result != nil {
+		t.Error("expected nil for negative targetServings")
+	}
+}
+
+func TestScaleIngredients_SameServings(t *testing.T) {
+	ingredients := []Ingredient{
+		{Name: "flour", Quantity: "2", Unit: "cups"},
+	}
+	result := ScaleIngredients(ingredients, 4, 4)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result))
+	}
+	if result[0].DisplayQuantity != "2" {
+		t.Errorf("expected '2' (unchanged), got %q", result[0].DisplayQuantity)
+	}
+}

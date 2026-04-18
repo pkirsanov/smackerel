@@ -85,8 +85,28 @@ func (s *Service) DeletePlan(ctx context.Context, planID string) error {
 	return s.Store.DeletePlan(ctx, planID)
 }
 
+const (
+	maxSlotNotesLen = 500
+	maxSlotServings = 1000
+)
+
 // AddSlot assigns a recipe to a date+meal slot in a plan.
 func (s *Service) AddSlot(ctx context.Context, planID string, slotDate time.Time, mealType, recipeArtifactID string, servings int, batchFlag bool, notes string) (*Slot, error) {
+	if len(notes) > maxSlotNotesLen {
+		return nil, &ServiceError{
+			Code:    "MEAL_PLAN_VALIDATION",
+			Message: fmt.Sprintf("notes must be at most %d characters", maxSlotNotesLen),
+			Status:  422,
+		}
+	}
+	if servings > maxSlotServings {
+		return nil, &ServiceError{
+			Code:    "MEAL_PLAN_VALIDATION",
+			Message: fmt.Sprintf("servings must be at most %d", maxSlotServings),
+			Status:  422,
+		}
+	}
+
 	plan, err := s.Store.GetPlan(ctx, planID)
 	if err != nil {
 		return nil, fmt.Errorf("get plan: %w", err)
@@ -168,6 +188,21 @@ func (s *Service) AddSlot(ctx context.Context, planID string, slotDate time.Time
 
 // UpdateSlot updates a slot's mutable fields.
 func (s *Service) UpdateSlot(ctx context.Context, planID, slotID string, recipeArtifactID string, servings int, batchFlag bool, notes string) (*Slot, error) {
+	if len(notes) > maxSlotNotesLen {
+		return nil, &ServiceError{
+			Code:    "MEAL_PLAN_VALIDATION",
+			Message: fmt.Sprintf("notes must be at most %d characters", maxSlotNotesLen),
+			Status:  422,
+		}
+	}
+	if servings > maxSlotServings {
+		return nil, &ServiceError{
+			Code:    "MEAL_PLAN_VALIDATION",
+			Message: fmt.Sprintf("servings must be at most %d", maxSlotServings),
+			Status:  422,
+		}
+	}
+
 	existing, err := s.Store.GetSlot(ctx, planID, slotID)
 	if err != nil {
 		return nil, err

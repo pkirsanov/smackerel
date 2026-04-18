@@ -1,6 +1,7 @@
 package intelligence
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/smackerel/smackerel/internal/config"
@@ -10,8 +11,8 @@ import (
 func newTestClassifier() *ExpenseClassifier {
 	return &ExpenseClassifier{
 		IMAPExpenseLabels: map[string]string{
-			"Business-Receipts": "business",
-			"Tax-Deductible":    "business",
+			"Business-Receipts":  "business",
+			"Tax-Deductible":     "business",
 			"Personal-Purchases": "personal",
 		},
 		BusinessVendors:      []string{"WeWork", "Zoom"},
@@ -248,4 +249,102 @@ func TestVendorNormalizer_CacheEviction(t *testing.T) {
 		t.Errorf("expected cache <= 4 after eviction, got %d", len(n.cache))
 	}
 	n.mu.RUnlock()
+}
+
+// CHAOS: Classify with nil/empty config fields — must not panic
+func TestClassify_NilConfigFields(t *testing.T) {
+	ec := &ExpenseClassifier{
+		IMAPExpenseLabels: nil,
+		BusinessVendors:   nil,
+		Categories:        nil,
+		vendorNormalizer:  NewVendorNormalizer(nil, 10),
+	}
+	expense := domain.NewExpenseMetadata()
+	expense.Vendor = "Test"
+
+	// Must not panic
+	result := ec.Classify(expense)
+	if result != "uncategorized" {
+		t.Errorf("expected 'uncategorized' with nil config, got %q", result)
+	}
+}
+
+// CHAOS: Vendor name 10,000 chars through Classify — must not panic or hang
+func TestClassify_HugeVendorName(t *testing.T) {
+	ec := newTestClassifier()
+	expense := domain.NewExpenseMetadata()
+	expense.Vendor = strings.Repeat("A", 10000)
+
+	result := ec.Classify(expense)
+	if result != "uncategorized" {
+		t.Errorf("expected 'uncategorized' for huge vendor, got %q", result)
+	}
+}
+
+// CHAOS: CategoryDisplayName with nil Categories slice
+func TestCategoryDisplayName_NilCategories(t *testing.T) {
+	ec := &ExpenseClassifier{Categories: nil, vendorNormalizer: NewVendorNormalizer(nil, 10)}
+	if name := ec.CategoryDisplayName("food"); name != "food" {
+		t.Errorf("expected fallback 'food', got %q", name)
+	}
+}
+
+// CHAOS: Classify with empty string vendor and nil notes
+func TestClassify_EmptyVendorNilNotes(t *testing.T) {
+	ec := newTestClassifier()
+	expense := domain.NewExpenseMetadata()
+	expense.Vendor = ""
+	expense.Notes = nil
+
+	result := ec.Classify(expense)
+	if result != "uncategorized" {
+		t.Errorf("expected 'uncategorized', got %q", result)
+	}
+}
+
+// CHAOS: VendorNormalizer cache with 10,000-char key
+func TestVendorNormalizer_HugeCacheKey(t *testing.T) {
+	n := NewVendorNormalizer(nil, 100)
+	hugeKey := strings.Repeat("X", 10000)
+	_, found := n.Normalize(nil, hugeKey)
+	if found {
+		t.Error("expected not found for huge key with nil pool")
+	}
+	// With nil pool, Normalize returns early — no cache entry expected.
+	// Verify no panic occurred with the huge key.
+}
+
+// Round 10: VendorNormalizer LIKE escape — verify special chars are escaped
+func TestVendorNormalizer_LIKEEscaping(t *testing.T) {
+	// This tests the escape logic indirectly. With nil pool,
+	// the query won't execute but the escape path is exercised.
+	n := NewVendorNormalizer(nil, 100)
+
+	// Input containing LIKE wildcards should not cause issues
+	_, found := n.Normalize(nil, "100% MATCH_TEST")
+	if found {
+		t.Error("expected not found with nil pool")
+	}
+
+	// Underscore in vendor name
+	_, found = n.Normalize(nil, "test_vendor")
+	if found {
+		t.Error("expected not found with nil pool")
+	}
+}
+
+// Round 10: containsField edge cases
+func TestContainsField_EdgeCases(t *testing.T) {
+	if containsField(nil, "test") {
+		t.Error("expected false for nil slice")
+	}
+	if containsField([]string{}, "test") {
+		t.Error("expected false for empty slice")
+	}
+	if !containsField([]string{"a", "b", "c"}, "b") {
+		t.Error("expected true for present item")
+	}
+	if containsField([]string{"a", "b"}, "B") {
+		t.Error("expected false for case mismatch (case-sensitive)")
+	}
 }

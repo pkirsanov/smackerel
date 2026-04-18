@@ -843,6 +843,12 @@ func (b *Bot) SetMealPlanHandler(h *MealPlanCommandHandler) {
 	b.mealPlanHandler = h
 }
 
+// TriggerCookMode starts a cook mode session from an external caller (e.g., meal plan).
+func (b *Bot) TriggerCookMode(chatID int64, recipeName string, servings int) {
+	ctx := context.Background()
+	b.handleCookEntry(ctx, chatID, recipeName, servings)
+}
+
 func (b *Bot) Stop() {
 	slog.Info("telegram bot shutting down, waiting for update goroutine")
 

@@ -44,8 +44,29 @@ func (h *ExpenseHandler) RegisterRoutes(r chi.Router) {
 	})
 }
 
-var amountPattern = regexp.MustCompile(`^\d+\.\d{2}$`)
+var amountPattern = regexp.MustCompile(`^\d{1,10}\.\d{2}$`)
 var currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
+var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+var filenameClean = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+
+const (
+	maxVendorLen        = 200
+	maxNotesLen         = 2000
+	maxPaymentMethodLen = 100
+)
+
+// sanitizeCSVCell prevents CSV injection (formula injection) by prefixing
+// dangerous leading characters with a single quote. OWASP recommendation.
+func sanitizeCSVCell(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t', '\r', '\n':
+		return "'" + s
+	}
+	return s
+}
 
 // List handles GET /api/expenses with query filters.
 func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -54,17 +75,26 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Parse and validate filters
 	from := q.Get("from")
 	to := q.Get("to")
-	if from != "" && to != "" {
-		fromDate, err1 := time.Parse("2006-01-02", from)
-		toDate, err2 := time.Parse("2006-01-02", to)
-		if err1 != nil || err2 != nil {
-			writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", "Date must be YYYY-MM-DD")
+	var fromDate, toDate time.Time
+	if from != "" {
+		var err error
+		fromDate, err = time.Parse("2006-01-02", from)
+		if err != nil {
+			writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", "from must be YYYY-MM-DD")
 			return
 		}
-		if fromDate.After(toDate) {
-			writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE_RANGE", "from must be before to")
+	}
+	if to != "" {
+		var err error
+		toDate, err = time.Parse("2006-01-02", to)
+		if err != nil {
+			writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", "to must be YYYY-MM-DD")
 			return
 		}
+	}
+	if from != "" && to != "" && fromDate.After(toDate) {
+		writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE_RANGE", "from must be before to")
+		return
 	}
 
 	// Build query
@@ -162,10 +192,10 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type expenseItem struct {
-		ID      string                 `json:"id"`
-		Title   string                 `json:"title"`
-		Expense json.RawMessage        `json:"expense"`
-		Source  string                 `json:"source"`
+		ID      string          `json:"id"`
+		Title   string          `json:"title"`
+		Expense json.RawMessage `json:"expense"`
+		Source  string          `json:"source"`
 	}
 	var expenses []expenseItem
 	for rows.Next() {
@@ -248,6 +278,16 @@ func (h *ExpenseHandler) Correct(w http.ResponseWriter, r *http.Request) {
 		writeExpenseError(w, http.StatusBadRequest, "INVALID_CURRENCY", "Currency must be a 3-letter ISO 4217 code")
 		return
 	}
+	if req.Date != nil {
+		if !datePattern.MatchString(*req.Date) {
+			writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE", "Date must be YYYY-MM-DD")
+			return
+		}
+		if _, err := time.Parse("2006-01-02", *req.Date); err != nil {
+			writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE", "Date must be a valid YYYY-MM-DD date")
+			return
+		}
+	}
 	if req.Classification != nil {
 		switch *req.Classification {
 		case "business", "personal", "uncategorized":
@@ -255,6 +295,31 @@ func (h *ExpenseHandler) Correct(w http.ResponseWriter, r *http.Request) {
 			writeExpenseError(w, http.StatusBadRequest, "INVALID_CLASSIFICATION", "Classification must be business, personal, or uncategorized")
 			return
 		}
+	}
+	if req.Category != nil && h.Cfg != nil && len(h.Cfg.ExpensesCategories) > 0 {
+		validCategory := false
+		for _, c := range h.Cfg.ExpensesCategories {
+			if c.Slug == *req.Category {
+				validCategory = true
+				break
+			}
+		}
+		if !validCategory {
+			writeExpenseError(w, http.StatusBadRequest, "INVALID_CATEGORY", "Category must be a configured category slug")
+			return
+		}
+	}
+	if req.Vendor != nil && len(*req.Vendor) > maxVendorLen {
+		writeExpenseError(w, http.StatusBadRequest, "INVALID_VENDOR", fmt.Sprintf("Vendor must be at most %d characters", maxVendorLen))
+		return
+	}
+	if req.Notes != nil && len(*req.Notes) > maxNotesLen {
+		writeExpenseError(w, http.StatusBadRequest, "INVALID_NOTES", fmt.Sprintf("Notes must be at most %d characters", maxNotesLen))
+		return
+	}
+	if req.PaymentMethod != nil && len(*req.PaymentMethod) > maxPaymentMethodLen {
+		writeExpenseError(w, http.StatusBadRequest, "INVALID_PAYMENT_METHOD", fmt.Sprintf("Payment method must be at most %d characters", maxPaymentMethodLen))
+		return
 	}
 
 	// Fetch existing expense metadata
@@ -538,11 +603,19 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 	from := q.Get("from")
 	to := q.Get("to")
 	if from != "" {
+		if _, err := time.Parse("2006-01-02", from); err != nil {
+			writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", "from must be YYYY-MM-DD")
+			return
+		}
 		conditions = append(conditions, fmt.Sprintf("(metadata->'expense'->>'date')::date >= $%d", argIdx))
 		args = append(args, from)
 		argIdx++
 	}
 	if to != "" {
+		if _, err := time.Parse("2006-01-02", to); err != nil {
+			writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE_FORMAT", "to must be YYYY-MM-DD")
+			return
+		}
 		conditions = append(conditions, fmt.Sprintf("(metadata->'expense'->>'date')::date <= $%d", argIdx))
 		args = append(args, to)
 		argIdx++
@@ -590,10 +663,10 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 
 	// Detect currencies for mixed-currency warning
 	type expenseRow struct {
-		Expense  domain.ExpenseMetadata
-		ID       string
-		Source   string
-		Title    string
+		Expense domain.ExpenseMetadata
+		ID      string
+		Source  string
+		Title   string
 	}
 	var exportRows []expenseRow
 	currencies := make(map[string]bool)
@@ -624,7 +697,11 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 			month = t.Format("2006-01")
 		}
 	}
-	filename := fmt.Sprintf("smackerel-expenses-%s-%s.csv", classification, month)
+	safeClassification := filenameClean.ReplaceAllString(classification, "")
+	if safeClassification == "" {
+		safeClassification = "all"
+	}
+	filename := fmt.Sprintf("smackerel-expenses-%s-%s.csv", safeClassification, month)
 
 	// Set headers
 	w.Header().Set("Content-Type", "text/csv")
@@ -688,11 +765,21 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 			if exp.Notes != nil && *exp.Notes != "" {
 				memo = *exp.Notes
 			}
-			_ = csvWriter.Write([]string{dateStr, exp.Vendor, categoryDisplay, amount, memo})
+			_ = csvWriter.Write([]string{
+				dateStr,
+				sanitizeCSVCell(exp.Vendor),
+				sanitizeCSVCell(categoryDisplay),
+				amount,
+				sanitizeCSVCell(memo),
+			})
 		} else {
 			_ = csvWriter.Write([]string{
-				dateStr, exp.Vendor, row.Title, exp.Category,
-				amount, exp.Currency, tax, paymentMethod,
+				dateStr,
+				sanitizeCSVCell(exp.Vendor),
+				sanitizeCSVCell(row.Title),
+				sanitizeCSVCell(exp.Category),
+				amount, exp.Currency, tax,
+				sanitizeCSVCell(paymentMethod),
 				exp.Classification, row.Source, row.ID,
 			})
 		}
