@@ -222,6 +222,104 @@ Then downstream aggregation (spec 028) can reliably merge quantities across reci
 
 ---
 
+## UI Wireframes
+
+### Screen: Telegram Recipe Card
+**Actor:** User | **Channel:** Telegram | **Status:** New
+
+```
+┌─────────────────────────────────────────────────┐
+│  🍳 Pasta Carbonara                              │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━           │
+│  ⏱ Prep: 15m | Cook: 20m | Serves: 4           │
+│  🏷 Italian • Main • Medium                      │
+│                                                   │
+│  📋 Ingredients (6):                              │
+│  • 400g spaghetti                                │
+│  • 200g guanciale, diced                         │
+│  • 4 egg yolks                                   │
+│  • 100g pecorino romano, grated                  │
+│  • Black pepper, to taste                        │
+│  • Salt, to taste                                │
+│                                                   │
+│  📝 Steps: 5 | Techniques: sautéing, tempering  │
+│                                                   │
+│  🔗 allrecipes.com/recipe/123                    │
+│  ⭐ Rate  |  📋 Shopping List  |  🔍 Similar    │
+└─────────────────────────────────────────────────┘
+```
+
+**Interactions:**
+- ⭐ Rate → prompts for rating reply (spec 027)
+- 📋 Shopping List → generates list from this recipe (spec 028)
+- 🔍 Similar → runs semantic search for related recipes
+
+**States:**
+- Extraction pending: "🔄 Extracting recipe details..."
+- Extraction failed: Shows standard artifact card (no domain section)
+- No ingredients: Shows title + summary only
+
+### Screen: Telegram Product Card
+**Actor:** User | **Channel:** Telegram | **Status:** New
+
+```
+┌─────────────────────────────────────────────────┐
+│  📦 Sony WH-1000XM5                              │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━           │
+│  Brand: Sony | Category: Headphones              │
+│  💰 $349.99 USD                                  │
+│  ⭐ 4.5/5 (12,847 reviews)                      │
+│                                                   │
+│  ✅ Industry-leading ANC                         │
+│  ✅ Comfortable fit                              │
+│  ✅ 30hr battery                                 │
+│  ❌ No aptX support                              │
+│  ❌ Cannot fold flat                             │
+│                                                   │
+│  Specs: 30mm driver | 250g | Bluetooth 5.2      │
+│                                                   │
+│  🔗 amazon.com/dp/B09X...                       │
+│  ⭐ Rate  |  📊 Compare  |  🔍 Similar          │
+└─────────────────────────────────────────────────┘
+```
+
+### Screen: Search Results with Domain Data
+**Actor:** User | **Channel:** Web/API | **Status:** Modify
+
+```
+┌─────────────────────────────────────────────────┐
+│  🔍 Search: "recipes with chicken"               │
+│  Mode: semantic+domain | 12 results | 340ms     │
+├─────────────────────────────────────────────────┤
+│                                                   │
+│  1. Chicken Tikka Masala          ⭐ 4.8  🍳    │
+│     8 ingredients | 45 min | Indian              │
+│     Ingredients: chicken, yogurt, garam masala...│
+│     [View] [Shopping List] [Rate]                │
+│                                                   │
+│  2. Lemon Herb Chicken            ⭐ —   🍳    │
+│     6 ingredients | 30 min | Mediterranean       │
+│     Ingredients: chicken breast, lemon, thyme... │
+│     [View] [Shopping List] [Rate]                │
+│                                                   │
+│  3. Chicken Stock Guide           📄             │
+│     No domain data (article)                     │
+│     "How to make rich chicken stock from..."     │
+│     [View] [Rate]                                │
+└─────────────────────────────────────────────────┘
+```
+
+**Responsive:**
+- Mobile: Single column, domain pills collapsed to icons
+- Tablet: Same layout, wider cards
+
+**Accessibility:**
+- Domain type icons have aria-labels (🍳 = "recipe", 📦 = "product")
+- Ingredient lists are semantic `<ul>` elements
+- Keyboard: Tab through results, Enter to expand
+
+---
+
 ## UI Scenario Matrix
 
 | Scenario | Actor | Entry Point | Steps | Expected Outcome | Screen(s) |
