@@ -122,6 +122,54 @@ Scenario: Extension setup with validation
   Then the extension calls /api/health to validate
   And on success shows "Connected to Smackerel"
   And on failure shows the specific error
+
+Scenario: Auth token expired with offline queue
+  Given the user captured 10 items while offline
+  When connectivity is restored but the auth token has been rotated
+  Then the queue sync fails with 401 authentication error
+  And queued items are preserved (not discarded)
+  And the user is prompted to update their auth token
+  And sync resumes after re-authentication
+
+Scenario: Share target receives non-URL content
+  Given the user shares an image or contact card to the Smackerel PWA
+  When the PWA share target receives non-URL, non-text content
+  Then unsupported content types are rejected with a clear message
+  And the user is told what content types are supported (URLs and text)
+
+Scenario: Transport security warning
+  Given the extension is configured with an HTTP (not HTTPS) server URL
+  When the user saves the configuration
+  Then the extension warns that the connection is insecure
+  And recommends using HTTPS or localhost only
+  And allows the user to proceed at their own risk
+
+Scenario: Duplicate capture from multiple surfaces
+  Given the user captures the same URL via Telegram AND the browser extension within 30 seconds
+  When both requests reach POST /api/capture
+  Then the system deduplicates based on URL content hash
+  And only one artifact is created
+  And both surfaces show success confirmation
+
+Scenario: Mobile list access at grocery store
+  Given a user generated a shopping list on desktop (spec 028)
+  When they open Smackerel PWA on their phone at the grocery store
+  Then active lists are accessible via GET /api/lists?status=active
+  And they can check off items via PATCH /api/lists/{id}/items/{itemId}
+  And checked state syncs to the server in real-time
+
+Scenario: Offline queue storage pressure
+  Given the PWA has 50 items in the offline queue in IndexedDB
+  When the browser clears storage due to storage pressure
+  Then the queue loss is detected on next app interaction
+  And the user is informed that queued items may have been lost
+  And the app recovers to a functional state
+
+Scenario: Capture confirmation with processing preview
+  Given the user captures a recipe URL via the extension
+  When the capture succeeds and processing completes
+  Then the extension shows a notification: "Captured: [Title] — processing started"
+  And optionally (if still visible): "8 ingredients detected" after domain extraction
 ```
 
 ## Acceptance Criteria
@@ -134,10 +182,14 @@ Scenario: Extension setup with validation
 - [ ] Extension supports selected text capture
 - [ ] Offline queue stores up to 100 pending captures in browser storage
 - [ ] Queue syncs automatically when connectivity is restored
+- [ ] Queued items preserved on auth failure, sync resumes after re-auth
 - [ ] Extension setup requires only Server URL and Auth Token
 - [ ] Extension validates connection via /api/health before saving config
+- [ ] Extension warns on HTTP (non-HTTPS) server URL
 - [ ] All capture flows complete in under 3 seconds (online)
 - [ ] No user data beyond auth token and pending queue stored in extension
+- [ ] PWA provides read access to active lists (spec 028) for mobile grocery shopping
+- [ ] Duplicate capture from multiple surfaces deduplicates correctly
 
 ## Non-Functional Requirements
 

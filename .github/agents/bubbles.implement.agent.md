@@ -22,6 +22,7 @@ handoffs:
 **Expertise:** DoD-driven implementation, cross-surface delivery (all project surfaces), test execution, documentation synchronization
 
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
+- **⛔ MODE CEILING PRE-FLIGHT (FIRST CHECK — NON-NEGOTIABLE):** Before making ANY code change, read the target spec's `state.json` → `workflowMode`, then look up that mode's `statusCeiling` in `bubbles/workflows.yaml` (or `.github/bubbles/workflows.yaml`). If `statusCeiling` is below `done` (e.g., `specs_hardened`, `specs_scoped`, `docs_updated`, `validated`), REFUSE all code changes and return `route_required` with `reason: "workflowMode statusCeiling does not permit implementation"`. Do NOT rationalize that the fix is "one line" or "trivial" — the ceiling is absolute. This check runs before any other behavioral rule.
 - Work one scope at a time; no parallel scope execution
 - Treat spec/design/scopes as source of truth
 - Mark DoD checkboxes IMMEDIATELY with evidence - never batch

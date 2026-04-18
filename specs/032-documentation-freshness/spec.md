@@ -55,6 +55,29 @@ Scenario: Operator sets up TLS
   Given an operator wants to expose Smackerel to their home network
   When they read the TLS section of docs/Operations.md
   Then they find instructions for reverse proxy setup with Caddy or nginx
+
+Scenario: Documented CLI command verified against real stack
+  Given docs/Operations.md documents a connector restart procedure
+  When the operator follows the documented steps against the real Docker stack
+  Then every documented command succeeds
+  And if the stack changes, a CI check flags stale commands (spec 029 coordination)
+
+Scenario: Error message troubleshooting
+  Given the system can produce common errors (NATS connection refused, migration failed, LLM timeout)
+  When an operator encounters one of these errors
+  Then docs/Operations.md has a troubleshooting entry with cause and resolution steps
+
+Scenario: New feature documentation from specs 026-033
+  Given domain extraction (026), annotations (027), lists (028), and mobile capture (033) are implemented
+  When a developer reads docs/Development.md
+  Then all new packages (domain, annotation, list), migrations (015-017), and prompt contracts are listed
+  And new API endpoints are documented
+  And browser extension/PWA setup is documented
+
+Scenario: Prompt contract documentation
+  Given 7 prompt contracts exist under config/prompt_contracts/
+  When a developer wants to add a new domain extraction schema
+  Then docs/Development.md has a section explaining the contract format, required fields, and how to test
 ```
 
 ## Acceptance Criteria
@@ -62,7 +85,9 @@ Scenario: Operator sets up TLS
 - [ ] README.md contains system requirements section (minimum/recommended RAM, disk, Docker version)
 - [ ] docs/Development.md lists all Go packages under internal/ with one-line descriptions
 - [ ] docs/Development.md lists all migrations (001-017) with purpose
-- [ ] docs/Development.md lists all prompt contracts with purpose
+- [ ] docs/Development.md lists all prompt contracts with purpose and format guide
 - [ ] docs/Operations.md exists with sections: deployment, connector management, troubleshooting, TLS setup, backup/restore
+- [ ] docs/Operations.md includes error-message troubleshooting lookup table
+- [ ] Browser extension and PWA installation documented
 - [ ] All documented commands are verified against the real stack
 - [ ] No documentation references unimplemented features

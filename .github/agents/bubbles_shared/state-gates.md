@@ -28,7 +28,7 @@ Purpose: compact state/completion rules that must remain authoritative for all a
 - Phase claims in `completedPhaseClaims` must have matching agent provenance in `executionHistory` (Gate G066). An agent may only record its own phase name; cross-phase impersonation is fabrication.
 
 ## Mechanical Gates
-- `state-transition-guard.sh` — DoD, scope status, certification/execution coherence, policy provenance (G055), certification state (G056), scenario manifest (G057), lockdown/regression (G058/G059), TDD evidence (G060), transition/rework closure (G061), packet/result integrity and framework contract enforcement (G042/G063/G064), phase-claim provenance (G066)
+- `state-transition-guard.sh` — DoD, scope status, certification/execution coherence, policy provenance (G055), certification state (G056), scenario manifest (G057), lockdown/regression (G058/G059), TDD evidence (G060), transition/rework closure (G061), packet/result integrity and framework contract enforcement (G042/G063/G064), phase-claim provenance (G066), source code edit lockout (G073)
 - `artifact-lint.sh` — schema validation (v2 + v3), phase coherence, scope parity, specialist completion
 - `implementation-reality-scan.sh` — stub/fake/hardcoded data detection
 - `regression-quality-guard.sh` — silent-pass bailout detection plus adversarial regression heuristics for bug-fix tests
@@ -82,3 +82,13 @@ Blocked patterns:
 - DoD item left `[ ]` after agent work without an Uncertainty Declaration explaining what was attempted
 
 Enforced by: evidence-rules.md (Evidence Provenance Taxonomy), quality-gates.md (Evidence Provenance Standard), audit-core.md (Evidence provenance review).
+
+## Source Code Edit Lockout Gate (G073)
+
+When a workflow mode's `statusCeiling` is below `done` (e.g., `specs_hardened`, `docs_updated`, `validated`), NO source code files may be modified. The guard script checks `git diff` (staged + working tree) for files matching implementation extensions (`.go`, `.rs`, `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.sql`, `.proto`, `.yaml`, `.yml`, `.toml`, `.json`, `.css`, `.scss`, `.html`) outside allowed paths (`specs/`, `docs/`, `.github/`, `.specify/`).
+
+Blocked patterns:
+- Any source code file staged or modified in the working tree when the active `workflowMode` has `statusCeiling` below `done`
+- Commits containing source code changes under a planning-only mode (detected as warnings on last commit)
+
+Enforced by: `state-transition-guard.sh` (Check 3B), agent-common.md (Mode Ceiling Pre-Flight), bubbles.implement (Mode Ceiling Pre-Flight behavioral rule), bubbles.bug (Phase 5 Mode Ceiling Gate).
