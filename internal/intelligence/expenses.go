@@ -17,15 +17,15 @@ import (
 // ExpenseClassifier implements the 7-level rule priority chain for expense
 // classification and manages vendor normalization and suggestion generation.
 type ExpenseClassifier struct {
-	Pool                  *pgxpool.Pool
-	IMAPExpenseLabels     map[string]string
-	BusinessVendors       []string
-	MinPastBusiness       int
-	MinConfidence         float64
-	MaxPerDigest          int
-	ReclassifyBatchLimit  int
-	Categories            []config.ExpenseCategory
-	vendorNormalizer      *VendorNormalizer
+	Pool                 *pgxpool.Pool
+	IMAPExpenseLabels    map[string]string
+	BusinessVendors      []string
+	MinPastBusiness      int
+	MinConfidence        float64
+	MaxPerDigest         int
+	ReclassifyBatchLimit int
+	Categories           []config.ExpenseCategory
+	vendorNormalizer     *VendorNormalizer
 }
 
 // NewExpenseClassifier creates a classifier from config.
@@ -223,11 +223,14 @@ func (ec *ExpenseClassifier) ReclassifyVendor(ctx context.Context, vendor, class
 	tag, err := ec.Pool.Exec(ctx, `
 		UPDATE artifacts
 		SET metadata = jsonb_set(metadata, '{expense,classification}', to_jsonb($1::text))
-		WHERE metadata ? 'expense'
-		AND LOWER(metadata->'expense'->>'vendor') = LOWER($2)
-		AND metadata->'expense'->>'classification' = 'uncategorized'
-		AND (metadata->'expense'->>'user_corrected')::boolean IS NOT TRUE
-		LIMIT $3
+		WHERE id IN (
+			SELECT id FROM artifacts
+			WHERE metadata ? 'expense'
+			AND LOWER(metadata->'expense'->>'vendor') = LOWER($2)
+			AND metadata->'expense'->>'classification' = 'uncategorized'
+			AND (metadata->'expense'->>'user_corrected')::boolean IS NOT TRUE
+			LIMIT $3
+		)
 	`, classification, vendor, ec.ReclassifyBatchLimit)
 	if err != nil {
 		return 0, fmt.Errorf("reclassify vendor: %w", err)
@@ -249,10 +252,10 @@ func (ec *ExpenseClassifier) CategoryDisplayName(slug string) string {
 // VendorNormalizer resolves raw vendor names to canonical forms using an
 // LRU cache backed by the vendor_aliases database table.
 type VendorNormalizer struct {
-	pool     *pgxpool.Pool
-	mu       sync.RWMutex
-	cache    map[string]string
-	maxSize  int
+	pool    *pgxpool.Pool
+	mu      sync.RWMutex
+	cache   map[string]string
+	maxSize int
 }
 
 // NewVendorNormalizer creates a VendorNormalizer with the given cache capacity.
@@ -298,11 +301,13 @@ func (n *VendorNormalizer) Normalize(ctx context.Context, vendorRaw string) (str
 	}
 
 	// Prefix match lookup for patterns like "SQ *" and "GOOGLE *"
+	// Escape LIKE wildcards in the user input to prevent pattern injection.
+	escapedKey := strings.NewReplacer("%", "\\%", "_", "\\_").Replace(key)
 	err = n.pool.QueryRow(ctx, `
 		SELECT canonical FROM vendor_aliases
-		WHERE alias LIKE '%*' AND $1 LIKE LOWER(REPLACE(alias, '*', '')) || '%'
+		WHERE alias LIKE '%*' AND $1 LIKE LOWER(REPLACE(alias, '*', '')) || '%' ESCAPE '\'
 		LIMIT 1
-	`, key).Scan(&canonical)
+	`, escapedKey).Scan(&canonical)
 
 	if err == nil {
 		n.put(key, canonical)

@@ -9,7 +9,7 @@ import (
 
 // FormatCookStep formats a cook mode step display per UX-2.2.
 func FormatCookStep(session *CookSession) string {
-	if session.CurrentStep < 1 || session.CurrentStep > session.TotalSteps {
+	if session.CurrentStep < 1 || session.CurrentStep > session.TotalSteps || session.CurrentStep > len(session.Steps) {
 		return ""
 	}
 
@@ -67,6 +67,27 @@ func formatStepMeta(step recipe.Step) string {
 	return "~ " + strings.Join(parts, " · ")
 }
 
+// formatIngredientLine formats a single scaled ingredient as a Telegram list item.
+// Shared by FormatCookIngredients and formatScaledResponse to avoid duplication.
+func formatIngredientLine(ing recipe.ScaledIngredient) string {
+	if !ing.Scaled {
+		qtyPart := ing.Quantity
+		if qtyPart == "" {
+			return fmt.Sprintf("- %s (unscaled)", ing.Name)
+		}
+		unitPart := ""
+		if ing.Unit != "" {
+			unitPart = " " + ing.Unit
+		}
+		return fmt.Sprintf("- %s%s %s (unscaled)", qtyPart, unitPart, ing.Name)
+	}
+	unitPart := ""
+	if ing.Unit != "" {
+		unitPart = " " + ing.Unit
+	}
+	return fmt.Sprintf("- %s%s %s", ing.DisplayQuantity, unitPart, ing.Name)
+}
+
 // FormatCookIngredients formats the ingredient list during cook mode per UX-2.4.
 func FormatCookIngredients(session *CookSession) string {
 	var lines []string
@@ -85,24 +106,7 @@ func FormatCookIngredients(session *CookSession) string {
 		// Scaled ingredients
 		scaled := recipe.ScaleIngredients(session.Ingredients, session.OriginalServings, session.ScaledServings)
 		for _, ing := range scaled {
-			if !ing.Scaled {
-				qtyPart := ing.Quantity
-				if qtyPart == "" {
-					lines = append(lines, fmt.Sprintf("- %s (unscaled)", ing.Name))
-				} else {
-					unitPart := ""
-					if ing.Unit != "" {
-						unitPart = " " + ing.Unit
-					}
-					lines = append(lines, fmt.Sprintf("- %s%s %s (unscaled)", qtyPart, unitPart, ing.Name))
-				}
-			} else {
-				unitPart := ""
-				if ing.Unit != "" {
-					unitPart = ing.Unit + " "
-				}
-				lines = append(lines, fmt.Sprintf("- %s%s%s", ing.DisplayQuantity, unitPart, ing.Name))
-			}
+			lines = append(lines, formatIngredientLine(ing))
 		}
 	} else {
 		// Unscaled — display as-is

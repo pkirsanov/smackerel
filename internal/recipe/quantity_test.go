@@ -2,6 +2,7 @@ package recipe
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -82,10 +83,40 @@ func TestParseQuantity_UnicodeFractions(t *testing.T) {
 }
 
 func TestParseQuantity_MixedWithUnicode(t *testing.T) {
-	// "1½" should be handled as "1 1/2" after unicode replacement
+	// "1 ½" should be handled as "1 1/2" after unicode replacement
 	qty, _ := ParseQuantity("1 ½", "cup")
 	if qty != 1.5 {
 		t.Fatalf("expected 1.5, got %f", qty)
+	}
+}
+
+func TestParseQuantity_MixedWithUnicodeNoSpace(t *testing.T) {
+	// "1½" (no space) must also parse as 1.5, not 5.5
+	qty, _ := ParseQuantity("1½", "cup")
+	if qty != 1.5 {
+		t.Fatalf("expected 1.5 for '1½', got %f", qty)
+	}
+}
+
+func TestParseQuantity_ZeroDenominator(t *testing.T) {
+	// "5/0" should return 0 (division by zero guard)
+	qty, _ := ParseQuantity("5/0", "cup")
+	if qty != 0 {
+		t.Fatalf("expected 0 for '5/0', got %f", qty)
+	}
+}
+
+func TestParseQuantity_ZeroNumerator(t *testing.T) {
+	qty, _ := ParseQuantity("0/5", "cup")
+	if qty != 0 {
+		t.Fatalf("expected 0 for '0/5', got %f", qty)
+	}
+}
+
+func TestParseQuantity_FiveSixthsUnicode(t *testing.T) {
+	qty, _ := ParseQuantity("⅚", "cup")
+	if math.Abs(qty-0.833) > 0.01 {
+		t.Fatalf("expected ~0.833 for '⅚', got %f", qty)
 	}
 }
 
@@ -107,6 +138,41 @@ func TestNormalizeUnit(t *testing.T) {
 		if got != expected {
 			t.Errorf("NormalizeUnit(%q) = %q, want %q", input, got, expected)
 		}
+	}
+}
+
+// Round 11: ParseQuantity must return 0 for overflow-sized numerics
+func TestParseQuantity_OverflowFraction(t *testing.T) {
+	// A 310-digit numerator overflows float64 to +Inf
+	hugeNum := strings.Repeat("9", 310)
+	qty, _ := ParseQuantity(hugeNum+"/1", "cup")
+	if qty != 0 {
+		t.Errorf("expected 0 for overflow fraction, got %f", qty)
+	}
+}
+
+func TestParseQuantity_OverflowMixedFraction(t *testing.T) {
+	hugeNum := strings.Repeat("9", 310)
+	qty, _ := ParseQuantity("1 "+hugeNum+"/1", "cup")
+	if qty != 0 {
+		t.Errorf("expected 0 for overflow mixed fraction, got %f", qty)
+	}
+}
+
+func TestParseQuantity_OverflowSimpleNumber(t *testing.T) {
+	hugeNum := strings.Repeat("9", 310)
+	qty, _ := ParseQuantity(hugeNum, "cup")
+	if qty != 0 {
+		t.Errorf("expected 0 for overflow simple number, got %f", qty)
+	}
+}
+
+func TestParseQuantity_OverflowBothParts(t *testing.T) {
+	// Both numerator and denominator overflow → +Inf / +Inf = NaN
+	hugeNum := strings.Repeat("9", 310)
+	qty, _ := ParseQuantity(hugeNum+"/"+hugeNum, "cup")
+	if qty != 0 {
+		t.Errorf("expected 0 for NaN fraction, got %f", qty)
 	}
 }
 

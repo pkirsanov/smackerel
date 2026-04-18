@@ -134,6 +134,56 @@ func TestFormatCookStep_TechniqueOnly(t *testing.T) {
 	}
 }
 
+func TestFormatCookStep_OutOfBoundsStep(t *testing.T) {
+	session := &CookSession{
+		RecipeTitle: "Test",
+		Steps: []recipe.Step{
+			{Number: 1, Instruction: "Step one"},
+		},
+		CurrentStep: 5, // beyond len(Steps)
+		TotalSteps:  1,
+	}
+
+	result := FormatCookStep(session)
+	if result != "" {
+		t.Errorf("expected empty string for out-of-bounds step, got %q", result)
+	}
+}
+
+func TestFormatCookStep_StepsBeyondTotalSteps(t *testing.T) {
+	// TotalSteps=3 but only 2 steps in slice — CurrentStep=3 should be safe
+	session := &CookSession{
+		RecipeTitle: "Test",
+		Steps: []recipe.Step{
+			{Number: 1, Instruction: "Step one"},
+			{Number: 2, Instruction: "Step two"},
+		},
+		CurrentStep: 3,
+		TotalSteps:  3,
+	}
+
+	result := FormatCookStep(session)
+	if result != "" {
+		t.Errorf("expected empty string when step exceeds slice length, got %q", result)
+	}
+}
+
+func TestFormatCookStep_ZeroStep(t *testing.T) {
+	session := &CookSession{
+		RecipeTitle: "Test",
+		Steps: []recipe.Step{
+			{Number: 1, Instruction: "Step one"},
+		},
+		CurrentStep: 0,
+		TotalSteps:  1,
+	}
+
+	result := FormatCookStep(session)
+	if result != "" {
+		t.Errorf("expected empty string for step 0, got %q", result)
+	}
+}
+
 func TestFormatCookIngredients_Unscaled(t *testing.T) {
 	session := &CookSession{
 		RecipeTitle: "Pasta",
@@ -184,5 +234,62 @@ func TestFormatCookIngredients_Scaled(t *testing.T) {
 	}
 	if !strings.Contains(result, "(unscaled)") {
 		t.Error("missing unscaled annotation for salt")
+	}
+}
+
+// Round 5 test: formatIngredientLine shared helper
+func TestFormatIngredientLine_Scaled(t *testing.T) {
+	ing := recipe.ScaledIngredient{
+		Name:            "flour",
+		Quantity:        "2",
+		Unit:            "cups",
+		DisplayQuantity: "4",
+		Scaled:          true,
+	}
+	got := formatIngredientLine(ing)
+	if got != "- 4 cups flour" {
+		t.Errorf("formatIngredientLine(scaled) = %q, want %q", got, "- 4 cups flour")
+	}
+}
+
+func TestFormatIngredientLine_ScaledNoUnit(t *testing.T) {
+	ing := recipe.ScaledIngredient{
+		Name:            "eggs",
+		Quantity:        "4",
+		Unit:            "",
+		DisplayQuantity: "8",
+		Scaled:          true,
+	}
+	got := formatIngredientLine(ing)
+	if got != "- 8 eggs" {
+		t.Errorf("formatIngredientLine(scaled no unit) = %q, want %q", got, "- 8 eggs")
+	}
+}
+
+func TestFormatIngredientLine_Unscaled(t *testing.T) {
+	ing := recipe.ScaledIngredient{
+		Name:            "salt",
+		Quantity:        "to taste",
+		Unit:            "",
+		DisplayQuantity: "to taste",
+		Scaled:          false,
+	}
+	got := formatIngredientLine(ing)
+	if got != "- to taste salt (unscaled)" {
+		t.Errorf("formatIngredientLine(unscaled) = %q, want %q", got, "- to taste salt (unscaled)")
+	}
+}
+
+func TestFormatIngredientLine_UnscaledEmptyQty(t *testing.T) {
+	ing := recipe.ScaledIngredient{
+		Name:            "water",
+		Quantity:        "",
+		Unit:            "",
+		DisplayQuantity: "",
+		Scaled:          false,
+	}
+	got := formatIngredientLine(ing)
+	if got != "- water (unscaled)" {
+		t.Errorf("formatIngredientLine(empty qty) = %q, want %q", got, "- water (unscaled)")
 	}
 }

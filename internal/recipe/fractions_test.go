@@ -71,3 +71,43 @@ func TestFormatQuantity_Zero(t *testing.T) {
 		t.Errorf("FormatQuantity(0) = %q, want '0'", got)
 	}
 }
+
+func TestFormatQuantity_NearInteger(t *testing.T) {
+	cases := []struct {
+		input    float64
+		expected string
+	}{
+		{0.999, "1"},
+		{2.999, "3"},
+		{0.001, "0"},
+		{1.001, "1"},
+		{4.995, "5"},
+	}
+	for _, tc := range cases {
+		got := FormatQuantity(tc.input)
+		if got != tc.expected {
+			t.Errorf("FormatQuantity(%f) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+func TestFormatQuantity_Negative(t *testing.T) {
+	got := FormatQuantity(-1)
+	if got != "0" {
+		t.Errorf("FormatQuantity(-1) = %q, want '0'", got)
+	}
+}
+
+func TestFormatQuantity_FiveSixths(t *testing.T) {
+	got := FormatQuantity(0.833)
+	if got != "5/6" {
+		t.Errorf("FormatQuantity(0.833) = %q, want '5/6'", got)
+	}
+}
+
+func TestFormatQuantity_MixedFiveSixths(t *testing.T) {
+	got := FormatQuantity(2.833)
+	if got != "2 5/6" {
+		t.Errorf("FormatQuantity(2.833) = %q, want '2 5/6'", got)
+	}
+}

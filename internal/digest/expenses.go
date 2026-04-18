@@ -11,10 +11,10 @@ import (
 
 // ExpenseDigestSection produces the expense section for the daily digest.
 type ExpenseDigestSection struct {
-	Pool                      *pgxpool.Pool
-	MaxWords                  int
-	NeedsReviewLimit          int
-	MaxSuggestionsPerDigest   int
+	Pool                       *pgxpool.Pool
+	MaxWords                   int
+	NeedsReviewLimit           int
+	MaxSuggestionsPerDigest    int
 	MissingReceiptLookbackDays int
 }
 
@@ -40,9 +40,9 @@ func (c *ExpenseDigestContext) IsEmpty() bool {
 
 // ExpenseDigestSummary holds weekly expense totals.
 type ExpenseDigestSummary struct {
-	TotalCount    int                        `json:"total_count"`
-	BusinessCount int                        `json:"business_count"`
-	PersonalCount int                        `json:"personal_count"`
+	TotalCount      int                      `json:"total_count"`
+	BusinessCount   int                      `json:"business_count"`
+	PersonalCount   int                      `json:"personal_count"`
 	TotalByCurrency []ExpenseDigestCurrTotal `json:"total_by_currency"`
 }
 
@@ -293,6 +293,12 @@ func EnforceWordLimit(ctx *ExpenseDigestContext, maxWords int) {
 	}
 	if totalWords > maxWords {
 		ctx.Suggestions = nil
+		totalWords = countWords(ctx)
+	}
+	// If still over limit, trim NeedsReview items from the end
+	for totalWords > maxWords && len(ctx.NeedsReview) > 1 {
+		ctx.NeedsReview = ctx.NeedsReview[:len(ctx.NeedsReview)-1]
+		totalWords = countWords(ctx)
 	}
 }
 

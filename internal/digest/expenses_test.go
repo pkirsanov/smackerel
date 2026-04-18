@@ -162,3 +162,83 @@ func TestCountWords(t *testing.T) {
 		t.Errorf("expected >= 3 words with summary, got %d", w)
 	}
 }
+
+// CHAOS: 1000 NeedsReview items must be trimmed by EnforceWordLimit
+func TestEnforceWordLimit_TrimsNeedsReview(t *testing.T) {
+	items := make([]ExpenseDigestReviewItem, 1000)
+	for i := range items {
+		items[i] = ExpenseDigestReviewItem{
+			Vendor: "Vendor Number " + string(rune('A'+i%26)),
+			Amount: "99.99",
+			Reason: "amount not detected",
+		}
+	}
+	ctx := &ExpenseDigestContext{
+		NeedsReview: items,
+	}
+
+	EnforceWordLimit(ctx, 50)
+
+	if len(ctx.NeedsReview) >= 1000 {
+		t.Errorf("expected NeedsReview trimmed from 1000, still has %d items", len(ctx.NeedsReview))
+	}
+	// Must retain at least 1 (highest priority)
+	if len(ctx.NeedsReview) < 1 {
+		t.Error("expected at least 1 NeedsReview item preserved")
+	}
+	// Word count must be within limit
+	if w := countWords(ctx); w > 50 {
+		t.Errorf("expected <= 50 words after enforcement, got %d", w)
+	}
+}
+
+// CHAOS: EnforceWordLimit with all sections populated and very low limit
+func TestEnforceWordLimit_AllSections_TightLimit(t *testing.T) {
+	ctx := &ExpenseDigestContext{
+		Summary: &ExpenseDigestSummary{
+			TotalCount:    500,
+			BusinessCount: 300,
+			PersonalCount: 200,
+			TotalByCurrency: []ExpenseDigestCurrTotal{
+				{Currency: "USD", Total: "50000.00"},
+				{Currency: "EUR", Total: "12000.00"},
+			},
+		},
+		NeedsReview:     make([]ExpenseDigestReviewItem, 100),
+		Suggestions:     make([]ExpenseDigestSuggestion, 50),
+		MissingReceipts: make([]ExpenseDigestMissing, 20),
+		UnusualCharges:  make([]ExpenseDigestUnusual, 10),
+	}
+	for i := range ctx.NeedsReview {
+		ctx.NeedsReview[i] = ExpenseDigestReviewItem{Vendor: "V", Amount: "1.00", Reason: "r"}
+	}
+	for i := range ctx.Suggestions {
+		ctx.Suggestions[i] = ExpenseDigestSuggestion{Vendor: "V", Amount: "1.00", SuggestedClass: "business", Evidence: "e"}
+	}
+	for i := range ctx.MissingReceipts {
+		ctx.MissingReceipts[i] = ExpenseDigestMissing{ServiceName: "S", Amount: "1.00"}
+	}
+	for i := range ctx.UnusualCharges {
+		ctx.UnusualCharges[i] = ExpenseDigestUnusual{Vendor: "V", Amount: "1.00"}
+	}
+
+	EnforceWordLimit(ctx, 10)
+
+	// Low-priority sections must be dropped
+	if ctx.Summary != nil {
+		t.Error("expected Summary dropped")
+	}
+	if ctx.UnusualCharges != nil {
+		t.Error("expected UnusualCharges dropped")
+	}
+	if ctx.MissingReceipts != nil {
+		t.Error("expected MissingReceipts dropped")
+	}
+	if ctx.Suggestions != nil {
+		t.Error("expected Suggestions dropped")
+	}
+	// NeedsReview should be trimmed but not empty
+	if len(ctx.NeedsReview) >= 100 {
+		t.Errorf("expected NeedsReview trimmed, still %d", len(ctx.NeedsReview))
+	}
+}

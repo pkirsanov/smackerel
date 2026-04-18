@@ -17,21 +17,25 @@ import (
 
 // Regex patterns for serving scaler triggers (UX-1.1).
 var (
-	scaleServingsRe   = regexp.MustCompile(`(?i)^(\d+)\s+servings?$`)
-	scaleForRe        = regexp.MustCompile(`(?i)^for\s+(\d+)$`)
-	scaleToRe         = regexp.MustCompile(`(?i)^scale\s+to\s+(\d+)$`)
-	scalePeopleRe     = regexp.MustCompile(`(?i)^(\d+)\s+people$`)
-	cookBareRe        = regexp.MustCompile(`(?i)^cook$`)
-	cookNameRe        = regexp.MustCompile(`(?i)^cook\s+(.+?)$`)
-	cookNameServRe    = regexp.MustCompile(`(?i)^cook\s+(.+?)\s+for\s+(\d+)\s+servings?$`)
-	cookNavNextRe     = regexp.MustCompile(`(?i)^(next|n)$`)
-	cookNavBackRe     = regexp.MustCompile(`(?i)^(back|b|prev|previous)$`)
-	cookNavIngrRe     = regexp.MustCompile(`(?i)^(ingredients?|ing|i)$`)
-	cookNavDoneRe     = regexp.MustCompile(`(?i)^(done|d|stop|exit)$`)
-	cookNavJumpRe     = regexp.MustCompile(`^(\d+)$`)
-	cookConfirmYesRe  = regexp.MustCompile(`(?i)^(yes|y)$`)
-	cookConfirmNoRe   = regexp.MustCompile(`(?i)^(no|n)$`)
+	scaleServingsRe  = regexp.MustCompile(`(?i)^(\d+)\s+servings?$`)
+	scaleForRe       = regexp.MustCompile(`(?i)^for\s+(\d+)$`)
+	scaleToRe        = regexp.MustCompile(`(?i)^scale\s+to\s+(\d+)$`)
+	scalePeopleRe    = regexp.MustCompile(`(?i)^(\d+)\s+people$`)
+	cookBareRe       = regexp.MustCompile(`(?i)^cook$`)
+	cookNameRe       = regexp.MustCompile(`(?i)^cook\s+(.+?)$`)
+	cookNameServRe   = regexp.MustCompile(`(?i)^cook\s+(.+?)\s+for\s+(\d+)\s+servings?$`)
+	cookNavNextRe    = regexp.MustCompile(`(?i)^(next|n)$`)
+	cookNavBackRe    = regexp.MustCompile(`(?i)^(back|b|prev|previous)$`)
+	cookNavIngrRe    = regexp.MustCompile(`(?i)^(ingredients?|ing|i)$`)
+	cookNavDoneRe    = regexp.MustCompile(`(?i)^(done|d|stop|exit)$`)
+	cookNavJumpRe    = regexp.MustCompile(`^(\d+)$`)
+	cookConfirmYesRe = regexp.MustCompile(`(?i)^(yes|y)$`)
+	cookConfirmNoRe  = regexp.MustCompile(`(?i)^(no|n)$`)
 )
+
+// maxServings caps the maximum serving count to prevent abuse via
+// extremely large scale factors that could cause excessive computation.
+const maxServings = 1000
 
 // parseScaleTrigger checks if text matches a serving scaler pattern.
 // Returns the requested servings count, or 0 if no match.
@@ -41,7 +45,7 @@ func parseScaleTrigger(text string) int {
 	for _, re := range []*regexp.Regexp{scaleServingsRe, scaleForRe, scaleToRe, scalePeopleRe} {
 		if m := re.FindStringSubmatch(text); len(m) >= 2 {
 			n, err := strconv.Atoi(m[1])
-			if err == nil && n > 0 {
+			if err == nil && n > 0 && n <= maxServings {
 				return n
 			}
 		}
@@ -58,7 +62,7 @@ func parseCookTrigger(text string) (string, int, bool) {
 	// "cook {name} for {N} servings" — must check before cookNameRe
 	if m := cookNameServRe.FindStringSubmatch(text); len(m) >= 3 {
 		n, err := strconv.Atoi(m[2])
-		if err == nil && n > 0 {
+		if err == nil && n > 0 && n <= maxServings {
 			return strings.TrimSpace(m[1]), n, true
 		}
 	}
@@ -145,26 +149,7 @@ func formatScaledResponse(title string, originalServings, requestedServings int,
 	lines = append(lines, "")
 
 	for _, ing := range scaled {
-		if !ing.Scaled {
-			// Unparseable quantity
-			qtyPart := ing.Quantity
-			if qtyPart == "" {
-				qtyPart = ing.Name
-				lines = append(lines, fmt.Sprintf("- %s (unscaled)", qtyPart))
-			} else {
-				unitPart := ""
-				if ing.Unit != "" {
-					unitPart = " " + ing.Unit
-				}
-				lines = append(lines, fmt.Sprintf("- %s%s %s (unscaled)", qtyPart, unitPart, ing.Name))
-			}
-		} else {
-			unitPart := ""
-			if ing.Unit != "" {
-				unitPart = ing.Unit + " "
-			}
-			lines = append(lines, fmt.Sprintf("- %s%s%s", ing.DisplayQuantity, unitPart, ing.Name))
-		}
+		lines = append(lines, formatIngredientLine(ing))
 	}
 
 	return strings.Join(lines, "\n")
@@ -261,7 +246,7 @@ func (b *Bot) handleCookEntry(ctx context.Context, chatID int64, recipeName stri
 func (b *Bot) startCookSession(chatID int64, rd *recipe.RecipeData, artifactID string, servings int) {
 	if len(rd.Steps) == 0 {
 		// No steps — show ingredient list fallback
-		b.reply(chatID, formatNoStepsFallback(rd))
+		b.reply(chatID, formatNoStepsFallback(rd, servings))
 		return
 	}
 
@@ -295,22 +280,33 @@ func (b *Bot) startCookSession(chatID int64, rd *recipe.RecipeData, artifactID s
 }
 
 // formatNoStepsFallback formats the response for a recipe with no steps.
-func formatNoStepsFallback(rd *recipe.RecipeData) string {
+// If servings are specified and the recipe has a base serving count, ingredients are scaled.
+func formatNoStepsFallback(rd *recipe.RecipeData, servings int) string {
 	var lines []string
 	lines = append(lines, "> This recipe has no steps to walk through.")
 	lines = append(lines, "")
 	lines = append(lines, fmt.Sprintf("# %s — Ingredients", rd.Title))
 
-	for _, ing := range rd.Ingredients {
-		qty := ""
-		if ing.Quantity != "" {
-			qty = ing.Quantity
-			if ing.Unit != "" {
-				qty += " " + ing.Unit
-			}
-			qty += " "
+	if servings > 0 && rd.Servings != nil && *rd.Servings > 0 && servings != *rd.Servings {
+		scaled := recipe.ScaleIngredients(rd.Ingredients, *rd.Servings, servings)
+		lines = append(lines, fmt.Sprintf("~ Scaled to %d servings (from %d)", servings, *rd.Servings))
+		lines = append(lines, "")
+		for _, ing := range scaled {
+			lines = append(lines, formatIngredientLine(ing))
 		}
-		lines = append(lines, fmt.Sprintf("- %s%s", qty, ing.Name))
+	} else {
+		lines = append(lines, "")
+		for _, ing := range rd.Ingredients {
+			qty := ""
+			if ing.Quantity != "" {
+				qty = ing.Quantity
+				if ing.Unit != "" {
+					qty += " " + ing.Unit
+				}
+				qty += " "
+			}
+			lines = append(lines, fmt.Sprintf("- %s%s", qty, ing.Name))
+		}
 	}
 
 	return strings.Join(lines, "\n")
