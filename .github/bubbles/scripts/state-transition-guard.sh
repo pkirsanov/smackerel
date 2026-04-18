@@ -473,6 +473,90 @@ fi
 echo ""
 
 # =============================================================================
+# CHECK 3B: Source code edit lockout for planning-only modes (Gate G073)
+# =============================================================================
+echo "--- Check 3B: Source Code Edit Lockout (Gate G073) ---"
+
+# Determine if the current mode forbids source code edits
+ceiling_forbids_code="false"
+case "$state_workflow_mode" in
+  spec-scope-hardening|product-discovery|product-to-planning)
+    ceiling_forbids_code="true"
+    ceiling_label="specs_hardened"
+    ;;
+  docs-only|spec-review-to-doc)
+    ceiling_forbids_code="true"
+    ceiling_label="docs_updated"
+    ;;
+  validate-only|audit-only|validate-to-doc)
+    ceiling_forbids_code="true"
+    ceiling_label="validated"
+    ;;
+  resume-only)
+    ceiling_forbids_code="true"
+    ceiling_label="in_progress"
+    ;;
+esac
+
+if [[ "$ceiling_forbids_code" == "true" ]]; then
+  # Check if git is available and we're in a repo
+  if command -v git &>/dev/null && git rev-parse --is-inside-work-tree &>/dev/null 2>&1; then
+    # Get source code files modified in the working tree + staged + last commit
+    # relative to the repo root, then filter for implementation file extensions
+    source_code_violations=0
+    source_code_pattern='\.(go|rs|py|ts|tsx|js|jsx|sql|proto|yaml|yml|toml|json|css|scss|html)$'
+    # Exclude specs/ docs/ .github/ .specify/ paths — those are allowed
+    allowed_path_pattern='^(specs/|docs/|\.github/|\.specify/|CHANGELOG|README|LICENSE|VERSION)'
+
+    # Check staged files
+    while IFS= read -r changed_file; do
+      [[ -z "$changed_file" ]] && continue
+      if echo "$changed_file" | grep -qE "$source_code_pattern"; then
+        if ! echo "$changed_file" | grep -qE "$allowed_path_pattern"; then
+          fail "Mode '$state_workflow_mode' (ceiling: $ceiling_label) forbids source code edits, but staged file modified: $changed_file"
+          source_code_violations=$((source_code_violations + 1))
+        fi
+      fi
+    done < <(git diff --cached --name-only 2>/dev/null || true)
+
+    # Check unstaged working tree changes
+    while IFS= read -r changed_file; do
+      [[ -z "$changed_file" ]] && continue
+      if echo "$changed_file" | grep -qE "$source_code_pattern"; then
+        if ! echo "$changed_file" | grep -qE "$allowed_path_pattern"; then
+          fail "Mode '$state_workflow_mode' (ceiling: $ceiling_label) forbids source code edits, but working tree file modified: $changed_file"
+          source_code_violations=$((source_code_violations + 1))
+        fi
+      fi
+    done < <(git diff --name-only 2>/dev/null || true)
+
+    # Check the most recent commit (if it exists and was made during this workflow)
+    last_commit_msg="$(git log -1 --format='%s' 2>/dev/null || true)"
+    if [[ -n "$last_commit_msg" ]]; then
+      while IFS= read -r changed_file; do
+        [[ -z "$changed_file" ]] && continue
+        if echo "$changed_file" | grep -qE "$source_code_pattern"; then
+          if ! echo "$changed_file" | grep -qE "$allowed_path_pattern"; then
+            warn "Mode '$state_workflow_mode' (ceiling: $ceiling_label) forbids source code edits — last commit touched: $changed_file (review commit: $last_commit_msg)"
+          fi
+        fi
+      done < <(git diff --name-only HEAD~1 HEAD -- 2>/dev/null || true)
+    fi
+
+    if [[ "$source_code_violations" -eq 0 ]]; then
+      pass "No source code edits detected under planning-only mode '$state_workflow_mode'"
+    else
+      fail "Found $source_code_violations source code file(s) modified under planning-only mode '$state_workflow_mode' — implementation is forbidden when statusCeiling is '$ceiling_label'"
+    fi
+  else
+    info "Git not available or not in a repo — skipping source code edit lockout check"
+  fi
+else
+  pass "Workflow mode '$state_workflow_mode' permits source code edits (ceiling allows implementation)"
+fi
+echo ""
+
+# =============================================================================
 # CHECK 4: ALL DoD items must be checked [x] — ZERO unchecked allowed
 # =============================================================================
 echo "--- Check 3A: Policy Snapshot Provenance (Gate G055) ---"

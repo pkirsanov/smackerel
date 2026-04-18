@@ -56,6 +56,30 @@ Scenario: Distributed trace follows a request
   Given tracing is enabled in config
   When a user sends a capture request
   Then a trace spans core HTTP handler → NATS publish → ML processing → NATS response → DB write
+
+Scenario: Metric cardinality is bounded
+  Given connectors have arbitrary names and LLM models change frequently
+  When metrics use connector name and model name as label values
+  Then cardinality is capped with an allowlist or "other" bucket
+  And total unique label combinations stay under 1000
+
+Scenario: NATS dead letter queue is monitored
+  Given 9 NATS streams exist with dead letter routing
+  When a message fails all retry attempts and enters dead letter
+  Then smackerel_nats_deadletter_total{stream} is incremented
+  And an alert-worthy log entry is emitted
+
+Scenario: Database connection pool is instrumented
+  Given the PostgreSQL connection pool has MaxConns and MinConns configured
+  When active connections approach the limit
+  Then smackerel_db_connections_active gauge reflects the true count
+  And operators can detect pool exhaustion before it causes timeouts
+
+Scenario: Trace context lost across NATS boundary
+  Given a capture request generates a trace in Go core
+  When the trace context header propagation fails at the NATS boundary
+  Then the ML sidecar creates a new root span (not silently lost)
+  And the root span includes the artifact_id for manual correlation
 ```
 
 ## Acceptance Criteria
@@ -65,6 +89,11 @@ Scenario: Distributed trace follows a request
 - [ ] Search histogram: `smackerel_search_latency_seconds{mode}`
 - [ ] Connector gauge: `smackerel_connector_sync_total{connector, status}`
 - [ ] LLM counter: `smackerel_llm_tokens_used_total{provider, model}`
+- [ ] Domain extraction counter: `smackerel_domain_extraction_total{schema, status}`
+- [ ] NATS dead letter counter: `smackerel_nats_deadletter_total{stream}`
+- [ ] DB connection pool gauge: `smackerel_db_connections_active`
+- [ ] Capture source counter: `smackerel_capture_total{source}` (telegram, api, extension, pwa)
 - [ ] ML sidecar exposes /metrics with processing latency
 - [ ] Trace context propagated through NATS message headers (opt-in)
 - [ ] Metrics add < 1ms overhead to hot paths
+- [ ] Label cardinality bounded under 1000 unique combinations

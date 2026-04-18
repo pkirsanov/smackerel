@@ -80,15 +80,50 @@ Scenario: ML sidecar readiness gate prevents cold-start timeouts
   When a search request arrives before the sidecar is ready
   Then the core waits for sidecar health before attempting NATS embed
   And the search falls back to text mode if readiness times out
+
+Scenario: NATS consumer replay after crash
+  Given the ML sidecar crashes while processing a message
+  When the sidecar restarts and the consumer replays unacknowledged messages
+  Then the replayed message is processed correctly (idempotent handling)
+  And no duplicate artifacts or domain_data entries are created
+
+Scenario: Migration rollback and re-apply
+  Given all 17 migrations have been applied
+  When a migration is rolled back using its ROLLBACK SQL
+  And then re-applied
+  Then the database returns to a consistent state
+  And no data loss occurs in tables unaffected by the migration
+
+Scenario: Tests run against populated database
+  Given the test database already contains artifacts from a previous test run
+  When integration tests run
+  Then tests use unique identifiers that don't collide with existing data
+  And test assertions don't depend on the database being empty
+
+Scenario: Annotation CRUD against real PostgreSQL
+  Given migrations 016 (annotations) have been applied
+  When an annotation is created, queried, and the summary materialized view is refreshed
+  Then all operations succeed against real PostgreSQL
+  And the materialized view returns correct aggregated data
+
+Scenario: List generation against real PostgreSQL
+  Given migrations 017 (lists) have been applied and artifacts with domain_data exist
+  When a shopping list is generated from those artifacts
+  Then the list and items are persisted in real PostgreSQL
+  And item status updates correctly modify checked_items counters
 ```
 
 ## Acceptance Criteria
 
 - [ ] `./smackerel.sh test integration` runs against Docker stack and passes
 - [ ] All 17 migrations apply cleanly on fresh PostgreSQL
+- [ ] Migration rollback SQL tested for at least 3 recent migrations (015-017)
 - [ ] NATS stream creation verified with 9 streams
+- [ ] NATS consumer replay/idempotency tested after simulated crash
 - [ ] Artifact CRUD operations verified against real PostgreSQL
 - [ ] pgvector similarity search works with real embeddings
+- [ ] Annotation CRUD verified against real PostgreSQL (spec 027)
+- [ ] List generation verified against real PostgreSQL (spec 028)
 - [ ] `./smackerel.sh test e2e` verifies capture → process → search flow
 - [ ] All test data cleaned up after test run
 - [ ] Tests are idempotent (re-runnable without manual cleanup)

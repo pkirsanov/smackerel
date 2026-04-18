@@ -197,6 +197,45 @@ Then it detects which ingredients the user buys most frequently
 And which recipes the user actually shops for (vs. saved but never made)
 And this data feeds into recipe recommendations and resurfacing
 
+### BS-009: Ingredient Normalization Ambiguity
+Given recipe A calls for "1 chicken breast" and recipe B calls for "500g chicken"
+When the system generates a shopping list
+Then the system does NOT merge these (incompatible units: count vs weight)
+And both items appear separately with a note suggesting they may overlap
+And the user can manually merge them
+
+### BS-010: Partial Domain Extraction Graceful Degradation
+Given recipe A has full ingredient extraction and recipe B has domain_extraction_status "failed"
+When the user generates a shopping list from both
+Then recipe A's ingredients appear normally
+And recipe B is flagged with "ingredients could not be extracted — add manually"
+And the list is still generated (not blocked by one failure)
+
+### BS-011: Quantity Overflow Normalization
+Given the user selects 50 recipes that all include "1 tsp salt"
+When quantities are summed to "50 tsp"
+Then the system normalizes to a reasonable display unit ("~1 cup" or "~250ml")
+And pantry staples are flagged as "likely already have"
+
+### BS-012: Empty List Generation
+Given the user selects 3 artifacts that have no domain_data (articles, not recipes)
+When they request a shopping list
+Then the system returns a clear message: "No extractable ingredients found"
+And suggests selecting recipe artifacts instead
+
+### BS-013: List Completion Triggers Annotation Feedback
+Given a user completes a shopping list generated from 3 recipes
+When the list status changes to "completed"
+Then "made_it" interaction annotations are auto-created on all 3 source recipe artifacts (spec 027)
+And the intelligence engine records these as usage events
+
+### BS-014: Mobile List Access
+Given a user generated a shopping list on desktop
+When they open Smackerel on their phone at the grocery store (spec 033)
+Then the list is accessible via the PWA or API
+And they can check off items in real-time
+And checked state syncs back to the server
+
 ---
 
 ## Non-Functional Requirements

@@ -110,6 +110,24 @@ Use [validation-core.md](validation-core.md) for the shared Tier 1/Tier 2 model 
 
 Prompt files should reference the matching profile instead of embedding duplicate validation tables.
 
+## Mode Ceiling Pre-Flight (NON-NEGOTIABLE — ALL Agents, Gate G073)
+
+**Before editing ANY non-spec file** (source code, config, Docker, test files — anything outside `specs/`), every agent MUST check the active workflow mode's `statusCeiling` from the target's `state.json` → `workflowMode` field, resolved against `bubbles/workflows.yaml` (or `.github/bubbles/workflows.yaml` in downstream repos).
+
+| `statusCeiling` | Allowed File Edits |
+|-----------------|--------------------| 
+| `done` | All files (implementation permitted) |
+| `specs_hardened` | `specs/` artifacts ONLY — NO source code, NO config, NO tests, NO Docker files |
+| `specs_scoped` | `specs/` artifacts ONLY |
+| `docs_updated` | `specs/` and `docs/` ONLY |
+| `validated` | `specs/` artifacts ONLY |
+
+**If the ceiling is below `done`:** REFUSE to edit source code. Return `route_required` with `reason: "mode ceiling does not permit implementation"`. Do NOT rationalize that the change is "small enough" or "trivial" — the ceiling is absolute regardless of change size.
+
+**If no `state.json` exists or `workflowMode` is absent:** Treat as unrestricted (ceiling `done`). This rule only activates when a workflow mode is explicitly set.
+
+**Mechanical enforcement:** `state-transition-guard.sh` Check 3B detects source code modifications via `git diff` and blocks promotion when the mode ceiling forbids implementation. This is a real script gate (exit code 1 = blocked), not prose-only.
+
 ## Operating Baseline
 
 Use [operating-baseline.md](operating-baseline.md) as the source for:
