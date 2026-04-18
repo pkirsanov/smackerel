@@ -22,6 +22,7 @@ type Generator struct {
 	NATS             *smacknats.Client
 	Registry         *connector.Registry
 	KnowledgeEnabled bool
+	ExpenseSection   *ExpenseDigestSection
 }
 
 // NewGenerator creates a new digest generator.
@@ -37,6 +38,7 @@ type DigestContext struct {
 	HotTopics          []TopicBrief                  `json:"hot_topics"`
 	Hospitality        *HospitalityDigestContext     `json:"hospitality,omitempty"`
 	KnowledgeHealth    *KnowledgeHealthDigestContext `json:"knowledge_health,omitempty"`
+	Expenses           *ExpenseDigestContext          `json:"expenses,omitempty"`
 }
 
 // KnowledgeHealthDigestContext holds critical knowledge lint findings for the digest.
@@ -130,10 +132,21 @@ func (g *Generator) Generate(ctx context.Context) (*DigestContext, error) {
 		}
 	}
 
+	// Assemble expense digest context if expense section producer is configured
+	if g.ExpenseSection != nil {
+		expCtx, expErr := g.ExpenseSection.Assemble(ctx)
+		if expErr != nil {
+			slog.Warn("failed to assemble expense digest context", "error", expErr)
+		} else if !expCtx.IsEmpty() {
+			digestCtx.Expenses = expCtx
+		}
+	}
+
 	// Check for quiet day
 	hasHospitality := digestCtx.Hospitality != nil
 	hasKnowledgeHealth := digestCtx.KnowledgeHealth != nil
-	if len(actionItems) == 0 && len(overnight) == 0 && len(hotTopics) == 0 && !hasHospitality && !hasKnowledgeHealth {
+	hasExpenses := digestCtx.Expenses != nil
+	if len(actionItems) == 0 && len(overnight) == 0 && len(hotTopics) == 0 && !hasHospitality && !hasKnowledgeHealth && !hasExpenses {
 		return digestCtx, g.storeQuietDigest(ctx, today)
 	}
 

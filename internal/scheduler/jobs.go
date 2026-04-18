@@ -465,3 +465,23 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 
 	slog.Info("alert delivery sweep complete", "delivered", delivered, "failed", failed, "total", len(alerts))
 }
+
+func (s *Scheduler) runMealPlanAutoCompleteJob() {
+	if !s.muMealPlanComplete.TryLock() {
+		slog.Warn("skipping overlapping job", "group", "meal-plan-auto-complete")
+		return
+	}
+	defer s.muMealPlanComplete.Unlock()
+
+	ctx, cancel := context.WithTimeout(s.baseCtx, 60*time.Second)
+	defer cancel()
+
+	n, err := s.mealPlanSvc.AutoCompletePastPlans(ctx)
+	if err != nil {
+		slog.Error("meal plan auto-complete failed", "error", err)
+		return
+	}
+	if n > 0 {
+		slog.Info("meal plan auto-complete", "plans_completed", n)
+	}
+}

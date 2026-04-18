@@ -17,12 +17,14 @@ import (
 
 // mockArtifactStore implements ArtifactQuerier for testing.
 type mockArtifactStore struct {
-	recentItems []db.RecentArtifact
-	recentErr   error
-	artifact    *db.ArtifactDetail
-	artifactErr error
-	exportRes   *db.ExportResult
-	exportErr   error
+	recentItems       []db.RecentArtifact
+	recentErr         error
+	artifact          *db.ArtifactDetail
+	artifactErr       error
+	artifactWithDom   *db.ArtifactWithDomain
+	artifactWithDomErr error
+	exportRes         *db.ExportResult
+	exportErr         error
 }
 
 func (m *mockArtifactStore) RecentArtifacts(_ context.Context, limit int) ([]db.RecentArtifact, error) {
@@ -37,6 +39,13 @@ func (m *mockArtifactStore) GetArtifact(_ context.Context, id string) (*db.Artif
 		return nil, m.artifactErr
 	}
 	return m.artifact, nil
+}
+
+func (m *mockArtifactStore) GetArtifactWithDomain(_ context.Context, id string) (*db.ArtifactWithDomain, error) {
+	if m.artifactWithDomErr != nil {
+		return nil, m.artifactWithDomErr
+	}
+	return m.artifactWithDom, nil
 }
 
 func (m *mockArtifactStore) ExportArtifacts(_ context.Context, cursor time.Time, limit int) (*db.ExportResult, error) {

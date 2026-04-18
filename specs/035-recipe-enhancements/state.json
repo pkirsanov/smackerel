@@ -1,0 +1,81 @@
+{
+  "version": 3,
+  "featureDir": "specs/035-recipe-enhancements",
+  "featureName": "Recipe Enhancements — Serving Scaler & Cook Mode",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "currentScope": null,
+    "runStartedAt": "2026-04-18T00:00:00Z",
+    "completedPhaseClaims": ["analyze", "design", "plan"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      { "scope": 1, "name": "Config & Shared Recipe Package", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 2, "name": "Serving Scaler Core", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 3, "name": "Serving Scaler Telegram & API", "status": "not_started", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 4, "name": "Cook Mode Session Store", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 5, "name": "Cook Mode Navigation", "status": "not_started", "dependsOn": [3, 4], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 6, "name": "Cook Mode Edge Cases", "status": "not_started", "dependsOn": [4, 5], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
+    ],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-18T00:00:00Z",
+      "runCompletedAt": "2026-04-18T00:00:00Z",
+      "summary": "Created spec.md: 3 actors, 5 use cases, 20 business scenarios, competitive analysis, 2 IPs."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-18T00:00:00Z",
+      "runCompletedAt": "2026-04-18T00:00:00Z",
+      "summary": "Created design.md: architecture, scaler core, cook mode session store, config, testing strategy."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-18T00:00:00Z",
+      "runCompletedAt": "2026-04-18T00:00:00Z",
+      "summary": "Replaced scopes.md: 6 scopes, 50 Gherkin scenarios (SCN-035-001 to SCN-035-050). Split into config+shared package, scaler core, scaler Telegram+API, cook session store, cook navigation, cook edge cases."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-18T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  },
+  "notes": "Planning redo complete. 6 scopes, 50 scenarios. Config+shared package extracted as scope 01. Ready for implementation."
+}
