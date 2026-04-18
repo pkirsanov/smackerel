@@ -253,6 +253,81 @@ artifact annotation summary (materialized/cached):
 
 ---
 
+## UI Wireframes
+
+### Screen: Telegram Annotation Confirmation
+**Actor:** User | **Channel:** Telegram | **Status:** New
+
+```
+┌─────────────────────────────────────────────────┐
+│  User replies: "4/5 made it #weeknight great"   │
+│                                                   │
+│  ↓ Bot response:                                 │
+│                                                   │
+│  ✅ Annotated: Pasta Carbonara                   │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━                 │
+│  ⭐ Rating: ★★★★☆ (4/5)                        │
+│  🏷 Tags: #weeknight                            │
+│  🍳 Interaction: Made it!                        │
+│  📝 Note: "great"                                │
+│                                                   │
+│  Overall: ⭐ 4.0 avg | Made 3× | Tagged: 2      │
+└─────────────────────────────────────────────────┘
+```
+
+**Interactions:**
+- Reply-to any artifact message → parsed as annotation
+- `/rate pasta carbonara 4/5` → search + disambiguate + annotate
+
+**States:**
+- Ambiguous artifact: "Did you mean: 1) Pasta Carbonara 2) Pasta Primavera?"
+- Parse failure: "I couldn't parse a rating or interaction. Try: '4/5 made it'"
+- Already rated: "Updated rating from 3 → 4. New average: 4.0"
+
+### Screen: Telegram /rate Command with Disambiguation
+**Actor:** User | **Channel:** Telegram | **Status:** New
+
+```
+┌─────────────────────────────────────────────────┐
+│  User: /rate pasta 5/5                           │
+│                                                   │
+│  ↓ Bot response:                                 │
+│                                                   │
+│  Multiple matches for "pasta":                   │
+│                                                   │
+│  1️⃣ Pasta Carbonara (allrecipes.com)             │
+│     ⭐ 4.0 | Made 3× | 2 days ago               │
+│                                                   │
+│  2️⃣ Pasta Primavera (epicurious.com)             │
+│     ⭐ — | Never made | 1 week ago               │
+│                                                   │
+│  Reply with a number to select.                  │
+└─────────────────────────────────────────────────┘
+```
+
+### Screen: API Annotation Summary Response
+**Actor:** Client | **Channel:** REST API | **Status:** New
+
+```json
+GET /api/artifacts/art-001/annotations/summary
+
+{
+  "artifact_id": "art-001",
+  "current_rating": 4,
+  "average_rating": 4.0,
+  "rating_count": 3,
+  "times_used": 2,
+  "last_used": "2026-04-15T18:30:00Z",
+  "tags": ["weeknight", "quick", "italian"],
+  "notes_count": 1
+}
+```
+
+**Responsive:** N/A (API-only)
+**Accessibility:** JSON responses include semantic field names
+
+---
+
 ## Improvement Proposals
 
 ### IP-001: Mood/Context Tagging ⭐ Competitive Edge

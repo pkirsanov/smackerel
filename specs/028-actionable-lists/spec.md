@@ -287,6 +287,130 @@ aggregation_rules (config, not DB):
 
 ---
 
+## UI Wireframes
+
+### Screen: Telegram Shopping List
+**Actor:** User | **Channel:** Telegram | **Status:** New
+
+```
+┌─────────────────────────────────────────────────┐
+│  🛒 Weekend Cooking (15 items)                   │
+│  From: Carbonara, Tikka Masala, Lemon Chicken   │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━           │
+│                                                   │
+│  🥬 PRODUCE                                      │
+│  [ ] 5 cloves garlic                   [✓][⊘]  │
+│  [ ] 2 lemons                          [✓][⊘]  │
+│  [ ] 1 bunch cilantro                  [✓][⊘]  │
+│                                                   │
+│  🥩 PROTEINS                                     │
+│  [ ] 1 kg chicken breast               [✓][⊘]  │
+│  [ ] 200g guanciale                    [✓][⊘]  │
+│                                                   │
+│  🧀 DAIRY                                        │
+│  [ ] 100g pecorino romano              [✓][⊘]  │
+│  [ ] 200ml yogurt                      [✓][⊘]  │
+│                                                   │
+│  🧂 SPICES                                       │
+│  [ ] garam masala                      [✓][⊘]  │
+│  [ ] black pepper                      [✓][⊘]  │
+│                                                   │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━           │
+│  Progress: 0/15 | [+ Add Item] [✅ Done]        │
+└─────────────────────────────────────────────────┘
+```
+
+**Interactions:**
+- [✓] button → inline keyboard callback: marks item done (strikethrough)
+- [⊘] button → marks skipped
+- [+ Add Item] → prompts for manual item text
+- [✅ Done] → completes list, triggers annotation feedback (spec 027)
+
+**States:**
+- Item checked: `[✓] ~~5 cloves garlic~~`
+- Item skipped: `[⊘] 1 bunch cilantro (skipped)`
+- Item substituted: `[↔] yogurt → sour cream`
+- All items done: "🎉 List complete! 15/15 items. Mark recipes as made?"
+
+### Screen: Telegram List Summary
+**Actor:** User | **Channel:** Telegram | **Status:** New
+
+```
+┌─────────────────────────────────────────────────┐
+│  User: /list                                     │
+│                                                   │
+│  📋 Your Active Lists:                           │
+│                                                   │
+│  1. 🛒 Weekend Cooking (3/15 done)              │
+│     Created: 2h ago | From: 3 recipes            │
+│                                                   │
+│  2. 📚 Reading Queue (0/8 done)                  │
+│     Created: 1 day ago | From: 8 starred articles│
+│                                                   │
+│  Reply with a number to open.                    │
+└─────────────────────────────────────────────────┘
+```
+
+### Screen: Mobile Shopping List (PWA)
+**Actor:** User | **Channel:** PWA (spec 033) | **Status:** New
+
+```
+┌──────────────────────────┐
+│  ← 🛒 Weekend Cooking    │
+│  3/15 done               │
+├──────────────────────────┤
+│                           │
+│  🥬 PRODUCE              │
+│  ☐ 5 cloves garlic       │
+│  ☑ 2 lemons    ──────── │
+│  ☐ 1 bunch cilantro      │
+│                           │
+│  🥩 PROTEINS             │
+│  ☐ 1 kg chicken breast   │
+│  ☑ 200g guanciale ───── │
+│  ☐ 100g pecorino romano  │
+│                           │
+│  ─────────────────────── │
+│  [+ Add Item]             │
+│                           │
+├──────────────────────────┤
+│  🏠  🔍  📋  ⚙️          │
+└──────────────────────────┘
+```
+
+**Interactions:**
+- Tap item → toggle checked (instant, syncs to server)
+- Swipe left → skip/substitute options
+- [+ Add Item] → inline text input
+
+**Responsive:**
+- Mobile: Full-width single column (primary use case: grocery store)
+- Tablet: Two-column (categories side by side)
+
+**Accessibility:**
+- Each item is a checkbox with label
+- Category headings are semantic `<h3>` with emoji as decorative
+- Large tap targets (48px minimum)
+
+### User Flow: Generate Shopping List
+
+```mermaid
+stateDiagram-v2
+    [*] --> SelectRecipes: /list shopping from #tag
+    SelectRecipes --> ResolveArtifacts: Find tagged recipes
+    ResolveArtifacts --> ExtractIngredients: Load domain_data
+    ExtractIngredients --> Aggregate: Merge + normalize
+    Aggregate --> ReviewDraft: Show draft list
+    ReviewDraft --> EditList: User adds/removes items
+    EditList --> ActivateList: User confirms
+    ActivateList --> Shopping: Use at store
+    Shopping --> Complete: All items checked
+    Complete --> AnnotateRecipes: Auto-create "made_it"
+    AnnotateRecipes --> [*]
+```
+
+---
+
 ## Improvement Proposals
 
 ### IP-001: Smart Pantry Awareness ⭐ Competitive Edge
