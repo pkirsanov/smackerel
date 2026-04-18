@@ -387,6 +387,7 @@ func TestChaos_ContainsURL_OnlyScheme(t *testing.T) {
 func TestSecurity_BotHealthURL_SetAtInit(t *testing.T) {
 	// SEC-02: healthURL must be a struct field, not string-manipulated at call time
 	bot := &Bot{
+		baseURL:    "http://localhost:8080",
 		captureURL: "http://localhost:8080/api/capture",
 		healthURL:  "http://localhost:8080/api/health",
 	}
@@ -478,6 +479,7 @@ func TestSecurity_OpenAccessMode_StillAuthorizes(t *testing.T) {
 func TestSecurity_InternalAPIURLs_NotUserControlled(t *testing.T) {
 	// Verify that internal API URLs are only set from config, never from user input
 	bot := &Bot{
+		baseURL:    "http://core:8080",
 		captureURL: "http://core:8080/api/capture",
 		searchURL:  "http://core:8080/api/search",
 		digestURL:  "http://core:8080/api/digest",

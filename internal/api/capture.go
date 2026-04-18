@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
 
@@ -181,6 +182,8 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 		Topics:       result.Topics,
 		ProcessingMs: result.ProcessingMs,
 	}
+
+	metrics.CaptureTotal.WithLabelValues("api").Inc()
 
 	writeJSON(w, http.StatusOK, resp)
 }

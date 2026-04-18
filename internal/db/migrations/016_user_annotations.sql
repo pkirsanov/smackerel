@@ -24,6 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_annotations_artifact ON annotations(artifact_id);
 CREATE INDEX IF NOT EXISTS idx_annotations_type ON annotations(annotation_type);
 CREATE INDEX IF NOT EXISTS idx_annotations_created ON annotations(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_annotations_tag ON annotations(tag) WHERE tag IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_annotations_rating ON annotations(rating) WHERE rating IS NOT NULL;
 
 -- Constraint: rating must be 1-5 when present
 ALTER TABLE annotations ADD CONSTRAINT chk_rating_range
@@ -47,7 +48,13 @@ SELECT
     COUNT(CASE WHEN a2.annotation_type = 'rating' THEN 1 END)::INTEGER AS rating_count,
     COUNT(CASE WHEN a2.annotation_type = 'interaction' THEN 1 END)::INTEGER AS times_used,
     MAX(CASE WHEN a2.annotation_type = 'interaction' THEN a2.created_at END) AS last_used,
-    ARRAY_AGG(DISTINCT a2.tag) FILTER (WHERE a2.annotation_type = 'tag_add' AND a2.tag IS NOT NULL) AS tags,
+    ARRAY(
+        SELECT DISTINCT t.tag FROM annotations t
+        WHERE t.artifact_id = a.artifact_id AND t.annotation_type = 'tag_add' AND t.tag IS NOT NULL
+        EXCEPT
+        SELECT DISTINCT t.tag FROM annotations t
+        WHERE t.artifact_id = a.artifact_id AND t.annotation_type = 'tag_remove' AND t.tag IS NOT NULL
+    ) AS tags,
     COUNT(CASE WHEN a2.annotation_type = 'note' THEN 1 END)::INTEGER AS notes_count
 FROM (SELECT DISTINCT artifact_id FROM annotations) a
 LEFT JOIN annotations a2 ON a2.artifact_id = a.artifact_id

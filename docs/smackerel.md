@@ -170,8 +170,8 @@ graph TB
         DISC_CAP[Discord Bot - discordgo]
         FWD[Email Forward - go-imap]
         WEB_CAP[Smackerel Web UI]
-        SHARE[Mobile Share Sheet 🔜]
-        BEXT[Browser Extension 🔜]
+        SHARE[Mobile Share Sheet - PWA]
+        BEXT[Browser Extension - Chrome/Firefox]
         SLACK_CAP[Slack Bot - slack-go 🔜]
         VOICE[Voice Input 🔜]
     end

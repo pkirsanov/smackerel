@@ -37,6 +37,10 @@ type Config struct {
 	// ML sidecar health cache TTL in seconds (SST-compliant)
 	MLHealthCacheTTLS int
 
+	// ML sidecar readiness timeout in seconds (SST-compliant)
+	// Core blocks at startup until ML sidecar is healthy or timeout elapses.
+	MLReadinessTimeoutS int
+
 	// Optional connector path fields (SST-compliant — read from env, sourced from smackerel.yaml)
 	BookmarksImportDir    string
 	BookmarksEnabled      bool
@@ -45,9 +49,10 @@ type Config struct {
 	MapsImportDir         string
 
 	// Telegram assembly config (SST-compliant — from smackerel.yaml via config generate)
-	TelegramAssemblyWindowSeconds   int
-	TelegramAssemblyMaxMessages     int
-	TelegramMediaGroupWindowSeconds int
+	TelegramAssemblyWindowSeconds        int
+	TelegramAssemblyMaxMessages          int
+	TelegramMediaGroupWindowSeconds      int
+	TelegramDisambiguationTimeoutSeconds int
 
 	// Knowledge layer config (SST-compliant — from smackerel.yaml via config generate)
 	KnowledgeEnabled                        bool
@@ -63,6 +68,10 @@ type Config struct {
 	KnowledgePromptContractLintAudit        string
 	KnowledgePromptContractQueryAugment     string
 	KnowledgePromptContractDigestAssembly   string
+
+	// Observability config (SST-compliant — from smackerel.yaml via config generate)
+	OTELEnabled          bool
+	OTELExporterEndpoint string
 }
 
 // Load reads configuration from environment variables.
@@ -105,6 +114,7 @@ func Load() (*Config, error) {
 	dbMinConnsStr := os.Getenv("DB_MIN_CONNS")
 	shutdownTimeoutStr := os.Getenv("SHUTDOWN_TIMEOUT_S")
 	mlHealthCacheTTLStr := os.Getenv("ML_HEALTH_CACHE_TTL_S")
+	mlReadinessTimeoutStr := os.Getenv("ML_READINESS_TIMEOUT_S")
 
 	var parseErrors []string
 
@@ -140,6 +150,14 @@ func Load() (*Config, error) {
 		cfg.MLHealthCacheTTLS = v
 	}
 
+	if mlReadinessTimeoutStr == "" {
+		parseErrors = append(parseErrors, "ML_READINESS_TIMEOUT_S")
+	} else if v, err := strconv.Atoi(mlReadinessTimeoutStr); err != nil || v < 0 {
+		parseErrors = append(parseErrors, "ML_READINESS_TIMEOUT_S (must be a non-negative integer)")
+	} else {
+		cfg.MLReadinessTimeoutS = v
+	}
+
 	if len(parseErrors) > 0 {
 		return nil, fmt.Errorf("missing or invalid required configuration: %s", strings.Join(parseErrors, ", "))
 	}
@@ -169,6 +187,13 @@ func Load() (*Config, error) {
 			cfg.TelegramMediaGroupWindowSeconds = n
 		} else {
 			return nil, fmt.Errorf("TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS must be an integer in range [2, 10] (got %q)", v)
+		}
+	}
+	if v := os.Getenv("TELEGRAM_DISAMBIGUATION_TIMEOUT_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 30 && n <= 600 {
+			cfg.TelegramDisambiguationTimeoutSeconds = n
+		} else {
+			return nil, fmt.Errorf("TELEGRAM_DISAMBIGUATION_TIMEOUT_SECONDS must be an integer in range [30, 600] (got %q)", v)
 		}
 	}
 
@@ -272,6 +297,10 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("missing or invalid required knowledge configuration: %s", strings.Join(knowledgeErrors, ", "))
 		}
 	}
+
+	// Parse observability config (SST-compliant — opt-in, disabled by default)
+	cfg.OTELEnabled = os.Getenv("OTEL_ENABLED") == "true"
+	cfg.OTELExporterEndpoint = os.Getenv("OTEL_EXPORTER_ENDPOINT")
 
 	return cfg, nil
 }

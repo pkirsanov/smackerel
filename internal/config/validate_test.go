@@ -349,6 +349,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("DB_MIN_CONNS", "2")
 	t.Setenv("SHUTDOWN_TIMEOUT_S", "25")
 	t.Setenv("ML_HEALTH_CACHE_TTL_S", "30")
+	t.Setenv("ML_READINESS_TIMEOUT_S", "60")
 	t.Setenv("KNOWLEDGE_ENABLED", "true")
 	t.Setenv("KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS", "30")
 	t.Setenv("KNOWLEDGE_LINT_CRON", "0 3 * * *")

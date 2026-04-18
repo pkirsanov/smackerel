@@ -14,10 +14,20 @@ COPY . .
 
 ARG VERSION=dev
 ARG COMMIT_HASH=unknown
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH}" -o /bin/smackerel-core ./cmd/core
+ARG BUILD_TIME=unknown
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}" -o /bin/smackerel-core ./cmd/core
 
 # --- Runtime stage ---
 FROM alpine:3.20
+
+ARG VERSION=dev
+ARG COMMIT_HASH=unknown
+ARG BUILD_TIME=unknown
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${COMMIT_HASH}"
+LABEL org.opencontainers.image.created="${BUILD_TIME}"
+LABEL org.opencontainers.image.title="smackerel-core"
+LABEL org.opencontainers.image.source="https://github.com/smackerel/smackerel"
 
 RUN apk add --no-cache ca-certificates tzdata
 

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <title>Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/pwa/icon.svg">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  <h1>Smackerel</h1>
+  <p class="subtitle">Capture anything, find everything</p>
+
+  <div class="card">
+    <h2>Share Target Ready</h2>
+    <p>Install this app to your home screen, then use your device's Share button to send URLs and text to Smackerel.</p>
+  </div>
+
+  <div class="card" id="install-card" style="display:none">
+    <button id="install-btn" style="
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+      width: 100%;
+    ">Install Smackerel</button>
+  </div>
+
+  <div class="card">
+    <h2>How it works</h2>
+    <ol style="padding-left: 1.25rem; line-height: 1.8; color: var(--text-muted);">
+      <li>Install this PWA to your home screen</li>
+      <li>Find something interesting in any app</li>
+      <li>Tap Share → Smackerel</li>
+      <li>Done — it's captured and searchable</li>
+    </ol>
+  </div>
+
+  <p class="footer">Smackerel PWA</p>
+
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/pwa/sw.js', { scope: '/pwa/' })
+        .then(function(reg) { console.log('SW registered:', reg.scope); })
+        .catch(function(err) { console.error('SW registration failed:', err); });
+    }
+
+    // Handle install prompt
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('install-card').style.display = 'block';
+    });
+
+    var installBtn = document.getElementById('install-btn');
+    if (installBtn) {
+      installBtn.addEventListener('click', function() {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function(result) {
+            deferredPrompt = null;
+            document.getElementById('install-card').style.display = 'none';
+          });
+        }
+      });
+    }
+  </script>
+</body>
+</html>

@@ -76,10 +76,46 @@ Connectors (passive ingestion):
   Twitter/X · Weather · Gov Alerts · Financial Markets
 ```
 
+## System Requirements
+
+### Minimum (without local LLM)
+
+| Resource | Requirement |
+|----------|-------------|
+| **CPU** | 2 cores (x86_64 or ARM64) |
+| **RAM** | 8 GB |
+| **Disk** | 10 GB (Docker images + PostgreSQL data) |
+| **OS** | Linux, macOS, or Windows with WSL2 |
+| **Docker** | Docker Engine 24+ with Docker Compose v2 |
+
+### Recommended (with Ollama local LLM)
+
+| Resource | Requirement |
+|----------|-------------|
+| **CPU** | 4+ cores |
+| **RAM** | 16 GB |
+| **Disk** | 30 GB (includes Ollama model weights) |
+| **GPU** | Optional — Ollama uses GPU acceleration if available |
+
+### Container Memory Limits (from docker-compose.yml)
+
+| Container | Memory Limit |
+|-----------|-------------|
+| `postgres` (PostgreSQL 16 + pgvector) | 512 MB |
+| `nats` (NATS JetStream) | 256 MB |
+| `smackerel-core` (Go API) | 512 MB |
+| `smackerel-ml` (Python ML sidecar) | 2 GB |
+| `ollama` (optional, local LLM) | 8 GB |
+| **Total without Ollama** | **~3.3 GB** |
+| **Total with Ollama** | **~11.3 GB** |
+
+The ML sidecar has a 120-second startup period (`start_period`) for model loading. Expect first requests to take longer while models warm up.
+
 ## Docs
 
 - [Design Document](docs/smackerel.md)
 - [Development Guide](docs/Development.md)
+- [Operations Runbook](docs/Operations.md)
 - [Testing Guide](docs/Testing.md)
 - [Docker Best Practices](docs/Docker_Best_Practices.md)
 - [Connector Development](docs/Connector_Development.md)
@@ -581,6 +617,15 @@ All API endpoints except `/api/health` require a Bearer token in the `Authorizat
 | `GET` | `/api/knowledge/lint` | Yes | Knowledge quality lint findings |
 | `GET` | `/api/knowledge/stats` | Yes | Knowledge layer statistics |
 | `GET` | `/api/auth/status` | Yes | OAuth provider token status |
+| `POST` | `/api/artifacts/{id}/annotations` | Yes | Create annotation (freeform text parsed into ratings, tags, notes) |
+| `GET` | `/api/artifacts/{id}/annotations` | Yes | List annotations for an artifact |
+| `GET` | `/api/artifacts/{id}/annotations/summary` | Yes | Annotation summary (materialized view) |
+| `POST` | `/api/lists` | Yes | Create an actionable list (shopping, reading, comparison) |
+| `GET` | `/api/lists` | Yes | List all lists (optional `?status=`) |
+| `GET` | `/api/lists/{id}` | Yes | Get list detail with items |
+| `POST` | `/api/lists/{id}/items` | Yes | Add item to a list |
+| `POST` | `/api/lists/{id}/items/{itemId}/check` | Yes | Mark item done/skipped/substituted |
+| `POST` | `/api/lists/{id}/complete` | Yes | Complete a list |
 | `GET` | `/auth/{provider}/start` | No | Start OAuth flow (browser redirect) |
 | `GET` | `/auth/{provider}/callback` | No | OAuth callback handler |
 
@@ -714,6 +759,22 @@ Smackerel runs background intelligence jobs on a schedule:
 
 All jobs have timeouts, nil-guards, and graceful failure handling. Digest delivery retries on the next cycle if the ML sidecar was slow.
 
+## Observability
+
+Prometheus metrics are exposed at `http://127.0.0.1:40001/metrics` (unauthenticated). Metrics include:
+
+| Metric | Type | Labels | Purpose |
+|--------|------|--------|---------|
+| `smackerel_artifacts_ingested_total` | Counter | `source`, `type` | Artifact ingestion tracking |
+| `smackerel_capture_total` | Counter | `source` | Capture request counting |
+| `smackerel_search_latency_seconds` | Histogram | `mode` | Search performance |
+| `smackerel_domain_extraction_total` | Counter | `schema`, `status` | Domain extraction tracking |
+| `smackerel_connector_sync_total` | Counter | `connector`, `status` | Connector sync health |
+| `smackerel_nats_deadletter_total` | Counter | `stream` | Dead-letter monitoring |
+| `smackerel_db_connections_active` | Gauge | — | Database connection pool |
+
+W3C `traceparent` headers are propagated through NATS messages for distributed trace correlation.
+
 ## Security
 
 | Protection | Implementation |
@@ -752,11 +813,19 @@ Open **http://127.0.0.1:40001** in a browser. Pages:
 - **/status** — System status (DB, NATS, ML sidecar, knowledge health)
 - **/settings** — Connector status and configuration
 
+### PWA (Mobile Capture)
+
+Install Smackerel as a PWA from **http://127.0.0.1:40001/pwa/** on any mobile device. The PWA registers as an OS share target — share any URL, text, or note from any app and it is captured to Smackerel automatically.
+
+### Browser Extension (Desktop Capture)
+
+A Chrome (MV3) and Firefox extension is included under `web/extension/`. Load it as an unpacked extension, configure the server URL and auth token in the popup, then capture pages via the toolbar icon or right-click context menu.
+
 The web search uses the same semantic search engine as the API (pgvector + embedding + LLM re-ranking). Dark/light theme follows OS preference. Monochrome design — no accent colors, no emoji.
 
 ## Runtime Standards
 
-Smackerel has a complete runtime with a repo CLI, YAML-backed config generation, a Go core (105 source files, 104 test files), a Python ML sidecar (14 files), and Docker Compose orchestration. The operational surface is standardized:
+Smackerel has a complete runtime with a repo CLI, YAML-backed config generation, a Go core (130 source files, 131 test files), a Python ML sidecar (16 source files, 18 test files), and Docker Compose orchestration. The operational surface is standardized:
 
 - Docker-only runtime and test execution
 - One repo CLI for build, test, config generation, stack lifecycle, logs, and cleanup: `./smackerel.sh`

@@ -18,6 +18,7 @@ import (
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/domain"
 	"github.com/smackerel/smackerel/internal/knowledge"
+	"github.com/smackerel/smackerel/internal/metrics"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/stringutil"
 )
@@ -233,6 +234,9 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 		return
 	}
 
+	// Record ingestion metric
+	metrics.ArtifactsIngested.WithLabelValues("pipeline", payload.Result.ArtifactType).Inc()
+
 	// Best-effort knowledge synthesis — fail-open, never blocks ingestion (SCN-025-06)
 	if rs.KnowledgeEnabled && payload.Success {
 		if err := rs.publishSynthesisRequest(ctx, &payload); err != nil {
@@ -250,6 +254,9 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 				"artifact_id", payload.ArtifactID,
 				"error", err,
 			)
+			metrics.DomainExtraction.WithLabelValues("unknown", "error").Inc()
+		} else {
+			metrics.DomainExtraction.WithLabelValues("unknown", "published").Inc()
 		}
 	}
 
@@ -359,6 +366,7 @@ func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstre
 		"subject", dlSubject,
 		"original_subject", originalSubject,
 	)
+	metrics.NATSDeadLetter.WithLabelValues(originalStream).Inc()
 	return nil
 }
 
