@@ -166,9 +166,7 @@ case "$COMMAND" in
       integration)
         require_docker
         smackerel_generate_config test >/dev/null
-        local env_file
         env_file="$(smackerel_require_env_file test)"
-        local pg_host_port nats_host_port auth_token pg_user pg_pass pg_db
         pg_host_port="$(smackerel_env_value "$env_file" "POSTGRES_HOST_PORT")"
         nats_host_port="$(smackerel_env_value "$env_file" "NATS_CLIENT_HOST_PORT")"
         auth_token="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
