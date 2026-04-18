@@ -1,0 +1,54 @@
+{
+  "version": 3,
+  "featureDir": "specs/033-mobile-capture",
+  "featureName": "Mobile & Browser Capture Surfaces",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": null,
+    "currentScope": null,
+    "runStartedAt": null,
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {"scope": 1, "name": "PWA Manifest & Share Target", "status": "Not Started", "dependsOn": []},
+      {"scope": 2, "name": "PWA Share Handler & Capture Flow", "status": "Not Started", "dependsOn": [1]},
+      {"scope": 3, "name": "Browser Extension Core (Chrome Manifest V3)", "status": "Not Started", "dependsOn": []},
+      {"scope": 4, "name": "Extension Context Menu & Toolbar Capture", "status": "Not Started", "dependsOn": [3]},
+      {"scope": 5, "name": "Offline Queue & Sync", "status": "Not Started", "dependsOn": [2, 4]},
+      {"scope": 6, "name": "Firefox Extension Compatibility", "status": "Not Started", "dependsOn": [3]},
+      {"scope": 7, "name": "Extension Setup & Validation UI", "status": "Not Started", "dependsOn": [3]}
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-18T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  }
+}
