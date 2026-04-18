@@ -8,16 +8,16 @@ Committed:
 
 - `README.md`
 - `docs/smackerel.md`
-- `specs/` (001-025, all with spec, design, scopes, reports)
+- `specs/` (001-033, all with spec, design, scopes, reports)
 - `.github/`
 - `.specify/memory/`
-- Go core runtime sources under `cmd/` and `internal/` (105 source files, 104 test files)
-- Python ML sidecar sources under `ml/` (14 files, 9 test files)
+- Go core runtime sources under `cmd/` and `internal/` (130 source files, 131 test files)
+- Python ML sidecar sources under `ml/` (16 source files, 18 test files)
 - `docker-compose.yml` with health checks, resource limits, restart policies, NATS auth
 - `config/smackerel.yaml`
 - Generated environment files under `config/generated/` via `./smackerel.sh config generate`
 - `./smackerel.sh`
-- E2E test scripts under `tests/e2e/` (59 scripts)
+- E2E test scripts under `tests/e2e/` (70 scripts)
 - Stress test scripts under `tests/stress/` (2 scripts)
 
 Implemented runtime capabilities:
@@ -31,11 +31,17 @@ Implemented runtime capabilities:
 - 14 passive connectors (Gmail API, Google Calendar API, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps, Hospitable STR, Discord, Twitter/X archive, Weather via Open-Meteo, Government Alerts via USGS, Financial Markets via Finnhub/CoinGecko)
 - Intelligence engine (synthesis at 2AM, momentum hourly, resurfacing at 8AM, overdue alerts)
 - Knowledge synthesis layer (concept pages, entity profiles, cross-source connections, lint auditing, prompt contract validation)
+- Domain extraction pipeline (recipe and product schemas) with NATS-backed async processing and Prometheus metrics
+- User annotations (freeform ratings, tags, notes, interactions) with Telegram reply-based annotation and materialized summaries
+- Actionable lists (shopping, reading, product comparison) with domain-aware aggregation and completion tracking
+- Observability (Prometheus metrics for ingestion, search, connector sync, domain extraction, NATS dead-letter; W3C trace propagation via NATS headers)
+- PWA share target for mobile capture and browser extension (Chrome MV3 / Firefox) for desktop capture
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)
-- Database migrations (14 SQL files)
-- NATS JetStream with token authentication (5 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, SYNTHESIS)
+- Database migrations (17 SQL files)
+- NATS JetStream with token authentication (11 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
+- CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
 
 Do not bypass `./smackerel.sh` with ad-hoc `go`, `python`, `pytest`, or `docker compose` commands as the normal repo workflow.
 
@@ -185,3 +191,102 @@ These docs are already the operational source of truth for architecture and gove
 - `docs/Docker_Best_Practices.md` for Docker lifecycle, cleanup, and freshness rules
 
 Any runtime change that affects command surfaces, topology, storage, or test behavior must update the relevant docs in the same change set.
+
+## Go Packages (`internal/`)
+
+| Package | Purpose |
+|---------|---------|
+| `internal/annotation/` | User annotation model, freeform parser (ratings, tags, interactions, notes), PostgreSQL store, materialized summary view |
+| `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists), Bearer auth, security headers, rate limiting |
+| `internal/auth/` | OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, token storage |
+| `internal/config/` | SST-compliant configuration loader — reads all env vars, validates required fields, parses numeric config, cross-validates constraints |
+| `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `bookmarks/`, `browser/`, `calendar/`, `discord/`, `financial/`, `gmail/`, `govalerts/`, `guesthost/`, `hospitable/`, `keep/`, `maps/`, `rss/`, `twitter/`, `weather/`, `youtube/` |
+| `internal/db/` | PostgreSQL connection pool wrapper, migration runner (embed.FS), artifact CRUD, export with cursor pagination, guest/property repos |
+| `internal/digest/` | Daily digest assembly (action items, overnight artifacts, hot topics, hospitality context, knowledge health), LLM generation via NATS, Telegram delivery with retry |
+| `internal/domain/` | Domain extraction schema registry — maps artifact content types to prompt contracts for structured extraction (recipes, products) |
+| `internal/extract/` | Content extraction from URLs — HTML readability, YouTube transcript fetching, media type detection, SSRF-safe HTTP client |
+| `internal/graph/` | Knowledge graph linker — 4 strategies (similarity, entity, topic, temporal), bidirectional edge creation, connection counting |
+| `internal/intelligence/` | Intelligence engine — cross-domain synthesis, expertise mapping (R-501), learning paths (R-502), subscription detection (R-504), serendipity resurfacing (R-505), content fuel (R-506), quick references (R-507), monthly reports (R-508), seasonal patterns, momentum tracking, alerts |
+| `internal/knowledge/` | Knowledge synthesis layer — concept pages, entity profiles, lint reports, cross-source connection assessment, store with trigram search, prompt contract integration |
+| `internal/list/` | Actionable list model — lists and list items, domain-aware aggregation from extracted data, completion tracking, PostgreSQL store |
+| `internal/metrics/` | Prometheus metrics (ingestion, capture, search latency, domain extraction, connector sync, NATS dead-letter counters, DB connection gauge) and W3C traceparent propagation via NATS headers |
+| `internal/nats/` | NATS JetStream client — stream/consumer creation, publish/subscribe helpers, subject constants matching `config/nats_contract.json` |
+| `internal/pipeline/` | Artifact processing pipeline — NATS subscribers for process/embed/rerank/digest/synthesis/domain-extract, result handlers, retry logic |
+| `internal/scheduler/` | Cron-based task scheduler — digest generation (configurable cron), intelligence synthesis (2AM), momentum (hourly), resurfacing (8AM), knowledge lint (configurable), alert checks |
+| `internal/stringutil/` | String utility functions — UTF-8 safe truncation, control character sanitization, text normalization |
+| `internal/telegram/` | Telegram bot — message handling (URLs, text, voice, forwards, media groups, conversations), 9 commands (/find, /concept, /person, /lint, /digest, /done, /status, /recent, /rate), annotation via reply, disambiguation flow |
+| `internal/topics/` | Topic extraction and management — topic CRUD, promotion/archival lifecycle, hot topic detection |
+| `internal/web/` | HTMX web UI — search, artifact detail, digest, topics, settings, status, knowledge dashboard (concepts, entities, lint), embedded HTML templates |
+
+## Database Migrations
+
+All migrations live in `internal/db/migrations/` and run automatically on startup via `internal/db/migrate.go` with advisory locking.
+
+| Migration | File | Purpose |
+|-----------|------|---------|
+| 001 | `001_initial_schema.sql` | Core schema: `artifacts`, `people`, `topics`, `edges`, `sync_state`, `action_items`, `digests`. Extensions: `vector`, `pg_trgm` |
+| 002 | `002_intelligence.sql` | Intelligence layer: `synthesis_insights`, `alerts`, `meeting_briefs`, `weekly_synthesis` |
+| 003 | `003_expansion.sql` | Phase 4 expansion: `trips`, `trails`, `privacy_consent`, location_geo column on artifacts |
+| 004 | `004_keep.sql` | Google Keep connector: `keep_exports`, `ocr_cache` |
+| 005 | `005_conversation_fields.sql` | Conversation assembly: `message_count`, `source_chat`, `timeline` columns on artifacts |
+| 006 | `006_processing_status.sql` | Processing pipeline: `processing_status` column on artifacts |
+| 007 | `007_oauth_tokens.sql` | OAuth2 token storage: `oauth_tokens` table |
+| 008 | `008_dedup_unique.sql` | TOCTOU race prevention: partial unique index on `content_hash` for dedup |
+| 009 | `009_maps.sql` | Google Maps Timeline: `location_clusters` table for spatial clustering |
+| 010 | `010_phase5_advanced.sql` | Phase 5 Intelligence: `subscriptions`, `learning_progress`, `search_log`, `quick_references`, `content_fuel`, `seasonal_patterns` |
+| 011 | `011_add_guests_properties.sql` | Hospitality graph: `guests` and `properties` tables for GuestHost connector |
+| 012 | `012_people_name_unique.sql` | Graph linker fix: UNIQUE constraint on `people.name` for ON CONFLICT upsert |
+| 013 | `013_phase5_stability.sql` | Stability fixes: UNIQUE indexes on `subscriptions.detected_from` and `learning_progress(topic_id, artifact_id)` |
+| 014 | `014_knowledge_layer.sql` | Knowledge synthesis layer: `knowledge_concepts`, `knowledge_entities`, `knowledge_lint_reports`, synthesis tracking columns |
+| 015 | `015_domain_extraction.sql` | Domain extraction (spec 026): `domain_data` JSONB column, extraction tracking on artifacts |
+| 016 | `016_user_annotations.sql` | User annotations (spec 027): `annotations` table, `telegram_message_artifacts` mapping, `artifact_annotation_summary` materialized view |
+| 017 | `017_actionable_lists.sql` | Actionable lists (spec 028): `lists` and `list_items` tables |
+
+## Prompt Contracts
+
+Prompt contracts live in `config/prompt_contracts/` and are mounted into the ML sidecar container at `/app/prompt_contracts`. Each contract defines the system prompt, extraction schema, and validation rules for a specific LLM task.
+
+| Contract | File | Type | Purpose |
+|----------|------|------|---------|
+| Ingest Synthesis | `ingest-synthesis-v1.yaml` | `ingest-synthesis` | Extract concepts, entities, claims, and relationships from an artifact for the knowledge layer |
+| Cross-Source Connection | `cross-source-connection-v1.yaml` | `cross-source-connection` | Assess whether artifacts from different sources sharing a concept have a genuine cross-domain connection |
+| Lint Audit | `lint-audit-v1.yaml` | `lint-audit` | Audit knowledge quality — detect contradictions, stale concepts, orphan entities |
+| Query Augment | `query-augment-v1.yaml` | `query-augment` | Augment a search query with context from concept pages and entity profiles |
+| Digest Assembly | `digest-assembly-v1.yaml` | `digest-assembly` | Assemble daily digest section from pre-synthesized knowledge layer content |
+| Recipe Extraction | `recipe-extraction-v1.yaml` | `domain-extraction` | Extract structured recipe data (ingredients, steps, nutrition) from recipe content |
+| Product Extraction | `product-extraction-v1.yaml` | `domain-extraction` | Extract structured product data (price, specs, ratings) from product pages and reviews |
+
+### Adding a New Prompt Contract
+
+To add a new domain extraction contract:
+
+1. Create `config/prompt_contracts/<domain>-extraction-v1.yaml`
+2. Required fields:
+   - `version`: Contract version identifier (e.g., `"recipe-extraction-v1"`)
+   - `type`: Must be `"domain-extraction"` for extraction contracts
+   - `description`: One-line description
+   - `content_types`: List of content types this contract handles
+   - `url_qualifiers`: URL patterns that trigger this contract
+   - `min_content_length`: Minimum content length to attempt extraction
+   - `system_prompt`: The LLM system prompt
+   - `extraction_schema`: JSON schema for the expected output
+3. Register the contract in `internal/domain/` schema registry
+4. The ML sidecar auto-discovers contracts from the mounted directory
+
+## NATS JetStream Streams
+
+All NATS subjects and streams are defined in `config/nats_contract.json`. Both Go core and Python ML sidecar have tests that verify their local constants match this contract.
+
+| Stream | Subjects Pattern | Purpose |
+|--------|-----------------|---------|
+| `ARTIFACTS` | `artifacts.>` | Artifact processing pipeline (core → ML → core) |
+| `SEARCH` | `search.>` | Embedding and re-ranking (core → ML → core) |
+| `DIGEST` | `digest.>` | Daily digest generation (core → ML → core) |
+| `KEEP` | `keep.>` | Google Keep sync and OCR (core → ML → core) |
+| `INTELLIGENCE` | `learning.>`, `content.>`, `monthly.>`, `quickref.>`, `seasonal.>` | Phase 5 intelligence features (learning classification, content analysis, monthly reports, quick references, seasonal patterns) |
+| `ALERTS` | `alerts.>` | Contextual alert notifications (core → external) |
+| `SYNTHESIS` | `synthesis.>` | Knowledge synthesis and cross-source connection assessment (core → ML → core) |
+| `DOMAIN` | `domain.>` | Domain-aware structured extraction (core → ML → core) |
+| `ANNOTATIONS` | `annotations.>` | Annotation event notifications (core internal) |
+| `LISTS` | `lists.>` | List lifecycle events (core internal) |
+| `DEADLETTER` | `deadletter.>` | Failed message storage for debugging |

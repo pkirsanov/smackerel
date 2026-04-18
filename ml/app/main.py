@@ -6,6 +6,8 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI
+from fastapi.responses import PlainTextResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from .auth import verify_auth
 from .embedder import _model
@@ -16,18 +18,24 @@ logger = logging.getLogger("smackerel-ml")
 
 def _check_required_config() -> dict[str, str]:
     """Validate required environment variables. Fail loudly if missing."""
-    required = {
-        "NATS_URL": os.getenv("NATS_URL", ""),
-        "LLM_PROVIDER": os.getenv("LLM_PROVIDER", ""),
-        "LLM_MODEL": os.getenv("LLM_MODEL", ""),
-        "OLLAMA_URL": os.getenv("OLLAMA_URL", ""),
-    }
+    keys = ["NATS_URL", "LLM_PROVIDER", "LLM_MODEL", "OLLAMA_URL"]
+    required: dict[str, str] = {}
+    missing: list[str] = []
+    for k in keys:
+        val = os.environ.get(k)
+        if not val:
+            missing.append(k)
+        else:
+            required[k] = val
 
-    llm_provider = required["LLM_PROVIDER"].lower()
+    llm_provider = required.get("LLM_PROVIDER", "").lower()
     if llm_provider != "ollama":
-        required["LLM_API_KEY"] = os.getenv("LLM_API_KEY", "")
+        val = os.environ.get("LLM_API_KEY")
+        if not val:
+            missing.append("LLM_API_KEY")
+        else:
+            required["LLM_API_KEY"] = val
 
-    missing = [k for k, v in required.items() if not v]
     if missing:
         logger.error("Missing required configuration: %s", ", ".join(missing))
         sys.exit(1)
@@ -82,6 +90,12 @@ async def health():
         "nats": "connected" if nats_connected else "disconnected",
         "model_loaded": _model is not None,
     }
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    """Prometheus metrics endpoint — unauthenticated (standard scrape pattern)."""
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 # Authenticated router — all non-health HTTP endpoints go here.

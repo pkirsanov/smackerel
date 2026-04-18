@@ -15,6 +15,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/smackerel/smackerel/internal/db"
+	"github.com/smackerel/smackerel/internal/metrics"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/stringutil"
 )
@@ -28,13 +29,17 @@ type SearchRequest struct {
 
 // SearchFilters are optional filters for search queries.
 type SearchFilters struct {
-	Type       string `json:"type,omitempty"`
-	DateFrom   string `json:"date_from,omitempty"`
-	DateTo     string `json:"date_to,omitempty"`
-	Person     string `json:"person,omitempty"`
-	Topic      string `json:"topic,omitempty"`
-	Domain     string `json:"domain,omitempty"`
-	Ingredient string `json:"ingredient,omitempty"`
+	Type           string `json:"type,omitempty"`
+	DateFrom       string `json:"date_from,omitempty"`
+	DateTo         string `json:"date_to,omitempty"`
+	Person         string `json:"person,omitempty"`
+	Topic          string `json:"topic,omitempty"`
+	Domain         string `json:"domain,omitempty"`
+	Ingredient     string `json:"ingredient,omitempty"`
+	MinRating      *int   `json:"min_rating,omitempty"`
+	MaxRating      *int   `json:"max_rating,omitempty"`
+	Tag            string `json:"tag,omitempty"`
+	HasInteraction bool   `json:"has_interaction,omitempty"`
 }
 
 // SearchResponse is the response for POST /api/search.
@@ -71,6 +76,9 @@ type SearchResult struct {
 	Topics       []string        `json:"topics"`
 	Connections  int             `json:"connections"`
 	DomainData   json.RawMessage `json:"domain_data,omitempty"`
+	Rating       *int            `json:"rating,omitempty"`
+	TimesUsed    int             `json:"times_used,omitempty"`
+	Tags         []string        `json:"tags,omitempty"`
 }
 
 // SearchEngine handles semantic search operations.
@@ -158,6 +166,9 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	elapsed := time.Since(start).Milliseconds()
 
+	// Record search latency metric
+	metrics.SearchLatency.WithLabelValues(searchMode).Observe(time.Since(start).Seconds())
+
 	resp := SearchResponse{
 		Results:         results,
 		TotalCandidates: totalCandidates,
@@ -229,6 +240,23 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 			"attributes", intent.Attributes,
 			"price_max", intent.PriceMax,
 		)
+	}
+
+	// Step 0.6: Parse annotation intent (e.g., "my top rated recipes", "things I've made")
+	if intent := parseAnnotationIntent(req.Query); intent != nil {
+		if intent.MinRating > 0 && req.Filters.MinRating == nil {
+			r := intent.MinRating
+			req.Filters.MinRating = &r
+		}
+		if intent.HasInteraction {
+			req.Filters.HasInteraction = true
+		}
+		if intent.Tag != "" && req.Filters.Tag == "" {
+			req.Filters.Tag = intent.Tag
+		}
+		if intent.Cleaned != "" {
+			req.Query = intent.Cleaned
+		}
 	}
 
 	// Temporal-only query — use time-range-filtered recency query, skip embedding
@@ -411,58 +439,80 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 
 	// Build query with optional filters
 	query := `
-		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
-		       COALESCE(topics::text, '[]'), created_at,
-		       1 - (embedding <=> $1::vector) AS similarity
-		FROM artifacts
-		WHERE embedding IS NOT NULL`
+		SELECT a.id, a.title, a.artifact_type, COALESCE(a.summary, ''), COALESCE(a.source_url, ''),
+		       COALESCE(a.topics::text, '[]'), a.created_at,
+		       1 - (a.embedding <=> $1::vector) AS similarity,
+		       aas.current_rating, aas.times_used, COALESCE(aas.tags, '{}')
+		FROM artifacts a
+		LEFT JOIN artifact_annotation_summary aas ON aas.artifact_id = a.id
+		WHERE a.embedding IS NOT NULL`
 
 	args := []any{embStr}
 	argN := 2
 
 	if req.Filters.Type != "" {
-		query += fmt.Sprintf(" AND artifact_type = $%d", argN)
+		query += fmt.Sprintf(" AND a.artifact_type = $%d", argN)
 		args = append(args, req.Filters.Type)
 		argN++
 	}
 
 	if req.Filters.DateFrom != "" {
-		query += fmt.Sprintf(" AND created_at >= $%d::timestamptz", argN)
+		query += fmt.Sprintf(" AND a.created_at >= $%d::timestamptz", argN)
 		args = append(args, req.Filters.DateFrom)
 		argN++
 	}
 
 	if req.Filters.DateTo != "" {
-		query += fmt.Sprintf(" AND created_at <= $%d::timestamptz", argN)
+		query += fmt.Sprintf(" AND a.created_at <= $%d::timestamptz", argN)
 		args = append(args, req.Filters.DateTo)
 		argN++
 	}
 
 	if req.Filters.Person != "" {
-		query += fmt.Sprintf(" AND entities->'people' ? $%d", argN)
+		query += fmt.Sprintf(" AND a.entities->'people' ? $%d", argN)
 		args = append(args, req.Filters.Person)
 		argN++
 	}
 
 	if req.Filters.Topic != "" {
-		query += fmt.Sprintf(" AND topics ? $%d", argN)
+		query += fmt.Sprintf(" AND a.topics ? $%d", argN)
 		args = append(args, req.Filters.Topic)
 		argN++
 	}
 
 	if req.Filters.Domain != "" {
-		query += fmt.Sprintf(" AND domain_data->>'domain' = $%d", argN)
+		query += fmt.Sprintf(" AND a.domain_data->>'domain' = $%d", argN)
 		args = append(args, req.Filters.Domain)
 		argN++
 	}
 
 	if req.Filters.Ingredient != "" {
-		query += fmt.Sprintf(` AND domain_data @> jsonb_build_object('ingredients', jsonb_build_array(jsonb_build_object('name', $%d)))`, argN)
+		query += fmt.Sprintf(` AND a.domain_data @> jsonb_build_object('ingredients', jsonb_build_array(jsonb_build_object('name', $%d)))`, argN)
 		args = append(args, req.Filters.Ingredient)
 		argN++
 	}
 
-	query += " ORDER BY embedding <=> $1::vector LIMIT $" + fmt.Sprintf("%d", argN)
+	// Annotation filters
+	if req.Filters.MinRating != nil {
+		query += fmt.Sprintf(" AND aas.current_rating >= $%d", argN)
+		args = append(args, *req.Filters.MinRating)
+		argN++
+	}
+	if req.Filters.MaxRating != nil {
+		query += fmt.Sprintf(" AND aas.current_rating <= $%d", argN)
+		args = append(args, *req.Filters.MaxRating)
+		argN++
+	}
+	if req.Filters.Tag != "" {
+		query += fmt.Sprintf(" AND $%d = ANY(aas.tags)", argN)
+		args = append(args, req.Filters.Tag)
+		argN++
+	}
+	if req.Filters.HasInteraction {
+		query += " AND aas.times_used > 0"
+	}
+
+	query += " ORDER BY a.embedding <=> $1::vector LIMIT $" + fmt.Sprintf("%d", argN)
 	args = append(args, req.Limit*3) // Fetch more for re-ranking
 
 	rows, err := s.Pool.Query(ctx, query, args...)
@@ -477,13 +527,27 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		var topicsStr string
 		var similarity float64
 		var createdAt time.Time
+		var annRating *int
+		var annTimesUsed *int
+		var annTags []string
 
 		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
-			&r.SourceURL, &topicsStr, &createdAt, &similarity); err != nil {
+			&r.SourceURL, &topicsStr, &createdAt, &similarity,
+			&annRating, &annTimesUsed, &annTags); err != nil {
 			continue
 		}
 
 		r.CreatedAt = createdAt.Format(time.RFC3339)
+		r.Rating = annRating
+		if annTimesUsed != nil {
+			r.TimesUsed = *annTimesUsed
+		}
+		if len(annTags) > 0 {
+			r.Tags = annTags
+		}
+
+		// Apply annotation boost (small enough not to overwhelm semantics)
+		similarity = applyAnnotationBoost(similarity, annRating, annTimesUsed)
 
 		// Parse topics
 		var topics []string

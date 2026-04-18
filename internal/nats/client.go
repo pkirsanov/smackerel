@@ -51,6 +51,13 @@ const (
 	// Domain extraction subjects (spec 026)
 	SubjectDomainExtract   = "domain.extract"
 	SubjectDomainExtracted = "domain.extracted"
+
+	// Annotation subjects (spec 027)
+	SubjectAnnotationsCreated = "annotations.created"
+
+	// Actionable list subjects (spec 028)
+	SubjectListsCreated   = "lists.created"
+	SubjectListsCompleted = "lists.completed"
 )
 
 // StreamConfig defines a JetStream stream and its subjects.
@@ -70,6 +77,8 @@ func AllStreams() []StreamConfig {
 		{Name: "ALERTS", Subjects: []string{"alerts.>"}},
 		{Name: "SYNTHESIS", Subjects: []string{"synthesis.>"}},
 		{Name: "DOMAIN", Subjects: []string{"domain.>"}},
+		{Name: "ANNOTATIONS", Subjects: []string{"annotations.>"}},
+		{Name: "LISTS", Subjects: []string{"lists.>"}},
 		{Name: "DEADLETTER", Subjects: []string{"deadletter.>"}},
 	}
 }
@@ -147,6 +156,21 @@ func (c *Client) EnsureStreams(ctx context.Context) error {
 // Publish publishes a message to a NATS subject via JetStream.
 func (c *Client) Publish(ctx context.Context, subject string, data []byte) error {
 	_, err := c.JetStream.Publish(ctx, subject, data)
+	if err != nil {
+		return fmt.Errorf("publish to %s: %w", subject, err)
+	}
+	return nil
+}
+
+// PublishWithHeaders publishes a message to a NATS subject via JetStream
+// with optional headers. Used for trace context propagation (W3C traceparent).
+func (c *Client) PublishWithHeaders(ctx context.Context, subject string, data []byte, headers nats.Header) error {
+	msg := &nats.Msg{
+		Subject: subject,
+		Data:    data,
+		Header:  headers,
+	}
+	_, err := c.JetStream.PublishMsg(ctx, msg)
 	if err != nil {
 		return fmt.Errorf("publish to %s: %w", subject, err)
 	}

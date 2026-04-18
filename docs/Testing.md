@@ -6,9 +6,9 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 
 | Language | Packages/Files | Test Count | Type |
 |----------|---------------|------------|------|
-| Go | 33 packages | 2850+ test functions | Unit (behavioral + structural) |
-| Python | 9 test files | 90+ tests | Unit |
-| Shell (E2E) | 59 scripts | End-to-end | Live-stack |
+| Go | 38 packages | 3334+ test functions | Unit (behavioral + structural) |
+| Python | 18 test files | 177+ tests | Unit |
+| Shell (E2E) | 70 scripts | End-to-end | Live-stack |
 | Shell (Stress) | 2 scripts | Stress | Live-stack |
 
 ### Key Test Areas
@@ -19,6 +19,10 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 - **Telegram tests**: share capture, forward metadata, conversation assembly (timer/overflow/concurrent), media group assembly
 - **Intelligence tests**: synthesis insights, alert lifecycle, resurfacing scoring
 - **Knowledge tests**: concept store CRUD, entity profiles, contract validation, lint auditing (stale/orphan/contradiction detection), upsert conflict resolution
+- **Domain extraction tests**: schema registry lookup, content-type matching, URL qualifier matching
+- **Annotation tests**: freeform parser (ratings, tags, notes, interactions), store CRUD, materialized summary view, Telegram message-artifact mapping
+- **Actionable list tests**: list CRUD, item completion (done/skipped/substituted), domain-aware aggregation (recipe ingredients, reading lists, product comparisons)
+- **Observability tests**: Prometheus metric registration, counter increments, histogram recording, W3C traceparent header injection/extraction
 - **Pipeline tests**: dedup, processing, embedding format, tier assignment, synthesis subscriber
 
 ## Current Validation Surface
@@ -52,9 +56,10 @@ The current CLI-owned runtime surface exposes these categories today:
 
 ### Go Package Coverage
 
-All 33 Go packages have tests:
+All 38 Go packages have tests:
 
-- `internal/api` — capture, search, health, digest, recent handlers
+- `internal/api` — capture, search, health, digest, recent, annotations, lists handlers
+- `internal/annotation` — freeform parser, store CRUD, materialized summary, Telegram message mapping
 - `internal/auth` — OAuth2 provider, token exchange
 - `internal/config` — validation, placeholder rejection, env parsing
 - `internal/connector` — framework, registry, backoff, supervisor
@@ -74,10 +79,13 @@ All 33 Go packages have tests:
 - `internal/connector/youtube` — video sync, engagement tiers
 - `internal/db` — migration system
 - `internal/digest` — generation, formatting
+- `internal/domain` — schema registry, content-type matching, URL qualifier matching
 - `internal/extract` — readability, SSRF protection, content hashing
 - `internal/graph` — similarity, entity, topic, temporal linking
 - `internal/intelligence` — synthesis, alerts, commitments, resurfacing
 - `internal/knowledge` — concept store, entity profiles, contract validation, lint auditing, upsert conflict resolution
+- `internal/list` — list CRUD, item completion, domain-aware aggregation (recipe, reading, product)
+- `internal/metrics` — Prometheus metric registration, counter/histogram/gauge verification, W3C trace header propagation
 - `internal/nats` — JetStream client, stream management
 - `internal/pipeline` — processing, dedup, tier assignment
 - `internal/scheduler` — cron scheduling

@@ -2,27 +2,96 @@
   "version": 3,
   "featureDir": "specs/031-live-stack-testing",
   "featureName": "Live Stack Testing",
-  "status": "not_started",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": null,
-    "currentPhase": null,
-    "currentScope": null,
-    "runStartedAt": null,
-    "completedPhaseClaims": [],
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "finalize",
+    "currentScope": 6,
+    "runStartedAt": "2026-04-18T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-04-18T00:00:00Z",
+        "scopesCompleted": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not_started",
-    "completedScopes": [],
+    "status": "in_progress",
+    "completedScopes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
-      {"scope": 1, "name": "Integration Test Infrastructure", "status": "Not Started", "dependsOn": []},
-      {"scope": 2, "name": "Database Migration Integration Tests", "status": "Not Started", "dependsOn": [1]},
-      {"scope": 3, "name": "NATS Stream Integration Tests", "status": "Not Started", "dependsOn": [1]},
-      {"scope": 4, "name": "Artifact CRUD + Vector Search Integration Tests", "status": "Not Started", "dependsOn": [1, 2]},
-      {"scope": 5, "name": "E2E Capture → Process → Search Tests", "status": "Not Started", "dependsOn": [1, 2, 3, 4]},
-      {"scope": 6, "name": "ML Sidecar Readiness Gate", "status": "Not Started", "dependsOn": [1]}
+      {
+        "scope": 1,
+        "name": "Integration Test Infrastructure",
+        "status": "Done",
+        "dependsOn": []
+      },
+      {
+        "scope": 2,
+        "name": "Database Migration Integration Tests",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ]
+      },
+      {
+        "scope": 3,
+        "name": "NATS Stream Integration Tests",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ]
+      },
+      {
+        "scope": 4,
+        "name": "Artifact CRUD + Vector Search Integration Tests",
+        "status": "Done",
+        "dependsOn": [
+          1,
+          2
+        ]
+      },
+      {
+        "scope": 5,
+        "name": "E2E Capture \u2192 Process \u2192 Search Tests",
+        "status": "Done",
+        "dependsOn": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "scope": 6,
+        "name": "ML Sidecar Readiness Gate",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ]
+      }
     ],
     "lockdownState": {
       "active": false,
@@ -30,12 +99,30 @@
     }
   },
   "policySnapshot": {
-    "grill": {"mode": "off", "source": "repo-default"},
-    "tdd": {"mode": "scenario-first", "source": "repo-default"},
-    "autoCommit": {"mode": "off", "source": "repo-default"},
-    "lockdown": {"mode": "off", "source": "repo-default"},
-    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
-    "validation": {"mode": "certification-required", "source": "repo-default"}
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
@@ -43,7 +130,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T00:00:00Z",
+  "lastUpdatedAt": "2026-04-18T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

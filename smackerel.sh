@@ -164,7 +164,32 @@ case "$COMMAND" in
         fi
         ;;
       integration)
+        require_docker
+        smackerel_generate_config test >/dev/null
+        local env_file
+        env_file="$(smackerel_require_env_file test)"
+        local pg_host_port nats_host_port auth_token pg_user pg_pass pg_db
+        pg_host_port="$(smackerel_env_value "$env_file" "POSTGRES_HOST_PORT")"
+        nats_host_port="$(smackerel_env_value "$env_file" "NATS_CLIENT_HOST_PORT")"
+        auth_token="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
+        pg_user="$(smackerel_env_value "$env_file" "POSTGRES_USER")"
+        pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
+        pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
+
+        # Run existing shell-based integration health check
         timeout 300 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
+
+        # Run Go integration tests against the live test stack
+        docker run --rm \
+          --network host \
+          -v "$SCRIPT_DIR:/workspace" \
+          -v smackerel-gomod-cache:/go/pkg/mod \
+          -v smackerel-gobuild-cache:/root/.cache/go-build \
+          -w /workspace \
+          -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
+          -e "NATS_URL=nats://127.0.0.1:${nats_host_port}" \
+          -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+          golang:1.24.3-bookworm bash /workspace/scripts/runtime/go-integration.sh
         ;;
       e2e)
         # Scope 01: Project scaffold

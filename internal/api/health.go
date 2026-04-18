@@ -97,6 +97,7 @@ type Dependencies struct {
 	AuthToken          string
 	Version            string
 	CommitHash         string
+	BuildTime          string
 
 	// Annotation handlers (optional — nil when annotations not configured)
 	AnnotationHandlers *AnnotationHandlers
@@ -110,6 +111,9 @@ type Dependencies struct {
 	knowledgeHealthMu    sync.Mutex
 	knowledgeHealthCache *KnowledgeHealthSection
 	knowledgeHealthAt    time.Time
+
+	// Actionable list handlers (optional — nil when lists not configured)
+	ListHandlers *ListHandlers
 }
 
 // DBHealthChecker is the interface for database health checks.
@@ -140,6 +144,7 @@ type HealthResponse struct {
 	Status     string                   `json:"status"`
 	Version    string                   `json:"version,omitempty"`
 	CommitHash string                   `json:"commit_hash,omitempty"`
+	BuildTime  string                   `json:"build_time,omitempty"`
 	Services   map[string]ServiceStatus `json:"services"`
 	Knowledge  *KnowledgeHealthSection  `json:"knowledge,omitempty"`
 }
@@ -273,6 +278,7 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		resp.Services = services
 		resp.Version = d.Version
 		resp.CommitHash = d.CommitHash
+		resp.BuildTime = d.BuildTime
 
 		// Knowledge layer health (optional — nil when knowledge is disabled)
 		if d.KnowledgeStore != nil {

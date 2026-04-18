@@ -1,17 +1,38 @@
 # syntax=docker/dockerfile:1
 
-# --- Build stage ---
+# --- Build stage: install dependencies with CPU-only PyTorch ---
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
+# Install torch CPU-only first to avoid pulling CUDA dependencies
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app/ app/
+# Strip __pycache__, .dist-info, test files, and type stubs to reduce image size
+RUN find /usr/local/lib/python3.12/site-packages \
+    -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null; \
+    find /usr/local/lib/python3.12/site-packages \
+    -type d -name "tests" -exec rm -rf {} + 2>/dev/null; \
+    find /usr/local/lib/python3.12/site-packages \
+    -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null; \
+    find /usr/local/lib/python3.12/site-packages \
+    -name "*.pyc" -delete 2>/dev/null; \
+    true
 
 # --- Runtime stage ---
 FROM python:3.12-slim
+
+ARG VERSION=dev
+ARG COMMIT_HASH=unknown
+ARG BUILD_TIME=unknown
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${COMMIT_HASH}"
+LABEL org.opencontainers.image.created="${BUILD_TIME}"
+LABEL org.opencontainers.image.title="smackerel-ml"
+LABEL org.opencontainers.image.source="https://github.com/smackerel/smackerel"
 
 WORKDIR /app
 

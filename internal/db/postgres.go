@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // Postgres wraps a pgx connection pool.
@@ -73,6 +75,9 @@ func (p *Postgres) ArtifactCount(ctx context.Context) (int64, error) {
 func (p *Postgres) Healthy(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	// Update DB connection pool gauge on each health check
+	stat := p.Pool.Stat()
+	metrics.DBConnectionsActive.Set(float64(stat.AcquiredConns()))
 	return p.Pool.Ping(ctx) == nil
 }
 

@@ -173,6 +173,21 @@
       "request": "domain.extract",
       "stream": "DOMAIN",
       "critical": false
+    },
+    "annotations.created": {
+      "direction": "core_internal",
+      "stream": "ANNOTATIONS",
+      "critical": false
+    },
+    "lists.created": {
+      "direction": "core_internal",
+      "stream": "LISTS",
+      "critical": false
+    },
+    "lists.completed": {
+      "direction": "core_internal",
+      "stream": "LISTS",
+      "critical": false
     }
   },
   "streams": {
@@ -184,6 +199,8 @@
     "ALERTS": { "subjects_pattern": "alerts.>" },
     "SYNTHESIS": { "subjects_pattern": "synthesis.>" },
     "DOMAIN": { "subjects_pattern": "domain.>" },
+    "ANNOTATIONS": { "subjects_pattern": "annotations.>" },
+    "LISTS": { "subjects_pattern": "lists.>" },
     "DEADLETTER": { "subjects_pattern": "deadletter.>" }
   },
   "request_response_pairs": [

@@ -84,6 +84,9 @@ func TestSCN002054_GoSubjectsMatchContract(t *testing.T) {
 		"SubjectSynthesisCrossSourceResult": SubjectSynthesisCrossSourceResult,
 		"SubjectDomainExtract":              SubjectDomainExtract,
 		"SubjectDomainExtracted":            SubjectDomainExtracted,
+		"SubjectAnnotationsCreated":         SubjectAnnotationsCreated,
+		"SubjectListsCreated":               SubjectListsCreated,
+		"SubjectListsCompleted":             SubjectListsCompleted,
 	}
 
 	// Every Go constant must exist in the contract

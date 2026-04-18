@@ -8,8 +8,8 @@ import (
 
 func TestAllStreams_Coverage(t *testing.T) {
 	streams := AllStreams()
-	if len(streams) != 9 {
-		t.Fatalf("expected 9 streams, got %d", len(streams))
+	if len(streams) != 11 {
+		t.Fatalf("expected 11 streams, got %d", len(streams))
 	}
 
 	expected := map[string][]string{
@@ -21,6 +21,8 @@ func TestAllStreams_Coverage(t *testing.T) {
 		"ALERTS":       {"alerts.>"},
 		"SYNTHESIS":    {"synthesis.>"},
 		"DOMAIN":       {"domain.>"},
+		"ANNOTATIONS":  {"annotations.>"},
+		"LISTS":        {"lists.>"},
 		"DEADLETTER":   {"deadletter.>"},
 	}
 
@@ -71,6 +73,9 @@ func TestSubjectConstants(t *testing.T) {
 		{"SubjectSeasonalAnalyzed", SubjectSeasonalAnalyzed},
 		{"SubjectDomainExtract", SubjectDomainExtract},
 		{"SubjectDomainExtracted", SubjectDomainExtracted},
+		{"SubjectAnnotationsCreated", SubjectAnnotationsCreated},
+		{"SubjectListsCreated", SubjectListsCreated},
+		{"SubjectListsCompleted", SubjectListsCompleted},
 	}
 
 	for _, s := range subjects {
