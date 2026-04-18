@@ -180,6 +180,41 @@ When it sends `POST /api/artifacts/{id}/annotations` with `{rating: 4, note: "go
 Then the annotation is recorded identically to a Telegram annotation
 And the response includes the updated annotation summary
 
+### BS-008: Annotation on Artifact Still Processing
+Given a user just captured a URL that hasn't finished ML processing
+When the user immediately replies with "5/5 this looks great"
+Then the annotation is stored against the artifact ID (which exists from capture)
+And when processing completes, the annotation is already associated
+And the user sees no error
+
+### BS-009: Orphaned Annotations on Artifact Deletion
+Given a user has 10 annotations on an artifact
+When the artifact is deleted from the system
+Then all associated annotations are cascade-deleted
+And the materialized summary view is refreshed
+And the intelligence engine stops using these annotations for recommendations
+
+### BS-010: Annotation Flood Prevention
+Given an automated client sends 1000 annotation requests in 10 seconds
+When the system detects abnormal annotation volume
+Then the existing API rate limiter (Throttle 100) applies
+And earlier annotations are preserved
+And excess requests receive 429 Too Many Requests
+
+### BS-011: List Completion Creates Interaction Annotations
+Given a user completes a shopping list generated from 3 recipes (spec 028)
+When the list status changes to "completed"
+Then the system auto-creates "made_it" interaction annotations on all 3 source recipe artifacts
+And the intelligence engine records these as actual usage events
+And the user's recipe preference profile is updated
+
+### BS-012: Rating Parse Ambiguity
+Given a user replies to an artifact with "4/5/2026"
+When the annotation parser encounters this pattern
+Then the system recognizes this as a date (not a 4/5 rating) due to the third segment
+And no rating is recorded
+And the full text is stored as a note
+
 ---
 
 ## Non-Functional Requirements

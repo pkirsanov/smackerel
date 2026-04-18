@@ -1059,7 +1059,7 @@ modes:
     description: Harden spec/design/scopes quality and expand Gherkin-to-E2E coverage before implementation.
     statusCeiling: specs_hardened
     phaseOrder: [ select, bootstrap, harden, docs, validate, audit, finalize ]
-    requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016 ]
+    requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016, G073 ]
     constraints:
       requireDetailedStoriesAndGherkin: true
       requireGherkinToE2ETraceability: true
@@ -1072,7 +1072,7 @@ modes:
     description: Full analysis and planning pipeline from business analysis through UX, design, and scope planning — no implementation. Use when creating specs, designs, scopes, or bug artifacts from findings, requirements, or review outputs.
     statusCeiling: specs_hardened
     phaseOrder: [ analyze, select, bootstrap, harden, docs, validate, audit, finalize ]
-    requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016, G032 ]
+    requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016, G032, G073 ]
     constraints:
       requireBusinessAnalysis: true
       requireUXDesign: true
@@ -1192,19 +1192,19 @@ modes:
     description: Documentation maintenance without implementation changes.
     statusCeiling: docs_updated
     phaseOrder: [ select, docs, validate, audit, finalize ]
-    requiredGates: [ G001, G006, G007, G008, G011, G012 ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073 ]
 
   validate-only:
     description: Validation-only run with evidence output.
     statusCeiling: validated
     phaseOrder: [ select, validate, finalize ]
-    requiredGates: [ G001, G007, G011, G012 ]
+    requiredGates: [ G001, G007, G011, G012, G073 ]
 
   audit-only:
     description: Audit-only run for already validated scopes.
     statusCeiling: validated
     phaseOrder: [ select, audit, finalize ]
-    requiredGates: [ G001, G008, G011, G012 ]
+    requiredGates: [ G001, G008, G011, G012, G073 ]
 
   chaos-hardening:
     description: Start with chaos probes, then run the remediation, verification, docs, and finalize chain until clean or retry limit.
@@ -1378,7 +1378,7 @@ modes:
     description: Run validation, audit, and docs sync. For specs needing final quality verification without re-running tests or chaos.
     statusCeiling: validated
     phaseOrder: [ select, validate, audit, docs, finalize ]
-    requiredGates: [ G001, G006, G007, G008, G011, G012 ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073 ]
     constraints:
       sequentialSpecCompletion: true
       crossAgentVerification: true
@@ -1388,7 +1388,7 @@ modes:
     description: Resume from saved phase without re-selecting mode/work.
     statusCeiling: in_progress
     phaseOrder: [ select, finalize ]
-    requiredGates: [ G001, G011, G012 ]
+    requiredGates: [ G001, G011, G012, G073 ]
     constraints:
       requireExistingSession: true
 
@@ -1575,7 +1575,7 @@ modes:
     description: Audit all or selected specs for freshness, classify trust levels, and produce a maintenance context report. Read-only — no code changes, only spec trust classification and reporting.
     statusCeiling: docs_updated
     phaseOrder: [ select, spec-review, docs, finalize ]
-    requiredGates: [ G001, G010, G011, G012 ]
+    requiredGates: [ G001, G010, G011, G012, G073 ]
     constraints:
       requireExistingImplementation: true
       readOnlyAudit: true

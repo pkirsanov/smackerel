@@ -65,6 +65,31 @@ Scenario: ML sidecar image is optimized
   Then the final image size is under 3GB
   And all runtime dependencies are present
   And no training-only or build-only packages remain
+
+Scenario: Database migration rollback after failed release
+  Given a release applied migration 018 that added a column
+  When the release is rolled back to the previous image version
+  Then the rollback procedure documents how to handle schema drift
+  And migration rollback SQL is tested as part of the release process
+
+Scenario: Dependency supply-chain verification
+  Given Go modules and Python packages are pulled during build
+  When a dependency is compromised upstream
+  Then checksums are verified against go.sum and requirements lock file
+  And the build fails if checksums don't match
+
+Scenario: Integration and E2E tests in CI (staged)
+  Given the CI pipeline has a separate stage for live-stack tests
+  When a merge to main triggers the full pipeline
+  Then lint + unit tests run first (fast gate)
+  And on success, integration tests run against a CI Docker stack (spec 031)
+  And E2E tests run as an optional final stage
+
+Scenario: Extension and PWA artifacts built in CI
+  Given browser extension (spec 033) and PWA assets exist
+  When CI runs
+  Then extension is linted and packaged
+  And PWA manifest is validated
 ```
 
 ## Acceptance Criteria
@@ -76,3 +101,6 @@ Scenario: ML sidecar image is optimized
 - [ ] Docker images include version label from git tag/SHA
 - [ ] `docker-compose.yml` supports pinned image versions via environment variable
 - [ ] ML sidecar image size < 3GB (down from 8.63GB) via multi-stage build and dependency pruning
+- [ ] go.sum and Python lock file integrity verified during build
+- [ ] CI has staged integration/E2E test support (spec 031 coordination)
+- [ ] Migration rollback procedures documented and tested
