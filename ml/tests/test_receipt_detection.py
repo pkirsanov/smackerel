@@ -126,3 +126,51 @@ class TestAdversarialCases:
 
     def test_none_like_text(self):
         assert detect_receipt_content("", content_type="note") is False
+
+
+class TestChaoPathologicalInput:
+    """CHAOS: Pathological input that must not crash or hang."""
+
+    def test_all_emoji_input(self):
+        """All-emoji text should not trigger receipt detection."""
+        text = "🏪" * 500 + "💰" * 500
+        assert detect_receipt_content(text) is False
+
+    def test_binary_data(self):
+        """Binary-like content should not crash or trigger."""
+        text = "\x00\x01\x02\xff\xfe\xfd" * 100
+        assert detect_receipt_content(text) is False
+
+    def test_empty_string(self):
+        assert detect_receipt_content("") is False
+
+    def test_whitespace_only(self):
+        assert detect_receipt_content("   \n\t\r\n  ") is False
+
+    def test_extremely_long_input(self):
+        """100KB+ input must not hang — should be capped internally."""
+        text = "A" * 200_000 + " receipt $10.00 total"
+        # The receipt keyword + amount is past the 100K cap, so H-002
+        # won't see it. But the first 100K has no receipt patterns.
+        result = detect_receipt_content(text)
+        assert result is False
+
+    def test_long_input_with_receipt_in_front(self):
+        """Receipt pattern at start of long input should still fire."""
+        text = "Your receipt total: $47.50 " + "X" * 200_000
+        assert detect_receipt_content(text) is True
+
+    def test_null_bytes_in_text(self):
+        """Null bytes should not crash regex."""
+        text = "receipt\x00total\x00$15.00"
+        assert detect_receipt_content(text) is True
+
+    def test_unicode_currency_symbols(self):
+        """Various currency symbols must work."""
+        assert detect_receipt_content("Payment: €47,50 charged") is True
+        assert detect_receipt_content("Invoice total: £89.99") is True
+
+    def test_repeated_formula_chars(self):
+        """Input that looks like CSV injection should not crash."""
+        text = "=" * 10000
+        assert detect_receipt_content(text) is False

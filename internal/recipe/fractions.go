@@ -23,6 +23,7 @@ var fractionTable = []kitchenFraction{
 	{0.625, "5/8"},
 	{0.667, "2/3"},
 	{0.75, "3/4"},
+	{0.833, "5/6"},
 	{0.875, "7/8"},
 }
 
@@ -36,8 +37,8 @@ func FormatQuantity(qty float64) string {
 		return "0"
 	}
 
-	// Integer check
-	if math.Abs(qty-math.Round(qty)) < 0.001 {
+	// Integer check (within kitchen tolerance for floating-point artifacts)
+	if math.Abs(qty-math.Round(qty)) < 0.01 {
 		return fmt.Sprintf("%d", int(math.Round(qty)))
 	}
 
@@ -49,6 +50,10 @@ func FormatQuantity(qty float64) string {
 	if display == "" {
 		// Round to nearest 1/8 and retry
 		rounded := math.Round(frac*8) / 8
+		if rounded >= 1.0 {
+			// Fractional part rounds up to the next whole number
+			return fmt.Sprintf("%d", int(whole)+1)
+		}
 		display = matchFraction(rounded)
 	}
 

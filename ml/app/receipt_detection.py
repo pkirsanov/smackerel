@@ -49,6 +49,9 @@ RECEIPT_SENDER_PATTERNS = [
     "orders@",
 ]
 
+# Maximum text length to analyze — reject pathological inputs early
+MAX_TEXT_LENGTH = 100_000
+
 
 def detect_receipt_content(
     text: str,
@@ -71,6 +74,10 @@ def detect_receipt_content(
     """
     if not text and content_type != "bill":
         return False
+
+    # Cap input length to avoid pathological regex behavior on huge inputs
+    if text and len(text) > MAX_TEXT_LENGTH:
+        text = text[:MAX_TEXT_LENGTH]
 
     text_lower = text.lower() if text else ""
 

@@ -164,6 +164,34 @@ func TestCookSessionStore_ReplaceExisting(t *testing.T) {
 	}
 }
 
+func TestCookSessionStore_TouchNonExistent(t *testing.T) {
+	store := NewCookSessionStore(120)
+
+	// Touch on a chat with no session should not panic
+	store.Touch(99999)
+
+	got := store.Get(99999)
+	if got != nil {
+		t.Error("expected nil for non-existent session after Touch")
+	}
+}
+
+func TestCookSessionStore_DeleteNonExistent(t *testing.T) {
+	store := NewCookSessionStore(120)
+
+	// Delete on a chat with no session should not panic
+	store.Delete(99999)
+}
+
+func TestCookSessionStore_StopIdempotent(t *testing.T) {
+	store := NewCookSessionStore(120)
+	store.StartCleanup()
+
+	// Stop twice should not panic
+	store.Stop()
+	store.Stop()
+}
+
 func makeTestSteps(n int) []recipe.Step {
 	steps := make([]recipe.Step, n)
 	for i := 0; i < n; i++ {

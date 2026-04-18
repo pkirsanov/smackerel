@@ -17,9 +17,14 @@ type MealPlanCommandHandler struct {
 	Service  *mealplan.Service
 	Shopping *mealplan.ShoppingBridge
 
+	// CookDelegate is called to enter cook mode from plan resolution.
+	// Set by the wiring layer to bridge into Bot.handleCookEntry.
+	CookDelegate func(chatID int64, recipeName string, servings int)
+
 	// Draft plan context per chat ID (in-process memory, not DB)
 	mu     sync.RWMutex
 	drafts map[int64]*draftContext
+	done   chan struct{}
 }
 
 type draftContext struct {
@@ -35,6 +40,44 @@ func NewMealPlanCommandHandler(svc *mealplan.Service, shopping *mealplan.Shoppin
 		Service:  svc,
 		Shopping: shopping,
 		drafts:   make(map[int64]*draftContext),
+		done:     make(chan struct{}),
+	}
+}
+
+// StartCleanup begins a background goroutine that sweeps expired draft entries.
+func (h *MealPlanCommandHandler) StartCleanup() {
+	ticker := time.NewTicker(30 * time.Minute)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-h.done:
+				return
+			case <-ticker.C:
+				h.sweepDrafts()
+			}
+		}
+	}()
+}
+
+// Stop signals the cleanup goroutine to exit.
+func (h *MealPlanCommandHandler) Stop() {
+	select {
+	case <-h.done:
+	default:
+		close(h.done)
+	}
+}
+
+// sweepDrafts removes expired draft entries from the map.
+func (h *MealPlanCommandHandler) sweepDrafts() {
+	now := time.Now()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for chatID, d := range h.drafts {
+		if now.After(d.ExpiresAt) {
+			delete(h.drafts, chatID)
+		}
 	}
 }
 
@@ -42,7 +85,6 @@ func NewMealPlanCommandHandler(svc *mealplan.Service, shopping *mealplan.Shoppin
 var (
 	mealPlanThisWeekRe = regexp.MustCompile(`(?i)^meal\s+plan\s+this\s+week$`)
 	mealPlanNextWeekRe = regexp.MustCompile(`(?i)^meal\s+plan\s+next\s+week$`)
-	mealPlanDateRe     = regexp.MustCompile(`(?i)^meal\s+plan\s+(\w+\s+\d+)\s+to\s+(\w+\s+\d+)$`)
 	activatePlanRe     = regexp.MustCompile(`(?i)^activate\s+plan$`)
 	showPlanRe         = regexp.MustCompile(`(?i)^(meal\s+plan|show\s+plan|plan\s+this\s+week)$`)
 
@@ -50,8 +92,8 @@ var (
 	whatsForMealRe = regexp.MustCompile(`(?i)^what(?:'?s| is) for (\w+?)(?:\s+(\w+))?\??$`)
 	// "{day} meals" / "today's plan"
 	dayMealsRe = regexp.MustCompile(`(?i)^(\w+?)(?:'?s)?\s+(?:meals|plan)$`)
-	// "dinners this week"
-	weeklyMealRe = regexp.MustCompile(`(?i)^(\w+?)s?\s+this\s+week\??$`)
+	// "dinners this week" / "lunches this week"
+	weeklyMealRe = regexp.MustCompile(`(?i)^(\w+)\s+this\s+week\??$`)
 
 	// Slot assignment: "Monday dinner: Pasta Carbonara for 4"
 	slotAssignRe = regexp.MustCompile(`(?i)^(\w+)\s+(breakfast|lunch|dinner|snack):?\s+(.+?)(?:\s+for\s+(\d+)(?:\s+servings?)?)?$`)
@@ -121,9 +163,14 @@ func (h *MealPlanCommandHandler) TryHandle(ctx context.Context, chatID int64, te
 		return true
 	}
 
-	// "dinners this week"
+	// "dinners this week" / "lunches this week"
 	if m := weeklyMealRe.FindStringSubmatch(text); len(m) >= 2 {
-		meal := strings.ToLower(strings.TrimSuffix(m[1], "s"))
+		meal := strings.ToLower(m[1])
+		if trimmed := strings.TrimSuffix(meal, "es"); trimmed != meal {
+			meal = trimmed
+		} else {
+			meal = strings.TrimSuffix(meal, "s")
+		}
 		h.handleWeeklyMealQuery(ctx, chatID, meal, replyFunc)
 		return true
 	}
@@ -463,13 +510,13 @@ func (h *MealPlanCommandHandler) handleCookFromPlan(ctx context.Context, chatID 
 	}
 
 	sl := slots[0]
-	// Prepend plan resolution confirmation, then delegate to cook mode.
-	// The bot's handleCookEntry will be called separately with the recipe name and servings.
+	// Resolve recipe from plan and delegate to cook mode (BS-010).
 	replyFunc(chatID, fmt.Sprintf(". %s's %s: %s (%d servings)\n  Starting cook mode...",
 		date.Format("Monday"), meal, sl.RecipeTitle, sl.Servings))
 
-	// Return the recipe info so the bot can trigger cook mode.
-	// In a real integration, the Bot would call handleCookEntry with (sl.RecipeTitle, sl.Servings).
+	if h.CookDelegate != nil {
+		h.CookDelegate(chatID, sl.RecipeTitle, sl.Servings)
+	}
 }
 
 func (h *MealPlanCommandHandler) handlePlanRepeat(ctx context.Context, chatID int64, replyFunc func(int64, string)) {

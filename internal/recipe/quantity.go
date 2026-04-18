@@ -41,9 +41,10 @@ func ParseQuantity(qtyStr, unitStr string) (float64, string) {
 		return 0, unitStr
 	}
 
-	// Normalize Unicode fractions to ASCII equivalents
+	// Normalize Unicode fractions to ASCII equivalents.
+	// Prepend a space so "1½" becomes "1 1/2" (not "11/2").
 	for unicode, ascii := range unicodeFractions {
-		qtyStr = strings.ReplaceAll(qtyStr, unicode, ascii)
+		qtyStr = strings.ReplaceAll(qtyStr, unicode, " "+ascii)
 	}
 	qtyStr = strings.TrimSpace(qtyStr)
 
@@ -53,7 +54,11 @@ func ParseQuantity(qtyStr, unitStr string) (float64, string) {
 		num, _ := strconv.ParseFloat(m[2], 64)
 		den, _ := strconv.ParseFloat(m[3], 64)
 		if den > 0 {
-			return whole + num/den, unitStr
+			result := whole + num/den
+			if math.IsInf(result, 0) || math.IsNaN(result) {
+				return 0, unitStr
+			}
+			return result, unitStr
 		}
 	}
 
@@ -62,13 +67,20 @@ func ParseQuantity(qtyStr, unitStr string) (float64, string) {
 		num, _ := strconv.ParseFloat(m[1], 64)
 		den, _ := strconv.ParseFloat(m[2], 64)
 		if den > 0 {
-			return num / den, unitStr
+			result := num / den
+			if math.IsInf(result, 0) || math.IsNaN(result) {
+				return 0, unitStr
+			}
+			return result, unitStr
 		}
 	}
 
 	// Simple number: "2" or "2.5"
 	if m := simpleRe.FindStringSubmatch(qtyStr); len(m) == 2 {
 		v, _ := strconv.ParseFloat(m[1], 64)
+		if math.IsInf(v, 0) || math.IsNaN(v) {
+			return 0, unitStr
+		}
 		return v, unitStr
 	}
 

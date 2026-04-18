@@ -12,10 +12,6 @@ const (
 	StatusArchived  PlanStatus = "archived"
 )
 
-// ValidMealTypes is the set of recognized meal type strings.
-// Actual validation uses the config-driven list; this is for reference.
-var defaultMealTypes = []string{"breakfast", "lunch", "dinner", "snack"}
-
 // Plan represents a meal plan with a date range and lifecycle status.
 type Plan struct {
 	ID        string     `json:"id"`

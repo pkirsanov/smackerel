@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -120,10 +121,10 @@ func TestMealPlanPatternMatching(t *testing.T) {
 
 func TestSlotAssignPattern(t *testing.T) {
 	tests := []struct {
-		input   string
-		wantDay string
-		wantMeal string
-		wantRecipe string
+		input        string
+		wantDay      string
+		wantMeal     string
+		wantRecipe   string
 		wantServings string
 	}{
 		{
@@ -312,4 +313,71 @@ func mealPlanContains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Round 44: Draft context cleanup sweeps expired entries
+func TestMealPlanCommandHandler_SweepDrafts(t *testing.T) {
+	h := NewMealPlanCommandHandler(nil, nil)
+
+	h.setDraft(100, "plan-100")
+	h.setDraft(200, "plan-200")
+
+	// Manually expire entry 100
+	h.mu.Lock()
+	h.drafts[100].ExpiresAt = time.Now().Add(-1 * time.Minute)
+	h.mu.Unlock()
+
+	h.sweepDrafts()
+
+	if h.getDraft(100) != "" {
+		t.Error("expected expired draft 100 to be swept")
+	}
+	if h.getDraft(200) != "plan-200" {
+		t.Error("expected active draft 200 to be preserved")
+	}
+}
+
+// Round 44: Stop is idempotent
+func TestMealPlanCommandHandler_StopIdempotent(t *testing.T) {
+	h := NewMealPlanCommandHandler(nil, nil)
+	h.StartCleanup()
+	h.Stop()
+	h.Stop() // second call should not panic
+}
+
+// Round 82: weeklyMealRe must parse "lunches this week" → meal "lunch"
+func TestWeeklyMealPattern_PluralStripping(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantMeal string
+	}{
+		{"dinners this week", "dinner"},
+		{"lunches this week", "lunch"},
+		{"breakfasts this week", "breakfast"},
+		{"snacks this week", "snack"},
+		{"Dinners this week?", "dinner"},
+		{"Lunches This Week?", "lunch"},
+		// singular form should also work
+		{"dinner this week", "dinner"},
+		{"lunch this week", "lunch"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			m := weeklyMealRe.FindStringSubmatch(tt.input)
+			if m == nil {
+				t.Fatalf("no match for %q", tt.input)
+			}
+			// Replicate the handler's plural-stripping logic
+			meal := strings.ToLower(m[1])
+			if trimmed := strings.TrimSuffix(meal, "es"); trimmed != meal {
+				meal = trimmed
+			} else {
+				meal = strings.TrimSuffix(meal, "s")
+			}
+			if meal != tt.wantMeal {
+				t.Errorf("meal = %q, want %q (raw capture: %q)", meal, tt.wantMeal, m[1])
+			}
+		})
+	}
 }
