@@ -1,0 +1,188 @@
+{
+  "version": 3,
+  "featureDir": "specs/034-expense-tracking",
+  "featureName": "Expense Tracking",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "currentScope": null,
+    "runStartedAt": "2026-04-18T00:00:00Z",
+    "completedPhaseClaims": ["analyze", "design", "plan"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Configuration & Config Pipeline",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 2,
+        "name": "Receipt Detection & Extraction Pipeline",
+        "status": "not_started",
+        "dependsOn": [1],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "name": "Expense Data Model & Migration",
+        "status": "not_started",
+        "dependsOn": [1],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 4,
+        "name": "Classification Engine",
+        "status": "not_started",
+        "dependsOn": [2, 3],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 5,
+        "name": "Vendor Normalization & Suggestions",
+        "status": "not_started",
+        "dependsOn": [3, 4],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 6,
+        "name": "Expense API Endpoints",
+        "status": "not_started",
+        "dependsOn": [3, 4],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 7,
+        "name": "CSV Export",
+        "status": "not_started",
+        "dependsOn": [6],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 8,
+        "name": "Telegram Expense Commands",
+        "status": "not_started",
+        "dependsOn": [4, 6],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 9,
+        "name": "Digest Integration",
+        "status": "not_started",
+        "dependsOn": [4, 5],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-18T00:00:00Z",
+      "runCompletedAt": "2026-04-18T00:00:00Z",
+      "summary": "Created spec.md with full business analysis: 3 actors, 10 use cases, 28 business scenarios, outcome contract, competitive analysis (5 competitors), 4 improvement proposals, UI scenario matrix, and non-functional requirements."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-18T00:00:00Z",
+      "runCompletedAt": "2026-04-18T00:00:00Z",
+      "summary": "Created design.md with 13 sections: architecture, receipt heuristics, prompt contract, data model, config, API, Telegram, digest, classification, CSV export, testing strategy, risks."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-18T00:00:00Z",
+      "runCompletedAt": "2026-04-18T00:00:00Z",
+      "summary": "Created scopes.md with 9 scopes, 65 Gherkin scenarios (SCN-034-001 through SCN-034-065), test plans with regression E2E rows, and Definition of Done. Created report.md template and uservalidation.md."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-18T12:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Plan phase complete. scopes.md created with 9 scopes (65 scenarios). report.md and uservalidation.md initialized. Ready for implementation."
+}

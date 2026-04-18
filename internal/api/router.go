@@ -42,6 +42,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Get("/digest", deps.DigestHandler)
 			r.Get("/recent", deps.RecentHandler)
 			r.Get("/artifact/{id}", deps.ArtifactDetailHandler)
+			r.Get("/artifacts/{id}/domain", deps.DomainDataHandler)
 			r.Get("/export", deps.ExportHandler)
 
 			// Context enrichment endpoint (GuestHost connector)
@@ -101,6 +102,16 @@ func NewRouter(deps *Dependencies) http.Handler {
 			// OAuth status requires authentication (token-bearing callers)
 			if deps.OAuthHandler != nil {
 				r.Get("/auth/status", deps.OAuthHandler.StatusHandler)
+			}
+
+			// Expense tracking endpoints (spec 034)
+			if deps.ExpenseHandler != nil {
+				deps.ExpenseHandler.RegisterRoutes(r)
+			}
+
+			// Meal planning endpoints (spec 036)
+			if deps.MealPlanHandler != nil {
+				deps.MealPlanHandler.RegisterRoutes(r)
 			}
 		})
 	})

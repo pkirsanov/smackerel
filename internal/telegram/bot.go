@@ -34,6 +34,8 @@ type Bot struct {
 	assembler       *ConversationAssembler
 	mediaAssembler  *MediaGroupAssembler
 	disambiguations *disambiguationStore
+	cookSessions    *CookSessionStore
+	mealPlanHandler *MealPlanCommandHandler
 	done            chan struct{}                   // closed when the update goroutine exits
 	replyFunc       func(chatID int64, text string) // test hook: overrides reply()
 	callbackFunc    func(callbackID, text string)   // test hook: overrides callback answer
@@ -49,6 +51,8 @@ type Config struct {
 	AssemblyMaxMessages          int // max messages per conversation buffer (default: 100)
 	MediaGroupWindowSeconds      int // media group assembly window (default: 3)
 	DisambiguationTimeoutSeconds int // disambiguation prompt TTL (default: 120)
+	CookSessionTimeoutMinutes    int // cook mode session inactivity timeout
+	CookSessionMaxPerChat        int // max concurrent cook sessions per chat
 }
 
 // NewBot creates and initializes a Telegram bot.
@@ -93,8 +97,12 @@ func NewBot(cfg Config) (*Bot, error) {
 		authToken:       cfg.AuthToken,
 		httpClient:      &http.Client{Timeout: 30 * time.Second},
 		disambiguations: newDisambiguationStore(cfg.DisambiguationTimeoutSeconds),
+		cookSessions:    NewCookSessionStore(cfg.CookSessionTimeoutMinutes),
 		done:            make(chan struct{}),
 	}
+
+	// Start cook session cleanup goroutine
+	bot.cookSessions.StartCleanup()
 
 	// Initialize assemblers with config-driven parameters
 	ctx := context.Background()
@@ -219,6 +227,53 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	// Priority 2: Disambiguation resolution (user replies with a number)
 	if !msg.IsCommand() && b.handleDisambiguationReply(ctx, msg) {
 		return
+	}
+
+	// Priority 3: Cook session navigation (next, back, ingredients, done, jump)
+	if !msg.IsCommand() && b.cookSessions != nil {
+		session := b.cookSessions.Get(chatID)
+		if session != nil {
+			// Handle pending replacement confirmation
+			if session.PendingReplacement != "" {
+				if cookConfirmYesRe.MatchString(strings.TrimSpace(text)) {
+					b.handleCookReplacement(ctx, chatID, true)
+					return
+				}
+				if cookConfirmNoRe.MatchString(strings.TrimSpace(text)) {
+					b.handleCookReplacement(ctx, chatID, false)
+					return
+				}
+			}
+
+			nav := parseCookNavigation(text)
+			if nav != "" {
+				b.handleCookNavigation(ctx, chatID, nav)
+				return
+			}
+		}
+	}
+
+	// Priority 4: Serving scaler trigger ("{N} servings", "for {N}", etc.)
+	if !msg.IsCommand() {
+		if n := parseScaleTrigger(text); n > 0 {
+			b.handleScaleTrigger(ctx, chatID, n)
+			return
+		}
+	}
+
+	// Priority 5: Cook entry commands ("cook", "cook {name}", "cook {name} for {N} servings")
+	if !msg.IsCommand() {
+		if name, servings, matched := parseCookTrigger(text); matched {
+			b.handleCookEntry(ctx, chatID, name, servings)
+			return
+		}
+	}
+
+	// Priority 6: Meal plan commands (natural language)
+	if !msg.IsCommand() && b.mealPlanHandler != nil {
+		if b.mealPlanHandler.TryHandle(ctx, chatID, text, b.reply) {
+			return
+		}
 	}
 
 	// Handle commands
@@ -781,6 +836,11 @@ func (b *Bot) handleDone(ctx context.Context, msg *tgbotapi.Message) {
 // Healthy reports whether the Telegram bot has an active API connection.
 func (b *Bot) Healthy() bool {
 	return b != nil && b.api != nil
+}
+
+// SetMealPlanHandler configures the meal plan command handler. Must be called before Start().
+func (b *Bot) SetMealPlanHandler(h *MealPlanCommandHandler) {
+	b.mealPlanHandler = h
 }
 
 func (b *Bot) Stop() {

@@ -1,0 +1,99 @@
+version: "receipt-extraction-v1"
+type: "domain-extraction"
+description: "Extract structured expense/receipt data from receipt text, invoice text, or OCR output"
+
+content_types:
+  - "email"
+  - "bill"
+  - "note"
+  - "media"
+
+min_content_length: 20
+
+system_prompt: |
+  You are a receipt and invoice extraction engine. Extract structured expense
+  data from the provided content. The content may be OCR output (noisy), email
+  text, PDF-extracted text, or user-typed natural language.
+
+  Return ONLY valid JSON matching the output schema below.
+
+  RULES:
+  - Extract the vendor/merchant name. Normalize obvious abbreviations
+    (e.g., "AMZN MKTP" → keep raw, let the application normalize).
+  - Extract the total amount with currency. If currency is ambiguous, default
+    to "USD".
+  - Parse date in ISO 8601 (YYYY-MM-DD). If no date, use null.
+  - Extract tax, tip, and subtotal separately if present.
+  - Extract line items if visible. Do NOT hallucinate line items from a total.
+  - For amounts, return string representations with exactly two decimal places
+    (e.g., "147.30", not "147.3" or 147.30).
+  - If the content is a refund, the amount should be negative (e.g., "-29.99").
+  - If a field cannot be determined, use null (not empty string or zero).
+  - Preserve the raw vendor text in vendor_raw even when you can identify
+    the canonical name.
+  - For international receipts with comma decimals (e.g., "47,50"), normalize
+    to dot decimal ("47.50") in the amount field and preserve original in
+    raw_amount.
+
+extraction_schema:
+  type: object
+  required:
+    - domain
+    - vendor_raw
+  properties:
+    domain:
+      type: string
+      const: "expense"
+    vendor:
+      type: string
+      description: "Cleaned/canonical vendor name if recognizable"
+    vendor_raw:
+      type: string
+      description: "Original vendor text as extracted"
+    date:
+      type: string
+      format: date
+      description: "Transaction date in YYYY-MM-DD"
+    amount:
+      type: string
+      pattern: "^-?\\d+\\.\\d{2}$"
+      description: "Total amount as decimal string"
+    raw_amount:
+      type: string
+      description: "Original amount text before normalization"
+    currency:
+      type: string
+      pattern: "^[A-Z]{3}$"
+      description: "ISO 4217 currency code"
+    subtotal:
+      type: string
+      pattern: "^-?\\d+\\.\\d{2}$"
+    tax:
+      type: string
+      pattern: "^-?\\d+\\.\\d{2}$"
+    tip:
+      type: string
+      pattern: "^-?\\d+\\.\\d{2}$"
+    payment_method:
+      type: string
+      description: "e.g., visa-ending-4242, cash, paypal"
+    category:
+      type: string
+      description: "Expense category slug"
+    line_items:
+      type: array
+      items:
+        type: object
+        required:
+          - description
+        properties:
+          description:
+            type: string
+          amount:
+            type: string
+            pattern: "^-?\\d+\\.\\d{2}$"
+          quantity:
+            type: string
+    notes:
+      type: string
+      description: "Any additional context extracted from the content"

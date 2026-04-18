@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -237,6 +238,33 @@ func (p *Postgres) GetArtifact(ctx context.Context, id string) (*ArtifactDetail,
 		&a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get artifact: %w", err)
+	}
+	return &a, nil
+}
+
+// ArtifactWithDomain extends ArtifactDetail with domain_data.
+type ArtifactWithDomain struct {
+	ArtifactDetail
+	DomainData json.RawMessage
+}
+
+// GetArtifactWithDomain retrieves a single artifact by ID including domain_data.
+func (p *Postgres) GetArtifactWithDomain(ctx context.Context, id string) (*ArtifactWithDomain, error) {
+	var a ArtifactWithDomain
+	var domainData []byte
+	err := p.Pool.QueryRow(ctx, `
+		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
+		       COALESCE(sentiment, ''), COALESCE(source_quality, ''), COALESCE(processing_tier, ''),
+		       created_at, updated_at, COALESCE(domain_data::text, '')
+		FROM artifacts WHERE id = $1
+	`, id).Scan(&a.ID, &a.Title, &a.ArtifactType, &a.Summary, &a.SourceURL,
+		&a.Sentiment, &a.SourceQuality, &a.ProcessingTier,
+		&a.CreatedAt, &a.UpdatedAt, &domainData)
+	if err != nil {
+		return nil, fmt.Errorf("get artifact with domain: %w", err)
+	}
+	if len(domainData) > 0 {
+		a.DomainData = json.RawMessage(domainData)
 	}
 	return &a, nil
 }

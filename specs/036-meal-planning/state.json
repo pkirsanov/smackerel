@@ -1,0 +1,83 @@
+{
+  "version": 3,
+  "featureDir": "specs/036-meal-planning",
+  "featureName": "Meal Planning Calendar",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "currentScope": null,
+    "runStartedAt": "2026-04-18T00:00:00Z",
+    "completedPhaseClaims": ["analyze", "design", "plan"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      { "scope": 1, "name": "Config & Migration", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 2, "name": "Plan Store & Service", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 3, "name": "Plan API Endpoints", "status": "not_started", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 4, "name": "Telegram Plan Commands", "status": "not_started", "dependsOn": [2, 3], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 5, "name": "Shopping List Bridge", "status": "not_started", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 6, "name": "Plan Copy & Templates", "status": "not_started", "dependsOn": [2, 3], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 7, "name": "CalDAV Calendar Sync", "status": "not_started", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 8, "name": "Auto-Complete Lifecycle", "status": "not_started", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
+    ],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-18T00:00:00Z",
+      "runCompletedAt": "2026-04-18T00:00:00Z",
+      "summary": "Created spec.md: 4 actors, 5 use cases, 13 business scenarios, competitive analysis (5 competitors), 3 IPs."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-18T00:00:00Z",
+      "runCompletedAt": "2026-04-18T00:00:00Z",
+      "summary": "Created design.md: data model (2 tables), architecture, 12 API endpoints, shopping bridge, CalDAV bridge, config."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-04-18T00:00:00Z",
+      "runCompletedAt": "2026-04-18T00:00:00Z",
+      "summary": "Replaced scopes.md: 8 scopes, 56 Gherkin scenarios (SCN-036-001 to SCN-036-056). Reordered: config/migration first (P0), separated API from Telegram, extracted auto-complete lifecycle."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-18T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  },
+  "notes": "Planning complete. 8 scopes, 56 scenarios. Config & migration first (P0), then store/service (P0), then API/Telegram/shopping (P1), then copy/CalDAV/auto-complete (P2). Depends on specs 026, 028, 035, 003. Ready for implementation."
+}
