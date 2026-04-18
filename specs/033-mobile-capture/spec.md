@@ -198,3 +198,181 @@ Scenario: Capture confirmation with processing preview
 - **Security:** Auth token stored in extension secure storage, not localStorage
 - **Size:** Extension < 100KB, PWA service worker < 50KB
 - **Compatibility:** Chrome 120+, Firefox 115+, iOS Safari 16+, Android Chrome 120+
+
+---
+
+## UI Wireframes
+
+### Screen: Browser Extension Popup (Setup)
+**Actor:** User | **Channel:** Chrome/Firefox | **Status:** New
+
+```
+┌──────────────────────────────┐
+│  🐟 Smackerel                │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│                               │
+│  Server URL:                  │
+│  ┌──────────────────────────┐│
+│  │ https://my.smackerel.local││
+│  └──────────────────────────┘│
+│                               │
+│  Auth Token:                  │
+│  ┌──────────────────────────┐│
+│  │ ●●●●●●●●●●●●●●●●●●●●   ││
+│  └──────────────────────────┘│
+│                               │
+│  ⚠️ HTTP detected — insecure │
+│                               │
+│  [Test Connection]            │
+│  ✅ Connected to Smackerel   │
+│                               │
+│  [Save Settings]              │
+└──────────────────────────────┘
+```
+
+**States:**
+- Unconfigured: Both fields empty, Save disabled
+- Testing: Spinner on "Test Connection"
+- Connected: Green ✅ + Save enabled
+- Failed: Red ❌ + error message ("Connection refused" / "401 Unauthorized")
+- HTTP warning: Yellow ⚠️ banner
+
+### Screen: Browser Extension Popup (Capture)
+**Actor:** User | **Channel:** Chrome/Firefox | **Status:** New
+
+```
+┌──────────────────────────────┐
+│  🐟 Smackerel                │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│                               │
+│  Save current page?           │
+│                               │
+│  📄 Sony WH-1000XM5 Review   │
+│  🔗 techradar.com/reviews/... │
+│                               │
+│  Selected text:               │
+│  "Industry-leading ANC with   │
+│   30-hour battery life..."    │
+│                               │
+│  [💾 Save to Smackerel]      │
+│                               │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│  Queue: 0 pending             │
+└──────────────────────────────┘
+```
+
+**After capture:**
+```
+┌──────────────────────────────┐
+│  ✅ Saved!                    │
+│  Sony WH-1000XM5 Review      │
+│  Processing started...        │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│  Queue: 0 pending             │
+└──────────────────────────────┘
+```
+
+### Screen: Context Menu
+**Actor:** User | **Channel:** Chrome/Firefox | **Status:** New
+
+```
+┌─────────────────────────────┐
+│  Open link in new tab        │
+│  Copy link address           │
+│  ─────────────────────────── │
+│  🐟 Save to Smackerel       │
+│  🐟 Save with selection     │
+│  ─────────────────────────── │
+│  Inspect                     │
+└─────────────────────────────┘
+```
+
+### Screen: PWA Share Target (Mobile)
+**Actor:** User | **Channel:** iOS/Android | **Status:** New
+
+```
+┌──────────────────────────┐
+│  ← Share to Smackerel     │
+├──────────────────────────┤
+│                           │
+│  📎 URL received:         │
+│  allrecipes.com/recipe/..│
+│                           │
+│  📝 Add a note:           │
+│  ┌──────────────────────┐│
+│  │ looks delicious      ││
+│  └──────────────────────┘│
+│                           │
+│  [💾 Save]   [Cancel]    │
+│                           │
+│  ━━━━━━━━━━━━━━━━━━━━━━ │
+│  Queue: 2 pending (offline)│
+└──────────────────────────┘
+```
+
+**After save (online):**
+```
+┌──────────────────────────┐
+│  ✅ Saved!                │
+│  Returning to app...      │
+└──────────────────────────┘
+```
+*(Auto-closes after 1.5s and returns to source app)*
+
+### Screen: PWA Home (Mobile)
+**Actor:** User | **Channel:** PWA | **Status:** New
+
+```
+┌──────────────────────────┐
+│  🐟 Smackerel             │
+├──────────────────────────┤
+│                           │
+│  🔍 Search...             │
+│                           │
+│  📋 Active Lists          │
+│  ┌──────────────────────┐│
+│  │ 🛒 Weekend Cooking    ││
+│  │    3/15 done          ││
+│  └──────────────────────┘│
+│  ┌──────────────────────┐│
+│  │ 📚 Reading Queue      ││
+│  │    0/8 done           ││
+│  └──────────────────────┘│
+│                           │
+│  📊 Recent Activity       │
+│  • Captured: Sony WH-...  │
+│  • Rated: Carbonara 4/5   │
+│                           │
+├──────────────────────────┤
+│  🏠  🔍  📋  ⚙️          │
+└──────────────────────────┘
+```
+
+**Bottom nav:**
+- 🏠 Home (recent activity + lists)
+- 🔍 Search
+- 📋 Lists
+- ⚙️ Settings (server URL, auth token, queue status)
+
+### User Flow: Mobile Share → Capture
+
+```mermaid
+stateDiagram-v2
+    [*] --> BrowsingApp: User finds content
+    BrowsingApp --> ShareSheet: Tap Share
+    ShareSheet --> SmackerelPWA: Select Smackerel
+    SmackerelPWA --> AddNote: Optional note
+    AddNote --> SendCapture: Tap Save
+
+    SendCapture --> Online: Connected
+    SendCapture --> Offline: No connection
+
+    Online --> Success: API returns 200
+    Success --> ReturnToApp: Auto-close 1.5s
+    ReturnToApp --> [*]
+
+    Offline --> QueueLocally: Store in IndexedDB
+    QueueLocally --> ReturnToApp
+    QueueLocally --> SyncLater: Connectivity restored
+    SyncLater --> Success
+```
