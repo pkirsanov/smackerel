@@ -130,6 +130,13 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 		HealthCacheTTL: time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 	}
 
+	// ML sidecar readiness gate: wait for sidecar health at startup
+	// so first search requests don't timeout. Falls back to text mode on timeout.
+	if cfg.MLReadinessTimeoutS > 0 {
+		readinessTimeout := time.Duration(cfg.MLReadinessTimeoutS) * time.Second
+		svc.searchEngine.WaitForMLReady(ctx, readinessTimeout)
+	}
+
 	// Create digest generator
 	svc.digestGen = digest.NewGenerator(svc.pg.Pool, svc.nc, svc.registry)
 	svc.digestGen.KnowledgeEnabled = cfg.KnowledgeEnabled

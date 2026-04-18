@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // NewRouter creates the Chi router with all routes and middleware.
@@ -22,6 +24,9 @@ func NewRouter(deps *Dependencies) http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
 	r.Use(securityHeadersMiddleware)
+
+	// Prometheus metrics endpoint — unauthenticated (standard scrape pattern)
+	r.Handle("/metrics", metrics.Handler())
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.Throttle(100))
@@ -54,6 +59,9 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Get("/", deps.AnnotationHandlers.GetAnnotations)
 					r.Get("/summary", deps.AnnotationHandlers.GetAnnotationSummary)
 				})
+				// Internal Telegram message-artifact mapping (spec 027, scope 5)
+				r.Post("/internal/telegram-message-artifact", deps.AnnotationHandlers.RecordTelegramMessageArtifact)
+				r.Get("/internal/telegram-message-artifact", deps.AnnotationHandlers.ResolveTelegramMessageArtifact)
 			}
 
 			// Knowledge layer endpoints (Scope 3)
@@ -76,6 +84,18 @@ func NewRouter(deps *Dependencies) http.Handler {
 				r.Get("/quick-references", QuickReferencesHandler(deps.IntelligenceEngine))
 				r.Get("/monthly-report", MonthlyReportHandler(deps.IntelligenceEngine))
 				r.Get("/seasonal-patterns", SeasonalPatternsHandler(deps.IntelligenceEngine))
+			}
+
+			// Actionable list endpoints (spec 028)
+			if deps.ListHandlers != nil {
+				r.Route("/lists", func(r chi.Router) {
+					r.Post("/", deps.ListHandlers.CreateListHandler)
+					r.Get("/", deps.ListHandlers.ListListsHandler)
+					r.Get("/{id}", deps.ListHandlers.GetListHandler)
+					r.Post("/{id}/items", deps.ListHandlers.AddItemHandler)
+					r.Post("/{id}/items/{itemId}/check", deps.ListHandlers.CheckItemHandler)
+					r.Post("/{id}/complete", deps.ListHandlers.CompleteListHandler)
+				})
 			}
 
 			// OAuth status requires authentication (token-bearing callers)
@@ -121,6 +141,12 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Get("/knowledge/lint/{id}", deps.WebHandler.LintFindingDetail)
 		})
 	}
+
+	// PWA routes (spec 033) — no auth required, PWA must be publicly installable
+	r.Route("/pwa", func(r chi.Router) {
+		r.Post("/share", deps.PWAShareHandler)
+		r.Handle("/*", http.StripPrefix("/pwa", pwaFileServer()))
+	})
 
 	return r
 }

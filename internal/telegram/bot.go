@@ -19,31 +19,36 @@ import (
 
 // Bot manages the Telegram bot lifecycle and message handling.
 type Bot struct {
-	api            *tgbotapi.BotAPI
-	allowedChats   map[int64]bool
-	captureURL     string // internal API URL for capture
-	searchURL      string // internal API URL for search
-	digestURL      string // internal API URL for digest
-	recentURL      string // internal API URL for recent
-	healthURL      string // internal API URL for health check
-	knowledgeURL   string // internal API URL for knowledge endpoints
-	authToken      string
-	httpClient     *http.Client
-	assembler      *ConversationAssembler
-	mediaAssembler *MediaGroupAssembler
-	done           chan struct{}                   // closed when the update goroutine exits
-	replyFunc      func(chatID int64, text string) // test hook: overrides reply()
+	api             *tgbotapi.BotAPI
+	allowedChats    map[int64]bool
+	baseURL         string // core API base URL (e.g., "http://localhost:8080")
+	captureURL      string // internal API URL for capture
+	searchURL       string // internal API URL for search
+	digestURL       string // internal API URL for digest
+	recentURL       string // internal API URL for recent
+	healthURL       string // internal API URL for health check
+	knowledgeURL    string // internal API URL for knowledge endpoints
+	listsURL        string // internal API URL for list endpoints
+	authToken       string
+	httpClient      *http.Client
+	assembler       *ConversationAssembler
+	mediaAssembler  *MediaGroupAssembler
+	disambiguations *disambiguationStore
+	done            chan struct{}                   // closed when the update goroutine exits
+	replyFunc       func(chatID int64, text string) // test hook: overrides reply()
+	callbackFunc    func(callbackID, text string)   // test hook: overrides callback answer
 }
 
 // Config holds Telegram bot configuration.
 type Config struct {
-	BotToken                string
-	ChatIDs                 []string
-	CoreAPIURL              string // e.g., "http://localhost:8080"
-	AuthToken               string
-	AssemblyWindowSeconds   int // conversation assembly inactivity window (default: 10)
-	AssemblyMaxMessages     int // max messages per conversation buffer (default: 100)
-	MediaGroupWindowSeconds int // media group assembly window (default: 3)
+	BotToken                     string
+	ChatIDs                      []string
+	CoreAPIURL                   string // e.g., "http://localhost:8080"
+	AuthToken                    string
+	AssemblyWindowSeconds        int // conversation assembly inactivity window (default: 10)
+	AssemblyMaxMessages          int // max messages per conversation buffer (default: 100)
+	MediaGroupWindowSeconds      int // media group assembly window (default: 3)
+	DisambiguationTimeoutSeconds int // disambiguation prompt TTL (default: 120)
 }
 
 // NewBot creates and initializes a Telegram bot.
@@ -75,17 +80,20 @@ func NewBot(cfg Config) (*Bot, error) {
 	}
 
 	bot := &Bot{
-		api:          api,
-		allowedChats: allowed,
-		captureURL:   baseURL + "/api/capture",
-		searchURL:    baseURL + "/api/search",
-		digestURL:    baseURL + "/api/digest",
-		recentURL:    baseURL + "/api/recent",
-		healthURL:    baseURL + "/api/health",
-		knowledgeURL: baseURL + "/api/knowledge",
-		authToken:    cfg.AuthToken,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
-		done:         make(chan struct{}),
+		api:             api,
+		allowedChats:    allowed,
+		baseURL:         baseURL,
+		captureURL:      baseURL + "/api/capture",
+		searchURL:       baseURL + "/api/search",
+		digestURL:       baseURL + "/api/digest",
+		recentURL:       baseURL + "/api/recent",
+		healthURL:       baseURL + "/api/health",
+		knowledgeURL:    baseURL + "/api/knowledge",
+		listsURL:        baseURL + "/api/lists",
+		authToken:       cfg.AuthToken,
+		httpClient:      &http.Client{Timeout: 30 * time.Second},
+		disambiguations: newDisambiguationStore(cfg.DisambiguationTimeoutSeconds),
+		done:            make(chan struct{}),
 	}
 
 	// Initialize assemblers with config-driven parameters
@@ -113,9 +121,11 @@ func (b *Bot) Start(ctx context.Context) {
 	// Register commands so they appear in Telegram's autocomplete menu
 	commands := tgbotapi.NewSetMyCommands(
 		tgbotapi.BotCommand{Command: "find", Description: "Search your knowledge"},
+		tgbotapi.BotCommand{Command: "rate", Description: "Rate and annotate an artifact"},
 		tgbotapi.BotCommand{Command: "concept", Description: "Browse concept pages"},
 		tgbotapi.BotCommand{Command: "person", Description: "Browse entity profiles"},
 		tgbotapi.BotCommand{Command: "lint", Description: "Knowledge quality report"},
+		tgbotapi.BotCommand{Command: "list", Description: "Manage actionable lists"},
 		tgbotapi.BotCommand{Command: "digest", Description: "Get today's digest"},
 		tgbotapi.BotCommand{Command: "done", Description: "Finalize conversation assembly"},
 		tgbotapi.BotCommand{Command: "status", Description: "System status"},
@@ -144,6 +154,10 @@ func (b *Bot) Start(ctx context.Context) {
 				if !ok {
 					return // channel closed
 				}
+				if update.CallbackQuery != nil {
+					b.safeHandleCallback(ctx, update.CallbackQuery)
+					continue
+				}
 				if update.Message == nil {
 					continue
 				}
@@ -162,6 +176,16 @@ func (b *Bot) safeHandleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		}
 	}()
 	b.handleMessage(ctx, msg)
+}
+
+// safeHandleCallback wraps handleListCallback with panic recovery.
+func (b *Bot) safeHandleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("telegram callback handler panic recovered", "panic", r)
+		}
+	}()
+	b.handleListCallback(ctx, cb)
 }
 
 // handleMessage routes incoming messages to the appropriate handler.
@@ -185,17 +209,33 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 
 	text := msg.Text
 
+	// Priority 1: Reply-to annotation (user replies to a capture confirmation)
+	if msg.ReplyToMessage != nil && !msg.IsCommand() {
+		if b.handleReplyAnnotation(ctx, msg) {
+			return
+		}
+	}
+
+	// Priority 2: Disambiguation resolution (user replies with a number)
+	if !msg.IsCommand() && b.handleDisambiguationReply(ctx, msg) {
+		return
+	}
+
 	// Handle commands
 	if msg.IsCommand() {
 		switch msg.Command() {
 		case "find":
 			b.handleFind(ctx, msg, msg.CommandArguments())
+		case "rate":
+			b.handleRate(ctx, msg, msg.CommandArguments())
 		case "concept":
 			b.handleConcept(ctx, msg, msg.CommandArguments())
 		case "person":
 			b.handlePerson(ctx, msg, msg.CommandArguments())
 		case "lint":
 			b.handleLint(ctx, msg)
+		case "list":
+			b.handleList(ctx, msg, msg.CommandArguments())
 		case "digest":
 			b.handleDigest(ctx, msg)
 		case "status":
@@ -207,7 +247,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		case "start", "help":
 			b.handleHelp(ctx, msg)
 		default:
-			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /concept, /person, /lint, /digest, /done, /status, or /recent")
+			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /digest, /done, /status, or /recent")
 		}
 		return
 	}
@@ -282,13 +322,14 @@ func (b *Bot) handleTextCapture(ctx context.Context, msg *tgbotapi.Message, text
 	}
 
 	title, _ := result["title"].(string)
+	artifactID, _ := result["artifact_id"].(string)
 
 	suffix := ""
 	if ps, _ := result["processing_status"].(string); ps == "pending" {
 		suffix = " (processing pending)"
 	}
 
-	b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (idea)%s", title, suffix))
+	b.replyWithMapping(ctx, msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (idea)%s", title, suffix), artifactID)
 }
 
 // handleVoice captures a voice note through Whisper transcription.
@@ -306,12 +347,13 @@ func (b *Bot) handleVoice(ctx context.Context, msg *tgbotapi.Message) {
 	}
 
 	title, _ := result["title"].(string)
+	artifactID, _ := result["artifact_id"].(string)
 	connections := 0
 	if c, ok := result["connections"].(float64); ok {
 		connections = int(c)
 	}
 
-	b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (note, %d connections)", title, connections))
+	b.replyWithMapping(ctx, msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (note, %d connections)", title, connections), artifactID)
 }
 
 // maxFindQueryLen is the maximum length for /find search queries.
@@ -388,7 +430,18 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 		if len(summary) > 100 {
 			summary = stringutil.TruncateUTF8(summary, 100) + "..."
 		}
-		lines = append(lines, fmt.Sprintf("> %s (%s)\n- %s", title, artType, summary))
+		entry := fmt.Sprintf("> %s (%s)\n- %s", title, artType, summary)
+
+		// Append domain card if domain_data is present
+		if dd, ok := result["domain_data"]; ok && dd != nil {
+			if raw, err := json.Marshal(dd); err == nil {
+				if card := formatDomainCard(json.RawMessage(raw)); card != "" {
+					entry += "\n" + card
+				}
+			}
+		}
+
+		lines = append(lines, entry)
 	}
 
 	b.reply(msg.Chat.ID, strings.Join(lines, "\n\n"))
@@ -523,7 +576,9 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 - Send text to save an idea
 - Send a voice note to transcribe and save
 - Forward messages to assemble conversations
+- Reply to a saved item to annotate it
 - /find <query> - Search your knowledge
+- /rate <search> <annotation> - Rate/annotate an artifact
 - /concept - Browse concept pages
 - /person - Browse entity profiles
 - /lint - Knowledge quality report

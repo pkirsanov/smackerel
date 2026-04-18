@@ -3,6 +3,7 @@
 package list
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 )
@@ -106,4 +107,15 @@ type Aggregator interface {
 	Domain() string
 	// ListType returns the default list type for this domain.
 	DefaultListType() ListType
+}
+
+// ListStore abstracts list persistence for dependency injection.
+type ListStore interface {
+	CreateList(ctx context.Context, list *List, items []ListItem) error
+	GetList(ctx context.Context, listID string) (*ListWithItems, error)
+	ListLists(ctx context.Context, statusFilter, typeFilter string, limit, offset int) ([]List, error)
+	UpdateItemStatus(ctx context.Context, listID, itemID string, status ItemStatus, substitution string) error
+	AddManualItem(ctx context.Context, listID, content, category string) (*ListItem, error)
+	CompleteList(ctx context.Context, listID string) error
+	ArchiveList(ctx context.Context, listID string) error
 }

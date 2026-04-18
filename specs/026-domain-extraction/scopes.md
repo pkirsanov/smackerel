@@ -80,21 +80,21 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 | # | Name | Surfaces | Key Tests | Status |
 |---|------|----------|-----------|--------|
-| 1 | DB Migration & Domain Data Types | PostgreSQL, Go types | unit: migration applies, type validation | Not Started |
-| 2 | Domain Schema Registry | Go core | unit: contract loading, matching, duplicate rejection | Not Started |
-| 3 | NATS Subjects & Go Publisher | Go pipeline, NATS | unit: publisher, result handler, NATS contract alignment | Not Started |
-| 4 | ML Sidecar Domain Handler | Python ML | unit: prompt build, schema validation, error handling | Not Started |
-| 5 | Recipe Extraction Contract | Config, Python ML | unit: contract loads, fixture validates, prompt correct | Not Started |
-| 6 | Product Extraction Contract | Config, Python ML | unit: contract loads, fixture validates, prompt correct | Not Started |
-| 7 | Pipeline Integration | Go pipeline, Go core | unit: dispatch logic; integration: artifact→domain_data round-trip | Not Started |
-| 8 | Search Extension | Go API | unit: intent detection, JSONB filters; e2e: search by ingredient/price | Not Started |
-| 9 | Telegram Display | Go telegram | unit: recipe card, product card rendering | Not Started |
+| 1 | DB Migration & Domain Data Types | PostgreSQL, Go types | unit: migration applies, type validation | Done |
+| 2 | Domain Schema Registry | Go core | unit: contract loading, matching, duplicate rejection | Done |
+| 3 | NATS Subjects & Go Publisher | Go pipeline, NATS | unit: publisher, result handler, NATS contract alignment | Done |
+| 4 | ML Sidecar Domain Handler | Python ML | unit: prompt build, schema validation, error handling | Done |
+| 5 | Recipe Extraction Contract | Config, Python ML | unit: contract loads, fixture validates, prompt correct | Done |
+| 6 | Product Extraction Contract | Config, Python ML | unit: contract loads, fixture validates, prompt correct | Done |
+| 7 | Pipeline Integration | Go pipeline, Go core | unit: dispatch logic; integration: artifact→domain_data round-trip | Done |
+| 8 | Search Extension | Go API | unit: intent detection, JSONB filters; e2e: search by ingredient/price | Done |
+| 9 | Telegram Display | Go telegram | unit: recipe card, product card rendering | Done |
 
 ---
 
 ## Scope 1: DB Migration & Domain Data Types
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Spec 025 Scope 1 (Knowledge Store migration 014 must exist)
 
@@ -174,7 +174,7 @@ Scenario: Domain extraction response handles success and failure
 
 ## Scope 2: Domain Schema Registry
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 1
 
@@ -262,7 +262,7 @@ Scenario: Registry returns nil for unmatched content type
 
 ## Scope 3: NATS Domain Extraction Subjects & Go Publisher
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 1, Scope 2
 
@@ -371,7 +371,7 @@ Scenario: Domain extraction result handler records failure
 
 ## Scope 4: ML Sidecar Domain Extraction Handler
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 3
 
@@ -467,7 +467,7 @@ Scenario: ML sidecar rejects schema-invalid JSON from LLM
 
 ## Scope 5: Recipe Extraction Prompt Contract
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** Scope 2, Scope 4
 
@@ -540,7 +540,7 @@ Scenario: Recipe schema rejects invalid extraction output
 
 ## Scope 6: Product Extraction Prompt Contract
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** Scope 2, Scope 4
 
@@ -612,7 +612,7 @@ Scenario: Product schema rejects invalid extraction output
 
 ## Scope 7: Pipeline Integration
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 1, Scope 2, Scope 3, Scope 4, Scope 5, Scope 6
 
@@ -725,7 +725,7 @@ Scenario: Domain extraction lifecycle completes end-to-end
 
 ## Scope 8: Search Extension
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** Scope 7
 
@@ -842,7 +842,7 @@ Scenario: SearchResult includes domain_data when present
 
 ## Scope 9: Telegram Display
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P2
 **Depends On:** Scope 7
 
@@ -905,23 +905,23 @@ Scenario: Unknown domain type in domain_data is handled gracefully
 
 ### Definition of Done
 
-- [ ] `formatDomainCard` dispatches to domain-specific renderer based on `domain_data->>'domain'`
-  > **Phase:** implement
+- [x] `formatDomainCard` dispatches to domain-specific renderer based on `domain_data->>'domain'`
+  > **Phase:** implement — switch on `envelope.Domain` in `formatDomainCard()` dispatches to `formatRecipeCard`/`formatProductCard`; verified by T9-07, T9-08
 
-- [ ] `formatRecipeCard` renders timing, servings, cuisine, difficulty, dietary_tags, and up to 10 ingredients
-  > **Phase:** implement
+- [x] `formatRecipeCard` renders timing, servings, cuisine, difficulty, dietary_tags, and up to 10 ingredients
+  > **Phase:** implement — T9-01 asserts all fields present in output
 
-- [ ] `formatRecipeCard` truncates ingredient list beyond 10 with "... and N more" message
-  > **Phase:** implement
+- [x] `formatRecipeCard` truncates ingredient list beyond 10 with "... and N more" message
+  > **Phase:** implement — T9-02 uses 13 ingredients, verifies 10 shown + "... and 3 more" message
 
-- [ ] `formatProductCard` renders brand, price (with currency), rating (score/max), up to 5 pros and 3 cons
-  > **Phase:** implement
+- [x] `formatProductCard` renders brand, price (with currency), rating (score/max), up to 5 pros and 3 cons
+  > **Phase:** implement — T9-03 asserts brand, price, rating, pros, cons; T9-04 asserts truncation
 
-- [ ] `formatDomainCard` returns empty string for nil/empty domain_data and unknown domain types (no errors)
-  > **Phase:** implement
+- [x] `formatDomainCard` returns empty string for nil/empty domain_data and unknown domain types (no errors)
+  > **Phase:** implement — T9-05 (nil/empty) and T9-06 (unknown domain="travel") both assert empty string
 
-- [ ] `formatDomainCard` integrated into artifact display formatting in Telegram format layer
-  > **Phase:** implement
+- [x] `formatDomainCard` integrated into artifact display formatting in Telegram format layer
+  > **Phase:** implement — integrated into `handleFind` result loop in `bot.go`; domain_data from search results rendered via `formatDomainCard`
 
 - [ ] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test

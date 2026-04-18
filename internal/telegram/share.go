@@ -49,6 +49,7 @@ func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, tex
 
 		title, _ := result["title"].(string)
 		artType, _ := result["artifact_type"].(string)
+		artifactID, _ := result["artifact_id"].(string)
 		connections := 0
 		if c, ok := result["connections"].(float64); ok {
 			connections = int(c)
@@ -60,9 +61,9 @@ func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, tex
 		}
 
 		if contextText != "" {
-			b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections) with context%s", title, artType, connections, suffix))
+			b.replyWithMapping(ctx, msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections) with context%s", title, artType, connections, suffix), artifactID)
 		} else {
-			b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections)%s", title, artType, connections, suffix))
+			b.replyWithMapping(ctx, msg.Chat.ID, fmt.Sprintf(". Saved: \"%s\" (%s, %d connections)%s", title, artType, connections, suffix), artifactID)
 		}
 		return
 	}

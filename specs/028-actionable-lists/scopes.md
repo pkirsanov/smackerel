@@ -10,7 +10,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ### Phase Order
 
-1. **Scope 1 — DB Migration & List Types** — Migration `016_actionable_lists.sql` + Go types for lists, list items, aggregation sources, and list item seeds. Foundation for all subsequent scopes.
+1. **Scope 1 — DB Migration & List Types** — Migration `017_actionable_lists.sql` + Go types for lists, list items, aggregation sources, and list item seeds. Foundation for all subsequent scopes.
 2. **Scope 2 — List Store (CRUD)** — `internal/list/store.go` with CreateList, GetList, ListLists, UpdateItemStatus, AddManualItem, CompleteList, ArchiveList, denormalized counter updates, NATS event publication.
 3. **Scope 3 — Aggregator Interface & Recipe Aggregator** — `internal/list/aggregator.go` interface + `internal/list/recipe_aggregator.go` with ingredient parsing, unit normalization, quantity merging, category assignment, name normalization.
 4. **Scope 4 — Reading & Comparison Aggregators** — `internal/list/reading_aggregator.go` for article lists + `internal/list/compare_aggregator.go` for product comparison tables. Demonstrates domain extensibility.
@@ -108,7 +108,7 @@ Scope 1 (DB + Types)
 - `SubjectListsCreated = "lists.created"`
 - `SubjectListsCompleted = "lists.completed"`
 
-**SQL (`internal/db/migrations/016_actionable_lists.sql`):**
+**SQL (`internal/db/migrations/017_actionable_lists.sql`):**
 - `CREATE TABLE lists (...)` — as defined in design.md
 - `CREATE TABLE list_items (...)` — as defined in design.md
 
@@ -120,7 +120,7 @@ Scope 1 (DB + Types)
 
 ## Scope 1: DB Migration & List Types
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** None (spec 026 migration is 015, this is 016)
 
@@ -129,7 +129,7 @@ Scope 1 (DB + Types)
 ```gherkin
 Scenario: List tables created by migration
   Given the database is running with migrations through 015
-  When migration 016_actionable_lists.sql is applied
+  When migration 017_actionable_lists.sql is applied
   Then a "lists" table exists with columns id, list_type, title, status, source_artifact_ids, source_query, domain, total_items, checked_items, created_at, updated_at, completed_at
   And a "list_items" table exists with columns id, list_id, content, category, status, substitution, source_artifact_ids, is_manual, quantity, unit, normalized_name, sort_order, checked_at, notes, created_at, updated_at
   And list_items.list_id has a foreign key to lists.id with ON DELETE CASCADE
@@ -143,7 +143,7 @@ Scenario: List type constants compile
 
 ### DoD
 
-- [ ] Migration file `016_actionable_lists.sql` created and applies cleanly
+- [ ] Migration file `017_actionable_lists.sql` created and applies cleanly
 - [ ] Go types defined in `internal/list/types.go`
 - [ ] `./smackerel.sh test unit` passes
 - [ ] `./smackerel.sh lint` passes
@@ -152,7 +152,7 @@ Scenario: List type constants compile
 
 ## Scope 2: List Store (CRUD)
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 1
 
@@ -209,7 +209,7 @@ Scenario: Archive list
 
 ## Scope 3: Aggregator Interface & Recipe Aggregator
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 1
 
@@ -266,7 +266,7 @@ Scenario: Handle uncountable quantities
 
 ## Scope 4: Reading & Comparison Aggregators
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** Scope 3 (interface)
 
@@ -304,7 +304,7 @@ Scenario: Estimate read time
 
 ## Scope 5: List Generator
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 2, Scope 3
 
@@ -337,19 +337,19 @@ Scenario: Handle artifacts without domain_data
 
 ### DoD
 
-- [ ] Generator resolves artifacts from IDs, tags, and search queries
-- [ ] Generator selects correct aggregator based on list_type + domain
-- [ ] Generator persists list via Store
-- [ ] Handles missing domain_data gracefully (skip with warning)
-- [ ] Rejects incompatible domain combinations
-- [ ] `./smackerel.sh test unit` passes
-- [ ] `./smackerel.sh lint` passes
+- [x] Generator resolves artifacts from IDs, tags, and search queries **Phase:** implement — ArtifactResolver interface + PostgresArtifactResolver
+- [x] Generator selects correct aggregator based on list_type + domain **Phase:** implement — validateDomains() + aggregator map lookup
+- [x] Generator persists list via Store **Phase:** implement — ListStore interface injection
+- [x] Handles missing domain_data gracefully (skip with warning) **Phase:** implement — slog.Warn when resolved < requested
+- [x] Rejects incompatible domain combinations **Phase:** implement — TestGenerator_RejectMixedDomains passes
+- [x] `./smackerel.sh test unit` passes **Phase:** implement — **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Phase:** implement — **Claim Source:** executed
 
 ---
 
 ## Scope 6: REST API Endpoints
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 5
 
@@ -392,19 +392,19 @@ Scenario: List all active lists
 
 ### DoD
 
-- [ ] All list CRUD endpoints implemented
-- [ ] All item-level operation endpoints implemented
-- [ ] Route group registered in router.go
-- [ ] Dependencies wired (Generator, Store)
-- [ ] Error responses follow existing API error format
-- [ ] `./smackerel.sh test unit` passes
-- [ ] `./smackerel.sh lint` passes
+- [x] All list CRUD endpoints implemented **Phase:** implement — POST/GET /api/lists, GET /api/lists/{id}
+- [x] All item-level operation endpoints implemented **Phase:** implement — POST items, POST check, POST complete
+- [x] Route group registered in router.go **Phase:** implement — Chi r.Route("/lists", ...)
+- [x] Dependencies wired (Generator, Store) **Phase:** implement — ListHandlers struct + Dependencies field
+- [x] Error responses follow existing API error format **Phase:** implement — JSON error pattern
+- [x] `./smackerel.sh test unit` passes **Phase:** implement — **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Phase:** implement — **Claim Source:** executed
 
 ---
 
 ## Scope 7: Telegram /list Command & Inline Keyboard
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** Scope 5
 
@@ -443,19 +443,19 @@ Scenario: Complete list via Telegram
 
 ### DoD
 
-- [ ] `/list` command parser implemented and registered
-- [ ] List display with inline keyboard renders correctly
-- [ ] Callback handler for check/skip/substitute works
-- [ ] Message editing on item state change works
-- [ ] `/list add` and `/list done` sub-commands work
-- [ ] `./smackerel.sh test unit` passes
-- [ ] `./smackerel.sh lint` passes
+- [x] `/list` command parser implemented and registered **Phase:** implement — parseListCommand() + bot command switch
+- [x] List display with inline keyboard renders correctly **Phase:** implement — formatListMessage() with keyboard buttons
+- [x] Callback handler for check/skip/substitute works **Phase:** implement — handleListCallback() with callback data parsing
+- [x] Message editing on item state change works **Phase:** implement — NewEditMessageText after callback
+- [x] `/list add` and `/list done` sub-commands work **Phase:** implement — tested with mock HTTP servers
+- [x] `./smackerel.sh test unit` passes **Phase:** implement — **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Phase:** implement — **Claim Source:** executed
 
 ---
 
 ## Scope 8: Intelligence Integration
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P2
 **Depends On:** Scope 2
 
@@ -477,11 +477,11 @@ Scenario: Frequently purchased ingredients detected
 
 ### DoD
 
-- [ ] NATS subscriber for `lists.completed` implemented in intelligence engine
-- [ ] Completed list analysis updates artifact relevance scores
-- [ ] Frequency tracking for purchased items stored (for future pantry awareness)
-- [ ] `./smackerel.sh test unit` passes
-- [ ] `./smackerel.sh lint` passes
+- [x] NATS subscriber for `lists.completed` implemented in intelligence engine **Phase:** implement — SubscribeListsCompleted() + NATS subjects in contract
+- [x] Completed list analysis updates artifact relevance scores **Phase:** implement — boostArtifactRelevance() +0.1 capped at 1.0
+- [x] Frequency tracking for purchased items stored (for future pantry awareness) **Phase:** implement — trackPurchaseFrequency() upserts
+- [x] `./smackerel.sh test unit` passes **Phase:** implement — **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Phase:** implement — **Claim Source:** executed
 
 ---
 
@@ -502,11 +502,11 @@ Scenario: Frequently purchased ingredients detected
 
 | Scope | Name | Priority | Status | Est. Size | Depends On |
 |-------|------|----------|--------|-----------|------------|
-| 1 | DB Migration & List Types | P0 | Not Started | S | None |
-| 2 | List Store (CRUD) | P0 | Not Started | M | 1 |
-| 3 | Aggregator Interface & Recipe Aggregator | P0 | Not Started | L | 1 |
-| 4 | Reading & Comparison Aggregators | P1 | Not Started | M | 3 |
-| 5 | List Generator | P0 | Not Started | M | 2, 3 |
-| 6 | REST API Endpoints | P0 | Not Started | M | 5 |
-| 7 | Telegram /list Command & Inline Keyboard | P1 | Not Started | M | 5 |
-| 8 | Intelligence Integration | P2 | Not Started | S | 2 |
+| 1 | DB Migration & List Types | P0 | Done | S | None |
+| 2 | List Store (CRUD) | P0 | Done | M | 1 |
+| 3 | Aggregator Interface & Recipe Aggregator | P0 | Done | L | 1 |
+| 4 | Reading & Comparison Aggregators | P1 | Done | M | 3 |
+| 5 | List Generator | P0 | Done | M | 2, 3 |
+| 6 | REST API Endpoints | P0 | Done | M | 5 |
+| 7 | Telegram /list Command & Inline Keyboard | P1 | Done | M | 5 |
+| 8 | Intelligence Integration | P2 | Done | S | 2 |

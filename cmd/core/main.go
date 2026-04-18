@@ -17,10 +17,11 @@ import (
 	"github.com/smackerel/smackerel/internal/telegram"
 )
 
-// version and commitHash are set by -ldflags at build time.
+// version, commitHash, and buildTime are set by -ldflags at build time.
 var (
 	version    = "dev"
 	commitHash = "unknown"
+	buildTime  = "unknown"
 )
 
 func main() {
@@ -58,7 +59,7 @@ func run() error {
 		slog.Warn("SMACKEREL_AUTH_TOKEN is empty — system running without authentication")
 	}
 
-	slog.Info("starting smackerel-core", "port", cfg.Port, "version", version, "commit", commitHash)
+	slog.Info("starting smackerel-core", "port", cfg.Port, "version", version, "commit", commitHash, "build_time", buildTime)
 
 	// Build core services (DB, NATS, pipeline, knowledge, etc.)
 	svc, err := buildCoreServices(ctx, cfg)
@@ -90,6 +91,7 @@ func run() error {
 		ConnectorRegistry:               svc.registry,
 		Version:                         version,
 		CommitHash:                      commitHash,
+		BuildTime:                       buildTime,
 		KnowledgeStore:                  svc.knowledgeStore,
 		KnowledgeConceptSearchThreshold: cfg.KnowledgeConceptSearchThreshold,
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
@@ -102,13 +104,14 @@ func run() error {
 	if cfg.TelegramBotToken != "" {
 		var err error
 		tgBot, err = telegram.NewBot(telegram.Config{
-			BotToken:                cfg.TelegramBotToken,
-			ChatIDs:                 cfg.TelegramChatIDs,
-			CoreAPIURL:              cfg.CoreAPIURL,
-			AuthToken:               cfg.AuthToken,
-			AssemblyWindowSeconds:   cfg.TelegramAssemblyWindowSeconds,
-			AssemblyMaxMessages:     cfg.TelegramAssemblyMaxMessages,
-			MediaGroupWindowSeconds: cfg.TelegramMediaGroupWindowSeconds,
+			BotToken:                     cfg.TelegramBotToken,
+			ChatIDs:                      cfg.TelegramChatIDs,
+			CoreAPIURL:                   cfg.CoreAPIURL,
+			AuthToken:                    cfg.AuthToken,
+			AssemblyWindowSeconds:        cfg.TelegramAssemblyWindowSeconds,
+			AssemblyMaxMessages:          cfg.TelegramAssemblyMaxMessages,
+			MediaGroupWindowSeconds:      cfg.TelegramMediaGroupWindowSeconds,
+			DisambiguationTimeoutSeconds: cfg.TelegramDisambiguationTimeoutSeconds,
 		})
 		if err != nil {
 			slog.Warn("telegram bot initialization failed", "error", err)
@@ -121,6 +124,13 @@ func run() error {
 
 	// Start digest scheduler + intelligence jobs
 	sched := scheduler.New(svc.digestGen, tgBot, svc.intEngine, svc.topicLifecycle)
+
+	// Subscribe intelligence engine to annotation events (spec 027)
+	if svc.intEngine != nil {
+		if err := svc.intEngine.SubscribeAnnotations(ctx); err != nil {
+			slog.Warn("annotation subscription failed", "error", err)
+		}
+	}
 
 	// Wire knowledge linter into scheduler if knowledge layer is enabled
 	if cfg.KnowledgeEnabled && svc.knowledgeStore != nil {

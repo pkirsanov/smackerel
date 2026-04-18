@@ -159,7 +159,8 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 			return
 		}
 		title, _ := result["title"].(string)
-		b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: forwarded from %s (\"%s\")", meta.SenderName, title))
+		artifactID, _ := result["artifact_id"].(string)
+		b.replyWithMapping(ctx, msg.Chat.ID, fmt.Sprintf(". Saved: forwarded from %s (\"%s\")", meta.SenderName, title), artifactID)
 		return
 	}
 
@@ -176,7 +177,8 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 			return
 		}
 		title, _ := result["title"].(string)
-		b.reply(msg.Chat.ID, fmt.Sprintf(". Saved: forwarded from %s (\"%s\")", meta.SenderName, title))
+		artifactID, _ := result["artifact_id"].(string)
+		b.replyWithMapping(ctx, msg.Chat.ID, fmt.Sprintf(". Saved: forwarded from %s (\"%s\")", meta.SenderName, title), artifactID)
 		return
 	}
 

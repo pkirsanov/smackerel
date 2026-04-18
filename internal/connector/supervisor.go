@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // Supervisor manages connector goroutines with crash recovery.
@@ -260,6 +262,7 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 		items, newCursor, err := conn.Sync(connCtx, cursor)
 		if err != nil {
 			consecutiveErrors++
+			metrics.ConnectorSync.WithLabelValues(id, "error").Inc()
 			slog.Error("connector sync failed",
 				"connector", id,
 				"error", err,
@@ -311,6 +314,7 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 		// Success — reset backoff and error counter
 		backoff.Reset()
 		consecutiveErrors = 0
+		metrics.ConnectorSync.WithLabelValues(id, "success").Inc()
 
 		// Track cursor in memory as fallback for transient DB failures
 		if newCursor != "" {

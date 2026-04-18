@@ -2,26 +2,82 @@
   "version": 3,
   "featureDir": "specs/030-observability",
   "featureName": "Observability",
-  "status": "not_started",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": null,
-    "currentPhase": null,
-    "currentScope": null,
-    "runStartedAt": null,
-    "completedPhaseClaims": [],
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "finalize",
+    "currentScope": 5,
+    "runStartedAt": "2026-04-18T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "scopes": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "completedAt": "2026-04-18T00:00:00Z",
+        "evidence": "All 5 scopes implemented. ./smackerel.sh test unit: 39/39 packages pass. ./smackerel.sh lint: 0 errors. ./smackerel.sh config generate: OTEL_ENABLED in dev.env."
+      },
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "not_started",
-    "completedScopes": [],
+    "completedScopes": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
-      {"scope": 1, "name": "Prometheus Metrics Endpoint", "status": "Not Started", "dependsOn": []},
-      {"scope": 2, "name": "Ingestion & Search Metrics Instrumentation", "status": "Not Started", "dependsOn": [1]},
-      {"scope": 3, "name": "Connector Sync Metrics", "status": "Not Started", "dependsOn": [1]},
-      {"scope": 4, "name": "ML Sidecar Metrics Endpoint", "status": "Not Started", "dependsOn": []},
-      {"scope": 5, "name": "OpenTelemetry Trace Propagation", "status": "Not Started", "dependsOn": [1, 4]}
+      {
+        "scope": 1,
+        "name": "Prometheus Metrics Endpoint",
+        "status": "Done",
+        "dependsOn": []
+      },
+      {
+        "scope": 2,
+        "name": "Ingestion & Search Metrics Instrumentation",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ]
+      },
+      {
+        "scope": 3,
+        "name": "Connector Sync Metrics",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ]
+      },
+      {
+        "scope": 4,
+        "name": "ML Sidecar Metrics Endpoint",
+        "status": "Done",
+        "dependsOn": []
+      },
+      {
+        "scope": 5,
+        "name": "OpenTelemetry Trace Propagation",
+        "status": "Done",
+        "dependsOn": [
+          1,
+          4
+        ]
+      }
     ],
     "lockdownState": {
       "active": false,
@@ -29,12 +85,30 @@
     }
   },
   "policySnapshot": {
-    "grill": {"mode": "off", "source": "repo-default"},
-    "tdd": {"mode": "scenario-first", "source": "repo-default"},
-    "autoCommit": {"mode": "off", "source": "repo-default"},
-    "lockdown": {"mode": "off", "source": "repo-default"},
-    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
-    "validation": {"mode": "certification-required", "source": "repo-default"}
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
@@ -42,7 +116,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T00:00:00Z",
+  "lastUpdatedAt": "2026-04-18T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
