@@ -71,6 +71,7 @@ type ConnectorHealthLister interface {
 type ArtifactQuerier interface {
 	RecentArtifacts(ctx context.Context, limit int) ([]db.RecentArtifact, error)
 	GetArtifact(ctx context.Context, id string) (*db.ArtifactDetail, error)
+	GetArtifactWithDomain(ctx context.Context, id string) (*db.ArtifactWithDomain, error)
 	ExportArtifacts(ctx context.Context, cursor time.Time, limit int) (*db.ExportResult, error)
 }
 
@@ -114,6 +115,12 @@ type Dependencies struct {
 
 	// Actionable list handlers (optional — nil when lists not configured)
 	ListHandlers *ListHandlers
+
+	// Expense handler (optional — nil when expenses not enabled)
+	ExpenseHandler *ExpenseHandler
+
+	// Meal plan handler (optional — nil when meal planning not enabled)
+	MealPlanHandler *MealPlanHandler
 }
 
 // DBHealthChecker is the interface for database health checks.

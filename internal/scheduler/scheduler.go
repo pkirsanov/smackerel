@@ -45,6 +45,9 @@ type Scheduler struct {
 	muKnowledgeLint    sync.Mutex
 	knowledgeLinter    *knowledge.Linter
 	knowledgeLintCron  string
+	muMealPlanComplete sync.Mutex
+	mealPlanSvc        MealPlanAutoCompleter
+	mealPlanCron       string
 }
 
 // New creates a new scheduler.
@@ -112,6 +115,13 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			slog.Info("knowledge lint scheduled", "cron", s.knowledgeLintCron)
 		}
 	}
+	if s.mealPlanSvc != nil && s.mealPlanCron != "" {
+		if _, err := s.cron.AddFunc(s.mealPlanCron, s.runMealPlanAutoCompleteJob); err != nil {
+			slog.Warn("failed to schedule meal plan auto-complete", "error", err)
+		} else {
+			slog.Info("meal plan auto-complete scheduled", "cron", s.mealPlanCron)
+		}
+	}
 	s.cron.Start()
 	slog.Info("scheduler started", "digest_cron", cronExpr)
 	return nil
@@ -155,6 +165,18 @@ func (s *Scheduler) DigestPendingRetry() bool {
 func (s *Scheduler) SetKnowledgeLinter(linter *knowledge.Linter, cronExpr string) {
 	s.knowledgeLinter = linter
 	s.knowledgeLintCron = cronExpr
+}
+
+// MealPlanAutoCompleter is the interface for auto-completing meal plans.
+type MealPlanAutoCompleter interface {
+	AutoCompletePastPlans(ctx context.Context) (int, error)
+}
+
+// SetMealPlanAutoComplete configures the meal plan auto-complete job.
+// Must be called before Start().
+func (s *Scheduler) SetMealPlanAutoComplete(svc MealPlanAutoCompleter, cronExpr string) {
+	s.mealPlanSvc = svc
+	s.mealPlanCron = cronExpr
 }
 
 // DigestPendingDate returns the current pending date (thread-safe).

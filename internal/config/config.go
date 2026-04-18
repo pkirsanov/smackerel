@@ -1,12 +1,20 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 )
+
+// ExpenseCategory defines an expense classification category.
+type ExpenseCategory struct {
+	Slug        string `json:"slug"`
+	Display     string `json:"display"`
+	TaxCategory string `json:"tax_category"`
+}
 
 // Config holds all configuration values for smackerel-core.
 type Config struct {
@@ -72,6 +80,33 @@ type Config struct {
 	// Observability config (SST-compliant — from smackerel.yaml via config generate)
 	OTELEnabled          bool
 	OTELExporterEndpoint string
+
+	// Expense tracking config (SST-compliant — from smackerel.yaml via config generate)
+	ExpensesEnabled                        bool
+	ExpensesDefaultCurrency                string
+	ExpensesExportMaxRows                  int
+	ExpensesExportQBDateFormat             string
+	ExpensesExportStdDateFormat            string
+	ExpensesSuggestionsMinConfidence       float64
+	ExpensesSuggestionsMinPastBusiness     int
+	ExpensesSuggestionsMaxPerDigest        int
+	ExpensesSuggestionsReclassifyBatchLim  int
+	ExpensesVendorCacheSize                int
+	ExpensesDigestMaxWords                 int
+	ExpensesDigestNeedsReviewLimit         int
+	ExpensesDigestMissingReceiptLookback   int
+	IMAPExpenseLabels                      map[string]string
+	ExpensesBusinessVendors                []string
+	ExpensesCategories                     []ExpenseCategory
+
+	// Meal planning config (SST-compliant — from smackerel.yaml via config generate)
+	MealPlanEnabled           bool
+	MealPlanDefaultServings   int
+	MealPlanMealTypes         []string
+	MealPlanMealTimes         map[string]string
+	MealPlanCalendarSync      bool
+	MealPlanAutoComplete      bool
+	MealPlanAutoCompleteCron  string
 }
 
 // Load reads configuration from environment variables.
@@ -301,6 +336,209 @@ func Load() (*Config, error) {
 	// Parse observability config (SST-compliant — opt-in, disabled by default)
 	cfg.OTELEnabled = os.Getenv("OTEL_ENABLED") == "true"
 	cfg.OTELExporterEndpoint = os.Getenv("OTEL_EXPORTER_ENDPOINT")
+
+	// Parse expense tracking config (SST-compliant — from smackerel.yaml via config generate)
+	expensesEnabledStr := os.Getenv("EXPENSES_ENABLED")
+	if expensesEnabledStr == "" {
+		return nil, fmt.Errorf("missing required configuration: EXPENSES_ENABLED")
+	}
+	cfg.ExpensesEnabled = expensesEnabledStr == "true"
+
+	if cfg.ExpensesEnabled {
+		var expenseErrors []string
+
+		cfg.ExpensesDefaultCurrency = os.Getenv("EXPENSES_DEFAULT_CURRENCY")
+		if cfg.ExpensesDefaultCurrency == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_DEFAULT_CURRENCY")
+		}
+
+		exportMaxRowsStr := os.Getenv("EXPENSES_EXPORT_MAX_ROWS")
+		if exportMaxRowsStr == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_EXPORT_MAX_ROWS")
+		} else if v, err := strconv.Atoi(exportMaxRowsStr); err != nil || v < 1 {
+			expenseErrors = append(expenseErrors, "EXPENSES_EXPORT_MAX_ROWS (must be a positive integer)")
+		} else {
+			cfg.ExpensesExportMaxRows = v
+		}
+
+		cfg.ExpensesExportQBDateFormat = os.Getenv("EXPENSES_EXPORT_QB_DATE_FORMAT")
+		if cfg.ExpensesExportQBDateFormat == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_EXPORT_QB_DATE_FORMAT")
+		}
+
+		cfg.ExpensesExportStdDateFormat = os.Getenv("EXPENSES_EXPORT_STD_DATE_FORMAT")
+		if cfg.ExpensesExportStdDateFormat == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_EXPORT_STD_DATE_FORMAT")
+		}
+
+		minConfStr := os.Getenv("EXPENSES_SUGGESTIONS_MIN_CONFIDENCE")
+		if minConfStr == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_SUGGESTIONS_MIN_CONFIDENCE")
+		} else if v, err := strconv.ParseFloat(minConfStr, 64); err != nil || v < 0 || v > 1 {
+			expenseErrors = append(expenseErrors, "EXPENSES_SUGGESTIONS_MIN_CONFIDENCE (must be a float in [0, 1])")
+		} else {
+			cfg.ExpensesSuggestionsMinConfidence = v
+		}
+
+		minPastStr := os.Getenv("EXPENSES_SUGGESTIONS_MIN_PAST_BUSINESS")
+		if minPastStr == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_SUGGESTIONS_MIN_PAST_BUSINESS")
+		} else if v, err := strconv.Atoi(minPastStr); err != nil || v < 1 {
+			expenseErrors = append(expenseErrors, "EXPENSES_SUGGESTIONS_MIN_PAST_BUSINESS (must be a positive integer)")
+		} else {
+			cfg.ExpensesSuggestionsMinPastBusiness = v
+		}
+
+		maxPerDigestStr := os.Getenv("EXPENSES_SUGGESTIONS_MAX_PER_DIGEST")
+		if maxPerDigestStr == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_SUGGESTIONS_MAX_PER_DIGEST")
+		} else if v, err := strconv.Atoi(maxPerDigestStr); err != nil || v < 1 {
+			expenseErrors = append(expenseErrors, "EXPENSES_SUGGESTIONS_MAX_PER_DIGEST (must be a positive integer)")
+		} else {
+			cfg.ExpensesSuggestionsMaxPerDigest = v
+		}
+
+		reclassLimStr := os.Getenv("EXPENSES_SUGGESTIONS_RECLASSIFY_BATCH_LIMIT")
+		if reclassLimStr == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_SUGGESTIONS_RECLASSIFY_BATCH_LIMIT")
+		} else if v, err := strconv.Atoi(reclassLimStr); err != nil || v < 1 {
+			expenseErrors = append(expenseErrors, "EXPENSES_SUGGESTIONS_RECLASSIFY_BATCH_LIMIT (must be a positive integer)")
+		} else {
+			cfg.ExpensesSuggestionsReclassifyBatchLim = v
+		}
+
+		vendorCacheStr := os.Getenv("EXPENSES_VENDOR_CACHE_SIZE")
+		if vendorCacheStr == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_VENDOR_CACHE_SIZE")
+		} else if v, err := strconv.Atoi(vendorCacheStr); err != nil || v < 1 {
+			expenseErrors = append(expenseErrors, "EXPENSES_VENDOR_CACHE_SIZE (must be a positive integer)")
+		} else {
+			cfg.ExpensesVendorCacheSize = v
+		}
+
+		digestMaxWordsStr := os.Getenv("EXPENSES_DIGEST_MAX_WORDS")
+		if digestMaxWordsStr == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_DIGEST_MAX_WORDS")
+		} else if v, err := strconv.Atoi(digestMaxWordsStr); err != nil || v < 1 {
+			expenseErrors = append(expenseErrors, "EXPENSES_DIGEST_MAX_WORDS (must be a positive integer)")
+		} else {
+			cfg.ExpensesDigestMaxWords = v
+		}
+
+		digestNeedsReviewStr := os.Getenv("EXPENSES_DIGEST_NEEDS_REVIEW_LIMIT")
+		if digestNeedsReviewStr == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_DIGEST_NEEDS_REVIEW_LIMIT")
+		} else if v, err := strconv.Atoi(digestNeedsReviewStr); err != nil || v < 1 {
+			expenseErrors = append(expenseErrors, "EXPENSES_DIGEST_NEEDS_REVIEW_LIMIT (must be a positive integer)")
+		} else {
+			cfg.ExpensesDigestNeedsReviewLimit = v
+		}
+
+		missingReceiptStr := os.Getenv("EXPENSES_DIGEST_MISSING_RECEIPT_LOOKBACK_DAYS")
+		if missingReceiptStr == "" {
+			expenseErrors = append(expenseErrors, "EXPENSES_DIGEST_MISSING_RECEIPT_LOOKBACK_DAYS")
+		} else if v, err := strconv.Atoi(missingReceiptStr); err != nil || v < 1 {
+			expenseErrors = append(expenseErrors, "EXPENSES_DIGEST_MISSING_RECEIPT_LOOKBACK_DAYS (must be a positive integer)")
+		} else {
+			cfg.ExpensesDigestMissingReceiptLookback = v
+		}
+
+		// JSON-encoded complex config
+		imapLabelsStr := os.Getenv("IMAP_EXPENSE_LABELS")
+		if imapLabelsStr == "" || imapLabelsStr == "{}" {
+			cfg.IMAPExpenseLabels = make(map[string]string)
+		} else if err := json.Unmarshal([]byte(imapLabelsStr), &cfg.IMAPExpenseLabels); err != nil {
+			expenseErrors = append(expenseErrors, "IMAP_EXPENSE_LABELS (invalid JSON)")
+		}
+
+		businessVendorsStr := os.Getenv("EXPENSES_BUSINESS_VENDORS")
+		if businessVendorsStr == "" || businessVendorsStr == "[]" {
+			cfg.ExpensesBusinessVendors = []string{}
+		} else if err := json.Unmarshal([]byte(businessVendorsStr), &cfg.ExpensesBusinessVendors); err != nil {
+			expenseErrors = append(expenseErrors, "EXPENSES_BUSINESS_VENDORS (invalid JSON)")
+		}
+
+		categoriesStr := os.Getenv("EXPENSES_CATEGORIES")
+		if categoriesStr == "" || categoriesStr == "[]" {
+			expenseErrors = append(expenseErrors, "EXPENSES_CATEGORIES (must contain at least one category)")
+		} else if err := json.Unmarshal([]byte(categoriesStr), &cfg.ExpensesCategories); err != nil {
+			expenseErrors = append(expenseErrors, "EXPENSES_CATEGORIES (invalid JSON)")
+		}
+
+		if len(expenseErrors) > 0 {
+			return nil, fmt.Errorf("missing or invalid required expense configuration: %s", strings.Join(expenseErrors, ", "))
+		}
+	}
+
+	// Parse meal planning config (SST-compliant — from smackerel.yaml via config generate)
+	mealPlanEnabledStr := os.Getenv("MEAL_PLANNING_ENABLED")
+	if mealPlanEnabledStr == "" {
+		return nil, fmt.Errorf("missing required configuration: MEAL_PLANNING_ENABLED")
+	}
+	cfg.MealPlanEnabled = mealPlanEnabledStr == "true"
+
+	if cfg.MealPlanEnabled {
+		var mealPlanErrors []string
+
+		defaultServStr := os.Getenv("MEAL_PLANNING_DEFAULT_SERVINGS")
+		if defaultServStr == "" {
+			mealPlanErrors = append(mealPlanErrors, "MEAL_PLANNING_DEFAULT_SERVINGS")
+		} else if v, err := strconv.Atoi(defaultServStr); err != nil || v < 1 {
+			mealPlanErrors = append(mealPlanErrors, "MEAL_PLANNING_DEFAULT_SERVINGS (must be a positive integer)")
+		} else {
+			cfg.MealPlanDefaultServings = v
+		}
+
+		mealTypesStr := os.Getenv("MEAL_PLANNING_MEAL_TYPES")
+		if mealTypesStr == "" {
+			mealPlanErrors = append(mealPlanErrors, "MEAL_PLANNING_MEAL_TYPES")
+		} else {
+			// Parse comma-separated, stripping brackets and quotes from YAML array format
+			cleaned := strings.Trim(mealTypesStr, "[] ")
+			var types []string
+			for _, t := range strings.Split(cleaned, ",") {
+				t = strings.Trim(strings.TrimSpace(t), "\"'")
+				if t != "" {
+					types = append(types, t)
+				}
+			}
+			if len(types) == 0 {
+				mealPlanErrors = append(mealPlanErrors, "MEAL_PLANNING_MEAL_TYPES (must contain at least one type)")
+			} else {
+				cfg.MealPlanMealTypes = types
+			}
+		}
+
+		cfg.MealPlanMealTimes = make(map[string]string)
+		mealTimeKeys := map[string]string{
+			"MEAL_PLANNING_MEAL_TIME_BREAKFAST": "breakfast",
+			"MEAL_PLANNING_MEAL_TIME_LUNCH":     "lunch",
+			"MEAL_PLANNING_MEAL_TIME_DINNER":    "dinner",
+			"MEAL_PLANNING_MEAL_TIME_SNACK":     "snack",
+		}
+		for envKey, mealKey := range mealTimeKeys {
+			if v := os.Getenv(envKey); v != "" {
+				cfg.MealPlanMealTimes[mealKey] = v
+			}
+		}
+
+		cfg.MealPlanCalendarSync = os.Getenv("MEAL_PLANNING_CALENDAR_SYNC") == "true"
+
+		cfg.MealPlanAutoComplete = os.Getenv("MEAL_PLANNING_AUTO_COMPLETE") == "true"
+
+		cfg.MealPlanAutoCompleteCron = os.Getenv("MEAL_PLANNING_AUTO_COMPLETE_CRON")
+		if cfg.MealPlanAutoComplete {
+			if cfg.MealPlanAutoCompleteCron == "" {
+				mealPlanErrors = append(mealPlanErrors, "MEAL_PLANNING_AUTO_COMPLETE_CRON")
+			} else if !isValidCronExpr(cfg.MealPlanAutoCompleteCron) {
+				mealPlanErrors = append(mealPlanErrors, "MEAL_PLANNING_AUTO_COMPLETE_CRON (not a valid cron expression)")
+			}
+		}
+
+		if len(mealPlanErrors) > 0 {
+			return nil, fmt.Errorf("missing or invalid required meal planning configuration: %s", strings.Join(mealPlanErrors, ", "))
+		}
+	}
 
 	return cfg, nil
 }

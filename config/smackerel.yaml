@@ -36,10 +36,100 @@ telegram:
   assembly_max_messages: 100
   media_group_window_seconds: 3
   disambiguation_timeout_seconds: 120
+  cook_session_timeout_minutes: 120 # Inactivity timeout before cook session auto-expires [5, 480]
+  cook_session_max_per_chat: 1 # Max concurrent cook sessions per chat (always 1 in v1)
+
+expenses:
+  enabled: true
+
+  # Default currency for manual entries and when extraction cannot determine currency.
+  # Must be ISO 4217.
+  default_currency: "USD"
+
+  # Expense categories available for classification.
+  categories:
+    - slug: "food-and-drink"
+      display: "Food & Drink"
+      tax_category: "Meals"
+    - slug: "transportation"
+      display: "Transportation"
+      tax_category: "Car and Truck Expenses"
+    - slug: "office-supplies"
+      display: "Office Supplies"
+      tax_category: "Office Expenses"
+    - slug: "technology"
+      display: "Technology"
+      tax_category: "Other Expenses"
+    - slug: "travel"
+      display: "Travel"
+      tax_category: "Travel"
+    - slug: "utilities"
+      display: "Utilities"
+      tax_category: "Utilities"
+    - slug: "home-improvement"
+      display: "Home Improvement"
+      tax_category: "Repairs and Maintenance"
+    - slug: "auto-and-transport"
+      display: "Auto & Transport"
+      tax_category: "Car and Truck Expenses"
+    - slug: "subscriptions"
+      display: "Subscriptions"
+      tax_category: "Other Expenses"
+    - slug: "professional-services"
+      display: "Professional Services"
+      tax_category: "Legal and Professional Services"
+    - slug: "insurance"
+      display: "Insurance"
+      tax_category: "Insurance"
+    - slug: "advertising"
+      display: "Advertising"
+      tax_category: "Advertising"
+    - slug: "education"
+      display: "Education"
+      tax_category: "Other Expenses"
+    - slug: "health"
+      display: "Health"
+      tax_category: "Other Expenses"
+    - slug: "entertainment"
+      display: "Entertainment"
+      tax_category: "Other Expenses"
+    - slug: "other"
+      display: "Other"
+      tax_category: "Other Expenses"
+
+  # Vendors that are always classified as business.
+  business_vendors: []
+
+  # Export settings
+  export:
+    max_rows: 10000
+    quickbooks_date_format: "01/02/2006"
+    standard_date_format: "2006-01-02"
+
+  # Suggestion engine settings
+  suggestions:
+    min_confidence: 0.6
+    min_past_business_count: 2
+    max_per_digest: 3
+    reclassify_batch_limit: 100
+
+  # Vendor normalization cache
+  vendor_cache_size: 500
+
+  # Digest section settings
+  digest:
+    max_words: 100
+    needs_review_limit: 5
+    missing_receipt_lookback_days: 35
 
 connectors:
   imap:
     sync_schedule: "*/15 * * * *" # Every 15 minutes (spec R-202)
+    expense_labels: {}
+    # Map Gmail labels to expense classifications:
+    # Business-Receipts: business
+    # Tax-Deductible: business
+    # Personal-Purchases: personal
 
   caldav:
     sync_schedule: "*/15 * * * *" # Every 15 minutes
@@ -241,6 +331,19 @@ knowledge:
     lint_audit: "lint-audit-v1"
     query_augment: "query-augment-v1"
     digest_assembly: "digest-assembly-v1"
+
+meal_planning:
+  enabled: true
+  default_servings: 2
+  meal_types: ["breakfast", "lunch", "dinner", "snack"]
+  meal_times:
+    breakfast: "08:00"
+    lunch: "12:00"
+    dinner: "18:00"
+    snack: "15:00"
+  calendar_sync: false
+  auto_complete_past_plans: true
+  auto_complete_cron: "0 1 * * *"
 
 observability:
   otel_enabled: false # Opt-in OpenTelemetry trace propagation (zero overhead when disabled)
