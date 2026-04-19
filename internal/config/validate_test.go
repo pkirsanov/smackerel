@@ -287,6 +287,24 @@ func TestValidate_AuthTokenCaseInsensitivePlaceholder(t *testing.T) {
 	}
 }
 
+func TestValidate_AuthTokenDevTokenPrefixRejected(t *testing.T) {
+	setRequiredEnv(t)
+	devTokens := []string{
+		"dev-token-smackerel-2026",
+		"dev-token-anything-here-1234",
+		"Dev-Token-MyProject-9999",
+	}
+	for _, token := range devTokens {
+		t.Run(token, func(t *testing.T) {
+			t.Setenv("SMACKEREL_AUTH_TOKEN", token)
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("dev-token- prefix %q should be rejected", token)
+			}
+		})
+	}
+}
+
 // SCN-023-04: Connector paths flow through config.Config (SST).
 func TestLoad_ConnectorPathFields(t *testing.T) {
 	setRequiredEnv(t)

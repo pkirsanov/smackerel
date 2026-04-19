@@ -13,12 +13,16 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 3. **Scope 3 — Branch Protection Documentation** — Document recommended GitHub branch protection rules for main.
 4. **Scope 4 — Build Metadata** — Inject version, commit hash, build time into Docker images and Go binary.
 5. **Scope 5 — ML Sidecar Image Optimization** — Multi-stage Dockerfile, torch-cpu, dependency pruning. Target <3GB.
+6. **Scope 6 — Docker Compose env_file Migration** — [P0 BUG] Replace individual `KEY: ${KEY}` declarations with `env_file:` to close 52+ var gap. Fixes BUG-001/SM-001.
+7. **Scope 7 — GHCR Image Push on Tagged Releases** — Optional registry push for self-hosted deployment convenience. Fixes DO-003.
 
 ### Validation Checkpoints
 
 - After Scope 1: CI runs on push, lint + test pass in <10 min
 - After Scope 2: Tagged builds produce versioned images
 - After Scope 5: `docker images` shows ML image <3GB
+- After Scope 6: `docker exec smackerel-core env | grep EXPENSES_ENABLED` returns value
+- After Scope 7: `docker pull ghcr.io/<owner>/smackerel-core:v*` succeeds after tagged release
 
 ---
 
@@ -174,3 +178,121 @@ Scenario: ML image under 3GB
 - [x] No runtime dependency missing
   **Phase:** implement | `requirements.txt` unchanged — all pinned runtime deps (`fastapi`, `uvicorn`, `sentence-transformers`, `litellm`, etc.) still installed. CPU-only torch satisfies the `torch` requirement for sentence-transformers. Lint passes.
   **Claim Source:** executed
+
+---
+
+## Scope 6: Docker Compose env_file Migration (BUG-001 + SM-001)
+
+**Status:** Not Started
+**Priority:** P0 (CRITICAL — deployment blocker)
+**Depends On:** None
+**Bug Ref:** [BUG-001](bugs/BUG-001-docker-compose-env-var-gap/bug.md)
+
+### Problem
+
+52+ environment variables emitted by `scripts/commands/config.sh` are absent from the `smackerel-core` environment block in `docker-compose.yml`. All features from specs 008+ are broken in containerized deployment.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: All config vars reach the smackerel-core container
+  Given config/smackerel.yaml defines EXPENSES_ENABLED, MEAL_PLANNING_ENABLED, OTEL_ENABLED, etc.
+  When ./smackerel.sh config generate is run
+  And ./smackerel.sh up starts the stack
+  Then all variables from config/generated/dev.env are available inside the smackerel-core container
+
+Scenario: New config vars automatically flow to container
+  Given a developer adds a new config key to config/smackerel.yaml
+  And updates scripts/commands/config.sh to emit it
+  When ./smackerel.sh config generate is run
+  Then the new var appears in config/generated/dev.env
+  And the container receives the new var without docker-compose.yml changes
+
+Scenario: env_file replaces individual environment declarations
+  Given docker-compose.yml uses env_file: config/generated/dev.env
+  When the operator inspects docker-compose.yml
+  Then there are no individual KEY: ${KEY} declarations for SST-managed vars
+  And the environment block is removed or contains only non-SST overrides
+```
+
+### Implementation Plan
+
+1. Add `env_file: config/generated/dev.env` to `smackerel-core` service
+2. Remove the entire `environment:` block (100+ individual declarations)
+3. Add `env_file: config/generated/dev.env` to `smackerel-ml` service
+4. Remove `smackerel-ml` individual environment declarations
+5. Verify `postgres` and `nats` services keep their minimal `environment:` blocks (they use different vars not in dev.env)
+6. Ensure build args (`VERSION`, `COMMIT_HASH`, `BUILD_TIME`) stay in `build.args:` (not in env_file)
+7. Add CI drift guard: `./smackerel.sh check` verifies no individual env declarations for core/ml services
+
+### DoD
+
+- [ ] `docker-compose.yml` smackerel-core uses `env_file: config/generated/dev.env`
+- [ ] `docker-compose.yml` smackerel-ml uses `env_file: config/generated/dev.env`
+- [ ] Individual `environment:` blocks removed from core and ml services
+- [ ] `./smackerel.sh up` starts successfully with all features receiving config
+- [ ] `docker exec` confirms EXPENSES_ENABLED, MEAL_PLANNING_ENABLED, OTEL_ENABLED are present
+- [ ] `./smackerel.sh test unit` passes (no regression)
+- [ ] `./smackerel.sh check` includes env_file drift guard
+
+---
+
+## Scope 7: GHCR Image Push on Tagged Releases (DO-003)
+
+**Status:** Not Started
+**Priority:** P1
+**Depends On:** Scope 6 (env_file must be resolved before pushing images)
+**Bug Ref:** [BUG-003](bugs/BUG-003-no-ghcr-image-push/bug.md)
+
+### Problem
+
+Images are built but never stored in a registry. Self-hosted deployment requires building from source. Rollback requires checkout + rebuild.
+
+### Spec Amendment Required
+
+`spec.md` Non-Goals currently lists:
+> Container registry publishing (DockerHub, GHCR) — images are built locally
+
+This must be amended to:
+> Container registry publishing is optional — GHCR push on tagged releases is supported
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: Tagged release pushes images to GHCR
+  Given a git tag v1.0.0 is pushed
+  When the CI pipeline completes successfully
+  Then smackerel-core:v1.0.0 is available at ghcr.io
+  And smackerel-ml:v1.0.0 is available at ghcr.io
+  And both images have OCI version/revision labels
+
+Scenario: Operator deploys from pre-built images
+  Given SMACKEREL_CORE_IMAGE is set to ghcr.io/owner/smackerel-core:v1.0.0
+  When the operator runs ./smackerel.sh up
+  Then Compose pulls the pre-built image
+  And all services start successfully
+
+Scenario: Build-from-source remains the default
+  Given no image override vars are set
+  When the operator runs ./smackerel.sh build && ./smackerel.sh up
+  Then images are built from local Dockerfiles (unchanged behavior)
+```
+
+### Implementation Plan
+
+1. Add `push-images` job to `.github/workflows/ci.yml` (tagged releases only)
+2. Use `docker/login-action@v3` with `GITHUB_TOKEN` for GHCR auth
+3. Tag and push `smackerel-core` and `smackerel-ml` with version + latest
+4. Add `image:` override support to `docker-compose.yml` via `SMACKEREL_CORE_IMAGE` and `SMACKEREL_ML_IMAGE` env vars
+5. Add `SMACKEREL_CORE_IMAGE` and `SMACKEREL_ML_IMAGE` to `config/smackerel.yaml` as optional fields
+6. Update `docs/Operations.md` with pull-based deployment instructions
+
+### DoD
+
+- [ ] `.github/workflows/ci.yml` has `push-images` job gated on `refs/tags/v*`
+- [ ] GHCR login uses `GITHUB_TOKEN` (no additional secrets)
+- [ ] Images pushed with version tag and `latest`
+- [ ] `docker-compose.yml` supports `image:` override via env var
+- [ ] Build-from-source default behavior unchanged
+- [ ] `docs/Operations.md` documents pull-based deployment
+- [ ] OCI labels verified on pushed images

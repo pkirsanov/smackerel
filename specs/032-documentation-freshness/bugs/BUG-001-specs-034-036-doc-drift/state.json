@@ -1,0 +1,78 @@
+{
+  "version": 3,
+  "featureDir": "specs/032-documentation-freshness/bugs/BUG-001-specs-034-036-doc-drift",
+  "featureName": "BUG-001: Documentation drift from specs 034-036",
+  "status": "not_started",
+  "workflowMode": "bug-fix",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": null,
+    "currentScope": null,
+    "runStartedAt": null,
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Fix Development.md drift",
+        "status": "Not Started",
+        "dependsOn": []
+      },
+      {
+        "scope": 2,
+        "name": "Fix Operations.md drift",
+        "status": "Not Started",
+        "dependsOn": []
+      },
+      {
+        "scope": 3,
+        "name": "Fix README.md drift",
+        "status": "Not Started",
+        "dependsOn": []
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "off",
+      "source": "bug-fix"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-19T00:00:00Z",
+  "scopeLayout": "single-file"
+}

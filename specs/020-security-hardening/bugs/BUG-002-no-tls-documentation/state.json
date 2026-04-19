@@ -1,0 +1,37 @@
+{
+  "version": 3,
+  "specId": "020-security-hardening",
+  "bugId": "BUG-002-no-tls-documentation",
+  "workflowMode": "bugfix-fastlane",
+  "status": "not-started",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": null,
+    "completedPhaseClaims": [],
+    "executionHistory": [
+      {
+        "phase": "planning",
+        "agent": "bubbles.analyst+ux+design+plan",
+        "timestamp": "2026-04-19T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created 6-artifact bug packet from system review finding TR-002. Identified that Telegram webhooks and OAuth callbacks require HTTPS but no reverse proxy documentation exists. Fix: create docs/Deployment.md with Caddy and nginx examples, update architecture doc and README."
+      }
+    ]
+  },
+  "certification": {
+    "status": "pending",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {},
+    "lockdownState": {}
+  },
+  "policySnapshot": {
+    "grill": { "value": "off", "provenance": "repo-default" },
+    "tdd": { "value": "scenario-first", "provenance": "repo-default" },
+    "autoCommit": { "value": "off", "provenance": "repo-default" },
+    "lockdown": { "value": "off", "provenance": "repo-default" },
+    "regression": { "value": "protected-scenarios", "provenance": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

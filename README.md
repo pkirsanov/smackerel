@@ -28,6 +28,14 @@
 
 <img src="assets/icons/feature-surface.svg" width="20" height="20" alt="">&ensp;**Surfaces** the right information at the right time
 
+<img src="assets/icons/feature-local.svg" width="20" height="20" alt="">&ensp;**Tracks expenses** — receipts from email, photo, or PDF with automatic classification and CSV export
+
+<img src="assets/icons/feature-local.svg" width="20" height="20" alt="">&ensp;**Scales recipes** to any serving count with kitchen-friendly fractions
+
+<img src="assets/icons/feature-local.svg" width="20" height="20" alt="">&ensp;**Cook mode** — step-by-step Telegram walkthrough for any recipe
+
+<img src="assets/icons/feature-local.svg" width="20" height="20" alt="">&ensp;**Plans meals** — weekly meal plans with automatic shopping list generation
+
 <img src="assets/icons/feature-local.svg" width="20" height="20" alt="">&ensp;**Runs locally** — you own your data, always
 
 ## Architecture
@@ -116,6 +124,7 @@ The ML sidecar has a 120-second startup period (`start_period`) for model loadin
 - [Design Document](docs/smackerel.md)
 - [Development Guide](docs/Development.md)
 - [Operations Runbook](docs/Operations.md)
+- [Production Deployment](docs/Deployment.md)
 - [Testing Guide](docs/Testing.md)
 - [Docker Best Practices](docs/Docker_Best_Practices.md)
 - [Connector Development](docs/Connector_Development.md)

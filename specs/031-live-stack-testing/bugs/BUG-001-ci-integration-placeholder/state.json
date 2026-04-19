@@ -1,0 +1,15 @@
+{
+  "version": 3,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-001-ci-integration-placeholder",
+  "featureName": "BUG-031-001: CI Integration Test Placeholder",
+  "status": "planned",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "runStartedAt": "2026-04-19T00:00:00Z"
+  },
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "lastUpdatedAt": "2026-04-19T00:00:00Z"
+}

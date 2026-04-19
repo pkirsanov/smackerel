@@ -93,7 +93,16 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "executionHistory": [],
-  "activeBugs": [],
+  "activeBugs": [
+    {
+      "id": "BUG-001",
+      "title": "Documentation drift from specs 034-036",
+      "severity": "HIGH",
+      "path": "specs/032-documentation-freshness/bugs/BUG-001-specs-034-036-doc-drift",
+      "findings": ["DC-001", "DC-002", "DC-003"],
+      "createdAt": "2026-04-19T00:00:00Z"
+    }
+  ],
   "resolvedBugs": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-17T00:00:00Z",
