@@ -277,55 +277,29 @@ func TestDockerCompose_CapDropAll(t *testing.T) {
 func TestDockerCompose_ConnectorEnvVarsWired(t *testing.T) {
 	compose := readRepoFile(t, "docker-compose.yml")
 
-	// Every env var that main.go reads via os.Getenv for auto-starting connectors
-	// MUST appear in the smackerel-core environment section of docker-compose.yml.
-	// If missing, the connector silently never starts in Docker deployments.
-	requiredEnvVars := []struct {
-		envVar    string
-		connector string
-	}{
-		// Twitter connector (DEV-015-001)
-		{"TWITTER_ENABLED", "twitter"},
-		{"TWITTER_SYNC_MODE", "twitter"},
-		{"TWITTER_ARCHIVE_DIR", "twitter"},
-		{"TWITTER_BEARER_TOKEN", "twitter"},
-		{"TWITTER_SYNC_SCHEDULE", "twitter"},
-		// Discord connector
-		{"DISCORD_ENABLED", "discord"},
-		{"DISCORD_BOT_TOKEN", "discord"},
-		{"DISCORD_SYNC_SCHEDULE", "discord"},
-		{"DISCORD_ENABLE_GATEWAY", "discord"},
-		{"DISCORD_BACKFILL_LIMIT", "discord"},
-		{"DISCORD_INCLUDE_THREADS", "discord"},
-		{"DISCORD_INCLUDE_PINS", "discord"},
-		{"DISCORD_CAPTURE_COMMANDS", "discord"},
-		{"DISCORD_MONITORED_CHANNELS", "discord"},
-		// Weather connector
-		{"WEATHER_ENABLED", "weather"},
-		{"WEATHER_SYNC_SCHEDULE", "weather"},
-		{"WEATHER_LOCATIONS", "weather"},
-		// Gov Alerts connector
-		{"GOV_ALERTS_ENABLED", "gov-alerts"},
-		{"GOV_ALERTS_SYNC_SCHEDULE", "gov-alerts"},
-		{"GOV_ALERTS_MIN_EARTHQUAKE_MAG", "gov-alerts"},
-		{"GOV_ALERTS_SOURCE_WEATHER", "gov-alerts"},
-		{"GOV_ALERTS_SOURCE_TSUNAMI", "gov-alerts"},
-		{"GOV_ALERTS_SOURCE_VOLCANO", "gov-alerts"},
-		{"GOV_ALERTS_SOURCE_WILDFIRE", "gov-alerts"},
-		{"GOV_ALERTS_SOURCE_AIRNOW", "gov-alerts"},
-		{"GOV_ALERTS_SOURCE_GDACS", "gov-alerts"},
-		{"GOV_ALERTS_AIRNOW_API_KEY", "gov-alerts"},
-		{"GOV_ALERTS_LOCATIONS", "gov-alerts"},
-		{"GOV_ALERTS_TRAVEL_LOCATIONS", "gov-alerts"},
+	// With the env_file pattern, all vars from config/generated/dev.env
+	// are passed to the container automatically. Verify that smackerel-core
+	// uses env_file (which covers all SST-managed vars) rather than
+	// checking individual KEY: ${KEY} declarations.
+	if !strings.Contains(compose, "env_file:") {
+		t.Fatal("docker-compose.yml must use env_file: for SST-managed environment variables")
+	}
+	if !strings.Contains(compose, "config/generated/dev.env") {
+		t.Fatal("docker-compose.yml env_file must reference config/generated/dev.env")
 	}
 
-	for _, tc := range requiredEnvVars {
-		t.Run(tc.envVar, func(t *testing.T) {
-			if !strings.Contains(compose, tc.envVar) {
-				t.Errorf("docker-compose.yml missing env var %s for %s connector — connector will silently never start in Docker",
-					tc.envVar, tc.connector)
-			}
-		})
+	// Spot-check: individual env declarations should NOT exist for SST-managed vars.
+	// Only container-path overrides (BOOKMARKS_IMPORT_DIR, etc.) are allowed inline.
+	sampleSST := []string{
+		"DATABASE_URL: ${DATABASE_URL}",
+		"NATS_URL: ${NATS_URL}",
+		"LLM_PROVIDER: ${LLM_PROVIDER}",
+		"TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}",
+	}
+	for _, decl := range sampleSST {
+		if strings.Contains(compose, decl) {
+			t.Errorf("docker-compose.yml should not have individual SST declarations like %q — use env_file instead", decl)
+		}
 	}
 }
 

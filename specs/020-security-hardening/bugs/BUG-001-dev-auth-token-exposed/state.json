@@ -1,0 +1,37 @@
+{
+  "version": 3,
+  "specId": "020-security-hardening",
+  "bugId": "BUG-001-dev-auth-token-exposed",
+  "workflowMode": "bugfix-fastlane",
+  "status": "not-started",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": null,
+    "completedPhaseClaims": [],
+    "executionHistory": [
+      {
+        "phase": "planning",
+        "agent": "bubbles.analyst+ux+design+plan",
+        "timestamp": "2026-04-19T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created 6-artifact bug packet from system review finding TR-001. Identified that dev-token-smackerel-2026 bypasses existing placeholder validation. Fix: add to reject list, add dev-token-* prefix check, change YAML default to empty string."
+      }
+    ]
+  },
+  "certification": {
+    "status": "pending",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {},
+    "lockdownState": {}
+  },
+  "policySnapshot": {
+    "grill": { "value": "off", "provenance": "repo-default" },
+    "tdd": { "value": "scenario-first", "provenance": "repo-default" },
+    "autoCommit": { "value": "off", "provenance": "repo-default" },
+    "lockdown": { "value": "off", "provenance": "repo-default" },
+    "regression": { "value": "protected-scenarios", "provenance": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

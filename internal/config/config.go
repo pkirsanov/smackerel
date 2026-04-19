@@ -600,11 +600,16 @@ func (c *Config) Validate() error {
 		"placeholder",
 		"test-token",
 		"default",
+		"dev-token-smackerel-2026",
 	}
 	for _, p := range placeholders {
 		if strings.EqualFold(c.AuthToken, p) {
-			return fmt.Errorf("SMACKEREL_AUTH_TOKEN is set to a known placeholder value %q — generate a secure random token", c.AuthToken)
+			return fmt.Errorf("SMACKEREL_AUTH_TOKEN is set to a known placeholder value %q — generate a secure random token: openssl rand -hex 24", c.AuthToken)
 		}
+	}
+	// Reject any token starting with "dev-token-" — these are development-only patterns
+	if strings.HasPrefix(strings.ToLower(c.AuthToken), "dev-token-") {
+		return fmt.Errorf("SMACKEREL_AUTH_TOKEN starts with 'dev-token-' which is a development placeholder pattern — generate a secure random token: openssl rand -hex 24")
 	}
 	if len(c.AuthToken) < 16 {
 		return fmt.Errorf("SMACKEREL_AUTH_TOKEN must be at least 16 characters (got %d)", len(c.AuthToken))
