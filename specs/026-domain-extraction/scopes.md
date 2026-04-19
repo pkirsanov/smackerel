@@ -340,31 +340,31 @@ Scenario: Domain extraction result handler records failure
 
 ### Definition of Done
 
-- [ ] NATS constants `SubjectDomainExtract` and `SubjectDomainExtracted` defined in Go
+- [x] NATS constants `SubjectDomainExtract` and `SubjectDomainExtracted` defined in Go
   > **Phase:** implement
 
-- [ ] `config/nats_contract.json` updated with `domain.extract` and `domain.extracted` entries in DOMAIN stream
+- [x] `config/nats_contract.json` updated with `domain.extract` and `domain.extracted` entries in DOMAIN stream
   > **Phase:** implement
 
-- [ ] `ResultSubscriber.DomainRegistry` field added; `publishDomainExtractionRequest` method implemented
+- [x] `ResultSubscriber.DomainRegistry` field added; `publishDomainExtractionRequest` method implemented
   > **Phase:** implement
 
-- [ ] Publisher sets `domain_extraction_status = 'pending'` and `domain_schema_version` before publishing
+- [x] Publisher sets `domain_extraction_status = 'pending'` and `domain_schema_version` before publishing
   > **Phase:** implement
 
-- [ ] Publisher skips when no contract matches (no publish, status stays NULL)
+- [x] Publisher skips when no contract matches (no publish, status stays NULL)
   > **Phase:** implement
 
-- [ ] Publisher skips when content below `min_content_length` (no publish, status set to 'skipped')
+- [x] Publisher skips when content below `min_content_length` (no publish, status set to 'skipped')
   > **Phase:** implement
 
-- [ ] `handleDomainMessage` stores domain_data and sets status=completed on success
+- [x] `handleDomainMessage` stores domain_data and sets status=completed on success
   > **Phase:** implement
 
-- [ ] `handleDomainMessage` sets status=failed on failure, acks message (no infinite retry)
+- [x] `handleDomainMessage` sets status=failed on failure, acks message (no infinite retry)
   > **Phase:** implement
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
 ---
@@ -442,25 +442,25 @@ Scenario: ML sidecar rejects schema-invalid JSON from LLM
 
 ### Definition of Done
 
-- [ ] `ml/app/domain.py` created with `handle_domain_extract` and `build_domain_prompt`
+- [x] `ml/app/domain.py` created with `handle_domain_extract` and `build_domain_prompt`
   > **Phase:** implement
 
-- [ ] `build_domain_prompt` assembles system_prompt + artifact fields + schema into LLM prompt, truncates content at 8000 chars
+- [x] `build_domain_prompt` assembles system_prompt + artifact fields + schema into LLM prompt, truncates content at 8000 chars
   > **Phase:** implement
 
-- [ ] `handle_domain_extract` calls LLM with retry (3 attempts, exponential backoff) for transient errors
+- [x] `handle_domain_extract` calls LLM with retry (3 attempts, exponential backoff) for transient errors
   > **Phase:** implement
 
-- [ ] `handle_domain_extract` validates LLM output against contract's `extraction_schema` using JSON Schema
+- [x] `handle_domain_extract` validates LLM output against contract's `extraction_schema` using JSON Schema
   > **Phase:** implement
 
-- [ ] `handle_domain_extract` returns `success=false` with descriptive error for invalid JSON, schema failure, and max retries exhausted
+- [x] `handle_domain_extract` returns `success=false` with descriptive error for invalid JSON, schema failure, and max retries exhausted
   > **Phase:** implement
 
-- [ ] `ml/app/nats_client.py` routes `domain.extract` to handler and publishes result to `domain.extracted`
+- [x] `ml/app/nats_client.py` routes `domain.extract` to handler and publishes result to `domain.extracted`
   > **Phase:** implement
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
 ---
@@ -521,19 +521,19 @@ Scenario: Recipe schema rejects invalid extraction output
 
 ### Definition of Done
 
-- [ ] `config/prompt_contracts/recipe-extraction-v1.yaml` created with type `domain-extraction`, content_types `["recipe"]`, url_qualifiers, min_content_length, system_prompt, and extraction_schema
+- [x] `config/prompt_contracts/recipe-extraction-v1.yaml` created with type `domain-extraction`, content_types `["recipe"]`, url_qualifiers, min_content_length, system_prompt, and extraction_schema
   > **Phase:** implement
 
-- [ ] Extraction schema requires `domain` (const "recipe"), `ingredients` (array, minItems 1), and `steps` (array, minItems 1)
+- [x] Extraction schema requires `domain` (const "recipe"), `ingredients` (array, minItems 1), and `steps` (array, minItems 1)
   > **Phase:** implement
 
-- [ ] Contract loads successfully via `LoadRegistry` and matches content_type "recipe"
+- [x] Contract loads successfully via `LoadRegistry` and matches content_type "recipe"
   > **Phase:** implement
 
-- [ ] A realistic recipe fixture validates against the schema; an empty-ingredients fixture is rejected
+- [x] A realistic recipe fixture validates against the schema; an empty-ingredients fixture is rejected
   > **Phase:** implement
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
 ---
@@ -593,19 +593,19 @@ Scenario: Product schema rejects invalid extraction output
 
 ### Definition of Done
 
-- [ ] `config/prompt_contracts/product-extraction-v1.yaml` created with type `domain-extraction`, content_types `["product"]`, url_qualifiers, system_prompt, and extraction_schema
+- [x] `config/prompt_contracts/product-extraction-v1.yaml` created with type `domain-extraction`, content_types `["product"]`, url_qualifiers, system_prompt, and extraction_schema
   > **Phase:** implement
 
-- [ ] Extraction schema requires `domain` (const "product") and `product_name` (string)
+- [x] Extraction schema requires `domain` (const "product") and `product_name` (string)
   > **Phase:** implement
 
-- [ ] Contract loads successfully via `LoadRegistry` and matches content_type "product"
+- [x] Contract loads successfully via `LoadRegistry` and matches content_type "product"
   > **Phase:** implement
 
-- [ ] A realistic product fixture validates against the schema; a missing-product_name fixture is rejected
+- [x] A realistic product fixture validates against the schema; a missing-product_name fixture is rejected
   > **Phase:** implement
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
 ---
@@ -691,34 +691,34 @@ Scenario: Domain extraction lifecycle completes end-to-end
 
 ### Definition of Done
 
-- [ ] `ResultSubscriber` has `DomainRegistry *domain.Registry` field wired at startup
+- [x] `ResultSubscriber` has `DomainRegistry *domain.Registry` field wired at startup
   > **Phase:** implement
 
-- [ ] `handleMessage` calls `publishDomainExtractionRequest` after universal processing, parallel to synthesis
+- [x] `handleMessage` calls `publishDomainExtractionRequest` after universal processing, parallel to synthesis
   > **Phase:** implement
 
-- [ ] Domain extraction is fail-open: publish errors are logged as warnings, message is still acked
+- [x] Domain extraction is fail-open: publish errors are logged as warnings, message is still acked
   > **Phase:** implement
 
-- [ ] Content below `min_content_length` is skipped with status="skipped"
+- [x] Content below `min_content_length` is skipped with status="skipped"
   > **Phase:** implement
 
-- [ ] DOMAIN stream consumer for `domain.extracted` created in `ResultSubscriber.Start()`
+- [x] DOMAIN stream consumer for `domain.extracted` created in `ResultSubscriber.Start()`
   > **Phase:** implement
 
-- [ ] Domain registry loaded at service startup from `config/prompt_contracts/` directory
+- [x] Domain registry loaded at service startup from `config/prompt_contracts/` directory
   > **Phase:** implement
 
-- [ ] Integration test: recipe artifact → domain_data populated in DB with status=completed
+- [x] Integration test: recipe artifact → domain_data populated in DB with status=completed
   > **Phase:** test
 
-- [ ] Integration test: article artifact → no domain extraction attempted
+- [x] Integration test: article artifact → no domain extraction attempted
   > **Phase:** test
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
-- [ ] Integration tests pass: `./smackerel.sh test integration`
+- [x] Integration tests pass: `./smackerel.sh test integration`
   > **Phase:** test
 
 ---
@@ -805,37 +805,37 @@ Scenario: SearchResult includes domain_data when present
 
 ### Definition of Done
 
-- [ ] `parseDomainIntent` detects recipe ingredient patterns ("recipes with X", "dishes with X and Y")
+- [x] `parseDomainIntent` detects recipe ingredient patterns ("recipes with X", "dishes with X and Y")
   > **Phase:** implement
 
-- [ ] `parseDomainIntent` detects product price patterns ("X under $N", "X below N")
+- [x] `parseDomainIntent` detects product price patterns ("X under $N", "X below N")
   > **Phase:** implement
 
-- [ ] `parseDomainIntent` returns nil for non-domain queries (no false positives)
+- [x] `parseDomainIntent` returns nil for non-domain queries (no false positives)
   > **Phase:** implement
 
-- [ ] `addDomainFilters` generates parameterized JSONB SQL for recipe ingredient containment
+- [x] `addDomainFilters` generates parameterized JSONB SQL for recipe ingredient containment
   > **Phase:** implement
 
-- [ ] `addDomainFilters` generates parameterized JSONB SQL for product price ceiling
+- [x] `addDomainFilters` generates parameterized JSONB SQL for product price ceiling
   > **Phase:** implement
 
-- [ ] Domain-matched search results receive +0.15 score boost (capped at 1.0)
+- [x] Domain-matched search results receive +0.15 score boost (capped at 1.0)
   > **Phase:** implement
 
-- [ ] Search falls back to pure semantic search when domain JSONB query returns zero results
+- [x] Search falls back to pure semantic search when domain JSONB query returns zero results
   > **Phase:** implement
 
-- [ ] `SearchResult.DomainData` populated when artifact has domain_data
+- [x] `SearchResult.DomainData` populated when artifact has domain_data
   > **Phase:** implement
 
-- [ ] `SearchFilters` extended with `Domain` and `Ingredient` optional fields
+- [x] `SearchFilters` extended with `Domain` and `Ingredient` optional fields
   > **Phase:** implement
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
-- [ ] E2E tests pass: `./smackerel.sh test e2e`
+- [x] E2E tests pass: `./smackerel.sh test e2e`
   > **Phase:** test
 
 ---
@@ -923,5 +923,5 @@ Scenario: Unknown domain type in domain_data is handled gracefully
 - [x] `formatDomainCard` integrated into artifact display formatting in Telegram format layer
   > **Phase:** implement — integrated into `handleFind` result loop in `bot.go`; domain_data from search results rendered via `formatDomainCard`
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
