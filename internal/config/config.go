@@ -99,6 +99,10 @@ type Config struct {
 	ExpensesBusinessVendors                []string
 	ExpensesCategories                     []ExpenseCategory
 
+	// Telegram cook session config (SST-compliant — from smackerel.yaml via config generate)
+	TelegramCookSessionTimeoutMinutes int
+	TelegramCookSessionMaxPerChat     int
+
 	// Meal planning config (SST-compliant — from smackerel.yaml via config generate)
 	MealPlanEnabled           bool
 	MealPlanDefaultServings   int
@@ -231,6 +235,27 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("TELEGRAM_DISAMBIGUATION_TIMEOUT_SECONDS must be an integer in range [30, 600] (got %q)", v)
 		}
 	}
+
+	// Parse telegram cook session config (SST-compliant — from smackerel.yaml via config generate)
+	cookTimeoutStr := os.Getenv("TELEGRAM_COOK_SESSION_TIMEOUT_MINUTES")
+	if cookTimeoutStr == "" {
+		return nil, fmt.Errorf("TELEGRAM_COOK_SESSION_TIMEOUT_MINUTES is required")
+	}
+	cookTimeoutVal, err := strconv.Atoi(cookTimeoutStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid TELEGRAM_COOK_SESSION_TIMEOUT_MINUTES: %w", err)
+	}
+	cfg.TelegramCookSessionTimeoutMinutes = cookTimeoutVal
+
+	cookMaxStr := os.Getenv("TELEGRAM_COOK_SESSION_MAX_PER_CHAT")
+	if cookMaxStr == "" {
+		return nil, fmt.Errorf("TELEGRAM_COOK_SESSION_MAX_PER_CHAT is required")
+	}
+	cookMaxVal, err := strconv.Atoi(cookMaxStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid TELEGRAM_COOK_SESSION_MAX_PER_CHAT: %w", err)
+	}
+	cfg.TelegramCookSessionMaxPerChat = cookMaxVal
 
 	// Parse knowledge layer config (SST-compliant — from smackerel.yaml via config generate)
 	knowledgeEnabledStr := os.Getenv("KNOWLEDGE_ENABLED")

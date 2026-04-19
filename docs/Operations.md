@@ -63,6 +63,32 @@ git pull
 
 Database migrations run automatically on startup. The migration runner uses PostgreSQL advisory locks to prevent concurrent migration attempts.
 
+### Pre-built Image Deployment
+
+Tagged releases publish images to GitHub Container Registry (GHCR). To deploy from pre-built images instead of building from source:
+
+1. **Set image override variables** in your environment or `config/smackerel.yaml`:
+   ```bash
+   export SMACKEREL_CORE_IMAGE=ghcr.io/<owner>/smackerel-core:v1.0.0
+   export SMACKEREL_ML_IMAGE=ghcr.io/<owner>/smackerel-ml:v1.0.0
+   ```
+
+2. **Pull and start:**
+   ```bash
+   ./smackerel.sh config generate
+   ./smackerel.sh up
+   ```
+   Compose pulls the pre-built images instead of building from source.
+
+3. **Rollback** to a previous version:
+   ```bash
+   export SMACKEREL_CORE_IMAGE=ghcr.io/<owner>/smackerel-core:v0.9.0
+   export SMACKEREL_ML_IMAGE=ghcr.io/<owner>/smackerel-ml:v0.9.0
+   ./smackerel.sh down && ./smackerel.sh up
+   ```
+
+When `SMACKEREL_CORE_IMAGE` and `SMACKEREL_ML_IMAGE` are unset (the default), Compose builds from local Dockerfiles as before.
+
 ## Stack Lifecycle
 
 | Action | Command |

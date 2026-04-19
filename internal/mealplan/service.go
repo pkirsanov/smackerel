@@ -10,7 +10,7 @@ import (
 
 // Service implements meal plan business logic.
 type Service struct {
-	Store            *Store
+	Store            PlanDataStore
 	MealTypes        []string
 	DefaultServings  int
 	CalendarSync     bool
@@ -19,7 +19,7 @@ type Service struct {
 }
 
 // NewService creates a new meal plan service.
-func NewService(store *Store, mealTypes []string, defaultServings int, calendarSync, autoComplete bool, autoCompleteCron string) *Service {
+func NewService(store PlanDataStore, mealTypes []string, defaultServings int, calendarSync, autoComplete bool, autoCompleteCron string) *Service {
 	return &Service{
 		Store:            store,
 		MealTypes:        mealTypes,

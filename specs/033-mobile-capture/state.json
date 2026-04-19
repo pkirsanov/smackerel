@@ -2,10 +2,10 @@
   "version": 3,
   "featureDir": "specs/033-mobile-capture",
   "featureName": "Mobile & Browser Capture Surfaces",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": null,
     "currentPhase": "finalize",
     "currentScope": 7,
     "runStartedAt": "2026-04-18T12:00:00Z",
@@ -23,9 +23,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not_started",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "certified",
+    "completedScopes": [1, 2, 3, 4, 5, 6, 7],
+    "certifiedCompletedPhases": ["implement", "test", "validate"],
     "scopeProgress": [
       {
         "scope": 1,

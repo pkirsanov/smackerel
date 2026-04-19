@@ -17,12 +17,12 @@ No new types or signatures. Changes are to existing `Validate()` logic and confi
 
 | # | Name | Surfaces | Key Tests | Status |
 |---|------|----------|-----------|--------|
-| 1 | Reject default token + change YAML default | `internal/config/config.go`, `config/smackerel.yaml`, `internal/config/validate_test.go` | Unit: placeholder rejection, prefix rejection, case-insensitive | [ ] Not started |
+| 1 | Reject default token + change YAML default | `internal/config/config.go`, `config/smackerel.yaml`, `internal/config/validate_test.go` | Unit: placeholder rejection, prefix rejection, case-insensitive | [x] Done |
 
 ---
 
 ## Scope 1: Reject default token + change YAML default
-**Status:** [ ] Not started
+**Status:** [x] Done
 
 ### Gherkin Scenarios
 
@@ -81,9 +81,9 @@ Feature: Reject guessable dev auth tokens
 
 ### Definition of Done
 
-- [ ] `dev-token-smackerel-2026` is in the placeholder reject list
-- [ ] `dev-token-*` prefix check added (case-insensitive)
-- [ ] `config/smackerel.yaml` `auth_token` is `""` (empty string)
-- [ ] Regression tests cover literal, prefix, case-insensitive, valid token, and empty token
-- [ ] `./smackerel.sh test unit` passes
-- [ ] No existing tests broken
+- [x] `dev-token-smackerel-2026` is in the placeholder reject list
+- [x] `dev-token-*` prefix check added (case-insensitive)
+- [x] `config/smackerel.yaml` `auth_token` is `""` (empty string)
+- [x] Regression tests cover literal, prefix, case-insensitive, valid token, and empty token
+- [x] `./smackerel.sh test unit` passes
+- [x] No existing tests broken

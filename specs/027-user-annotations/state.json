@@ -2,10 +2,10 @@
   "version": 3,
   "featureDir": "specs/027-user-annotations",
   "featureName": "User Annotations & Interaction Tracking",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": null,
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-17T15:30:00Z",
@@ -20,7 +20,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "certified",
     "completedScopes": [
       1,
       2,
@@ -31,7 +31,7 @@
       7,
       8
     ],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": ["implement", "test", "validate"],
     "scopeProgress": [
       {
         "scope": 1,
@@ -143,7 +143,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T20:30:00Z",
+  "lastUpdatedAt": "2026-04-19T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

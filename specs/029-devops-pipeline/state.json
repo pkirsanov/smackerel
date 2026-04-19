@@ -2,12 +2,12 @@
   "version": 3,
   "featureDir": "specs/029-devops-pipeline",
   "featureName": "DevOps Pipeline",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": null,
     "currentPhase": "finalize",
-    "currentScope": 5,
+    "currentScope": 7,
     "runStartedAt": "2026-04-18T00:00:00Z",
     "completedPhaseClaims": [
       {
@@ -19,7 +19,9 @@
           2,
           3,
           4,
-          5
+          5,
+          6,
+          7
         ]
       },
       "test",
@@ -30,13 +32,15 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "certified",
     "completedScopes": [
       1,
       2,
       3,
       4,
-      5
+      5,
+      6,
+      7
     ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
@@ -73,6 +77,18 @@
         "name": "ML Sidecar Image Optimization",
         "status": "Done",
         "dependsOn": []
+      },
+      {
+        "scope": 6,
+        "name": "Docker Compose env_file Migration",
+        "status": "Done",
+        "dependsOn": []
+      },
+      {
+        "scope": 7,
+        "name": "GHCR Image Push on Tagged Releases",
+        "status": "Done",
+        "dependsOn": [6]
       }
     ],
     "lockdownState": {

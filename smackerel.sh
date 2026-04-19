@@ -135,6 +135,18 @@ case "$COMMAND" in
         exit 1
     fi
     echo "Config is in sync with SST"
+    # env_file drift guard — verify core/ml services use env_file, not individual SST vars
+    if ! grep -q 'env_file:' docker-compose.yml; then
+        echo "ERROR: docker-compose.yml missing env_file: directive — SST vars must flow through config/generated/dev.env"
+        exit 1
+    fi
+    # Check for common SST-managed vars that should NOT be individually declared
+    SST_VARS="DATABASE_URL:|NATS_URL:|LLM_API_KEY:|SMACKEREL_AUTH_TOKEN:|OLLAMA_URL:|OLLAMA_MODEL:|EMBEDDING_MODEL:|DIGEST_CRON:|ML_SIDECAR_URL:|CORE_API_URL:"
+    if grep -E "^\s+${SST_VARS}" docker-compose.yml >/dev/null 2>&1; then
+        echo "ERROR: docker-compose.yml contains individual SST-managed env declarations — use env_file: instead"
+        exit 1
+    fi
+    echo "env_file drift guard: OK"
     ;;
   lint)
     run_go_tooling /workspace/scripts/runtime/go-lint.sh

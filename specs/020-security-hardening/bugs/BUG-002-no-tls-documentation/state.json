@@ -3,11 +3,11 @@
   "specId": "020-security-hardening",
   "bugId": "BUG-002-no-tls-documentation",
   "workflowMode": "bugfix-fastlane",
-  "status": "not-started",
+  "status": "done",
   "execution": {
     "activeAgent": null,
-    "currentPhase": null,
-    "completedPhaseClaims": [],
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["planning", "implement", "test", "validate", "finalize"],
     "executionHistory": [
       {
         "phase": "planning",
@@ -15,14 +15,44 @@
         "timestamp": "2026-04-19T00:00:00Z",
         "outcome": "completed_owned",
         "summary": "Created 6-artifact bug packet from system review finding TR-002. Identified that Telegram webhooks and OAuth callbacks require HTTPS but no reverse proxy documentation exists. Fix: create docs/Deployment.md with Caddy and nginx examples, update architecture doc and README."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-19T04:40:28Z",
+        "outcome": "completed_owned",
+        "summary": "Commit 43e93cf: Created docs/Deployment.md (209 lines) with Caddy, nginx, Telegram webhook, OAuth callback, Docker Compose prod override, port exposure sections. README.md links to deployment guide. docs/smackerel.md references deployment guide at two locations."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-19T12:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Documentation-only bug — manual review confirms all 6 Gherkin scenarios satisfied. All config examples use smackerel.example.com. Port 40001 consistent with SST."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-19T12:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "All 9 DoD items verified. Scope 1 marked Done."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-19T12:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug closed. All DoD items checked, state promoted to done."
       }
     ]
   },
   "certification": {
-    "status": "pending",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "scopeProgress": {},
+    "status": "certified",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["planning", "implement", "test", "validate", "finalize"],
+    "scopeProgress": {
+      "scope-1": "Done"
+    },
     "lockdownState": {}
   },
   "policySnapshot": {
