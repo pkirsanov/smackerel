@@ -29,6 +29,7 @@ type Bot struct {
 	healthURL       string // internal API URL for health check
 	knowledgeURL    string // internal API URL for knowledge endpoints
 	listsURL        string // internal API URL for list endpoints
+	expensesURL     string // internal API URL for expense endpoints
 	authToken       string
 	httpClient      *http.Client
 	assembler       *ConversationAssembler
@@ -36,6 +37,7 @@ type Bot struct {
 	disambiguations *disambiguationStore
 	cookSessions    *CookSessionStore
 	mealPlanHandler *MealPlanCommandHandler
+	expenseStates   *expenseStateStore
 	done            chan struct{}                   // closed when the update goroutine exits
 	replyFunc       func(chatID int64, text string) // test hook: overrides reply()
 	callbackFunc    func(callbackID, text string)   // test hook: overrides callback answer
@@ -94,15 +96,20 @@ func NewBot(cfg Config) (*Bot, error) {
 		healthURL:       baseURL + "/api/health",
 		knowledgeURL:    baseURL + "/api/knowledge",
 		listsURL:        baseURL + "/api/lists",
+		expensesURL:     baseURL + "/api/expenses",
 		authToken:       cfg.AuthToken,
 		httpClient:      &http.Client{Timeout: 30 * time.Second},
 		disambiguations: newDisambiguationStore(cfg.DisambiguationTimeoutSeconds),
 		cookSessions:    NewCookSessionStore(cfg.CookSessionTimeoutMinutes),
+		expenseStates:   newExpenseStateStore(120),
 		done:            make(chan struct{}),
 	}
 
 	// Start cook session cleanup goroutine
 	bot.cookSessions.StartCleanup()
+
+	// Start expense state cleanup goroutine
+	bot.expenseStates.StartCleanup()
 
 	// Initialize assemblers with config-driven parameters
 	ctx := context.Background()
@@ -134,6 +141,7 @@ func (b *Bot) Start(ctx context.Context) {
 		tgbotapi.BotCommand{Command: "person", Description: "Browse entity profiles"},
 		tgbotapi.BotCommand{Command: "lint", Description: "Knowledge quality report"},
 		tgbotapi.BotCommand{Command: "list", Description: "Manage actionable lists"},
+		tgbotapi.BotCommand{Command: "expense", Description: "View and manage expenses"},
 		tgbotapi.BotCommand{Command: "digest", Description: "Get today's digest"},
 		tgbotapi.BotCommand{Command: "done", Description: "Finalize conversation assembly"},
 		tgbotapi.BotCommand{Command: "status", Description: "System status"},
@@ -276,6 +284,18 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		}
 	}
 
+	// Priority 7: Expense queries and entries (natural language)
+	if !msg.IsCommand() {
+		if isExpenseQuery(text) {
+			b.handleExpenseQuery(ctx, msg, text)
+			return
+		}
+		if isExpenseExport(text) {
+			b.handleExpenseExport(ctx, msg)
+			return
+		}
+	}
+
 	// Handle commands
 	if msg.IsCommand() {
 		switch msg.Command() {
@@ -291,6 +311,8 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 			b.handleLint(ctx, msg)
 		case "list":
 			b.handleList(ctx, msg, msg.CommandArguments())
+		case "expense":
+			b.handleExpenseCommand(ctx, msg, msg.CommandArguments())
 		case "digest":
 			b.handleDigest(ctx, msg)
 		case "status":
@@ -302,7 +324,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		case "start", "help":
 			b.handleHelp(ctx, msg)
 		default:
-			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /digest, /done, /status, or /recent")
+			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /digest, /done, /status, or /recent")
 		}
 		return
 	}
@@ -637,6 +659,7 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 - /concept - Browse concept pages
 - /person - Browse entity profiles
 - /lint - Knowledge quality report
+- /expense - View and manage expenses
 - /digest - Get today's digest
 - /done - Finalize conversation assembly
 - /status - System status
@@ -841,6 +864,117 @@ func (b *Bot) Healthy() bool {
 // SetMealPlanHandler configures the meal plan command handler. Must be called before Start().
 func (b *Bot) SetMealPlanHandler(h *MealPlanCommandHandler) {
 	b.mealPlanHandler = h
+}
+
+// handleExpenseCommand handles /expense <args>.
+func (b *Bot) handleExpenseCommand(ctx context.Context, msg *tgbotapi.Message, args string) {
+	if args == "" {
+		// Show recent expenses
+		b.handleExpenseQuery(ctx, msg, "show expenses")
+		return
+	}
+	if isExpenseExport(args) || strings.EqualFold(strings.TrimSpace(args), "export") {
+		b.handleExpenseExport(ctx, msg)
+		return
+	}
+	// Treat as filtered query
+	b.handleExpenseQuery(ctx, msg, args)
+}
+
+// handleExpenseQuery fetches expense list from the API and replies.
+func (b *Bot) handleExpenseQuery(ctx context.Context, msg *tgbotapi.Message, query string) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.expensesURL, nil)
+	if err != nil {
+		b.reply(msg.Chat.ID, "Failed to query expenses")
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+b.authToken)
+
+	resp, err := b.httpClient.Do(req)
+	if err != nil {
+		slog.Warn("expense query failed", "error", err)
+		b.reply(msg.Chat.ID, "Failed to query expenses — service unavailable")
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponseBytes))
+	if err != nil {
+		b.reply(msg.Chat.ID, "Failed to read expense response")
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("expense query non-200", "status", resp.StatusCode)
+		b.reply(msg.Chat.ID, "Failed to query expenses")
+		return
+	}
+
+	var result struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Expenses []json.RawMessage `json:"expenses"`
+			Total    string            `json:"total"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		b.reply(msg.Chat.ID, "Failed to parse expense data")
+		return
+	}
+
+	if len(result.Data.Expenses) == 0 {
+		b.reply(msg.Chat.ID, "No expenses found")
+		return
+	}
+
+	// Format summary
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("📊 %d expenses", len(result.Data.Expenses)))
+	if result.Data.Total != "" {
+		sb.WriteString(fmt.Sprintf(", total: $%s", result.Data.Total))
+	}
+	sb.WriteString("\nUse /expense export to download CSV")
+	b.reply(msg.Chat.ID, sb.String())
+}
+
+// handleExpenseExport requests a CSV export from the expense API.
+func (b *Bot) handleExpenseExport(ctx context.Context, msg *tgbotapi.Message) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.expensesURL+"/export", nil)
+	if err != nil {
+		b.reply(msg.Chat.ID, "Failed to request expense export")
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+b.authToken)
+
+	resp, err := b.httpClient.Do(req)
+	if err != nil {
+		slog.Warn("expense export failed", "error", err)
+		b.reply(msg.Chat.ID, "Failed to export expenses — service unavailable")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("expense export non-200", "status", resp.StatusCode)
+		b.reply(msg.Chat.ID, "Failed to export expenses")
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponseBytes))
+	if err != nil {
+		b.reply(msg.Chat.ID, "Failed to read export data")
+		return
+	}
+
+	// Send as document
+	doc := tgbotapi.NewDocument(msg.Chat.ID, tgbotapi.FileBytes{
+		Name:  "expenses.csv",
+		Bytes: body,
+	})
+	if _, err := b.api.Send(doc); err != nil {
+		slog.Warn("failed to send expense CSV", "error", err)
+		b.reply(msg.Chat.ID, "Failed to send expense CSV file")
+	}
 }
 
 // TriggerCookMode starts a cook mode session from an external caller (e.g., meal plan).

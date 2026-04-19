@@ -30,7 +30,7 @@ Smackerel has zero CI/CD automation. All testing, linting, and building is manua
 ## Non-Goals
 
 - CD (continuous deployment) — this system is self-hosted, not cloud-deployed
-- Container registry publishing (DockerHub, GHCR) — images are built locally
+- Container registry publishing is optional — GHCR push on tagged releases is supported for self-hosted deployment convenience
 - Kubernetes or Helm chart support
 - Multi-arch builds
 

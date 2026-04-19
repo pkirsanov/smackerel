@@ -12,6 +12,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	"github.com/smackerel/smackerel/internal/list"
 	"github.com/smackerel/smackerel/internal/mealplan"
@@ -114,6 +115,8 @@ func run() error {
 			AssemblyMaxMessages:          cfg.TelegramAssemblyMaxMessages,
 			MediaGroupWindowSeconds:      cfg.TelegramMediaGroupWindowSeconds,
 			DisambiguationTimeoutSeconds: cfg.TelegramDisambiguationTimeoutSeconds,
+			CookSessionTimeoutMinutes:    cfg.TelegramCookSessionTimeoutMinutes,
+			CookSessionMaxPerChat:        cfg.TelegramCookSessionMaxPerChat,
 		})
 		if err != nil {
 			slog.Warn("telegram bot initialization failed", "error", err)
@@ -145,6 +148,23 @@ func run() error {
 		slog.Info("knowledge linter configured", "cron", cfg.KnowledgeLintCron,
 			"stale_days", cfg.KnowledgeLintStaleDays,
 			"max_retries", cfg.KnowledgeMaxSynthesisRetries,
+		)
+	}
+
+	// Wire expense tracking services (spec 034)
+	if cfg.ExpensesEnabled {
+		expenseClassifier := intelligence.NewExpenseClassifier(svc.pg.Pool, cfg)
+
+		// Seed vendor aliases on startup (idempotent)
+		if err := expenseClassifier.SeedVendorAliases(ctx); err != nil {
+			slog.Warn("failed to seed vendor aliases", "error", err)
+		}
+
+		expenseHandler := api.NewExpenseHandler(svc.pg.Pool, expenseClassifier, cfg)
+		deps.ExpenseHandler = expenseHandler
+		slog.Info("expense tracking enabled",
+			"default_currency", cfg.ExpensesDefaultCurrency,
+			"export_max_rows", cfg.ExpensesExportMaxRows,
 		)
 	}
 

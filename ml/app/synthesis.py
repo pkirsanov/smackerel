@@ -12,6 +12,8 @@ import time
 
 import yaml
 
+from .receipt_detection import detect_receipt_content
+
 logger = logging.getLogger("smackerel-ml.synthesis")
 
 # Content char limit sent to LLM (design contract: 8000 chars)
@@ -136,6 +138,19 @@ async def handle_extract(
     artifact_id = data.get("artifact_id", "")
     contract_version = data.get("prompt_contract_version", "")
 
+    # Pre-filter: check if content looks like a receipt (avoids expensive LLM
+    # calls for receipt extraction on non-receipt content)
+    content_raw = data.get("content_raw", "")
+    content_type = data.get("content_type", "")
+    source_id = data.get("source_id", "")
+    is_receipt = detect_receipt_content(
+        text=content_raw,
+        content_type=content_type,
+        source_id=source_id,
+        sender=data.get("sender", ""),
+        subject=data.get("subject", ""),
+    )
+
     try:
         contract = load_prompt_contract(contract_version)
     except FileNotFoundError as e:
@@ -235,6 +250,7 @@ async def handle_extract(
         "artifact_id": artifact_id,
         "success": True,
         "result": result,
+        "is_receipt": is_receipt,
         "prompt_contract_version": contract_version,
         "processing_time_ms": _elapsed_ms(start),
         "model_used": model_used,

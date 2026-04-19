@@ -2,10 +2,10 @@
   "version": 3,
   "featureDir": "specs/031-live-stack-testing",
   "featureName": "Live Stack Testing",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": null,
     "currentPhase": "finalize",
     "currentScope": 6,
     "runStartedAt": "2026-04-18T00:00:00Z",
@@ -31,7 +31,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "certified",
     "completedScopes": [
       1,
       2,

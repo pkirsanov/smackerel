@@ -6,7 +6,7 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 
 ## Scope 1: Fix Development.md drift
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
@@ -27,18 +27,18 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 
 ### DoD
 
-- [ ] "Implemented runtime capabilities" includes expense tracking, recipe scaler/cook mode, meal planning — **Phase:** implement
-- [ ] Go Packages table includes `internal/recipe/` and `internal/mealplan/` — **Phase:** implement
-- [ ] Existing package descriptions for `api/`, `digest/`, `domain/`, `intelligence/`, `telegram/` updated — **Phase:** implement
-- [ ] Migration 018 listed in migration table — **Phase:** implement
-- [ ] `receipt-extraction-v1.yaml` listed in prompt contract table — **Phase:** implement
-- [ ] Source/test file counts verified and updated — **Phase:** implement
+- [x] "Implemented runtime capabilities" includes expense tracking, recipe scaler/cook mode, meal planning — **Phase:** implement
+- [x] Go Packages table includes `internal/recipe/` and `internal/mealplan/` — **Phase:** implement
+- [x] Existing package descriptions for `api/`, `digest/`, `domain/`, `intelligence/`, `telegram/` updated — **Phase:** implement
+- [x] Migration 018 listed in migration table — **Phase:** implement
+- [x] `receipt-extraction-v1.yaml` listed in prompt contract table — **Phase:** implement
+- [x] Source/test file counts verified and updated — **Phase:** implement
 
 ---
 
 ## Scope 2: Fix Operations.md drift
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** None
 
@@ -51,16 +51,16 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 
 ### DoD
 
-- [ ] Expense tracking operational section exists with configuration, API endpoints, Telegram flow — **Phase:** implement
-- [ ] Meal planning operational section exists with API endpoints, Telegram commands — **Phase:** implement
-- [ ] Recipe features operational section exists with scaler, cook mode — **Phase:** implement
-- [ ] 5 new troubleshooting entries in Error Lookup Table — **Phase:** implement
+- [x] Expense tracking operational section exists with configuration, API endpoints, Telegram flow — **Phase:** implement
+- [x] Meal planning operational section exists with API endpoints, Telegram commands — **Phase:** implement
+- [x] Recipe features operational section exists with scaler, cook mode — **Phase:** implement
+- [x] 5 new troubleshooting entries in Error Lookup Table — **Phase:** implement
 
 ---
 
 ## Scope 3: Fix README.md drift
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Depends On:** None
 
@@ -72,6 +72,6 @@ Links: [spec.md](spec.md) | [design.md](design.md)
 
 ### DoD
 
-- [ ] "What It Does" section includes expense tracking, recipe scaling, cook mode, meal planning feature bullets — **Phase:** implement
-- [ ] Architecture diagram shows expense/recipe/meal plan components — **Phase:** implement
-- [ ] Telegram bot section mentions recipe, cook, expense, and meal plan interactions — **Phase:** implement
+- [x] "What It Does" section includes expense tracking, recipe scaling, cook mode, meal planning feature bullets — **Phase:** implement
+- [x] Architecture diagram shows expense/recipe/meal plan components — **Phase:** implement
+- [x] Telegram bot section mentions recipe, cook, expense, and meal plan interactions — **Phase:** implement

@@ -61,6 +61,48 @@ jobs:
         docker tag smackerel-smackerel-ml:latest "smackerel-ml:${VERSION}"
         docker tag smackerel-smackerel-ml:latest "smackerel-ml:${COMMIT_SHA:0:12}"
 
+  push-images:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build Docker images
+      run: |
+        VERSION="${GITHUB_REF#refs/tags/}"
+        export SMACKEREL_VERSION="${VERSION}"
+        export SMACKEREL_COMMIT="${GITHUB_SHA:0:12}"
+        export SMACKEREL_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        ./smackerel.sh build
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Tag and push images
+      run: |
+        VERSION="${GITHUB_REF#refs/tags/}"
+        CORE_IMAGE="ghcr.io/${{ github.repository_owner }}/smackerel-core"
+        ML_IMAGE="ghcr.io/${{ github.repository_owner }}/smackerel-ml"
+
+        docker tag smackerel-smackerel-core:latest "${CORE_IMAGE}:${VERSION}"
+        docker tag smackerel-smackerel-core:latest "${CORE_IMAGE}:latest"
+        docker push "${CORE_IMAGE}:${VERSION}"
+        docker push "${CORE_IMAGE}:latest"
+
+        docker tag smackerel-smackerel-ml:latest "${ML_IMAGE}:${VERSION}"
+        docker tag smackerel-smackerel-ml:latest "${ML_IMAGE}:latest"
+        docker push "${ML_IMAGE}:${VERSION}"
+        docker push "${ML_IMAGE}:latest"
+
   integration:
     if: github.ref == 'refs/heads/main'
     needs: build
@@ -75,17 +117,14 @@ jobs:
           POSTGRES_PASSWORD: smackerel
           POSTGRES_DB: smackerel_test
         ports:
-          - 5432:5432
+        - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U smackerel -d smackerel_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd "pg_isready -U smackerel -d smackerel_test" --health-interval 5s --health-timeout 5s --health-retries 5
 
       nats:
         image: nats:2.10-alpine
         ports:
-          - 4222:4222
+        - 4222:4222
 
     steps:
     - uses: actions/checkout@v4
@@ -94,9 +133,17 @@ jobs:
       with:
         go-version: '1.24'
 
+    - name: Apply database migrations
+      env:
+        PGPASSWORD: smackerel
+      run: |
+        psql -h localhost -U smackerel -d smackerel_test -f internal/db/migrations/001_initial_schema.sql
+        psql -h localhost -U smackerel -d smackerel_test -f internal/db/migrations/018_meal_plans.sql
+
     - name: Run integration tests
       env:
         DATABASE_URL: postgres://smackerel:smackerel@localhost:5432/smackerel_test?sslmode=disable
         NATS_URL: nats://localhost:4222
+        SMACKEREL_AUTH_TOKEN: ci-test-token-integration
       run: |
-        go test ./tests/integration/... -v -count=1 -timeout 10m
+        go test -tags=integration ./tests/integration/... -v -count=1 -timeout 10m

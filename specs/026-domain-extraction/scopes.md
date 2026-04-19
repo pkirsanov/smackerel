@@ -152,23 +152,23 @@ Scenario: Domain extraction response handles success and failure
 
 ### Definition of Done
 
-- [ ] Migration `015_domain_extraction.sql` adds `domain_data JSONB`, `domain_extraction_status TEXT`, `domain_schema_version TEXT`, `domain_extracted_at TIMESTAMPTZ` to artifacts
-  > **Phase:** implement
+- [x] Migration `015_domain_extraction.sql` adds `domain_data JSONB`, `domain_extraction_status TEXT`, `domain_schema_version TEXT`, `domain_extracted_at TIMESTAMPTZ` to artifacts
+  > **Phase:** implement — consolidated into `001_initial_schema.sql` lines 52-55; all four columns present on artifacts table
 
-- [ ] GIN index `idx_artifacts_domain_data_gin` created with `jsonb_path_ops` on `domain_data`
-  > **Phase:** implement
+- [x] GIN index `idx_artifacts_domain_data_gin` created with `jsonb_path_ops` on `domain_data`
+  > **Phase:** implement — `001_initial_schema.sql`: `CREATE INDEX IF NOT EXISTS idx_artifacts_domain_data_gin ON artifacts USING gin (domain_data jsonb_path_ops)`
 
-- [ ] Partial indexes created on `domain_extraction_status` (pending/failed) and `domain_schema_version` (non-NULL)
-  > **Phase:** implement
+- [x] Partial indexes created on `domain_extraction_status` (pending/failed) and `domain_schema_version` (non-NULL)
+  > **Phase:** implement — `001_initial_schema.sql`: `idx_artifacts_domain_extraction_status WHERE ... IN ('pending','failed')` and `idx_artifacts_domain_schema_version WHERE ... IS NOT NULL`
 
-- [ ] `DomainExtractRequest` struct with Validate() method rejects empty artifact_id and contract_version
-  > **Phase:** implement
+- [x] `DomainExtractRequest` struct with Validate() method rejects empty artifact_id and contract_version
+  > **Phase:** implement — `internal/pipeline/domain_types.go`: `ValidateDomainExtractRequest` checks artifact_id, contract_version, and at least one content field
 
-- [ ] `DomainExtractResponse` struct with Validate() method enforces artifact_id required, DomainData required when success=true
-  > **Phase:** implement
+- [x] `DomainExtractResponse` struct with Validate() method enforces artifact_id required, DomainData required when success=true
+  > **Phase:** implement — `internal/pipeline/domain_types.go`: `ValidateDomainExtractResponse` checks artifact_id required and DomainData required when Success=true
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** test
+- [x] All unit tests pass: `./smackerel.sh test unit`
+  > **Phase:** test — all Go packages pass including `internal/pipeline` (domain_types_test.go covers T1-01 through T1-05)
 
 ---
 
@@ -237,26 +237,26 @@ Scenario: Registry returns nil for unmatched content type
 
 ### Definition of Done
 
-- [ ] `internal/domain/registry.go` package created with `Registry`, `DomainContract`, `LoadRegistry`, `Match`, `Count`
-  > **Phase:** implement
+- [x] `internal/domain/registry.go` package created with `Registry`, `DomainContract`, `LoadRegistry`, `Match`, `Count`
+  > **Phase:** implement — `internal/domain/registry.go`: all types and functions present; `Registry` struct with `byContentType`/`byURLPattern` maps
 
-- [ ] `LoadRegistry` correctly parses `type: "domain-extraction"` contracts and ignores other types
-  > **Phase:** implement
+- [x] `LoadRegistry` correctly parses `type: "domain-extraction"` contracts and ignores other types
+  > **Phase:** implement — `registry.go`: `if contract.Type != "domain-extraction" { continue }` skips non-domain contracts silently
 
-- [ ] `LoadRegistry` returns error on duplicate `content_type` across contracts
-  > **Phase:** implement
+- [x] `LoadRegistry` returns error on duplicate `content_type` across contracts
+  > **Phase:** implement — `registry.go`: checks `reg.byContentType[ct]` before insert; returns `duplicate content_type` error with both versions
 
-- [ ] `Match` returns correct contract for direct content_type match
-  > **Phase:** implement
+- [x] `Match` returns correct contract for direct content_type match
+  > **Phase:** implement — `registry.go Match()`: `byContentType[contentType]` lookup returns contract directly
 
-- [ ] `Match` returns correct contract for URL qualifier substring match (case-insensitive)
-  > **Phase:** implement
+- [x] `Match` returns correct contract for URL qualifier substring match (case-insensitive)
+  > **Phase:** implement — `registry.go`: URL patterns stored via `strings.ToLower`, matched via `strings.Contains(lower, entry.pattern)`
 
-- [ ] `Match` returns nil when no contract matches; nil receiver returns nil (no panic)
-  > **Phase:** implement
+- [x] `Match` returns nil when no contract matches; nil receiver returns nil (no panic)
+  > **Phase:** implement — `registry.go Match()`: starts with `if r == nil { return nil }` guard; returns nil at end if no match found
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** test
+- [x] All unit tests pass: `./smackerel.sh test unit`
+  > **Phase:** test — `internal/domain` passes; registry_test.go covers T2-01 through T2-07
 
 ---
 
