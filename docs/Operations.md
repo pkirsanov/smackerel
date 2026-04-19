@@ -402,3 +402,119 @@ If switching from `http://127.0.0.1:40001` to `https://smackerel.example.com`, u
 2. Google Cloud Console → Authorized redirect URIs
 3. Regenerate config: `./smackerel.sh config generate`
 4. Restart: `./smackerel.sh down && ./smackerel.sh up`
+
+## Expense Tracking Configuration
+
+Expense tracking captures receipts from email, photos, and PDFs, classifies them using a 7-level rule chain, and supports CSV export.
+
+### Enabling Expense Tracking
+
+Set `features.expense_tracking.enabled: true` in `config/smackerel.yaml` and configure:
+
+```yaml
+features:
+  expense_tracking:
+    enabled: true
+    categories:
+      - groceries
+      - dining
+      - transport
+      - utilities
+      - entertainment
+      - health
+      - travel
+      - home
+      - other
+    business_vendors:
+      - "Amazon Web Services"
+      - "Google Cloud"
+    labels:
+      needs_review: "needs-review"
+      personal: "personal"
+      business: "business"
+```
+
+Regenerate config and restart after changes:
+```bash
+./smackerel.sh config generate
+./smackerel.sh down && ./smackerel.sh up
+```
+
+The expense API provides 7 endpoints: query, export CSV, correction, classification, suggestions, receipt confirmation, and vendor normalization.
+
+## Meal Planning Configuration
+
+Meal planning provides weekly plans with slot assignment, shopping list generation, and optional CalDAV calendar sync.
+
+### Enabling Meal Planning
+
+Set `features.meal_planning.enabled: true` in `config/smackerel.yaml` and configure:
+
+```yaml
+features:
+  meal_planning:
+    enabled: true
+    meal_types:
+      - breakfast
+      - lunch
+      - dinner
+      - snack
+    meal_times:
+      breakfast: "08:00"
+      lunch: "12:00"
+      dinner: "18:30"
+      snack: "15:00"
+    default_servings: 2
+    caldav:
+      enabled: false
+      url: ""
+      username: ""
+      password: ""
+      calendar_name: "Meal Plans"
+```
+
+The meal plan API provides 12 endpoints for creating, querying, assigning recipes to slots, copying plans, generating shopping lists, and syncing to CalDAV.
+
+## Recipe Features
+
+### Cook Session Timeout
+
+Cook mode provides a step-by-step Telegram walkthrough for any recipe. Sessions time out after the configured duration (default 2 hours):
+
+```yaml
+features:
+  recipes:
+    cook_session_timeout: "2h"
+```
+
+### Serving Scaler
+
+The serving scaler adjusts ingredient quantities for any serving count. Fractions are formatted as kitchen-friendly values (e.g., ½, ¾, ⅓). Scaling is available via the recipe API endpoint and Telegram commands.
+
+## Troubleshooting — New Features
+
+### Expenses Not Showing Up
+
+| Check | Resolution |
+|-------|------------|
+| Feature enabled? | Verify `features.expense_tracking.enabled: true` in `config/smackerel.yaml` |
+| Config regenerated? | Run `./smackerel.sh config generate` after config changes |
+| Receipt extraction working? | Check ML sidecar logs: `docker logs smackerel-ml 2>&1`. The `receipt-extraction-v1` prompt contract must be present in `/app/prompt_contracts/` |
+| Vendor not recognized? | Vendor normalization uses an LRU cache with pre-seeded aliases. Unknown vendors appear as "needs-review" until corrected |
+
+### Meal Plan Slots Fail
+
+| Check | Resolution |
+|-------|------------|
+| Feature enabled? | Verify `features.meal_planning.enabled: true` in `config/smackerel.yaml` |
+| Overlapping plans? | Plans with overlapping date ranges are rejected. Check existing plans via `GET /api/meal-plans` |
+| Recipe not found? | Slots require a valid recipe artifact ID. Verify the recipe exists in the system |
+| CalDAV sync failing? | Check CalDAV URL, credentials, and network connectivity. CalDAV sync is optional and does not block plan creation |
+
+### Cook Mode Timeout
+
+| Check | Resolution |
+|-------|------------|
+| Session expired? | Default timeout is 2 hours. Adjust `features.recipes.cook_session_timeout` in config |
+| No active session? | Start a cook session via Telegram command. Sessions are per-user and per-recipe |
+| Bot not responding? | Check Telegram bot token and that the bot is receiving webhook updates |

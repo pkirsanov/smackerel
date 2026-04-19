@@ -8,7 +8,7 @@ Committed:
 
 - `README.md`
 - `docs/smackerel.md`
-- `specs/` (001-033, all with spec, design, scopes, reports)
+- `specs/` (001-036, all with spec, design, scopes, reports)
 - `.github/`
 - `.specify/memory/`
 - Go core runtime sources under `cmd/` and `internal/` (130 source files, 131 test files)
@@ -38,7 +38,7 @@ Implemented runtime capabilities:
 - PWA share target for mobile capture and browser extension (Chrome MV3 / Firefox) for desktop capture
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)
-- Database migrations (17 SQL files)
+- Database migrations (18 SQL files)
 - NATS JetStream with token authentication (11 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 - CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
@@ -197,16 +197,16 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | Package | Purpose |
 |---------|---------|
 | `internal/annotation/` | User annotation model, freeform parser (ratings, tags, interactions, notes), PostgreSQL store, materialized summary view |
-| `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists), Bearer auth, security headers, rate limiting |
+| `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists, expense API (7 endpoints: query, export CSV, correction, classification, suggestions), meal plan API (12 endpoints), recipe domain scaling endpoint), Bearer auth, security headers, rate limiting |
 | `internal/auth/` | OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, token storage |
 | `internal/config/` | SST-compliant configuration loader — reads all env vars, validates required fields, parses numeric config, cross-validates constraints |
 | `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `bookmarks/`, `browser/`, `calendar/`, `discord/`, `financial/`, `gmail/`, `govalerts/`, `guesthost/`, `hospitable/`, `keep/`, `maps/`, `rss/`, `twitter/`, `weather/`, `youtube/` |
 | `internal/db/` | PostgreSQL connection pool wrapper, migration runner (embed.FS), artifact CRUD, export with cursor pagination, guest/property repos |
-| `internal/digest/` | Daily digest assembly (action items, overnight artifacts, hot topics, hospitality context, knowledge health), LLM generation via NATS, Telegram delivery with retry |
-| `internal/domain/` | Domain extraction schema registry — maps artifact content types to prompt contracts for structured extraction (recipes, products) |
+| `internal/digest/` | Daily digest assembly (action items, overnight artifacts, hot topics, hospitality context, knowledge health, expense digest section (summary, needs-review, suggestions, missing receipts, word limit enforcement)), LLM generation via NATS, Telegram delivery with retry |
+| `internal/domain/` | Domain extraction schema registry — maps artifact content types to prompt contracts for structured extraction (recipes, products), expense metadata types, vendor alias types |
 | `internal/extract/` | Content extraction from URLs — HTML readability, YouTube transcript fetching, media type detection, SSRF-safe HTTP client |
 | `internal/graph/` | Knowledge graph linker — 4 strategies (similarity, entity, topic, temporal), bidirectional edge creation, connection counting |
-| `internal/intelligence/` | Intelligence engine — cross-domain synthesis, expertise mapping (R-501), learning paths (R-502), subscription detection (R-504), serendipity resurfacing (R-505), content fuel (R-506), quick references (R-507), monthly reports (R-508), seasonal patterns, momentum tracking, alerts |
+| `internal/intelligence/` | Intelligence engine — cross-domain synthesis, expertise mapping (R-501), learning paths (R-502), subscription detection (R-504), serendipity resurfacing (R-505), content fuel (R-506), quick references (R-507), monthly reports (R-508), seasonal patterns, momentum tracking, alerts, expense classification (7-level rule chain), vendor normalization (LRU cache + pre-seeded aliases), expense suggestion generation |
 | `internal/knowledge/` | Knowledge synthesis layer — concept pages, entity profiles, lint reports, cross-source connection assessment, store with trigram search, prompt contract integration |
 | `internal/list/` | Actionable list model — lists and list items, domain-aware aggregation from extracted data, completion tracking, PostgreSQL store |
 | `internal/metrics/` | Prometheus metrics (ingestion, capture, search latency, domain extraction, connector sync, NATS dead-letter counters, DB connection gauge) and W3C traceparent propagation via NATS headers |
@@ -214,7 +214,9 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/pipeline/` | Artifact processing pipeline — NATS subscribers for process/embed/rerank/digest/synthesis/domain-extract, result handlers, retry logic |
 | `internal/scheduler/` | Cron-based task scheduler — digest generation (configurable cron), intelligence synthesis (2AM), momentum (hourly), resurfacing (8AM), knowledge lint (configurable), alert checks |
 | `internal/stringutil/` | String utility functions — UTF-8 safe truncation, control character sanitization, text normalization |
-| `internal/telegram/` | Telegram bot — message handling (URLs, text, voice, forwards, media groups, conversations), 9 commands (/find, /concept, /person, /lint, /digest, /done, /status, /recent, /rate), annotation via reply, disambiguation flow |
+| `internal/telegram/` | Telegram bot — message handling (URLs, text, voice, forwards, media groups, conversations), 9 commands (/find, /concept, /person, /lint, /digest, /done, /status, /recent, /rate), annotation via reply, disambiguation flow, recipe commands (serving scaler, cook mode with session store), expense interactions (receipt confirmation, query, correction, suggestions), meal plan commands (create, assign, query, cook-from-plan) |
+| `internal/mealplan/` | Meal planning calendar — plan store, service (lifecycle, overlap, copy), shopping list bridge (reuses RecipeAggregator + ScaleIngredients), CalDAV calendar sync bridge |
+| `internal/recipe/` | Shared recipe types, serving scaler, kitchen fraction formatter, quantity parsing (extracted from list aggregator for reuse by scaler and cook mode) |
 | `internal/topics/` | Topic extraction and management — topic CRUD, promotion/archival lifecycle, hot topic detection |
 | `internal/web/` | HTMX web UI — search, artifact detail, digest, topics, settings, status, knowledge dashboard (concepts, entities, lint), embedded HTML templates |
 
@@ -241,6 +243,7 @@ All migrations live in `internal/db/migrations/` and run automatically on startu
 | 015 | `015_domain_extraction.sql` | Domain extraction (spec 026): `domain_data` JSONB column, extraction tracking on artifacts |
 | 016 | `016_user_annotations.sql` | User annotations (spec 027): `annotations` table, `telegram_message_artifacts` mapping, `artifact_annotation_summary` materialized view |
 | 017 | `017_actionable_lists.sql` | Actionable lists (spec 028): `lists` and `list_items` tables |
+| 018 | `018_meal_plans.sql` | Meal planning (spec 036): `meal_plans` + `meal_plan_slots` tables with date range, lifecycle status, slot constraints |
 
 ## Prompt Contracts
 
@@ -255,6 +258,7 @@ Prompt contracts live in `config/prompt_contracts/` and are mounted into the ML 
 | Digest Assembly | `digest-assembly-v1.yaml` | `digest-assembly` | Assemble daily digest section from pre-synthesized knowledge layer content |
 | Recipe Extraction | `recipe-extraction-v1.yaml` | `domain-extraction` | Extract structured recipe data (ingredients, steps, nutrition) from recipe content |
 | Product Extraction | `product-extraction-v1.yaml` | `domain-extraction` | Extract structured product data (price, specs, ratings) from product pages and reviews |
+| Receipt Extraction | `receipt-extraction-v1.yaml` | `domain-extraction` | Extract structured receipt/invoice data (vendor, date, amount, currency, tax, line items, payment method) |
 
 ### Adding a New Prompt Contract
 
