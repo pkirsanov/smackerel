@@ -2,10 +2,10 @@
   "version": 3,
   "featureDir": "specs/026-domain-extraction",
   "featureName": "Domain-Aware Structured Extraction",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": null,
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-17T15:00:00Z",
@@ -20,7 +20,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "certified",
     "completedScopes": [
       1,
       2,
@@ -32,7 +32,7 @@
       8,
       9
     ],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": ["implement", "test", "validate"],
     "scopeProgress": [
       {
         "scope": 1,
@@ -149,12 +149,21 @@
       "runStartedAt": "2026-04-17T15:00:00Z",
       "runEndedAt": "2026-04-17T15:30:00Z",
       "summary": "Created spec.md, design.md, scopes.md with 9 scopes. Created report.md, uservalidation.md, state.json."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "runStartedAt": "2026-04-19T00:00:00Z",
+      "runEndedAt": "2026-04-19T00:05:00Z",
+      "summary": "Per-spec implement verification: all 9 scopes Done, all implementation files verified present (internal/domain/, internal/pipeline/domain_types.go, internal/api/domain*.go, internal/nats/client.go NATS subjects, ml/app/domain.py, internal/db/migrations/archive/015_domain_extraction.sql, config/prompt_contracts/recipe-extraction-v1.yaml, config/prompt_contracts/product-extraction-v1.yaml). No code changes needed."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-18T12:00:00Z",
+  "lastUpdatedAt": "2026-04-19T00:05:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

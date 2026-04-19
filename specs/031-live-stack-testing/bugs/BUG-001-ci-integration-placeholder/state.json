@@ -2,14 +2,60 @@
   "version": 3,
   "featureDir": "specs/031-live-stack-testing/bugs/BUG-001-ci-integration-placeholder",
   "featureName": "BUG-031-001: CI Integration Test Placeholder",
-  "status": "planned",
+  "status": "done",
   "workflowMode": "bugfix-fastlane",
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
-    "runStartedAt": "2026-04-19T00:00:00Z"
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["planning", "implement", "test", "validate", "finalize"],
+    "runStartedAt": "2026-04-19T00:00:00Z",
+    "executionHistory": [
+      {
+        "phase": "planning",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-04-19T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created scopes.md with single scope for CI integration wiring."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-19T04:40:28Z",
+        "outcome": "completed_owned",
+        "summary": "Commit 43e93cf: Replaced placeholder echo with PostgreSQL+NATS service containers, migration step, and go test with -tags=integration. SMACKEREL_AUTH_TOKEN added to env."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-19T12:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "CI YAML verified: services block correct, health check present, migrations applied, go test with correct tags and timeout, all env vars present, no placeholder echo."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-19T12:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "All 9 DoD items verified. Scope 1 marked Done."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-19T12:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug closed. All DoD items checked, state promoted to done."
+      }
+    ]
+  },
+  "certification": {
+    "status": "certified",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["planning", "implement", "test", "validate", "finalize"],
+    "scopeProgress": {
+      "scope-1": "Done"
+    }
   },
   "activeBugs": [],
   "resolvedBugs": [],
-  "lastUpdatedAt": "2026-04-19T00:00:00Z"
+  "lastUpdatedAt": "2026-04-19T12:00:00Z"
 }

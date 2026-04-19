@@ -1997,6 +1997,7 @@ The runtime implementation details for these standards are defined in:
 - `docs/Development.md`
 - `docs/Testing.md`
 - `docs/Docker_Best_Practices.md`
+- `docs/Deployment.md` — production deployment including TLS termination, reverse proxy setup, and auth token management
 
 ### 20.2 Current Repo State
 
@@ -2250,7 +2251,7 @@ All technology choices must satisfy:
 3. **Proven at scale** — used in production by large organizations
 4. **Compiled / high-performance** — Go or Rust for core services; Python only where no compiled alternative exists (ML inference, YouTube transcripts)
 
-In addition to technology selection, the runtime implementation must satisfy the operational contract documented in `docs/Development.md`, `docs/Testing.md`, and `docs/Docker_Best_Practices.md`.
+In addition to technology selection, the runtime implementation must satisfy the operational contract documented in `docs/Development.md`, `docs/Testing.md`, `docs/Docker_Best_Practices.md`, and `docs/Deployment.md`.
 
 ### 23.2 Core Language: Go
 

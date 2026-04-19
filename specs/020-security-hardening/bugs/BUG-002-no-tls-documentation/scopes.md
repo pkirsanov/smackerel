@@ -17,12 +17,12 @@ None — documentation only.
 
 | # | Name | Surfaces | Key Tests | Status |
 |---|------|----------|-----------|--------|
-| 1 | Create deployment guide + update references | `docs/Deployment.md` (new), `docs/smackerel.md`, `README.md` | Manual review: all sections present, examples syntactically valid | [ ] Not started |
+| 1 | Create deployment guide + update references | `docs/Deployment.md` (new), `docs/smackerel.md`, `README.md` | Manual review: all sections present, examples syntactically valid | [x] Done |
 
 ---
 
 ## Scope 1: Create deployment guide + update references
-**Status:** [ ] Not started
+**Status:** [x] Done
 
 ### Gherkin Scenarios
 
@@ -86,12 +86,12 @@ Feature: TLS reverse proxy deployment documentation
 
 ### Definition of Done
 
-- [ ] `docs/Deployment.md` exists with Caddy reverse proxy example (Caddyfile + Compose snippet)
-- [ ] `docs/Deployment.md` contains nginx reverse proxy example (nginx.conf + Compose snippet)
-- [ ] `docs/Deployment.md` covers Telegram webhook HTTPS configuration
-- [ ] `docs/Deployment.md` covers OAuth redirect URI HTTPS configuration
-- [ ] `docs/Deployment.md` includes Docker Compose integration guidance
-- [ ] `docs/smackerel.md` references the deployment guide
-- [ ] `README.md` links to the deployment guide
-- [ ] All config examples use placeholder domain `smackerel.example.com`
-- [ ] No hardcoded ports — examples reference `config/smackerel.yaml` port values
+- [x] `docs/Deployment.md` exists with Caddy reverse proxy example (Caddyfile + Compose snippet)
+- [x] `docs/Deployment.md` contains nginx reverse proxy example (nginx.conf + Compose snippet)
+- [x] `docs/Deployment.md` covers Telegram webhook HTTPS configuration
+- [x] `docs/Deployment.md` covers OAuth redirect URI HTTPS configuration
+- [x] `docs/Deployment.md` includes Docker Compose integration guidance
+- [x] `docs/smackerel.md` references the deployment guide
+- [x] `README.md` links to the deployment guide
+- [x] All config examples use placeholder domain `smackerel.example.com`
+- [x] No hardcoded ports — examples reference `config/smackerel.yaml` port values

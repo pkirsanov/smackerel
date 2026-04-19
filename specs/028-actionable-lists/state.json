@@ -2,12 +2,12 @@
   "version": 3,
   "featureDir": "specs/028-actionable-lists",
   "featureName": "Actionable Lists & Resource Tracking",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": null,
     "currentPhase": "finalize",
-    "currentScope": 8,
+    "currentScope": null,
     "runStartedAt": "2026-04-17T16:00:00Z",
     "completedPhaseClaims": [
       "bootstrap",
@@ -20,7 +20,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "certified",
     "completedScopes": [
       1,
       2,
@@ -31,7 +31,7 @@
       7,
       8
     ],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": ["implement", "test", "validate"],
     "scopeProgress": [
       {
         "scope": 1,
@@ -144,7 +144,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-18T02:45:00Z",
+  "lastUpdatedAt": "2026-04-19T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

@@ -397,6 +397,8 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("IMAP_EXPENSE_LABELS", "{}")
 	t.Setenv("EXPENSES_BUSINESS_VENDORS", "[]")
 	t.Setenv("EXPENSES_CATEGORIES", `[{"slug":"food-and-drink","display":"Food & Drink","tax_category":"Meals"}]`)
+	t.Setenv("TELEGRAM_COOK_SESSION_TIMEOUT_MINUTES", "30")
+	t.Setenv("TELEGRAM_COOK_SESSION_MAX_PER_CHAT", "3")
 	t.Setenv("MEAL_PLANNING_ENABLED", "true")
 	t.Setenv("MEAL_PLANNING_DEFAULT_SERVINGS", "2")
 	t.Setenv("MEAL_PLANNING_MEAL_TYPES", "breakfast,lunch,dinner,snack")

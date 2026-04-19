@@ -3,11 +3,11 @@
   "specId": "020-security-hardening",
   "bugId": "BUG-001-dev-auth-token-exposed",
   "workflowMode": "bugfix-fastlane",
-  "status": "not-started",
+  "status": "done",
   "execution": {
     "activeAgent": null,
-    "currentPhase": null,
-    "completedPhaseClaims": [],
+    "currentPhase": "finalize",
+    "completedPhaseClaims": ["planning", "implement", "test", "validate", "finalize"],
     "executionHistory": [
       {
         "phase": "planning",
@@ -15,14 +15,44 @@
         "timestamp": "2026-04-19T00:00:00Z",
         "outcome": "completed_owned",
         "summary": "Created 6-artifact bug packet from system review finding TR-001. Identified that dev-token-smackerel-2026 bypasses existing placeholder validation. Fix: add to reject list, add dev-token-* prefix check, change YAML default to empty string."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-19T04:40:28Z",
+        "outcome": "completed_owned",
+        "summary": "Commit 43e93cf: Added dev-token-smackerel-2026 to placeholder reject list, added dev-token-* prefix check (case-insensitive) in config.go, changed smackerel.yaml auth_token to empty string, added TestValidate_AuthTokenDevTokenPrefixRejected."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-19T12:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "All unit tests pass. TestValidate_AuthTokenDevTokenPrefixRejected covers literal, prefix, and case-insensitive rejection. No existing tests broken."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-19T12:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "All 6 DoD items verified against committed code. Scope 1 marked Done."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-19T12:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug closed. All DoD items checked, state promoted to done."
       }
     ]
   },
   "certification": {
-    "status": "pending",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "scopeProgress": {},
+    "status": "certified",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["planning", "implement", "test", "validate", "finalize"],
+    "scopeProgress": {
+      "scope-1": "Done"
+    },
     "lockdownState": {}
   },
   "policySnapshot": {

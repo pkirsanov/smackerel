@@ -59,6 +59,7 @@ services:
       com.smackerel.lifecycle: ephemeral
 
   smackerel-core:
+    image: ${SMACKEREL_CORE_IMAGE:-}
     build:
       context: .
       dockerfile: Dockerfile
@@ -110,6 +111,7 @@ services:
       com.smackerel.lifecycle: ephemeral
 
   smackerel-ml:
+    image: ${SMACKEREL_ML_IMAGE:-}
     build:
       context: ./ml
       dockerfile: Dockerfile
