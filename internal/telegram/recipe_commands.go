@@ -221,7 +221,7 @@ func (b *Bot) handleCookEntry(ctx context.Context, chatID int64, recipeName stri
 		}
 	} else {
 		// Search for recipe by name
-		rd, artifactID, err = b.resolveRecipeByName(ctx, recipeName)
+		rd, artifactID, err = b.ResolveRecipeByName(ctx, recipeName)
 		if err != nil {
 			b.reply(chatID, fmt.Sprintf("? I don't have a recipe called \"%s\". Try /find %s to search.", recipeName, recipeName))
 			return
@@ -393,8 +393,9 @@ func (b *Bot) handleCookReplacement(ctx context.Context, chatID int64, confirm b
 	}
 }
 
-// resolveRecipeByName searches for a recipe by name via the API.
-func (b *Bot) resolveRecipeByName(ctx context.Context, name string) (*recipe.RecipeData, string, error) {
+// ResolveRecipeByName searches for a recipe by name via the API.
+// Exported for use by MealPlanCommandHandler's RecipeResolver callback.
+func (b *Bot) ResolveRecipeByName(ctx context.Context, name string) (*recipe.RecipeData, string, error) {
 	// Truncate name for safety
 	if len(name) > 200 {
 		name = name[:200]

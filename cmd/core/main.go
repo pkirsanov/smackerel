@@ -181,6 +181,13 @@ func run() error {
 			tgMealPlan.CookDelegate = func(chatID int64, recipeName string, servings int) {
 				tgBot.TriggerCookMode(chatID, recipeName, servings)
 			}
+			tgMealPlan.RecipeResolver = func(ctx context.Context, name string) (string, string, error) {
+				rd, artifactID, err := tgBot.ResolveRecipeByName(ctx, name)
+				if err != nil {
+					return "", "", err
+				}
+				return artifactID, rd.Title, nil
+			}
 			tgBot.SetMealPlanHandler(tgMealPlan)
 			slog.Info("telegram meal plan handler configured")
 		}
