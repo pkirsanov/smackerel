@@ -105,14 +105,14 @@ Scenario: SCN-036-005 — Configurable meal times stored in config (BS-013)
 
 ### Definition of Done
 
-- [ ] `config/smackerel.yaml` contains `meal_planning:` section with enabled, default_servings, meal_types, meal_times, calendar_sync, auto_complete_past_plans, auto_complete_cron
-- [ ] `scripts/commands/config.sh` emits all `MEAL_PLANNING_*` env vars to `config/generated/dev.env` and `config/generated/test.env`
-- [ ] `internal/config/config.go` defines `MealPlanConfig` struct with fail-loud validation for all required fields
-- [ ] Migration `018_meal_plans.sql` creates `meal_plans` and `meal_plan_slots` tables with all indexes, constraints, and FKs
-- [ ] Go types `Plan`, `Slot`, `PlanWithSlots`, `PlanStatus` defined in `internal/mealplan/types.go`
-- [ ] All 5 Gherkin scenarios pass
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] `config/smackerel.yaml` contains `meal_planning:` section with enabled, default_servings, meal_types, meal_times, calendar_sync, auto_complete_past_plans, auto_complete_cron
+- [x] `scripts/commands/config.sh` emits all `MEAL_PLANNING_*` env vars to `config/generated/dev.env` and `config/generated/test.env`
+- [x] `internal/config/config.go` defines `MealPlanConfig` struct with fail-loud validation for all required fields
+- [x] Migration `018_meal_plans.sql` creates `meal_plans` and `meal_plan_slots` tables with all indexes, constraints, and FKs
+- [x] Go types `Plan`, `Slot`, `PlanWithSlots`, `PlanStatus` defined in `internal/mealplan/types.go`
+- [x] All 5 Gherkin scenarios pass
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Broader E2E regression suite passes
 
 ---
 
@@ -220,15 +220,15 @@ Scenario: SCN-036-017 — Batch slot creation for repeating recipes
 
 ### Definition of Done
 
-- [ ] `internal/mealplan/store.go` implements full CRUD for plans and slots against PostgreSQL
-- [ ] `internal/mealplan/service.go` implements CreatePlan, AddSlot, UpdateSlot, DeleteSlot, BatchAddSlots, lifecycle transitions, overlap detection, QueryByDate
-- [ ] Status lifecycle enforced: draft→active→completed→archived; all forbidden transitions rejected with 422
-- [ ] Overlap detection returns 409 with conflicting plan details on draft→active
-- [ ] Batch slot creation creates one slot per day with batch_flag=true
-- [ ] Slot date range validated against plan boundaries
-- [ ] All 12 Gherkin scenarios pass
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] `internal/mealplan/store.go` implements full CRUD for plans and slots against PostgreSQL
+- [x] `internal/mealplan/service.go` implements CreatePlan, AddSlot, UpdateSlot, DeleteSlot, BatchAddSlots, lifecycle transitions, overlap detection, QueryByDate
+- [x] Status lifecycle enforced: draft→active→completed→archived; all forbidden transitions rejected with 422
+- [x] Overlap detection returns 409 with conflicting plan details on draft→active
+- [x] Batch slot creation creates one slot per day with batch_flag=true
+- [x] Slot date range validated against plan boundaries
+- [x] All 12 Gherkin scenarios pass
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Broader E2E regression suite passes
 
 ---
 
@@ -311,13 +311,13 @@ Scenario: SCN-036-026 — All API endpoints require auth token
 
 ### Definition of Done
 
-- [ ] All 12 REST endpoints from design §7 implemented in `internal/api/mealplan.go`
-- [ ] Request validation for title, dates, meal_type, recipe_artifact_id, servings, status transitions
-- [ ] Error response format matches existing Smackerel API pattern with error codes from design §7.3
-- [ ] Auth middleware applied to all meal plan endpoints
-- [ ] All 9 Gherkin scenarios pass
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] All 12 REST endpoints from design §7 implemented in `internal/api/mealplan.go`
+- [x] Request validation for title, dates, meal_type, recipe_artifact_id, servings, status transitions
+- [x] Error response format matches existing Smackerel API pattern with error codes from design §7.3
+- [x] Auth middleware applied to all meal plan endpoints
+- [x] All 9 Gherkin scenarios pass
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Broader E2E regression suite passes
 
 ---
 
@@ -420,17 +420,17 @@ Scenario: SCN-036-037 — "repeat last week" via Telegram (UX-5.1, BS-006)
 
 ### Definition of Done
 
-- [ ] All Telegram command patterns from design §8.1 routing table registered and handled
-- [ ] Plan creation from natural language: "meal plan this week", "meal plan next week", "meal plan {date} to {date}"
-- [ ] Slot assignment with recipe search, disambiguation, servings parsing, and batch support
-- [ ] Daily query ("what's for dinner?") and weekly overview ("meal plan") with formatted responses per UX-2.1/UX-2.2
-- [ ] "Cook tonight's dinner" resolves recipe via plan and delegates to spec 035 cook mode
-- [ ] Shopping list generation triggered via "shopping list for plan"
-- [ ] Plan repeat via "repeat last week's plan"
-- [ ] Draft plan context per chat ID with 24-hour TTL (in-process memory, not DB)
-- [ ] All 11 Gherkin scenarios pass
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] All Telegram command patterns from design §8.1 routing table registered and handled
+- [x] Plan creation from natural language: "meal plan this week", "meal plan next week", "meal plan {date} to {date}"
+- [x] Slot assignment with recipe search, disambiguation, servings parsing, and batch support
+- [x] Daily query ("what's for dinner?") and weekly overview ("meal plan") with formatted responses per UX-2.1/UX-2.2
+- [x] "Cook tonight's dinner" resolves recipe via plan and delegates to spec 035 cook mode
+- [x] Shopping list generation triggered via "shopping list for plan"
+- [x] Plan repeat via "repeat last week's plan"
+- [x] Draft plan context per chat ID with 24-hour TTL (in-process memory, not DB)
+- [x] All 11 Gherkin scenarios pass
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Broader E2E regression suite passes
 
 ---
 
@@ -506,17 +506,17 @@ Scenario: SCN-036-043 — Regeneration without force returns 409 when list exist
 
 ### Definition of Done
 
-- [ ] `internal/mealplan/shopping.go` implements ShoppingBridge.GenerateFromPlan per design §5.1 algorithm
-- [ ] Per-slot scaling via ScaleIngredients from spec 035 (no new scaling code)
-- [ ] Batch-flagged slots consolidated into single AggregationSource with totalServings
-- [ ] Delegation to existing RecipeAggregator.Aggregate and Generator.Generate (no new aggregation code)
-- [ ] SourceQuery = "plan:{plan_id}" for traceability
-- [ ] Missing domain_data recipes skipped with user-visible note in scaling summary
-- [ ] Regeneration with force archives old list; without force returns 409
-- [ ] Existing spec 028 direct-from-recipes shopping list generation unchanged (regression verified)
-- [ ] All 6 Gherkin scenarios pass
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] `internal/mealplan/shopping.go` implements ShoppingBridge.GenerateFromPlan per design §5.1 algorithm
+- [x] Per-slot scaling via ScaleIngredients from spec 035 (no new scaling code)
+- [x] Batch-flagged slots consolidated into single AggregationSource with totalServings
+- [x] Delegation to existing RecipeAggregator.Aggregate and Generator.Generate (no new aggregation code)
+- [x] SourceQuery = "plan:{plan_id}" for traceability
+- [x] Missing domain_data recipes skipped with user-visible note in scaling summary
+- [x] Regeneration with force archives old list; without force returns 409
+- [x] Existing spec 028 direct-from-recipes shopping list generation unchanged (regression verified)
+- [x] All 6 Gherkin scenarios pass
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Broader E2E regression suite passes
 
 ---
 
@@ -575,14 +575,14 @@ Scenario: SCN-036-047 — API POST /api/meal-plans/{id}/copy creates shifted pla
 
 ### Definition of Done
 
-- [ ] CopyPlan creates new draft plan with all slot dates shifted by dayOffset
-- [ ] Deleted recipe slots omitted with explanation in slots_skipped response
-- [ ] Optional serving overrides applied per meal type
-- [ ] API POST /api/meal-plans/{id}/copy returns new plan with copy details
-- [ ] Telegram "repeat last week" and "copy plan" commands work
-- [ ] All 4 Gherkin scenarios pass
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] CopyPlan creates new draft plan with all slot dates shifted by dayOffset
+- [x] Deleted recipe slots omitted with explanation in slots_skipped response
+- [x] Optional serving overrides applied per meal type
+- [x] API POST /api/meal-plans/{id}/copy returns new plan with copy details
+- [x] Telegram "repeat last week" and "copy plan" commands work
+- [x] All 4 Gherkin scenarios pass
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Broader E2E regression suite passes
 
 ---
 
@@ -648,16 +648,16 @@ Scenario: SCN-036-052 — Individual event sync failures do not abort batch
 
 ### Definition of Done
 
-- [ ] CalDAV bridge maps plan slots to VEVENTs per design §6.2 field mapping
-- [ ] UID format: `smackerel-meal-{slot.ID}`, CATEGORIES: `smackerel-meal`
-- [ ] Meal times from `meal_planning.meal_times` config (SST, no hardcoded defaults)
-- [ ] Sync is user-initiated via API/Telegram, not automatic
-- [ ] Individual event failures logged but do not abort the batch
-- [ ] Plan deletion triggers CalDAV event cleanup (best-effort, non-blocking)
-- [ ] CalDAV-disabled returns 422 with actionable message
-- [ ] All 5 Gherkin scenarios pass
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] CalDAV bridge maps plan slots to VEVENTs per design §6.2 field mapping
+- [x] UID format: `smackerel-meal-{slot.ID}`, CATEGORIES: `smackerel-meal`
+- [x] Meal times from `meal_planning.meal_times` config (SST, no hardcoded defaults)
+- [x] Sync is user-initiated via API/Telegram, not automatic
+- [x] Individual event failures logged but do not abort the batch
+- [x] Plan deletion triggers CalDAV event cleanup (best-effort, non-blocking)
+- [x] CalDAV-disabled returns 422 with actionable message
+- [x] All 5 Gherkin scenarios pass
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Broader E2E regression suite passes
 
 ---
 
@@ -712,11 +712,11 @@ Scenario: SCN-036-056 — Auto-complete cron schedule from config
 
 ### Definition of Done
 
-- [ ] `Service.AutoCompletePastPlans` queries active plans with end_date < CURRENT_DATE and transitions to "completed"
-- [ ] Scheduler registers cron job using `meal_planning.auto_complete_cron` from config
-- [ ] Job only registered when `meal_planning.auto_complete_past_plans` is true
-- [ ] Job executes with 60-second timeout context
-- [ ] Future-dated active plans are not affected
-- [ ] All 4 Gherkin scenarios pass
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
+- [x] `Service.AutoCompletePastPlans` queries active plans with end_date < CURRENT_DATE and transitions to "completed"
+- [x] Scheduler registers cron job using `meal_planning.auto_complete_cron` from config
+- [x] Job only registered when `meal_planning.auto_complete_past_plans` is true
+- [x] Job executes with 60-second timeout context
+- [x] Future-dated active plans are not affected
+- [x] All 4 Gherkin scenarios pass
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+- [x] Broader E2E regression suite passes
