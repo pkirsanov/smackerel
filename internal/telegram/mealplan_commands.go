@@ -21,6 +21,12 @@ type MealPlanCommandHandler struct {
 	// Set by the wiring layer to bridge into Bot.handleCookEntry.
 	CookDelegate func(chatID int64, recipeName string, servings int)
 
+	// RecipeResolver searches for a recipe artifact by name and returns
+	// (artifactID, recipeTitle, error). Set by the wiring layer to bridge
+	// into Bot.resolveRecipeByName. When nil, recipeName is used directly
+	// (unit test fallback only — live wiring must set this).
+	RecipeResolver func(ctx context.Context, name string) (artifactID string, title string, err error)
+
 	// Draft plan context per chat ID (in-process memory, not DB)
 	mu     sync.RWMutex
 	drafts map[int64]*draftContext
@@ -269,13 +275,22 @@ func (h *MealPlanCommandHandler) handleSlotAssign(ctx context.Context, chatID in
 		return
 	}
 
-	// For now, use recipeName as artifact ID placeholder.
-	// In a real integration, we'd search for the recipe and disambiguate.
-	// The service validates the artifact ID against the DB.
-	slot, err := h.Service.AddSlot(ctx, draftID, date, meal, recipeName, servings, false, "")
+	// Resolve recipe name to artifact ID via search.
+	artifactID, resolvedTitle, err := h.resolveRecipe(ctx, recipeName)
+	if err != nil {
+		replyFunc(chatID, fmt.Sprintf("? No recipe found for %q. Try a different name or /find to search.", recipeName))
+		return
+	}
+
+	slot, err := h.Service.AddSlot(ctx, draftID, date, meal, artifactID, servings, false, "")
 	if err != nil {
 		replyFunc(chatID, fmt.Sprintf("? %s", err))
 		return
+	}
+
+	displayName := resolvedTitle
+	if displayName == "" {
+		displayName = recipeName
 	}
 
 	plan, _ := h.Service.GetPlan(ctx, draftID)
@@ -285,7 +300,7 @@ func (h *MealPlanCommandHandler) handleSlotAssign(ctx context.Context, chatID in
 	}
 
 	replyFunc(chatID, fmt.Sprintf(". %s %s: %s (%d servings)\n  %d slots filled.",
-		date.Format("Monday"), meal, recipeName, slot.Servings, slotCount))
+		date.Format("Monday"), meal, displayName, slot.Servings, slotCount))
 }
 
 func (h *MealPlanCommandHandler) handleBatchSlotAssign(ctx context.Context, chatID int64, startDay, endDay, meal, recipeName string, servings int, replyFunc func(int64, string)) {
@@ -306,14 +321,26 @@ func (h *MealPlanCommandHandler) handleBatchSlotAssign(ctx context.Context, chat
 		endDate = endDate.AddDate(0, 0, 7) // Handle wrap-around
 	}
 
-	slots, err := h.Service.AddBatchSlots(ctx, draftID, startDate, endDate, meal, recipeName, servings)
+	// Resolve recipe name to artifact ID via search.
+	artifactID, resolvedTitle, err := h.resolveRecipe(ctx, recipeName)
+	if err != nil {
+		replyFunc(chatID, fmt.Sprintf("? No recipe found for %q. Try a different name or /find to search.", recipeName))
+		return
+	}
+
+	slots, err := h.Service.AddBatchSlots(ctx, draftID, startDate, endDate, meal, artifactID, servings)
 	if err != nil {
 		replyFunc(chatID, fmt.Sprintf("? %s", err))
 		return
 	}
 
+	displayName := resolvedTitle
+	if displayName == "" {
+		displayName = recipeName
+	}
+
 	replyFunc(chatID, fmt.Sprintf(". %s-%s %s: %s (%d servings each)\n  %d slots added.",
-		startDay, endDay, meal, recipeName, slots[0].Servings, len(slots)))
+		startDay, endDay, meal, displayName, slots[0].Servings, len(slots)))
 }
 
 func (h *MealPlanCommandHandler) handlePlanActivate(ctx context.Context, chatID int64, replyFunc func(int64, string)) {
@@ -631,6 +658,17 @@ var dayNames = map[string]time.Weekday{
 	"friday": time.Friday, "fri": time.Friday,
 	"saturday": time.Saturday, "sat": time.Saturday,
 	"sunday": time.Sunday, "sun": time.Sunday,
+}
+
+// resolveRecipe resolves a user-typed recipe name to an artifact ID.
+// Uses the RecipeResolver callback when set (live wiring), falls back to
+// treating the name as a literal artifact ID (unit test compatibility).
+func (h *MealPlanCommandHandler) resolveRecipe(ctx context.Context, name string) (artifactID string, title string, err error) {
+	if h.RecipeResolver != nil {
+		return h.RecipeResolver(ctx, name)
+	}
+	// Fallback: treat name as artifact ID directly (unit tests only).
+	return name, name, nil
 }
 
 func resolveDayName(s string) time.Time {
