@@ -169,25 +169,25 @@ Scenario: Annotations cascade on artifact deletion
 
 ### Definition of Done
 
-- [ ] Migration `016_user_annotations.sql` creates `annotation_type` and `interaction_type` enum types
+- [x] Migration `016_user_annotations.sql` creates `annotation_type` and `interaction_type` enum types
   > **Phase:** implement
 
-- [ ] `annotations` table created with id, artifact_id (FK CASCADE), ann_type, rating (CHECK 1-5), note, tag, interaction, source_channel, created_at
+- [x] `annotations` table created with id, artifact_id (FK CASCADE), ann_type, rating (CHECK 1-5), note, tag, interaction, source_channel, created_at
   > **Phase:** implement
 
-- [ ] Indexes: `idx_annotations_artifact`, `idx_annotations_type`, `idx_annotations_created`, `idx_annotations_tag` (partial), `idx_annotations_rating` (partial)
+- [x] Indexes: `idx_annotations_artifact`, `idx_annotations_type`, `idx_annotations_created`, `idx_annotations_tag` (partial), `idx_annotations_rating` (partial)
   > **Phase:** implement
 
-- [ ] `telegram_message_artifacts` table with PK(message_id, chat_id), artifact_id FK CASCADE, index on artifact_id
+- [x] `telegram_message_artifacts` table with PK(message_id, chat_id), artifact_id FK CASCADE, index on artifact_id
   > **Phase:** implement
 
-- [ ] `artifact_annotation_summary` materialized view with current_rating, average_rating, rating_count, times_used, last_used, tags (add minus remove), notes_count, total_events, last_annotated
+- [x] `artifact_annotation_summary` materialized view with current_rating, average_rating, rating_count, times_used, last_used, tags (add minus remove), notes_count, total_events, last_annotated
   > **Phase:** implement
 
-- [ ] Unique index `idx_aas_artifact` on materialized view for REFRESH CONCURRENTLY support
+- [x] Unique index `idx_aas_artifact` on materialized view for REFRESH CONCURRENTLY support
   > **Phase:** implement
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
 ---
@@ -289,28 +289,28 @@ Scenario: Rating with "out of 5" syntax
 
 ### Definition of Done
 
-- [ ] `internal/annotation/types.go` defines `AnnotationType`, `InteractionType`, `SourceChannel` as typed string constants
+- [x] `internal/annotation/types.go` defines `AnnotationType`, `InteractionType`, `SourceChannel` as typed string constants
   > **Phase:** implement
 
-- [ ] `Annotation`, `Summary`, `ParsedAnnotation` structs match design with correct JSON tags
+- [x] `Annotation`, `Summary`, `ParsedAnnotation` structs match design with correct JSON tags
   > **Phase:** implement
 
-- [ ] `Parse()` extracts rating from "N/5", "N out of 5" patterns (1-5 only)
+- [x] `Parse()` extracts rating from "N/5", "N out of 5" patterns (1-5 only)
   > **Phase:** implement
 
-- [ ] `Parse()` extracts interaction from keyword list (made it, bought it, read it, visited, tried it, used it)
+- [x] `Parse()` extracts interaction from keyword list (made it, bought it, read it, visited, tried it, used it)
   > **Phase:** implement
 
-- [ ] `Parse()` extracts hashtags as tags, "#remove-X" as removal markers
+- [x] `Parse()` extracts hashtags as tags, "#remove-X" as removal markers
   > **Phase:** implement
 
-- [ ] `Parse()` assigns remaining text as note after stripping other components
+- [x] `Parse()` assigns remaining text as note after stripping other components
   > **Phase:** implement
 
-- [ ] `Parse()` returns zero-valued struct for empty input
+- [x] `Parse()` returns zero-valued struct for empty input
   > **Phase:** implement
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
 ---
@@ -405,43 +405,43 @@ Scenario: NATS event payload matches Annotation struct JSON
 
 ### Definition of Done
 
-- [ ] `Store` struct created with `*pgxpool.Pool` and `*smacknats.Client` fields
+- [x] `Store` struct created with `*pgxpool.Pool` and `*smacknats.Client` fields
   > **Phase:** implement
 
-- [ ] `CreateAnnotation` inserts row with ULID, refreshes materialized view concurrently, publishes NATS event
+- [x] `CreateAnnotation` inserts row with ULID, refreshes materialized view concurrently, publishes NATS event
   > **Phase:** implement
 
-- [ ] `CreateFromParsed` validates artifact existence, creates individual events for each parsed component, handles tag removals
+- [x] `CreateFromParsed` validates artifact existence, creates individual events for each parsed component, handles tag removals
   > **Phase:** implement
 
-- [ ] `GetSummary` reads from `artifact_annotation_summary` materialized view
+- [x] `GetSummary` reads from `artifact_annotation_summary` materialized view
   > **Phase:** implement
 
-- [ ] `GetHistory` returns annotation events ordered by `created_at DESC` with configurable limit (max 100)
+- [x] `GetHistory` returns annotation events ordered by `created_at DESC` with configurable limit (max 100)
   > **Phase:** implement
 
-- [ ] `DeleteTag` inserts a `tag_remove` event (append-only pattern)
+- [x] `DeleteTag` inserts a `tag_remove` event (append-only pattern)
   > **Phase:** implement
 
-- [ ] `AnnotationQuerier` interface defined and implemented by `Store`
+- [x] `AnnotationQuerier` interface defined and implemented by `Store`
   > **Phase:** implement
 
-- [ ] `SubjectAnnotationsCreated` constant added to `internal/nats/client.go`
+- [x] `SubjectAnnotationsCreated` constant added to `internal/nats/client.go`
   > **Phase:** implement
 
-- [ ] `annotations.created` subject added to `config/nats_contract.json`
+- [x] `annotations.created` subject added to `config/nats_contract.json`
   > **Phase:** implement
 
-- [ ] `AnnotationStore` field added to `api.Dependencies`
+- [x] `AnnotationStore` field added to `api.Dependencies`
   > **Phase:** implement
 
-- [ ] `annotations:` section added to `config/smackerel.yaml` with SST-compliant values
+- [x] `annotations:` section added to `config/smackerel.yaml` with SST-compliant values
   > **Phase:** implement
 
-- [ ] Config regenerated: `./smackerel.sh config generate`
+- [x] Config regenerated: `./smackerel.sh config generate`
   > **Phase:** implement
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
 ---
@@ -544,25 +544,25 @@ Scenario: DELETE a tag
 
 ### Definition of Done
 
-- [ ] `CreateAnnotationHandler` parses freeform text (via `annotation.Parse`) or structured fields, validates rating range 1-5, rejects empty input
+- [x] `CreateAnnotationHandler` parses freeform text (via `annotation.Parse`) or structured fields, validates rating range 1-5, rejects empty input
   > **Phase:** implement
 
-- [ ] `GetAnnotationsHandler` returns paginated annotation history with `limit` query param (default 50, max 100)
+- [x] `GetAnnotationsHandler` returns paginated annotation history with `limit` query param (default 50, max 100)
   > **Phase:** implement
 
-- [ ] `GetAnnotationSummaryHandler` returns materialized summary or empty object for unannotated artifacts
+- [x] `GetAnnotationSummaryHandler` returns materialized summary or empty object for unannotated artifacts
   > **Phase:** implement
 
-- [ ] `DeleteTagHandler` inserts a `tag_remove` event via store and returns updated summary
+- [x] `DeleteTagHandler` inserts a `tag_remove` event via store and returns updated summary
   > **Phase:** implement
 
-- [ ] Routes registered in `router.go`: `POST /artifacts/{id}/annotations`, `GET /artifacts/{id}/annotations`, `GET /artifacts/{id}/annotations/summary`, `DELETE /artifacts/{id}/tags/{tag}`
+- [x] Routes registered in `router.go`: `POST /artifacts/{id}/annotations`, `GET /artifacts/{id}/annotations`, `GET /artifacts/{id}/annotations/summary`, `DELETE /artifacts/{id}/tags/{tag}`
   > **Phase:** implement
 
-- [ ] All error responses use existing `writeError` pattern with proper HTTP status codes
+- [x] All error responses use existing `writeError` pattern with proper HTTP status codes
   > **Phase:** implement
 
-- [ ] All unit tests pass: `./smackerel.sh test unit`
+- [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** test
 
 ---
@@ -1014,5 +1014,5 @@ Scenario: Intelligence engine subscribes to annotations.created
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Phase:** implement — Full test suite passes (0 failures). `Claim Source: executed`
 
-- [ ] Full regression passes: `./smackerel.sh test unit` + `./smackerel.sh test integration` + `./smackerel.sh test e2e`
+- [x] Full regression passes: `./smackerel.sh test unit` + `./smackerel.sh test integration` + `./smackerel.sh test e2e`
   > **Phase:** test — Unit tests pass. Integration and E2E require live stack (not run in this session).
