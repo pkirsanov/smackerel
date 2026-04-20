@@ -48,5 +48,5 @@ CREATE TABLE IF NOT EXISTS expense_suggestion_suppressions (
 
 -- Indexes on artifacts.metadata for expense query performance
 CREATE INDEX IF NOT EXISTS idx_artifacts_expense ON artifacts USING gin ((metadata->'expense')) WHERE metadata ? 'expense';
-CREATE INDEX IF NOT EXISTS idx_artifacts_expense_date ON artifacts (((metadata->'expense'->>'date')::date)) WHERE metadata ? 'expense' AND metadata->'expense'->>'date' IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_artifacts_expense_date ON artifacts ((metadata->'expense'->>'date')) WHERE metadata ? 'expense' AND metadata->'expense'->>'date' IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_artifacts_expense_vendor ON artifacts (LOWER(metadata->'expense'->>'vendor')) WHERE metadata ? 'expense';
