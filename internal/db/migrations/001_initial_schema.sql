@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS artifacts (
     -- 015: domain extraction
     domain_data             JSONB,
     domain_extraction_status TEXT,
+    -- connector metadata (used by expense tracking indexes in 019)
+    metadata                JSONB,
     domain_schema_version   TEXT,
     domain_extracted_at     TIMESTAMPTZ
 );
