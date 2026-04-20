@@ -82,41 +82,60 @@ type Config struct {
 	OTELExporterEndpoint string
 
 	// Expense tracking config (SST-compliant — from smackerel.yaml via config generate)
-	ExpensesEnabled                        bool
-	ExpensesDefaultCurrency                string
-	ExpensesExportMaxRows                  int
-	ExpensesExportQBDateFormat             string
-	ExpensesExportStdDateFormat            string
-	ExpensesSuggestionsMinConfidence       float64
-	ExpensesSuggestionsMinPastBusiness     int
-	ExpensesSuggestionsMaxPerDigest        int
-	ExpensesSuggestionsReclassifyBatchLim  int
-	ExpensesVendorCacheSize                int
-	ExpensesDigestMaxWords                 int
-	ExpensesDigestNeedsReviewLimit         int
-	ExpensesDigestMissingReceiptLookback   int
-	IMAPExpenseLabels                      map[string]string
-	ExpensesBusinessVendors                []string
-	ExpensesCategories                     []ExpenseCategory
+	ExpensesEnabled                       bool
+	ExpensesDefaultCurrency               string
+	ExpensesExportMaxRows                 int
+	ExpensesExportQBDateFormat            string
+	ExpensesExportStdDateFormat           string
+	ExpensesSuggestionsMinConfidence      float64
+	ExpensesSuggestionsMinPastBusiness    int
+	ExpensesSuggestionsMaxPerDigest       int
+	ExpensesSuggestionsReclassifyBatchLim int
+	ExpensesVendorCacheSize               int
+	ExpensesDigestMaxWords                int
+	ExpensesDigestNeedsReviewLimit        int
+	ExpensesDigestMissingReceiptLookback  int
+	IMAPExpenseLabels                     map[string]string
+	ExpensesBusinessVendors               []string
+	ExpensesCategories                    []ExpenseCategory
 
 	// Telegram cook session config (SST-compliant — from smackerel.yaml via config generate)
 	TelegramCookSessionTimeoutMinutes int
 	TelegramCookSessionMaxPerChat     int
 
 	// Meal planning config (SST-compliant — from smackerel.yaml via config generate)
-	MealPlanEnabled           bool
-	MealPlanDefaultServings   int
-	MealPlanMealTypes         []string
-	MealPlanMealTimes         map[string]string
-	MealPlanCalendarSync      bool
-	MealPlanAutoComplete      bool
-	MealPlanAutoCompleteCron  string
+	MealPlanEnabled          bool
+	MealPlanDefaultServings  int
+	MealPlanMealTypes        []string
+	MealPlanMealTimes        map[string]string
+	MealPlanCalendarSync     bool
+	MealPlanAutoComplete     bool
+	MealPlanAutoCompleteCron string
 
 	// Connector enable/credential/schedule fields (SST-compliant — from smackerel.yaml via config generate)
 	MapsSyncSchedule              string
+	MapsWatchInterval             string
+	MapsArchiveProcessed          bool
+	MapsHomeDetection             string
+	MapsCommuteWeekdaysOnly       bool
+	MapsMinDistanceM              float64
+	MapsMinDurationMin            float64
+	MapsLocationRadiusM           float64
+	MapsCommuteMinOccurrences     float64
+	MapsCommuteWindowDays         float64
+	MapsTripMinDistanceKm         float64
+	MapsTripMinOvernightHours     float64
+	MapsLinkTimeExtendMin         float64
+	MapsLinkProximityRadiusM      float64
 	DiscordEnabled                bool
 	DiscordBotToken               string
 	DiscordSyncSchedule           string
+	DiscordEnableGateway          bool
+	DiscordBackfillLimit          float64
+	DiscordIncludeThreads         bool
+	DiscordIncludePins            bool
+	DiscordCaptureCommands        []interface{}
+	DiscordMonitoredChannels      []interface{}
 	TwitterEnabled                bool
 	TwitterBearerToken            string
 	TwitterSyncSchedule           string
@@ -124,13 +143,32 @@ type Config struct {
 	TwitterArchiveDir             string
 	WeatherEnabled                bool
 	WeatherSyncSchedule           string
+	WeatherLocations              []interface{}
+	WeatherEnableAlerts           bool
+	WeatherForecastDays           float64
+	WeatherPrecision              float64
 	GovAlertsEnabled              bool
 	GovAlertsSyncSchedule         string
 	GovAlertsAirnowAPIKey         string
+	GovAlertsLocations            []interface{}
+	GovAlertsMinEarthquakeMag     float64
+	GovAlertsTravelLocations      []interface{}
+	GovAlertsSourceEarthquake     bool
+	GovAlertsSourceWeather        bool
+	GovAlertsSourceTsunami        bool
+	GovAlertsSourceVolcano        bool
+	GovAlertsSourceWildfire       bool
+	GovAlertsSourceAirnow         bool
+	GovAlertsSourceGdacs          bool
 	FinancialMarketsEnabled       bool
 	FinancialMarketsSyncSchedule  string
 	FinancialMarketsFinnhubAPIKey string
 	FinancialMarketsFredAPIKey    string
+	FinancialMarketsWatchlist     map[string]interface{}
+	FinancialMarketsAlertThresh   float64
+	FinancialMarketsCoingecko     bool
+	FinancialMarketsFredEnabled   bool
+	FinancialMarketsFredSeries    []interface{}
 	IMAPSyncSchedule              string
 	CalDAVSyncSchedule            string
 	YouTubeSyncSchedule           string
@@ -164,9 +202,28 @@ func Load() (*Config, error) {
 
 		// Connector enable/credential/schedule (SST-compliant)
 		MapsSyncSchedule:              os.Getenv("MAPS_SYNC_SCHEDULE"),
+		MapsWatchInterval:             os.Getenv("MAPS_WATCH_INTERVAL"),
+		MapsArchiveProcessed:          os.Getenv("MAPS_ARCHIVE_PROCESSED") == "true",
+		MapsHomeDetection:             os.Getenv("MAPS_HOME_DETECTION"),
+		MapsCommuteWeekdaysOnly:       os.Getenv("MAPS_COMMUTE_WEEKDAYS_ONLY") == "true",
+		MapsMinDistanceM:              parseEnvFloat("MAPS_MIN_DISTANCE_M"),
+		MapsMinDurationMin:            parseEnvFloat("MAPS_MIN_DURATION_MIN"),
+		MapsLocationRadiusM:           parseEnvFloat("MAPS_LOCATION_RADIUS_M"),
+		MapsCommuteMinOccurrences:     parseEnvFloat("MAPS_COMMUTE_MIN_OCCURRENCES"),
+		MapsCommuteWindowDays:         parseEnvFloat("MAPS_COMMUTE_WINDOW_DAYS"),
+		MapsTripMinDistanceKm:         parseEnvFloat("MAPS_TRIP_MIN_DISTANCE_KM"),
+		MapsTripMinOvernightHours:     parseEnvFloat("MAPS_TRIP_MIN_OVERNIGHT_HOURS"),
+		MapsLinkTimeExtendMin:         parseEnvFloat("MAPS_LINK_TIME_EXTEND_MIN"),
+		MapsLinkProximityRadiusM:      parseEnvFloat("MAPS_LINK_PROXIMITY_RADIUS_M"),
 		DiscordEnabled:                os.Getenv("DISCORD_ENABLED") == "true",
 		DiscordBotToken:               os.Getenv("DISCORD_BOT_TOKEN"),
 		DiscordSyncSchedule:           os.Getenv("DISCORD_SYNC_SCHEDULE"),
+		DiscordEnableGateway:          os.Getenv("DISCORD_ENABLE_GATEWAY") == "true",
+		DiscordBackfillLimit:          parseEnvFloat("DISCORD_BACKFILL_LIMIT"),
+		DiscordIncludeThreads:         os.Getenv("DISCORD_INCLUDE_THREADS") == "true",
+		DiscordIncludePins:            os.Getenv("DISCORD_INCLUDE_PINS") == "true",
+		DiscordCaptureCommands:        parseEnvJSONArray("DISCORD_CAPTURE_COMMANDS"),
+		DiscordMonitoredChannels:      parseEnvJSONArray("DISCORD_MONITORED_CHANNELS"),
 		TwitterEnabled:                os.Getenv("TWITTER_ENABLED") == "true",
 		TwitterBearerToken:            os.Getenv("TWITTER_BEARER_TOKEN"),
 		TwitterSyncSchedule:           os.Getenv("TWITTER_SYNC_SCHEDULE"),
@@ -174,13 +231,32 @@ func Load() (*Config, error) {
 		TwitterArchiveDir:             os.Getenv("TWITTER_ARCHIVE_DIR"),
 		WeatherEnabled:                os.Getenv("WEATHER_ENABLED") == "true",
 		WeatherSyncSchedule:           os.Getenv("WEATHER_SYNC_SCHEDULE"),
+		WeatherLocations:              parseEnvJSONArray("WEATHER_LOCATIONS"),
+		WeatherEnableAlerts:           os.Getenv("WEATHER_ENABLE_ALERTS") == "true",
+		WeatherForecastDays:           parseEnvFloat("WEATHER_FORECAST_DAYS"),
+		WeatherPrecision:              parseEnvFloat("WEATHER_PRECISION"),
 		GovAlertsEnabled:              os.Getenv("GOV_ALERTS_ENABLED") == "true",
 		GovAlertsSyncSchedule:         os.Getenv("GOV_ALERTS_SYNC_SCHEDULE"),
 		GovAlertsAirnowAPIKey:         os.Getenv("GOV_ALERTS_AIRNOW_API_KEY"),
+		GovAlertsLocations:            parseEnvJSONArray("GOV_ALERTS_LOCATIONS"),
+		GovAlertsMinEarthquakeMag:     parseEnvFloat("GOV_ALERTS_MIN_EARTHQUAKE_MAG"),
+		GovAlertsTravelLocations:      parseEnvJSONArray("GOV_ALERTS_TRAVEL_LOCATIONS"),
+		GovAlertsSourceEarthquake:     os.Getenv("GOV_ALERTS_SOURCE_EARTHQUAKE") == "true",
+		GovAlertsSourceWeather:        os.Getenv("GOV_ALERTS_SOURCE_WEATHER") == "true",
+		GovAlertsSourceTsunami:        os.Getenv("GOV_ALERTS_SOURCE_TSUNAMI") == "true",
+		GovAlertsSourceVolcano:        os.Getenv("GOV_ALERTS_SOURCE_VOLCANO") == "true",
+		GovAlertsSourceWildfire:       os.Getenv("GOV_ALERTS_SOURCE_WILDFIRE") == "true",
+		GovAlertsSourceAirnow:         os.Getenv("GOV_ALERTS_SOURCE_AIRNOW") == "true",
+		GovAlertsSourceGdacs:          os.Getenv("GOV_ALERTS_SOURCE_GDACS") == "true",
 		FinancialMarketsEnabled:       os.Getenv("FINANCIAL_MARKETS_ENABLED") == "true",
 		FinancialMarketsSyncSchedule:  os.Getenv("FINANCIAL_MARKETS_SYNC_SCHEDULE"),
 		FinancialMarketsFinnhubAPIKey: os.Getenv("FINANCIAL_MARKETS_FINNHUB_API_KEY"),
 		FinancialMarketsFredAPIKey:    os.Getenv("FINANCIAL_MARKETS_FRED_API_KEY"),
+		FinancialMarketsWatchlist:     parseEnvJSONObject("FINANCIAL_MARKETS_WATCHLIST"),
+		FinancialMarketsAlertThresh:   parseEnvFloat("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
+		FinancialMarketsCoingecko:     os.Getenv("FINANCIAL_MARKETS_COINGECKO_ENABLED") == "true",
+		FinancialMarketsFredEnabled:   os.Getenv("FINANCIAL_MARKETS_FRED_ENABLED") == "true",
+		FinancialMarketsFredSeries:    parseEnvJSONArray("FINANCIAL_MARKETS_FRED_SERIES"),
 		IMAPSyncSchedule:              os.Getenv("IMAP_SYNC_SCHEDULE"),
 		CalDAVSyncSchedule:            os.Getenv("CALDAV_SYNC_SCHEDULE"),
 		YouTubeSyncSchedule:           os.Getenv("YOUTUBE_SYNC_SCHEDULE"),
@@ -729,4 +805,43 @@ func isValidCronExpr(expr string) bool {
 		}
 	}
 	return true
+}
+
+// parseEnvFloat reads an env var and returns its float64 value, or 0 if unset/invalid.
+func parseEnvFloat(key string) float64 {
+	s := os.Getenv(key)
+	if s == "" {
+		return 0
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+// parseEnvJSONArray reads an env var containing a JSON array and returns []interface{}.
+func parseEnvJSONArray(key string) []interface{} {
+	s := os.Getenv(key)
+	if s == "" {
+		return nil
+	}
+	var result []interface{}
+	if err := json.Unmarshal([]byte(s), &result); err != nil {
+		return nil
+	}
+	return result
+}
+
+// parseEnvJSONObject reads an env var containing a JSON object and returns map[string]interface{}.
+func parseEnvJSONObject(key string) map[string]interface{} {
+	s := os.Getenv(key)
+	if s == "" {
+		return nil
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(s), &result); err != nil {
+		return nil
+	}
+	return result
 }

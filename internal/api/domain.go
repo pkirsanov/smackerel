@@ -56,6 +56,13 @@ func (d *Dependencies) DomainDataHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Cap servings to prevent abuse (consistent with Telegram maxServings=1000)
+	const maxServings = 1000
+	if targetServings > maxServings {
+		writeError(w, http.StatusBadRequest, "INVALID_SERVINGS", "Servings exceeds maximum of 1000")
+		return
+	}
+
 	// Unmarshal domain_data to check if it's a recipe
 	var rd recipe.RecipeData
 	if err := json.Unmarshal(a.DomainData, &rd); err != nil {
@@ -68,8 +75,8 @@ func (d *Dependencies) DomainDataHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if rd.Servings == nil {
-		writeError(w, http.StatusUnprocessableEntity, "NO_BASELINE_SERVINGS", "Recipe does not specify a base serving count")
+	if rd.Servings == nil || *rd.Servings == 0 {
+		writeError(w, http.StatusUnprocessableEntity, "NO_BASELINE_SERVINGS", "Recipe does not specify a valid base serving count")
 		return
 	}
 
@@ -93,7 +100,7 @@ func (d *Dependencies) DomainDataHandler(w http.ResponseWriter, r *http.Request)
 	for i, si := range scaled {
 		scaledIngredients[i] = scaledIngredientResponse{
 			Name:            si.Name,
-			Quantity:        si.DisplayQuantity,
+			Quantity:        si.Quantity,
 			DisplayQuantity: si.DisplayQuantity,
 			Unit:            si.Unit,
 			Scaled:          si.Scaled,
