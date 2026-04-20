@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "featureDir": "specs/023-engineering-quality/bugs/BUG-006-test-auth-token-provisioning",
+  "generatedAt": "2026-04-20T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG006-001",
+      "scope": "01-auto-generate-test-auth-token",
+      "title": "Test environment auto-generates auth token when SST is empty",
+      "gherkin": {
+        "given": "config/smackerel.yaml has auth_token: \"\"",
+        "when": "the config generator runs with TARGET_ENV=test",
+        "then": "config/generated/test.env contains SMACKEREL_AUTH_TOKEN with at least 48 hex characters"
+      },
+      "testMapping": {
+        "type": "unit",
+        "label": "Config gen test token"
+      },
+      "status": "pending"
+    },
+    {
+      "scenarioId": "SCN-BUG006-002",
+      "scope": "01-auto-generate-test-auth-token",
+      "title": "Dev environment preserves fail-loud empty token",
+      "gherkin": {
+        "given": "config/smackerel.yaml has auth_token: \"\"",
+        "when": "the config generator runs with TARGET_ENV=dev",
+        "then": "config/generated/dev.env contains SMACKEREL_AUTH_TOKEN= with empty value"
+      },
+      "testMapping": {
+        "type": "regression-e2e",
+        "label": "Adversarial: dev env still fails loud"
+      },
+      "status": "pending"
+    },
+    {
+      "scenarioId": "SCN-BUG006-003",
+      "scope": "01-auto-generate-test-auth-token",
+      "title": "Integration tests succeed with auto-generated token",
+      "gherkin": {
+        "given": "the config generator has produced test.env with an auto-generated token",
+        "when": "./smackerel.sh test integration runs",
+        "then": "smackerel-core starts without SMACKEREL_AUTH_TOKEN crash"
+      },
+      "testMapping": {
+        "type": "integration",
+        "label": "Core starts with test token"
+      },
+      "status": "pending"
+    },
+    {
+      "scenarioId": "SCN-BUG006-004",
+      "scope": "01-auto-generate-test-auth-token",
+      "title": "Each config generate produces a fresh token",
+      "gherkin": {
+        "given": "config/smackerel.yaml has auth_token: \"\"",
+        "when": "the config generator runs twice with TARGET_ENV=test",
+        "then": "the two generated SMACKEREL_AUTH_TOKEN values are different"
+      },
+      "testMapping": {
+        "type": "unit",
+        "label": "Token freshness"
+      },
+      "status": "pending"
+    },
+    {
+      "scenarioId": "SCN-BUG006-005",
+      "scope": "01-auto-generate-test-auth-token",
+      "title": "No hardcoded tokens in source-controlled files",
+      "gherkin": {
+        "given": "the fix is applied",
+        "when": "scanning all tracked files for hardcoded token patterns",
+        "then": "no hardcoded auth tokens are found in committed files"
+      },
+      "testMapping": {
+        "type": "regression-e2e",
+        "label": "No hardcoded tokens in repo"
+      },
+      "status": "pending"
+    }
+  ]
+}

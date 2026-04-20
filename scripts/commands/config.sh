@@ -311,6 +311,11 @@ OLLAMA_URL="$(required_value llm.ollama_url)"
 OLLAMA_MODEL="$(required_value llm.ollama_model)"
 OLLAMA_VISION_MODEL="$(required_value llm.ollama_vision_model)"
 SMACKEREL_AUTH_TOKEN="$(required_value runtime.auth_token)"
+# Auto-generate a disposable test token when the SST value is empty and TARGET_ENV=test.
+# Dev/prod environments still require manual configuration (fail-loud at service startup).
+if [[ "$TARGET_ENV" == "test" && -z "$SMACKEREL_AUTH_TOKEN" ]]; then
+  SMACKEREL_AUTH_TOKEN="$(openssl rand -hex 24 2>/dev/null || python3 -c 'import secrets; print(secrets.token_hex(24))')"
+fi
 HOST_BIND_ADDRESS="$(required_value runtime.host_bind_address)"
 DIGEST_CRON="$(required_value runtime.digest_cron)"
 EMBEDDING_MODEL="$(required_value runtime.embedding_model)"
@@ -489,6 +494,7 @@ cat > "$OUTPUT_FILE" <<EOF
 # Regenerate: ./smackerel.sh config generate
 # Environment: ${TARGET_ENV}
 # Generated: $(date -u +%Y-%m-%dT%H:%M:%S+00:00)
+SMACKEREL_ENV_FILE=config/generated/${TARGET_ENV}.env
 PROJECT_NAME=${PROJECT_NAME}
 COMPOSE_PROJECT=${COMPOSE_PROJECT}
 POSTGRES_USER=${POSTGRES_USER}

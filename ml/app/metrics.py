@@ -3,11 +3,20 @@
 from prometheus_client import Counter, Histogram
 
 # Known model values for bounded cardinality (plus "other" bucket)
-_KNOWN_MODELS = frozenset([
-    "llama3.2", "llama3.1", "llama3", "mistral", "mixtral",
-    "gpt-4", "gpt-4o", "gpt-3.5-turbo",
-    "claude-3-opus", "claude-3-sonnet",
-])
+_KNOWN_MODELS = frozenset(
+    [
+        "llama3.2",
+        "llama3.1",
+        "llama3",
+        "mistral",
+        "mixtral",
+        "gpt-4",
+        "gpt-4o",
+        "gpt-3.5-turbo",
+        "claude-3-opus",
+        "claude-3-sonnet",
+    ]
+)
 
 
 def sanitize_model(model: str) -> str:
