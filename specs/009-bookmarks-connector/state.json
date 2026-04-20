@@ -208,7 +208,7 @@
   "failures": [],
   "lastUpdatedAt": "2026-04-09T02:05:00Z",
   "certification": {
-    "status": "done",
+    "status": "certified",
     "completedScopes": ["scope-01", "scope-02"],
     "certifiedCompletedPhases": ["analyze", "bootstrap", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"],
     "scopeProgress": [

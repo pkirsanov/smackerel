@@ -111,6 +111,29 @@ type Config struct {
 	MealPlanCalendarSync      bool
 	MealPlanAutoComplete      bool
 	MealPlanAutoCompleteCron  string
+
+	// Connector enable/credential/schedule fields (SST-compliant — from smackerel.yaml via config generate)
+	MapsSyncSchedule              string
+	DiscordEnabled                bool
+	DiscordBotToken               string
+	DiscordSyncSchedule           string
+	TwitterEnabled                bool
+	TwitterBearerToken            string
+	TwitterSyncSchedule           string
+	TwitterSyncMode               string
+	TwitterArchiveDir             string
+	WeatherEnabled                bool
+	WeatherSyncSchedule           string
+	GovAlertsEnabled              bool
+	GovAlertsSyncSchedule         string
+	GovAlertsAirnowAPIKey         string
+	FinancialMarketsEnabled       bool
+	FinancialMarketsSyncSchedule  string
+	FinancialMarketsFinnhubAPIKey string
+	FinancialMarketsFredAPIKey    string
+	IMAPSyncSchedule              string
+	CalDAVSyncSchedule            string
+	YouTubeSyncSchedule           string
 }
 
 // Load reads configuration from environment variables.
@@ -138,6 +161,29 @@ func Load() (*Config, error) {
 		BookmarksSyncSchedule: os.Getenv("BOOKMARKS_SYNC_SCHEDULE"),
 		BrowserHistoryPath:    os.Getenv("BROWSER_HISTORY_PATH"),
 		MapsImportDir:         os.Getenv("MAPS_IMPORT_DIR"),
+
+		// Connector enable/credential/schedule (SST-compliant)
+		MapsSyncSchedule:              os.Getenv("MAPS_SYNC_SCHEDULE"),
+		DiscordEnabled:                os.Getenv("DISCORD_ENABLED") == "true",
+		DiscordBotToken:               os.Getenv("DISCORD_BOT_TOKEN"),
+		DiscordSyncSchedule:           os.Getenv("DISCORD_SYNC_SCHEDULE"),
+		TwitterEnabled:                os.Getenv("TWITTER_ENABLED") == "true",
+		TwitterBearerToken:            os.Getenv("TWITTER_BEARER_TOKEN"),
+		TwitterSyncSchedule:           os.Getenv("TWITTER_SYNC_SCHEDULE"),
+		TwitterSyncMode:               os.Getenv("TWITTER_SYNC_MODE"),
+		TwitterArchiveDir:             os.Getenv("TWITTER_ARCHIVE_DIR"),
+		WeatherEnabled:                os.Getenv("WEATHER_ENABLED") == "true",
+		WeatherSyncSchedule:           os.Getenv("WEATHER_SYNC_SCHEDULE"),
+		GovAlertsEnabled:              os.Getenv("GOV_ALERTS_ENABLED") == "true",
+		GovAlertsSyncSchedule:         os.Getenv("GOV_ALERTS_SYNC_SCHEDULE"),
+		GovAlertsAirnowAPIKey:         os.Getenv("GOV_ALERTS_AIRNOW_API_KEY"),
+		FinancialMarketsEnabled:       os.Getenv("FINANCIAL_MARKETS_ENABLED") == "true",
+		FinancialMarketsSyncSchedule:  os.Getenv("FINANCIAL_MARKETS_SYNC_SCHEDULE"),
+		FinancialMarketsFinnhubAPIKey: os.Getenv("FINANCIAL_MARKETS_FINNHUB_API_KEY"),
+		FinancialMarketsFredAPIKey:    os.Getenv("FINANCIAL_MARKETS_FRED_API_KEY"),
+		IMAPSyncSchedule:              os.Getenv("IMAP_SYNC_SCHEDULE"),
+		CalDAVSyncSchedule:            os.Getenv("CALDAV_SYNC_SCHEDULE"),
+		YouTubeSyncSchedule:           os.Getenv("YOUTUBE_SYNC_SCHEDULE"),
 	}
 
 	if chatIDs := os.Getenv("TELEGRAM_CHAT_IDS"); chatIDs != "" {
