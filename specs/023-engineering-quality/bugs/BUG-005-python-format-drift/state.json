@@ -4,13 +4,13 @@
   "bugId": "BUG-005-python-format-drift",
   "featureDir": "specs/023-engineering-quality/bugs/BUG-005-python-format-drift",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
+  "status": "done",
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "documentation",
+    "activeAgent": null,
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-20T00:00:00Z",
-    "completedPhaseClaims": ["documentation"],
+    "completedPhaseClaims": ["documentation", "implement", "test", "validate", "finalize"],
     "pendingTransitionRequests": [],
     "executionHistory": [
       {
@@ -18,18 +18,46 @@
         "agent": "bubbles.bug",
         "timestamp": "2026-04-20T00:00:00Z",
         "outcome": "artifacts_created"
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-20T04:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Commit c6e3dca: Pinned ruff>=0.15.0,<0.16.0 in ml/pyproject.toml, reformatted 4 Python files."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-20T04:30:00Z",
+        "outcome": "completed_owned",
+        "summary": "format --check: 32 files unchanged. Python unit: 214 passed, 0 failed. Only 5 expected files changed."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-20T05:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "All verification checks passed. Scope 1 marked Done."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-20T05:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug closed. State promoted to done."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "certified",
+    "completedScopes": [1],
+    "certifiedCompletedPhases": ["documentation", "implement", "test", "validate", "finalize"],
     "scopeProgress": [
       {
         "scope": 1,
         "name": "Pin ruff version and reformat affected files",
-        "status": "not_started",
+        "status": "Done",
         "dependsOn": []
       }
     ],
@@ -51,7 +79,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-20T00:00:00Z",
+  "lastUpdatedAt": "2026-04-20T05:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
