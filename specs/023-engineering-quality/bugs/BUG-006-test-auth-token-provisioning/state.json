@@ -1,0 +1,66 @@
+{
+  "version": 3,
+  "specId": "023-engineering-quality",
+  "bugId": "BUG-006-test-auth-token-provisioning",
+  "featureDir": "specs/023-engineering-quality/bugs/BUG-006-test-auth-token-provisioning",
+  "workflowMode": "bugfix-fastlane",
+  "status": "in_progress",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "documentation",
+    "currentScope": null,
+    "runStartedAt": "2026-04-20T00:00:00Z",
+    "completedPhaseClaims": ["documentation"],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "phase": "documentation",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-20T00:00:00Z",
+        "outcome": "artifacts_created"
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Auto-generate test auth token in config generator",
+        "status": "not_started",
+        "dependsOn": []
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": { "value": "off", "provenance": "repo-default" },
+    "tdd": { "value": false, "provenance": "repo-default" },
+    "autoCommit": { "value": "off", "provenance": "repo-default" },
+    "lockdown": { "value": "off", "provenance": "repo-default" },
+    "regressionStrictness": { "value": "standard", "provenance": "repo-default" },
+    "validateCertificationRequired": { "value": true, "provenance": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-20T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "notes": "Bug artifacts created. Root cause: config generator treats dev and test environments identically for auth_token. Fix: auto-generate disposable 48-char hex token when TARGET_ENV=test and SST auth_token is empty."
+}

@@ -61,49 +61,45 @@ class TestH004TelegramOCR:
     """H-004: Telegram OCR captures are always receipt-likely."""
 
     def test_telegram_media_source(self):
-        assert detect_receipt_content(
-            "some OCR text", content_type="media", source_id="telegram"
-        ) is True
+        assert detect_receipt_content("some OCR text", content_type="media", source_id="telegram") is True
 
     def test_telegram_ocr_type(self):
-        assert detect_receipt_content(
-            "blurry text", content_type="ocr", source_id="telegram"
-        ) is True
+        assert detect_receipt_content("blurry text", content_type="ocr", source_id="telegram") is True
 
     def test_telegram_text_message_not_receipt(self):
         # Regular telegram text is NOT auto-receipted
-        assert detect_receipt_content(
-            "hello world", content_type="text", source_id="telegram"
-        ) is False
+        assert detect_receipt_content("hello world", content_type="text", source_id="telegram") is False
 
 
 class TestH005EmailSenderPatterns:
     """H-005: Known receipt sender patterns."""
 
     def test_receipts_at_sender(self):
-        assert detect_receipt_content(
-            "Your order", sender="receipts@squareup.com"
-        ) is True
+        assert detect_receipt_content("Your order", sender="receipts@squareup.com") is True
 
     def test_billing_at_sender(self):
-        assert detect_receipt_content(
-            "Monthly charge", sender="billing@netflix.com"
-        ) is True
+        assert detect_receipt_content("Monthly charge", sender="billing@netflix.com") is True
 
     def test_noreply_requires_keyword(self):
         # noreply@ alone is not enough — need receipt keyword in subject
-        assert detect_receipt_content(
-            "Your account was updated",
-            sender="noreply@example.com",
-            subject="Account settings",
-        ) is False
+        assert (
+            detect_receipt_content(
+                "Your account was updated",
+                sender="noreply@example.com",
+                subject="Account settings",
+            )
+            is False
+        )
 
     def test_noreply_with_receipt_subject(self):
-        assert detect_receipt_content(
-            "Thank you for your order",
-            sender="noreply@amazon.com",
-            subject="Your receipt from Amazon",
-        ) is True
+        assert (
+            detect_receipt_content(
+                "Thank you for your order",
+                sender="noreply@amazon.com",
+                subject="Your receipt from Amazon",
+            )
+            is True
+        )
 
 
 class TestAdversarialCases:

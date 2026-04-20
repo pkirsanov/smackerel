@@ -11,9 +11,7 @@ def _load_receipt_schema():
 
     import yaml  # noqa: PLC0415
 
-    contracts_dir = os.path.join(
-        os.path.dirname(__file__), "..", "..", "config", "prompt_contracts"
-    )
+    contracts_dir = os.path.join(os.path.dirname(__file__), "..", "..", "config", "prompt_contracts")
     path = os.path.join(contracts_dir, "receipt-extraction-v1.yaml")
     with open(path) as f:
         contract = yaml.safe_load(f)
@@ -37,9 +35,7 @@ class TestReceiptExtractionSchema:
             "currency": "USD",
             "subtotal": "100.00",
             "tax": "8.25",
-            "line_items": [
-                {"description": "Latte", "amount": "4.75", "quantity": "1"}
-            ],
+            "line_items": [{"description": "Latte", "amount": "4.75", "quantity": "1"}],
         }
         valid, err = validate_extraction(output, self.schema)
         assert valid is True, f"Expected valid, got: {err}"
