@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector"
@@ -102,19 +101,19 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			SyncSchedule: cfg.MapsSyncSchedule,
 			SourceConfig: map[string]interface{}{
 				"import_dir":               cfg.MapsImportDir,
-				"watch_interval":           os.Getenv("MAPS_WATCH_INTERVAL"),
-				"archive_processed":        os.Getenv("MAPS_ARCHIVE_PROCESSED") == "true",
-				"min_distance_m":           parseFloatEnv("MAPS_MIN_DISTANCE_M"),
-				"min_duration_min":         parseFloatEnv("MAPS_MIN_DURATION_MIN"),
-				"location_radius_m":        parseFloatEnv("MAPS_LOCATION_RADIUS_M"),
-				"home_detection":           os.Getenv("MAPS_HOME_DETECTION"),
-				"commute_min_occurrences":  parseFloatEnv("MAPS_COMMUTE_MIN_OCCURRENCES"),
-				"commute_window_days":      parseFloatEnv("MAPS_COMMUTE_WINDOW_DAYS"),
-				"commute_weekdays_only":    os.Getenv("MAPS_COMMUTE_WEEKDAYS_ONLY") == "true",
-				"trip_min_distance_km":     parseFloatEnv("MAPS_TRIP_MIN_DISTANCE_KM"),
-				"trip_min_overnight_hours": parseFloatEnv("MAPS_TRIP_MIN_OVERNIGHT_HOURS"),
-				"link_time_extend_min":     parseFloatEnv("MAPS_LINK_TIME_EXTEND_MIN"),
-				"link_proximity_radius_m":  parseFloatEnv("MAPS_LINK_PROXIMITY_RADIUS_M"),
+				"watch_interval":           cfg.MapsWatchInterval,
+				"archive_processed":        cfg.MapsArchiveProcessed,
+				"min_distance_m":           cfg.MapsMinDistanceM,
+				"min_duration_min":         cfg.MapsMinDurationMin,
+				"location_radius_m":        cfg.MapsLocationRadiusM,
+				"home_detection":           cfg.MapsHomeDetection,
+				"commute_min_occurrences":  cfg.MapsCommuteMinOccurrences,
+				"commute_window_days":      cfg.MapsCommuteWindowDays,
+				"commute_weekdays_only":    cfg.MapsCommuteWeekdaysOnly,
+				"trip_min_distance_km":     cfg.MapsTripMinDistanceKm,
+				"trip_min_overnight_hours": cfg.MapsTripMinOvernightHours,
+				"link_time_extend_min":     cfg.MapsLinkTimeExtendMin,
+				"link_proximity_radius_m":  cfg.MapsLinkProximityRadiusM,
 			},
 		}
 		if err := mapsConn.Connect(ctx, mapsCfg); err == nil {
@@ -134,12 +133,12 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			Enabled:      true,
 			SyncSchedule: cfg.DiscordSyncSchedule,
 			SourceConfig: map[string]interface{}{
-				"enable_gateway":     os.Getenv("DISCORD_ENABLE_GATEWAY") == "true",
-				"backfill_limit":     parseFloatEnv("DISCORD_BACKFILL_LIMIT"),
-				"include_threads":    os.Getenv("DISCORD_INCLUDE_THREADS") == "true",
-				"include_pins":       os.Getenv("DISCORD_INCLUDE_PINS") == "true",
-				"capture_commands":   parseJSONArrayEnv("DISCORD_CAPTURE_COMMANDS"),
-				"monitored_channels": parseJSONArrayEnv("DISCORD_MONITORED_CHANNELS"),
+				"enable_gateway":     cfg.DiscordEnableGateway,
+				"backfill_limit":     cfg.DiscordBackfillLimit,
+				"include_threads":    cfg.DiscordIncludeThreads,
+				"include_pins":       cfg.DiscordIncludePins,
+				"capture_commands":   cfg.DiscordCaptureCommands,
+				"monitored_channels": cfg.DiscordMonitoredChannels,
 			},
 		}
 		if err := discordConn.Connect(ctx, discordCfg); err == nil {
@@ -179,10 +178,10 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			Enabled:      true,
 			SyncSchedule: cfg.WeatherSyncSchedule,
 			SourceConfig: map[string]interface{}{
-				"locations":     parseJSONArrayEnv("WEATHER_LOCATIONS"),
-				"enable_alerts": os.Getenv("WEATHER_ENABLE_ALERTS") == "true",
-				"forecast_days": parseFloatEnv("WEATHER_FORECAST_DAYS"),
-				"precision":     parseFloatEnv("WEATHER_PRECISION"),
+				"locations":     cfg.WeatherLocations,
+				"enable_alerts": cfg.WeatherEnableAlerts,
+				"forecast_days": cfg.WeatherForecastDays,
+				"precision":     cfg.WeatherPrecision,
 			},
 		}
 		if err := weatherConn.Connect(ctx, weatherCfg); err == nil {
@@ -208,16 +207,16 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			Enabled:      true,
 			SyncSchedule: cfg.GovAlertsSyncSchedule,
 			SourceConfig: map[string]interface{}{
-				"locations":                parseJSONArrayEnv("GOV_ALERTS_LOCATIONS"),
-				"min_earthquake_magnitude": parseFloatEnv("GOV_ALERTS_MIN_EARTHQUAKE_MAG"),
-				"travel_locations":         parseJSONArrayEnv("GOV_ALERTS_TRAVEL_LOCATIONS"),
-				"source_earthquake":        os.Getenv("GOV_ALERTS_SOURCE_EARTHQUAKE") == "true",
-				"source_weather":           os.Getenv("GOV_ALERTS_SOURCE_WEATHER") == "true",
-				"source_tsunami":           os.Getenv("GOV_ALERTS_SOURCE_TSUNAMI") == "true",
-				"source_volcano":           os.Getenv("GOV_ALERTS_SOURCE_VOLCANO") == "true",
-				"source_wildfire":          os.Getenv("GOV_ALERTS_SOURCE_WILDFIRE") == "true",
-				"source_airnow":            os.Getenv("GOV_ALERTS_SOURCE_AIRNOW") == "true",
-				"source_gdacs":             os.Getenv("GOV_ALERTS_SOURCE_GDACS") == "true",
+				"locations":                cfg.GovAlertsLocations,
+				"min_earthquake_magnitude": cfg.GovAlertsMinEarthquakeMag,
+				"travel_locations":         cfg.GovAlertsTravelLocations,
+				"source_earthquake":        cfg.GovAlertsSourceEarthquake,
+				"source_weather":           cfg.GovAlertsSourceWeather,
+				"source_tsunami":           cfg.GovAlertsSourceTsunami,
+				"source_volcano":           cfg.GovAlertsSourceVolcano,
+				"source_wildfire":          cfg.GovAlertsSourceWildfire,
+				"source_airnow":            cfg.GovAlertsSourceAirnow,
+				"source_gdacs":             cfg.GovAlertsSourceGdacs,
 			},
 		}
 		if err := alertsConn.Connect(ctx, alertsCfg); err == nil {
@@ -240,11 +239,11 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			Enabled:      true,
 			SyncSchedule: cfg.FinancialMarketsSyncSchedule,
 			SourceConfig: map[string]interface{}{
-				"watchlist":         parseJSONObjectEnv("FINANCIAL_MARKETS_WATCHLIST"),
-				"alert_threshold":   parseFloatEnv("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
-				"coingecko_enabled": os.Getenv("FINANCIAL_MARKETS_COINGECKO_ENABLED") == "true",
-				"fred_enabled":      os.Getenv("FINANCIAL_MARKETS_FRED_ENABLED") == "true",
-				"fred_series":       parseJSONArrayEnv("FINANCIAL_MARKETS_FRED_SERIES"),
+				"watchlist":         cfg.FinancialMarketsWatchlist,
+				"alert_threshold":   cfg.FinancialMarketsAlertThresh,
+				"coingecko_enabled": cfg.FinancialMarketsCoingecko,
+				"fred_enabled":      cfg.FinancialMarketsFredEnabled,
+				"fred_series":       cfg.FinancialMarketsFredSeries,
 			},
 		}
 		if err := marketsConn.Connect(ctx, marketsCfg); err == nil {
