@@ -3,7 +3,7 @@
 Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [uservalidation.md](uservalidation.md)
 
 ## Scope 1: Pin ruff version and reformat affected files
-**Status:** [ ] Not started | [~] In progress | [ ] Done
+**Status:** [ ] Not started | [ ] In progress | [x] Done
 
 ### Gherkin Scenarios (Regression Tests)
 ```gherkin

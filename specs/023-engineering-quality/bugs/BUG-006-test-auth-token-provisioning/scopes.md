@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ## Scope 1: Auto-generate test auth token in config generator
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
