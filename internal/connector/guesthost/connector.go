@@ -146,10 +146,12 @@ func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.R
 	var artifacts []connector.RawArtifact
 	var newCursor string
 	var latestTime time.Time
+	var normalizeErrors int
 
 	for _, event := range resp.Events {
 		artifact, err := NormalizeEvent(event)
 		if err != nil {
+			normalizeErrors++
 			slog.Warn("guesthost: skipping event normalization",
 				"event_id", event.ID, "type", event.Type, "error", err)
 			continue
@@ -161,6 +163,20 @@ func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.R
 			latestTime = eventTime
 			newCursor = event.Timestamp
 		}
+	}
+
+	// Circuit-breaker: if all events failed normalization and the API returned events,
+	// advance the cursor to the latest event timestamp to prevent infinite retry loops.
+	if len(artifacts) == 0 && len(resp.Events) > 0 && normalizeErrors == len(resp.Events) {
+		for _, event := range resp.Events {
+			eventTime, parseErr := time.Parse(time.RFC3339, event.Timestamp)
+			if parseErr == nil && eventTime.After(latestTime) {
+				latestTime = eventTime
+				newCursor = event.Timestamp
+			}
+		}
+		slog.Warn("guesthost: all events failed normalization, advancing cursor to prevent loop",
+			"events", len(resp.Events), "cursor", newCursor)
 	}
 
 	if newCursor == "" {

@@ -5,7 +5,7 @@
   "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": null,
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-10T00:00:00Z",
@@ -29,7 +29,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "certified",
     "completedScopes": [
       "1",
       "2",

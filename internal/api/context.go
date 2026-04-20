@@ -272,14 +272,16 @@ func (h *ContextHandler) buildPropertyContext(ctx context.Context, resp *Context
 }
 
 func (h *ContextHandler) buildBookingContext(ctx context.Context, resp *ContextResponse, bookingID string, includeSet map[string]bool, includeAll bool) error {
-	// Look up booking artifact by matching artifact_type='booking' and content_raw containing the booking ID
+	// Look up booking artifact by matching content_type='booking' and metadata containing the booking entity ID.
+	// Booking artifacts from guesthost have source_ref set to the event ID, and metadata carries
+	// guest_email, property_id, checkin_date, checkout_date, total_price, booking_source.
 	var contentRaw string
 	err := h.pool.QueryRow(ctx, `
 		SELECT COALESCE(content_raw, '')
 		FROM artifacts
 		WHERE artifact_type = 'booking'
 		  AND source_id = 'guesthost'
-		  AND content_raw::jsonb @> jsonb_build_object('bookingId', $1)
+		  AND source_ref = $1
 		ORDER BY created_at DESC
 		LIMIT 1
 	`, bookingID).Scan(&contentRaw)
@@ -287,17 +289,17 @@ func (h *ContextHandler) buildBookingContext(ctx context.Context, resp *ContextR
 		return err
 	}
 
+	// Parse the raw booking event data using the same JSON tags as BookingData (types.go).
 	var meta struct {
 		GuestName    string  `json:"guestName"`
 		GuestEmail   string  `json:"guestEmail"`
 		PropertyName string  `json:"propertyName"`
 		PropertyID   string  `json:"propertyId"`
-		CheckIn      string  `json:"checkIn"`
-		CheckOut     string  `json:"checkOut"`
+		CheckIn      string  `json:"checkinDate"`
+		CheckOut     string  `json:"checkoutDate"`
 		Source       string  `json:"source"`
 		Status       string  `json:"status"`
-		TotalPrice   float64 `json:"totalPrice"`
-		BookingID    string  `json:"bookingId"`
+		TotalPrice   float64 `json:"totalAmount"`
 	}
 	if err := json.Unmarshal([]byte(contentRaw), &meta); err != nil {
 		return err

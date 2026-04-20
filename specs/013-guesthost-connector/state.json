@@ -5,8 +5,8 @@
   "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "test",
+    "activeAgent": null,
+    "currentPhase": "finalize",
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedScopes": [],
     "completedPhaseClaims": [
@@ -97,7 +97,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "certified",
     "completedScopes": [
       "1",
       "2",
@@ -178,6 +178,6 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-16T00:00:00Z",
-  "notes": "2026-04-16: Governance remediation complete. All 13 scenario-manifest linkedTest files verified. DoD evidence replaced with specific test function names. report.md updated with real test counts. All 35 Go packages + 92 Python tests pass."
+  "lastUpdatedAt": "2026-04-20T00:00:00Z",
+  "notes": "2026-04-20: Certified by bubbles.validate. All 5 scopes Done, all DoD items checked, all guesthost/db/digest/api/graph unit tests pass. Pre-existing hospitable chaos test failure (TestIMP012002_MessageLoopStopsOnContextCancel) noted — unrelated to spec 013. 118 total tests (97 unit + 11 regression + 8 integration + 2 e2e). Lockdown round 2 resolved all 11 findings."
 }

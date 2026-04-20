@@ -458,16 +458,21 @@ func parseTweetsJS(data []byte) ([]ArchiveTweet, error) {
 	return tweets, nil
 }
 
-// buildThreads groups tweets into threads by self-reply chains.
-// Handles branching replies (multiple children per parent) by collecting
-// all children and visiting every branch.
+// buildThreads groups tweets into self-reply threads.
+// Only includes replies where the parent tweet exists in the archive (self-reply).
+// Replies to other users' tweets (parent not in archive) are excluded per SCN-TW-THR-002.
 func buildThreads(tweets []ArchiveTweet) []Thread {
 	tweetMap := make(map[string]ArchiveTweet)
 	childrenOf := make(map[string][]ArchiveTweet) // parent ID → child tweets
 	for _, t := range tweets {
 		tweetMap[t.ID] = t
+	}
+	// Only index reply relationships where the parent is in the archive (self-reply).
+	for _, t := range tweets {
 		if t.InReplyToStatusID != "" {
-			childrenOf[t.InReplyToStatusID] = append(childrenOf[t.InReplyToStatusID], t)
+			if _, isSelfReply := tweetMap[t.InReplyToStatusID]; isSelfReply {
+				childrenOf[t.InReplyToStatusID] = append(childrenOf[t.InReplyToStatusID], t)
+			}
 		}
 	}
 

@@ -247,6 +247,21 @@
       "startedAt": "2026-04-16T00:00:00Z",
       "completedAt": "2026-04-16T00:30:00Z",
       "summary": "Governance artifact hardening: created scenario-manifest.json (30 scenarios, G057), enriched report.md with raw terminal output evidence blocks, fixed scopes.md test plan tables (client_test.go→connector_test.go, annotated phantom integration/e2e tests), added scenario-faithful DoD items (G068), added test plan tables for scopes 04/05. artifact-lint PASSED, traceability-guard PASSED (0 warnings). ./smackerel.sh test unit, lint, check, format all pass."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "chaos",
+        "implement",
+        "test",
+        "validate",
+        "finalize"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-04-20T06:19:00Z",
+      "completedAt": "2026-04-20T06:30:00Z",
+      "summary": "chaos-hardening: Fixed flaky TestIMP012002_MessageLoopStopsOnContextCancel. Root cause: race between 1ms-polling cancel goroutine and instant mock server responses allowing 50 iterations to complete before cancel propagated. Fix: replaced polling+cancel pattern with a channel gate that blocks the (N+1)th message fetch until cancel fires, making the test deterministic. All unit tests pass (Go + Python 214), check OK, lint OK."
     }
   ],
   "policySnapshot": {
@@ -280,7 +295,7 @@
   "failures": [],
   "lastUpdatedAt": "2026-04-16T00:00:00Z",
   "certification": {
-    "status": "done",
+    "status": "certified",
     "completedScopes": [
       "scope-01",
       "scope-02",
