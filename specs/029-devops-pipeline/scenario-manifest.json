@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "featureDir": "specs/029-devops-pipeline",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-029-001",
+      "scope": 1,
+      "title": "CI runs lint and tests on push",
+      "gherkinSummary": "Given a commit is pushed to main, When the CI workflow triggers, Then lint and test unit pass",
+      "regressionRequired": true,
+      "requiredTestType": "ci-pipeline",
+      "linkedTests": [".github/workflows/ci.yml"],
+      "evidenceRefs": ["scopes.md#scope-1-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-002",
+      "scope": 1,
+      "title": "CI runs on pull requests",
+      "gherkinSummary": "Given a PR is opened against main, When the CI workflow triggers, Then lint + test + build run and PR shows pass/fail status",
+      "regressionRequired": true,
+      "requiredTestType": "ci-pipeline",
+      "linkedTests": [".github/workflows/ci.yml"],
+      "evidenceRefs": ["scopes.md#scope-1-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-003",
+      "scope": 2,
+      "title": "Version tag produces versioned images",
+      "gherkinSummary": "Given a git tag v1.0.0 is pushed, When CI build completes, Then images are tagged smackerel-core:v1.0.0 and smackerel-ml:v1.0.0",
+      "regressionRequired": true,
+      "requiredTestType": "ci-pipeline",
+      "linkedTests": [".github/workflows/ci.yml", "Dockerfile", "ml/Dockerfile"],
+      "evidenceRefs": ["scopes.md#scope-2-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-004",
+      "scope": 2,
+      "title": "Untagged builds use commit SHA",
+      "gherkinSummary": "Given a commit without a tag is pushed, When CI build completes, Then images are tagged with the commit SHA",
+      "regressionRequired": true,
+      "requiredTestType": "ci-pipeline",
+      "linkedTests": [".github/workflows/ci.yml"],
+      "evidenceRefs": ["scopes.md#scope-2-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-005",
+      "scope": 5,
+      "title": "ML image under 3GB",
+      "gherkinSummary": "Given the ML Dockerfile uses optimized multi-stage build, When the image is built, Then the final image is under 3GB and all runtime tests pass",
+      "regressionRequired": true,
+      "requiredTestType": "build-verification",
+      "linkedTests": ["ml/Dockerfile"],
+      "evidenceRefs": ["scopes.md#scope-5-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-006",
+      "scope": 6,
+      "title": "All config vars reach the smackerel-core container",
+      "gherkinSummary": "Given config/smackerel.yaml defines feature flags, When config generate + up runs, Then all variables from dev.env are available inside the container",
+      "regressionRequired": true,
+      "requiredTestType": "integration",
+      "linkedTests": ["docker-compose.yml", "scripts/commands/config.sh"],
+      "evidenceRefs": ["scopes.md#scope-6-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-007",
+      "scope": 6,
+      "title": "New config vars automatically flow to container",
+      "gherkinSummary": "Given a developer adds a new config key and updates config.sh, When config generate runs, Then the new var appears in dev.env and containers receive it without docker-compose.yml changes",
+      "regressionRequired": true,
+      "requiredTestType": "integration",
+      "linkedTests": ["docker-compose.yml", "scripts/commands/config.sh"],
+      "evidenceRefs": ["scopes.md#scope-6-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-008",
+      "scope": 6,
+      "title": "env_file replaces individual environment declarations",
+      "gherkinSummary": "Given docker-compose.yml uses env_file, When operator inspects it, Then there are no individual KEY: ${KEY} declarations for SST-managed vars",
+      "regressionRequired": true,
+      "requiredTestType": "unit",
+      "linkedTests": ["docker-compose.yml", "smackerel.sh"],
+      "evidenceRefs": ["scopes.md#scope-6-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-009",
+      "scope": 7,
+      "title": "Tagged release pushes images to GHCR",
+      "gherkinSummary": "Given a git tag v1.0.0 is pushed, When CI completes, Then smackerel-core:v1.0.0 and smackerel-ml:v1.0.0 are available at ghcr.io with OCI labels",
+      "regressionRequired": true,
+      "requiredTestType": "ci-pipeline",
+      "linkedTests": [".github/workflows/ci.yml"],
+      "evidenceRefs": ["scopes.md#scope-7-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-010",
+      "scope": 7,
+      "title": "Operator deploys from pre-built images",
+      "gherkinSummary": "Given SMACKEREL_CORE_IMAGE is set to ghcr.io/owner/smackerel-core:v1.0.0, When operator runs ./smackerel.sh up, Then Compose pulls the pre-built image and services start",
+      "regressionRequired": true,
+      "requiredTestType": "integration",
+      "linkedTests": ["docker-compose.yml"],
+      "evidenceRefs": ["scopes.md#scope-7-dod"],
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-011",
+      "scope": 7,
+      "title": "Build-from-source remains the default",
+      "gherkinSummary": "Given no image override vars are set, When operator runs ./smackerel.sh build && ./smackerel.sh up, Then images are built from local Dockerfiles",
+      "regressionRequired": true,
+      "requiredTestType": "build-verification",
+      "linkedTests": ["docker-compose.yml"],
+      "evidenceRefs": ["scopes.md#scope-7-dod"],
+      "status": "verified"
+    }
+  ]
+}
+{
+  "version": 1,
+  "featureDir": "specs/029-devops-pipeline",
+  "scenarios": [
+    {
+      "id": "SCN-029-001",
+      "scope": 1,
+      "title": "CI runs lint and tests on push",
+      "gherkinSummary": "Given a commit is pushed to main, When the CI workflow triggers, Then lint and test unit pass",
+      "regressionRequired": true,
+      "testFiles": [".github/workflows/ci.yml"],
+      "liveTestExpectation": "CI pipeline validates on GitHub Actions; local verification via ./smackerel.sh lint && ./smackerel.sh test unit",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-002",
+      "scope": 1,
+      "title": "CI runs on pull requests",
+      "gherkinSummary": "Given a PR is opened against main, When the CI workflow triggers, Then lint + test + build run and PR shows pass/fail status",
+      "regressionRequired": true,
+      "testFiles": [".github/workflows/ci.yml"],
+      "liveTestExpectation": "CI pipeline validates on GitHub Actions; local verification via ./smackerel.sh lint && ./smackerel.sh test unit",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-003",
+      "scope": 2,
+      "title": "Version tag produces versioned images",
+      "gherkinSummary": "Given a git tag v1.0.0 is pushed, When CI build completes, Then images are tagged smackerel-core:v1.0.0 and smackerel-ml:v1.0.0",
+      "regressionRequired": true,
+      "testFiles": [".github/workflows/ci.yml", "Dockerfile", "ml/Dockerfile"],
+      "liveTestExpectation": "CI pipeline validates on GitHub Actions; local verification via ./smackerel.sh build",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-004",
+      "scope": 2,
+      "title": "Untagged builds use commit SHA",
+      "gherkinSummary": "Given a commit without a tag is pushed, When CI build completes, Then images are tagged with the commit SHA",
+      "regressionRequired": true,
+      "testFiles": [".github/workflows/ci.yml"],
+      "liveTestExpectation": "CI pipeline validates on GitHub Actions; local verification via ./smackerel.sh build",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-005",
+      "scope": 5,
+      "title": "ML image under 3GB",
+      "gherkinSummary": "Given the ML Dockerfile uses optimized multi-stage build, When the image is built, Then the final image is under 3GB and all runtime tests pass",
+      "regressionRequired": true,
+      "testFiles": ["ml/Dockerfile"],
+      "liveTestExpectation": "Local verification via ./smackerel.sh build && docker images | grep smackerel-ml",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-006",
+      "scope": 6,
+      "title": "All config vars reach the smackerel-core container",
+      "gherkinSummary": "Given config/smackerel.yaml defines feature flags, When config generate + up runs, Then all variables from dev.env are available inside the container",
+      "regressionRequired": true,
+      "testFiles": ["docker-compose.yml", "scripts/commands/config.sh"],
+      "liveTestExpectation": "Live stack verification via ./smackerel.sh up && docker exec; local verification via ./smackerel.sh check (env_file drift guard)",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-007",
+      "scope": 6,
+      "title": "New config vars automatically flow to container",
+      "gherkinSummary": "Given a developer adds a new config key and updates config.sh, When config generate runs, Then the new var appears in dev.env and containers receive it without docker-compose.yml changes",
+      "regressionRequired": true,
+      "testFiles": ["docker-compose.yml", "scripts/commands/config.sh"],
+      "liveTestExpectation": "Local verification via ./smackerel.sh config generate && ./smackerel.sh check",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-008",
+      "scope": 6,
+      "title": "env_file replaces individual environment declarations",
+      "gherkinSummary": "Given docker-compose.yml uses env_file, When operator inspects it, Then there are no individual KEY: ${KEY} declarations for SST-managed vars",
+      "regressionRequired": true,
+      "testFiles": ["docker-compose.yml", "smackerel.sh"],
+      "liveTestExpectation": "Local verification via ./smackerel.sh check (env_file drift guard validates no SST-managed vars as individual declarations)",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-009",
+      "scope": 7,
+      "title": "Tagged release pushes images to GHCR",
+      "gherkinSummary": "Given a git tag v1.0.0 is pushed, When CI completes, Then smackerel-core:v1.0.0 and smackerel-ml:v1.0.0 are available at ghcr.io with OCI labels",
+      "regressionRequired": true,
+      "testFiles": [".github/workflows/ci.yml"],
+      "liveTestExpectation": "CI pipeline validates on GitHub Actions; local verification via ./smackerel.sh check && ./smackerel.sh lint",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-010",
+      "scope": 7,
+      "title": "Operator deploys from pre-built images",
+      "gherkinSummary": "Given SMACKEREL_CORE_IMAGE is set to ghcr.io/owner/smackerel-core:v1.0.0, When operator runs ./smackerel.sh up, Then Compose pulls the pre-built image and services start",
+      "regressionRequired": true,
+      "testFiles": ["docker-compose.yml"],
+      "liveTestExpectation": "Live stack verification requires GHCR images; local verification via ./smackerel.sh check confirms image override support in docker-compose.yml",
+      "status": "verified"
+    },
+    {
+      "id": "SCN-029-011",
+      "scope": 7,
+      "title": "Build-from-source remains the default",
+      "gherkinSummary": "Given no image override vars are set, When operator runs ./smackerel.sh build && ./smackerel.sh up, Then images are built from local Dockerfiles",
+      "regressionRequired": true,
+      "testFiles": ["docker-compose.yml"],
+      "liveTestExpectation": "Local verification via ./smackerel.sh build (default behavior unchanged)",
+      "status": "verified"
+    }
+  ]
+}

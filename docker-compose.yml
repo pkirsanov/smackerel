@@ -75,7 +75,7 @@ services:
     ports:
       - "127.0.0.1:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
     env_file:
-      - config/generated/dev.env
+      - ${SMACKEREL_ENV_FILE:-config/generated/dev.env}
     environment:
       # Override host paths with container-internal mount paths.
       # The env_file provides the host path; these overrides point to the
@@ -128,7 +128,7 @@ services:
     ports:
       - "127.0.0.1:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
     env_file:
-      - config/generated/dev.env
+      - ${SMACKEREL_ENV_FILE:-config/generated/dev.env}
     environment:
       # Override: container-internal path for prompt contracts (mounted via volume)
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts

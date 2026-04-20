@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "featureDir": "specs/023-engineering-quality/bugs/BUG-005-python-format-drift",
+  "generatedAt": "2026-04-20T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-005-001",
+      "scope": "01-pin-ruff-reformat",
+      "title": "Format check passes after ruff pin and reformat",
+      "gherkin": {
+        "given": "ruff is pinned to a stable version range in ml/pyproject.toml and the 4 affected files have been reformatted",
+        "when": "./smackerel.sh format --check is run",
+        "then": "it exits with code 0 and reports no files needing reformatting"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-1"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-005-002",
+      "scope": "01-pin-ruff-reformat",
+      "title": "Python unit tests pass after reformat",
+      "gherkin": {
+        "given": "the 4 affected files have been reformatted",
+        "when": "./smackerel.sh test unit --python is run",
+        "then": "all tests pass with zero failures"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-1"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-005-003",
+      "scope": "01-pin-ruff-reformat",
+      "title": "No unrelated files reformatted",
+      "gherkin": {
+        "given": "ruff is pinned to the new version range",
+        "when": "./smackerel.sh format is run",
+        "then": "only the 4 known affected files are changed"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-1"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-005-004",
+      "scope": "01-pin-ruff-reformat",
+      "title": "Adversarial — loose pin would re-introduce drift",
+      "gherkin": {
+        "given": "the 4 files are reformatted to the pinned version output",
+        "when": "the ruff pin is reverted to >=0.8.0 and a newer ruff is installed",
+        "then": "./smackerel.sh format --check would report files needing reformatting"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-1"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

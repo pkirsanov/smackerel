@@ -282,16 +282,12 @@ class NATSClient:
                     result["processing_time_ms"] = elapsed_ms
 
                     # Record processing latency metric
-                    processing_latency.labels(operation=subject).observe(
-                        elapsed_ms / 1000.0
-                    )
+                    processing_latency.labels(operation=subject).observe(elapsed_ms / 1000.0)
 
                     # Record LLM token usage if present
                     tokens = result.get("tokens_used", 0)
                     if tokens and tokens > 0:
-                        model_label = sanitize_model(
-                            result.get("model_used", llm_model or "unknown")
-                        )
+                        model_label = sanitize_model(result.get("model_used", llm_model or "unknown"))
                         llm_tokens_used.labels(
                             provider=llm_provider or "unknown",
                             model=model_label,
