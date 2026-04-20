@@ -2418,7 +2418,13 @@ func TestIMP012001_PaginationStopsOnContextCancel(t *testing.T) {
 func TestIMP012002_MessageLoopStopsOnContextCancel(t *testing.T) {
 	// Connector has 50 reservations; context is cancelled after 3 message fetches.
 	// Without the syncCtx.Err() check, all 50 reservations would be attempted.
+	//
+	// To avoid flakiness, the mock server blocks on the 4th message fetch until
+	// the context is cancelled. This guarantees the cancel happens while the
+	// message loop is still running, regardless of goroutine scheduling.
 	var msgFetches atomic.Int64
+	cancelAfter := int64(3)
+	gate := make(chan struct{}) // blocks message fetches after cancelAfter
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
@@ -2436,9 +2442,14 @@ func TestIMP012002_MessageLoopStopsOnContextCancel(t *testing.T) {
 			}
 			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: reservations, Total: 50})
 		case strings.Contains(r.URL.Path, "/messages"):
-			msgFetches.Add(1)
+			n := msgFetches.Add(1)
+			if n == cancelAfter+1 {
+				// Block this request until the context is cancelled, giving
+				// the cancel signal time to propagate before more iterations.
+				<-gate
+			}
 			json.NewEncoder(w).Encode(PaginatedResponse[Message]{
-				Data:  []Message{{ID: fmt.Sprintf("m%d", msgFetches.Load()), Sender: "Test", Body: "hi", SentAt: time.Now()}},
+				Data:  []Message{{ID: fmt.Sprintf("m%d", n), Sender: "Test", Body: "hi", SentAt: time.Now()}},
 				Total: 1,
 			})
 		case r.URL.Path == "/reviews":
@@ -2459,20 +2470,22 @@ func TestIMP012002_MessageLoopStopsOnContextCancel(t *testing.T) {
 	c.client = NewClient(srv.URL, "token", 100)
 	c.health = connector.HealthHealthy
 
-	// Use a context that cancels after a few message fetches
+	// Cancel after the gate blocks the (cancelAfter+1)th fetch
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		for msgFetches.Load() < 3 {
-			time.Sleep(1 * time.Millisecond)
+		for msgFetches.Load() < cancelAfter+1 {
+			time.Sleep(500 * time.Microsecond)
 		}
 		cancel()
+		close(gate) // unblock the waiting request so it can return/fail
 	}()
 
 	_, _, _ = c.Sync(ctx, "")
 
 	fetches := msgFetches.Load()
-	// Should stop well before 50 (the total reservation count)
-	if fetches > 15 {
+	// Should stop very close to cancelAfter+1 since we gate at that point.
+	// Allow a small margin for in-flight requests.
+	if fetches > cancelAfter+5 {
 		t.Errorf("IMP-012-002: %d message fetches after context cancel — should stop promptly (50 reservations)", fetches)
 	}
 }

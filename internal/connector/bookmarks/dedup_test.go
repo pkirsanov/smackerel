@@ -151,9 +151,9 @@ func TestNormalizeURL_RootPath(t *testing.T) {
 	}
 }
 
-// T-2-06 through T-2-08 test FilterNew which requires a DB pool.
-// These are tested as integration tests (they need postgres).
-// Here we test the nil-pool graceful handling.
+// T-2-06 through T-2-08 test FilterNew which requires a live DB pool.
+// These are integration-test paths that need PostgreSQL — not yet implemented
+// (tracked as spec 009 test gap). Here we test nil-pool graceful degradation.
 func TestFilterNew_NilPool(t *testing.T) {
 	d := NewURLDeduplicator(nil)
 	in := []connector.RawArtifact{

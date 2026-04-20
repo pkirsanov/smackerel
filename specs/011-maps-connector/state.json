@@ -120,7 +120,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "certified",
     "completedScopes": ["scope-01", "scope-02", "scope-03"],
     "certifiedCompletedPhases": ["analyze", "bootstrap", "plan", "spec-review", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "chaos", "validate", "audit", "docs", "finalize"],
     "validationNotes": "All 3 scopes implemented and validated. 78 maps unit tests pass, 26 Go packages green, 31 Python tests green. Full quality chain completed: test, regression, simplify, gaps, harden, stabilize, security, validate, audit, docs. DB-dependent integration/e2e tests deferred to live stack — all DB code audited correct."

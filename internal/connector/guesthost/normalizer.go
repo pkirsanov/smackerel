@@ -145,7 +145,12 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		title = fmt.Sprintf("%s — Expense: %s $%.2f", d.PropertyName, d.Description, d.Amount)
 		metadata["property_id"] = d.PropertyID
 		metadata["property_name"] = d.PropertyName
-		metadata["amount"] = -d.Amount // negative for expense
+		// Store as negative (expense). If the API already sent a negative value, preserve it.
+		if d.Amount > 0 {
+			metadata["amount"] = -d.Amount
+		} else {
+			metadata["amount"] = d.Amount
+		}
 
 	case "property.updated":
 		var d PropertyData

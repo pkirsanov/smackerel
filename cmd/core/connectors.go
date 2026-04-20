@@ -99,7 +99,7 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 		mapsCfg := connector.ConnectorConfig{
 			AuthType:     "none",
 			Enabled:      true,
-			SyncSchedule: os.Getenv("MAPS_SYNC_SCHEDULE"),
+			SyncSchedule: cfg.MapsSyncSchedule,
 			SourceConfig: map[string]interface{}{
 				"import_dir":               cfg.MapsImportDir,
 				"watch_interval":           os.Getenv("MAPS_WATCH_INTERVAL"),
@@ -127,12 +127,12 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	}
 
 	// Auto-start Discord connector (token-based)
-	if os.Getenv("DISCORD_ENABLED") == "true" {
+	if cfg.DiscordEnabled {
 		discordCfg := connector.ConnectorConfig{
 			AuthType:     "token",
-			Credentials:  map[string]string{"bot_token": os.Getenv("DISCORD_BOT_TOKEN")},
+			Credentials:  map[string]string{"bot_token": cfg.DiscordBotToken},
 			Enabled:      true,
-			SyncSchedule: os.Getenv("DISCORD_SYNC_SCHEDULE"),
+			SyncSchedule: cfg.DiscordSyncSchedule,
 			SourceConfig: map[string]interface{}{
 				"enable_gateway":     os.Getenv("DISCORD_ENABLE_GATEWAY") == "true",
 				"backfill_limit":     parseFloatEnv("DISCORD_BACKFILL_LIMIT"),
@@ -152,15 +152,15 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	}
 
 	// Auto-start Twitter/X connector (token or file-based)
-	if os.Getenv("TWITTER_ENABLED") == "true" {
+	if cfg.TwitterEnabled {
 		twitterCfg := connector.ConnectorConfig{
 			AuthType:     "token",
-			Credentials:  map[string]string{"bearer_token": os.Getenv("TWITTER_BEARER_TOKEN")},
+			Credentials:  map[string]string{"bearer_token": cfg.TwitterBearerToken},
 			Enabled:      true,
-			SyncSchedule: os.Getenv("TWITTER_SYNC_SCHEDULE"),
+			SyncSchedule: cfg.TwitterSyncSchedule,
 			SourceConfig: map[string]interface{}{
-				"sync_mode":   os.Getenv("TWITTER_SYNC_MODE"),
-				"archive_dir": os.Getenv("TWITTER_ARCHIVE_DIR"),
+				"sync_mode":   cfg.TwitterSyncMode,
+				"archive_dir": cfg.TwitterArchiveDir,
 			},
 		}
 		if err := twitterConn.Connect(ctx, twitterCfg); err == nil {
@@ -173,11 +173,11 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	}
 
 	// Auto-start Weather connector (no auth — Open-Meteo is free)
-	if os.Getenv("WEATHER_ENABLED") == "true" {
+	if cfg.WeatherEnabled {
 		weatherCfg := connector.ConnectorConfig{
 			AuthType:     "none",
 			Enabled:      true,
-			SyncSchedule: os.Getenv("WEATHER_SYNC_SCHEDULE"),
+			SyncSchedule: cfg.WeatherSyncSchedule,
 			SourceConfig: map[string]interface{}{
 				"locations":     parseJSONArrayEnv("WEATHER_LOCATIONS"),
 				"enable_alerts": os.Getenv("WEATHER_ENABLE_ALERTS") == "true",
@@ -195,7 +195,7 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	}
 
 	// Auto-start Gov Alerts connector (no auth — USGS/NWS are free)
-	if os.Getenv("GOV_ALERTS_ENABLED") == "true" {
+	if cfg.GovAlertsEnabled {
 		// Wire proactive alert notifier to publish extreme/severe alerts to NATS
 		alertsConn.Notifier = &alertsConnector.NATSAlertNotifier{
 			PublishFn: svc.nc.Publish,
@@ -204,9 +204,9 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 
 		alertsCfg := connector.ConnectorConfig{
 			AuthType:     "api_key",
-			Credentials:  map[string]string{"airnow_api_key": os.Getenv("GOV_ALERTS_AIRNOW_API_KEY")},
+			Credentials:  map[string]string{"airnow_api_key": cfg.GovAlertsAirnowAPIKey},
 			Enabled:      true,
-			SyncSchedule: os.Getenv("GOV_ALERTS_SYNC_SCHEDULE"),
+			SyncSchedule: cfg.GovAlertsSyncSchedule,
 			SourceConfig: map[string]interface{}{
 				"locations":                parseJSONArrayEnv("GOV_ALERTS_LOCATIONS"),
 				"min_earthquake_magnitude": parseFloatEnv("GOV_ALERTS_MIN_EARTHQUAKE_MAG"),
@@ -230,15 +230,15 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	}
 
 	// Auto-start Financial Markets connector (API key auth)
-	if os.Getenv("FINANCIAL_MARKETS_ENABLED") == "true" {
+	if cfg.FinancialMarketsEnabled {
 		marketsCfg := connector.ConnectorConfig{
 			AuthType: "api_key",
 			Credentials: map[string]string{
-				"finnhub_api_key": os.Getenv("FINANCIAL_MARKETS_FINNHUB_API_KEY"),
-				"fred_api_key":    os.Getenv("FINANCIAL_MARKETS_FRED_API_KEY"),
+				"finnhub_api_key": cfg.FinancialMarketsFinnhubAPIKey,
+				"fred_api_key":    cfg.FinancialMarketsFredAPIKey,
 			},
 			Enabled:      true,
-			SyncSchedule: os.Getenv("FINANCIAL_MARKETS_SYNC_SCHEDULE"),
+			SyncSchedule: cfg.FinancialMarketsSyncSchedule,
 			SourceConfig: map[string]interface{}{
 				"watchlist":         parseJSONObjectEnv("FINANCIAL_MARKETS_WATCHLIST"),
 				"alert_threshold":   parseFloatEnv("FINANCIAL_MARKETS_ALERT_THRESHOLD"),
@@ -265,7 +265,7 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 				AuthType:     "oauth2",
 				Credentials:  creds,
 				Enabled:      true,
-				SyncSchedule: os.Getenv("IMAP_SYNC_SCHEDULE"),
+				SyncSchedule: cfg.IMAPSyncSchedule,
 			}
 			if err := imapConn.Connect(ctx, imapConfig); err == nil {
 				svc.supervisor.SetConfig("gmail", imapConfig)
@@ -276,7 +276,7 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 				AuthType:     "oauth2",
 				Credentials:  creds,
 				Enabled:      true,
-				SyncSchedule: os.Getenv("CALDAV_SYNC_SCHEDULE"),
+				SyncSchedule: cfg.CalDAVSyncSchedule,
 			}
 			if err := caldavConn.Connect(ctx, caldavConfig); err == nil {
 				svc.supervisor.SetConfig("google-calendar", caldavConfig)
@@ -287,7 +287,7 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 				AuthType:     "oauth2",
 				Credentials:  creds,
 				Enabled:      true,
-				SyncSchedule: os.Getenv("YOUTUBE_SYNC_SCHEDULE"),
+				SyncSchedule: cfg.YouTubeSyncSchedule,
 			}
 			if err := ytConn.Connect(ctx, ytConfig); err == nil {
 				svc.supervisor.SetConfig("youtube", ytConfig)

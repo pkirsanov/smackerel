@@ -21,7 +21,10 @@ func TestMapFolder_EmptyPath(t *testing.T) {
 	}
 }
 
-// Test nil pool graceful handling
+// TopicMapper DB-backed operations (resolveSegment 3-stage cascade, CreateTopicEdge,
+// CreateParentEdge, UpdateTopicMomentum) require PostgreSQL with pg_trgm.
+// Integration tests not yet implemented (tracked as spec 009 test gap).
+// Below we test nil-pool graceful degradation.
 func TestTopicMapper_NilPool(t *testing.T) {
 	tm := NewTopicMapper(nil)
 
