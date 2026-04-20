@@ -143,16 +143,19 @@ func TestMigrations_SchemaVersionCount(t *testing.T) {
 		t.Fatalf("count schema_migrations: %v", err)
 	}
 
-	if count < 1 {
-		t.Errorf("expected at least 1 migration applied, got %d", count)
+	// We have 3 migration files (001, 018, 019) — all must be applied
+	if count < 3 {
+		t.Errorf("expected at least 3 migrations applied (001, 018, 019), got %d", count)
 	}
 	t.Logf("schema_migrations count: %d", count)
 }
 
-// Scenario: Migration rollback works
+// Scenario: Schema allows table drop and recreation
 // Given the consolidated schema has been applied
-// When specific tables are dropped
-// Then they can be recreated and other tables are unaffected
+// When specific tables are dropped and recreated via DDL
+// Then other tables are unaffected
+// Note: True migration rollback is not supported with the consolidated schema (001+018+019).
+// This test verifies DDL-level resilience for schema operations.
 func TestMigrations_TableDropAndRecreate(t *testing.T) {
 	pool := testPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
