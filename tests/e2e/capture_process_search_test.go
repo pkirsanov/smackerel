@@ -101,7 +101,7 @@ func TestE2E_CaptureProcessSearch(t *testing.T) {
 	}
 
 	if !processed {
-		t.Log("artifact not yet processed within timeout — continuing with search test")
+		t.Fatal("artifact not processed within 60s timeout — pipeline may be broken")
 	}
 
 	// Step 3: Search for content from the captured artifact
@@ -155,10 +155,8 @@ func TestE2E_CaptureProcessSearch(t *testing.T) {
 		}
 	}
 
-	if processed && !found {
+	if !found {
 		t.Error("captured and processed artifact not found in search results")
-	} else if !processed {
-		t.Log("artifact not yet processed — skipping search result assertion")
 	}
 
 	// Cleanup: delete the test artifact via DB if possible
