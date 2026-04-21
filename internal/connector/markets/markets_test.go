@@ -21,7 +21,7 @@ import (
 var stableTestTime = time.Date(2026, 4, 11, 10, 0, 0, 0, time.UTC) // Saturday
 
 // newTestConnector creates a connector with a stable nowFunc to prevent
-// time-dependent test flakiness from shouldGenerateDailySummary.
+// time-dependent test flakiness from tryClaimDailySummary.
 func newTestConnector(id string) *Connector {
 	c := New(id)
 	c.nowFunc = func() time.Time { return stableTestTime }
@@ -3326,9 +3326,9 @@ func TestDailySummary_TimeGate(t *testing.T) {
 			c := newTestConnector("financial-markets")
 			c.lastSummaryDate = tc.lastDay
 
-			got := c.shouldGenerateDailySummary(tc.now)
+			got := c.tryClaimDailySummary(tc.now)
 			if got != tc.want {
-				t.Errorf("shouldGenerateDailySummary() = %v, want %v", got, tc.want)
+				t.Errorf("tryClaimDailySummary() = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -4102,5 +4102,152 @@ func TestRegression_NewsPartialFailureStaysHealthy(t *testing.T) {
 	health := c.Health(context.Background())
 	if health != connector.HealthHealthy {
 		t.Errorf("expected HealthHealthy after partial news failure, got %v", health)
+	}
+}
+
+// --- Chaos Tests: CHAOS-018-001 through CHAOS-018-003 ---
+
+func TestCHAOS018_001_ConcurrentSyncDailySummaryNoDoubleGeneration(t *testing.T) {
+	// CHAOS-018-001: Two concurrent Syncs running after market close must NOT
+	// both generate a daily summary. The tryClaimDailySummary atomic check-and-set
+	// must ensure exactly one summary is produced.
+	et, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal("failed to load timezone")
+	}
+	mockNow := time.Date(2024, 6, 10, 17, 0, 0, 0, et) // Monday 5pm ET
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.3, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+	c.nowFunc = func() time.Time { return mockNow }
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL"}},
+	}
+
+	// Run 10 concurrent Syncs.
+	var wg sync.WaitGroup
+	summaryCount := make(chan int, 10)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			artifacts, _, err := c.Sync(context.Background(), "")
+			if err != nil {
+				return
+			}
+			count := 0
+			for _, a := range artifacts {
+				if a.ContentType == "market/daily-summary" {
+					count++
+				}
+			}
+			summaryCount <- count
+		}()
+	}
+	wg.Wait()
+	close(summaryCount)
+
+	total := 0
+	for count := range summaryCount {
+		total += count
+	}
+	if total != 1 {
+		t.Errorf("CHAOS-018-001: expected exactly 1 daily summary from 10 concurrent Syncs, got %d — TOCTOU race in summary generation", total)
+	}
+}
+
+func TestCHAOS018_002_EconomicArtifactSliceIsolation(t *testing.T) {
+	// CHAOS-018-002: Each economic artifact's related_symbols must be an independent
+	// copy. Mutating one must NOT corrupt the others.
+	fredSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2024-01-01", "value": "3.7"},
+			},
+		})
+	}))
+	defer fredSrv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.httpClient = fredSrv.Client()
+	c.fredBaseURL = fredSrv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		FREDAPIKey:     "fred-key",
+		FREDEnabled:    true,
+		FREDSeries:     []string{"GDP", "UNRATE"},
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL", "GOOGL"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var econArtifacts []*connector.RawArtifact
+	for i := range artifacts {
+		if artifacts[i].ContentType == "market/economic" {
+			econArtifacts = append(econArtifacts, &artifacts[i])
+		}
+	}
+	if len(econArtifacts) < 2 {
+		t.Fatalf("expected at least 2 economic artifacts, got %d", len(econArtifacts))
+	}
+
+	// Get related_symbols from the first economic artifact and mutate it.
+	first := econArtifacts[0].Metadata["related_symbols"].([]string)
+	second := econArtifacts[1].Metadata["related_symbols"].([]string)
+
+	originalSecondLen := len(second)
+	// Mutate the first slice by overwriting element 0.
+	if len(first) > 0 {
+		first[0] = "CORRUPTED"
+	}
+
+	// Second artifact's slice must be unaffected.
+	if len(second) != originalSecondLen {
+		t.Errorf("CHAOS-018-002: second economic artifact's related_symbols length changed after mutating first")
+	}
+	for _, s := range second {
+		if s == "CORRUPTED" {
+			t.Error("CHAOS-018-002: mutating first economic artifact's related_symbols corrupted the second — shared slice aliasing bug")
+		}
+	}
+}
+
+func TestCHAOS018_003_TryClaimDailySummaryIdempotent(t *testing.T) {
+	// CHAOS-018-003: After tryClaimDailySummary returns true once for a date,
+	// subsequent calls for the same date must return false (no duplicates).
+	et, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal("failed to load timezone")
+	}
+	mockNow := time.Date(2024, 6, 10, 17, 0, 0, 0, et) // Monday 5pm ET
+
+	c := newTestConnector("financial-markets")
+
+	// First call should claim.
+	if !c.tryClaimDailySummary(mockNow) {
+		t.Error("first tryClaimDailySummary should return true")
+	}
+	// Second call for the same date should be rejected.
+	if c.tryClaimDailySummary(mockNow) {
+		t.Error("second tryClaimDailySummary for same date should return false — duplicate summary prevention broken")
+	}
+	// Different day should succeed.
+	nextDay := time.Date(2024, 6, 11, 17, 0, 0, 0, et) // Tuesday
+	if !c.tryClaimDailySummary(nextDay) {
+		t.Error("tryClaimDailySummary for next day should return true")
 	}
 }

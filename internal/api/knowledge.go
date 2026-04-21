@@ -109,7 +109,6 @@ func (d *Dependencies) KnowledgeConceptsHandler(w http.ResponseWriter, r *http.R
 			Title:         c.Title,
 			Summary:       c.Summary,
 			CitationCount: len(c.SourceArtifactIDs),
-			EntityCount:   len(c.RelatedConceptIDs),
 			SourceTypes:   c.SourceTypeDiversity,
 			UpdatedAt:     c.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 		})

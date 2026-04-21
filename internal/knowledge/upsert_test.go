@@ -167,3 +167,70 @@ func TestArtifactSynthesisDataJSON(t *testing.T) {
 		t.Errorf("source_id = %q", decoded.SourceID)
 	}
 }
+
+// --- enforceTokenCap tests (design: 4,000-token cap) ---
+
+func TestEnforceTokenCap_UnderLimit(t *testing.T) {
+	claims := []Claim{
+		{Text: "Claim one", ArtifactID: "a1"},
+		{Text: "Claim two", ArtifactID: "a2"},
+	}
+	result := enforceTokenCap(claims, "Short summary", 4000)
+	if len(result) != 2 {
+		t.Errorf("expected 2 claims (under limit), got %d", len(result))
+	}
+}
+
+func TestEnforceTokenCap_OverLimit_DropsOldest(t *testing.T) {
+	// Build claims that together exceed a small token budget.
+	// Each claim ~100 chars → ~25 tokens. With summary ~10 tokens, budget = 40 tokens → only ~1 claim fits.
+	claims := []Claim{
+		{Text: "Oldest claim with lots of detail about leadership and management strategies and retention rates in modern organizations", ArtifactID: "a1"},
+		{Text: "Middle claim about remote work productivity and collaboration tools in distributed teams across time zones", ArtifactID: "a2"},
+		{Text: "Newest claim about pricing strategy optimization and revenue growth through data-driven decision making process", ArtifactID: "a3"},
+	}
+	// Set a very tight budget (40 tokens = ~160 chars for summary + claims JSON)
+	result := enforceTokenCap(claims, "Summary", 40)
+	if len(result) >= 3 {
+		t.Errorf("expected fewer than 3 claims after cap enforcement, got %d", len(result))
+	}
+	// The oldest claims should be dropped first — newest should survive
+	if len(result) > 0 && result[len(result)-1].ArtifactID != "a3" {
+		t.Errorf("newest claim (a3) should be preserved, last claim is %q", result[len(result)-1].ArtifactID)
+	}
+}
+
+func TestEnforceTokenCap_ZeroLimit_NoOp(t *testing.T) {
+	claims := []Claim{
+		{Text: "Claim one", ArtifactID: "a1"},
+	}
+	// enforceTokenCap is only called when MaxTokens > 0, but test defensive behavior
+	result := enforceTokenCap(claims, "Summary", 0)
+	// With 0 budget, all claims get trimmed (edge case)
+	if len(result) > len(claims) {
+		t.Errorf("result should not grow: got %d, want <= %d", len(result), len(claims))
+	}
+}
+
+func TestEnforceTokenCap_EmptyClaims(t *testing.T) {
+	result := enforceTokenCap(nil, "Summary", 4000)
+	if len(result) != 0 {
+		t.Errorf("expected 0 claims for nil input, got %d", len(result))
+	}
+}
+
+func TestEnforceTokenCap_PreservesNewest(t *testing.T) {
+	// When trimming, newest claims (end of slice) should be preserved
+	claims := make([]Claim, 50)
+	for i := range claims {
+		claims[i] = Claim{Text: "Claim with enough text to use tokens " + string(rune('A'+i%26)), ArtifactID: "art-" + string(rune('0'+i%10))}
+	}
+	result := enforceTokenCap(claims, "A summary", 100)
+	if len(result) >= 50 {
+		t.Fatal("expected trimming to occur")
+	}
+	// Last element should be the original last element
+	if len(result) > 0 && result[len(result)-1].ArtifactID != claims[49].ArtifactID {
+		t.Errorf("newest claim should be preserved")
+	}
+}

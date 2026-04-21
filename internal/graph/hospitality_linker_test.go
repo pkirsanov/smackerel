@@ -240,22 +240,17 @@ func TestHospitalityMetaMalformed(t *testing.T) {
 	}
 }
 
-// TestNonGuestHostSourceSkipped verifies the source check logic.
-func TestNonGuestHostSourceSkipped(t *testing.T) {
-	// The linker checks sourceID != "guesthost" → return nil
-	// This validates the pattern: non-guesthost sources are skipped
-	sources := []string{"rss", "imap", "caldav", "youtube", "bookmarks", "hospitable"}
-	for _, src := range sources {
-		if src == "guesthost" {
-			t.Errorf("source %q should not be in the skip list", src)
-		}
-	}
-}
-
-// TestHospitalityLinkerNilSafety validates that NewHospitalityLinker handles construction.
-func TestHospitalityLinkerNilSafety(t *testing.T) {
+// TestHospitalityLinkerNilDepsDoNotPanic validates that construction with nil deps
+// succeeds and that accessing linker state doesn't panic.
+func TestHospitalityLinkerNilDepsDoNotPanic(t *testing.T) {
 	linker := NewHospitalityLinker(nil, nil, nil, nil)
 	if linker == nil {
-		t.Error("NewHospitalityLinker should return non-nil even with nil deps")
+		t.Fatal("NewHospitalityLinker should return non-nil even with nil deps")
+	}
+	if linker.guestRepo != nil {
+		t.Error("guestRepo should be nil when nil was passed")
+	}
+	if linker.propertyRepo != nil {
+		t.Error("propertyRepo should be nil when nil was passed")
 	}
 }

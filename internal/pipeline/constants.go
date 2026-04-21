@@ -1,5 +1,18 @@
 package pipeline
 
+import "errors"
+
+// Sentinel errors for pipeline failure classification.
+// CaptureHandler and other callers use errors.Is() against these to map
+// pipeline failures to the correct HTTP status codes.
+var (
+	// ErrExtractionFailed indicates content extraction (fetch, parse, SSRF block) failed.
+	ErrExtractionFailed = errors.New("content extraction failed")
+
+	// ErrNATSPublish indicates the NATS publish to the ML sidecar failed.
+	ErrNATSPublish = errors.New("publish to NATS")
+)
+
 // ProcessingStatus represents the processing state of an artifact.
 type ProcessingStatus string
 

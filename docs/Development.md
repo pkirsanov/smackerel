@@ -38,7 +38,7 @@ Implemented runtime capabilities:
 - PWA share target for mobile capture and browser extension (Chrome MV3 / Firefox) for desktop capture
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)
-- Database migrations (19 SQL files)
+- Database migrations (3 SQL files — migrations 002–017 consolidated into 001)
 - NATS JetStream with token authentication (11 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 - CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
@@ -224,25 +224,11 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 
 All migrations live in `internal/db/migrations/` and run automatically on startup via `internal/db/migrate.go` with advisory locking.
 
+Migrations 002–017 were consolidated into `001_initial_schema.sql` during a schema squash. The consolidated migration creates all tables in a single file (31 tables, 86 DDL statements).
+
 | Migration | File | Purpose |
 |-----------|------|---------|
-| 001 | `001_initial_schema.sql` | Core schema: `artifacts`, `people`, `topics`, `edges`, `sync_state`, `action_items`, `digests`. Extensions: `vector`, `pg_trgm` |
-| 002 | `002_intelligence.sql` | Intelligence layer: `synthesis_insights`, `alerts`, `meeting_briefs`, `weekly_synthesis` |
-| 003 | `003_expansion.sql` | Phase 4 expansion: `trips`, `trails`, `privacy_consent`, location_geo column on artifacts |
-| 004 | `004_keep.sql` | Google Keep connector: `keep_exports`, `ocr_cache` |
-| 005 | `005_conversation_fields.sql` | Conversation assembly: `message_count`, `source_chat`, `timeline` columns on artifacts |
-| 006 | `006_processing_status.sql` | Processing pipeline: `processing_status` column on artifacts |
-| 007 | `007_oauth_tokens.sql` | OAuth2 token storage: `oauth_tokens` table |
-| 008 | `008_dedup_unique.sql` | TOCTOU race prevention: partial unique index on `content_hash` for dedup |
-| 009 | `009_maps.sql` | Google Maps Timeline: `location_clusters` table for spatial clustering |
-| 010 | `010_phase5_advanced.sql` | Phase 5 Intelligence: `subscriptions`, `learning_progress`, `search_log`, `quick_references`, `content_fuel`, `seasonal_patterns` |
-| 011 | `011_add_guests_properties.sql` | Hospitality graph: `guests` and `properties` tables for GuestHost connector |
-| 012 | `012_people_name_unique.sql` | Graph linker fix: UNIQUE constraint on `people.name` for ON CONFLICT upsert |
-| 013 | `013_phase5_stability.sql` | Stability fixes: UNIQUE indexes on `subscriptions.detected_from` and `learning_progress(topic_id, artifact_id)` |
-| 014 | `014_knowledge_layer.sql` | Knowledge synthesis layer: `knowledge_concepts`, `knowledge_entities`, `knowledge_lint_reports`, synthesis tracking columns |
-| 015 | `015_domain_extraction.sql` | Domain extraction (spec 026): `domain_data` JSONB column, extraction tracking on artifacts |
-| 016 | `016_user_annotations.sql` | User annotations (spec 027): `annotations` table, `telegram_message_artifacts` mapping, `artifact_annotation_summary` materialized view |
-| 017 | `017_actionable_lists.sql` | Actionable lists (spec 028): `lists` and `list_items` tables |
+| 001 | `001_initial_schema.sql` | Consolidated schema (original migrations 001–017): `artifacts`, `people`, `topics`, `edges`, `sync_state`, `action_items`, `digests`, `synthesis_insights`, `alerts`, `meeting_briefs`, `weekly_synthesis`, `trips`, `trails`, `privacy_consent`, `keep_exports`, `ocr_cache`, `oauth_tokens`, `location_clusters`, `subscriptions`, `learning_progress`, `quick_references`, `search_log`, `guests`, `properties`, `knowledge_concepts`, `knowledge_entities`, `knowledge_lint_reports`, `annotations`, `telegram_message_artifacts`, `lists`, `list_items`. Extensions: `vector`, `pg_trgm`. Includes all indexes, unique constraints, materialized views, and column additions from the original 17 migrations |
 | 018 | `018_meal_plans.sql` | Meal planning (spec 036): `meal_plans` + `meal_plan_slots` tables with date range, lifecycle status, slot constraints |
 | 019 | `019_expense_tracking.sql` | Expense tracking (spec 034): `vendor_aliases`, `expense_suggestions`, `expense_suggestion_suppressions` tables, GIN index on artifacts expense metadata |
 

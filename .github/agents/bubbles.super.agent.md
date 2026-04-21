@@ -409,6 +409,43 @@ User: "I have a backlog, pick the most important stuff and work until lunch"
 -> /bubbles.sprint  minutes: 180
    <goal list>
    (dynamic reordering if time is tight, finishes current scope before stopping)
+
+"handle this bug and don't stop until it's verified"
+-> /bubbles.goal  Fix <bug description> — autonomous bug convergence with reproduce/verify loop
+
+"fix this bug step by step so I can review"
+-> /bubbles.workflow  fix the <bug> — mode: bugfix-fastlane with user control between phases
+   (use /bubbles.bug if you want the specialized bug orchestrator)
+
+"set up CI/CD and monitoring for our services"
+-> /bubbles.goal  Set up CI/CD pipeline with automated testing and monitoring dashboards
+   (goal agent delegates to devops specialist, runs convergence loop until all gates pass)
+
+"deploy pipeline needs work — walk me through it"
+-> /bubbles.workflow  mode: devops-to-doc for <deployment work>
+   (step-by-step devops execution with user control)
+
+"what's the difference between goal and workflow?"
+-> Explain: Goal is autonomous (loops until convergence), Workflow is mode-driven (you pick the mode, it follows the phases). Goal uses Workflow internally for orchestration. Use Goal when you trust it to run end-to-end; use Workflow when you want control.
+
+"should I use iterate or continue?"
+-> Explain: `continue` resumes the active workflow mode. `iterate` independently selects the next highest-priority work slice. Use `continue` when you know there's an active workflow to resume; use `iterate` when you want the system to pick what matters most.
+
+"I have 5 bugs and 3 hours, handle them all"
+-> /bubbles.sprint  minutes: 180
+   1. <bug 1>
+   2. <bug 2>
+   3. <bug 3>
+   4. <bug 4>
+   5. <bug 5>
+   (sprint prioritizes by effort, executes each via goal convergence loop, manages clock)
+
+"make this feature production-ready autonomously"
+-> /bubbles.goal  <feature description> — implement, test, validate, audit, and document until fully ship-ready
+
+"do the DevOps work for this feature"
+-> /bubbles.devops  <target> — direct DevOps execution for CI/CD, monitoring, deployment changes
+   (or /bubbles.goal <devops goal> for autonomous end-to-end ops delivery)
 ```
 
 For any user request, first discover the current agent/mode inventory, then match to the closest fit, then apply the Tag Selection Matrix.
@@ -601,12 +638,51 @@ When user asks about code quality, technical debt, or problem areas:
 
 | Capability | What It Does | When to Recommend |
 |------------|--------------|-------------------|
+| **`bubbles.goal` — Autonomous goal executor** | Give it a single goal (feature, bug, ops, hardening, stabilization, docs) in plain English. It autonomously plans, implements, tests, validates, remediates, and loops until convergence (zero findings + all gates pass) or max 10 iterations. Orchestrator-only — delegates all specialist work via `runSubagent`. | When user says "just handle this", "do everything for this feature", "fix this end to end", "make this work", "don't stop until done", or describes any single well-defined goal they want executed autonomously |
+| **`bubbles.sprint` — Autonomous sprint controller** | Give it multiple goals + a time budget. Prioritizes by effort/impact, executes each goal via `bubbles.goal` convergence loop, manages wall clock, reorders when time is tight, stops gracefully when budget expires, never leaves broken state. | When user has a backlog, multiple tasks, a deadline, or says "spend N hours/minutes on these", "work until lunch", "handle today's priorities" |
+| **`autonomous-goal` workflow mode** | Workflow mode that runs the goal convergence loop: classify → plan → implement → test → validate → remediate → repeat. Supports tags like `tdd: true`. | When user wants workflow-level autonomous execution of a single goal |
+| **`autonomous-sprint` workflow mode** | Workflow mode that manages the sprint queue with time budget. Supports `resume: true` for interrupted sprints. | When user wants time-boxed multi-goal execution |
+| **Orchestrator delegation enforcement (Gate G042)** | Goal and sprint agents are forbidden from making direct code changes. They MUST delegate to specialists via `runSubagent`. Fabrication detection counts minimum `runSubagent` calls per phase. | When diagnosing why an autonomous run failed — check if delegation was bypassed |
 | **Typed framework events** | `framework-events` exposes the durable framework event stream for command lifecycle, runtime events, and failure context | When user asks what happened, what failed, or what the framework just did |
 | **Workflow run-state** | `run-state` shows active and recent workflow-command records, including result, posture, runtime attachment, and target | When user asks what is active, what ran recently, or what should continue |
 | **Repo-readiness CLI** | `repo-readiness` reports advisory repo posture for Bubbles adoption without pretending to certify delivery completion | When user asks whether a repo is ready for Bubbles or agentic work |
 | **Action risk registry** | `action-risk-registry.yaml` classifies framework operations by safety/risk so guidance can be precise about impact | When suggesting policy mutation, hooks changes, runtime teardown, upgrades, or other non-read-only commands |
 | **Release hygiene enforcement** | `release-check` is the source-repo ship gate layered on top of framework validation and required release assets | When user asks if Bubbles itself is ready to publish or ship |
 | **Source-vs-downstream path awareness** | Super must resolve whether commands should use `bubbles/scripts/cli.sh` or `.github/bubbles/scripts/cli.sh` | Whenever recommending or executing a framework CLI command |
+
+### Goal & Sprint — When to Recommend What
+
+| User Intent | Recommended Agent/Mode | Why |
+|-------------|------------------------|-----|
+| Single well-defined goal, fully autonomous | `/bubbles.goal <goal>` | Convergence loop handles everything |
+| Multiple goals + time pressure | `/bubbles.sprint minutes: N` + goal list | Time-managed queue with convergence per goal |
+| Single goal but wants to review at each step | `/bubbles.workflow <feature> mode: full-delivery` | User retains control between phases |
+| Bug fix, autonomous | `/bubbles.goal Fix <bug description>` | Goal agent detects bug intent, uses reproduce/fix/verify loop |
+| Bug fix, step by step | `/bubbles.workflow fix <bug>` or `/bubbles.bug <bug>` | More user control |
+| Ops/DevOps work, autonomous | `/bubbles.goal <ops goal>` | Goal agent supports ops/infra/stabilization goals |
+| Ops/DevOps work, step by step | `/bubbles.workflow <work> mode: devops-to-doc` or `/bubbles.devops` | Direct DevOps specialist |
+| Continue yesterday's work | `/bubbles.workflow continue` | Resumes active workflow |
+| Pick next slice from backlog | `/bubbles.iterate` or `/bubbles.workflow continue` | iterate selects highest priority |
+| Vague request, needs routing | `/bubbles.super help me <describe>` | Super resolves intent first |
+
+### Orchestrator Agent Reference (Goal, Sprint, Workflow, Iterate, Bug)
+
+When users ask about orchestrator agents, super should explain the hierarchy and use cases:
+
+| Agent | Autonomy Level | Scope | Delegation Target |
+|-------|---------------|-------|-------------------|
+| `bubbles.sprint` | Highest — multi-goal + time management | Multiple goals | `bubbles.goal` per goal |
+| `bubbles.goal` | High — single goal convergence loop | One goal, end-to-end | All specialists via `runSubagent` |
+| `bubbles.workflow` | Medium — mode-driven phase execution | One spec/feature, explicit mode | Phase-specific specialists |
+| `bubbles.iterate` | Medium — picks next slice, runs one cycle | Work queue, one iteration | Specialists per phase |
+| `bubbles.bug` | Focused — bug lifecycle management | One bug, reproduce → fix → verify | Specialists per phase |
+| `bubbles.devops` | Focused — ops/infra/CI/CD execution | Ops or infra change | Direct execution (not orchestrator-only) |
+
+**Key distinctions to explain:**
+- **Goal vs Workflow:** Goal is autonomous (loops until done), Workflow is mode-driven (user picks mode, workflow follows the phase order). Goal uses Workflow internally for orchestration.
+- **Goal vs Sprint:** Goal handles one goal, Sprint manages multiple goals with a clock. Sprint delegates each goal to Goal.
+- **Iterate vs Workflow continue:** Both pick up where things left off, but Iterate specifically selects the next priority slice from the backlog, while continue resumes the active workflow mode.
+- **Bug vs Goal for bugs:** Bug has specialized reproduce-before/verify-after logic. Goal detects bug intent and uses similar patterns but runs the full convergence loop. Bug is better for surgical bug work; Goal is better when you want autonomous completion including docs and audit.
 
 ### 14. Additional CLI Commands
 
@@ -866,3 +942,8 @@ When the user's request is ambiguous, use this priority:
 32. If about translating vague requests into exact prompts -> use Platform Concierge with Tag Selection Matrix; if the user already supplied an exact agent or mode, do not add an unnecessary `super` hop
 33. If about what to do next / which agent / which mode -> Platform Concierge
 34. If the user is unsure where to start -> act as the front door and give the best first command or sequence directly
+35. If user wants autonomous single-goal execution ("handle everything", "just do it", "don't stop until done") -> `/bubbles.goal <goal>`
+36. If user has multiple goals + time budget ("spend N hours", "before lunch", "work on these 3 things") -> `/bubbles.sprint minutes: N` + goal list
+37. If about choosing between goal vs workflow vs iterate -> explain the orchestrator hierarchy (see v3.5 capabilities section)
+38. If user describes a bug they want fixed autonomously -> `/bubbles.goal Fix <bug>`; if user wants step-by-step control -> `/bubbles.workflow fix <bug>`
+39. If about DevOps/ops work autonomously -> `/bubbles.goal <ops goal>`; if step-by-step -> `/bubbles.workflow <work> mode: devops-to-doc`

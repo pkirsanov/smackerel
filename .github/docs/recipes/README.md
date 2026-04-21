@@ -54,13 +54,26 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Fix a Bug](fix-a-bug.md) | "Something's broken and I need to fix it properly" |
 | [Resume Work](resume-work.md) | "I was working on something yesterday, need to pick up where I left off" |
 
+## Autonomous Execution (v3.5)
+
+| Recipe | Problem → Solution |
+|--------|-------------------|
+| [Autonomous Goal](autonomous-goal.md) | "Give it a single goal — feature, bug, ops, or hardening — and let it handle everything until done" |
+| [Autonomous Sprint](autonomous-sprint.md) | "Give it multiple goals + a time budget, let it prioritize and execute autonomously" |
+
+> **💡 Tip:** Use **goal** when you have one well-defined objective and want full autonomy. Use **sprint** when you have a backlog and a deadline. Both run convergence loops that don't stop until findings are zero or time runs out.
+
+> **💡 Tip:** Goal works for any work type — features, bugs, ops, hardening, stabilization, docs cleanup. Sprint mixes them freely.
+
 ### Common How-To Patterns
 
 | Goal | Best Entry Point |
 |------|------------------|
+| Handle a single goal autonomously | `/bubbles.goal  <describe the goal>` |
+| Multiple goals with a time budget | `/bubbles.sprint  minutes: N` + goal list |
 | Explore an idea before any code | `/bubbles.workflow  mode: brainstorm for <idea>` |
 | Improve a legacy feature with objective research first | `/bubbles.workflow  improve <feature>` |
-| Fix a bug in brownfield code | `/bubbles.workflow  fix the <bug>` |
+| Fix a bug in brownfield code | `/bubbles.workflow  fix the <bug>` or `/bubbles.goal  Fix <bug>` |
 | Keep shipping the next most important slice | `/bubbles.workflow  continue` |
 | Keep going until the whole thing is truly green | `/bubbles.workflow  <feature> mode: delivery-lockdown` |
 | Review rework and churn after a run | `/bubbles.retro  week` |

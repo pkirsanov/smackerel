@@ -284,15 +284,25 @@ func resolveTitle(domainData json.RawMessage) string {
 }
 
 // findExistingList checks if a list with the given source query already exists.
+// Paginates through all non-archived lists to avoid missing results beyond
+// any single-page limit.
 func (b *ShoppingBridge) findExistingList(ctx context.Context, sourceQuery string) (*list.List, error) {
-	lists, err := b.Store.ListLists(ctx, "", "", 100, 0)
-	if err != nil {
-		return nil, err
-	}
-	for _, l := range lists {
-		if l.SourceQuery == sourceQuery && l.Status != list.StatusArchived {
-			return &l, nil
+	const pageSize = 100
+	offset := 0
+	for {
+		lists, err := b.Store.ListLists(ctx, "", "", pageSize, offset)
+		if err != nil {
+			return nil, err
 		}
+		for _, l := range lists {
+			if l.SourceQuery == sourceQuery && l.Status != list.StatusArchived {
+				return &l, nil
+			}
+		}
+		if len(lists) < pageSize {
+			break
+		}
+		offset += pageSize
 	}
 	return nil, nil
 }

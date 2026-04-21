@@ -56,6 +56,7 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
     <div class="status info">📱 Saved offline — will sync when connected</div>
   </div>
 
+  <script src="/pwa/lib/queue.js"></script>
   <script>
     var shareData = {
       title: {{.Title}},
@@ -106,14 +107,19 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
         } else if (resp.status === 409) {
           showSuccess(); // duplicate — still counts as saved
         } else {
-          return resp.json().then(function(data) {
-            showError(data.error ? data.error.message : 'HTTP ' + resp.status);
+          return resp.text().then(function(text) {
+            try {
+              var data = JSON.parse(text);
+              showError(data.error ? data.error.message : 'HTTP ' + resp.status);
+            } catch (e) {
+              showError('HTTP ' + resp.status);
+            }
           });
         }
       })
       .catch(function(err) {
-        // Offline — queue for later
-        queueOffline(body);
+        // Offline — queue for later using shared IndexedDB CaptureQueue
+        queueOffline(shareData);
       });
     }
 
@@ -130,16 +136,20 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
       document.getElementById('result-error').classList.remove('hidden');
     }
 
-    function queueOffline(body) {
-      // Store in localStorage as simple offline queue
-      var queue = JSON.parse(localStorage.getItem('smackerel_queue') || '[]');
-      if (queue.length < 100) {
-        queue.push({ body: body, capturedAt: new Date().toISOString() });
-        localStorage.setItem('smackerel_queue', JSON.stringify(queue));
-      }
-      document.getElementById('saving').classList.add('hidden');
-      document.getElementById('queued').classList.remove('hidden');
-      setTimeout(function() { window.close(); }, 2000);
+    function queueOffline(data) {
+      // Use the shared IndexedDB CaptureQueue so the service worker can sync later
+      CaptureQueue.enqueue({
+        url: data.url || '',
+        title: data.title || '',
+        text: data.text || ''
+      }).then(function() {
+        document.getElementById('saving').classList.add('hidden');
+        document.getElementById('queued').classList.remove('hidden');
+        setTimeout(function() { window.close(); }, 2000);
+      }).catch(function() {
+        // IndexedDB unavailable — show error instead of silently losing the item
+        showError('Offline and unable to queue — please try again');
+      });
     }
 
     // Start capture immediately

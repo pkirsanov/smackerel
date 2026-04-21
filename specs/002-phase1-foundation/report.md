@@ -2,6 +2,29 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Scope: improve-existing (stochastic-quality-sweep, 2026-04-21)
+### Summary
+Replaced fragile `strings.Contains()` error classification in `CaptureHandler` with Go-idiomatic sentinel errors and `errors.Is()`. The capture handler classified pipeline errors by matching substrings in error messages — if error messages were refactored, the classification would silently degrade to generic 500 responses. The `DuplicateError` typed error path already used `errors.As()` correctly, making the string-matching paths an asymmetric gap.
+
+### Finding Addressed
+- IMPROVE-002-SQS-003 (MEDIUM): `CaptureHandler` uses fragile `strings.Contains()` for extraction (422) and NATS publish (503) error classification instead of sentinel errors
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/pipeline/constants.go` | Added sentinel errors `ErrExtractionFailed` and `ErrNATSPublish` |
+| `internal/pipeline/processor.go` | Changed `ExtractContent` and `submitForProcessing` to wrap with sentinel errors via `fmt.Errorf("%w: %w", ...)` |
+| `internal/api/capture.go` | Replaced `strings.Contains(err.Error(), ...)` with `errors.Is(err, pipeline.ErrExtractionFailed)` and `errors.Is(err, pipeline.ErrNATSPublish)` |
+| `internal/pipeline/constants_test.go` | Added `TestSentinelErrors_ExtractionFailed_Unwrappable` and `TestSentinelErrors_NATSPublish_Unwrappable` |
+| `internal/api/capture_test.go` | Added `TestCaptureHandler_ExtractionFailed_Returns422`, `TestCaptureHandler_NATSPublishFailed_Returns503`, `TestCaptureHandler_GenericError_Returns500` |
+
+### Test Evidence
+- `./smackerel.sh test unit` — all 41 Go packages pass, 236 Python tests pass, 0 failures
+- `./smackerel.sh check` — config in sync with SST
+
+---
+
 ## Scope: improve-existing (stochastic-quality-sweep, 2026-04-14)
 ### Summary
 Two improvements to the Phase 1 foundation layer:

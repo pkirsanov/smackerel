@@ -14,7 +14,8 @@ import (
 
 // KnowledgeStore provides CRUD operations for the knowledge layer tables.
 type KnowledgeStore struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	MaxTokens int // Concept page token cap (design: 4000). 0 means no limit.
 }
 
 // NewKnowledgeStore creates a new KnowledgeStore backed by the given connection pool.

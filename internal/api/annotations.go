@@ -24,7 +24,7 @@ type CreateAnnotationResponse struct {
 
 // AnnotationHandlers holds annotation API handler methods.
 type AnnotationHandlers struct {
-	Store *annotation.Store
+	Store annotation.AnnotationQuerier
 }
 
 // CreateAnnotation handles POST /api/artifacts/{id}/annotations.
@@ -192,4 +192,38 @@ func (h *AnnotationHandlers) ResolveTelegramMessageArtifact(w http.ResponseWrite
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"artifact_id": artifactID})
+}
+
+// DeleteTag handles DELETE /api/artifacts/{id}/tags/{tag}.
+func (h *AnnotationHandlers) DeleteTag(w http.ResponseWriter, r *http.Request) {
+	if h.Store == nil {
+		http.Error(w, `{"error":"annotations not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	artifactID := chi.URLParam(r, "id")
+	if artifactID == "" {
+		http.Error(w, `{"error":"artifact id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	tag := chi.URLParam(r, "tag")
+	if tag == "" {
+		http.Error(w, `{"error":"tag required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.Store.DeleteTag(r.Context(), artifactID, tag, annotation.ChannelAPI); err != nil {
+		slog.Error("failed to delete tag", "artifact_id", artifactID, "tag", tag, "error", err)
+		http.Error(w, `{"error":"failed to remove tag"}`, http.StatusInternalServerError)
+		return
+	}
+
+	summary, _ := h.Store.GetSummary(r.Context(), artifactID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"removed": tag,
+		"summary": summary,
+	})
 }

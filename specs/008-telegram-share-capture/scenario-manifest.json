@@ -36,6 +36,7 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": ["internal/telegram/share_test.go::TestExtractAllURLs_DuplicateURLs"],
+      "coverageNote": "Linked test covers URL dedup within extraction only. The duplicate-artifact detection (errDuplicate from callCapture) and context-merge reply (replyDuplicate) path lacks a dedicated unit test. Planned TestHandleShareCapture_DuplicateURL was never created.",
       "evidenceRefs": ["specs/008-telegram-share-capture/report.md"]
     },
     {

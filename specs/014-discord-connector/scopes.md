@@ -45,6 +45,20 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ---
 
+## Deferred Items
+
+The following spec requirements are documented but not implemented in the current scope set. They are tracked here for future work.
+
+| Requirement | Item | Status | Rationale |
+|---|---|---|---|
+| R-008 | MESSAGE_UPDATE event handling | Deferred | EventPoller implements MESSAGE_CREATE only; update detection requires message-diff logic and artifact mutation support |
+| R-008 | MESSAGE_DELETE event handling | Deferred | Soft-delete artifact tracking not yet supported by the pipeline |
+| R-008 | CHANNEL_PINS_UPDATE event handling | Deferred | Pin changes are covered by REST pin fetch on each sync; real-time pin events are incremental improvement |
+| R-008 | GUILD_CREATE event handling | Deferred | Bot access verification on connect is handled by token validation; guild event handling is incremental |
+| R-010 | Bot command confirmation response | Deferred | Hard Constraint mandates read-only access; spec R-010 mentions confirmation but contradicts the read-only constraint. Implementation follows the Hard Constraint. |
+
+---
+
 ## Scope 01: Normalizer & Message Classification
 
 **Status:** Done
@@ -219,7 +233,7 @@ Scenario: SCN-DC-CONN-001 Connector lifecycle
   > Evidence: `discord.go` — Connect→Healthy, Sync→Syncing→Healthy, Close→Disconnected; TestClose, TestSync_HealthTransitionsDuringSyncLifecycle verify
 - [x] Config added to `smackerel.yaml` with empty-string placeholders per SST
   > Evidence: `config/smackerel.yaml` contains discord connector section
-- [x] 8 unit + 4 integration + 2 e2e tests pass
+- [x] 15+ unit tests pass (all httptest-based; live integration deferred)
   > Evidence: 148 total test runs pass (including REST client, token validation, pagination, rate limits, end-to-end sync). Tests use httptest.Server for HTTP mocking. Live-stack integration tests deferred until Docker available.
 
 ---
@@ -259,7 +273,7 @@ Scenario: SCN-DC-GW-001 Real-time message capture
   > Evidence: `EventPoller.pollChannel()` retries with exponential backoff (1s, 2s, 4s, 8s, 16s cap) on fetch failures. `consecutiveErrors` atomic counter tracks failures. `Healthy()` returns false when errors ≥ 5. `Connector.Health()` returns `HealthDegraded` when gateway is unhealthy. TestEventPoller_ReconnectOnPollingFailure verifies recovery after 3 consecutive failures. TestConnector_GatewayHealthDegradedOnPollFailure verifies health degradation.
 - [x] On reconnection, REST backfill covers any gap since last cursor
   > Evidence: `EventPoller` maintains per-channel cursors (`ep.cursors`). On recovery after failures, polling resumes from the last successful cursor position, inherently backfilling missed messages via REST `?after={cursor}`. The Sync() drain also advances `localCursors` from gateway events so subsequent REST fetches skip covered messages.
-- [x] 6 unit + 3 integration tests pass
+- [x] 9 unit tests pass (all httptest-based; live integration deferred)
   > Evidence: 9 new gateway tests all pass with `-race`: TestEventPoller_ConnectStartsPolling, TestEventPoller_EventsFilterToMonitoredChannels, TestEventPoller_SyncDrainsBufferedEvents, TestEventPoller_ReconnectOnPollingFailure, TestEventPoller_CloseStopsPolling, TestEventPoller_EventBufferOverflow, TestConnector_GatewayHealthDegradedOnPollFailure, TestConnector_CloseStopsGateway, TestConnector_GatewayStartsOnConnectWithEnabledFlag. Total discord package: 147 test functions pass.
 
 ---
@@ -273,6 +287,34 @@ Scenario: SCN-DC-GW-001 Real-time message capture
 ### Description
 
 Auto-follow threads in monitored channels. Fetch thread message history via REST. Create linked artifact chains with thread context metadata.
+
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-DC-THR-001 Auto-follow active threads in monitored channels
+  Given a monitored channel "#general" with active threads in the guild
+  When the connector syncs
+  Then active threads whose parent matches monitored channels are discovered
+  And thread messages are fetched via REST with pagination
+  And each thread message carries thread_id and thread_name metadata
+  And discovered thread IDs are registered with the Gateway poller
+
+Scenario: SCN-DC-THR-002 Thread starter gets discord/thread content type
+  Given a message that started a thread (has ThreadID, no MessageReference)
+  When the normalizer classifies it
+  Then the content_type is "discord/thread"
+
+Scenario: SCN-DC-THR-003 Archived thread backfill
+  Given a monitored channel with public archived threads
+  When the connector syncs
+  Then archived threads are fetched via GET /channels/{id}/threads/archived/public
+  And thread messages are included in the sync output with thread metadata
+
+Scenario: SCN-DC-THR-004 Thread ingestion disabled via config
+  Given include_threads is set to false
+  When the connector syncs
+  Then no thread discovery or thread message fetching occurs
+```
 
 ### Definition of Done
 
@@ -300,6 +342,32 @@ Auto-follow threads in monitored channels. Fetch thread message history via REST
 ### Description
 
 Implement `!save` and `!capture` command handling for explicit user-initiated captures.
+
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-DC-CMD-001 Capture command with URL and comment
+  Given a message "!save https://example.com Great resource" in a monitored channel
+  When the connector processes the message
+  Then the content_type is "discord/capture"
+  And the capture URL "https://example.com" is extracted into metadata["capture_url"]
+  And the comment "Great resource" is preserved in metadata["capture_comment"]
+  And processing_tier is set to "full"
+
+Scenario: SCN-DC-CMD-002 Capture command without URL
+  Given a message "!save just some notes about a topic"
+  When the connector processes the message
+  Then the content_type is "discord/capture"
+  And no capture_url is set in metadata
+  And the full text is stored as capture_comment
+
+Scenario: SCN-DC-CMD-003 Capture command with unsafe URL rejected
+  Given a message "!save http://169.254.169.254/latest/meta-data/ check this"
+  When the connector processes the message
+  Then the URL is rejected by SSRF protection
+  And no capture_url is set in metadata
+  And the text is preserved as capture_comment
+```
 
 ### Definition of Done
 

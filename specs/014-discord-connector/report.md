@@ -831,6 +831,46 @@ All tests are unit-level with httptest mocking. No integration or E2E test suite
 
 ---
 
+### Harden-To-Doc Sweep 2 — 2026-04-21
+
+**Trigger:** `harden` probe via stochastic-quality-sweep
+**Mode:** `harden-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Context
+
+Second hardening pass on the certified Discord connector (147 tests, 43 security tests, 16+ prior sweeps). This pass targets artifact quality: Gherkin scenario coverage, DoD accuracy, and spec/scope gap documentation.
+
+#### Findings (3 artifact-level hardening issues identified)
+
+| # | Finding | Category | Severity | Status |
+|---|---------|----------|----------|--------|
+| H-014-H2-001 | Scopes 5 (Thread Ingestion) and 6 (Bot Command Capture) lack Gherkin BDD scenarios — all other scopes have explicit `Scenario:` blocks with Given/When/Then; these two jump directly from Description to DoD | Missing Gherkin | Medium | Fixed |
+| H-014-H2-002 | Scope 3 DoD claims "8 unit + 4 integration + 2 e2e tests" and Scope 4 DoD claims "6 unit + 3 integration tests" — all tests are unit-level with httptest mocking as confirmed in report.md certification notes; mislabeling creates false impression of live-stack test depth | DoD mislabel | Medium | Fixed |
+| H-014-H2-003 | Spec R-008 lists 6 Gateway events (MESSAGE_CREATE, MESSAGE_UPDATE, MESSAGE_DELETE, CHANNEL_PINS_UPDATE, GUILD_CREATE, THREAD_CREATE) but only MESSAGE_CREATE is implemented — no deferred/future documentation exists in scopes for the unimplemented events | Spec/scope gap | Low | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+
+- `specs/014-discord-connector/scopes.md`:
+  - H-014-H2-001: Added `### Use Cases (Gherkin)` sections to Scope 5 with 4 scenarios (SCN-DC-THR-001 through SCN-DC-THR-004: active thread follow, thread starter classification, archived thread backfill, thread config disable) and Scope 6 with 3 scenarios (SCN-DC-CMD-001 through SCN-DC-CMD-003: URL+comment capture, no-URL capture, SSRF rejection)
+  - H-014-H2-002: Corrected Scope 3 DoD label from "8 unit + 4 integration + 2 e2e tests" to "15+ unit tests pass (all httptest-based; live integration deferred)". Corrected Scope 4 DoD label from "6 unit + 3 integration tests" to "9 unit tests pass (all httptest-based; live integration deferred)"
+  - H-014-H2-003: Added `## Deferred Items` section after Scope Summary table documenting 5 deferred items: MESSAGE_UPDATE, MESSAGE_DELETE, CHANNEL_PINS_UPDATE, GUILD_CREATE event handling, and bot command confirmation response (with note on Hard Constraint contradiction)
+
+#### Validation
+
+```
+$ ./smackerel.sh test unit 2>&1 | grep -E '^(ok|FAIL)' | wc -l
+41
+$ ./smackerel.sh test unit 2>&1 | grep discord
+ok      github.com/smackerel/smackerel/internal/connector/discord       (cached)
+```
+
+All 41 packages pass. Zero FAIL results. No code changes — artifact-only fixes.
+
+---
+
 ### DevOps-To-Doc Sweep — 2026-04-21
 
 **Trigger:** `devops` probe via stochastic-quality-sweep

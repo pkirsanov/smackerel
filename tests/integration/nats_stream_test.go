@@ -244,21 +244,25 @@ func TestNATS_ConsumerReplay_NakRedeliver(t *testing.T) {
 		msg.Nak()
 	}
 
-	// Wait for redelivery
-	time.Sleep(3 * time.Second)
-
-	// Second fetch: should get the same message (redelivered)
-	msgs, err = cons.Fetch(1, jetstream.FetchMaxWait(5*time.Second))
-	if err != nil {
-		t.Fatalf("second fetch: %v", err)
-	}
+	// CHAOS-031-003: Poll for redelivered message instead of hardcoded sleep.
+	// Under load, AckWait timing may vary; polling is resilient.
+	redeliveryDeadline := time.Now().Add(15 * time.Second)
 	received := 0
-	for msg := range msgs.Messages() {
-		if string(msg.Data()) != string(testPayload) {
-			t.Errorf("redelivered message mismatch")
+	for time.Now().Before(redeliveryDeadline) {
+		msgs, err = cons.Fetch(1, jetstream.FetchMaxWait(2*time.Second))
+		if err != nil {
+			t.Fatalf("redeliver fetch: %v", err)
 		}
-		msg.Ack()
-		received++
+		for msg := range msgs.Messages() {
+			if string(msg.Data()) != string(testPayload) {
+				t.Errorf("redelivered message mismatch")
+			}
+			msg.Ack()
+			received++
+		}
+		if received > 0 {
+			break
+		}
 	}
 	if received != 1 {
 		t.Errorf("expected 1 redelivered message, got %d", received)

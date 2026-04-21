@@ -501,3 +501,39 @@ All core 022 resilience features verified present and correct in code:
 - All changes are documentation-only (design.md, scopes.md, report.md, state.json)
 - No functional code changes required — implementation is complete and correct
 - Zero claimed-vs-implemented drift in functional behavior
+
+## Hardening Pass 4 (stochastic sweep — harden-to-doc)
+
+**Date:** 2026-04-21
+**Trigger:** Stochastic quality sweep — harden (child workflow)
+**Scope:** Full Gherkin scenario quality, DoD completeness, test depth, scope coverage
+
+### Probe Summary
+
+Systematic review of all 14 Gherkin scenarios (SCN-022-01 through SCN-022-14), all 4 scopes with DoD items, all test files, and all implementation files touched by this spec.
+
+### Areas Reviewed
+
+| Area | Files Reviewed | Finding |
+|------|----------------|---------|
+| Gherkin scenarios | scopes.md (14 scenarios) | All well-formed with clear Given/When/Then, covering main flows and alternative error paths |
+| DoD items | scopes.md (4 scopes, ~40 DoD items) | All checked [x], consistent with implementation |
+| Capture resilience | capture.go, capture_test.go (16 test functions) | Nil DB, DB unavailable, chaos DB fail during processing, post-processing re-check — comprehensive |
+| ML health cache | search.go, search_test.go (15 test functions) | Zero TTL, concurrent probes coalesced, rapid flapping, cancelled context isolation — comprehensive |
+| Dead-letter routing | subscriber.go, subscriber_test.go, subscriber_lifecycle_test.go (25+ test functions) | Process-first ordering, UTF-8 safe truncation (2-byte, 3-byte CJK, 4-byte emoji), Nak-on-DL-failure, metadata unavailable — comprehensive |
+| Cron concurrency | scheduler.go, jobs.go, scheduler_test.go (10+ test functions) | 14 per-job mutexes, race detector, baseCtx cancellation, bounded Stop — comprehensive |
+| Config validation | config.go, validate_test.go (20+ test functions) | MinConns<=MaxConns cross-check, fail-loud on missing, placeholder rejection — comprehensive |
+| Shutdown ordering | shutdown.go, main_test.go (5 test functions) | Per-step + overall deadline, elapsed logging — comprehensive |
+| Backup script | backup.sh | stderr capture, gzip integrity, trap-based cleanup — comprehensive |
+| NATS DEADLETTER | client.go | LimitsPolicy, 30d MaxAge, 10000 MaxMsgs, FileStorage — matches design contract |
+
+### Findings
+
+**Zero findings.** After 12 previous quality passes (3 harden, 2 gaps, 1 stabilize, 5 improve, 1 reconcile) addressing ~40 findings with adversarial tests, no new weaknesses detected.
+
+### Evidence
+
+- Unit tests: `./smackerel.sh test unit` — all 41 Go packages PASS, 236 Python tests PASS
+- All 14 Gherkin scenarios have corresponding test coverage with adversarial variants
+- All DoD items verified consistent with implementation
+- No drifted artifact counts, no stale mutex/job references, no missing edge cases

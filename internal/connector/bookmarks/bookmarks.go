@@ -103,8 +103,9 @@ func ParseNetscapeHTML(data []byte) ([]Bookmark, error) {
 					Folder: strings.Join(folderStack, "/"),
 				}
 				// Parse ADD_DATE attribute (unix timestamp) when present.
-				// Use the portion of the line around this match for date extraction.
-				if dateMatch := netscapeAddDateRe.FindStringSubmatch(line); len(dateMatch) > 1 {
+				// F-IMP-009-001: Search within this specific <A> tag match (matches[0])
+				// rather than the whole line, so multi-bookmark lines get correct dates.
+				if dateMatch := netscapeAddDateRe.FindStringSubmatch(matches[0]); len(dateMatch) > 1 {
 					if ts, err := strconv.ParseInt(dateMatch[1], 10, 64); err == nil && ts > 0 {
 						b.AddedAt = time.Unix(ts, 0)
 					}

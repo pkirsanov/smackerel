@@ -78,6 +78,49 @@ func TestNormalizeURL_PreservesPath(t *testing.T) {
 	}
 }
 
+// T-IMP-009-001: www. prefix is stripped for consistent dedup across www/non-www variants.
+func TestNormalizeURL_StripWWWPrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "www prefix stripped",
+			in:   "https://www.example.com/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "non-www unchanged",
+			in:   "https://example.com/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "www with path and query",
+			in:   "https://www.example.com/path?id=1",
+			want: "https://example.com/path?id=1",
+		},
+		{
+			name: "www with uppercase host",
+			in:   "https://WWW.Example.COM/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "subdomain starting with www not stripped",
+			in:   "https://www2.example.com/page",
+			want: "https://www2.example.com/page",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeURL(tt.in)
+			if got != tt.want {
+				t.Errorf("NormalizeURL(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 // T-2-05
 func TestNormalizeURL_InvalidURL(t *testing.T) {
 	tests := []struct {

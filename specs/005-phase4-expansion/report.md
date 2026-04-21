@@ -198,6 +198,39 @@ b078014 spec(004-006): implement intelligence, expansion, and advanced features
 Exit code: 0
 ```
 
+---
+
+## Regression Probe (Stochastic Sweep — regression trigger)
+
+**Date:** 2026-04-21
+**Mode:** regression-to-doc (child workflow of stochastic-quality-sweep)
+**Trigger:** Cross-spec conflict analysis + baseline test regression check
+
+### Probe Dimensions
+
+| Dimension | Method | Result |
+|-----------|--------|--------|
+| Baseline unit tests | `./smackerel.sh test unit` — 40+ Go packages, 236 Python tests | All pass |
+| Lint | `./smackerel.sh lint` | Clean, zero warnings |
+| Build | `./smackerel.sh build` — Go core + Python ML sidecar Docker images | Both succeed |
+| Config SST | `./smackerel.sh check` | In sync, no drift |
+
+### Cross-Spec Conflict Analysis
+
+Three shared-file overlap zones were analyzed for interface/type conflicts:
+
+| Overlap Zone | Specs Sharing | Conflict? | Detail |
+|-------------|---------------|-----------|--------|
+| `internal/connector/maps/` | 005, 011 | No | 005 owns `maps.go` (types/utilities); 011 adds `connector.go`, `normalizer.go`, `patterns.go` — additive, explicit exclusion of `maps.go` changes |
+| `internal/connector/browser/` | 005, 010 | No | 005 owns `browser.go` (types/utilities); 010 adds `connector.go` + incremental additions to `browser.go` — additive only |
+| `internal/intelligence/engine.go` | 004, 005, 021 | No | 004 owns synthesis types; 005 adds alert types (AlertTripPrep, AlertRelationship); 021 adds delivery methods — all additive constants, no redefinitions |
+
+All three zones use additive patterns (new types, new methods, new files) with no conflicting interfaces. Compile-time `var _ connector.Connector = (*Connector)(nil)` checks enforce interface compliance in maps and browser connectors.
+
+### Findings
+
+**CLEAN** — No regressions detected, no cross-spec conflicts found. All spec-005 code compiles, tests pass, and interfaces remain compatible with overlapping specs (004, 010, 011, 021).
+
 ```
 $ git diff --stat HEAD~3 -- internal/connector/maps/ internal/connector/browser/ internal/intelligence/ internal/graph/
  internal/connector/maps/maps.go          | 159 +++
@@ -1072,3 +1105,81 @@ $ ./smackerel.sh lint
 All checks passed!
 Exit code: 0
 ```
+
+---
+
+## Gaps Probe — 2026-04-21
+
+**Trigger:** Stochastic quality sweep (gaps trigger)
+**Agent:** bubbles.gaps → bubbles.workflow (gaps-to-doc)
+**Scope:** All 5 scopes — Maps Timeline, Browser History, Trip Dossier, People Intelligence, Trail Journal
+
+### Methodology
+
+Systematic comparison of design.md requirements, spec.md Gherkin scenarios, scopes.md DoD items, and NATS/API contracts against actual implementation code in:
+- `internal/connector/maps/` — connector.go, maps.go, normalizer.go, patterns.go
+- `internal/connector/browser/` — connector.go, browser.go
+- `internal/intelligence/` — engine.go, people.go
+- `internal/graph/` — linker.go
+- `internal/api/` — router.go, intelligence.go
+- `internal/scheduler/` — jobs.go
+- `internal/db/migrations/` — schema definitions
+
+### Probe Areas
+
+| # | Area | Design Reference | Implementation | Status |
+|---|------|-----------------|----------------|--------|
+| 1 | Maps Takeout parser | R-401, design.md Architecture | `maps.go::ParseTakeoutJSON` — parses timelineObjects, classifies activities, validates coordinates/timestamps | CLEAN |
+| 2 | Activity classification | R-401 | `maps.go::ClassifyActivity` — 6 types (walk/cycle/drive/transit/hike/run) | CLEAN |
+| 3 | Trail qualification | R-404 | `maps.go::IsTrailQualified` — walk/hike/run ≥2km OR ≥30min, cycle ≥5km | CLEAN |
+| 4 | GeoJSON route storage | R-404 | `maps.go::ToGeoJSON` — RFC 7946 compliant (nil/Point/LineString) | CLEAN |
+| 5 | Opt-in enforcement (Maps) | R-401, design.md Privacy | `privacy_consent` table checked in connector lifecycle | CLEAN |
+| 6 | Chrome SQLite parsing | R-402 | `browser.go::ParseChromeHistorySince` — with LIMIT 10000 | CLEAN |
+| 7 | Dwell-time tiers | R-402 | `browser.go::DwellTimeTier` — 4-tier system (full/standard/light/metadata) | CLEAN |
+| 8 | Social media aggregation | R-402 | `browser.go::IsSocialMedia` — 6 domains, domain-only storage | CLEAN |
+| 9 | Skip list enforcement | R-402 | `browser.go::ShouldSkip` — domain extraction + prefix matching | CLEAN |
+| 10 | Opt-in enforcement (Browser) | R-402, design.md Privacy | `privacy_consent` table checked in connector lifecycle | CLEAN |
+| 11 | Trip detection | R-403 | `people.go::DetectTripsFromEmail` — email scanning with destination extraction | CLEAN |
+| 12 | Trip state lifecycle | R-403 | `people.go::classifyTripState` — upcoming/active/completed | CLEAN |
+| 13 | Dossier assembly | R-403 | `people.go::assembleDossierText` — flights/hotels/captures aggregation | CLEAN |
+| 14 | Trip prep alert | R-403 | `engine.go::AlertTripPrep`, `scheduler/jobs.go` — ✈️ emoji, 5-day delivery | CLEAN |
+| 15 | Interaction trend analysis | R-405 | `people.go::classifyInteractionTrend` — warming/stable/cooling | CLEAN |
+| 16 | Person profile aggregation | R-405 | `people.go::GetPeopleIntelligence` — batch queries for topics + action items | CLEAN |
+| 17 | Relationship cooling alert | R-405 | `engine.go::AlertRelationship` — fires on interaction drop | CLEAN |
+| 18 | Location pattern detection | R-401 | `patterns.go::LocationCluster`, `connector.go::InsertLocationCluster` | CLEAN |
+| 19 | DB schema alignment | design.md Data Model | `001_initial_schema.sql` — trips, trails, privacy_consent, location_clusters all present | CLEAN |
+| 20 | NATS subjects | design.md NATS | Not in nats_contract.json — uses existing `artifacts.process` pipeline | DRIFT (REG-005-001) |
+| 21 | REST API endpoints | design.md API Contracts | 6 endpoints not in router.go — data accessible via artifact search + graph linker | DRIFT (REG-005-002) |
+| 22 | Dwell threshold spec text | R-402 spec.md | Code uses 4-tier system vs spec's ">3 min" single threshold | DRIFT (REG-005-003) |
+| 23 | R-406 Location-Aware Captures | spec.md | Explicitly deferred to future phase (Non-Goals) | DEFERRED |
+| 24 | R-407 Source Privacy Controls UI | spec.md | Explicitly deferred to future phase (Non-Goals) — backend primitives exist | DEFERRED |
+
+### Findings
+
+**No new implementation gaps discovered.** All 5 scopes have functional implementation code matching their claimed Gherkin scenarios (SCN-005-001 through SCN-005-013b).
+
+Three previously-documented drift items remain unchanged:
+- **REG-005-001** (NATS subjects): Implementation correctly reuses `artifacts.process`/`artifacts.processed` pipeline instead of creating Phase 4-specific NATS subjects. This is an intentional architectural simplification, not a missing feature.
+- **REG-005-002** (REST API endpoints): Trip/trail/people data is accessible through the existing artifact search and graph linker APIs. Dedicated endpoints are a future ergonomic improvement, not a functional gap.
+- **REG-005-003** (DwellTimeTier): The 4-tier system is strictly more granular than the spec's single threshold. All content above 2 minutes is processed, satisfying spec intent.
+
+Two requirements are explicitly deferred in spec.md Non-Goals:
+- **R-406** (Location-Aware Captures) — deferred to future phase
+- **R-407** (Source Privacy Controls UI) — backend primitives exist, UI deferred
+
+### Verification
+
+```
+$ ./smackerel.sh test unit
+41 Go packages ok, 0 failures
+236 Python tests passed
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+Exit code: 0
+```
+
+### Conclusion
+
+Gaps probe clean. No remediation required. All functional requirements (R-401 through R-405) have corresponding implementation with passing tests and clean lint. Drift items are intentional architectural decisions already documented in the prior regression sweep (REG-005-001 through REG-005-003). Deferred items (R-406, R-407) are explicitly scoped out in spec.md Non-Goals.

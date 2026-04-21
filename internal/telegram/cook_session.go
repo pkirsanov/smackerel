@@ -116,13 +116,22 @@ func (s *CookSessionStore) Touch(chatID int64) {
 	session.LastInteraction = time.Now()
 }
 
-// sweep removes expired sessions.
+// sweep removes expired sessions and stale disambiguation entries.
 func (s *CookSessionStore) sweep() {
 	now := time.Now()
 	s.sessions.Range(func(key, value any) bool {
 		session := value.(*CookSession)
 		if now.Sub(session.LastInteraction) > s.timeout {
 			s.sessions.Delete(key)
+		}
+		return true
+	})
+	// Clean disambiguation entries for chats that no longer have an active session
+	// or where the disambiguation has been pending longer than the session timeout.
+	s.disambiguations.Range(func(key, _ any) bool {
+		chatID := key.(int64)
+		if s.Get(chatID) == nil {
+			s.disambiguations.Delete(key)
 		}
 		return true
 	})

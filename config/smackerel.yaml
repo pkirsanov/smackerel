@@ -128,6 +128,15 @@ expenses:
     needs_review_limit: 5
     missing_receipt_lookback_days: 35
 
+annotations:
+  matview_refresh_timeout_seconds: 10
+  history_default_limit: 50
+  history_max_limit: 100
+  relevance_boost:
+    rating_max: 0.05       # max boost for rating 5
+    usage_max: 0.03        # max boost capped at 10 uses
+    usage_cap: 10          # number of uses for full usage boost
+
 connectors:
   imap:
     sync_schedule: "*/15 * * * *" # Every 15 minutes (spec R-202)
