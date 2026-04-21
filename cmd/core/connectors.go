@@ -164,6 +164,28 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 		}
 	}
 
+	// Auto-start GuestHost connector (API key auth)
+	if cfg.GuestHostEnabled {
+		ghCfg := connector.ConnectorConfig{
+			AuthType:     "token",
+			Credentials:  map[string]string{"api_key": cfg.GuestHostAPIKey},
+			Enabled:      true,
+			SyncSchedule: cfg.GuestHostSyncSchedule,
+			SourceConfig: map[string]interface{}{
+				"base_url":    cfg.GuestHostBaseURL,
+				"api_key":     cfg.GuestHostAPIKey,
+				"event_types": cfg.GuestHostEventTypes,
+			},
+		}
+		if err := guesthostConn.Connect(ctx, ghCfg); err == nil {
+			svc.supervisor.SetConfig("guesthost", ghCfg)
+			svc.supervisor.StartConnector(ctx, "guesthost")
+			slog.Info("guesthost connector started")
+		} else {
+			slog.Warn("guesthost connector failed to start", "error", err)
+		}
+	}
+
 	// Auto-start Discord connector (token-based)
 	if cfg.DiscordEnabled {
 		discordCfg := connector.ConnectorConfig{

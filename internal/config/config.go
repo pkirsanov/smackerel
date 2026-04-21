@@ -197,6 +197,13 @@ type Config struct {
 	HospitableTierReservations    string
 	HospitableTierProperties      string
 
+	// GuestHost connector (SST-compliant — from smackerel.yaml via config generate)
+	GuestHostEnabled      bool
+	GuestHostBaseURL      string
+	GuestHostAPIKey       string
+	GuestHostSyncSchedule string
+	GuestHostEventTypes   string
+
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
 }
@@ -292,6 +299,13 @@ func Load() (*Config, error) {
 		IMAPSyncSchedule:              os.Getenv("IMAP_SYNC_SCHEDULE"),
 		CalDAVSyncSchedule:            os.Getenv("CALDAV_SYNC_SCHEDULE"),
 		YouTubeSyncSchedule:           os.Getenv("YOUTUBE_SYNC_SCHEDULE"),
+
+		// GuestHost connector
+		GuestHostEnabled:      os.Getenv("GUESTHOST_ENABLED") == "true",
+		GuestHostBaseURL:      os.Getenv("GUESTHOST_BASE_URL"),
+		GuestHostAPIKey:       os.Getenv("GUESTHOST_API_KEY"),
+		GuestHostSyncSchedule: os.Getenv("GUESTHOST_SYNC_SCHEDULE"),
+		GuestHostEventTypes:   os.Getenv("GUESTHOST_EVENT_TYPES"),
 
 		// Hospitable connector
 		HospitableEnabled:             os.Getenv("HOSPITABLE_ENABLED") == "true",

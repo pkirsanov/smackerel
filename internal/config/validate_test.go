@@ -815,3 +815,50 @@ func TestLoad_BookmarksMinURLLength_MissingEnv(t *testing.T) {
 		t.Errorf("expected BookmarksMinURLLength=0 when env is unset, got %d", cfg.BookmarksMinURLLength)
 	}
 }
+
+func TestLoad_GuestHostConnectorFields(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("GUESTHOST_ENABLED", "true")
+	t.Setenv("GUESTHOST_BASE_URL", "https://myhost.example.com")
+	t.Setenv("GUESTHOST_API_KEY", "tkn_test123")
+	t.Setenv("GUESTHOST_SYNC_SCHEDULE", "*/5 * * * *")
+	t.Setenv("GUESTHOST_EVENT_TYPES", "booking.created,review.received")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.GuestHostEnabled {
+		t.Error("expected GuestHostEnabled=true")
+	}
+	if cfg.GuestHostBaseURL != "https://myhost.example.com" {
+		t.Errorf("expected GuestHostBaseURL, got %q", cfg.GuestHostBaseURL)
+	}
+	if cfg.GuestHostAPIKey != "tkn_test123" {
+		t.Errorf("expected GuestHostAPIKey, got %q", cfg.GuestHostAPIKey)
+	}
+	if cfg.GuestHostSyncSchedule != "*/5 * * * *" {
+		t.Errorf("expected GuestHostSyncSchedule, got %q", cfg.GuestHostSyncSchedule)
+	}
+	if cfg.GuestHostEventTypes != "booking.created,review.received" {
+		t.Errorf("expected GuestHostEventTypes, got %q", cfg.GuestHostEventTypes)
+	}
+}
+
+func TestLoad_GuestHostConnectorFieldsOptional(t *testing.T) {
+	setRequiredEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.GuestHostEnabled {
+		t.Error("expected GuestHostEnabled=false when GUESTHOST_ENABLED is unset")
+	}
+	if cfg.GuestHostBaseURL != "" {
+		t.Errorf("expected empty GuestHostBaseURL, got %q", cfg.GuestHostBaseURL)
+	}
+	if cfg.GuestHostAPIKey != "" {
+		t.Errorf("expected empty GuestHostAPIKey, got %q", cfg.GuestHostAPIKey)
+	}
+}

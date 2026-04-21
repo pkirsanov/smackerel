@@ -204,13 +204,13 @@ r.Group(func(r chi.Router) {
 ```go
 import "github.com/go-chi/httprate"
 
-// In NewRouter, wrap the OAuth start endpoint:
+// In NewRouter, wrap the OAuth start and callback endpoints:
 r.Group(func(r chi.Router) {
     r.Use(httprate.LimitByIP(10, 1*time.Minute))
     r.Get("/auth/{provider}/start", oh.StartHandler)
+    r.Get("/auth/{provider}/callback", oh.CallbackHandler)
 })
-// Callback stays outside rate-limit group (browser redirects, low abuse vector)
-r.Get("/auth/{provider}/callback", oh.CallbackHandler)
+// Both endpoints rate-limited per SEC-SWEEP-001 (callback DoS via log flooding)
 ```
 
 **Dependency addition:** `go get github.com/go-chi/httprate`

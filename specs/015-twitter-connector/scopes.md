@@ -92,7 +92,7 @@ Scenario: SCN-TW-ARC-002 Parse like.js and bookmark.js
 - [x] Missing optional fields (entities, media) handled gracefully
   > Evidence: `twitter.go::classifyTweet()` and `normalizeTweet()` use zero-value checks for entities/URLs/hashtags
 - [x] Multiple `partN` files supported (tweets.js, tweet-part1.js, etc.)
-  > Evidence: `twitter.go::syncArchive()` reads from configured archive_dir data/ subdirectory
+  > Evidence: `twitter.go::findArchiveFiles()` globs for `tweets.js` + `tweet-part*.js` in data/ with CWE-22 path traversal protection; `twitter_test.go::TestSyncArchive_MultiPartFiles` verifies both parts are parsed and produce artifacts
 - [x] 12 unit tests pass with test fixtures covering all data formats
   > Evidence: `twitter_test.go` — TestParseTweetsJS, TestParseTweetsJS_InvalidJSON, TestBuildThreads, TestClassifyTweet (4 cases), TestAssignTweetTier (7 cases), TestNormalizeTweet, TestParseTweetTime (3 cases); `./smackerel.sh test unit` passes
 
@@ -135,7 +135,7 @@ Scenario: SCN-TW-THR-002 Ignore replies to other users
 - [x] `BuildThreads()` detects self-reply chains by matching author
   > Evidence: `twitter.go::buildThreads()` groups tweets by InReplyToStatusID into reply chains; `twitter_test.go::TestBuildThreads` verifies 3-tweet thread with root_id="100"
 - [x] Thread trees built with correct order (root → replies)
-  > Evidence: `twitter.go::buildThreads()` returns Thread structs with RootID and ordered Tweets slice; TestBuildThreads verifies 3 tweets in order
+  > Evidence: `twitter.go::buildThreads()` returns Thread structs with RootID, ordered Tweets slice, and Position map (tweet ID → 0-based index); TestBuildThreads verifies 3 tweets in order; TestNormalizeTweet_ThreadPosition verifies position metadata
 - [x] Standalone tweets (no thread) are not wrapped in thread objects
   > Evidence: `twitter.go::buildThreads()` only creates Thread for chains of 2+ tweets; standalone tweet "200" excluded in TestBuildThreads
 - [x] Incomplete threads (missing intermediate tweets) handled gracefully
@@ -160,11 +160,11 @@ Build the normalizer (`normalizer.go`) that converts parsed tweets and thread me
 - [x] `NormalizeTweet()` converts `ArchiveTweet` to `connector.RawArtifact`
   > Evidence: `twitter.go::normalizeTweet()` creates RawArtifact with SourceID="twitter", SourceRef=tweet ID; `twitter_test.go::TestNormalizeTweet` verifies
 - [x] All content types per R-004 are classified correctly
-  > Evidence: `twitter.go::classifyTweet()` — tweet/text, tweet/retweet, tweet/link, tweet/thread; `twitter_test.go::TestClassifyTweet` — 4 cases
+  > Evidence: `twitter.go::classifyTweet()` — tweet/text, tweet/retweet, tweet/quote, tweet/link, tweet/image, tweet/video, tweet/thread; `twitter_test.go::TestClassifyTweet` — 4 base cases + TestClassifyTweet_Quote + TestClassifyTweet_QuoteOverridesLink
 - [x] All metadata fields per R-005 are populated
   > Evidence: `twitter.go::normalizeTweet()` populates is_bookmarked, is_liked, hashtags, mentions, favorite_count, retweet_count, url_count
 - [x] Thread metadata (thread_id, thread_position, is_thread) added for threaded tweets
-  > Evidence: `twitter.go::normalizeTweet()` adds thread metadata when Thread parameter is non-nil; TestNormalizeTweet verifies
+  > Evidence: `twitter.go::normalizeTweet()` adds is_thread, thread_id, and thread_position (from Thread.Position map) when Thread parameter is non-nil; TestNormalizeTweet verifies is_thread/thread_id; TestNormalizeTweet_ThreadPosition verifies position=0 for root and position=2 for third tweet
 - [x] Processing tier assignment matches R-007 (bookmarked/liked→full, has URL→full, etc.)
   > Evidence: `twitter.go::assignTweetTier()` — bookmarked/liked/thread/URL→full, high-engagement→standard, RT→light, short→metadata; TestAssignTweetTier — 7 cases
 - [x] Tweet URL constructed as `https://x.com/i/status/{id}`
@@ -238,13 +238,13 @@ Extract URLs from tweet entities and create child artifacts for content extracti
 - [x] URLs extracted from `tweet.Entities.URLs[].ExpandedURL`
   > Evidence: `twitter.go::TweetEntities.URLs` struct with ExpandedURL field; classifyTweet() detects "tweet/link" when URLs present; TestClassifyTweet verifies
 - [x] Child artifact created for each unique URL
-  > Evidence: `twitter.go::normalizeTweet()` creates RawArtifact with URL content from tweet entities
+  > Evidence: `twitter.go::syncArchive()` creates child RawArtifact per unique URL with ContentType="link", parent_tweet_id, and edge_type="CONTAINS_LINK" metadata; `twitter_test.go::TestSyncArchive_FullRoundTrip` verifies child artifact creation; `TestSyncArchive_ChildURLDedup` verifies dedup
 - [x] Child linked to parent tweet via CONTAINS_LINK metadata
-  > Evidence: `twitter.go::normalizeTweet()` includes url_count and entity URLs in metadata
+  > Evidence: `twitter.go::syncArchive()` sets metadata edge_type="CONTAINS_LINK" and parent_tweet_id on each child URL artifact; TestSyncArchive_FullRoundTrip verifies
 - [x] YouTube, GitHub, and article URLs detected for specialized routing
   > Evidence: `twitter.go::classifyTweet()` returns "tweet/link" for URL-bearing tweets; processing tier "full" assigned
 - [x] Duplicate URLs (same URL in multiple tweets) not duplicated in pipeline
-  > Evidence: `twitter.go::syncArchive()` uses cursor-based dedup with tweet ID uniqueness
+  > Evidence: `twitter.go::syncArchive()` uses seenURLs map for URL-level dedup; `twitter_test.go::TestSyncArchive_ChildURLDedup` verifies 2 tweets with same URL produce only 1 child artifact
 - [x] 6 unit + 3 integration + 1 e2e tests pass
   > Evidence: `twitter_test.go` full suite; `./smackerel.sh test unit` passes
 
