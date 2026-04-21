@@ -339,3 +339,46 @@ env_file drift guard: OK
 ### Completion Statement
 
 Simplify probe complete. One finding (consumer loop duplication) identified and fixed. Code quality is high — well-separated packages, consistent patterns, proper error handling, config SST compliance. Build, all tests, and lint pass after fix.
+
+---
+
+## Harden Probe (Stochastic Quality Sweep) — 2026-04-21
+
+### Trigger
+Child workflow of stochastic-quality-sweep, mode `harden-to-doc`. Probed Gherkin coverage, DoD rigor, and test depth for all 8 scopes.
+
+### Findings
+
+| # | Severity | Finding | Resolution |
+|---|----------|---------|------------|
+| H1 | HIGH | Lint tests (T5-01 through T5-09) are shape-only — manually construct `LintFinding` structs and check fields. No test calls `checkOrphanConcepts()`, `RunLint()`, `retrySynthesisBacklog()`, or any other lint function. Tests pass even if all lint logic is deleted. | Root cause: lint check functions use direct `l.pool.Query()` (concrete pgxpool dependency), making them inherently integration-test-only. Fixed: (1) Updated `scenario-manifest.json` to mark SCN-025-12 through SCN-025-15 as `requiredTestType: "integration"` with `liveSystem: true`, (2) renamed test comments to transparently document shape-only scope, (3) added `TestRetrySynthesisDecisionLogic` (8-case table-driven test covering retry-vs-abandon boundary), (4) added `TestRunLint_NilPool` which exposed a nil-pool panic bug, (5) added `TestLintFindingSeverityValues` (canonical severity mapping for all 6 checks). |
+| H2 | HIGH | `RunLint()` panics on nil pool instead of returning an error — discovered by `TestRunLint_NilPool`. | Fixed: added `if l.pool == nil` guard at top of `RunLint()` returning `fmt.Errorf("lint: database pool is nil")`. |
+| H3 | MEDIUM | `scenario-manifest.json` had ~5KB of duplicate trailing content (malformed JSON after the closing `}`). Second block used `"type"` field instead of `"requiredTestType"` and lacked `linkedTests`/`evidenceRefs`. | Fixed: removed trailing duplicate content, file is now valid JSON with 8 scopes. |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/knowledge/lint.go` | Added nil-pool guard in `RunLint()` |
+| `internal/knowledge/lint_test.go` | Updated test comments for transparency; added `TestRetrySynthesisDecisionLogic`, `TestRunLint_NilPool`, `TestLintFindingSeverityValues` |
+| `specs/025-knowledge-synthesis-layer/scenario-manifest.json` | Fixed lint scenario test types to `integration`; removed ~5KB duplicate trailing content; valid JSON |
+| `specs/025-knowledge-synthesis-layer/report.md` | Added this harden probe report |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/knowledge  0.015s
+41 Go packages ok, 0 FAIL
+236 Python tests passed, 3 warnings
+$ ./smackerel.sh build
+smackerel-core Built, smackerel-ml Built
+```
+
+### Remaining Gap
+
+Lint check functions (`checkOrphanConcepts`, `checkContradictions`, `checkStaleKnowledge`, `checkSynthesisBacklog`, `checkWeakEntities`, `checkUnreferencedClaims`) and `retrySynthesisBacklog` use direct SQL (`l.pool.Query`) and NATS (`l.nats.Publish`) — they require a live PostgreSQL + NATS stack for functional testing. The scenario-manifest now correctly labels these as `requiredTestType: "integration"`. Integration test scaffolds exist at `tests/integration/knowledge_lint_test.go` but require `./smackerel.sh up` for execution.
+
+### Completion Statement
+
+Harden probe complete. 3 findings identified and fixed: lint test depth gap (correctly reclassified as integration, added decision-logic unit tests), nil-pool panic bug (guarded), and malformed manifest (cleaned). All unit tests and build pass.

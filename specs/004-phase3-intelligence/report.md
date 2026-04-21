@@ -835,3 +835,55 @@ Config is in sync with SST
 $ ./smackerel.sh lint
 All checks passed! Exit code: 0
 ```
+
+---
+
+## Hardening Pass — 2026-04-21 (Stochastic Sweep Child)
+
+**Trigger:** Stochastic quality sweep round (harden-to-doc)
+**Focus:** Re-probe Gherkin scenario coverage, DoD evidence accuracy, test depth for intelligence layer after all prior sweep rounds
+
+### Probe Methodology
+
+Full audit of all 6 scopes (27 Gherkin scenarios SCN-004-001 through SCN-004-018b) against:
+1. Actual test functions in `engine_test.go` (140 tests), `synthesis_test.go`, `alerts_test.go`, `resurface_test.go`, `briefs_test.go`, `generator_test.go`
+2. Pure-function behavioral coverage (`assembleBriefText`, `assembleWeeklySynthesisText`, `synthesisConfidence`)
+3. Validation and error-path coverage for all Engine methods
+4. DoD evidence claims vs. actual code state
+
+### Findings
+
+**No actionable findings.** The spec is clean after 6 prior quality sweep rounds (HDN-004, TST-004, RGR-004, SEC-004, SIMP-004, IMP-R01).
+
+### Coverage Summary
+
+| Category | Status | Detail |
+|----------|--------|--------|
+| Gherkin ↔ Test mapping | Complete | All 27 scenarios mapped to structural or behavioral tests appropriate to their type |
+| Pure function tests | Comprehensive | `synthesisConfidence` (exhaustive property testing, monotonicity, bounds, zero/negative guards), `assembleWeeklySynthesisText` (all 6 section names, ordering, partial data, word count, arrow symbols, confidence formatting), `assembleBriefText` (full context, new contact, shared topics, pending items, mixed attendees, no attendees) |
+| Validation tests | Comprehensive | All Engine methods tested for nil pool, empty ID, invalid type, invalid priority, past snooze time, validation ordering, context cancellation |
+| Security hardening | In place | Control char sanitization (SEC-021-002/CWE-116), LIKE injection prevention, title/body truncation caps, dead-letter age limit (CWE-770), SSRF guards in ML sidecar |
+| DoD evidence accuracy | Honest | Evidence correctly distinguishes structural vs. behavioral coverage; acknowledged gaps (SCN-004-006 auto-resolve, SCN-004-007b false positive rejection) are DB-dependent integration territory |
+| Prior fixes verified | All present | RGR-004-001 cross-domain filter, HDN-004-001 dedup NOT EXISTS, HDN-004-002 type validation, HDN-004-005 250-word cap, IMP-R01-F1 calendarDaysBetween, IMP-R01-F2 context checks |
+
+### Test Suite Health
+
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence    (cached)
+ok  github.com/smackerel/smackerel/internal/digest          (cached)
+ok  github.com/smackerel/smackerel/internal/scheduler       (cached)
+41 Go packages pass, 0 failures
+236 Python tests passed
+Exit code: 0
+
+$ ./smackerel.sh lint
+Exit code: 0
+
+$ ./smackerel.sh check
+Exit code: 0
+```
+
+### Conclusion
+
+Clean probe — no new hardening findings. The intelligence layer's test depth and input validation are comprehensive for the unit-testable surface. Remaining untested paths (DB-dependent behavioral scenarios for alert batching, commitment auto-resolve, and full synthesis pipeline) are integration-test territory and correctly documented as such in the DoD evidence.
