@@ -172,6 +172,13 @@ if [ "$check_only" = true ]; then
     printf '%s\n' "README generated workflow mode count appears stale. Run bubbles/scripts/generate-framework-stats.sh"
     exit 1
   fi
+  html_file="$repo_root/docs/its-not-rocket-appliances.html"
+  if [ -f "$html_file" ]; then
+    if ! grep -q "v$version" "$html_file"; then
+      printf '%s\n' "HTML cheatsheet version is stale (expected v$version). Run bubbles/scripts/generate-framework-stats.sh"
+      exit 1
+    fi
+  fi
   printf '%s\n' "Framework stats are current: $summary_line (v$version)"
   exit 0
 fi
