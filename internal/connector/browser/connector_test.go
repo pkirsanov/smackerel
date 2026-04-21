@@ -1883,7 +1883,7 @@ func TestParseBrowserConfig_NegativeDurations(t *testing.T) {
 		{
 			name: "negative social_media_individual_threshold",
 			sc: map[string]interface{}{
-				"history_path":                       "/tmp/test",
+				"history_path":                      "/tmp/test",
 				"social_media_individual_threshold": "-5m",
 			},
 			errContains: "social_media_individual_threshold",
