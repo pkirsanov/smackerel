@@ -234,3 +234,34 @@ func TestEnforceTokenCap_PreservesNewest(t *testing.T) {
 		t.Errorf("newest claim should be preserved")
 	}
 }
+
+// --- Chaos regression tests (C-025-C001, C-025-C003) ---
+
+// C-025-C003: ErrArtifactNotFound must be a sentinel error so callers can
+// distinguish permanent not-found from transient DB errors.
+// Regression: If this sentinel is removed, handleSynthesized Naks on every
+// artifact-not-found, causing 5 wasted redeliveries per deleted artifact.
+func TestErrArtifactNotFound_IsSentinel(t *testing.T) {
+	if ErrArtifactNotFound == nil {
+		t.Fatal("ErrArtifactNotFound must not be nil")
+	}
+	msg := ErrArtifactNotFound.Error()
+	if msg == "" {
+		t.Fatal("ErrArtifactNotFound must have a message")
+	}
+	// Must NOT wrap another error — it's a root sentinel
+	if msg != "artifact not found" {
+		t.Errorf("unexpected ErrArtifactNotFound message: %q", msg)
+	}
+}
+
+// C-025-C001: UpdateArtifactSynthesisStatusInTx must exist and accept a pgx.Tx.
+// Regression: If removed, the synthesis subscriber falls back to updating status
+// outside the transaction, re-introducing the partial-commit race where knowledge
+// data is committed but artifact status stays "pending".
+func TestUpdateArtifactSynthesisStatusInTx_Exists(t *testing.T) {
+	ks := NewKnowledgeStore(nil)
+	// Verify the method exists by taking a reference.
+	// Cannot call it with nil pool, but compile-time check is sufficient.
+	_ = ks.UpdateArtifactSynthesisStatusInTx
+}

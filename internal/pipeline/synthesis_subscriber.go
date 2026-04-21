@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -192,6 +193,14 @@ func (s *SynthesisResultSubscriber) handleSynthesized(ctx context.Context, msg j
 	// Load artifact title and source type for citation creation
 	artifact, err := s.KnowledgeStore.GetArtifactForSynthesis(ctx, resp.ArtifactID)
 	if err != nil {
+		// Permanent error (artifact deleted/invalid) — Ack to avoid poison message loop (C-025-C003)
+		if errors.Is(err, knowledge.ErrArtifactNotFound) {
+			slog.Warn("artifact not found for synthesis — acking to prevent redelivery loop",
+				"artifact_id", resp.ArtifactID,
+			)
+			_ = msg.Ack()
+			return
+		}
 		slog.Error("failed to load artifact for knowledge update",
 			"artifact_id", resp.ArtifactID,
 			"error", err,
@@ -200,7 +209,7 @@ func (s *SynthesisResultSubscriber) handleSynthesized(ctx context.Context, msg j
 		return
 	}
 
-	// Transactional knowledge update
+	// Transactional knowledge update (includes status update — C-025-C001)
 	conceptIDs, err := s.applyKnowledgeUpdate(ctx, &resp, artifact)
 	if err != nil {
 		slog.Error("knowledge update failed",
@@ -209,14 +218,6 @@ func (s *SynthesisResultSubscriber) handleSynthesized(ctx context.Context, msg j
 		)
 		_ = msg.Nak()
 		return
-	}
-
-	// Mark artifact synthesis as completed
-	if err := s.KnowledgeStore.UpdateArtifactSynthesisStatus(ctx, resp.ArtifactID, "completed", ""); err != nil {
-		slog.Error("failed to update synthesis status on success",
-			"artifact_id", resp.ArtifactID,
-			"error", err,
-		)
 	}
 
 	// Best-effort cross-source connection detection after successful synthesis
@@ -329,6 +330,13 @@ func (s *SynthesisResultSubscriber) applyKnowledgeUpdate(ctx context.Context, re
 		}); err != nil {
 			slog.Debug("contradiction edge creation failed", "error", err)
 		}
+	}
+
+	// Mark artifact synthesis as completed within the same transaction (C-025-C001).
+	// This prevents partial-commit races where knowledge data is written but the artifact
+	// status stays "pending", causing the linter to re-trigger duplicate synthesis.
+	if err := s.KnowledgeStore.UpdateArtifactSynthesisStatusInTx(ctx, tx, resp.ArtifactID, "completed", ""); err != nil {
+		return nil, fmt.Errorf("update artifact synthesis status: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
