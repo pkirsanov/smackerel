@@ -77,6 +77,7 @@ echo
 
 run_check "Framework validation" bash "$SCRIPT_DIR/framework-validate.sh"
 run_check "Capability ledger docs freshness" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" --check
+run_check "Framework stats freshness" sh "$SCRIPT_DIR/generate-framework-stats.sh" --check
 run_check "Release manifest freshness" bash "$SCRIPT_DIR/generate-release-manifest.sh" --check
 run_check "Required release files" check_required_files
 run_check "No stray temp or backup files" check_stray_release_files
