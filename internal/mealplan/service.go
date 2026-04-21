@@ -2,6 +2,7 @@ package mealplan
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -30,9 +31,12 @@ func NewService(store PlanDataStore, mealTypes []string, defaultServings int, ca
 	}
 }
 
-// generateID creates a time-sortable unique identifier.
+// generateID creates a unique identifier with a prefix.
+// Uses timestamp + random suffix to avoid collisions under concurrent access.
 func generateID(prefix string) string {
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%s-%d-%x", prefix, time.Now().UnixNano(), b)
 }
 
 // CreatePlan creates a new draft meal plan.
@@ -230,7 +234,12 @@ func (s *Service) UpdateSlot(ctx context.Context, planID, slotID string, recipeA
 // DeleteSlot removes a slot from a plan.
 func (s *Service) DeleteSlot(ctx context.Context, planID, slotID string) error {
 	if err := s.Store.DeleteSlot(ctx, planID, slotID); err != nil {
-		return &ServiceError{Code: "MEAL_PLAN_SLOT_NOT_FOUND", Message: err.Error(), Status: 404}
+		// Store.DeleteSlot returns a formatted "slot not found" message for
+		// missing rows. Wrap only that case as a 404; propagate other errors.
+		if strings.Contains(err.Error(), "slot not found") {
+			return &ServiceError{Code: "MEAL_PLAN_SLOT_NOT_FOUND", Message: err.Error(), Status: 404}
+		}
+		return fmt.Errorf("delete slot: %w", err)
 	}
 	_ = s.Store.MarkPlanUpdated(ctx, planID)
 	return nil

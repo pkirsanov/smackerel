@@ -18,6 +18,7 @@ func TestMetricsRegistered(t *testing.T) {
 	DomainExtraction.WithLabelValues("_test_reg", "ok")
 	ConnectorSync.WithLabelValues("_test_reg", "success")
 	NATSDeadLetter.WithLabelValues("_test_reg")
+	DigestGeneration.WithLabelValues("_test_reg")
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -32,6 +33,7 @@ func TestMetricsRegistered(t *testing.T) {
 		"smackerel_connector_sync_total":     false,
 		"smackerel_nats_deadletter_total":    false,
 		"smackerel_db_connections_active":    false,
+		"smackerel_digest_generation_total":  false,
 	}
 
 	for _, fam := range families {

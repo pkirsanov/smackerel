@@ -22,8 +22,14 @@ func TestParseDomainIntent_RecipeMultipleIngredients(t *testing.T) {
 	if intent == nil {
 		t.Fatal("expected recipe intent")
 	}
-	if len(intent.Attributes) < 1 {
-		t.Errorf("expected at least 1 ingredient, got %v", intent.Attributes)
+	if len(intent.Attributes) != 2 {
+		t.Fatalf("expected 2 ingredients, got %d: %v", len(intent.Attributes), intent.Attributes)
+	}
+	if intent.Attributes[0] != "chicken" {
+		t.Errorf("expected first ingredient 'chicken', got %q", intent.Attributes[0])
+	}
+	if intent.Attributes[1] != "garlic" {
+		t.Errorf("expected second ingredient 'garlic', got %q", intent.Attributes[1])
 	}
 }
 
@@ -104,5 +110,34 @@ func TestParseDomainIntent_DishKeyword(t *testing.T) {
 	}
 	if intent.Domain != "recipe" {
 		t.Errorf("expected domain recipe, got %s", intent.Domain)
+	}
+}
+
+func TestParseDomainIntent_LemonAndGarlic(t *testing.T) {
+	intent := parseDomainIntent("recipes with lemon and garlic")
+	if intent == nil {
+		t.Fatal("expected recipe intent")
+	}
+	if len(intent.Attributes) != 2 {
+		t.Fatalf("expected 2 ingredients, got %d: %v", len(intent.Attributes), intent.Attributes)
+	}
+	if intent.Attributes[0] != "lemon" {
+		t.Errorf("expected first ingredient 'lemon', got %q", intent.Attributes[0])
+	}
+	if intent.Attributes[1] != "garlic" {
+		t.Errorf("expected second ingredient 'garlic', got %q", intent.Attributes[1])
+	}
+}
+
+func TestParseDomainIntent_DishesWithMushrooms(t *testing.T) {
+	intent := parseDomainIntent("dishes with mushrooms")
+	if intent == nil {
+		t.Fatal("expected recipe intent for 'dishes with mushrooms'")
+	}
+	if intent.Domain != "recipe" {
+		t.Errorf("expected domain recipe, got %s", intent.Domain)
+	}
+	if len(intent.Attributes) != 1 || intent.Attributes[0] != "mushrooms" {
+		t.Errorf("expected [mushrooms], got %v", intent.Attributes)
 	}
 }

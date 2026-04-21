@@ -83,3 +83,69 @@ Spec 026 introduces domain-specific structured extraction as an additional LLM p
 ### Conclusion
 
 **No actionable security vulnerabilities found.** The domain extraction implementation follows security best practices: parameterized SQL, bounded inputs, fail-open with logging, internal-only NATS triggering, and proper auth on API surfaces. The two informational notes are defense-in-depth hardening opportunities, not exploitable vulnerabilities.
+
+---
+
+## Security Re-Scan — 2026-04-21 (stochastic-quality-sweep round)
+
+**Trigger:** `security` via `security-to-doc` child workflow
+**Verdict:** Clean — no new findings.
+
+Re-scanned all domain extraction surfaces against OWASP Top 10. Confirmed:
+- All SQL queries remain parameterized (`$N` placeholders with args arrays)
+- `LoadRegistry()` path traversal guard intact (`os.ReadDir` + `filepath.Join`)
+- NATS subjects are constants (`SubjectDomainExtract`, `SubjectDomainExtracted`)
+- Content size bounds enforced (`maxDomainContentChars`, `MaxNATSMessageSize`)
+- LLM timeout at 30s, retry cap at 2
+- No new dependencies or code changes since last scan
+
+CLI verification:
+- `./smackerel.sh check` — passed (config in sync, env_file drift guard OK)
+- `./smackerel.sh lint` — passed (Go + Python clean)
+- `./smackerel.sh test unit` — 236 passed, 0 failed
+
+---
+
+## Gaps Analysis & Fix — 2026-04-21 (stochastic-quality-sweep round)
+
+**Trigger:** `gaps` via `gaps-to-doc` child workflow
+**Scope:** All 9 scopes — spec/design/scopes vs actual implementation comparison.
+
+### Findings
+
+| # | Gap | Severity | Scope | Status |
+|---|-----|----------|-------|--------|
+| G1 | `domain_data` not selected in search SQL; `SearchResult.DomainData` field never populated | Medium | 8 | Fixed |
+| G2 | `PriceMax` parsed by `parseDomainIntent` but never applied as search filter | Medium | 8 | Fixed |
+| G3 | No +0.15 domain score boost for domain-matched search results (spec DoD item) | Medium | 8 | Fixed |
+| G4 | Multi-ingredient "and" parsing broken — "recipes with lemon and garlic" only captures "lemon" | Medium | 8 | Fixed |
+
+### Fix Details
+
+**G1 — domain_data in search SELECT/Scan:**
+- Added `a.domain_data` to the vector search SELECT clause in `internal/api/search.go`
+- Added `domainData []byte` scan target and populated `r.DomainData` when non-empty
+- File: [internal/api/search.go](../../internal/api/search.go)
+
+**G2 — PriceMax filter:**
+- Added `PriceMax float64` field to `SearchFilters` struct
+- Wired `intent.PriceMax` into `req.Filters.PriceMax` in domain intent integration
+- Added SQL filter: `AND (a.domain_data->'price'->>'amount')::float <= $N`
+- File: [internal/api/search.go](../../internal/api/search.go)
+
+**G3 — Domain score boost:**
+- Added +0.15 similarity boost (capped at 1.0) when `req.Filters.Domain != ""` and artifact has `domain_data`
+- Boost applied after annotation boost, before relevance classification
+- File: [internal/api/search.go](../../internal/api/search.go)
+
+**G4 — Multi-ingredient parsing:**
+- Removed `and` from the regex stop-words (`ingredientIntentRe`), allowing "and"-separated terms to flow into the captured group
+- Added post-capture split on both `,` and ` and ` to extract individual ingredients
+- Strengthened `TestParseDomainIntent_RecipeMultipleIngredients` to assert exact count (2) instead of `>= 1`
+- Added `TestParseDomainIntent_LemonAndGarlic` (spec T8-02) and `TestParseDomainIntent_DishesWithMushrooms` (spec T8-05)
+- Files: [internal/api/domain_intent.go](../../internal/api/domain_intent.go), [internal/api/domain_intent_test.go](../../internal/api/domain_intent_test.go)
+
+### Verification
+
+- `./smackerel.sh test unit` — all Go packages pass (including `internal/api` with new tests), 236 Python tests pass
+- `./smackerel.sh build` — clean compilation

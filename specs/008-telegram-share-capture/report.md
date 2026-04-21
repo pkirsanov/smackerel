@@ -660,3 +660,53 @@ All existing tests pass — the balanced-paren logic only changes behavior for U
   internal/telegram  24.068s (non-cached, new tests executed)
 ./smackerel.sh check → Config is in sync with SST
 ```
+
+---
+
+## Hardening Sweep (Stochastic Sweep — harden-to-doc, 2026-04-21)
+
+**Trigger:** `harden` via stochastic-quality-sweep
+**Scope:** All 6 scopes of spec 008 — Gherkin coverage, DoD evidence integrity, test depth, scenario-manifest linkage
+
+### Probe Summary
+
+| Dimension | Result |
+|-----------|--------|
+| Gherkin scenario coverage | 17 spec-level + 7 scope-level scenarios — all have linked tests |
+| Unit test depth | 45+ tests across share/forward/assembly/media/bot — comprehensive |
+| Chaos/regression/stabilization | Extensive prior sweeps added 20+ adversarial and edge tests |
+| DoD evidence integrity | **3 findings** — fabricated E2E evidence, shallow manifest linkage |
+| Scenario-manifest linkage | **1 finding** — SCN-008-004 linked to wrong test |
+
+### Findings
+
+| ID | Severity | Category | Finding | Remediation |
+|----|----------|----------|---------|-------------|
+| H-008-001 | HIGH | Fabricated evidence | All 6 scopes' DoD items claim `[x] Scenario-specific E2E regression tests` with evidence pointing to Go E2E test files (`tests/e2e/telegram_share_test.go`, `telegram_forward_test.go`, `telegram_assembly_test.go`, `telegram_conversation_test.go`, `telegram_media_test.go`, `telegram_regression_test.go`) that **do not exist** in the repository. The test plan specified these files, but they were never created. Only the shell-based `tests/e2e/test_telegram.sh` exists, covering basic URL/text capture. | Unchecked fabricated DoD items across all 6 scopes. Updated evidence to document the gap honestly. |
+| H-008-002 | MEDIUM | Shallow linkage | SCN-008-004 ("Duplicate URL share merges new context") in `scenario-manifest.json` is linked to `TestExtractAllURLs_DuplicateURLs`, which tests URL deduplication during text extraction — NOT the actual duplicate-artifact detection (`errDuplicate` from capture API 409) and context-merge reply (`replyDuplicate`). The test plan specified `TestHandleShareCapture_DuplicateURL` and `TestHandleShareCapture_DuplicateURL_NoNewContext`, but these tests were never created. | Added `coverageNote` to SCN-008-004 in scenario-manifest.json documenting the partial coverage. |
+| H-008-003 | LOW | Missing routing tests | Scope 6 test plan specified `TestHandleMessage_RoutingOrder_MediaGroupBeforeForward` and `TestHandleMessage_RoutingOrder_ForwardBeforeURL` in bot_test.go, but these tests were never created. Routing correctness is verified by code inspection (bot.go routing order) and implicitly by existing tests, but dedicated precedence tests are absent. | Documented. Routing order is correct in code; gap is test-plan compliance only. |
+
+### Artifacts Modified
+
+| Artifact | Change |
+|----------|--------|
+| `scopes.md` | Unchecked 6 fabricated E2E evidence DoD items, updated evidence to document gap |
+| `scenario-manifest.json` | Added `coverageNote` to SCN-008-004 documenting shallow linkage |
+| `report.md` | Added this hardening sweep section |
+
+### Follow-Up Required
+
+1. **Create dedicated Go E2E test files** for spec 008 features (share-sheet, forward, assembly, media, security, regression, confirmation formats). This requires implementation work beyond the harden-to-doc scope.
+2. **Create `TestHandleShareCapture_DuplicateURL`** — test the `errDuplicate` → `replyDuplicate` path with mock capture API.
+3. **Create routing order tests** — `TestHandleMessage_RoutingOrder_MediaGroupBeforeForward` and `TestHandleMessage_RoutingOrder_ForwardBeforeURL`.
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit 2>&1 | grep telegram
+ok  	github.com/smackerel/smackerel/internal/telegram	(cached)
+$ ./smackerel.sh check 2>&1; echo "exit: $?"
+exit: 0
+```
+
+All existing unit tests pass. No code changes — this sweep corrected artifact evidence only.

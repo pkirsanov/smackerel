@@ -81,72 +81,76 @@ func TestHospitalityDigestContext_IsEmpty_RevenueOnly(t *testing.T) {
 	}
 }
 
-func TestGuestStay_Fields(t *testing.T) {
-	s := GuestStay{
-		GuestName:    "Alice",
-		GuestEmail:   "alice@example.com",
-		PropertyName: "Beach House",
-		CheckIn:      "2026-04-11",
-		CheckOut:     "2026-04-14",
-		Source:       "guesthost",
-		TotalPrice:   450.50,
+func TestGuestStay_IsReturningSurfacedByAlerts(t *testing.T) {
+	// Returning guest detection is surfaced via GuestAlerts, not GuestStay fields.
+	// Verify that an alert for a returning guest produces meaningful alert data.
+	h := &HospitalityDigestContext{
+		TodayArrivals: []GuestStay{
+			{GuestName: "Alice", PropertyName: "Beach House", CheckIn: "2026-04-11", CheckOut: "2026-04-14"},
+		},
+		GuestAlerts: []GuestAlert{
+			{GuestName: "Alice", GuestEmail: "alice@example.com", AlertType: "repeat_guest", Description: "Repeat guest with 3 stays"},
+		},
 	}
-	if s.GuestName != "Alice" {
-		t.Errorf("expected GuestName Alice, got %s", s.GuestName)
+	if h.IsEmpty() {
+		t.Error("context with arrivals + alerts should not be empty")
 	}
-	if s.TotalPrice != 450.50 {
-		t.Errorf("expected TotalPrice 450.50, got %f", s.TotalPrice)
+	text := formatHospitalityFallback(h)
+	if !strings.Contains(text, "Guest alerts: 1") {
+		t.Errorf("expected guest alert count in fallback, got:\n%s", text)
+	}
+	if !strings.Contains(text, "Alice at Beach House") {
+		t.Errorf("expected arrival detail in fallback, got:\n%s", text)
 	}
 }
 
-func TestHospitalityTask_Fields(t *testing.T) {
-	task := HospitalityTask{
-		PropertyName: "Cabin",
-		Title:        "Replace towels",
-		Category:     "housekeeping",
-		Status:       "pending",
+func TestFormatHospitalityFallback_PendingTasksOnly(t *testing.T) {
+	h := &HospitalityDigestContext{
+		PendingTasks: []HospitalityTask{
+			{PropertyName: "Cabin", Title: "Replace towels", Category: "housekeeping", Status: "pending"},
+			{PropertyName: "Beach House", Title: "Fix AC", Category: "maintenance", Status: "pending"},
+		},
 	}
-	if task.Title != "Replace towels" {
-		t.Errorf("expected title 'Replace towels', got %s", task.Title)
+	text := formatHospitalityFallback(h)
+	if !strings.Contains(text, "Pending tasks: 2") {
+		t.Errorf("expected 2 pending tasks in fallback, got:\n%s", text)
 	}
-	if task.Status != "pending" {
-		t.Errorf("expected status 'pending', got %s", task.Status)
+	// formatHospitalityFallback only shows count, not individual task titles
+	if strings.Contains(text, "Arrivals today") {
+		t.Error("should omit arrivals section when none exist")
+	}
+	if strings.Contains(text, "Departures today") {
+		t.Error("should omit departures section when none exist")
 	}
 }
 
-func TestRevenueSnapshot_Fields(t *testing.T) {
-	snap := RevenueSnapshot{
-		TodayCheckIns:  3,
-		TodayCheckOuts: 2,
-		DayRevenue:     800.00,
-		WeekRevenue:    2500.00,
-		MonthRevenue:   9800.00,
-		ByChannel: map[string]float64{
-			"direct": 5000.00,
-			"airbnb": 4800.00,
+func TestFormatHospitalityFallback_RevenueChannelBreakdown(t *testing.T) {
+	h := &HospitalityDigestContext{
+		Revenue: RevenueSnapshot{
+			TodayCheckIns:  3,
+			TodayCheckOuts: 2,
+			DayRevenue:     800.00,
+			WeekRevenue:    2500.00,
+			MonthRevenue:   9800.00,
+			ByChannel: map[string]float64{
+				"direct": 5000.00,
+				"airbnb": 4800.00,
+			},
+			ByProperty: map[string]float64{
+				"Beach House":    6000.00,
+				"Mountain Cabin": 3800.00,
+			},
 		},
-		ByProperty: map[string]float64{
-			"Beach House":    6000.00,
-			"Mountain Cabin": 3800.00,
-		},
 	}
-	if snap.TodayCheckIns != 3 {
-		t.Errorf("expected 3 check-ins, got %d", snap.TodayCheckIns)
+	text := formatHospitalityFallback(h)
+	if !strings.Contains(text, "24h: $800.00") {
+		t.Errorf("expected 24h revenue in fallback, got:\n%s", text)
 	}
-	if snap.DayRevenue != 800.00 {
-		t.Errorf("expected day revenue 800, got %f", snap.DayRevenue)
+	if !strings.Contains(text, "direct: $5000.00") {
+		t.Errorf("expected direct channel breakdown in fallback, got:\n%s", text)
 	}
-	if snap.MonthRevenue != 9800.00 {
-		t.Errorf("expected month revenue 9800, got %f", snap.MonthRevenue)
-	}
-	if snap.ByChannel["direct"] != 5000.00 {
-		t.Errorf("expected direct channel 5000, got %f", snap.ByChannel["direct"])
-	}
-	if snap.ByChannel["airbnb"] != 4800.00 {
-		t.Errorf("expected airbnb channel 4800, got %f", snap.ByChannel["airbnb"])
-	}
-	if snap.ByProperty["Beach House"] != 6000.00 {
-		t.Errorf("expected Beach House property 6000, got %f", snap.ByProperty["Beach House"])
+	if !strings.Contains(text, "airbnb: $4800.00") {
+		t.Errorf("expected airbnb channel breakdown in fallback, got:\n%s", text)
 	}
 }
 
@@ -177,26 +181,36 @@ func TestRevenueSnapshot_EmptyChannelBreakdown(t *testing.T) {
 	}
 }
 
-func TestGuestAlert_Fields(t *testing.T) {
-	alert := GuestAlert{
-		GuestName:   "Carol",
-		GuestEmail:  "carol@example.com",
-		AlertType:   "repeat_guest",
-		Description: "Repeat guest with 5 stays, total spend $2100",
+func TestFormatHospitalityFallback_GuestAndPropertyAlerts(t *testing.T) {
+	h := &HospitalityDigestContext{
+		GuestAlerts: []GuestAlert{
+			{GuestName: "Carol", GuestEmail: "carol@example.com", AlertType: "repeat_guest", Description: "Repeat guest with 5 stays"},
+			{GuestName: "Dave", GuestEmail: "dave@example.com", AlertType: "low_sentiment", Description: "Sentiment score below threshold"},
+		},
+		PropertyAlerts: []PropertyAlert{
+			{PropertyName: "Lakeside Villa", AlertType: "low_rating", Description: "Average rating: 3.2"},
+		},
 	}
-	if alert.AlertType != "repeat_guest" {
-		t.Errorf("expected alert type 'repeat_guest', got %s", alert.AlertType)
+	text := formatHospitalityFallback(h)
+	if !strings.Contains(text, "Guest alerts: 2") {
+		t.Errorf("expected 2 guest alerts in fallback, got:\n%s", text)
+	}
+	if !strings.Contains(text, "Property alerts: 1") {
+		t.Errorf("expected 1 property alert in fallback, got:\n%s", text)
 	}
 }
 
-func TestPropertyAlert_Fields(t *testing.T) {
-	alert := PropertyAlert{
-		PropertyName: "Lakeside Villa",
-		AlertType:    "low_rating",
-		Description:  "Average rating: 3.2",
+func TestIsEmpty_DayRevenueWithoutCheckIns(t *testing.T) {
+	// DayRevenue > 0 but zero check-ins: IsEmpty should still return true
+	// because IsEmpty checks TodayCheckIns/TodayCheckOuts, not revenue amounts.
+	h := &HospitalityDigestContext{
+		Revenue: RevenueSnapshot{
+			DayRevenue:  500.00,
+			WeekRevenue: 2000.00,
+		},
 	}
-	if alert.AlertType != "low_rating" {
-		t.Errorf("expected alert type 'low_rating', got %s", alert.AlertType)
+	if !h.IsEmpty() {
+		t.Error("context with only revenue amounts (no check-ins) should be empty per IsEmpty logic")
 	}
 }
 

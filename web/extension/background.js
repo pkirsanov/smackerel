@@ -135,6 +135,13 @@ function doCapture(data) {
       return enqueueOffline(data).then(function() {
         showNotification('Saved Offline', 'Will sync when connected');
         return { success: true, queued: true };
+      }).catch(function(queueErr) {
+        if (queueErr && queueErr.message === 'queue_full') {
+          showNotification('Queue Full', 'Offline queue is full — please sync pending items first');
+          return { success: false, error: 'queue_full' };
+        }
+        showNotification('Save Failed', 'Could not save offline');
+        return { success: false, error: 'queue_error' };
       });
     });
   });
@@ -186,7 +193,7 @@ function enqueueOffline(data) {
       var countReq = store.count();
       countReq.onsuccess = function() {
         if (countReq.result >= MAX_QUEUE_SIZE) {
-          resolve(); // silently drop if queue is full
+          reject(new Error('queue_full'));
           return;
         }
         store.add({
@@ -242,6 +249,8 @@ function flushQueue() {
           var chain = Promise.resolve();
           items.forEach(function(item) {
             chain = chain.then(function() {
+              if (authFailed) return; // stop on auth failure
+
               var body = {};
               if (item.url) body.url = item.url;
               if (item.text) body.text = item.text;

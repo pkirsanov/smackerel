@@ -310,10 +310,9 @@ func splitRateArgs(args string) (searchTerms, annotationText string) {
 		}
 	}
 
-	// Check for interaction keywords
+	// Check for interaction keywords using canonical phrases from annotation parser
 	lower := strings.ToLower(args)
-	interactionPhrases := []string{"made it", "bought it", "read it", "visited", "tried it", "used it"}
-	for _, phrase := range interactionPhrases {
+	for _, phrase := range annotation.InteractionPhrases() {
 		idx := strings.Index(lower, phrase)
 		if idx > 0 {
 			searchTerms = strings.TrimSpace(args[:idx])

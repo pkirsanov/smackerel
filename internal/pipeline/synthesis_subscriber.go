@@ -67,43 +67,7 @@ func (s *SynthesisResultSubscriber) Start(ctx context.Context) error {
 		return fmt.Errorf("create consumer for synthesis.extracted: %w", err)
 	}
 
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		for {
-			msgs, err := consumer.Fetch(10, jetstream.FetchMaxWait(5*time.Second))
-			if err != nil {
-				select {
-				case <-s.done:
-					return
-				case <-ctx.Done():
-					return
-				default:
-				}
-				slog.Debug("fetch synthesis.extracted batch", "error", err)
-				select {
-				case <-s.done:
-					return
-				case <-ctx.Done():
-					return
-				case <-time.After(1 * time.Second):
-				}
-				continue
-			}
-
-			for msg := range msgs.Messages() {
-				select {
-				case <-s.done:
-					return
-				case <-ctx.Done():
-					return
-				default:
-				}
-				s.handleSynthesized(ctx, msg)
-			}
-		}
-	}()
-
+	s.runConsumerLoop(ctx, consumer, smacknats.SubjectSynthesisExtracted, s.handleSynthesized)
 	slog.Info("synthesis result subscriber started", "subject", smacknats.SubjectSynthesisExtracted)
 
 	// Cross-source result consumer
@@ -118,11 +82,20 @@ func (s *SynthesisResultSubscriber) Start(ctx context.Context) error {
 		return fmt.Errorf("create consumer for synthesis.crosssource.result: %w", err)
 	}
 
+	s.runConsumerLoop(ctx, crossSourceConsumer, smacknats.SubjectSynthesisCrossSourceResult, s.handleCrossSourceResult)
+	slog.Info("cross-source result subscriber started", "subject", smacknats.SubjectSynthesisCrossSourceResult)
+	return nil
+}
+
+// runConsumerLoop launches a background goroutine that fetches messages from a
+// JetStream consumer in batches and dispatches them to the given handler.
+// The goroutine exits when s.done is closed or the context is cancelled.
+func (s *SynthesisResultSubscriber) runConsumerLoop(ctx context.Context, consumer jetstream.Consumer, subject string, handler func(context.Context, jetstream.Msg)) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		for {
-			msgs, err := crossSourceConsumer.Fetch(10, jetstream.FetchMaxWait(5*time.Second))
+			msgs, err := consumer.Fetch(10, jetstream.FetchMaxWait(5*time.Second))
 			if err != nil {
 				select {
 				case <-s.done:
@@ -131,7 +104,7 @@ func (s *SynthesisResultSubscriber) Start(ctx context.Context) error {
 					return
 				default:
 				}
-				slog.Debug("fetch synthesis.crosssource.result batch", "error", err)
+				slog.Debug("fetch batch", "subject", subject, "error", err)
 				select {
 				case <-s.done:
 					return
@@ -150,13 +123,10 @@ func (s *SynthesisResultSubscriber) Start(ctx context.Context) error {
 					return
 				default:
 				}
-				s.handleCrossSourceResult(ctx, msg)
+				handler(ctx, msg)
 			}
 		}
 	}()
-
-	slog.Info("cross-source result subscriber started", "subject", smacknats.SubjectSynthesisCrossSourceResult)
-	return nil
 }
 
 // Stop signals the background goroutine to exit and waits with a bounded timeout.

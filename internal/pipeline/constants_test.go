@@ -1,6 +1,10 @@
 package pipeline
 
-import "testing"
+import (
+	"errors"
+	"fmt"
+	"testing"
+)
 
 // SCN-002-045: Source ID constants accessible without importing processor.
 func TestSCN002045_SourceIDConstants_Accessible(t *testing.T) {
@@ -59,5 +63,30 @@ func TestProcessingStatusType_NotPlainString(t *testing.T) {
 	s := string(ps)
 	if s != "pending" {
 		t.Errorf("string(ps) = %q, want %q", s, "pending")
+	}
+}
+
+// Sentinel errors: verify errors.Is works through fmt.Errorf wrapping.
+func TestSentinelErrors_ExtractionFailed_Unwrappable(t *testing.T) {
+	inner := fmt.Errorf("DNS resolution failed for example.com")
+	wrapped := fmt.Errorf("%w: %w", ErrExtractionFailed, inner)
+
+	if !errors.Is(wrapped, ErrExtractionFailed) {
+		t.Error("errors.Is(wrapped, ErrExtractionFailed) should be true")
+	}
+	if !errors.Is(wrapped, inner) {
+		t.Error("errors.Is(wrapped, inner) should be true — original cause must be accessible")
+	}
+}
+
+func TestSentinelErrors_NATSPublish_Unwrappable(t *testing.T) {
+	inner := fmt.Errorf("connection refused")
+	wrapped := fmt.Errorf("%w: %w", ErrNATSPublish, inner)
+
+	if !errors.Is(wrapped, ErrNATSPublish) {
+		t.Error("errors.Is(wrapped, ErrNATSPublish) should be true")
+	}
+	if !errors.Is(wrapped, inner) {
+		t.Error("errors.Is(wrapped, inner) should be true — original cause must be accessible")
 	}
 }

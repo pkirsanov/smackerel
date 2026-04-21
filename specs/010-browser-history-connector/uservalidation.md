@@ -1,6 +1,6 @@
 # User Validation: 010 — Browser History Connector
 
-> **Status:** Done
+> **Status:** In Progress
 
 ---
 
@@ -20,6 +20,8 @@
 - [x] Content fetch failures produce metadata-only artifacts with content_fetch_failed flag
 - [x] Config section in smackerel.yaml with SST pipeline integration (disabled by default)
 - [x] Connector registered and auto-started in main.go
-- [x] All 43 unit tests pass across connector_test.go and browser_test.go
+- [x] All 67 unit tests pass across connector_test.go (49) and browser_test.go (18)
 - [x] ./smackerel.sh lint passes
 - [x] ./smackerel.sh check passes
+- [ ] Integration tests pass against real SQLite fixture (blocked: F002/R003 — SQLite driver not in go.mod)
+- [ ] E2E tests pass against live stack (blocked: no live stack available)

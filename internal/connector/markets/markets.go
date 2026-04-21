@@ -467,14 +467,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	enrichArtifactsWithSymbols(artifacts, cfg)
 
 	// Generate daily summary if time gate passes (Scope 5).
-	if c.shouldGenerateDailySummary(now) {
+	// CHAOS-018-001: Atomic check-and-set prevents duplicate summaries from concurrent Syncs.
+	if c.tryClaimDailySummary(now) {
 		summary := buildDailySummary(artifacts, now)
 		artifacts = append(artifacts, summary)
-		c.mu.Lock()
-		// nyLocation is guaranteed non-nil here because shouldGenerateDailySummary
-		// returned true, which requires successful LoadLocation.
-		c.lastSummaryDate = now.In(nyLocation).Format("2006-01-02")
-		c.mu.Unlock()
 	}
 
 	return artifacts, now.Format(time.RFC3339), nil
@@ -981,9 +977,11 @@ var (
 	}
 )
 
-// shouldGenerateDailySummary returns true if a daily summary should be appended.
-// Summary is generated on weekdays after 16:30 ET if not already generated today.
-func (c *Connector) shouldGenerateDailySummary(now time.Time) bool {
+// tryClaimDailySummary atomically checks whether a daily summary should be generated
+// and claims the date slot if so. This eliminates the TOCTOU race where concurrent
+// Sync calls could both pass the check and generate duplicate summaries.
+// CHAOS-018-001: Merged check-and-set under a single lock acquisition.
+func (c *Connector) tryClaimDailySummary(now time.Time) bool {
 	nyLocationOnce.Do(func() {
 		nyLocation, nyLocationErr = time.LoadLocation("America/New_York")
 	})
@@ -1005,13 +1003,15 @@ func (c *Connector) shouldGenerateDailySummary(now time.Time) bool {
 		return false
 	}
 
-	// Check if already generated today.
+	// Atomic check-and-claim under write lock to prevent TOCTOU race.
 	today := nowET.Format("2006-01-02")
-	c.mu.RLock()
-	lastDate := c.lastSummaryDate
-	c.mu.RUnlock()
-
-	return lastDate != today
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.lastSummaryDate == today {
+		return false
+	}
+	c.lastSummaryDate = today
+	return true
 }
 
 // buildDailySummary aggregates sync artifacts into a single market/daily-summary artifact.
@@ -1184,7 +1184,12 @@ func enrichArtifactsWithSymbols(artifacts []connector.RawArtifact, cfg MarketsCo
 			a.Metadata["related_symbols"] = detected
 			a.Metadata["detected_symbols"] = detected
 		case "market/economic":
-			a.Metadata["related_symbols"] = allWatchlistSymbols
+			// CHAOS-018-002: Copy the slice to prevent shared-slice aliasing.
+			// Without a copy, all economic artifacts share the same backing array;
+			// a downstream append on one would corrupt the others.
+			ownedCopy := make([]string, len(allWatchlistSymbols))
+			copy(ownedCopy, allWatchlistSymbols)
+			a.Metadata["related_symbols"] = ownedCopy
 		}
 	}
 }

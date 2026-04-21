@@ -34,8 +34,9 @@ type SearchFilters struct {
 	DateTo         string `json:"date_to,omitempty"`
 	Person         string `json:"person,omitempty"`
 	Topic          string `json:"topic,omitempty"`
-	Domain         string `json:"domain,omitempty"`
-	Ingredient     string `json:"ingredient,omitempty"`
+	Domain         string  `json:"domain,omitempty"`
+	Ingredient     string  `json:"ingredient,omitempty"`
+	PriceMax       float64 `json:"price_max,omitempty"`
 	MinRating      *int   `json:"min_rating,omitempty"`
 	MaxRating      *int   `json:"max_rating,omitempty"`
 	Tag            string `json:"tag,omitempty"`
@@ -231,6 +232,9 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		}
 		if len(intent.Attributes) > 0 && req.Filters.Ingredient == "" {
 			req.Filters.Ingredient = intent.Attributes[0]
+		}
+		if intent.PriceMax > 0 && req.Filters.PriceMax == 0 {
+			req.Filters.PriceMax = intent.PriceMax
 		}
 		if intent.Cleaned != "" {
 			req.Query = intent.Cleaned
@@ -442,7 +446,8 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		SELECT a.id, a.title, a.artifact_type, COALESCE(a.summary, ''), COALESCE(a.source_url, ''),
 		       COALESCE(a.topics::text, '[]'), a.created_at,
 		       1 - (a.embedding <=> $1::vector) AS similarity,
-		       aas.current_rating, aas.times_used, COALESCE(aas.tags, '{}')
+		       aas.current_rating, aas.times_used, COALESCE(aas.tags, '{}'),
+		       a.domain_data
 		FROM artifacts a
 		LEFT JOIN artifact_annotation_summary aas ON aas.artifact_id = a.id
 		WHERE a.embedding IS NOT NULL`
@@ -492,6 +497,12 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		argN++
 	}
 
+	if req.Filters.PriceMax > 0 {
+		query += fmt.Sprintf(` AND (a.domain_data->'price'->>'amount')::float <= $%d`, argN)
+		args = append(args, req.Filters.PriceMax)
+		argN++
+	}
+
 	// Annotation filters
 	if req.Filters.MinRating != nil {
 		query += fmt.Sprintf(" AND aas.current_rating >= $%d", argN)
@@ -531,9 +542,10 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		var annTimesUsed *int
 		var annTags []string
 
+		var domainData []byte
 		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
 			&r.SourceURL, &topicsStr, &createdAt, &similarity,
-			&annRating, &annTimesUsed, &annTags); err != nil {
+			&annRating, &annTimesUsed, &annTags, &domainData); err != nil {
 			continue
 		}
 
@@ -545,9 +557,20 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		if len(annTags) > 0 {
 			r.Tags = annTags
 		}
+		if len(domainData) > 0 {
+			r.DomainData = json.RawMessage(domainData)
+		}
 
 		// Apply annotation boost (small enough not to overwhelm semantics)
 		similarity = applyAnnotationBoost(similarity, annRating, annTimesUsed)
+
+		// Apply domain score boost (+0.15 capped at 1.0) when a domain filter matched
+		if req.Filters.Domain != "" && len(domainData) > 0 {
+			similarity += 0.15
+			if similarity > 1.0 {
+				similarity = 1.0
+			}
+		}
 
 		// Parse topics
 		var topics []string

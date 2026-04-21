@@ -4,6 +4,59 @@ Links: [uservalidation.md](uservalidation.md)
 
 ---
 
+## Security Pass (Round 3) — 2026-04-21
+
+**Trigger:** stochastic-quality-sweep → security-to-doc
+**Agent:** bubbles.security (via bubbles.workflow child)
+**Scope:** `internal/connector/twitter/`
+**Prior sweep history:** 2 prior security passes (SEC-001→SEC-009), 4 chaos fixes, 3 simplify fixes, 4 improve fixes, 3 devops fixes, 1 stabilize fix, 7 test-probe additions — all durable
+
+### Scan Methodology
+
+Full manual code review of `internal/connector/twitter/twitter.go` (780 lines) and `internal/connector/twitter/twitter_test.go` (500+ lines) against OWASP Top 10 categories, CWE database, and Go-specific security patterns. Dependency surface audited. Lint and unit tests executed as baseline.
+
+### OWASP Top 10 Coverage
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| A01 Broken Access Control | PASS | Path traversal: `filepath.EvalSymlinks` + prefix boundary check in `Connect()`, `syncArchive()`, `parseSignalFile()`. Tweet ID regex prevents URL injection. |
+| A02 Cryptographic Failures | PASS | Bearer token redacted in `String()`. No credential storage — token comes from config/credentials map. |
+| A03 Injection | PASS | URL scheme whitelist (`isSafeURL` — http/https only). Control char sanitization (`sanitizeControlChars`). Tweet ID regex validation before URL construction. |
+| A04 Insecure Design | PASS | Resource limits: `maxArchiveFileSize` (500 MiB), `maxTweetCount` (500K). Fail-loud auth for API mode. Context cancellation at all I/O points. Cycle detection in thread graph. |
+| A05 Security Misconfiguration | PASS | Strict config validation via `validSyncModes` whitelist. No defaults — invalid sync_mode rejected. Bearer token required for API mode. |
+| A06 Vulnerable Components | PASS | Only `encoding/json`, `net/url`, `path/filepath`, `unicode/utf8` from Go stdlib used for security-critical paths. No third-party libraries in attack surface. |
+| A07 Auth Failures | PASS | Bearer token fail-loud for `sync_mode=api`. Hybrid mode warns but degrades to archive-only. |
+| A08 Data Integrity | PASS | JSON deserialization via typed Go structs. Signal file parsing is best-effort (no silent corruption propagation). |
+| A09 Logging Failures | PASS | `slog.Warn` for skipped tweets, failed signal files, unparseable timestamps. Token redacted in all log-reachable paths. |
+| A10 SSRF | N/A | No outbound HTTP requests in current archive-only implementation. API client is opt-in and not yet wired to HTTP transport. |
+
+### CWE Verification Matrix
+
+| CWE | Protection | Test Coverage |
+|-----|-----------|---------------|
+| CWE-20 (Input Validation) | `tweetIDPattern`, `validSyncModes` | `TestNormalizeTweet_InvalidIDNoURL`, `TestConnect_InvalidSyncMode` |
+| CWE-22 (Path Traversal) | `filepath.EvalSymlinks` + prefix check × 3 sites | `TestConnect_ArchiveDirSymlinkResolution`, `TestSyncArchive_SymlinkTraversal` |
+| CWE-79/601 (XSS/Redirect) | `isSafeURL()` http/https only | `TestIsSafeURL_RejectsJavascript`, `TestIsSafeURL_RejectsData`, 5 more |
+| CWE-116 (Output Encoding) | `sanitizeControlChars()` | `TestSanitizeControlChars_EmptyString` + inline coverage |
+| CWE-287 (Auth) | Fail-loud bearer token | `TestConnect_APIModeRequiresBearerToken` |
+| CWE-400 (Resource Exhaustion) | `maxArchiveFileSize` 500 MiB | `TestSyncArchive_FileSizeLimit` |
+| CWE-532 (Info Exposure) | `TwitterConfig.String()` redacts | `TestTwitterConfig_StringRedactsToken` |
+| CWE-770 (Allocation Limit) | `maxTweetCount` 500K | `TestMaxTweetCount_ConstantSet` |
+| CWE-838 (UTF-8 Safety) | `truncateUTF8()` rune-aware | `TestTruncateUTF8_MultiByteBoundary`, `TestTruncateUTF8_FourByteEmoji` |
+
+### Findings
+
+**None.** No critical, high, or medium severity vulnerabilities found. All previously identified security concerns (SEC-001 through SEC-009) remain durably fixed with adversarial regression tests.
+
+### Baseline Verification
+
+| Command | Result |
+|---------|--------|
+| `./smackerel.sh test unit` | PASS — all Go packages + 236 Python tests |
+| `./smackerel.sh lint` | PASS — all checks passed |
+
+---
+
 ## Stabilize Pass — 2026-04-20
 
 **Trigger:** stochastic-quality-sweep → stabilize-to-doc
@@ -103,12 +156,13 @@ Comprehensive test probe of the Twitter connector's 1890-line test suite (90+ in
 
 ### Quality Sweep History
 
-8 quality sweep passes completed across simplify, security (×2), regression, chaos, improve (×2), and devops domains. Key outcomes:
+11 quality sweep passes completed across simplify, security (×3), regression, chaos, improve (×2), devops, stabilize, and test domains. Key outcomes:
 
-- **22 findings fixed** across all sweeps
+- **22 findings fixed** across all sweeps + 7 test-probe additions + 1 stabilize fix
 - **9 CWE-addressed security hardening fixes** (CWE-20, CWE-22, CWE-79, CWE-287, CWE-400, CWE-532, CWE-601, CWE-770, CWE-838)
+- **Security round 3: clean scan** — no new vulnerabilities found
 - **4 chaos hardening fixes** with race detector clean
-- **58+ tests** in twitter package (unit + adversarial + concurrency)
+- **90+ tests** in twitter package (unit + adversarial + concurrency + security regression)
 - **Zero regressions** across all sweep surfaces
 
 ### Implementation Summary

@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -478,4 +480,101 @@ func TestArtifact_VectorSimilarityDifferentEmbeddings(t *testing.T) {
 		t.Errorf("expected different similarity scores, got %.4f and %.4f", results[0].similarity, results[1].similarity)
 	}
 	t.Logf("similar=%.4f different=%.4f", results[0].similarity, results[1].similarity)
+}
+
+// CHAOS-031-004: Concurrent duplicate content_hash insertion.
+// The idx_artifacts_content_hash_unique partial unique index must reject
+// concurrent duplicate inserts. This test verifies that exactly one writer
+// wins and all others get a unique constraint violation, preventing silent
+// duplicate artifacts under concurrent capture.
+func TestArtifact_Chaos_ConcurrentDuplicateContentHash(t *testing.T) {
+	pool := testPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	sharedHash := fmt.Sprintf("chaos-dedup-%d", time.Now().UnixNano())
+	const concurrency = 10
+
+	var successCount atomic.Int32
+	var conflictCount atomic.Int32
+	var otherErrors atomic.Int32
+
+	var wg sync.WaitGroup
+	for i := range concurrency {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			id := fmt.Sprintf("chaos-%s-%d", sharedHash, idx)
+			_, err := pool.Exec(ctx, `
+				INSERT INTO artifacts (id, artifact_type, title, summary, content_raw, content_hash, source_id, created_at, updated_at)
+				VALUES ($1, 'article', $2, 'chaos test', 'content', $3, 'test-source', NOW(), NOW())
+			`, id, fmt.Sprintf("Chaos Article %d", idx), sharedHash)
+			if err == nil {
+				successCount.Add(1)
+			} else if isUniqueViolation(err) {
+				conflictCount.Add(1)
+			} else {
+				otherErrors.Add(1)
+				t.Logf("unexpected error from goroutine %d: %v", idx, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// Cleanup: delete all artifacts with this hash (only 1 should exist)
+	t.Cleanup(func() {
+		cctx, ccancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer ccancel()
+		pool.Exec(cctx, "DELETE FROM artifacts WHERE content_hash = $1", sharedHash)
+	})
+
+	successes := successCount.Load()
+	conflicts := conflictCount.Load()
+	others := otherErrors.Load()
+
+	t.Logf("concurrent inserts: successes=%d conflicts=%d errors=%d", successes, conflicts, others)
+
+	if successes != 1 {
+		t.Errorf("expected exactly 1 successful insert, got %d", successes)
+	}
+	if conflicts != int32(concurrency)-1 {
+		t.Errorf("expected %d unique violations, got %d", concurrency-1, conflicts)
+	}
+	if others != 0 {
+		t.Errorf("expected 0 other errors, got %d", others)
+	}
+
+	// Verify only 1 row exists
+	var count int
+	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM artifacts WHERE content_hash = $1", sharedHash).Scan(&count)
+	if err != nil {
+		t.Fatalf("count check: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected exactly 1 artifact with hash %s, got %d", sharedHash, count)
+	}
+}
+
+// isUniqueViolation checks if a pgx error is a unique constraint violation (SQLSTATE 23505).
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	// pgx wraps the PG error; check the error string for the SQLSTATE code
+	return containsSubstring(err.Error(), "23505") ||
+		containsSubstring(err.Error(), "unique constraint") ||
+		containsSubstring(err.Error(), "duplicate key")
+}
+
+func containsSubstring(s, substr string) bool {
+	return len(s) >= len(substr) && searchSubstring(s, substr)
+}
+
+func searchSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

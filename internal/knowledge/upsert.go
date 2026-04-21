@@ -94,6 +94,13 @@ func (ks *KnowledgeStore) mergeConceptInTx(ctx context.Context, tx pgx.Tx, exist
 		existingClaims = nil
 	}
 	mergedClaims := append(existingClaims, newClaims...)
+
+	// Enforce concept page token cap (design: 4,000 tokens).
+	// When over budget, drop oldest claims (FIFO) while preserving citations.
+	if ks.MaxTokens > 0 {
+		mergedClaims = enforceTokenCap(mergedClaims, existing.Summary, ks.MaxTokens)
+	}
+
 	claimsJSON, err := json.Marshal(mergedClaims)
 	if err != nil {
 		return nil, fmt.Errorf("marshal merged claims: %w", err)
@@ -350,6 +357,24 @@ func addUnique(slice []string, val string) []string {
 func estimateTokens(summary string, claimsJSON json.RawMessage) int {
 	totalChars := len(summary) + len(claimsJSON)
 	return totalChars / 4
+}
+
+// enforceTokenCap trims the oldest claims (FIFO) until the estimated token count
+// for summary + claims is within maxTokens. Citations (source_artifact_ids) are
+// preserved independently of claims, so no provenance is lost.
+func enforceTokenCap(claims []Claim, summary string, maxTokens int) []Claim {
+	for len(claims) > 0 {
+		claimsJSON, err := json.Marshal(claims)
+		if err != nil {
+			break
+		}
+		if estimateTokens(summary, claimsJSON) <= maxTokens {
+			return claims
+		}
+		// Drop the oldest claim (index 0 = earliest appended)
+		claims = claims[1:]
+	}
+	return claims
 }
 
 // CreateCrossSourceEdge creates a CROSS_SOURCE_CONNECTION edge linking artifacts

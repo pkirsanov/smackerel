@@ -518,6 +518,39 @@ func TestSyncCorruptedExportNoPanic(t *testing.T) {
 	}
 }
 
+// T-IMP-009-002: Multi-bookmark-per-line Netscape HTML gets correct per-bookmark ADD_DATE.
+func TestParseNetscapeHTML_MultiBookmarkPerLine_CorrectDates(t *testing.T) {
+	// Minified HTML with two bookmarks on a single line, each with a different ADD_DATE.
+	html := []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p>
+<DT><A HREF="https://first.com" ADD_DATE="1000000000">First</A><DT><A HREF="https://second.com" ADD_DATE="1200000000">Second</A>
+</DL>`)
+
+	bookmarks, err := ParseNetscapeHTML(html)
+	if err != nil {
+		t.Fatalf("ParseNetscapeHTML: %v", err)
+	}
+	if len(bookmarks) != 2 {
+		t.Fatalf("got %d bookmarks, want 2", len(bookmarks))
+	}
+
+	// First bookmark should have ADD_DATE=1000000000 (2001-09-08)
+	if bookmarks[0].URL != "https://first.com" {
+		t.Errorf("bookmarks[0].URL = %q, want https://first.com", bookmarks[0].URL)
+	}
+	if bookmarks[0].AddedAt.Unix() != 1000000000 {
+		t.Errorf("bookmarks[0].AddedAt.Unix() = %d, want 1000000000", bookmarks[0].AddedAt.Unix())
+	}
+
+	// Second bookmark should have ADD_DATE=1200000000 (2008-01-10), NOT 1000000000
+	if bookmarks[1].URL != "https://second.com" {
+		t.Errorf("bookmarks[1].URL = %q, want https://second.com", bookmarks[1].URL)
+	}
+	if bookmarks[1].AddedAt.Unix() != 1200000000 {
+		t.Errorf("bookmarks[1].AddedAt.Unix() = %d, want 1200000000 (got first bookmark's date instead)", bookmarks[1].AddedAt.Unix())
+	}
+}
+
 // T-GAP-R006-01: R-006 bookmark_url and added_at metadata fields are populated.
 func TestMetadataR006Fields(t *testing.T) {
 	// Chrome JSON fixture with date_added field (Chrome epoch: microseconds since 1601-01-01)

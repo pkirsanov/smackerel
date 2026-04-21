@@ -293,3 +293,24 @@ func TestFormatIngredientLine_UnscaledEmptyQty(t *testing.T) {
 		t.Errorf("formatIngredientLine(empty qty) = %q, want %q", got, "- water (unscaled)")
 	}
 }
+
+func TestFormatRawIngredientLine(t *testing.T) {
+	cases := []struct {
+		name     string
+		ing      recipe.Ingredient
+		expected string
+	}{
+		{"with qty and unit", recipe.Ingredient{Name: "flour", Quantity: "2", Unit: "cups"}, "- 2 cups flour"},
+		{"with qty no unit", recipe.Ingredient{Name: "eggs", Quantity: "3", Unit: ""}, "- 3 eggs"},
+		{"no qty", recipe.Ingredient{Name: "salt", Quantity: "", Unit: ""}, "- salt"},
+		{"free text qty", recipe.Ingredient{Name: "salt", Quantity: "to taste", Unit: ""}, "- to taste salt"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatRawIngredientLine(tc.ing)
+			if got != tc.expected {
+				t.Errorf("formatRawIngredientLine() = %q, want %q", got, tc.expected)
+			}
+		})
+	}
+}

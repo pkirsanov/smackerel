@@ -14,16 +14,58 @@ You have a single goal — a feature to implement, a bug to fix, an ops or stabi
 
 ## Examples
 
+### Feature Implementation
 ```
 /bubbles.goal  Implement the security deposit hold/release feature for guestHost
 
-/bubbles.goal  Fix all broken E2E tests and make chaos scenarios pass
-
 /bubbles.goal  Add webhook notification system to the booking flow
 
+/bubbles.goal  Build a multi-tenant property search with location filtering and sorting
+```
+
+### Bug Fixing
+```
+/bubbles.goal  Fix all broken E2E tests and make chaos scenarios pass
+
+/bubbles.goal  Fix the calendar sync bug where Hospitable iCal imports show wrong timezone
+
+/bubbles.goal  Debug and fix the CSRF token validation failing on mobile API requests
+```
+
+### Ops & Stabilization
+```
+/bubbles.goal  Stabilize the deployment pipeline, close config drift, and don't stop until validation and docs are clean
+
+/bubbles.goal  Fix all Docker build warnings, pin dependency versions, and eliminate flaky test failures
+
+/bubbles.goal  Set up monitoring dashboards and alerting for all production services
+```
+
+### Code Quality & Hardening
+```
 /bubbles.goal  Refactor the calendar module to eliminate all lint warnings and increase test coverage to 100%
 
-/bubbles.goal  Stabilize the deployment pipeline, close config drift, and don't stop until validation and docs are clean
+/bubbles.goal  Eliminate all hardcoded configuration values and enforce fail-fast on missing config
+
+/bubbles.goal  Add comprehensive input validation and error handling to all public API endpoints
+```
+
+### DevOps & Infrastructure
+```
+/bubbles.goal  Set up CI/CD pipeline with automated testing, linting, and deployment to staging
+
+/bubbles.goal  Migrate database schema to support multi-region deployment
+
+/bubbles.goal  Optimize Docker images for all services — reduce size, improve layer caching, add health checks
+```
+
+### Documentation & Cleanup
+```
+/bubbles.goal  Update all API documentation to match current endpoint implementations
+
+/bubbles.goal  Remove all dead code, unused imports, and obsolete configuration files across the codebase
+
+/bubbles.goal  Create comprehensive developer onboarding guide with architecture overview and local setup instructions
 ```
 
 ## What Happens

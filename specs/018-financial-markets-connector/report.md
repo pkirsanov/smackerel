@@ -248,6 +248,44 @@ The core financial markets connector is functional and well-tested:
 - All Go unit tests pass: `./smackerel.sh test unit` — `internal/connector/markets 0.507s`
 - Total test count: 46 test functions (40 existing + 6 new)
 
+### Chaos Hardening Sweep: 2026-04-21
+
+**Trigger:** stochastic-quality-sweep → chaos-hardening
+**Scope:** `internal/connector/markets/markets.go`, `internal/connector/markets/markets_test.go`
+
+#### Findings
+
+| # | Finding | Severity | Remediated |
+|---|---------|----------|------------|
+| CHAOS-018-001 | TOCTOU race in daily summary generation — `shouldGenerateDailySummary()` reads `lastSummaryDate` under RLock, then releases; between the check and the later write of `lastSummaryDate` under Lock, a concurrent Sync can also pass the check, producing duplicate summaries | HIGH | Yes |
+| CHAOS-018-002 | Shared slice aliasing in `enrichArtifactsWithSymbols` — all `market/economic` artifacts receive the same `allWatchlistSymbols` slice reference in their `related_symbols` metadata; a downstream consumer that mutates this slice (e.g., `append`) corrupts all economic artifacts in the batch | MEDIUM | Yes |
+| CHAOS-018-003 | No additional code fix needed — the TOCTOU fix (CHAOS-018-001) converts `shouldGenerateDailySummary` to `tryClaimDailySummary` with atomic check-and-set, which also makes the function idempotent (calling twice for the same date always returns false on the second call) | LOW | Yes (covered by CHAOS-018-001) |
+
+#### Remediations Applied
+
+1. **CHAOS-018-001: Atomic daily summary claim** — Replaced the two-step `shouldGenerateDailySummary()` check + separate `lastSummaryDate` write with a single `tryClaimDailySummary()` method that performs both check and date-claim under the same `mu.Lock()`. This eliminates the TOCTOU window where concurrent Syncs could both pass the check and generate duplicate summaries.
+
+2. **CHAOS-018-002: Per-artifact slice copy for economic metadata** — Changed `enrichArtifactsWithSymbols()` to create an independent copy of `allWatchlistSymbols` for each economic artifact's `related_symbols` metadata. Previously all economic artifacts shared the same backing array; now each gets its own copy via `make([]string, len(src))` + `copy()`.
+
+#### Tests Added
+
+| Test | Finding | Adversarial? |
+|------|---------|-------------|
+| `TestCHAOS018_001_ConcurrentSyncDailySummaryNoDoubleGeneration` | CHAOS-018-001 | Yes — 10 concurrent Syncs after market close; exactly 1 must produce a daily summary |
+| `TestCHAOS018_002_EconomicArtifactSliceIsolation` | CHAOS-018-002 | Yes — mutates first economic artifact's `related_symbols[0]`; second artifact must be unaffected |
+| `TestCHAOS018_003_TryClaimDailySummaryIdempotent` | CHAOS-018-001 | Yes — second call for same date must return false; different day must succeed |
+
+#### Evidence
+
+```
+$ ./smackerel.sh test unit --go 2>&1 | grep markets
+ok      github.com/smackerel/smackerel/internal/connector/markets       1.743s
+$ go test -race -count=1 -run 'CHAOS018' ./internal/connector/markets/
+ok      github.com/smackerel/smackerel/internal/connector/markets       1.639s
+```
+
+All tests pass including race detector. Zero regressions across full suite (236 tests).
+
 _No scopes have been implemented yet._
 
 ---

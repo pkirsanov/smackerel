@@ -53,7 +53,7 @@ func TestCreateFromParsed_EmptyParsedGeneratesNothing(t *testing.T) {
 }
 
 func TestNewStore_NilPool(t *testing.T) {
-	store := NewStore(nil)
+	store := NewStore(nil, nil)
 	if store == nil {
 		t.Fatal("NewStore should return non-nil even with nil pool")
 	}
@@ -116,5 +116,14 @@ func TestSummary_DefaultValues(t *testing.T) {
 	}
 	if s.Tags != nil {
 		t.Error("expected nil Tags by default")
+	}
+}
+
+func TestStoreImplementsAnnotationQuerier(t *testing.T) {
+	// Compile-time check is in store.go (var _ AnnotationQuerier = (*Store)(nil)).
+	// This test verifies at runtime that the interface assignment works.
+	var q AnnotationQuerier = NewStore(nil, nil)
+	if q == nil {
+		t.Fatal("expected non-nil AnnotationQuerier from NewStore")
 	}
 }

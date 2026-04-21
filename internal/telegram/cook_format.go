@@ -88,6 +88,20 @@ func formatIngredientLine(ing recipe.ScaledIngredient) string {
 	return fmt.Sprintf("- %s%s %s", ing.DisplayQuantity, unitPart, ing.Name)
 }
 
+// formatRawIngredientLine formats a single unscaled ingredient as a Telegram list item.
+// Used when no scaling is active and raw quantities should be displayed as-is.
+func formatRawIngredientLine(ing recipe.Ingredient) string {
+	qty := ""
+	if ing.Quantity != "" {
+		qty = ing.Quantity
+		if ing.Unit != "" {
+			qty += " " + ing.Unit
+		}
+		qty += " "
+	}
+	return fmt.Sprintf("- %s%s", qty, ing.Name)
+}
+
 // FormatCookIngredients formats the ingredient list during cook mode per UX-2.4.
 func FormatCookIngredients(session *CookSession) string {
 	var lines []string
@@ -111,15 +125,7 @@ func FormatCookIngredients(session *CookSession) string {
 	} else {
 		// Unscaled — display as-is
 		for _, ing := range session.Ingredients {
-			qty := ""
-			if ing.Quantity != "" {
-				qty = ing.Quantity
-				if ing.Unit != "" {
-					qty += " " + ing.Unit
-				}
-				qty += " "
-			}
-			lines = append(lines, fmt.Sprintf("- %s%s", qty, ing.Name))
+			lines = append(lines, formatRawIngredientLine(ing))
 		}
 	}
 

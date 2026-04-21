@@ -179,5 +179,5 @@
   "reworkQueue": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-21T00:00:00Z",
-  "notes": "2026-04-21: Stochastic reconcile-to-doc sweep. Validated all 9 implementation files exist, all 14 test files exist, all 41 Go packages pass (./smackerel.sh test unit exit 0). Connector registered in connectors.go, route in router.go, config in smackerel.yaml, migration consolidated in 001_initial_schema.sql. state.json coherent: status done, certification certified, 5 scopes done, 13 phases claimed all backed by executionHistory. 1 finding: regression_test.go count drifted (14→21) after chaos sweeps; report.md corrected (total 107 unit tests, 138 total). No implementation drift, no stale phases, no wrong status."
+  "notes": "2026-04-21: Harden-to-doc sweep (stochastic child). 6 findings: (1) 8 empty integration test stubs — reclassified as honest stubs, (2) 2 proxy E2E tests — ContextForEndpoint fixed to POST /api/context-for, (3) 10+ self-validating unit tests — replaced with real behavior tests, (4) linker tests only parse JSON — tautological test removed, (5) SCN-GH-026 Gherkin 15→5 topics fixed, (6) manifest false claims documented. All 41 Go packages pass after fixes."
 }

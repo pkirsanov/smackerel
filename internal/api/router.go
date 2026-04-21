@@ -79,6 +79,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Get("/", deps.AnnotationHandlers.GetAnnotations)
 					r.Get("/summary", deps.AnnotationHandlers.GetAnnotationSummary)
 				})
+				r.Delete("/artifacts/{id}/tags/{tag}", deps.AnnotationHandlers.DeleteTag)
 				// Internal Telegram message-artifact mapping (spec 027, scope 5)
 				r.Post("/internal/telegram-message-artifact", deps.AnnotationHandlers.RecordTelegramMessageArtifact)
 				r.Get("/internal/telegram-message-artifact", deps.AnnotationHandlers.ResolveTelegramMessageArtifact)

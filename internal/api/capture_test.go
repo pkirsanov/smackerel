@@ -854,3 +854,126 @@ func TestCaptureHandler_Chaos_PipelineFailsWithDBStillHealthy_Returns500(t *test
 		t.Errorf("expected PROCESSING_FAILED when DB is healthy, got %q", resp.Error.Code)
 	}
 }
+
+func TestCaptureSource(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   string
+		expected string
+	}{
+		{"no header defaults to api", "", "api"},
+		{"api header", "api", "api"},
+		{"telegram header", "telegram", "telegram"},
+		{"extension header", "extension", "extension"},
+		{"pwa header", "pwa", "pwa"},
+		{"unknown source defaults to api", "unknown", "api"},
+		{"injection attempt defaults to api", "<script>", "api"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/capture", nil)
+			if tt.header != "" {
+				req.Header.Set("X-Capture-Source", tt.header)
+			}
+			got := captureSource(req)
+			if got != tt.expected {
+				t.Errorf("captureSource() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// === Sentinel error classification tests (IMPROVE-002-SQS-003) ===
+
+// mockErrorPipeline returns a configurable error from Process.
+type mockErrorPipeline struct {
+	err error
+}
+
+func (m *mockErrorPipeline) Process(_ context.Context, _ *pipeline.ProcessRequest) (*pipeline.ProcessResult, error) {
+	return nil, m.err
+}
+
+func TestCaptureHandler_ExtractionFailed_Returns422(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  &mockErrorPipeline{err: fmt.Errorf("%w: %w", pipeline.ErrExtractionFailed, fmt.Errorf("DNS resolution failed"))},
+	}
+
+	body := `{"url": "https://example.com/article"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for extraction failure, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "EXTRACTION_FAILED" {
+		t.Errorf("expected error code EXTRACTION_FAILED, got %q", resp.Error.Code)
+	}
+}
+
+func TestCaptureHandler_NATSPublishFailed_Returns503(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  &mockErrorPipeline{err: fmt.Errorf("%w: %w", pipeline.ErrNATSPublish, fmt.Errorf("connection refused"))},
+	}
+
+	body := `{"url": "https://example.com/article"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for NATS publish failure, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "ML_UNAVAILABLE" {
+		t.Errorf("expected error code ML_UNAVAILABLE, got %q", resp.Error.Code)
+	}
+}
+
+func TestCaptureHandler_GenericError_Returns500(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+		Pipeline:  &mockErrorPipeline{err: fmt.Errorf("something unexpected")},
+	}
+
+	body := `{"url": "https://example.com/article"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for generic error, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "PROCESSING_FAILED" {
+		t.Errorf("expected error code PROCESSING_FAILED, got %q", resp.Error.Code)
+	}
+}
