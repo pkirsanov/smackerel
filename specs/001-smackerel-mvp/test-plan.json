@@ -11,7 +11,7 @@
         {
           "type": "unit",
           "category": "unit",
-          "file": "internal/web/icons_test.go",
+          "file": "internal/web/icons/icons_test.go",
           "scenarioId": "SCN-001-001",
           "description": "All 32 icon SVGs exist, valid XML, valid viewBox",
           "liveSystem": false
@@ -19,7 +19,7 @@
         {
           "type": "unit",
           "category": "unit",
-          "file": "internal/web/icons_test.go",
+          "file": "internal/web/icons/icons_test.go",
           "scenarioId": "SCN-001-001",
           "description": "No emoji chars, color fills, or external icon glyphs in SVGs",
           "liveSystem": false
@@ -27,7 +27,7 @@
         {
           "type": "unit",
           "category": "unit",
-          "file": "internal/web/icons_test.go",
+          "file": "internal/web/icons/icons_test.go",
           "scenarioId": "SCN-001-002",
           "description": "Icons inherit currentColor — no hardcoded color values",
           "liveSystem": false
@@ -35,7 +35,7 @@
         {
           "type": "unit",
           "category": "unit",
-          "file": "internal/web/icons_test.go",
+          "file": "internal/web/icons/icons_test.go",
           "scenarioId": "SCN-001-003",
           "description": "Icon viewBox is 24x24 and stroke is 1.5px for all icons",
           "liveSystem": false
@@ -59,7 +59,7 @@
         {
           "type": "unit",
           "category": "unit",
-          "file": "internal/web/icons_test.go",
+          "file": "internal/web/icons/icons_test.go",
           "scenarioId": "SCN-001-018",
           "description": "Navigation/chrome icons follow same grid and stroke rules",
           "liveSystem": false
@@ -97,7 +97,7 @@
         {
           "type": "functional",
           "category": "functional",
-          "file": "tests/visual/test_theme.html",
+          "file": "internal/web/handler_test.go",
           "scenarioId": "SCN-001-005",
           "description": "Light theme palette: warm white bg, warm black fg",
           "liveSystem": false
@@ -105,7 +105,7 @@
         {
           "type": "functional",
           "category": "functional",
-          "file": "tests/visual/test_theme.html",
+          "file": "internal/web/handler_test.go",
           "scenarioId": "SCN-001-006",
           "description": "Dark theme palette: warm near-black bg, off-white fg",
           "liveSystem": false
@@ -113,7 +113,7 @@
         {
           "type": "functional",
           "category": "functional",
-          "file": "tests/visual/test_theme.html",
+          "file": "internal/web/handler_test.go",
           "scenarioId": "SCN-001-006",
           "description": "Dark mode auto-detects via prefers-color-scheme media query",
           "liveSystem": false
@@ -121,7 +121,7 @@
         {
           "type": "functional",
           "category": "functional",
-          "file": "tests/visual/test_theme.html",
+          "file": "internal/web/handler_test.go",
           "scenarioId": "SCN-001-006",
           "description": "Manual dark mode toggle persists selection in localStorage",
           "liveSystem": false
@@ -129,7 +129,7 @@
         {
           "type": "functional",
           "category": "functional",
-          "file": "tests/visual/test_responsive.html",
+          "file": "internal/web/handler_test.go",
           "scenarioId": "SCN-001-007",
           "description": "Mobile breakpoint (<480px): hamburger nav, full-width, 44px tap targets",
           "liveSystem": false
@@ -137,7 +137,7 @@
         {
           "type": "functional",
           "category": "functional",
-          "file": "tests/visual/test_typography.html",
+          "file": "internal/web/handler_test.go",
           "scenarioId": "SCN-001-008",
           "description": "System font stack renders (no custom @font-face declarations)",
           "liveSystem": false
@@ -145,7 +145,7 @@
         {
           "type": "unit",
           "category": "unit",
-          "file": "tests/lint/test_no_accent.sh",
+          "file": "internal/web/handler_test.go",
           "scenarioId": "SCN-001-009",
           "description": "No accent colors in any CSS rule",
           "liveSystem": false
@@ -153,7 +153,7 @@
         {
           "type": "unit",
           "category": "unit",
-          "file": "tests/lint/test_no_accent.sh",
+          "file": "internal/web/handler_test.go",
           "scenarioId": "SCN-001-009",
           "description": "Links use foreground color with underline, not blue",
           "liveSystem": false
@@ -199,7 +199,7 @@
         {
           "type": "unit",
           "category": "unit",
-          "file": "internal/connector/registry_test.go",
+          "file": "internal/connector/connector_test.go",
           "scenarioId": "SCN-001-010",
           "description": "ConnectorRegistry registers, retrieves, and unregisters connectors",
           "liveSystem": false
@@ -231,7 +231,7 @@
         {
           "type": "integration",
           "category": "integration",
-          "file": "internal/connector/state_test.go",
+          "file": "internal/connector/connector_test.go",
           "scenarioId": "SCN-001-013",
           "description": "Sync state persists cursor and resumes from it",
           "liveSystem": false
@@ -239,7 +239,7 @@
         {
           "type": "integration",
           "category": "integration",
-          "file": "internal/connector/state_test.go",
+          "file": "internal/connector/connector_test.go",
           "scenarioId": "SCN-001-013",
           "description": "Sync state records items_synced and error_count",
           "liveSystem": false
@@ -263,7 +263,7 @@
         {
           "type": "unit",
           "category": "unit",
-          "file": "internal/connector/health_test.go",
+          "file": "internal/connector/connector_test.go",
           "scenarioId": "SCN-001-020",
           "description": "Connector health reports correct status enum values",
           "liveSystem": false
@@ -271,7 +271,7 @@
         {
           "type": "integration",
           "category": "integration",
-          "file": "internal/connector/deadletter_test.go",
+          "file": "internal/connector/connector_test.go",
           "scenarioId": "SCN-001-021",
           "description": "Dead-letter queue receives items after 3 failed delivery attempts",
           "liveSystem": false
@@ -349,7 +349,7 @@
         {
           "type": "stress",
           "category": "stress",
-          "file": "tests/benchmark/test_search_accuracy.sh",
+          "file": "tests/stress/test_search_stress.sh",
           "scenarioId": "SCN-001-014",
           "description": "Search accuracy benchmark (20 vague queries)",
           "liveSystem": true

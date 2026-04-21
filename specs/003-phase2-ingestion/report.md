@@ -138,7 +138,8 @@ Exit code: 0
 - [x] Folder structure preserved as topic hints
 - [x] Duplicate URLs detected and skipped
 - [x] Async processing with progress reporting
-- [ ] POST /api/bookmarks/import endpoint works — **NOT IMPLEMENTED** (directory-based import via BookmarksConnector exists instead)
+- [x] POST /api/bookmarks/import endpoint works
+  > Evidence: `internal/api/bookmarks.go` — BookmarkImportHandler accepts multipart file upload, parses Chrome JSON / Netscape HTML, publishes via BookmarkPublisher. Route wired at `/api/bookmarks/import` in `internal/api/router.go`. Tests: `internal/api/bookmarks_test.go` (7 tests).
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior
 - [x] Broader E2E regression suite passes
 - [x] Zero warnings, lint/format clean

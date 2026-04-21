@@ -501,6 +501,57 @@ analyze → ux
 | `spec-scope-hardening` (with analyze + socratic) | Explore → bootstrap → harden → finalize | Idea exploration, no code |
 | `devops-to-doc` | DevOps → test → stabilize → security → validate → audit → docs → finalize | Operational delivery |
 | `resume-only` | Resume state | Picking up work |
+| `autonomous-goal` | Convergence loop: plan → implement → verify → remediate → repeat | Fully autonomous single-goal execution |
+| `autonomous-sprint` | Time-bounded multi-goal: plan → execute goals → wrap-up | Multiple goals with a deadline |
+
+---
+
+## Autonomous Modes
+
+Full-cycle autonomous execution without human intervention until convergence or time budget is exhausted.
+
+### <img src="../../icons/tyrone-chain.svg" width="20"> autonomous-goal
+
+```
+[CONVERGENCE LOOP: understand → plan → execute → verify (E2E + chaos + audit) → remediate → check] → optimize → docs → finalize
+```
+
+**Use when:** You want to give a single goal and have the agent handle everything autonomously — spec creation, design, implementation, testing, E2E, chaos, validation, audit, and remediation — looping until all gates pass and zero findings remain. Max 10 convergence iterations.
+
+**Key behaviors:**
+- Never stops on fixable obstacles (searches web/docs for solutions)
+- E2E + chaos MANDATORY every verify cycle
+- Creates spec/design/scopes automatically if they don't exist
+- Remediates ALL findings (no reporting-only)
+- Solution search when stuck: project docs → web → alternative approaches
+
+```
+/bubbles.goal  Implement the security deposit hold/release feature
+/bubbles.goal  Fix the broken E2E tests and make all chaos scenarios pass
+```
+
+### <img src="../../icons/donna-whistle.svg" width="20"> autonomous-sprint
+
+```
+[SPRINT: plan goals → FOR EACH goal: time-check → autonomous-goal loop → next] → sprint report
+```
+
+**Use when:** You have multiple goals and a fixed time budget. The agent prioritizes, executes each via the convergence loop, manages the clock, dynamically reorders if time is tight, and delivers a sprint report.
+
+**Key behaviors:**
+- Checks wall clock before each goal AND each scope
+- Finishes current scope completely before stopping (never leaves broken state)
+- Dynamically reorders: if next goal won't fit, tries a smaller one
+- Reserves 15 minutes for wrap-up/docs at end
+- Produces structured sprint report (completed / in-progress / not-started)
+- Resume support for interrupted sprints
+
+```
+/bubbles.sprint  minutes: 240
+1. Fix the calendar sync bug
+2. Add deposit hold/release feature
+3. Improve page builder E2E coverage
+```
 
 ---
 

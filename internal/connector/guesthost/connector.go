@@ -183,7 +183,16 @@ func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.R
 		newCursor = cursor
 	}
 
-	c.setHealth(connector.HealthHealthy)
+	// CHAOS-013-002: Only restore HealthHealthy if the connector has not been
+	// closed while this Sync was in-flight. Without this guard, Sync's deferred
+	// setHealth overwrites Close's HealthDisconnected, making a closed connector
+	// appear healthy.
+	c.mu.RLock()
+	closed := c.client == nil
+	c.mu.RUnlock()
+	if !closed {
+		c.setHealth(connector.HealthHealthy)
+	}
 
 	slog.Info("GuestHost sync complete", "id", c.id, "events", len(artifacts), "cursor", newCursor)
 	return artifacts, newCursor, nil

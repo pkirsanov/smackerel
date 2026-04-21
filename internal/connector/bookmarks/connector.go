@@ -404,6 +404,12 @@ func (c *BookmarksConnector) processFile(ctx context.Context, cfg Config, filePa
 		artifacts[i].Metadata["source_format"] = sourceFormat
 		artifacts[i].Metadata["import_file"] = fileName
 		artifacts[i].Metadata["processing_tier"] = cfg.ProcessingTier
+		// R-006: bookmark_url for dedup key and content fetch target
+		artifacts[i].Metadata["bookmark_url"] = artifacts[i].URL
+		// R-006: added_at as ISO 8601 string for timeline placement
+		if !artifacts[i].CapturedAt.IsZero() {
+			artifacts[i].Metadata["added_at"] = artifacts[i].CapturedAt.Format(time.RFC3339)
+		}
 		// folder_path is already set by ToRawArtifacts via the "folder" key
 		if folder, ok := artifacts[i].Metadata["folder"]; ok {
 			artifacts[i].Metadata["folder_path"] = folder

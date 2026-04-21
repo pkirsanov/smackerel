@@ -1,7 +1,7 @@
 {
-  "agents": 34,
+  "agents": 36,
   "gates": 60,
-  "workflowModes": 32,
+  "workflowModes": 34,
   "phases": 25,
-  "generatedAt": "2026-04-17T22:02:37Z"
+  "generatedAt": "2026-04-20T21:28:07Z"
 }

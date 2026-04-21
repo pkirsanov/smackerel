@@ -208,7 +208,10 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 			case <-time.After(restartDelay):
 			}
 			// Re-check after sleep: shutdown may have started during the delay
-			if s.stopped || parentCtx.Err() != nil {
+			s.mu.RLock()
+			stoppedAfterDelay := s.stopped
+			s.mu.RUnlock()
+			if stoppedAfterDelay || parentCtx.Err() != nil {
 				slog.Warn("skipping restart — supervisor stopped during delay", "connector", id)
 				return
 			}

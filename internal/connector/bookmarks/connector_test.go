@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
 )
@@ -180,6 +181,10 @@ func TestSyncChromeJSON(t *testing.T) {
 		}
 		if _, ok := a.Metadata["folder_path"]; !ok {
 			t.Error("artifact missing folder_path metadata")
+		}
+		// R-006: bookmark_url must be present
+		if burl, ok := a.Metadata["bookmark_url"].(string); !ok || burl == "" {
+			t.Errorf("artifact missing or empty bookmark_url metadata, got %v", a.Metadata["bookmark_url"])
 		}
 	}
 
@@ -510,6 +515,84 @@ func TestSyncCorruptedExportNoPanic(t *testing.T) {
 	// At least the good.json should produce artifacts
 	if len(artifacts) < 2 {
 		t.Errorf("got %d artifacts, expected at least 2 from good.json", len(artifacts))
+	}
+}
+
+// T-GAP-R006-01: R-006 bookmark_url and added_at metadata fields are populated.
+func TestMetadataR006Fields(t *testing.T) {
+	// Chrome JSON fixture with date_added field (Chrome epoch: microseconds since 1601-01-01)
+	// 13350000000000000 µs ≈ 2023-06-12 in Chrome epoch
+	fixture := []byte(`{
+		"roots": {
+			"bookmark_bar": {
+				"type": "folder",
+				"name": "Bookmarks Bar",
+				"children": [
+					{
+						"type": "url",
+						"name": "Dated Bookmark",
+						"url": "https://example.com/dated",
+						"date_added": "13350000000000000"
+					},
+					{
+						"type": "url",
+						"name": "Undated Bookmark",
+						"url": "https://example.com/undated"
+					}
+				]
+			}
+		}
+	}`)
+
+	dir := setupImportDir(t, map[string][]byte{
+		"with_dates.json": fixture,
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync() error: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("got %d artifacts, want 2", len(artifacts))
+	}
+
+	for _, a := range artifacts {
+		// bookmark_url must always be present
+		burl, ok := a.Metadata["bookmark_url"].(string)
+		if !ok || burl == "" {
+			t.Errorf("artifact %q: missing bookmark_url metadata", a.Title)
+		}
+		if burl != a.URL {
+			t.Errorf("artifact %q: bookmark_url = %q, want %q (matches URL)", a.Title, burl, a.URL)
+		}
+	}
+
+	// Find the dated bookmark and check added_at
+	for _, a := range artifacts {
+		if a.Title == "Dated Bookmark" {
+			addedAt, ok := a.Metadata["added_at"].(string)
+			if !ok || addedAt == "" {
+				t.Errorf("dated bookmark missing added_at metadata")
+			}
+			// Verify it's a valid RFC3339 timestamp
+			if ok && addedAt != "" {
+				if _, err := time.Parse(time.RFC3339, addedAt); err != nil {
+					t.Errorf("added_at %q is not valid RFC3339: %v", addedAt, err)
+				}
+			}
+		}
+		if a.Title == "Undated Bookmark" {
+			// Undated bookmark should not have added_at
+			if _, ok := a.Metadata["added_at"]; ok {
+				t.Errorf("undated bookmark should not have added_at metadata")
+			}
+		}
 	}
 }
 

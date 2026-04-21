@@ -159,7 +159,8 @@ func TestE2E_CaptureProcessSearch(t *testing.T) {
 		t.Error("captured and processed artifact not found in search results")
 	}
 
-	// Cleanup: delete the test artifact via DB if possible
-	// (E2E tests use the API, but cleanup through the API may not exist)
+	// Cleanup note: E2E tests rely on the disposable test stack (smackerel-test
+	// compose project with isolated volumes). Test data uses unique markers
+	// (e2e-test-{UnixNano}) for idempotency. Stack teardown removes all data.
 	t.Logf("e2e capture→process→search test completed, artifact_id=%s", captureResp.ArtifactID)
 }

@@ -273,6 +273,16 @@ class NATSClient:
                             llm_api_key,
                             ollama_url,
                         )
+                    elif subject == "domain.extract":
+                        from .domain import handle_domain_extract
+
+                        result = await handle_domain_extract(
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                            ollama_url,
+                        )
                     else:
                         logger.warning("Unknown subject: %s", subject)
                         await msg.ack()

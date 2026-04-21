@@ -553,11 +553,11 @@ Scenario: SCN-MT-021 Commute-classified activities downgraded to light tier
 - [x] Trip event artifacts have ContentType `event/trip` with destination, date range, activity breakdown metadata
   > Evidence | **Phase:** implement — TestNormalizeTripEvent PASS: ContentType="event/trip", destination=(52.52,13.40), start_date=2026-04-10, end_date=2026-04-12, total_activities=6, processing_tier="full", deterministic SourceRef
 - [x] Commute-classified activities downgraded to `light` tier; trip-associated activities upgraded to `full`
-  > Evidence | **Phase:** implement — TestTierDowngradeCommute PASS (standard→light, original unchanged), TestTierUpgradeTrip PASS (standard→full). normalizeCommutePattern sets tier="light", normalizeTripEvent sets tier="full".
+  > Evidence | **Phase:** test-to-doc — TestTierDowngradeCommute PASS: drive activity tier=standard (precondition), commute pattern artifact tier=light, original activity unchanged. TestTierUpgradeTrip PASS: transit activity tier=standard (precondition), trip event artifact tier=full, original activity unchanged. `./smackerel.sh test unit` all maps tests green.
 - [x] `CAPTURED_DURING` edges inserted via `ON CONFLICT DO NOTHING` (idempotent)
   > Evidence | **Phase:** implement — LinkTemporalSpatial() uses `ON CONFLICT (src_type, src_id, dst_type, dst_id, edge_type) DO NOTHING` in SQL. Code audited correct with regression-fixed schema alignment. Integration verification deferred to live stack.
 - [x] All 10 unit + 6 integration + 2 e2e tests pass
-  > Evidence | **Phase:** implement — 15 Scope 3 unit tests PASS (24 patterns_test.go functions total across all scopes, 78 maps package total). All unit tests green. Integration/e2e tests (T-3-11 through T-3-18) deferred to live stack — all DB-dependent code audited correct.
+  > Evidence | **Phase:** test-to-doc — 17 Scope 3 unit tests PASS (26 patterns_test.go functions total, including TestTierDowngradeCommute and TestTierUpgradeTrip added to close SCN-MT-021 coverage gap). Integration/e2e tests (T-3-11 through T-3-18) deferred to live stack — all DB-dependent code audited correct.
 - [x] `./smackerel.sh lint` passes with zero new errors
   > Evidence | **Phase:** implement — `./smackerel.sh lint` → Exit Code: 0
 - [x] `./smackerel.sh format --check` passes

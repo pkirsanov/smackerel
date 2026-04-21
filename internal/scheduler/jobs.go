@@ -28,12 +28,10 @@ func FormatAlertMessage(alertType string, title string, body string) string {
 
 // runDigestJob handles the digest cron callback.
 func (s *Scheduler) runDigestJob() {
-	if !s.muDigest.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "digest", "job", "digest")
-		return
-	}
-	defer s.muDigest.Unlock()
+	s.runGuarded(&s.muDigest, "digest", "digest", s.doDigestJob)
+}
 
+func (s *Scheduler) doDigestJob() {
 	slog.Info("digest cron triggered")
 	if s.digestGen == nil {
 		slog.Warn("digest generator not configured")
@@ -118,12 +116,10 @@ func (s *Scheduler) runDigestJob() {
 
 // runTopicMomentumJob updates topic momentum scores — hourly.
 func (s *Scheduler) runTopicMomentumJob() {
-	if !s.muHourly.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "hourly", "job", "topic-momentum")
-		return
-	}
-	defer s.muHourly.Unlock()
+	s.runGuarded(&s.muHourly, "hourly", "topic-momentum", s.doTopicMomentumJob)
+}
 
+func (s *Scheduler) doTopicMomentumJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 	defer cancel()
 	if err := s.lifecycle.UpdateAllMomentum(ctx); err != nil {
@@ -135,12 +131,10 @@ func (s *Scheduler) runTopicMomentumJob() {
 
 // runSynthesisJob runs intelligence synthesis and overdue commitments check — daily at 2 AM.
 func (s *Scheduler) runSynthesisJob() {
-	if !s.muDaily.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "daily", "job", "synthesis")
-		return
-	}
-	defer s.muDaily.Unlock()
+	s.runGuarded(&s.muDaily, "daily", "synthesis", s.doSynthesisJob)
+}
 
+func (s *Scheduler) doSynthesisJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 	defer cancel()
 
@@ -158,12 +152,10 @@ func (s *Scheduler) runSynthesisJob() {
 
 // runResurfacingJob resurfaces dormant artifacts — daily at 8 AM.
 func (s *Scheduler) runResurfacingJob() {
-	if !s.muResurface.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "resurface", "job", "resurfacing")
-		return
-	}
-	defer s.muResurface.Unlock()
+	s.runGuarded(&s.muResurface, "resurface", "resurfacing", s.doResurfacingJob)
+}
 
+func (s *Scheduler) doResurfacingJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 	defer cancel()
 
@@ -194,12 +186,10 @@ func (s *Scheduler) runResurfacingJob() {
 
 // runPreMeetingBriefsJob generates pre-meeting briefs — every 5 minutes (R-306).
 func (s *Scheduler) runPreMeetingBriefsJob() {
-	if !s.muBriefs.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "briefs", "job", "pre-meeting-briefs")
-		return
-	}
-	defer s.muBriefs.Unlock()
+	s.runGuarded(&s.muBriefs, "briefs", "pre-meeting-briefs", s.doPreMeetingBriefsJob)
+}
 
+func (s *Scheduler) doPreMeetingBriefsJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 1*time.Minute)
 	defer cancel()
 
@@ -218,12 +208,10 @@ func (s *Scheduler) runPreMeetingBriefsJob() {
 
 // runWeeklySynthesisJob generates weekly synthesis — Sunday at 4 PM (R-307).
 func (s *Scheduler) runWeeklySynthesisJob() {
-	if !s.muWeekly.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "weekly", "job", "weekly-synthesis")
-		return
-	}
-	defer s.muWeekly.Unlock()
+	s.runGuarded(&s.muWeekly, "weekly", "weekly-synthesis", s.doWeeklySynthesisJob)
+}
 
+func (s *Scheduler) doWeeklySynthesisJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 	defer cancel()
 
@@ -238,12 +226,10 @@ func (s *Scheduler) runWeeklySynthesisJob() {
 
 // runMonthlyReportJob generates monthly self-knowledge report — 1st of each month at 3 AM (R-506).
 func (s *Scheduler) runMonthlyReportJob() {
-	if !s.muMonthly.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "monthly", "job", "monthly-report")
-		return
-	}
-	defer s.muMonthly.Unlock()
+	s.runGuarded(&s.muMonthly, "monthly", "monthly-report", s.doMonthlyReportJob)
+}
 
+func (s *Scheduler) doMonthlyReportJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 	defer cancel()
 
@@ -262,12 +248,10 @@ func (s *Scheduler) runMonthlyReportJob() {
 
 // runSubscriptionDetectionJob detects subscriptions — weekly on Mondays at 3 AM (R-504).
 func (s *Scheduler) runSubscriptionDetectionJob() {
-	if !s.muSubs.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "subscriptions", "job", "subscription-detection")
-		return
-	}
-	defer s.muSubs.Unlock()
+	s.runGuarded(&s.muSubs, "subscriptions", "subscription-detection", s.doSubscriptionDetectionJob)
+}
 
+func (s *Scheduler) doSubscriptionDetectionJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 	defer cancel()
 
@@ -281,12 +265,10 @@ func (s *Scheduler) runSubscriptionDetectionJob() {
 
 // runFrequentLookupsJob detects frequent lookups and purges old search logs — daily at 4 AM (R-507).
 func (s *Scheduler) runFrequentLookupsJob() {
-	if !s.muLookups.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "lookups", "job", "frequent-lookups")
-		return
-	}
-	defer s.muLookups.Unlock()
+	s.runGuarded(&s.muLookups, "lookups", "frequent-lookups", s.doFrequentLookupsJob)
+}
 
+func (s *Scheduler) doFrequentLookupsJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
 	defer cancel()
 
@@ -334,27 +316,20 @@ func (s *Scheduler) runFrequentLookupsJob() {
 
 // runAlertDeliveryJob sweeps and delivers pending alerts — every 15 minutes (R-021-001).
 func (s *Scheduler) runAlertDeliveryJob() {
-	if !s.muAlerts.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "alerts", "job", "alert-delivery")
-		return
-	}
-	defer s.muAlerts.Unlock()
-
-	ctx, cancel := context.WithTimeout(s.baseCtx, 1*time.Minute)
-	defer cancel()
-
-	s.deliverPendingAlerts(ctx)
+	s.runGuarded(&s.muAlerts, "alerts", "alert-delivery", func() {
+		ctx, cancel := context.WithTimeout(s.baseCtx, 1*time.Minute)
+		defer cancel()
+		s.deliverPendingAlerts(ctx)
+	})
 }
 
 // runAlertProductionJob runs daily alert producers — 6 AM (R-021-002, R-021-003, R-021-004).
 // All three producers run sequentially in one job.
 func (s *Scheduler) runAlertProductionJob() {
-	if !s.muAlertProd.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "alert-prod", "job", "alert-producers")
-		return
-	}
-	defer s.muAlertProd.Unlock()
+	s.runGuarded(&s.muAlertProd, "alert-prod", "alert-producers", s.doAlertProductionJob)
+}
 
+func (s *Scheduler) doAlertProductionJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
 	defer cancel()
 
@@ -379,34 +354,24 @@ func (s *Scheduler) runAlertProductionJob() {
 
 // runRelationshipCoolingJob produces relationship cooling alerts — weekly Monday 7 AM (R-021-005).
 func (s *Scheduler) runRelationshipCoolingJob() {
-	if !s.muRelCool.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "rel-cool", "job", "relationship-cooling-alerts")
-		return
-	}
-	defer s.muRelCool.Unlock()
-
-	ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
-	defer cancel()
-
-	if err := s.engine.ProduceRelationshipCoolingAlerts(ctx); err != nil {
-		slog.Error("relationship cooling alert production failed", "error", err)
-	}
+	s.runGuarded(&s.muRelCool, "rel-cool", "relationship-cooling-alerts", func() {
+		ctx, cancel := context.WithTimeout(s.baseCtx, 2*time.Minute)
+		defer cancel()
+		if err := s.engine.ProduceRelationshipCoolingAlerts(ctx); err != nil {
+			slog.Error("relationship cooling alert production failed", "error", err)
+		}
+	})
 }
 
 // runKnowledgeLintJob runs the knowledge linter — configurable cron.
 func (s *Scheduler) runKnowledgeLintJob() {
-	if !s.muKnowledgeLint.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "knowledge-lint", "job", "knowledge-lint")
-		return
-	}
-	defer s.muKnowledgeLint.Unlock()
-
-	ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
-	defer cancel()
-
-	if err := s.knowledgeLinter.RunLint(ctx); err != nil {
-		slog.Error("knowledge lint failed", "error", err)
-	}
+	s.runGuarded(&s.muKnowledgeLint, "knowledge-lint", "knowledge-lint", func() {
+		ctx, cancel := context.WithTimeout(s.baseCtx, 5*time.Minute)
+		defer cancel()
+		if err := s.knowledgeLinter.RunLint(ctx); err != nil {
+			slog.Error("knowledge lint failed", "error", err)
+		}
+	})
 }
 
 // deliverPendingAlerts fetches pending alerts and delivers them via Telegram.
@@ -467,12 +432,10 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 }
 
 func (s *Scheduler) runMealPlanAutoCompleteJob() {
-	if !s.muMealPlanComplete.TryLock() {
-		slog.Warn("skipping overlapping job", "group", "meal-plan-auto-complete")
-		return
-	}
-	defer s.muMealPlanComplete.Unlock()
+	s.runGuarded(&s.muMealPlanComplete, "meal-plan-auto-complete", "meal-plan-auto-complete", s.doMealPlanAutoCompleteJob)
+}
 
+func (s *Scheduler) doMealPlanAutoCompleteJob() {
 	ctx, cancel := context.WithTimeout(s.baseCtx, 60*time.Second)
 	defer cancel()
 

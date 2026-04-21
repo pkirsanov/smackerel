@@ -108,8 +108,9 @@ type Dependencies struct {
 	KnowledgeConceptSearchThreshold float64
 	KnowledgeHealthCacheTTL         time.Duration
 
-	// Knowledge health cache
-	knowledgeHealthMu    sync.Mutex
+	// Knowledge health cache — RWMutex avoids serializing concurrent
+	// health checks on slow DB calls when the cache TTL expires (C-023-C001).
+	knowledgeHealthMu    sync.RWMutex
 	knowledgeHealthCache *KnowledgeHealthSection
 	knowledgeHealthAt    time.Time
 
@@ -297,18 +298,24 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // getCachedKnowledgeHealth returns cached knowledge health stats, refreshing when stale.
+// Uses RWMutex so concurrent readers don't block each other, and releases the lock
+// before making the DB call to avoid serialising health checks on slow queries (C-023-C001).
 func (d *Dependencies) getCachedKnowledgeHealth(ctx context.Context) *KnowledgeHealthSection {
-	d.knowledgeHealthMu.Lock()
-	defer d.knowledgeHealthMu.Unlock()
-
+	// Fast path: serve from cache under read lock (concurrent readers OK).
+	d.knowledgeHealthMu.RLock()
 	if d.KnowledgeHealthCacheTTL > 0 && d.knowledgeHealthCache != nil && time.Since(d.knowledgeHealthAt) < d.KnowledgeHealthCacheTTL {
-		return d.knowledgeHealthCache
+		cached := d.knowledgeHealthCache
+		d.knowledgeHealthMu.RUnlock()
+		return cached
 	}
+	stale := d.knowledgeHealthCache
+	d.knowledgeHealthMu.RUnlock()
 
+	// Slow path: fetch fresh data WITHOUT holding any lock.
 	stats, err := d.KnowledgeStore.GetKnowledgeHealthStats(ctx)
 	if err != nil {
 		slog.Warn("knowledge health stats query failed", "error", err)
-		return d.knowledgeHealthCache // return stale cache if available
+		return stale // return stale cache if available
 	}
 
 	section := &KnowledgeHealthSection{
@@ -317,8 +324,13 @@ func (d *Dependencies) getCachedKnowledgeHealth(ctx context.Context) *KnowledgeH
 		SynthesisPending: stats.SynthesisPending,
 		LastSynthesisAt:  stats.LastSynthesisAt,
 	}
+
+	// Update cache under write lock.
+	d.knowledgeHealthMu.Lock()
 	d.knowledgeHealthCache = section
 	d.knowledgeHealthAt = time.Now()
+	d.knowledgeHealthMu.Unlock()
+
 	return section
 }
 

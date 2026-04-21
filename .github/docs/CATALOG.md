@@ -52,6 +52,8 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 40 | [End of Day](recipes/end-of-day.md) | `bubbles.handoff` | Session handoff |
 | 41 | [Update Docs](recipes/update-docs.md) | `docs-only` | Publish managed docs |
 | 42 | [Outcome-First Specs](recipes/outcome-first-specs.md) | `bubbles.analyst` | Define what 'done' means before how to get there |
+| 43 | [Autonomous Goal](recipes/autonomous-goal.md) | `autonomous-goal` | Give a goal, agent does everything until done |
+| 44 | [Autonomous Sprint](recipes/autonomous-sprint.md) | `autonomous-sprint` | Multiple goals + time budget, fully autonomous |
 
 ---
 
@@ -64,7 +66,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 8 → 9 → 10 → 7 → 11
 
 ### 🔨 Building & Delivering
-3 → 4 → 5 → 12
+3 → 4 → 5 → 12 → 43 → 44
 
 ### 🔍 Review & Assessment
 13 → 14 → 15 → 16 → 28

@@ -202,6 +202,31 @@ func TestStateConstants(t *testing.T) {
 	}
 }
 
+// SCN-003-026: Archived topic resurfaces on new capture back to active.
+// TransitionState must promote StateArchived to active/hot when momentum recovers.
+func TestTransitionState_ArchivedResurfaces(t *testing.T) {
+	tests := []struct {
+		name     string
+		momentum float64
+		expected State
+	}{
+		{"archived to hot on high momentum", 55.0, StateHot},
+		{"archived to active on moderate momentum", 12.0, StateActive},
+		{"archived stays archived on zero momentum", 0.0, StateArchived},
+		{"archived to emerging on low momentum", 3.0, StateEmerging},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TransitionState(StateArchived, tt.momentum)
+			if got != tt.expected {
+				t.Errorf("TransitionState(archived, %.1f) = %s, want %s",
+					tt.momentum, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestNewLifecycle(t *testing.T) {
 	l := NewLifecycle(nil)
 	if l == nil {

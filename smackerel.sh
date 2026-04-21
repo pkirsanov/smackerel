@@ -141,7 +141,7 @@ case "$COMMAND" in
         exit 1
     fi
     # Check for common SST-managed vars that should NOT be individually declared
-    SST_VARS="DATABASE_URL:|NATS_URL:|LLM_API_KEY:|SMACKEREL_AUTH_TOKEN:|OLLAMA_URL:|OLLAMA_MODEL:|EMBEDDING_MODEL:|DIGEST_CRON:|ML_SIDECAR_URL:|CORE_API_URL:"
+    SST_VARS="(DATABASE_URL|NATS_URL|LLM_API_KEY|SMACKEREL_AUTH_TOKEN|OLLAMA_URL|OLLAMA_MODEL|EMBEDDING_MODEL|DIGEST_CRON|ML_SIDECAR_URL|CORE_API_URL):"
     if grep -E "^\s+${SST_VARS}" docker-compose.yml >/dev/null 2>&1; then
         echo "ERROR: docker-compose.yml contains individual SST-managed env declarations — use env_file: instead"
         exit 1
@@ -234,9 +234,10 @@ case "$COMMAND" in
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_ui.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_detail.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_settings.sh"
-        # Phase 4: Expansion (maps + browser)
+        # Phase 4: Expansion (maps + browser + bookmarks)
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_maps_import.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_browser_sync.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_bookmark_import.sh"
         ;;
       stress)
         timeout 300 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"

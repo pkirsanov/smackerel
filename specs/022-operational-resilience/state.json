@@ -15,7 +15,7 @@
   "certification": {
     "status": "certified",
     "completedScopes": ["scope-1", "scope-2", "scope-3", "scope-4"],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": ["analyze", "design", "plan", "implement", "test", "docs", "finalize"],
     "scopeProgress": [],
     "lockdownState": {
       "active": false,

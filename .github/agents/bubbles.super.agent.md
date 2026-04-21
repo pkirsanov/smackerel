@@ -378,6 +378,37 @@ User: "deliver this fast with parallel scopes"
 
 User: "release-ready, careful, TDD, commit each scope"
 -> /bubbles.workflow  specs/<feature> mode: delivery-lockdown tdd: true grillMode: required-on-ambiguity autoCommit: scope
+
+User: "just make this feature work end-to-end, handle everything"
+-> /bubbles.goal  Implement the <feature> — full autonomous execution with convergence loop
+   (auto-creates spec/design/scopes, implements, tests, E2E, chaos, validates, remediates all findings until zero remain)
+
+User: "I want this done autonomously, don't stop until it's perfect"
+-> /bubbles.goal  <goal description>
+   (convergence loop runs up to 10 iterations: implement → verify → remediate → repeat until all gates pass)
+
+User: "stabilize this stack end-to-end and don't stop until deploy, tests, and docs are clean"
+-> /bubbles.goal  Stabilize the <system> — close ops, deployment, validation, and documentation gaps until the stack is clean
+   (works for ops and reliability goals too: config drift, deploy breakage, runtime instability, hardening, docs sync)
+
+User: "spend the next 90 minutes on bug and ops cleanup"
+-> /bubbles.sprint  minutes: 90
+   1. <bug fix>
+   2. <ops cleanup>
+   3. <stability follow-up>
+   (mixes bug, ops, hardening, and cleanup goals in one time-boxed sprint)
+
+User: "work on these 3 things for the next 4 hours"
+-> /bubbles.sprint  minutes: 240
+   1. <goal 1>
+   2. <goal 2>
+   3. <goal 3>
+   (prioritizes goals, executes each via convergence loop, manages clock, stops gracefully)
+
+User: "I have a backlog, pick the most important stuff and work until lunch"
+-> /bubbles.sprint  minutes: 180
+   <goal list>
+   (dynamic reordering if time is tight, finishes current scope before stopping)
 ```
 
 For any user request, first discover the current agent/mode inventory, then match to the closest fit, then apply the Tag Selection Matrix.
@@ -403,6 +434,8 @@ For any user request, first discover the current agent/mode inventory, then matc
 | "Resume yesterday's work" | status → `workflow mode: resume-only` | — |
 | "Do the next thing from recap/status/handoff" | `workflow mode: delivery-lockdown` or `bugfix-fastlane` | Preserve workflow orchestration instead of mirroring raw specialist advice |
 | "fix all found", "address rest", "fix the rest" after a workflow run | Resume the active workflow mode from continuation state | Preserve orchestration and required quality chain |
+| "One autonomous goal with no check-ins" | `/bubbles.goal  <goal>` | Use for feature, bug, ops, or hardening goals that should run to convergence |
+| "Several goals before a deadline" | `/bubbles.sprint  minutes: <N>` | Use for mixed feature, bug, ops, and cleanup backlogs |
 | "Package a reusable workflow" | create-skill → verify trigger | — |
 | "Speed up a well-planned spec" | `workflow mode: full-delivery` | `parallelScopes: dag maxParallelScopes: 2` |
 | "How am I doing?" | `/bubbles.retro week` | — |

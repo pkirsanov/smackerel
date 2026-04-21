@@ -138,6 +138,44 @@ All 3 test coverage gaps identified in the 2026-04-10 reconciliation have been c
 
 All 3 scopes implemented and code-verified. All security controls are correctly in place. All 3 test coverage gaps from prior reconciliation have been closed with targeted unit tests. 53 unit tests pass (Go 31 packages all green + Python 53 pytest all green).
 
+## Regression Probe (2026-04-21) — Stochastic Quality Sweep
+
+### Probe Methodology
+
+Regression analysis covering:
+- Baseline test suite execution (Go + Python unit tests)
+- Config SST drift check (`./smackerel.sh check`)
+- Lint pass (`./smackerel.sh lint`)
+- Cross-spec conflict analysis (files modified by spec 020 vs other specs)
+- Design contradiction scan (decrypt behavior, router auth, docker-compose)
+- Coverage stability verification
+
+### Probed Surfaces
+
+| Surface | Files | Cross-Spec Overlap | Finding |
+|---------|-------|-------------------|---------|
+| `internal/auth/store.go` (decrypt fail-closed) | Spec 002 references old plaintext fallback in evidence text | Artifact text staleness only — no functional conflict | CLEAN |
+| `internal/api/router.go` (webAuthMiddleware, httprate) | Specs 003, 023, 025, 027, 028 add routes to same router | All route registrations inside authenticated groups coexist; unauthenticated routes (health, PWA, metrics) remain outside auth | CLEAN |
+| `docker-compose.yml` (127.0.0.1 binding, NATS config, cap_drop) | Specs 002, 029 also modify compose | Port bindings, env_file, build args, labels all compatible | CLEAN |
+| `ml/app/auth.py` (verify_auth dependency) | No other spec touches this file | Sole owner: spec 020 | CLEAN |
+| `config/smackerel.yaml` (host_bind_address) | SST pipeline reads field correctly | `./smackerel.sh check` confirms sync | CLEAN |
+| `scripts/commands/config.sh` (nats.conf generation) | Spec 029 also modifies config.sh | Changes are additive (029 adds env vars, 020 adds nats.conf + host_bind_address) | CLEAN |
+
+### Results
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| `./smackerel.sh test unit` | PASS | Go 41 packages green + Python 214 passed (0 failures) |
+| `./smackerel.sh check` | PASS | "Config is in sync with SST", "env_file drift guard: OK" |
+| `./smackerel.sh lint` | PASS | "All checks passed!" |
+| Cross-spec conflicts | NONE | 6 surfaces verified — no functional regressions |
+| Design contradictions | NONE | decrypt, router auth, docker security all coherent |
+| Coverage decrease | NONE | Test count stable (214 Python + 41 Go packages) |
+
+### Verdict
+
+**CLEAN — no regressions detected.** All security hardening changes from spec 020 remain intact and non-conflicting with subsequent spec implementations. No findings to route.
+
 ## Gaps Probe (2026-04-14) — Stochastic Quality Sweep R30
 
 ### Sweep Methodology

@@ -34,6 +34,7 @@ type mockKnowledgeStore struct {
 	statsErr      error
 	healthStats   *knowledge.KnowledgeHealthStats
 	healthErr     error
+	healthDelay   time.Duration // optional delay to simulate slow DB (C-023-C001)
 }
 
 func (m *mockKnowledgeStore) SearchConcepts(_ context.Context, _ string, _ float64) (*knowledge.ConceptMatch, error) {
@@ -65,6 +66,9 @@ func (m *mockKnowledgeStore) GetStats(_ context.Context) (*knowledge.KnowledgeSt
 }
 
 func (m *mockKnowledgeStore) GetKnowledgeHealthStats(_ context.Context) (*knowledge.KnowledgeHealthStats, error) {
+	if m.healthDelay > 0 {
+		time.Sleep(m.healthDelay)
+	}
 	return m.healthStats, m.healthErr
 }
 

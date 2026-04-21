@@ -26,6 +26,7 @@ func shutdownAll(
 	tgBot *telegram.Bot,
 	resultSub *pipeline.ResultSubscriber,
 	synthesisSub *pipeline.SynthesisResultSubscriber,
+	domainSub *pipeline.DomainResultSubscriber,
 	supervisor *connector.Supervisor,
 	nc *smacknats.Client,
 	pg *db.Postgres,
@@ -83,6 +84,9 @@ func shutdownAll(
 		}
 		if synthesisSub != nil {
 			synthesisSub.Stop()
+		}
+		if domainSub != nil {
+			domainSub.Stop()
 		}
 	})
 

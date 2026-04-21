@@ -1098,7 +1098,7 @@ func (c *Connector) fetchTsunamiAlerts(ctx context.Context) ([]TsunamiAlert, err
 	return alerts, nil
 }
 
-// classifyTsunamiSeverity maps tsunami alert titles to severity levels.
+// classifyTsunamiSeverity maps tsunami alert titles to CAP severity levels.
 func classifyTsunamiSeverity(title string) string {
 	lower := strings.ToLower(title)
 	switch {
@@ -1109,7 +1109,7 @@ func classifyTsunamiSeverity(title string) string {
 	case strings.Contains(lower, "advisory"):
 		return "minor"
 	default:
-		return "info"
+		return "unknown"
 	}
 }
 
@@ -1230,7 +1230,7 @@ func (c *Connector) fetchVolcanoAlerts(ctx context.Context) ([]VolcanoAlert, err
 	return alerts, nil
 }
 
-// classifyVolcanoSeverity maps USGS volcano alert levels to severity.
+// classifyVolcanoSeverity maps USGS volcano alert levels to CAP severity levels.
 func classifyVolcanoSeverity(alertLevel string) string {
 	switch strings.ToUpper(alertLevel) {
 	case "WARNING":
@@ -1240,9 +1240,9 @@ func classifyVolcanoSeverity(alertLevel string) string {
 	case "ADVISORY":
 		return "minor"
 	case "NORMAL":
-		return "info"
+		return "minor"
 	default:
-		return "info"
+		return "unknown"
 	}
 }
 
@@ -1488,7 +1488,7 @@ func (c *Connector) fetchAirNowAQI(ctx context.Context, lat, lon float64, apiKey
 	return observations, nil
 }
 
-// classifyAQISeverity maps AQI values to severity levels.
+// classifyAQISeverity maps AQI values to CAP severity levels.
 func classifyAQISeverity(aqi int) string {
 	switch {
 	case aqi > 300:
@@ -1500,7 +1500,7 @@ func classifyAQISeverity(aqi int) string {
 	case aqi > 100:
 		return "minor"
 	default:
-		return "info"
+		return "minor"
 	}
 }
 
@@ -1628,7 +1628,7 @@ func (c *Connector) fetchGDACSAlerts(ctx context.Context) ([]GDACSAlert, error) 
 	return alerts, nil
 }
 
-// classifyGDACSAlertLevel maps GDACS alert levels to severity.
+// classifyGDACSAlertLevel maps GDACS alert levels to CAP severity levels.
 func classifyGDACSAlertLevel(level string) string {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "red":
@@ -1638,7 +1638,7 @@ func classifyGDACSAlertLevel(level string) string {
 	case "green":
 		return "moderate"
 	default:
-		return "info"
+		return "unknown"
 	}
 }
 

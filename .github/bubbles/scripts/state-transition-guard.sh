@@ -499,8 +499,13 @@ case "$state_workflow_mode" in
 esac
 
 if [[ "$ceiling_forbids_code" == "true" ]]; then
-  # Check if git is available and we're in a repo
-  if command -v git &>/dev/null && git rev-parse --is-inside-work-tree &>/dev/null 2>&1; then
+  git_repo_root=""
+  if command -v git &>/dev/null && git -C "$feature_dir" rev-parse --is-inside-work-tree &>/dev/null 2>&1; then
+    git_repo_root="$(git -C "$feature_dir" rev-parse --show-toplevel 2>/dev/null || true)"
+  fi
+
+  # Check if git is available and the target feature lives inside a repo.
+  if [[ -n "$git_repo_root" ]]; then
     # Get source code files modified in the working tree + staged + last commit
     # relative to the repo root, then filter for implementation file extensions
     source_code_violations=0
@@ -517,7 +522,7 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
           source_code_violations=$((source_code_violations + 1))
         fi
       fi
-    done < <(git diff --cached --name-only 2>/dev/null || true)
+    done < <(git -C "$git_repo_root" diff --cached --name-only 2>/dev/null || true)
 
     # Check unstaged working tree changes
     while IFS= read -r changed_file; do
@@ -528,10 +533,10 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
           source_code_violations=$((source_code_violations + 1))
         fi
       fi
-    done < <(git diff --name-only 2>/dev/null || true)
+    done < <(git -C "$git_repo_root" diff --name-only 2>/dev/null || true)
 
     # Check the most recent commit (if it exists and was made during this workflow)
-    last_commit_msg="$(git log -1 --format='%s' 2>/dev/null || true)"
+    last_commit_msg="$(git -C "$git_repo_root" log -1 --format='%s' 2>/dev/null || true)"
     if [[ -n "$last_commit_msg" ]]; then
       while IFS= read -r changed_file; do
         [[ -z "$changed_file" ]] && continue
@@ -540,7 +545,7 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
             warn "Mode '$state_workflow_mode' (ceiling: $ceiling_label) forbids source code edits — last commit touched: $changed_file (review commit: $last_commit_msg)"
           fi
         fi
-      done < <(git diff --name-only HEAD~1 HEAD -- 2>/dev/null || true)
+      done < <(git -C "$git_repo_root" diff --name-only HEAD~1 HEAD -- 2>/dev/null || true)
     fi
 
     if [[ "$source_code_violations" -eq 0 ]]; then
@@ -549,7 +554,7 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
       fail "Found $source_code_violations source code file(s) modified under planning-only mode '$state_workflow_mode' — implementation is forbidden when statusCeiling is '$ceiling_label'"
     fi
   else
-    info "Git not available or not in a repo — skipping source code edit lockout check"
+    info "Git not available or target feature is not in a repo — skipping source code edit lockout check"
   fi
 else
   pass "Workflow mode '$state_workflow_mode' permits source code edits (ceiling allows implementation)"

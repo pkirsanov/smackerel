@@ -36,6 +36,7 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	bmConn := bookmarksConnector.NewConnectorWithPool("bookmarks", svc.pg.Pool)
 	browserHistConn := browserConnector.New("browser-history")
 	mapsConn := mapsConnector.New("google-maps-timeline")
+	mapsConn.SetPool(svc.pg.Pool) // Enable pattern detection (commute, trip, temporal-spatial linking)
 	hospitableConn := hospitableConnector.New("hospitable")
 	guesthostConn := guesthostConnector.New()
 	discordConn := discordConnector.New("discord")
@@ -56,14 +57,21 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 
 	// Auto-start bookmarks connector (no OAuth needed — file-based import)
 	if cfg.BookmarksEnabled && cfg.BookmarksImportDir != "" {
+		processingTier := cfg.BookmarksProcessingTier
+		if processingTier == "" {
+			processingTier = "full"
+		}
 		bmConfig := connector.ConnectorConfig{
 			AuthType:       "none",
 			Enabled:        true,
-			ProcessingTier: "full",
+			ProcessingTier: processingTier,
 			SyncSchedule:   cfg.BookmarksSyncSchedule,
 			SourceConfig: map[string]interface{}{
 				"import_dir":        cfg.BookmarksImportDir,
-				"archive_processed": false,
+				"watch_interval":    cfg.BookmarksWatchInterval,
+				"archive_processed": cfg.BookmarksArchiveProcessed,
+				"min_url_length":    cfg.BookmarksMinURLLength,
+				"exclude_domains":   parseJSONArray(cfg.BookmarksExcludeDomains),
 			},
 		}
 		if err := bmConn.Connect(ctx, bmConfig); err == nil {

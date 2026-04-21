@@ -755,3 +755,63 @@ func TestValidate_KnowledgeCrossSourceConfidence_OutOfRange(t *testing.T) {
 		t.Errorf("error should name KNOWLEDGE_CROSS_SOURCE_CONFIDENCE_THRESHOLD, got: %v", err)
 	}
 }
+
+// F-DEVOPS-009-002: Regression — bookmarks SST config fields must flow through env pipeline.
+// This test would fail if BookmarksWatchInterval, BookmarksArchiveProcessed,
+// BookmarksProcessingTier, BookmarksMinURLLength, or BookmarksExcludeDomains
+// were reverted to hardcoded defaults instead of reading from env.
+func TestLoad_BookmarksSST_AllConfigFieldsFlow(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("BOOKMARKS_ENABLED", "true")
+	t.Setenv("BOOKMARKS_IMPORT_DIR", "/data/bookmarks")
+	t.Setenv("BOOKMARKS_SYNC_SCHEDULE", "*/15 * * * *")
+	t.Setenv("BOOKMARKS_WATCH_INTERVAL", "10m")
+	t.Setenv("BOOKMARKS_ARCHIVE_PROCESSED", "true")
+	t.Setenv("BOOKMARKS_PROCESSING_TIER", "standard")
+	t.Setenv("BOOKMARKS_MIN_URL_LENGTH", "25")
+	t.Setenv("BOOKMARKS_EXCLUDE_DOMAINS", "[\"example.com\",\"test.org\"]")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.BookmarksEnabled {
+		t.Error("expected BookmarksEnabled=true")
+	}
+	if cfg.BookmarksImportDir != "/data/bookmarks" {
+		t.Errorf("expected BookmarksImportDir=/data/bookmarks, got %q", cfg.BookmarksImportDir)
+	}
+	if cfg.BookmarksSyncSchedule != "*/15 * * * *" {
+		t.Errorf("expected BookmarksSyncSchedule=*/15 * * * *, got %q", cfg.BookmarksSyncSchedule)
+	}
+	if cfg.BookmarksWatchInterval != "10m" {
+		t.Errorf("expected BookmarksWatchInterval=10m, got %q", cfg.BookmarksWatchInterval)
+	}
+	if !cfg.BookmarksArchiveProcessed {
+		t.Error("expected BookmarksArchiveProcessed=true")
+	}
+	if cfg.BookmarksProcessingTier != "standard" {
+		t.Errorf("expected BookmarksProcessingTier=standard, got %q", cfg.BookmarksProcessingTier)
+	}
+	if cfg.BookmarksMinURLLength != 25 {
+		t.Errorf("expected BookmarksMinURLLength=25, got %d", cfg.BookmarksMinURLLength)
+	}
+	if cfg.BookmarksExcludeDomains != "[\"example.com\",\"test.org\"]" {
+		t.Errorf("expected BookmarksExcludeDomains JSON, got %q", cfg.BookmarksExcludeDomains)
+	}
+}
+
+// F-DEVOPS-009-002: Adversarial — if BookmarksMinURLLength env var is missing,
+// parseIntEnv should return 0, not crash or return a stale default.
+func TestLoad_BookmarksMinURLLength_MissingEnv(t *testing.T) {
+	setRequiredEnv(t)
+	// Deliberately NOT setting BOOKMARKS_MIN_URL_LENGTH
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BookmarksMinURLLength != 0 {
+		t.Errorf("expected BookmarksMinURLLength=0 when env is unset, got %d", cfg.BookmarksMinURLLength)
+	}
+}

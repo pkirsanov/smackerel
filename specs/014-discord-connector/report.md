@@ -828,3 +828,49 @@ internal/connector/discord/gateway_test.go:9
 #### Notes
 
 All tests are unit-level with httptest mocking. No integration or E2E test suites exist for the Discord connector — this is accurately documented in scope DoD evidence. REST fetch functions and Gateway EventPoller use real HTTP calls via httptest servers, not stubs. The implementation includes defensive coding throughout: snowflake validation, SSRF protection, content sanitization, rate limiting, cursor scope enforcement, concurrency safety, and resource exhaustion caps.
+
+---
+
+### DevOps-To-Doc Sweep — 2026-04-21
+
+**Trigger:** `devops` probe via stochastic-quality-sweep
+**Mode:** `devops-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Context
+
+DevOps probe on the certified Discord connector. Assessed build pipeline, deployment configuration, CI/CD integration, monitoring/observability, config SST compliance, Docker lifecycle, and release automation.
+
+#### Probes Executed
+
+| Dimension | Probe | Result |
+|-----------|-------|--------|
+| Build | Multi-stage Dockerfile with OCI labels, Go binary compilation | Clean — connector compiles into `smackerel-core` via standard `go build` |
+| Config SST | All 9 Discord env vars (`DISCORD_ENABLED`, `DISCORD_BOT_TOKEN`, `DISCORD_SYNC_SCHEDULE`, `DISCORD_ENABLE_GATEWAY`, `DISCORD_BACKFILL_LIMIT`, `DISCORD_INCLUDE_THREADS`, `DISCORD_INCLUDE_PINS`, `DISCORD_CAPTURE_COMMANDS`, `DISCORD_MONITORED_CHANNELS`) | Clean — SST pipeline: `config/smackerel.yaml` → `scripts/commands/config.sh` → `config/generated/dev.env` → `os.Getenv()` in `internal/config/config.go` |
+| Config check | `./smackerel.sh check` | Clean — "Config is in sync with SST", "env_file drift guard: OK" |
+| Docker Compose | Service integration in `smackerel-core` container | Clean — env_file injection, healthcheck, resource limits, labels, `stop_grace_period: 30s` |
+| Health/Monitoring | `Health()` method with 5 states, gateway health factoring, structured `slog` logging | Clean — Supervisor-visible health transitions (Healthy/Syncing/Degraded/Error/Disconnected) |
+| Lint | `./smackerel.sh lint` | Clean — "All checks passed!" |
+| Unit tests | `./smackerel.sh test unit` | Clean — 33 Go packages + 236 Python tests pass, discord package cached/passing |
+| Rate limiting | Per-route Discord API rate limiting with header parsing, exponential backoff | Clean — `awaitRateLimit()` helper, `RateLimiter` with bucket pruning |
+| Graceful shutdown | `Close()` with gateway cleanup, closed-connector guard, sync serialization | Clean — `syncMu` prevents concurrent cursor regression, `closed` flag prevents post-close sync |
+| Secrets management | Bot token as SST empty-string placeholder, consumed via env var | Clean — no hardcoded credentials, fail-loud on empty token |
+| Auto-start wiring | `cmd/core/connectors.go` — conditional start when `cfg.DiscordEnabled` | Clean — proper config passthrough, supervisor registration |
+| Code quality | `grep -rn 'TODO\|FIXME\|HACK\|STUB'` on discord sources | Clean — 0 hits |
+
+#### Findings
+
+**Zero DevOps findings.** The Discord connector's DevOps integration is clean across all probed dimensions.
+
+#### Validation
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+$ ./smackerel.sh lint
+All checks passed!
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/discord  (cached)
+236 passed (Python)
+```

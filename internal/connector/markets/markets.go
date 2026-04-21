@@ -367,6 +367,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	for _, s := range cfg.Watchlist.Stocks {
 		watchlistSet[s] = true
 	}
+	if len(cfg.Watchlist.Stocks) > 0 {
+		totalProviders++ // REG-018-R01: track news as a provider dimension for health
+	}
+	var newsFails int
 	for _, symbol := range cfg.Watchlist.Stocks {
 		select {
 		case <-ctx.Done():
@@ -381,6 +385,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		articles, err := c.fetchFinnhubCompanyNews(ctx, symbol, newsDate, newsDate)
 		if err != nil {
 			slog.Warn("finnhub company news failed", "symbol", symbol, "error", err)
+			newsFails++
 			continue
 		}
 		for _, article := range articles {
@@ -411,6 +416,10 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				CapturedAt: time.Unix(article.Datetime, 0),
 			})
 		}
+	}
+	// REG-018-R01: If ALL news fetches failed, count as a failed provider.
+	if newsFails > 0 && newsFails >= len(cfg.Watchlist.Stocks) {
+		failCount++
 	}
 
 	// Fetch FRED economic indicators.
