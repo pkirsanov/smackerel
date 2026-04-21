@@ -202,13 +202,17 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 
 	// 5. Subscription summary
 	subSummary, err := e.GetSubscriptionSummary(ctx)
-	if err == nil {
+	if err != nil {
+		slog.Warn("failed to query subscription summary for monthly report", "error", err)
+	} else {
 		report.SubscriptionSum = subSummary
 	}
 
 	// 6. Learning progress
 	paths, err := e.GetLearningPaths(ctx)
-	if err == nil {
+	if err != nil {
+		slog.Warn("failed to query learning paths for monthly report", "error", err)
+	} else {
 		report.LearningProgress = paths
 	}
 
@@ -218,7 +222,11 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 
 	// 7. Top synthesis insights
 	insights, err := e.RunSynthesis(ctx)
-	if err == nil && len(insights) > 3 {
+	if err != nil {
+		slog.Warn("synthesis failed during monthly report", "error", err)
+	}
+	// Always cap at 3 insights regardless of partial failure.
+	if len(insights) > 3 {
 		insights = insights[:3]
 	}
 	report.TopInsights = insights

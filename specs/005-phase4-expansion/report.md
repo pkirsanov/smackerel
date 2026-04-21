@@ -2,6 +2,27 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Improve Pass (Stochastic Sweep — improve trigger)
+
+### Findings
+
+| ID | Finding | Severity | Fix |
+|----|---------|----------|-----|
+| IMPROVE-005-I1 | `Haversine()` can return NaN for near-antipodal coordinates due to floating-point rounding pushing `h` above 1.0 | Medium | Added `h = 1.0` clamp before `math.Asin(math.Sqrt(h))` to prevent NaN |
+
+### Files Changed
+- `internal/connector/maps/maps.go` — Added `h > 1.0` clamp in `Haversine()`
+- `internal/connector/maps/maps_test.go` — Added `TestHaversine_Antipodal` (antipodal, near-antipodal, same-point cases)
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/maps  0.189s
+All 41 Go packages pass. Lint clean.
+```
+
+---
+
 ## Hardening Pass (Stochastic Sweep R04 — harden trigger)
 
 ### Findings

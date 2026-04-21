@@ -537,3 +537,53 @@ Systematic review of all 14 Gherkin scenarios (SCN-022-01 through SCN-022-14), a
 - All 14 Gherkin scenarios have corresponding test coverage with adversarial variants
 - All DoD items verified consistent with implementation
 - No drifted artifact counts, no stale mutex/job references, no missing edge cases
+
+## Security Scan (stochastic sweep — security-to-doc)
+
+**Date:** 2026-04-21
+**Trigger:** Stochastic quality sweep — security (child workflow)
+**Scope:** OWASP Top 10 security audit of all spec 022 implementation surfaces
+
+### Scan Coverage
+
+| Surface | File(s) | Security Checks |
+|---------|---------|-----------------|
+| Backup CLI | `scripts/commands/backup.sh` | Shell injection, credential exposure, path traversal, temp file leaks |
+| Config loading | `internal/config/config.go` | Fail-loud validation, no silent defaults, integer range, cross-validation |
+| DB connection | `internal/db/postgres.go` | Pool params from SST, connection timeout, no hardcoded credentials |
+| Capture handler | `internal/api/capture.go` | Auth middleware, DB health gate, error response safety (no stack traces) |
+| Search engine | `internal/api/search.go` | SQL injection (parameterized queries), query length limit, health probe context isolation |
+| Dead-letter routing | `internal/pipeline/subscriber.go` | Message loss prevention (Nak on DL failure), UTF-8 safe truncation, malformed payload handling |
+| NATS client | `internal/nats/client.go` | Token auth, stream limits, drain timeout alignment |
+| Shutdown sequence | `cmd/core/shutdown.go` | Overall deadline enforcement, per-step budgets, nil guards |
+| Scheduler | `internal/scheduler/scheduler.go` | Per-job TryLock, baseCtx cancellation, sync.Once double-stop safety |
+| Auth middleware | `internal/api/router.go` | Constant-time token comparison, security headers (CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy), rate limiting on OAuth |
+| OAuth handler | `internal/auth/handler.go` | CSRF state tokens with 10m TTL + eviction, 100-entry cap, XSS-safe callback response (html.EscapeString) |
+
+### Security Posture Assessment
+
+| OWASP Category | Status | Evidence |
+|----------------|--------|----------|
+| A01:2021 Broken Access Control | Clean | Bearer token auth on all API routes; constant-time comparison (`crypto/subtle`); OAuth callback CSRF state validation with TTL |
+| A02:2021 Cryptographic Failures | Clean | Auth tokens via env vars (SST pipeline); backup files gitignored; no credentials logged or exposed in error responses |
+| A03:2021 Injection | Clean | All SQL queries use parameterized placeholders (`$N`); shell script variables properly quoted; no eval/exec of user input |
+| A04:2021 Insecure Design | Clean | Fail-loud config (no silent defaults); DB health gate prevents silent data loss; dead-letter preserves failed messages |
+| A05:2021 Security Misconfiguration | Clean | Security headers middleware (CSP, X-Frame-Options DENY, nosniff, strict Referrer-Policy, Permissions-Policy); CORS SST-configured |
+| A06:2021 Vulnerable Components | Clean | Dependencies are standard Go stdlib + pgx + chi + nats-io; no known CVEs in current versions |
+| A07:2021 Auth Failures | Clean | Rate limiting on OAuth (10/min/IP); state token TTL eviction; 100-entry cap prevents memory exhaustion |
+| A08:2021 Data Integrity | Clean | Dead-letter Nak-on-publish-failure preserves messages; gzip integrity check on backups; UTF-8 safe truncation in NATS headers |
+| A09:2021 Logging/Monitoring | Clean | Structured slog logging; Prometheus metrics; no sensitive data in log output (tokens not logged) |
+| A10:2021 SSRF | Clean | ML health probe URL comes from SST config (not user input); detached context prevents request-level taint |
+
+### Findings
+
+**Zero security vulnerabilities detected.** All 11 implementation surfaces pass OWASP Top 10 checks. Prior improvement passes (IMP-022-R29-001 context isolation, IMP-022-R29-003 UTF-8 safe truncation) had already addressed the most security-adjacent risks.
+
+### Evidence
+
+- Unit tests: `./smackerel.sh test unit` — all 41 Go packages PASS
+- Auth: `crypto/subtle.ConstantTimeCompare` used in both `bearerAuthMiddleware` and `webAuthMiddleware`
+- SQL: All `vectorSearch`, `textSearch`, `timeRangeSearch` queries use `$N` parameterized placeholders
+- Shell: `backup.sh` uses `set -euo pipefail`, quoted variables, `${VAR:?error}` fail-loud, `trap` cleanup
+- Headers: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy all set
+- OAuth: `generateState()` uses `crypto/rand`, state entries evicted after 10m, capped at 100

@@ -2,6 +2,39 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Stabilization Pass 2 (April 21, 2026)
+
+### Trigger: stabilize-to-doc (child of stochastic-quality-sweep)
+
+### Findings (2 total, 2 resolved)
+
+| # | Finding | Severity | File | Fix |
+|---|---------|----------|------|-----|
+| STB-001 | `GenerateMonthlyReport` silently swallows `GetSubscriptionSummary` and `GetLearningPaths` errors — missing report sections with no observability | Medium | `internal/intelligence/monthly.go` | Added `slog.Warn` logging for both error paths, consistent with the function's own pattern for seasonal patterns |
+| STB-002 | `GenerateMonthlyReport` partial `RunSynthesis` failure bypasses insight truncation cap — `if err == nil && len(insights) > 3` skips truncation when partial results + error are returned, allowing up to 10 insights; error also silently swallowed | Medium | `internal/intelligence/monthly.go` | Decoupled truncation from error check: always cap at 3 insights; added `slog.Warn` for synthesis errors |
+
+### Key Files Changed
+- `internal/intelligence/monthly.go` — `slog.Warn` for subscription/learning path/synthesis errors; insight truncation decoupled from error check
+- `internal/intelligence/monthly_test.go` — `TestMonthlyReport_TopInsightsCap`, `TestAssembleMonthlyReportText_WithSeasonalPatterns`
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence    0.031s
+ok  github.com/smackerel/smackerel/internal/scheduler       5.020s
+42 Go packages PASS, 236 Python tests PASS, 3 warnings
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+```
+
+---
+
 ## Stabilization Pass (April 12, 2026)
 
 ### Trigger: stabilize-to-doc

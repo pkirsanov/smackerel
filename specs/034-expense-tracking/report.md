@@ -103,4 +103,48 @@ No coverage decrease detected. Expense-specific test files:
 
 ---
 
+## Security Analysis — 2026-04-21 (security-to-doc)
+
+**Trigger:** Child workflow of stochastic-quality-sweep
+**Mode:** security-to-doc
+**Verdict:** 1 finding (SEC-034-001), FIXED
+
+### Security Scan Summary
+
+| OWASP Category | Surface | Verdict |
+|----------------|---------|---------|
+| A01 Broken Access Control | All expense API routes behind `bearerAuthMiddleware` with `subtle.ConstantTimeCompare` | CLEAN |
+| A02 Cryptographic Failures | Auth token compared via constant-time comparison; no secrets in logs | CLEAN |
+| A03 Injection — SQL | All SQL queries use parameterized `$N` args via pgx | CLEAN |
+| A03 Injection — CSV | `sanitizeCSVCell()` prefixes `=`, `+`, `-`, `@`, `\t`, `\r`, `\n` with `'` (OWASP recommendation) | CLEAN |
+| A03 Injection — LIKE | `VendorNormalizer.Normalize` escapes `%` and `_` before LIKE query | CLEAN |
+| A04 Insecure Design | Amount pattern caps at 10 digits; string length limits on vendor/notes/payment_method | CLEAN |
+| A05 Security Misconfiguration | Security headers set (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Cache-Control) | CLEAN |
+| A06 Vulnerable Components | No expense-specific third-party dependencies beyond existing stack | CLEAN |
+| A07 Auth Failures | Bearer auth enforced; dev-mode pass-through is intentional for local dev | CLEAN |
+| A08 Software/Data Integrity | User corrections are sticky (`user_corrected: true`); re-extraction never overwrites corrected fields | CLEAN |
+| A09 Logging/Monitoring | Auth failures logged with path and remote_addr; no sensitive data in error responses | CLEAN |
+| A10 SSRF | No outbound requests from expense handlers | CLEAN |
+| ReDoS | Receipt detection caps input at 100,000 chars; regex patterns are non-backtracking | CLEAN |
+| Memory exhaustion | **FINDING SEC-034-001** — PATCH and POST handlers missing `http.MaxBytesReader` | **FIXED** |
+
+### Finding: SEC-034-001 — Missing Request Body Size Limit
+
+**Severity:** Medium
+**OWASP:** A04 Insecure Design / resource exhaustion
+**Location:** `internal/api/expenses.go` — `Correct()` and `ClassifyEndpoint()` handlers
+**Description:** Both handlers called `json.NewDecoder(r.Body).Decode(&req)` without applying `http.MaxBytesReader` first. An attacker with a valid token could send an arbitrarily large request body to exhaust server memory. Compare with `capture.go` and `bookmarks.go` which already apply body limits.
+**Fix:** Added `r.Body = http.MaxBytesReader(w, r.Body, maxExpenseBodySize)` (64 KB) at the start of both handlers. Added `maxExpenseBodySize` constant.
+**Tests added:** `TestExpenseCorrect_OversizedBody`, `TestClassifyEndpoint_OversizedBody` in `internal/api/expenses_test.go`
+**Verification:** `./smackerel.sh test unit` — all pass; `./smackerel.sh lint` — all checks passed; `./smackerel.sh format --check` — 33 files unchanged
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `internal/api/expenses.go` | Added `maxExpenseBodySize` const (64 KB); added `http.MaxBytesReader` to `Correct()` and `ClassifyEndpoint()` |
+| `internal/api/expenses_test.go` | Added `TestExpenseCorrect_OversizedBody` and `TestClassifyEndpoint_OversizedBody` |
+
+---
+
 <!-- Report entries will be added below as scopes are implemented -->

@@ -80,7 +80,7 @@
 
 Connectors (passive ingestion):
   Gmail · Calendar · YouTube · RSS · Bookmarks · Browser History
-  Google Keep · Google Maps Timeline · Hospitable · Discord
+  Google Keep · Google Maps Timeline · Hospitable · GuestHost · Discord
   Twitter/X · Weather · Gov Alerts · Financial Markets
 ```
 
@@ -274,8 +274,8 @@ Connectors run on 5-minute sync cycles via the supervisor and sync data incremen
 
 | Connector | Source | Auth | Status |
 |-----------|--------|------|--------|
-| Gmail | Email via Gmail REST API | OAuth2 (Google) | Implemented |
-| Google Calendar | Events via Calendar API v3 | OAuth2 (Google) | Implemented |
+| Gmail | Email via IMAP | OAuth2 (Google) | Implemented |
+| Google Calendar | Calendar events via CalDAV | OAuth2 (Google) | Implemented |
 | YouTube | Liked/playlist videos via Data API v3 | OAuth2 (Google) | Implemented |
 | RSS / Atom | Feed subscriptions | None | Implemented |
 | Bookmarks | Browser bookmark exports (Chrome JSON, Netscape HTML) | None (file import) | Implemented |
@@ -288,7 +288,7 @@ Connectors run on 5-minute sync cycles via the supervisor and sync data incremen
 | Weather | Real-time weather via Open-Meteo API | None | Implemented |
 | Government Alerts | USGS earthquakes by location proximity | None | Implemented |
 | Financial Markets | Stock/ETF/crypto quotes via Finnhub + CoinGecko | Finnhub API key | Implemented |
-| GuestHost | Direct bookings, property ops, guest messaging | API token | Planned — see `specs/013-guesthost-connector/` |
+| GuestHost | Direct bookings, property ops, guest messaging | API token | Implemented |
 
 #### Google OAuth Setup (Gmail + Calendar + YouTube)
 

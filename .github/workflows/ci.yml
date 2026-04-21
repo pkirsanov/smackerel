@@ -121,17 +121,23 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U smackerel -d smackerel_test" --health-interval 5s --health-timeout 5s --health-retries 5
 
-      nats:
-        image: nats:2.10-alpine
-        ports:
-        - 4222:4222
-
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
     - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
       with:
         go-version: '1.24'
+
+    - name: Start NATS with auth and JetStream
+      run: |
+        docker run -d --name nats-ci \
+          --network host \
+          nats:2.10-alpine \
+          --auth ci-test-token-integration \
+          --http_port 8222 \
+          --jetstream
+        timeout 30 bash -c 'until wget -qO- http://localhost:8222/healthz >/dev/null 2>&1; do sleep 1; done'
+        echo "NATS is ready with auth enforcement and JetStream enabled"
 
     - name: Apply database migrations
       env:

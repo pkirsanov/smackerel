@@ -462,3 +462,31 @@ func TestExpenseList_InvalidToOnly(t *testing.T) {
 		t.Errorf("expected 400 for bad to-only date, got %d", w.Code)
 	}
 }
+
+// SEC-034-001: Oversized request body must be rejected by MaxBytesReader
+func TestExpenseCorrect_OversizedBody(t *testing.T) {
+	h := &ExpenseHandler{
+		Cfg: &config.Config{},
+	}
+	// 128 KB body — exceeds the 64 KB limit
+	bigBody := `{"notes": "` + strings.Repeat("X", 128*1024) + `"}`
+	req := httptest.NewRequest("PATCH", "/api/expenses/test-id", strings.NewReader(bigBody))
+	w := httptest.NewRecorder()
+	h.Correct(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for oversized body, got %d", w.Code)
+	}
+}
+
+func TestClassifyEndpoint_OversizedBody(t *testing.T) {
+	h := &ExpenseHandler{
+		Cfg: &config.Config{},
+	}
+	bigBody := `{"classification": "` + strings.Repeat("X", 128*1024) + `"}`
+	req := httptest.NewRequest("POST", "/api/expenses/test-id/classify", strings.NewReader(bigBody))
+	w := httptest.NewRecorder()
+	h.ClassifyEndpoint(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for oversized classify body, got %d", w.Code)
+	}
+}

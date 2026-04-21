@@ -28,7 +28,7 @@ Implemented runtime capabilities:
 - Knowledge graph linking (4 strategies: similarity, entity, topic, temporal) — wired into pipeline
 - Telegram bot (share-sheet, forwards, conversation assembly, media groups, 9 commands)
 - Web UI (HTMX semantic search, artifact detail, digest, topics, settings, status, knowledge dashboard)
-- 14 passive connectors (Gmail API, Google Calendar API, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps, Hospitable STR, Discord, Twitter/X archive, Weather via Open-Meteo, Government Alerts via USGS, Financial Markets via Finnhub/CoinGecko)
+- 15 passive connectors (IMAP email, CalDAV calendar, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps, Hospitable STR, GuestHost STR, Discord, Twitter/X archive, Weather via Open-Meteo, Government Alerts via USGS, Financial Markets via Finnhub/CoinGecko)
 - Intelligence engine (synthesis at 2AM, momentum hourly, resurfacing at 8AM, overdue alerts)
 - Knowledge synthesis layer (concept pages, entity profiles, cross-source connections, lint auditing, prompt contract validation)
 - Domain extraction pipeline (recipe and product schemas) with NATS-backed async processing and Prometheus metrics
@@ -200,7 +200,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists, expense API (7 endpoints: query, export CSV, correction, classification, suggestions), meal plan API (12 endpoints), recipe domain scaling endpoint), Bearer auth, security headers, rate limiting |
 | `internal/auth/` | OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, token storage |
 | `internal/config/` | SST-compliant configuration loader — reads all env vars, validates required fields, parses numeric config, cross-validates constraints |
-| `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `bookmarks/`, `browser/`, `calendar/`, `discord/`, `financial/`, `gmail/`, `govalerts/`, `guesthost/`, `hospitable/`, `keep/`, `maps/`, `rss/`, `twitter/`, `weather/`, `youtube/` |
+| `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `rss/`, `twitter/`, `weather/`, `youtube/` |
 | `internal/db/` | PostgreSQL connection pool wrapper, migration runner (embed.FS), artifact CRUD, export with cursor pagination, guest/property repos |
 | `internal/digest/` | Daily digest assembly (action items, overnight artifacts, hot topics, hospitality context, knowledge health, expense digest section (summary, needs-review, suggestions, missing receipts, word limit enforcement)), LLM generation via NATS, Telegram delivery with retry |
 | `internal/domain/` | Domain extraction schema registry — maps artifact content types to prompt contracts for structured extraction (recipes, products), expense metadata types, vendor alias types |
