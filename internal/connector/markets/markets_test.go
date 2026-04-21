@@ -3928,8 +3928,8 @@ func TestFetchFinnhubForex_RejectsZeroPriceResponse(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for zero-price forex response")
 	}
-	if !strings.Contains(err.Error(), "no forex data") {
-		t.Errorf("error should mention no forex data, got: %v", err)
+	if !strings.Contains(err.Error(), "no data for") {
+		t.Errorf("error should mention no data for pair, got: %v", err)
 	}
 }
 

@@ -494,12 +494,26 @@ func (h *ExpenseHandler) ClassifyEndpoint(w http.ResponseWriter, r *http.Request
 // AcceptSuggestion handles POST /api/expenses/suggestions/{id}/accept.
 func (h *ExpenseHandler) AcceptSuggestion(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	ctx := r.Context()
+
+	if h.Pool == nil {
+		writeExpenseError(w, http.StatusInternalServerError, "TX_FAILED", "Database pool not available")
+		return
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		writeExpenseError(w, http.StatusInternalServerError, "TX_FAILED", "Failed to start transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
 
 	var artifactID, suggestedClass, vendor string
-	err := h.Pool.QueryRow(r.Context(), `
+	err = tx.QueryRow(ctx, `
 		SELECT artifact_id, suggested_class, vendor
 		FROM expense_suggestions
 		WHERE id = $1 AND status = 'pending'
+		FOR UPDATE
 	`, id).Scan(&artifactID, &suggestedClass, &vendor)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -511,7 +525,7 @@ func (h *ExpenseHandler) AcceptSuggestion(w http.ResponseWriter, r *http.Request
 	}
 
 	// Update the artifact's classification
-	_, err = h.Pool.Exec(r.Context(), `
+	_, err = tx.Exec(ctx, `
 		UPDATE artifacts SET metadata = jsonb_set(metadata, '{expense,classification}', to_jsonb($1::text))
 		WHERE id = $2 AND metadata ? 'expense'
 	`, suggestedClass, artifactID)
@@ -521,12 +535,17 @@ func (h *ExpenseHandler) AcceptSuggestion(w http.ResponseWriter, r *http.Request
 	}
 
 	// Mark suggestion as accepted
-	_, err = h.Pool.Exec(r.Context(), `
+	_, err = tx.Exec(ctx, `
 		UPDATE expense_suggestions SET status = 'accepted', resolved_at = NOW()
 		WHERE id = $1
 	`, id)
 	if err != nil {
 		writeExpenseError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to update suggestion")
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		writeExpenseError(w, http.StatusInternalServerError, "COMMIT_FAILED", "Failed to commit transaction")
 		return
 	}
 
@@ -544,12 +563,26 @@ func (h *ExpenseHandler) AcceptSuggestion(w http.ResponseWriter, r *http.Request
 // DismissSuggestion handles POST /api/expenses/suggestions/{id}/dismiss.
 func (h *ExpenseHandler) DismissSuggestion(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	ctx := r.Context()
+
+	if h.Pool == nil {
+		writeExpenseError(w, http.StatusInternalServerError, "TX_FAILED", "Database pool not available")
+		return
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		writeExpenseError(w, http.StatusInternalServerError, "TX_FAILED", "Failed to start transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
 
 	var vendor, suggestedClass string
-	err := h.Pool.QueryRow(r.Context(), `
+	err = tx.QueryRow(ctx, `
 		SELECT vendor, suggested_class
 		FROM expense_suggestions
 		WHERE id = $1 AND status = 'pending'
+		FOR UPDATE
 	`, id).Scan(&vendor, &suggestedClass)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -561,7 +594,7 @@ func (h *ExpenseHandler) DismissSuggestion(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Mark suggestion as dismissed
-	_, err = h.Pool.Exec(r.Context(), `
+	_, err = tx.Exec(ctx, `
 		UPDATE expense_suggestions SET status = 'dismissed', resolved_at = NOW()
 		WHERE id = $1
 	`, id)
@@ -570,14 +603,20 @@ func (h *ExpenseHandler) DismissSuggestion(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Create suppression entry
-	_, err = h.Pool.Exec(r.Context(), `
+	// Create suppression entry (within transaction for atomicity)
+	_, err = tx.Exec(ctx, `
 		INSERT INTO expense_suggestion_suppressions (id, vendor, classification)
 		VALUES (gen_random_uuid()::text, $1, $2)
 		ON CONFLICT (vendor, classification) DO NOTHING
 	`, vendor, suggestedClass)
 	if err != nil {
-		slog.Warn("failed to create suppression", "vendor", vendor, "error", err)
+		writeExpenseError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Failed to create suppression")
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		writeExpenseError(w, http.StatusInternalServerError, "COMMIT_FAILED", "Failed to commit transaction")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
