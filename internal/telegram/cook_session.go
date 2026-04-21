@@ -47,8 +47,8 @@ type CookSessionStore struct {
 	disambiguations sync.Map      // key: int64 (chatID), value: *CookDisambiguation
 	timeout         time.Duration // from config: telegram.cook_session_timeout_minutes
 	done            chan struct{} // signals cleanup goroutine to stop
-	startOnce       sync.Once    // ensures StartCleanup spawns only one goroutine
-	stopOnce        sync.Once    // ensures Stop closes done channel exactly once
+	startOnce       sync.Once     // ensures StartCleanup spawns only one goroutine
+	stopOnce        sync.Once     // ensures Stop closes done channel exactly once
 }
 
 // NewCookSessionStore creates a new session store with the given timeout.

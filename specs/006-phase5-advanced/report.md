@@ -2,6 +2,36 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Improvement Pass (April 21, 2026)
+
+### Trigger: improve-existing (child of stochastic-quality-sweep)
+
+### Findings (2 total, 2 resolved)
+
+| # | Finding | Severity | File | Fix |
+|---|---------|----------|------|-----|
+| IMP-006-R01 | `GetQuickReferences` omits `source_artifact_ids` from SELECT — data stored via `CreateQuickReference` is never read back, so API consumers see nil instead of the artifact source list | Medium | `internal/intelligence/lookups.go` | Added `source_artifact_ids` to SELECT and Scan with JSONB unmarshal into `[]string` |
+| IMP-006-R02 | Learning path resources not sorted by difficulty — R-502 requires "Order logically: foundational concepts first, then progressive complexity" but resources stay in DB order (position, title) after heuristic difficulty classification, so paths with position=0 show alphabetical order instead of beginner→intermediate→advanced | Medium | `internal/intelligence/learning.go` | Added `sort.SliceStable` by `difficultyOrder()` after building each path's resources; new `difficultyOrder` helper maps difficulty to sort key |
+
+### Key Files Changed
+- `internal/intelligence/lookups.go` — `GetQuickReferences` SELECT now includes `source_artifact_ids`; JSONB unmarshal into `QuickReference.SourceArtifactIDs`
+- `internal/intelligence/learning.go` — `GetLearningPaths` sorts resources by difficulty within each path; new `difficultyOrder` helper function
+- `internal/intelligence/lookups_test.go` — `TestGetQuickReferences_IncludesSourceArtifactIDs`
+- `internal/intelligence/learning_test.go` — `TestDifficultyOrder`, `TestLearningPath_ResourcesSortedByDifficulty`
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence    0.096s
+42 Go packages PASS, 236 Python tests PASS, 3 warnings
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+```
+
+---
+
 ## Stabilization Pass 2 (April 21, 2026)
 
 ### Trigger: stabilize-to-doc (child of stochastic-quality-sweep)

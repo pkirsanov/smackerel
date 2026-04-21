@@ -416,6 +416,23 @@ GUESTHOST_BASE_URL="$(yaml_get connectors.guesthost.base_url 2>/dev/null)" || GU
 GUESTHOST_API_KEY="$(yaml_get connectors.guesthost.api_key 2>/dev/null)" || GUESTHOST_API_KEY=""
 GUESTHOST_SYNC_SCHEDULE="$(yaml_get connectors.guesthost.sync_schedule 2>/dev/null)" || GUESTHOST_SYNC_SCHEDULE=""
 GUESTHOST_EVENT_TYPES="$(yaml_get connectors.guesthost.event_types 2>/dev/null)" || GUESTHOST_EVENT_TYPES=""
+
+# Hospitable connector
+HOSPITABLE_ENABLED="$(yaml_get connectors.hospitable.enabled 2>/dev/null)" || HOSPITABLE_ENABLED="false"
+HOSPITABLE_ACCESS_TOKEN="$(yaml_get connectors.hospitable.access_token 2>/dev/null)" || HOSPITABLE_ACCESS_TOKEN=""
+HOSPITABLE_BASE_URL="$(yaml_get connectors.hospitable.base_url 2>/dev/null)" || HOSPITABLE_BASE_URL=""
+HOSPITABLE_SYNC_SCHEDULE="$(yaml_get connectors.hospitable.sync_schedule 2>/dev/null)" || HOSPITABLE_SYNC_SCHEDULE=""
+HOSPITABLE_INITIAL_LOOKBACK_DAYS="$(yaml_get connectors.hospitable.initial_lookback_days 2>/dev/null)" || HOSPITABLE_INITIAL_LOOKBACK_DAYS=""
+HOSPITABLE_PAGE_SIZE="$(yaml_get connectors.hospitable.page_size 2>/dev/null)" || HOSPITABLE_PAGE_SIZE=""
+HOSPITABLE_SYNC_PROPERTIES="$(yaml_get connectors.hospitable.sync_properties 2>/dev/null)" || HOSPITABLE_SYNC_PROPERTIES=""
+HOSPITABLE_SYNC_RESERVATIONS="$(yaml_get connectors.hospitable.sync_reservations 2>/dev/null)" || HOSPITABLE_SYNC_RESERVATIONS=""
+HOSPITABLE_SYNC_MESSAGES="$(yaml_get connectors.hospitable.sync_messages 2>/dev/null)" || HOSPITABLE_SYNC_MESSAGES=""
+HOSPITABLE_SYNC_REVIEWS="$(yaml_get connectors.hospitable.sync_reviews 2>/dev/null)" || HOSPITABLE_SYNC_REVIEWS=""
+HOSPITABLE_TIER_MESSAGES="$(yaml_get connectors.hospitable.processing_tier_messages 2>/dev/null)" || HOSPITABLE_TIER_MESSAGES=""
+HOSPITABLE_TIER_REVIEWS="$(yaml_get connectors.hospitable.processing_tier_reviews 2>/dev/null)" || HOSPITABLE_TIER_REVIEWS=""
+HOSPITABLE_TIER_RESERVATIONS="$(yaml_get connectors.hospitable.processing_tier_reservations 2>/dev/null)" || HOSPITABLE_TIER_RESERVATIONS=""
+HOSPITABLE_TIER_PROPERTIES="$(yaml_get connectors.hospitable.processing_tier_properties 2>/dev/null)" || HOSPITABLE_TIER_PROPERTIES=""
+
 DISCORD_BOT_TOKEN="$(yaml_get connectors.discord.bot_token 2>/dev/null)" || DISCORD_BOT_TOKEN=""
 DISCORD_SYNC_SCHEDULE="$(yaml_get connectors.discord.sync_schedule 2>/dev/null)" || DISCORD_SYNC_SCHEDULE=""
 DISCORD_ENABLE_GATEWAY="$(yaml_get connectors.discord.enable_gateway 2>/dev/null)" || DISCORD_ENABLE_GATEWAY=""
@@ -632,6 +649,20 @@ GUESTHOST_BASE_URL=${GUESTHOST_BASE_URL}
 GUESTHOST_API_KEY=${GUESTHOST_API_KEY}
 GUESTHOST_SYNC_SCHEDULE=${GUESTHOST_SYNC_SCHEDULE}
 GUESTHOST_EVENT_TYPES=${GUESTHOST_EVENT_TYPES}
+HOSPITABLE_ENABLED=${HOSPITABLE_ENABLED}
+HOSPITABLE_ACCESS_TOKEN=${HOSPITABLE_ACCESS_TOKEN}
+HOSPITABLE_BASE_URL=${HOSPITABLE_BASE_URL}
+HOSPITABLE_SYNC_SCHEDULE=${HOSPITABLE_SYNC_SCHEDULE}
+HOSPITABLE_INITIAL_LOOKBACK_DAYS=${HOSPITABLE_INITIAL_LOOKBACK_DAYS}
+HOSPITABLE_PAGE_SIZE=${HOSPITABLE_PAGE_SIZE}
+HOSPITABLE_SYNC_PROPERTIES=${HOSPITABLE_SYNC_PROPERTIES}
+HOSPITABLE_SYNC_RESERVATIONS=${HOSPITABLE_SYNC_RESERVATIONS}
+HOSPITABLE_SYNC_MESSAGES=${HOSPITABLE_SYNC_MESSAGES}
+HOSPITABLE_SYNC_REVIEWS=${HOSPITABLE_SYNC_REVIEWS}
+HOSPITABLE_TIER_MESSAGES=${HOSPITABLE_TIER_MESSAGES}
+HOSPITABLE_TIER_REVIEWS=${HOSPITABLE_TIER_REVIEWS}
+HOSPITABLE_TIER_RESERVATIONS=${HOSPITABLE_TIER_RESERVATIONS}
+HOSPITABLE_TIER_PROPERTIES=${HOSPITABLE_TIER_PROPERTIES}
 DB_MAX_CONNS=${DB_MAX_CONNS}
 DB_MIN_CONNS=${DB_MIN_CONNS}
 SHUTDOWN_TIMEOUT_S=${SHUTDOWN_TIMEOUT_S}

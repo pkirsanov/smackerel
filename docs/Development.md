@@ -11,7 +11,7 @@ Committed:
 - `specs/` (001-036, all with spec, design, scopes, reports)
 - `.github/`
 - `.specify/memory/`
-- Go core runtime sources under `cmd/` and `internal/` (153 source files, 149 test files)
+- Go core runtime sources under `cmd/` and `internal/` (154 source files, 152 test files)
 - Python ML sidecar sources under `ml/` (17 source files, 16 test files)
 - `docker-compose.yml` with health checks, resource limits, restart policies, NATS auth
 - `config/smackerel.yaml`

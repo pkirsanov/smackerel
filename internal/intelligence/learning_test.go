@@ -1,6 +1,7 @@
 package intelligence
 
 import (
+	"sort"
 	"testing"
 )
 
@@ -220,5 +221,63 @@ func TestResurface_NegativeLimit(t *testing.T) {
 	_, err := engine.Resurface(nil, -10)
 	if err == nil {
 		t.Error("expected error for nil pool even with negative limit")
+	}
+}
+
+// === Improve: difficultyOrder sorts beginner < intermediate < advanced (IMP-006-R02) ===
+
+func TestDifficultyOrder(t *testing.T) {
+	tests := []struct {
+		difficulty LearningDifficulty
+		expected   int
+	}{
+		{DifficultyBeginner, 0},
+		{DifficultyIntermediate, 1},
+		{DifficultyAdvanced, 2},
+		{"unknown", 1}, // unknown defaults to intermediate position
+		{"", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.difficulty), func(t *testing.T) {
+			got := difficultyOrder(tt.difficulty)
+			if got != tt.expected {
+				t.Errorf("difficultyOrder(%q) = %d, want %d", tt.difficulty, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLearningPath_ResourcesSortedByDifficulty(t *testing.T) {
+	// Verify that resources within a path are ordered by difficulty
+	// (beginner → intermediate → advanced) after GetLearningPaths processing.
+	resources := []LearningResource{
+		{ArtifactID: "a1", Difficulty: DifficultyAdvanced, Title: "Advanced Topic"},
+		{ArtifactID: "a2", Difficulty: DifficultyBeginner, Title: "Getting Started"},
+		{ArtifactID: "a3", Difficulty: DifficultyIntermediate, Title: "Middle Ground"},
+		{ArtifactID: "a4", Difficulty: DifficultyBeginner, Title: "Basics 101"},
+		{ArtifactID: "a5", Difficulty: DifficultyAdvanced, Title: "Expert Level"},
+	}
+
+	// Simulate the sort that GetLearningPaths now performs
+	sort.SliceStable(resources, func(i, j int) bool {
+		return difficultyOrder(resources[i].Difficulty) < difficultyOrder(resources[j].Difficulty)
+	})
+
+	// Verify order: all beginners first, then intermediate, then advanced
+	if resources[0].Difficulty != DifficultyBeginner || resources[1].Difficulty != DifficultyBeginner {
+		t.Errorf("first two resources should be beginner, got %s and %s", resources[0].Difficulty, resources[1].Difficulty)
+	}
+	if resources[2].Difficulty != DifficultyIntermediate {
+		t.Errorf("third resource should be intermediate, got %s", resources[2].Difficulty)
+	}
+	if resources[3].Difficulty != DifficultyAdvanced || resources[4].Difficulty != DifficultyAdvanced {
+		t.Errorf("last two resources should be advanced, got %s and %s", resources[3].Difficulty, resources[4].Difficulty)
+	}
+
+	// Verify stable sort preserves title order within same difficulty
+	if resources[0].Title != "Getting Started" || resources[1].Title != "Basics 101" {
+		t.Errorf("stable sort should preserve original order within same difficulty, got %q and %q",
+			resources[0].Title, resources[1].Title)
 	}
 }

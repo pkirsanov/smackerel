@@ -3536,10 +3536,10 @@ func TestStabilize_SyncArtifactCapEnforcedDuringPinFetch(t *testing.T) {
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
-			"api_url":          ts.URL,
-			"include_pins":     true,
-			"include_threads":  false,
-			"enable_gateway":   false,
+			"api_url":         ts.URL,
+			"include_pins":    true,
+			"include_threads": false,
+			"enable_gateway":  false,
 			"monitored_channels": []interface{}{
 				map[string]interface{}{
 					"server_id":   "100000000000000001",

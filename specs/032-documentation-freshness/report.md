@@ -168,3 +168,45 @@ None. Previous devops fix (migration table consolidation 19→3 entries) remains
 ### Verification
 
 - `./smackerel.sh lint` — passed clean after fix
+
+---
+
+## Gaps Pass (2026-04-21)
+
+**Trigger:** `gaps-to-doc` child workflow from stochastic-quality-sweep
+
+### Probe Summary
+
+| Check | Documented | Actual | Match |
+|-------|-----------|--------|-------|
+| Go source file count (cmd/ + internal/) | 153 | 154 | DRIFT |
+| Go test file count (cmd/ + internal/) | 149 | 152 | DRIFT |
+| Python source file count (ml/app/) | 17 | 17 | OK |
+| Python test file count (ml/tests/) | 16 | 16 | OK |
+| E2E script count (tests/e2e/) | 59 | 59 | OK |
+| Stress test count (tests/stress/) | 2 | 2 | OK |
+| Migration files on disk | 3 (001, 018, 019) | 3 (001, 018, 019) | OK |
+| Prompt contracts on disk | 8 | 8 | OK |
+| Internal packages on disk | 23 | 23 | OK |
+| Connector directories on disk | 15 | 15 | OK |
+| Spec range | 001-036 | 001-036 | OK |
+| README system requirements section | Present | Present | OK |
+| README connector table (15 connectors) | All listed | All match | OK |
+| Operations.md sections | All present | All present | OK |
+| TLS setup section | Present | Present | OK |
+| Error lookup table | 13 entries | 13 entries | OK |
+| Health checks table | 5 services (incl Ollama) | 5 services | OK |
+
+### Findings
+
+| # | Finding | Category | Severity | Resolution |
+|---|---------|----------|----------|------------|
+| F1 | Go file counts stale in Development.md: documented 153 source/149 test, actual 154 source/152 test | Documentation drift | Low | Updated line 14 to 154 source files, 152 test files |
+
+### Files Modified
+
+- `docs/Development.md` — updated Go file counts (153→154 source, 149→152 test)
+
+### Verification
+
+- `./smackerel.sh lint` — passed clean after fix

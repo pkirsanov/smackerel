@@ -387,11 +387,20 @@ func TestCursorEmptyAppliesLookback(t *testing.T) {
 		t.Errorf("expected zero properties cursor for initial sync, got %v", cursor.Properties)
 	}
 
-	// Reservations should be ~30 days ago
+	// Reservations, Messages, and Reviews should all be ~30 days ago
 	expected := time.Now().UTC().AddDate(0, 0, -30)
-	diff := cursor.Reservations.Sub(expected)
-	if diff < -time.Minute || diff > time.Minute {
-		t.Errorf("reservations cursor should be ~30 days ago, got %v (diff: %v)", cursor.Reservations, diff)
+	for _, tc := range []struct {
+		name string
+		val  time.Time
+	}{
+		{"reservations", cursor.Reservations},
+		{"messages", cursor.Messages},
+		{"reviews", cursor.Reviews},
+	} {
+		diff := tc.val.Sub(expected)
+		if diff < -time.Minute || diff > time.Minute {
+			t.Errorf("%s cursor should be ~30 days ago, got %v (diff: %v)", tc.name, tc.val, diff)
+		}
 	}
 }
 
@@ -536,9 +545,25 @@ func TestSyncFullLifecycle(t *testing.T) {
 		}
 	}
 
-	// Cursor should be non-empty
+	// Cursor should be non-empty with non-zero timestamps for all synced resource types
 	if cursor == "" {
 		t.Error("cursor should not be empty after sync")
+	}
+	var decodedCursor SyncCursor
+	if err := json.Unmarshal([]byte(cursor), &decodedCursor); err != nil {
+		t.Fatalf("cursor should be valid JSON: %v", err)
+	}
+	if decodedCursor.Properties.IsZero() {
+		t.Error("cursor properties timestamp should be non-zero after sync")
+	}
+	if decodedCursor.Reservations.IsZero() {
+		t.Error("cursor reservations timestamp should be non-zero after sync")
+	}
+	if decodedCursor.Messages.IsZero() {
+		t.Error("cursor messages timestamp should be non-zero after sync")
+	}
+	if decodedCursor.Reviews.IsZero() {
+		t.Error("cursor reviews timestamp should be non-zero after sync")
 	}
 
 	// Verify content types
