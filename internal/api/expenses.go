@@ -53,6 +53,7 @@ const (
 	maxVendorLen        = 200
 	maxNotesLen         = 2000
 	maxPaymentMethodLen = 100
+	maxExpenseBodySize  = 64 << 10 // 64 KB — more than enough for correction/classify JSON
 )
 
 // sanitizeCSVCell prevents CSV injection (formula injection) by prefixing
@@ -263,6 +264,7 @@ func (h *ExpenseHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *ExpenseHandler) Correct(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxExpenseBodySize)
 	var req domain.ExpenseCorrectionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeExpenseError(w, http.StatusBadRequest, "INVALID_BODY", "Invalid JSON body")
@@ -428,6 +430,7 @@ func (h *ExpenseHandler) Correct(w http.ResponseWriter, r *http.Request) {
 func (h *ExpenseHandler) ClassifyEndpoint(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxExpenseBodySize)
 	var req domain.ClassifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeExpenseError(w, http.StatusBadRequest, "INVALID_BODY", "Invalid JSON body")

@@ -130,6 +130,39 @@ func TestHaversine(t *testing.T) {
 	}
 }
 
+// IMPROVE-005: Haversine must not return NaN for near-antipodal points.
+// Floating-point rounding can push h slightly above 1.0, so the clamp is essential.
+func TestHaversine_Antipodal(t *testing.T) {
+	// Exactly antipodal: North Pole to South Pole (~20015 km half-circumference)
+	northPole := LatLng{Lat: 90.0, Lng: 0.0}
+	southPole := LatLng{Lat: -90.0, Lng: 0.0}
+	d := Haversine(northPole, southPole)
+	if math.IsNaN(d) {
+		t.Fatal("Haversine returned NaN for antipodal points")
+	}
+	if math.Abs(d-20015) > 100 {
+		t.Errorf("North Pole to South Pole should be ~20015 km, got %.0f km", d)
+	}
+
+	// Near-antipodal with longitude offset (most likely to trigger h > 1.0)
+	a := LatLng{Lat: 89.99999, Lng: 0.0}
+	b := LatLng{Lat: -89.99999, Lng: 179.99999}
+	d2 := Haversine(a, b)
+	if math.IsNaN(d2) {
+		t.Fatal("Haversine returned NaN for near-antipodal points")
+	}
+	if d2 < 19000 || d2 > 21000 {
+		t.Errorf("near-antipodal distance should be ~20000 km, got %.0f km", d2)
+	}
+
+	// Same point should return 0
+	same := LatLng{Lat: 51.5074, Lng: -0.1278}
+	d3 := Haversine(same, same)
+	if d3 != 0.0 {
+		t.Errorf("same-point distance should be exactly 0, got %g", d3)
+	}
+}
+
 func TestParseJSON_MalformedInput(t *testing.T) {
 	// Completely invalid JSON
 	_, err := ParseTakeoutJSON([]byte(`{not valid json`))

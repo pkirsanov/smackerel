@@ -29,18 +29,18 @@ type SearchRequest struct {
 
 // SearchFilters are optional filters for search queries.
 type SearchFilters struct {
-	Type           string `json:"type,omitempty"`
-	DateFrom       string `json:"date_from,omitempty"`
-	DateTo         string `json:"date_to,omitempty"`
-	Person         string `json:"person,omitempty"`
-	Topic          string `json:"topic,omitempty"`
+	Type           string  `json:"type,omitempty"`
+	DateFrom       string  `json:"date_from,omitempty"`
+	DateTo         string  `json:"date_to,omitempty"`
+	Person         string  `json:"person,omitempty"`
+	Topic          string  `json:"topic,omitempty"`
 	Domain         string  `json:"domain,omitempty"`
 	Ingredient     string  `json:"ingredient,omitempty"`
 	PriceMax       float64 `json:"price_max,omitempty"`
-	MinRating      *int   `json:"min_rating,omitempty"`
-	MaxRating      *int   `json:"max_rating,omitempty"`
-	Tag            string `json:"tag,omitempty"`
-	HasInteraction bool   `json:"has_interaction,omitempty"`
+	MinRating      *int    `json:"min_rating,omitempty"`
+	MaxRating      *int    `json:"max_rating,omitempty"`
+	Tag            string  `json:"tag,omitempty"`
+	HasInteraction bool    `json:"has_interaction,omitempty"`
 }
 
 // SearchResponse is the response for POST /api/search.
