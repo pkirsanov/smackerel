@@ -26,34 +26,31 @@ Adds integration and E2E test suites that run against the real Docker stack (Pos
 
 ### Test Stack Configuration
 
-```
-docker-compose.test.yml (override):
-  postgres-test:  port 15432, volume: test-pg-data (disposable)
-  nats-test:      port 14222, volume: test-nats-data (disposable)
-  core-test:      port 18080, connects to test DB + test NATS
-  ml-test:        port 18081, connects to test NATS + Ollama
-```
+Test stack uses SST-managed isolation via `config/smackerel.yaml` `environments.test`:
+- Separate Compose project: `smackerel-test`
+- Isolated ports: 47001-47004
+- Disposable volumes: `smackerel-test-*`
 
 ### Integration Test Structure
 
 ```
 tests/integration/
-├── db_test.go          # Migration chain, CRUD, pgvector search
-├── nats_test.go        # Stream creation, publish/subscribe roundtrip
-├── annotation_test.go  # Annotation CRUD against real PostgreSQL
-├── list_test.go        # List creation, item status updates
-├── domain_test.go      # Domain extraction message roundtrip
-└── helpers_test.go     # DB pool setup, cleanup utilities
+├── db_migration_test.go     # Consolidated schema verification, DDL resilience
+├── nats_stream_test.go      # Stream creation, publish/subscribe roundtrip, consumer replay
+├── artifact_crud_test.go    # Artifact CRUD, pgvector search, annotation CRUD, list operations
+├── ml_readiness_test.go     # ML sidecar readiness gate tests
+└── helpers_test.go          # DB pool setup, cleanup utilities
 ```
 
 ### E2E Test Structure
 
 ```
 tests/e2e/
-├── capture_test.go     # POST /api/capture → wait for processing → verify
-├── search_test.go      # Capture + process + search → find result
-├── domain_e2e_test.go  # Capture recipe URL → domain extraction → ingredient search
-└── helpers_test.go     # HTTP client, polling, timeout utilities
+├── capture_process_search_test.go  # POST /api/capture → wait for processing → search → verify
+├── domain_e2e_test.go              # Capture recipe URL → domain extraction → ingredient search
+├── browser_history_e2e_test.go     # E2E helpers + browser history sync E2E
+└── lib/
+    └── helpers.sh                  # Shell test helpers
 ```
 
 ### Test Isolation Pattern

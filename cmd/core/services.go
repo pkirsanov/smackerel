@@ -12,6 +12,7 @@ import (
 	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
+	"github.com/smackerel/smackerel/internal/domain"
 	"github.com/smackerel/smackerel/internal/graph"
 	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/knowledge"
@@ -32,6 +33,7 @@ type coreServices struct {
 	supervisor        *connector.Supervisor
 	resultSub         *pipeline.ResultSubscriber
 	synthesisSub      *pipeline.SynthesisResultSubscriber
+	domainSub         *pipeline.DomainResultSubscriber
 	knowledgeStore    *knowledge.KnowledgeStore
 	proc              *pipeline.Processor
 	searchEngine      *api.SearchEngine
@@ -115,6 +117,26 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 	if svc.synthesisSub != nil {
 		if err := svc.synthesisSub.Start(ctx); err != nil {
 			slog.Warn("synthesis result subscriber failed to start", "error", err)
+		}
+	}
+
+	// Load domain extraction registry and start domain result subscriber.
+	// Domain extraction is independent of knowledge — it fires whenever
+	// matching prompt contracts exist in the contracts directory.
+	if cfg.PromptContractsDir != "" {
+		domainReg, err := domain.LoadRegistry(cfg.PromptContractsDir)
+		if err != nil {
+			slog.Warn("domain registry load failed", "error", err)
+		} else if domainReg.Count() > 0 {
+			svc.resultSub.DomainRegistry = domainReg
+			slog.Info("domain extraction enabled", "contracts", domainReg.Count())
+
+			svc.domainSub = pipeline.NewDomainResultSubscriber(svc.pg.Pool, svc.nc)
+			if err := svc.domainSub.Start(ctx); err != nil {
+				slog.Warn("domain result subscriber failed to start", "error", err)
+			}
+		} else {
+			slog.Info("domain extraction disabled — no domain contracts found")
 		}
 	}
 

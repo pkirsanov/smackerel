@@ -65,9 +65,6 @@ func FormatQuantity(qty float64) string {
 	}
 
 	// Fallback: one decimal place
-	if whole > 0 {
-		return fmt.Sprintf("%.1f", qty)
-	}
 	return fmt.Sprintf("%.1f", qty)
 }
 

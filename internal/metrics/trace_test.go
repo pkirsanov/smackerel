@@ -51,3 +51,30 @@ func TestExtractTraceID_Malformed(t *testing.T) {
 		t.Errorf("expected empty for malformed, got %q", got)
 	}
 }
+
+func TestTraceRoundTrip(t *testing.T) {
+	traceID := "abcdef1234567890abcdef1234567890"
+	headers := TraceHeaders(traceID)
+	extracted := ExtractTraceID(headers)
+	if extracted != traceID {
+		t.Errorf("round-trip failed: injected %q, extracted %q", traceID, extracted)
+	}
+}
+
+func TestExtractTraceID_TooFewParts(t *testing.T) {
+	h := nats.Header{}
+	h.Set("traceparent", "00-traceid-parentid")
+	got := ExtractTraceID(h)
+	if got != "" {
+		t.Errorf("expected empty for 3-part traceparent, got %q", got)
+	}
+}
+
+func TestExtractTraceID_TooManyParts(t *testing.T) {
+	h := nats.Header{}
+	h.Set("traceparent", "00-traceid-parentid-01-extra")
+	got := ExtractTraceID(h)
+	if got != "" {
+		t.Errorf("expected empty for 5-part traceparent, got %q", got)
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -21,6 +22,7 @@ import (
 type Connector struct {
 	id         string
 	config     connector.ConnectorConfig
+	healthMu   sync.RWMutex
 	health     connector.HealthStatus
 	qualifiers QualifierConfig
 }
@@ -49,7 +51,9 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	c.qualifiers = ParseQualifiers(config.Qualifiers)
 
 	slog.Info("IMAP connector connected", "id", c.id, "auth", authType)
+	c.healthMu.Lock()
 	c.health = connector.HealthHealthy
+	c.healthMu.Unlock()
 	return nil
 }
 
@@ -72,19 +76,28 @@ type EmailMessage struct {
 // Emails are read from the source_config "messages" field for local/test use,
 // or from a live IMAP connection when credentials are configured.
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
-	if c.health == connector.HealthDisconnected {
+	c.healthMu.RLock()
+	disconnected := c.health == connector.HealthDisconnected
+	c.healthMu.RUnlock()
+	if disconnected {
 		return nil, "", fmt.Errorf("IMAP connector %q: Sync called before Connect", c.id)
 	}
+	c.healthMu.Lock()
 	c.health = connector.HealthSyncing
+	c.healthMu.Unlock()
 	defer func() {
+		c.healthMu.Lock()
 		if c.health == connector.HealthSyncing {
 			c.health = connector.HealthHealthy
 		}
+		c.healthMu.Unlock()
 	}()
 
 	messages, err := c.fetchMessages(ctx, cursor)
 	if err != nil {
+		c.healthMu.Lock()
 		c.health = connector.HealthError
+		c.healthMu.Unlock()
 		return nil, cursor, fmt.Errorf("fetch messages: %w", err)
 	}
 
@@ -455,12 +468,16 @@ func getStr(m map[string]interface{}, key string) string {
 
 // Health returns the current connector status.
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
+	c.healthMu.RLock()
+	defer c.healthMu.RUnlock()
 	return c.health
 }
 
 // Close disconnects the IMAP session.
 func (c *Connector) Close() error {
+	c.healthMu.Lock()
 	c.health = connector.HealthDisconnected
+	c.healthMu.Unlock()
 	slog.Info("IMAP connector closed", "id", c.id)
 	return nil
 }

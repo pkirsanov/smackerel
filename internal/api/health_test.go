@@ -302,6 +302,7 @@ func TestHealthHandler_VersionAndCommitHash(t *testing.T) {
 		StartTime:  time.Now(),
 		Version:    "1.2.3",
 		CommitHash: "abc123",
+		BuildTime:  "2026-04-18T00:00:00Z",
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
@@ -319,6 +320,9 @@ func TestHealthHandler_VersionAndCommitHash(t *testing.T) {
 	if resp.CommitHash != "abc123" {
 		t.Errorf("expected commit abc123, got %s", resp.CommitHash)
 	}
+	if resp.BuildTime != "2026-04-18T00:00:00Z" {
+		t.Errorf("expected build_time 2026-04-18T00:00:00Z, got %s", resp.BuildTime)
+	}
 }
 
 // IMP-023-01: Version and commit hash are hidden from unauthenticated callers
@@ -330,6 +334,7 @@ func TestHealthHandler_VersionHiddenWithoutAuth(t *testing.T) {
 		StartTime:  time.Now(),
 		Version:    "1.2.3",
 		CommitHash: "abc123",
+		BuildTime:  "2026-04-18T00:00:00Z",
 		AuthToken:  "secret-token",
 	}
 
@@ -349,6 +354,9 @@ func TestHealthHandler_VersionHiddenWithoutAuth(t *testing.T) {
 	if resp.CommitHash != "" {
 		t.Errorf("expected empty commit hash for unauthenticated caller, got %s", resp.CommitHash)
 	}
+	if resp.BuildTime != "" {
+		t.Errorf("expected empty build_time for unauthenticated caller, got %s", resp.BuildTime)
+	}
 }
 
 // IMP-023-01: Version and commit hash are visible to authenticated callers.
@@ -359,6 +367,7 @@ func TestHealthHandler_VersionVisibleWithAuth(t *testing.T) {
 		StartTime:  time.Now(),
 		Version:    "1.2.3",
 		CommitHash: "abc123",
+		BuildTime:  "2026-04-18T00:00:00Z",
 		AuthToken:  "secret-token",
 	}
 
@@ -377,6 +386,9 @@ func TestHealthHandler_VersionVisibleWithAuth(t *testing.T) {
 	}
 	if resp.CommitHash != "abc123" {
 		t.Errorf("expected commit abc123, got %s", resp.CommitHash)
+	}
+	if resp.BuildTime != "2026-04-18T00:00:00Z" {
+		t.Errorf("expected build_time 2026-04-18T00:00:00Z, got %s", resp.BuildTime)
 	}
 }
 
@@ -1522,5 +1534,78 @@ func TestHealthHandler_IntelligenceDownDegrades(t *testing.T) {
 	}
 	if resp.Status != "degraded" {
 		t.Errorf("expected overall degraded when intelligence is down, got %s", resp.Status)
+	}
+}
+
+// === CHAOS-023-C001: Concurrent health checks with slow knowledge store ===
+// Verifies that concurrent authenticated health checks don't serialise on the
+// knowledge health mutex when the cache TTL expires and the DB query is slow.
+// Before the RWMutex fix, all goroutines would queue behind the first one
+// that took the exclusive lock to fetch fresh data, adding O(N * query_time)
+// latency across N concurrent requests.
+func TestChaos_ConcurrentHealthWithSlowKnowledgeStore(t *testing.T) {
+	synthTime := time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC)
+	store := &mockKnowledgeStore{
+		healthStats: &knowledge.KnowledgeHealthStats{
+			ConceptCount:     15,
+			EntityCount:      42,
+			SynthesisPending: 2,
+			LastSynthesisAt:  &synthTime,
+		},
+		healthDelay: 200 * time.Millisecond, // simulate slow DB query
+	}
+
+	deps := &Dependencies{
+		DB:                      &mockDB{healthy: true, artifactCount: 5},
+		NATS:                    &mockNATS{healthy: true},
+		StartTime:               time.Now().Add(-30 * time.Second),
+		KnowledgeStore:          store,
+		KnowledgeHealthCacheTTL: 1 * time.Millisecond, // force cache miss every call
+	}
+
+	const goroutines = 30
+	errs := make(chan error, goroutines)
+	start := time.Now()
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+			rec := httptest.NewRecorder()
+			deps.HealthHandler(rec, req)
+
+			if rec.Code != http.StatusOK {
+				errs <- fmt.Errorf("expected 200, got %d", rec.Code)
+				return
+			}
+
+			var resp HealthResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				errs <- fmt.Errorf("decode: %v", err)
+				return
+			}
+			if resp.Status != "healthy" {
+				errs <- fmt.Errorf("expected healthy, got %s", resp.Status)
+				return
+			}
+			if resp.Knowledge == nil {
+				errs <- fmt.Errorf("expected knowledge section to be present")
+				return
+			}
+			errs <- nil
+		}()
+	}
+
+	for i := 0; i < goroutines; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	elapsed := time.Since(start)
+	// With the old exclusive Mutex: ~goroutines*200ms = 6s (serialised).
+	// With the RWMutex fix: closer to 1*200ms = 200ms (parallel).
+	// Allow generous margin for CI jitter but catch serialisation.
+	if elapsed > 3*time.Second {
+		t.Errorf("concurrent health checks took %v — likely serialised on knowledge health mutex (expected <3s)", elapsed)
 	}
 }

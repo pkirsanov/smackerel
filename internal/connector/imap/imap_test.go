@@ -2,6 +2,7 @@ package imap
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -152,7 +153,30 @@ func TestExtractActionItems_Patterns(t *testing.T) {
 	text := "Let's discuss the project.\nAction: Review the proposal by Wednesday\nTodo: Update budget spreadsheet\nPlease send the report by Friday\nNo action needed here."
 	items := ExtractActionItems(text)
 	if len(items) != 3 {
-		t.Errorf("expected 3 action items, got %d: %v", len(items), items)
+		t.Fatalf("expected 3 action items, got %d: %v", len(items), items)
+	}
+
+	// SCN-003-007: Verify extracted content matches the actual commitment text.
+	found := map[string]bool{
+		"action":   false,
+		"todo":     false,
+		"sendverb": false,
+	}
+	for _, item := range items {
+		lower := strings.ToLower(item)
+		switch {
+		case strings.Contains(lower, "review the proposal"):
+			found["action"] = true
+		case strings.Contains(lower, "update budget"):
+			found["todo"] = true
+		case strings.Contains(lower, "send the report"):
+			found["sendverb"] = true
+		}
+	}
+	for tag, ok := range found {
+		if !ok {
+			t.Errorf("expected action item %q to be extracted from text; got items: %v", tag, items)
+		}
 	}
 }
 

@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **34 Agents · 60 Gates · 32 Workflow Modes · 25 Phases**
+> **36 Agents · 60 Gates · 34 Workflow Modes · 25 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -20,6 +20,8 @@
 | Icon | Agent | Alias | Role | Quote |
 |:----:|-------|-------|------|-------|
 | <img src="../icons/jacob-hardhat.svg" width="28"> | `bubbles.iterate` | Jacob | Single-iteration work picker. Chooses the next executable slice and runs the right specialist chain. Also accepts plain English via `super` delegation. | *"I'll do whatever you need, Julian."* |
+| <img src="../icons/tyrone-chain.svg" width="28"> | `bubbles.goal` | Tyrone | Autonomous single-goal executor. Give him a goal and he handles everything — spec, design, implement, test, E2E, chaos, validate, audit — looping until convergence. Never stops on fixable obstacles. | *"I handle things, that's what I do."* |
+| <img src="../icons/donna-whistle.svg" width="28"> | `bubbles.sprint` | Donna | Multi-goal sprint controller. Give her goals and a time budget. She prioritizes, executes each via the convergence loop, manages the clock, and delivers a sprint report. | *"We're on a schedule, people. Next!"* |
 | <img src="../icons/cory-cap.svg" width="28"> | `bubbles.bug` | Cory | Bug orchestrator. Reproduces the issue, packets the work, dispatches the right owners, and keeps going until the bug is actually closed. | *"I didn't wanna find it, but... there it is."* |
 
 ## <img src="../icons/julian-glass.svg" width="32"> Owners & Executors
@@ -115,6 +117,10 @@
 | `sunnyvale lets-get-organized` | `bubbles.design` | *"Let's get this organized."* |
 | `sunnyvale whats-going-on-here` | `bubbles.clarify` | *"What in the f— is going on here?"* |
 | `sunnyvale nice-kitty` | `bubbles.bug` | *"That's a nice f\*\*\*ing kitty right there."* |
+| `sunnyvale i-handle-things` | `bubbles.goal` | *"I handle things, that's what I do."* |
+| `sunnyvale tyrone-got-this` | `bubbles.goal` | *"Peace. Tyrone got this."* |
+| `sunnyvale on-the-clock` | `bubbles.sprint` | *"We're on a schedule, people. Next!"* |
+| `sunnyvale next-on-the-board` | `bubbles.sprint` | *"That one's done. What's next on the board?"* |
 | `sunnyvale just-fixes` | `bubbles.stabilize` | *"..." (Bill spots the problem and points at it)* |
 | `sunnyvale used-to-be-a-vet` | `bubbles.create-skill` | *"I used to be a vet, you know."* |
 | `sunnyvale true` | `bubbles.commands` | *"True."* |

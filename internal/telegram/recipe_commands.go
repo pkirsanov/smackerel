@@ -220,12 +220,41 @@ func (b *Bot) handleCookEntry(ctx context.Context, chatID int64, recipeName stri
 			return
 		}
 	} else {
-		// Search for recipe by name
-		rd, artifactID, err = b.ResolveRecipeByName(ctx, recipeName)
-		if err != nil {
+		// Search for recipe by name — handle disambiguation if multiple matches
+		matches, searchErr := b.SearchRecipesByName(ctx, recipeName)
+		if searchErr != nil || len(matches) == 0 {
 			b.reply(chatID, fmt.Sprintf("? I don't have a recipe called \"%s\". Try /find %s to search.", recipeName, recipeName))
 			return
 		}
+		if len(matches) > 1 {
+			// Multiple matches — present disambiguation list
+			var lines []string
+			lines = append(lines, fmt.Sprintf("? Multiple recipes match \"%s\":", recipeName))
+			lines = append(lines, "")
+			for i, m := range matches {
+				lines = append(lines, fmt.Sprintf("%d. %s", i+1, m.RecipeData.Title))
+			}
+			lines = append(lines, "")
+			lines = append(lines, "Reply with a number to select.")
+			b.reply(chatID, strings.Join(lines, "\n"))
+
+			// Store disambiguation state
+			options := make([]CookDisambiguationOption, len(matches))
+			for i, m := range matches {
+				options[i] = CookDisambiguationOption{
+					ArtifactID: m.ArtifactID,
+					RecipeData: m.RecipeData,
+					Title:      m.RecipeData.Title,
+				}
+			}
+			b.cookSessions.SetDisambiguation(chatID, &CookDisambiguation{
+				Options:  options,
+				Servings: servings,
+			})
+			return
+		}
+		rd = matches[0].RecipeData
+		artifactID = matches[0].ArtifactID
 	}
 
 	// Check for existing session — prompt replacement
@@ -393,9 +422,51 @@ func (b *Bot) handleCookReplacement(ctx context.Context, chatID int64, confirm b
 	}
 }
 
+// handleCookDisambiguation resolves a numeric reply to a pending cook disambiguation prompt.
+// Returns true if a disambiguation was pending and resolved, false otherwise.
+func (b *Bot) handleCookDisambiguation(ctx context.Context, chatID int64, text string) bool {
+	if b.cookSessions == nil {
+		return false
+	}
+	pending := b.cookSessions.GetDisambiguation(chatID)
+	if pending == nil {
+		return false
+	}
+
+	num, err := strconv.Atoi(strings.TrimSpace(text))
+	if err != nil || num < 1 || num > len(pending.Options) {
+		b.cookSessions.ClearDisambiguation(chatID)
+		return false
+	}
+
+	selected := pending.Options[num-1]
+	servings := pending.Servings
+	b.cookSessions.ClearDisambiguation(chatID)
+	b.startCookSession(chatID, selected.RecipeData, selected.ArtifactID, servings)
+	return true
+}
+
 // ResolveRecipeByName searches for a recipe by name via the API.
 // Exported for use by MealPlanCommandHandler's RecipeResolver callback.
 func (b *Bot) ResolveRecipeByName(ctx context.Context, name string) (*recipe.RecipeData, string, error) {
+	matches, err := b.SearchRecipesByName(ctx, name)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(matches) == 0 {
+		return nil, "", fmt.Errorf("no recipe found matching %q", name)
+	}
+	return matches[0].RecipeData, matches[0].ArtifactID, nil
+}
+
+// recipeMatch holds a single recipe search result.
+type recipeMatch struct {
+	ArtifactID string
+	RecipeData *recipe.RecipeData
+}
+
+// SearchRecipesByName searches for recipes by name and returns all matches.
+func (b *Bot) SearchRecipesByName(ctx context.Context, name string) ([]recipeMatch, error) {
 	// Truncate name for safety
 	if len(name) > 200 {
 		name = name[:200]
@@ -403,7 +474,7 @@ func (b *Bot) ResolveRecipeByName(ctx context.Context, name string) (*recipe.Rec
 
 	body, err := b.apiPost(ctx, "/api/search", map[string]string{"query": name + " recipe"})
 	if err != nil {
-		return nil, "", fmt.Errorf("search recipe: %w", err)
+		return nil, fmt.Errorf("search recipe: %w", err)
 	}
 
 	var results struct {
@@ -413,9 +484,10 @@ func (b *Bot) ResolveRecipeByName(ctx context.Context, name string) (*recipe.Rec
 		} `json:"results"`
 	}
 	if err := json.Unmarshal(body, &results); err != nil {
-		return nil, "", fmt.Errorf("parse search results: %w", err)
+		return nil, fmt.Errorf("parse search results: %w", err)
 	}
 
+	var matches []recipeMatch
 	for _, item := range results.Results {
 		if len(item.DomainData) == 0 {
 			continue
@@ -425,11 +497,14 @@ func (b *Bot) ResolveRecipeByName(ctx context.Context, name string) (*recipe.Rec
 			continue
 		}
 		if rd.Domain == "recipe" && strings.Contains(strings.ToLower(rd.Title), strings.ToLower(name)) {
-			return &rd, item.ID, nil
+			matches = append(matches, recipeMatch{
+				ArtifactID: item.ID,
+				RecipeData: &rd,
+			})
 		}
 	}
 
-	return nil, "", fmt.Errorf("no recipe found matching %q", name)
+	return matches, nil
 }
 
 // apiGet performs an authenticated GET request to the core API.

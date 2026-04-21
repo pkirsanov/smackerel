@@ -156,6 +156,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	const maxFileSizeBytes = 200 * 1024 * 1024  // 200MB hard limit
 
 	var allArtifacts []connector.RawArtifact
+	var syncedActivities []TakeoutActivity
 	var processedThisCycle []string
 	syncErrors := 0
 	trailCount := 0
@@ -229,6 +230,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 			artifact := NormalizeActivity(activity, filename)
 			allArtifacts = append(allArtifacts, artifact)
+			syncedActivities = append(syncedActivities, activity)
 
 			if IsTrailQualified(activity) {
 				trailCount++
@@ -283,6 +285,18 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		"trail_qualified", trailCount,
 		"errors", syncErrors,
 	)
+
+	// Run pattern detection and temporal-spatial linking after sync.
+	if len(syncedActivities) > 0 {
+		patternArtifacts, err := c.PostSync(ctx, syncedActivities)
+		if err != nil {
+			slog.Warn("post-sync pattern detection had errors", "error", err)
+		}
+		if len(patternArtifacts) > 0 {
+			allArtifacts = append(allArtifacts, patternArtifacts...)
+			slog.Info("post-sync pattern artifacts added", "count", len(patternArtifacts))
+		}
+	}
 
 	return allArtifacts, newCursor, nil
 }

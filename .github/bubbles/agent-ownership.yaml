@@ -53,6 +53,8 @@ artifacts:
     executionClaimsAllowed:
     - bubbles.workflow
     - bubbles.iterate
+    - bubbles.goal
+    - bubbles.sprint
     - bubbles.bug
     - bubbles.analyst
     - bubbles.ux
@@ -97,6 +99,8 @@ artifacts:
     executionClaimsAllowed:
     - bubbles.workflow
     - bubbles.iterate
+    - bubbles.goal
+    - bubbles.sprint
     - bubbles.implement
     - bubbles.test
     - bubbles.docs

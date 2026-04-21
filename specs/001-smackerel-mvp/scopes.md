@@ -21,7 +21,7 @@ This spec covers cross-cutting product concerns that span multiple phases. Phase
 - `ConnectorConfig` struct: auth, schedule, qualifiers, processing rules
 - `ConnectorRegistry`: register/unregister/get connector lifecycle
 - `OAuth2Provider` interface: `AuthURL(scopes)`, `ExchangeCode(code)`, `RefreshToken(refresh)`
-- `HealthStatus` enum: `healthy | syncing | error | disconnected`
+- `HealthStatus` enum: `healthy | syncing | degraded | failing | error | disconnected`
 - CSS custom properties: `--fg`, `--bg`, `--subtle`, `--surface`, `--divider` (light + dark)
 - SVG icon partials: 32 icons (8 source + 8 artifact + 4 status + 4 action + 8 navigation)
 - Telegram text markers: `. ? ! > - ~ # @`
@@ -279,9 +279,9 @@ Scenario: SCN-001-019 Rate limit detection and exponential backoff
   And the next scheduled sync cycle proceeds normally
 
 Scenario: SCN-001-020 Connector health status reporting
-  Given a connector can be in one of four states
+  Given a connector can be in one of six states
   When the health endpoint is queried for a registered connector
-  Then it reports one of: healthy, syncing, error, disconnected
+  Then it reports one of: healthy, syncing, degraded, failing, error, disconnected
   And status transitions follow the connector state machine
 
 Scenario: SCN-001-021 Connector error recovery and dead-letter
@@ -301,7 +301,7 @@ Scenario: SCN-001-021 Connector error recovery and dead-letter
 - Sync state CRUD on `sync_state` table
 - Cron scheduler integration (robfig/cron)
 - Rate limit detection and exponential backoff with jitter
-- `HealthStatus` enum: healthy, syncing, error, disconnected
+- `HealthStatus` enum: healthy, syncing, degraded, failing, error, disconnected
 - Dead-letter queue for items failing 3 delivery attempts
 - Connector supervisor goroutine with crash recovery
 
@@ -364,8 +364,8 @@ All changes are contained within the connector, auth, and scheduler packages. No
     > Evidence: `internal/connector/backoff.go` implements `Backoff` with `BaseDelay=1s`, `MaxDelay=16s`, exponential+jitter. `backoff_test.go::TestBackoff_Exponential` verifies.
 - [x] SCN-001-019: After max retries the current sync cycle is skipped
     > Evidence: `backoff.go::Next()` returns `false` after `MaxRetries=5`. `backoff_test.go::TestBackoff_MaxRetries` verifies exhaustion.
-- [x] SCN-001-020: Connector health status reporting with enum: healthy, syncing, error, disconnected
-    > Evidence: `connector.go` defines `HealthStatus` type with `HealthHealthy`, `HealthSyncing`, `HealthError`, `HealthDisconnected` constants.
+- [x] SCN-001-020: Connector health status reporting with enum: healthy, syncing, degraded, failing, error, disconnected
+    > Evidence: `connector.go` defines `HealthStatus` type with `HealthHealthy`, `HealthSyncing`, `HealthDegraded`, `HealthFailing`, `HealthError`, `HealthDisconnected` constants. Original 4-value contract from this spec extended to 6 values by downstream specs (019-connector-wiring, 022-operational-resilience).
 - [x] SCN-001-021: Connector error recovery and dead-letter — supervisor with crash recovery (goroutine restart)
     > Evidence: `internal/connector/supervisor.go` implements `Supervisor` with `StartConnector`/`StopConnector`. `runWithRecovery` uses `defer recover()` with 5s restart delay.
 - [x] SCN-001-021: Dead-letter handling for items failing delivery attempts

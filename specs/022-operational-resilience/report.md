@@ -36,8 +36,8 @@
 
 ### Scope 3: Cron Concurrency Guards
 
-- 6 per-group `sync.Mutex` fields added to `Scheduler`: `muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muFrequent`
-- All cron callbacks wrapped in `TryLock()`/`Unlock()` guards
+- 14 per-job `sync.Mutex` fields added to `Scheduler`: `muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muBriefs`, `muAlerts`, `muAlertProd`, `muResurface`, `muLookups`, `muSubs`, `muRelCool`, `muKnowledgeLint`, `muMealPlanComplete`
+- All 14 cron callbacks wrapped in `TryLock()`/`Unlock()` guards
 - Unit tests: `TestCronConcurrencyGuard_SameGroupSkipped`, `TestCronConcurrencyGuard_DifferentGroupsConcurrent`, `TestCronConcurrencyGuard_AllGroupsIndependent`, `TestCronConcurrencyGuard_RaceDetectorClean`
 
 ### Scope 4: Graceful Shutdown + Docker + Dead-Letter
@@ -98,7 +98,7 @@ All 8 spec goals (G1–G8) are implemented and verified. The full implementation
 
 ### Scope 3 Report Correction
 
-The scheduler now has 7 per-group `sync.Mutex` fields (not 6): `muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muBriefs`, `muAlerts`. The change from the original 6-group design occurred when spec 021 (Intelligence Delivery) added alert delivery sweep (every 15 min) and pre-meeting brief (every 5 min) as separate-cadence jobs. Both new job groups have TryLock() guards consistent with the original implementation pattern. Total registered cron jobs: 14 (up from original 9). All 14 have TryLock guards.
+The scheduler now has 14 per-job `sync.Mutex` fields: `muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muBriefs`, `muAlerts`, `muAlertProd`, `muResurface`, `muLookups`, `muSubs`, `muRelCool`, `muKnowledgeLint`, `muMealPlanComplete`. The original 6-group design evolved to per-job mutexes as the job count grew from 9 to 14 across specs 021 (alert jobs), 025 (knowledge lint), and 036 (meal plan auto-complete). All 14 jobs have TryLock() guards.
 
 ### New Tests
 
@@ -122,7 +122,7 @@ The scheduler now has 7 per-group `sync.Mutex` fields (not 6): `muDigest`, `muHo
 |------|-----------------|----------------|--------|
 | Backup CLI | G1: `./smackerel.sh backup` produces valid pg_dump | `scripts/commands/backup.sh` + CLI dispatch | ✅ |
 | Capture 503 | G2: HTTP 503 + DB_UNAVAILABLE on DB outage | `CaptureHandler` DB health gate (nil + unhealthy) | ✅ |
-| Cron guards | G3: Per-type TryLock on all cron jobs | 7 mutex groups, 14 jobs, all guarded | ✅ |
+| Cron guards | G3: Per-type TryLock on all cron jobs | 14 per-job mutexes, 14 jobs, all guarded | ✅ |
 | Dead-letter | G4: DEADLETTER stream + metadata headers | `EnsureStreams()` + `publishToDeadLetter()` + Nak on DL failure | ✅ |
 | Shutdown | G5: Explicit sequential shutdown | `shutdownAll()` with per-step timeouts | ✅ |
 | Docker timeout | G6: stop_grace_period 30s | `docker-compose.yml` smackerel-core | ✅ |
@@ -229,7 +229,7 @@ Spec 021 (Intelligence Delivery) added 3 cron jobs (alert delivery sweep, daily 
 | R-001: Backup CLI produces pg_dump | `scripts/commands/backup.sh` + `smackerel.sh backup` | ✅ |
 | R-002: Backup fails loudly | Container check + file size validation | ✅ |
 | R-003: Capture 503 on DB outage | `CaptureHandler` DB health gate (nil + unhealthy) | ✅ |
-| R-004: Per-type cron TryLock | 7 mutex groups, all 12 job callbacks guarded | ✅ |
+| R-004: Per-type cron TryLock | 14 per-job mutexes, all 14 job callbacks guarded | ✅ |
 | R-005: DEADLETTER stream | `EnsureStreams()` + LimitsPolicy + 30d MaxAge + 10000 MaxMsgs | ✅ |
 | R-006: Sequential shutdown | `shutdownAll()` with per-step timeouts | ✅ |
 | R-007: stop_grace_period 30s | `docker-compose.yml` smackerel-core | ✅ |
@@ -452,3 +452,52 @@ Feature 022 is complete. All 4 scopes implemented and verified with unit tests. 
 - `internal/scheduler` freshly compiled (5.116s) — both new tests PASS
 - `internal/connector` freshly compiled (14.894s) — new test PASS
 - Explicit verification: `go test -v -count=1 -run "TestStop_CronStopBounded|TestStop_WgWaitBounded|TestSupervisor_ItemsSynced" ./internal/scheduler/... ./internal/connector/...` — all 3 PASS
+
+## Reconcile-to-Doc Pass (stochastic sweep)
+
+**Date:** 2026-04-20
+**Trigger:** Stochastic quality sweep — reconcile (child workflow)
+**Scope:** Claimed-vs-implemented state reconciliation across all artifacts
+
+### Reconciliation Method
+
+Systematic comparison of:
+- state.json claimed status + phases vs actual artifact and code state
+- design.md architectural claims vs actual implementation in Go source
+- scopes.md DoD items, Gherkin scenarios, and implementation plans vs actual code
+- report.md evidence claims vs current codebase
+
+### Findings and Remediations
+
+| ID | Finding | Severity | Affected Artifacts | Fix |
+|----|---------|----------|--------------------|-----|
+| REC-001 | design.md Section 6.1/6.2 claims 12 jobs in 7 mutex groups; actual code has 14 jobs with 14 per-job mutexes (`muResurface`, `muLookups`, `muSubs`, `muAlertProd`, `muRelCool`, `muKnowledgeLint`, `muMealPlanComplete` added; per-group → per-job architecture) | Low | `design.md` | Updated Section 6.1 to per-job table (14 entries), Section 6.2 struct to 14 mutexes, resolved decision bullet |
+| REC-002 | scopes.md Scope 3 claims 7 per-group mutexes; actual has 14 per-job mutexes. Execution outline, new types, Gherkin SCN-022-11, implementation plan, and DoD all stale | Low | `scopes.md` | Updated all 6 stale references to reflect 14 per-job architecture |
+| REC-003 | report.md Scope 3 section and gaps correction paragraph reference stale "7 per-group" counts | Low | `report.md` | Updated to "14 per-job" counts |
+| REC-004 | state.json `certifiedCompletedPhases: []` despite `certification.status: "certified"` — metadata tracking gap | Low | `state.json` | Updated to list certified phases |
+
+### Root Cause
+
+Specs 025 (knowledge synthesis layer) and 036 (meal planning) added cron jobs with their own dedicated mutexes after the 022 artifacts were last reconciled. Additionally, the original per-group mutex design (where related jobs shared a mutex, e.g., synthesis + resurfacing + frequent lookups sharing `muDaily`) was replaced by per-job mutexes during implementation — each of the 14 jobs now has its own `sync.Mutex` for maximum independent concurrency. This architecture change was never reflected back into the 022 design/scopes documentation.
+
+### Implementation Verification (No Functional Issues)
+
+All core 022 resilience features verified present and correct in code:
+
+| Feature | File | Evidence |
+|---------|------|----------|
+| Backup CLI | `scripts/commands/backup.sh` | pg_dump via docker exec, gzip, size check, `gunzip -t` integrity |
+| DB health gate | `internal/api/capture.go:100` | `d.DB == nil \|\| !d.DB.Healthy(r.Context())` → 503 |
+| ML health cache | `internal/api/search.go:97-105` | `atomic.Bool` + `atomic.Int64` + `healthProbeMu` coalescing |
+| 14 TryLock guards | `internal/scheduler/jobs.go` | All 14 cron callbacks guarded (verified via grep) |
+| DEADLETTER stream | `internal/nats/client.go:82` | Present in `AllStreams()` |
+| Dead-letter routing | `internal/pipeline/subscriber.go:298-369` | `publishToDeadLetter` with metadata headers |
+| Sequential shutdown | `cmd/core/shutdown.go` | `shutdownAll()` with per-step budgets + overall deadline |
+| stop_grace_period | `docker-compose.yml:88` | `stop_grace_period: 30s` on smackerel-core |
+| SST pool config | `internal/db/postgres.go:23` | `Connect(ctx, url, maxConns, minConns)` — no hardcoded values |
+
+### Evidence
+
+- All changes are documentation-only (design.md, scopes.md, report.md, state.json)
+- No functional code changes required — implementation is complete and correct
+- Zero claimed-vs-implemented drift in functional behavior

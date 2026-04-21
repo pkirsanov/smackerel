@@ -2398,8 +2398,8 @@ func TestClassifyTsunamiSeverity(t *testing.T) {
 		{"Tsunami Warning — Pacific Coast", "severe"},
 		{"Tsunami Watch issued for Hawaii", "moderate"},
 		{"Tsunami Advisory for coastal areas", "minor"},
-		{"Tsunami Information Statement", "info"},
-		{"", "info"},
+		{"Tsunami Information Statement", "unknown"},
+		{"", "unknown"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
@@ -2553,11 +2553,11 @@ func TestClassifyVolcanoSeverity(t *testing.T) {
 		{"WARNING", "severe"},
 		{"WATCH", "moderate"},
 		{"ADVISORY", "minor"},
-		{"NORMAL", "info"},
+		{"NORMAL", "minor"},
 		{"warning", "severe"},
 		{"Watch", "moderate"},
-		{"", "info"},
-		{"UNKNOWN", "info"},
+		{"", "unknown"},
+		{"UNKNOWN", "unknown"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.level, func(t *testing.T) {
@@ -2836,9 +2836,9 @@ func TestClassifyAQISeverity(t *testing.T) {
 		{151, "moderate"},
 		{120, "minor"},
 		{101, "minor"},
-		{50, "info"},
-		{100, "info"},
-		{0, "info"},
+		{50, "minor"},
+		{100, "minor"},
+		{0, "minor"},
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("AQI_%d", tt.aqi), func(t *testing.T) {
@@ -3024,8 +3024,8 @@ func TestClassifyGDACSAlertLevel(t *testing.T) {
 		{"ORANGE", "severe"},
 		{"Green", "moderate"},
 		{"green", "moderate"},
-		{"", "info"},
-		{"Yellow", "info"},
+		{"", "unknown"},
+		{"Yellow", "unknown"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.level, func(t *testing.T) {

@@ -237,6 +237,11 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		return
 	}
 
+	// Priority 2.5: Cook disambiguation resolution (user replies with a number to select a recipe)
+	if !msg.IsCommand() && b.handleCookDisambiguation(ctx, chatID, text) {
+		return
+	}
+
 	// Priority 3: Cook session navigation (next, back, ingredients, done, jump)
 	if !msg.IsCommand() && b.cookSessions != nil {
 		session := b.cookSessions.Get(chatID)

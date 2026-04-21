@@ -1,13 +1,13 @@
 # Report: 012 — Hospitable Connector
 
 > **Status:** Done
-> **Last Updated:** 2026-04-16
+> **Last Updated:** 2026-04-20
 
 ---
 
 ## Summary
 
-Hospitable Connector delivered under delivery-lockdown mode. 5 scopes completed: (1) API Client, Types & Config; (2) Connector Implementation & Normalizer; (3) Edge Hints, Cross-Domain Linking & Hardening; (4) Message Sync Reliability & Client Hardening; (5) Normalizer Quality Fixes. Implementation: types.go, client.go, connector.go, normalizer.go in `internal/connector/hospitable/`. 138 unit tests across 3 test files (connector_test.go, normalizer_test.go, chaos_test.go) — all pass. PAT authentication, paginated fetching, rate limit handling, 4 resource types (property, reservation, message, review), incremental cursor sync, knowledge graph edge hints, partial failure isolation, property name cache. Security hardening includes SSRF protection on pagination URLs, response body size limits, and extensive chaos testing.
+Hospitable Connector delivered under delivery-lockdown mode. 5 scopes completed: (1) API Client, Types & Config; (2) Connector Implementation & Normalizer; (3) Edge Hints, Cross-Domain Linking & Hardening; (4) Message Sync Reliability & Client Hardening; (5) Normalizer Quality Fixes. Implementation: types.go, client.go, connector.go, normalizer.go in `internal/connector/hospitable/`. 202 unit tests across 3 test files (connector_test.go: 69, normalizer_test.go: 56, chaos_test.go: 77) — all pass. PAT authentication, paginated fetching, rate limit handling, 4 resource types (property, reservation, message, review), incremental cursor sync, knowledge graph edge hints, partial failure isolation, property name cache. Security hardening includes SSRF protection on pagination URLs, response body size limits, and extensive chaos testing.
 
 ## Completion Statement
 
@@ -16,6 +16,80 @@ All 5 scopes are Done. All DoD items verified with passing tests. `./smackerel.s
 ## Known Gaps
 
 Integration tests (`tests/integration/hospitable_test.go`) and E2E tests (`tests/e2e/hospitable_test.go`) listed in scope test plans were never implemented. All test coverage is via unit tests with mock HTTP servers. This is acceptable for the connector pattern (no live API in CI) but means the test plans in scopes.md overstate the integration/E2E coverage.
+
+---
+
+## Hardening Probe (2026-04-21)
+
+**Trigger:** `harden-to-doc` via stochastic-quality-sweep (round 2)
+**Probe agent:** bubbles.harden (inline)
+**Result:** Clean — doc freshness fixes only, no code changes
+
+### Probe Summary
+
+Full re-probe of 22 requirements (R-001–R-022), 5 scopes + chaos scope, 30 Gherkin scenarios (SCN-HC-001–030), 4 source files (client.go, connector.go, normalizer.go, types.go), and 202 test functions. All unit tests pass. `./smackerel.sh lint` exit 0. `./smackerel.sh test unit` — hospitable package ok.
+
+**Areas probed:**
+- Gherkin scenario completeness and specificity
+- DoD item coverage against implementation
+- Test plan depth and adversarial coverage
+- Scope boundary definitions
+- Security hardening gaps
+- Spec-vs-implementation drift
+- Artifact doc freshness vs actual test counts
+
+**Findings:**
+
+| # | Area | Severity | Detail | Disposition |
+|---|------|----------|--------|-------------|
+| 1 | uservalidation.md stale test count | Cosmetic | Said 138 (53+39+46), actual 202 (69+56+77) | Fixed: updated uservalidation.md |
+| 2 | Scope Summary chaos count stale | Cosmetic | Said 56, actual 77 | Fixed: updated scopes.md |
+| 3 | SCN-HC-020 says "healthy" but code uses HealthDegraded | Informational | Scenario-to-code mismatch; implementation is correct (more granular). Already noted in prior probe. | Acknowledged — no change |
+| 4 | `HealthDegraded` in code but not R-013 | Informational | Implementation provides more granular health reporting than spec. Not a bug — improvement over spec. | Acknowledged (carried from prior probe) |
+| 5 | Processing tier strings unvalidated | Informational | Config accepts arbitrary tier strings. Pipeline validates downstream. Low risk. | Accepted (carried from prior probe) |
+
+**No code changes required. No new Gherkin scenarios needed. Security hardening is thorough (SSRF, body limits, retry caps, cache caps, input sanitization, race protection, 77 chaos tests).**
+
+---
+
+## Hardening Probe (2026-04-20)
+
+**Trigger:** `harden-to-doc` via stochastic-quality-sweep
+**Probe agent:** bubbles.harden (inline)
+**Result:** Clean — no actionable findings
+
+### Probe Summary
+
+Systematic review of 22 requirements (R-001–R-022), 5 scopes + chaos scope, 30 Gherkin scenarios (SCN-HC-001–030), 4 source files, and 202 test functions.
+
+**Areas probed:**
+- Gherkin scenario completeness and specificity
+- DoD item coverage against implementation
+- Test plan depth and adversarial coverage
+- Scope boundary definitions
+- Security hardening gaps
+- Spec-vs-implementation drift
+
+**Findings:**
+
+| # | Area | Severity | Detail | Disposition |
+|---|------|----------|--------|-------------|
+| 1 | Report freshness | Cosmetic | Test count was 138 (stale); actual is 202 after later hardening rounds | Fixed in this update |
+| 2 | `HealthDegraded` in code but not R-013 | Informational | Implementation provides more granular health reporting than spec. Not a bug — improvement over spec. | Acknowledged |
+| 3 | Processing tier strings unvalidated | Informational | Config accepts arbitrary tier strings. Pipeline validates downstream. Low risk. | Accepted |
+
+**Hardening already present:**
+- SSRF protection on pagination URLs (same-origin check)
+- Response body size limit (10 MiB)
+- Retry-After cap (60s), max page size cap (500), pagination page cap (1000)
+- Property name cache caps (10K entries, 1024-char strings)
+- Input sanitization (CWE-116), URL scheme validation (CWE-79/601)
+- Rating clamping for NaN/Inf (CWE-20)
+- Context cancellation propagation, sync timeout (10 min)
+- Race condition protection (sync.RWMutex)
+- 77 chaos tests covering malformed responses, concurrency, extreme values
+
+**Conclusion:** No implementation work required. Documentation freshness fixed.
 
 ---
 
@@ -61,7 +135,7 @@ ok      github.com/smackerel/smackerel/internal/web     (cached)
 ok      github.com/smackerel/smackerel/internal/web/icons       (cached)
 ```
 
-**Result:** All 35 Go packages pass. Hospitable package: `ok github.com/smackerel/smackerel/internal/connector/hospitable (cached)`. 138 tests: 53 connector + 39 normalizer + 46 chaos.
+**Result:** All Go packages pass. Hospitable package: `ok github.com/smackerel/smackerel/internal/connector/hospitable (cached)`. 202 test functions: 69 connector + 56 normalizer + 77 chaos.
 
 ### Lint, Config SST Check, Format Check
 

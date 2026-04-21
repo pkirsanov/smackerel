@@ -8,6 +8,59 @@ All 6 scopes implemented. 166 test functions in `alerts_test.go`. See individual
 
 ---
 
+## Regression Report — 2026-04-21
+
+**Trigger:** `regression` (stochastic-quality-sweep child workflow)
+**Mode:** `regression-to-doc`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Regression analysis of the Government Alerts connector (post-certification sweep). No regressions found. All 166 test functions pass. Build, check, and lint all clean. Previous regressions (REG-001 config wiring, REG-002 scope summary drift) remain fixed. No cross-spec conflicts, no coverage decreases, no design contradictions beyond the already-documented RECON-007 (info-level, single-file vs multi-file accepted).
+
+### Probes Performed
+
+| Probe | Result | Detail |
+|-------|--------|--------|
+| Unit test baseline | PASS | 166 test functions in `alerts_test.go`, all pass via `./smackerel.sh test unit` |
+| Full suite regression | PASS | All 41 Go packages + 214 Python tests pass, zero failures |
+| Build check | PASS | `./smackerel.sh check` — config SST in sync, env_file drift guard OK |
+| Lint | PASS | `./smackerel.sh lint` — all Go and Python lint clean |
+| REG-001 (config wiring) | STILL FIXED | `cmd/core/connectors.go` passes all 7 source flags + AirNow key via Credentials channel |
+| REG-002 (scope summary) | STILL FIXED | Scope Summary table in `scopes.md` matches individual scope statuses (all Done) |
+| Cross-spec: 016-weather NWS overlap | NO CONFLICT | Weather connector uses Open-Meteo only; no NWS code in `weather.go`. 017 owns all NWS functionality exclusively |
+| Cross-spec: NATS contract | CONSISTENT | `alerts.notify` subject + ALERTS stream in `nats_contract.json`, matched by `nats/client.go::SubjectAlertsNotify` and `AllStreams()` |
+| Cross-spec: connector registry | CONSISTENT | `alertsConn` registered in `connectors.go` with NATSAlertNotifier wired to `SubjectAlertsNotify` |
+| Config SST compliance | COMPLIANT | Full pipeline: `smackerel.yaml` → `config.sh` → `dev.env` → `config.go` → `connectors.go` → `alerts.go` |
+| No hardcoded defaults | COMPLIANT | `alerts.go` contains zero `os.Getenv` calls; reads from `ConnectorConfig` only |
+| Design drift (RECON-007) | UNCHANGED | Single-file implementation vs multi-file design — previously accepted as info-level, no change |
+| Test count delta | 0 | 166 at certification (Apr 17) → 166 now — no tests removed or weakened |
+
+### Findings
+
+None. Clean regression probe.
+
+### Cross-Spec Conflict Check
+
+| Check | Result |
+|-------|--------|
+| Connector interface compliance (`ID/Connect/Sync/Health/Close`) | Compliant |
+| NATS contract (`alerts.notify` + ALERTS stream) | Present, wired, tested by `TestSCN002054_GoSubjectsMatchContract` |
+| Config SST (all 7 source flags + AirNow key) | End-to-end wired |
+| Registry wiring (`cmd/core/connectors.go`) | Registered and auto-started with NATSAlertNotifier |
+| Weather connector (016) NWS overlap | No conflict — separate APIs, separate data |
+| Connector wiring (019) | No conflicts — gov-alerts follows standard `Connector` interface |
+
+### Validation
+
+- `./smackerel.sh test unit` — All Go packages pass, 214 Python tests pass
+- `./smackerel.sh check` — Config SST verified, env_file drift guard OK
+- `./smackerel.sh lint` — All checks passed
+- `internal/connector/alerts`: 166 test functions, all pass
+
+---
+
 ## Certification Report — 2026-04-17
 
 **Trigger:** `certify` (bubbles.validate)

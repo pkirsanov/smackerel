@@ -11,13 +11,13 @@ Committed:
 - `specs/` (001-036, all with spec, design, scopes, reports)
 - `.github/`
 - `.specify/memory/`
-- Go core runtime sources under `cmd/` and `internal/` (130 source files, 131 test files)
-- Python ML sidecar sources under `ml/` (16 source files, 18 test files)
+- Go core runtime sources under `cmd/` and `internal/` (153 source files, 149 test files)
+- Python ML sidecar sources under `ml/` (17 source files, 16 test files)
 - `docker-compose.yml` with health checks, resource limits, restart policies, NATS auth
 - `config/smackerel.yaml`
 - Generated environment files under `config/generated/` via `./smackerel.sh config generate`
 - `./smackerel.sh`
-- E2E test scripts under `tests/e2e/` (70 scripts)
+- E2E test scripts under `tests/e2e/` (59 scripts)
 - Stress test scripts under `tests/stress/` (2 scripts)
 
 Implemented runtime capabilities:
@@ -38,7 +38,7 @@ Implemented runtime capabilities:
 - PWA share target for mobile capture and browser extension (Chrome MV3 / Firefox) for desktop capture
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)
-- Database migrations (18 SQL files)
+- Database migrations (19 SQL files)
 - NATS JetStream with token authentication (11 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 - CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
@@ -244,6 +244,7 @@ All migrations live in `internal/db/migrations/` and run automatically on startu
 | 016 | `016_user_annotations.sql` | User annotations (spec 027): `annotations` table, `telegram_message_artifacts` mapping, `artifact_annotation_summary` materialized view |
 | 017 | `017_actionable_lists.sql` | Actionable lists (spec 028): `lists` and `list_items` tables |
 | 018 | `018_meal_plans.sql` | Meal planning (spec 036): `meal_plans` + `meal_plan_slots` tables with date range, lifecycle status, slot constraints |
+| 019 | `019_expense_tracking.sql` | Expense tracking (spec 034): `vendor_aliases`, `expense_suggestions`, `expense_suggestion_suppressions` tables, GIN index on artifacts expense metadata |
 
 ## Prompt Contracts
 

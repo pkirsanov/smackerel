@@ -319,3 +319,59 @@ Valid JSON
 ```
 
 All 119 tests pass. 36 Go packages pass. Zero FAIL results. scenario-manifest.json validates as clean JSON.
+
+### Regression Sweep: 2026-04-20
+
+**Trigger:** stochastic-quality-sweep → regression-to-doc
+**Scope:** `internal/connector/markets/markets.go`, `internal/connector/markets/markets_test.go`
+
+#### Probe Summary
+
+Regression probe checked: cross-spec conflicts (connector interface, shared `stringutil` package, config namespace), baseline test regressions (119 existing tests), coverage consistency, design contradictions, and health state machine completeness.
+
+#### Findings
+
+| # | Finding | Severity | Remediated |
+|---|---------|----------|------------|
+| REG-018-R01 | Company news fetch failures invisible to health state machine — `Sync()` tracked stocks, crypto, forex, and FRED as provider dimensions in `totalProviders`/`failCount` but NOT company news. When all news fetches failed (e.g., Finnhub `/company-news` endpoint down), health stayed `Healthy` even though cross-reference data was unavailable. This violated the spec's failure condition about cross-references. | MEDIUM | Yes |
+| REG-018-R02 | TOCTOU race on daily summary generation — concurrent `Sync()` calls could both pass `shouldGenerateDailySummary()` and produce duplicate `market/daily-summary` artifacts because the check reads `lastSummaryDate` under `RLock` but sets it after summary generation, creating a window. | LOW | Documented — scheduler runs Sync sequentially; fix would require holding lock through summary generation, blocking concurrent Connect() |
+
+#### Remediations Applied
+
+1. **REG-018-R01: News failure health tracking** — Added `totalProviders++` increment when stocks exist (news is fetched per stock symbol). Added `newsFails` counter that increments on each `fetchFinnhubCompanyNews` failure. After the news loop, if `newsFails >= len(cfg.Watchlist.Stocks)`, `failCount` is incremented, correctly surfacing total news failure as health degradation. Matches the existing pattern used by forex and FRED providers.
+
+2. **Existing test fixes** — `TestSyncHealthyOnPartialFailure` and `TestSyncHealthRestoredAfterRecovery` had httptest servers that returned stock-quote JSON for ALL paths including `/api/v1/company-news`. With news now tracked, these decoded as news-format errors. Fixed both servers to route `/api/v1/company-news` to proper empty-array responses.
+
+#### Tests Added
+
+| Test | Finding | Adversarial? |
+|------|---------|-------------|
+| `TestRegression_NewsTotalFailureSetsHealthDegraded` | REG-018-R01 | Yes — news endpoint returns 500 while quotes succeed; without fix, health would be Healthy |
+| `TestRegression_NewsPartialFailureStaysHealthy` | REG-018-R01 | Yes — 1-of-2 news fetches fail; verifies partial failure doesn't false-positive to Degraded |
+
+#### Cross-Spec Conflict Check
+
+| Vector | Status | Detail |
+|--------|--------|--------|
+| `connector.Connector` interface | Clean | No changes to shared interface |
+| `connector.RawArtifact` struct | Clean | No changes to shared type |
+| `connector.ConnectorConfig` struct | Clean | No changes to shared type |
+| `stringutil.SanitizeControlChars` | Clean | No changes to shared utility |
+| Config namespace (`financial-markets` in `smackerel.yaml`) | Clean | No conflicts with other connectors |
+| Connector registration (`cmd/core/connectors.go`) | Clean | Properly registered alongside 14 other connectors |
+
+#### Evidence
+
+```
+$ ./smackerel.sh test unit --go 2>&1 | grep markets
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.132s
+$ grep -c 'func Test' internal/connector/markets/markets_test.go
+121
+$ ./smackerel.sh test unit --go 2>&1 | grep -cE '^ok'
+41
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+```
+
+All 121 tests pass (119 existing + 2 new regression tests). All 41 Go packages pass. Zero FAIL results.

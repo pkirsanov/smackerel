@@ -38,7 +38,7 @@ type DigestContext struct {
 	HotTopics          []TopicBrief                  `json:"hot_topics"`
 	Hospitality        *HospitalityDigestContext     `json:"hospitality,omitempty"`
 	KnowledgeHealth    *KnowledgeHealthDigestContext `json:"knowledge_health,omitempty"`
-	Expenses           *ExpenseDigestContext          `json:"expenses,omitempty"`
+	Expenses           *ExpenseDigestContext         `json:"expenses,omitempty"`
 }
 
 // KnowledgeHealthDigestContext holds critical knowledge lint findings for the digest.

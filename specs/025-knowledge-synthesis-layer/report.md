@@ -214,3 +214,63 @@ Spec 025 synthesis pipeline fail-open verified by unit tests T2-03/T2-06.
 NATS maxDeliver=3/5 prevents infinite retry loops.
 Lint retry capped at max_synthesis_retries=3 then status=abandoned.
 ```
+
+---
+
+## Regression Probe — 2026-04-21 (regression-to-doc)
+
+### Summary
+
+Stochastic quality sweep triggered `regression-to-doc` for spec 025. Executed full regression probe: cross-spec conflict scan, baseline test comparison, coverage verification, design contradiction check, and formal regression-baseline-guard.
+
+### Regression Findings
+
+**Zero regression findings.** Spec 025 is clean.
+
+### Cross-Spec Conflict Scan (G044/G046)
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| Route collisions | Clean | `/api/knowledge/*` and `/knowledge/*` routes unique to spec 025. `/api/health` shared by design (additive extension, not conflict) |
+| Table mutations | Clean | `knowledge_concepts`, `knowledge_entities`, `knowledge_lint_reports` only written by `internal/knowledge/` package |
+| NATS subject overlap | Clean | `synthesis.*` stream owned exclusively by spec 025 |
+| Schema conflicts | Clean | Migration 014 is additive — no ALTER/DROP on existing tables owned by other specs |
+| Design contradictions | Clean | Knowledge layer is additive to existing RAG pipeline; no spec contradicts the synthesis-at-ingest pattern |
+
+### Baseline Test Comparison (G044)
+
+| Category | Before | After | Delta |
+|----------|--------|-------|-------|
+| Go unit packages | 41 ok | 41 ok | 0 |
+| Python tests | 214 passed | 214 passed | 0 |
+| E2E tests | All PASS | All PASS | 0 |
+| Lint | Clean | Clean | 0 |
+| Build | Compiles | Compiles | 0 |
+| Config SST | In sync | In sync | 0 |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh test unit
+41 packages ok, 0 FAIL
+214 passed, 2 warnings in 29.92s
+$ ./smackerel.sh lint
+All checks passed!
+$ ./smackerel.sh build
+smackerel-core Built, smackerel-ml Built
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+$ timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/025-knowledge-synthesis-layer --verbose
+Regression baseline guard: PASSED
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/025-knowledge-synthesis-layer
+Artifact lint PASSED.
+```
+
+### Artifact Fix Applied
+
+- Fixed `state.json` certification.status from `"certified"` to `"done"` to match top-level status (artifact-lint failure on status mismatch)
+
+### Completion Statement
+
+Regression probe complete. Zero regression findings for spec 025-knowledge-synthesis-layer. All 41 Go packages, 214 Python tests, and E2E suite pass. No cross-spec conflicts detected. One minor artifact metadata fix applied (state.json certification.status alignment). Spec remains done.

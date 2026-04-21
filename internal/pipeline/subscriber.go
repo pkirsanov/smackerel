@@ -254,9 +254,6 @@ func (rs *ResultSubscriber) handleMessage(ctx context.Context, msg jetstream.Msg
 				"artifact_id", payload.ArtifactID,
 				"error", err,
 			)
-			metrics.DomainExtraction.WithLabelValues("unknown", "error").Inc()
-		} else {
-			metrics.DomainExtraction.WithLabelValues("unknown", "published").Inc()
 		}
 	}
 
@@ -585,55 +582,14 @@ func (rs *ResultSubscriber) publishDomainExtractionRequest(ctx context.Context, 
 	)
 
 	if err := rs.NATS.Publish(ctx, smacknats.SubjectDomainExtract, data); err != nil {
+		metrics.DomainExtraction.WithLabelValues(contract.Version, "error").Inc()
 		return fmt.Errorf("publish to domain.extract: %w", err)
 	}
 
+	metrics.DomainExtraction.WithLabelValues(contract.Version, "published").Inc()
 	slog.Info("domain extraction request published",
 		"artifact_id", payload.ArtifactID,
 		"contract_version", contract.Version,
-	)
-	return nil
-}
-
-// HandleDomainExtractedResult processes a domain.extracted response from the ML sidecar.
-func (rs *ResultSubscriber) HandleDomainExtractedResult(ctx context.Context, resp *DomainExtractResponse) error {
-	if err := ValidateDomainExtractResponse(resp); err != nil {
-		return fmt.Errorf("validate domain response: %w", err)
-	}
-
-	if !resp.Success {
-		_, err := rs.DB.Exec(ctx,
-			`UPDATE artifacts SET domain_extraction_status = 'failed', updated_at = NOW() WHERE id = $1`,
-			resp.ArtifactID,
-		)
-		if err != nil {
-			return fmt.Errorf("update artifact domain status to failed: %w", err)
-		}
-		slog.Warn("domain extraction failed",
-			"artifact_id", resp.ArtifactID,
-			"error", resp.Error,
-		)
-		return nil
-	}
-
-	_, err := rs.DB.Exec(ctx,
-		`UPDATE artifacts SET
-			domain_data = $2,
-			domain_extraction_status = 'completed',
-			domain_schema_version = $3,
-			domain_extracted_at = NOW(),
-			updated_at = NOW()
-		WHERE id = $1`,
-		resp.ArtifactID, resp.DomainData, resp.ContractVersion,
-	)
-	if err != nil {
-		return fmt.Errorf("store domain extraction result: %w", err)
-	}
-
-	slog.Info("domain extraction completed",
-		"artifact_id", resp.ArtifactID,
-		"contract_version", resp.ContractVersion,
-		"processing_ms", resp.ProcessingTimeMs,
 	)
 	return nil
 }

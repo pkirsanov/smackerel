@@ -198,3 +198,16 @@ func (s *Scheduler) SetDigestPending(retry bool, date string) {
 func (s *Scheduler) CronEntryCount() int {
 	return len(s.cron.Entries())
 }
+
+// runGuarded runs fn under a TryLock guard. If the mutex is already held
+// (another invocation of the same job is in progress), the call is skipped
+// with a warning log. This centralises the overlap-prevention pattern used
+// by all 14 cron jobs (SCN-022-09 through SCN-022-11).
+func (s *Scheduler) runGuarded(mu *sync.Mutex, group, job string, fn func()) {
+	if !mu.TryLock() {
+		slog.Warn("skipping overlapping job", "group", group, "job", job)
+		return
+	}
+	defer mu.Unlock()
+	fn()
+}

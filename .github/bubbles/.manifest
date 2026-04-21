@@ -77,6 +77,7 @@ docs/generated/interop-migration-matrix.md
 docs/generated/issue-status.md
 docs/guides/AGENT_MANUAL.md
 docs/guides/AI_ENVIRONMENT.md
+docs/guides/AUTONOMOUS_EXECUTION.md
 docs/guides/CONTROL_PLANE_ADOPTION.md
 docs/guides/CONTROL_PLANE_DESIGN.md
 docs/guides/CONTROL_PLANE_ROLLOUT.md
@@ -91,6 +92,8 @@ docs/issues/session-aware-runtime-coordination.md
 docs/its-not-rocket-appliances.html
 docs/recipes/README.md
 docs/recipes/ask-the-super-first.md
+docs/recipes/autonomous-goal.md
+docs/recipes/autonomous-sprint.md
 docs/recipes/brainstorm-idea.md
 docs/recipes/chaos-testing.md
 docs/recipes/check-status.md
@@ -157,6 +160,7 @@ agents/bubbles.design.agent.md
 agents/bubbles.devops.agent.md
 agents/bubbles.docs.agent.md
 agents/bubbles.gaps.agent.md
+agents/bubbles.goal.agent.md
 agents/bubbles.grill.agent.md
 agents/bubbles.handoff.agent.md
 agents/bubbles.harden.agent.md
@@ -170,6 +174,7 @@ agents/bubbles.security.agent.md
 agents/bubbles.setup.agent.md
 agents/bubbles.simplify.agent.md
 agents/bubbles.spec-review.agent.md
+agents/bubbles.sprint.agent.md
 agents/bubbles.stabilize.agent.md
 agents/bubbles.status.agent.md
 agents/bubbles.super.agent.md
@@ -235,6 +240,7 @@ prompts/bubbles.design.prompt.md
 prompts/bubbles.devops.prompt.md
 prompts/bubbles.docs.prompt.md
 prompts/bubbles.gaps.prompt.md
+prompts/bubbles.goal.prompt.md
 prompts/bubbles.grill.prompt.md
 prompts/bubbles.handoff.prompt.md
 prompts/bubbles.harden.prompt.md
@@ -248,6 +254,7 @@ prompts/bubbles.security.prompt.md
 prompts/bubbles.setup.prompt.md
 prompts/bubbles.simplify.prompt.md
 prompts/bubbles.spec-review.prompt.md
+prompts/bubbles.sprint.prompt.md
 prompts/bubbles.stabilize.prompt.md
 prompts/bubbles.status.prompt.md
 prompts/bubbles.super.prompt.md

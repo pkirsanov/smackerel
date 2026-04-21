@@ -254,7 +254,7 @@ func run() error {
 	// Explicit sequential shutdown — replaces defer-based ordering to prevent
 	// resource races (e.g., NATS drain racing DB pool close).
 	// Timeout budget: cfg.ShutdownTimeoutS with 5s margin before Docker SIGKILL.
-	shutdownAll(cfg.ShutdownTimeoutS, sched, srv, tgBot, svc.resultSub, svc.synthesisSub, svc.supervisor, svc.nc, svc.pg)
+	shutdownAll(cfg.ShutdownTimeoutS, sched, srv, tgBot, svc.resultSub, svc.synthesisSub, svc.domainSub, svc.supervisor, svc.nc, svc.pg)
 
 	slog.Info("smackerel-core stopped")
 	return nil

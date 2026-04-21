@@ -426,3 +426,152 @@ func TestFetchActivityNormalCursorAccepted(t *testing.T) {
 		t.Errorf("expected 2 events across 2 pages, got %d", len(resp.Events))
 	}
 }
+
+// --- CHAOS-013-001: Cursor regression off-by-one (stuck cursor wastes an extra request) ---
+
+func TestChaos013001_StuckCursorDetectedImmediately(t *testing.T) {
+	// A server that always returns the same cursor with HasMore=true is stuck.
+	// The client MUST detect this on the FIRST repetition (2 total requests),
+	// not after an extra wasted round (3 total requests).
+	requestCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ActivityFeedResponse{
+			Events: []ActivityEvent{
+				{ID: "e1", Type: "guest.created", Timestamp: "2026-04-01T10:00:00Z", EntityID: "g1", Data: json.RawMessage(`{"email":"a@b.com","name":"A"}`)},
+			},
+			HasMore: true,
+			Cursor:  "stuck-cursor-value",
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token")
+	resp, err := client.FetchActivity(context.Background(), "", "", 10)
+	if err != nil {
+		t.Fatalf("stuck cursor should not error, just break: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+	// The CORRECT behavior: page 0 returns cursor "stuck-cursor-value",
+	// page 1 sends cursor "stuck-cursor-value" and gets back the SAME cursor.
+	// Detection should fire on page 1 → total 2 requests.
+	// Before fix: detection fires on page 2 → total 3 requests (off-by-one waste).
+	if requestCount > 2 {
+		t.Errorf("stuck cursor detection off-by-one: made %d requests, want at most 2 — "+
+			"the client compared resp.Cursor with previousCursor (2 iterations ago) instead of "+
+			"cursor (current request), wasting an extra round", requestCount)
+	}
+}
+
+// --- CHAOS-013-002: Sync after Close overwrites HealthDisconnected with HealthHealthy ---
+
+func TestChaos013002_SyncAfterCloseHealthNotOverwritten(t *testing.T) {
+	// If Close() is called while Sync() is in-flight (after Sync releases the initial
+	// lock to do the network call), Sync's deferred health update must NOT overwrite
+	// the HealthDisconnected state set by Close.
+	syncStarted := make(chan struct{})
+	allowResponse := make(chan struct{})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+			return
+		}
+		// Signal that sync has started its network call
+		select {
+		case syncStarted <- struct{}{}:
+		default:
+		}
+		// Wait until we're told to respond (Close will happen in between)
+		<-allowResponse
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ActivityFeedResponse{Events: []ActivityEvent{}, HasMore: false})
+	}))
+	defer srv.Close()
+
+	c := New()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"base_url": srv.URL,
+			"api_key":  "key",
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Start Sync in a goroutine
+	syncDone := make(chan error, 1)
+	go func() {
+		_, _, err := c.Sync(context.Background(), "")
+		syncDone <- err
+	}()
+
+	// Wait for sync to reach the network call (past the initial lock release)
+	<-syncStarted
+
+	// Close the connector while sync is in-flight
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Verify Close set the health to disconnected
+	if h := c.Health(context.Background()); h != connector.HealthDisconnected {
+		t.Fatalf("after Close, expected HealthDisconnected, got %v", h)
+	}
+
+	// Allow the sync response to complete
+	close(allowResponse)
+	<-syncDone
+
+	// After Sync completes, the connector health must STILL be HealthDisconnected.
+	// Before fix: Sync's deferred setHealth(HealthHealthy) overwrites the Close state.
+	health := c.Health(context.Background())
+	if health == connector.HealthHealthy {
+		t.Errorf("Sync after Close overwrote HealthDisconnected with HealthHealthy — " +
+			"a closed connector appears healthy, which is a race condition")
+	}
+	if health != connector.HealthDisconnected {
+		t.Errorf("after Close+Sync, expected HealthDisconnected, got %v", health)
+	}
+}
+
+// --- CHAOS-013-003: Empty events with HasMore=true causes wasteful pagination ---
+
+func TestChaos013003_EmptyEventsWithHasMoreBreaksPagination(t *testing.T) {
+	// A malicious or buggy server returning HasMore=true with zero events and a
+	// changing cursor should NOT cause up to maxPaginationPages (1000) requests.
+	// The client should detect the empty-events condition and break early.
+	requestCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		// Empty events, HasMore=true, advancing cursor — pagination runs wild
+		json.NewEncoder(w).Encode(ActivityFeedResponse{
+			Events:  []ActivityEvent{},
+			HasMore: true,
+			Cursor:  "cursor-" + strings.Repeat("x", requestCount),
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token")
+	resp, err := client.FetchActivity(context.Background(), "", "", 10)
+	if err != nil {
+		t.Fatalf("empty-events pagination should not error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+	// With no guard, this would make maxPaginationPages (1000) requests.
+	// A reasonable cap is 1-3 requests before detecting the empty-events pattern.
+	if requestCount > 3 {
+		t.Errorf("empty-events with HasMore=true caused %d requests (want ≤3) — "+
+			"a buggy/malicious server can trigger up to 1000 wasteful requests without this guard",
+			requestCount)
+	}
+}

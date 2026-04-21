@@ -21,7 +21,7 @@
 **Resolved Decisions:**
 - Backup uses `pg_dump` via `docker exec` against the running postgres container — no volume snapshot needed
 - Dead-letter uses a dedicated `DEADLETTER` JetStream stream with `MaxDeliver` advisory routing
-- Cron concurrency uses `sync.Mutex` per job group, not per individual job — allows independent groups to run concurrently
+- Cron concurrency uses `sync.Mutex` per individual job — maximizes independent concurrency while preventing self-overlap
 - ML health cache is a simple atomic bool + timestamp in the `SearchEngine` struct, not a circuit breaker
 - Shutdown timeout set to 25s in Go code (5s margin before Docker's 30s SIGKILL)
 
@@ -220,39 +220,53 @@ if !d.DB.Healthy(r.Context()) {
 
 ## 6. Cron Concurrency Design
 
-### 6.1 Job Group Classification
+### 6.1 Job-to-Mutex Classification
 
-The 12 cron jobs are classified into 7 mutex groups based on execution frequency and resource contention patterns:
+Each of the 14 cron jobs has its own dedicated `sync.Mutex` for maximum independent concurrency:
 
-| Group | Mutex Name | Jobs | Schedule |
-|-------|-----------|------|----------|
-| `digest` | `muDigest` | Digest generation + retry | User-configured cron |
-| `hourly` | `muHourly` | Topic momentum | `0 * * * *` |
-| `daily` | `muDaily` | Synthesis + overdue, Resurfacing, Frequent lookups, Alert producers | `0 2 * * *`, `0 8 * * *`, `0 4 * * *`, `0 6 * * *` |
-| `weekly` | `muWeekly` | Weekly synthesis, Subscription detection, Relationship cooling alerts | `0 16 * * 0`, `0 3 * * 1`, `0 7 * * 1` |
-| `monthly` | `muMonthly` | Monthly report | `0 3 1 * *` |
-| `briefs` | `muBriefs` | Pre-meeting briefs | `*/5 * * * *` |
-| `alerts` | `muAlerts` | Alert delivery sweep | `*/15 * * * *` |
+| Job | Mutex Name | Schedule |
+|-----|-----------|----------|
+| Digest generation + retry | `muDigest` | User-configured cron |
+| Topic momentum | `muHourly` | `0 * * * *` |
+| Synthesis + overdue | `muDaily` | `0 2 * * *` |
+| Resurfacing | `muResurface` | `0 8 * * *` |
+| Frequent lookups | `muLookups` | `0 4 * * *` |
+| Pre-meeting briefs | `muBriefs` | `*/5 * * * *` |
+| Weekly synthesis | `muWeekly` | `0 16 * * 0` |
+| Subscription detection | `muSubs` | `0 3 * * 1` |
+| Monthly report | `muMonthly` | `0 3 1 * *` |
+| Alert delivery sweep | `muAlerts` | `*/15 * * * *` |
+| Alert production | `muAlertProd` | `0 6 * * *` |
+| Relationship cooling | `muRelCool` | `0 7 * * 1` |
+| Knowledge lint | `muKnowledgeLint` | Configurable cron |
+| Meal plan auto-complete | `muMealPlanComplete` | Configurable cron |
 
-**Rationale for grouping:** Jobs within the same group share resource affinity (e.g., daily jobs all hit the intelligence engine heavily). Grouping prevents intra-group contention while allowing inter-group concurrency. The digest job gets its own mutex because it has a user-configured schedule and a unique retry mechanism.
+**Rationale for per-job mutexes:** Each job gets its own mutex so that no two independent jobs block each other. The original design grouped jobs by cadence, but as the job count grew (from 9 to 14 across specs 021, 025, 036), per-job mutexes proved simpler and more concurrent.
 
 ### 6.2 Scheduler Struct Changes
 
-Add mutex fields to the `Scheduler` struct:
+Each cron job has a dedicated mutex field in the `Scheduler` struct:
 
 ```go
 type Scheduler struct {
     cron      *cron.Cron
     // ... existing fields ...
 
-    // Per-group concurrency guards
-    muDigest   sync.Mutex
-    muHourly   sync.Mutex
-    muDaily    sync.Mutex
-    muWeekly   sync.Mutex
-    muMonthly  sync.Mutex
-    muBriefs   sync.Mutex // pre-meeting briefs (every 5 min)
-    muAlerts   sync.Mutex // alert delivery sweep (every 15 min)
+    // Per-job concurrency guards (14 mutexes)
+    muDigest           sync.Mutex
+    muHourly           sync.Mutex
+    muDaily            sync.Mutex
+    muWeekly           sync.Mutex
+    muMonthly          sync.Mutex
+    muBriefs           sync.Mutex
+    muAlerts           sync.Mutex
+    muAlertProd        sync.Mutex
+    muResurface        sync.Mutex
+    muLookups          sync.Mutex
+    muSubs             sync.Mutex
+    muRelCool          sync.Mutex
+    muKnowledgeLint    sync.Mutex
+    muMealPlanComplete sync.Mutex
 }
 ```
 
