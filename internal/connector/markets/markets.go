@@ -19,6 +19,10 @@ import (
 	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
+// sensitiveQueryParams lists query parameter names that contain API keys or secrets.
+// redactHTTPError strips these from *url.Error messages to prevent CWE-532.
+var sensitiveQueryParams = []string{"token", "api_key", "apikey"}
+
 const (
 	// maxResponseBodyBytes limits response body reads to 1MB to prevent OOM from malicious servers.
 	maxResponseBodyBytes = 1 * 1024 * 1024
@@ -184,7 +188,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	// Snapshot config under lock to prevent data race with concurrent Connect().
 	c.mu.Lock()
 	// H-018-R60-001: Reject Sync if Connect() was never called.
-	if c.configGen == 0 {
+	// CHAOS-018-R02-002: Also reject Sync if the connector has been closed.
+	if c.configGen == 0 || c.health == connector.HealthDisconnected {
 		c.mu.Unlock()
 		return nil, cursor, fmt.Errorf("connector is not configured: call Connect() before Sync()")
 	}
@@ -407,13 +412,19 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			summary := stringutil.SanitizeControlChars(article.Summary)
 			source := stringutil.SanitizeControlChars(article.Source)
 			category := stringutil.SanitizeControlChars(article.Category)
+			// SEC-018-002: Validate URL scheme to prevent stored XSS via javascript:/data: (CWE-20).
+			articleURL := article.URL
+			if !isSafeURL(articleURL) {
+				slog.Warn("dropping unsafe news URL", "symbol", symbol, "url_scheme", articleURL)
+				articleURL = ""
+			}
 			artifacts = append(artifacts, connector.RawArtifact{
 				SourceID:    "financial-markets",
 				SourceRef:   fmt.Sprintf("news-%s-%d", symbol, article.ID),
 				ContentType: "market/news",
 				Title:       headline,
 				RawContent:  summary,
-				URL:         article.URL,
+				URL:         articleURL,
 				Metadata: map[string]interface{}{
 					"symbol":          symbol,
 					"source":          source,
@@ -494,6 +505,9 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 func (c *Connector) Close() error {
 	c.mu.Lock()
 	c.health = connector.HealthDisconnected
+	// CHAOS-018-R02-001: Increment configGen so in-flight Sync's deferred health
+	// write detects the generation mismatch and skips overwriting Disconnected.
+	c.configGen++
 	// Reset rate limit tracking so a subsequent Connect() starts fresh.
 	c.callCounts = make(map[string][]time.Time)
 	c.mu.Unlock()
@@ -509,6 +523,60 @@ func httpErrorWithSnippet(resp *http.Response, label string) error {
 	n, _ := io.ReadFull(resp.Body, snippet)
 	io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
 	return fmt.Errorf("%s returned status %d: %s", label, resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
+}
+
+// redactHTTPError strips sensitive query parameters (API keys, tokens) from
+// HTTP client error messages to prevent credential leakage into logs (CWE-532).
+// Go's http.Client wraps transport errors in *url.Error which includes the full URL.
+func redactHTTPError(err error, label string) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	for _, param := range sensitiveQueryParams {
+		// Match param=value where value ends at & or end-of-string.
+		prefix := param + "="
+		searchFrom := 0
+		for {
+			idx := strings.Index(msg[searchFrom:], prefix)
+			if idx < 0 {
+				break
+			}
+			idx += searchFrom // adjust to absolute position
+			valueStart := idx + len(prefix)
+			end := strings.IndexByte(msg[valueStart:], '&')
+			if end < 0 {
+				// Value runs to end of URL or end of string — find the next
+				// non-URL character (space, quote, closing paren).
+				rest := msg[valueStart:]
+				end = strings.IndexAny(rest, " \"')")
+				if end < 0 {
+					end = len(rest)
+				}
+			}
+			msg = msg[:valueStart] + "REDACTED" + msg[valueStart+end:]
+			searchFrom = valueStart + len("REDACTED") // advance past replacement
+		}
+	}
+	return fmt.Errorf("%s request failed: %s", label, msg)
+}
+
+// isSafeURL validates that a URL uses http or https scheme.
+// Returns false for javascript:, data:, or other potentially dangerous schemes (CWE-20).
+func isSafeURL(rawURL string) bool {
+	if rawURL == "" {
+		return true // empty URL is safe (just omitted)
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+		return true
+	default:
+		return false
+	}
 }
 
 // fetchFinnhubQuote gets a stock quote from Finnhub.
@@ -550,7 +618,7 @@ func (c *Connector) doFinnhubQuote(ctx context.Context, finnhubSymbol, displaySy
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%s request failed: %w", label, err)
+		return nil, redactHTTPError(err, label)
 	}
 	defer resp.Body.Close()
 
@@ -607,7 +675,7 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("coingecko request failed: %w", err)
+		return nil, redactHTTPError(err, "coingecko")
 	}
 	defer resp.Body.Close()
 
@@ -669,7 +737,7 @@ func (c *Connector) fetchFinnhubCompanyNews(ctx context.Context, symbol, fromDat
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("finnhub news request failed: %w", err)
+		return nil, redactHTTPError(err, "finnhub news")
 	}
 	defer resp.Body.Close()
 
@@ -710,7 +778,7 @@ func (c *Connector) fetchFREDLatest(ctx context.Context, seriesID string) (*FRED
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("FRED request failed: %w", err)
+		return nil, redactHTTPError(err, "FRED")
 	}
 	defer resp.Body.Close()
 

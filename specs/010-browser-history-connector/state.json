@@ -220,6 +220,15 @@
       "startedAt": "2026-04-21T02:00:00Z",
       "completedAt": "2026-04-21T02:15:00Z",
       "summary": "Stochastic quality sweep R91 security-to-doc trigger. Full OWASP Top 10 + Go-specific security review of connector.go (780 lines), browser.go (195 lines), connectors.go registration, config. Zero findings. Prior mitigations confirmed: SEC-005-001 DSN injection prevention, read-only SQLite mode, copy-then-read isolation, CHAOS-R66-F1 race fix, CHAOS-R66-F2 negative duration rejection, SST-compliant config, no HTTP client surface, no command injection surface. All 73 unit tests pass. Lint clean."
+    },
+    {
+      "agent": "bubbles.harden",
+      "phasesExecuted": ["harden"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-21T03:00:00Z",
+      "completedAt": "2026-04-21T03:15:00Z",
+      "summary": "Stochastic quality sweep harden-to-doc trigger. Found 2 findings: H-010-H01 missing Gherkin scenario for URL+date dedup (R-010) — spec declared 'Dedup via URL + visit date' as Hard Constraint, implementation and tests exist but no BDD scenario. Added SCN-BH-011 with test plan links (T-14b, T-14c) and DoD item. H-010-H02 state.json certification.scopeProgress showed 'Done' but scopes.md showed 'In Progress' (unchecked integration/E2E DoD items) — fixed certification status to match scopes.md. All 73 unit tests pass. Lint clean."
     }
   ],
   "policySnapshot": {
@@ -233,14 +242,14 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-21T02:15:00Z",
+  "lastUpdatedAt": "2026-04-21T03:00:00Z",
   "certification": {
-    "status": "certified",
+    "status": "in_progress",
     "completedScopes": ["1", "2"],
     "certifiedCompletedPhases": ["analyze", "bootstrap", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"],
     "scopeProgress": [
-      { "scope": 1, "name": "Connector Implementation, Config & Registration", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-14T06:10:00Z" },
-      { "scope": 2, "name": "Social Media Aggregation, Repeat Visits & Privacy Gate", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-14T06:10:00Z" }
+      { "scope": 1, "name": "Connector Implementation, Config & Registration", "status": "In Progress", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null },
+      { "scope": 2, "name": "Social Media Aggregation, Repeat Visits & Privacy Gate", "status": "In Progress", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null }
     ],
     "lockdownState": { "active": false, "lockedScenarioIds": ["SCN-BH-001", "SCN-BH-002", "SCN-BH-003", "SCN-BH-004", "SCN-BH-005", "SCN-BH-006", "SCN-BH-007", "SCN-BH-008", "SCN-BH-009", "SCN-BH-010"] },
     "reconciliationNote": "V-010-001 resolved 2026-04-14: integration and E2E test files created. SQLite driver skip pattern used for F002/R003."

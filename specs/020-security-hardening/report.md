@@ -2,7 +2,7 @@
 
 **Feature:** 020-security-hardening
 **Created:** 2026-04-10
-**Last Reconciled:** 2026-04-14
+**Last Reconciled:** 2026-04-21
 
 ---
 
@@ -52,7 +52,7 @@
 | `webAuthMiddleware` checks cookie | `internal/api/router.go` | `r.Cookie("auth_token")` fallback | ✅ |
 | `webAuthMiddleware` dev mode passthrough | `internal/api/router.go` | `if d.AuthToken == "" { next.ServeHTTP(w, r); return }` | ✅ |
 | `httprate.LimitByIP(10, 1*time.Minute)` on OAuth start | `internal/api/router.go` | Applied to OAuth start group | ✅ |
-| OAuth callback NOT rate-limited | `internal/api/router.go` | `r.Get("/auth/{provider}/callback", ...)` registered outside rate-limited group | ✅ |
+| OAuth start + callback rate-limited | `internal/api/router.go` | Both endpoints inside `httprate.LimitByIP(10, 1*time.Minute)` group (SEC-SWEEP-001) | ✅ |
 | `go-chi/httprate` in `go.mod` | `go.mod` | `github.com/go-chi/httprate v0.15.0 // indirect` | ✅ |
 | ML sidecar auth tests (7 tests) | `ml/tests/test_auth.py` | `TestMLSidecarAuthWithToken` (5 tests), `TestMLSidecarAuthDevMode` (2 tests) | ✅ |
 
@@ -137,6 +137,44 @@ All 3 test coverage gaps identified in the 2026-04-10 reconciliation have been c
 ## Completion Statement
 
 All 3 scopes implemented and code-verified. All security controls are correctly in place. All 3 test coverage gaps from prior reconciliation have been closed with targeted unit tests. 53 unit tests pass (Go 31 packages all green + Python 53 pytest all green).
+
+## Reconcile-to-Doc Sweep (2026-04-21) — Stochastic Quality Sweep
+
+### Sweep Methodology
+
+Full claimed-vs-implemented reconciliation across all 3 scopes:
+- Line-by-line code verification of every DoD claim against actual source files
+- Docker Compose port binding audit (all 6 services)
+- Config SST pipeline verification (host_bind_address, nats.conf generation)
+- Auth middleware verification (ML sidecar, Web UI, OAuth rate limiting)
+- Decrypt fail-closed path verification (3 error paths + passthrough)
+- Startup warning verification (core + ML sidecar)
+- Unit test execution (`./smackerel.sh test unit`)
+
+### Documentation Drift Found
+
+| Location | Stale Claim | Actual Code | Fix |
+|----------|-------------|-------------|-----|
+| `report.md` Scope 2 table | "OAuth callback NOT rate-limited" | Both start and callback inside `httprate.LimitByIP` group (SEC-SWEEP-001) | Updated table entry |
+| `design.md` OAuth code snippet | Callback registered outside rate-limited group | Callback inside rate-limited group | Updated snippet + comment |
+
+### Code Verification Results
+
+| Scope | DoD Items | Verified | Drift |
+|-------|-----------|----------|-------|
+| 1: Docker Port Binding + NATS Config | 11/11 | 11/11 ✅ | None |
+| 2: ML Sidecar Auth + Web UI Auth + OAuth Rate | 12/12 | 12/12 ✅ | None |
+| 3: Decrypt Fail-Closed + Startup Warning | 9/9 | 9/9 ✅ | None |
+
+### Test Results
+
+| Command | Result | Notes |
+|---------|--------|-------|
+| `./smackerel.sh test unit` | All spec-020 packages PASS | `cmd/core`, `internal/api`, `internal/auth`, `internal/config` all green. Pre-existing failures in `internal/connector/markets` (spec 018) — unrelated to security hardening. |
+
+### Verdict
+
+**CLEAN — zero code drift.** All 32 DoD items across 3 scopes verified against actual source. Two documentation-only drifts corrected (report.md stale table entry, design.md stale code snippet — both related to SEC-SWEEP-001 callback rate-limiting fix). No new findings to route.
 
 ## Regression Probe (2026-04-21) — Stochastic Quality Sweep
 

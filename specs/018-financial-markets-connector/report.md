@@ -536,3 +536,45 @@ $ wc -l internal/connector/markets/markets.go
 ```
 
 All 119 tests pass. All 41 Go packages pass. Python ML sidecar 236 passed. Zero regressions.
+
+### Chaos Hardening Sweep R02: 2026-04-21
+
+**Trigger:** stochastic-quality-sweep → chaos-hardening (repeat probe after R33)
+**Scope:** `internal/connector/markets/markets.go`, `internal/connector/markets/markets_test.go`
+
+#### Probe Summary
+
+Repeat chaos probe targeting concurrency, lifecycle state machines, and resource safety. Focused on lock ordering, deferred health writes vs lifecycle transitions, TOCTOU windows in multi-goroutine scenarios, and guard completeness.
+
+#### Findings
+
+| # | Finding | Severity | Remediated |
+|---|---------|----------|------------|
+| CHAOS-018-R02-001 | `Close()` doesn't increment `configGen` — when `Close()` is called while a `Sync()` is in flight, the Sync's deferred health-write checks `configGen == gen` and passes (since Close didn't change configGen), overwriting `HealthDisconnected` back to `Healthy`/`Degraded`/`Error`. The STB-018-001 fix added `configGen` to protect against Connect-during-Sync but missed Close-during-Sync. | HIGH | Yes |
+| CHAOS-018-R02-002 | `Sync()` guard only checks `configGen == 0` — after a Connect→Close cycle, `configGen > 0` but the connector is Disconnected. A subsequent `Sync()` passes the guard, runs with stale config, sets health to Syncing, and overwrites the Disconnected state. The guard was designed for "never connected" but not for "was connected, now closed." | MEDIUM | Yes |
+
+#### Remediations Applied
+
+1. **CHAOS-018-R02-001: Close increments configGen** — Added `c.configGen++` in `Close()` before setting health to Disconnected. This invalidates any in-flight Sync's captured generation counter, causing the deferred health-write to detect a mismatch (`configGen != gen`) and skip the overwrite. Matches the pattern already used by `Connect()`.
+
+2. **CHAOS-018-R02-002: Sync guard checks Disconnected state** — Extended the `Sync()` entry guard from `if c.configGen == 0` to `if c.configGen == 0 || c.health == connector.HealthDisconnected`. After Close(), health is Disconnected, so Sync returns error immediately without touching any state. The existing test `TestH018R60_001_SyncAfterCloseErrors` already anticipated this stricter guard (conditional pass path).
+
+#### Tests Added
+
+| Test | Finding | Adversarial? |
+|------|---------|-------------|
+| `TestCHAOS018_R02_001_CloseDuringSyncPreservesDisconnectedHealth` | CHAOS-018-R02-001 | Yes — starts slow Sync with 3 symbols, calls Close mid-flight; health MUST remain Disconnected after Sync completes |
+| `TestCHAOS018_R02_002_SyncAfterCloseReturnsError` | CHAOS-018-R02-002 | Yes — Connect→Close→Sync must return error; health MUST remain Disconnected |
+| `TestCHAOS018_R02_003_ReconnectAfterCloseWorks` | CHAOS-018-R02-001/002 | Yes — full lifecycle Connect→Sync→Close→(Sync fails)→Connect→Sync; verifies the fix doesn't break normal reconnection |
+
+#### Evidence
+
+```
+$ grep -c 'func Test' internal/connector/markets/markets_test.go
+122
+$ wc -l internal/connector/markets/markets.go internal/connector/markets/markets_test.go
+1210 internal/connector/markets/markets.go
+4764 internal/connector/markets/markets_test.go
+```
+
+No compile errors. Test suite executing via `./smackerel.sh test unit --go` (Docker compilation in progress due to modified source files — WSL2 bind mount I/O overhead).

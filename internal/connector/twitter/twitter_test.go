@@ -470,8 +470,10 @@ func TestSyncArchive_SymlinkTraversal(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when tweets.js is a symlink escaping archive directory")
 	}
-	if err != nil && !strings.Contains(err.Error(), "escapes archive directory") {
-		t.Errorf("expected 'escapes archive directory' error, got: %v", err)
+	// findArchiveFiles skips symlinks that escape the archive boundary (CWE-22),
+	// so the error surfaces as "no tweet files found" rather than a path-specific message.
+	if err != nil && !strings.Contains(err.Error(), "no tweet files found") && !strings.Contains(err.Error(), "escapes archive directory") {
+		t.Errorf("expected path-escape or no-files error, got: %v", err)
 	}
 }
 
@@ -1807,8 +1809,8 @@ func TestSyncArchive_TweetsJSNotFound(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when tweets.js is missing")
 	}
-	if !strings.Contains(err.Error(), "tweets.js") {
-		t.Errorf("expected error mentioning tweets.js, got: %v", err)
+	if !strings.Contains(err.Error(), "no tweet files found") {
+		t.Errorf("expected 'no tweet files found' error, got: %v", err)
 	}
 }
 
@@ -1994,8 +1996,8 @@ func TestSyncArchive_FullRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("syncArchive failed: %v", err)
 	}
-	if len(artifacts) != 4 {
-		t.Fatalf("expected 4 artifacts, got %d", len(artifacts))
+	if len(artifacts) != 5 {
+		t.Fatalf("expected 5 artifacts (4 tweets + 1 child URL), got %d", len(artifacts))
 	}
 	if cursor == "" {
 		t.Error("expected non-empty cursor")
@@ -2022,5 +2024,145 @@ func TestSyncArchive_FullRoundTrip(t *testing.T) {
 				t.Errorf("expected 1 URL, got %v", urls)
 			}
 		}
+	}
+
+	// Verify the child URL artifact was created per R-009
+	var childArtifact *connector.RawArtifact
+	for i, a := range artifacts {
+		if a.ContentType == "link" {
+			childArtifact = &artifacts[i]
+			break
+		}
+	}
+	if childArtifact == nil {
+		t.Fatal("expected a child URL artifact for tweet 300's link")
+	}
+	if childArtifact.URL != "https://example.com/article" {
+		t.Errorf("child artifact URL = %q, want https://example.com/article", childArtifact.URL)
+	}
+	if childArtifact.Metadata["parent_tweet_id"] != "300" {
+		t.Errorf("child artifact parent_tweet_id = %v, want 300", childArtifact.Metadata["parent_tweet_id"])
+	}
+	if childArtifact.Metadata["edge_type"] != "CONTAINS_LINK" {
+		t.Errorf("child artifact edge_type = %v, want CONTAINS_LINK", childArtifact.Metadata["edge_type"])
+	}
+}
+
+// --- Gap-closure tests (R-003 thread_position, R-004 tweet/quote, R-009 child URLs, R-002 multi-part) ---
+
+func TestNormalizeTweet_ThreadPosition(t *testing.T) {
+	thread := &Thread{
+		RootID: "100",
+		Tweets: []ArchiveTweet{
+			{ID: "100", FullText: "Root"},
+			{ID: "101", FullText: "Reply 1"},
+			{ID: "102", FullText: "Reply 2"},
+		},
+		Position: map[string]int{"100": 0, "101": 1, "102": 2},
+	}
+
+	// Check position 0 (root)
+	a0 := normalizeTweet(ArchiveTweet{ID: "100", FullText: "Root"}, false, false, thread)
+	if a0.Metadata["thread_position"] != 0 {
+		t.Errorf("root tweet thread_position = %v, want 0", a0.Metadata["thread_position"])
+	}
+
+	// Check position 2 (last reply)
+	a2 := normalizeTweet(ArchiveTweet{ID: "102", FullText: "Reply 2"}, false, false, thread)
+	if a2.Metadata["thread_position"] != 2 {
+		t.Errorf("reply tweet thread_position = %v, want 2", a2.Metadata["thread_position"])
+	}
+}
+
+func TestClassifyTweet_Quote(t *testing.T) {
+	tweet := ArchiveTweet{
+		FullText:       "Great thread https://t.co/example",
+		QuotedStatusID: "9876543210",
+	}
+	got := classifyTweet(tweet, nil)
+	if got != "tweet/quote" {
+		t.Errorf("classifyTweet() = %s, want tweet/quote", got)
+	}
+}
+
+func TestClassifyTweet_QuoteOverridesLink(t *testing.T) {
+	// A quoted tweet with URLs should still classify as tweet/quote, not tweet/link.
+	tweet := ArchiveTweet{
+		FullText:       "Check this out",
+		QuotedStatusID: "1234",
+		Entities:       TweetEntities{URLs: []TweetURL{{ExpandedURL: "https://x.com"}}},
+	}
+	got := classifyTweet(tweet, nil)
+	if got != "tweet/quote" {
+		t.Errorf("classifyTweet() = %s, want tweet/quote (quote takes priority over link)", got)
+	}
+}
+
+func TestSyncArchive_MultiPartFiles(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	// tweets.js has 1 tweet
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"Part zero tweet with enough text","created_at":"Wed Mar 15 14:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	// tweet-part1.js has 1 tweet
+	os.WriteFile(filepath.Join(dataDir, "tweet-part1.js"),
+		[]byte(`window.YTD.tweet.part1 = [{"tweet":{"id":"2","full_text":"Part one tweet with enough text too","created_at":"Wed Mar 15 15:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	artifacts, _, err := c.syncArchive(context.Background(), "")
+	if err != nil {
+		t.Fatalf("syncArchive failed: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Errorf("expected 2 artifacts from multi-part archive, got %d", len(artifacts))
+	}
+
+	ids := make(map[string]bool)
+	for _, a := range artifacts {
+		ids[a.SourceRef] = true
+	}
+	if !ids["1"] || !ids["2"] {
+		t.Errorf("expected tweets from both parts, got IDs: %v", ids)
+	}
+}
+
+func TestSyncArchive_ChildURLDedup(t *testing.T) {
+	// Same URL in two tweets should produce only one child artifact.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"),
+		[]byte(`window.YTD.tweet.part0 = [`+
+			`{"tweet":{"id":"1","full_text":"First mention of link with text","created_at":"Wed Mar 15 14:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[{"expanded_url":"https://example.com/shared"}],"hashtags":[],"user_mentions":[]}}},`+
+			`{"tweet":{"id":"2","full_text":"Second mention of same link here","created_at":"Wed Mar 15 15:00:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[{"expanded_url":"https://example.com/shared"}],"hashtags":[],"user_mentions":[]}}}`+
+			`]`), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	artifacts, _, err := c.syncArchive(context.Background(), "")
+	if err != nil {
+		t.Fatalf("syncArchive failed: %v", err)
+	}
+
+	// 2 tweet artifacts + 1 child URL artifact (deduped)
+	if len(artifacts) != 3 {
+		t.Errorf("expected 3 artifacts (2 tweets + 1 deduped child URL), got %d", len(artifacts))
+	}
+
+	childCount := 0
+	for _, a := range artifacts {
+		if a.ContentType == "link" {
+			childCount++
+		}
+	}
+	if childCount != 1 {
+		t.Errorf("expected 1 child URL artifact (deduped), got %d", childCount)
 	}
 }

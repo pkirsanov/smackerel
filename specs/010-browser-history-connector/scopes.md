@@ -74,7 +74,7 @@ type BrowserHistoryConfig struct {
 
 | # | Scope | Surfaces | Key Tests | DoD Summary | Status |
 |---|---|---|---|---|---|
-| 1 | Connector Implementation, Config & Registration | Go core (`browser/connector.go`, `browser/browser.go`), Config, `cmd/core/main.go` | ~14 unit (integration/E2E deferred — no live stack) | Connector interface complete, cursor-based query works, config validated, registration wired, basic sync end-to-end | In Progress |
+| 1 | Connector Implementation, Config & Registration | Go core (`browser/connector.go`, `browser/browser.go`), Config, `cmd/core/main.go` | ~16 unit (integration/E2E deferred — no live stack) | Connector interface complete, cursor-based query works, config validated, registration wired, basic sync end-to-end, URL+date dedup | In Progress |
 | 2 | Social Media Aggregation, Repeat Visits & Privacy Gate | Go core (`browser/connector.go`) | ~10 unit (integration/E2E deferred — no live stack) | Social aggregation, repeat detection, privacy gate, content fetch failure handling | In Progress |
 
 ---
@@ -148,6 +148,16 @@ Scenario: SCN-BH-005 Copy-then-read strategy handles locked file with retry
   Then the connector retries once after 5 seconds
   And if the retry succeeds, sync proceeds normally
   And if the retry also fails, the sync cycle is skipped with an error
+
+Scenario: SCN-BH-011 Same-URL same-day visits are merged with summed dwell time
+  Given the Chrome History file contains 3 visits to "https://example.com/article" on the same day
+  And each visit has a dwell time of 2 minutes
+  When the connector processes these entries
+  Then the 3 visits are merged into a single entry for that URL and date
+  And the merged entry has a combined dwell time of 6 minutes
+  And the merged entry is assigned "full" processing tier (6 minutes ≥ 5 minute threshold)
+  And only one artifact is created for the URL on that date
+  And the title is taken from the visit with the longest individual dwell time
 ```
 
 ### Implementation Plan
@@ -187,6 +197,8 @@ Scenario: SCN-BH-005 Copy-then-read strategy handles locked file with retry
 | T-12 | Unit | SQLite | `internal/connector/browser/browser_test.go` | `TestParseChromeHistorySince_AllTiers` |
 | T-13 | Unit | Close | `internal/connector/browser/connector_test.go` | `TestClose_SetsDisconnected` |
 | T-14 | Unit | Sync | `internal/connector/browser/connector_test.go` | `TestSync_EmptyCursor_UsesLookback` |
+| T-14b | Unit | SCN-BH-011 | `internal/connector/browser/connector_test.go` | `TestProcessEntries_DedupSameURLSameDay` |
+| T-14c | Unit | SCN-BH-011 | `internal/connector/browser/connector_test.go` | `TestDedupByURLDate` |
 | T-15 | Integration | SCN-BH-001 | `tests/integration/browser_history_test.go` | `TestBrowserHistorySync_InitialImport` |
 | T-16 | Integration | SCN-BH-002 | `tests/integration/browser_history_test.go` | `TestBrowserHistorySync_IncrementalCursor` |
 | T-17 | Integration | Full flow | `tests/integration/browser_history_test.go` | `TestBrowserHistorySync_FullPipelineFlow` |
@@ -226,6 +238,8 @@ Scenario: SCN-BH-005 Copy-then-read strategy handles locked file with retry
   > Evidence: `./smackerel.sh test unit` compiles all packages including browser — ok 0.017s
 - [x] Health lifecycle transitions verified: disconnected → healthy → syncing → healthy and error paths
   > Evidence: TestConnector_HealthLifecycle, TestConnect_HistoryFileNotFound, TestClose_SetsDisconnected PASS
+- [x] URL+date dedup merges same-URL same-day visits with summed dwell time and correct tier assignment (SCN-BH-011)
+  > Evidence: TestDedupByURLDate (merge logic, title from longest dwell, latest visit time), TestProcessEntries_DedupSameURLSameDay (3×2m merges to 6m → full tier) PASS
 
 ---
 

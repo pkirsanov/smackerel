@@ -469,3 +469,59 @@ $ ./smackerel.sh test unit
 ### Verdict
 
 **CLEAN.** Claimed-vs-implemented state is consistent. All source files exist, compile, and pass tests. Registration and wiring verified. Two minor report documentation errors corrected inline.
+
+---
+
+## DevOps-to-Doc Sweep (2026-04-21, Stochastic Quality Sweep Round)
+
+**Agent:** bubbles.workflow (devops-to-doc child workflow)
+**Trigger:** Stochastic quality sweep parent orchestrator
+**Findings:** 1 finding — SST config chain broken for GuestHost auto-start. Fixed.
+
+### Probe Dimensions
+
+| Dimension | Result | Evidence |
+|-----------|--------|----------|
+| **Docker build** | ✅ Clean | `./smackerel.sh build` exit 0 — Go binary compiles with guesthost package, Docker image builds in ~35s |
+| **Config SST chain** | ❌ → ✅ Fixed | `config/smackerel.yaml` → `config.sh` generates `GUESTHOST_*` env vars → `internal/config/config.go` was MISSING struct fields and env loading → `cmd/core/connectors.go` was MISSING auto-start block |
+| **Config check** | ✅ Clean | `./smackerel.sh check` — "Config is in sync with SST, env_file drift guard: OK" |
+| **Monitoring** | ✅ Clean | `smackerel_connector_sync_total{connector="guesthost"}` metric automatically emitted via shared `ConnectorSync` counter in `internal/metrics/metrics.go` — no guesthost-specific metrics needed |
+| **Docker Compose** | ✅ Clean | GuestHost runs inside `smackerel-core` container — no separate service needed. Core container has health check, security options, resource limits, labels |
+| **Dockerfile** | ✅ Clean | Multi-stage build, non-root user, no-new-privileges, OCI labels for version/revision/build-time |
+| **CI/CD** | N/A | No CI pipeline committed — expected at current repo state |
+| **Unit tests** | ✅ Pass | `./smackerel.sh test unit` — `internal/config` 0.035s (new tests), `cmd/core` 0.194s (recompiled), `internal/connector/guesthost` cached (no regressions) |
+
+### Finding: DEVOPS-013-001 — Broken SST Auto-Start Chain
+
+**Severity:** High
+**Category:** Config SST violation
+**Root Cause:** The GuestHost connector config pipeline was incomplete. The SST config file (`config/smackerel.yaml`) defined `connectors.guesthost` and the config generator (`scripts/commands/config.sh`) wrote `GUESTHOST_ENABLED`, `GUESTHOST_BASE_URL`, `GUESTHOST_API_KEY`, `GUESTHOST_SYNC_SCHEDULE`, and `GUESTHOST_EVENT_TYPES` to the generated `.env` file. However, the Go config loader (`internal/config/config.go`) had NO struct fields and NO env var loading for these values, and the connector startup code (`cmd/core/connectors.go`) had NO auto-start block. Every other connector (Hospitable, Discord, Twitter, Weather, Alerts, Markets) has all three pieces.
+
+**Impact:** The GuestHost connector was registered in the registry but could NEVER auto-start at boot when `GUESTHOST_ENABLED=true`. A user who configured GuestHost in `smackerel.yaml` and ran `./smackerel.sh config generate && ./smackerel.sh up` would see the connector appear in the registry as disconnected, with no way to activate it short of calling internal APIs.
+
+**Fix Applied:**
+
+| File | Change |
+|------|--------|
+| `internal/config/config.go` | Added 5 struct fields: `GuestHostEnabled`, `GuestHostBaseURL`, `GuestHostAPIKey`, `GuestHostSyncSchedule`, `GuestHostEventTypes` |
+| `internal/config/config.go` | Added env var loading in `Load()`: reads `GUESTHOST_ENABLED`, `GUESTHOST_BASE_URL`, `GUESTHOST_API_KEY`, `GUESTHOST_SYNC_SCHEDULE`, `GUESTHOST_EVENT_TYPES` |
+| `cmd/core/connectors.go` | Added auto-start block: when `cfg.GuestHostEnabled`, constructs `ConnectorConfig` with credentials and source_config, calls `Connect()`, sets supervisor config, starts connector |
+| `internal/config/validate_test.go` | Added 2 tests: `TestLoad_GuestHostConnectorFields` (verifies all 5 fields load correctly), `TestLoad_GuestHostConnectorFieldsOptional` (verifies defaults when unset) |
+
+**Verification:**
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+
+$ ./smackerel.sh build
+[+] Building 38.1s (36/36) FINISHED
+✔ smackerel-core  Built
+✔ smackerel-ml    Built
+
+$ ./smackerel.sh test unit | grep -E 'config|guesthost|cmd/core'
+ok  github.com/smackerel/smackerel/cmd/core  0.194s
+ok  github.com/smackerel/smackerel/internal/config  0.035s
+ok  github.com/smackerel/smackerel/internal/connector/guesthost  (cached)
+```

@@ -4,6 +4,61 @@ Links: [uservalidation.md](uservalidation.md)
 
 ---
 
+## Gaps Analysis & Closure — 2026-04-21
+
+**Trigger:** stochastic-quality-sweep → gaps-to-doc
+**Agent:** bubbles.gaps (via bubbles.workflow child)
+**Scope:** `internal/connector/twitter/`, `specs/015-twitter-connector/`
+
+### Methodology
+
+Systematic comparison of implementation (`twitter.go`, `twitter_test.go`) against all spec requirements (R-001 through R-009), design component contracts, and scope DoD items. Each requirement's sub-clauses checked against concrete code paths.
+
+### Gap Findings
+
+| # | Gap | Requirement | Severity | Disposition |
+|---|-----|-------------|----------|-------------|
+| GAP-015-001 | No `thread_position` metadata on threaded tweets | R-005, R-003, design ThreadMeta.Position | Medium | **Fixed** — Thread.Position map populated in buildThreads; normalizeTweet emits thread_position |
+| GAP-015-002 | No `tweet/quote` content type classification | R-004 (quoted tweets → `tweet/quote`) | Medium | **Fixed** — Added QuotedStatusID field to ArchiveTweet; classifyTweet detects before link check |
+| GAP-015-003 | No child artifacts for embedded tweet URLs | R-009 (create child artifact per URL with CONTAINS_LINK edge) | High | **Fixed** — syncArchive creates child RawArtifact per unique URL with parent_tweet_id and edge_type metadata |
+| GAP-015-004 | No multi-part archive file support | R-002 (tweets.js, tweet-part1.js, etc.) | Medium | **Fixed** — findArchiveFiles globs for `tweets.js` + `tweet-part*.js` with path traversal protection |
+| GAP-015-005 | Missing `author_handle`, `author_name` metadata | R-005 | Low | **Documented** — Twitter archive format does not include per-tweet author info in tweets.js (all tweets are from archive owner); like.js/bookmark.js only contain tweetId. These fields available only via API path. |
+| GAP-015-006 | Missing `reply_count` metadata | R-005 | Low | **Documented** — Twitter archive format does not include reply_count. Only favorite_count and retweet_count are in the export. Available only via API path. |
+| GAP-015-007 | API polling structurally absent from Sync() | R-008, Scope 6 | Low | **Documented** — No syncAPI method, no APIClient field on Connector struct. sync_mode=api returns zero artifacts. Config parsing accepts API settings but Sync() has no API code path. This is opt-in and requires external HTTP client integration. |
+| GAP-015-008 | No parent thread artifact with concatenated text | R-003 | Low | **Documented** — Individual threaded tweets get thread metadata (is_thread, thread_id, thread_position) but no separate parent artifact with concatenated full text is created. Could be added as a follow-up. |
+
+### Changes
+
+**`internal/connector/twitter/twitter.go`:**
+- Added `QuotedStatusID string` field to `ArchiveTweet` struct (JSON: `quoted_status_id_str`)
+- Added `Position map[string]int` field to `Thread` struct; populated in `buildThreads()`
+- Added `tweet/quote` detection in `classifyTweet()` — checks QuotedStatusID before URL check
+- Added `thread_position` to metadata in `normalizeTweet()` when tweet is in a thread
+- Replaced single-file `syncArchive` with `findArchiveFiles()` + multi-file loop for multi-part support
+- Added child URL artifact creation in `syncArchive()` with URL dedup via `seenURLs` map
+- Added `findArchiveFiles()` helper with glob + CWE-22 path traversal protection
+
+**`internal/connector/twitter/twitter_test.go`:**
+- Updated `TestSyncArchive_SymlinkTraversal` — accepts new error message format
+- Updated `TestSyncArchive_TweetsJSNotFound` — accepts "no tweet files found" message
+- Updated `TestSyncArchive_FullRoundTrip` — expects 5 artifacts (4 tweets + 1 child URL); verifies child URL metadata
+- Added `TestNormalizeTweet_ThreadPosition` — verifies thread_position=0 for root, =2 for third tweet
+- Added `TestClassifyTweet_Quote` — verifies tweet/quote classification via QuotedStatusID
+- Added `TestClassifyTweet_QuoteOverridesLink` — verifies quote priority over link
+- Added `TestSyncArchive_MultiPartFiles` — verifies tweets.js + tweet-part1.js both parsed
+- Added `TestSyncArchive_ChildURLDedup` — verifies duplicate URLs produce only 1 child artifact
+
+### Evidence
+
+| Command | Result |
+|---------|--------|
+| `./smackerel.sh test unit` | PASS — all packages including twitter (0.296s) |
+| `./smackerel.sh lint` | PASS |
+| `./smackerel.sh check` | PASS — config in sync |
+| `./smackerel.sh build` | PASS — both images built |
+
+---
+
 ## Security Pass (Round 3) — 2026-04-21
 
 **Trigger:** stochastic-quality-sweep → security-to-doc
