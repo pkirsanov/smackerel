@@ -181,6 +181,22 @@ type Config struct {
 	CalDAVSyncSchedule            string
 	YouTubeSyncSchedule           string
 
+	// Hospitable connector (SST-compliant — from smackerel.yaml via config generate)
+	HospitableEnabled             bool
+	HospitableAccessToken         string
+	HospitableBaseURL             string
+	HospitableSyncSchedule        string
+	HospitableInitialLookbackDays int
+	HospitablePageSize            int
+	HospitableSyncProperties      bool
+	HospitableSyncReservations    bool
+	HospitableSyncMessages        bool
+	HospitableSyncReviews         bool
+	HospitableTierMessages        string
+	HospitableTierReviews         string
+	HospitableTierReservations    string
+	HospitableTierProperties      string
+
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
 }
@@ -276,6 +292,22 @@ func Load() (*Config, error) {
 		IMAPSyncSchedule:              os.Getenv("IMAP_SYNC_SCHEDULE"),
 		CalDAVSyncSchedule:            os.Getenv("CALDAV_SYNC_SCHEDULE"),
 		YouTubeSyncSchedule:           os.Getenv("YOUTUBE_SYNC_SCHEDULE"),
+
+		// Hospitable connector
+		HospitableEnabled:             os.Getenv("HOSPITABLE_ENABLED") == "true",
+		HospitableAccessToken:         os.Getenv("HOSPITABLE_ACCESS_TOKEN"),
+		HospitableBaseURL:             os.Getenv("HOSPITABLE_BASE_URL"),
+		HospitableSyncSchedule:        os.Getenv("HOSPITABLE_SYNC_SCHEDULE"),
+		HospitableInitialLookbackDays: parseIntEnv("HOSPITABLE_INITIAL_LOOKBACK_DAYS", 90),
+		HospitablePageSize:            parseIntEnv("HOSPITABLE_PAGE_SIZE", 100),
+		HospitableSyncProperties:      os.Getenv("HOSPITABLE_SYNC_PROPERTIES") != "false",
+		HospitableSyncReservations:    os.Getenv("HOSPITABLE_SYNC_RESERVATIONS") != "false",
+		HospitableSyncMessages:        os.Getenv("HOSPITABLE_SYNC_MESSAGES") != "false",
+		HospitableSyncReviews:         os.Getenv("HOSPITABLE_SYNC_REVIEWS") != "false",
+		HospitableTierMessages:        os.Getenv("HOSPITABLE_TIER_MESSAGES"),
+		HospitableTierReviews:         os.Getenv("HOSPITABLE_TIER_REVIEWS"),
+		HospitableTierReservations:    os.Getenv("HOSPITABLE_TIER_RESERVATIONS"),
+		HospitableTierProperties:      os.Getenv("HOSPITABLE_TIER_PROPERTIES"),
 	}
 
 	// Parse CORS allowed origins (comma-separated)

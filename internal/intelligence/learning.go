@@ -132,6 +132,12 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 
 	var paths []LearningPath
 	for _, path := range pathMap {
+		// Sort resources by difficulty per R-502: foundational concepts first,
+		// then progressive complexity. Uses stable sort to preserve title order
+		// within the same difficulty level.
+		sort.SliceStable(path.Resources, func(i, j int) bool {
+			return difficultyOrder(path.Resources[i].Difficulty) < difficultyOrder(path.Resources[j].Difficulty)
+		})
 		path.Gaps = detectGaps(path.Resources)
 		paths = append(paths, *path)
 	}
@@ -200,4 +206,18 @@ func detectGaps(resources []LearningResource) []string {
 		gaps = append(gaps, "No beginner-level resources — the path may be hard to start")
 	}
 	return gaps
+}
+
+// difficultyOrder returns an integer for sorting resources by difficulty level.
+func difficultyOrder(d LearningDifficulty) int {
+	switch d {
+	case DifficultyBeginner:
+		return 0
+	case DifficultyIntermediate:
+		return 1
+	case DifficultyAdvanced:
+		return 2
+	default:
+		return 1
+	}
 }

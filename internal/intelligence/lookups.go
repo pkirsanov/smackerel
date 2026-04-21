@@ -151,7 +151,7 @@ func (e *Engine) GetQuickReferences(ctx context.Context) ([]QuickReference, erro
 	}
 
 	rows, err := e.Pool.Query(ctx, `
-		SELECT id, concept, content, lookup_count, pinned, created_at
+		SELECT id, concept, content, source_artifact_ids, lookup_count, pinned, created_at
 		FROM quick_references
 		WHERE pinned = TRUE
 		ORDER BY created_at DESC
@@ -164,9 +164,15 @@ func (e *Engine) GetQuickReferences(ctx context.Context) ([]QuickReference, erro
 	var refs []QuickReference
 	for rows.Next() {
 		var qr QuickReference
-		if err := rows.Scan(&qr.ID, &qr.Concept, &qr.Content, &qr.LookupCount, &qr.Pinned, &qr.CreatedAt); err != nil {
+		var sourceJSON []byte
+		if err := rows.Scan(&qr.ID, &qr.Concept, &qr.Content, &sourceJSON, &qr.LookupCount, &qr.Pinned, &qr.CreatedAt); err != nil {
 			slog.Warn("quick reference scan failed", "error", err)
 			continue
+		}
+		if len(sourceJSON) > 0 {
+			if err := json.Unmarshal(sourceJSON, &qr.SourceArtifactIDs); err != nil {
+				slog.Warn("quick reference source_artifact_ids unmarshal failed", "id", qr.ID, "error", err)
+			}
 		}
 		refs = append(refs, qr)
 	}

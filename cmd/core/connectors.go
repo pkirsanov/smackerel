@@ -133,6 +133,37 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 		}
 	}
 
+	// Auto-start Hospitable connector (PAT-based)
+	if cfg.HospitableEnabled {
+		hospitableCfg := connector.ConnectorConfig{
+			AuthType:       "token",
+			Credentials:    map[string]string{"access_token": cfg.HospitableAccessToken},
+			Enabled:        true,
+			SyncSchedule:   cfg.HospitableSyncSchedule,
+			ProcessingTier: cfg.HospitableTierMessages, // default tier for connector
+			SourceConfig: map[string]interface{}{
+				"base_url":                     cfg.HospitableBaseURL,
+				"initial_lookback_days":        cfg.HospitableInitialLookbackDays,
+				"page_size":                    cfg.HospitablePageSize,
+				"sync_properties":              cfg.HospitableSyncProperties,
+				"sync_reservations":            cfg.HospitableSyncReservations,
+				"sync_messages":                cfg.HospitableSyncMessages,
+				"sync_reviews":                 cfg.HospitableSyncReviews,
+				"processing_tier_messages":     cfg.HospitableTierMessages,
+				"processing_tier_reviews":      cfg.HospitableTierReviews,
+				"processing_tier_reservations": cfg.HospitableTierReservations,
+				"processing_tier_properties":   cfg.HospitableTierProperties,
+			},
+		}
+		if err := hospitableConn.Connect(ctx, hospitableCfg); err == nil {
+			svc.supervisor.SetConfig("hospitable", hospitableCfg)
+			svc.supervisor.StartConnector(ctx, "hospitable")
+			slog.Info("hospitable connector started")
+		} else {
+			slog.Warn("hospitable connector failed to start", "error", err)
+		}
+	}
+
 	// Auto-start Discord connector (token-based)
 	if cfg.DiscordEnabled {
 		discordCfg := connector.ConnectorConfig{

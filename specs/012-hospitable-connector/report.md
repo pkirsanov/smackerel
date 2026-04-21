@@ -1,7 +1,7 @@
 # Report: 012 — Hospitable Connector
 
 > **Status:** Done
-> **Last Updated:** 2026-04-20
+> **Last Updated:** 2026-04-21
 
 ---
 
@@ -16,6 +16,44 @@ All 5 scopes are Done. All DoD items verified with passing tests. `./smackerel.s
 ## Known Gaps
 
 Integration tests (`tests/integration/hospitable_test.go`) and E2E tests (`tests/e2e/hospitable_test.go`) listed in scope test plans were never implemented. All test coverage is via unit tests with mock HTTP servers. This is acceptable for the connector pattern (no live API in CI) but means the test plans in scopes.md overstate the integration/E2E coverage.
+
+---
+
+## DevOps Probe (2026-04-21)
+
+**Trigger:** `devops-to-doc` via stochastic-quality-sweep
+**Probe agent:** bubbles.devops (inline)
+**Result:** 1 critical finding — SST→env→auto-start pipeline was broken; fixed
+
+### Probe Summary
+
+Probed build/deployment/CI/CD/monitoring surface for the Hospitable connector. Examined: Dockerfile, docker-compose.yml, docker-compose.prod.yml, config/smackerel.yaml, scripts/commands/config.sh, internal/config/config.go, cmd/core/connectors.go, generated env files.
+
+**Areas probed:**
+- Docker build (Dockerfile, multi-stage, non-root, labels) — clean
+- Docker Compose (service definition, healthchecks, env_file, volumes) — clean (connector runs inside smackerel-core, no separate container needed)
+- Config SST pipeline (smackerel.yaml → config.sh → generated env → Config struct → auto-start) — **BROKEN**
+- Monitoring (health endpoint, slog structured logging, connector health status) — clean
+- Build identity (ldflags VERSION/COMMIT_HASH/BUILD_TIME, OCI labels) — clean
+
+**Findings:**
+
+| # | Area | Severity | Detail | Fix |
+|---|------|----------|--------|-----|
+| 1 | Config SST pipeline | Critical | Hospitable connector had YAML config in `smackerel.yaml` but: (a) `scripts/commands/config.sh` did not extract `HOSPITABLE_*` env vars, (b) `internal/config/config.go` had no `Hospitable*` fields in Config struct, (c) `cmd/core/connectors.go` had no auto-start block. Result: connector registered but could never be started in a real deployment. | Fixed: all 3 layers wired |
+
+**Changes made:**
+- `scripts/commands/config.sh` — Added 15 `HOSPITABLE_*` variable extractions from SST and corresponding env file output lines
+- `internal/config/config.go` — Added 14 `Hospitable*` fields to Config struct and env var loading in `Load()`
+- `cmd/core/connectors.go` — Added auto-start block following the Discord/Twitter/Weather pattern: checks `cfg.HospitableEnabled`, builds `ConnectorConfig` with PAT credentials and all source config, calls `Connect()`, registers with supervisor
+
+**Verification:**
+- `./smackerel.sh config generate` — generates `HOSPITABLE_*` vars in dev.env
+- `./smackerel.sh check` — "Config is in sync with SST"
+- `./smackerel.sh build` — Docker build succeeds (Go compiles clean)
+- `./smackerel.sh test unit` — all packages pass including cmd/core, internal/config, internal/connector/hospitable
+- `./smackerel.sh lint` — exit 0
+- `./smackerel.sh format --check` — 33 files unchanged
 
 ---
 
@@ -51,7 +89,49 @@ Full re-probe of 22 requirements (R-001–R-022), 5 scopes + chaos scope, 30 Ghe
 **No code changes required. No new Gherkin scenarios needed. Security hardening is thorough (SSRF, body limits, retry caps, cache caps, input sanitization, race protection, 77 chaos tests).**
 
 ---
+## Test Probe (2026-04-21)
 
+**Trigger:** `test-to-doc` via stochastic-quality-sweep (child workflow)
+**Probe agent:** bubbles.test (inline)
+**Result:** Near-clean — 2 minor assertion weaknesses fixed, no new test functions needed
+
+### Probe Summary
+
+Full test coverage audit: 3 test files, 150+ test functions, 30 Gherkin scenarios (SCN-HC-001–030), all 5 scopes + chaos scope. Applied Test Integrity gates (Gherkin coverage, no mocks in live categories, no silent-pass, real assertions, test plan parity, no self-validating setup).
+
+**Gate Results:**
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| G1: Gherkin Coverage | PASS | All 30 SCN-HC-* scenarios have 1+ mapped test functions |
+| G2: No Internal Mocks (Live) | N/A | All tests are unit category — no live-stack claims |
+| G3: No Silent-Pass | PASS | No early-return/bailout patterns found |
+| G4: Real Assertions | PASS (after fix) | 2 weak assertions strengthened |
+| G5: Test Plan ↔ DoD Parity | PASS | All scope DoD items have corresponding test evidence |
+| G7: No Self-Validating Setup | PASS | All assertions validate code output, not test setup |
+
+**Findings:**
+
+| # | Area | Severity | Detail | Fix |
+|---|------|----------|--------|-----|
+| 1 | `TestCursorEmptyAppliesLookback` weak assertion | Minor | Only checked `Properties` (zero) and `Reservations` (~30d ago). Did not verify `Messages` and `Reviews` cursors also apply the lookback period. | Fixed: added loop checking all 3 lookback fields |
+| 2 | `TestSyncFullLifecycle` weak cursor assertion | Minor | Only checked `cursor != ""`. Did not verify decoded cursor has non-zero timestamps for all 4 resource types after sync. | Fixed: added JSON decode + per-field non-zero checks |
+
+**Changes made:**
+- [connector_test.go](../../internal/connector/hospitable/connector_test.go): `TestCursorEmptyAppliesLookback` — expanded assertions to verify Messages and Reviews cursors also match lookback period
+- [connector_test.go](../../internal/connector/hospitable/connector_test.go): `TestSyncFullLifecycle` — added cursor JSON decode with non-zero timestamp assertions for all 4 resource types
+
+**Verification:**
+- `./smackerel.sh test unit` — all pass (hospitable package rerun, not cached)
+- `./smackerel.sh lint` — exit 0
+- `./smackerel.sh format --check` — 33 files unchanged
+
+**Coverage strength summary:**
+- 69 tests in `connector_test.go` — client, connector lifecycle, config, cursor, SSRF, pagination, retry, context cancellation
+- 56 tests in `normalizer_test.go` — all 4 normalizers, edge hints, URL safety, rating clamping, input sanitization, address/date formatting
+- 77 tests in `chaos_test.go` — malformed JSON, empty/null fields, Unicode, concurrency, extreme values, auth expiry, lifecycle races
+
+---
 ## Hardening Probe (2026-04-20)
 
 **Trigger:** `harden-to-doc` via stochastic-quality-sweep
