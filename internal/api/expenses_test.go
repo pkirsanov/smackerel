@@ -139,6 +139,26 @@ func TestExport_InvalidFormat(t *testing.T) {
 	}
 }
 
+func TestExport_InvalidDateRange(t *testing.T) {
+	h := &ExpenseHandler{
+		Cfg: &config.Config{ExpensesExportMaxRows: 10000},
+	}
+	req := httptest.NewRequest("GET", "/api/expenses/export?from=2026-05-01&to=2026-04-01", nil)
+	w := httptest.NewRecorder()
+
+	h.Export(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	errObj, _ := resp["error"].(map[string]any)
+	if errObj == nil || errObj["code"] != "INVALID_DATE_RANGE" {
+		t.Errorf("expected INVALID_DATE_RANGE error code, got %v", resp)
+	}
+}
+
 func TestWriteExpenseError(t *testing.T) {
 	w := httptest.NewRecorder()
 	writeExpenseError(w, http.StatusNotFound, "NOT_FOUND", "Item not found")

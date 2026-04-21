@@ -1,6 +1,7 @@
 package intelligence
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -333,18 +334,18 @@ func TestVendorNormalizer_LIKEEscaping(t *testing.T) {
 	}
 }
 
-// Round 10: containsField edge cases
-func TestContainsField_EdgeCases(t *testing.T) {
-	if containsField(nil, "test") {
+// Round 10: slices.Contains edge cases (previously containsField)
+func TestSlicesContains_EdgeCases(t *testing.T) {
+	if slices.Contains([]string(nil), "test") {
 		t.Error("expected false for nil slice")
 	}
-	if containsField([]string{}, "test") {
+	if slices.Contains([]string{}, "test") {
 		t.Error("expected false for empty slice")
 	}
-	if !containsField([]string{"a", "b", "c"}, "b") {
+	if !slices.Contains([]string{"a", "b", "c"}, "b") {
 		t.Error("expected true for present item")
 	}
-	if containsField([]string{"a", "b"}, "B") {
+	if slices.Contains([]string{"a", "b"}, "B") {
 		t.Error("expected false for case mismatch (case-sensitive)")
 	}
 }

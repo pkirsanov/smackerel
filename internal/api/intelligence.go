@@ -12,13 +12,15 @@ import (
 func ExpertiseHandler(engine *intelligence.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		defer func() {
+			metrics.IntelligenceLatency.WithLabelValues("expertise").Observe(time.Since(start).Seconds())
+		}()
 		expertiseMap, err := engine.GenerateExpertiseMap(r.Context())
 		if err != nil {
 			metrics.IntelligenceErrors.WithLabelValues("expertise").Inc()
 			writeError(w, http.StatusInternalServerError, "expertise_error", "expertise map generation failed")
 			return
 		}
-		metrics.IntelligenceLatency.WithLabelValues("expertise").Observe(time.Since(start).Seconds())
 		writeJSON(w, http.StatusOK, expertiseMap)
 	}
 }
@@ -27,13 +29,15 @@ func ExpertiseHandler(engine *intelligence.Engine) http.HandlerFunc {
 func LearningPathsHandler(engine *intelligence.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		defer func() {
+			metrics.IntelligenceLatency.WithLabelValues("learning_paths").Observe(time.Since(start).Seconds())
+		}()
 		paths, err := engine.GetLearningPaths(r.Context())
 		if err != nil {
 			metrics.IntelligenceErrors.WithLabelValues("learning_paths").Inc()
 			writeError(w, http.StatusInternalServerError, "learning_error", "learning paths query failed")
 			return
 		}
-		metrics.IntelligenceLatency.WithLabelValues("learning_paths").Observe(time.Since(start).Seconds())
 		writeJSON(w, http.StatusOK, paths)
 	}
 }
@@ -42,13 +46,15 @@ func LearningPathsHandler(engine *intelligence.Engine) http.HandlerFunc {
 func SubscriptionsHandler(engine *intelligence.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		defer func() {
+			metrics.IntelligenceLatency.WithLabelValues("subscriptions").Observe(time.Since(start).Seconds())
+		}()
 		summary, err := engine.GetSubscriptionSummary(r.Context())
 		if err != nil {
 			metrics.IntelligenceErrors.WithLabelValues("subscriptions").Inc()
 			writeError(w, http.StatusInternalServerError, "subscription_error", "subscription summary failed")
 			return
 		}
-		metrics.IntelligenceLatency.WithLabelValues("subscriptions").Observe(time.Since(start).Seconds())
 		writeJSON(w, http.StatusOK, summary)
 	}
 }
@@ -57,13 +63,15 @@ func SubscriptionsHandler(engine *intelligence.Engine) http.HandlerFunc {
 func SerendipityHandler(engine *intelligence.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		defer func() {
+			metrics.IntelligenceLatency.WithLabelValues("serendipity").Observe(time.Since(start).Seconds())
+		}()
 		pick, err := engine.SerendipityPick(r.Context())
 		if err != nil {
 			metrics.IntelligenceErrors.WithLabelValues("serendipity").Inc()
 			writeError(w, http.StatusInternalServerError, "serendipity_error", "serendipity pick failed")
 			return
 		}
-		metrics.IntelligenceLatency.WithLabelValues("serendipity").Observe(time.Since(start).Seconds())
 		if pick == nil {
 			writeJSON(w, http.StatusOK, map[string]string{
 				"message": "No serendipity candidates available yet. Archive items need 6+ months of dormancy.",
@@ -78,13 +86,15 @@ func SerendipityHandler(engine *intelligence.Engine) http.HandlerFunc {
 func ContentFuelHandler(engine *intelligence.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		defer func() {
+			metrics.IntelligenceLatency.WithLabelValues("content_fuel").Observe(time.Since(start).Seconds())
+		}()
 		angles, err := engine.GenerateContentFuel(r.Context())
 		if err != nil {
 			metrics.IntelligenceErrors.WithLabelValues("content_fuel").Inc()
 			writeError(w, http.StatusInternalServerError, "content_fuel_error", "content fuel generation failed")
 			return
 		}
-		metrics.IntelligenceLatency.WithLabelValues("content_fuel").Observe(time.Since(start).Seconds())
 		if angles == nil {
 			angles = []intelligence.ContentAngle{}
 		}
@@ -96,13 +106,15 @@ func ContentFuelHandler(engine *intelligence.Engine) http.HandlerFunc {
 func QuickReferencesHandler(engine *intelligence.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		defer func() {
+			metrics.IntelligenceLatency.WithLabelValues("quick_references").Observe(time.Since(start).Seconds())
+		}()
 		refs, err := engine.GetQuickReferences(r.Context())
 		if err != nil {
 			metrics.IntelligenceErrors.WithLabelValues("quick_references").Inc()
 			writeError(w, http.StatusInternalServerError, "quick_references_error", "quick references query failed")
 			return
 		}
-		metrics.IntelligenceLatency.WithLabelValues("quick_references").Observe(time.Since(start).Seconds())
 		if refs == nil {
 			refs = []intelligence.QuickReference{}
 		}
@@ -114,13 +126,15 @@ func QuickReferencesHandler(engine *intelligence.Engine) http.HandlerFunc {
 func MonthlyReportHandler(engine *intelligence.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		defer func() {
+			metrics.IntelligenceLatency.WithLabelValues("monthly_report").Observe(time.Since(start).Seconds())
+		}()
 		report, err := engine.GenerateMonthlyReport(r.Context())
 		if err != nil {
 			metrics.IntelligenceErrors.WithLabelValues("monthly_report").Inc()
 			writeError(w, http.StatusInternalServerError, "monthly_report_error", "monthly report generation failed")
 			return
 		}
-		metrics.IntelligenceLatency.WithLabelValues("monthly_report").Observe(time.Since(start).Seconds())
 		writeJSON(w, http.StatusOK, report)
 	}
 }
@@ -129,13 +143,15 @@ func MonthlyReportHandler(engine *intelligence.Engine) http.HandlerFunc {
 func SeasonalPatternsHandler(engine *intelligence.Engine) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		defer func() {
+			metrics.IntelligenceLatency.WithLabelValues("seasonal_patterns").Observe(time.Since(start).Seconds())
+		}()
 		patterns, err := engine.DetectSeasonalPatterns(r.Context())
 		if err != nil {
 			metrics.IntelligenceErrors.WithLabelValues("seasonal_patterns").Inc()
 			writeError(w, http.StatusInternalServerError, "seasonal_error", "seasonal pattern detection failed")
 			return
 		}
-		metrics.IntelligenceLatency.WithLabelValues("seasonal_patterns").Observe(time.Since(start).Seconds())
 		if patterns == nil {
 			patterns = []intelligence.SeasonalPattern{}
 		}

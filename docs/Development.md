@@ -47,21 +47,24 @@ Do not bypass `./smackerel.sh` with ad-hoc `go`, `python`, `pytest`, or `docker 
 
 ## Commands Available Today
 
-Use `./smackerel.sh` for runtime work and keep the committed Bubbles validation surface for framework/artifact governance:
+Use `./smackerel.sh` for runtime work and keep the committed Bubbles validation surface for framework/artifact governance.
+
+**Global flag:** `--env dev|test` selects the target environment (default: `dev`). The test environment uses separate Compose project names and port ranges to avoid colliding with the dev stack.
 
 | Action | Command | Purpose |
 |--------|---------|---------|
 | Generate config | `./smackerel.sh config generate` | Render environment files from `config/smackerel.yaml` |
-| Build images | `./smackerel.sh build` | Build the Go core and Python sidecar images |
+| Build images | `./smackerel.sh build [--no-cache]` | Build the Go core and Python sidecar images |
 | Check compose wiring | `./smackerel.sh check` | Validate generated config and docker-compose interpolation |
 | Lint | `./smackerel.sh lint` | Run Go and Python linting in containers |
 | Format | `./smackerel.sh format` | Format Go and Python sources in containers |
-| Unit tests | `./smackerel.sh test unit` | Run Go and Python unit tests |
+| Unit tests | `./smackerel.sh test unit [--go\|--python]` | Run Go and Python unit tests (or one language only) |
 | Integration tests | `./smackerel.sh test integration` | Run live-stack foundation integration validation |
 | E2E tests | `./smackerel.sh test e2e` | Run compose start, persistence, and config-failure E2E checks |
 | Stress smoke | `./smackerel.sh test stress` | Run live-stack health burst validation |
 | Start stack | `./smackerel.sh up` | Start the foundation runtime |
-| Stop stack | `./smackerel.sh down` | Stop the current runtime stack |
+| Stop stack | `./smackerel.sh down [--volumes]` | Stop the current runtime stack; optionally remove named volumes |
+| Backup database | `./smackerel.sh backup` | Create a compressed pg_dump backup in `backups/` |
 | Runtime status | `./smackerel.sh status` | Show docker status and API health |
 | Runtime logs | `./smackerel.sh logs` | Show compose logs |
 | Cleanup | `./smackerel.sh clean smart|full|status|measure` | Project-scoped docker cleanup |
@@ -88,16 +91,17 @@ Required command families:
 | Area | Required command shape |
 |------|------------------------|
 | Config generation | `./smackerel.sh config generate` |
-| Build | `./smackerel.sh build` |
+| Build | `./smackerel.sh build [--no-cache]` |
 | Fast compile or static checks | `./smackerel.sh check` |
 | Lint | `./smackerel.sh lint` |
 | Format | `./smackerel.sh format` |
-| Unit tests | `./smackerel.sh test unit` |
+| Unit tests | `./smackerel.sh test unit [--go\|--python]` |
 | Integration tests | `./smackerel.sh test integration` |
 | End-to-end tests | `./smackerel.sh test e2e` |
 | Stress tests | `./smackerel.sh test stress` |
 | Full dev stack | `./smackerel.sh up` |
-| Stack shutdown | `./smackerel.sh down` |
+| Stack shutdown | `./smackerel.sh down [--volumes]` |
+| Database backup | `./smackerel.sh backup` |
 | Health and status | `./smackerel.sh status` |
 | Logs | `./smackerel.sh logs` |
 | Cleanup | `./smackerel.sh clean smart|full|status|measure` |
