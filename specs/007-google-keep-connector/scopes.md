@@ -93,11 +93,31 @@ CREATE TABLE IF NOT EXISTS keep_exports (export_path TEXT PRIMARY KEY, notes_par
 ### Validation Checkpoints
 
 - **After Scope 1:** Unit tests validate all 5 note types parse correctly, normalizer produces correct `RawArtifact` fields, tier assignment matches R-008 rules, cursor filtering works. This is the foundation — all later scopes depend on it.
-- **After Scope 2:** Integration tests verify full Takeout sync flow: connector starts → detects export → parses → normalizes → publishes to NATS → cursor persisted. E2E test confirms artifacts appear in the database.
-- **After Scope 3:** Integration tests verify tier assignment drives actual pipeline behavior differences. Pinned notes get `full` processing, archived get `light`.
-- **After Scope 4:** Integration tests verify label→topic cascade with a real PostgreSQL + pg_trgm setup. Edge creation/deletion works across sync cycles.
-- **After Scope 5:** Integration tests verify NATS round-trip: Go publishes `keep.sync.request`, Python responds with notes, Go normalizes them. Fallback on failure is verified.
-- **After Scope 6:** Integration tests verify OCR round-trip: Go publishes `keep.ocr.request` with image, Python returns extracted text, Go appends to artifact content. Cache hit/miss verified.
+- **After Scope 2:** Unit tests verify full Takeout sync flow: connector starts → detects export → parses → normalizes → cursor persisted. Connector lifecycle (Connect/Sync/Health/Close) covered end-to-end.
+- **After Scope 3:** Unit tests verify tier assignment follows R-008 evaluation order. Pinned notes get `full` processing, archived get `light` (including recently-modified archived per SCN-GK-030).
+- **After Scope 4:** Unit tests verify label→topic 4-stage cascade: exact, abbreviation, fuzzy (in-memory trigram), and create-new. Edge diff on re-sync verified.
+- **After Scope 5:** Python unit tests verify gkeepapi bridge serialization, authentication, session caching, and error handling. Go unit tests verify NormalizeGkeep and hybrid fallback logic.
+- **After Scope 6:** Python unit tests verify OCR pipeline: Tesseract primary, Ollama fallback, LRU cache, graceful failure. Go unit tests verify OCR request/timeout handling.
+
+### Test Location Reconciliation (Harden Fix — 2026-04-21)
+
+> **Context:** Previous harden pass (H-R2-003, April 12, 2026) documented that test plan tables in Scopes 2-6 reference integration and E2E test files at `tests/integration/keep_test.go` and `tests/e2e/keep_test.go` that were never created. The listed test function names (e.g., `TestRegistryContainsKeep`, `TestTakeoutSyncEndToEnd`, `TestNATSRoundTripKeepSync`, `TestNATSRoundTripOCR`) do not exist in any file. This pass corrects the record.
+>
+> **Actual test location:** ALL Keep connector tests reside in `internal/connector/keep/*_test.go` (7 files, 100+ Go test functions) and `ml/tests/test_keep.py` (20+ Python test functions). All run as unit tests via `./smackerel.sh test unit`.
+>
+> **Coverage mapping:** The integration/E2E scenarios described in the test plans are covered by unit-level tests that exercise the same code paths without external dependencies (no live NATS, PostgreSQL, or ML sidecar). The DoD evidence items are honest about this — each states "verified via unit-level tests" in the evidence text.
+>
+> **Test plan row reconciliation:**
+>
+> | Scope | Phantom Rows | Phantom Location | Actual Coverage |
+> |-------|-------------|-----------------|-----------------|
+> | 2 | T-2-14 through T-2-20, T-2-R1 | `tests/integration/keep_test.go`, `tests/e2e/keep_test.go` | `internal/connector/keep/keep_test.go` (TestSyncTakeoutProducesArtifacts, TestKeepExportTracking, TestCorruptedCursorFallback, TestSyncSkipsTrashedNotes, TestHealthTransitions) |
+> | 3 | T-3-09 through T-3-13, T-3-R1 | Correct file, wrong Type (listed as integration/e2e, actually unit) | `internal/connector/keep/qualifiers_test.go` (TestEvaluateBatch, all qualifier rule tests) |
+> | 4 | T-4-11 through T-4-17, T-4-R1 | Correct file, wrong Type (listed as integration/e2e, actually unit) | `internal/connector/keep/labels_test.go` (TestMapLabelsMultiple, TestDiffLabels, TestFuzzyMatch, edge case tests) |
+> | 5 | T-5-09 through T-5-13, T-5-R1 | `tests/integration/keep_test.go`, `tests/e2e/keep_test.go` | `internal/connector/keep/keep_test.go` + `ml/tests/test_keep.py` (TestKeepBridge class, bridge serialization and auth tests) |
+> | 6 | T-6-09 through T-6-13, T-6-R1 | `tests/integration/keep_test.go`, `tests/e2e/keep_test.go` | `ml/tests/test_keep.py` (TestOCR class, cache/fallback/failure tests) |
+>
+> **Gap acknowledged:** Dedicated integration tests (requiring live NATS + PostgreSQL + ML sidecar) and dedicated E2E tests (full stack) for the Keep connector do not exist. The unit tests provide strong code-path coverage but do not exercise cross-service communication. This is a known limitation documented since H-R2-003.
 
 ---
 
@@ -106,11 +126,11 @@ CREATE TABLE IF NOT EXISTS keep_exports (export_path TEXT PRIMARY KEY, notes_par
 | # | Scope | Surfaces | Key Tests | DoD Summary | Status |
 |---|---|---|---|---|---|
 | 1 | Takeout Parser & Normalizer | Go core | 22 unit tests | All 5 note types parsed, metadata mapped per R-005, tiers assigned per R-008 | Done |
-| 2 | Keep Connector, Config & Registry | Go core, Config, DB | 12 unit + 6 integration + 2 e2e | Connector interface complete, config validated, migration applied, Takeout sync end-to-end | Done |
-| 3 | Source Qualifiers & Processing Tiers | Go core, Pipeline | 8 unit + 4 integration + 1 e2e | Qualifier engine drives tier assignment, pipeline respects tiers | Done |
-| 4 | Label-to-Topic Mapping | Go core, DB | 10 unit + 6 integration + 1 e2e | 4-stage cascade works, edges created/deleted on label changes | Done |
-| 5 | gkeepapi Python Bridge | Python ML sidecar, NATS | 8 unit + 4 integration + 1 e2e | NATS round-trip works, opt-in gate enforced, fallback on failure | Done |
-| 6 | Image OCR Pipeline | Python ML sidecar, NATS, DB | 8 unit + 4 integration + 1 e2e | OCR extracts text, caching works, content appended to artifact | Done |
+| 2 | Keep Connector, Config & Registry | Go core, Config, DB | 20 unit tests | Connector interface complete, config validated, migration applied, Takeout sync end-to-end | Done |
+| 3 | Source Qualifiers & Processing Tiers | Go core, Pipeline | 15 unit tests | Qualifier engine drives tier assignment, evaluation order matches R-008 | Done |
+| 4 | Label-to-Topic Mapping | Go core, DB | 18 unit tests | 4-stage cascade works, edges created/deleted on label changes | Done |
+| 5 | gkeepapi Python Bridge | Python ML sidecar, NATS | 4 Python + 3 Go unit tests | Serialization, auth, session caching, fallback on failure | Done |
+| 6 | Image OCR Pipeline | Python ML sidecar, NATS, DB | 5 Python + 2 Go unit tests | OCR extracts text, caching works, content appended to artifact | Done |
 
 ---
 

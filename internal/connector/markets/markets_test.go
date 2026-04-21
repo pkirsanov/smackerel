@@ -3,6 +3,7 @@ package markets
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -27,6 +28,7 @@ func newTestConnector(id string) *Connector {
 	c := New(id)
 	c.nowFunc = func() time.Time { return stableTestTime }
 	c.configGen = 1 // mark as configured for tests that set c.config directly
+	c.health = connector.HealthHealthy // allow Sync without Connect for unit tests
 	return c
 }
 
@@ -4150,6 +4152,7 @@ func TestCHAOS018_001_ConcurrentSyncDailySummaryNoDoubleGeneration(t *testing.T)
 	c.finnhubBaseURL = srv.URL
 	c.nowFunc = func() time.Time { return mockNow }
 	c.configGen = 1 // mark configured for Sync guard
+	c.health = connector.HealthHealthy // allow Sync without Connect for unit tests
 	c.config = MarketsConfig{
 		FinnhubAPIKey:  "test-key",
 		AlertThreshold: 5.0,
@@ -4271,6 +4274,168 @@ func TestCHAOS018_003_TryClaimDailySummaryIdempotent(t *testing.T) {
 	nextDay := time.Date(2024, 6, 11, 17, 0, 0, 0, et) // Tuesday
 	if !c.tryClaimDailySummary(nextDay) {
 		t.Error("tryClaimDailySummary for next day should return true")
+	}
+}
+
+// --- Chaos Tests: R02 (repeat round) ---
+
+func TestCHAOS018_R02_001_CloseDuringSyncPreservesDisconnectedHealth(t *testing.T) {
+	// CHAOS-018-R02-001: When Close() is called while Sync() is in flight, the
+	// deferred health write in Sync must NOT clobber HealthDisconnected back to
+	// Healthy/Degraded. The fix: Close() increments configGen so the stale Sync's
+	// deferred write detects a generation mismatch and skips the overwrite.
+	slowSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Slow response to keep the Sync in flight long enough for Close to run.
+		time.Sleep(50 * time.Millisecond)
+		if r.URL.Path == "/api/v1/company-news" {
+			json.NewEncoder(w).Encode([]map[string]interface{}{})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.3, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer slowSrv.Close()
+
+	c := New("financial-markets")
+	c.nowFunc = func() time.Time { return stableTestTime }
+	c.httpClient = slowSrv.Client()
+	c.finnhubBaseURL = slowSrv.URL
+
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "test-key"},
+		SourceConfig: map[string]interface{}{
+			"watchlist": map[string]interface{}{
+				"stocks": []interface{}{"AAPL", "GOOGL", "MSFT"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+
+	// Start Sync in a goroutine — it will be slow due to the sleep per symbol.
+	syncDone := make(chan struct{})
+	go func() {
+		defer close(syncDone)
+		c.Sync(context.Background(), "")
+	}()
+
+	// Give Sync time to start and enter the HTTP call loop.
+	time.Sleep(20 * time.Millisecond)
+
+	// Close while Sync is in-flight.
+	c.Close()
+
+	// Wait for Sync to complete.
+	<-syncDone
+
+	// After Close + Sync completion, health MUST be Disconnected.
+	// Without the fix, the deferred health write in Sync would overwrite
+	// Disconnected with Healthy (all API calls succeeded).
+	health := c.Health(context.Background())
+	if health != connector.HealthDisconnected {
+		t.Errorf("CHAOS-018-R02-001: expected HealthDisconnected after Close() during Sync, got %v — stale Sync clobbered health state", health)
+	}
+}
+
+func TestCHAOS018_R02_002_SyncAfterCloseReturnsError(t *testing.T) {
+	// CHAOS-018-R02-002: After Connect → Close, a subsequent Sync() must return
+	// an error because the connector is in Disconnected state. Without the guard,
+	// Sync would run with stale config and overwrite HealthDisconnected.
+	c := New("financial-markets")
+	c.nowFunc = func() time.Time { return stableTestTime }
+
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "test-key"},
+	})
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Fatal("expected Healthy after Connect")
+	}
+
+	c.Close()
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Fatal("expected Disconnected after Close")
+	}
+
+	// Sync after Close must fail.
+	_, _, err = c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("CHAOS-018-R02-002: Sync after Close() should return error — ran with stale config on a disconnected connector")
+	}
+	if !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("error should mention not configured, got: %v", err)
+	}
+
+	// Health must remain Disconnected — not flipped to Syncing or Healthy.
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("CHAOS-018-R02-002: health should stay Disconnected after rejected Sync, got %v", c.Health(context.Background()))
+	}
+}
+
+func TestCHAOS018_R02_003_ReconnectAfterCloseWorks(t *testing.T) {
+	// Ensure the fix doesn't break the normal lifecycle:
+	// Connect → Close → Connect → Sync should work.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/company-news" {
+			json.NewEncoder(w).Encode([]map[string]interface{}{})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.3, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := New("financial-markets")
+	c.nowFunc = func() time.Time { return stableTestTime }
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	cfg := connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "test-key"},
+		SourceConfig: map[string]interface{}{
+			"watchlist": map[string]interface{}{
+				"stocks": []interface{}{"AAPL"},
+			},
+		},
+	}
+
+	// First cycle: Connect → Sync → Close
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("first Connect failed: %v", err)
+	}
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("first Sync failed: %v", err)
+	}
+	if len(artifacts) == 0 {
+		t.Fatal("first Sync produced no artifacts")
+	}
+	c.Close()
+
+	// Sync should fail after Close.
+	_, _, err = c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("Sync after Close should fail")
+	}
+
+	// Second cycle: Reconnect → Sync → should work.
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("second Connect failed: %v", err)
+	}
+	artifacts, _, err = c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("second Sync failed: %v", err)
+	}
+	if len(artifacts) == 0 {
+		t.Fatal("second Sync produced no artifacts after reconnect")
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected Healthy after second Sync, got %v", c.Health(context.Background()))
 	}
 }
 
@@ -4440,5 +4605,179 @@ func TestH018R60_004_FREDRateLimitMidLoopHealthDegraded(t *testing.T) {
 	// Health MUST be Degraded due to partialSkip — not Healthy.
 	if c.Health(context.Background()) != connector.HealthDegraded {
 		t.Errorf("expected HealthDegraded when FRED rate-limited mid-loop, got %v", c.Health(context.Background()))
+	}
+}
+
+// --- SEC-018-001: API Key Redaction in Error Messages (CWE-532) ---
+
+func TestRedactHTTPError_RedactsTokenParam(t *testing.T) {
+	// SEC-018-001: When http.Client.Do fails, the *url.Error includes the full URL
+	// with API keys. redactHTTPError must strip sensitive query params.
+	cases := []struct {
+		name     string
+		errMsg   string
+		contains string // must NOT appear in output
+		label    string
+	}{
+		{
+			name:     "finnhub token in URL error",
+			errMsg:   `Get "https://finnhub.io/api/v1/quote?symbol=AAPL&token=sk-secret123": dial tcp: lookup finnhub.io: no such host`,
+			contains: "sk-secret123",
+			label:    "finnhub",
+		},
+		{
+			name:     "FRED api_key in URL error",
+			errMsg:   `Get "https://api.stlouisfed.org/fred/series/observations?api_key=fred-secret-key&series_id=GDP": context deadline exceeded`,
+			contains: "fred-secret-key",
+			label:    "FRED",
+		},
+		{
+			name:     "token at end of URL",
+			errMsg:   `Get "https://finnhub.io/api/v1/company-news?from=2026-01-01&symbol=AAPL&to=2026-01-01&token=my-api-key": EOF`,
+			contains: "my-api-key",
+			label:    "finnhub news",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			redacted := redactHTTPError(errors.New(tc.errMsg), tc.label)
+			if redacted == nil {
+				t.Fatal("expected non-nil error")
+			}
+			if strings.Contains(redacted.Error(), tc.contains) {
+				t.Errorf("redacted error still contains secret %q: %s", tc.contains, redacted.Error())
+			}
+			if !strings.Contains(redacted.Error(), "REDACTED") {
+				t.Errorf("redacted error should contain 'REDACTED': %s", redacted.Error())
+			}
+			if !strings.Contains(redacted.Error(), tc.label+" request failed") {
+				t.Errorf("redacted error should contain label prefix %q: %s", tc.label, redacted.Error())
+			}
+		})
+	}
+}
+
+func TestRedactHTTPError_NilError(t *testing.T) {
+	if err := redactHTTPError(nil, "test"); err != nil {
+		t.Errorf("expected nil for nil input, got %v", err)
+	}
+}
+
+func TestRedactHTTPError_NoSensitiveParams(t *testing.T) {
+	// Errors without sensitive params should pass through unchanged (except label wrapping).
+	original := fmt.Errorf("connection refused")
+	redacted := redactHTTPError(original, "test")
+	if !strings.Contains(redacted.Error(), "connection refused") {
+		t.Errorf("non-sensitive error should preserve message: %s", redacted.Error())
+	}
+}
+
+// --- SEC-018-002: News URL Scheme Validation (CWE-20) ---
+
+func TestIsSafeURL(t *testing.T) {
+	cases := []struct {
+		url  string
+		safe bool
+	}{
+		{"https://example.com/news", true},
+		{"http://example.com/news", true},
+		{"", true}, // empty is safe (omitted)
+		{"javascript:alert(1)", false},
+		{"data:text/html,<script>alert(1)</script>", false},
+		{"ftp://example.com/file", false},
+		{"file:///etc/passwd", false},
+		{"vbscript:MsgBox(1)", false},
+		{"HTTPS://EXAMPLE.COM", true}, // case-insensitive
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.url, func(t *testing.T) {
+			if got := isSafeURL(tc.url); got != tc.safe {
+				t.Errorf("isSafeURL(%q) = %v, want %v", tc.url, got, tc.safe)
+			}
+		})
+	}
+}
+
+func TestSync_NewsDropsUnsafeURL(t *testing.T) {
+	// SEC-018-002: News articles with javascript: or data: URLs must have URL cleared.
+	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/company-news" {
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{
+					"category": "company",
+					"datetime": 1705334400,
+					"headline": "Safe Article",
+					"id":       70001,
+					"related":  "AAPL",
+					"source":   "Reuters",
+					"summary":  "This article has a safe URL",
+					"url":      "https://example.com/safe",
+				},
+				{
+					"category": "company",
+					"datetime": 1705334401,
+					"headline": "Malicious Article",
+					"id":       70002,
+					"related":  "AAPL",
+					"source":   "FakeNews",
+					"summary":  "This article has a javascript URL",
+					"url":      "javascript:alert(document.cookie)",
+				},
+				{
+					"category": "company",
+					"datetime": 1705334402,
+					"headline": "Data URL Article",
+					"id":       70003,
+					"related":  "AAPL",
+					"source":   "FakeNews",
+					"summary":  "This article has a data URL",
+					"url":      "data:text/html,<script>alert(1)</script>",
+				},
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer finnhubSrv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.httpClient = finnhubSrv.Client()
+	c.finnhubBaseURL = finnhubSrv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var newsArtifacts []connector.RawArtifact
+	for _, a := range artifacts {
+		if a.ContentType == "market/news" {
+			newsArtifacts = append(newsArtifacts, a)
+		}
+	}
+	if len(newsArtifacts) != 3 {
+		t.Fatalf("expected 3 news artifacts, got %d", len(newsArtifacts))
+	}
+
+	// First article should keep its safe URL.
+	if newsArtifacts[0].URL != "https://example.com/safe" {
+		t.Errorf("safe article URL should be preserved, got %q", newsArtifacts[0].URL)
+	}
+	// Second article (javascript:) should have URL cleared.
+	if newsArtifacts[1].URL != "" {
+		t.Errorf("javascript: URL should be cleared, got %q", newsArtifacts[1].URL)
+	}
+	// Third article (data:) should have URL cleared.
+	if newsArtifacts[2].URL != "" {
+		t.Errorf("data: URL should be cleared, got %q", newsArtifacts[2].URL)
 	}
 }

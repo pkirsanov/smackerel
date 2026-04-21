@@ -60,6 +60,7 @@ type ArchiveTweet struct {
 	CreatedAt         string        `json:"created_at"`
 	InReplyToStatusID string        `json:"in_reply_to_status_id"`
 	InReplyToUserID   string        `json:"in_reply_to_user_id"`
+	QuotedStatusID    string        `json:"quoted_status_id_str"`
 	FavoriteCount     int           `json:"favorite_count"`
 	RetweetCount      int           `json:"retweet_count"`
 	Entities          TweetEntities `json:"entities"`
@@ -95,8 +96,9 @@ type TweetMedia struct {
 
 // Thread represents a reconstructed tweet thread.
 type Thread struct {
-	RootID string
-	Tweets []ArchiveTweet
+	RootID   string
+	Tweets   []ArchiveTweet
+	Position map[string]int // tweet ID → position in thread (0-based)
 }
 
 // Connector implements the Twitter/X connector.
@@ -277,47 +279,46 @@ func (c *Connector) Close() error {
 
 // syncArchive parses the Twitter data export directory.
 func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
-	tweetsFile := filepath.Join(c.config.ArchiveDir, "data", "tweets.js")
-
-	// Verify the resolved file path stays within the archive directory boundary (CWE-22).
-	resolvedFile, err := filepath.EvalSymlinks(tweetsFile)
+	// Find all tweet archive files (tweets.js, tweet-part1.js, etc.) per R-002.
+	tweetFiles, err := findArchiveFiles(c.config.ArchiveDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, cursor, fmt.Errorf("tweets.js not found in archive: %s", tweetsFile)
+		return nil, cursor, fmt.Errorf("find archive files: %w", err)
+	}
+	if len(tweetFiles) == 0 {
+		return nil, cursor, fmt.Errorf("no tweet files found in archive: %s/data/", c.config.ArchiveDir)
+	}
+
+	var allTweets []ArchiveTweet
+	for _, tf := range tweetFiles {
+		if err := ctx.Err(); err != nil {
+			return nil, cursor, fmt.Errorf("context cancelled before reading archive: %w", err)
 		}
-		return nil, cursor, fmt.Errorf("resolve tweets.js path: %w", err)
-	}
-	if !strings.HasPrefix(resolvedFile, c.config.ArchiveDir+string(filepath.Separator)) {
-		return nil, cursor, fmt.Errorf("tweets.js path escapes archive directory")
-	}
 
-	if err := ctx.Err(); err != nil {
-		return nil, cursor, fmt.Errorf("context cancelled before reading archive: %w", err)
-	}
+		// Enforce file size limit before reading to prevent OOM (CWE-400).
+		info, err := os.Stat(tf)
+		if err != nil {
+			return nil, cursor, fmt.Errorf("stat %s: %w", filepath.Base(tf), err)
+		}
+		if info.Size() > maxArchiveFileSize {
+			return nil, cursor, fmt.Errorf("%s exceeds max size (%d > %d bytes)", filepath.Base(tf), info.Size(), maxArchiveFileSize)
+		}
 
-	// Enforce file size limit before reading to prevent OOM (CWE-400).
-	info, err := os.Stat(resolvedFile)
-	if err != nil {
-		return nil, cursor, fmt.Errorf("stat tweets.js: %w", err)
-	}
-	if info.Size() > maxArchiveFileSize {
-		return nil, cursor, fmt.Errorf("tweets.js exceeds max size (%d > %d bytes)", info.Size(), maxArchiveFileSize)
-	}
+		data, err := os.ReadFile(tf)
+		if err != nil {
+			return nil, cursor, fmt.Errorf("read %s: %w", filepath.Base(tf), err)
+		}
 
-	data, err := os.ReadFile(resolvedFile)
-	if err != nil {
-		return nil, cursor, fmt.Errorf("read tweets.js: %w", err)
-	}
-
-	tweets, err := parseTweetsJS(data)
-	if err != nil {
-		return nil, cursor, fmt.Errorf("parse tweets.js: %w", err)
+		tweets, err := parseTweetsJS(data)
+		if err != nil {
+			return nil, cursor, fmt.Errorf("parse %s: %w", filepath.Base(tf), err)
+		}
+		allTweets = append(allTweets, tweets...)
 	}
 
 	// Enforce maximum tweet count to prevent OOM from archives with
 	// massive tweet counts that individually pass the file-size check (CWE-770).
-	if len(tweets) > maxTweetCount {
-		return nil, cursor, fmt.Errorf("tweets.js contains %d tweets, exceeding max %d", len(tweets), maxTweetCount)
+	if len(allTweets) > maxTweetCount {
+		return nil, cursor, fmt.Errorf("archive contains %d tweets, exceeding max %d", len(allTweets), maxTweetCount)
 	}
 
 	// Parse like.js and bookmark.js to build bookmarked/liked ID sets.
@@ -327,7 +328,7 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 	bookmarkedIDs := c.parseSignalFile(ctx, "bookmark.js", "bookmark")
 
 	// Build thread map for thread reconstruction
-	threads := buildThreads(tweets)
+	threads := buildThreads(allTweets)
 	threadMap := make(map[string]*Thread)
 	for i := range threads {
 		for _, tw := range threads[i].Tweets {
@@ -337,9 +338,10 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 
 	var artifacts []connector.RawArtifact
 	var skippedTimestamps int
+	seenURLs := make(map[string]bool) // dedup child URL artifacts per R-009
 	newCursor := cursor
 
-	for _, tweet := range tweets {
+	for _, tweet := range allTweets {
 		if err := ctx.Err(); err != nil {
 			return nil, cursor, fmt.Errorf("context cancelled during archive processing: %w", err)
 		}
@@ -363,6 +365,29 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 		liked := likedIDs[tweet.ID]
 		artifact := normalizeTweet(tweet, bookmarked, liked, threadMap[tweet.ID])
 		artifacts = append(artifacts, artifact)
+
+		// Create child artifacts for embedded URLs per R-009.
+		for _, u := range tweet.Entities.URLs {
+			if !isSafeURL(u.ExpandedURL) || seenURLs[u.ExpandedURL] {
+				continue
+			}
+			seenURLs[u.ExpandedURL] = true
+			child := connector.RawArtifact{
+				SourceID:    "twitter",
+				SourceRef:   fmt.Sprintf("%s:url:%s", tweet.ID, u.ExpandedURL),
+				ContentType: "link",
+				Title:       u.ExpandedURL,
+				RawContent:  "",
+				URL:         u.ExpandedURL,
+				Metadata: map[string]interface{}{
+					"parent_tweet_id": tweet.ID,
+					"edge_type":       "CONTAINS_LINK",
+					"source_path":     "archive",
+				},
+				CapturedAt: artifact.CapturedAt,
+			}
+			artifacts = append(artifacts, child)
+		}
 	}
 
 	if skippedTimestamps > 0 {
@@ -370,6 +395,38 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 	}
 
 	return artifacts, newCursor, nil
+}
+
+// findArchiveFiles finds all tweet archive files in the data/ subdirectory.
+// Supports tweets.js plus multi-part files like tweet-part1.js per R-002.
+// All resolved paths are verified to stay within the archive directory (CWE-22).
+func findArchiveFiles(archiveDir string) ([]string, error) {
+	dataDir := filepath.Join(archiveDir, "data")
+
+	// Glob for tweets.js and tweet-part*.js patterns.
+	patterns := []string{
+		filepath.Join(dataDir, "tweets.js"),
+		filepath.Join(dataDir, "tweet-part*.js"),
+	}
+
+	var files []string
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("glob %s: %w", pattern, err)
+		}
+		for _, m := range matches {
+			resolved, err := filepath.EvalSymlinks(m)
+			if err != nil {
+				continue // skip unresolvable entries
+			}
+			if !strings.HasPrefix(resolved, archiveDir+string(filepath.Separator)) {
+				continue // skip files escaping archive boundary (CWE-22)
+			}
+			files = append(files, resolved)
+		}
+	}
+	return files, nil
 }
 
 // parseSignalFile reads a Twitter archive signal file (like.js or bookmark.js)
@@ -525,6 +582,10 @@ func buildThreads(tweets []ArchiveTweet) []Thread {
 		}
 
 		if len(thread.Tweets) >= 2 {
+			thread.Position = make(map[string]int, len(thread.Tweets))
+			for i, tw := range thread.Tweets {
+				thread.Position[tw.ID] = i
+			}
 			threads = append(threads, thread)
 		}
 	}
@@ -581,6 +642,9 @@ func normalizeTweet(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread) 
 	if thread != nil {
 		metadata["is_thread"] = true
 		metadata["thread_id"] = thread.RootID
+		if pos, ok := thread.Position[tweet.ID]; ok {
+			metadata["thread_position"] = pos
+		}
 	}
 	if tweet.InReplyToStatusID != "" {
 		metadata["in_reply_to"] = tweet.InReplyToStatusID
@@ -616,6 +680,9 @@ func classifyTweet(tweet ArchiveTweet, thread *Thread) string {
 	}
 	if strings.HasPrefix(tweet.FullText, "RT @") {
 		return "tweet/retweet"
+	}
+	if tweet.QuotedStatusID != "" {
+		return "tweet/quote"
 	}
 	// Check for media attachments (photo, video, animated_gif) per R-004.
 	for _, m := range tweet.Entities.Media {
