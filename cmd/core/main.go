@@ -98,6 +98,7 @@ func run() error {
 		KnowledgeStore:                  svc.knowledgeStore,
 		KnowledgeConceptSearchThreshold: cfg.KnowledgeConceptSearchThreshold,
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
+		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
 	}
 
 	router := api.NewRouter(deps)

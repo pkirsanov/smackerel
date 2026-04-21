@@ -1,0 +1,75 @@
+# Smackerel Docker Compose — Production Overrides
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Or via CLI:
+#   SMACKEREL_ENV=prod ./smackerel.sh up
+#
+# Prerequisites:
+#   1. Set runtime.auth_token in config/smackerel.yaml (min 16 chars)
+#   2. Set llm.api_key if using cloud LLM provider
+#   3. Set telegram.bot_token and telegram.chat_ids for Telegram bot
+#   4. Run: ./smackerel.sh config generate
+#   5. Set up a reverse proxy (Caddy or nginx) for TLS — see docs/Deployment.md
+
+services:
+  postgres:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  nats:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  smackerel-core:
+    restart: always
+    environment:
+      LOG_LEVEL: warn
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${CORE_CONTAINER_PORT}/readyz"]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  smackerel-ml:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  ollama:
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"

@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
 
 	"github.com/smackerel/smackerel/internal/metrics"
@@ -25,8 +26,26 @@ func NewRouter(deps *Dependencies) http.Handler {
 	r.Use(middleware.Heartbeat("/ping"))
 	r.Use(securityHeadersMiddleware)
 
+	// CORS — configured via SST (CORSAllowedOrigins from smackerel.yaml).
+	// Default: no origins allowed (same-origin only). Set cors.allowed_origins
+	// in smackerel.yaml to enable cross-origin access for web clients.
+	if len(deps.CORSAllowedOrigins) > 0 {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   deps.CORSAllowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+			ExposedHeaders:   []string{"Link"},
+			AllowCredentials: true,
+			MaxAge:           300,
+		}))
+	}
+
 	// Prometheus metrics endpoint — unauthenticated (standard scrape pattern)
 	r.Handle("/metrics", metrics.Handler())
+
+	// Readiness probe — lightweight check for orchestrators (k8s, Docker HEALTHCHECK).
+	// Only verifies DB connectivity; /api/health is the full liveness check.
+	r.Get("/readyz", deps.ReadyzHandler)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(middleware.Throttle(100))

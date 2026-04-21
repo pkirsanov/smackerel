@@ -137,8 +137,10 @@ jobs:
       env:
         PGPASSWORD: smackerel
       run: |
-        psql -h localhost -U smackerel -d smackerel_test -f internal/db/migrations/001_initial_schema.sql
-        psql -h localhost -U smackerel -d smackerel_test -f internal/db/migrations/018_meal_plans.sql
+        for f in internal/db/migrations/*.sql; do
+          echo "Applying $f..."
+          psql -h localhost -U smackerel -d smackerel_test -f "$f"
+        done
 
     - name: Run integration tests
       env:
