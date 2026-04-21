@@ -214,3 +214,52 @@ Full gap analysis of spec 020-security-hardening implementation covering:
 | Command | Result | Timestamp |
 |---------|--------|-----------|
 | `./smackerel.sh test unit` | PASS — Go 33 packages all green + Python 75 tests (75 passed, 1 skipped) | 2026-04-14 (gaps probe) |
+
+## Security Scan (2026-04-21) — Stochastic Quality Sweep R68
+
+### Scan Methodology
+
+Full security review of spec 020 attack surfaces plus broader codebase review:
+- CSP header strength analysis (directive-level granularity)
+- Authentication bypass surface enumeration (unauthenticated routes, cookie handling)
+- SQL injection review (parameterized query verification)
+- CSRF posture assessment (cookie auth + state-changing endpoints)
+- Docker security posture (capability dropping, port binding, secrets visibility)
+- ML sidecar auth edge cases and token lifecycle
+- SSRF surface review (outbound HTTP from config-sourced URLs)
+
+### Findings
+
+| ID | Severity | CWE | Description | Status |
+|----|----------|-----|-------------|--------|
+| SEC-R68-001 | Low | CWE-16 | CSP `script-src` allowed entire `unpkg.com` domain instead of pinned HTMX version path — broader than necessary for defense-in-depth | **Fixed** |
+
+### Verified Non-Findings (Negative Evidence)
+
+| Category | Finding | Evidence |
+|----------|---------|----------|
+| SQL Injection | None — all queries use pgx `$N` parameterized placeholders. `expenses.go` `whereClause` is built from hardcoded condition strings with `$N` args, never user input | Code review of `internal/api/expenses.go` lines 600-700 |
+| Auth bypass via PWA share | None — `/pwa/share` is unauthenticated but only renders HTML; actual capture routes through auth'd `/api/capture` with Bearer token from localStorage | PWA share target design is intentional (spec 033) |
+| Auth bypass via metrics/readyz | None — `/metrics` and `/readyz` are standard monitoring endpoints with no sensitive data | Prometheus scrape pattern; readyz only checks DB connectivity |
+| Cookie security attributes | Accepted — `auth_token` cookie is read by `webAuthMiddleware` but never server-set (client-side cookie). `HttpOnly`/`Secure` cannot be enforced on client-set cookies. Modern browsers default `SameSite=Lax` which blocks cross-origin POST CSRF. | Local-first deployment model (127.0.0.1 bound) |
+| CSRF on Web UI POST routes | Mitigated — HTMX requests include `HX-Request` custom header which triggers CORS preflight from cross-origin; `SameSite=Lax` default blocks cross-origin POST cookies; all ports bound to 127.0.0.1 | Defense-in-depth adequate for self-hosted local deployment |
+| ML sidecar token lifecycle | Accepted — `_AUTH_TOKEN` cached at import time; token changes require container restart. Standard for Docker-deployed services. | `ml/app/auth.py` line 11 |
+| SSRF | None — `MLSidecarURL` and `OllamaURL` sourced from config env vars, not user input | `internal/config/config.go` verified |
+| Command injection | None — zero `os/exec` or `subprocess` in application code | Grep verified |
+| Docker port binding | All 6 services bound to `127.0.0.1` — confirmed intact | `docker-compose.yml` verified |
+| NATS token visibility | Token in config file mount, not CLI args — confirmed intact | `docker-compose.yml` `--config /etc/nats/nats.conf` |
+| Decrypt fail-closed | 3 error paths return `("", error)` when key present — confirmed intact | `internal/auth/store.go` verified |
+
+### Fix Implemented
+
+**SEC-R68-001: CSP script-src pinned to HTMX version path**
+- File: [internal/api/router.go](internal/api/router.go) — changed `https://unpkg.com` to `https://unpkg.com/htmx.org@1.9.12/` in `securityHeadersMiddleware`
+- File: [README.md](README.md) — updated CSP documentation to match
+- Test: [internal/api/router_test.go](internal/api/router_test.go) — `TestSecurityHeaders_CSP_PinnedCDNPath` verifies CSP does not allow entire unpkg.com domain and contains pinned version path
+- Rationale: The `<script>` tag already used SRI (`integrity` attribute) for content verification, but CSP's `script-src https://unpkg.com` allowed any script from the entire CDN. Pinning to `https://unpkg.com/htmx.org@1.9.12/` restricts CSP to the specific package version, blocking hypothetical injection of other unpkg packages.
+
+### Test Evidence
+
+| Command | Result | Timestamp |
+|---------|--------|-----------|
+| `./smackerel.sh test unit` | PASS — Go 41 packages green + Python 236 passed | 2026-04-21 (security scan R68) |
