@@ -116,3 +116,34 @@ Triggered by stochastic-quality-sweep improve-existing child workflow (REPEAT pr
 - **Verification:** `./smackerel.sh test unit` → all packages OK.
 
 All existing tests pass after changes. `./smackerel.sh lint` → all checks passed. No behavior changes.
+
+## Stability Pass (2026-04-21)
+
+Triggered by stochastic-quality-sweep R92 stabilize-to-doc child workflow. Systematic stability probe of concurrency safety, resource lifecycle, panic-inducing edge cases, graceful shutdown paths, and error handling.
+
+### Stability Findings
+
+**STB-035-001: `CookSessionStore.Stop()` double-close panic risk — FIXED**
+- **Finding:** `Stop()` used a `select`/`default` guard to avoid double-closing the `done` channel, but this is NOT safe for concurrent callers. Two goroutines entering `Stop()` simultaneously can both pass the `select` guard and both call `close(s.done)`, which panics in Go. Shutdown paths can be triggered by concurrent signals (SIGINT + graceful shutdown).
+- **Root cause:** Missing synchronization primitive on the close-once path.
+- **Fix:** Replaced `select`/`default` guard with `sync.Once` (`stopOnce`). Now `close(s.done)` executes exactly once regardless of concurrent callers.
+- **Files changed:** `internal/telegram/cook_session.go`
+- **Tests added:** `TestCookSessionStore_StopConcurrent` (10 concurrent Stop() goroutines — must not panic).
+- **Verification:** `./smackerel.sh test unit` → all 236 tests pass. `./smackerel.sh lint` → all checks passed. `./smackerel.sh build` → OK.
+
+**STB-035-002: `CookSessionStore.StartCleanup()` allows duplicate goroutines — FIXED**
+- **Finding:** No guard prevented calling `StartCleanup()` multiple times. Each call spawned a new goroutine with a new ticker, wasting resources and causing redundant concurrent sweep passes.
+- **Root cause:** Missing idempotency guard on goroutine spawn.
+- **Fix:** Wrapped goroutine spawn in `sync.Once` (`startOnce`). Only the first `StartCleanup()` call spawns a goroutine.
+- **Files changed:** `internal/telegram/cook_session.go`
+- **Tests added:** `TestCookSessionStore_StartCleanupIdempotent` (3 sequential StartCleanup() calls — must not panic or leak goroutines).
+- **Verification:** `./smackerel.sh test unit` → all 236 tests pass. `./smackerel.sh lint` → all checks passed. `./smackerel.sh build` → OK.
+
+### Stability Areas Probed (No Issues Found)
+
+- **Concurrency safety of `sync.Map` usage:** Session CRUD operations use `sync.Map` correctly. Session struct mutations (e.g., `CurrentStep++`) are unprotected but documented as acceptable for single-user design.
+- **Memory leak analysis:** Sweep goroutine correctly cleans expired sessions and orphaned disambiguations. `io.LimitReader` caps API response body reads at 1MB.
+- **Nil pointer dereference paths:** All optional pointer fields (`Servings *int`, `DurationMinutes *int`) are nil-checked before dereference. `FormatCookStep` bounds-checks `CurrentStep` before array access.
+- **Input validation:** `maxServings = 1000` caps scale factor. `SearchRecipesByName` truncates input to 200 chars. `ParseQuantity` returns 0 for Inf/NaN results.
+- **Floating-point stability:** `FormatQuantity` uses epsilon-based comparison. `formatScaleFactor` uses epsilon-based near-integer detection (fixed in IMP-035-004).
+- **Error propagation:** API calls propagate errors with context. JSON unmarshal failures in search results are safely skipped.

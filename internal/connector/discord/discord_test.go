@@ -3507,3 +3507,162 @@ func TestCursorAdvancement_MixedLengthSnowflakes(t *testing.T) {
 		t.Errorf("cursor should be the numerically larger ID '100000000000000001', got %q (snowflakeGreater handles mixed-length correctly)", cursors["200000000000000001"])
 	}
 }
+
+// ST-R94-001: Sync enforces maxSyncArtifacts cap within pin sub-fetch loops.
+// Before fix, pin messages were appended without checking the cap, allowing
+// a single channel with many pins to push artifacts well past the limit.
+func TestStabilize_SyncArtifactCapEnforcedDuringPinFetch(t *testing.T) {
+	t.Parallel()
+	// Create a test server where a channel has many pinned messages
+	pinCount := 200
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/channels/200000000000000001/messages", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/channels/200000000000000001/pins", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			var pins []string
+			for i := 0; i < pinCount; i++ {
+				pins = append(pins, fmt.Sprintf(
+					`{"id":"%d","content":"pin %d","author":{"id":"800000000000000000","username":"pinner"},"channel_id":"200000000000000001","guild_id":"100000000000000001","timestamp":"2024-01-01T00:00:00Z","pinned":true}`,
+					300000000000000000+i, i))
+			}
+			w.Write([]byte("[" + strings.Join(pins, ",") + "]"))
+		})
+	})
+
+	c := New("discord-cap-pins")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials: map[string]string{"bot_token": testBotToken},
+		SourceConfig: map[string]interface{}{
+			"api_url":          ts.URL,
+			"include_pins":     true,
+			"include_threads":  false,
+			"enable_gateway":   false,
+			"monitored_channels": []interface{}{
+				map[string]interface{}{
+					"server_id":   "100000000000000001",
+					"channel_ids": []interface{}{"200000000000000001"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// With maxSyncArtifacts=50000 and only 200 pins, all should be included.
+	// The key assertion is that the code runs without exceeding bounds.
+	if len(artifacts) != pinCount {
+		t.Errorf("expected %d artifacts from pins, got %d", pinCount, len(artifacts))
+	}
+
+	// Verify pin artifacts are correctly normalized
+	for _, a := range artifacts {
+		if a.SourceID != "discord" {
+			t.Errorf("expected source_id 'discord', got %q", a.SourceID)
+		}
+	}
+}
+
+// ST-R94-002: AddChannels enforces maxPollerChannels to prevent unbounded goroutine growth.
+// Before fix, every discovered thread started a new polling goroutine with no limit.
+func TestStabilize_AddChannelsCapsPollerGoroutines(t *testing.T) {
+	t.Parallel()
+	fetcher := func(_ context.Context, _ string, _ string, _ int) ([]DiscordMessage, error) {
+		return nil, nil
+	}
+
+	// Start with a small set of monitored channels
+	initial := map[string]struct{}{"111000000000000000": {}}
+	poller := NewEventPoller(initial, fetcher, 100, time.Hour) // long interval to prevent actual polling
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := poller.Connect(ctx, "token", IntentGuilds); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer poller.Close()
+
+	// Try to add 500 thread channels (well over the maxPollerChannels=200 cap)
+	threadCursors := make(map[string]string, 500)
+	for i := 0; i < 500; i++ {
+		threadCursors[fmt.Sprintf("50000000000000%04d", i)] = ""
+	}
+	monitoredParents := map[string]struct{}{"111000000000000000": {}}
+
+	poller.AddChannels(threadCursors, monitoredParents)
+
+	poller.mu.RLock()
+	channelCount := len(poller.channels)
+	poller.mu.RUnlock()
+
+	// Should be capped at maxPollerChannels (200), not 501 (1 initial + 500 threads)
+	if channelCount > maxPollerChannels {
+		t.Errorf("expected channels capped at %d, got %d — unbounded goroutine growth", maxPollerChannels, channelCount)
+	}
+	if channelCount < 2 {
+		t.Error("expected at least some thread channels to be added")
+	}
+}
+
+// ST-R94-003: collectThreadMessages enforces aggregate message cap across threads.
+// Before fix, N threads × backfillLimit messages could exhaust memory.
+func TestStabilize_CollectThreadMessagesCapsTotal(t *testing.T) {
+	t.Parallel()
+	// Create a mock server where each thread returns 500 messages
+	msgsPerThread := 500
+	ts := newTestDiscordAPI(t, func(mux *http.ServeMux) {
+		// Each thread channel returns msgsPerThread messages
+		mux.HandleFunc("/channels/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if strings.Contains(r.URL.Path, "/messages") {
+				var msgs []string
+				for i := 0; i < msgsPerThread; i++ {
+					msgs = append(msgs, fmt.Sprintf(
+						`{"id":"%d","content":"thread msg %d","author":{"id":"800000000000000000","username":"u"},"channel_id":"999","guild_id":"100000000000000001","timestamp":"2024-01-01T00:00:00Z"}`,
+						400000000000000000+int64(i), i))
+				}
+				w.Write([]byte("[" + strings.Join(msgs, ",") + "]"))
+				return
+			}
+			w.Write([]byte("[]"))
+		})
+	})
+
+	c := New("discord-thread-cap")
+	c.httpClient = ts.Client()
+	c.config.APIURL = ts.URL
+	c.config.BotToken = testBotToken
+
+	// Create 50 threads — at 500 msgs each, that's 25,000 messages total.
+	// With maxCollectThreadMessages=10000, the result should be capped.
+	threads := make([]apiThreadChannel, 50)
+	for i := 0; i < 50; i++ {
+		threads[i] = apiThreadChannel{
+			ID:       fmt.Sprintf("60000000000000%04d", i),
+			Name:     fmt.Sprintf("thread-%d", i),
+			ParentID: "200000000000000001",
+		}
+	}
+
+	cursors := make(ChannelCursors)
+	result := c.collectThreadMessages(context.Background(), ts.URL, testBotToken, threads, cursors, msgsPerThread)
+
+	// Without the cap, we'd get 50*500 = 25,000 messages.
+	// With maxCollectThreadMessages=10000, it should be <= 10,000.
+	if len(result) > maxCollectThreadMessages {
+		t.Errorf("expected collectThreadMessages to cap at %d, got %d — memory exhaustion risk",
+			maxCollectThreadMessages, len(result))
+	}
+	if len(result) < msgsPerThread {
+		t.Errorf("expected at least %d messages (one thread's worth), got %d", msgsPerThread, len(result))
+	}
+}

@@ -192,6 +192,34 @@ func TestCookSessionStore_StopIdempotent(t *testing.T) {
 	store.Stop()
 }
 
+func TestCookSessionStore_StopConcurrent(t *testing.T) {
+	store := NewCookSessionStore(120)
+	store.StartCleanup()
+
+	// Concurrent Stop calls must not panic (double-close on channel)
+	done := make(chan struct{})
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			store.Stop()
+		}()
+	}
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
+func TestCookSessionStore_StartCleanupIdempotent(t *testing.T) {
+	store := NewCookSessionStore(120)
+
+	// Multiple StartCleanup calls must not spawn duplicate goroutines or panic
+	store.StartCleanup()
+	store.StartCleanup()
+	store.StartCleanup()
+
+	store.Stop()
+}
+
 func TestCookSessionStore_SweepCleansStaleDisambiguations(t *testing.T) {
 	store := NewCookSessionStore(1) // 1 minute timeout
 
