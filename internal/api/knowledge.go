@@ -104,13 +104,31 @@ func (d *Dependencies) KnowledgeConceptsHandler(w http.ResponseWriter, r *http.R
 
 	items := make([]ConceptListItem, 0, len(concepts))
 	for _, c := range concepts {
+		// Compute entity count from related_concept_ids cross-referencing entities
+		entityCount := 0
+		if d.KnowledgeStore != nil {
+			if cnt, err := d.KnowledgeStore.CountEntitiesForConcept(r.Context(), c.ID); err == nil {
+				entityCount = cnt
+			}
+		}
+
+		// Check for contradictions via CONTRADICTS edges referencing this concept's artifacts
+		hasContradictions := false
+		if d.KnowledgeStore != nil {
+			if has, err := d.KnowledgeStore.HasContradictions(r.Context(), c.ID); err == nil {
+				hasContradictions = has
+			}
+		}
+
 		items = append(items, ConceptListItem{
-			ID:            c.ID,
-			Title:         c.Title,
-			Summary:       c.Summary,
-			CitationCount: len(c.SourceArtifactIDs),
-			SourceTypes:   c.SourceTypeDiversity,
-			UpdatedAt:     c.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+			ID:                c.ID,
+			Title:             c.Title,
+			Summary:           c.Summary,
+			CitationCount:     len(c.SourceArtifactIDs),
+			EntityCount:       entityCount,
+			SourceTypes:       c.SourceTypeDiversity,
+			HasContradictions: hasContradictions,
+			UpdatedAt:         c.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 		})
 	}
 

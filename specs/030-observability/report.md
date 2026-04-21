@@ -104,3 +104,40 @@ Spec 030 adds observability infrastructure: Prometheus metrics endpoints for Go 
 
 - `go test -count=1 ./internal/metrics/ ./internal/api/ ./internal/digest/` — all pass
 - `./smackerel.sh lint` — 0 errors
+
+---
+
+## Regression-to-Doc Sweep (2026-04-21)
+
+### Trigger: `bubbles.regression` probe — stochastic-quality-sweep R73
+
+### Probe Scope
+
+Checked for regressions across all 5 observability scopes since spec was marked done:
+
+1. **Unit test suite**: `./smackerel.sh test unit` — 42 Go packages pass, 236 Python tests pass (0 failures)
+2. **Lint**: `./smackerel.sh lint` — 0 errors
+3. **Go metric callsite wiring** (8 metrics verified live in source):
+   - `metrics.ArtifactsIngested` → `internal/pipeline/subscriber.go:238`
+   - `metrics.SearchLatency` → `internal/api/search.go:171`
+   - `metrics.ConnectorSync` → `internal/connector/supervisor.go:268,320`
+   - `metrics.CaptureTotal` → `internal/api/capture.go:142`
+   - `metrics.DomainExtraction` → `internal/pipeline/subscriber.go:585,589` + `domain_subscriber.go:155,183`
+   - `metrics.NATSDeadLetter` → `internal/pipeline/subscriber.go:366`
+   - `metrics.DBConnectionsActive` → `internal/db/postgres.go:81`
+   - `metrics.DigestGeneration` → `internal/digest/generator.go:151,164,168`
+4. **Route registration**: `metrics.Handler()` registered at `/metrics` in `internal/api/router.go:44` — unauthenticated
+5. **ML sidecar endpoint**: `/metrics` endpoint in `ml/app/main.py:98` via `generate_latest()` — unauthenticated
+6. **ML sidecar metric consumers**: `llm_tokens_used`, `processing_latency`, `sanitize_model` imported and called in `ml/app/nats_client.py:14,295,301`
+7. **Trace utilities**: `trace.go` (`TraceHeaders`, `ExtractTraceID`) and `trace_test.go` (7 tests) present and passing
+8. **Config pipeline**: `OTEL_ENABLED` in `config/smackerel.yaml:364`, generated into env via `config.sh:498`, consumed in `config.go:513`
+
+### Findings
+
+| # | Category | Finding | Severity |
+|---|----------|---------|----------|
+| — | — | No regressions detected | — |
+
+### Verdict
+
+**CLEAN.** All observability implementation remains intact. No metric definitions removed, no callsites disconnected, no test failures, no lint errors. Spec remains `done`.

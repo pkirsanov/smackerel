@@ -459,3 +459,37 @@ $ ./smackerel.sh test unit --go 2>&1 | grep -cE '^ok'
 ```
 
 All 41 Go packages pass. Zero FAIL results. Lint clean.
+
+### Gaps Sweep: 2026-04-21
+
+**Trigger:** stochastic-quality-sweep R75 → gaps-to-doc
+**Scope:** `internal/connector/markets/markets.go`, `internal/connector/markets/markets_test.go`, `specs/018-financial-markets-connector/design.md`
+
+#### Findings
+
+| # | Finding | Type | Severity | Remediated |
+|---|---------|------|----------|------------|
+| GAP-018-G01 | FRED series list has no size limit — all other watchlist categories enforce `maxWatchlistSymbols=100` but FRED series parsing doesn't, allowing excessive API calls | Code | MEDIUM | Yes |
+| GAP-018-G02 | Design doc architecture shows 6 separate files (`finnhub.go`, `coingecko.go`, `fred.go`, `normalizer.go`, `ratelimiter.go`, `symbolresolver.go`) but implementation is a single `markets.go` | Doc | LOW | Yes |
+| GAP-018-G03 | Design doc content types list `market/summary` but code uses `market/daily-summary`; design lists `market/alert` and `market/earnings` which don't exist as distinct types | Doc | MEDIUM | Yes |
+| GAP-018-G04 | Design doc references separate `ProviderRateLimiter`, `Normalizer`, `SymbolResolver` structs that don't exist — rate limiting is `tryRecordCall()`, normalization is inline, symbol resolution is package-level | Doc | LOW | Yes |
+| GAP-018-G05 | Design doc code samples contain stale stub methods (`return nil, nil`) that don't match production implementation | Doc | LOW | Yes |
+
+#### Remediations Applied
+
+1. **GAP-018-G01: FRED series size limit** — Added `if len(cfg.FREDSeries) > maxWatchlistSymbols` check in `parseMarketsConfig()` after parsing custom FRED series. Returns error `"FRED series list exceeds maximum of 100 entries"`. Consistent with stocks, ETFs, crypto, and forex_pairs size limits.
+
+2. **GAP-018-G02–G05: Design doc refresh** — Replaced stale multi-file architecture diagram with accurate single-file diagram showing actual exported functions. Replaced 6 stale Go code stubs (with `return nil, nil` bodies) with structured API surface documentation. Added content types table with actual types and tier logic. Added design decision note explaining `market/alert` → `market/quote` with `processing_tier: "full"` and `market/earnings` deferral. Updated configuration YAML to match actual `config/smackerel.yaml`. Removed stale references to `market_hours_only`, `daily_summary_time`, `indices` watchlist category, and `processing_tier` top-level config.
+
+#### Tests Added
+
+| Test | Finding | Adversarial? |
+|------|---------|-------------|
+| `TestParseMarketsConfig_FREDSeriesSizeLimit` | GAP-018-G01 | Yes — 101 FRED series must be rejected |
+
+#### Evidence
+
+```
+$ ./smackerel.sh test unit --go 2>&1 | grep markets
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.199s
+```

@@ -148,6 +148,8 @@ type KnowledgeSearcher interface {
 	GetLatestLintReport(ctx context.Context) (*knowledge.LintReport, error)
 	GetStats(ctx context.Context) (*knowledge.KnowledgeStats, error)
 	GetKnowledgeHealthStats(ctx context.Context) (*knowledge.KnowledgeHealthStats, error)
+	CountEntitiesForConcept(ctx context.Context, conceptID string) (int, error)
+	HasContradictions(ctx context.Context, conceptID string) (bool, error)
 }
 
 // HealthResponse is the JSON response for GET /api/health.
