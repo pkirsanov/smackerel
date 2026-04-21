@@ -573,7 +573,8 @@ func TestClassifyTripsEmptyClusters(t *testing.T) {
 }
 
 func TestClassifyTripsSingleDayBelowOvernight(t *testing.T) {
-	// Single remote day → span < TripMinOvernightHours → no trip
+	// REG-011-R70-001: Single remote day → span = 0h < TripMinOvernightHours → no trip.
+	// A same-day round-trip has zero overnight hours and must NOT be classified as a trip.
 	home := LatLng{Lat: 47.37, Lng: 8.54}
 	clusters := []LocationCluster{
 		makeCluster(47.37, 8.54, 52.52, 13.40, "drive", "2026-04-10", 4, 8, 660.0, 420.0),
@@ -581,15 +582,14 @@ func TestClassifyTripsSingleDayBelowOvernight(t *testing.T) {
 	config := MapsConfig{TripMinDistanceKm: 50, TripMinOvernightHours: 18}
 
 	trips := classifyTrips(clusters, home, config)
-	// Single day: span = 0hours + 24h = 24h > 18h, so this actually qualifies.
-	// Let's verify:
-	if len(trips) != 1 {
-		t.Errorf("expected 1 trip for single remote day (24h span >= 18h threshold), got %d", len(trips))
+	if len(trips) != 0 {
+		t.Errorf("expected 0 trips for single-day remote activity (no overnight), got %d", len(trips))
 	}
 }
 
 func TestClassifyTripsGapBreaks(t *testing.T) {
-	// Two remote days with a 3-day gap → should form two separate single-day entries, not one trip
+	// REG-011-R70-001: Two remote days with a 3-day gap → two separate single-day entries.
+	// Each single-day entry has span 0h < 18h, so neither qualifies as a trip.
 	home := LatLng{Lat: 47.37, Lng: 8.54}
 	clusters := []LocationCluster{
 		makeCluster(47.37, 8.54, 52.52, 13.40, "drive", "2026-04-10", 4, 8, 660.0, 420.0),
@@ -599,9 +599,53 @@ func TestClassifyTripsGapBreaks(t *testing.T) {
 	config := MapsConfig{TripMinDistanceKm: 50, TripMinOvernightHours: 18}
 
 	trips := classifyTrips(clusters, home, config)
-	// Gap >1 day breaks the consecutive run → two separate "trips" (each single-day: 24h >= 18h)
-	if len(trips) != 2 {
-		t.Errorf("expected 2 separate trips (gap breaks consecutive run), got %d", len(trips))
+	// Gap >1 day breaks the consecutive run → two separate single-day entries,
+	// each with 0h span < 18h threshold → 0 trips.
+	if len(trips) != 0 {
+		t.Errorf("expected 0 trips (single-day entries have no overnight), got %d", len(trips))
+	}
+}
+
+// REG-011-R70-001: Adversarial regression for the trip overnight span bug.
+// The old code added +24h to the span, making same-day remote activity
+// clusters (span 0h + 24h = 24h) satisfy the 18h overnight threshold.
+// Fixed: span is endDay - startDay with no +24h offset. Same-day = 0h < 18h.
+// If the bug were reintroduced, this test would fail because the single-day
+// remote cluster would produce a trip artifact.
+func TestRegressionSingleDayRemoteIsNotOvernightTrip(t *testing.T) {
+	home := LatLng{Lat: 47.37, Lng: 8.54}
+
+	// Single day: 3 activities in Berlin (660km from Zurich), all on April 10.
+	clusters := []LocationCluster{
+		makeCluster(47.37, 8.54, 52.52, 13.40, "drive", "2026-04-10", 4, 7, 660.0, 420.0),
+		makeCluster(52.52, 13.40, 52.53, 13.41, "walk", "2026-04-10", 4, 14, 3.0, 45.0),
+		makeCluster(52.52, 13.40, 47.37, 8.54, "drive", "2026-04-10", 4, 18, 660.0, 420.0),
+	}
+
+	config := MapsConfig{TripMinDistanceKm: 50, TripMinOvernightHours: 18}
+
+	trips := classifyTrips(clusters, home, config)
+	if len(trips) != 0 {
+		t.Errorf("single-day remote activity cluster (no overnight) must NOT be classified as a trip, got %d trips", len(trips))
+	}
+
+	// Verify that a genuine 2-day trip IS still detected (no false negatives).
+	twoDayClusters := []LocationCluster{
+		makeCluster(47.37, 8.54, 52.52, 13.40, "drive", "2026-04-10", 4, 7, 660.0, 420.0),
+		makeCluster(52.52, 13.40, 52.53, 13.41, "walk", "2026-04-10", 4, 14, 3.0, 45.0),
+		makeCluster(52.52, 13.40, 52.53, 13.41, "walk", "2026-04-11", 5, 10, 2.0, 30.0),
+		makeCluster(52.52, 13.40, 47.37, 8.54, "drive", "2026-04-11", 5, 16, 660.0, 420.0),
+	}
+
+	trips = classifyTrips(twoDayClusters, home, config)
+	if len(trips) != 1 {
+		t.Fatalf("2-day overnight trip must still be detected, got %d trips", len(trips))
+	}
+	if trips[0].StartDate.Format("2006-01-02") != "2026-04-10" {
+		t.Errorf("trip start = %s, want 2026-04-10", trips[0].StartDate.Format("2006-01-02"))
+	}
+	if trips[0].EndDate.Format("2006-01-02") != "2026-04-11" {
+		t.Errorf("trip end = %s, want 2026-04-11", trips[0].EndDate.Format("2006-01-02"))
 	}
 }
 
@@ -753,8 +797,10 @@ func TestTripSourceRefDeterministic(t *testing.T) {
 // --- Hardening tests ---
 
 // HARDEN-011: Same-day round trip far from home. Documents the +24h span behavior:
-// a single remote day gets spanHours = 0 + 24 = 24 >= TripMinOvernightHours=18.
-// This is the current documented behavior — a day trip to a remote location IS detected.
+// REG-011-R70-001: Same-day round trip must NOT be detected as an overnight trip.
+// The old code added +24h to the span, making same-day remote activity
+// clusters (span 0h + 24h = 24h) satisfy the 18h overnight threshold.
+// Fixed: span = endDay - startDay with no +24h offset. Same-day = 0h < 18h.
 func TestClassifyTripsSameDayRoundTrip(t *testing.T) {
 	home := LatLng{Lat: 47.37, Lng: 8.54}
 	clusters := []LocationCluster{
@@ -766,10 +812,9 @@ func TestClassifyTripsSameDayRoundTrip(t *testing.T) {
 	config := MapsConfig{TripMinDistanceKm: 50, TripMinOvernightHours: 18}
 
 	trips := classifyTrips(clusters, home, config)
-	// Current behavior: single remote day => 24h span >= 18h => detected as trip.
-	// This documents the edge case (see span calculation in classifyTrips).
-	if len(trips) != 1 {
-		t.Errorf("single-day remote cluster produces trip (span=24h >= 18h), got %d trips", len(trips))
+	// Same-day round trip: span = 0h < 18h overnight threshold → no trip.
+	if len(trips) != 0 {
+		t.Errorf("same-day round trip (no overnight) must NOT be a trip, got %d trips", len(trips))
 	}
 }
 
