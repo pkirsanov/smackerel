@@ -394,21 +394,22 @@ Also update the connector count in §21.4 "Unique Value Proposition" if it refer
 
 #### Verify connector list accuracy
 
-The 14 committed connector directories under `internal/connector/`:
+The 15 committed connector directories under `internal/connector/`:
 1. `alerts/` — gov alerts
 2. `bookmarks/` — browser bookmark imports
 3. `browser/` — browser history
 4. `caldav/` — calendar (CalDAV)
 5. `discord/` — Discord
-6. `hospitable/` — Hospitable property management
-7. `imap/` — email (IMAP-based, works for Gmail/Outlook/Fastmail)
-8. `keep/` — Google Keep
-9. `maps/` — Google Maps Timeline
-10. `markets/` — financial markets
-11. `rss/` — RSS/Atom feeds
-12. `twitter/` — Twitter/X
-13. `weather/` — weather
-14. `youtube/` — YouTube
+6. `guesthost/` — GuestHost property management
+7. `hospitable/` — Hospitable property management
+8. `imap/` — email (IMAP-based, works for Gmail/Outlook/Fastmail)
+9. `keep/` — Google Keep
+10. `maps/` — Google Maps Timeline
+11. `markets/` — financial markets
+12. `rss/` — RSS/Atom feeds
+13. `twitter/` — Twitter/X
+14. `weather/` — weather
+15. `youtube/` — YouTube
 
 **§22.2 Email Connectors:** The table lists Gmail, Outlook/O365, and Generic IMAP as separate connectors. The actual implementation is a single IMAP connector. Add a note: "Current implementation: unified IMAP connector. Gmail and Outlook/O365 SDK connectors are planned."
 
@@ -517,7 +518,7 @@ grep -n "SQLite" docs/smackerel.md | grep -v "SUPERSEDED" | grep -v "Apple Notes
 # Zero LanceDB references outside §4 superseded block
 grep -n "LanceDB" docs/smackerel.md | grep -v "SUPERSEDED"
 
-# Verify 14 connectors are represented
+# Verify 15 connectors are represented
 grep -c "connector" docs/smackerel.md  # sanity check
 ```
 

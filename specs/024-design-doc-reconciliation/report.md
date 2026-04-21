@@ -145,3 +145,42 @@ $ awk check → only TOC link (line 23)
 # All unit tests green (docs-only change)
 $ ./smackerel.sh test unit → all PASS
 ```
+
+---
+
+## Harden-to-Doc Pass (2026-04-21, stochastic-quality-sweep child)
+
+### Probe Summary
+
+Probed Gherkin scenario quality, DoD completeness, test depth, and internal consistency across all spec artifacts. Verified design doc (`docs/smackerel.md`) against all 6 Gherkin scenarios.
+
+**Design doc verification (all clean):**
+- OpenClaw outside §4: only TOC link (line 23) — correct
+- SQLite/LanceDB outside §4: only Apple Notes factual ref (line 2176) — correct
+- Connector count: 15 in §22.7 — correct
+- Chi/Gin ambiguous refs: 0 — correct
+- Phase delivery markers: Phase 1-5 all present — correct
+- Competitive matrix: pre-meeting briefs 🔜, weekly 🔜, trip dossiers 🔜 — honest
+
+**Gherkin & DoD audit:** All 6 scenarios have matching DoD items (all checked). Test plan rows align 1:1 with scenarios. No missing coverage.
+
+### Findings & Resolutions
+
+| # | Severity | Finding | Resolution |
+|---|----------|---------|------------|
+| H5 | MEDIUM | Stale "14 connectors" in 7 locations across spec artifacts — H1 hardening fix was incomplete. Affected: spec.md (lines 9, 84), scopes.md (lines 114, 123, 150), design.md (lines 397, 520). design.md connector enumeration also missing `guesthost/` | Updated all 7 references from 14→15. Added `guesthost/` to design.md connector list (now 15 items matching `internal/connector/` directory) |
+
+### Verification
+
+```
+# Zero stale "14 connectors" references in spec artifacts (excluding historical state.json log)
+$ grep -rn "14 connectors\|14 committed" specs/024-design-doc-reconciliation/ --include="*.md" → 0 hits
+
+# design.md now lists 15 connectors including guesthost
+$ grep -c "guesthost" specs/024-design-doc-reconciliation/design.md → 1
+
+# Design doc still clean
+$ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}' docs/smackerel.md → only line 23 (TOC)
+$ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md → only Apple Notes ref
+$ find internal/connector -maxdepth 1 -mindepth 1 -type d | wc -l → 15
+```

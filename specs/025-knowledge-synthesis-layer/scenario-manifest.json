@@ -134,38 +134,42 @@
         {
           "scenarioId": "SCN-025-12",
           "scenario": "Lint detects orphan concepts",
-          "requiredTestType": "unit",
+          "requiredTestType": "integration",
           "file": "internal/knowledge/lint_test.go",
-          "linkedTests": ["TestCheckOrphanConcepts"],
+          "linkedTests": ["TestCheckOrphanConcepts_FindingShape", "TestNewLinter"],
           "evidenceRefs": ["scopes.md#scope-5-dod-lint"],
-          "liveSystem": false
+          "liveSystem": true,
+          "note": "checkOrphanConcepts uses direct SQL via pgxpool — functional test requires live PostgreSQL"
         },
         {
           "scenarioId": "SCN-025-13",
           "scenario": "Lint detects contradictions",
-          "requiredTestType": "unit",
+          "requiredTestType": "integration",
           "file": "internal/knowledge/lint_test.go",
-          "linkedTests": ["TestCheckContradictions"],
+          "linkedTests": ["TestCheckContradictions_FindingShape"],
           "evidenceRefs": ["scopes.md#scope-5-dod-lint"],
-          "liveSystem": false
+          "liveSystem": true,
+          "note": "checkContradictions uses direct SQL via pgxpool — functional test requires live PostgreSQL"
         },
         {
           "scenarioId": "SCN-025-14",
           "scenario": "Lint retries failed synthesis",
-          "requiredTestType": "unit",
+          "requiredTestType": "integration",
           "file": "internal/knowledge/lint_test.go",
-          "linkedTests": ["TestRetrySynthesisBacklog"],
+          "linkedTests": ["TestRetrySynthesisBacklog_UnderMaxRetries", "TestRetrySynthesisDecisionLogic"],
           "evidenceRefs": ["scopes.md#scope-5-dod-retry"],
-          "liveSystem": false
+          "liveSystem": true,
+          "note": "retrySynthesisBacklog uses KnowledgeStore + NATS — unit tests cover decision logic, functional test requires live stack"
         },
         {
           "scenarioId": "SCN-025-15",
           "scenario": "Lint abandons after max retries",
-          "requiredTestType": "unit",
+          "requiredTestType": "integration",
           "file": "internal/knowledge/lint_test.go",
-          "linkedTests": ["TestRetrySynthesisBacklog_Abandon"],
+          "linkedTests": ["TestRetrySynthesisBacklog_MaxRetriesAbandoned", "TestRetrySynthesisDecisionLogic"],
           "evidenceRefs": ["scopes.md#scope-5-dod-abandon"],
-          "liveSystem": false
+          "liveSystem": true,
+          "note": "retrySynthesisBacklog abandon path uses KnowledgeStore — unit tests cover decision logic, functional test requires live stack"
         }
       ]
     },
@@ -261,180 +265,4 @@
     }
   ]
 }
-          "type": "unit",
-          "file": "internal/pipeline/synthesis_subscriber_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-05",
-          "scenario": "Incremental concept page update preserves existing knowledge",
-          "type": "unit",
-          "file": "internal/knowledge/upsert_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-06",
-          "scenario": "Synthesis failure does not block ingestion",
-          "type": "unit",
-          "file": "internal/pipeline/synthesis_subscriber_test.go",
-          "liveSystem": false
-        }
-      ]
-    },
-    {
-      "scopeId": "03-knowledge-query-api",
-      "scopeName": "Knowledge-First Query & Search API",
-      "tests": [
-        {
-          "scenarioId": "SCN-025-07",
-          "scenario": "Knowledge query returns pre-synthesized answer",
-          "type": "unit",
-          "file": "internal/api/search_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-08",
-          "scenario": "No concept match falls back to existing RAG",
-          "type": "unit",
-          "file": "internal/api/search_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-09",
-          "scenario": "Knowledge API lists concept pages",
-          "type": "unit",
-          "file": "internal/api/knowledge_test.go",
-          "liveSystem": false
-        }
-      ]
-    },
-    {
-      "scopeId": "04-cross-source-connections",
-      "scopeName": "Cross-Source Connection Detection",
-      "tests": [
-        {
-          "scenarioId": "SCN-025-10",
-          "scenario": "Cross-source connection detected at ingest time",
-          "type": "unit",
-          "file": "internal/pipeline/synthesis_subscriber_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-11",
-          "scenario": "Surface-level overlap is discarded",
-          "type": "unit",
-          "file": "ml/tests/test_synthesis.py",
-          "liveSystem": false
-        }
-      ]
-    },
-    {
-      "scopeId": "05-knowledge-lint-scheduler",
-      "scopeName": "Knowledge Lint & Scheduler",
-      "tests": [
-        {
-          "scenarioId": "SCN-025-12",
-          "scenario": "Lint detects orphan concepts",
-          "type": "unit",
-          "file": "internal/knowledge/lint_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-13",
-          "scenario": "Lint detects contradictions",
-          "type": "unit",
-          "file": "internal/knowledge/lint_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-14",
-          "scenario": "Lint retries failed synthesis",
-          "type": "unit",
-          "file": "internal/knowledge/lint_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-15",
-          "scenario": "Lint abandons after max retries",
-          "type": "unit",
-          "file": "internal/knowledge/lint_test.go",
-          "liveSystem": false
-        }
-      ]
-    },
-    {
-      "scopeId": "06-web-ui-knowledge-pages",
-      "scopeName": "Web UI Knowledge Pages",
-      "tests": [
-        {
-          "scenarioId": "SCN-025-16",
-          "scenario": "Knowledge dashboard shows stats and activity",
-          "type": "unit",
-          "file": "internal/web/handler_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-17",
-          "scenario": "Search results show knowledge provenance",
-          "type": "unit",
-          "file": "internal/web/handler_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-18",
-          "scenario": "Concept detail page shows claims with citations",
-          "type": "unit",
-          "file": "internal/web/handler_test.go",
-          "liveSystem": false
-        }
-      ]
-    },
-    {
-      "scopeId": "07-telegram-commands",
-      "scopeName": "Telegram Knowledge Commands",
-      "tests": [
-        {
-          "scenarioId": "SCN-025-19",
-          "scenario": "/concept lists top concepts",
-          "type": "unit",
-          "file": "internal/telegram/knowledge_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-20",
-          "scenario": "/concept <name> shows concept detail",
-          "type": "unit",
-          "file": "internal/telegram/knowledge_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-21",
-          "scenario": "/find enhanced with knowledge provenance",
-          "type": "unit",
-          "file": "internal/telegram/bot_test.go",
-          "liveSystem": false
-        }
-      ]
-    },
-    {
-      "scopeId": "08-digest-integration-health",
-      "scopeName": "Digest Integration & Health",
-      "tests": [
-        {
-          "scenarioId": "SCN-025-22",
-          "scenario": "Lint findings surfaced in daily digest",
-          "type": "unit",
-          "file": "internal/digest/generator_test.go",
-          "liveSystem": false
-        },
-        {
-          "scenarioId": "SCN-025-23",
-          "scenario": "Health endpoint includes knowledge stats",
-          "type": "unit",
-          "file": "internal/api/health_test.go",
-          "liveSystem": false
-        }
-      ]
-    }
-  ]
-}
+

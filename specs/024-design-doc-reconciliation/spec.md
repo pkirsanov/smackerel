@@ -6,7 +6,7 @@ Smackerel's design document (`docs/smackerel.md` v2) has significant drift from 
 
 1. **Fictional runtime platform (Critical):** §4 describes ~2000 words of OpenClaw integration — workspace structure, multi-agent architecture, node capabilities, cron/webhook config — none of which exists. The actual runtime is standalone Go + Docker Compose.
 2. **Wrong storage layer (High):** §8 and §14 describe SQLite + LanceDB. The actual implementation uses PostgreSQL + pgvector (10 committed migrations under `internal/db/migrations/`).
-3. **Inflated competitive claims (Medium):** §21.3 marks features as implemented (✅) that are aspirational — weekly synthesis, pre-meeting briefs, and connector counts that don't match the 14 committed connectors.
+3. **Inflated competitive claims (Medium):** §21.3 marks features as implemented (✅) that are aspirational — weekly synthesis, pre-meeting briefs, and connector counts that don't match the 15 committed connectors.
 
 The design doc is the primary architecture reference for the project. Inaccurate content causes confusion for contributors and creates a false picture of system capabilities.
 
@@ -81,7 +81,7 @@ The design doc is the primary architecture reference for the project. Inaccurate
   1. Reviewer reads differentiation matrix
   2. Each ✅ claim corresponds to implemented, running functionality
   3. Planned/aspirational features are marked with a distinct indicator (e.g., 🔜 or "Planned")
-  4. Connector counts match the 14 committed connectors
+  4. Connector counts match the 15 committed connectors
 - **Postconditions:** No false capability claims
 
 ### UC-004: Contributor Reads Phased Plan

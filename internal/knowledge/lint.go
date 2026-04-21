@@ -38,6 +38,10 @@ func NewLinter(store *KnowledgeStore, pool *pgxpool.Pool, cfg LinterConfig, nats
 
 // RunLint orchestrates all 6 lint checks, retries failed synthesis, and stores the report.
 func (l *Linter) RunLint(ctx context.Context) error {
+	if l.pool == nil {
+		return fmt.Errorf("lint: database pool is nil")
+	}
+
 	start := time.Now()
 	var findings []LintFinding
 
