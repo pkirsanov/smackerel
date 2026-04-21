@@ -285,7 +285,29 @@ func (ks *KnowledgeStore) UpdateArtifactSynthesisStatus(ctx context.Context, art
 	return nil
 }
 
+// UpdateArtifactSynthesisStatusInTx sets the synthesis_status within an existing transaction.
+// This ensures the status update is atomic with knowledge layer writes (C-025-C001).
+func (ks *KnowledgeStore) UpdateArtifactSynthesisStatusInTx(ctx context.Context, tx pgx.Tx, artifactID, status, synthError string) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE artifacts SET
+			synthesis_status = $2,
+			synthesis_at = NOW(),
+			synthesis_error = $3,
+			synthesis_retry_count = CASE WHEN $2 = 'failed' THEN synthesis_retry_count + 1 ELSE synthesis_retry_count END
+		WHERE id = $1`,
+		artifactID, status, synthError,
+	)
+	if err != nil {
+		return fmt.Errorf("update artifact synthesis status in tx: %w", err)
+	}
+	return nil
+}
+
+// ErrArtifactNotFound is returned when an artifact ID does not exist in the database.
+var ErrArtifactNotFound = fmt.Errorf("artifact not found")
+
 // GetArtifactForSynthesis loads the fields needed to build a SynthesisExtractRequest.
+// Returns ErrArtifactNotFound when the artifact ID does not exist (C-025-C003).
 func (ks *KnowledgeStore) GetArtifactForSynthesis(ctx context.Context, artifactID string) (*ArtifactSynthesisData, error) {
 	var a ArtifactSynthesisData
 	err := ks.pool.QueryRow(ctx, `
@@ -298,6 +320,9 @@ func (ks *KnowledgeStore) GetArtifactForSynthesis(ctx context.Context, artifactI
 		&a.ContentRaw, &a.SourceID,
 		&a.KeyIdeasJSON, &a.EntitiesJSON, &a.TopicsJSON, &a.RetryCount)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrArtifactNotFound
+		}
 		return nil, fmt.Errorf("get artifact for synthesis: %w", err)
 	}
 	return &a, nil

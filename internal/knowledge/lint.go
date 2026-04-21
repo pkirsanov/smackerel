@@ -14,8 +14,11 @@ import (
 // LinterConfig holds configuration values for the knowledge linter.
 // All values originate from config/smackerel.yaml via config generate.
 type LinterConfig struct {
-	StaleDays           int
-	MaxSynthesisRetries int
+	StaleDays                    int
+	MaxSynthesisRetries          int
+	PromptContractVersion        string // Required for building complete retry requests (C-025-C002)
+	MaxSynthesisContextItems     int    // Cap on existing concepts/entities included in retry requests
+	MaxSynthesisContentChars     int    // Content char limit sent to LLM
 }
 
 // Linter performs periodic quality audits on the knowledge layer.
@@ -372,7 +375,10 @@ func (l *Linter) checkUnreferencedClaims(ctx context.Context) ([]LintFinding, er
 	return findings, nil
 }
 
-// retrySynthesisBacklog re-publishes failed artifacts and marks those at max retries as abandoned.
+// retrySynthesisBacklog re-publishes failed artifacts with full synthesis request payloads
+// and marks those at max retries as abandoned.
+// The retry builds a complete request matching the SynthesisExtractRequest schema so the
+// ML sidecar can process it without missing fields (C-025-C002).
 func (l *Linter) retrySynthesisBacklog(ctx context.Context) {
 	artifacts, err := l.store.GetArtifactsBySynthesisStatus(ctx, []string{"pending", "failed"}, 50)
 	if err != nil {
@@ -390,11 +396,81 @@ func (l *Linter) retrySynthesisBacklog(ctx context.Context) {
 			continue
 		}
 
-		// Re-publish to synthesis.extract for retry
+		// Load full artifact data to build a complete synthesis request (C-025-C002)
+		artifact, err := l.store.GetArtifactForSynthesis(ctx, a.ID)
+		if err != nil {
+			slog.Warn("lint: failed to load artifact for retry", "artifact_id", a.ID, "error", err)
+			continue
+		}
+
+		// Parse ML-extracted fields
+		var keyIdeas []string
+		_ = json.Unmarshal(artifact.KeyIdeasJSON, &keyIdeas)
+		var entities map[string][]string
+		_ = json.Unmarshal(artifact.EntitiesJSON, &entities)
+		var topics []string
+		_ = json.Unmarshal(artifact.TopicsJSON, &topics)
+
+		// Truncate content for LLM context window budget
+		contentRaw := artifact.ContentRaw
+		if l.cfg.MaxSynthesisContentChars > 0 && len(contentRaw) > l.cfg.MaxSynthesisContentChars {
+			contentRaw = contentRaw[:l.cfg.MaxSynthesisContentChars]
+		}
+
+		// Load existing concepts for context
+		contextLimit := l.cfg.MaxSynthesisContextItems
+		if contextLimit <= 0 {
+			contextLimit = 50
+		}
+		type conceptSummary struct {
+			ID      string `json:"id"`
+			Title   string `json:"title"`
+			Summary string `json:"summary"`
+		}
+		type entitySummary struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			Type string `json:"type"`
+		}
+
+		var conceptSummaries []conceptSummary
+		existingConcepts, _, cErr := l.store.ListConcepts(ctx, contextLimit, 0)
+		if cErr == nil {
+			for _, c := range existingConcepts {
+				conceptSummaries = append(conceptSummaries, conceptSummary{
+					ID: c.ID, Title: c.Title, Summary: c.Summary,
+				})
+			}
+		}
+
+		var entitySummaries []entitySummary
+		existingEntities, _, eErr := l.store.ListEntities(ctx, contextLimit, 0)
+		if eErr == nil {
+			for _, e := range existingEntities {
+				entitySummaries = append(entitySummaries, entitySummary{
+					ID: e.ID, Name: e.Name, Type: e.EntityType,
+				})
+			}
+		}
+
+		contractVersion := l.cfg.PromptContractVersion
+
 		req := map[string]interface{}{
-			"artifact_id":  a.ID,
-			"retry_count":  a.RetryCount + 1,
-			"triggered_by": "lint_retry",
+			"artifact_id":            a.ID,
+			"content_type":           artifact.ArtifactType,
+			"title":                  artifact.Title,
+			"summary":                artifact.Summary,
+			"content_raw":            contentRaw,
+			"key_ideas":              keyIdeas,
+			"entities":               entities,
+			"topics":                 topics,
+			"source_id":              artifact.SourceID,
+			"source_type":            artifact.ArtifactType,
+			"existing_concepts":      conceptSummaries,
+			"existing_entities":      entitySummaries,
+			"prompt_contract_version": contractVersion,
+			"retry_count":            a.RetryCount + 1,
+			"triggered_by":           "lint_retry",
 		}
 		data, err := json.Marshal(req)
 		if err != nil {
