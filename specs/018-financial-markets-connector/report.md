@@ -493,3 +493,46 @@ All 41 Go packages pass. Zero FAIL results. Lint clean.
 $ ./smackerel.sh test unit --go 2>&1 | grep markets
 ok      github.com/smackerel/smackerel/internal/connector/markets       2.199s
 ```
+
+### Simplification Sweep: 2026-04-21
+
+**Trigger:** stochastic-quality-sweep R88 → simplify-to-doc
+**Scope:** `internal/connector/markets/markets.go`, `internal/connector/markets/markets_test.go`
+
+#### Findings
+
+| # | Finding | Type | Lines Saved | Remediated |
+|---|---------|------|-------------|------------|
+| SIMP-018-R88-001 | HTTP error response handling duplicated 5× — identical snippet-read + drain + error format in `fetchFinnhubQuote`, `fetchFinnhubForex`, `fetchCoinGeckoPrices`, `fetchFinnhubCompanyNews`, `fetchFREDLatest` | Code reuse | ~20 | Yes |
+| SIMP-018-R88-002 | `fetchFinnhubQuote` and `fetchFinnhubForex` share ~90% identical code — URL construction, HTTP request, error handling, JSON decode, zero-data check all duplicated | Code reuse | ~30 | Yes |
+| SIMP-018-R88-003 | Watchlist config parsing has 4 near-identical blocks — stocks, ETFs, crypto, forex_pairs each repeat: type-assert slice, iterate, type-assert string, validate regex, append, check max | Code reuse | ~40 | Yes |
+
+#### Remediations Applied
+
+1. **SIMP-018-R88-001: Extract `httpErrorWithSnippet` helper** — New package-private function reads a diagnostic snippet from the error response body, drains the remainder for connection reuse, and returns a formatted error. Replaces 5 identical 4-line blocks across all fetch functions with single-line calls.
+
+2. **SIMP-018-R88-002: Extract `doFinnhubQuote` shared implementation** — `fetchFinnhubQuote` and `fetchFinnhubForex` now delegate to a shared `doFinnhubQuote(ctx, finnhubSymbol, displaySymbol, label)` that owns URL construction, HTTP lifecycle, JSON decoding, and zero-data detection. Each public function remains a thin wrapper doing input validation and symbol format conversion.
+
+3. **SIMP-018-R88-003: Extract `parseStringSlice` helper** — New function `parseStringSlice(wl, key, re, itemLabel, listLabel)` replaces 4 duplicate blocks in `parseMarketsConfig`. Each call site is now a single line. Error messages preserve the same structure (e.g., `"watchlist stocks[0]: expected string, got int"`, `"invalid stock symbol: ..."`, `"stocks watchlist exceeds maximum of 100 symbols"`).
+
+#### Impact
+
+- `markets.go`: 1207 → 1146 lines (−61 lines, −5.1%)
+- Zero behavior changes — all simplifications are internal refactors
+- 1 test assertion updated: `TestFetchFinnhubForex_RejectsZeroPriceResponse` — error message changed from `"no forex data"` to `"no data for"` due to unified `doFinnhubQuote` error format; assertion loosened to match
+
+#### Evidence
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+$ ./smackerel.sh test unit --go 2>&1 | grep markets
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.229s
+$ grep -c 'func Test' internal/connector/markets/markets_test.go
+119
+$ wc -l internal/connector/markets/markets.go
+1146 internal/connector/markets/markets.go
+```
+
+All 119 tests pass. All 41 Go packages pass. Python ML sidecar 236 passed. Zero regressions.

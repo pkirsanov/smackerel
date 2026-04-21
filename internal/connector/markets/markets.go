@@ -502,52 +502,21 @@ func (c *Connector) Close() error {
 	return nil
 }
 
+// httpErrorWithSnippet reads a small diagnostic snippet from an error response body,
+// drains the remainder for connection reuse, and returns a formatted error.
+func httpErrorWithSnippet(resp *http.Response, label string) error {
+	snippet := make([]byte, maxErrorBodySnippet)
+	n, _ := io.ReadFull(resp.Body, snippet)
+	io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
+	return fmt.Errorf("%s returned status %d: %s", label, resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
+}
+
 // fetchFinnhubQuote gets a stock quote from Finnhub.
 func (c *Connector) fetchFinnhubQuote(ctx context.Context, symbol string) (*StockQuote, error) {
 	if !validSymbolRe.MatchString(symbol) {
 		return nil, fmt.Errorf("invalid symbol format: %q", symbol)
 	}
-
-	u, err := url.Parse(c.finnhubBaseURL + "/api/v1/quote")
-	if err != nil {
-		return nil, fmt.Errorf("parse finnhub URL: %w", err)
-	}
-	q := u.Query()
-	q.Set("symbol", symbol)
-	q.Set("token", c.config.FinnhubAPIKey)
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("finnhub request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		// Read a small snippet for diagnostic logging, then drain remainder.
-		snippet := make([]byte, maxErrorBodySnippet)
-		n, _ := io.ReadFull(resp.Body, snippet)
-		io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
-		return nil, fmt.Errorf("finnhub returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
-	}
-
-	var quote StockQuote
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBodyBytes)).Decode(&quote); err != nil {
-		return nil, fmt.Errorf("decode finnhub response: %w", err)
-	}
-	quote.Symbol = symbol
-
-	// Detect Finnhub "no data" response: all-zero fields indicate unknown/delisted symbol.
-	if quote.CurrentPrice == 0 && quote.High == 0 && quote.Low == 0 && quote.PreviousClose == 0 {
-		return nil, fmt.Errorf("finnhub returned no data for symbol %q (possibly delisted or invalid)", symbol)
-	}
-
-	return &quote, nil
+	return c.doFinnhubQuote(ctx, symbol, symbol, "finnhub")
 }
 
 // fetchFinnhubForex gets a forex exchange rate from Finnhub.
@@ -557,10 +526,14 @@ func (c *Connector) fetchFinnhubForex(ctx context.Context, pair string) (*StockQ
 	if !validForexPairRe.MatchString(pair) {
 		return nil, fmt.Errorf("invalid forex pair format: %q", pair)
 	}
-
 	// Convert "USD/JPY" → "OANDA:USD_JPY" for Finnhub forex endpoint.
 	finnhubSymbol := "OANDA:" + strings.ReplaceAll(pair, "/", "_")
+	return c.doFinnhubQuote(ctx, finnhubSymbol, pair, "finnhub forex")
+}
 
+// doFinnhubQuote is the shared implementation for stock and forex quote fetches.
+// finnhubSymbol is sent to the API; displaySymbol is stored on the returned quote.
+func (c *Connector) doFinnhubQuote(ctx context.Context, finnhubSymbol, displaySymbol, label string) (*StockQuote, error) {
 	u, err := url.Parse(c.finnhubBaseURL + "/api/v1/quote")
 	if err != nil {
 		return nil, fmt.Errorf("parse finnhub URL: %w", err)
@@ -577,25 +550,23 @@ func (c *Connector) fetchFinnhubForex(ctx context.Context, pair string) (*StockQ
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("finnhub forex request failed: %w", err)
+		return nil, fmt.Errorf("%s request failed: %w", label, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		snippet := make([]byte, maxErrorBodySnippet)
-		n, _ := io.ReadFull(resp.Body, snippet)
-		io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
-		return nil, fmt.Errorf("finnhub forex returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
+		return nil, httpErrorWithSnippet(resp, label)
 	}
 
 	var quote StockQuote
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBodyBytes)).Decode(&quote); err != nil {
-		return nil, fmt.Errorf("decode finnhub forex response: %w", err)
+		return nil, fmt.Errorf("decode %s response: %w", label, err)
 	}
-	quote.Symbol = pair
+	quote.Symbol = displaySymbol
 
+	// Detect Finnhub "no data" response: all-zero fields indicate unknown/delisted symbol.
 	if quote.CurrentPrice == 0 && quote.High == 0 && quote.Low == 0 && quote.PreviousClose == 0 {
-		return nil, fmt.Errorf("finnhub returned no forex data for pair %q", pair)
+		return nil, fmt.Errorf("%s returned no data for %q (possibly delisted or invalid)", label, displaySymbol)
 	}
 
 	return &quote, nil
@@ -641,11 +612,7 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Read a small snippet for diagnostic logging, then drain remainder.
-		snippet := make([]byte, maxErrorBodySnippet)
-		n, _ := io.ReadFull(resp.Body, snippet)
-		io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
-		return nil, fmt.Errorf("coingecko returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
+		return nil, httpErrorWithSnippet(resp, "coingecko")
 	}
 
 	var result map[string]map[string]float64
@@ -707,10 +674,7 @@ func (c *Connector) fetchFinnhubCompanyNews(ctx context.Context, symbol, fromDat
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		snippet := make([]byte, maxErrorBodySnippet)
-		n, _ := io.ReadFull(resp.Body, snippet)
-		io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
-		return nil, fmt.Errorf("finnhub news returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
+		return nil, httpErrorWithSnippet(resp, "finnhub news")
 	}
 
 	var articles []NewsArticle
@@ -751,10 +715,7 @@ func (c *Connector) fetchFREDLatest(ctx context.Context, seriesID string) (*FRED
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		snippet := make([]byte, maxErrorBodySnippet)
-		n, _ := io.ReadFull(resp.Body, snippet)
-		io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBodyBytes))
-		return nil, fmt.Errorf("FRED returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(snippet[:n])))
+		return nil, httpErrorWithSnippet(resp, "FRED")
 	}
 
 	var result struct {
@@ -850,65 +811,18 @@ func parseMarketsConfig(config connector.ConnectorConfig) (MarketsConfig, error)
 	}
 
 	if wl, ok := config.SourceConfig["watchlist"].(map[string]interface{}); ok {
-		if stocks, ok := wl["stocks"].([]interface{}); ok {
-			for i, s := range stocks {
-				str, ok := s.(string)
-				if !ok {
-					return MarketsConfig{}, fmt.Errorf("watchlist stocks[%d]: expected string, got %T", i, s)
-				}
-				if !validSymbolRe.MatchString(str) {
-					return MarketsConfig{}, fmt.Errorf("invalid stock symbol: %q", str)
-				}
-				cfg.Watchlist.Stocks = append(cfg.Watchlist.Stocks, str)
-			}
-			if len(cfg.Watchlist.Stocks) > maxWatchlistSymbols {
-				return MarketsConfig{}, fmt.Errorf("stocks watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
-			}
+		var err error
+		if cfg.Watchlist.Stocks, err = parseStringSlice(wl, "stocks", validSymbolRe, "stock symbol", "stocks"); err != nil {
+			return MarketsConfig{}, err
 		}
-		if etfs, ok := wl["etfs"].([]interface{}); ok {
-			for i, s := range etfs {
-				str, ok := s.(string)
-				if !ok {
-					return MarketsConfig{}, fmt.Errorf("watchlist etfs[%d]: expected string, got %T", i, s)
-				}
-				if !validSymbolRe.MatchString(str) {
-					return MarketsConfig{}, fmt.Errorf("invalid ETF symbol: %q", str)
-				}
-				cfg.Watchlist.ETFs = append(cfg.Watchlist.ETFs, str)
-			}
-			if len(cfg.Watchlist.ETFs) > maxWatchlistSymbols {
-				return MarketsConfig{}, fmt.Errorf("ETFs watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
-			}
+		if cfg.Watchlist.ETFs, err = parseStringSlice(wl, "etfs", validSymbolRe, "ETF symbol", "ETFs"); err != nil {
+			return MarketsConfig{}, err
 		}
-		if crypto, ok := wl["crypto"].([]interface{}); ok {
-			for i, s := range crypto {
-				str, ok := s.(string)
-				if !ok {
-					return MarketsConfig{}, fmt.Errorf("watchlist crypto[%d]: expected string, got %T", i, s)
-				}
-				if !validCoinIDRe.MatchString(str) {
-					return MarketsConfig{}, fmt.Errorf("invalid crypto coin ID: %q", str)
-				}
-				cfg.Watchlist.Crypto = append(cfg.Watchlist.Crypto, str)
-			}
-			if len(cfg.Watchlist.Crypto) > maxWatchlistSymbols {
-				return MarketsConfig{}, fmt.Errorf("crypto watchlist exceeds maximum of %d symbols", maxWatchlistSymbols)
-			}
+		if cfg.Watchlist.Crypto, err = parseStringSlice(wl, "crypto", validCoinIDRe, "crypto coin ID", "crypto"); err != nil {
+			return MarketsConfig{}, err
 		}
-		if pairs, ok := wl["forex_pairs"].([]interface{}); ok {
-			for i, s := range pairs {
-				str, ok := s.(string)
-				if !ok {
-					return MarketsConfig{}, fmt.Errorf("watchlist forex_pairs[%d]: expected string, got %T", i, s)
-				}
-				if !validForexPairRe.MatchString(str) {
-					return MarketsConfig{}, fmt.Errorf("invalid forex pair: %q (expected format: USD/JPY)", str)
-				}
-				cfg.Watchlist.ForexPairs = append(cfg.Watchlist.ForexPairs, str)
-			}
-			if len(cfg.Watchlist.ForexPairs) > maxWatchlistSymbols {
-				return MarketsConfig{}, fmt.Errorf("forex pairs watchlist exceeds maximum of %d entries", maxWatchlistSymbols)
-			}
+		if cfg.Watchlist.ForexPairs, err = parseStringSlice(wl, "forex_pairs", validForexPairRe, "forex pair", "forex pairs"); err != nil {
+			return MarketsConfig{}, err
 		}
 	}
 
@@ -953,6 +867,31 @@ func parseMarketsConfig(config connector.ConnectorConfig) (MarketsConfig, error)
 	}
 
 	return cfg, nil
+}
+
+// parseStringSlice extracts, validates, and returns a string slice from a watchlist map entry.
+// key is the map key (e.g., "stocks"), re validates each element, itemLabel describes
+// an invalid element (e.g., "stock symbol"), and listLabel describes the list in limit errors.
+func parseStringSlice(wl map[string]interface{}, key string, re *regexp.Regexp, itemLabel, listLabel string) ([]string, error) {
+	raw, ok := wl[key].([]interface{})
+	if !ok {
+		return nil, nil
+	}
+	var result []string
+	for i, s := range raw {
+		str, ok := s.(string)
+		if !ok {
+			return nil, fmt.Errorf("watchlist %s[%d]: expected string, got %T", key, i, s)
+		}
+		if !re.MatchString(str) {
+			return nil, fmt.Errorf("invalid %s: %q", itemLabel, str)
+		}
+		result = append(result, str)
+	}
+	if len(result) > maxWatchlistSymbols {
+		return nil, fmt.Errorf("%s watchlist exceeds maximum of %d symbols", listLabel, maxWatchlistSymbols)
+	}
+	return result, nil
 }
 
 // --- Scope 5: Daily Summary ---
