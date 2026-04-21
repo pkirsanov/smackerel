@@ -218,4 +218,72 @@ No coverage decrease detected. Expense-specific test files:
 
 ---
 
+## Stability Analysis — 2026-04-21 (stabilize-to-doc)
+
+**Trigger:** Child workflow of stochastic-quality-sweep R89
+**Mode:** stabilize-to-doc
+**Verdict:** 1 finding (STB-034-001), FIXED. 1 documented (STB-034-002), acceptable.
+
+### Stability Scan Summary
+
+| Surface | Verdict | Details |
+|---------|---------|---------|
+| API handlers — request validation | CLEAN | All endpoints validate inputs, enforce body size limits, return structured errors |
+| API handlers — database nil guard | CLEAN | List, Get, Correct, ClassifyEndpoint handle nil pool via query failure |
+| API handlers — suggestion atomicity | **FIXED STB-034-001** | AcceptSuggestion and DismissSuggestion now wrapped in transactions |
+| Classification engine — rule chain | CLEAN | 7-level priority chain is deterministic; nil config fields do not panic (existing chaos test) |
+| Vendor normalizer — cache | CLEAN | LRU-style cache with eviction, negative caching, thread-safe via RWMutex |
+| CSV export — streaming | CLEAN | Streams rows from DB cursor directly to HTTP response; context cancellation propagated via `r.Context()` |
+| CSV export — row limit | CLEAN | `ExpensesExportMaxRows` enforced before streaming; 413 returned when exceeded |
+| Digest assembly — query resilience | CLEAN | Each sub-query logs warning on failure and continues; digest degrades gracefully |
+| Digest — word limit enforcement | CLEAN | EnforceWordLimit drops low-priority sections first; existing chaos tests cover 1000-item and tight-limit cases |
+| Receipt detection — input capping | CLEAN | `MAX_TEXT_LENGTH = 100,000` prevents pathological regex behavior |
+| Telegram — conversation state | CLEAN | TTL-based sweep goroutine with `Stop()` signal; thread-safe store |
+| Suggestion generation — N+1 queries | **DOCUMENTED STB-034-002** | Per-candidate DB queries; acceptable for single-user with 100-row LIMIT |
+
+### Finding: STB-034-001 — Non-Atomic Suggestion Accept/Dismiss
+
+**Severity:** Medium
+**Category:** Data consistency / reliability
+**Location:** `internal/api/expenses.go` — `AcceptSuggestion()` and `DismissSuggestion()` handlers
+
+**Description:** Both handlers performed multiple database mutations (read suggestion → update artifact → update suggestion → optionally create suppression) without wrapping them in a transaction. If any intermediate step failed:
+- **AcceptSuggestion:** Artifact classification could be changed while the suggestion remained "pending", allowing double-accept.
+- **DismissSuggestion:** Suggestion could be marked "dismissed" without creating the suppression entry, causing re-suggestion.
+
+Additionally, both handlers would panic with a nil pointer dereference if invoked with a nil database pool.
+
+**Fix:**
+1. Wrapped both handlers in `pool.Begin(ctx)` / `tx.Commit(ctx)` transactions with `defer tx.Rollback(ctx)`
+2. Added `SELECT ... FOR UPDATE` row-level locking on the suggestion read to prevent concurrent races
+3. Added nil pool guard before `pool.Begin()` to return 500 gracefully instead of panicking
+4. Promoted DismissSuggestion's suppression insert from warning-swallowed to transactional
+
+**Tests added:** `TestAcceptSuggestion_NilPool`, `TestDismissSuggestion_NilPool` in `internal/api/expenses_test.go`
+**Verification:** `./smackerel.sh test unit` — all pass; `./smackerel.sh lint` — all checks passed
+
+### Documented: STB-034-002 — GenerateSuggestions N+1 Query Pattern
+
+**Severity:** Low (acceptable for single-user system)
+**Category:** Performance
+**Location:** `internal/intelligence/expenses.go` — `GenerateSuggestions()`
+
+**Description:** The method queries up to 100 candidates, then runs 2 queries per candidate (suppression check + business history count). For a single-user system with local PostgreSQL, this is acceptable — the method runs in a scheduled background job, not a latency-sensitive request path.
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `internal/api/expenses.go` | Wrapped `AcceptSuggestion()` and `DismissSuggestion()` in DB transactions with `FOR UPDATE` row locking; added nil pool guards |
+| `internal/api/expenses_test.go` | Added `TestAcceptSuggestion_NilPool` and `TestDismissSuggestion_NilPool` |
+
+### CLI Verification
+
+| Command | Result |
+|---------|--------|
+| `./smackerel.sh test unit` | All Go packages OK, 236 Python tests passed |
+| `./smackerel.sh lint` | All checks passed |
+
+---
+
 <!-- Report entries will be added below as scopes are implemented -->

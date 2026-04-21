@@ -490,3 +490,43 @@ func TestClassifyEndpoint_OversizedBody(t *testing.T) {
 		t.Errorf("expected 400 for oversized classify body, got %d", w.Code)
 	}
 }
+
+// STB-034-001: AcceptSuggestion requires a DB transaction (nil pool → 500)
+func TestAcceptSuggestion_NilPool(t *testing.T) {
+	h := &ExpenseHandler{
+		Pool: nil,
+		Cfg:  &config.Config{},
+	}
+	req := httptest.NewRequest("POST", "/api/expenses/suggestions/test-id/accept", nil)
+	w := httptest.NewRecorder()
+	h.AcceptSuggestion(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 for nil pool, got %d", w.Code)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	errObj, _ := resp["error"].(map[string]any)
+	if errObj == nil || errObj["code"] != "TX_FAILED" {
+		t.Errorf("expected TX_FAILED error, got %v", resp)
+	}
+}
+
+// STB-034-001: DismissSuggestion requires a DB transaction (nil pool → 500)
+func TestDismissSuggestion_NilPool(t *testing.T) {
+	h := &ExpenseHandler{
+		Pool: nil,
+		Cfg:  &config.Config{},
+	}
+	req := httptest.NewRequest("POST", "/api/expenses/suggestions/test-id/dismiss", nil)
+	w := httptest.NewRecorder()
+	h.DismissSuggestion(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 for nil pool, got %d", w.Code)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	errObj, _ := resp["error"].(map[string]any)
+	if errObj == nil || errObj["code"] != "TX_FAILED" {
+		t.Errorf("expected TX_FAILED error, got %v", resp)
+	}
+}

@@ -60,14 +60,17 @@ Add a financial markets connector that fetches stock/ETF quotes, forex rates, cr
 │  │  │ • Connector struct (iface)     │  │                       │
 │  │  │ • fetchFinnhubQuote()          │  │                       │
 │  │  │ • fetchFinnhubForex()          │  │                       │
+│  │  │ •   doFinnhubQuote() (shared)  │  │                       │
 │  │  │ • fetchFinnhubCompanyNews()    │  │                       │
 │  │  │ • fetchCoinGeckoPrices()       │  │                       │
 │  │  │ • fetchFREDLatest()            │  │                       │
+│  │  │ • httpErrorWithSnippet()       │  │                       │
 │  │  │ • tryRecordCall() (rate limit) │  │                       │
 │  │  │ • classifyTier() (normalizer)  │  │                       │
 │  │  │ • buildDailySummary()          │  │                       │
 │  │  │ • ResolveSymbols()             │  │                       │
 │  │  │ • enrichArtifactsWithSymbols() │  │                       │
+│  │  │ • parseStringSlice() (config)  │  │                       │
 │  │  └────────────────────────────────┘  │                       │
 │  │  ┌────────────────────────────────┐  │                       │
 │  │  │ markets_test.go (119+ tests)   │  │                       │
@@ -124,8 +127,9 @@ All connector logic is in a single file organized by concern:
 - `FREDObservation` — FRED economic data point (series ID, date, value)
 
 **Provider fetch methods (on Connector):**
-- `fetchFinnhubQuote(ctx, symbol)` — stock/ETF quote via `/api/v1/quote`
-- `fetchFinnhubForex(ctx, pair)` — forex via `/api/v1/quote` with OANDA format conversion
+- `fetchFinnhubQuote(ctx, symbol)` — stock/ETF quote, delegates to `doFinnhubQuote` after validation
+- `fetchFinnhubForex(ctx, pair)` — forex via OANDA format conversion, delegates to `doFinnhubQuote`
+- `doFinnhubQuote(ctx, finnhubSymbol, displaySymbol, label)` — shared Finnhub quote HTTP lifecycle
 - `fetchFinnhubCompanyNews(ctx, symbol, from, to)` — news via `/api/v1/company-news`
 - `fetchCoinGeckoPrices(ctx, coinIDs)` — batch crypto via `/api/v3/simple/price`
 - `fetchFREDLatest(ctx, seriesID)` — economic data via `/fred/series/observations`

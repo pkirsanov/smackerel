@@ -104,3 +104,54 @@ Spec 031 establishes live-stack integration and E2E testing infrastructure: Dock
 - Build: `./smackerel.sh build` — PASS
 - Unit tests: `./smackerel.sh test unit` — all 41 Go packages PASS, 236 Python tests PASS
 - Config: `./smackerel.sh check` — PASS (config in sync)
+
+---
+
+## Test Coverage Probe (April 21, 2026)
+
+**Trigger:** Stochastic quality sweep R87 — test (child workflow `test-to-doc`)
+**Scope:** Gherkin scenario coverage, DoD parity, test quality gates, assertion integrity
+
+### Coverage Map
+
+| # | Spec Gherkin Scenario | Test File | Test Function(s) | Covered |
+|---|----------------------|-----------|-------------------|---------|
+| 1 | Database migrations apply cleanly | `db_migration_test.go` | `TestMigrations_AllTablesExist`, `SchemaVersionCount`, `ArtifactsColumns`, `IndexesExist`, `ExtensionsLoaded` | YES |
+| 2 | NATS streams are created | `nats_stream_test.go` | `TestNATS_EnsureStreams` (11 streams) | YES |
+| 3 | Artifact insert and vector search | `artifact_crud_test.go` | `TestArtifact_InsertAndVectorSearch`, `VectorSimilarityDifferentEmbeddings` | YES |
+| 4 | Capture-to-search E2E | `capture_process_search_test.go` | `TestE2E_CaptureProcessSearch` | YES |
+| 5 | Domain extraction E2E | `domain_e2e_test.go` | `TestE2E_DomainExtraction` | YES |
+| 6 | Test isolation | `helpers_test.go` + all tests | `testID()`, `cleanupArtifact()`, `cleanupList()`, `cleanupAnnotation()` | YES (structural) |
+| 7 | ML sidecar readiness gate | `ml_readiness_test.go` | `TestMLReadiness_WaitForHealthy`, `TimeoutFallback`, `EmptyURL`, `ZeroTimeout` | YES |
+| 8 | NATS consumer replay after crash | `nats_stream_test.go` | `TestNATS_ConsumerReplay_NakRedeliver` | YES |
+| 9 | Schema DDL resilience | `db_migration_test.go` | `TestMigrations_TableDropAndRecreate` | YES |
+| 10 | Tests run against populated DB | all tests | `testID(t)` uniqueness pattern | YES (structural) |
+| 11 | Annotation CRUD | `artifact_crud_test.go` | `TestAnnotation_CRUD` | YES |
+| 12 | List generation | `artifact_crud_test.go` | `TestList_CreateAndUpdateStatus` | YES |
+
+**Result: 12/12 Gherkin scenarios covered. 26/26 DoD items checked. 13/13 acceptance criteria met.**
+
+### Quality Gate Results
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| G1: Gherkin Coverage | PASS | All 12 scenarios mapped to tests |
+| G2: No Internal Mocks (live categories) | PASS | DB/NATS tests use real services via `testPool`/`testJetStream`. ML readiness uses `httptest.NewServer` for gate logic only (appropriate for component contract). |
+| G3: No Silent-Pass Patterns | PASS | All tests have real assertions; no early-return bailouts |
+| G4: Real Assertions | PASS | Specific value assertions (counts, IDs, similarity scores, status strings, constraint violations) |
+| G5: Test Plan ↔ DoD Parity | PASS | All DoD items correspond to implemented tests |
+
+### Bonus Coverage (beyond spec scenarios)
+
+- `TestArtifact_TextSearch` — trigram text search on title
+- `TestArtifact_DomainDataContainmentQuery` — JSONB containment (positive + negative)
+- `TestArtifact_Chaos_ConcurrentDuplicateContentHash` — 10-goroutine adversarial dedup test
+
+### Findings
+
+**Zero actionable findings.** Test coverage is comprehensive after 3 prior quality passes (gaps-to-doc, chaos-hardening, stability).
+
+### Evidence
+
+- Unit tests: `./smackerel.sh test unit` — 41 Go packages PASS, 236 Python tests PASS
+- Integration tests compile cleanly (tagged `integration`, require live stack)
