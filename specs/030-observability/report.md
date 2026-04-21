@@ -141,3 +141,101 @@ Checked for regressions across all 5 observability scopes since spec was marked 
 ### Verdict
 
 **CLEAN.** All observability implementation remains intact. No metric definitions removed, no callsites disconnected, no test failures, no lint errors. Spec remains `done`.
+
+---
+
+## Improve-Existing Sweep (2026-04-21)
+
+### Trigger: `bubbles.improve` probe — stochastic-quality-sweep child workflow
+
+### Probe Scope
+
+Analyzed all observability code for improvement opportunities across Go core metrics, ML sidecar metrics, trace propagation, and handler instrumentation patterns.
+
+### Findings
+
+| # | Category | Finding | Severity | Status |
+|---|----------|---------|----------|--------|
+| IMP-1 | Metrics | Intelligence handlers (8 endpoints) skip `IntelligenceLatency` histogram observation on error paths — error duration invisible to operators, violating RED (Rate/Error/Duration) methodology | Medium | Fixed |
+
+### Remediation
+
+**IMP-1 — Intelligence handler error-path latency (FIXED)**
+- All 8 handlers in `internal/api/intelligence.go` used `metrics.IntelligenceLatency.WithLabelValues(...).Observe(...)` only on the success return path
+- On error, `IntelligenceErrors` was incremented but latency was NOT recorded — operators could not distinguish fast failures (e.g., validation) from slow failures (e.g., timeouts)
+- Fix: moved latency observation into a `defer` at the top of each handler, ensuring it fires for both success and error paths
+- Affected handlers: `ExpertiseHandler`, `LearningPathsHandler`, `SubscriptionsHandler`, `SerendipityHandler`, `ContentFuelHandler`, `QuickReferencesHandler`, `MonthlyReportHandler`, `SeasonalPatternsHandler`
+
+### Verification
+
+- `./smackerel.sh test unit`: 42 Go packages pass (including `internal/api`), 236 Python tests pass — 0 failures
+
+---
+
+## DevOps-to-Doc Sweep (2026-04-21)
+
+### Trigger: `bubbles.devops` probe — stochastic-quality-sweep child workflow
+
+### Probe Scope
+
+Systematic DevOps audit of observability infrastructure: build pipeline, Docker Compose wiring, config SST compliance, metrics endpoint exposure, deployment documentation, and operational runbook accuracy.
+
+### Build Pipeline
+
+| Check | Result |
+|-------|--------|
+| Go core builds with `prometheus/client_golang v1.23.2` | PASS |
+| ML sidecar builds with `prometheus_client==0.21.0` | PASS |
+| Both Dockerfiles: multi-stage, OCI labels, non-root user | PASS |
+| `./smackerel.sh build` completes successfully | PASS |
+
+### Config SST Compliance
+
+| Check | Result |
+|-------|--------|
+| `observability.otel_enabled` defined in SST | PASS |
+| `observability.otel_exporter_endpoint` defined in SST | PASS |
+| Config generator emits `OTEL_ENABLED`, `OTEL_EXPORTER_ENDPOINT` to env | PASS |
+| Go `config.go` reads `OTEL_ENABLED` from env | PASS |
+| `./smackerel.sh check` — SST in sync, no drift | PASS |
+| `./smackerel.sh check` — env_file drift guard OK | PASS |
+
+### Docker Compose
+
+| Check | Result |
+|-------|--------|
+| Core `/metrics` accessible on `:40001/metrics` (same port as app) | PASS |
+| ML sidecar `/metrics` on `:40002/metrics` (same port as app) | PASS |
+| Both services use `env_file:` for SST vars | PASS |
+| Health checks defined for all services | PASS |
+| Production overrides (`docker-compose.prod.yml`) with logging config | PASS |
+
+### Tests
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh test unit --go` — 42 packages, 0 failures | PASS |
+| `./smackerel.sh test unit --python` — 236 tests, 0 failures | PASS |
+| `./smackerel.sh lint` — 0 errors | PASS |
+
+### Documentation Findings
+
+| # | Category | Gap | Severity | Status |
+|---|----------|-----|----------|--------|
+| D1 | Docs | Operations.md metrics table missing `smackerel_digest_generation_total{status}` | Low | Fixed |
+| D2 | Docs | Operations.md missing ML sidecar metrics section (`smackerel_llm_tokens_used_total`, `smackerel_ml_processing_latency_seconds`) and endpoint URL | Medium | Fixed |
+| D3 | Docs | Operations.md missing OTEL tracing enablement guidance | Low | Fixed |
+
+### Remediation
+
+**D1/D2/D3 — Operations.md updated** (`docs/Operations.md`):
+- Split metrics section into "Go Core" and "ML Sidecar" subsections with respective endpoint URLs
+- Added `smackerel_digest_generation_total{status}` to Go core metrics table
+- Added `smackerel_capture_total` source label detail (telegram, api, extension, pwa)
+- Added ML sidecar metrics table: `smackerel_llm_tokens_used_total`, `smackerel_ml_processing_latency_seconds`
+- Added cardinality note for model labels
+- Added "OpenTelemetry Tracing (Opt-in)" section with enablement steps
+
+### Verdict
+
+**CLEAN (code) + 3 doc-sync fixes applied.** Build pipeline, Docker Compose, config SST, and test infrastructure are all healthy. No code changes required. Operations documentation now matches the full implemented metrics surface.

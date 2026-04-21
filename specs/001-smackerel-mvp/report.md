@@ -680,3 +680,50 @@ grep symlink/traversal scan → all file-reading connectors use EvalSymlinks + b
 ### Conclusion
 
 No remediation required. The spec 001-scoped code demonstrates defense-in-depth security practices across all OWASP Top 10 categories relevant to this surface area.
+
+---
+
+## Regression Probe: 2026-04-21 (stochastic-quality-sweep child)
+
+**Trigger:** `regression-to-doc` child workflow of stochastic-quality-sweep
+**Result:** CLEAN — zero regressions detected
+
+### Probe Scope
+
+Full regression analysis targeting all spec 001 deliverables: connector framework, icon system, design system CSS, product-level testing infrastructure, OAuth2 abstraction, and all cross-cutting wiring.
+
+### Verification Matrix
+
+| Probe | Command | Result |
+|-------|---------|--------|
+| Build (Go core + ML sidecar) | `./smackerel.sh build` | PASS — both images built (cached layers) |
+| Unit tests (Go) | `./smackerel.sh test unit` | PASS — 41 Go packages, 0 failures |
+| Unit tests (Python) | `./smackerel.sh test unit` | PASS — 236 tests, 3 warnings, 0 failures |
+| Static checks | `./smackerel.sh check` | PASS — Config SST in sync, env_file drift guard OK |
+| Lint (Go vet + Python ruff) | `./smackerel.sh lint` | PASS — All checks passed |
+| Format | `./smackerel.sh format --check` | PASS — 33 files unchanged |
+
+### Cross-Spec Interface Consistency
+
+| Contract | Spec 001 Definition | Current State | Status |
+|----------|-------------------|---------------|--------|
+| `Connector` interface (5 methods) | `ID`, `Connect`, `Sync`, `Health`, `Close` | All connectors implement all 5 methods | PASS |
+| `HealthStatus` enum | Original 4 + additive `degraded`, `failing` | 6 values, backward-compatible | PASS |
+| `ConnectorConfig` struct | auth, schedule, qualifiers, processing | Unchanged | PASS |
+| `ConnectorRegistry` | thread-safe register/unregister/get/list | Intact with concurrent health + panic recovery | PASS |
+| `OAuth2Provider` interface | `AuthURL`, `ExchangeCode`, `RefreshToken` | Intact with TTL enforcement | PASS |
+| Icon system | 32 SVG icons, 8 text markers | Verified by `icons_test.go` + `format_test.go` | PASS |
+| CSS design system | Light/dark theme, system fonts, no accents | Intact in `templates.go` with toggle | PASS |
+
+### Prior Fix Durability
+
+All fixes from previous sweep rounds remain intact:
+- I-001 (sorted registry list), I-002 (wrapped DB error), I-003 (RWMutex): ✓
+- I-004 (concurrent health), I-005 (configurable backoff wait): ✓
+- S-001 (WaitGroup drain), S-002 (lock-free Close): ✓
+- H-001 (snapshot-then-probe), H-002 (panic recovery), H-003 (state TTL): ✓
+- Gaps G-001 (8 markers), G-002 (dark mode toggle): ✓
+
+### Findings
+
+**Zero regressions.** No previously-passing test now fails. No interface drift. No SST violations. No design contradictions. All prior sweep fixes are durable.

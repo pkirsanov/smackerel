@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 
@@ -48,7 +49,7 @@ func NewExpenseClassifier(pool *pgxpool.Pool, cfg *config.Config) *ExpenseClassi
 // Rules 1-4 set classification directly. Rules 5-6 only generate suggestions.
 func (ec *ExpenseClassifier) Classify(expense *domain.ExpenseMetadata) string {
 	// Rule 1: User correction is sticky — never overwrite
-	if expense.UserCorrected && containsField(expense.CorrectedFields, "classification") {
+	if expense.UserCorrected && slices.Contains(expense.CorrectedFields, "classification") {
 		return expense.Classification
 	}
 
@@ -341,13 +342,4 @@ func (n *VendorNormalizer) put(key, value string) {
 		}
 	}
 	n.cache[key] = value
-}
-
-func containsField(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

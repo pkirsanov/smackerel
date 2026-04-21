@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -395,7 +396,7 @@ func (h *ExpenseHandler) Correct(w http.ResponseWriter, r *http.Request) {
 	expense.UserCorrected = true
 	// Merge corrected fields (don't duplicate)
 	for _, f := range correctedFields {
-		if !containsStr(expense.CorrectedFields, f) {
+		if !slices.Contains(expense.CorrectedFields, f) {
 			expense.CorrectedFields = append(expense.CorrectedFields, f)
 		}
 	}
@@ -666,6 +667,14 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 		args = append(args, to)
 		argIdx++
 	}
+	if from != "" && to != "" {
+		fromDate, _ := time.Parse("2006-01-02", from)
+		toDate, _ := time.Parse("2006-01-02", to)
+		if fromDate.After(toDate) {
+			writeExpenseError(w, http.StatusBadRequest, "INVALID_DATE_RANGE", "from must be before to")
+			return
+		}
+	}
 	if classification := q.Get("classification"); classification != "" {
 		conditions = append(conditions, fmt.Sprintf("metadata->'expense'->>'classification' = $%d", argIdx))
 		args = append(args, classification)
@@ -844,13 +853,4 @@ func writeExpenseError(w http.ResponseWriter, status int, code, message string) 
 		"ok":    false,
 		"error": map[string]string{"code": code, "message": message},
 	})
-}
-
-func containsStr(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

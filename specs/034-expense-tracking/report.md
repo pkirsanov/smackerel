@@ -286,4 +286,76 @@ Additionally, both handlers would panic with a nil pointer dereference if invoke
 
 ---
 
+## Simplify Analysis — 2026-04-21 (simplify-to-doc)
+
+**Trigger:** Child workflow of stochastic-quality-sweep
+**Mode:** simplify-to-doc
+**Verdict:** 2 findings (SMP-034-001, SMP-034-002), both FIXED
+
+### Simplify Scan Summary
+
+| Surface | Verdict | Details |
+|---------|---------|---------|
+| Domain model (`internal/domain/expense.go`) | CLEAN | Focused types, no unnecessary abstractions, safe defaults via `NewExpenseMetadata()` |
+| Classification engine (`internal/intelligence/expenses.go`) | **FIXED SMP-034-001** | Duplicate `containsField` helper replaced with stdlib `slices.Contains` |
+| Vendor normalizer (`internal/intelligence/expenses.go`) | CLEAN | Simple cache-with-eviction strategy appropriate for single-user system |
+| Vendor seeds (`internal/intelligence/vendor_seeds.go`) | CLEAN | Static data, no logic to simplify |
+| API handlers (`internal/api/expenses.go`) | **FIXED SMP-034-001, SMP-034-002** | Duplicate `containsStr` helper replaced; missing date range validation added to Export |
+| CSV export (`internal/api/expenses.go`) | CLEAN | Streams directly from DB cursor, CSV injection protection, proper filename sanitization |
+| Digest assembly (`internal/digest/expenses.go`) | CLEAN | Graceful degradation, word limit enforcement, clear priority ordering |
+| Telegram formatting (`internal/telegram/expenses.go`) | CLEAN | Focused format functions per UX spec, vendor truncation for message safety |
+| Receipt detection (`ml/app/receipt_detection.py`) | CLEAN | Well-focused module, input length cap, clear rule documentation |
+| Prompt contract (`config/prompt_contracts/receipt-extraction-v1.yaml`) | CLEAN | Proper JSON Schema, explicit extraction rules |
+| Config pipeline (`scripts/commands/config.sh`) | CLEAN | 16 env vars properly mapped from YAML |
+
+### Finding: SMP-034-001 — Duplicate String-Contains Helpers
+
+**Severity:** Low (code hygiene)
+**Category:** Code reuse
+**Locations:**
+- `internal/intelligence/expenses.go` — `containsField(slice []string, item string) bool`
+- `internal/api/expenses.go` — `containsStr(slice []string, item string) bool`
+
+**Description:** Both functions were identical hand-rolled implementations of `slices.Contains` from the Go standard library (available since Go 1.21; project uses Go 1.24). Two packages duplicated the same 6-line helper.
+
+**Fix:** Replaced both with `slices.Contains` from stdlib. Updated one test (`TestContainsField_EdgeCases` → `TestSlicesContains_EdgeCases`) that directly tested the deleted helper. Added `"slices"` import to both packages.
+
+### Finding: SMP-034-002 — Missing Date Range Validation in Export Endpoint
+
+**Severity:** Low (consistency gap)
+**Category:** Quality / consistency
+**Location:** `internal/api/expenses.go` — `Export()` handler
+
+**Description:** The `List()` handler validated that `from` date is before `to` date and returned `INVALID_DATE_RANGE` error. The `Export()` handler validated date format but missed the `from > to` range check — an inconsistency between the two endpoints that share the same filter surface.
+
+**Fix:** Added `from > to` validation to `Export()` matching the existing `List()` behavior. Added `TestExport_InvalidDateRange` adversarial test.
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `internal/intelligence/expenses.go` | Added `"slices"` import; replaced `containsField()` call with `slices.Contains()`; removed `containsField` function |
+| `internal/intelligence/expenses_test.go` | Added `"slices"` import; updated `TestContainsField_EdgeCases` → `TestSlicesContains_EdgeCases` to use `slices.Contains` |
+| `internal/api/expenses.go` | Added `"slices"` import; replaced `containsStr()` call with `slices.Contains()`; removed `containsStr` function; added `from > to` date range validation to `Export()` |
+| `internal/api/expenses_test.go` | Added `TestExport_InvalidDateRange` |
+
+### Reviewed But Clean (No Findings)
+
+| Area | Notes |
+|------|-------|
+| Filter builder duplication between List and Export | ~35 lines of overlapping filter construction. Decided against extraction: the two methods serve different filter sets (List has vendor/currency/needs_review; Export has format/quickbooks), and the abstraction cost outweighs the duplication for a stable, tested surface. |
+| VendorNormalizer cache eviction | Uses clear-half strategy instead of LRU. Acceptable for single-user system — simple, predictable, no external dependency. |
+| Digest summary double-query | Two similar queries (classification+currency grouped, currency-only grouped). Second only runs when TotalCount > 0. Clear and readable; merging adds complexity for negligible gain. |
+| Python receipt_detection module | Well-isolated, well-documented, clean separation from synthesis pipeline. No simplification needed. |
+
+### CLI Verification
+
+| Command | Result |
+|---------|--------|
+| `./smackerel.sh build` | Both images built successfully |
+| `./smackerel.sh test unit` | All Go packages OK, 236 Python tests passed |
+| `./smackerel.sh lint` | All checks passed |
+
+---
+
 <!-- Report entries will be added below as scopes are implemented -->
