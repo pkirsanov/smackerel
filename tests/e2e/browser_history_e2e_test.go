@@ -36,11 +36,14 @@ func loadE2EConfig(t *testing.T) e2eConfig {
 
 // waitForHealth blocks until the health endpoint reports all services up,
 // or times out after maxWait.
+// SEC-031-R69-001: Uses a timeout-configured client to prevent individual
+// requests from blocking indefinitely if the server hangs mid-response.
 func waitForHealth(t *testing.T, cfg e2eConfig, maxWait time.Duration) {
 	t.Helper()
+	client := &http.Client{Timeout: 5 * time.Second}
 	deadline := time.Now().Add(maxWait)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(cfg.CoreURL + "/api/health")
+		resp, err := client.Get(cfg.CoreURL + "/api/health")
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
