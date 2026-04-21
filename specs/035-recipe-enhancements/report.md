@@ -81,3 +81,38 @@ Triggered by stochastic-quality-sweep gaps-to-doc child workflow. Systematic com
 - **Finding:** `handleCookNavigation` uses session-cached steps/ingredients and does not re-verify the recipe artifact exists in the database on each navigation command. Design §4.8 states deletion should be detected.
 - **Assessment:** The current architecture caches all recipe data (steps, ingredients) in the session at creation time. This means navigation works entirely from cached data without DB calls. This is *superior UX* — the user can continue cooking even if the recipe is externally deleted. Adding a DB verification on every `next`/`back`/`jump` would add latency to the most common cook mode operations for an extremely rare edge case in a single-user system. When the bot restarts, all sessions are cleared (in-memory store), and the user gets the "no active session" message (SCN-035-049), which is the correct behavior.
 - **Status:** Documented as intentional architectural decision. No code change needed.
+
+## Improve-Existing REPEAT Pass (2026-04-21)
+
+Triggered by stochastic-quality-sweep improve-existing child workflow (REPEAT probe). Systematic review of all implementation code after prior improve-existing and gaps sweeps.
+
+### Improvement Findings
+
+**IMP-035-004: `formatScaleFactor` floating-point equality comparison — FIXED**
+- **Finding:** `formatScaleFactor` used direct float equality `factor == float64(int(factor))` which could fail for near-integer values produced by floating-point arithmetic (e.g., `2.9999999999999996` from `9/3`).
+- **Fix:** Replaced with epsilon-based comparison using `math.Abs(factor - math.Round(factor)) < 0.01`, consistent with `FormatQuantity`'s approach. Added `math` import.
+- **Files changed:** `internal/telegram/recipe_commands.go`
+- **Tests added:** Two near-integer edge cases in `TestFormatScaleFactor` (2.9999999999999996 → "3", 1.0000000000000002 → "1").
+- **Verification:** `./smackerel.sh test unit` → all packages OK.
+
+**IMP-035-005: `CookSessionStore.sweep()` does not clean stale disambiguation entries — FIXED**
+- **Finding:** The `sweep()` goroutine cleaned expired sessions but not stale disambiguation entries. A user who triggered disambiguation (multiple recipes matching a name) but never selected a number would leave a `CookDisambiguation` entry in the `sync.Map` permanently.
+- **Fix:** Added disambiguation cleanup pass to `sweep()` that removes disambiguation entries for chats with no active session.
+- **Files changed:** `internal/telegram/cook_session.go`
+- **Tests added:** `TestCookSessionStore_SweepCleansStaleDisambiguations` (orphaned disambiguation removed), `TestCookSessionStore_SweepPreservesDisambiguationWithSession` (active session preserves disambiguation).
+- **Verification:** `./smackerel.sh test unit` → all packages OK.
+
+**IMP-035-006: Unscaled ingredient formatting duplicated across two functions — FIXED**
+- **Finding:** `FormatCookIngredients` (unscaled path) and `formatNoStepsFallback` (unscaled path) both contained identical 8-line inline blocks for formatting raw ingredient lines. This violated DRY and created maintenance risk if the format needed to change.
+- **Fix:** Extracted shared `formatRawIngredientLine(ing recipe.Ingredient) string` helper in `cook_format.go`. Both call sites now delegate to the helper.
+- **Files changed:** `internal/telegram/cook_format.go`, `internal/telegram/recipe_commands.go`
+- **Tests added:** `TestFormatRawIngredientLine` with 4 cases (qty+unit, qty only, no qty, free-text qty).
+- **Verification:** `./smackerel.sh test unit` → all packages OK.
+
+**IMP-035-007: `parseScaleTrigger` per-call regex slice allocation — FIXED**
+- **Finding:** `parseScaleTrigger` created a temporary `[]*regexp.Regexp{...}` slice literal on every invocation. While small (4 elements), this allocates on the heap per call for a function called on every incoming Telegram message.
+- **Fix:** Moved the slice to package-level `scalePatterns` variable, allocated once at init time.
+- **Files changed:** `internal/telegram/recipe_commands.go`
+- **Verification:** `./smackerel.sh test unit` → all packages OK.
+
+All existing tests pass after changes. `./smackerel.sh lint` → all checks passed. No behavior changes.

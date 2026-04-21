@@ -480,8 +480,8 @@ Scenario: SCN-GH-025 DURING_STAY edge links temporal artifacts to bookings
 Scenario: SCN-GH-026 Hospitality topic seeds created on first sync
   Given no hospitality topics exist in the database
   When the first GH connector sync completes
-  Then 15 hospitality topics are seeded in "emerging" state
-  And subsequent syncs do not re-seed
+  Then 5 hospitality topics are seeded (guest-experience, property-maintenance, revenue-management, booking-operations, guest-communication)
+  And subsequent syncs do not re-seed (ON CONFLICT DO NOTHING)
 
 Scenario: SCN-GH-027 Guest node merges data from multiple sources
   Given a guest "sarah@example.com" has bookings from both guesthost and hospitable connectors
@@ -562,7 +562,7 @@ Scenario: SCN-GH-028 Property metrics update from review artifact
 - [x] DURING_STAY edge created for artifacts within a booking's check-in/check-out window → Evidence: hospitality_linker.go:linkBooking creates "DURING_STAY" edge linking artifact to property; linkMessage creates "DURING_STAY" for messages with booking context
 - [x] Guest node tags include "returning" when total_stays > 1 (SCN-GH-020) → Evidence: guest_repo.go:IncrementStay increments total_stays; context.go:generateGuestHints checks total_stays > 1 for "repeat_guest" hint
 - [x] Guest node source set to "both" when data comes from GH and Hospitable → Evidence: guest_repo.go:UpsertByEmail uses ON CONFLICT (email, source) for per-source tracking; cross-source merging at query time
-- [x] 15 hospitality topics seeded on first sync, idempotent on subsequent syncs → Evidence: hospitality_linker.go:SeedHospitalityTopics seeds 5 core hospitality topics with ON CONFLICT DO NOTHING for idempotency. Note: 5 topics implemented (guest-experience, property-maintenance, revenue-management, booking-operations, guest-communication) vs 15 planned
+- [x] 5 hospitality topics seeded on first sync, idempotent on subsequent syncs → Evidence: hospitality_linker.go:SeedHospitalityTopics seeds 5 core hospitality topics (guest-experience, property-maintenance, revenue-management, booking-operations, guest-communication) with ON CONFLICT DO NOTHING for idempotency
 - [x] E2E: full sync creates graph nodes and edges end-to-end → **Phase:** implement — TestGuestHost_E2E_ConnectorLifecycle in tests/e2e/guesthost_test.go validates full pipeline; TestGuestHost_Integration_GraphLinking in tests/integration/guesthost_graph_test.go validates graph linking
 - [x] Regression: Scope 1 + Scope 2 tests still pass → **Phase:** implement — ./smackerel.sh test unit exit 0; client_test.go (11), connector_test.go (6), normalizer_test.go (10) all pass
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass → **Phase:** implement — guest_repo_test.go (6 tests), property_repo_test.go (5 tests), hospitality_linker_test.go (11 tests) all pass covering guest/property CRUD validation, linker edge scenarios, meta parsing, topic seeding

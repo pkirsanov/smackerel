@@ -66,7 +66,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 8 → 9 → 10 → 7 → 11
 
 ### 🔨 Building & Delivering
-3 → 4 → 5 → 12 → 43 → 44
+43 → 44 → 3 → 4 → 5 → 12
 
 ### 🔍 Review & Assessment
 13 → 14 → 15 → 16 → 28
@@ -93,11 +93,18 @@ START
   ├─ Don't know where to start?
   │     → Recipe 1 (Just Tell Bubbles) or Recipe 2 (Ask the Super)
   │
+  ├─ Want fully autonomous execution?
+  │     ├─ Single goal?
+  │     │     → Recipe 43 (Autonomous Goal)
+  │     │
+  │     └─ Multiple goals + time budget?
+  │           → Recipe 44 (Autonomous Sprint)
+  │
   ├─ New feature from scratch?
-  │     → Recipe 3 (New Feature)
+  │     → Recipe 3 (New Feature) or Recipe 43 (Autonomous Goal)
   │
   ├─ Bug to fix?
-  │     → Recipe 4 (Fix a Bug)
+  │     → Recipe 4 (Fix a Bug) or Recipe 43 (Autonomous Goal)
   │
   ├─ Continue yesterday's work?
   │     → Recipe 5 (Resume Work)
@@ -115,6 +122,9 @@ START
   │     │
   │     └─ Need data to target it?
   │           → Recipe 24 (Data-Driven Review)
+  │
+  ├─ Have a backlog to work through?
+  │     → Recipe 44 (Autonomous Sprint)
   │
   ├─ Pre-release quality check?
   │     → Recipe 17 (Quality Sweep)

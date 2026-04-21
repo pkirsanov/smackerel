@@ -14,9 +14,10 @@ type AnnotationIntent struct {
 }
 
 var (
-	topRatedRe    = regexp.MustCompile(`(?i)\b(my\s+)?(top\s+rated|best\s+rated|highest\s+rated|best)\b`)
-	interactionRe = regexp.MustCompile(`(?i)\b(things?\s+I'?v?e?\s*(made|cooked|tried|bought|read|visited|used)|my\s+(made|cooked|tried|used)\s+\w+)\b`)
-	tagIntentRe   = regexp.MustCompile(`#([\w-]+)`)
+	topRatedRe       = regexp.MustCompile(`(?i)\b(my\s+)?(top\s+rated|best\s+rated|highest\s+rated|best)\b`)
+	interactionRe    = regexp.MustCompile(`(?i)\b(things?\s+I'?v?e?\s*(made|cooked|tried|bought|read|visited|used)|my\s+(made|cooked|tried|used)\s+\w+)\b`)
+	tagIntentRe      = regexp.MustCompile(`#([\w-]+)`)
+	whitespaceNormRe = regexp.MustCompile(`\s+`)
 )
 
 // parseAnnotationIntent detects annotation-related intent in a search query.
@@ -52,7 +53,7 @@ func parseAnnotationIntent(query string) *AnnotationIntent {
 	}
 
 	// Clean up remaining text
-	intent.Cleaned = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(remaining, " "))
+	intent.Cleaned = strings.TrimSpace(whitespaceNormRe.ReplaceAllString(remaining, " "))
 	return &intent
 }
 

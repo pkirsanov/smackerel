@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/smackerel/smackerel/internal/annotation"
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/intelligence"
@@ -100,6 +101,10 @@ func run() error {
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
 	}
+
+	// Wire annotation handlers (spec 027)
+	annotationStore := annotation.NewStore(svc.pg.Pool, svc.nc)
+	deps.AnnotationHandlers = &api.AnnotationHandlers{Store: annotationStore}
 
 	router := api.NewRouter(deps)
 

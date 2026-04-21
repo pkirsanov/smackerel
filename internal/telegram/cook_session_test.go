@@ -192,6 +192,55 @@ func TestCookSessionStore_StopIdempotent(t *testing.T) {
 	store.Stop()
 }
 
+func TestCookSessionStore_SweepCleansStaleDisambiguations(t *testing.T) {
+	store := NewCookSessionStore(1) // 1 minute timeout
+
+	// Set disambiguation without a corresponding session
+	store.SetDisambiguation(12345, &CookDisambiguation{
+		Options: []CookDisambiguationOption{
+			{ArtifactID: "art-1", Title: "Recipe A"},
+		},
+	})
+
+	// Verify disambiguation exists
+	if store.GetDisambiguation(12345) == nil {
+		t.Fatal("expected disambiguation to exist")
+	}
+
+	// Sweep should clean stale disambiguation (no corresponding session)
+	store.sweep()
+
+	if store.GetDisambiguation(12345) != nil {
+		t.Error("expected stale disambiguation to be swept")
+	}
+}
+
+func TestCookSessionStore_SweepPreservesDisambiguationWithSession(t *testing.T) {
+	store := NewCookSessionStore(120) // 120 minutes timeout
+
+	// Create session and disambiguation for same chat
+	session := &CookSession{
+		RecipeArtifactID: "art-123",
+		RecipeTitle:      "Test",
+		CurrentStep:      1,
+		TotalSteps:       3,
+		ScaleFactor:      1.0,
+	}
+	store.Create(12345, session)
+	store.SetDisambiguation(12345, &CookDisambiguation{
+		Options: []CookDisambiguationOption{
+			{ArtifactID: "art-2", Title: "Recipe B"},
+		},
+	})
+
+	store.sweep()
+
+	// Session is active, so disambiguation should be preserved
+	if store.GetDisambiguation(12345) == nil {
+		t.Error("expected disambiguation to be preserved with active session")
+	}
+}
+
 func makeTestSteps(n int) []recipe.Step {
 	steps := make([]recipe.Step, n)
 	for i := 0; i < n; i++ {

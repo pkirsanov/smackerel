@@ -7,7 +7,8 @@
     "storage",
     "contextMenus",
     "notifications",
-    "activeTab"
+    "activeTab",
+    "alarms"
   ],
   "browser_specific_settings": {
     "gecko": {

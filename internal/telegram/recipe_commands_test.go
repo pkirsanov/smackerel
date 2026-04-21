@@ -169,6 +169,8 @@ func TestFormatScaleFactor(t *testing.T) {
 		{3.0, "3"},
 		{1.5, "1.5"},
 		{0.5, "0.5"},
+		{2.9999999999999996, "3"}, // near-integer from floating-point arithmetic
+		{1.0000000000000002, "1"}, // near-integer from floating-point arithmetic
 	}
 	for _, tc := range cases {
 		got := formatScaleFactor(tc.input)

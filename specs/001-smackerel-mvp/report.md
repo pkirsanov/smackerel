@@ -642,3 +642,41 @@ The design doc originally specified `#E8E6E3` for dark theme foreground. Impleme
 ### DoD Evidence Quality
 
 Scope 01-04 DoD items reference file names and test function names rather than embedding ≥10 lines of raw terminal output inline. Full test output is recorded in this report's per-scope Test Evidence sections. This is appropriate for a retroactively formalized MVP spec.
+
+---
+
+## Security Scan: 2026-04-21 (stochastic-quality-sweep child)
+
+**Trigger:** `security-to-doc` child workflow of stochastic-quality-sweep
+**Result:** CLEAN — zero critical, high, or medium findings
+**Scan scope:** All spec 001-owned code surfaces (connector framework, OAuth2, icon system, design system CSS)
+
+### Scan Coverage
+
+| Category | Surface | Result |
+|----------|---------|--------|
+| SQL injection | `internal/connector/state.go`, `internal/auth/store.go` | CLEAN — all queries parameterized ($1, $2, ...) |
+| XSS | Go templates | CLEAN — no `template.HTML`/`template.JS` unsafe conversions; html/template auto-escaping in effect |
+| Path traversal (CWE-22) | Bookmarks, Keep, Twitter, Maps connectors | CLEAN — `filepath.EvalSymlinks()`, boundary checks, symlink rejection, TOCTOU Lstat guards |
+| OAuth2 CSRF | `internal/auth/handler.go` | CLEAN — crypto/rand state tokens, 10-min TTL eviction, 100-entry cap, rate limiting |
+| Token storage | `internal/auth/store.go` | CLEAN — AES-256-GCM encryption at rest, SHA-256 key derivation |
+| Auth middleware | `internal/api/router.go` | CLEAN — `crypto/subtle.ConstantTimeCompare` for bearer tokens and cookies |
+| Security headers | `internal/api/router.go` | CLEAN — CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy |
+| Hardcoded secrets | All spec 001-owned packages | CLEAN — credentials from config pipeline only; API key redaction tested |
+| SST config bypass | `internal/connector/`, `internal/auth/` | CLEAN — no direct `os.Getenv()` calls bypassing SST |
+| Dependency audit | `go.mod` | CLEAN — Go 1.24.3, chi v5.1.0, pgx v5.7.2, nats v1.37.0, x/crypto v0.41.0 |
+| Token response size | `internal/auth/oauth.go` | CLEAN — 1MB `maxTokenResponseBytes` limit, 15s HTTP timeout |
+
+### Verification Commands
+
+```
+./smackerel.sh check        → Config is in sync with SST / env_file drift guard: OK
+./smackerel.sh test unit    → 41 Go packages passed, 236 Python tests passed
+grep SQL injection scan     → zero string-formatted SQL in spec 001 packages
+grep template.HTML scan     → zero unsafe template conversions
+grep symlink/traversal scan → all file-reading connectors use EvalSymlinks + boundary checks
+```
+
+### Conclusion
+
+No remediation required. The spec 001-scoped code demonstrates defense-in-depth security practices across all OWASP Top 10 categories relevant to this surface area.

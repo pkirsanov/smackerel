@@ -149,12 +149,12 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if strings.Contains(err.Error(), "content extraction failed") {
+		if errors.Is(err, pipeline.ErrExtractionFailed) {
 			writeError(w, http.StatusUnprocessableEntity, "EXTRACTION_FAILED", err.Error())
 			return
 		}
 
-		if strings.Contains(err.Error(), "publish to NATS") {
+		if errors.Is(err, pipeline.ErrNATSPublish) {
 			writeError(w, http.StatusServiceUnavailable, "ML_UNAVAILABLE", "Processing service unavailable")
 			return
 		}
@@ -183,7 +183,7 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 		ProcessingMs: result.ProcessingMs,
 	}
 
-	metrics.CaptureTotal.WithLabelValues("api").Inc()
+	metrics.CaptureTotal.WithLabelValues(captureSource(r)).Inc()
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -246,6 +246,24 @@ func toPipelineForwardMeta(fm *ForwardMetaPayload) *pipeline.ForwardMetaPayload 
 		OriginalDate: fm.OriginalDate,
 		IsChannel:    fm.IsChannel,
 	}
+}
+
+// validCaptureSources is the bounded set of allowed capture source label values.
+var validCaptureSources = map[string]bool{
+	"api":       true,
+	"telegram":  true,
+	"extension": true,
+	"pwa":       true,
+}
+
+// captureSource reads the X-Capture-Source header from the request and validates
+// it against the known set. Returns "api" if the header is missing or unknown.
+func captureSource(r *http.Request) string {
+	src := r.Header.Get("X-Capture-Source")
+	if validCaptureSources[src] {
+		return src
+	}
+	return "api"
 }
 
 // decodeJSONBody validates Content-Type, limits body size to 1MB, and decodes

@@ -274,3 +274,68 @@ Artifact lint PASSED.
 ### Completion Statement
 
 Regression probe complete. Zero regression findings for spec 025-knowledge-synthesis-layer. All 41 Go packages, 214 Python tests, and E2E suite pass. No cross-spec conflicts detected. One minor artifact metadata fix applied (state.json certification.status alignment). Spec remains done.
+
+---
+
+## Simplify Phase — 2026-04-21
+
+### Summary
+
+Simplify-to-doc probe (child of stochastic-quality-sweep) reviewing spec 025 code for code reuse, quality, and efficiency.
+
+**Files reviewed:**
+- `internal/knowledge/store.go` — CRUD operations for concepts, entities, lint reports (600+ LOC)
+- `internal/knowledge/upsert.go` — Transactional upsert logic for concepts/entities (400+ LOC)
+- `internal/knowledge/types.go` — Type definitions (110 LOC)
+- `internal/knowledge/contract.go` — Prompt contract YAML loader (120 LOC)
+- `internal/knowledge/lint.go` — 6 lint checks + retry + report storage (350 LOC)
+- `internal/pipeline/synthesis_subscriber.go` — NATS consumer for synthesis results (500+ LOC)
+- `internal/pipeline/synthesis_types.go` — Request/response types + validation (150 LOC)
+- `internal/api/knowledge.go` — REST API handlers for knowledge endpoints (200 LOC)
+- `internal/telegram/knowledge.go` — Telegram command handlers (200 LOC)
+- `ml/app/synthesis.py` — Python ML sidecar synthesis consumer (400 LOC)
+
+### Findings
+
+**Finding 1 (Fixed): Duplicated NATS consumer loop in `synthesis_subscriber.go`**
+- `SynthesisResultSubscriber.Start()` contained two nearly identical ~30-line goroutine blocks for the `synthesis.extracted` and `synthesis.crosssource.result` consumers
+- Same fetch/retry/dispatch/shutdown pattern duplicated verbatim; only the consumer variable and handler function differed
+- **Fix:** Extracted `runConsumerLoop(ctx, consumer, subject, handler)` method — reduces ~60 lines of duplicated goroutine management to two 1-line calls
+- Adding future NATS consumers to this subscriber now requires 1 line instead of copying another 30-line block
+
+**Assessed and retained (no changes needed):**
+- `InsertConcept`/`InsertEntity` in store.go vs `createConceptInTx`/`createEntityInTx` in upsert.go share INSERT SQL but differ in executor (pool vs tx) — standard Go DB pattern, not worth abstracting
+- `ListConceptsFiltered`/`ListEntitiesFiltered` share structural shape (count+query+filter+sort+limit) but operate on different tables/types — Go generics would add complexity without clarity
+- Python `synthesis.py` error response dicts are repeated but each carries context-specific field values — a helper would obscure the error paths
+- API handlers (`knowledge.go`) follow consistent project-wide patterns from existing handlers
+
+### Code Quality Assessment
+
+The knowledge synthesis layer code is well-structured:
+- Clean package separation (knowledge/, pipeline/, api/, telegram/)
+- Consistent error wrapping with `fmt.Errorf("context: %w", err)`
+- Proper use of parameterized SQL (no injection risk)
+- Transactional knowledge updates with proper rollback
+- Fail-open synthesis (doesn't block ingestion)
+- All config values flow from SST (no hardcoded defaults)
+- Consistent logging with structured slog
+
+### Test Evidence
+
+```
+$ ./smackerel.sh build
+smackerel-core Built, smackerel-ml Built
+$ ./smackerel.sh test unit
+internal/pipeline 0.288s (fresh, covers refactored synthesis_subscriber.go)
+41 packages ok, 0 FAIL
+236 passed, 3 warnings in 11.74s
+$ ./smackerel.sh lint
+All checks passed!
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+```
+
+### Completion Statement
+
+Simplify probe complete. One finding (consumer loop duplication) identified and fixed. Code quality is high — well-separated packages, consistent patterns, proper error handling, config SST compliance. Build, all tests, and lint pass after fix.

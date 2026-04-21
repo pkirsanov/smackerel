@@ -13,6 +13,7 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/metrics"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
@@ -147,6 +148,7 @@ func (g *Generator) Generate(ctx context.Context) (*DigestContext, error) {
 	hasKnowledgeHealth := digestCtx.KnowledgeHealth != nil
 	hasExpenses := digestCtx.Expenses != nil
 	if len(actionItems) == 0 && len(overnight) == 0 && len(hotTopics) == 0 && !hasHospitality && !hasKnowledgeHealth && !hasExpenses {
+		metrics.DigestGeneration.WithLabelValues("quiet").Inc()
 		return digestCtx, g.storeQuietDigest(ctx, today)
 	}
 
@@ -159,9 +161,11 @@ func (g *Generator) Generate(ctx context.Context) (*DigestContext, error) {
 	if err := g.NATS.Publish(ctx, smacknats.SubjectDigestGenerate, data); err != nil {
 		// Fallback: generate plain-text digest without LLM
 		slog.Warn("NATS publish failed, generating fallback digest", "error", err)
+		metrics.DigestGeneration.WithLabelValues("fallback").Inc()
 		return digestCtx, g.storeFallbackDigest(ctx, today, digestCtx)
 	}
 
+	metrics.DigestGeneration.WithLabelValues("published").Inc()
 	return digestCtx, nil
 }
 

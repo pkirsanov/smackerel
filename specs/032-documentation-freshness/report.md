@@ -46,3 +46,60 @@ Spec 032 brings documentation up to date: README system requirements, Developmen
 ### Verification
 
 - `./smackerel.sh lint` — passed clean after fixes
+
+---
+
+## DevOps Pass (2026-04-21)
+
+**Trigger:** `devops-to-doc` child workflow from stochastic-quality-sweep
+
+### Probe Summary
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| `./smackerel.sh check` | CLEAN | Config is in sync with SST, env_file drift guard OK |
+| `./smackerel.sh lint` | CLEAN | Go + Python lint passed |
+| `./smackerel.sh test unit` | CLEAN | All Go (41 packages) and Python (236) tests passed |
+| `./smackerel.sh format --check` | CLEAN | No formatting issues |
+| CI pipeline (`ci.yml`) | CLEAN | lint-and-test, build, push-images, integration jobs present and using `./smackerel.sh` |
+| Docker Compose (dev) | CLEAN | Health checks, resource limits, security_opt, labels all present |
+| Docker Compose (prod) | CLEAN | `/readyz` endpoint exists in code and used by prod health check |
+| Dockerfiles (core + ML) | CLEAN | Multi-stage builds, non-root users, OCI labels, pinned base images |
+| Config pipeline | CLEAN | SST enforced, generated files not hand-edited |
+
+### Findings
+
+| # | Finding | Category | Severity | Resolution |
+|---|---------|----------|----------|------------|
+| F1 | Migration table in Development.md listed 19 individual files (001–019) but only 3 exist on disk — migrations 002–017 were consolidated into `001_initial_schema.sql` during a schema squash. Summary line also said "19 SQL files" | Documentation drift | Medium | Replaced 19-entry migration table with 3-entry table reflecting actual files on disk. Added consolidation note. Updated summary from "19 SQL files" to "3 SQL files" |
+
+### Files Modified
+
+- `docs/Development.md` — fixed stale migration table (19 phantom files → 3 actual files with consolidation note), updated summary migration count
+
+### Verification
+
+- `./smackerel.sh lint` — passed clean after fix
+- `find internal/db/migrations/*.sql | wc -l` → 3 (matches updated docs)
+
+---
+
+## DevOps Repeat Probe (2026-04-21)
+
+**Trigger:** `devops-to-doc` repeat child workflow from stochastic-quality-sweep
+
+### Probe Summary
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| `./smackerel.sh check` | CLEAN | Config in sync with SST, env_file drift guard OK |
+| `./smackerel.sh lint` | CLEAN | Go (41 packages) + Python (ruff) passed |
+| `./smackerel.sh test unit` | CLEAN | Go 41 packages OK, Python 236 passed (3 warnings, 0 failures) |
+
+### Findings
+
+None. Previous devops fix (migration table consolidation 19→3 entries) remains clean. No new drift detected.
+
+### Verdict
+
+**CLEAN** — no action required.

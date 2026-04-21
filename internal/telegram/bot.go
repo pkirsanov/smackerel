@@ -708,6 +708,7 @@ func (b *Bot) callCapture(ctx context.Context, body interface{}) (map[string]int
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Capture-Source", "telegram")
 	if b.authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+b.authToken)
 	}

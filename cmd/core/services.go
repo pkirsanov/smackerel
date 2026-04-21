@@ -97,6 +97,7 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 	// Wire knowledge synthesis into pipeline if enabled
 	if cfg.KnowledgeEnabled {
 		svc.knowledgeStore = knowledge.NewKnowledgeStore(svc.pg.Pool)
+		svc.knowledgeStore.MaxTokens = cfg.KnowledgeConceptMaxTokens
 		svc.resultSub.KnowledgeEnabled = true
 		svc.resultSub.KnowledgeStore = svc.knowledgeStore
 		svc.resultSub.PromptContractVersion = cfg.KnowledgePromptContractIngestSynthesis

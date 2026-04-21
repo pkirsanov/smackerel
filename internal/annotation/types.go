@@ -2,7 +2,22 @@
 // for user annotations on artifacts (ratings, notes, tags, interactions).
 package annotation
 
-import "time"
+import (
+	"context"
+	"time"
+)
+
+// AnnotationQuerier defines the interface for annotation CRUD operations.
+// Implemented by Store; consumed by API handlers and other packages
+// that need annotation operations without depending on the concrete store.
+type AnnotationQuerier interface {
+	CreateFromParsed(ctx context.Context, artifactID string, parsed ParsedAnnotation, channel SourceChannel) ([]Annotation, error)
+	GetSummary(ctx context.Context, artifactID string) (*Summary, error)
+	GetHistory(ctx context.Context, artifactID string, limit int) ([]Annotation, error)
+	DeleteTag(ctx context.Context, artifactID, tag string, channel SourceChannel) error
+	RecordMessageArtifact(ctx context.Context, messageID, chatID int64, artifactID string) error
+	ResolveArtifactFromMessage(ctx context.Context, messageID, chatID int64) (string, error)
+}
 
 // AnnotationType identifies the kind of annotation event.
 type AnnotationType string

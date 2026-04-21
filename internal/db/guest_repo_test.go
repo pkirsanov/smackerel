@@ -42,26 +42,25 @@ func TestGuestUpsertCreate(t *testing.T) {
 	}
 }
 
-// TestGuestUpsertUpdate validates that name truncation happens before DB interaction.
+// TestGuestUpsertUpdate validates email normalization trims whitespace before validation.
 func TestGuestUpsertUpdate(t *testing.T) {
-	// Verify that a name longer than 500 chars gets truncated.
-	// We test this by confirming the validation path doesn't reject it.
-	// The actual truncation happens in UpsertByEmail before the DB call.
+	repo := &GuestRepository{Pool: nil}
 
-	// Names at exactly 500 are fine
-	name500 := strings.Repeat("X", 500)
-	if len(name500) != 500 {
-		t.Fatalf("expected 500-char name, got %d", len(name500))
+	// Email with leading/trailing whitespace should be trimmed and then validated.
+	// " alice@example.com " after trim is valid, so validation passes—but nil pool panics.
+	// " " after trim is empty, so validation catches it.
+	_, err := repo.UpsertByEmail(nil, "  ", "Alice", "guesthost")
+	if err == nil {
+		t.Fatal("expected error for whitespace-padded empty email")
+	}
+	if !strings.Contains(err.Error(), "invalid email") {
+		t.Errorf("expected 'invalid email' error for whitespace email, got: %v", err)
 	}
 
-	// Names over 500 are truncated silently (not rejected)
-	longName := strings.Repeat("X", 600)
-	truncated := longName
-	if len(truncated) > 500 {
-		truncated = truncated[:500]
-	}
-	if len(truncated) != 500 {
-		t.Errorf("expected truncated name length 500, got %d", len(truncated))
+	// Email missing @ should also fail
+	_, err = repo.UpsertByEmail(nil, "  justtext  ", "Bob", "guesthost")
+	if err == nil {
+		t.Fatal("expected error for trimmed email missing @")
 	}
 }
 
@@ -116,34 +115,30 @@ func TestGuestUpdateSentimentValidation(t *testing.T) {
 	}
 }
 
-// TestGuestNodeStructure validates the GuestNode type fields.
-func TestGuestNodeStructure(t *testing.T) {
-	rating := 4.2
-	sentiment := 0.8
-	g := GuestNode{
-		ID:             "ulid-123",
-		Email:          "alice@example.com",
-		Name:           "Alice",
-		Source:         "guesthost",
-		TotalStays:     3,
-		TotalSpend:     1500.50,
-		AvgRating:      &rating,
-		SentimentScore: &sentiment,
+// TestGuestIncrementStayZeroSpend validates that zero spend passes validation boundary.
+func TestGuestIncrementStayZeroSpend(t *testing.T) {
+	repo := &GuestRepository{Pool: nil}
+
+	// Negative spend → validation error
+	err := repo.IncrementStay(nil, "guest-id-123", -100)
+	if err == nil {
+		t.Fatal("expected error for negative spend")
+	}
+	if !strings.Contains(err.Error(), "non-negative") {
+		t.Errorf("expected 'non-negative' error for -100, got: %v", err)
 	}
 
-	if g.Email != "alice@example.com" {
-		t.Errorf("expected email alice@example.com, got %s", g.Email)
-	}
-	if g.TotalStays != 3 {
-		t.Errorf("expected 3 stays, got %d", g.TotalStays)
-	}
-	if g.TotalSpend != 1500.50 {
-		t.Errorf("expected spend 1500.50, got %f", g.TotalSpend)
-	}
-	if *g.AvgRating != 4.2 {
-		t.Errorf("expected avg rating 4.2, got %f", *g.AvgRating)
-	}
-	if *g.SentimentScore != 0.8 {
-		t.Errorf("expected sentiment 0.8, got %f", *g.SentimentScore)
-	}
+	// Boundary: exactly 0 should pass validation (0 is non-negative).
+	// With nil pool, it will panic at the DB call, so we catch it.
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Expected: nil pool panic means validation passed
+			}
+		}()
+		err := repo.IncrementStay(nil, "guest-id-123", 0)
+		if err != nil && strings.Contains(err.Error(), "non-negative") {
+			t.Error("zero spend should not be rejected as negative")
+		}
+	}()
 }

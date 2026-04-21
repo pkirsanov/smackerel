@@ -19,6 +19,7 @@ var (
 	ratingRe       = regexp.MustCompile(`\b([1-5])\s*/\s*5\b`)
 	tagRe          = regexp.MustCompile(`#([\w-]+)`)
 	removeTagRe    = regexp.MustCompile(`#remove-([\w-]+)`)
+	whitespaceRe   = regexp.MustCompile(`\s+`)
 	interactionMap = map[string]InteractionType{
 		"made it":   InteractionMadeIt,
 		"made_it":   InteractionMadeIt,
@@ -36,6 +37,25 @@ var (
 		"used_it":   InteractionUsedIt,
 	}
 )
+
+// InteractionPhrases returns the canonical human-readable interaction phrases
+// recognized by the parser (e.g., "made it", "bought it"). Use this instead of
+// maintaining separate phrase lists for split-point detection.
+func InteractionPhrases() []string {
+	seen := make(map[InteractionType]bool)
+	var phrases []string
+	for phrase, itype := range interactionMap {
+		if seen[itype] {
+			continue
+		}
+		// Prefer the space-separated human-readable form for each type
+		if strings.Contains(phrase, " ") || phrase == "visited" || phrase == "purchased" {
+			seen[itype] = true
+			phrases = append(phrases, phrase)
+		}
+	}
+	return phrases
+}
 
 // Parse extracts structured annotation components from a freeform string.
 // Example: "4/5 made it #weeknight needs more garlic"
@@ -83,7 +103,7 @@ func Parse(input string) ParsedAnnotation {
 	// Remaining text is the note
 	note := strings.TrimSpace(remaining)
 	// Clean up extra spaces
-	note = regexp.MustCompile(`\s+`).ReplaceAllString(note, " ")
+	note = whitespaceRe.ReplaceAllString(note, " ")
 	if note != "" {
 		result.Note = note
 	}

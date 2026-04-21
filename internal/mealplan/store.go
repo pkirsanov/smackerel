@@ -74,6 +74,9 @@ func (s *Store) GetPlanWithSlots(ctx context.Context, planID string) (*PlanWithS
 		}
 		slots = append(slots, sl)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return &PlanWithSlots{Plan: *plan, Slots: slots}, nil
 }
@@ -114,6 +117,9 @@ func (s *Store) ListPlans(ctx context.Context, statusFilter string, fromDate, to
 			return nil, err
 		}
 		plans = append(plans, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return plans, nil
 }
@@ -267,6 +273,9 @@ func (s *Store) GetSlotsByDate(ctx context.Context, date time.Time, mealType str
 		}
 		slots = append(slots, sl)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
 	return slots, &plan, nil
 }
 
@@ -293,6 +302,9 @@ func (s *Store) FindOverlappingPlans(ctx context.Context, startDate, endDate tim
 			return nil, err
 		}
 		plans = append(plans, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return plans, nil
 }

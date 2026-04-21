@@ -288,3 +288,74 @@ Scope 1 implementation is complete. All 15 connectors are imported, instantiated
 |-----------|---------|--------|-----------|
 | Unit | `./smackerel.sh test unit` | PASS — 35 Go packages, 92 Python tests | 2026-04-17 |
 | Check | `./smackerel.sh check` | PASS — config in sync | 2026-04-17 |
+
+---
+
+## DevOps Sweep (2026-04-21)
+
+**Trigger:** Stochastic quality sweep — devops trigger on connector wiring.
+**Scope:** Build, deployment, CI/CD, monitoring, observability, release automation for the 5 wired connectors.
+
+### Probe Summary
+
+| Area | Status | Evidence |
+|------|--------|----------|
+| Config generation | CLEAN | `./smackerel.sh config generate` produces all 5 connector env var blocks (Discord: 9 vars, Twitter: 5, Weather: 6, Gov Alerts: 12, Financial Markets: 9) — all default to `enabled: false` |
+| Config sync check | CLEAN | `./smackerel.sh check` returns "Config is in sync with SST" / "env_file drift guard: OK" |
+| Docker build | CLEAN | `./smackerel.sh build` succeeds — both `smackerel-core` and `smackerel-ml` images built with ldflags version metadata and OCI labels |
+| Unit tests | CLEAN | `./smackerel.sh test unit` — all Go packages pass, including `cmd/core` (connector registration + helper tests) |
+| Lint | CLEAN | `./smackerel.sh lint` — all checks passed (Go vet + Python ruff) |
+| Docker Compose wiring | CLEAN | `smackerel-core` service loads `env_file` (generated env), Twitter archive dir has volume mount with host→container path override, all connector env vars flow to container |
+| Production overrides | CLEAN | `docker-compose.prod.yml` has restart=always, resource limits, log rotation, `/readyz` health probe for orchestrators |
+| CI/CD pipeline | CLEAN | `.github/workflows/ci.yml` covers lint → unit test → Docker build → integration → tagged image push to GHCR, uses `./smackerel.sh` CLI surface throughout |
+| Health endpoint | CLEAN | `/api/health` lists all 15 connectors with status; `/readyz` provides lightweight DB-only readiness for Docker HEALTHCHECK |
+| Startup observability | CLEAN | `slog.Info("connector registry initialized", "count", ...)` logs total count after registration; each auto-started connector logs individually |
+| Dockerfile security | CLEAN | Non-root user (`smackerel`), `no-new-privileges` in Compose, `cap_drop: ALL` on core service |
+| SST compliance | CLEAN | All connector config flows YAML → config.sh → env → `os.Getenv()` / `config.Config` — zero hardcoded defaults |
+| Build identity | CLEAN | Dockerfile passes `VERSION`, `COMMIT_HASH`, `BUILD_TIME` via build args to ldflags and OCI labels |
+
+### Findings
+
+No devops findings. The connector wiring implementation has complete SST-compliant config generation, Docker Compose volume mounts for file-based connectors (Twitter archive dir), proper CI/CD coverage, health monitoring for all 15 connectors, startup logging, and production deployment configuration.
+
+### Test Evidence
+
+| Test Type | Command | Result | Timestamp |
+|-----------|---------|--------|-----------|
+| Config generate | `./smackerel.sh config generate` | PASS — dev.env + nats.conf generated | 2026-04-21 |
+| Check | `./smackerel.sh check` | PASS — config in sync, env_file drift guard OK | 2026-04-21 |
+| Build | `./smackerel.sh build` | PASS — both images built | 2026-04-21 |
+| Unit | `./smackerel.sh test unit --go` | PASS — all Go packages | 2026-04-21 |
+| Lint | `./smackerel.sh lint` | PASS — all checks passed | 2026-04-21 |
+
+---
+
+## Improvement Sweep (2026-04-21)
+
+**Trigger:** Stochastic quality sweep — improve trigger on connector wiring (child workflow).
+**Scope:** Full implementation review of `cmd/core/connectors.go`, `cmd/core/helpers.go`, `internal/config/config.go` (connector fields), `scripts/commands/config.sh` (connector extraction), `config/smackerel.yaml` (connector blocks), and `cmd/core/main_test.go` (connector tests).
+
+### Analysis Summary
+
+| Area | Status | Evidence |
+|------|--------|----------|
+| Registration pattern consistency | CLEAN | All 15 connectors follow identical instantiate → register → auto-start pattern in `connectors.go` |
+| SST compliance | CLEAN | All config flows YAML → `config.sh` → `dev.env` → `config.Config` → `connectors.go` — zero hardcoded defaults |
+| Config struct typing | CLEAN | All 5 connector field groups use correct types: `bool` for enabled/toggles, `string` for tokens/schedules/paths, `float64` for numeric, `[]interface{}` for JSON arrays, `map[string]interface{}` for JSON objects |
+| Error handling | CLEAN | All `Connect()` failures logged as warnings, not fatal — other connectors unaffected. Config validation happens at load time in `config.Load()` |
+| Credential routing | CLEAN | API keys/tokens flow through `Credentials` map (fixed in H-019-R21-001). `AuthType` matches credential channel |
+| Test coverage | CLEAN | `TestAllConnectorsRegistered` covers SCN-019-001, `TestDuplicateRegistrationRejected` covers SCN-019-006, helper tests cover all edge cases including IEEE 754 special values |
+| Code structure | CLEAN | BUG-004 refactoring correctly split `main.go` into `connectors.go` (wiring), `services.go` (infra), `helpers.go` (parsers), `shutdown.go` (lifecycle) |
+| Dead helper code | NOTE | `parseJSONArrayEnv`, `parseJSONObjectEnv`, `parseJSONObject`, `parseJSONObjectVal` in `helpers.go` are unused in production — config parsing migrated to `internal/config/config.go` during BUG-004 refactoring. Covered by tests, harmless, and cross-cutting (not 019-specific) |
+| Unit tests | CLEAN | `./smackerel.sh test unit` — all 236 tests pass (Go + Python) |
+
+### Findings
+
+No actionable improvement findings. The implementation is clean across all dimensions analyzed. Previous sweeps (security, test, harden ×2, improve ×2, devops) have already addressed all significant issues. The minor dead helper code in `helpers.go` is a consequence of the BUG-004 god-wirer refactoring and is not specific to this spec.
+
+### Test Evidence
+
+| Test Type | Command | Result | Timestamp |
+|-----------|---------|--------|-----------|
+| Unit | `./smackerel.sh test unit` | PASS — all Go packages + 236 Python tests | 2026-04-21 |
+| Lint | `./smackerel.sh lint` | PASS — all checks passed | 2026-04-21 |

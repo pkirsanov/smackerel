@@ -16,7 +16,7 @@ type DomainIntent struct {
 
 var (
 	recipeIntentRe     = regexp.MustCompile(`(?i)\b(recipes?|dishes?|meals?|cooking)\b`)
-	ingredientIntentRe = regexp.MustCompile(`(?i)\bwith\s+([\w\s,]+?)(?:\s+(?:for|and|recipe|dish)|$)`)
+	ingredientIntentRe = regexp.MustCompile(`(?i)\bwith\s+([\w\s,]+?)(?:\s+(?:for|recipe|dish)|$)`)
 	productIntentRe    = regexp.MustCompile(`(?i)\b(products?|cameras?|headphones?|laptops?|phones?|gadgets?)\b`)
 	priceIntentRe      = regexp.MustCompile(`(?i)\bunder\s+\$?(\d+(?:\.\d{2})?)\b`)
 	ingredientListRe   = regexp.MustCompile(`(?i)\bingredients?\s*:\s*([\w\s,]+)`)
@@ -39,12 +39,19 @@ func parseDomainIntent(query string) *DomainIntent {
 
 		// Extract ingredients from "with chicken and garlic" patterns
 		if m := ingredientIntentRe.FindStringSubmatch(q); len(m) >= 2 {
-			for _, ing := range strings.Split(m[1], ",") {
-				ing = strings.TrimSpace(ing)
-				if ing != "" {
-					intent.Attributes = append(intent.Attributes, strings.ToLower(ing))
+			raw := m[1]
+			// Split on both "," and " and " to handle multi-ingredient queries
+			parts := strings.Split(raw, ",")
+			var expanded []string
+			for _, p := range parts {
+				for _, sub := range strings.Split(p, " and ") {
+					sub = strings.TrimSpace(sub)
+					if sub != "" {
+						expanded = append(expanded, strings.ToLower(sub))
+					}
 				}
 			}
+			intent.Attributes = append(intent.Attributes, expanded...)
 		}
 
 		// Extract ingredients from "ingredients: chicken, garlic" patterns

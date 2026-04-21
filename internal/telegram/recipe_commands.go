@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -37,12 +38,15 @@ var (
 // extremely large scale factors that could cause excessive computation.
 const maxServings = 1000
 
+// scalePatterns is the ordered list of scale trigger regexes, allocated once.
+var scalePatterns = []*regexp.Regexp{scaleServingsRe, scaleForRe, scaleToRe, scalePeopleRe}
+
 // parseScaleTrigger checks if text matches a serving scaler pattern.
 // Returns the requested servings count, or 0 if no match.
 func parseScaleTrigger(text string) int {
 	text = strings.TrimSpace(text)
 
-	for _, re := range []*regexp.Regexp{scaleServingsRe, scaleForRe, scaleToRe, scalePeopleRe} {
+	for _, re := range scalePatterns {
 		if m := re.FindStringSubmatch(text); len(m) >= 2 {
 			n, err := strconv.Atoi(m[1])
 			if err == nil && n > 0 && n <= maxServings {
@@ -157,8 +161,9 @@ func formatScaledResponse(title string, originalServings, requestedServings int,
 
 // formatScaleFactor formats a float factor for display (e.g., 2.0 → "2", 1.5 → "1.5").
 func formatScaleFactor(factor float64) string {
-	if factor == float64(int(factor)) {
-		return fmt.Sprintf("%d", int(factor))
+	rounded := math.Round(factor)
+	if math.Abs(factor-rounded) < 0.01 {
+		return fmt.Sprintf("%d", int(rounded))
 	}
 	return fmt.Sprintf("%.1f", factor)
 }
@@ -326,15 +331,7 @@ func formatNoStepsFallback(rd *recipe.RecipeData, servings int) string {
 	} else {
 		lines = append(lines, "")
 		for _, ing := range rd.Ingredients {
-			qty := ""
-			if ing.Quantity != "" {
-				qty = ing.Quantity
-				if ing.Unit != "" {
-					qty += " " + ing.Unit
-				}
-				qty += " "
-			}
-			lines = append(lines, fmt.Sprintf("- %s%s", qty, ing.Name))
+			lines = append(lines, formatRawIngredientLine(ing))
 		}
 	}
 

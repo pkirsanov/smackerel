@@ -285,7 +285,7 @@ func ExtractContent(ctx context.Context, req *ProcessRequest) (*extract.Result, 
 		default:
 			result, err := extract.ExtractArticle(ctx, req.URL)
 			if err != nil {
-				return nil, fmt.Errorf("content extraction failed: %w", err)
+				return nil, fmt.Errorf("%w: %w", ErrExtractionFailed, err)
 			}
 			return result, nil
 		}
@@ -440,7 +440,7 @@ func (p *Processor) submitForProcessing(ctx context.Context, req *ProcessRequest
 		} else {
 			slog.Warn("cleaned up orphaned artifact after NATS publish failure", "artifact_id", artifactID)
 		}
-		return nil, fmt.Errorf("publish to NATS: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrNATSPublish, err)
 	}
 
 	slog.Info("artifact submitted for processing",

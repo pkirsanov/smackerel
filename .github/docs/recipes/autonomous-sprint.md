@@ -17,6 +17,7 @@ You have multiple goals and a fixed time window. Those goals can mix features, b
 
 ## Examples
 
+### Mixed Feature + Bug Sprint
 ```
 /bubbles.sprint  minutes: 240
 1. Fix the calendar sync bug
@@ -24,12 +25,57 @@ You have multiple goals and a fixed time window. Those goals can mix features, b
 3. Improve browser E2E coverage for the page builder
 ```
 
+### Start-of-Day Bug & Cleanup Sprint
 ```
 /bubbles.sprint  minutes: 120
 - Fix broken E2E tests for theming
 - Stabilize the deploy pipeline and close config drift
 - Update API documentation
 - Add missing unit tests for booking service
+```
+
+### Half-Day Feature Sprint
+```
+/bubbles.sprint  minutes: 180
+1. Implement property search with location filtering
+2. Add search results pagination
+3. Add search result sorting by price and rating
+```
+
+### DevOps & Ops Cleanup Sprint
+```
+/bubbles.sprint  minutes: 150
+1. Fix all Docker build warnings across services
+2. Add health check endpoints to services missing them
+3. Set up Prometheus metrics collection for the gateway
+4. Update deployment documentation
+```
+
+### Code Quality Sprint
+```
+/bubbles.sprint  minutes: 120
+1. Eliminate all lint warnings in the booking service
+2. Add input validation to all public API endpoints
+3. Remove dead code and unused imports across backend
+```
+
+### Pre-Release Sprint
+```
+/bubbles.sprint  minutes: 300
+1. Fix all failing E2E tests
+2. Close all open bug tickets for the current milestone
+3. Update user-facing documentation
+4. Run security audit and fix findings
+5. Update changelog and release notes
+```
+
+### End-of-Week Cleanup Sprint
+```
+/bubbles.sprint  minutes: 90
+- Fix that flaky test in the auth module
+- Update the README with the new API endpoints
+- Remove the deprecated v1 booking endpoints
+- Add missing error handling in the payment flow
 ```
 
 ## What Happens

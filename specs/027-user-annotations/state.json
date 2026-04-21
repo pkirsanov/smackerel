@@ -138,12 +138,24 @@
       "runStartedAt": "2026-04-17T15:30:00Z",
       "runEndedAt": "2026-04-17T16:00:00Z",
       "summary": "Created spec.md, design.md, scopes.md with 8 scopes. Created report.md, uservalidation.md, state.json."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "validate",
+        "implement",
+        "test",
+        "docs"
+      ],
+      "runStartedAt": "2026-04-21T00:00:00Z",
+      "runEndedAt": "2026-04-21T00:00:00Z",
+      "summary": "Reconcile-to-doc pass. Fixed: AnnotationHandlers wiring in main.go (was dead code), DeleteTag method+handler+route (missing), NATS event publishing in Store (missing), annotations config in smackerel.yaml (SST gap). 236 unit tests pass."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-19T00:00:00Z",
+  "lastUpdatedAt": "2026-04-21T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

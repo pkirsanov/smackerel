@@ -63,3 +63,44 @@ Spec 030 adds observability infrastructure: Prometheus metrics endpoints for Go 
 
 ### Scope 5 — W3C Trace Propagation
 - `internal/metrics/trace.go` provides `TraceHeaders()` and `ExtractTraceID()` for W3C `traceparent` header injection/extraction over NATS messages.
+
+---
+
+## Gaps-to-Doc Sweep (2026-04-21)
+
+### Trigger: `bubbles.gaps` probe — implementation gaps against design/requirements
+
+### Findings
+
+| # | Category | Gap | Severity | Status |
+|---|----------|-----|----------|--------|
+| G1 | Metrics | `smackerel_capture_total` hardcoded `"api"` source label — spec requires per-source tracking (telegram, api, extension, pwa) | Medium | Fixed |
+| G2 | Metrics | `smackerel_digest_generation_total` counter missing — spec goals and design architecture diagram both list digest generation as instrumented operation | Medium | Fixed |
+| G3 | Trace | `PublishWithHeaders()` exists but is never called in pipeline code — trace context not injected into production NATS messages | Low | Documented (design-scoped deferral) |
+| G4 | Trace | Python ML sidecar has no trace context extraction from NATS headers | Low | Documented (design-scoped deferral) |
+
+### Remediation
+
+**G1 — Capture source metric label (FIXED)**
+- Added `X-Capture-Source` header support in `internal/api/capture.go`
+- `captureSource()` validates against bounded set: `api`, `telegram`, `extension`, `pwa`
+- Unknown/missing header defaults to `"api"` (backward-compatible)
+- Telegram bot sets `X-Capture-Source: telegram` in `internal/telegram/bot.go:callCapture()`
+- Added `TestCaptureSource` with 7 cases including injection prevention
+
+**G2 — Digest generation metric (FIXED)**
+- Added `smackerel_digest_generation_total{status}` counter in `internal/metrics/metrics.go`
+- Status labels: `published` (NATS success), `fallback` (NATS failure, local generation), `quiet` (no content day)
+- Instrumented in `internal/digest/generator.go:Generate()`
+- Metric registered in `init()` and covered by `TestMetricsRegistered`
+
+**G3/G4 — Trace propagation wiring (DOCUMENTED — not a gap against current design)**
+- Scope 5 design explicitly positions trace propagation as a "foundation" with "Full OTEL SDK can be added later when collector is deployed"
+- `TraceHeaders()` and `ExtractTraceID()` are implemented, tested, and work correctly
+- `PublishWithHeaders()` is available in `internal/nats/client.go`
+- Production wiring requires threading `OTELEnabled` config into all NATS publish sites and adding Python-side extraction — this is future work when OTEL collector infrastructure is deployed
+
+### Verification
+
+- `go test -count=1 ./internal/metrics/ ./internal/api/ ./internal/digest/` — all pass
+- `./smackerel.sh lint` — 0 errors

@@ -84,6 +84,17 @@ var DBConnectionsActive = prometheus.NewGauge(
 	},
 )
 
+// --- Digest ---
+
+// DigestGeneration counts digest generation attempts by status.
+var DigestGeneration = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_digest_generation_total",
+		Help: "Digest generation attempts",
+	},
+	[]string{"status"},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -93,6 +104,7 @@ func init() {
 		ConnectorSync,
 		NATSDeadLetter,
 		DBConnectionsActive,
+		DigestGeneration,
 	)
 }
 

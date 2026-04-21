@@ -2,21 +2,30 @@ package annotation
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
 // Store manages annotation CRUD operations in PostgreSQL.
 type Store struct {
 	Pool *pgxpool.Pool
+	NATS *smacknats.Client
 }
 
+// Compile-time assertion: *Store implements AnnotationQuerier.
+var _ AnnotationQuerier = (*Store)(nil)
+
 // NewStore creates a new annotation store.
-func NewStore(pool *pgxpool.Pool) *Store {
-	return &Store{Pool: pool}
+func NewStore(pool *pgxpool.Pool, nc *smacknats.Client) *Store {
+	return &Store{Pool: pool, NATS: nc}
 }
 
 // Create inserts a single annotation event.
@@ -118,6 +127,20 @@ func (s *Store) CreateFromParsed(ctx context.Context, artifactID string, parsed 
 		slog.Warn("failed to refresh annotation summary view", "error", err)
 	}
 
+	// Publish NATS events for each created annotation (best-effort)
+	if s.NATS != nil {
+		for i := range created {
+			data, err := json.Marshal(created[i])
+			if err != nil {
+				slog.Warn("failed to marshal annotation event", "error", err)
+				continue
+			}
+			if err := s.NATS.Publish(ctx, smacknats.SubjectAnnotationsCreated, data); err != nil {
+				slog.Warn("failed to publish annotation event", "error", err)
+			}
+		}
+	}
+
 	return created, nil
 }
 
@@ -164,8 +187,10 @@ func (s *Store) GetSummary(ctx context.Context, artifactID string) (*Summary, er
 	`, artifactID).Scan(&sum.CurrentRating, &sum.AverageRating, &sum.RatingCount,
 		&sum.TimesUsed, &sum.LastUsed, &sum.Tags, &sum.NotesCount)
 	if err != nil {
-		// Not found is ok — return empty summary
-		return &sum, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &sum, nil
+		}
+		return nil, fmt.Errorf("get annotation summary: %w", err)
 	}
 	return &sum, nil
 }
@@ -176,6 +201,36 @@ func (s *Store) RefreshSummary(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("refresh annotation summary: %w", err)
 	}
+	return nil
+}
+
+// DeleteTag removes a tag from an artifact by inserting a tag_remove event.
+// This preserves the append-only log — the tag_remove event neutralizes the tag_add.
+func (s *Store) DeleteTag(ctx context.Context, artifactID, tag string, channel SourceChannel) error {
+	ann := Annotation{
+		ID:             fmt.Sprintf("ann-%s-%d-untag-%s", artifactID[:min(8, len(artifactID))], time.Now().UnixNano(), tag),
+		ArtifactID:     artifactID,
+		AnnotationType: TypeTagRemove,
+		Tag:            tag,
+		SourceChannel:  channel,
+		CreatedAt:      time.Now(),
+	}
+	if err := s.Create(ctx, &ann); err != nil {
+		return fmt.Errorf("delete tag: %w", err)
+	}
+
+	if err := s.RefreshSummary(ctx); err != nil {
+		slog.Warn("failed to refresh annotation summary after tag delete", "error", err)
+	}
+
+	// Publish NATS event (best-effort)
+	if s.NATS != nil {
+		data, _ := json.Marshal(ann)
+		if err := s.NATS.Publish(ctx, smacknats.SubjectAnnotationsCreated, data); err != nil {
+			slog.Warn("failed to publish tag removal event", "error", err)
+		}
+	}
+
 	return nil
 }
 

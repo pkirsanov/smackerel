@@ -91,16 +91,28 @@ func testID(t *testing.T) string {
 }
 
 // cleanupArtifact registers cleanup to delete a test artifact and its edges.
+// CHAOS-031-001: errors are logged instead of silently swallowed so stale
+// test data is detectable rather than invisible.
 func cleanupArtifact(t *testing.T, pool *pgxpool.Pool, artifactID string) {
 	t.Helper()
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		pool.Exec(ctx, "DELETE FROM list_items WHERE source_artifact_ids @> ARRAY[$1]::text[]", artifactID)
-		pool.Exec(ctx, "DELETE FROM lists WHERE source_artifact_ids @> ARRAY[$1]::text[]", artifactID)
-		pool.Exec(ctx, "DELETE FROM annotations WHERE artifact_id = $1", artifactID)
-		pool.Exec(ctx, "DELETE FROM edges WHERE src_id = $1 OR dst_id = $1", artifactID)
-		pool.Exec(ctx, "DELETE FROM artifacts WHERE id = $1", artifactID)
+		deletes := []struct {
+			query string
+			desc  string
+		}{
+			{"DELETE FROM list_items WHERE source_artifact_ids @> ARRAY[$1]::text[]", "list_items"},
+			{"DELETE FROM lists WHERE source_artifact_ids @> ARRAY[$1]::text[]", "lists"},
+			{"DELETE FROM annotations WHERE artifact_id = $1", "annotations"},
+			{"DELETE FROM edges WHERE src_id = $1 OR dst_id = $1", "edges"},
+			{"DELETE FROM artifacts WHERE id = $1", "artifacts"},
+		}
+		for _, d := range deletes {
+			if _, err := pool.Exec(ctx, d.query, artifactID); err != nil {
+				t.Logf("cleanup %s for %s failed: %v", d.desc, artifactID, err)
+			}
+		}
 	})
 }
 
@@ -110,8 +122,12 @@ func cleanupList(t *testing.T, pool *pgxpool.Pool, listID string) {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		pool.Exec(ctx, "DELETE FROM list_items WHERE list_id = $1", listID)
-		pool.Exec(ctx, "DELETE FROM lists WHERE id = $1", listID)
+		if _, err := pool.Exec(ctx, "DELETE FROM list_items WHERE list_id = $1", listID); err != nil {
+			t.Logf("cleanup list_items for list %s failed: %v", listID, err)
+		}
+		if _, err := pool.Exec(ctx, "DELETE FROM lists WHERE id = $1", listID); err != nil {
+			t.Logf("cleanup list %s failed: %v", listID, err)
+		}
 	})
 }
 
@@ -121,6 +137,8 @@ func cleanupAnnotation(t *testing.T, pool *pgxpool.Pool, annotationID string) {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		pool.Exec(ctx, "DELETE FROM annotations WHERE id = $1", annotationID)
+		if _, err := pool.Exec(ctx, "DELETE FROM annotations WHERE id = $1", annotationID); err != nil {
+			t.Logf("cleanup annotation %s failed: %v", annotationID, err)
+		}
 	})
 }

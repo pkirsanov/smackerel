@@ -156,10 +156,47 @@ func TestMigrations_SchemaVersionCount(t *testing.T) {
 // Then other tables are unaffected
 // Note: True migration rollback is not supported with the consolidated schema (001+018+019).
 // This test verifies DDL-level resilience for schema operations.
+//
+// CHAOS-031-002: Recreation is registered via t.Cleanup so tables are always
+// restored even if the test panics between drop and recreate.
 func TestMigrations_TableDropAndRecreate(t *testing.T) {
 	pool := testPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	recreateSQL := `
+CREATE TABLE IF NOT EXISTS lists (
+    id TEXT PRIMARY KEY, list_type TEXT NOT NULL, title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft', source_artifact_ids TEXT[] NOT NULL DEFAULT '{}',
+    source_query TEXT, domain TEXT, total_items INTEGER NOT NULL DEFAULT 0,
+    checked_items INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_lists_status ON lists(status);
+CREATE INDEX IF NOT EXISTS idx_lists_type ON lists(list_type);
+CREATE INDEX IF NOT EXISTS idx_lists_created ON lists(created_at DESC);
+CREATE TABLE IF NOT EXISTS list_items (
+    id TEXT PRIMARY KEY, list_id TEXT NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    content TEXT NOT NULL, category TEXT, status TEXT NOT NULL DEFAULT 'pending',
+    substitution TEXT, source_artifact_ids TEXT[] NOT NULL DEFAULT '{}',
+    is_manual BOOLEAN NOT NULL DEFAULT FALSE, quantity REAL, unit TEXT,
+    normalized_name TEXT, sort_order INTEGER NOT NULL DEFAULT 0,
+    checked_at TIMESTAMPTZ, notes TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_list_items_list ON list_items(list_id);
+CREATE INDEX IF NOT EXISTS idx_list_items_status ON list_items(list_id, status);
+CREATE INDEX IF NOT EXISTS idx_list_items_category ON list_items(list_id, category);
+`
+	// Register recreation FIRST so it runs even if the test panics after drop.
+	// t.Cleanup runs in LIFO order; this ensures tables are always restored.
+	t.Cleanup(func() {
+		rctx, rcancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer rcancel()
+		if _, err := pool.Exec(rctx, recreateSQL); err != nil {
+			t.Logf("CHAOS-031-002: cleanup recreation of lists tables failed: %v", err)
+		}
+	})
 
 	// Verify lists tables exist
 	for _, table := range []string{"lists", "list_items"} {
@@ -176,7 +213,7 @@ func TestMigrations_TableDropAndRecreate(t *testing.T) {
 		}
 	}
 
-	// Drop and recreate list_items + lists
+	// Drop list_items + lists
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin transaction: %v", err)
@@ -221,31 +258,7 @@ func TestMigrations_TableDropAndRecreate(t *testing.T) {
 		}
 	}
 
-	// Recreate using the table DDL
-	recreateSQL := `
-CREATE TABLE IF NOT EXISTS lists (
-    id TEXT PRIMARY KEY, list_type TEXT NOT NULL, title TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'draft', source_artifact_ids TEXT[] NOT NULL DEFAULT '{}',
-    source_query TEXT, domain TEXT, total_items INTEGER NOT NULL DEFAULT 0,
-    checked_items INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), completed_at TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS idx_lists_status ON lists(status);
-CREATE INDEX IF NOT EXISTS idx_lists_type ON lists(list_type);
-CREATE INDEX IF NOT EXISTS idx_lists_created ON lists(created_at DESC);
-CREATE TABLE IF NOT EXISTS list_items (
-    id TEXT PRIMARY KEY, list_id TEXT NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
-    content TEXT NOT NULL, category TEXT, status TEXT NOT NULL DEFAULT 'pending',
-    substitution TEXT, source_artifact_ids TEXT[] NOT NULL DEFAULT '{}',
-    is_manual BOOLEAN NOT NULL DEFAULT FALSE, quantity REAL, unit TEXT,
-    normalized_name TEXT, sort_order INTEGER NOT NULL DEFAULT 0,
-    checked_at TIMESTAMPTZ, notes TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_list_items_list ON list_items(list_id);
-CREATE INDEX IF NOT EXISTS idx_list_items_status ON list_items(list_id, status);
-CREATE INDEX IF NOT EXISTS idx_list_items_category ON list_items(list_id, category);
-`
+	// Recreate using the table DDL (also guaranteed by t.Cleanup above)
 	_, err = pool.Exec(ctx, recreateSQL)
 	if err != nil {
 		t.Fatalf("recreate lists tables: %v", err)
