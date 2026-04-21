@@ -180,6 +180,9 @@ type Config struct {
 	IMAPSyncSchedule              string
 	CalDAVSyncSchedule            string
 	YouTubeSyncSchedule           string
+
+	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
+	CORSAllowedOrigins []string
 }
 
 // Load reads configuration from environment variables.
@@ -273,6 +276,16 @@ func Load() (*Config, error) {
 		IMAPSyncSchedule:              os.Getenv("IMAP_SYNC_SCHEDULE"),
 		CalDAVSyncSchedule:            os.Getenv("CALDAV_SYNC_SCHEDULE"),
 		YouTubeSyncSchedule:           os.Getenv("YOUTUBE_SYNC_SCHEDULE"),
+	}
+
+	// Parse CORS allowed origins (comma-separated)
+	if corsOrigins := os.Getenv("CORS_ALLOWED_ORIGINS"); corsOrigins != "" {
+		for _, o := range strings.Split(corsOrigins, ",") {
+			o = strings.TrimSpace(o)
+			if o != "" {
+				cfg.CORSAllowedOrigins = append(cfg.CORSAllowedOrigins, o)
+			}
+		}
 	}
 
 	if chatIDs := os.Getenv("TELEGRAM_CHAT_IDS"); chatIDs != "" {

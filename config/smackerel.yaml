@@ -21,6 +21,12 @@ runtime:
   digest_cron: "0 7 * * *"
   embedding_model: all-MiniLM-L6-v2
 
+cors:
+  # Allowed origins for cross-origin requests (empty = same-origin only).
+  # Set when the API is accessed from a different domain/port (e.g., a separate frontend).
+  # Example: ["https://smackerel.example.com", "http://localhost:3000"]
+  allowed_origins: []
+
 llm:
   provider: "ollama" # REQUIRED: set to ollama, openai, or anthropic
   model: llama3.2
