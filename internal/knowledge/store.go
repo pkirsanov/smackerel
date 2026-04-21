@@ -613,3 +613,35 @@ func scanEntity(row pgx.Row) (*EntityProfile, error) {
 	}
 	return e, nil
 }
+
+// CountEntitiesForConcept returns the number of knowledge entities linked to a concept
+// via ENTITY_RELATES_TO_CONCEPT edges.
+func (ks *KnowledgeStore) CountEntitiesForConcept(ctx context.Context, conceptID string) (int, error) {
+	var count int
+	err := ks.pool.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT e.src_id)
+		FROM edges e
+		WHERE e.dst_id = $1
+		  AND e.dst_type = 'concept'
+		  AND e.edge_type = 'ENTITY_RELATES_TO_CONCEPT'`, conceptID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count entities for concept: %w", err)
+	}
+	return count, nil
+}
+
+// HasContradictions checks whether a concept has any CONTRADICTS edges involving
+// its source artifacts.
+func (ks *KnowledgeStore) HasContradictions(ctx context.Context, conceptID string) (bool, error) {
+	var exists bool
+	err := ks.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM edges e
+			WHERE e.edge_type = 'CONTRADICTS'
+			  AND e.metadata->>'concept_id' = $1
+		)`, conceptID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check contradictions: %w", err)
+	}
+	return exists, nil
+}

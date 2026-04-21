@@ -8,6 +8,84 @@ All 6 scopes implemented. 168 test functions in `alerts_test.go`. See individual
 
 ---
 
+## Reconciliation Report — 2026-04-21 (R72)
+
+**Trigger:** `reconcile` (stochastic-quality-sweep R72 child workflow)
+**Mode:** `reconcile-to-doc`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Reconciliation probe of the Government Alerts connector (post-certification, post-stabilize sweep). Compared claimed artifact state against actual implementation. All functional claims are substantiated. No code drift, no test drift, no config wiring gaps. One info-level design architecture drift (RECON-007, single-file vs multi-file) remains documented and accepted. Two cosmetic documentation observations noted below.
+
+### Reconciliation Matrix
+
+| Claim | Source | Actual | Verdict |
+|-------|--------|--------|---------|
+| Connector interface (ID/Connect/Sync/Health/Close) | scopes.md Scope 4 | `alerts.go` lines 130–170, all 5 methods present | **Match** |
+| USGS GeoJSON parser | scopes.md Scope 2 | `fetchUSGSEarthquakes()` decodes FeatureCollection, extracts Earthquake structs | **Match** |
+| NWS JSON-LD/CAP parser | scopes.md Scope 3 | `fetchNWSAlerts()` queries `?point=lat,lon`, parses CAP fields (9 fields) | **Match** |
+| NOAA Tsunami Atom/XML parser | scopes.md Scope 5 | `fetchTsunamiAlerts()` decodes `tsunamiAtomFeed` XML | **Match** |
+| USGS Volcano JSON parser | scopes.md Scope 5 | `fetchVolcanoAlerts()` decodes JSON array | **Match** |
+| InciWeb Wildfire RSS parser | scopes.md Scope 5 | `fetchWildfireAlerts()` decodes `wildfireRSSFeed` XML | **Match** |
+| AirNow AQI JSON parser | scopes.md Scope 5 | `fetchAirNowAQI()` with API key + lat/lon query | **Match** |
+| GDACS RSS parser | scopes.md Scope 5 | `fetchGDACSAlerts()` with `georss:point` proximity filtering | **Match** |
+| Haversine proximity filter | scopes.md Scope 1 | `haversineKm()` + `findNearestLocation()` | **Match** |
+| Alert lifecycle dedup | scopes.md Scope 1 | `c.known` map + 7-day eviction in `Sync()` | **Match** |
+| CAP severity classification | scopes.md Scope 1 | `classifyEarthquakeSeverity()`, `mapNWSSeverity()`, 5 source-specific classifiers | **Match** |
+| 7 content types | spec.md R-001 | earthquake, weather, tsunami, volcano, wildfire, air-quality, disaster | **Match** |
+| `alerts.notify` NATS subject | scopes.md Scope 6 | `nats/client.go::SubjectAlertsNotify`, `nats_contract.json` | **Match** |
+| ALERTS stream | scopes.md Scope 6 | `nats/client.go::AllStreams()`, `nats_contract.json` | **Match** |
+| Proactive notification routing | scopes.md Scope 6 | `maybeNotify()` routes extreme/severe; panic recovery (C-017-002) | **Match** |
+| TravelLocationProvider interface | scopes.md Scope 6 | `TravelLocationProvider` interface + `mergedLocations()` 2x radius | **Match** |
+| Config SST pipeline | smackerel.yaml → connectors.go | All 7 source flags + AirNow key via Credentials channel | **Match** |
+| Registry wiring | connectors.go | `alertsConn` registered, auto-started with `NATSAlertNotifier` | **Match** |
+| 168 test functions | report.md | `grep -c '^func Test' alerts_test.go` = 168 | **Match** |
+| All unit tests pass | CI | `./smackerel.sh test unit` — all 41 Go packages pass | **Match** |
+| state.json: done + certified | state.json | status=done, certification.status=certified, all 6 scopes + 7 phases | **Match** |
+
+### Security Controls Verified
+
+| Control | Implementation | Status |
+|---------|---------------|--------|
+| Response body size limiting | `io.LimitReader(resp.Body, maxResponseBytes)` on all 7 sources | Present |
+| Input sanitization | `sanitizeStringField()`, `sanitizeContentField()`, `sanitizeAlertID()` | Present |
+| URL scheme allowlisting | `sanitizeExternalURL()` — http/https only | Present |
+| Coordinate validation | `isFiniteCoord()` — rejects NaN/Inf/out-of-range | Present |
+| Radius validation | `isFinitePositiveRadius()` — rejects NaN/Inf/zero/negative | Present |
+| API key redaction | `fetchAirNowAQI()` replaces key with `[REDACTED]` in errors | Present |
+| HTTP timeout | `http.Client{Timeout: 15 * time.Second}` | Present |
+| Sync timeout | `maxSyncDuration = 5 * time.Minute` (STAB-017-001) | Present |
+| Panic recovery | `maybeNotify()` deferred recover (C-017-002) | Present |
+| Close/Sync coordination | `closed` flag prevents post-close health corruption (C-017-003) | Present |
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| RECON-R72-001 | Design Drift | Info | Design.md specifies separate files (usgs.go, nws.go, proximity.go, lifecycle.go, normalizer.go). Implementation is single-file `alerts.go` (1808 lines). Same as RECON-007 from Apr 11 reconciliation — accepted as functionally equivalent. No change needed. | Accepted |
+| RECON-R72-002 | Doc Staleness | Info | Regression report (Apr 21) references "166 test functions" but stabilize report (same day, later) added 2 → 168 total. Both were accurate at snapshot time. No correction needed — reports are point-in-time records. | Noted |
+
+### Cross-Spec Conflict Check
+
+| Check | Result |
+|-------|--------|
+| Weather connector (016) NWS overlap | No conflict — weather uses Open-Meteo, alerts uses NWS |
+| NATS contract consistency | `alerts.notify` + ALERTS stream in contract, code, and tests |
+| Connector wiring (019) | Standard interface, registered in registry |
+| Config SST compliance | Zero `os.Getenv` in alerts.go; all config via ConnectorConfig |
+| No hardcoded defaults in source | `parseAlertsConfig` reads all toggles, validates ranges |
+
+### Validation
+
+- `./smackerel.sh test unit` — All 41 Go packages pass, Python tests pass
+- 168 test functions in `internal/connector/alerts/alerts_test.go`
+- `./smackerel.sh check` — Config SST verified
+- No code changes needed — all claims substantiated
+
+---
+
 ## Stabilize Report — 2026-04-21
 
 **Trigger:** `stabilize` (stochastic-quality-sweep R56 child workflow)
