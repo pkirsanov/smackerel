@@ -407,8 +407,10 @@ func classifyTrips(clusters []LocationCluster, home LatLng, config MapsConfig) [
 		startDay := remoteDays[tripStart]
 		endDay := remoteDays[i-1]
 
-		// Check minimum overnight hours: the span from first day start to last day end.
-		spanHours := endDay.date.Sub(startDay.date).Hours() + 24 // add 24h for the last day itself
+		// Check minimum overnight hours: the span from first day to last day.
+		// A single-day cluster has span 0 — it is NOT an overnight trip.
+		// Two consecutive days have span 24h (one overnight), etc.
+		spanHours := endDay.date.Sub(startDay.date).Hours()
 		if spanHours < config.TripMinOvernightHours {
 			tripStart = i
 			continue
