@@ -370,6 +370,14 @@ IMAP_SYNC_SCHEDULE="$(yaml_get connectors.imap.sync_schedule 2>/dev/null)" || IM
 CALDAV_SYNC_SCHEDULE="$(yaml_get connectors.caldav.sync_schedule 2>/dev/null)" || CALDAV_SYNC_SCHEDULE=""
 YOUTUBE_SYNC_SCHEDULE="$(yaml_get connectors.youtube.sync_schedule 2>/dev/null)" || YOUTUBE_SYNC_SCHEDULE=""
 
+# CORS config
+CORS_ALLOWED_ORIGINS_JSON="$(yaml_get_json cors.allowed_origins 2>/dev/null)" || CORS_ALLOWED_ORIGINS_JSON="[]"
+# Convert JSON array to comma-separated string for env var
+CORS_ALLOWED_ORIGINS=""
+if [[ "$CORS_ALLOWED_ORIGINS_JSON" != "[]" && -n "$CORS_ALLOWED_ORIGINS_JSON" ]]; then
+  CORS_ALLOWED_ORIGINS="$(python3 -c "import json,sys; print(','.join(json.loads(sys.argv[1])))" "$CORS_ALLOWED_ORIGINS_JSON" 2>/dev/null)" || CORS_ALLOWED_ORIGINS=""
+fi
+
 # Connector import paths (optional — empty string is valid default)
 BOOKMARKS_ENABLED="$(yaml_get connectors.bookmarks.enabled 2>/dev/null)" || BOOKMARKS_ENABLED="false"
 BOOKMARKS_SYNC_SCHEDULE="$(yaml_get connectors.bookmarks.sync_schedule 2>/dev/null)" || BOOKMARKS_SYNC_SCHEDULE=""
@@ -671,6 +679,7 @@ MEAL_PLANNING_MEAL_TIME_SNACK=${MEAL_PLANNING_MEAL_TIME_SNACK}
 MEAL_PLANNING_CALENDAR_SYNC=${MEAL_PLANNING_CALENDAR_SYNC}
 MEAL_PLANNING_AUTO_COMPLETE=${MEAL_PLANNING_AUTO_COMPLETE}
 MEAL_PLANNING_AUTO_COMPLETE_CRON=${MEAL_PLANNING_AUTO_COMPLETE_CRON}
+CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
 EOF
 
 chmod 0600 "$OUTPUT_FILE"

@@ -122,6 +122,9 @@ type Dependencies struct {
 
 	// Meal plan handler (optional — nil when meal planning not enabled)
 	MealPlanHandler *MealPlanHandler
+
+	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
+	CORSAllowedOrigins []string
 }
 
 // DBHealthChecker is the interface for database health checks.
@@ -295,6 +298,23 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// ReadyzHandler handles GET /readyz — a lightweight readiness probe.
+// Only checks core DB connectivity. Returns 200 when the service can serve
+// requests, 503 when it cannot. Intended for Docker HEALTHCHECK and
+// orchestrator readiness probes (separate from the full /api/health liveness check).
+func (d *Dependencies) ReadyzHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if d.DB == nil || !d.DB.Healthy(ctx) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"ready":false}`))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"ready":true}`))
 }
 
 // getCachedKnowledgeHealth returns cached knowledge health stats, refreshing when stale.
