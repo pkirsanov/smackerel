@@ -72,6 +72,18 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate conversation payload (SC-TSC13a)
+	if req.Conversation != nil {
+		if len(req.Conversation.Participants) == 0 {
+			writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Conversation must have at least one participant")
+			return
+		}
+		if len(req.Conversation.Messages) == 0 {
+			writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Conversation must have at least one message")
+			return
+		}
+	}
+
 	// Get the pipeline processor
 	if d.Pipeline == nil {
 		writeError(w, http.StatusServiceUnavailable, "ML_UNAVAILABLE", "Processing service unavailable")

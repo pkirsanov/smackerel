@@ -111,7 +111,7 @@ Scenario: SCN-024-04 Competitive matrix distinguishes implemented vs planned
   When the reconciliation is applied
   Then only actually implemented features retain ✅
   And aspirational features use a distinct planned indicator (🔜)
-  And connector counts match the 14 committed connectors
+  And connector counts match the 15 committed connectors
 
 Scenario: SCN-024-05 Phased plan reflects actual technology and delivery state
   Given §19 references OpenClaw setup and SQLite/LanceDB
@@ -120,7 +120,7 @@ Scenario: SCN-024-05 Phased plan reflects actual technology and delivery state
   And completed phases are marked as delivered
   And current phase is identified
 
-Scenario: SCN-024-06 Connector ecosystem accurately lists all 14 connectors
+Scenario: SCN-024-06 Connector ecosystem accurately lists all 15 connectors
   Given §22 lists connectors by category
   When the reconciliation is applied
   Then all 15 committed connectors are represented (alerts, bookmarks, browser, caldav, discord, guesthost, hospitable, imap, keep, maps, markets, rss, twitter, weather, youtube)
@@ -147,7 +147,7 @@ Scenario: SCN-024-06 Connector ecosystem accurately lists all 14 connectors
 |------|------|---------|-------------------|
 | Manual | Each ✅ in §21.3 verified against committed code directories | Honest competitive claims | SCN-024-04 |
 | Manual | §19 phase tasks reference correct technology | Accurate phased plan | SCN-024-05 |
-| Count | 14 committed connectors represented in §22 | Connector accuracy | SCN-024-06 |
+| Count | 15 committed connectors represented in §22 | Connector accuracy | SCN-024-06 |
 | Grep | `grep -c "✅ Committed" docs/smackerel.md` for connector table entries | Connector status markers | SCN-024-06 |
 | Grep | `grep -n "Notion\|Obsidian" docs/smackerel.md` → all marked as planned | No false committed claims | SCN-024-06 |
 | Validation | `git diff --stat` shows only `docs/smackerel.md` | No code files modified (AC-8) | All |

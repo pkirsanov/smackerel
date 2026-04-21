@@ -114,6 +114,73 @@ func TestSCN008003_BareURLBackwardCompat(t *testing.T) {
 	}
 }
 
+// SC-TSC04: Duplicate URL detection — replyDuplicate formats the correct response
+// depending on whether new context was provided.
+func TestSCN008004_ReplyDuplicate_WithContext(t *testing.T) {
+	var sentMsg string
+	b := &Bot{
+		replyFunc: func(chatID int64, text string) {
+			sentMsg = text
+		},
+	}
+
+	result := map[string]interface{}{
+		"title": "Test Article",
+	}
+	b.replyDuplicate(42, result, "for the team meeting")
+	if sentMsg == "" {
+		t.Fatal("expected a reply to be sent")
+	}
+	if !strings.Contains(sentMsg, "Already saved") {
+		t.Errorf("expected 'Already saved' in reply, got %q", sentMsg)
+	}
+	if !strings.Contains(sentMsg, "Test Article") {
+		t.Errorf("expected title in reply, got %q", sentMsg)
+	}
+	if !strings.Contains(sentMsg, "updated with new context") {
+		t.Errorf("expected context merge note, got %q", sentMsg)
+	}
+}
+
+func TestSCN008004_ReplyDuplicate_WithoutContext(t *testing.T) {
+	var sentMsg string
+	b := &Bot{
+		replyFunc: func(chatID int64, text string) {
+			sentMsg = text
+		},
+	}
+
+	result := map[string]interface{}{
+		"title": "Existing Item",
+	}
+	b.replyDuplicate(42, result, "")
+	if sentMsg == "" {
+		t.Fatal("expected a reply to be sent")
+	}
+	if !strings.Contains(sentMsg, "Already saved") {
+		t.Errorf("expected 'Already saved' in reply, got %q", sentMsg)
+	}
+	if strings.Contains(sentMsg, "updated with new context") {
+		t.Errorf("should not mention context update when no context provided, got %q", sentMsg)
+	}
+}
+
+func TestSCN008004_ReplyDuplicate_EmptyTitle(t *testing.T) {
+	var sentMsg string
+	b := &Bot{
+		replyFunc: func(chatID int64, text string) {
+			sentMsg = text
+		},
+	}
+
+	// When API returns no title, fallback to "item"
+	result := map[string]interface{}{}
+	b.replyDuplicate(42, result, "some context")
+	if !strings.Contains(sentMsg, "item") {
+		t.Errorf("expected fallback title 'item', got %q", sentMsg)
+	}
+}
+
 // --- Chaos-hardening tests ---
 
 func TestChaos_TruncateUTF8_MultiByteAtBoundary(t *testing.T) {

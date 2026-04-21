@@ -1041,3 +1041,75 @@ func TestCaptureRequest_ConversationDecodesIntoPipelineType(t *testing.T) {
 		t.Errorf("expected ForwardMeta.SenderName=charlie, got %q", req.ForwardMeta.SenderName)
 	}
 }
+
+// SC-TSC13a: Conversation validation rejects payloads with 0 participants.
+func TestCaptureHandler_ConversationValidation_ZeroParticipants(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	body := `{
+		"conversation": {
+			"participants": [],
+			"message_count": 2,
+			"source_chat": "test-chat",
+			"messages": [
+				{"sender": "alice", "timestamp": "2026-04-01T10:00:00Z", "text": "hello"}
+			]
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for 0 participants, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "INVALID_INPUT" {
+		t.Errorf("expected INVALID_INPUT, got %q", resp.Error.Code)
+	}
+}
+
+// SC-TSC13a: Conversation validation rejects payloads with 0 messages.
+func TestCaptureHandler_ConversationValidation_ZeroMessages(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	body := `{
+		"conversation": {
+			"participants": ["alice", "bob"],
+			"message_count": 0,
+			"source_chat": "test-chat",
+			"messages": []
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capture", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.CaptureHandler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for 0 messages, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "INVALID_INPUT" {
+		t.Errorf("expected INVALID_INPUT, got %q", resp.Error.Code)
+	}
+}

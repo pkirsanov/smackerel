@@ -710,3 +710,92 @@ exit: 0
 ```
 
 All existing unit tests pass. No code changes — this sweep corrected artifact evidence only.
+
+---
+
+## Test Coverage Probe (R04 — Stochastic Quality Sweep: test-to-doc)
+
+**Date:** April 21, 2026
+**Trigger:** `test`
+**Mode:** `test-to-doc`
+
+### Methodology
+
+Mapped all 24 Gherkin scenarios from `scopes.md` against existing unit tests in `internal/telegram/*_test.go`, `internal/api/capture_test.go`, and `internal/pipeline/*_test.go`. Identified scenarios with zero or insufficient test coverage.
+
+### Coverage Matrix (24 scenarios)
+
+| Scenario | Scope | Status | Test Location |
+|----------|-------|--------|---------------|
+| SC-TSC01 | 1 | ✅ Covered | `share_test.go::TestSCN008001` |
+| SC-TSC02 | 1 | ✅ Covered | `share_test.go::TestSCN008003` |
+| SC-TSC03 | 1 | ✅ Covered | `share_test.go::TestSCN008002`, `TestExtractAllURLs_MultipleURLs` |
+| SC-TSC04 | 1 | ✅ **Fixed** | `share_test.go::TestSCN008004_ReplyDuplicate_*` (3 tests added) |
+| SC-TSC05 | 2 | ✅ Covered | `forward_test.go::TestSCN008005`, `TestExtractForwardMeta_FromUser` |
+| SC-TSC06 | 2 | ✅ Covered | `forward_test.go::TestExtractForwardMeta_PrivacyRestricted` |
+| SC-TSC07 | 2 | ✅ Covered | `forward_test.go::TestExtractForwardMeta_FromChannel` |
+| SC-TSC05a | 2 | ✅ Covered | `forward_test.go::TestSCN008005a` |
+| SC-TSC05b | 2 | ✅ Covered | `forward_test.go::TestSCN008005b` |
+| SC-TSC08 | 3 | ✅ Covered | `assembly_test.go::TestConversationAssembler_MultipleMessages_Clustered` |
+| SC-TSC09 | 3 | ✅ Covered | `assembly_test.go::TestConversationAssembler_SingleMessage_FlushesAsSingle` |
+| SC-TSC10 | 3 | ✅ Covered | `assembly_test.go::TestConversationAssembler_ConcurrentKeys` |
+| SC-TSC11 | 3 | ✅ Covered | Routing-level: bot.go handles non-forwarded messages on separate branch; `assembly_test.go` confirms non-assembly messages don't appear in buffers |
+| SC-TSC12 | 3 | ✅ Covered | `assembly_test.go::TestConversationAssembler_OverflowFlush` |
+| SC-TSC12a | 3 | ✅ Covered | `assembly_test.go::TestConversationAssembler_FlushChat` (FlushChat is the /done mechanism) |
+| SC-TSC12b | 3 | ✅ Covered | `assembly_test.go::TestConversationAssembler_URLsInConversation_NotSeparated` |
+| SC-TSC12c | 3 | ✅ Covered | `assembly_test.go::TestConversationAssembler_OutOfOrderTimestamps` |
+| SC-TSC08p | 4 | ✅ Covered | `capture_test.go::TestCaptureRequest_ConversationDecodesIntoPipelineType`, `extraction_edge_test.go::TestExtractContent_Conversation*` |
+| SC-TSC13 | 4 | ⚠️ Integration | Requires live stack (DB + search). Pipeline unit coverage exists in `extraction_edge_test.go` |
+| SC-TSC13a | 4 | ✅ **Fixed** | `capture_test.go::TestCaptureHandler_ConversationValidation_ZeroParticipants/ZeroMessages` (code + 2 tests added) |
+| SC-TSC14 | 5 | ✅ Covered | `media_test.go::TestMediaGroupAssembler_BasicAssembly` |
+| SC-TSC15 | 5 | ✅ Covered | `media_test.go::TestCollectCaptions`, `TestFormatMediaGroup` |
+| SC-TSC16 | 6 | ✅ **Fixed** | `bot_test.go::TestSCN008016_UnauthorizedChat_NoAssemblyBuffer` (1 test added) |
+| SC-TSC17 | 6 | ✅ Covered | `assembly_test.go::TestChaos_FlushChat_OnlyFlushesTargetChat` |
+
+### Gaps Found & Fixed
+
+| # | Scenario | Gap Type | Fix Applied |
+|---|----------|----------|-------------|
+| 1 | SC-TSC04 | Missing test | Added 3 unit tests for `replyDuplicate` logic: with-context, without-context, empty-title fallback |
+| 2 | SC-TSC13a | Missing code + test | Added conversation payload validation in `capture.go` (reject 0 participants, reject 0 messages). Added 2 HTTP handler tests |
+| 3 | SC-TSC16 | Missing test | Added unit test verifying unauthorized chat + assembler interaction: auth check blocks before assembler is reached |
+
+### Remaining Integration Gaps (not addressable as unit tests)
+
+| Scenario | Category | Reason |
+|----------|----------|--------|
+| SC-TSC13 | Integration | Requires live PostgreSQL + pgvector for conversation searchability validation |
+| SC-TSC08p (full path) | Integration | Full pipeline end-to-end requires live stack; unit-level extraction coverage exists |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/api/capture.go` | Added conversation validation (0 participants, 0 messages → 400) |
+| `internal/api/capture_test.go` | +2 tests: `TestCaptureHandler_ConversationValidation_ZeroParticipants`, `TestCaptureHandler_ConversationValidation_ZeroMessages` |
+| `internal/telegram/share_test.go` | +3 tests: `TestSCN008004_ReplyDuplicate_WithContext`, `WithoutContext`, `EmptyTitle` |
+| `internal/telegram/bot_test.go` | +1 test: `TestSCN008016_UnauthorizedChat_NoAssemblyBuffer` |
+
+### Test Evidence
+
+```
+$ go test ./internal/telegram/... -run "TestSCN008004|TestSCN008016" -v
+=== RUN   TestSCN008016_UnauthorizedChat_NoAssemblyBuffer
+--- PASS: TestSCN008016_UnauthorizedChat_NoAssemblyBuffer (0.00s)
+=== RUN   TestSCN008004_ReplyDuplicate_WithContext
+--- PASS: TestSCN008004_ReplyDuplicate_WithContext (0.00s)
+=== RUN   TestSCN008004_ReplyDuplicate_WithoutContext
+--- PASS: TestSCN008004_ReplyDuplicate_WithoutContext (0.00s)
+=== RUN   TestSCN008004_ReplyDuplicate_EmptyTitle
+--- PASS: TestSCN008004_ReplyDuplicate_EmptyTitle (0.00s)
+PASS
+
+$ go test ./internal/api/... -run "TestCaptureHandler_ConversationValidation" -v
+=== RUN   TestCaptureHandler_ConversationValidation_ZeroParticipants
+--- PASS: TestCaptureHandler_ConversationValidation_ZeroParticipants (0.00s)
+=== RUN   TestCaptureHandler_ConversationValidation_ZeroMessages
+--- PASS: TestCaptureHandler_ConversationValidation_ZeroMessages (0.00s)
+PASS
+
+$ ./smackerel.sh test unit — all packages pass (pre-existing TestSplitRateArgs failure in annotation_test.go is unrelated)
+```
