@@ -21,6 +21,43 @@ Links: [scopes.md](scopes.md) | [uservalidation.md](uservalidation.md)
 - `./smackerel.sh test unit` — 236 passed, 0 failed
 - `./smackerel.sh lint` — All checks passed
 
+## Regression Probe — 2026-04-21
+
+**Trigger:** `regression-to-doc` child workflow of `stochastic-quality-sweep` R59
+
+### Probe Summary
+
+Probed all meal planning implementation files for regressions against prior fixes and spec scenarios:
+
+| Surface | Files Probed | Result |
+|---------|-------------|--------|
+| Store layer | `store.go`, `store_iface.go` | Clean — `rows.Err()` checks present in all 4 iteration methods |
+| Service layer | `service.go` | Clean — `crypto/rand` ID generation intact, `DeleteSlot` error discrimination intact |
+| Shopping bridge | `shopping.go` | Clean — paginated `findExistingList` correctly terminates on `len(lists) < pageSize` |
+| Calendar bridge | `calendar.go` | Clean — meal time resolution with fallback to noon |
+| API handlers | `api/mealplan_test.go` | Clean — validation, error codes, CalDAV guard all tested |
+| Telegram commands | `telegram/mealplan_commands_test.go` | Clean — regex patterns, day resolution, batch patterns tested |
+| Type system | `types.go` | Clean — `AllowedTransition` covers all 12 state pairs |
+
+### Prior Fix Retention Verification
+
+All 4 fixes from the improvement sweep (2026-04-21) confirmed intact:
+
+1. **`rows.Err()` checks** — verified in `GetPlanWithSlots` (L88), `ListPlans` (L120), `GetSlotsByDate` (L273), `FindOverlappingPlans` (L297)
+2. **`crypto/rand` ID suffix** — verified `generateID()` reads 8 random bytes (L38-39)
+3. **Paginated `findExistingList`** — verified loop with `offset += pageSize` and `len(lists) < pageSize` break (L291-306)
+4. **`DeleteSlot` error discrimination** — verified `strings.Contains(err.Error(), "slot not found")` guard with DB error passthrough (L241-244)
+
+### CLI Verification
+
+- `./smackerel.sh check` — PASS (SST config in sync, env_file drift guard OK)
+- `./smackerel.sh test unit` — 236 passed, 0 failed
+- `./smackerel.sh lint` — All checks passed
+
+### Findings
+
+None. No regressions detected.
+
 ## Scope 01: Config & Migration
 
 _Not started._

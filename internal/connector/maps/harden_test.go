@@ -299,6 +299,63 @@ func TestImprove_ConfigIntMinRejectsHugeFloat(t *testing.T) {
 	}
 }
 
+// --- S-011-001: Health recovers on no-new-files sync after prior complete failure ---
+// If a previous sync completely fails (all files error → HealthError), the next
+// sync that finds no new files should reset to HealthHealthy, not stay stuck in
+// HealthError from stale counters.
+
+func TestStabilize_HealthRecoveryAfterFailureThenIdle(t *testing.T) {
+	dir := t.TempDir()
+	// Write a file that will fail to parse (invalid JSON).
+	badFile := filepath.Join(dir, "bad.json")
+	if err := os.WriteFile(badFile, []byte(`{invalid json`), 0o644); err != nil {
+		t.Fatalf("write bad file: %v", err)
+	}
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// First sync: the bad file fails to parse → syncErrors=1, syncCount=0.
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("first Sync: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts from bad file, got %d", len(artifacts))
+	}
+
+	// Health should be HealthError because all files errored with zero artifacts.
+	if c.Health(context.Background()) != connector.HealthError {
+		t.Fatalf("expected HealthError after complete failure, got %q", c.Health(context.Background()))
+	}
+
+	// Remove the bad file so the next sync finds no new files.
+	if err := os.Remove(badFile); err != nil {
+		t.Fatalf("remove bad file: %v", err)
+	}
+
+	// Second sync: no new files (bad.json was removed from the directory).
+	// Health MUST recover to HealthHealthy — there is nothing wrong, just no work.
+	_, _, err = c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("second Sync: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("expected HealthHealthy on idle after prior failure, got %q",
+			c.Health(context.Background()))
+	}
+}
+
 func TestImprove_ConfigIntMinRejectsNaN(t *testing.T) {
 	_, err := configIntMin(map[string]interface{}{"x": math.NaN()}, "x", 1)
 	if err == nil {

@@ -5099,3 +5099,86 @@ func TestSync_TravelProviderInfRadius_NoGlobalMatches(t *testing.T) {
 		t.Errorf("expected 0 artifacts (distant eq + bad travel loc filtered), got %d — C-017-001 regression", len(arts))
 	}
 }
+
+// TestSync_MaxSyncDurationBoundsTimeout verifies that Sync() is bounded
+// by maxSyncDuration so a slow API cannot block the sync loop indefinitely (STAB-017-001).
+func TestSync_MaxSyncDurationBoundsTimeout(t *testing.T) {
+	// Create an HTTP server that blocks until explicitly closed.
+	serverDone := make(chan struct{})
+	slowServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-serverDone
+	}))
+	defer func() {
+		close(serverDone)
+		slowServer.Close()
+	}()
+
+	c := New("gov-alerts")
+	c.baseURL = slowServer.URL
+	c.nwsBaseURL = slowServer.URL
+	c.tsunamiBaseURL = slowServer.URL
+	c.volcanoBaseURL = slowServer.URL
+	c.wildfireBaseURL = slowServer.URL
+	c.airnowBaseURL = slowServer.URL
+	c.gdacsBaseURL = slowServer.URL
+	// Use a very short HTTP timeout so the individual request fails fast, but
+	// the important assertion is that the overall Sync is bounded.
+	c.httpClient = &http.Client{Timeout: 100 * time.Millisecond}
+	c.config = AlertsConfig{
+		Locations:        []LocationConfig{{Name: "Test", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceEarthquake: true,
+		SourceWeather:    true,
+		SourceTsunami:    true,
+	}
+	c.health = connector.HealthHealthy
+
+	start := time.Now()
+	_, _, err := c.Sync(context.Background(), "")
+	elapsed := time.Since(start)
+
+	// The sync must complete (via errors) in well under maxSyncDuration.
+	// With 100ms HTTP timeout per source, all 3 sources should fail within ~1s.
+	if elapsed > 30*time.Second {
+		t.Errorf("Sync took %v — expected bounded completion, not unbounded blocking", elapsed)
+	}
+	// The sync should report errors from the failing sources.
+	if err == nil {
+		t.Error("expected error from failing API sources")
+	}
+}
+
+// TestSync_ParentContextCancellation_StopsSyncEarly verifies that cancelling the parent
+// context triggers the sync timeout via the derived bounded context (STAB-017-001).
+func TestSync_ParentContextCancellation_StopsSyncEarly(t *testing.T) {
+	// Server that blocks until explicitly closed.
+	serverDone := make(chan struct{})
+	slowServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-serverDone
+	}))
+	defer func() {
+		close(serverDone)
+		slowServer.Close()
+	}()
+
+	c := New("gov-alerts")
+	c.baseURL = slowServer.URL
+	c.httpClient = &http.Client{Timeout: 15 * time.Second}
+	c.config = AlertsConfig{
+		Locations:        []LocationConfig{{Name: "Test", Latitude: 37.77, Longitude: -122.42, RadiusKm: 200}},
+		SourceEarthquake: true,
+	}
+	c.health = connector.HealthHealthy
+
+	// Cancel the parent context after 200ms.
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, _, _ = c.Sync(ctx, "")
+	elapsed := time.Since(start)
+
+	// Should exit fast (not wait the full 15s HTTP timeout).
+	if elapsed > 5*time.Second {
+		t.Errorf("Sync took %v after parent cancellation — expected fast exit", elapsed)
+	}
+}

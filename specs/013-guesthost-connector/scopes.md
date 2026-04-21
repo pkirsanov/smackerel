@@ -391,7 +391,7 @@ Scenario: SCN-GH-018 Normalizer maps all remaining event types
 
 - [x] `internal/connector/guesthost/connector.go` created with full `Connector` implementation → Evidence: connector.go: `var _ connector.Connector = (*Connector)(nil)` compiles; New/Connect/Sync/Health/Close all present
 - [x] `internal/connector/guesthost/normalizer.go` created with `NormalizeEvent()` handling all 11 event types → Evidence: normalizer.go: switch on 11 event types (booking.created/updated/cancelled, guest.created/updated, review.received, message.received, task.created/completed, expense.created, property.updated)
-- [x] Connector registered in `cmd/core/main.go` following Keep/Hospitable pattern → Evidence: main.go L24: import guesthost; L174: guesthostConn := guesthostConnector.New(); L189: registry.Register(guesthostConn)
+- [x] Connector registered in `cmd/core/connectors.go` following Keep/Hospitable pattern → Evidence: connectors.go L15: import guesthost; L41: guesthostConn := guesthostConnector.New(); L49: registry.Register(guesthostConn)
 - [x] `Connect()` validates API key via GH health endpoint, sets health correctly (SCN-GH-008) → Evidence: connector.go:Connect calls client.Validate(), sets health to healthy/error
 - [x] `Sync()` fetches activity feed, normalizes events, returns artifacts + cursor → Evidence: connector.go:Sync calls FetchActivity, iterates events through NormalizeEvent
 - [x] Normalizer maps all 11 event types to correct ContentType, Title, tier, and metadata → Evidence: normalizer.go: all 11 types mapped; TestNormalizeAllEventTypes covers all; tests T-2-04..T-2-09 exist

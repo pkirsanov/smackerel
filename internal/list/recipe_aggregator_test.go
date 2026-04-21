@@ -224,3 +224,130 @@ func TestFormatIngredient(t *testing.T) {
 		}
 	}
 }
+
+func TestRecipeAggregator_SameUnitsMerged(t *testing.T) {
+	// Gherkin: "Normalize units before merging"
+	// Two recipes with the same ingredient in the same canonical unit are merged.
+	a := &RecipeAggregator{}
+	sources := []AggregationSource{
+		{ArtifactID: "a1", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[{"name":"milk","quantity":"1","unit":"cup"}]}`)},
+		{ArtifactID: "a2", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[{"name":"milk","quantity":"2","unit":"cups"}]}`)},
+	}
+
+	seeds, err := a.Aggregate(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// "cups" normalizes to "cup", so both entries share the merge key (milk, cup).
+	if len(seeds) != 1 {
+		t.Fatalf("expected 1 merged item for milk, got %d", len(seeds))
+	}
+	if seeds[0].Quantity == nil || *seeds[0].Quantity != 3 {
+		t.Fatalf("expected merged quantity 3, got %v", seeds[0].Quantity)
+	}
+	if len(seeds[0].SourceArtifactIDs) != 2 {
+		t.Fatalf("expected 2 source artifacts, got %d", len(seeds[0].SourceArtifactIDs))
+	}
+}
+
+func TestRecipeAggregator_DifferentUnitsMergedByAlias(t *testing.T) {
+	// When one recipe says "tablespoon" and another says "tbsp", they normalize to the same
+	// canonical unit and MUST merge.
+	a := &RecipeAggregator{}
+	sources := []AggregationSource{
+		{ArtifactID: "a1", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[{"name":"olive oil","quantity":"2","unit":"tablespoon"}]}`)},
+		{ArtifactID: "a2", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[{"name":"olive oil","quantity":"1","unit":"tbsp"}]}`)},
+	}
+
+	seeds, err := a.Aggregate(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(seeds) != 1 {
+		t.Fatalf("expected 1 merged item for olive oil (alias merge), got %d", len(seeds))
+	}
+	if seeds[0].Quantity == nil || *seeds[0].Quantity != 3 {
+		t.Fatalf("expected merged quantity 3, got %v", seeds[0].Quantity)
+	}
+}
+
+func TestRecipeAggregator_IncompatibleUnitsKeptSeparate(t *testing.T) {
+	// Gherkin: "Keep incompatible units separate"
+	// "2 cloves garlic" and "1 tbsp minced garlic" have different normalized units
+	// (cloves vs tbsp) and must appear as separate items.
+	a := &RecipeAggregator{}
+	sources := []AggregationSource{
+		{ArtifactID: "a1", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[{"name":"garlic","quantity":"2","unit":"cloves"}]}`)},
+		{ArtifactID: "a2", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[{"name":"garlic","quantity":"1","unit":"tbsp"}]}`)},
+	}
+
+	seeds, err := a.Aggregate(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(seeds) != 2 {
+		t.Fatalf("expected 2 separate items for garlic (incompatible units), got %d", len(seeds))
+	}
+
+	// Verify each item exists with the correct unit
+	units := map[string]bool{}
+	for _, s := range seeds {
+		units[s.Unit] = true
+	}
+	if !units["cloves"] {
+		t.Error("expected a garlic item with unit 'cloves'")
+	}
+	if !units["tbsp"] {
+		t.Error("expected a garlic item with unit 'tbsp'")
+	}
+}
+
+func TestRecipeAggregator_ThreeRecipeMerge(t *testing.T) {
+	// End-to-end test: 3 recipes with overlapping ingredients.
+	// Verifies merge, separate items, and multi-source traceability.
+	a := &RecipeAggregator{}
+	sources := []AggregationSource{
+		{ArtifactID: "a1", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[
+			{"name":"garlic","quantity":"2","unit":"cloves"},
+			{"name":"olive oil","quantity":"2","unit":"tbsp"},
+			{"name":"chicken","quantity":"1","unit":"lb"}
+		]}`)},
+		{ArtifactID: "a2", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[
+			{"name":"garlic","quantity":"3","unit":"cloves"},
+			{"name":"olive oil","quantity":"1","unit":"tbsp"},
+			{"name":"rice","quantity":"2","unit":"cup"}
+		]}`)},
+		{ArtifactID: "a3", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[
+			{"name":"garlic","quantity":"1","unit":"cloves"},
+			{"name":"salt","quantity":"1","unit":"tsp"}
+		]}`)},
+	}
+
+	seeds, err := a.Aggregate(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Expected: garlic 6 cloves (merged from 3), olive oil 3 tbsp (merged from 2),
+	// chicken 1 lb, rice 2 cup, salt 1 tsp = 5 distinct items
+	if len(seeds) != 5 {
+		t.Fatalf("expected 5 items, got %d", len(seeds))
+	}
+
+	// Find garlic and verify it merged from all 3 recipes
+	for _, s := range seeds {
+		if s.NormalizedName == "garlic" && s.Unit == "cloves" {
+			if s.Quantity == nil || *s.Quantity != 6 {
+				t.Errorf("expected garlic quantity 6, got %v", s.Quantity)
+			}
+			if len(s.SourceArtifactIDs) != 3 {
+				t.Errorf("expected garlic from 3 sources, got %d", len(s.SourceArtifactIDs))
+			}
+			return
+		}
+	}
+	t.Error("garlic item not found in merged results")
+}

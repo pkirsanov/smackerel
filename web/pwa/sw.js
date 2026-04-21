@@ -1,9 +1,10 @@
 // Smackerel PWA Service Worker
-var CACHE_NAME = 'smackerel-pwa-v1';
+var CACHE_NAME = 'smackerel-pwa-v2';
 var STATIC_ASSETS = [
   '/pwa/',
   '/pwa/index.html',
   '/pwa/style.css',
+  '/pwa/app.js',
   '/pwa/icon.svg',
   '/pwa/manifest.json',
   '/pwa/lib/queue.js'
@@ -105,10 +106,13 @@ function flushWithConfig(serverUrl, authToken) {
 
         var apiUrl = serverUrl.replace(/\/+$/, '') + '/api/capture';
         var deleteIds = [];
+        var authFailed = false;
         var chain = Promise.resolve();
 
         items.forEach(function(item) {
           chain = chain.then(function() {
+            if (authFailed) return; // stop on auth failure
+
             var body = {};
             if (item.url) body.url = item.url;
             if (item.text) body.text = item.text;
@@ -125,6 +129,8 @@ function flushWithConfig(serverUrl, authToken) {
             .then(function(resp) {
               if (resp.ok || resp.status === 409) {
                 deleteIds.push(item.id);
+              } else if (resp.status === 401) {
+                authFailed = true;
               }
             })
             .catch(function() { /* keep in queue */ });

@@ -93,6 +93,17 @@
         "runStartedAt": "2026-04-14T00:00:00Z",
         "runEndedAt": "2026-04-14T00:00:00Z",
         "summary": "P0 user validation regressions fixed: (1) Revenue snapshot extended with 24h window + per-channel/per-property breakdown, (2) Communication hints: added early_checkin + direct_booker rules with GuestBookingStats. Scope 3 unit tests created: 22 tests across guest_repo_test.go (6), property_repo_test.go (5), hospitality_linker_test.go (11). All 33 Go packages pass."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": [
+          "reconcile"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-04-21T00:00:00Z",
+        "runEndedAt": "2026-04-21T00:00:00Z",
+        "summary": "Reconcile-to-doc R65 (stochastic sweep child): Verified all 9 implementation files, 14 test files, connector registration (connectors.go), context handler wiring (services.go L191), route registration (router.go L68-69), config section (smackerel.yaml L255). 41 Go packages pass. 2 minor doc fixes: package count 33→41 in report, connector file ref main.go→connectors.go in scopes. Verdict: CLEAN."
       }
     ]
   },

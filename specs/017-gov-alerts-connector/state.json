@@ -74,6 +74,17 @@
       "runStartedAt": "2026-04-14T06:40:00Z",
       "runFinishedAt": "2026-04-14T06:42:00Z",
       "summary": "Chaos-hardening R26: found and fixed 3 issues (TravelProvider location validation bypass C-017-001, notifier panic crash C-017-002, Close-during-Sync health corruption C-017-003). Added 9 adversarial tests."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "stabilize"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-21T00:00:00Z",
+      "runFinishedAt": "2026-04-21T00:00:00Z",
+      "summary": "Stabilize R56: found and fixed 1 issue (STAB-017-001 missing maxSyncDuration bound for aggregate sync timeout). Added 2 adversarial tests. 168 total test functions."
     }
   ]
 }

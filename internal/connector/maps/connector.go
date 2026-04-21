@@ -149,6 +149,14 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	if len(newFiles) == 0 {
+		// Reset sync counters so the deferred health check sees clean state.
+		// Without this, stale values from a prior failed sync would keep
+		// health stuck in HealthError even though there is nothing wrong.
+		c.mu.Lock()
+		c.lastSyncCount = 0
+		c.lastSyncErrors = 0
+		c.lastTrailCount = 0
+		c.mu.Unlock()
 		return nil, cursor, nil
 	}
 

@@ -413,3 +413,49 @@ env_file drift guard: OK
 ```
 
 All 121 tests pass (119 existing + 2 new regression tests). All 41 Go packages pass. Zero FAIL results.
+
+### Hardening Sweep: 2026-04-21
+
+**Trigger:** stochastic-quality-sweep R60 → harden-to-doc
+**Scope:** `internal/connector/markets/markets.go`, `internal/connector/markets/markets_test.go`
+
+#### Findings
+
+| # | Finding | Severity | Remediated |
+|---|---------|----------|------------|
+| H-018-R60-001 | `Sync()` succeeds silently on never-configured connector — calling Sync() before Connect() returns 0 artifacts, no error, and sets health to Healthy, masking misconfiguration | MEDIUM | Yes |
+| H-018-R60-002 | Dead code in news tier assignment — `if watchlistSet[symbol] { tier = "standard" }` is a no-op since the variable is already "standard"; removed | LOW | Yes |
+| H-018-R60-003 | News article count unbounded per symbol — `fetchFinnhubCompanyNews` returns all articles from API with no cap; a popular symbol could flood hundreds of artifacts in one sync | MEDIUM | Yes |
+| H-018-R60-004 | Missing FRED rate-limit mid-loop degradation test — stock and forex mid-loop rate limit degradation were tested (STB-018-003) but FRED's `partialSkip = true` branch had no coverage | LOW | Yes |
+
+#### Remediations Applied
+
+1. **H-018-R60-001: Sync guard on configGen** — Added check `if c.configGen == 0` at the start of `Sync()` under the existing lock. Returns error `"connector is not configured: call Connect() before Sync()"`. `configGen` is incremented only by `Connect()`, so it's 0 only when the connector was never connected.
+
+2. **H-018-R60-002: Dead code removal** — Removed the no-op `if watchlistSet[symbol] { tier = "standard" }` conditional that assigned the same value the variable already held.
+
+3. **H-018-R60-003: News article cap** — Added `maxNewsArticlesPerSymbol = 10` constant. After `fetchFinnhubCompanyNews()` returns, the articles slice is truncated to the cap with a warning log. Prevents artifact store flooding from high-volume news symbols.
+
+4. **H-018-R60-004: FRED rate-limit test** — Added `TestH018R60_004_FREDRateLimitMidLoopHealthDegraded` that pre-exhausts 98 of 100 FRED calls and verifies only 2 economic artifacts are produced with HealthDegraded status.
+
+#### Tests Added
+
+| Test | Finding | Adversarial? |
+|------|---------|-------------|
+| `TestH018R60_001_SyncBeforeConnectErrors` | H-018-R60-001 | Yes — Sync on fresh connector (configGen=0) must error |
+| `TestH018R60_001_SyncAfterCloseErrors` | H-018-R60-001 | Yes — documents lifecycle behavior after Close |
+| `TestH018R60_003_NewsArticlesCappedPerSymbol` | H-018-R60-003 | Yes — server returns 25 articles; max 10 must appear |
+| `TestH018R60_004_FREDRateLimitMidLoopHealthDegraded` | H-018-R60-004 | Yes — pre-exhausts FRED budget; verifies Degraded |
+
+#### Evidence
+
+```
+$ ./smackerel.sh test unit --go 2>&1 | grep markets
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.013s
+$ ./smackerel.sh lint
+All checks passed!
+$ ./smackerel.sh test unit --go 2>&1 | grep -cE '^ok'
+41
+```
+
+All 41 Go packages pass. Zero FAIL results. Lint clean.

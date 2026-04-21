@@ -28,6 +28,8 @@ const (
 	maxCoinGeckoBatchSize = 50
 	// maxErrorBodySnippet limits error response body read for diagnostic logging.
 	maxErrorBodySnippet = 512
+	// maxNewsArticlesPerSymbol caps news articles per symbol to prevent artifact floods from popular tickers.
+	maxNewsArticlesPerSymbol = 10
 )
 
 var (
@@ -181,6 +183,11 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
 	// Snapshot config under lock to prevent data race with concurrent Connect().
 	c.mu.Lock()
+	// H-018-R60-001: Reject Sync if Connect() was never called.
+	if c.configGen == 0 {
+		c.mu.Unlock()
+		return nil, cursor, fmt.Errorf("connector is not configured: call Connect() before Sync()")
+	}
 	c.health = connector.HealthSyncing
 	cfg := c.config
 	gen := c.configGen
@@ -388,11 +395,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			newsFails++
 			continue
 		}
+		// H-018-R60-003: Cap news articles per symbol to prevent artifact floods.
+		if len(articles) > maxNewsArticlesPerSymbol {
+			slog.Warn("capping news articles per symbol", "symbol", symbol, "total", len(articles), "cap", maxNewsArticlesPerSymbol)
+			articles = articles[:maxNewsArticlesPerSymbol]
+		}
 		for _, article := range articles {
 			tier := "standard"
-			if watchlistSet[symbol] {
-				tier = "standard"
-			}
 			// IMP-018-SQS-001: Sanitize API-supplied text fields (CWE-116).
 			headline := stringutil.SanitizeControlChars(article.Headline)
 			summary := stringutil.SanitizeControlChars(article.Summary)

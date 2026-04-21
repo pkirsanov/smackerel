@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -15,6 +17,7 @@ func pwaFileServer() http.Handler {
 
 // sharePageTemplate is the HTML template served when the OS share target POSTs to /pwa/share.
 // It reads the shared data from Go-injected template variables and calls POST /api/capture.
+// Uses nonce-based CSP to allow inline scripts while preventing injection.
 var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -41,7 +44,7 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
 
   <div class="card hidden" id="result-error">
     <div class="status error" id="error-msg">❌ Save failed</div>
-    <button onclick="doCapture()" style="
+    <button id="retry-btn" style="
       margin-top: 0.75rem;
       background: var(--primary);
       color: white;
@@ -56,8 +59,8 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
     <div class="status info">📱 Saved offline — will sync when connected</div>
   </div>
 
-  <script src="/pwa/lib/queue.js"></script>
-  <script>
+  <script nonce="{{.Nonce}}" src="/pwa/lib/queue.js"></script>
+  <script nonce="{{.Nonce}}">
     var shareData = {
       title: {{.Title}},
       text:  {{.Text}},
@@ -142,7 +145,11 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
         url: data.url || '',
         title: data.title || '',
         text: data.text || ''
-      }).then(function() {
+      }).then(function(added) {
+        if (added === false) {
+          showError('Offline queue is full — please sync pending items first');
+          return;
+        }
         document.getElementById('saving').classList.add('hidden');
         document.getElementById('queued').classList.remove('hidden');
         setTimeout(function() { window.close(); }, 2000);
@@ -152,15 +159,31 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
       });
     }
 
+    // Retry button handler (replaces inline onclick for CSP compliance)
+    var retryBtn = document.getElementById('retry-btn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function() { doCapture(); });
+    }
+
     // Start capture immediately
     doCapture();
   </script>
 </body>
 </html>`))
 
+// generateCSPNonce produces a cryptographically random base64 nonce for CSP headers.
+func generateCSPNonce() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
+}
+
 // PWAShareHandler handles POST /pwa/share from the OS Web Share Target API.
 // It parses form-encoded data (title, text, url) and serves an HTML page
 // that captures the content via the existing /api/capture endpoint.
+// Sets a nonce-based Content-Security-Policy header on the response.
 func (d *Dependencies) PWAShareHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		slog.Warn("pwa share: bad form data", "error", err)
@@ -168,17 +191,28 @@ func (d *Dependencies) PWAShareHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	nonce, err := generateCSPNonce()
+	if err != nil {
+		slog.Error("pwa share: failed to generate CSP nonce", "error", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
 	data := struct {
 		Title string
 		Text  string
 		URL   string
+		Nonce string
 	}{
 		Title: r.FormValue("title"),
 		Text:  r.FormValue("text"),
 		URL:   r.FormValue("url"),
+		Nonce: nonce,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'self'; script-src 'nonce-"+nonce+"'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'")
 	if err := sharePageTemplate.Execute(w, data); err != nil {
 		slog.Error("pwa share: template render failed", "error", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)

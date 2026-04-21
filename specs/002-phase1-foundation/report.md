@@ -2,6 +2,26 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Scope: improve-existing (stochastic-quality-sweep R55, 2026-04-21)
+### Summary
+Removed 6 duplicated struct type definitions (`ConversationPayload`, `TimelinePayload`, `ConversationMsgPayload`, `MediaGroupPayload`, `MediaItemPayload`, `ForwardMetaPayload`) from `api/capture.go` that were field-for-field identical to types in `pipeline/processor.go`. Also removed 3 manual field-by-field conversion functions (`toPipelineConversation`, `toPipelineMediaGroup`, `toPipelineForwardMeta`) totaling ~80 lines of boilerplate. The `CaptureRequest` struct now uses `*pipeline.ConversationPayload`, `*pipeline.MediaGroupPayload`, and `*pipeline.ForwardMetaPayload` directly — the API layer already imports `pipeline`, so no circular dependency exists. If a field were added to one set of types but not the other, the divergence would be silent.
+
+### Finding Addressed
+- IMPROVE-002-SQS-004 (MEDIUM): `CaptureRequest` duplicates 6 payload types from `pipeline/processor.go` plus 3 manual conversion functions — maintenance-trap drift risk
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/api/capture.go` | Changed `CaptureRequest` to use `*pipeline.ConversationPayload`, `*pipeline.MediaGroupPayload`, `*pipeline.ForwardMetaPayload` directly; removed 6 duplicated type definitions and 3 conversion functions |
+| `internal/api/capture_test.go` | Added `TestCaptureRequest_ConversationDecodesIntoPipelineType` regression test proving JSON round-trip through unified pipeline types |
+
+### Test Evidence
+- `./smackerel.sh test unit` — all 41 Go packages pass, 236 Python tests pass, 0 failures
+- `./smackerel.sh check` — config in sync with SST
+
+---
+
 ## Scope: improve-existing (stochastic-quality-sweep, 2026-04-21)
 ### Summary
 Replaced fragile `strings.Contains()` error classification in `CaptureHandler` with Go-idiomatic sentinel errors and `errors.Is()`. The capture handler classified pipeline errors by matching substrings in error messages — if error messages were refactored, the classification would silently degrade to generic 500 responses. The `DuplicateError` typed error path already used `errors.As()` correctly, making the string-matching paths an asymmetric gap.

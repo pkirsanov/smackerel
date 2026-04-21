@@ -129,3 +129,42 @@ None. Previous devops fix (migration table consolidation 19→3 entries) remains
 
 - `./smackerel.sh lint` — passed clean after fixes
 - `ls internal/connector/` confirms: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `rss/`, `twitter/`, `weather/`, `youtube/` (15 directories)
+
+---
+
+## Stabilize Pass (2026-04-21, R57)
+
+**Trigger:** `stabilize-to-doc` child workflow from stochastic-quality-sweep R57
+
+### Probe Summary
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Go source file count (cmd/ + internal/) | 153 | Matches Development.md |
+| Go test file count (cmd/ + internal/) | 149 | Matches Development.md |
+| Python source file count (ml/app/) | 17 | Matches Development.md |
+| Python test file count (ml/tests/) | 16 | Matches Development.md |
+| E2E script count (tests/e2e/) | 59 | Matches Development.md |
+| Migration files on disk | 3 (001, 018, 019) | Matches Development.md migration table |
+| Prompt contracts on disk | 8 | Matches Development.md prompt contract table |
+| Internal packages on disk | 23 | Matches Development.md Go Packages table |
+| Connector directories on disk | 15 | Matches README + Development.md connector tables |
+| Docker memory limits | 512M/256M/512M/2G/8G | Matches README container memory table |
+| Health check intervals | pg:5s, nats:5s, core:10s, ml:10s, ollama:10s | 4/5 documented in Operations.md |
+| Port allocation (dev) | 40001/40002/42001-42004 | Matches Development.md + Operations.md |
+| README doc links | All 7 files exist | All links valid |
+| `./smackerel.sh lint` | CLEAN | Go + Python lint passed |
+
+### Findings
+
+| # | Finding | Category | Severity | Resolution |
+|---|---------|----------|----------|------------|
+| F1 | Operations.md Health Checks table listed 4 services but omitted Ollama, which has a health check in docker-compose.yml (HTTP `/api/tags`, interval 10s, start_period 30s) | Documentation drift | Low | Added Ollama row to health check table |
+
+### Files Modified
+
+- `docs/Operations.md` — added Ollama health check entry to Monitoring → Health Checks table
+
+### Verification
+
+- `./smackerel.sh lint` — passed clean after fix
