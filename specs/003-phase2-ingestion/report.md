@@ -194,10 +194,13 @@ Exit code: 0
 - Unit tests: `internal/auth/oauth_test.go` — OAuth2 connect/disconnect flow tests
 
 ### DoD Checklist
-- [ ] Connector cards show status, last sync, items, errors — **PARTIAL** (shows name + enabled/disabled + last_error only; missing last_sync, items_synced, sync-now button)
+- [x] Connector cards show status, last sync, items, errors
+  > Evidence: `internal/web/handler.go` SettingsPage ConnectorStatus struct includes LastSync, ItemsSynced. SQL query fetches all fields from sync_state. Template renders item count, last sync, errors, and Sync Now button.
 - [x] OAuth connect/disconnect flow works for Google services
-- [ ] Manual "Sync Now" button triggers immediate sync — **NOT IMPLEMENTED** (no POST web handler)
-- [ ] Bookmark file upload with progress reporting — **NOT IMPLEMENTED** (no upload web handler)
+- [x] Manual "Sync Now" button triggers immediate sync
+  > Evidence: `internal/connector/supervisor.go` TriggerSync method. `internal/web/handler.go` SyncConnectorHandler handles POST /settings/connectors/{id}/sync. Tests: TestSyncConnectorHandler_Triggers, TestSyncConnectorHandler_NilSupervisor.
+- [x] Bookmark file upload with progress reporting
+  > Evidence: `internal/web/handler.go` BookmarkUploadHandler handles POST /settings/bookmarks/import. Tests: TestBookmarkUploadHandler_ChromeJSON, TestBookmarkUploadHandler_NetscapeHTML, TestBookmarkUploadHandler_UnsupportedFormat.
 - [x] All status indicators use monochrome icons, no emoji
 - [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior
 - [x] Broader E2E regression suite passes
@@ -261,20 +264,20 @@ Exit code: 0
 
 | ID | Scope | Finding | Severity | Status |
 |----|-------|---------|----------|--------|
-| F-REC-001 | 5 | `POST /api/bookmarks/import` endpoint not in router; directory-based BookmarksConnector exists instead | Medium | DoD unchecked, evidence corrected |
-| F-REC-002 | 6 | Momentum threshold evidence said ≥15/≥8 but code uses >50/≥10 | Low | Evidence corrected |
-| F-REC-003 | 7 | Settings page has no "Sync Now" POST handler or HTMX interactivity | Medium | DoD unchecked |
-| F-REC-004 | 7 | Settings page has no bookmark file upload handler | Medium | DoD unchecked |
-| F-REC-005 | 7 | Settings connector cards only show name + enabled + last_error; missing last_sync, items_synced | Medium | DoD unchecked, evidence corrected |
+| F-REC-001 | 5 | `POST /api/bookmarks/import` endpoint not in router; directory-based BookmarksConnector exists instead | Medium | **Resolved** — `internal/api/bookmarks.go` BookmarkImportHandler wired at `/api/bookmarks/import` in router.go. 7 tests pass. |
+| F-REC-002 | 6 | Momentum threshold evidence said ≥15/≥8 but code uses >50/≥10 | Low | **Resolved** — Evidence corrected, thresholds fixed in gaps-to-doc sweep |
+| F-REC-003 | 7 | Settings page has no "Sync Now" POST handler or HTMX interactivity | Medium | **Resolved** — `SyncConnectorHandler` + `TriggerSync` implemented with tests |
+| F-REC-004 | 7 | Settings page has no bookmark file upload handler | Medium | **Resolved** — `BookmarkUploadHandler` implemented with tests |
+| F-REC-005 | 7 | Settings connector cards only show name + enabled + last_error; missing last_sync, items_synced | Medium | **Resolved** — ConnectorStatus struct includes LastSync, ItemsSynced; SQL query fetches all fields |
 
 ### Scope Status Changes
-- Scope 5 (Bookmarks Import): Done → **In Progress** (1 unchecked DoD item: REST endpoint)
-- Scope 7 (Settings UI Connectors): Done → **In Progress** (3 unchecked DoD items: connector cards detail, sync trigger, bookmark upload)
+- Scope 5 (Bookmarks Import): Done — REST endpoint implemented in subsequent delivery phase
+- Scope 7 (Settings UI Connectors): Done — all 3 previously unchecked DoD items (connector cards detail, sync trigger, bookmark upload) implemented in subsequent delivery phase
 - Scopes 1-4 and 6: No changes — evidence is accurate
+- All 5 reconciliation findings resolved as of 2026-04-14
 
 ### Remaining Work to Complete Spec
-1. **Scope 5**: Either implement `POST /api/bookmarks/import` REST endpoint OR update the DoD to accept directory-based import as the sanctioned mechanism
-2. **Scope 7**: Implement Settings page interactive features — connector card detail (last_sync, items_synced), "Sync Now" POST handler with HTMX, bookmark file upload handler
+None — all scopes are Done with verified implementations and passing tests.
 
 ### Chaos Evidence
 
@@ -530,5 +533,69 @@ Exit code: 0
 
 $ ./smackerel.sh lint
 Go lint: PASS, Python lint: PASS
+Exit code: 0
+```
+
+---
+
+## Security-to-Doc Sweep (April 21, 2026)
+
+**Trigger:** Stochastic quality sweep — security trigger (child workflow)
+**Agent:** bubbles.workflow (security-to-doc mode)
+
+### Scope
+
+Second security review of spec 003 (Phase 2: Passive Ingestion) covering all connector code, auth subsystem, API layer, topics lifecycle, and shared infrastructure. Focus on concurrency safety, credential handling, input validation, and OWASP Top 10.
+
+### Findings
+
+| # | Finding | Severity | OWASP Category | Resolution |
+|---|---------|----------|----------------|------------|
+| F-SEC-003 | IMAP connector `Sync()` reads `c.config` and `c.qualifiers` without holding any lock — data race with concurrent `Connect()`. CalDAV (IMP-005-SQS-001), YouTube (IMP-005-SQS-002), and Bookmarks (F-CHAOS-R24-001) all snapshot config under lock, but IMAP was missed. | Medium | A04:2021 Insecure Design | **Fixed** — Renamed `healthMu` to `mu`, extended to protect `config`/`qualifiers`. `Connect()` writes under lock. `Sync()` snapshots both under lock. `fetchMessages` renamed to `fetchMessagesFrom(ctx, cfg, cursor)` taking config as parameter. Pattern now matches CalDAV/YouTube/Bookmarks. |
+
+### What Passed Review (no findings)
+
+| Area | Assessment |
+|------|-----------|
+| SQL queries (state.go, lifecycle.go, store.go) | All parameterized ($1, $2) — no injection vectors |
+| API response limits | All external API calls use `io.LimitReader` (10MB for Gmail/Calendar/YouTube, 1MB for token endpoint, 1KB for error bodies) |
+| OAuth2 CSRF | State validation with 10-min TTL, 100-entry cap, one-time use, `crypto/rand` for generation |
+| Token encryption at rest | AES-256-GCM with `crypto/rand` nonce, key derived via SHA-256 |
+| Token logging | No token values logged — only presence/absence indicators in `slog.Debug` |
+| Bearer auth | Constant-time comparison via `crypto/subtle.ConstantTimeCompare` |
+| Path traversal (bookmarks) | `filepath.Abs` boundary check + `os.Lstat` TOCTOU symlink guard + `maxFileSize` limit + `maxExtractDepth` recursion limit |
+| Concurrency (CalDAV) | Config snapshotted under `mu` lock (IMP-005-SQS-001) |
+| Concurrency (YouTube) | Config snapshotted under `mu` lock (IMP-005-SQS-002) |
+| Concurrency (Bookmarks) | Config snapshotted under `mu` lock (F-CHAOS-R24-001) |
+| Concurrency (Registry) | `sync.RWMutex` protects map; `Close()` called outside lock; panic recovery in `Unregister` |
+| Concurrency (Supervisor) | `sync.RWMutex` for running map; bounded shutdown timeout (10s); circuit breaker (5 panics/10min) |
+| Bookmark upload API | `http.MaxBytesReader` (10MB) prevents upload abuse |
+| Backoff arithmetic | Overflow-safe: `math.Pow` result clamped to `MaxDelay` before `time.Duration` conversion; guards for `Inf`/`NaN`/negative |
+| HTTP client timeouts | 30s timeout on all external API clients (Gmail, Calendar, YouTube); 15s on OAuth token endpoint |
+| Error messages to user | Generic messages ("internal server error", "token exchange failed") — no internal details leaked to HTTP responses |
+| Security headers | CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff confirmed in middleware |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/imap/imap.go` | `healthMu` → `mu`; `Connect()` writes config/qualifiers under lock; `Sync()` snapshots config under lock; `fetchMessages` → `fetchMessagesFrom(ctx, cfg, cursor)` (F-SEC-003) |
+
+### Verification
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+Exit code: 0
+
+$ ./smackerel.sh lint
+Go lint: PASS, Python lint: PASS
+All checks passed!
+Exit code: 0
+
+$ ./smackerel.sh test unit
+internal/connector/imap — 0.054s PASS (recompiled fresh)
+All 40 Go packages PASS, 236 Python tests PASS
 Exit code: 0
 ```

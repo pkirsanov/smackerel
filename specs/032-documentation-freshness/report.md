@@ -103,3 +103,29 @@ None. Previous devops fix (migration table consolidation 19→3 entries) remains
 ### Verdict
 
 **CLEAN** — no action required.
+
+---
+
+## Improve Pass (2026-04-21)
+
+**Trigger:** `improve-existing` child workflow from stochastic-quality-sweep
+
+### Findings
+
+| # | Finding | Category | Severity | Resolution |
+|---|---------|----------|----------|------------|
+| F1 | Development.md connector sub-package dir names wrong: `calendar/` → `caldav/`, `financial/` → `markets/`, `gmail/` → `imap/`, `govalerts/` → `alerts/` | Documentation drift | Medium | Fixed all 4 directory names in Go Packages table |
+| F2 | Development.md says "14 passive connectors" but 15 exist (GuestHost omitted) | Documentation drift | Medium | Updated count to 15, added GuestHost STR, corrected protocol names (IMAP, CalDAV) |
+| F3 | README.md connector table lists GuestHost as "Planned" but it has full implementation + tests | Documentation drift | Medium | Changed status to "Implemented" |
+| F4 | README.md connector table says "Email via Gmail REST API" and "Events via Calendar API v3" but packages use IMAP and CalDAV protocols | Documentation drift | Medium | Fixed to "Email via IMAP" and "Calendar events via CalDAV" |
+| F5 | README.md architecture diagram connector list missing GuestHost | Documentation drift | Low | Added GuestHost to connector list |
+
+### Files Modified
+
+- `docs/Development.md` — fixed connector sub-package names (4 dirs) and connector count/naming (14→15)
+- `README.md` — fixed GuestHost status, protocol descriptions, and architecture connector list
+
+### Verification
+
+- `./smackerel.sh lint` — passed clean after fixes
+- `ls internal/connector/` confirms: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `rss/`, `twitter/`, `weather/`, `youtube/` (15 directories)

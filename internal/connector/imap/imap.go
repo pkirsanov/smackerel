@@ -22,7 +22,7 @@ import (
 type Connector struct {
 	id         string
 	config     connector.ConnectorConfig
-	healthMu   sync.RWMutex
+	mu         sync.RWMutex // Protects concurrent access to config/health/qualifiers
 	health     connector.HealthStatus
 	qualifiers QualifierConfig
 }
@@ -40,20 +40,21 @@ func (c *Connector) ID() string { return c.id }
 
 // Connect initializes the IMAP connection.
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
-	c.config = config
-
 	authType := config.AuthType
 	if authType != "oauth2" && authType != "password" {
 		return fmt.Errorf("IMAP connector requires oauth2 or password auth, got %q", authType)
 	}
 
 	// Parse qualifier config from source config
-	c.qualifiers = ParseQualifiers(config.Qualifiers)
+	qualifiers := ParseQualifiers(config.Qualifiers)
+
+	c.mu.Lock()
+	c.config = config
+	c.qualifiers = qualifiers
+	c.health = connector.HealthHealthy
+	c.mu.Unlock()
 
 	slog.Info("IMAP connector connected", "id", c.id, "auth", authType)
-	c.healthMu.Lock()
-	c.health = connector.HealthHealthy
-	c.healthMu.Unlock()
 	return nil
 }
 
@@ -76,28 +77,30 @@ type EmailMessage struct {
 // Emails are read from the source_config "messages" field for local/test use,
 // or from a live IMAP connection when credentials are configured.
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
-	c.healthMu.RLock()
-	disconnected := c.health == connector.HealthDisconnected
-	c.healthMu.RUnlock()
-	if disconnected {
+	c.mu.Lock()
+	if c.health == connector.HealthDisconnected {
+		c.mu.Unlock()
 		return nil, "", fmt.Errorf("IMAP connector %q: Sync called before Connect", c.id)
 	}
-	c.healthMu.Lock()
 	c.health = connector.HealthSyncing
-	c.healthMu.Unlock()
+	// Snapshot config under lock to avoid data race with concurrent Connect().
+	cfg := c.config
+	quals := c.qualifiers
+	c.mu.Unlock()
+
 	defer func() {
-		c.healthMu.Lock()
+		c.mu.Lock()
 		if c.health == connector.HealthSyncing {
 			c.health = connector.HealthHealthy
 		}
-		c.healthMu.Unlock()
+		c.mu.Unlock()
 	}()
 
-	messages, err := c.fetchMessages(ctx, cursor)
+	messages, err := c.fetchMessagesFrom(ctx, cfg, cursor)
 	if err != nil {
-		c.healthMu.Lock()
+		c.mu.Lock()
 		c.health = connector.HealthError
-		c.healthMu.Unlock()
+		c.mu.Unlock()
 		return nil, cursor, fmt.Errorf("fetch messages: %w", err)
 	}
 
@@ -122,7 +125,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			continue
 		}
 
-		tier := AssignTier(msg.From, msg.Labels, c.qualifiers)
+		tier := AssignTier(msg.From, msg.Labels, quals)
 		if tier == "skip" {
 			continue
 		}
@@ -178,17 +181,18 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	return artifacts, newCursor, nil
 }
 
-// fetchMessages retrieves messages from source config (for testing/local)
+// fetchMessagesFrom retrieves messages from source config (for testing/local)
 // or from the Gmail REST API when OAuth credentials are present.
-func (c *Connector) fetchMessages(ctx context.Context, cursor string) ([]EmailMessage, error) {
+// Takes config as parameter to avoid reading c.config without lock.
+func (c *Connector) fetchMessagesFrom(ctx context.Context, cfg connector.ConnectorConfig, cursor string) ([]EmailMessage, error) {
 	// Check for local/test messages in source_config (testing path)
-	rawMsgs, ok := c.config.SourceConfig["messages"]
+	rawMsgs, ok := cfg.SourceConfig["messages"]
 	if ok {
 		return parseEmailMessages(rawMsgs)
 	}
 
 	// Check for OAuth access token (live API path)
-	accessToken := getCredential(c.config.Credentials, "access_token")
+	accessToken := getCredential(cfg.Credentials, "access_token")
 	if accessToken == "" {
 		slog.Debug("IMAP: no source_config messages and no access_token", "id", c.id)
 		return nil, nil
@@ -468,16 +472,16 @@ func getStr(m map[string]interface{}, key string) string {
 
 // Health returns the current connector status.
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
-	c.healthMu.RLock()
-	defer c.healthMu.RUnlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.health
 }
 
 // Close disconnects the IMAP session.
 func (c *Connector) Close() error {
-	c.healthMu.Lock()
+	c.mu.Lock()
 	c.health = connector.HealthDisconnected
-	c.healthMu.Unlock()
+	c.mu.Unlock()
 	slog.Info("IMAP connector closed", "id", c.id)
 	return nil
 }

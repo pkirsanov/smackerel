@@ -242,5 +242,10 @@ func Haversine(a, b LatLng) float64 {
 
 	h := math.Sin(dLat/2)*math.Sin(dLat/2) +
 		math.Sin(dLng/2)*math.Sin(dLng/2)*math.Cos(lat1)*math.Cos(lat2)
+	// Clamp h to [0,1] — floating-point rounding with near-antipodal points
+	// can push h slightly above 1.0, making math.Asin(math.Sqrt(h)) return NaN.
+	if h > 1.0 {
+		h = 1.0
+	}
 	return 2 * R * math.Asin(math.Sqrt(h))
 }
