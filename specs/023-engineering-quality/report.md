@@ -506,3 +506,68 @@ $ ./smackerel.sh test unit — All packages pass (236 Python tests pass)
 ### Conclusion
 
 2 data races discovered via `go test -race` (C-023-CHAOS-002: IMAP connector health field, C-023-CHAOS-003: supervisor stopped field post-delay re-check). Both fixed with appropriate mutex guards and verified race-free. No regressions.
+
+---
+
+## Security Scan (2026-04-21)
+
+**Trigger:** stochastic-quality-sweep → security-to-doc (child workflow)
+**Agent:** bubbles.security (inline scan)
+**Result:** Clean — no actionable security findings
+
+### Scan Surface
+
+All code files touched or introduced by spec 023:
+
+| File | Security-Relevant Surface |
+|------|--------------------------|
+| `internal/api/health.go` | `mlClient()` sync.Once, `checkMLSidecar()` / `checkOllama()` HTTP probes, `HealthHandler` unauthenticated endpoint, knowledge health cache RWMutex |
+| `internal/api/router.go` | `structuredLogger` health log exclusion, `bearerAuthMiddleware`, `webAuthMiddleware`, `securityHeadersMiddleware`, CORS config |
+| `internal/api/capture.go` | `writeJSON`/`writeError`/`decodeJSONBody`, `CaptureHandler` input validation, body size limits |
+| `internal/api/intelligence.go` | 8 intelligence handlers — all use `writeJSON`/`writeError` |
+| `internal/api/bookmarks.go` | `BookmarkImportHandler` multipart upload with `MaxBytesReader` |
+| `internal/config/config.go` | SST-compliant config loading, fail-loud validation |
+| `internal/connector/supervisor.go` | `getSyncInterval()`, `parseSyncInterval()`, circuit breakers |
+| `cmd/core/main.go` | Service wiring, config consumption |
+
+### Security Checks Performed
+
+| # | Check | Area | Result |
+|---|-------|------|--------|
+| 1 | **SSRF — health probe URLs** | `checkOllama()`, `checkMLSidecar()` | Clean — URLs sourced from SST config (startup-time `config.Load()`), not from request parameters. 2s context timeout bounds worst-case. Response bodies drained via `io.Copy(io.Discard, resp.Body)` with timeout protection. |
+| 2 | **Auth bypass** | `bearerAuthMiddleware`, `webAuthMiddleware` | Clean — constant-time comparison via `crypto/subtle.ConstantTimeCompare`. Empty `AuthToken` explicitly logged as warning. |
+| 3 | **Timing attacks** | Token comparison paths | Clean — all 3 comparison sites (`bearerAuthMiddleware`, `webAuthMiddleware` cookie check, `webAuthMiddleware` bearer check) use `subtle.ConstantTimeCompare`. |
+| 4 | **Input validation** | `CaptureHandler`, `BookmarkImportHandler`, `decodeJSONBody` | Clean — JSON body limited to 1MB (`1<<20`), bookmark upload limited to 10MB (`10<<20`) via `http.MaxBytesReader`. Content-Type validated. Artifact ID length capped at 128. |
+| 5 | **Error information leakage** | All `writeError()` calls | Clean — standardised error responses with generic messages. No stack traces, DB queries, or internal paths exposed. |
+| 6 | **Security headers** | `securityHeadersMiddleware` | Clean — CSP (with nonce-based inline script), X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy, Cache-Control: no-store. |
+| 7 | **CORS configuration** | `NewRouter()` CORS setup | Clean — SST-configured origins only, no wildcard. Default: no origins allowed (same-origin). |
+| 8 | **Rate limiting** | OAuth routes, API throttle | Clean — OAuth start/callback rate-limited to 10/min per IP. API throttled at 100 concurrent. |
+| 9 | **CSRF protection** | `OAuthHandler` state tokens | Clean — crypto/rand generated state tokens, 10-min TTL, 100-entry cap, consumed-on-use. |
+| 10 | **Credential logging** | All `slog` calls in spec 023 surfaces | Clean — no tokens, secrets, passwords, or API keys logged. Auth failures log path + remote_addr only. |
+| 11 | **SST compliance (secrets)** | `config.go` secret fields | Clean — `AuthToken`, `LLMAPIKey`, `TelegramBotToken` sourced from env vars via SST pipeline. Empty-string placeholders for dev. Generated env files gitignored. |
+| 12 | **Response body drain** | `checkMLSidecar`, `checkOllama` | Clean — both properly drain and close response bodies. Context timeout (2s) bounds the drain operation. |
+| 13 | **Metric label injection** | `captureSource()` | Clean — bounded whitelist validation (`validCaptureSources` map), unknown values default to `"api"`. |
+| 14 | **Path traversal** | Connector config paths | Clean — `BookmarksImportDir`, `BrowserHistoryPath`, `MapsImportDir` are connector-internal paths from SST config, not exposed to HTTP request parameters. |
+
+### Findings
+
+**None.** All 14 security checks pass. The spec 023 code surfaces demonstrate sound security practices:
+- Authentication with constant-time comparison
+- Input size limits on all ingestion endpoints
+- SST-compliant secret management
+- Standardised error responses without information leakage
+- OWASP-recommended security headers
+- Rate limiting on abuse-prone endpoints
+- CSRF protection with state tokens
+
+### Evidence
+
+```
+./smackerel.sh check — Config is in sync with SST, env_file drift guard: OK
+./smackerel.sh test unit — All packages pass (33 Go + 236 Python)
+./smackerel.sh lint — Pass
+```
+
+### Verdict
+
+✅ CLEAN — No security findings. Spec 023 implementation follows OWASP best practices.
