@@ -40,6 +40,9 @@ jobs:
     needs: lint-and-test
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -54,40 +57,21 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/v')
       run: |
         VERSION="${GITHUB_REF#refs/tags/}"
-        COMMIT_SHA="${GITHUB_SHA}"
-        BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         docker tag smackerel-smackerel-core:latest "smackerel-core:${VERSION}"
-        docker tag smackerel-smackerel-core:latest "smackerel-core:${COMMIT_SHA:0:12}"
+        docker tag smackerel-smackerel-core:latest "smackerel-core:${GITHUB_SHA:0:12}"
         docker tag smackerel-smackerel-ml:latest "smackerel-ml:${VERSION}"
-        docker tag smackerel-smackerel-ml:latest "smackerel-ml:${COMMIT_SHA:0:12}"
-
-  push-images:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      packages: write
-    steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-    - name: Build Docker images
-      run: |
-        VERSION="${GITHUB_REF#refs/tags/}"
-        export SMACKEREL_VERSION="${VERSION}"
-        export SMACKEREL_COMMIT="${GITHUB_SHA:0:12}"
-        export SMACKEREL_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        ./smackerel.sh build
+        docker tag smackerel-smackerel-ml:latest "smackerel-ml:${GITHUB_SHA:0:12}"
 
     - name: Log in to GHCR
+      if: startsWith(github.ref, 'refs/tags/v')
       uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Tag and push images
+    - name: Push images to GHCR
+      if: startsWith(github.ref, 'refs/tags/v')
       run: |
         VERSION="${GITHUB_REF#refs/tags/}"
         CORE_IMAGE="ghcr.io/${{ github.repository_owner }}/smackerel-core"

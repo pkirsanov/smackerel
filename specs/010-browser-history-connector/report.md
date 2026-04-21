@@ -4,6 +4,49 @@
 
 ---
 
+## Security Scan R91 (stochastic-quality-sweep, security trigger, April 21 2026)
+
+**Trigger:** `security` via `bubbles.workflow mode: security-to-doc`
+**Scope:** Full security review of browser history connector surface
+
+**Files reviewed:**
+- `internal/connector/browser/connector.go` (780 lines) — Connector struct, Sync pipeline, processEntries, config parsing, temp file handling, cursor management
+- `internal/connector/browser/browser.go` (195 lines) — Chrome SQLite parsing, domain extraction, skip filtering
+- `cmd/core/connectors.go` — Connector registration and auto-start config
+- `config/smackerel.yaml` — browser-history config section
+
+**Checklist (OWASP Top 10 + Go-specific):**
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| SQL Injection (CWE-89) | Clean | `ParseChromeHistorySince` uses parameterized `?` placeholder, no string interpolation in SQL |
+| SQLite DSN Injection (CWE-74) | Mitigated | SEC-005-001: `dbPath` validated against `?` and `#` chars; `?mode=ro` enforced |
+| Read-only DB Access | Enforced | `?mode=ro` in DSN; no write operations; Copy-then-read isolates from Chrome's live database |
+| Path Traversal (CWE-22) | N/A | `historyPath` from user's own config (smackerel.yaml), not from untrusted external input |
+| Temp File Security (CWE-377) | Clean | `os.CreateTemp` (0600 permissions, random suffix), `defer os.Remove`, error-path cleanup |
+| Race Condition (CWE-362) | Mitigated | CHAOS-R66-F1 re-check-under-write-lock in `Health()`, config snapshot under lock in `Sync()` |
+| Command Injection (CWE-78) | Clean | No `exec.Command`, no shell calls, no subprocess spawning |
+| SSRF (CWE-918) | N/A | `contentFetcher` field is nil — no HTTP client surface in current implementation |
+| Denial of Service | Mitigated | `LIMIT 10000` on SQL query, negative duration rejection (CHAOS-R66-F2), all config validated |
+| Integer Overflow | Safe | int64 for Chrome timestamps, cursor validation rejects negative values |
+| Hardcoded Secrets | Clean | No credentials in source; config flows through SST pipeline |
+| Error Disclosure | Acceptable | Error messages include file paths (appropriate for local-only personal tool) |
+| Privacy Gate | Enforced | Metadata-tier entries produce no individual artifacts; short-dwell URLs not persisted |
+
+**Assessment: Clean — zero critical, high, or medium severity findings.**
+
+This is the 3rd dedicated security pass (after R09 initial security review and R66 chaos-hardening which caught the TOCTOU race). No new attack surface introduced since the last security review.
+
+**Verification:**
+```
+$ ./smackerel.sh test unit — all 40 Go packages pass, browser package ok (73 tests: 55 connector + 18 browser). 236 Python tests pass.
+$ ./smackerel.sh lint — All checks passed!
+$ grep -rn 'exec\.\|Command\|http\.Get\|http\.Post' internal/connector/browser/ — no matches
+$ grep -rn 'os\.Getenv.*default\|getenv.*fallback' internal/connector/browser/ — no matches (SST-compliant)
+```
+
+---
+
 ## Summary
 
 Browser History Connector delivered under delivery-lockdown mode. 2 scopes in progress: (1) Connector Implementation, Config & Registration; (2) Social Media Aggregation, Repeat Visits & Privacy Gate. Implementation: connector.go (580+ lines) with full Connector interface, social media aggregation, repeat visit detection, privacy gate, content fetch failure handling, URL+date dedup (R-010), and social aggregate peak page tracking (R-005). connector_test.go with 55 tests, browser_test.go with 18 tests — all 73 unit tests pass. Lint, format, check clean. Config SST pipeline extended for browser-history connector section. Stochastic quality sweeps fixed pipeline SourceID routing (R001), configurable dwell thresholds dead code (R002), added 6 additional test quality tests (F001/F003–F007), implemented R-010 URL+date dedup, added R-005 social aggregate peak tracking, and corrected artifact documentation drift (config location claims). V-010 reconciliation (April 14 2026) unchecked 7 overclaimed integration/E2E DoD items. V-010-R2 reconciliation (April 21 2026) found the same 7 items re-checked by a later agent; unchecked again. R54 test-to-doc (April 21 2026) found and fixed 3 unit test coverage gaps. R66 chaos-hardening (April 21 2026) found and fixed 2 concurrency/config-validation issues.

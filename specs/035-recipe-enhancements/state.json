@@ -72,12 +72,21 @@
       "runStartedAt": "2026-04-19T00:00:00Z",
       "runCompletedAt": "2026-04-19T00:00:00Z",
       "summary": "State reconciliation: verified all 6 scopes have implementation files in codebase. internal/recipe/ (types.go, quantity.go, scaler.go, fractions.go + tests), internal/telegram/ (recipe_commands.go, cook_session.go, cook_format.go + tests), internal/api/domain.go, config/smackerel.yaml. Updated state.json from not_started to in_progress. DoD checkboxes in scopes.md not yet verified/checked."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-21T00:00:00Z",
+      "runCompletedAt": "2026-04-21T00:00:00Z",
+      "summary": "Stability probe found 2 issues in CookSessionStore: (1) Stop() double-close panic risk — fixed with sync.Once; (2) StartCleanup() duplicate goroutine spawn — fixed with sync.Once. Added 2 tests. All 236 tests pass, lint clean, build OK."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-19T00:00:00Z",
+  "lastUpdatedAt": "2026-04-21T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
