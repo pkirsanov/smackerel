@@ -104,6 +104,17 @@
         "runStartedAt": "2026-04-21T00:00:00Z",
         "runEndedAt": "2026-04-21T00:00:00Z",
         "summary": "Reconcile-to-doc R65 (stochastic sweep child): Verified all 9 implementation files, 14 test files, connector registration (connectors.go), context handler wiring (services.go L191), route registration (router.go L68-69), config section (smackerel.yaml L255). 41 Go packages pass. 2 minor doc fixes: package count 33→41 in report, connector file ref main.go→connectors.go in scopes. Verdict: CLEAN."
+      },
+      {
+        "agent": "bubbles.security",
+        "phasesExecuted": [
+          "security"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-04-21T00:00:00Z",
+        "runEndedAt": "2026-04-21T00:00:00Z",
+        "summary": "Security-to-doc (stochastic sweep child): Full security scan of guesthost connector, context API, normalizer, client, router. Verified: bearer auth with constant-time compare, parameterized SQL, MaxBytesReader on POST, entity ID length cap, URL scheme validation, SanitizeControlChars on text fields, UTF-8 safe truncation, Inf/NaN rejection, pagination caps, response size limits, security headers, no leaked secrets. Verdict: CLEAN — no actionable findings. report.md updated with security evidence."
       }
     ]
   },
@@ -190,5 +201,5 @@
   "reworkQueue": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-21T00:00:00Z",
-  "notes": "2026-04-21: Harden-to-doc sweep (stochastic child). 6 findings: (1) 8 empty integration test stubs — reclassified as honest stubs, (2) 2 proxy E2E tests — ContextForEndpoint fixed to POST /api/context-for, (3) 10+ self-validating unit tests — replaced with real behavior tests, (4) linker tests only parse JSON — tautological test removed, (5) SCN-GH-026 Gherkin 15→5 topics fixed, (6) manifest false claims documented. All 41 Go packages pass after fixes."
+  "notes": "2026-04-21: Security-to-doc sweep (stochastic child). Full OWASP scan of guesthost connector surface (client, connector, normalizer, types, context API, router auth). All controls verified: AuthN, input validation, SQL injection, output encoding, DoS limits, security headers, numeric safety, concurrency, secrets hygiene. Verdict: CLEAN. report.md updated with security evidence table."
 }

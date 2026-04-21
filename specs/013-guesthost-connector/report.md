@@ -73,6 +73,33 @@ ok      github.com/smackerel/smackerel/internal/connector/guesthost     0.648s
 
 All 3 findings verified with adversarial tests in `regression_test.go` (TestChaos013001, TestChaos013002, TestChaos013003). Tests fail before fix, pass after fix.
 
+### Security Scan Evidence
+
+Executed: YES
+Agent: bubbles.security (stochastic sweep child, security-to-doc, 2026-04-21)
+
+**Verdict: CLEAN — no actionable findings.**
+
+| Category | Controls Verified | Status |
+|----------|------------------|--------|
+| AuthN/AuthZ | Bearer token middleware + `crypto/subtle.ConstantTimeCompare`; context API behind authenticated group | ✅ Pass |
+| Input validation (CWE-20) | `MaxBytesReader` 1 MiB on POST body, `maxEntityIDLen` 512, config `extractString` non-empty check, URL scheme http/https validation, `EntityType` switch-default error | ✅ Pass |
+| SQL injection (CWE-89) | All DB queries use parameterized placeholders (`$1`, `$2`); `EscapeLikePattern` available for LIKE; no string concatenation in queries | ✅ Pass |
+| Output encoding (CWE-116) | `SanitizeControlChars` on all title/metadata text fields; UTF-8 safe truncation; JSON auto-escaping | ✅ Pass |
+| DoS (CWE-400) | `maxResponseSize` 10 MiB, `maxPaginationPages` 1000, `maxTotalEvents` 10000, `maxCursorLen` 4096, empty-page guard, cursor-regression guard, `Throttle(100)`, 30s HTTP timeout | ✅ Pass |
+| Security headers | CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy, Cache-Control: no-store | ✅ Pass |
+| Numeric safety | Inf/NaN rejection on booking `TotalPrice` and expense `Amount` | ✅ Pass |
+| Concurrency | `sync.RWMutex` on connector state; Sync-after-Close guard; panic recovery with health state transition | ✅ Pass |
+| Secrets hygiene | API key in struct only, never logged; no hardcoded secrets in source; test files use dummy tokens | ✅ Pass |
+
+```
+$ ./smackerel.sh build 2>&1 | tail -5
+ ✔ smackerel-core  Built
+ ✔ smackerel-ml    Built
+$ ./smackerel.sh test unit 2>&1 | grep -cE '^ok'
+41
+```
+
 ### Implementation Files Verified
 
 | File | Exists | Lines |

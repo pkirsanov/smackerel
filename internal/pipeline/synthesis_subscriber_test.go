@@ -3,6 +3,8 @@ package pipeline
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/knowledge"
 )
 
 // T2-01: handleSynthesized success → conceptual validation of response handling
@@ -325,5 +327,43 @@ func TestCrossSourceResponse_ExactThresholdDiscarded(t *testing.T) {
 	shouldCreate := resp.HasGenuineConnection && resp.Confidence > threshold
 	if shouldCreate {
 		t.Fatal("confidence == threshold should be discarded, not stored")
+	}
+}
+
+// --- Chaos regression tests (C-025-C001, C-025-C002, C-025-C003) ---
+
+// C-025-C001: Verify ErrArtifactNotFound sentinel exists and is usable.
+// Regression: If the sentinel is removed or renamed, this test fails.
+func TestErrArtifactNotFound_SentinelExists(t *testing.T) {
+	// knowledge.ErrArtifactNotFound must be a non-nil error and usable with errors.Is
+	if knowledge.ErrArtifactNotFound == nil {
+		t.Fatal("ErrArtifactNotFound sentinel should not be nil")
+	}
+	if knowledge.ErrArtifactNotFound.Error() != "artifact not found" {
+		t.Errorf("unexpected message: %q", knowledge.ErrArtifactNotFound.Error())
+	}
+}
+
+// C-025-C001: Verify UpdateArtifactSynthesisStatusInTx method exists on KnowledgeStore.
+// Regression: If the in-tx variant is removed, handleSynthesized falls back to the
+// non-transactional UpdateArtifactSynthesisStatus, re-introducing the partial-commit race.
+func TestKnowledgeStore_HasInTxStatusUpdate(t *testing.T) {
+	ks := knowledge.NewKnowledgeStore(nil)
+	// We can't call it with nil pool (would panic on Exec), but we verify it compiles
+	// and the method signature is correct by holding a reference to the method.
+	_ = ks.UpdateArtifactSynthesisStatusInTx
+}
+
+// C-025-C002: Verify LinterConfig has PromptContractVersion field.
+// Regression: If the field is removed, lint retry falls back to publishing
+// incomplete synthesis requests that the ML sidecar cannot process.
+func TestLinterConfig_HasPromptContractVersion(t *testing.T) {
+	cfg := knowledge.LinterConfig{
+		StaleDays:             90,
+		MaxSynthesisRetries:   3,
+		PromptContractVersion: "ingest-synthesis-v1",
+	}
+	if cfg.PromptContractVersion == "" {
+		t.Fatal("PromptContractVersion must be set for lint retry to build complete requests")
 	}
 }

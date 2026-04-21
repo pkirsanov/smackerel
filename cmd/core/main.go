@@ -146,8 +146,11 @@ func run() error {
 	// Wire knowledge linter into scheduler if knowledge layer is enabled
 	if cfg.KnowledgeEnabled && svc.knowledgeStore != nil {
 		linterCfg := knowledge.LinterConfig{
-			StaleDays:           cfg.KnowledgeLintStaleDays,
-			MaxSynthesisRetries: cfg.KnowledgeMaxSynthesisRetries,
+			StaleDays:                cfg.KnowledgeLintStaleDays,
+			MaxSynthesisRetries:      cfg.KnowledgeMaxSynthesisRetries,
+			PromptContractVersion:    cfg.KnowledgePromptContractIngestSynthesis,
+			MaxSynthesisContextItems: 50,
+			MaxSynthesisContentChars: 8000,
 		}
 		knowledgeLinter := knowledge.NewLinter(svc.knowledgeStore, svc.pg.Pool, linterCfg, svc.nc)
 		sched.SetKnowledgeLinter(knowledgeLinter, cfg.KnowledgeLintCron)
