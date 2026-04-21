@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -891,5 +892,33 @@ func TestSecurityHeaders_CSP_NoUnsafeEvalOrInline(t *testing.T) {
 
 	if stringContains(csp, "'unsafe-eval'") {
 		t.Errorf("CSP must not contain 'unsafe-eval', got: %s", csp)
+	}
+}
+
+// --- SEC-R68-001: CSP script-src must pin CDN to specific package version path ---
+
+func TestSecurityHeaders_CSP_PinnedCDNPath(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+
+	// CSP must NOT allow the entire unpkg.com domain — only the pinned HTMX version path
+	if stringContains(csp, "https://unpkg.com ") || stringContains(csp, "https://unpkg.com;") || strings.HasSuffix(csp, "https://unpkg.com") {
+		t.Errorf("CSP script-src must pin CDN to specific package path, not entire domain; got: %s", csp)
+	}
+
+	// Must contain the pinned version path
+	if !stringContains(csp, "https://unpkg.com/htmx.org@") {
+		t.Errorf("CSP script-src must contain pinned HTMX version path (https://unpkg.com/htmx.org@...); got: %s", csp)
 	}
 }

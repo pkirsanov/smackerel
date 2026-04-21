@@ -793,7 +793,7 @@ W3C `traceparent` headers are propagated through NATS messages for distributed t
 | **SSRF protection** | URL validation blocks private IPs, loopback, metadata endpoints, non-HTTP schemes. Redirect chains re-validated per hop. |
 | **SQL injection** | All queries parameterized with `$N` placeholders, ILIKE metacharacters escaped |
 | **XSS prevention** | Go `html/template` auto-escaping + `safeURL` blocks `javascript:`/`data:` schemes |
-| **CSP header** | `default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'` |
+| **CSP header** | `default-src 'self'; script-src 'self' https://unpkg.com/htmx.org@1.9.12/; style-src 'self' 'unsafe-inline'` |
 | **Rate limiting** | 100 concurrent API requests (Chi middleware) |
 | **Dedup integrity** | Unique partial index on `content_hash` + belt-and-suspenders check |
 | **OAuth CSRF** | Crypto-random state tokens with 10-minute TTL and 100-entry cap |
