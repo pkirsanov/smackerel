@@ -97,7 +97,7 @@ func (c *Client) FetchActivity(ctx context.Context, since string, types string, 
 
 	var allEvents []ActivityEvent
 	cursor := ""
-	previousCursor := ""
+	var consecutiveEmptyPages int
 
 	for page := 0; page < maxPaginationPages; page++ {
 		body, err := c.doGet(ctx, buildURL(cursor))
@@ -111,6 +111,19 @@ func (c *Client) FetchActivity(ctx context.Context, since string, types string, 
 		}
 
 		allEvents = append(allEvents, resp.Events...)
+
+		// CHAOS-013-003: Guard against empty-events + HasMore=true loop.
+		// A buggy/malicious server returning empty pages with HasMore=true
+		// would otherwise cause up to maxPaginationPages (1000) requests.
+		if len(resp.Events) == 0 {
+			consecutiveEmptyPages++
+			if consecutiveEmptyPages >= 2 {
+				slog.Warn("guesthost: consecutive empty pages with HasMore=true, breaking pagination")
+				break
+			}
+		} else {
+			consecutiveEmptyPages = 0
+		}
 
 		if len(allEvents) >= maxTotalEvents {
 			slog.Warn("guesthost: event accumulation cap reached", "cap", maxTotalEvents)
@@ -126,13 +139,12 @@ func (c *Client) FetchActivity(ctx context.Context, since string, types string, 
 			return nil, fmt.Errorf("server returned oversized cursor (%d bytes, max %d)", len(resp.Cursor), maxCursorLen)
 		}
 
-		// R27-H23-05: Detect cursor regression — if the server returns the same
-		// cursor twice, pagination is stuck; break to prevent infinite loop.
-		if resp.Cursor == previousCursor {
+		// CHAOS-013-001: Detect cursor regression — if the server returns the
+		// same cursor we sent in this request, pagination is stuck.
+		if resp.Cursor == cursor {
 			slog.Warn("guesthost: cursor did not advance, breaking pagination", "cursor", resp.Cursor)
 			break
 		}
-		previousCursor = cursor
 		cursor = resp.Cursor
 	}
 

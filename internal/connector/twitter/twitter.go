@@ -483,9 +483,17 @@ func buildThreads(tweets []ArchiveTweet) []Thread {
 		if visited[t.ID] || t.InReplyToStatusID == "" {
 			continue
 		}
-		// Follow reply chain to find root
+		// Follow reply chain to find root.
+		// Track seen IDs to break out of circular reply chains that would
+		// otherwise loop forever (corrupt or crafted archive data).
 		root := t
+		seen := make(map[string]bool)
 		for root.InReplyToStatusID != "" {
+			if seen[root.ID] {
+				// Cycle detected — treat current node as root to avoid infinite loop.
+				break
+			}
+			seen[root.ID] = true
 			parent, ok := tweetMap[root.InReplyToStatusID]
 			if !ok {
 				break

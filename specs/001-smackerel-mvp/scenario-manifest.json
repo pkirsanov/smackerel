@@ -261,7 +261,7 @@
         {"file": "internal/connector/connector_test.go"}
       ],
       "evidenceRefs": ["report.md"],
-      "linkedDoD": ["HealthStatus enum: healthy, syncing, error, disconnected"]
+      "linkedDoD": ["HealthStatus enum: healthy, syncing, degraded, failing, error, disconnected"]
     },
     {
       "scenarioId": "SCN-001-021",

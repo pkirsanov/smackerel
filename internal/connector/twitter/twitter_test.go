@@ -287,6 +287,55 @@ func TestBuildThreads_AllStandalone(t *testing.T) {
 	}
 }
 
+func TestBuildThreads_CircularReplyChain(t *testing.T) {
+	// STAB-015-001: Circular reply chains in corrupt/crafted archives must not
+	// cause an infinite loop in the root-finding traversal. Before the fix,
+	// buildThreads looped forever on this input.
+	tweets := []ArchiveTweet{
+		{ID: "A", FullText: "Tweet A", InReplyToStatusID: "B"},
+		{ID: "B", FullText: "Tweet B", InReplyToStatusID: "A"},
+	}
+
+	done := make(chan []Thread, 1)
+	go func() {
+		done <- buildThreads(tweets)
+	}()
+
+	select {
+	case threads := <-done:
+		// Cycle was detected and handled gracefully — any non-hang outcome is correct.
+		// The cycle should still produce a thread (both tweets connected).
+		if len(threads) > 1 {
+			t.Errorf("expected at most 1 thread from 2-node cycle, got %d", len(threads))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("buildThreads hung on circular reply chain (STAB-015-001 regression)")
+	}
+}
+
+func TestBuildThreads_LongerCycle(t *testing.T) {
+	// Three-node cycle: A → B → C → A
+	tweets := []ArchiveTweet{
+		{ID: "A", FullText: "Tweet A", InReplyToStatusID: "C"},
+		{ID: "B", FullText: "Tweet B", InReplyToStatusID: "A"},
+		{ID: "C", FullText: "Tweet C", InReplyToStatusID: "B"},
+	}
+
+	done := make(chan []Thread, 1)
+	go func() {
+		done <- buildThreads(tweets)
+	}()
+
+	select {
+	case threads := <-done:
+		if len(threads) > 1 {
+			t.Errorf("expected at most 1 thread from 3-node cycle, got %d", len(threads))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("buildThreads hung on 3-node circular reply chain")
+	}
+}
+
 func TestSyncArchive_CancelledContext(t *testing.T) {
 	c := New("twitter")
 	dir := t.TempDir()
@@ -1828,6 +1877,93 @@ func TestParseSignalFile_DirectoryInsteadOfFile(t *testing.T) {
 	ids := c.parseSignalFile(context.Background(), "like.js", "like")
 	if len(ids) != 0 {
 		t.Errorf("expected empty set when signal path is a directory, got %d", len(ids))
+	}
+}
+
+// --- Test probe: coverage gap closure (stochastic-quality-sweep test-to-doc) ---
+
+func TestBuildTweetTitle_ExactBoundaryNoTruncation(t *testing.T) {
+	// At exactly 80 bytes, no truncation should occur (len > 80 is the guard).
+	text := strings.Repeat("A", 80)
+	tweet := ArchiveTweet{FullText: text}
+	title := buildTweetTitle(tweet)
+	if title != text {
+		t.Errorf("80-byte title should not be truncated, got %q (len=%d)", title, len(title))
+	}
+	if strings.HasSuffix(title, "...") {
+		t.Error("80-byte title must not have ... suffix")
+	}
+}
+
+func TestBuildTweetTitle_OneOverBoundaryTruncates(t *testing.T) {
+	// At 81 bytes, truncation must happen.
+	text := strings.Repeat("B", 81)
+	tweet := ArchiveTweet{FullText: text}
+	title := buildTweetTitle(tweet)
+	if !strings.HasSuffix(title, "...") {
+		t.Error("81-byte title must be truncated with ... suffix")
+	}
+	trimmed := strings.TrimSuffix(title, "...")
+	if len(trimmed) > 80 {
+		t.Errorf("truncated body exceeds 80 bytes: %d", len(trimmed))
+	}
+}
+
+func TestParseTwitterConfig_DefaultSyncMode(t *testing.T) {
+	// When sync_mode is not provided, should default to "archive".
+	cfg, err := parseTwitterConfig(connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"archive_dir": "/tmp/test",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SyncMode != SyncModeArchive {
+		t.Errorf("expected default sync_mode=archive, got %s", cfg.SyncMode)
+	}
+}
+
+func TestAssignTweetTier_BookmarkedRetweetGetsFull(t *testing.T) {
+	// Priority ordering: bookmarked check must win over retweet classification.
+	tweet := ArchiveTweet{
+		FullText: "RT @user: some retweeted content that is normally light tier",
+	}
+	tier := assignTweetTier(tweet, true, false, nil)
+	if tier != "full" {
+		t.Errorf("bookmarked retweet must get full tier (bookmarked wins), got %s", tier)
+	}
+}
+
+func TestAssignTweetTier_LikedHighEngagementGetsFull(t *testing.T) {
+	// Priority ordering: liked check must win over high-engagement standard tier.
+	tweet := ArchiveTweet{
+		FullText:      "Viral tweet with high engagement",
+		FavoriteCount: 500,
+	}
+	tier := assignTweetTier(tweet, false, true, nil)
+	if tier != "full" {
+		t.Errorf("liked tweet must get full tier regardless of engagement, got %s", tier)
+	}
+}
+
+func TestNormalizeTweet_BadTimestampZeroTime(t *testing.T) {
+	// When tweet has an unparseable timestamp, CapturedAt should be zero time.
+	tweet := ArchiveTweet{
+		ID:        "888",
+		FullText:  "Tweet with bad time",
+		CreatedAt: "INVALID_DATE",
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	if !artifact.CapturedAt.IsZero() {
+		t.Errorf("expected zero CapturedAt for bad timestamp, got %v", artifact.CapturedAt)
+	}
+}
+
+func TestSanitizeControlChars_EmptyString(t *testing.T) {
+	got := sanitizeControlChars("")
+	if got != "" {
+		t.Errorf("expected empty string, got %q", got)
 	}
 }
 

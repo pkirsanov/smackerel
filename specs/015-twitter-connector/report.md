@@ -4,6 +4,79 @@ Links: [uservalidation.md](uservalidation.md)
 
 ---
 
+## Stabilize Pass — 2026-04-20
+
+**Trigger:** stochastic-quality-sweep → stabilize-to-doc
+**Agent:** bubbles.stabilize (via bubbles.workflow child)
+**Scope:** `internal/connector/twitter/`
+**Prior sweep history:** 9 prior quality sweep passes (simplify, security ×2, regression, chaos, improve ×2, devops, test) — all durable
+
+### Probe Summary
+
+Deep stability probe of the Twitter connector examining: flaky tests, race conditions, infinite loops, timeout sensitivity, environment dependencies, non-deterministic outputs, and resource leaks.
+
+**Concurrency model:** Mutex-protected (prior chaos hardening), sync-in-progress guard, graduated health escalation — all verified durable.
+
+**Test determinism:** All tests use temp directories, inline fixtures, and deterministic inputs. No time-dependent assertions, no map iteration order dependency, no external service calls. Verified stable.
+
+**Resource handling:** File reads bounded by `maxArchiveFileSize` (500 MiB) and `maxTweetCount` (500K). Context cancellation checked at key I/O points. Signal file parsing is best-effort with no blocking failure propagation. Verified stable.
+
+### Findings
+
+| # | Finding | Severity | Root Cause | Disposition |
+|---|---------|----------|------------|-------------|
+| STAB-015-001 | `buildThreads` root-finding loop hangs on circular reply chains — the `for root.InReplyToStatusID != ""` loop walks up reply chains without cycle detection; a corrupt or crafted archive where tweet A replies to B and B replies to A causes infinite loop, hanging sync indefinitely | Medium | Missing visited-set during root-finding traversal; only the BFS expansion had cycle protection via `visited` map | Fixed — added `seen` set in root-finding loop; breaks out when a cycle is detected, treating the current node as root |
+
+### Changes
+
+- **`internal/connector/twitter/twitter.go`**: Added `seen` map in `buildThreads()` root-finding traversal to detect and break circular reply chains
+- **`internal/connector/twitter/twitter_test.go`**: Added 2 adversarial regression tests:
+  - `TestBuildThreads_CircularReplyChain`: 2-node cycle (A→B→A) — uses goroutine with 5s timeout to detect hang; would fail (timeout) if cycle protection removed
+  - `TestBuildThreads_LongerCycle`: 3-node cycle (A→C→B→A) — same timeout-based hang detection
+
+### Evidence
+
+- `./smackerel.sh test unit` — PASS (twitter: 1.044s fresh compile, all tests green including 2 new stabilize regression tests)
+- All prior sweep tests remain green (simplify, chaos, security, regression, improve, devops, test findings)
+- Race detector clean (prior chaos pass; no new shared state introduced)
+- Adversarial tests use goroutine+timeout pattern — they WILL hang and fail if the cycle protection is removed, making the regression self-enforcing
+
+---
+
+## Test Probe — 2026-04-20
+
+**Trigger:** stochastic-quality-sweep → test-to-doc
+**Agent:** bubbles.test (via bubbles.workflow child)
+**Scope:** `internal/connector/twitter/`
+
+### Probe Summary
+
+Comprehensive test probe of the Twitter connector's 1890-line test suite (90+ individual tests). The suite had already undergone 8 quality sweep passes (simplify, security ×2, regression, chaos, improve ×2, devops). Initial probe identified 9 candidate findings; upon deep review, all 9 had already been addressed by prior sweeps.
+
+**Residual gap closure:** 7 minor edge-case tests added to close boundary-condition, priority-ordering, and fallback-path gaps.
+
+### Findings
+
+| # | Finding | Severity | Disposition |
+|---|---------|----------|-------------|
+| F1 | `buildTweetTitle` boundary at exactly 80 bytes — no test confirmed no-truncation at boundary | Low | Fixed — `TestBuildTweetTitle_ExactBoundaryNoTruncation`, `TestBuildTweetTitle_OneOverBoundaryTruncates` |
+| F2 | `parseTwitterConfig` default sync_mode — omitted key defaulting to archive untested | Low | Fixed — `TestParseTwitterConfig_DefaultSyncMode` |
+| F3 | `assignTweetTier` priority overlap — combined attributes (bookmarked retweet) untested | Low | Fixed — `TestAssignTweetTier_BookmarkedRetweetGetsFull`, `TestAssignTweetTier_LikedHighEngagementGetsFull` |
+| F4 | `normalizeTweet` zero-time CapturedAt fallback for bad timestamps | Low | Fixed — `TestNormalizeTweet_BadTimestampZeroTime` |
+| F5 | `sanitizeControlChars` empty string edge case | Low | Fixed — `TestSanitizeControlChars_EmptyString` |
+
+### Changes
+
+- **`internal/connector/twitter/twitter_test.go`**: Added 7 tests (boundary, default config, priority ordering, zero-time fallback, empty string edge case)
+
+### Evidence
+
+- `./smackerel.sh test unit` — PASS (214 tests, 0 failures)
+- `./smackerel.sh lint` — PASS (all checks passed)
+- No code changes to `twitter.go` — all findings were test coverage gaps, not implementation bugs
+
+---
+
 ## Certification — 2026-04-17
 
 **Agent:** bubbles.validate

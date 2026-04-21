@@ -6,7 +6,7 @@
 
 1. **Scope 1 — Backup Command + DB Pool SST Config:** Add `./smackerel.sh backup` CLI command and make DB pool MaxConns/MinConns configurable via SST. These are low-risk, foundational changes that extend the config pipeline and CLI surface without touching hot paths.
 2. **Scope 2 — Capture Resilience + ML Health Cache:** Add DB health gate to capture (503 on DB down) and ML sidecar health cache for fast search fallback. Both are safety-net changes on critical read/write paths.
-3. **Scope 3 — Cron Concurrency Guards:** Add per-group `sync.Mutex` to the scheduler's cron jobs. Isolated scheduler change with no API surface impact.
+3. **Scope 3 — Cron Concurrency Guards:** Add per-job `sync.Mutex` to the scheduler's cron jobs. Isolated scheduler change with no API surface impact.
 4. **Scope 4 — Graceful Shutdown + Docker stop_grace_period + NATS Dead-Letter:** Rewrite shutdown sequence, align Docker timeout, and add NATS dead-letter routing. Highest-risk scope — touches main.go lifecycle, NATS streams, and Docker Compose.
 
 ### New Types & Signatures
@@ -16,7 +16,7 @@
 - `db.Connect(ctx, url, maxConns, minConns)` — updated signature (was hardcoded)
 - `SearchEngine.mlHealthy atomic.Bool`, `mlHealthAt atomic.Int64` — ML health cache fields
 - `SearchEngine.isMLHealthy(ctx) bool` — health cache method
-- `Scheduler.muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muBriefs`, `muAlerts` — per-group mutexes
+- `Scheduler.muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muBriefs`, `muAlerts`, `muAlertProd`, `muResurface`, `muLookups`, `muSubs`, `muRelCool`, `muKnowledgeLint`, `muMealPlanComplete` — per-job mutexes (14 total)
 - NATS `DEADLETTER` stream — new JetStream stream in `AllStreams()`
 - `shutdownAll(ctx, ...)` — explicit sequential shutdown function replacing defer-based cleanup
 
@@ -203,8 +203,8 @@ Scenario: SCN-022-10 Different job groups run concurrently
   When the hourly topic momentum job fires
   Then the momentum job acquires its own mutex and runs concurrently with synthesis
 
-Scenario: SCN-022-11 All nine cron jobs are protected from self-overlap
-  Given all cron jobs are registered (digest, momentum, synthesis, resurfacing, pre-meeting briefs, weekly synthesis, monthly report, subscription detection, frequent lookups, alert delivery, alert production, relationship cooling)
+Scenario: SCN-022-11 All cron jobs are protected from self-overlap
+  Given all 14 cron jobs are registered (digest, momentum, synthesis, resurfacing, pre-meeting briefs, weekly synthesis, monthly report, subscription detection, frequent lookups, alert delivery, alert production, relationship cooling, knowledge lint, meal plan auto-complete)
   When any job fires while a previous instance of the same type is still running
   Then the new invocation is skipped and a warning is logged
 ```
@@ -212,19 +212,26 @@ Scenario: SCN-022-11 All nine cron jobs are protected from self-overlap
 ### Implementation Plan
 
 **Files touched:**
-- `internal/scheduler/scheduler.go` — add 7 `sync.Mutex` fields to `Scheduler` struct: `muDigest`, `muHourly`, `muDaily`, `muWeekly`, `muMonthly`, `muBriefs`, `muAlerts`; wrap each cron callback in `TryLock`/`Unlock` guard
+- `internal/scheduler/scheduler.go` — 14 per-job `sync.Mutex` fields in `Scheduler` struct; each cron callback wrapped in `TryLock`/`Unlock` guard
 
-**Job group classification:**
+**Job-to-mutex mapping:**
 
-| Group | Mutex | Jobs |
-|-------|-------|------|
-| digest | `muDigest` | Digest generation + retry |
-| hourly | `muHourly` | Topic momentum |
-| daily | `muDaily` | Synthesis, resurfacing, frequent lookups |
-| weekly | `muWeekly` | Weekly synthesis, subscription detection |
-| monthly | `muMonthly` | Monthly report |
-| briefs | `muBriefs` | Pre-meeting briefs |
-| alerts | `muAlerts` | Alert delivery sweep |
+| Job | Mutex | Schedule |
+|-----|-------|----------|
+| Digest generation + retry | `muDigest` | User-configured cron |
+| Topic momentum | `muHourly` | `0 * * * *` |
+| Synthesis + overdue | `muDaily` | `0 2 * * *` |
+| Resurfacing | `muResurface` | `0 8 * * *` |
+| Frequent lookups | `muLookups` | `0 4 * * *` |
+| Pre-meeting briefs | `muBriefs` | `*/5 * * * *` |
+| Weekly synthesis | `muWeekly` | `0 16 * * 0` |
+| Subscription detection | `muSubs` | `0 3 * * 1` |
+| Monthly report | `muMonthly` | `0 3 1 * *` |
+| Alert delivery sweep | `muAlerts` | `*/15 * * * *` |
+| Alert production | `muAlertProd` | `0 6 * * *` |
+| Relationship cooling | `muRelCool` | `0 7 * * 1` |
+| Knowledge lint | `muKnowledgeLint` | Configurable cron |
+| Meal plan auto-complete | `muMealPlanComplete` | Configurable cron |
 
 **Guard pattern:** `sync.Mutex.TryLock()` (Go 1.18+) — returns immediately without blocking. If lock held, skip invocation with `slog.Warn("skipping overlapping job", "group", group, "job", jobName)`.
 
@@ -234,16 +241,16 @@ Scenario: SCN-022-11 All nine cron jobs are protected from self-overlap
 |------|------|---------|-------------------|
 | Unit | TryLock returns false when mutex held → job skipped | Overlap prevention | SCN-022-09 |
 | Unit | Different group mutexes are independent | Cross-group concurrency | SCN-022-10 |
-| Unit | All 6 mutex groups are wired to correct jobs | Complete coverage | SCN-022-11 |
+| Unit | All 14 per-job mutexes are wired to correct jobs | Complete coverage | SCN-022-11 |
 | Unit (race) | Concurrent cron fire simulation with race detector | Concurrency safety | SCN-022-09, SCN-022-10 |
 | E2E (regression) | Cron jobs still execute normally (no deadlock) | Regression: cron functionality | SCN-022-11 |
 
 ### Definition of Done
 
-- [x] 7 per-group `sync.Mutex` fields added to `Scheduler` struct
-- [x] All cron job callbacks wrapped in `TryLock`/`Unlock` guards
-- [x] Overlapping same-group job invocations are skipped with warning log
-- [x] Different-group jobs run concurrently without interference
+- [x] 14 per-job `sync.Mutex` fields added to `Scheduler` struct
+- [x] All 14 cron job callbacks wrapped in `TryLock`/`Unlock` guards
+- [x] Overlapping same-job invocations are skipped with warning log
+- [x] Different jobs run concurrently without interference
 - [x] Race detector clean: `go test -race ./internal/scheduler/...`
 - [x] All unit tests pass: `./smackerel.sh test unit`
 - [x] No hardcoded sleep or wait in concurrency tests — use channels/sync for determinism

@@ -148,3 +148,107 @@ func TestGaugeSet(t *testing.T) {
 
 	t.Error("smackerel_db_connections_active not found in gathered metrics")
 }
+
+func TestConnectorSyncCounter(t *testing.T) {
+	ConnectorSync.WithLabelValues("bookmarks", "success").Inc()
+	ConnectorSync.WithLabelValues("bookmarks", "error").Inc()
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather failed: %v", err)
+	}
+
+	found := map[string]bool{"success": false, "error": false}
+	for _, fam := range families {
+		if fam.GetName() == "smackerel_connector_sync_total" {
+			for _, m := range fam.GetMetric() {
+				var connector, status string
+				for _, l := range m.GetLabel() {
+					switch l.GetName() {
+					case "connector":
+						connector = l.GetValue()
+					case "status":
+						status = l.GetValue()
+					}
+				}
+				if connector == "bookmarks" {
+					if m.GetCounter().GetValue() < 1 {
+						t.Errorf("connector_sync{connector=bookmarks,status=%s} expected >= 1, got %f", status, m.GetCounter().GetValue())
+					}
+					found[status] = true
+				}
+			}
+		}
+	}
+
+	for status, ok := range found {
+		if !ok {
+			t.Errorf("connector_sync{connector=bookmarks,status=%s} not found", status)
+		}
+	}
+}
+
+func TestDomainExtractionCounter(t *testing.T) {
+	DomainExtraction.WithLabelValues("recipe", "published").Inc()
+	DomainExtraction.WithLabelValues("recipe", "error").Inc()
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather failed: %v", err)
+	}
+
+	found := map[string]bool{"published": false, "error": false}
+	for _, fam := range families {
+		if fam.GetName() == "smackerel_domain_extraction_total" {
+			for _, m := range fam.GetMetric() {
+				var schema, status string
+				for _, l := range m.GetLabel() {
+					switch l.GetName() {
+					case "schema":
+						schema = l.GetValue()
+					case "status":
+						status = l.GetValue()
+					}
+				}
+				if schema == "recipe" {
+					if m.GetCounter().GetValue() < 1 {
+						t.Errorf("domain_extraction{schema=recipe,status=%s} expected >= 1, got %f", status, m.GetCounter().GetValue())
+					}
+					found[status] = true
+				}
+			}
+		}
+	}
+
+	for status, ok := range found {
+		if !ok {
+			t.Errorf("domain_extraction{schema=recipe,status=%s} not found", status)
+		}
+	}
+}
+
+func TestNATSDeadLetterCounter(t *testing.T) {
+	NATSDeadLetter.WithLabelValues("artifacts").Inc()
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather failed: %v", err)
+	}
+
+	for _, fam := range families {
+		if fam.GetName() == "smackerel_nats_deadletter_total" {
+			for _, m := range fam.GetMetric() {
+				for _, l := range m.GetLabel() {
+					if l.GetName() == "stream" && l.GetValue() == "artifacts" {
+						if m.GetCounter().GetValue() < 1 {
+							t.Errorf("nats_deadletter{stream=artifacts} expected >= 1, got %f", m.GetCounter().GetValue())
+						}
+						return
+					}
+				}
+			}
+		}
+	}
+
+	t.Error("smackerel_nats_deadletter_total{stream=artifacts} not found")
+}

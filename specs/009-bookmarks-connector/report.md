@@ -532,3 +532,64 @@ $ ./smackerel.sh test unit (2026-04-16)
 ok  github.com/smackerel/smackerel/internal/connector/bookmarks  0.123s
 All 35 Go packages pass, 0 regressions
 ```
+
+### Gaps Quality Sweep (Stochastic Quality Sweep)
+
+**Date:** 2026-04-20
+**Trigger:** gaps
+**Mode:** gaps-to-doc
+
+#### Pre-Sweep Assessment
+
+- **Prior sweeps:** delivery-lockdown (2 scopes), devops (D001-D006), regression (R001), test (T001-T011), chaos R16/R24/C17, improve-existing (IMP-009-R-001/R-002)
+- **Methodology:** Systematic comparison of spec.md R-001 through R-013, design.md enrichMetadata contract, and actual implementation code
+- **Focus areas:** Metadata field completeness against R-006, dedup behavior against R-004, health reporting against R-012
+
+#### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| GAP-001 | Metadata Completeness | Medium | R-006 requires `bookmark_url` in artifact metadata. Design.md `enrichMetadata` explicitly lists it. Implementation's `processFile()` enrichment loop sets `source_format`, `import_file`, `processing_tier`, `folder_path` but NOT `bookmark_url`. The URL is available on `RawArtifact.URL` but not duplicated into metadata as required by the spec. | Fixed |
+| GAP-002 | Metadata Completeness | Medium | R-006 requires `added_at` as ISO 8601 string in artifact metadata. Design.md `enrichMetadata` explicitly shows `bookmark.AddedAt.Format(time.RFC3339)`. Implementation stores `AddedAt` as `CapturedAt` time.Time on the struct but never writes the ISO 8601 string to metadata. Downstream consumers expecting `metadata["added_at"]` for timeline placement get nothing. | Fixed |
+| GAP-003 | Dedup Behavior | Low | R-004 states "If a bookmark has a different title or folder for the same URL (e.g., from a different browser), update metadata but do NOT re-fetch." Current `FilterNew()` skips duplicates entirely without metadata update. This is an edge case (multi-browser users with overlapping exports) and requires a DB update path the connector doesn't currently expose. | Deferred — tracked as known limitation |
+| GAP-004 | Health Observability | Low | R-012 says health should include "whether import directory exists" and "number of unprocessed files waiting". `Health()` returns cached `HealthStatus` string (interface contract). Import dir is checked in `Connect()` but not re-checked in `Health()`. `pendingFiles` field exists in design.md but not in implementation. | Deferred — interface constraint; design-level concern |
+
+#### Fixes Applied
+
+**GAP-001 — Add `bookmark_url` to artifact metadata** (`internal/connector/bookmarks/connector.go`):
+- Added `artifacts[i].Metadata["bookmark_url"] = artifacts[i].URL` in the `processFile()` enrichment loop
+- Stores the original (non-normalized) URL as metadata for pipeline content fetch targeting
+- Tagged `R-006: bookmark_url for dedup key and content fetch target`
+
+**GAP-002 — Add `added_at` ISO 8601 to artifact metadata** (`internal/connector/bookmarks/connector.go`):
+- Added conditional `added_at` metadata when `CapturedAt` is non-zero: `artifacts[i].CapturedAt.Format(time.RFC3339)`
+- Chrome JSON exports with `date_added` fields produce ISO 8601 timestamps; Netscape HTML with `ADD_DATE` attributes likewise
+- Bookmarks without date info (some HTML exports) correctly omit the field rather than storing a zero-value timestamp
+- Tagged `R-006: added_at as ISO 8601 string for timeline placement`
+
+#### Tests Added (2 tests)
+
+| Test | File | Finding | Assertion | Would Fail Without Fix |
+|------|------|---------|-----------|----------------------|
+| `TestMetadataR006Fields` | connector_test.go | GAP-001, GAP-002 | Chrome fixture with `date_added`: dated bookmark has `bookmark_url` (matches URL) + `added_at` (valid RFC3339); undated bookmark has `bookmark_url` but no `added_at` | Yes — metadata fields absent |
+| `TestSyncChromeJSON` (updated) | connector_test.go | GAP-001 | Added assertion: `bookmark_url` must be present and non-empty for all synced artifacts | Yes — `bookmark_url` not in metadata |
+
+#### Deferred Findings Rationale
+
+**GAP-003 (metadata update for duplicate URLs):** Requires adding a DB update path to the connector. The current architecture routes all artifacts through `Sync() → supervisor → NATS publish` — the connector doesn't perform direct artifact updates. Implementing this would require either: (a) adding UPDATE queries to `FilterNew`, or (b) a separate metadata reconciliation pass. Deferred as a known limitation until multi-browser metadata merge is explicitly prioritized.
+
+**GAP-004 (runtime health enrichment):** The `Connector.Health()` interface returns `HealthStatus` (string type). Extended health info (pending files, dir existence) cannot be returned through the current interface without changing the shared contract across all 15+ connectors. The connector correctly checks import dir in `Connect()` and sets `HealthError` — runtime re-checking is a design improvement, not a spec violation of the interface contract.
+
+#### Verification Evidence
+
+```
+$ ./smackerel.sh test unit (2026-04-20)
+ok  github.com/smackerel/smackerel/internal/connector/bookmarks  0.675s
+All Go packages pass, 214 Python tests pass, 0 regressions
+
+$ ./smackerel.sh check
+Config is in sync with SST
+
+$ ./smackerel.sh lint
+All checks passed
+```

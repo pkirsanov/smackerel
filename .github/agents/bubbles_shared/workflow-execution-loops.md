@@ -16,11 +16,12 @@ This section owns the full batch execution contract, including:
 
 Retained workflow-agent anchors that must still be honored:
 
-- **Universal Finding-Owned Closure Rule (MANDATORY for ALL finding-capable phases and child workflows)**
+- **Universal Finding-Owned Closure Rule (MANDATORY for ALL finding-capable phases and child workflows):** See [workflow-fix-cycle-protocol.md](workflow-fix-cycle-protocol.md) and [workflow-phase-engine.md](workflow-phase-engine.md) → Finding-Owned Closure Protocol.
 - **Full finding-owned planning workflow:** `bubbles.analyst` -> `bubbles.ux` when the finding touches UI or a user-visible journey -> `bubbles.design` -> `bubbles.plan`.
 - **Full finding-owned delivery workflow:** `bubbles.implement` -> `bubbles.test` -> `bubbles.validate` -> `bubbles.audit` -> `bubbles.docs` -> finalize/certification owned by `bubbles.workflow` and `bubbles.validate`.
 - This applies to `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, `gaps`, and future trigger-style workflows.
 - Non-clean verdicts must invoke `implement` with the full finding ledger, and the workflow must require one-to-one closure accounting before success.
+- **Finding-only output from ANY child workflow is a NON-TERMINAL result — the child MUST complete remediation before returning `completed_owned`.**
 
 ### Phase 0.9: Stochastic Quality Sweep Loop
 
@@ -67,6 +68,13 @@ Concrete lookup examples (from `workflows.yaml` defaults):
   - The resolved child workflow mode from step 1b (e.g. `harden-to-doc`, `chaos-hardening`, `improve-existing`)
   - The selected spec as the target
   - Instruction that the child workflow owns the FULL chain: trigger → finding-owned planning → implementation → tests → validation → audit → docs → finalize/certification for that spec
+
+**⚠️ CHILD WORKFLOW MUST REMEDIATE FINDINGS (NON-NEGOTIABLE):** The child workflow dispatched in step 1c is a DELIVERY workflow with `statusCeiling: done`. It MUST NOT stop after its trigger phase returns findings. When the trigger phase (e.g., `bubbles.harden`, `bubbles.gaps`, `bubbles.security`) discovers issues, the child workflow MUST execute the finding-owned closure protocol defined in [workflow-phase-engine.md](workflow-phase-engine.md) → Finding-Owned Closure Protocol and [workflow-fix-cycle-protocol.md](workflow-fix-cycle-protocol.md):
+  1. **Planning chain:** `bubbles.bug` or `bubbles.analyst` → `bubbles.ux` (if UI) → `bubbles.design` → `bubbles.plan` — for EACH finding
+  2. **Delivery chain:** `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` — for EACH finding
+  3. **Closure accounting:** Every finding individually accounted for before the child may return `completed_owned`
+  
+  A child workflow that returns a findings list without having executed the planning + delivery chain for those findings is a **malformed result** — treat the round as `NON_TERMINAL` and re-dispatch or escalate.
 
 **⚠️ TWO KNOWN DISPATCH FAILURE MODES (BOTH FORBIDDEN):**
 

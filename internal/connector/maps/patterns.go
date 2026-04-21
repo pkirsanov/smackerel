@@ -125,10 +125,14 @@ func (pd *PatternDetector) LinkTemporalSpatial(ctx context.Context, activities [
 		windowEnd := activity.EndTime.Add(extend)
 
 		// Query artifacts that overlap the time window.
+		// NOTE: Checks metadata->>'start_lat'/start_lng' per design doc R-012.
+		// Cross-connector linking depends on those connectors storing location
+		// in the metadata JSONB column; connectors that do not will only produce
+		// temporal-only links (no spatial match).
 		rows, err := pd.pool.Query(ctx, `
 			SELECT id, created_at,
-				COALESCE((metadata->>'lat')::double precision, 0) AS lat,
-				COALESCE((metadata->>'lng')::double precision, 0) AS lng
+				COALESCE((metadata->>'start_lat')::double precision, 0) AS lat,
+				COALESCE((metadata->>'start_lng')::double precision, 0) AS lng
 			FROM artifacts
 			WHERE source_id != 'google-maps-timeline'
 				AND created_at >= $1

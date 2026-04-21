@@ -28,11 +28,25 @@ type CookSession struct {
 	PendingRecipeName  string
 }
 
+// CookDisambiguationOption is a single recipe candidate for disambiguation.
+type CookDisambiguationOption struct {
+	ArtifactID string
+	RecipeData *recipe.RecipeData
+	Title      string
+}
+
+// CookDisambiguation holds pending recipe choices when multiple recipes match a name.
+type CookDisambiguation struct {
+	Options  []CookDisambiguationOption
+	Servings int // requested servings (0 if none)
+}
+
 // CookSessionStore manages per-chat cook sessions with configurable TTL.
 type CookSessionStore struct {
-	sessions sync.Map      // key: int64 (chatID), value: *CookSession
-	timeout  time.Duration // from config: telegram.cook_session_timeout_minutes
-	done     chan struct{}  // signals cleanup goroutine to stop
+	sessions        sync.Map      // key: int64 (chatID), value: *CookSession
+	disambiguations sync.Map      // key: int64 (chatID), value: *CookDisambiguation
+	timeout         time.Duration // from config: telegram.cook_session_timeout_minutes
+	done            chan struct{} // signals cleanup goroutine to stop
 }
 
 // NewCookSessionStore creates a new session store with the given timeout.
@@ -112,4 +126,23 @@ func (s *CookSessionStore) sweep() {
 		}
 		return true
 	})
+}
+
+// SetDisambiguation stores pending recipe disambiguation options for a chat.
+func (s *CookSessionStore) SetDisambiguation(chatID int64, d *CookDisambiguation) {
+	s.disambiguations.Store(chatID, d)
+}
+
+// GetDisambiguation retrieves pending recipe disambiguation for a chat.
+func (s *CookSessionStore) GetDisambiguation(chatID int64) *CookDisambiguation {
+	val, ok := s.disambiguations.Load(chatID)
+	if !ok {
+		return nil
+	}
+	return val.(*CookDisambiguation)
+}
+
+// ClearDisambiguation removes pending recipe disambiguation for a chat.
+func (s *CookSessionStore) ClearDisambiguation(chatID int64) {
+	s.disambiguations.Delete(chatID)
 }

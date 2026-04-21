@@ -75,7 +75,7 @@ func NormalizeReview(review Review, propertyName string, config HospitableConfig
 | 3 | Edge Hints, Cross-Domain Linking & Hardening | Go core | Covered in connector/normalizer unit tests | Edge hints in metadata, partial failure isolation, property name cache, DURING_STAY temporal linking | Done |
 | 4 | Message Sync Reliability & Client Hardening | Go core | Covered in connector unit tests | Active reservation message sync, Retry-After parsing, persistent property name cache, message cursor isolation | Done |
 | 5 | Normalizer Quality Fixes | Go core | Covered in normalizer unit tests | Sender classification, URL population, review rating precision | Done |
-| — | Chaos & Resilience | Go core | 56 unit (chaos_test.go) | Malformed responses, concurrency, race conditions, edge cases, extreme values, SSRF probes, Retry-After cap, lifecycle races | Done |
+| — | Chaos & Resilience | Go core | 77 unit (chaos_test.go) | Malformed responses, concurrency, race conditions, edge cases, extreme values, SSRF probes, Retry-After cap, lifecycle races | Done |
 
 ---
 

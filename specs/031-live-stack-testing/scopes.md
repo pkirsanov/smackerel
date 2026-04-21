@@ -57,20 +57,19 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 ```gherkin
 Scenario: All migrations apply cleanly
   Given a fresh PostgreSQL instance
-  When all 17 migrations are applied in sequence
+  When all consolidated migrations (001, 018, 019) are applied in sequence
   Then all tables exist with correct columns and indexes
 
-Scenario: Migration rollback works
-  Given migration 017 has been applied
-  When the rollback SQL is executed
-  Then the list_items and lists tables are dropped
-  And other tables are unaffected
+Scenario: Schema DDL resilience
+  Given the consolidated schema has been applied
+  When specific tables (lists, list_items) are dropped and recreated via DDL
+  Then other tables are unaffected
 ```
 
 ### DoD
 
-- [x] All 17 migrations verified: `TestMigrations_SchemaVersionCount` checks >= 17, `TestMigrations_AllTablesExist` verifies 12 tables, `TestMigrations_ExtensionsLoaded` verifies vector + pg_trgm in `tests/integration/db_migration_test.go` — **Phase:** implement
-- [x] Rollback tested for migrations 015-017: `TestMigrations_Rollback015`, `TestMigrations_Rollback016`, `TestMigrations_Rollback017` each drop, verify gone, re-apply in `tests/integration/db_migration_test.go` — **Phase:** implement
+- [x] All consolidated migrations verified: `TestMigrations_SchemaVersionCount` checks >= 3 (001, 018, 019), `TestMigrations_AllTablesExist` verifies 12 tables, `TestMigrations_ExtensionsLoaded` verifies vector + pg_trgm in `tests/integration/db_migration_test.go` — **Phase:** implement
+- [x] Schema DDL resilience tested: `TestMigrations_TableDropAndRecreate` drops lists/list_items, verifies other tables unaffected, recreates via fresh DDL in `tests/integration/db_migration_test.go` — **Phase:** implement
 - [x] Table/column/index checks: `TestMigrations_ArtifactsColumns` (21 columns), `TestMigrations_IndexesExist` (11 indexes), `TestMigrations_AnnotationsConstraints` (chk_rating_range) — **Phase:** implement
 
 ---

@@ -23,7 +23,7 @@ All 38 Go packages and 173 Python tests pass at the unit level using mocks, but 
 ## Goals
 
 1. Create integration test suite that runs against real PostgreSQL + NATS
-2. Verify DB migration chain applies cleanly (001 through 017)
+2. Verify DB migration chain applies cleanly (consolidated schema: 001, 018, 019)
 3. Verify NATS stream creation and message round-trip
 4. Verify artifact CRUD against real PostgreSQL (insert, query, update, search)
 5. Verify pgvector similarity search with real embeddings
@@ -43,14 +43,14 @@ All 38 Go packages and 173 Python tests pass at the unit level using mocks, but 
 ```gherkin
 Scenario: Database migrations apply cleanly
   Given a fresh PostgreSQL instance
-  When all 17 migrations are applied in sequence
+  When all consolidated migrations (001, 018, 019) are applied in sequence
   Then all tables, indexes, and constraints exist
   And no migration fails
 
 Scenario: NATS streams are created
   Given a fresh NATS instance
   When EnsureStreams is called
-  Then all 9 streams exist (ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, DEADLETTER)
+  Then all 11 streams exist (ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 
 Scenario: Artifact insert and vector search
   Given migrations are applied and an embedding exists
@@ -87,12 +87,11 @@ Scenario: NATS consumer replay after crash
   Then the replayed message is processed correctly (idempotent handling)
   And no duplicate artifacts or domain_data entries are created
 
-Scenario: Migration rollback and re-apply
-  Given all 17 migrations have been applied
-  When a migration is rolled back using its ROLLBACK SQL
-  And then re-applied
-  Then the database returns to a consistent state
-  And no data loss occurs in tables unaffected by the migration
+Scenario: Schema DDL resilience (table drop and recreate)
+  Given the consolidated schema has been applied
+  When specific tables are dropped and recreated via DDL
+  Then other tables are unaffected
+  And the dropped tables can be recreated from migration SQL
 
 Scenario: Tests run against populated database
   Given the test database already contains artifacts from a previous test run
@@ -101,13 +100,13 @@ Scenario: Tests run against populated database
   And test assertions don't depend on the database being empty
 
 Scenario: Annotation CRUD against real PostgreSQL
-  Given migrations 016 (annotations) have been applied
+  Given migrations for annotations have been applied
   When an annotation is created, queried, and the summary materialized view is refreshed
   Then all operations succeed against real PostgreSQL
   And the materialized view returns correct aggregated data
 
 Scenario: List generation against real PostgreSQL
-  Given migrations 017 (lists) have been applied and artifacts with domain_data exist
+  Given migrations for lists have been applied and artifacts with domain_data exist
   When a shopping list is generated from those artifacts
   Then the list and items are persisted in real PostgreSQL
   And item status updates correctly modify checked_items counters
@@ -116,9 +115,9 @@ Scenario: List generation against real PostgreSQL
 ## Acceptance Criteria
 
 - [ ] `./smackerel.sh test integration` runs against Docker stack and passes
-- [ ] All 17 migrations apply cleanly on fresh PostgreSQL
-- [ ] Migration rollback SQL tested for at least 3 recent migrations (015-017)
-- [ ] NATS stream creation verified with 9 streams
+- [ ] All consolidated migrations (001, 018, 019) apply cleanly on fresh PostgreSQL
+- [ ] Schema DDL resilience tested (table drop and recreate for lists/list_items)
+- [ ] NATS stream creation verified with 11 streams
 - [ ] NATS consumer replay/idempotency tested after simulated crash
 - [ ] Artifact CRUD operations verified against real PostgreSQL
 - [ ] pgvector similarity search works with real embeddings

@@ -4,26 +4,26 @@ package domain
 // artifacts.metadata under the "expense" key.
 // All monetary amounts are decimal strings — never floats.
 type ExpenseMetadata struct {
-	Vendor           string             `json:"vendor"`
-	VendorRaw        string             `json:"vendor_raw"`
-	Date             *string            `json:"date"`                // YYYY-MM-DD, nullable
-	Amount           *string            `json:"amount"`              // decimal string, nullable if amount_missing
-	RawAmount        *string            `json:"raw_amount"`          // original amount text
-	Currency         string             `json:"currency"`            // ISO 4217
-	Subtotal         *string            `json:"subtotal"`            // pre-tax, pre-tip
-	Tax              *string            `json:"tax"`                 // tax amount
-	Tip              *string            `json:"tip"`                 // tip/gratuity
-	PaymentMethod    *string            `json:"payment_method"`      // visa-ending-4242, cash, etc.
-	Category         string             `json:"category"`            // slug
-	Classification   string             `json:"classification"`      // business, personal, uncategorized
-	LineItems        []ExpenseLineItem  `json:"line_items"`          // never nil, empty array default
-	Notes            *string            `json:"notes"`               // user or extracted notes
-	ExtractionStatus string             `json:"extraction_status"`   // complete, partial, failed
+	Vendor            string            `json:"vendor"`
+	VendorRaw         string            `json:"vendor_raw"`
+	Date              *string           `json:"date"`              // YYYY-MM-DD, nullable
+	Amount            *string           `json:"amount"`            // decimal string, nullable if amount_missing
+	RawAmount         *string           `json:"raw_amount"`        // original amount text
+	Currency          string            `json:"currency"`          // ISO 4217
+	Subtotal          *string           `json:"subtotal"`          // pre-tax, pre-tip
+	Tax               *string           `json:"tax"`               // tax amount
+	Tip               *string           `json:"tip"`               // tip/gratuity
+	PaymentMethod     *string           `json:"payment_method"`    // visa-ending-4242, cash, etc.
+	Category          string            `json:"category"`          // slug
+	Classification    string            `json:"classification"`    // business, personal, uncategorized
+	LineItems         []ExpenseLineItem `json:"line_items"`        // never nil, empty array default
+	Notes             *string           `json:"notes"`             // user or extracted notes
+	ExtractionStatus  string            `json:"extraction_status"` // complete, partial, failed
 	ExtractionPartial bool              `json:"extraction_partial"`
-	AmountMissing    bool               `json:"amount_missing"`
-	UserCorrected    bool               `json:"user_corrected"`
-	CorrectedFields  []string           `json:"corrected_fields"`    // which fields user corrected
-	SourceQualifiers []string           `json:"source_qualifiers"`   // Gmail labels etc.
+	AmountMissing     bool              `json:"amount_missing"`
+	UserCorrected     bool              `json:"user_corrected"`
+	CorrectedFields   []string          `json:"corrected_fields"`  // which fields user corrected
+	SourceQualifiers  []string          `json:"source_qualifiers"` // Gmail labels etc.
 }
 
 // ExpenseLineItem represents a single line item on a receipt.

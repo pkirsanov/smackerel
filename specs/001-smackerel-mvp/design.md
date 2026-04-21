@@ -1111,7 +1111,7 @@ All connectors follow these error handling patterns:
 | Invalid content (corrupt PDF, missing transcript) | Store metadata, set `extraction_failed` permanently | Artifact detail shows "content not available" |
 | Connector crash | Process supervisor restarts connector goroutine. Dead-letter queue preserves unprocessed items | Status page shows restart count |
 
-**Health status values:** `healthy` (last sync succeeded), `syncing` (sync in progress), `error` (last sync failed, will retry), `disconnected` (no credentials or auth revoked)
+**Health status values:** `healthy` (last sync succeeded), `syncing` (sync in progress), `degraded` (5-9 consecutive errors, will retry), `failing` (10+ consecutive errors, approaching disable), `error` (last sync failed, will retry), `disconnected` (no credentials or auth revoked)
 
 ### Data Export Design
 

@@ -374,6 +374,11 @@ YOUTUBE_SYNC_SCHEDULE="$(yaml_get connectors.youtube.sync_schedule 2>/dev/null)"
 BOOKMARKS_ENABLED="$(yaml_get connectors.bookmarks.enabled 2>/dev/null)" || BOOKMARKS_ENABLED="false"
 BOOKMARKS_SYNC_SCHEDULE="$(yaml_get connectors.bookmarks.sync_schedule 2>/dev/null)" || BOOKMARKS_SYNC_SCHEDULE=""
 BOOKMARKS_IMPORT_DIR="$(yaml_get connectors.bookmarks.import_dir 2>/dev/null)" || BOOKMARKS_IMPORT_DIR=""
+BOOKMARKS_WATCH_INTERVAL="$(yaml_get connectors.bookmarks.watch_interval 2>/dev/null)" || BOOKMARKS_WATCH_INTERVAL=""
+BOOKMARKS_ARCHIVE_PROCESSED="$(yaml_get connectors.bookmarks.archive_processed 2>/dev/null)" || BOOKMARKS_ARCHIVE_PROCESSED=""
+BOOKMARKS_PROCESSING_TIER="$(yaml_get connectors.bookmarks.processing_tier 2>/dev/null)" || BOOKMARKS_PROCESSING_TIER=""
+BOOKMARKS_MIN_URL_LENGTH="$(yaml_get connectors.bookmarks.min_url_length 2>/dev/null)" || BOOKMARKS_MIN_URL_LENGTH=""
+BOOKMARKS_EXCLUDE_DOMAINS="$(yaml_get connectors.bookmarks.exclude_domains 2>/dev/null)" || BOOKMARKS_EXCLUDE_DOMAINS=""
 MAPS_ENABLED="$(yaml_get connectors.google-maps-timeline.enabled 2>/dev/null)" || MAPS_ENABLED="false"
 MAPS_SYNC_SCHEDULE="$(yaml_get connectors.google-maps-timeline.sync_schedule 2>/dev/null)" || MAPS_SYNC_SCHEDULE=""
 MAPS_IMPORT_DIR="$(yaml_get connectors.google-maps-timeline.import_dir 2>/dev/null)" || MAPS_IMPORT_DIR=""
@@ -545,6 +550,11 @@ ML_EXTERNAL_URL=${ML_EXTERNAL_URL}
 BOOKMARKS_ENABLED=${BOOKMARKS_ENABLED}
 BOOKMARKS_SYNC_SCHEDULE=${BOOKMARKS_SYNC_SCHEDULE}
 BOOKMARKS_IMPORT_DIR=${BOOKMARKS_IMPORT_DIR}
+BOOKMARKS_WATCH_INTERVAL=${BOOKMARKS_WATCH_INTERVAL}
+BOOKMARKS_ARCHIVE_PROCESSED=${BOOKMARKS_ARCHIVE_PROCESSED}
+BOOKMARKS_PROCESSING_TIER=${BOOKMARKS_PROCESSING_TIER}
+BOOKMARKS_MIN_URL_LENGTH=${BOOKMARKS_MIN_URL_LENGTH}
+BOOKMARKS_EXCLUDE_DOMAINS=${BOOKMARKS_EXCLUDE_DOMAINS}
 MAPS_ENABLED=${MAPS_ENABLED}
 MAPS_SYNC_SCHEDULE=${MAPS_SYNC_SCHEDULE}
 MAPS_IMPORT_DIR=${MAPS_IMPORT_DIR}

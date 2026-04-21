@@ -398,6 +398,91 @@ func TestPostSyncContinuesOnFailure(t *testing.T) {
 	}
 }
 
+// SCN-MT-021: Commute-classified activities produce pattern artifacts with "light" tier.
+// The normalizeCommutePattern output artifact carries processing_tier="light"
+// while the original activity artifacts remain at their assigned tier.
+func TestTierDowngradeCommute(t *testing.T) {
+	// Original activity: drive, standard tier.
+	activity := TakeoutActivity{
+		Type:        ActivityDrive,
+		StartTime:   time.Date(2026, 3, 23, 8, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 3, 23, 8, 25, 0, 0, time.UTC),
+		DistanceKm:  15.0,
+		DurationMin: 25,
+		Route:       []LatLng{{Lat: 47.37, Lng: 8.54}, {Lat: 47.40, Lng: 8.55}},
+	}
+	original := NormalizeActivity(activity, "commute-data.json")
+	if original.Metadata["processing_tier"] != "standard" {
+		t.Fatalf("precondition: drive activity tier = %v, want standard", original.Metadata["processing_tier"])
+	}
+
+	// Commute pattern artifact: processing_tier must be "light".
+	pattern := CommutePattern{
+		StartClusterID:       "47.370,8.540",
+		EndClusterID:         "47.400,8.550",
+		StartLat:             47.370,
+		StartLng:             8.540,
+		EndLat:               47.400,
+		EndLng:               8.550,
+		Frequency:            4,
+		TypicalDepartureHour: 8,
+		AvgDurationMin:       25.0,
+		AvgDistanceKm:        15.0,
+		LatestActivityDate:   time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC),
+	}
+	commuteArtifact := normalizeCommutePattern(pattern)
+	if commuteArtifact.Metadata["processing_tier"] != "light" {
+		t.Errorf("commute pattern artifact tier = %v, want light", commuteArtifact.Metadata["processing_tier"])
+	}
+
+	// Original activity artifact is NOT mutated by pattern detection.
+	if original.Metadata["processing_tier"] != "standard" {
+		t.Errorf("original activity tier changed to %v, want standard (unchanged)", original.Metadata["processing_tier"])
+	}
+}
+
+// SCN-MT-021: Trip-associated activities produce trip artifacts with "full" tier.
+func TestTierUpgradeTrip(t *testing.T) {
+	// Original activity: transit, standard tier.
+	activity := TakeoutActivity{
+		Type:        ActivityTransit,
+		StartTime:   time.Date(2026, 4, 10, 16, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 4, 10, 16, 15, 0, 0, time.UTC),
+		DistanceKm:  5.0,
+		DurationMin: 15,
+		Route:       []LatLng{{Lat: 52.52, Lng: 13.40}, {Lat: 52.54, Lng: 13.42}},
+	}
+	original := NormalizeActivity(activity, "trip-data.json")
+	if original.Metadata["processing_tier"] != "standard" {
+		t.Fatalf("precondition: transit activity tier = %v, want standard", original.Metadata["processing_tier"])
+	}
+
+	// Trip event artifact: processing_tier must be "full".
+	trip := TripEvent{
+		DestinationLat:   52.52,
+		DestinationLng:   13.40,
+		StartDate:        time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC),
+		EndDate:          time.Date(2026, 4, 12, 0, 0, 0, 0, time.UTC),
+		DistanceFromHome: 660.0,
+		ActivityBreakdown: map[string]int{
+			"drive":   2,
+			"walk":    2,
+			"hike":    1,
+			"transit": 1,
+		},
+		TotalActivities: 6,
+	}
+	tripArtifact := normalizeTripEvent(trip)
+	if tripArtifact.Metadata["processing_tier"] != "full" {
+		t.Errorf("trip event artifact tier = %v, want full", tripArtifact.Metadata["processing_tier"])
+	}
+
+	// Original activity artifact is NOT mutated.
+	if original.Metadata["processing_tier"] != "standard" {
+		t.Errorf("original activity tier changed to %v, want standard (unchanged)", original.Metadata["processing_tier"])
+	}
+}
+
 func TestDetermineLinkTypeSpatial(t *testing.T) {
 	activity := TakeoutActivity{
 		StartTime: time.Date(2026, 3, 15, 13, 0, 0, 0, time.UTC),

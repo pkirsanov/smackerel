@@ -13,7 +13,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       "scope-1-knowledge-store-schema",
       "scope-2-synthesis-pipeline",
@@ -185,12 +185,21 @@
       "runStartedAt": "2026-04-15T23:45:00Z",
       "runFinishedAt": "2026-04-15T23:50:00Z",
       "summary": "Chaos diagnostic: synthesis fail-open verified in unit tests (T2-03/T2-06), NATS maxDeliver prevents infinite loops, lint retry capped at max_synthesis_retries then abandoned. Live chaos rounds require Docker stack — not executed."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-21T00:00:00Z",
+      "runFinishedAt": "2026-04-21T00:30:00Z",
+      "summary": "Stochastic sweep regression-to-doc probe: zero findings. Cross-spec conflict scan clean (routes, tables, NATS subjects, schema, design). Baseline test comparison: 41 Go packages ok, 214 Python tests, E2E all pass, lint clean, build compiles, config SST in sync. regression-baseline-guard PASSED, artifact-lint PASSED. One artifact fix: state.json certification.status aligned to done."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-15T22:00:00Z",
+  "lastUpdatedAt": "2026-04-21T00:30:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

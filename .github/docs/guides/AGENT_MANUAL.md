@@ -65,6 +65,8 @@ Common source modules:
 |------|----------|--------------------|
 | `bubbles.workflow` | **universal entry point** — run any Bubbles work by describing it in plain English, structured commands, or "continue" | `bubbles/workflows.yaml`, `scope-workflow.md`, `state-gates.md` |
 | `bubbles.iterate` | pick the highest-priority next work slice inside an existing spec and drive one iteration through the right specialists | `scope-workflow.md`, `completion-governance.md`, `quality-gates.md` |
+| `bubbles.goal` | **autonomous single-goal execution** — give a goal in plain English and the agent handles everything (plan, implement, test, E2E, chaos, validate, audit, remediate) looping until full convergence | `AUTONOMOUS_EXECUTION.md`, `bubbles/workflows.yaml` |
+| `bubbles.sprint` | **autonomous multi-goal sprint** — give multiple goals and a time budget; the agent prioritizes, executes each via convergence loop, manages the clock, and stops gracefully | `AUTONOMOUS_EXECUTION.md`, `bubbles/workflows.yaml` |
 | `bubbles.bug` | investigate a bug, create bug artifacts, and dispatch the required fix workflow | `artifact-lifecycle.md`, `completion-governance.md`, `quality-gates.md` |
 
 Orchestrator rule:

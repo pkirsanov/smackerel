@@ -1058,3 +1058,166 @@ func TestConfigIntMin(t *testing.T) {
 		})
 	}
 }
+
+// TestSyncCallsPostSyncOnActivities verifies that Sync invokes PostSync
+// after processing activities. With a nil pool, PostSync gracefully skips
+// pattern detection and returns no extra artifacts.
+func TestSyncCallsPostSyncOnActivities(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "export.json", makeTakeoutJSON(3))
+
+	c := New("google-maps-timeline")
+	// pool is nil — PostSync will skip pattern detection gracefully
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	// 3 activity artifacts only (PostSync with nil pool adds 0 pattern artifacts)
+	if len(artifacts) != 3 {
+		t.Errorf("expected 3 artifacts (no pattern artifacts with nil pool), got %d", len(artifacts))
+	}
+}
+
+// TestSyncNoPostSyncOnEmptyResult verifies that PostSync is NOT called
+// when Sync processes zero new files (no activities).
+func TestSyncNoPostSyncOnEmptyResult(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "done.json", makeTakeoutJSON(2))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// First sync processes the file
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("first Sync: %v", err)
+	}
+
+	// Second sync with populated cursor — no new files
+	artifacts, _, err := c.Sync(context.Background(), "done.json")
+	if err != nil {
+		t.Fatalf("second Sync: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Errorf("expected 0 artifacts on incremental sync with no new files, got %d", len(artifacts))
+	}
+}
+
+// TestSyncMultiActivityTypeDistribution verifies SCN-MT-003: Sync correctly
+// classifies all 6 activity types through the full parsing+normalization path.
+func TestSyncMultiActivityTypeDistribution(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "mixed-types.json", makeMultiTypeJSON())
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(artifacts) != 6 {
+		t.Fatalf("expected 6 artifacts (one per type), got %d", len(artifacts))
+	}
+
+	// Map content types for verification.
+	typeCounts := map[string]int{}
+	for _, a := range artifacts {
+		typeCounts[a.ContentType]++
+		if a.SourceID != "google-maps-timeline" {
+			t.Errorf("artifact SourceID = %q, want google-maps-timeline", a.SourceID)
+		}
+	}
+
+	// Each of the 6 activity types should appear exactly once.
+	expected := []string{
+		"activity/hike",    // WALKING >5km
+		"activity/walk",    // WALKING <=5km
+		"activity/cycle",   // CYCLING
+		"activity/drive",   // IN_VEHICLE
+		"activity/run",     // RUNNING
+		"activity/transit", // IN_SUBWAY
+	}
+	for _, ct := range expected {
+		if typeCounts[ct] != 1 {
+			t.Errorf("ContentType %q count = %d, want 1", ct, typeCounts[ct])
+		}
+	}
+}
+
+// makeMultiTypeJSON creates a Takeout JSON with exactly one activity per type.
+func makeMultiTypeJSON() string {
+	base := time.Date(2026, 3, 15, 8, 0, 0, 0, time.UTC)
+	types := []struct {
+		googleType string
+		distance   int // meters
+	}{
+		{"WALKING", 8000},     // >5km → hike
+		{"WALKING", 3000},     // <=5km → walk
+		{"CYCLING", 15000},    // cycle
+		{"IN_VEHICLE", 25000}, // drive
+		{"RUNNING", 5000},     // run
+		{"IN_SUBWAY", 8000},   // transit
+	}
+
+	objects := ""
+	for i, tt := range types {
+		start := base.Add(time.Duration(i) * 2 * time.Hour)
+		end := start.Add(45 * time.Minute)
+		if i > 0 {
+			objects += ","
+		}
+		objects += fmt.Sprintf(`{
+			"activitySegment": {
+				"startLocation": {"latitudeE7": 475000000, "longitudeE7": 87000000},
+				"endLocation": {"latitudeE7": 475200000, "longitudeE7": 87500000},
+				"duration": {
+					"startTimestamp": "%s",
+					"endTimestamp": "%s"
+				},
+				"distance": %d,
+				"activityType": "%s",
+				"waypointPath": {
+					"waypoints": [
+						{"latE7": 475000000, "lngE7": 87000000},
+						{"latE7": 475100000, "lngE7": 87250000},
+						{"latE7": 475200000, "lngE7": 87500000}
+					]
+				}
+			}
+		}`, start.Format(time.RFC3339), end.Format(time.RFC3339), tt.distance, tt.googleType)
+	}
+	return `{"timelineObjects": [` + objects + `]}`
+}

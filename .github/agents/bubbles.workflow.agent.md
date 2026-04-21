@@ -194,7 +194,7 @@ $ADDITIONAL_CONTEXT
 ```
 
 Supported options:
-- `mode: value-first-e2e-batch|spec-scope-hardening|product-to-planning|full-delivery|delivery-lockdown|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|validate-to-doc|resume-only|product-to-delivery|stabilize-to-doc|security-to-doc|regression-to-doc|improve-existing|simplify-to-doc|devops-to-doc|spec-review-to-doc|retro-to-simplify|retro-to-harden|retro-quality-sweep|retro-to-review|stochastic-quality-sweep|iterate`
+- `mode: value-first-e2e-batch|spec-scope-hardening|product-to-planning|full-delivery|delivery-lockdown|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|validate-to-doc|resume-only|product-to-delivery|stabilize-to-doc|security-to-doc|regression-to-doc|improve-existing|simplify-to-doc|devops-to-doc|spec-review-to-doc|retro-to-simplify|retro-to-harden|retro-quality-sweep|retro-to-review|stochastic-quality-sweep|iterate|autonomous-goal|autonomous-sprint`
 - `continue_on_blocked: true|false` (default: true)
 - `final_global_pass: true|false` (default: true)
 - `socratic: true|false` (default: false)
@@ -511,16 +511,22 @@ Retained workflow-agent anchors:
 
 ### Phase 0.9: Stochastic Quality Sweep Loop (for `mode: stochastic-quality-sweep`)
 
-Follow [workflow-execution-loops.md](bubbles_shared/workflow-execution-loops.md) for the authoritative stochastic sweep contract.
+Follow [workflow-execution-loops.md](bubbles_shared/workflow-execution-loops.md) for the authoritative stochastic sweep contract and [workflow-fix-cycle-protocol.md](bubbles_shared/workflow-fix-cycle-protocol.md) for the finding-owned closure contract.
 
 Retained workflow-agent anchors:
 - `mode: stochastic-quality-sweep` is randomized round-based execution across the active spec pool.
 - **SYNCHRONOUS ROUND LOOP:** Each round MUST dispatch its child workflow via `runSubagent`, WAIT for a terminal `## RESULT-ENVELOPE`, and record the outcome BEFORE starting the next round. Batching round selections without dispatching child workflows is FORBIDDEN.
 - Each round picks a spec and trigger, resolves `triggerWorkflowModes`, and dispatches the trigger-owned child workflow with `runSubagent`.
-- **⚠️ DISPATCH TARGET IS ALWAYS `bubbles.workflow` WITH THE MAPPED MODE (ABSOLUTE).** For EVERY round: look up `triggerWorkflowModes[trigger]` → get the child mode → dispatch `runSubagent("bubbles.workflow", "specs/{spec} mode: {mapped-mode}")`. Two known failure modes are FORBIDDEN:
+- **⚠️ DISPATCH TARGET IS ALWAYS `bubbles.workflow` WITH THE MAPPED MODE (ABSOLUTE).** For EVERY round: look up `triggerWorkflowModes[trigger]` → get the child mode → dispatch `runSubagent("bubbles.workflow", "specs/{spec} mode: {mapped-mode}")`. Three known failure modes are FORBIDDEN:
   - ❌ **Failure Mode 1 (default-to-implement):** Dispatching `runSubagent("bubbles.implement", ...)` instead of the child workflow. This skips the trigger probe and gives every spec identical treatment.
   - ❌ **Failure Mode 2 (direct-trigger-agent):** Dispatching `runSubagent("bubbles.chaos", ...)` or `runSubagent("bubbles.harden", ...)` instead of the child workflow. This runs only the probe and skips the implementation/quality chain.
-  - ✅ **CORRECT:** `runSubagent("bubbles.workflow", "specs/{spec} mode: chaos-hardening")` — always `bubbles.workflow` with the mapped mode.
+  - ❌ **Failure Mode 3 (finding-only):** The child workflow runs the trigger phase, discovers findings, but stops and returns findings as a summary/table WITHOUT executing the finding-owned planning chain (analyst → ux → design → plan) and delivery chain (implement → test → validate → audit → docs). This is the most common sweep failure — the child must REMEDIATE, not just REPORT.
+  - ✅ **CORRECT:** `runSubagent("bubbles.workflow", "specs/{spec} mode: chaos-hardening")` — always `bubbles.workflow` with the mapped mode, and the child MUST complete the full finding-owned closure chain for every finding it discovers.
+- **⚠️ CHILD WORKFLOWS MUST FIX WHAT THEY FIND (NON-NEGOTIABLE).** Each dispatched child workflow (e.g., `harden-to-doc`, `gaps-to-doc`, `security-to-doc`) is a DELIVERY workflow with `statusCeiling: done`. When its trigger phase returns findings, the child MUST:
+  1. Run the finding-owned planning chain: `bubbles.bug` or `bubbles.analyst` → `bubbles.ux` (if UI) → `bubbles.design` → `bubbles.plan`
+  2. Run the finding-owned delivery chain: `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs`
+  3. Achieve one-to-one closure for every finding before returning `completed_owned`
+  4. If the child returns findings without remediation, treat as `NON_TERMINAL` and re-dispatch or escalate
 - The stochastic parent MUST NOT execute the trigger phase directly or build a manual trigger-specific fix cycle when a mapped child workflow exists.
 - Invoke `bubbles.workflow` as a child workflow with the resolved mode and require that it owns the full chain from its trigger through the finding-owned planning workflow, then implementation, tests, validation, audit, docs, finalize, and certification.
 - The stochastic parent MUST NOT rerun a bespoke docs/finalize tail per spec after the child workflow returns.
@@ -558,7 +564,7 @@ Retained workflow-agent anchors:
 
 ### Phase 1: Per-Spec Orchestration Loop
 
-Follow [workflow-phase-engine.md](bubbles_shared/workflow-phase-engine.md) for the authoritative sequential execution engine.
+Follow [workflow-phase-engine.md](bubbles_shared/workflow-phase-engine.md) for the authoritative sequential execution engine and [workflow-fix-cycle-protocol.md](bubbles_shared/workflow-fix-cycle-protocol.md) for the finding-owned closure contract.
 
 Retained workflow-agent anchors:
 - Phase 1 is for sequential single-spec execution. Batch work belongs in Phase 0.8.
@@ -567,13 +573,27 @@ Retained workflow-agent anchors:
 - The orchestrator MUST enforce Cross-Agent Output Verification (G020) and Anti-Fabrication heuristics (G021) after every specialist run.
 - The orchestrator MUST enforce Gate G033 before any `implement` phase.
 - The state transition guard (G023) remains the first blocking check before any `done` promotion.
-- Full finding-owned planning workflow: `bubbles.analyst` → `bubbles.ux` when the finding touches UI or a user-visible journey → `bubbles.design` → `bubbles.plan`.
-- Full finding-owned delivery workflow: `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` → finalize/certification owned by `bubbles.workflow` and `bubbles.validate`.
+
+**⚠️ FINDING-OWNED CLOSURE (MANDATORY — NON-NEGOTIABLE):**
+
+When ANY trigger phase (`chaos`, `harden`, `gaps`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `test`, `improve`) returns findings, the orchestrator MUST execute the following closure chain BEFORE advancing to the next phase in `phaseOrder`. Skipping this chain and only reporting findings is a policy violation.
+
+**Step 1 — Full finding-owned planning workflow:** (inject between trigger result and next phaseOrder step):
+`bubbles.bug` (when finding is a defect) or `bubbles.analyst` → `bubbles.ux` (when finding touches UI or user-visible journey) → `bubbles.design` → `bubbles.plan`
+
+**Step 2 — Full finding-owned delivery workflow:** (runs AFTER planning, BEFORE resuming phaseOrder):
+`bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` → finalize/certification owned by `bubbles.workflow` and `bubbles.validate`
+
+**Step 3 — One-to-one closure accounting:**
 - Include the full finding ledger in the implement prompt and require one-to-one closure accounting.
-- You MUST account for every finding individually.
 - Require one-to-one accounting against the finding list.
+- You MUST account for every finding individually.
 - Every finding was accounted for before the round is treated as clean.
-- This applies to `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, `gaps`, and future trigger-style workflows.
+- If ANY finding remains unresolved, the phase is NOT complete.
+
+This applies to `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, `gaps`, and future trigger-style workflows.
+
+**⛔ PROHIBITED:** Returning a findings summary, a table of issues, or narrative recommendations without having dispatched the planning + delivery chain for EACH finding. Finding-only output is NEVER a valid terminal state when `requireTerminalFindingClosure: true`.
 
 ### Phase 2: Optional Global Final Pass
 

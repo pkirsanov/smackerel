@@ -457,7 +457,7 @@ func (h *ExpenseHandler) ClassifyEndpoint(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Update classification and mark as user-corrected
+	// Update classification and mark as user-corrected (deduplicate corrected_fields)
 	_, err = h.Pool.Exec(r.Context(), `
 		UPDATE artifacts SET metadata = jsonb_set(
 			jsonb_set(
@@ -465,7 +465,11 @@ func (h *ExpenseHandler) ClassifyEndpoint(w http.ResponseWriter, r *http.Request
 				'{expense,user_corrected}', 'true'::jsonb
 			),
 			'{expense,corrected_fields}',
-			(COALESCE(metadata->'expense'->'corrected_fields', '[]'::jsonb) || '["classification"]'::jsonb)
+			CASE
+				WHEN COALESCE(metadata->'expense'->'corrected_fields', '[]'::jsonb) @> '["classification"]'::jsonb
+				THEN COALESCE(metadata->'expense'->'corrected_fields', '[]'::jsonb)
+				ELSE COALESCE(metadata->'expense'->'corrected_fields', '[]'::jsonb) || '["classification"]'::jsonb
+			END
 		)
 		WHERE id = $2 AND metadata ? 'expense'
 	`, req.Classification, id)
@@ -646,44 +650,26 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Query data
-	dataQuery := fmt.Sprintf(`
-		SELECT metadata->'expense' AS expense, id, source_id, title
+	// Pre-query distinct currencies for mixed-currency warning (avoids full buffering)
+	currencyQuery := fmt.Sprintf(`
+		SELECT DISTINCT COALESCE(metadata->'expense'->>'currency', 'USD') AS currency
 		FROM artifacts
 		WHERE %s
-		ORDER BY (metadata->'expense'->>'date')::date ASC NULLS LAST, id ASC
 	`, whereClause)
-
-	rows, err := h.Pool.Query(r.Context(), dataQuery, args...)
+	currencyRows, err := h.Pool.Query(r.Context(), currencyQuery, args...)
 	if err != nil {
-		writeExpenseError(w, http.StatusInternalServerError, "QUERY_FAILED", "Export query failed")
+		writeExpenseError(w, http.StatusInternalServerError, "QUERY_FAILED", "Currency query failed")
 		return
 	}
-	defer rows.Close()
-
-	// Detect currencies for mixed-currency warning
-	type expenseRow struct {
-		Expense domain.ExpenseMetadata
-		ID      string
-		Source  string
-		Title   string
-	}
-	var exportRows []expenseRow
 	currencies := make(map[string]bool)
-
-	for rows.Next() {
-		var expJSON json.RawMessage
-		var rowID, source, title string
-		if err := rows.Scan(&expJSON, &rowID, &source, &title); err != nil {
+	for currencyRows.Next() {
+		var c string
+		if err := currencyRows.Scan(&c); err != nil {
 			continue
 		}
-		var exp domain.ExpenseMetadata
-		if err := json.Unmarshal(expJSON, &exp); err != nil {
-			continue
-		}
-		currencies[exp.Currency] = true
-		exportRows = append(exportRows, expenseRow{Expense: exp, ID: rowID, Source: source, Title: title})
+		currencies[c] = true
 	}
+	currencyRows.Close()
 
 	// Build filename
 	classification := q.Get("classification")
@@ -729,9 +715,32 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 		_ = csvWriter.Write([]string{"Date", "Vendor", "Description", "Category", "Amount", "Currency", "Tax", "Payment Method", "Classification", "Source", "Artifact ID"})
 	}
 
-	// Stream rows
-	for _, row := range exportRows {
-		exp := row.Expense
+	// Stream rows directly from DB cursor to CSV writer (no in-memory buffering)
+	dataQuery := fmt.Sprintf(`
+		SELECT metadata->'expense' AS expense, id, source_id, title
+		FROM artifacts
+		WHERE %s
+		ORDER BY (metadata->'expense'->>'date')::date ASC NULLS LAST, id ASC
+	`, whereClause)
+
+	rows, err := h.Pool.Query(r.Context(), dataQuery, args...)
+	if err != nil {
+		slog.Error("export data query failed", "error", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var expJSON json.RawMessage
+		var rowID, source, title string
+		if err := rows.Scan(&expJSON, &rowID, &source, &title); err != nil {
+			continue
+		}
+		var exp domain.ExpenseMetadata
+		if err := json.Unmarshal(expJSON, &exp); err != nil {
+			continue
+		}
+
 		dateStr := ""
 		if exp.Date != nil {
 			t, err := time.Parse("2006-01-02", *exp.Date)
@@ -761,7 +770,7 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 			if h.ClassifyEngine != nil {
 				categoryDisplay = h.ClassifyEngine.CategoryDisplayName(exp.Category)
 			}
-			memo := fmt.Sprintf("Source: %s", row.Source)
+			memo := fmt.Sprintf("Source: %s", source)
 			if exp.Notes != nil && *exp.Notes != "" {
 				memo = *exp.Notes
 			}
@@ -776,11 +785,11 @@ func (h *ExpenseHandler) Export(w http.ResponseWriter, r *http.Request) {
 			_ = csvWriter.Write([]string{
 				dateStr,
 				sanitizeCSVCell(exp.Vendor),
-				sanitizeCSVCell(row.Title),
+				sanitizeCSVCell(title),
 				sanitizeCSVCell(exp.Category),
 				amount, exp.Currency, tax,
 				sanitizeCSVCell(paymentMethod),
-				exp.Classification, row.Source, row.ID,
+				exp.Classification, source, rowID,
 			})
 		}
 	}

@@ -1788,3 +1788,76 @@ modes:
       requireImplementationRealityScan: true
       requireNoDefaultsNoFallbacks: true
       requireIntegrationCompleteness: true
+
+  autonomous-goal:
+    description: Fully autonomous single-goal execution. User provides a goal in natural language; the agent autonomously discovers requirements, creates specs/designs/scopes, implements, tests, validates, audits, runs chaos/E2E, remediates all findings, and loops until convergence (zero open findings + all gates pass) or max iterations reached. Never stops on fixable obstacles — searches for solutions, tries alternative approaches. Delegates to bubbles.goal as the outer convergence controller.
+    statusCeiling: done
+    phaseOrder: [ discover, analyze, bootstrap, implement, test, validate, audit, chaos, harden, gaps, security, regression, simplify, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G055, G056, G057, G059, G061 ]
+    constraints:
+      convergenceLoopExecution: true
+      maxConvergenceIterations: 10
+      maxIdenticalFailureRetries: 3
+      solutionSearchOnBlock: true
+      solutionSearchSources: [ web, docs, codebase, similar-patterns ]
+      mandatoryE2EPerVerifyCycle: true
+      mandatoryChaosPerVerifyCycle: true
+      autoBootstrap: true
+      requireFindingRemediation: true
+      neverStopForFixableObstacles: true
+      triggerPhases: [ validate, audit, chaos, harden, gaps, security, regression, devops, stabilize ]
+      remediationWorkflowModes:
+        chaos: chaos-hardening
+        harden: harden-to-doc
+        gaps: gaps-to-doc
+        security: security-to-doc
+        regression: regression-to-doc
+        validate: reconcile-to-doc
+        audit: reconcile-to-doc
+        test: test-to-doc
+        devops: devops-to-doc
+        stabilize: stabilize-to-doc
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true
+
+  autonomous-sprint:
+    description: Multi-goal time-bounded autonomous execution. User provides a list of goals and a time budget; the agent prioritizes goals by estimated effort and impact, executes each goal using the autonomous-goal convergence loop, checks the wall clock before each goal/scope, and stops gracefully when time expires (finishing the current scope completely). Can reorder goals dynamically if a smaller goal fits remaining time better. Delegates to bubbles.sprint as the sprint controller.
+    statusCeiling: done
+    phaseOrder: [ discover, select, analyze, bootstrap, implement, test, validate, audit, chaos, harden, gaps, security, regression, simplify, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G055, G056, G057, G059, G061 ]
+    constraints:
+      sprintExecution: true
+      requireTimeBudget: true
+      defaultTimeBudgetMinutes: 240
+      wrapUpReserveMinutes: 15
+      dynamicGoalReordering: true
+      effortEstimates:
+        small: 30
+        medium: 90
+        large: 240
+      finishCurrentScopeBeforeStopping: true
+      resumeSupport: true
+      goalExecutionMode: autonomous-goal
+      requireSprintReport: true
+      sequentialSpecCompletion: true
+      crossAgentVerification: true
+      antiFabricationDetection: true
+      requireAllSpecialistsComplete: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireTestsForAllRealScenarios: true
+      require100PercentBusinessLogicCoverage: true
+      requirePhaseScopeCoherence: true
+      requireImplementationRealityScan: true
+      requireNoDefaultsNoFallbacks: true
+      requireIntegrationCompleteness: true

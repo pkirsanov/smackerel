@@ -278,3 +278,70 @@ func TestFormatNoStepsFallback_SameServings(t *testing.T) {
 		t.Error("should not show scaling when servings match original")
 	}
 }
+
+func TestHandleCookDisambiguation_ResolvesSelection(t *testing.T) {
+	store := NewCookSessionStore(120)
+
+	servings := 4
+	store.SetDisambiguation(12345, &CookDisambiguation{
+		Options: []CookDisambiguationOption{
+			{ArtifactID: "art-1", RecipeData: &recipe.RecipeData{
+				Title:    "Pasta Carbonara",
+				Servings: &servings,
+				Steps:    []recipe.Step{{Number: 1, Instruction: "Cook pasta"}},
+			}, Title: "Pasta Carbonara"},
+			{ArtifactID: "art-2", RecipeData: &recipe.RecipeData{
+				Title:    "Pasta Bolognese",
+				Servings: &servings,
+				Steps:    []recipe.Step{{Number: 1, Instruction: "Brown meat"}},
+			}, Title: "Pasta Bolognese"},
+		},
+		Servings: 0,
+	})
+
+	// Verify disambiguation is stored
+	if store.GetDisambiguation(12345) == nil {
+		t.Fatal("expected pending disambiguation")
+	}
+
+	// After clear, should be nil
+	store.ClearDisambiguation(12345)
+	if store.GetDisambiguation(12345) != nil {
+		t.Error("expected nil after clearing disambiguation")
+	}
+}
+
+func TestCookDisambiguationStore_NonExistent(t *testing.T) {
+	store := NewCookSessionStore(120)
+
+	if store.GetDisambiguation(99999) != nil {
+		t.Error("expected nil for non-existent chat")
+	}
+}
+
+func TestCookDisambiguationStore_SetReplaces(t *testing.T) {
+	store := NewCookSessionStore(120)
+
+	store.SetDisambiguation(12345, &CookDisambiguation{
+		Options: []CookDisambiguationOption{
+			{ArtifactID: "art-1", Title: "Recipe A"},
+		},
+	})
+	store.SetDisambiguation(12345, &CookDisambiguation{
+		Options: []CookDisambiguationOption{
+			{ArtifactID: "art-2", Title: "Recipe B"},
+			{ArtifactID: "art-3", Title: "Recipe C"},
+		},
+	})
+
+	got := store.GetDisambiguation(12345)
+	if got == nil {
+		t.Fatal("expected disambiguation")
+	}
+	if len(got.Options) != 2 {
+		t.Errorf("expected 2 options, got %d", len(got.Options))
+	}
+	if got.Options[0].Title != "Recipe B" {
+		t.Errorf("expected 'Recipe B', got %q", got.Options[0].Title)
+	}
+}

@@ -43,6 +43,12 @@ Treat the child result as incomplete when any of these are true:
 - The child workflow asks the user to continue manually instead of routing or completing the work itself
 - The parent ran the trigger directly even though a mapped child workflow existed
 - The child workflow reports `completed_owned` before the full finding-owned planning and delivery closure workflow reached a terminal outcome
+- **The child workflow returns a findings list, summary table, or narrative recommendations without having executed the finding-owned planning chain (analyst → ux → design → plan) and delivery chain (implement → test → validate → audit → docs) for each finding — this is a finding-only result, not a completed workflow**
+- **The child workflow ran its trigger phase (harden/gaps/security/chaos/stabilize/simplify/regression/etc.) but did NOT invoke `bubbles.implement` or any delivery specialist — the trigger-only probe is necessary but insufficient**
+
+When a malformed result is detected, the parent MUST either:
+1. Re-dispatch the same child workflow with explicit instruction to complete the finding-owned closure chain, OR
+2. Mark the round as `NON_TERMINAL` and include the unresolved findings in the continuation envelope
 
 ## Round Ledger Requirement
 

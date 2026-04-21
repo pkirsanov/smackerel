@@ -367,3 +367,142 @@ A `bubbles.workflow` improve-existing pass reviewed spec 023 artifacts for drift
 ### Verdict
 
 Artifact-only repair. All 3 scopes remain Done. Spec 023 is certified complete.
+
+---
+
+## Chaos Hardening Probe (2026-04-20)
+
+**Trigger:** stochastic-quality-sweep → chaos-hardening (child workflow)
+**Agent:** bubbles.chaos (inline probe)
+**Result:** 1 finding discovered and remediated
+
+### Probe Dimensions
+
+| # | Dimension | Area | Outcome |
+|---|-----------|------|---------|
+| 1 | Concurrent mlClient race (SCN-023-01) | `health.go` `mlClient()` | Clean — 50-goroutine test + race detector |
+| 2 | Typed interface compile safety (SCN-023-02) | `Dependencies` struct | Clean — `go build ./...` |
+| 3 | Dead code removal (SCN-023-03) | `checkAuth` | Clean — `grep -rn checkAuth internal/` = 0 |
+| 4 | SST connector env vars (SCN-023-04) | `cmd/core/main.go` | Clean — zero `os.Getenv` for connector paths |
+| 5 | writeJSON consistency (SCN-023-05) | `intelligence.go` | Clean — all 8 handlers use writeJSON |
+| 6 | Ollama health probing (SCN-023-06) | `checkOllama()` | Clean — up/down/not_configured/unreachable tested |
+| 7 | Telegram health probing (SCN-023-07) | `TelegramBot.Healthy()` | Clean — connected/disconnected tested |
+| 8 | Health log exclusion (SCN-023-08) | `structuredLogger` | Clean — exact path match, tests cover all branches |
+| 9 | Sync interval parsing (SCN-023-09) | `parseSyncInterval` | Clean — cron, duration, empty, complex, invalid all tested |
+| 10 | Knowledge health cache under concurrency | `getCachedKnowledgeHealth` | **FINDING C-023-C001** |
+
+### Finding: CHAOS-023-C001
+
+**Title:** Knowledge health cache mutex held during database I/O serialises concurrent health checks
+
+**Severity:** Medium
+
+**Description:** `getCachedKnowledgeHealth()` acquired an exclusive `sync.Mutex` and held it while executing `KnowledgeStore.GetKnowledgeHealthStats()` — a database query. Under SCN-023-01's scenario (50+ concurrent authenticated health checks with the knowledge layer enabled and expired cache TTL), all concurrent requests serialised on this mutex. The first request to acquire the lock fetched fresh data while all others blocked, adding O(N × query_time) worst-case latency.
+
+**Root cause:** The method used `sync.Mutex` (exclusive) instead of `sync.RWMutex` (shared-read, exclusive-write), and held the lock across the entire cache-check-fetch-update lifecycle.
+
+**Fix applied:**
+1. Changed `knowledgeHealthMu` from `sync.Mutex` to `sync.RWMutex`
+2. Refactored `getCachedKnowledgeHealth()` to use read lock for cache hit (concurrent readers OK), release lock before DB call, take write lock only to update cache
+3. Added `TestChaos_ConcurrentHealthWithSlowKnowledgeStore` — 30 concurrent goroutines with a 200ms-delay mock knowledge store, verified total latency stays under 3s (serialised would be 6s+)
+4. Added `healthDelay` field to `mockKnowledgeStore` for slow-store simulation
+
+**Files changed:**
+- [internal/api/health.go](../../internal/api/health.go) — `sync.Mutex` → `sync.RWMutex`, refactored `getCachedKnowledgeHealth()` lock pattern
+- [internal/api/health_test.go](../../internal/api/health_test.go) — `TestChaos_ConcurrentHealthWithSlowKnowledgeStore`
+- [internal/api/knowledge_test.go](../../internal/api/knowledge_test.go) — `healthDelay` field + sleep in mock
+
+### Evidence
+
+```
+$ ./smackerel.sh test unit --go 2>&1 | grep "internal/api"
+ok      github.com/smackerel/smackerel/internal/api     2.924s
+
+$ go test -race -run "TestChaos_ConcurrentHealthWithSlowKnowledgeStore" ./internal/api/...
+ok      github.com/smackerel/smackerel/internal/api     2.282s
+
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+```
+
+### Conclusion
+
+1 finding discovered (CHAOS-023-C001), fixed, and verified with adversarial test + race detector. All 40+ Go packages pass. No regressions.
+
+---
+
+## Chaos Hardening Probe (2026-04-21)
+
+**Trigger:** stochastic-quality-sweep → chaos-hardening (child workflow)
+**Agent:** bubbles.chaos (inline probe, race detector sweep)
+**Result:** 2 findings discovered and remediated
+
+### Probe Dimensions
+
+| # | Dimension | Area | Outcome |
+|---|-----------|------|---------|
+| 1 | `go test -race -count=3 ./internal/api/...` | All API handlers, health, mlClient | Clean |
+| 2 | `go test -race -count=3 ./internal/connector/...` | All connector packages | **FINDING C-023-CHAOS-002** |
+| 3 | `go test -race -count=3 ./internal/connector/...` | Supervisor panic recovery | **FINDING C-023-CHAOS-003** |
+| 4 | Health log exclusion bypass (path variants) | `structuredLogger` exact match | Clean — `/api/health?q=x` normalised by Go, trailing slash 404s |
+| 5 | parseSyncInterval edge cases (*/0, negative, overflow) | `parseSyncInterval` | Clean — `n > 0` guard, `d > 0` check |
+| 6 | checkMLSidecar / checkOllama body drain | Response body lifecycle | Clean — both drain + close properly |
+| 7 | SST invariants re-verification | Connector config flow | Clean — zero `os.Getenv` for spec 023 fields |
+| 8 | writeJSON consistency | intelligence.go 8 handlers | Clean |
+| 9 | `./smackerel.sh check` | Build + SST | Clean |
+| 10 | `./smackerel.sh test unit` | Full test suite | All pass |
+
+### Finding: C-023-CHAOS-002
+
+**Title:** IMAP connector `health` field data race under concurrent Sync()
+
+**Severity:** Medium
+
+**Description:** `imap.Connector.Sync()` reads and writes `c.health` (a `HealthStatus` string field) without synchronization. The race is between the `defer` closure's read at line 80 (`if c.health == connector.HealthSyncing`) and another goroutine's write at line 81 (`c.health = connector.HealthHealthy`). `Connect()`, `Health()`, and `Close()` also access the field unsynchronized. The race detector flagged this consistently across 3 test iterations in `TestChaos_ConcurrentIMAPSync`.
+
+**Root cause:** The `Connector` struct had no mutex protecting the `health` field. All access sites (Sync, Connect, Health, Close) read/wrote the field directly.
+
+**Fix applied:**
+1. Added `healthMu sync.RWMutex` to `imap.Connector` struct
+2. Protected all `c.health` reads with `c.healthMu.RLock()`/`RUnlock()`
+3. Protected all `c.health` writes with `c.healthMu.Lock()`/`Unlock()`
+4. `Sync()` disconnected-check uses RLock, status transition uses Lock, defer cleanup uses Lock
+5. `Health()` uses RLock for read-only access
+6. `Close()` and `Connect()` use Lock for writes
+
+**Files changed:**
+- [internal/connector/imap/imap.go](../../internal/connector/imap/imap.go) — added `sync` import, `healthMu` field, mutex guards on all `c.health` access
+
+**Verification:** `go test -race -count=3 -run TestChaos_ConcurrentIMAPSync ./internal/connector/imap/...` — passes clean.
+
+### Finding: C-023-CHAOS-003
+
+**Title:** Supervisor `stopped` field data race in panic recovery restart path
+
+**Severity:** Low
+
+**Description:** `runWithRecovery()` re-checks `s.stopped` after the jittered restart delay sleep (line 211) without holding the mutex. Meanwhile, `StopAll()` writes `s.stopped = true` under `s.mu.Lock()`. The first read of `s.stopped` within the recovery handler IS protected (line 171, inside `s.mu.Lock()` block), but the second read after `time.After(restartDelay)` is unprotected.
+
+**Root cause:** The post-sleep re-check was added as a safety belt but was not wrapped in a lock.
+
+**Fix applied:** Wrapped the post-sleep `s.stopped` re-check with `s.mu.RLock()`/`RUnlock()`.
+
+**Files changed:**
+- [internal/connector/supervisor.go](../../internal/connector/supervisor.go) — added RLock guard around post-delay `s.stopped` re-check
+
+**Verification:** `go test -race -count=3 -run TestSupervisor_PanicRecovery ./internal/connector/` — passes clean.
+
+### Evidence
+
+```
+$ go test -race -count=3 ./internal/api/... — ok (21.459s)
+$ go test -race -count=3 ./internal/connector/imap/... — ok (1.031s)
+$ go test -race -count=3 -run TestSupervisor_PanicRecovery ./internal/connector/ — ok (13.488s)
+$ ./smackerel.sh check — Config is in sync with SST, env_file drift guard: OK
+$ ./smackerel.sh test unit — All packages pass (236 Python tests pass)
+```
+
+### Conclusion
+
+2 data races discovered via `go test -race` (C-023-CHAOS-002: IMAP connector health field, C-023-CHAOS-003: supervisor stopped field post-delay re-check). Both fixed with appropriate mutex guards and verified race-free. No regressions.

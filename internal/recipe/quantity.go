@@ -87,26 +87,28 @@ func ParseQuantity(qtyStr, unitStr string) (float64, string) {
 	return 0, unitStr
 }
 
+// unitAliases maps unit aliases to their canonical forms.
+var unitAliases = map[string]string{
+	"tablespoon": "tbsp", "tablespoons": "tbsp", "tbs": "tbsp",
+	"teaspoon": "tsp", "teaspoons": "tsp",
+	"cups":  "cup",
+	"ounce": "oz", "ounces": "oz",
+	"pound": "lb", "pounds": "lb", "lbs": "lb",
+	"gram": "g", "grams": "g",
+	"kilogram": "kg", "kilograms": "kg",
+	"milliliter": "ml", "milliliters": "ml",
+	"liter": "l", "liters": "l",
+	"clove": "cloves",
+	"piece": "pieces", "pc": "pieces",
+	"slice": "slices",
+	"can":   "cans",
+	"bunch": "bunches",
+}
+
 // NormalizeUnit converts unit aliases to canonical form.
 func NormalizeUnit(unit string) string {
 	unit = strings.ToLower(strings.TrimSpace(unit))
-	aliases := map[string]string{
-		"tablespoon": "tbsp", "tablespoons": "tbsp", "tbs": "tbsp",
-		"teaspoon": "tsp", "teaspoons": "tsp",
-		"cups":  "cup",
-		"ounce": "oz", "ounces": "oz",
-		"pound": "lb", "pounds": "lb", "lbs": "lb",
-		"gram": "g", "grams": "g",
-		"kilogram": "kg", "kilograms": "kg",
-		"milliliter": "ml", "milliliters": "ml",
-		"liter": "l", "liters": "l",
-		"clove": "cloves",
-		"piece": "pieces", "pc": "pieces",
-		"slice": "slices",
-		"can":   "cans",
-		"bunch": "bunches",
-	}
-	if canonical, ok := aliases[unit]; ok {
+	if canonical, ok := unitAliases[unit]; ok {
 		return canonical
 	}
 	return unit
@@ -124,51 +126,29 @@ func NormalizeIngredientName(name string) string {
 	return name
 }
 
+// ingredientCategories maps category names to their keyword lists.
+var ingredientCategories = []struct {
+	category string
+	keywords []string
+}{
+	{"proteins", []string{"chicken", "beef", "pork", "lamb", "fish", "salmon", "tuna", "shrimp", "tofu", "turkey", "bacon", "sausage", "egg"}},
+	{"dairy", []string{"milk", "cream", "butter", "cheese", "yogurt", "sour cream"}},
+	{"produce", []string{"onion", "garlic", "tomato", "pepper", "lettuce", "carrot", "celery", "potato", "mushroom", "lemon", "lime", "avocado", "spinach", "broccoli", "ginger", "cilantro", "parsley", "basil", "thyme", "rosemary", "scallion", "zucchini", "cucumber", "corn", "bean", "pea"}},
+	{"spices", []string{"salt", "pepper", "cumin", "paprika", "oregano", "cinnamon", "nutmeg", "turmeric", "chili", "cayenne", "bay leaf", "clove", "coriander"}},
+	{"baking", []string{"flour", "sugar", "baking soda", "baking powder", "yeast", "cocoa", "vanilla", "cornstarch"}},
+	{"pantry", []string{"oil", "olive oil", "vinegar", "soy sauce", "honey", "maple syrup", "rice", "pasta", "noodle", "bread", "broth", "stock", "ketchup", "mustard", "mayonnaise", "hot sauce"}},
+	{"beverages", []string{"water", "wine", "beer", "juice", "coffee", "tea"}},
+}
+
 // CategorizeIngredient maps an ingredient name to a grocery category.
 func CategorizeIngredient(name string) string {
 	name = strings.ToLower(name)
 
-	proteins := []string{"chicken", "beef", "pork", "lamb", "fish", "salmon", "tuna", "shrimp", "tofu", "turkey", "bacon", "sausage", "egg"}
-	dairy := []string{"milk", "cream", "butter", "cheese", "yogurt", "sour cream"}
-	produce := []string{"onion", "garlic", "tomato", "pepper", "lettuce", "carrot", "celery", "potato", "mushroom", "lemon", "lime", "avocado", "spinach", "broccoli", "ginger", "cilantro", "parsley", "basil", "thyme", "rosemary", "scallion", "zucchini", "cucumber", "corn", "bean", "pea"}
-	spices := []string{"salt", "pepper", "cumin", "paprika", "oregano", "cinnamon", "nutmeg", "turmeric", "chili", "cayenne", "bay leaf", "clove", "coriander"}
-	baking := []string{"flour", "sugar", "baking soda", "baking powder", "yeast", "cocoa", "vanilla", "cornstarch"}
-	pantry := []string{"oil", "olive oil", "vinegar", "soy sauce", "honey", "maple syrup", "rice", "pasta", "noodle", "bread", "broth", "stock", "ketchup", "mustard", "mayonnaise", "hot sauce"}
-	beverages := []string{"water", "wine", "beer", "juice", "coffee", "tea"}
-
-	for _, p := range proteins {
-		if strings.Contains(name, p) {
-			return "proteins"
-		}
-	}
-	for _, d := range dairy {
-		if strings.Contains(name, d) {
-			return "dairy"
-		}
-	}
-	for _, p := range produce {
-		if strings.Contains(name, p) {
-			return "produce"
-		}
-	}
-	for _, s := range spices {
-		if strings.Contains(name, s) {
-			return "spices"
-		}
-	}
-	for _, b := range baking {
-		if strings.Contains(name, b) {
-			return "baking"
-		}
-	}
-	for _, p := range pantry {
-		if strings.Contains(name, p) {
-			return "pantry"
-		}
-	}
-	for _, b := range beverages {
-		if strings.Contains(name, b) {
-			return "beverages"
+	for _, cat := range ingredientCategories {
+		for _, kw := range cat.keywords {
+			if strings.Contains(name, kw) {
+				return cat.category
+			}
 		}
 	}
 

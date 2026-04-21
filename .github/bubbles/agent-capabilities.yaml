@@ -17,6 +17,8 @@ stateModel:
   executionClaimWriters:
   - bubbles.workflow
   - bubbles.iterate
+  - bubbles.goal
+  - bubbles.sprint
   - bubbles.bug
   - bubbles.analyst
   - bubbles.ux
@@ -43,6 +45,8 @@ childWorkflowPolicy:
   callers:
   - bubbles.workflow
   - bubbles.iterate
+  - bubbles.goal
+  - bubbles.sprint
   - bubbles.bug
 
 resultPolicy:

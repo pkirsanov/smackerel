@@ -837,17 +837,22 @@ func TestSyncDegradedHealthOnTotalFailure(t *testing.T) {
 }
 
 func TestSyncHealthyOnPartialFailure(t *testing.T) {
-	// When some calls succeed, health should be healthy.
-	callNum := 0
+	// When some quote calls succeed and some fail, health should be healthy.
+	quoteCallNum := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callNum++
-		if callNum == 1 {
-			// First call succeeds
+		if r.URL.Path == "/api/v1/company-news" {
+			// News succeeds for all symbols to isolate partial-quote-failure test.
+			json.NewEncoder(w).Encode([]map[string]interface{}{})
+			return
+		}
+		quoteCallNum++
+		if quoteCallNum == 1 {
+			// First quote call succeeds
 			json.NewEncoder(w).Encode(map[string]float64{
 				"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
 			})
 		} else {
-			// Subsequent calls fail
+			// Subsequent quote calls fail
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(`{"error":"server error"}`))
 		}
@@ -868,7 +873,7 @@ func TestSyncHealthyOnPartialFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Partial failure — some symbols succeeded, health stays healthy.
+	// Partial failure — some quote symbols succeeded, health stays healthy.
 	if c.Health(context.Background()) != connector.HealthHealthy {
 		t.Errorf("expected healthy on partial failure, got %v", c.Health(context.Background()))
 	}
@@ -1353,10 +1358,15 @@ func TestSyncHealthRestoredAfterRecovery(t *testing.T) {
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
-		if callCount <= 2 {
-			// First sync: all calls fail.
+		if callCount <= 4 {
+			// First sync: all calls fail (2 quote + 2 news = 4 calls for 2 stocks).
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(`{"error":"down"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/company-news" {
+			// Recovery: news succeeds with empty array.
+			json.NewEncoder(w).Encode([]map[string]interface{}{})
 			return
 		}
 		json.NewEncoder(w).Encode(map[string]float64{
@@ -3756,5 +3766,341 @@ func TestEnrichArtifactsWithSymbols_QuoteArtifact(t *testing.T) {
 	}
 	if len(related) != 1 || related[0] != "AAPL" {
 		t.Errorf("expected [AAPL], got %v", related)
+	}
+}
+
+// --- REG-018-R01: Company news failures must degrade health ---
+
+// TestRegression_NewsTotalFailureSetsHealthDegraded verifies that when all company
+// news fetches fail while stock quotes succeed, health is Degraded (not Healthy).
+// Adversarial: without the REG-018-R01 fix, news failures were invisible to health.
+func TestRegression_NewsTotalFailureSetsHealthDegraded(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/company-news":
+			// News endpoint fails
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"error":"news down"}`))
+		default:
+			// Quote endpoint succeeds
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 175.0, "d": 1.5, "dp": 0.9, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.5,
+			})
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL", "GOOGL"},
+		},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Stock quotes should still succeed.
+	var quoteCount int
+	for _, a := range artifacts {
+		if a.ContentType == "market/quote" {
+			quoteCount++
+		}
+	}
+	if quoteCount != 2 {
+		t.Errorf("expected 2 quote artifacts, got %d", quoteCount)
+	}
+
+	// Health must NOT be Healthy — news is a tracked provider that completely failed.
+	health := c.Health(context.Background())
+	if health == connector.HealthHealthy {
+		t.Errorf("expected Degraded or Error health after total news failure, got %v", health)
+	}
+}
+
+// --- Test-to-doc coverage gap tests: TQS-018-001 through TQS-018-008 ---
+
+func TestFetchFinnhubForex_MalformedBaseURL(t *testing.T) {
+	// TQS-018-001: fetchFinnhubForex must return url.Parse error for malformed base URL.
+	c := newTestConnector("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.finnhubBaseURL = "://invalid-url"
+
+	_, err := c.fetchFinnhubForex(context.Background(), "USD/JPY")
+	if err == nil {
+		t.Fatal("expected error for malformed forex base URL")
+	}
+	if !strings.Contains(err.Error(), "parse finnhub URL") {
+		t.Errorf("error should mention URL parse failure, got: %v", err)
+	}
+}
+
+func TestFetchFinnhubForex_HTTPError(t *testing.T) {
+	// TQS-018-002: fetchFinnhubForex must handle non-200 HTTP responses with body snippet.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":"rate limited"}`))
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	_, err := c.fetchFinnhubForex(context.Background(), "USD/JPY")
+	if err == nil {
+		t.Fatal("expected error for 429 forex response")
+	}
+	if !strings.Contains(err.Error(), "429") {
+		t.Errorf("error should mention status 429, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "rate limited") {
+		t.Errorf("error should include body snippet, got: %v", err)
+	}
+}
+
+func TestFetchFinnhubForex_MalformedJSON(t *testing.T) {
+	// TQS-018-003: fetchFinnhubForex must return decode error for malformed JSON.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{not valid json`))
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	_, err := c.fetchFinnhubForex(context.Background(), "USD/JPY")
+	if err == nil {
+		t.Fatal("expected error for malformed forex JSON")
+	}
+	if !strings.Contains(err.Error(), "decode") {
+		t.Errorf("error should mention decode, got: %v", err)
+	}
+}
+
+func TestFetchFinnhubForex_RejectsZeroPriceResponse(t *testing.T) {
+	// TQS-018-004: fetchFinnhubForex must reject all-zero "no data" responses.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 0, "d": 0, "dp": 0, "h": 0, "l": 0, "o": 0, "pc": 0,
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	_, err := c.fetchFinnhubForex(context.Background(), "USD/JPY")
+	if err == nil {
+		t.Fatal("expected error for zero-price forex response")
+	}
+	if !strings.Contains(err.Error(), "no forex data") {
+		t.Errorf("error should mention no forex data, got: %v", err)
+	}
+}
+
+func TestFetchFinnhubCompanyNews_MalformedBaseURL(t *testing.T) {
+	// TQS-018-005: fetchFinnhubCompanyNews must return url.Parse error for malformed base URL.
+	c := newTestConnector("financial-markets")
+	c.config.FinnhubAPIKey = "test-key"
+	c.finnhubBaseURL = "://invalid-url"
+
+	_, err := c.fetchFinnhubCompanyNews(context.Background(), "AAPL", "2024-01-15", "2024-01-15")
+	if err == nil {
+		t.Fatal("expected error for malformed news base URL")
+	}
+	if !strings.Contains(err.Error(), "parse finnhub news URL") {
+		t.Errorf("error should mention URL parse failure, got: %v", err)
+	}
+}
+
+func TestBuildDailySummary_UnchangedSymbols(t *testing.T) {
+	// TQS-018-006: buildDailySummary must include an "Unchanged" section for 0% change.
+	now := time.Date(2024, 6, 10, 17, 0, 0, 0, time.UTC)
+	artifacts := []connector.RawArtifact{
+		{
+			ContentType: "market/quote",
+			Metadata: map[string]interface{}{
+				"symbol":          "FLAT",
+				"change_percent":  0.0,
+				"processing_tier": "light",
+			},
+		},
+	}
+
+	summary := buildDailySummary(artifacts, now)
+	if !strings.Contains(summary.RawContent, "Unchanged:") {
+		t.Error("summary should contain Unchanged section for 0% change symbol")
+	}
+	if !strings.Contains(summary.RawContent, "FLAT") {
+		t.Error("summary should mention the unchanged symbol")
+	}
+	if summary.Metadata["gainers_count"] != 0 {
+		t.Errorf("expected 0 gainers, got %v", summary.Metadata["gainers_count"])
+	}
+	if summary.Metadata["losers_count"] != 0 {
+		t.Errorf("expected 0 losers, got %v", summary.Metadata["losers_count"])
+	}
+}
+
+func TestSync_NewsSanitizesControlChars(t *testing.T) {
+	// TQS-018-007: Sync must sanitize control characters in news headline/summary/source
+	// via SanitizeControlChars (IMP-018-SQS-001, CWE-116).
+	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/company-news" {
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{
+					"category": "company\x00injected",
+					"datetime": 1705334400,
+					"headline": "Apple\x07Bell Report",
+					"id":       60001,
+					"related":  "AAPL",
+					"source":   "Reuters\x1b[31m",
+					"summary":  "Test\x0bsummary\x0cwith\x08controls",
+					"url":      "https://example.com/news",
+				},
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 175.0, "d": 2.0, "dp": 1.1, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.0,
+		})
+	}))
+	defer finnhubSrv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.httpClient = finnhubSrv.Client()
+	c.finnhubBaseURL = finnhubSrv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist:      WatchlistConfig{Stocks: []string{"AAPL"}},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var newsArtifact *connector.RawArtifact
+	for i := range artifacts {
+		if artifacts[i].ContentType == "market/news" {
+			newsArtifact = &artifacts[i]
+			break
+		}
+	}
+	if newsArtifact == nil {
+		t.Fatal("expected a news artifact")
+	}
+
+	// Verify control characters are stripped from headline.
+	if strings.ContainsAny(newsArtifact.Title, "\x00\x07\x08\x0b\x0c\x1b") {
+		t.Errorf("headline still contains control characters: %q", newsArtifact.Title)
+	}
+	if !strings.Contains(newsArtifact.Title, "Apple") {
+		t.Errorf("headline should still contain 'Apple', got %q", newsArtifact.Title)
+	}
+
+	// Verify control characters are stripped from source.
+	source := newsArtifact.Metadata["source"].(string)
+	if strings.ContainsAny(source, "\x1b") {
+		t.Errorf("source still contains ANSI escape: %q", source)
+	}
+
+	// Verify control characters are stripped from category.
+	category := newsArtifact.Metadata["category"].(string)
+	if strings.ContainsAny(category, "\x00") {
+		t.Errorf("category still contains null byte: %q", category)
+	}
+}
+
+func TestCoinGecko_ZeroPercentChangeViaFetch(t *testing.T) {
+	// TQS-018-008: CoinGecko 0% change must yield 0 change24h through real fetch path.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]map[string]float64{
+			"stablecoin": {"usd": 1.0, "usd_24h_change": 0.0},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.httpClient = srv.Client()
+	c.coingeckoBaseURL = srv.URL
+
+	prices, err := c.fetchCoinGeckoPrices(context.Background(), []string{"stablecoin"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(prices) != 1 {
+		t.Fatalf("expected 1 price, got %d", len(prices))
+	}
+	if prices[0].Change24h != 0.0 {
+		t.Errorf("expected 0.0 change24h for 0%% change, got %v", prices[0].Change24h)
+	}
+	if prices[0].ChangePct24h != 0.0 {
+		t.Errorf("expected 0.0 changePct24h, got %v", prices[0].ChangePct24h)
+	}
+}
+
+// TestRegression_NewsPartialFailureStaysHealthy verifies that partial news failures
+// (some symbols succeed) don't incorrectly mark the connector as degraded.
+func TestRegression_NewsPartialFailureStaysHealthy(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/company-news":
+			callCount++
+			if callCount == 1 {
+				// First symbol's news fails
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"temporary"}`))
+				return
+			}
+			// Second symbol's news succeeds
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{"category": "company", "datetime": 1705334400, "headline": "News", "id": 1, "related": "GOOGL", "source": "Test", "summary": "Sum", "url": "https://example.com"},
+			})
+		default:
+			json.NewEncoder(w).Encode(map[string]float64{
+				"c": 175.0, "d": 1.5, "dp": 0.9, "h": 177.0, "l": 173.0, "o": 174.0, "pc": 173.5,
+			})
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL", "GOOGL"},
+		},
+	}
+
+	_, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Partial failure (1 of 2 succeed) should NOT count as total provider failure.
+	health := c.Health(context.Background())
+	if health != connector.HealthHealthy {
+		t.Errorf("expected HealthHealthy after partial news failure, got %v", health)
 	}
 }
