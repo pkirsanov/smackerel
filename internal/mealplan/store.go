@@ -20,6 +20,21 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{Pool: pool}
 }
 
+// scanSlot scans a row into a Slot. The SQL must select columns in this order:
+// s.id, s.plan_id, s.slot_date, s.meal_type, s.recipe_artifact_id,
+// s.servings, s.batch_flag, s.notes, s.created_at, recipe_title.
+type slotScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanSlot(row slotScanner) (Slot, error) {
+	var sl Slot
+	err := row.Scan(&sl.ID, &sl.PlanID, &sl.SlotDate, &sl.MealType,
+		&sl.RecipeArtifactID, &sl.Servings, &sl.BatchFlag, &sl.Notes,
+		&sl.CreatedAt, &sl.RecipeTitle)
+	return sl, err
+}
+
 // CreatePlan inserts a new meal plan.
 func (s *Store) CreatePlan(ctx context.Context, plan *Plan) error {
 	_, err := s.Pool.Exec(ctx,
@@ -66,10 +81,8 @@ func (s *Store) GetPlanWithSlots(ctx context.Context, planID string) (*PlanWithS
 
 	var slots []Slot
 	for rows.Next() {
-		var sl Slot
-		if err := rows.Scan(&sl.ID, &sl.PlanID, &sl.SlotDate, &sl.MealType,
-			&sl.RecipeArtifactID, &sl.Servings, &sl.BatchFlag, &sl.Notes,
-			&sl.CreatedAt, &sl.RecipeTitle); err != nil {
+		sl, err := scanSlot(rows)
+		if err != nil {
 			return nil, err
 		}
 		slots = append(slots, sl)
@@ -179,16 +192,14 @@ func (s *Store) AddSlot(ctx context.Context, slot *Slot) error {
 
 // GetSlot retrieves a single slot by plan and slot ID.
 func (s *Store) GetSlot(ctx context.Context, planID, slotID string) (*Slot, error) {
-	var sl Slot
-	err := s.Pool.QueryRow(ctx,
+	sl, err := scanSlot(s.Pool.QueryRow(ctx,
 		`SELECT s.id, s.plan_id, s.slot_date, s.meal_type, s.recipe_artifact_id,
 		        s.servings, s.batch_flag, s.notes, s.created_at,
 		        COALESCE(a.title, '(recipe unavailable)') AS recipe_title
 		 FROM meal_plan_slots s
 		 LEFT JOIN artifacts a ON a.id = s.recipe_artifact_id
 		 WHERE s.plan_id = $1 AND s.id = $2`, planID, slotID,
-	).Scan(&sl.ID, &sl.PlanID, &sl.SlotDate, &sl.MealType, &sl.RecipeArtifactID,
-		&sl.Servings, &sl.BatchFlag, &sl.Notes, &sl.CreatedAt, &sl.RecipeTitle)
+	))
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -265,10 +276,8 @@ func (s *Store) GetSlotsByDate(ctx context.Context, date time.Time, mealType str
 
 	var slots []Slot
 	for rows.Next() {
-		var sl Slot
-		if err := rows.Scan(&sl.ID, &sl.PlanID, &sl.SlotDate, &sl.MealType,
-			&sl.RecipeArtifactID, &sl.Servings, &sl.BatchFlag, &sl.Notes,
-			&sl.CreatedAt, &sl.RecipeTitle); err != nil {
+		sl, err := scanSlot(rows)
+		if err != nil {
 			return nil, nil, err
 		}
 		slots = append(slots, sl)
@@ -333,8 +342,7 @@ func (s *Store) RecipeArtifactExists(ctx context.Context, artifactID string) (bo
 
 // GetSlotByDateMeal returns a slot for a specific plan+date+meal combination.
 func (s *Store) GetSlotByDateMeal(ctx context.Context, planID string, date time.Time, mealType string) (*Slot, error) {
-	var sl Slot
-	err := s.Pool.QueryRow(ctx,
+	sl, err := scanSlot(s.Pool.QueryRow(ctx,
 		`SELECT s.id, s.plan_id, s.slot_date, s.meal_type, s.recipe_artifact_id,
 		        s.servings, s.batch_flag, s.notes, s.created_at,
 		        COALESCE(a.title, '(recipe unavailable)') AS recipe_title
@@ -342,8 +350,7 @@ func (s *Store) GetSlotByDateMeal(ctx context.Context, planID string, date time.
 		 LEFT JOIN artifacts a ON a.id = s.recipe_artifact_id
 		 WHERE s.plan_id = $1 AND s.slot_date = $2 AND s.meal_type = $3`,
 		planID, date, mealType,
-	).Scan(&sl.ID, &sl.PlanID, &sl.SlotDate, &sl.MealType, &sl.RecipeArtifactID,
-		&sl.Servings, &sl.BatchFlag, &sl.Notes, &sl.CreatedAt, &sl.RecipeTitle)
+	))
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}

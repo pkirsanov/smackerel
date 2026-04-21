@@ -262,6 +262,19 @@
       "startedAt": "2026-04-20T06:19:00Z",
       "completedAt": "2026-04-20T06:30:00Z",
       "summary": "chaos-hardening: Fixed flaky TestIMP012002_MessageLoopStopsOnContextCancel. Root cause: race between 1ms-polling cancel goroutine and instant mock server responses allowing 50 iterations to complete before cancel propagated. Fix: replaced polling+cancel pattern with a channel gate that blocks the (N+1)th message fetch until cancel fires, making the test deterministic. All unit tests pass (Go + Python 214), check OK, lint OK."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "security",
+        "implement",
+        "test"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-04-21T00:00:00Z",
+      "completedAt": "2026-04-21T00:15:00Z",
+      "summary": "security-to-doc (stochastic R82): Security scan found 3 CWE-116/79 defense-in-depth gaps in NormalizeProperty and NormalizeReservation. SEC-R82-001: Amenities/ChannelIDs array elements not sanitized for control characters. SEC-R82-002: ListingURLs stored raw in metadata without scheme filtering. SEC-R82-003: Reservation CheckIn/CheckOut date strings not sanitized. All 3 fixed in normalizer.go with 5 new targeted tests in normalizer_test.go. All 236 tests pass, lint clean, check clean. No regressions."
     }
   ],
   "policySnapshot": {
@@ -293,7 +306,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-16T00:00:00Z",
+  "lastUpdatedAt": "2026-04-21T00:15:00Z",
   "certification": {
     "status": "certified",
     "completedScopes": [

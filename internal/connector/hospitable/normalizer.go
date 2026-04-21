@@ -48,6 +48,21 @@ func NormalizeProperty(p Property, config HospitableConfig) connector.RawArtifac
 	p.Address.State = stringutil.SanitizeControlChars(p.Address.State)
 	p.Address.Country = stringutil.SanitizeControlChars(p.Address.Country)
 	p.Address.Zip = stringutil.SanitizeControlChars(p.Address.Zip)
+	// SEC-R82-001: Sanitize array element strings from API (CWE-116).
+	for i, a := range p.Amenities {
+		p.Amenities[i] = stringutil.SanitizeControlChars(a)
+	}
+	for i, ch := range p.ChannelIDs {
+		p.ChannelIDs[i] = stringutil.SanitizeControlChars(ch)
+	}
+	// SEC-R82-002: Filter ListingURLs to safe schemes before storing in metadata (CWE-79/601).
+	safeListingURLs := make([]string, 0, len(p.ListingURLs))
+	for _, u := range p.ListingURLs {
+		if isSafeURL(u) {
+			safeListingURLs = append(safeListingURLs, u)
+		}
+	}
+	p.ListingURLs = safeListingURLs
 
 	content := buildPropertyContent(p)
 	metadata := map[string]interface{}{
@@ -91,6 +106,9 @@ func NormalizeReservation(r Reservation, propertyName string, config HospitableC
 	// SEC-012-010: Sanitize Channel and Status fields (CWE-116).
 	r.Channel = stringutil.SanitizeControlChars(r.Channel)
 	r.Status = stringutil.SanitizeControlChars(r.Status)
+	// SEC-R82-003: Sanitize date strings from API (CWE-116 defense-in-depth).
+	r.CheckIn = stringutil.SanitizeControlChars(r.CheckIn)
+	r.CheckOut = stringutil.SanitizeControlChars(r.CheckOut)
 
 	if propertyName == "" {
 		propertyName = r.PropertyID

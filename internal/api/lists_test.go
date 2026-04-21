@@ -96,6 +96,20 @@ func (m *mockListStore) ArchiveList(_ context.Context, id string) error {
 	return fmt.Errorf("not found")
 }
 
+func (m *mockListStore) RemoveItem(_ context.Context, listID, itemID string) error {
+	lwi, ok := m.lists[listID]
+	if !ok {
+		return fmt.Errorf("list not found")
+	}
+	for i := range lwi.Items {
+		if lwi.Items[i].ID == itemID {
+			lwi.Items = append(lwi.Items[:i], lwi.Items[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("item not found")
+}
+
 func seedTestList(store *mockListStore) {
 	store.lists["test-list-1"] = &list.ListWithItems{
 		List: list.List{

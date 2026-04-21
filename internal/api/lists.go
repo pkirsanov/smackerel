@@ -219,3 +219,80 @@ func (h *ListHandlers) CompleteListHandler(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "completed"})
 }
+
+// UpdateListRequest is the JSON body for PATCH /api/lists/{id}.
+type UpdateListRequest struct {
+	Title  string `json:"title,omitempty"`
+	Status string `json:"status,omitempty"` // "active", "archived"
+}
+
+// UpdateListHandler handles PATCH /api/lists/{id}.
+func (h *ListHandlers) UpdateListHandler(w http.ResponseWriter, r *http.Request) {
+	listID := chi.URLParam(r, "id")
+	if listID == "" {
+		http.Error(w, `{"error":"list id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req UpdateListRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Status == "archived" {
+		if err := h.Store.ArchiveList(r.Context(), listID); err != nil {
+			slog.Error("failed to archive list", "list_id", listID, "error", err)
+			http.Error(w, `{"error":"failed to archive list"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	result, err := h.Store.GetList(r.Context(), listID)
+	if err != nil {
+		slog.Error("failed to get list after update", "list_id", listID, "error", err)
+		http.Error(w, `{"error":"list not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// ArchiveListHandler handles DELETE /api/lists/{id} (soft delete → archived).
+func (h *ListHandlers) ArchiveListHandler(w http.ResponseWriter, r *http.Request) {
+	listID := chi.URLParam(r, "id")
+	if listID == "" {
+		http.Error(w, `{"error":"list id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	err := h.Store.ArchiveList(r.Context(), listID)
+	if err != nil {
+		slog.Error("failed to archive list", "list_id", listID, "error", err)
+		http.Error(w, `{"error":"failed to archive list"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "archived"})
+}
+
+// RemoveItemHandler handles DELETE /api/lists/{id}/items/{itemId}.
+func (h *ListHandlers) RemoveItemHandler(w http.ResponseWriter, r *http.Request) {
+	listID := chi.URLParam(r, "id")
+	itemID := chi.URLParam(r, "itemId")
+	if listID == "" || itemID == "" {
+		http.Error(w, `{"error":"list id and item id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	err := h.Store.RemoveItem(r.Context(), listID, itemID)
+	if err != nil {
+		slog.Error("failed to remove item", "list_id", listID, "item_id", itemID, "error", err)
+		http.Error(w, `{"error":"failed to remove item"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
