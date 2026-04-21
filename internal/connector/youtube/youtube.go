@@ -2,9 +2,7 @@ package youtube
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -176,7 +174,7 @@ func (c *Connector) fetchVideosFrom(ctx context.Context, cfg connector.Connector
 	}
 
 	// Check for OAuth access token (live API path)
-	accessToken := getCredential(cfg.Credentials, "access_token")
+	accessToken := connector.GetCredential(cfg.Credentials, "access_token")
 	if accessToken == "" {
 		slog.Debug("YouTube: no source_config videos and no access_token", "id", c.id)
 		return nil, nil
@@ -353,42 +351,12 @@ func (c *Connector) fetchPlaylistItems(ctx context.Context, client *http.Client,
 	return videos, nil
 }
 
-// youtubeAPICall makes an authenticated GET request to the YouTube Data API v3.
-func youtubeAPICall(ctx context.Context, client *http.Client, apiURL string, token string) (map[string]interface{}, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
+// youtubeAPICall delegates to the shared connector.OAuthAPIGet helper.
+// Retained as a package-level alias for backward compatibility with tests.
+var youtubeAPICall = connector.OAuthAPIGet
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("youtube API: token expired or invalid (401)")
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, fmt.Errorf("youtube API: HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Limit response body to 10MB to prevent resource exhaustion
-	var result map[string]interface{}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("youtube API: decode response: %w", err)
-	}
-	return result, nil
-}
-
-func getCredential(creds map[string]string, key string) string {
-	if creds == nil {
-		return ""
-	}
-	return creds[key]
-}
+// getCredential delegates to the shared connector.GetCredential helper.
+var getCredential = connector.GetCredential
 
 // parseVideoItems converts interface{} video data into VideoItem structs.
 func parseVideoItems(raw interface{}) ([]VideoItem, error) {
@@ -461,12 +429,8 @@ func parseVideoItems(raw interface{}) ([]VideoItem, error) {
 	return result, nil
 }
 
-func getStr(m map[string]interface{}, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
-	}
-	return ""
-}
+// getStr delegates to the shared connector.GetStr helper.
+var getStr = connector.GetStr
 
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 	c.mu.RLock()

@@ -6,9 +6,38 @@
 
 ## Summary
 
-Browser History Connector delivered under delivery-lockdown mode. 2 scopes in progress: (1) Connector Implementation, Config & Registration; (2) Social Media Aggregation, Repeat Visits & Privacy Gate. Implementation: connector.go (580+ lines) with full Connector interface, social media aggregation, repeat visit detection, privacy gate, content fetch failure handling, URL+date dedup (R-010), and social aggregate peak page tracking (R-005). connector_test.go with 49 tests, browser_test.go with 18 tests — all 67 unit tests pass. Lint, format, check clean. Config SST pipeline extended for browser-history connector section. Stochastic quality sweeps fixed pipeline SourceID routing (R001), configurable dwell thresholds dead code (R002), added 6 additional test quality tests (F001/F003–F007), implemented R-010 URL+date dedup, added R-005 social aggregate peak tracking, and corrected artifact documentation drift (config location claims). V-010 reconciliation (April 14 2026) unchecked 7 overclaimed integration/E2E DoD items. V-010-R2 reconciliation (April 21 2026) found the same 7 items re-checked by a later agent; unchecked again.
+Browser History Connector delivered under delivery-lockdown mode. 2 scopes in progress: (1) Connector Implementation, Config & Registration; (2) Social Media Aggregation, Repeat Visits & Privacy Gate. Implementation: connector.go (580+ lines) with full Connector interface, social media aggregation, repeat visit detection, privacy gate, content fetch failure handling, URL+date dedup (R-010), and social aggregate peak page tracking (R-005). connector_test.go with 55 tests, browser_test.go with 18 tests — all 73 unit tests pass. Lint, format, check clean. Config SST pipeline extended for browser-history connector section. Stochastic quality sweeps fixed pipeline SourceID routing (R001), configurable dwell thresholds dead code (R002), added 6 additional test quality tests (F001/F003–F007), implemented R-010 URL+date dedup, added R-005 social aggregate peak tracking, and corrected artifact documentation drift (config location claims). V-010 reconciliation (April 14 2026) unchecked 7 overclaimed integration/E2E DoD items. V-010-R2 reconciliation (April 21 2026) found the same 7 items re-checked by a later agent; unchecked again. R54 test-to-doc (April 21 2026) found and fixed 3 unit test coverage gaps. R66 chaos-hardening (April 21 2026) found and fixed 2 concurrency/config-validation issues.
 
-## Reconciliation Pass V-010-R2 (stochastic-quality-sweep, reconcile-to-doc, April 21 2026)
+## Chaos-Hardening Pass R66 (stochastic-quality-sweep, chaos trigger, April 21 2026)
+
+### Findings Detected
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| CHAOS-R66-F1 | Medium | `Health()` TOCTOU race: reads `c.health` under RLock, releases lock, acquires write Lock to set `HealthError` when file disappears. Between the two locks a concurrent `Sync()` can set `HealthSyncing`, which Health() then overwrites with `HealthError`. | Added re-check-under-write-lock guard: `if c.health == connector.HealthHealthy` before overwriting. Added adversarial test `TestHealth_ConcurrentSyncNotOverwritten` — would fail if guard removed. |
+| CHAOS-R66-F2 | Low | `parseBrowserConfig` accepted negative durations for `repeat_visit_window`, `content_fetch_timeout`, `content_fetch_domain_delay`, `social_media_individual_threshold`, and `dwell_time_thresholds.*`. While runtime `> 0` guards prevent the worst damage, negative configs are nonsensical and should fail loud. | Added `< 0` validation after each duration parse. Added adversarial test `TestParseBrowserConfig_NegativeDurations` (8 sub-cases) and positive test `TestParseBrowserConfig_ZeroDurations_Accepted`. |
+
+### Verification
+```
+$ ./smackerel.sh test unit — all Go packages pass, browser package ok 0.029s (73 tests: 55 connector + 18 browser)
+$ grep -c '^func Test' internal/connector/browser/connector_test.go — 55
+$ grep -c '^func Test' internal/connector/browser/browser_test.go — 18
+```
+
+## Test-to-Doc Pass R54 (stochastic-quality-sweep, test trigger, April 21 2026)
+
+### Findings Detected
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| GAP-R54-001 | Medium | Content fetch trigger only tested for `full` tier. Code path `tier == "full" \|\| tier == "standard"` had no test for standard tier — could silently regress to full-only without detection. | Added `TestProcessEntries_ContentFetchTriggeredForStandardTier` — adversarial: would fail if condition were `tier == "full"` only. |
+| GAP-R54-002 | Medium | No test verifying content fetch is NOT triggered for `light` tier. The boundary between standard (fetches) and light (no fetch) was unverified — could regress to `tier != "metadata"` without detection. | Added `TestProcessEntries_ContentFetchNotTriggeredForLightTier` — adversarial: would fail if condition were `tier != "metadata"`. |
+| GAP-R54-003 | Low | Dedup + social media threshold interaction untested. Same-day social media visits merged by `dedupByURLDate` can push summed dwell past `SocialMediaIndividualThreshold`, promoting entry from aggregate to individual processing. Edge case was unexercised. | Added `TestProcessEntries_DedupPushesSocialMediaPastIndividualThreshold` — 3 visits × 2m = 6m after merge, exceeding 5m threshold. |
+
+### Verification
+```
+$ ./smackerel.sh test unit — all Go packages pass, browser package ok 0.022s (70 tests: 52 connector + 18 browser)
+$ grep -c '^func Test' internal/connector/browser/connector_test.go — 52
+$ grep -c '^func Test' internal/connector/browser/browser_test.go — 18
+```
 
 ### Findings Detected
 | ID | Severity | Finding | Resolution |
@@ -56,8 +85,8 @@ $ grep sqlite3 go.mod — no match
 **Files reviewed:**
 - `internal/connector/browser/connector.go` (747 lines) — Connector struct, Sync pipeline, processEntries, config parsing, dedup, social aggregation, repeat detection, privacy gate
 - `internal/connector/browser/browser.go` (195 lines) — Chrome SQLite parsing, dwell-time tiering, skip filtering, domain extraction
-- `internal/connector/browser/connector_test.go` (1665 lines) — 44 tests covering all scenarios including chaos, adversarial, boundary, regression
-- `internal/connector/browser/browser_test.go` (375 lines) — 15 tests for core utility functions
+- `internal/connector/browser/connector_test.go` (1780 lines) — 52 tests covering all scenarios including chaos, adversarial, boundary, regression
+- `internal/connector/browser/browser_test.go` (375 lines) — 18 tests for core utility functions
 
 **Assessment: Clean — no actionable improvements found.**
 
@@ -71,7 +100,7 @@ After 12+ prior quality sweeps (regression, simplification, gap analysis, harden
 | Privacy | Clean | Metadata-only gate, no individual URLs in social aggregates (R-402) |
 | Determinism | Clean | Sorted social aggregate keys (SQS-001) |
 | Config | Clean | SST-compliant, thorough validation including Inf/NaN guards (R18-001) |
-| Test coverage | Clean | 59 tests covering happy path, boundary, adversarial, chaos, regression |
+| Test coverage | Clean | 70 tests covering happy path, boundary, adversarial, chaos, regression |
 | Lint | Clean | `./smackerel.sh lint` — All checks passed |
 
 **Verification:**
@@ -242,7 +271,7 @@ Resilience verification from unit tests:
 ### Delivery Lockdown Certification
 
 - **Scopes completed:** 0/2 — downgraded to In Progress (7 integration/E2E DoD items unchecked per V-010-001 reconciliation)
-- **Unit tests:** 59 tests across 2 test files — all pass
+- **Unit tests:** 70 tests across 2 test files — all pass
 - **Lint:** Pass
 - **Format:** Pass
 - **Check:** Pass

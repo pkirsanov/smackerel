@@ -239,10 +239,16 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 	if h == connector.HealthHealthy && histPath != "" {
 		if _, err := os.Stat(histPath); err != nil {
 			c.mu.Lock()
-			c.health = connector.HealthError
+			// CHAOS-R66-F1: Re-check health under write lock. Between the RLock
+			// read above and this Lock acquire, a concurrent Sync() may have
+			// transitioned health to HealthSyncing. Only overwrite if still Healthy.
+			if c.health == connector.HealthHealthy {
+				c.health = connector.HealthError
+				slog.Warn("chrome history file no longer accessible", "path", histPath, "error", err)
+			}
+			h = c.health
 			c.mu.Unlock()
-			slog.Warn("chrome history file no longer accessible", "path", histPath, "error", err)
-			return connector.HealthError
+			return h
 		}
 	}
 	return h
@@ -625,6 +631,10 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 		}
 		cfg.RepeatVisitWindow = d
 	}
+	// CHAOS-R66-F2: Reject negative durations at parse time.
+	if cfg.RepeatVisitWindow < 0 {
+		return BrowserConfig{}, fmt.Errorf("repeat_visit_window must not be negative, got %v", cfg.RepeatVisitWindow)
+	}
 
 	// repeat_visit_threshold
 	if rvt, ok := sc["repeat_visit_threshold"]; ok {
@@ -650,6 +660,9 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 		}
 		cfg.ContentFetchTimeout = d
 	}
+	if cfg.ContentFetchTimeout < 0 {
+		return BrowserConfig{}, fmt.Errorf("content_fetch_timeout must not be negative, got %v", cfg.ContentFetchTimeout)
+	}
 
 	// content_fetch_concurrency
 	if cfc, ok := sc["content_fetch_concurrency"]; ok {
@@ -672,6 +685,9 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 		}
 		cfg.ContentFetchDomainDelay = d
 	}
+	if cfg.ContentFetchDomainDelay < 0 {
+		return BrowserConfig{}, fmt.Errorf("content_fetch_domain_delay must not be negative, got %v", cfg.ContentFetchDomainDelay)
+	}
 
 	// custom_skip_domains
 	if csd, ok := sc["custom_skip_domains"].([]interface{}); ok {
@@ -689,6 +705,9 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 			return BrowserConfig{}, fmt.Errorf("invalid social_media_individual_threshold: %w", err)
 		}
 		cfg.SocialMediaIndividualThreshold = d
+	}
+	if cfg.SocialMediaIndividualThreshold < 0 {
+		return BrowserConfig{}, fmt.Errorf("social_media_individual_threshold must not be negative, got %v", cfg.SocialMediaIndividualThreshold)
 	}
 
 	// dwell_time_thresholds
@@ -714,6 +733,16 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 			}
 			cfg.DwellLightMin = d
 		}
+	}
+	// CHAOS-R66-F2: Reject negative dwell thresholds at parse time.
+	if cfg.DwellFullMin < 0 {
+		return BrowserConfig{}, fmt.Errorf("dwell_time_thresholds.full_min must not be negative, got %v", cfg.DwellFullMin)
+	}
+	if cfg.DwellStandardMin < 0 {
+		return BrowserConfig{}, fmt.Errorf("dwell_time_thresholds.standard_min must not be negative, got %v", cfg.DwellStandardMin)
+	}
+	if cfg.DwellLightMin < 0 {
+		return BrowserConfig{}, fmt.Errorf("dwell_time_thresholds.light_min must not be negative, got %v", cfg.DwellLightMin)
 	}
 
 	return cfg, nil

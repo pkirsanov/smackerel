@@ -4,6 +4,77 @@ Links: [scopes.md](scopes.md) | [uservalidation.md](uservalidation.md)
 
 ---
 
+## DevOps Analysis — 2026-04-21 (devops-to-doc)
+
+**Trigger:** Child workflow of stochastic-quality-sweep R52
+**Mode:** devops-to-doc
+**Verdict:** CLEAN — zero findings across build, CI/CD, config pipeline, deployment, and monitoring
+
+### Build Pipeline (Docker)
+
+| Surface | Status | Evidence |
+|---------|--------|----------|
+| Go core Dockerfile | CLEAN | Multi-stage build, `VERSION`/`COMMIT_HASH`/`BUILD_TIME` args, OCI labels, non-root user (`smackerel`), minimal alpine runtime |
+| Python ML Dockerfile | CLEAN | Multi-stage build, CPU-only PyTorch, OCI labels, non-root user (`smackerel`), `.dist-info`/`__pycache__` stripped |
+| docker-compose.yml core service | CLEAN | `env_file` from generated config, healthcheck on `/api/health`, resource limits (512M), `no-new-privileges` security opt |
+| docker-compose.yml ML service | CLEAN | Mounts `config/prompt_contracts:/app/prompt_contracts:ro` (includes `receipt-extraction-v1.yaml`), healthcheck, resource limits (2G) |
+| docker-compose.prod.yml | CLEAN | `restart: always`, memory limit overrides, json-file logging with rotation (`max-size: 50m`, `max-file: 5`), prod healthcheck on `/readyz` |
+
+### CI/CD (.github/workflows/ci.yml)
+
+| Job | Status | Evidence |
+|-----|--------|----------|
+| lint-and-test | CLEAN | Runs `./smackerel.sh lint` + `./smackerel.sh test unit`, Go 1.24, Python 3.12, SHA-pinned actions |
+| build | CLEAN | Runs `./smackerel.sh build` with version/commit/time build args |
+| push-images | CLEAN | Tags and pushes to GHCR on version tags, both `smackerel-core` and `smackerel-ml` |
+| integration | CLEAN | Applies all migrations (`internal/db/migrations/*.sql` including `019_expense_tracking.sql`), runs against real PostgreSQL + NATS |
+
+### Config Pipeline (SST)
+
+| Check | Status | Evidence |
+|-------|--------|----------|
+| Config generation | CLEAN | `scripts/commands/config.sh` lines 332–357 emit all 16 expense env vars |
+| dev.env output | CLEAN | Lines 151–166: `EXPENSES_ENABLED` through `EXPENSES_CATEGORIES` present with correct values |
+| test.env output | CLEAN | Lines 151–166: identical variable set with correct values |
+| JSON-encoded values | CLEAN | `IMAP_EXPENSE_LABELS`, `EXPENSES_BUSINESS_VENDORS`, `EXPENSES_CATEGORIES` use `yaml_get_json` |
+| SST compliance | CLEAN | `./smackerel.sh check` → "Config is in sync with SST, env_file drift guard: OK" |
+| Feature toggle | CLEAN | `EXPENSES_ENABLED=false` default when config section absent → feature safely disabled |
+
+### Service Wiring
+
+| Surface | Status | Evidence |
+|---------|--------|----------|
+| `cmd/core/main.go` | CLEAN | Lines 161–175: `ExpenseHandler` wired when `cfg.ExpensesEnabled`, vendor alias seeding on startup |
+| `internal/api/router.go` | CLEAN | Line 128: route registration guarded by `if deps.ExpenseHandler != nil` |
+| `ml/app/synthesis.py` | CLEAN | Imports `detect_receipt_content` from `receipt_detection` module |
+| `internal/telegram/bot.go` | CLEAN | Line 319: `case "expense":` dispatches to `handleExpenseCommand` |
+
+### Database Migrations
+
+| Check | Status | Evidence |
+|-------|--------|----------|
+| Migration file | CLEAN | `internal/db/migrations/019_expense_tracking.sql` — vendor_aliases, expense_suggestions, expense_suggestion_suppressions |
+| Expense query indexes | CLEAN | GIN index on `metadata->'expense'`, B-tree on expense date and vendor |
+| CI migration step | CLEAN | Alphabetical `*.sql` glob picks up `019_expense_tracking.sql` |
+| Rollback documented | CLEAN | SQL comments include `DROP TABLE IF EXISTS` rollback statements |
+
+### Monitoring/Observability
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| Prometheus metrics module | INFORMATIONAL | `internal/metrics/metrics.go` has general counters (artifacts ingested, capture, search, digest). No expense-specific counters (extraction, classification, export, suggestion accept/dismiss). Expense operations are covered by the general artifact ingestion and domain extraction counters. Not a blocking gap — enhancement opportunity for future observability spec. |
+| Health endpoints | CLEAN | Dev: `/api/health`, Prod: `/readyz` — both cover overall service health including expense handler |
+
+### CLI Verification
+
+| Command | Result |
+|---------|--------|
+| `./smackerel.sh check` | Config in sync with SST, env_file drift guard OK |
+| `./smackerel.sh lint` | All checks passed |
+| `./smackerel.sh test unit` | All Go packages OK, 236 Python tests passed (3 unrelated warnings) |
+
+---
+
 ## Reconciliation Analysis — 2026-04-21 (reconcile-to-doc)
 
 **Trigger:** Child workflow of stochastic-quality-sweep  

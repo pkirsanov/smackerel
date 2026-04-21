@@ -297,6 +297,7 @@ All containers have health checks configured in docker-compose.yml:
 | NATS | HTTP `/healthz` | 5s | 5s |
 | smackerel-core | HTTP `/api/health` | 10s | 15s |
 | smackerel-ml | HTTP `/health` | 10s | 120s |
+| ollama (optional) | HTTP `/api/tags` | 10s | 30s |
 
 ### Key Metrics
 

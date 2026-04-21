@@ -29,6 +29,11 @@ const knownEvictionAge = 7 * 24 * time.Hour
 // userAgent identifies outbound requests to government APIs.
 const userAgent = "Smackerel/1.0 (gov-alerts-connector)"
 
+// maxSyncDuration bounds total sync time to prevent unbounded blocking when multiple
+// sources and locations fan out into many sequential HTTP calls (5 + 2N for N locations).
+// Matches the weather connector's pattern (STAB-017-001).
+const maxSyncDuration = 5 * time.Minute
+
 // maxStringFieldLen caps untrusted short string fields from external APIs to prevent memory abuse.
 const maxStringFieldLen = 1024
 
@@ -163,6 +168,12 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.health = connector.HealthSyncing
 	cfg := c.config
 	c.mu.Unlock()
+
+	// Bound total sync duration to prevent unbounded blocking under API failures
+	// when many sources × locations fan out into sequential HTTP calls (STAB-017-001).
+	syncCtx, syncCancel := context.WithTimeout(ctx, maxSyncDuration)
+	defer syncCancel()
+	ctx = syncCtx // all source fetches use the bounded context
 
 	var syncErr error
 	defer func() {

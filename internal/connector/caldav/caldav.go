@@ -182,7 +182,7 @@ func (c *Connector) fetchEventsFrom(ctx context.Context, cfg connector.Connector
 	}
 
 	// Check for OAuth access token (live API path)
-	accessToken := getCredential(cfg.Credentials, "access_token")
+	accessToken := connector.GetCredential(cfg.Credentials, "access_token")
 	if accessToken == "" {
 		slog.Debug("CalDAV: no source_config events and no access_token", "id", c.id)
 		return nil, nil
@@ -342,12 +342,8 @@ func (c *Connector) fetchGoogleCalendarEvents(ctx context.Context, token string,
 	return events, nil
 }
 
-func getCredential(creds map[string]string, key string) string {
-	if creds == nil {
-		return ""
-	}
-	return creds[key]
-}
+// getCredential delegates to the shared connector.GetCredential helper.
+var getCredential = connector.GetCredential
 
 // parseCalendarEvents converts interface{} events from config into CalendarEvent structs.
 func parseCalendarEvents(raw interface{}) ([]CalendarEvent, error) {
@@ -420,12 +416,8 @@ func parseCalendarEvents(raw interface{}) ([]CalendarEvent, error) {
 	return result, nil
 }
 
-func getStr(m map[string]interface{}, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
-	}
-	return ""
-}
+// getStr delegates to the shared connector.GetStr helper.
+var getStr = connector.GetStr
 
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 	c.mu.RLock()

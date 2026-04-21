@@ -3,7 +3,7 @@
   "featureDir": "specs/010-browser-history-connector",
   "featureName": "Browser History Connector",
   "status": "in_progress",
-  "workflowMode": "reconcile-to-doc",
+  "workflowMode": "test-to-doc",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -193,6 +193,24 @@
       "startedAt": "2026-04-21T00:00:00Z",
       "completedAt": "2026-04-21T00:10:00Z",
       "summary": "Stochastic quality sweep improve-existing trigger. Full code review of connector.go (747 lines), browser.go (195 lines), connector_test.go (1665 lines), browser_test.go (375 lines). After 12+ prior quality sweeps, no actionable improvements found. Code is well-hardened: proper concurrency (mutex, config snapshot), comprehensive error handling (copy retry, cursor recovery, fetch isolation), security (read-only SQLite, path injection prevention), privacy gate, deterministic ordering, SST-compliant config. All tests pass, lint clean. Status unchanged."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-21T00:15:00Z",
+      "completedAt": "2026-04-21T00:25:00Z",
+      "summary": "Stochastic quality sweep R54 test-to-doc trigger. Found and fixed 3 unit test gaps: (1) GAP-R54-001 content fetch for standard tier untested, (2) GAP-R54-002 content fetch NOT triggered for light tier untested, (3) GAP-R54-003 dedup+social-media threshold interaction untested. Added 3 adversarial tests. All 70 tests pass (52 connector + 18 browser). Lint clean."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": ["chaos"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-21T01:00:00Z",
+      "completedAt": "2026-04-21T01:15:00Z",
+      "summary": "Stochastic quality sweep R66 chaos-hardening trigger. Found and fixed 2 issues: (1) CHAOS-R66-F1 Health() TOCTOU race — concurrent Sync status overwrite, added re-check-under-write-lock guard. (2) CHAOS-R66-F2 negative duration configs accepted silently, added non-negative validation for 8 duration fields. Added 3 adversarial tests (10 sub-cases). All 73 tests pass (55 connector + 18 browser). Lint clean."
     }
   ],
   "policySnapshot": {
@@ -206,7 +224,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-21T00:10:00Z",
+  "lastUpdatedAt": "2026-04-21T01:15:00Z",
   "certification": {
     "status": "certified",
     "completedScopes": ["1", "2"],

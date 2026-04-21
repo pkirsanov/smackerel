@@ -1663,3 +1663,302 @@ func TestProcessEntries_SocialAggregates_DeterministicOrder(t *testing.T) {
 		}
 	}
 }
+
+// --- TEST-TO-DOC R54: Gap fixes ---
+
+// GAP-R54-001: Content fetch MUST trigger for standard-tier entries, not just full.
+// The code path `if tier == "full" || tier == "standard"` was only tested for full.
+// Adversarial: would pass if the condition were `tier == "full"` only.
+func TestProcessEntries_ContentFetchTriggeredForStandardTier(t *testing.T) {
+	fetchedURLs := make(map[string]bool)
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		SocialMediaIndividualThreshold: 5 * time.Minute,
+		RepeatVisitThreshold:           3,
+	}
+	c.contentFetcher = func(url string) (string, error) {
+		fetchedURLs[url] = true
+		return "<p>Fetched content for " + url + "</p>", nil
+	}
+
+	entries := []HistoryEntry{
+		// 3 minutes → standard tier (≥2m, <5m) → content fetch MUST fire
+		{URL: "https://example.com/standard-article", Title: "Standard Article", VisitTime: time.Now(), DwellTime: 3 * time.Minute, Domain: "example.com"},
+	}
+
+	artifacts, _, stats := c.processEntries(entries, 0)
+
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(artifacts))
+	}
+
+	a := artifacts[0]
+	tier, _ := a.Metadata["processing_tier"].(string)
+	if tier != "standard" {
+		t.Errorf("expected 'standard' tier, got %s", tier)
+	}
+	if !fetchedURLs["https://example.com/standard-article"] {
+		t.Error("contentFetcher was NOT called for standard-tier entry — content fetch must trigger for both full and standard tiers")
+	}
+	if a.RawContent != "<p>Fetched content for https://example.com/standard-article</p>" {
+		t.Errorf("expected fetched content in RawContent, got %q", a.RawContent)
+	}
+	if _, ok := a.Metadata["content_fetch_failed"]; ok {
+		t.Error("content_fetch_failed should not be set on successful fetch")
+	}
+	if stats.fetchFails != 0 {
+		t.Errorf("expected 0 fetch failures, got %d", stats.fetchFails)
+	}
+}
+
+// GAP-R54-002: Content fetch MUST NOT trigger for light-tier entries.
+// Adversarial: would fail if the condition were `tier != "metadata"` instead of
+// `tier == "full" || tier == "standard"`.
+func TestProcessEntries_ContentFetchNotTriggeredForLightTier(t *testing.T) {
+	fetchCalled := false
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		SocialMediaIndividualThreshold: 5 * time.Minute,
+		RepeatVisitThreshold:           3,
+	}
+	c.contentFetcher = func(url string) (string, error) {
+		fetchCalled = true
+		return "<p>Should not be called</p>", nil
+	}
+
+	entries := []HistoryEntry{
+		// 45 seconds → light tier (≥30s, <2m) → content fetch must NOT fire
+		{URL: "https://example.com/quick-glance", Title: "Quick Glance", VisitTime: time.Now(), DwellTime: 45 * time.Second, Domain: "example.com"},
+	}
+
+	artifacts, _, _ := c.processEntries(entries, 0)
+
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact (light tier survives privacy gate), got %d", len(artifacts))
+	}
+
+	if fetchCalled {
+		t.Error("contentFetcher was called for light-tier entry — content fetch must only trigger for full and standard tiers")
+	}
+
+	a := artifacts[0]
+	tier, _ := a.Metadata["processing_tier"].(string)
+	if tier != "light" {
+		t.Errorf("expected 'light' tier, got %s", tier)
+	}
+	// Light tier should have URL as RawContent (not fetched content)
+	if a.RawContent != "https://example.com/quick-glance" {
+		t.Errorf("light-tier RawContent should be the URL itself, got %q", a.RawContent)
+	}
+}
+
+// GAP-R54-003: Dedup merging same-day social media visits can push summed dwell
+// past the SocialMediaIndividualThreshold, promoting the entry from aggregate
+// to individual processing. This interaction between dedup and social media
+// classification was untested.
+// Adversarial: would fail if dedup ran AFTER the social/content split instead of before.
+func TestProcessEntries_DedupPushesSocialMediaPastIndividualThreshold(t *testing.T) {
+	c := New("browser-history")
+	c.config = BrowserConfig{
+		SocialMediaIndividualThreshold: 5 * time.Minute,
+		RepeatVisitThreshold:           3,
+		DwellFullMin:                   5 * time.Minute,
+		DwellStandardMin:               2 * time.Minute,
+		DwellLightMin:                  30 * time.Second,
+	}
+
+	baseTime := time.Date(2025, 3, 15, 10, 0, 0, 0, time.UTC)
+	// Same Reddit URL visited 3 times on the same day with 2 minutes each.
+	// Individually each is below the 5-minute social media individual threshold → aggregate.
+	// After dedup merge: 2m + 2m + 2m = 6 minutes → above threshold → individual processing.
+	entries := []HistoryEntry{
+		{URL: "https://reddit.com/r/golang/deep-thread", Title: "Deep Thread", VisitTime: baseTime, DwellTime: 2 * time.Minute, Domain: "reddit.com"},
+		{URL: "https://reddit.com/r/golang/deep-thread", Title: "Deep Thread", VisitTime: baseTime.Add(2 * time.Hour), DwellTime: 2 * time.Minute, Domain: "reddit.com"},
+		{URL: "https://reddit.com/r/golang/deep-thread", Title: "Deep Thread", VisitTime: baseTime.Add(4 * time.Hour), DwellTime: 2 * time.Minute, Domain: "reddit.com"},
+		// A different Reddit URL with short dwell — should still aggregate
+		{URL: "https://reddit.com/r/golang/quick-post", Title: "Quick Post", VisitTime: baseTime.Add(30 * time.Minute), DwellTime: 1 * time.Minute, Domain: "reddit.com"},
+	}
+
+	artifacts, _, _ := c.processEntries(entries, 0)
+
+	// After dedup: deep-thread merges to 6m (above 5m threshold → individual at full tier)
+	// quick-post stays at 1m (below 5m threshold → social aggregate)
+	var foundIndividual, foundAggregate bool
+	for _, a := range artifacts {
+		if a.ContentType == "url" && a.URL == "https://reddit.com/r/golang/deep-thread" {
+			foundIndividual = true
+			tier, _ := a.Metadata["processing_tier"].(string)
+			if tier != "full" {
+				t.Errorf("dedup-merged social media entry (6m) expected 'full' tier, got %s", tier)
+			}
+		}
+		if a.ContentType == "browsing/social-aggregate" && a.Metadata["domain"] == "reddit.com" {
+			foundAggregate = true
+			if a.Metadata["visit_count"] != 1 {
+				t.Errorf("expected 1 visit in aggregate (quick-post only), got %v", a.Metadata["visit_count"])
+			}
+		}
+	}
+	if !foundIndividual {
+		t.Error("expected individual artifact for dedup-merged social media entry that exceeded threshold (6m > 5m)")
+	}
+	if !foundAggregate {
+		t.Error("expected social aggregate for remaining below-threshold reddit visit")
+	}
+}
+
+// CHAOS-R66-F1: Health() must not overwrite HealthSyncing with HealthError when
+// the history file disappears during an active sync. Before the fix, Health()
+// read health under RLock, released the lock, then acquired Lock to write Error
+// — a concurrent Sync could set HealthSyncing between the two locks.
+// Adversarial: would fail if the re-check-under-write-lock guard were removed.
+func TestHealth_ConcurrentSyncNotOverwritten(t *testing.T) {
+	c := New("browser-history")
+
+	tmpFile, err := os.CreateTemp("", "test-history-*.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+
+	c.mu.Lock()
+	c.config.HistoryPath = tmpFile.Name()
+	c.health = connector.HealthSyncing // Simulate active sync in progress
+	c.mu.Unlock()
+
+	// Remove the file while "syncing"
+	os.Remove(tmpFile.Name())
+
+	// Health should NOT overwrite HealthSyncing with HealthError
+	h := c.Health(context.Background())
+	if h != connector.HealthSyncing {
+		t.Errorf("expected HealthSyncing (concurrent sync in progress), got %v — "+
+			"Health() overwrote a concurrent Sync's status transition", h)
+	}
+}
+
+// CHAOS-R66-F2: Negative durations must be rejected at config parse time.
+// Before the fix, parseBrowserConfig accepted negative durations like "-7d"
+// which caused silent logic bugs (e.g., repeat detection window set to a
+// future time, effectively broadening or distorting repeat counting).
+// Adversarial: would fail if the negative-duration validations were removed.
+func TestParseBrowserConfig_NegativeDurations(t *testing.T) {
+	cases := []struct {
+		name        string
+		sc          map[string]interface{}
+		errContains string
+	}{
+		{
+			name: "negative repeat_visit_window via days suffix",
+			sc: map[string]interface{}{
+				"history_path":        "/tmp/test",
+				"repeat_visit_window": "-7d",
+			},
+			errContains: "repeat_visit_window",
+		},
+		{
+			name: "negative repeat_visit_window via Go duration",
+			sc: map[string]interface{}{
+				"history_path":        "/tmp/test",
+				"repeat_visit_window": "-168h",
+			},
+			errContains: "repeat_visit_window",
+		},
+		{
+			name: "negative content_fetch_timeout",
+			sc: map[string]interface{}{
+				"history_path":          "/tmp/test",
+				"content_fetch_timeout": "-5s",
+			},
+			errContains: "content_fetch_timeout",
+		},
+		{
+			name: "negative content_fetch_domain_delay",
+			sc: map[string]interface{}{
+				"history_path":               "/tmp/test",
+				"content_fetch_domain_delay": "-1s",
+			},
+			errContains: "content_fetch_domain_delay",
+		},
+		{
+			name: "negative social_media_individual_threshold",
+			sc: map[string]interface{}{
+				"history_path":                       "/tmp/test",
+				"social_media_individual_threshold": "-5m",
+			},
+			errContains: "social_media_individual_threshold",
+		},
+		{
+			name: "negative dwell_time_thresholds full_min",
+			sc: map[string]interface{}{
+				"history_path": "/tmp/test",
+				"dwell_time_thresholds": map[string]interface{}{
+					"full_min": "-5m",
+				},
+			},
+			errContains: "dwell_time_thresholds.full_min",
+		},
+		{
+			name: "negative dwell_time_thresholds standard_min",
+			sc: map[string]interface{}{
+				"history_path": "/tmp/test",
+				"dwell_time_thresholds": map[string]interface{}{
+					"standard_min": "-2m",
+				},
+			},
+			errContains: "dwell_time_thresholds.standard_min",
+		},
+		{
+			name: "negative dwell_time_thresholds light_min",
+			sc: map[string]interface{}{
+				"history_path": "/tmp/test",
+				"dwell_time_thresholds": map[string]interface{}{
+					"light_min": "-30s",
+				},
+			},
+			errContains: "dwell_time_thresholds.light_min",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := connector.ConnectorConfig{
+				AuthType:     "none",
+				Enabled:      true,
+				SourceConfig: tc.sc,
+			}
+			_, err := parseBrowserConfig(config)
+			if err == nil {
+				t.Fatalf("expected error for %s, got nil", tc.name)
+			}
+			if !strings.Contains(err.Error(), tc.errContains) {
+				t.Errorf("expected error containing %q, got: %v", tc.errContains, err)
+			}
+		})
+	}
+}
+
+// CHAOS-R66-F2 (positive case): Valid zero durations must still be accepted.
+// Zero repeat_visit_window means "no window filter" (all entries counted).
+// This test ensures the negative-duration guard doesn't accidentally reject zero.
+func TestParseBrowserConfig_ZeroDurations_Accepted(t *testing.T) {
+	config := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: map[string]interface{}{
+			"history_path":          "/tmp/test",
+			"repeat_visit_window":   "0s",
+			"content_fetch_timeout": "0s",
+		},
+	}
+	cfg, err := parseBrowserConfig(config)
+	if err != nil {
+		t.Fatalf("zero durations should be accepted, got error: %v", err)
+	}
+	if cfg.RepeatVisitWindow != 0 {
+		t.Errorf("expected 0 repeat_visit_window, got %v", cfg.RepeatVisitWindow)
+	}
+	if cfg.ContentFetchTimeout != 0 {
+		t.Errorf("expected 0 content_fetch_timeout, got %v", cfg.ContentFetchTimeout)
+	}
+}

@@ -395,3 +395,131 @@ func TestCreateListHandler_InvalidJSON(t *testing.T) {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
+
+func TestCheckItemHandler_SkipItem(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Post("/api/lists/{id}/items/{itemId}/check", h.CheckItemHandler)
+
+	body := `{"status":"skipped"}`
+	req := httptest.NewRequest("POST", "/api/lists/test-list-1/items/item-1/check", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify item was skipped in store
+	lwi := store.lists["test-list-1"]
+	if lwi.Items[0].Status != list.ItemSkipped {
+		t.Errorf("expected item status skipped, got %s", lwi.Items[0].Status)
+	}
+
+	// Verify response body
+	var result map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result["status"] != "skipped" {
+		t.Errorf("expected response status 'skipped', got %q", result["status"])
+	}
+}
+
+func TestCheckItemHandler_SubstituteItem(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Post("/api/lists/{id}/items/{itemId}/check", h.CheckItemHandler)
+
+	body := `{"status":"substituted","substitution":"almond milk"}`
+	req := httptest.NewRequest("POST", "/api/lists/test-list-1/items/item-1/check", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify item was substituted in store with the substitution text
+	lwi := store.lists["test-list-1"]
+	if lwi.Items[0].Status != list.ItemSubstituted {
+		t.Errorf("expected item status substituted, got %s", lwi.Items[0].Status)
+	}
+	if lwi.Items[0].Substitution != "almond milk" {
+		t.Errorf("expected substitution 'almond milk', got %q", lwi.Items[0].Substitution)
+	}
+
+	// Verify response body
+	var result map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result["status"] != "substituted" {
+		t.Errorf("expected response status 'substituted', got %q", result["status"])
+	}
+}
+
+func TestCheckItemHandler_ItemNotFound(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Post("/api/lists/{id}/items/{itemId}/check", h.CheckItemHandler)
+
+	body := `{"status":"done"}`
+	req := httptest.NewRequest("POST", "/api/lists/test-list-1/items/nonexistent/check", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for missing item, got %d", w.Code)
+	}
+}
+
+func TestListListsHandler_FilterByType(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+	// Add a reading list
+	store.lists["test-list-2"] = &list.ListWithItems{
+		List: list.List{
+			ID:       "test-list-2",
+			ListType: list.TypeReading,
+			Title:    "My Reading List",
+			Status:   list.StatusActive,
+		},
+		Items: []list.ListItem{},
+	}
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Get("/api/lists", h.ListListsHandler)
+
+	req := httptest.NewRequest("GET", "/api/lists?type=reading", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result map[string]any
+	json.NewDecoder(w.Body).Decode(&result)
+	lists := result["lists"].([]any)
+	if len(lists) != 1 {
+		t.Errorf("expected 1 reading list, got %d", len(lists))
+	}
+}
