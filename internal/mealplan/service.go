@@ -19,6 +19,12 @@ type Service struct {
 	AutoCompleteCron string
 }
 
+// truncateToDate strips the time component from a time.Time value,
+// keeping only the date at midnight UTC.
+func truncateToDate(t time.Time) time.Time {
+	return t.Truncate(24 * time.Hour)
+}
+
 // NewService creates a new meal plan service.
 func NewService(store PlanDataStore, mealTypes []string, defaultServings int, calendarSync, autoComplete bool, autoCompleteCron string) *Service {
 	return &Service{
@@ -49,8 +55,8 @@ func (s *Service) CreatePlan(ctx context.Context, title string, startDate, endDa
 	}
 
 	// Normalize to date-only (strip time)
-	startDate = startDate.Truncate(24 * time.Hour)
-	endDate = endDate.Truncate(24 * time.Hour)
+	startDate = truncateToDate(startDate)
+	endDate = truncateToDate(endDate)
 
 	if endDate.Before(startDate) {
 		return nil, fmt.Errorf("end_date must be on or after start_date")
@@ -129,11 +135,11 @@ func (s *Service) AddSlot(ctx context.Context, planID string, slotDate time.Time
 	}
 
 	// Normalize date
-	slotDate = slotDate.Truncate(24 * time.Hour)
+	slotDate = truncateToDate(slotDate)
 
 	// Validate slot date within plan range
-	planStart := plan.StartDate.Truncate(24 * time.Hour)
-	planEnd := plan.EndDate.Truncate(24 * time.Hour)
+	planStart := truncateToDate(plan.StartDate)
+	planEnd := truncateToDate(plan.EndDate)
 	if slotDate.Before(planStart) || slotDate.After(planEnd) {
 		return nil, &ServiceError{
 			Code:    "MEAL_PLAN_SLOT_OUT_OF_RANGE",
@@ -247,8 +253,8 @@ func (s *Service) DeleteSlot(ctx context.Context, planID, slotID string) error {
 
 // AddBatchSlots creates one slot per day across a date range for the same recipe+meal.
 func (s *Service) AddBatchSlots(ctx context.Context, planID string, startDate, endDate time.Time, mealType, recipeArtifactID string, servings int) ([]Slot, error) {
-	startDate = startDate.Truncate(24 * time.Hour)
-	endDate = endDate.Truncate(24 * time.Hour)
+	startDate = truncateToDate(startDate)
+	endDate = truncateToDate(endDate)
 
 	var slots []Slot
 	for d := startDate; !d.After(endDate); d = d.AddDate(0, 0, 1) {
@@ -351,7 +357,7 @@ func (s *Service) UpdatePlanTitle(ctx context.Context, planID, title string) err
 
 // QueryByDate looks up planned meals for a date and optional meal type.
 func (s *Service) QueryByDate(ctx context.Context, date time.Time, mealType string) ([]Slot, *Plan, error) {
-	date = date.Truncate(24 * time.Hour)
+	date = truncateToDate(date)
 	return s.Store.GetSlotsByDate(ctx, date, mealType)
 }
 
@@ -365,8 +371,8 @@ func (s *Service) CopyPlan(ctx context.Context, sourcePlanID string, newStartDat
 		return nil, &ServiceError{Code: "MEAL_PLAN_NOT_FOUND", Message: "source plan not found", Status: 404}
 	}
 
-	newStartDate = newStartDate.Truncate(24 * time.Hour)
-	sourceStart := source.Plan.StartDate.Truncate(24 * time.Hour)
+	newStartDate = truncateToDate(newStartDate)
+	sourceStart := truncateToDate(source.Plan.StartDate)
 	dayOffset := newStartDate.Sub(sourceStart)
 	newEndDate := source.Plan.EndDate.Add(dayOffset)
 

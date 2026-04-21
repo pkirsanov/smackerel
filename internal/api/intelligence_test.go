@@ -108,6 +108,50 @@ func TestSerendipityHandler_NilPool_Returns500(t *testing.T) {
 	}
 }
 
+// --- GAP-3: R-506 monthly-report endpoint ---
+
+func TestMonthlyReportHandler_NilPool_Returns500(t *testing.T) {
+	handler := MonthlyReportHandler(newNilPoolEngine())
+
+	req := httptest.NewRequest(http.MethodGet, "/api/monthly-report", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 for nil pool, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "monthly_report_error" {
+		t.Errorf("expected error code monthly_report_error, got %s", resp.Error.Code)
+	}
+}
+
+// --- GAP-4: R-508 seasonal-patterns endpoint ---
+
+func TestSeasonalPatternsHandler_NilPool_Returns500(t *testing.T) {
+	handler := SeasonalPatternsHandler(newNilPoolEngine())
+
+	req := httptest.NewRequest(http.MethodGet, "/api/seasonal-patterns", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 for nil pool, got %d", rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "seasonal_error" {
+		t.Errorf("expected error code seasonal_error, got %s", resp.Error.Code)
+	}
+}
+
 // --- Route registration: content-fuel and quick-references reachable ---
 
 func TestRouter_ContentFuelAndQuickReferencesRoutes(t *testing.T) {
@@ -125,12 +169,14 @@ func TestRouter_ContentFuelAndQuickReferencesRoutes(t *testing.T) {
 		path         string
 		expectedCode int
 	}{
-		{"/api/content-fuel", http.StatusInternalServerError},     // nil pool → 500
-		{"/api/quick-references", http.StatusInternalServerError}, // nil pool → 500
-		{"/api/expertise", http.StatusInternalServerError},        // nil pool → 500
-		{"/api/learning-paths", http.StatusInternalServerError},   // nil pool → 500
-		{"/api/subscriptions", http.StatusInternalServerError},    // nil pool → 500
-		{"/api/serendipity", http.StatusInternalServerError},      // nil pool → 500
+		{"/api/content-fuel", http.StatusInternalServerError},      // nil pool → 500
+		{"/api/quick-references", http.StatusInternalServerError},  // nil pool → 500
+		{"/api/expertise", http.StatusInternalServerError},         // nil pool → 500
+		{"/api/learning-paths", http.StatusInternalServerError},    // nil pool → 500
+		{"/api/subscriptions", http.StatusInternalServerError},     // nil pool → 500
+		{"/api/serendipity", http.StatusInternalServerError},       // nil pool → 500
+		{"/api/monthly-report", http.StatusInternalServerError},    // nil pool → 500
+		{"/api/seasonal-patterns", http.StatusInternalServerError}, // nil pool → 500
 	}
 
 	for _, rt := range routes {

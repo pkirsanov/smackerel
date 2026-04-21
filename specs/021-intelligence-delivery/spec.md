@@ -26,7 +26,7 @@ However, the system under-delivers intelligence to the user. Several intelligenc
 
 **Intent:** Every intelligence insight Smackerel generates reaches the user through Telegram at the right time — alerts within minutes, weekly narratives on Sunday afternoon, monthly reports on the 1st, and search-driven lookups feeding back into the intelligence loop.
 
-**Success Signal:** (1) Pending alerts created by any producer are delivered via Telegram within the next scheduled sweep cycle (≤15 minutes). (2) All 6 alert types have automated producers generating alerts from real data. (3) Every search query feeds LogSearch(), and DetectFrequentLookups() produces results when the same query recurs 3+ times in 14 days. (4) The health endpoint reports degraded when intelligence jobs are stale.
+**Success Signal:** (1) Pending alerts created by any producer are delivered via Telegram within the next scheduled sweep cycle (≤15 minutes). (2) All 6 alert types have automated producers generating alerts from real data. (3) Every search query feeds LogSearch(), and DetectFrequentLookups() produces results when the same query recurs 3+ times in 30 days. (4) The health endpoint reports degraded when intelligence jobs are stale.
 
 **Hard Constraints:**
 - Alert delivery respects the existing 2/day cap enforced by `GetPendingAlerts()`

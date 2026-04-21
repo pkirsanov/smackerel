@@ -38,77 +38,7 @@ func TestAllowedTransition(t *testing.T) {
 	}
 }
 
-func TestScaleRecipeDomainData(t *testing.T) {
-	// Recipe with 4 servings, scale to 8
-	domainData := []byte(`{
-		"domain": "recipe",
-		"title": "Pasta Carbonara",
-		"servings": 4,
-		"ingredients": [
-			{"name": "spaghetti", "quantity": "400", "unit": "g"},
-			{"name": "eggs", "quantity": "4", "unit": ""},
-			{"name": "parmesan", "quantity": "1/2", "unit": "cup"},
-			{"name": "salt", "quantity": "", "unit": "to taste"}
-		],
-		"steps": []
-	}`)
-
-	result, err := scaleRecipeDomainData(domainData, 8)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-
-	// Verify the output contains scaled quantities
-	if len(result) == 0 {
-		t.Fatal("expected non-empty result")
-	}
-}
-
-func TestScaleRecipeDomainData_NoScalingNeeded(t *testing.T) {
-	domainData := []byte(`{
-		"domain": "recipe",
-		"title": "Simple Salad",
-		"servings": 2,
-		"ingredients": [
-			{"name": "lettuce", "quantity": "1", "unit": "head"}
-		],
-		"steps": []
-	}`)
-
-	result, err := scaleRecipeDomainData(domainData, 2)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should return original data unchanged
-	if string(result) != string(domainData) {
-		t.Error("expected original data when no scaling needed")
-	}
-}
-
-func TestScaleRecipeDomainData_MissingServings(t *testing.T) {
-	domainData := []byte(`{
-		"domain": "recipe",
-		"title": "Unknown Servings",
-		"ingredients": [
-			{"name": "flour", "quantity": "2", "unit": "cups"}
-		],
-		"steps": []
-	}`)
-
-	result, err := scaleRecipeDomainData(domainData, 4)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-}
+// scaleRecipeDomainData tests are consolidated in shopping_test.go
 
 func TestResolveTitle(t *testing.T) {
 	tests := []struct {

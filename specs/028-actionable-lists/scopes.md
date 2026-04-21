@@ -199,9 +199,9 @@ Scenario: Archive list
 
 ### DoD
 
-- [x] Store CRUD operations implemented with tests **Phase:** implement — `internal/list/store.go` has CreateList, GetList, ListLists, UpdateItemStatus, AddManualItem, CompleteList, ArchiveList
-- [x] Denormalized counter updates (total_items, checked_items) correct **Phase:** implement — UpdateItemStatus recalculates checked_items via subquery; AddManualItem increments total_items; CreateList sets total_items = len(items)
-- [x] NATS events published for create and complete **Phase:** implement — `internal/nats/client.go` defines SubjectListsCreated="lists.created" and SubjectListsCompleted="lists.completed"; contract tests verify subjects
+- [x] Store CRUD operations implemented with tests **Phase:** implement — `internal/list/store.go` has CreateList, GetList, ListLists, UpdateItemStatus, AddManualItem, RemoveItem, CompleteList, ArchiveList
+- [x] Denormalized counter updates (total_items, checked_items) correct **Phase:** implement — UpdateItemStatus recalculates checked_items via subquery; AddManualItem increments total_items; RemoveItem recalculates both; CreateList sets total_items = len(items)
+- [x] NATS events published for create and complete **Phase:** reconcile — Store now accepts `*smacknats.Client`; CreateList publishes `lists.created`, CompleteList publishes `lists.completed` with item stats. **Claim Source:** executed (R85 reconcile sweep)
 - [x] `./smackerel.sh test unit` passes **Phase:** implement — all packages pass including `internal/list` and `internal/nats`. **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Phase:** implement — "All checks passed!" **Claim Source:** executed
 
@@ -392,13 +392,13 @@ Scenario: List all active lists
 
 ### DoD
 
-- [x] All list CRUD endpoints implemented **Phase:** implement — POST/GET /api/lists, GET /api/lists/{id}
-- [x] All item-level operation endpoints implemented **Phase:** implement — POST items, POST check, POST complete
-- [x] Route group registered in router.go **Phase:** implement — Chi r.Route("/lists", ...)
+- [x] All list CRUD endpoints implemented **Phase:** reconcile — POST/GET /api/lists, GET/PATCH/DELETE /api/lists/{id}
+- [x] All item-level operation endpoints implemented **Phase:** reconcile — POST items, POST check, DELETE items/{itemId}, POST complete
+- [x] Route group registered in router.go **Phase:** implement — Chi r.Route("/lists", ...) with all routes including PATCH, DELETE
 - [x] Dependencies wired (Generator, Store) **Phase:** implement — ListHandlers struct + Dependencies field
 - [x] Error responses follow existing API error format **Phase:** implement — JSON error pattern
-- [x] `./smackerel.sh test unit` passes **Phase:** implement — **Claim Source:** executed
-- [x] `./smackerel.sh lint` passes **Phase:** implement — **Claim Source:** executed
+- [x] `./smackerel.sh test unit` passes **Phase:** reconcile — **Claim Source:** executed (R85 reconcile sweep)
+- [x] `./smackerel.sh lint` passes **Phase:** reconcile — **Claim Source:** executed (R85 reconcile sweep)
 
 ---
 

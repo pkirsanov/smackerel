@@ -851,3 +851,103 @@ func TestIsSafeURLUnparseable(t *testing.T) {
 		t.Error("URL without valid scheme should not be safe")
 	}
 }
+
+// --- SEC-R82-001: Amenities/ChannelIDs control character sanitization ---
+
+func TestNormalizePropertySanitizesAmenities(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:        "p-ctrl",
+		Name:      "Clean House",
+		Amenities: []string{"Pool\x00", "Hot\x07Tub", "\x1bOcean View"},
+		UpdatedAt: time.Now(),
+	}
+	a := NormalizeProperty(p, cfg)
+	if strings.ContainsAny(a.RawContent, "\x00\x07\x1b") {
+		t.Error("SEC-R82-001: amenities with control chars must be sanitized in content")
+	}
+	amenities, ok := a.Metadata["amenities"].([]string)
+	if !ok {
+		t.Fatal("metadata amenities should be []string")
+	}
+	for _, am := range amenities {
+		if strings.ContainsAny(am, "\x00\x07\x1b") {
+			t.Errorf("SEC-R82-001: amenity metadata not sanitized: %q", am)
+		}
+	}
+}
+
+func TestNormalizePropertySanitizesChannelIDs(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:         "p-ctrl2",
+		Name:       "Clean House",
+		ChannelIDs: []string{"Airbnb\x00", "\x0DVRBO"},
+		UpdatedAt:  time.Now(),
+	}
+	a := NormalizeProperty(p, cfg)
+	if strings.ContainsAny(a.RawContent, "\x00\x0D") {
+		t.Error("SEC-R82-001: channel IDs with control chars must be sanitized in content")
+	}
+	channels, ok := a.Metadata["channel_ids"].([]string)
+	if !ok {
+		t.Fatal("metadata channel_ids should be []string")
+	}
+	for _, ch := range channels {
+		if strings.ContainsAny(ch, "\x00\x0D") {
+			t.Errorf("SEC-R82-001: channel_id metadata not sanitized: %q", ch)
+		}
+	}
+}
+
+// --- SEC-R82-002: ListingURLs filtered in metadata ---
+
+func TestNormalizePropertyFiltersUnsafeListingURLsFromMetadata(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:          "p-urls",
+		Name:        "URL House",
+		ListingURLs: []string{"javascript:alert(1)", "https://airbnb.com/rooms/123", "data:text/html,xss"},
+		UpdatedAt:   time.Now(),
+	}
+	a := NormalizeProperty(p, cfg)
+	urls, ok := a.Metadata["listing_urls"].([]string)
+	if !ok {
+		t.Fatal("metadata listing_urls should be []string")
+	}
+	for _, u := range urls {
+		if !isSafeURL(u) {
+			t.Errorf("SEC-R82-002: unsafe URL in metadata listing_urls: %q", u)
+		}
+	}
+	if len(urls) != 1 {
+		t.Errorf("SEC-R82-002: expected 1 safe URL, got %d", len(urls))
+	}
+	if a.URL != "https://airbnb.com/rooms/123" {
+		t.Errorf("artifact URL should be the safe one, got %q", a.URL)
+	}
+}
+
+// --- SEC-R82-003: Reservation date string sanitization ---
+
+func TestNormalizeReservationSanitizesDateStrings(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard"}
+	r := Reservation{
+		ID:         "res-ctrl",
+		PropertyID: "p1",
+		CheckIn:    "2026-04-15\x00",
+		CheckOut:   "\x1b2026-04-18",
+		GuestName:  "John",
+		BookedAt:   time.Now(),
+	}
+	a := NormalizeReservation(r, "Beach House", cfg)
+	if strings.ContainsAny(a.RawContent, "\x00\x1b") {
+		t.Error("SEC-R82-003: date strings with control chars must be sanitized in content")
+	}
+	if ci, ok := a.Metadata["check_in"].(string); ok && strings.ContainsAny(ci, "\x00\x1b") {
+		t.Errorf("SEC-R82-003: check_in metadata not sanitized: %q", ci)
+	}
+	if co, ok := a.Metadata["check_out"].(string); ok && strings.ContainsAny(co, "\x00\x1b") {
+		t.Errorf("SEC-R82-003: check_out metadata not sanitized: %q", co)
+	}
+}

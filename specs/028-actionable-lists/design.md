@@ -111,10 +111,10 @@ Both paths call `list.Generator.Generate()` which:
 
 ## Data Model
 
-### Migration: `016_actionable_lists.sql`
+### Migration: `017_actionable_lists.sql`
 
 ```sql
--- 016_actionable_lists.sql
+-- 017_actionable_lists.sql
 -- Actionable Lists & Resource Tracking (spec 028).
 -- Lists aggregate domain-extracted data across artifacts.
 --

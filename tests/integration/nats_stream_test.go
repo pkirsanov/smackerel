@@ -79,10 +79,13 @@ func TestNATS_PublishSubscribe_Artifacts(t *testing.T) {
 
 	// Create a consumer
 	consumerName := testID(t)
+	// STAB-031-001: DeliverNewPolicy ignores stale messages from crashed
+	// previous runs on WorkQueue streams, preventing payload-mismatch flakes.
 	cons, err := js.CreateOrUpdateConsumer(ctx, "ARTIFACTS", jetstream.ConsumerConfig{
 		Durable:       consumerName,
 		FilterSubject: "artifacts.process",
 		AckPolicy:     jetstream.AckExplicitPolicy,
+		DeliverPolicy: jetstream.DeliverNewPolicy,
 	})
 	if err != nil {
 		t.Fatalf("create consumer: %v", err)
@@ -148,10 +151,13 @@ func TestNATS_PublishSubscribe_Domain(t *testing.T) {
 	}
 
 	consumerName := testID(t)
+	// STAB-031-001: DeliverNewPolicy ignores stale messages from crashed
+	// previous runs on WorkQueue streams, preventing payload-mismatch flakes.
 	cons, err := js.CreateOrUpdateConsumer(ctx, "DOMAIN", jetstream.ConsumerConfig{
 		Durable:       consumerName,
 		FilterSubject: "domain.extract",
 		AckPolicy:     jetstream.AckExplicitPolicy,
+		DeliverPolicy: jetstream.DeliverNewPolicy,
 	})
 	if err != nil {
 		t.Fatalf("create consumer: %v", err)

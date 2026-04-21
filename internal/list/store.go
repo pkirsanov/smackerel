@@ -2,21 +2,25 @@ package list
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
 // Store manages list CRUD operations in PostgreSQL.
 type Store struct {
 	Pool *pgxpool.Pool
+	NATS *smacknats.Client
 }
 
 // NewStore creates a new list store.
-func NewStore(pool *pgxpool.Pool) *Store {
-	return &Store{Pool: pool}
+func NewStore(pool *pgxpool.Pool, nc *smacknats.Client) *Store {
+	return &Store{Pool: pool, NATS: nc}
 }
 
 // CreateList inserts a list and its items in a single transaction.
@@ -54,6 +58,23 @@ func (s *Store) CreateList(ctx context.Context, list *List, items []ListItem) er
 
 	list.TotalItems = len(items)
 	slog.Info("list created", "list_id", list.ID, "type", list.ListType, "items", len(items))
+
+	// Publish NATS event for intelligence consumption
+	if s.NATS != nil {
+		event := map[string]any{
+			"list_id":        list.ID,
+			"list_type":      list.ListType,
+			"domain":         list.Domain,
+			"artifact_count": len(list.SourceArtifactIDs),
+			"item_count":     len(items),
+		}
+		if data, err := json.Marshal(event); err == nil {
+			if pubErr := s.NATS.Publish(ctx, smacknats.SubjectListsCreated, data); pubErr != nil {
+				slog.Warn("failed to publish lists.created event", "list_id", list.ID, "error", pubErr)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -212,6 +233,56 @@ func (s *Store) CompleteList(ctx context.Context, listID string) error {
 		return fmt.Errorf("complete list: %w", err)
 	}
 	slog.Info("list completed", "list_id", listID)
+
+	// Publish NATS event for intelligence consumption
+	if s.NATS != nil {
+		// Fetch list stats for the event payload
+		var listType, domain string
+		var itemsDone, itemsSkipped, itemsSubstituted int
+		_ = s.Pool.QueryRow(ctx, `SELECT list_type, COALESCE(domain, '') FROM lists WHERE id = $1`, listID).Scan(&listType, &domain)
+		_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'done'`, listID).Scan(&itemsDone)
+		_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'skipped'`, listID).Scan(&itemsSkipped)
+		_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'substituted'`, listID).Scan(&itemsSubstituted)
+
+		event := map[string]any{
+			"list_id":           listID,
+			"list_type":         listType,
+			"domain":            domain,
+			"items_done":        itemsDone,
+			"items_skipped":     itemsSkipped,
+			"items_substituted": itemsSubstituted,
+		}
+		if data, err := json.Marshal(event); err == nil {
+			if pubErr := s.NATS.Publish(ctx, smacknats.SubjectListsCompleted, data); pubErr != nil {
+				slog.Warn("failed to publish lists.completed event", "list_id", listID, "error", pubErr)
+			}
+		}
+	}
+
+	return nil
+}
+
+// RemoveItem deletes a specific item from a list and updates counters.
+func (s *Store) RemoveItem(ctx context.Context, listID, itemID string) error {
+	now := time.Now()
+
+	tag, err := s.Pool.Exec(ctx, `DELETE FROM list_items WHERE id = $1 AND list_id = $2`, itemID, listID)
+	if err != nil {
+		return fmt.Errorf("delete item: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("item %s not found in list %s", itemID, listID)
+	}
+
+	// Recalculate total and checked counts
+	_, _ = s.Pool.Exec(ctx, `
+		UPDATE lists SET
+			total_items = (SELECT COUNT(*) FROM list_items WHERE list_id = $1),
+			checked_items = (SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status IN ('done', 'substituted')),
+			updated_at = $2
+		WHERE id = $1
+	`, listID, now)
+
 	return nil
 }
 

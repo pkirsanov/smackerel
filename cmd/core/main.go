@@ -188,7 +188,7 @@ func run() error {
 
 		// Build shopping bridge using existing list infrastructure (spec 028)
 		resolver := list.NewPostgresArtifactResolver(svc.pg.Pool)
-		listStore := list.NewStore(svc.pg.Pool)
+		listStore := list.NewStore(svc.pg.Pool, svc.nc)
 		aggregator := &list.RecipeAggregator{}
 		shoppingBridge := mealplan.NewShoppingBridge(resolver, aggregator, listStore)
 

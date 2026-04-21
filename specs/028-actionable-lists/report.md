@@ -30,11 +30,11 @@ Spec 028 introduces actionable list generation from domain-extracted structured 
 ### Scope 6 — REST API Endpoints
 - Full CRUD via `POST/GET /api/lists`, `POST /api/lists/{id}/items`, `POST /api/lists/{id}/items/{itemId}/check`, `POST /api/lists/{id}/complete`.
 
-### Scope 7 — NATS List Events
-- LISTS stream and `lists.>` subjects added for lifecycle event notification.
+### Scope 7 — Telegram /list Command & Inline Keyboard
+- Telegram bot `/list` command parser, list display formatting, inline keyboard for item check/skip/substitute, callback handler, message editing on state change.
 
-### Scope 8 — Telegram List Display
-- Telegram bot formats lists with item status indicators and completion tracking.
+### Scope 8 — Intelligence Integration
+- NATS subscriber for `lists.completed` in intelligence engine, artifact relevance boosting, purchase frequency tracking.
 
 ---
 
@@ -78,6 +78,57 @@ Spec 028 introduces actionable list generation from domain-extracted structured 
 ### Verification
 
 ```
+./smackerel.sh test unit  → all packages pass (236 passed)
+./smackerel.sh lint       → All checks passed!
+```
+
+---
+
+## Reconcile-to-Doc Sweep (R85 — 2026-04-21)
+
+**Trigger:** stochastic-quality-sweep child workflow, reconcile claimed-vs-implemented.
+
+### Drift Findings
+
+| # | Finding | Scope | Severity | Disposition |
+|---|---------|-------|----------|-------------|
+| R1 | Store lacks NATS event publishing — `CreateList`/`CompleteList` never publish `lists.created`/`lists.completed` events the intelligence engine expects | 2 | High | Fixed — added `*smacknats.Client` to Store, publish events in CreateList and CompleteList |
+| R2 | `RemoveItem` method missing from Store and ListStore interface — claimed in scopes.md but never implemented | 2 | Medium | Fixed — added `RemoveItem` to Store and ListStore interface |
+| R3 | Missing API routes: `PATCH /lists/{id}`, `DELETE /lists/{id}`, `DELETE /lists/{id}/items/{itemId}` — design.md claimed them but not registered | 6 | Medium | Fixed — added UpdateListHandler, ArchiveListHandler, RemoveItemHandler and registered routes |
+| R4 | design.md says migration `016_actionable_lists.sql` but actual is `017_actionable_lists.sql` | 1 | Low | Fixed — updated design.md |
+| R5 | report.md had Scope 7/8 labels swapped (7 said "NATS", 8 said "Telegram" — reversed from scopes.md) | docs | Low | Fixed — corrected report.md scope labels |
+
+### Code Changes
+
+**`internal/list/store.go`:**
+- Added `NATS *smacknats.Client` field to Store struct
+- `NewStore` now accepts `*smacknats.Client` parameter
+- `CreateList` publishes `lists.created` NATS event with list_id, list_type, domain, artifact_count, item_count
+- `CompleteList` publishes `lists.completed` NATS event with list_id, list_type, domain, items_done, items_skipped, items_substituted
+- Added `RemoveItem(ctx, listID, itemID)` method with counter recalculation
+
+**`internal/list/types.go`:**
+- Added `RemoveItem` to `ListStore` interface
+
+**`internal/api/lists.go`:**
+- Added `UpdateListHandler` (PATCH /lists/{id})
+- Added `ArchiveListHandler` (DELETE /lists/{id} → soft delete/archive)
+- Added `RemoveItemHandler` (DELETE /lists/{id}/items/{itemId})
+
+**`internal/api/router.go`:**
+- Registered `Patch("/{id}")`, `Delete("/{id}")`, `Delete("/{id}/items/{itemId}")` routes
+
+**`cmd/core/main.go`:**
+- Updated `list.NewStore(svc.pg.Pool)` → `list.NewStore(svc.pg.Pool, svc.nc)` to wire NATS client
+
+**Test mocks updated:**
+- `internal/api/lists_test.go` — added `RemoveItem` to mockListStore
+- `internal/list/generator_test.go` — added `RemoveItem` to mockStore
+
+### Verification
+
+```
+./smackerel.sh build      → ✔ smackerel-core Built, ✔ smackerel-ml Built
 ./smackerel.sh test unit  → all packages pass (236 passed)
 ./smackerel.sh lint       → All checks passed!
 ```
