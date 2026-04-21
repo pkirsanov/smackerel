@@ -947,6 +947,9 @@ func parseMarketsConfig(config connector.ConnectorConfig) (MarketsConfig, error)
 			}
 			cfg.FREDSeries = append(cfg.FREDSeries, str)
 		}
+		if len(cfg.FREDSeries) > maxWatchlistSymbols {
+			return MarketsConfig{}, fmt.Errorf("FRED series list exceeds maximum of %d entries", maxWatchlistSymbols)
+		}
 	}
 
 	return cfg, nil

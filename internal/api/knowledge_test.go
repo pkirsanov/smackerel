@@ -72,6 +72,14 @@ func (m *mockKnowledgeStore) GetKnowledgeHealthStats(_ context.Context) (*knowle
 	return m.healthStats, m.healthErr
 }
 
+func (m *mockKnowledgeStore) CountEntitiesForConcept(_ context.Context, _ string) (int, error) {
+	return 0, nil
+}
+
+func (m *mockKnowledgeStore) HasContradictions(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}
+
 // --- T3-05: GET /concepts → list with correct sort/limit/offset ---
 
 func TestKnowledgeConceptsHandler_List(t *testing.T) {

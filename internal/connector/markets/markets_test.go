@@ -2810,6 +2810,25 @@ func TestParseMarketsConfig_FREDSeriesRejectsInvalid(t *testing.T) {
 
 // --- Scope 3 Tests: market/news and market/economic normalizer ---
 
+func TestParseMarketsConfig_FREDSeriesSizeLimit(t *testing.T) {
+	// GAP-018-G01: FRED series list must enforce maxWatchlistSymbols limit
+	// just like stocks, ETFs, crypto, and forex_pairs.
+	series := make([]interface{}, 101)
+	for i := range series {
+		series[i] = fmt.Sprintf("S%03d", i)
+	}
+	_, err := parseMarketsConfig(connector.ConnectorConfig{
+		Credentials:  map[string]string{"finnhub_api_key": "test"},
+		SourceConfig: map[string]interface{}{"fred_series": series},
+	})
+	if err == nil {
+		t.Fatal("expected error for FRED series list exceeding maximum")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum") {
+		t.Errorf("expected 'exceeds maximum' error, got: %v", err)
+	}
+}
+
 func TestSyncProducesNewsArtifacts(t *testing.T) {
 	finnhubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/company-news" {

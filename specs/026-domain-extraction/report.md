@@ -149,3 +149,81 @@ CLI verification:
 
 - `./smackerel.sh test unit` — all Go packages pass (including `internal/api` with new tests), 236 Python tests pass
 - `./smackerel.sh build` — clean compilation
+
+---
+
+## Test Gap Probe — 2026-04-21 (stochastic-quality-sweep R74)
+
+**Trigger:** `test` via `test-to-doc` child workflow
+**Scope:** All 9 scopes — test plan vs actual test coverage comparison.
+
+### Methodology
+
+Compared every test plan row (T1-01 through T9-08) from `scopes.md` against actual test files in the codebase. Checked for:
+- Missing test functions mapped to test plan IDs
+- Missing test files referenced by test plans
+- Gherkin scenario coverage gaps
+
+### Test Coverage Findings
+
+| # | Gap | Severity | Scope | Test Plan IDs | Status |
+|---|-----|----------|-------|---------------|--------|
+| TG1 | No unit tests for `DomainResultSubscriber.handleDomainExtracted` or `publishDomainExtractionRequest` | Medium | 3, 7 | T3-01 to T3-07, T7-01 to T7-04 | Fixed — added `domain_subscriber_test.go` |
+| TG2 | No unit tests for domain search filter serialization or domain intent → filter mapping | Medium | 8 | T8-06, T8-07 | Fixed — added `domain_filter_test.go` |
+| TG3 | No integration test `tests/integration/domain_extraction_test.go` | Low | 7 | T7-05 to T7-07 | Documented — requires live stack |
+
+### Gap Detail
+
+**TG1 — DomainResultSubscriber and publisher unit tests:**
+
+The `DomainResultSubscriber` in `internal/pipeline/domain_subscriber.go` and the `publishDomainExtractionRequest` method on `ResultSubscriber` had zero unit test coverage. The test plan called for T3-01 through T3-07 in `subscriber_test.go` and T7-01 through T7-04 for pipeline integration logic.
+
+**Fix:** Created [internal/pipeline/domain_subscriber_test.go](../../internal/pipeline/domain_subscriber_test.go) with:
+- `TestHandleDomainExtracted_SuccessPayload` — validates successful response structure (T3-05)
+- `TestHandleDomainExtracted_FailurePayload` — validates failure response structure (T3-06)
+- `TestHandleDomainExtracted_InvalidJSONDetected` — verifies bad JSON is detected (T3-07)
+- `TestHandleDomainExtracted_MissingArtifactIDRejected` — missing artifact_id caught
+- `TestDomainResultSubscriber_NewCreation` — constructor produces valid subscriber
+- `TestDomainResultSubscriber_StopBeforeStart` — no panic on unstarted Stop
+- `TestDomainResultSubscriber_DoubleStartFails` — rejects duplicate Start
+- `TestDomainResultSubscriber_StartAfterStopFails` — rejects Start after Stop
+- `TestPublishDomainExtractionRequest_NilRegistrySkips` — nil registry returns nil (T3-02)
+
+Note: Full DB-dependent publisher tests (T3-01, T3-03, T3-04) and handler DB-write tests (T3-05 complete, T3-06 complete) require a `pgxpool.Pool` mock or live DB, which is integration-category. The validation and serialization layers are tested at unit level.
+
+**TG2 — Domain search filter tests:**
+
+The test plan called for T8-06 (`addDomainFilters` JSONB SQL for recipe ingredients) and T8-07 (`addDomainFilters` JSONB SQL for product price). The implementation inlined the filter logic into `vectorSearch()` rather than extracting a separate `addDomainFilters` function, so no tests existed for these code paths.
+
+**Fix:** Created [internal/api/domain_filter_test.go](../../internal/api/domain_filter_test.go) with:
+- `TestSearchFilters_DomainFieldSerialization` — domain + ingredient round-trip (T8-06)
+- `TestSearchFilters_PriceMaxSerialization` — PriceMax round-trip (T8-07)
+- `TestSearchFilters_DomainOmittedWhenEmpty` — omitempty correctness
+- `TestSearchResult_DomainDataSerialization` — domain_data present/absent in results
+- `TestDomainIntentToSearchFilters` — full intent → filter mapping for recipe and product (T8-06, T8-07)
+- `TestDomainIntentDoesNotOverrideExplicitFilters` — explicit filters take precedence
+
+**TG3 — Integration tests (documented, not fixed):**
+
+The test plan references `tests/integration/domain_extraction_test.go` for T7-05 through T7-07 (recipe artifact → domain_data in DB, article artifact → no extraction, short-content → skipped). These require a running PostgreSQL + NATS + ML sidecar stack. The E2E test `tests/e2e/domain_e2e_test.go` partially covers this path. Full integration tests are deferred to live-stack testing (spec 031).
+
+### Existing Coverage Summary (No Gaps)
+
+| Scope | Test File | Status |
+|-------|-----------|--------|
+| 1 — DB Migration & Types | `internal/pipeline/domain_types_test.go` | T1-01 to T1-05 covered |
+| 1 — Migration | `tests/integration/db_migration_test.go` | Domain columns verified |
+| 2 — Registry | `internal/domain/registry_test.go` | T2-01 to T2-07 covered + real contracts |
+| 4 — ML Sidecar | `ml/tests/test_domain.py` | T4-01 to T4-08 covered |
+| 5 — Recipe Contract | `internal/domain/registry_test.go` + `ml/tests/test_domain.py` | T5-01 to T5-05 covered |
+| 6 — Product Contract | `internal/domain/registry_test.go` + `ml/tests/test_domain.py` | T6-01 to T6-05 covered |
+| 8 — Search Intent | `internal/api/domain_intent_test.go` | T8-01 to T8-05 covered |
+| 8 — E2E Search | `tests/e2e/domain_e2e_test.go` | T8-08 covered |
+| 9 — Telegram Display | `internal/telegram/format_test.go` | T9-01 to T9-08 covered |
+
+### Verification
+
+```
+./smackerel.sh test unit — all Go packages pass, 236 Python tests pass
+./smackerel.sh lint — clean
+```
