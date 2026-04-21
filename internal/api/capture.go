@@ -15,60 +15,16 @@ import (
 )
 
 // CaptureRequest is the JSON body for POST /api/capture.
+// Reuses pipeline payload types directly to avoid duplicated struct definitions
+// and field-by-field conversion boilerplate (IMPROVE-002-SQS-004).
 type CaptureRequest struct {
-	URL          string               `json:"url,omitempty"`
-	Text         string               `json:"text,omitempty"`
-	VoiceURL     string               `json:"voice_url,omitempty"`
-	Context      string               `json:"context,omitempty"`
-	Conversation *ConversationPayload `json:"conversation,omitempty"`
-	MediaGroup   *MediaGroupPayload   `json:"media_group,omitempty"`
-	ForwardMeta  *ForwardMetaPayload  `json:"forward_meta,omitempty"`
-}
-
-// ConversationPayload carries structured conversation data from assembled forwarded messages.
-type ConversationPayload struct {
-	Participants []string                 `json:"participants"`
-	MessageCount int                      `json:"message_count"`
-	SourceChat   string                   `json:"source_chat"`
-	IsChannel    bool                     `json:"is_channel"`
-	Timeline     TimelinePayload          `json:"timeline"`
-	Messages     []ConversationMsgPayload `json:"messages"`
-}
-
-// TimelinePayload holds conversation time boundaries.
-type TimelinePayload struct {
-	FirstMessage time.Time `json:"first_message"`
-	LastMessage  time.Time `json:"last_message"`
-}
-
-// ConversationMsgPayload is a single message within a conversation.
-type ConversationMsgPayload struct {
-	Sender    string    `json:"sender"`
-	Timestamp time.Time `json:"timestamp"`
-	Text      string    `json:"text"`
-	HasMedia  bool      `json:"has_media,omitempty"`
-}
-
-// MediaGroupPayload carries assembled media group data.
-type MediaGroupPayload struct {
-	Items    []MediaItemPayload `json:"items"`
-	Captions string             `json:"captions,omitempty"`
-}
-
-// MediaItemPayload represents one item in a media group.
-type MediaItemPayload struct {
-	Type     string `json:"type"`
-	FileID   string `json:"file_id"`
-	FileSize int64  `json:"file_size,omitempty"`
-	MimeType string `json:"mime_type,omitempty"`
-}
-
-// ForwardMetaPayload carries forwarding metadata for a single forwarded message.
-type ForwardMetaPayload struct {
-	SenderName   string    `json:"sender_name"`
-	SourceChat   string    `json:"source_chat,omitempty"`
-	OriginalDate time.Time `json:"original_date"`
-	IsChannel    bool      `json:"is_channel,omitempty"`
+	URL          string                        `json:"url,omitempty"`
+	Text         string                        `json:"text,omitempty"`
+	VoiceURL     string                        `json:"voice_url,omitempty"`
+	Context      string                        `json:"context,omitempty"`
+	Conversation *pipeline.ConversationPayload `json:"conversation,omitempty"`
+	MediaGroup   *pipeline.MediaGroupPayload   `json:"media_group,omitempty"`
+	ForwardMeta  *pipeline.ForwardMetaPayload  `json:"forward_meta,omitempty"`
 }
 
 // CaptureResponse is the success response for POST /api/capture.
@@ -129,9 +85,9 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 		VoiceURL:     req.VoiceURL,
 		Context:      req.Context,
 		SourceID:     pipeline.SourceCapture,
-		Conversation: toPipelineConversation(req.Conversation),
-		MediaGroup:   toPipelineMediaGroup(req.MediaGroup),
-		ForwardMeta:  toPipelineForwardMeta(req.ForwardMeta),
+		Conversation: req.Conversation,
+		MediaGroup:   req.MediaGroup,
+		ForwardMeta:  req.ForwardMeta,
 	})
 
 	if err != nil {
@@ -186,66 +142,6 @@ func (d *Dependencies) CaptureHandler(w http.ResponseWriter, r *http.Request) {
 	metrics.CaptureTotal.WithLabelValues(captureSource(r)).Inc()
 
 	writeJSON(w, http.StatusOK, resp)
-}
-
-// toPipelineConversation converts an API ConversationPayload to a pipeline ConversationPayload.
-func toPipelineConversation(c *ConversationPayload) *pipeline.ConversationPayload {
-	if c == nil {
-		return nil
-	}
-	msgs := make([]pipeline.ConversationMsgPayload, len(c.Messages))
-	for i, m := range c.Messages {
-		msgs[i] = pipeline.ConversationMsgPayload{
-			Sender:    m.Sender,
-			Timestamp: m.Timestamp,
-			Text:      m.Text,
-			HasMedia:  m.HasMedia,
-		}
-	}
-	return &pipeline.ConversationPayload{
-		Participants: c.Participants,
-		MessageCount: c.MessageCount,
-		SourceChat:   c.SourceChat,
-		IsChannel:    c.IsChannel,
-		Timeline: pipeline.TimelinePayload{
-			FirstMessage: c.Timeline.FirstMessage,
-			LastMessage:  c.Timeline.LastMessage,
-		},
-		Messages: msgs,
-	}
-}
-
-// toPipelineMediaGroup converts an API MediaGroupPayload to a pipeline MediaGroupPayload.
-func toPipelineMediaGroup(mg *MediaGroupPayload) *pipeline.MediaGroupPayload {
-	if mg == nil {
-		return nil
-	}
-	items := make([]pipeline.MediaItemPayload, len(mg.Items))
-	for i, it := range mg.Items {
-		items[i] = pipeline.MediaItemPayload{
-			Type:     it.Type,
-			FileID:   it.FileID,
-			FileSize: it.FileSize,
-			MimeType: it.MimeType,
-		}
-	}
-	return &pipeline.MediaGroupPayload{
-		Items:    items,
-		Captions: mg.Captions,
-	}
-}
-
-// toPipelineForwardMeta converts an API ForwardMetaPayload to a pipeline ForwardMetaPayload.
-func toPipelineForwardMeta(fm *ForwardMetaPayload) *pipeline.ForwardMetaPayload {
-	if fm == nil {
-		return nil
-	}
-	return &pipeline.ForwardMetaPayload{
-		SenderName:   fm.SenderName,
-		SourceChat:   fm.SourceChat,
-		OriginalDate: fm.OriginalDate,
-		IsChannel:    fm.IsChannel,
-	}
 }
 
 // validCaptureSources is the bounded set of allowed capture source label values.

@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
   <title>Smackerel</title>
   <link rel="manifest" href="/pwa/manifest.json">
   <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
@@ -45,34 +46,6 @@
 
   <p class="footer">Smackerel PWA</p>
 
-  <script>
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/pwa/sw.js', { scope: '/pwa/' })
-        .then(function(reg) { console.log('SW registered:', reg.scope); })
-        .catch(function(err) { console.error('SW registration failed:', err); });
-    }
-
-    // Handle install prompt
-    var deferredPrompt = null;
-    window.addEventListener('beforeinstallprompt', function(e) {
-      e.preventDefault();
-      deferredPrompt = e;
-      document.getElementById('install-card').style.display = 'block';
-    });
-
-    var installBtn = document.getElementById('install-btn');
-    if (installBtn) {
-      installBtn.addEventListener('click', function() {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          deferredPrompt.userChoice.then(function(result) {
-            deferredPrompt = null;
-            document.getElementById('install-card').style.display = 'none';
-          });
-        }
-      });
-    }
-  </script>
+  <script src="/pwa/app.js"></script>
 </body>
 </html>

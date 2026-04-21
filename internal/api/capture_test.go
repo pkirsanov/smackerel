@@ -977,3 +977,67 @@ func TestCaptureHandler_GenericError_Returns500(t *testing.T) {
 		t.Errorf("expected error code PROCESSING_FAILED, got %q", resp.Error.Code)
 	}
 }
+
+// TestCaptureRequest_ConversationDecodesIntoPipelineType verifies that a JSON
+// body with conversation, media_group, and forward_meta fields decodes directly
+// into pipeline.* types without intermediate API-level struct copies.
+// Regression for IMPROVE-002-SQS-004: duplicated payload types removed.
+func TestCaptureRequest_ConversationDecodesIntoPipelineType(t *testing.T) {
+	body := `{
+		"text": "test note",
+		"conversation": {
+			"participants": ["alice", "bob"],
+			"message_count": 2,
+			"source_chat": "test-chat",
+			"is_channel": false,
+			"timeline": {
+				"first_message": "2026-04-01T10:00:00Z",
+				"last_message": "2026-04-01T10:05:00Z"
+			},
+			"messages": [
+				{"sender": "alice", "timestamp": "2026-04-01T10:00:00Z", "text": "hello"},
+				{"sender": "bob", "timestamp": "2026-04-01T10:05:00Z", "text": "hi"}
+			]
+		},
+		"media_group": {
+			"items": [{"type": "photo", "file_id": "f1"}],
+			"captions": "group caption"
+		},
+		"forward_meta": {
+			"sender_name": "charlie",
+			"original_date": "2026-04-01T09:00:00Z"
+		}
+	}`
+
+	var req CaptureRequest
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatalf("failed to unmarshal CaptureRequest: %v", err)
+	}
+
+	if req.Conversation == nil {
+		t.Fatal("expected Conversation to be non-nil")
+	}
+	if len(req.Conversation.Participants) != 2 || req.Conversation.Participants[0] != "alice" {
+		t.Errorf("unexpected Conversation.Participants: %v", req.Conversation.Participants)
+	}
+	if req.Conversation.MessageCount != 2 {
+		t.Errorf("expected MessageCount=2, got %d", req.Conversation.MessageCount)
+	}
+	if len(req.Conversation.Messages) != 2 || req.Conversation.Messages[0].Sender != "alice" {
+		t.Errorf("unexpected Conversation.Messages: %v", req.Conversation.Messages)
+	}
+
+	if req.MediaGroup == nil {
+		t.Fatal("expected MediaGroup to be non-nil")
+	}
+	if len(req.MediaGroup.Items) != 1 || req.MediaGroup.Items[0].FileID != "f1" {
+		t.Errorf("unexpected MediaGroup.Items: %v", req.MediaGroup.Items)
+	}
+
+	if req.ForwardMeta == nil {
+		t.Fatal("expected ForwardMeta to be non-nil")
+	}
+	if req.ForwardMeta.SenderName != "charlie" {
+		t.Errorf("expected ForwardMeta.SenderName=charlie, got %q", req.ForwardMeta.SenderName)
+	}
+}

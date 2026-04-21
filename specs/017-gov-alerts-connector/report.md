@@ -4,7 +4,73 @@ Links: [uservalidation.md](uservalidation.md)
 
 ## Reports
 
-All 6 scopes implemented. 166 test functions in `alerts_test.go`. See individual reports below for quality sweeps.
+All 6 scopes implemented. 168 test functions in `alerts_test.go`. See individual reports below for quality sweeps.
+
+---
+
+## Stabilize Report — 2026-04-21
+
+**Trigger:** `stabilize` (stochastic-quality-sweep R56 child workflow)
+**Mode:** `stabilize-to-doc`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Stabilize probe of the Government Alerts connector (post-certification sweep). Found 1 issue: `Sync()` lacked a bounded total duration timeout, meaning that under worst-case API latency with many locations, the sync could block indefinitely. With 7 sources and per-location fan-out for NWS + AirNow (5 + 2N HTTP requests total), a single sync cycle could exceed several minutes without any upper bound. The weather connector already had `maxSyncDuration = 5 * time.Minute` for the same pattern. Applied the same fix to the alerts connector. Added 2 adversarial tests.
+
+### Probes Performed
+
+| Probe | Result | Detail |
+|-------|--------|--------|
+| Unit test baseline | PASS | 166 test functions pre-change, all pass via `./smackerel.sh test unit` |
+| Build/check | PASS | `./smackerel.sh check` — config SST in sync, env_file drift guard OK |
+| Sequential fetch fan-out analysis | FINDING | 7 sources + per-location NWS/AirNow = 5 + 2N sequential HTTP requests with no aggregate timeout |
+| HTTP client timeout | OK | 15s per request — individual requests are bounded |
+| Supervisor retry loop | OK | Supervisor retries failed Sync() with exponential backoff + circuit breaker at 50 consecutive errors |
+| Context propagation | OK | All source blocks check ctx.Err() for cancellation between iterations |
+| Dedup map growth | OK | 7-day eviction window; source limits (USGS limit=20, NWS limit=50) keep practical map size small |
+| Error handling (errors.Join) | OK | Source failures are joined, health set to Degraded, other sources continue |
+| Resource cleanup (drainBody) | OK | 4KB drain before close enables HTTP/1.1 keep-alive reuse |
+| Mutex usage | OK | RWMutex properly protects shared state; deferred health restoration checks closed flag |
+| Config SST compliance | OK | Zero os.Getenv calls; all config from ConnectorConfig |
+| Cross-connector pattern check | FINDING | Weather connector has `maxSyncDuration` (5 min) but alerts connector did not |
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| STAB-017-001 | Reliability | Medium | `Sync()` had no aggregate timeout bounding total sync duration. With all 7 sources enabled and N locations, the sync makes 5 + 2N sequential HTTP requests. Under worst-case API latency (15s HTTP timeout per request × 15 requests for 5 locations = 225s), Sync blocks for minutes with no upper bound. The weather connector already implements `maxSyncDuration = 5 * time.Minute` for the same pattern. The alerts connector was missing this safeguard. | Fixed |
+
+### Remediation
+
+**STAB-017-001 Fix — Bounded Sync Duration:**
+- Added `maxSyncDuration = 5 * time.Minute` constant matching the weather connector pattern
+- `Sync()` now wraps the parent context with `context.WithTimeout(ctx, maxSyncDuration)` at entry
+- All source HTTP requests inherit the bounded context via `ctx = syncCtx` reassignment
+- Parent context cancellation still propagates (child timeout is min(parent, 5min))
+
+### New Tests (2)
+
+| Test | Finding | Description |
+|------|---------|-------------|
+| `TestSync_MaxSyncDurationBoundsTimeout` | STAB-017-001 | Server that blocks until closed; 100ms HTTP client timeout; 3 sources enabled. Verifies Sync completes in bounded time via error returns, not unbounded blocking. |
+| `TestSync_ParentContextCancellation_StopsSyncEarly` | STAB-017-001 | Server that blocks; 15s HTTP client timeout; parent context cancelled after 200ms. Verifies Sync exits fast when parent context is cancelled (context propagation through bounded timeout). |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/alerts/alerts.go` | Added `maxSyncDuration` constant; wrapped Sync context with `context.WithTimeout` |
+| `internal/connector/alerts/alerts_test.go` | Added 2 stabilization tests |
+| `specs/017-gov-alerts-connector/report.md` | Added this stabilize report |
+
+### Validation
+
+- `./smackerel.sh test unit` — All 41 Go packages pass (alerts: 9.227s, 168 test functions), 236 Python tests pass
+- `./smackerel.sh check` — Config SST verified, env_file drift guard OK
+- No existing tests broken or weakened
+- 168 test functions total in alerts package (166 existing + 2 new)
 
 ---
 

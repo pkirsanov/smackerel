@@ -3,9 +3,7 @@ package imap
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -192,7 +190,7 @@ func (c *Connector) fetchMessagesFrom(ctx context.Context, cfg connector.Connect
 	}
 
 	// Check for OAuth access token (live API path)
-	accessToken := getCredential(cfg.Credentials, "access_token")
+	accessToken := connector.GetCredential(cfg.Credentials, "access_token")
 	if accessToken == "" {
 		slog.Debug("IMAP: no source_config messages and no access_token", "id", c.id)
 		return nil, nil
@@ -215,7 +213,7 @@ func (c *Connector) fetchGmailMessages(ctx context.Context, token string, cursor
 	listURL := fmt.Sprintf("https://www.googleapis.com/gmail/v1/users/me/messages?q=%s&maxResults=50",
 		url.QueryEscape(query))
 
-	listResp, err := gmailAPICall(ctx, client, listURL, token)
+	listResp, err := connector.OAuthAPIGet(ctx, client, listURL, token)
 	if err != nil {
 		return nil, fmt.Errorf("gmail list messages: %w", err)
 	}
@@ -238,7 +236,7 @@ func (c *Connector) fetchGmailMessages(ctx context.Context, token string, cursor
 
 		// Fetch individual message with metadata and snippet
 		getURL := fmt.Sprintf("https://www.googleapis.com/gmail/v1/users/me/messages/%s?format=full", msgID)
-		msgData, err := gmailAPICall(ctx, client, getURL, token)
+		msgData, err := connector.OAuthAPIGet(ctx, client, getURL, token)
 		if err != nil {
 			slog.Warn("gmail fetch message failed", "message_id", msgID, "error", err)
 			continue
@@ -254,35 +252,9 @@ func (c *Connector) fetchGmailMessages(ctx context.Context, token string, cursor
 	return result, nil
 }
 
-// gmailAPICall makes an authenticated GET request to the Gmail API.
-func gmailAPICall(ctx context.Context, client *http.Client, apiURL string, token string) (map[string]interface{}, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("gmail API: token expired or invalid (401)")
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, fmt.Errorf("gmail API: HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Limit response body to 10MB to prevent resource exhaustion
-	var result map[string]interface{}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("gmail API: decode response: %w", err)
-	}
-	return result, nil
-}
+// gmailAPICall delegates to the shared connector.OAuthAPIGet helper.
+// Retained as a package-level alias for backward compatibility with tests.
+var gmailAPICall = connector.OAuthAPIGet
 
 // parseGmailMessage extracts an EmailMessage from a Gmail API message response.
 func parseGmailMessage(data map[string]interface{}) *EmailMessage {
@@ -396,12 +368,8 @@ func extractGmailBody(payload map[string]interface{}) string {
 	return htmlBody
 }
 
-func getCredential(creds map[string]string, key string) string {
-	if creds == nil {
-		return ""
-	}
-	return creds[key]
-}
+// getCredential delegates to the shared connector.GetCredential helper.
+var getCredential = connector.GetCredential
 
 // parseEmailMessages converts interface{} messages from config into EmailMessage structs.
 func parseEmailMessages(raw interface{}) ([]EmailMessage, error) {
@@ -463,12 +431,8 @@ func parseEmailMessages(raw interface{}) ([]EmailMessage, error) {
 	return result, nil
 }
 
-func getStr(m map[string]interface{}, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
-	}
-	return ""
-}
+// getStr delegates to the shared connector.GetStr helper.
+var getStr = connector.GetStr
 
 // Health returns the current connector status.
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
