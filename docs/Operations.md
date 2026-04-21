@@ -95,9 +95,11 @@ When `SMACKEREL_CORE_IMAGE` and `SMACKEREL_ML_IMAGE` are unset (the default), Co
 |--------|---------|
 | Start all services | `./smackerel.sh up` |
 | Stop all services | `./smackerel.sh down` |
+| Stop and remove volumes | `./smackerel.sh down --volumes` |
 | Check service health | `./smackerel.sh status` |
 | View logs | `./smackerel.sh logs` |
 | Rebuild images | `./smackerel.sh build` |
+| Backup database | `./smackerel.sh backup` |
 | Clean unused Docker resources | `./smackerel.sh clean smart` |
 | Full Docker cleanup | `./smackerel.sh clean full` |
 | Measure Docker disk usage | `./smackerel.sh clean measure` |
@@ -232,11 +234,21 @@ curl http://127.0.0.1:42003/jsz
 
 ### PostgreSQL Backup
 
+The CLI provides a one-command backup:
+
 ```bash
-# Backup (while stack is running)
+./smackerel.sh backup
+```
+
+This creates a compressed `pg_dump` file in the `backups/` directory.
+
+For manual backups (e.g., custom format or piping to remote storage):
+
+```bash
+# Plain SQL (while stack is running)
 docker exec smackerel-postgres pg_dump -U smackerel smackerel > backup.sql
 
-# Or compressed
+# Or compressed custom format
 docker exec smackerel-postgres pg_dump -U smackerel -Fc smackerel > backup.dump
 ```
 
@@ -301,17 +313,38 @@ All containers have health checks configured in docker-compose.yml:
 
 ### Key Metrics
 
-The `/metrics` endpoint exposes Prometheus-format metrics:
+#### Go Core (`http://127.0.0.1:40001/metrics`)
 
 | Metric | Type | Labels | Purpose |
 |--------|------|--------|---------|
 | `smackerel_artifacts_ingested_total` | Counter | `source`, `type` | Artifact ingestion by source and type |
-| `smackerel_capture_total` | Counter | `source` | Capture request count |
+| `smackerel_capture_total` | Counter | `source` | Capture request count (telegram, api, extension, pwa) |
 | `smackerel_search_latency_seconds` | Histogram | `mode` | Search latency distribution |
 | `smackerel_domain_extraction_total` | Counter | `schema`, `status` | Domain extraction attempts |
 | `smackerel_connector_sync_total` | Counter | `connector`, `status` | Connector sync success/failure |
 | `smackerel_nats_deadletter_total` | Counter | `stream` | Messages routed to dead letter |
 | `smackerel_db_connections_active` | Gauge | — | Active database connections |
+| `smackerel_digest_generation_total` | Counter | `status` | Digest generation (published, fallback, quiet) |
+
+#### ML Sidecar (`http://127.0.0.1:40002/metrics`)
+
+| Metric | Type | Labels | Purpose |
+|--------|------|--------|---------|
+| `smackerel_llm_tokens_used_total` | Counter | `provider`, `model` | LLM token usage per provider/model |
+| `smackerel_ml_processing_latency_seconds` | Histogram | `operation` | ML processing latency per operation |
+
+Model label cardinality is bounded: known models pass through, unknown models map to `other`.
+
+### OpenTelemetry Tracing (Opt-in)
+
+Distributed trace context propagation through NATS messages is available but disabled by default. To enable:
+
+1. Set `observability.otel_enabled: true` in `config/smackerel.yaml`
+2. Optionally set `observability.otel_exporter_endpoint` to an OTLP gRPC collector (e.g., `http://localhost:4317`)
+3. Regenerate config: `./smackerel.sh config generate`
+4. Restart: `./smackerel.sh down && ./smackerel.sh up`
+
+When enabled, trace context is propagated via W3C `traceparent` headers in NATS messages between Go core and ML sidecar. When disabled, there is zero overhead.
 
 ### NATS Monitoring
 

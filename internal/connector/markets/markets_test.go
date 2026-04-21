@@ -27,7 +27,7 @@ var stableTestTime = time.Date(2026, 4, 11, 10, 0, 0, 0, time.UTC) // Saturday
 func newTestConnector(id string) *Connector {
 	c := New(id)
 	c.nowFunc = func() time.Time { return stableTestTime }
-	c.configGen = 1 // mark as configured for tests that set c.config directly
+	c.configGen = 1                    // mark as configured for tests that set c.config directly
 	c.health = connector.HealthHealthy // allow Sync without Connect for unit tests
 	return c
 }
@@ -4151,7 +4151,7 @@ func TestCHAOS018_001_ConcurrentSyncDailySummaryNoDoubleGeneration(t *testing.T)
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 	c.nowFunc = func() time.Time { return mockNow }
-	c.configGen = 1 // mark configured for Sync guard
+	c.configGen = 1                    // mark configured for Sync guard
 	c.health = connector.HealthHealthy // allow Sync without Connect for unit tests
 	c.config = MarketsConfig{
 		FinnhubAPIKey:  "test-key",
