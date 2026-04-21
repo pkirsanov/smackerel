@@ -116,6 +116,7 @@ type ListStore interface {
 	ListLists(ctx context.Context, statusFilter, typeFilter string, limit, offset int) ([]List, error)
 	UpdateItemStatus(ctx context.Context, listID, itemID string, status ItemStatus, substitution string) error
 	AddManualItem(ctx context.Context, listID, content, category string) (*ListItem, error)
+	RemoveItem(ctx context.Context, listID, itemID string) error
 	CompleteList(ctx context.Context, listID string) error
 	ArchiveList(ctx context.Context, listID string) error
 }

@@ -95,6 +95,27 @@ var DigestGeneration = prometheus.NewCounterVec(
 	[]string{"status"},
 )
 
+// --- Intelligence (Phase 5) ---
+
+// IntelligenceLatency records Phase 5 intelligence endpoint latency in seconds.
+var IntelligenceLatency = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "smackerel_intelligence_latency_seconds",
+		Help:    "Intelligence endpoint latency by endpoint",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30},
+	},
+	[]string{"endpoint"},
+)
+
+// IntelligenceErrors counts intelligence endpoint errors by endpoint.
+var IntelligenceErrors = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_intelligence_errors_total",
+		Help: "Intelligence endpoint errors by endpoint",
+	},
+	[]string{"endpoint"},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -105,6 +126,8 @@ func init() {
 		NATSDeadLetter,
 		DBConnectionsActive,
 		DigestGeneration,
+		IntelligenceLatency,
+		IntelligenceErrors,
 	)
 }
 

@@ -166,3 +166,46 @@ Links: [uservalidation.md](uservalidation.md)
 
 - `./smackerel.sh check` passes clean
 - `./smackerel.sh test unit` — all 34 Go packages pass; weather package: 32.6s
+
+---
+
+### Test Coverage Probe (R83) — 2026-04-21
+
+**Trigger:** stochastic-quality-sweep R83 → test-to-doc
+**Target:** `internal/connector/weather/`
+
+#### Test Probe Summary
+
+All existing unit tests pass (236 Go + Python). Weather connector package: 36.5s, all pass.
+
+#### Test Coverage Gaps Found
+
+| # | Gap | Impact | Fix |
+|---|-----|--------|-----|
+| TG1 | `fetchCurrent` retry-then-succeed path untested | Retry loop with backoff never verified end-to-end — only single-shot `doFetch` tested | Added `TestFetchCurrent_RetryThenSucceed` — server 500 on call 1, 200 on call 2; verifies 2 HTTP calls + correct result |
+| TG2 | `fetchCurrent` permanent-error-no-retry path untested | No verification that 4xx errors skip retry loop | Added `TestFetchCurrent_PermanentErrorNoRetry` — server always 400; verifies exactly 1 HTTP call |
+| TG3 | `fetchCurrent` retry cancellation during backoff untested | Context timeout during backoff sleep never exercised | Added `TestFetchCurrent_RetryExhaustedViaContextTimeout` — 500ms context timeout with server always 500; verifies cancellation error |
+
+#### Implementation Reality Findings (Scope Inflation)
+
+| # | Finding | Severity | Scope | Detail |
+|---|---------|----------|-------|--------|
+| IR1 | No forecast fetch implementation | High | Scope 1, 3 | `FetchForecast()` does not exist. `ForecastDays` config field is parsed but never consumed by any API call. `Sync()` only calls `fetchCurrent()`. Scope 3 DoD claims forecast support. | 
+| IR2 | No historical weather lookup | High | Scope 1, 5 | `FetchHistorical()` does not exist. Gherkin SCN-WX-OM-003 specifies archive-api.open-meteo.com queries. No code references that endpoint. |
+| IR3 | No NWS alert client | High | Scope 4 | `NWSClient` struct, `nws.go` file, and any reference to api.weather.gov are absent. Scope 4 DoD evidence says "architecture supports alert fetching" — the config flag exists but no alert code does. |
+| IR4 | No NATS weather enrichment | High | Scope 5 | No WEATHER stream in nats_contract.json. No weather.enrich.* subjects defined. No NATS subscriber code in the weather package. |
+| IR5 | DoD evidence uses "architecture supports" language | Medium | Scopes 2-5 | Multiple DoD items cite "architecture supports X" as evidence — this means a config field or struct exists, not that the functionality is implemented and tested. |
+
+These findings represent scope inflation where scopes are marked "Done" but their core functionality is absent. The DoD items are checked but the evidence describes capability potential rather than working code.
+
+#### Tests Added (3 new test functions)
+
+1. `TestFetchCurrent_RetryThenSucceed` — server 500→200; verifies retry loop succeeds on recovery
+2. `TestFetchCurrent_PermanentErrorNoRetry` — server 400; verifies exactly 1 call, no retry
+3. `TestFetchCurrent_RetryExhaustedViaContextTimeout` — server always 500; verifies context cancellation during backoff
+
+#### Evidence
+
+- `./smackerel.sh test unit` — all pass; weather package: 36.5s
+- 3 new tests would fail if retry/permanent-error logic were reverted
+- Implementation reality findings IR1-IR4 verified by grep: no matches for `FetchHistorical`, `FetchForecast`, `NWSClient`, `archive-api.open-meteo`, `api.weather.gov`, `weather.enrich` in `internal/connector/weather/`

@@ -113,8 +113,11 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Post("/", deps.ListHandlers.CreateListHandler)
 					r.Get("/", deps.ListHandlers.ListListsHandler)
 					r.Get("/{id}", deps.ListHandlers.GetListHandler)
+					r.Patch("/{id}", deps.ListHandlers.UpdateListHandler)
+					r.Delete("/{id}", deps.ListHandlers.ArchiveListHandler)
 					r.Post("/{id}/items", deps.ListHandlers.AddItemHandler)
 					r.Post("/{id}/items/{itemId}/check", deps.ListHandlers.CheckItemHandler)
+					r.Delete("/{id}/items/{itemId}", deps.ListHandlers.RemoveItemHandler)
 					r.Post("/{id}/complete", deps.ListHandlers.CompleteListHandler)
 				})
 			}

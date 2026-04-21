@@ -1570,6 +1570,100 @@ func TestSync_ConfigGenGuard_ConnectDuringSync(t *testing.T) {
 	}
 }
 
+// --- fetchCurrent retry loop coverage ---
+
+func TestFetchCurrent_RetryThenSucceed(t *testing.T) {
+	// Verifies the fetchCurrent retry loop: server returns 500 on first call,
+	// then 200 on second. fetchCurrent should retry and succeed.
+	var callCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{"temperature_2m":19.0,"apparent_temperature":17.5,"relative_humidity_2m":55,"wind_speed_10m":6.0,"weather_code":3,"is_day":1}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	c.config.Precision = 2
+
+	cw, err := c.fetchCurrent(context.Background(), 40.0, -74.0)
+	if err != nil {
+		t.Fatalf("fetchCurrent should succeed after retry, got: %v", err)
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 HTTP calls (1 fail + 1 success), got %d", callCount)
+	}
+	if cw.Temperature != 19.0 {
+		t.Errorf("temperature = %v, want 19.0", cw.Temperature)
+	}
+	if cw.Description != "Partly cloudy" {
+		t.Errorf("description = %q, want %q", cw.Description, "Partly cloudy")
+	}
+}
+
+func TestFetchCurrent_PermanentErrorNoRetry(t *testing.T) {
+	// Verifies fetchCurrent stops immediately on permanent (4xx) errors
+	// without exhausting retries. A 400 should produce exactly 1 HTTP call.
+	var callCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	c.config.Precision = 2
+
+	_, err := c.fetchCurrent(context.Background(), 40.0, -74.0)
+	if err == nil {
+		t.Fatal("fetchCurrent should fail on permanent error")
+	}
+	if callCount != 1 {
+		t.Errorf("permanent error should not retry: expected 1 HTTP call, got %d", callCount)
+	}
+	if !strings.Contains(err.Error(), "400") {
+		t.Errorf("error should mention status code, got: %v", err)
+	}
+}
+
+func TestFetchCurrent_RetryExhaustedViaContextTimeout(t *testing.T) {
+	// Verifies the retry loop respects context cancellation during backoff.
+	// Server always returns 500 (retryable). Context times out during backoff sleep.
+	var callCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	c.config.Precision = 2
+
+	// 500ms timeout: first attempt is immediate (fails), then 1s backoff sleep
+	// triggers context cancellation before second attempt.
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	_, err := c.fetchCurrent(ctx, 40.0, -74.0)
+	if err == nil {
+		t.Fatal("fetchCurrent should fail when context times out during retry")
+	}
+	if !strings.Contains(err.Error(), "cancelled") {
+		t.Errorf("error should mention cancellation, got: %v", err)
+	}
+	// Should have made exactly 1 HTTP call before context expired during backoff sleep.
+	if callCount < 1 {
+		t.Errorf("expected at least 1 HTTP call before timeout, got %d", callCount)
+	}
+}
+
 func TestValidateWeatherValues(t *testing.T) {
 	tests := []struct {
 		name     string

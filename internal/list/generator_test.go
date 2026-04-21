@@ -77,8 +77,9 @@ func (m *mockStore) AddManualItem(_ context.Context, listID, content, category s
 	return item, nil
 }
 
-func (m *mockStore) CompleteList(_ context.Context, _ string) error { return nil }
-func (m *mockStore) ArchiveList(_ context.Context, _ string) error  { return nil }
+func (m *mockStore) CompleteList(_ context.Context, _ string) error  { return nil }
+func (m *mockStore) ArchiveList(_ context.Context, _ string) error   { return nil }
+func (m *mockStore) RemoveItem(_ context.Context, _, _ string) error { return nil }
 
 func TestGenerator_GenerateFromIDs(t *testing.T) {
 	recipeSrc1 := AggregationSource{

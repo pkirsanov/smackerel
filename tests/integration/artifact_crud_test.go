@@ -5,12 +5,15 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Scenario: Artifact insert and vector search
@@ -556,25 +559,14 @@ func TestArtifact_Chaos_ConcurrentDuplicateContentHash(t *testing.T) {
 }
 
 // isUniqueViolation checks if a pgx error is a unique constraint violation (SQLSTATE 23505).
+// STAB-031-002: Uses typed pgconn.PgError extraction instead of fragile string matching.
 func isUniqueViolation(err error) bool {
 	if err == nil {
 		return false
 	}
-	// pgx wraps the PG error; check the error string for the SQLSTATE code
-	return containsSubstring(err.Error(), "23505") ||
-		containsSubstring(err.Error(), "unique constraint") ||
-		containsSubstring(err.Error(), "duplicate key")
-}
-
-func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
 	}
 	return false
 }

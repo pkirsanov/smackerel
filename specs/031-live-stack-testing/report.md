@@ -84,3 +84,23 @@ Spec 031 establishes live-stack integration and E2E testing infrastructure: Dock
 - Build: `./smackerel.sh build` — PASS (core and ML images built)
 - Unit tests: `./smackerel.sh test unit` — all 41 Go packages PASS, 236 Python tests PASS
 - Integration test compilation: `./smackerel.sh check` — PASS (config in sync)
+
+---
+
+## Stability Pass (April 21, 2026)
+
+**Trigger:** Stochastic quality sweep R84 — stabilize (child workflow `stabilize-to-doc`)
+**Scope:** Test flakiness under crash-recovery, timing variability, and error classification robustness
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File(s) | Fix |
+|----|---------|----------|---------|-----|
+| STAB-031-001 | NATS publish/subscribe tests (`TestNATS_PublishSubscribe_Artifacts`, `TestNATS_PublishSubscribe_Domain`) create durable consumers with default `DeliverAllPolicy`. On `WorkQueuePolicy` streams, messages from crashed previous runs (never ACK'd) persist. A new consumer name still starts from the beginning and fetches stale messages first, causing payload-mismatch assertion failures on re-run after crash. | HIGH | `tests/integration/nats_stream_test.go` | Added `DeliverPolicy: jetstream.DeliverNewPolicy` to both test consumers. Consumers now only receive messages published after creation, ignoring stale messages from crashed previous runs. |
+| STAB-031-002 | `isUniqueViolation` in `TestArtifact_Chaos_ConcurrentDuplicateContentHash` uses fragile string matching (`"23505"`, `"unique constraint"`, `"duplicate key"`) on error messages. Any change to pgx error formatting, error wrapping, or message localization breaks detection, causing the chaos test to misclassify unique violations as `otherErrors` and fail. | MEDIUM | `tests/integration/artifact_crud_test.go` | Replaced string matching with typed `pgconn.PgError` extraction via `errors.As()` and direct SQLSTATE code check (`pgErr.Code == "23505"`). Removed brittle `containsSubstring`/`searchSubstring` helpers. |
+
+### Evidence
+
+- Build: `./smackerel.sh build` — PASS
+- Unit tests: `./smackerel.sh test unit` — all 41 Go packages PASS, 236 Python tests PASS
+- Config: `./smackerel.sh check` — PASS (config in sync)
