@@ -23,6 +23,10 @@ const (
 	gatewayCloseTimeout = 5 * time.Second
 	// maxGatewayBackoff caps the exponential backoff duration for poll retries.
 	maxGatewayBackoff = 16 * time.Second
+	// maxPollerChannels caps the total number of channels (including discovered
+	// threads) that the EventPoller will poll concurrently. Prevents unbounded
+	// goroutine growth when guilds have hundreds of active threads.
+	maxPollerChannels = 200
 
 	// Discord Gateway intent bit flags.
 	IntentGuilds         = 1 << 0  // 1
@@ -243,6 +247,8 @@ func drainGatewayEvents(gw GatewayClient) []GatewayEvent {
 // AddChannels registers new channel IDs (e.g. discovered threads) for polling.
 // Only channels present in cursors but not already in the poller's channel set
 // are added. A new polling goroutine is started for each new channel.
+// The total number of polled channels is capped at maxPollerChannels to prevent
+// unbounded goroutine growth from thread discovery in large guilds.
 func (ep *EventPoller) AddChannels(cursors map[string]string, monitoredParents map[string]struct{}) {
 	ep.mu.Lock()
 	defer ep.mu.Unlock()
@@ -250,6 +256,12 @@ func (ep *EventPoller) AddChannels(cursors map[string]string, monitoredParents m
 		return
 	}
 	for chID := range cursors {
+		// Enforce poller channel cap to prevent goroutine exhaustion (ST-R94-002).
+		if len(ep.channels) >= maxPollerChannels {
+			slog.Warn("discord event poller channel cap reached, skipping remaining threads",
+				"cap", maxPollerChannels, "total_channels", len(ep.channels))
+			break
+		}
 		if _, exists := ep.channels[chID]; exists {
 			continue
 		}

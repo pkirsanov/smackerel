@@ -54,6 +54,9 @@ const (
 	// maxSyncArtifacts caps the total number of artifacts returned per Sync call
 	// to prevent memory exhaustion with many channels × large backfill limits.
 	maxSyncArtifacts = 50000
+	// maxCollectThreadMessages caps the total messages returned by collectThreadMessages
+	// across all threads to prevent memory exhaustion in guilds with many threads.
+	maxCollectThreadMessages = 10000
 	// maxReactionEmojiLen caps stored reaction emoji string length.
 	maxReactionEmojiLen = 100
 	// maxMetadataStringLen caps general metadata string fields (usernames,
@@ -460,6 +463,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					syncErrors = append(syncErrors, fmt.Sprintf("pins %s: %v", chID, err))
 				}
 				for _, pin := range pins {
+					if len(allArtifacts) >= maxSyncArtifacts {
+						slog.Warn("discord sync artifact cap reached during pin fetch", "connector_id", c.id, "cap", maxSyncArtifacts)
+						capReached = true
+						break
+					}
 					if _, dup := seen[pin.ID]; dup {
 						continue
 					}
@@ -471,7 +479,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			}
 
 			// Fetch thread messages (deduplicate against already-seen messages)
-			if cfgSnapshot.IncludeThreads {
+			if cfgSnapshot.IncludeThreads && !capReached {
 				// Fetch active threads for the guild, filtered to this channel
 				if chCfg.ServerID != "" {
 					threadChannelSet := map[string]struct{}{chID: {}}
@@ -481,6 +489,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 						syncErrors = append(syncErrors, fmt.Sprintf("active-threads %s: %v", chID, err))
 					}
 					for _, tmsg := range threadMsgs {
+						if len(allArtifacts) >= maxSyncArtifacts {
+							slog.Warn("discord sync artifact cap reached during active thread fetch", "connector_id", c.id, "cap", maxSyncArtifacts)
+							capReached = true
+							break
+						}
 						if _, dup := seen[tmsg.ID]; dup {
 							continue
 						}
@@ -491,18 +504,25 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				}
 
 				// Fetch archived threads for this channel
-				archivedMsgs, err := c.fetchArchivedThreads(ctx, cfgSnapshot.APIURL, cfgSnapshot.BotToken, chID, localCursors, cfgSnapshot.BackfillLimit)
-				if err != nil {
-					slog.Warn("discord archived thread fetch failed", "channel", chID, "error", err)
-					syncErrors = append(syncErrors, fmt.Sprintf("archived-threads %s: %v", chID, err))
-				}
-				for _, tmsg := range archivedMsgs {
-					if _, dup := seen[tmsg.ID]; dup {
-						continue
+				if !capReached {
+					archivedMsgs, err := c.fetchArchivedThreads(ctx, cfgSnapshot.APIURL, cfgSnapshot.BotToken, chID, localCursors, cfgSnapshot.BackfillLimit)
+					if err != nil {
+						slog.Warn("discord archived thread fetch failed", "channel", chID, "error", err)
+						syncErrors = append(syncErrors, fmt.Sprintf("archived-threads %s: %v", chID, err))
 					}
-					seen[tmsg.ID] = struct{}{}
-					artifact := normalizeMessage(tmsg, chCfg.ProcessingTier, cfgSnapshot.CaptureCommands)
-					allArtifacts = append(allArtifacts, artifact)
+					for _, tmsg := range archivedMsgs {
+						if len(allArtifacts) >= maxSyncArtifacts {
+							slog.Warn("discord sync artifact cap reached during archived thread fetch", "connector_id", c.id, "cap", maxSyncArtifacts)
+							capReached = true
+							break
+						}
+						if _, dup := seen[tmsg.ID]; dup {
+							continue
+						}
+						seen[tmsg.ID] = struct{}{}
+						artifact := normalizeMessage(tmsg, chCfg.ProcessingTier, cfgSnapshot.CaptureCommands)
+						allArtifacts = append(allArtifacts, artifact)
+					}
 				}
 
 				// Register discovered thread IDs with the gateway poller
@@ -728,11 +748,23 @@ type apiArchivedThreadsResponse struct {
 // collectThreadMessages fetches messages for a slice of threads via
 // fetchChannelMessages, stamps thread metadata, and advances cursors.
 // Shared by fetchActiveThreads and fetchArchivedThreads.
+// The total messages returned across all threads is capped at
+// maxCollectThreadMessages to prevent memory exhaustion (ST-R94-003).
 func (c *Connector) collectThreadMessages(ctx context.Context, apiURL, botToken string, threads []apiThreadChannel, cursors ChannelCursors, backfillLimit int) []DiscordMessage {
 	var allMessages []DiscordMessage
 	for _, thread := range threads {
+		if len(allMessages) >= maxCollectThreadMessages {
+			slog.Warn("discord collectThreadMessages cap reached", "connector_id", c.id, "cap", maxCollectThreadMessages, "threads_processed", len(threads))
+			break
+		}
+		// Limit per-thread fetch to remaining capacity
+		remaining := maxCollectThreadMessages - len(allMessages)
+		perThreadLimit := backfillLimit
+		if remaining < perThreadLimit {
+			perThreadLimit = remaining
+		}
 		afterID := cursors[thread.ID]
-		msgs, err := c.fetchChannelMessages(ctx, apiURL, botToken, thread.ID, afterID, backfillLimit)
+		msgs, err := c.fetchChannelMessages(ctx, apiURL, botToken, thread.ID, afterID, perThreadLimit)
 		if err != nil {
 			slog.Warn("discord thread message fetch failed", "thread_id", thread.ID, "error", err)
 			continue

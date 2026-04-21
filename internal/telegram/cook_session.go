@@ -47,6 +47,8 @@ type CookSessionStore struct {
 	disambiguations sync.Map      // key: int64 (chatID), value: *CookDisambiguation
 	timeout         time.Duration // from config: telegram.cook_session_timeout_minutes
 	done            chan struct{} // signals cleanup goroutine to stop
+	startOnce       sync.Once    // ensures StartCleanup spawns only one goroutine
+	stopOnce        sync.Once    // ensures Stop closes done channel exactly once
 }
 
 // NewCookSessionStore creates a new session store with the given timeout.
@@ -59,29 +61,30 @@ func NewCookSessionStore(timeoutMinutes int) *CookSessionStore {
 }
 
 // StartCleanup begins the background sweep goroutine.
+// Safe to call multiple times — only the first call spawns a goroutine.
 func (s *CookSessionStore) StartCleanup() {
-	ticker := time.NewTicker(5 * time.Minute)
-	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case <-s.done:
-				return
-			case <-ticker.C:
-				s.sweep()
+	s.startOnce.Do(func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		go func() {
+			defer ticker.Stop()
+			for {
+				select {
+				case <-s.done:
+					return
+				case <-ticker.C:
+					s.sweep()
+				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 // Stop signals the cleanup goroutine to exit.
+// Safe to call multiple times — only the first call closes the channel.
 func (s *CookSessionStore) Stop() {
-	select {
-	case <-s.done:
-		// Already closed
-	default:
+	s.stopOnce.Do(func() {
 		close(s.done)
-	}
+	})
 }
 
 // Create creates or replaces a cook session for the given chat.

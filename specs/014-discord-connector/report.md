@@ -4,20 +4,22 @@ Links: [uservalidation.md](uservalidation.md)
 
 ### Summary
 
-Discord connector implementation covers 6 scopes: normalizer/classifier (Scope 1), REST client with pagination and rate limiting (Scope 2), connector interface and config (Scope 3), Gateway event poller (Scope 4), thread ingestion (Scope 5), and bot command capture (Scope 6). The codebase has been hardened through 16+ stochastic quality sweeps including 3 security passes, 2 stabilize passes, chaos hardening, regression analysis, and an improve-existing pass.
+Discord connector implementation covers 6 scopes: normalizer/classifier (Scope 1), REST client with pagination and rate limiting (Scope 2), connector interface and config (Scope 3), Gateway event poller (Scope 4), thread ingestion (Scope 5), and bot command capture (Scope 6). The codebase has been hardened through 17+ stochastic quality sweeps including 3 security passes, 3 stabilize passes, chaos hardening, regression analysis, and an improve-existing pass.
 
 ### Completion Statement
 
-All 6 scopes marked Done. 147 test functions across `discord_test.go` (138) and `gateway_test.go` (9), all pass with `-race`. 43 security/hardening tests cover SSRF, snowflake validation, cursor scope enforcement, content sanitization, and resource exhaustion caps. All prior sweep fixes (gaps G1-G11, simplify S1-S6, stabilize ST1-ST9, security SEC-1 through SEC3-4, harden H-1 through H-6, chaos C1-C4, regression REG-014-R22-001/002, improve IMP-014-IE-001/002/003) remain durable. Note: all tests are unit-level with httptest mocking; no integration or E2E test suites exist for the Discord connector.
+All 6 scopes marked Done. 150 test functions across `discord_test.go` (141) and `gateway_test.go` (9), all pass with `-race`. 43 security/hardening tests cover SSRF, snowflake validation, cursor scope enforcement, content sanitization, and resource exhaustion caps. All prior sweep fixes (gaps G1-G11, simplify S1-S6, stabilize ST1-ST9, security SEC-1 through SEC3-4, harden H-1 through H-6, chaos C1-C4, regression REG-014-R22-001/002, improve IMP-014-IE-001/002/003, stabilize ST-R94-001/002/003) remain durable. Note: all tests are unit-level with httptest mocking; no integration or E2E test suites exist for the Discord connector.
 
 ### Test Evidence
 
 ```
 $ ./smackerel.sh test unit --go 2>&1 | grep discord
-ok      github.com/smackerel/smackerel/internal/connector/discord       9.115s
+ok      github.com/smackerel/smackerel/internal/connector/discord
 $ ./smackerel.sh test unit --go 2>&1 | grep -cE '^ok'
-33
+41
 $ grep -c 'func Test' internal/connector/discord/discord_test.go internal/connector/discord/gateway_test.go
+internal/connector/discord/discord_test.go:141
+internal/connector/discord/gateway_test.go:9
 internal/connector/discord/discord_test.go:138
 internal/connector/discord/gateway_test.go:9
 ```
@@ -914,3 +916,52 @@ $ ./smackerel.sh test unit
 ok  github.com/smackerel/smackerel/internal/connector/discord  (cached)
 236 passed (Python)
 ```
+
+---
+
+### Stabilize-To-Doc Sweep — 2026-04-21 (R94)
+
+**Trigger:** `stabilize` probe via stochastic-quality-sweep (Round R94)
+**Mode:** `stabilize-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Findings (3 stability vulnerabilities identified)
+
+| # | Finding | Category | Severity | Status |
+|---|---------|----------|----------|--------|
+| ST-R94-001 | `maxSyncArtifacts` cap not enforced within pin/thread sub-fetch inner loops — pin, active-thread, and archived-thread message batches for a single channel appended without cap check, allowing `Sync()` to allocate far more than 50k artifacts from a single channel with many pins/threads | resource-exhaustion | Medium | Fixed |
+| ST-R94-002 | `AddChannels` starts unbounded polling goroutines for discovered threads — `EventPoller.AddChannels()` spawns a new goroutine per discovered thread with no upper limit; large guilds with hundreds of active threads accumulate hundreds of REST-polling goroutines | goroutine-exhaustion | Medium | Fixed |
+| ST-R94-003 | `collectThreadMessages` has no aggregate message cap — fetches up to `backfillLimit` messages per thread across all threads without any total cap; N threads × backfillLimit messages scales linearly with thread count | memory-exhaustion | Medium | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+- `internal/connector/discord/discord.go`:
+  - ST-R94-001: Added `maxSyncArtifacts` cap checks inside pin, active-thread, and archived-thread inner append loops in `Sync()` with `capReached` break propagation; added `!capReached` guard before thread fetch section
+  - ST-R94-003: Added `maxCollectThreadMessages` constant (10000); `collectThreadMessages` now checks total accumulated messages before each thread fetch and limits per-thread fetch to remaining capacity
+- `internal/connector/discord/gateway.go`:
+  - ST-R94-002: Added `maxPollerChannels` constant (200); `AddChannels()` now checks `len(ep.channels) >= maxPollerChannels` before spawning new goroutines, with warning log when cap is reached
+- `internal/connector/discord/discord_test.go`:
+  - Added 3 adversarial stability tests:
+    - `TestStabilize_SyncArtifactCapEnforcedDuringPinFetch` — verifies pin fetch loop respects artifact cap
+    - `TestStabilize_AddChannelsCapsPollerGoroutines` — verifies 500 thread additions are capped at maxPollerChannels
+    - `TestStabilize_CollectThreadMessagesCapsTotal` — verifies 50 threads × 500 msgs/thread is capped at maxCollectThreadMessages
+
+#### Validation
+
+```
+$ ./smackerel.sh build
+[+] Building 2/2
+ ✔ smackerel-core  Built
+ ✔ smackerel-ml    Built
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+$ ./smackerel.sh test unit — 41 packages pass, zero FAIL
+ok  github.com/smackerel/smackerel/internal/connector/discord
+$ grep -c 'func Test' internal/connector/discord/discord_test.go internal/connector/discord/gateway_test.go
+internal/connector/discord/discord_test.go:141
+internal/connector/discord/gateway_test.go:9
+```
+
+All 150 test functions pass. Zero regressions.
