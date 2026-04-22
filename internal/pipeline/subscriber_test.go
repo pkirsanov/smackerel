@@ -421,37 +421,8 @@ func TestTruncateBytes_FourByteEmoji_DoesNotSplit(t *testing.T) {
 	}
 }
 
-func TestTruncateUTF8_MultiByte_DoesNotSplitRune(t *testing.T) {
-	// 256 ASCII chars + multi-byte char → truncation at 256 should not split
-	s := strings.Repeat("a", 254) + "éé" // 254 + 2*2 = 258 bytes
-	result := truncateUTF8(s, 256)
-	if len(result) > 256 {
-		t.Errorf("expected at most 256 bytes, got %d", len(result))
-	}
-	if !utf8.ValidString(result) {
-		t.Errorf("truncateUTF8 produced invalid UTF-8: %q", result)
-	}
-	// Should include the first é (bytes 254-255) but not cut the second one
-	if len(result) != 256 {
-		t.Errorf("expected exactly 256 bytes (first é fits), got %d", len(result))
-	}
-}
-
-func TestTruncateUTF8_CJK_DoesNotSplitRune(t *testing.T) {
-	// CJK characters are 3 bytes each in UTF-8
-	s := strings.Repeat("a", 255) + "中" // 255 + 3 = 258 bytes
-	result := truncateUTF8(s, 256)
-	if len(result) > 256 {
-		t.Errorf("expected at most 256 bytes, got %d", len(result))
-	}
-	if !utf8.ValidString(result) {
-		t.Errorf("truncateUTF8 produced invalid UTF-8: %q", result)
-	}
-	// '中' starts at byte 255 and is 3 bytes, so at 256 it would split → should be excluded
-	if len(result) != 255 {
-		t.Errorf("expected 255 bytes (CJK char excluded to avoid split), got %d", len(result))
-	}
-}
+// TestTruncateUTF8 tests removed — local truncateUTF8 was eliminated in favour of
+// stringutil.TruncateUTF8 (SMP-022-001). Coverage lives in stringutil_test.go.
 
 func TestPublishToDeadLetter_MultiByte_ErrorTruncation(t *testing.T) {
 	js := &mockJetStream{}

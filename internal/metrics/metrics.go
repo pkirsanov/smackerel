@@ -116,6 +116,34 @@ var IntelligenceErrors = prometheus.NewCounterVec(
 	[]string{"endpoint"},
 )
 
+// --- Alert Delivery ---
+
+// AlertsDelivered counts alerts successfully delivered via Telegram by alert type.
+var AlertsDelivered = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_alerts_delivered_total",
+		Help: "Alerts delivered via Telegram by type",
+	},
+	[]string{"type"},
+)
+
+// AlertDeliveryFailures counts alert delivery failures.
+var AlertDeliveryFailures = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "smackerel_alert_delivery_failures_total",
+		Help: "Alert delivery failures (Telegram send or mark-delivered)",
+	},
+)
+
+// AlertsProduced counts alerts created by alert producers by type.
+var AlertsProduced = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_alerts_produced_total",
+		Help: "Alerts created by producers by type",
+	},
+	[]string{"type"},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -128,6 +156,9 @@ func init() {
 		DigestGeneration,
 		IntelligenceLatency,
 		IntelligenceErrors,
+		AlertsDelivered,
+		AlertDeliveryFailures,
+		AlertsProduced,
 	)
 }
 

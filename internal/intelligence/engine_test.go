@@ -824,6 +824,19 @@ func TestMarkAlertDelivered_NilPool(t *testing.T) {
 	}
 }
 
+// === Improve: HasStalePendingAlerts ===
+
+func TestHasStalePendingAlerts_NilPool(t *testing.T) {
+	engine := NewEngine(nil, nil)
+	_, err := engine.HasStalePendingAlerts(context.Background(), 30*time.Minute)
+	if err == nil {
+		t.Error("expected error for nil pool")
+	}
+	if !strings.Contains(err.Error(), "database connection") {
+		t.Errorf("expected database connection error, got: %s", err)
+	}
+}
+
 func TestMarkAlertDelivered_EmptyID(t *testing.T) {
 	engine := NewEngine(nil, nil)
 	err := engine.MarkAlertDelivered(context.Background(), "")

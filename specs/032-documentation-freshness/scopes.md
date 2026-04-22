@@ -109,4 +109,4 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - [x] Caddy reverse proxy configuration documented — **Phase:** implement — Full Caddyfile example with reverse_proxy, security headers, and automatic HTTPS explanation
 - [x] nginx reverse proxy configuration documented — **Phase:** implement — Full nginx config with certbot instructions, proxy headers, and WebSocket support
 - [x] Security guidance: which services stay on localhost — **Phase:** implement — Port exposure table: only port 40001 (core) exposed via reverse proxy; all other services (ML, PostgreSQL, NATS, Ollama) stay on localhost
-- [x] Browser extension/PWA HTTPS requirement noted (spec 033 coordination) — **Phase:** implement — Not documented because spec 033 (mobile capture) is not yet implemented. No documentation of planned-but-unimplemented features per spec constraint. **Claim Source:** interpreted
+- [x] Browser extension/PWA HTTPS requirement noted (spec 033 coordination) — **Phase:** implement — Browser extension installation (Chrome MV3 + Firefox) and PWA share target setup documented in Operations.md with HTTPS requirement noted for mobile PWA install

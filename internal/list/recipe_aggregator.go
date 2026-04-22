@@ -2,24 +2,13 @@ package list
 
 import (
 	"encoding/json"
+	"sort"
 
 	"github.com/smackerel/smackerel/internal/recipe"
 )
 
 // RecipeAggregator merges recipe ingredients across multiple artifacts.
 type RecipeAggregator struct{}
-
-type recipeData struct {
-	Ingredients []recipeIngredient `json:"ingredients"`
-}
-
-type recipeIngredient struct {
-	Name        string `json:"name"`
-	Quantity    string `json:"quantity"`
-	Unit        string `json:"unit"`
-	Preparation string `json:"preparation"`
-	Group       string `json:"group"`
-}
 
 func (a *RecipeAggregator) Domain() string            { return "recipe" }
 func (a *RecipeAggregator) DefaultListType() ListType { return TypeShopping }
@@ -44,7 +33,7 @@ func (a *RecipeAggregator) Aggregate(sources []AggregationSource) ([]ListItemSee
 	var order []mergeKey
 
 	for _, src := range sources {
-		var rd recipeData
+		var rd recipe.RecipeData
 		if err := json.Unmarshal(src.DomainData, &rd); err != nil {
 			continue
 		}
@@ -101,15 +90,14 @@ func (a *RecipeAggregator) Aggregate(sources []AggregationSource) ([]ListItemSee
 	}
 
 	// Stable sort by category then name
-	for i := 0; i < len(sorted); i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			ci := categoryOrder[sorted[i].item.category]
-			cj := categoryOrder[sorted[j].item.category]
-			if ci > cj || (ci == cj && sorted[i].item.name > sorted[j].item.name) {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
+	sort.SliceStable(sorted, func(i, j int) bool {
+		ci := categoryOrder[sorted[i].item.category]
+		cj := categoryOrder[sorted[j].item.category]
+		if ci != cj {
+			return ci < cj
 		}
-	}
+		return sorted[i].item.name < sorted[j].item.name
+	})
 
 	var seeds []ListItemSeed
 	for i, s := range sorted {
@@ -139,18 +127,3 @@ func (a *RecipeAggregator) Aggregate(sources []AggregationSource) ([]ListItemSee
 
 	return seeds, nil
 }
-
-// ParseQuantity delegates to the shared recipe package.
-var ParseQuantity = recipe.ParseQuantity
-
-// NormalizeUnit delegates to the shared recipe package.
-var NormalizeUnit = recipe.NormalizeUnit
-
-// NormalizeIngredientName delegates to the shared recipe package.
-var NormalizeIngredientName = recipe.NormalizeIngredientName
-
-// CategorizeIngredient delegates to the shared recipe package.
-var CategorizeIngredient = recipe.CategorizeIngredient
-
-// FormatIngredient delegates to the shared recipe package.
-var FormatIngredient = recipe.FormatIngredient

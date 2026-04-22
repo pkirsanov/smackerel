@@ -72,9 +72,8 @@ func (ec *ExpenseClassifier) Classify(expense *domain.ExpenseMetadata) string {
 	}
 
 	// Rule 4: Vendor matches business_vendors config list
-	vendorLower := strings.ToLower(expense.Vendor)
 	for _, bv := range ec.BusinessVendors {
-		if strings.EqualFold(bv, vendorLower) || strings.EqualFold(bv, expense.Vendor) {
+		if strings.EqualFold(bv, expense.Vendor) {
 			return "business"
 		}
 	}

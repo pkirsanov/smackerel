@@ -210,3 +210,50 @@ None. Previous devops fix (migration table consolidation 19→3 entries) remains
 ### Verification
 
 - `./smackerel.sh lint` — passed clean after fix
+
+---
+
+## Gaps Pass (2026-04-22)
+
+**Trigger:** `gaps-to-doc` child workflow from stochastic-quality-sweep
+
+### Probe Summary
+
+| Check | Documented | Actual | Match |
+|-------|-----------|--------|-------|
+| Go source file count (cmd/ + internal/) | 154 | 154 | OK |
+| Go test file count (cmd/ + internal/) | 152 | 152 | OK |
+| Python source file count (ml/app/) | 17 | 17 | OK |
+| Python test file count (ml/tests/) | 16 | 16 | OK |
+| E2E script count (tests/e2e/) | 59 | 59 | OK |
+| Migration files on disk | 3 (001, 018, 019) | 3 (001, 018, 019) | OK |
+| Prompt contracts on disk | 8 | 8 | OK |
+| Internal packages on disk | 23 | 23 | OK |
+| Connector directories on disk | 15 | 15 | OK |
+| README system requirements section | Present | Present | OK |
+| Operations.md sections | All present | All present | OK |
+| TLS setup section | Present | Present | OK |
+| Error lookup table | 13 entries | 13 entries | OK |
+| Health checks table | 5 services (incl Ollama) | 5 services | OK |
+| Browser extension code (`web/extension/`) | Not documented | Implemented (Chrome MV3 + Firefox MV2) | GAP |
+| PWA share target code (`web/pwa/`) | Not documented | Implemented (Web Share Target API) | GAP |
+
+### Findings
+
+| # | Finding | Category | Severity | Resolution |
+|---|---------|----------|----------|------------|
+| F1 | Browser extension and PWA installation documentation missing from Operations.md. Both are fully implemented (`web/extension/` with Chrome MV3 + Firefox manifests, `web/pwa/` with share target + service worker) and Development.md lists them as implemented capabilities, but no setup/installation instructions exist. The spec acceptance criteria explicitly requires "Browser extension and PWA installation documented." Scope 4 DoD incorrectly claimed "Not documented because spec 033 is not yet implemented." | Documentation gap | Medium | Added "Browser Extension" and "PWA (Progressive Web App)" sections to Operations.md with Chrome/Firefox installation steps, extension configuration, usage guide, PWA installation, share target usage, and troubleshooting table. Updated Scope 4 DoD claim in scopes.md. |
+
+### Files Modified
+
+- `docs/Operations.md` — added Browser Extension section (Chrome + Firefox installation, configuration, usage) and PWA section (installation, share target usage, troubleshooting)
+- `specs/032-documentation-freshness/scopes.md` — corrected Scope 4 DoD item from "Not documented because not implemented" to reflect actual documented state
+
+### Verification
+
+- `./smackerel.sh lint` — passed clean after fixes
+- `web/extension/manifest.json` confirms Chrome MV3 extension with context menus, popup, background service worker
+- `web/extension/manifest.firefox.json` confirms Firefox MV2 extension with gecko settings (min v109)
+- `web/pwa/manifest.json` confirms PWA share target with POST method
+- `web/extension/popup/popup.html` confirms setup screen with server URL and auth token fields
+- Documentation instructions match actual code behavior (context menu IDs, share target params, service worker scope)

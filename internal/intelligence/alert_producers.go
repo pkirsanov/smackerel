@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // ProduceBillAlerts creates alerts for subscriptions with upcoming billing dates.
@@ -96,6 +98,7 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 		}); err != nil {
 			slog.Warn("failed to create bill alert", "subscription", serviceName, "error", err)
 		} else {
+			metrics.AlertsProduced.WithLabelValues(string(AlertBill)).Inc()
 			created++
 		}
 	}
@@ -164,6 +167,7 @@ func (e *Engine) ProduceTripPrepAlerts(ctx context.Context) error {
 		}); err != nil {
 			slog.Warn("failed to create trip prep alert", "trip", destination, "error", err)
 		} else {
+			metrics.AlertsProduced.WithLabelValues(string(AlertTripPrep)).Inc()
 			created++
 		}
 	}
@@ -227,6 +231,7 @@ func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
 		}); err != nil {
 			slog.Warn("failed to create return window alert", "artifact", id, "error", err)
 		} else {
+			metrics.AlertsProduced.WithLabelValues(string(AlertReturnWindow)).Inc()
 			created++
 		}
 	}
@@ -291,6 +296,7 @@ func (e *Engine) ProduceRelationshipCoolingAlerts(ctx context.Context) error {
 		}); err != nil {
 			slog.Warn("failed to create relationship cooling alert", "person", name, "error", err)
 		} else {
+			metrics.AlertsProduced.WithLabelValues(string(AlertRelationship)).Inc()
 			created++
 		}
 	}

@@ -254,3 +254,40 @@ func TestNATSDeadLetterCounter(t *testing.T) {
 
 	t.Error("smackerel_nats_deadletter_total{stream=artifacts} not found")
 }
+
+func TestAlertDeliveryMetrics(t *testing.T) {
+	AlertsDelivered.WithLabelValues("bill").Inc()
+	AlertsDelivered.WithLabelValues("trip_prep").Inc()
+	AlertDeliveryFailures.Inc()
+	AlertsProduced.WithLabelValues("bill").Inc()
+	AlertsProduced.WithLabelValues("return_window").Inc()
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather failed: %v", err)
+	}
+
+	checks := map[string]bool{
+		"smackerel_alerts_delivered_total":         false,
+		"smackerel_alert_delivery_failures_total":  false,
+		"smackerel_alerts_produced_total":          false,
+	}
+
+	for _, fam := range families {
+		name := fam.GetName()
+		if _, ok := checks[name]; ok {
+			for _, m := range fam.GetMetric() {
+				if m.GetCounter().GetValue() >= 1 {
+					checks[name] = true
+					break
+				}
+			}
+		}
+	}
+
+	for name, found := range checks {
+		if !found {
+			t.Errorf("metric %s not found or has zero value", name)
+		}
+	}
+}

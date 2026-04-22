@@ -578,3 +578,72 @@ The serving scaler adjusts ingredient quantities for any serving count. Fraction
 | Session expired? | Default timeout is 2 hours. Adjust `features.recipes.cook_session_timeout` in config |
 | No active session? | Start a cook session via Telegram command. Sessions are per-user and per-recipe |
 | Bot not responding? | Check Telegram bot token and that the bot is receiving webhook updates |
+
+## Browser Extension
+
+The Smackerel browser extension enables one-click capture of any web page. It supports Chrome (Manifest V3) and Firefox (Manifest V2).
+
+### Chrome Installation
+
+1. Open `chrome://extensions/` in Chrome
+2. Enable **Developer mode** (toggle in the top-right corner)
+3. Click **Load unpacked**
+4. Select the `web/extension/` directory from the Smackerel repository
+5. The Smackerel icon appears in the toolbar
+
+### Firefox Installation
+
+1. Open `about:debugging#/runtime/this-firefox` in Firefox
+2. Click **Load Temporary Add-on...**
+3. Select `web/extension/manifest.firefox.json` from the Smackerel repository
+4. The Smackerel icon appears in the toolbar
+
+> **Note:** Firefox temporary add-ons are removed when the browser closes. For persistent installation, package the extension as an `.xpi` file using `web-ext build` from the `web/extension/` directory.
+
+### Extension Configuration
+
+After installation, click the Smackerel toolbar icon to open the setup popup:
+
+1. **Server URL** — enter your Smackerel instance URL (e.g., `https://smackerel.example.com` or `http://127.0.0.1:40001` for local dev)
+2. **Auth Token** — paste your Bearer auth token (from `runtime.auth_token` in `config/smackerel.yaml`)
+3. Click **Test Connection** to verify
+4. Click **Save Settings** when the test passes
+
+### Usage
+
+- **Toolbar button:** Click the Smackerel icon → **Save to Smackerel** to capture the current page
+- **Context menu:** Right-click any page, link, or image → **Save to Smackerel**
+- **Text selection:** Select text on a page → right-click → **Save with selection**
+- **Offline queue:** If the server is unreachable, captures are queued locally and synced when connectivity returns
+
+## PWA (Progressive Web App)
+
+The PWA provides a mobile share target so you can send URLs and text to Smackerel from any app's Share menu.
+
+### Installation
+
+1. Open `http://127.0.0.1:40001/pwa/` in a mobile browser (Chrome on Android, Safari on iOS)
+   - For HTTPS deployments: `https://smackerel.example.com/pwa/`
+2. The browser displays an **Install** prompt (or tap the browser menu → **Add to Home Screen**)
+3. Tap **Install** to add Smackerel to your home screen
+
+> **HTTPS required for mobile install:** PWA installation requires HTTPS on mobile browsers. For local development, use `http://127.0.0.1` (localhost is exempt). For network-exposed deployments, set up a reverse proxy with TLS (see the [TLS Setup](#tls-setup) section above).
+
+### Usage
+
+Once installed, Smackerel appears as a share target on your device:
+
+1. In any app (browser, notes, messaging), tap **Share**
+2. Select **Smackerel** from the share sheet
+3. The URL or text is captured to your Smackerel instance
+
+The PWA uses the Web Share Target API to receive shared content. It posts the shared URL/text to the Smackerel capture endpoint using your configured auth token.
+
+### PWA Troubleshooting
+
+| Check | Resolution |
+|-------|------------|
+| Install prompt not showing? | Ensure you're on HTTPS (or localhost). Clear browser cache and revisit `/pwa/` |
+| Share target not appearing? | The PWA must be installed to the home screen. Reinstall if missing |
+| Captures failing? | Verify the Smackerel stack is running and the server URL is reachable from your device |
+| Service worker not registering? | Check browser console for errors. The SW scope must match `/pwa/` |

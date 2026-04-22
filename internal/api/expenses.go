@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -177,13 +178,24 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Main data query with pagination
 	limit := 50
+	offset := 0
+	if offsetStr := q.Get("offset"); offsetStr != "" {
+		if v, err := strconv.Atoi(offsetStr); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+	if limitStr := q.Get("limit"); limitStr != "" {
+		if v, err := strconv.Atoi(limitStr); err == nil && v > 0 && v <= 200 {
+			limit = v
+		}
+	}
 	dataQuery := fmt.Sprintf(`
 		SELECT id, title, metadata->'expense' AS expense, source_id
 		FROM artifacts
 		WHERE %s
 		ORDER BY (metadata->'expense'->>'date')::date DESC NULLS LAST, id DESC
-		LIMIT %d
-	`, whereClause, limit)
+		LIMIT %d OFFSET %d
+	`, whereClause, limit, offset)
 
 	rows, err := h.Pool.Query(r.Context(), dataQuery, args...)
 	if err != nil {
@@ -220,7 +232,9 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 			"expenses": expenses,
 		},
 		"meta": map[string]any{
-			"count": totalCount,
+			"count":  totalCount,
+			"limit":  limit,
+			"offset": offset,
 			"summary": map[string]any{
 				"total_by_currency": summaries,
 			},
