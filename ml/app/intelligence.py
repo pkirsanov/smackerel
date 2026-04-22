@@ -36,6 +36,7 @@ async def _call_llm(prompt: str, provider: str, model: str, api_key: str, ollama
     try:
         if provider == "ollama":
             import httpx
+
             url = ollama_url or "http://localhost:11434"
             async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(
@@ -46,11 +47,11 @@ async def _call_llm(prompt: str, provider: str, model: str, api_key: str, ollama
                     return resp.json().get("response", "")
         elif provider in ("openai", "azure"):
             import httpx
+
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            base_url = "https://api.openai.com/v1" if provider == "openai" else api_key  # simplified
             async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(
-                    f"https://api.openai.com/v1/chat/completions",
+                    "https://api.openai.com/v1/chat/completions",
                     headers=headers,
                     json={
                         "model": model or "gpt-4o-mini",
@@ -116,7 +117,16 @@ async def handle_learning_classify(
     lower = f"{title} {summary}".lower()
     difficulty = "intermediate"
     advanced_terms = ["advanced", "deep dive", "internals", "architecture", "performance", "optimization", "expert"]
-    beginner_terms = ["introduction", "intro ", "beginner", "getting started", "101", "basics", "fundamentals", "tutorial"]
+    beginner_terms = [
+        "introduction",
+        "intro ",
+        "beginner",
+        "getting started",
+        "101",
+        "basics",
+        "fundamentals",
+        "tutorial",
+    ]
 
     for term in advanced_terms:
         if term in lower:
@@ -190,11 +200,13 @@ async def handle_content_analyze(
 
     return {
         "topic_id": topic_id,
-        "angles": [{
-            "title": f"Deep dive: {topic_name}",
-            "uniqueness_rationale": f"{capture_count} captures from {source_diversity} sources",
-            "format_suggestion": fmt,
-        }],
+        "angles": [
+            {
+                "title": f"Deep dive: {topic_name}",
+                "uniqueness_rationale": f"{capture_count} captures from {source_diversity} sources",
+                "format_suggestion": fmt,
+            }
+        ],
         "success": True,
         "processing_time_ms": _elapsed_ms(start),
     }
@@ -231,8 +243,10 @@ async def handle_monthly_generate(
         if shifts:
             prompt_parts.append("Expertise shifts this month:")
             for s in shifts[:10]:
-                prompt_parts.append(f"  - {s.get('topic_name', '')}: {s.get('direction', '')} "
-                                    f"({s.get('previous_depth', 0)} → {s.get('current_depth', 0)})")
+                prompt_parts.append(
+                    f"  - {s.get('topic_name', '')}: {s.get('direction', '')} "
+                    f"({s.get('previous_depth', 0)} → {s.get('current_depth', 0)})"
+                )
 
         if diet and diet.get("total", 0) > 0:
             prompt_parts.append(
@@ -243,8 +257,7 @@ async def handle_monthly_generate(
 
         if sub_sum and sub_sum.get("monthly_total", 0) > 0:
             prompt_parts.append(
-                f"\nSubscriptions: ${sub_sum['monthly_total']:.2f}/month, "
-                f"{len(sub_sum.get('active', []))} active"
+                f"\nSubscriptions: ${sub_sum['monthly_total']:.2f}/month, {len(sub_sum.get('active', []))} active"
             )
 
         if patterns:
@@ -294,8 +307,7 @@ async def handle_quickref_generate(
 
     if provider and api_key and sources:
         source_text = "\n".join(
-            f"- {s.get('title', 'Untitled')}: {_truncate(s.get('summary', ''), 500)}"
-            for s in sources[:10]
+            f"- {s.get('title', 'Untitled')}: {_truncate(s.get('summary', ''), 500)}" for s in sources[:10]
         )
         prompt = (
             f"Create a concise quick reference for '{concept}' from these saved resources:\n\n"
@@ -348,9 +360,7 @@ async def handle_seasonal_analyze(
     month = data.get("month", "")
 
     if provider and api_key and patterns:
-        pattern_text = "\n".join(
-            f"- {p.get('observation', '')}" for p in patterns[:10]
-        )
+        pattern_text = "\n".join(f"- {p.get('observation', '')}" for p in patterns[:10])
         prompt = (
             f"You are a personal analyst reviewing seasonal capture patterns for {month}.\n\n"
             f"Detected patterns:\n{pattern_text}\n\n"

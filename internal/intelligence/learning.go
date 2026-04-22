@@ -41,8 +41,8 @@ type LearningPath struct {
 	CompletedCount   int                `json:"completed_count"`
 	TotalMinutes     int                `json:"total_minutes"`
 	RemainingMinutes int                `json:"remaining_minutes"`
-	Gaps           []string           `json:"gaps"`
-	GeneratedAt    time.Time          `json:"generated_at"`
+	Gaps             []string           `json:"gaps"`
+	GeneratedAt      time.Time          `json:"generated_at"`
 }
 
 // GetLearningPaths returns all topics with 5+ learning-type artifacts per R-502.

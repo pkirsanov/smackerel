@@ -185,6 +185,10 @@ func generateCSPNonce() (string, error) {
 // that captures the content via the existing /api/capture endpoint.
 // Sets a nonce-based Content-Security-Policy header on the response.
 func (d *Dependencies) PWAShareHandler(w http.ResponseWriter, r *http.Request) {
+	// Limit request body on this unauthenticated endpoint to prevent memory-based DoS.
+	// Share target data (title + text + URL) is small; 64KB is generous.
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+
 	if err := r.ParseForm(); err != nil {
 		slog.Warn("pwa share: bad form data", "error", err)
 		http.Error(w, "Bad request", http.StatusBadRequest)

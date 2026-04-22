@@ -333,3 +333,25 @@ func TestPWAStaticFileServer(t *testing.T) {
 		})
 	}
 }
+
+func TestPWAShareHandler_OversizedBodyRejected(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	// Send a body larger than the 64KB limit to the unauthenticated endpoint
+	oversized := strings.Repeat("x", 128*1024)
+	form := "title=" + oversized
+
+	req := httptest.NewRequest(http.MethodPost, "/pwa/share", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	deps.PWAShareHandler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("oversized body: expected 400, got %d", rec.Code)
+	}
+}

@@ -4,6 +4,68 @@ Links: [scopes.md](scopes.md) | [uservalidation.md](uservalidation.md)
 
 ---
 
+## Regression Analysis — 2026-04-22 (regression-to-doc, repeat)
+
+**Trigger:** Child workflow of stochastic-quality-sweep
+**Mode:** regression-to-doc (repeat)
+**Verdict:** 1 finding (cross-spec lint regression), FIXED
+
+### Findings
+
+| ID | Surface | Severity | Description | Status |
+|----|---------|----------|-------------|--------|
+| REG-034-R2-001 | `ml/app/intelligence.py`, `ml/tests/test_intelligence_handlers.py` | Low | Cross-spec lint regression: 4 ruff errors introduced by Phase 5 intelligence work — unused `base_url` variable (F841), unnecessary f-string prefix (F541), unsorted imports (I001), unused `pytest` import (F401). Broke `./smackerel.sh lint` globally. | FIXED |
+
+### Fixes Applied
+
+**REG-034-R2-001 — Cross-Spec Lint Regression:**
+- Removed unused `base_url` variable from `ml/app/intelligence.py` line 52
+- Removed unnecessary `f` prefix from string literal on line 55 (no placeholders)
+- Fixed import sorting in `ml/tests/test_intelligence_handlers.py`
+- Removed unused `import pytest` in same test file
+- Files: `ml/app/intelligence.py`, `ml/tests/test_intelligence_handlers.py`
+
+### Test Baseline
+
+| Category | Result |
+|----------|--------|
+| Go unit tests | All 41 packages passing |
+| Python unit tests | 257 passed, 3 warnings (unrelated to expenses) |
+| Build | All images built successfully |
+| Lint | All checks passed (after fix) |
+| Config check | Config in sync with SST, env_file drift guard OK |
+
+### Cross-Spec Conflict Scan
+
+| Surface | Specs Checked | Verdict |
+|---------|--------------|---------|
+| Route collisions (`/api/expenses/*`) | All API-registering specs | CLEAN — properly namespaced |
+| Shared JSONB metadata (`metadata ? 'expense'`) | All metadata-writing specs | CLEAN — dedicated `expense` key |
+| ML sidecar synthesis pipeline (`receipt_detection`) | 025, 026 | CLEAN — additive second pass |
+| Config namespace (`EXPENSES_*` env vars) | All config-consuming specs | CLEAN — no prefix collisions |
+| Telegram commands (`/expense`) | 027, 028, 035, 036 | CLEAN — no command name conflicts |
+| Digest sections (`ExpenseDigestSection`) | 012, 025 | CLEAN — separate conditional producer |
+| Router registration (`internal/api/router.go`) | All API-registering specs | CLEAN — guarded by handler nil check |
+
+### Design Contradiction Check
+
+| Concern | Analysis | Verdict |
+|---------|----------|---------|
+| Metadata-first pattern (expenses as artifact metadata) | Consistent with project architecture | CLEAN |
+| Amounts as strings (no float arithmetic) | Design mandates `CAST(...AS NUMERIC)` for PostgreSQL aggregation only | CLEAN |
+| Pagination (offset/limit) | IMP-034-001 fix from prior improve-existing round still intact | CLEAN |
+
+### Verification
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh build` | All images built successfully |
+| `./smackerel.sh test unit` | All Go packages OK, 257 Python tests passed |
+| `./smackerel.sh lint` | All checks passed |
+| `./smackerel.sh check` | Config in sync, env_file drift guard OK |
+
+---
+
 ## Improve Analysis — 2026-04-22 (improve-existing, repeat)
 
 **Trigger:** Child workflow of stochastic-quality-sweep
