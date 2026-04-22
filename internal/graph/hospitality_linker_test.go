@@ -254,3 +254,38 @@ func TestHospitalityLinkerNilDepsDoNotPanic(t *testing.T) {
 		t.Error("propertyRepo should be nil when nil was passed")
 	}
 }
+
+// --- IMP-013-IMP-002: hospitalityMeta.Status field for task completed detection ---
+
+func TestHospitalityMetaStatusParsesCompleted(t *testing.T) {
+	raw := `{"propertyId":"p1","propertyName":"Beach House","category":"maintenance","status":"completed"}`
+	var meta hospitalityMeta
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	if meta.Status != "completed" {
+		t.Errorf("Status = %q, want 'completed' — task.completed events must be detectable by the linker", meta.Status)
+	}
+}
+
+func TestHospitalityMetaStatusParsesPending(t *testing.T) {
+	raw := `{"propertyId":"p1","propertyName":"Beach House","category":"maintenance","status":"pending"}`
+	var meta hospitalityMeta
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	if meta.Status != "pending" {
+		t.Errorf("Status = %q, want 'pending'", meta.Status)
+	}
+}
+
+func TestHospitalityMetaStatusEmptyWhenMissing(t *testing.T) {
+	raw := `{"propertyId":"p1","propertyName":"Beach House","category":"maintenance"}`
+	var meta hospitalityMeta
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	if meta.Status != "" {
+		t.Errorf("Status should be empty when not present in JSON, got %q", meta.Status)
+	}
+}

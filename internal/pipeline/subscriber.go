@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
@@ -331,7 +330,7 @@ func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstre
 		// Use UTF-8-safe truncation to avoid splitting multi-byte characters
 		// which would produce invalid UTF-8 in NATS headers (IMP-022-R29-003).
 		if len(lastError) > 256 {
-			lastError = truncateUTF8(lastError, 256)
+			lastError = stringutil.TruncateUTF8(lastError, 256)
 		}
 		headers.Set("Smackerel-Last-Error", lastError)
 	}
@@ -368,32 +367,12 @@ func (rs *ResultSubscriber) publishToDeadLetter(ctx context.Context, msg jetstre
 }
 
 // truncateBytes returns a string representation of data, truncated to maxLen bytes.
-// Uses UTF-8-safe truncation to avoid splitting multi-byte characters which would
-// produce invalid UTF-8 in structured log output (IMP-022-R29-003).
+// Delegates to stringutil.TruncateUTF8 for rune-safe truncation (IMP-022-R29-003).
 func truncateBytes(data []byte, maxLen int) string {
 	if len(data) <= maxLen {
 		return string(data)
 	}
-	// Walk backwards from maxLen to find a valid UTF-8 boundary
-	truncated := maxLen
-	for truncated > 0 && !utf8.RuneStart(data[truncated]) {
-		truncated--
-	}
-	return string(data[:truncated]) + "...(truncated)"
-}
-
-// truncateUTF8 truncates a string to at most maxBytes bytes without splitting
-// multi-byte UTF-8 rune boundaries.
-func truncateUTF8(s string, maxBytes int) string {
-	if len(s) <= maxBytes {
-		return s
-	}
-	// Walk backwards from maxBytes to find a valid UTF-8 rune boundary
-	truncated := maxBytes
-	for truncated > 0 && !utf8.RuneStart(s[truncated]) {
-		truncated--
-	}
-	return s[:truncated]
+	return stringutil.TruncateUTF8(string(data), maxLen) + "...(truncated)"
 }
 
 // maxSynthesisContentChars is the maximum character count for content_raw sent to the LLM.

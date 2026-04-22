@@ -107,7 +107,6 @@ func (s *ExpenseDigestSection) Assemble(ctx context.Context) (*ExpenseDigestCont
 	} else {
 		defer summaryRows.Close()
 		summary := &ExpenseDigestSummary{}
-		currTotals := make(map[string]float64)
 		for summaryRows.Next() {
 			var classification, currency, total string
 			var count int
@@ -121,11 +120,10 @@ func (s *ExpenseDigestSection) Assemble(ctx context.Context) (*ExpenseDigestCont
 			case "personal":
 				summary.PersonalCount += count
 			}
-			// We store total as string to avoid float issues in the digest
-			_ = currTotals // aggregated per currency for display
 		}
 		if summary.TotalCount > 0 {
-			// Query totals by currency
+			// Query totals by currency (separate GROUP BY without classification
+			// to get correct cross-classification sums per currency)
 			currRows, err := s.Pool.Query(ctx, `
 				SELECT
 					COALESCE(metadata->'expense'->>'currency', 'USD') AS currency,

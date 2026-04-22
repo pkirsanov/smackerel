@@ -179,3 +179,22 @@ func (e *Engine) MarkAlertDelivered(ctx context.Context, alertID string) error {
 	}
 	return nil
 }
+
+// HasStalePendingAlerts checks whether any alerts have been pending for longer
+// than the given threshold without delivery. This detects a broken delivery
+// pipeline: if alerts are being produced but not swept, something is wrong.
+func (e *Engine) HasStalePendingAlerts(ctx context.Context, threshold time.Duration) (bool, error) {
+	if e.Pool == nil {
+		return false, fmt.Errorf("alert staleness check requires a database connection")
+	}
+	var count int
+	err := e.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM alerts
+		WHERE status = 'pending'
+		  AND created_at < NOW() - MAKE_INTERVAL(secs => $1)
+	`, int(threshold.Seconds())).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("query stale pending alerts: %w", err)
+	}
+	return count > 0, nil
+}

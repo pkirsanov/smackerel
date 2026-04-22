@@ -49,6 +49,7 @@ type hospitalityMeta struct {
 	Category     string  `json:"category"`
 	Amount       float64 `json:"amount"`
 	Rating       string  `json:"rating"`
+	Status       string  `json:"status"`
 }
 
 // LinkArtifact creates hospitality-specific graph nodes and edges for a
@@ -117,7 +118,7 @@ func (l *HospitalityLinker) LinkArtifact(ctx context.Context, artifactID string)
 		edgesCreated += l.linkReview(ctx, artifactID, guestNode, propertyNode)
 
 	case "task":
-		edgesCreated += l.linkTask(ctx, artifactID, propertyNode)
+		edgesCreated += l.linkTask(ctx, artifactID, propertyNode, meta)
 
 	case "financial":
 		edgesCreated += l.linkExpense(ctx, artifactID, propertyNode, meta)
@@ -196,8 +197,9 @@ func (l *HospitalityLinker) linkReview(ctx context.Context, artifactID string, g
 	return count
 }
 
-// linkTask creates ISSUE_AT (artifact→property) edges and increments issue count.
-func (l *HospitalityLinker) linkTask(ctx context.Context, artifactID string, property *db.PropertyNode) int {
+// linkTask creates ISSUE_AT (artifact→property) edges and adjusts issue count.
+// IMP-013-IMP-002: completed tasks decrement instead of increment.
+func (l *HospitalityLinker) linkTask(ctx context.Context, artifactID string, property *db.PropertyNode, meta hospitalityMeta) int {
 	count := 0
 
 	if property != nil {
@@ -205,7 +207,11 @@ func (l *HospitalityLinker) linkTask(ctx context.Context, artifactID string, pro
 			count++
 		}
 
-		if err := l.propertyRepo.UpdateIssueCount(ctx, property.ID, 1); err != nil {
+		delta := 1
+		if meta.Status == "completed" {
+			delta = -1
+		}
+		if err := l.propertyRepo.UpdateIssueCount(ctx, property.ID, delta); err != nil {
 			slog.Warn("hospitality linker: update issue count failed", "property_id", property.ID, "error", err)
 		}
 	}
@@ -213,7 +219,8 @@ func (l *HospitalityLinker) linkTask(ctx context.Context, artifactID string, pro
 	return count
 }
 
-// linkExpense creates ISSUE_AT (artifact→property) edges for expenses.
+// linkExpense creates EXPENSE_AT (artifact→property) edges for expenses.
+// IMP-013-IMP-003: Use EXPENSE_AT instead of ISSUE_AT for semantic correctness.
 func (l *HospitalityLinker) linkExpense(ctx context.Context, artifactID string, property *db.PropertyNode, meta hospitalityMeta) int {
 	count := 0
 
@@ -224,7 +231,7 @@ func (l *HospitalityLinker) linkExpense(ctx context.Context, artifactID string, 
 			slog.Warn("hospitality linker: marshal expense metadata failed", "error", marshalErr)
 			metadataBytes = []byte("{}")
 		}
-		if err := l.createEdgeWithMetadata(ctx, "artifact", artifactID, "property", property.ID, "ISSUE_AT", 0.7, string(metadataBytes)); err == nil {
+		if err := l.createEdgeWithMetadata(ctx, "artifact", artifactID, "property", property.ID, "EXPENSE_AT", 0.7, string(metadataBytes)); err == nil {
 			count++
 		}
 	}

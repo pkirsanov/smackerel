@@ -244,6 +244,17 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				services["intelligence"] = ServiceStatus{Status: "up"}
 			}
+
+			// Alert delivery pipeline freshness: pending alerts older than 30 minutes
+			// indicate the delivery sweep is not running (2 missed sweep cycles).
+			staleAlerts, err := d.IntelligenceEngine.HasStalePendingAlerts(ctx, 30*time.Minute)
+			if err != nil {
+				slog.Warn("alert delivery freshness check failed", "error", err)
+			} else if staleAlerts {
+				services["alert_delivery"] = ServiceStatus{Status: "stale"}
+			} else {
+				services["alert_delivery"] = ServiceStatus{Status: "up"}
+			}
 		}
 	}
 

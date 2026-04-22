@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // AlertTypeIcons maps alert types to emoji icons for Telegram formatting.
@@ -408,6 +410,7 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		if err := s.bot.SendAlertMessage(msg); err != nil {
 			slog.Warn("alert delivery failed, will retry next sweep",
 				"alert_id", a.ID, "error", err)
+			metrics.AlertDeliveryFailures.Inc()
 			failed++
 			continue
 		}
@@ -419,11 +422,13 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		if err := s.engine.MarkAlertDelivered(markCtx, a.ID); err != nil {
 			markCancel()
 			slog.Warn("failed to mark alert delivered", "alert_id", a.ID, "error", err)
+			metrics.AlertDeliveryFailures.Inc()
 			failed++
 			continue
 		}
 		markCancel()
 
+		metrics.AlertsDelivered.WithLabelValues(string(a.AlertType)).Inc()
 		delivered++
 		slog.Info("alert delivered", "alert_id", a.ID, "type", a.AlertType, "title", a.Title)
 	}

@@ -69,7 +69,9 @@ func (h *ListHandlers) CreateListHandler(w http.ResponseWriter, r *http.Request)
 	result, err := h.Generator.Generate(r.Context(), genReq)
 	if err != nil {
 		slog.Error("failed to generate list", "error", err)
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
