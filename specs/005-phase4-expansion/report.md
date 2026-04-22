@@ -2,6 +2,35 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Stabilize Pass (Stochastic Sweep — stabilize trigger)
+
+### Findings
+
+| ID | Finding | Severity | Fix |
+|----|---------|----------|-----|
+| STAB-F1 | Maps connector `Sync()` defer unconditionally overwrites health, undoing `Close()` during in-flight sync — browser connector already had the guard (IMP-010-I2), maps was missing it | Medium | Added `HealthDisconnected` check in Sync defer to preserve Close state |
+| STAB-F2 | Maps connector `Sync()` lacks panic recovery — browser connector has `recover()` (IMP-010-I1), maps was missing it, leaving health stuck on HealthSyncing after panic | Medium | Added deferred `recover()` with error return and health reset |
+
+### Files Changed
+- `internal/connector/maps/connector.go` — Added panic recovery (STAB-F2) and Close-during-Sync guard (STAB-F1) matching browser connector patterns
+- `internal/connector/maps/chaos_test.go` — Added `TestStabilize_CloseDuringSyncPreservesDisconnected` (STAB-F1) and `TestStabilize_SyncPanicRecovery` (STAB-F2)
+
+### Test Evidence
+```
+$ ./smackerel.sh build
+ ✔ smackerel-core  Built
+ ✔ smackerel-ml    Built
+
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/maps  0.181s
+257 passed (Python). All 41 Go packages pass. Exit code: 0.
+
+$ ./smackerel.sh lint
+All checks passed!
+```
+
+---
+
 ## Improve Pass (Stochastic Sweep — improve trigger)
 
 ### Findings

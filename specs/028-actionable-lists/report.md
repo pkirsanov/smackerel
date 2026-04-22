@@ -204,3 +204,51 @@ The `ListHandlers` struct existed in `internal/api/lists.go`, the routes were re
 ./smackerel.sh test unit  → all Go packages pass (api 1.788s, list 0.011s re-run), 257 Python passed
 ./smackerel.sh lint       → All checks passed!
 ```
+
+---
+
+## Test-to-Doc Sweep (R54 — 2026-04-22)
+
+**Trigger:** stochastic-quality-sweep child workflow, test coverage probe.
+
+### Coverage Probe Method
+
+Systematic mapping of all 34 Gherkin scenarios across 8 scopes to their corresponding unit tests. Verified each scenario has at least one test that exercises the specified behavior with assertions against the Gherkin postconditions.
+
+### Findings Identified
+
+| # | Finding | Scope | Severity | Disposition |
+|---|---------|-------|----------|-------------|
+| T1 | No test for `handleListGenerate` Telegram code path — Gherkin "Generate shopping list via Telegram" ("/list shopping from #weeknight") untested at handler level | 7 | High | Fixed |
+| T2 | No happy-path test for `CreateListHandler` — only error paths (MissingTitle, NoSources, InvalidJSON) tested; success path (POST /api/lists → 201 with aggregated items) had no handler-level test | 6 | Medium | Fixed |
+| T3 | No test for invalid list type via Telegram — `parseListCommand` returns empty for unknown types but the handler error path was untested | 7 | Low | Fixed |
+
+### Tests Added
+
+**`internal/telegram/list_test.go`:**
+- `TestHandleList_GenerateShoppingList` — Gherkin "Generate shopping list via Telegram": exercises `handleListGenerate` via `handleList("shopping from #weeknight")`, mock API server returns 3-item shopping list, asserts list title, ingredient names ("garlic", "chicken") appear in formatted reply
+- `TestHandleList_GenerateInvalidType` — verifies unknown list type produces usage message
+
+**`internal/api/lists_test.go`:**
+- `TestCreateListHandler_Success` — Gherkin "Create shopping list via API": wires `ListHandlers` with a real `Generator` (mock resolver, mock store, real `RecipeAggregator`), POSTs `{"list_type":"shopping","title":"Weekend Groceries","artifact_ids":["a1","a2"]}` where a1 has 2 cloves garlic and a2 has 3 cloves garlic + 1 cup flour, asserts 201 response with correct title, type, draft status, and 2 items (garlic merged, flour separate)
+- `mockAPIArtifactResolver` — test helper implementing `list.ArtifactResolver`
+
+### Final Coverage Matrix (All 8 Scopes)
+
+| Scope | Gherkin Scenarios | Tests | Status |
+|-------|------------------|-------|--------|
+| 1 — DB Migration & List Types | 2 | 5 (types_test.go) | Full |
+| 2 — List Store (CRUD) | 6 | Covered via mock store in generator/API tests + integration tests | Full |
+| 3 — Recipe Aggregator | 6 | 15 (recipe_aggregator_test.go, quantity_test.go) | Full |
+| 4 — Reading & Comparison | 3 | 9 (reading_aggregator_test.go) | Full |
+| 5 — List Generator | 4 | 10 (generator_test.go) | Full |
+| 6 — REST API Endpoints | 6 | 17 (lists_test.go) | Full |
+| 7 — Telegram /list Command | 5 | 10 (list_test.go) | Full |
+| 8 — Intelligence Integration | 2 | 7 (lists_test.go) | Full |
+
+### Verification
+
+```
+./smackerel.sh test unit  → all Go packages pass (api 1.780s, telegram 24.940s re-run), 257 Python passed
+./smackerel.sh lint       → All checks passed!
+```

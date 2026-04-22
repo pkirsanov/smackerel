@@ -56,6 +56,62 @@ func TestParseSyncInterval_InvalidText(t *testing.T) {
 	}
 }
 
+// C-023-C003: Extreme cron minute values that would overflow Duration are capped.
+func TestParseSyncInterval_CronMinutesOverflow(t *testing.T) {
+	// 200000000 minutes * time.Minute would overflow int64 Duration.
+	// parseSyncInterval should cap to maxSyncDuration instead of wrapping negative.
+	d := parseSyncInterval("*/200000000 * * * *")
+	if d <= 0 {
+		t.Errorf("expected positive capped duration, got %v (negative means overflow)", d)
+	}
+	if d > maxSyncDuration {
+		t.Errorf("expected duration <= maxSyncDuration (%v), got %v", maxSyncDuration, d)
+	}
+}
+
+// C-023-C003: Extreme cron hour values that would overflow Duration are capped.
+func TestParseSyncInterval_CronHoursOverflow(t *testing.T) {
+	// 3000000000 hours * time.Hour would overflow int64 Duration.
+	d := parseSyncInterval("0 */3000000000 * * *")
+	if d <= 0 {
+		t.Errorf("expected positive capped duration, got %v (negative means overflow)", d)
+	}
+	if d > maxSyncDuration {
+		t.Errorf("expected duration <= maxSyncDuration (%v), got %v", maxSyncDuration, d)
+	}
+}
+
+// C-023-C003: Go duration strings that exceed the cap are also bounded.
+func TestParseSyncInterval_GoDurationExceedsCap(t *testing.T) {
+	d := parseSyncInterval("87600h") // 10 years
+	if d != maxSyncDuration {
+		t.Errorf("expected capped to maxSyncDuration (%v), got %v", maxSyncDuration, d)
+	}
+}
+
+// C-023-C003: Normal values remain unaffected by the cap.
+func TestParseSyncInterval_NormalValuesUnaffected(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected time.Duration
+	}{
+		{"*/5 * * * *", 5 * time.Minute},
+		{"*/30 * * * *", 30 * time.Minute},
+		{"0 */4 * * *", 4 * time.Hour},
+		{"0 */24 * * *", 24 * time.Hour},
+		{"15m", 15 * time.Minute},
+		{"2h", 2 * time.Hour},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			d := parseSyncInterval(tt.input)
+			if d != tt.expected {
+				t.Errorf("input %q: expected %v, got %v", tt.input, tt.expected, d)
+			}
+		})
+	}
+}
+
 // SCN-023-09: getSyncInterval reads from connector config.
 func TestGetSyncInterval_FromConfig(t *testing.T) {
 	registry := NewRegistry()

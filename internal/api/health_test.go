@@ -1609,3 +1609,114 @@ func TestChaos_ConcurrentHealthWithSlowKnowledgeStore(t *testing.T) {
 		t.Errorf("concurrent health checks took %v — likely serialised on knowledge health mutex (expected <3s)", elapsed)
 	}
 }
+
+// === C-023-C002: ReadyzHandler must set Content-Type application/json ===
+
+func TestReadyzHandler_ContentType(t *testing.T) {
+	deps := &Dependencies{
+		DB: &mockDB{healthy: true},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	deps.ReadyzHandler(rec, req)
+
+	ct := rec.Header().Get("Content-Type")
+	if ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", ct)
+	}
+}
+
+// === C-023-C005: ReadyzHandler unit test coverage ===
+
+func TestReadyzHandler_DBHealthy(t *testing.T) {
+	deps := &Dependencies{
+		DB: &mockDB{healthy: true},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	deps.ReadyzHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 when DB healthy, got %d", rec.Code)
+	}
+	if body := rec.Body.String(); body != `{"ready":true}` {
+		t.Errorf("expected {\"ready\":true}, got %s", body)
+	}
+}
+
+func TestReadyzHandler_DBDown(t *testing.T) {
+	deps := &Dependencies{
+		DB: &mockDB{healthy: false},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	deps.ReadyzHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when DB unhealthy, got %d", rec.Code)
+	}
+	if body := rec.Body.String(); body != `{"ready":false}` {
+		t.Errorf("expected {\"ready\":false}, got %s", body)
+	}
+}
+
+func TestReadyzHandler_NilDB(t *testing.T) {
+	deps := &Dependencies{
+		DB: nil,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	deps.ReadyzHandler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when DB is nil, got %d", rec.Code)
+	}
+	ct := rec.Header().Get("Content-Type")
+	if ct != "application/json" {
+		t.Errorf("expected Content-Type application/json even on failure, got %q", ct)
+	}
+}
+
+// === C-023-C004: structuredLogger excludes /readyz and /metrics ===
+
+func TestStructuredLogger_ReadyzExcluded(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	slog.SetDefault(logger)
+	defer slog.SetDefault(slog.Default())
+
+	handler := structuredLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if buf.Len() > 0 {
+		t.Error("expected no log output for /readyz, but got log output")
+	}
+}
+
+func TestStructuredLogger_MetricsExcluded(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	slog.SetDefault(logger)
+	defer slog.SetDefault(slog.Default())
+
+	handler := structuredLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if buf.Len() > 0 {
+		t.Error("expected no log output for /metrics, but got log output")
+	}
+}

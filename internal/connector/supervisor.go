@@ -384,6 +384,16 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 // defaultSyncInterval is used when no per-connector schedule is configured.
 const defaultSyncInterval = 5 * time.Minute
 
+// maxSyncDuration is the ceiling for parsed sync intervals to prevent
+// Duration overflow from extreme cron values (C-023-C003).
+const maxSyncDuration = 720 * time.Hour // 30 days
+
+// maxSyncMinutes is the pre-multiplication cap for cron minute values.
+const maxSyncMinutes = 43200 // 30 days in minutes
+
+// maxSyncHours is the pre-multiplication cap for cron hour values.
+const maxSyncHours = 720 // 30 days in hours
+
 // getSyncInterval returns the sync interval for a connector from its config.
 // Falls back to defaultSyncInterval when no schedule is configured.
 func (s *Supervisor) getSyncInterval(id string) time.Duration {
@@ -421,9 +431,15 @@ func (s *Supervisor) getSyncInterval(id string) time.Duration {
 //   - Go duration: "30m", "4h", "1h30m"
 //   - Cron minutes: "*/30 * * * *" → 30 minutes
 //   - Cron hours: "0 */4 * * *" → 4 hours
+//
+// Parsed values are capped at maxSyncDuration to prevent Duration overflow
+// from extreme config values (C-023-C003).
 func parseSyncInterval(s string) time.Duration {
 	// Try Go duration first
 	if d, err := time.ParseDuration(s); err == nil && d > 0 {
+		if d > maxSyncDuration {
+			return maxSyncDuration
+		}
 		return d
 	}
 
@@ -436,14 +452,22 @@ func parseSyncInterval(s string) time.Duration {
 	// Pattern: */N * * * * → every N minutes
 	if strings.HasPrefix(fields[0], "*/") && fields[1] == "*" && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
 		if n, err := strconv.Atoi(fields[0][2:]); err == nil && n > 0 {
-			return time.Duration(n) * time.Minute
+			d := time.Duration(n) * time.Minute
+			if n > maxSyncMinutes || d <= 0 {
+				return maxSyncDuration
+			}
+			return d
 		}
 	}
 
 	// Pattern: 0 */N * * * → every N hours
 	if fields[0] == "0" && strings.HasPrefix(fields[1], "*/") && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
 		if n, err := strconv.Atoi(fields[1][2:]); err == nil && n > 0 {
-			return time.Duration(n) * time.Hour
+			d := time.Duration(n) * time.Hour
+			if n > maxSyncHours || d <= 0 {
+				return maxSyncDuration
+			}
+			return d
 		}
 	}
 
