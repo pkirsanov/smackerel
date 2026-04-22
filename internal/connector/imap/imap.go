@@ -505,12 +505,12 @@ func AssignTier(from string, labels []string, qualifiers QualifierConfig) string
 		}
 	}
 
-	// Check skip labels
+	// Check skip labels — skip-labeled emails create no artifact (SCN-003-008)
 	for _, l := range labels {
 		ll := strings.ToLower(l)
 		for _, sl := range qualifiers.SkipLabels {
 			if ll == strings.ToLower(sl) {
-				return "metadata"
+				return "skip"
 			}
 		}
 	}

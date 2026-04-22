@@ -61,7 +61,18 @@ func CalculateMomentum(captures30d, captures90d, searchHits30d, starCount, conne
 // TransitionState determines the next state based on momentum score per R-208.
 // Hot: momentum > 50, Active: momentum >= 10, Cooling: previously active but declining,
 // Dormant: momentum < 1 for cooling/emerging states.
+// Archived topics with new captures (momentum > 0) resurrect via normal state machine (R-208).
 func TransitionState(current State, momentum float64) State {
+	// R-208: Archived → Active/Hot/Emerging: new capture or user resurfaces.
+	// Route through normal state machine when momentum recovers.
+	if current == StateArchived {
+		if momentum <= 0 {
+			return StateArchived
+		}
+		// Resurrect: use Emerging as the "previous" state for the normal machine
+		current = StateEmerging
+	}
+
 	switch {
 	case momentum > 50.0:
 		return StateHot
@@ -114,7 +125,6 @@ func (l *Lifecycle) UpdateAllMomentum(ctx context.Context) error {
 		                  OR dst_type = 'topic' AND dst_id = t.id), 0)::int,
 		       EXTRACT(DAY FROM NOW() - COALESCE(t.last_active, t.created_at))::int
 		FROM topics t
-		WHERE t.state != 'archived'
 	`)
 	if err != nil {
 		return fmt.Errorf("query topics: %w", err)

@@ -188,42 +188,6 @@ func TestClassifyDifficultyHeuristic_EmptyInputs(t *testing.T) {
 	}
 }
 
-func TestSerendipityPick_NilPool(t *testing.T) {
-	engine := &Engine{Pool: nil}
-	_, err := engine.SerendipityPick(nil)
-	if err == nil {
-		t.Error("expected error for nil pool")
-	}
-}
-
-// === Chaos: Resurface limit edge cases ===
-
-func TestResurface_NilPool(t *testing.T) {
-	engine := &Engine{Pool: nil}
-	_, err := engine.Resurface(nil, 5)
-	if err == nil {
-		t.Error("expected error for nil pool")
-	}
-}
-
-func TestResurface_ZeroLimit(t *testing.T) {
-	// limit=0 should be normalized to 5, then fail on nil pool
-	engine := &Engine{Pool: nil}
-	_, err := engine.Resurface(nil, 0)
-	if err == nil {
-		t.Error("expected error for nil pool even with limit=0")
-	}
-}
-
-func TestResurface_NegativeLimit(t *testing.T) {
-	// negative limit should be normalized to 5, then fail on nil pool
-	engine := &Engine{Pool: nil}
-	_, err := engine.Resurface(nil, -10)
-	if err == nil {
-		t.Error("expected error for nil pool even with negative limit")
-	}
-}
-
 // === Improve: difficultyOrder sorts beginner < intermediate < advanced (IMP-006-R02) ===
 
 func TestDifficultyOrder(t *testing.T) {

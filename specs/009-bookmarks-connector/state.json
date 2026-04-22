@@ -9,14 +9,36 @@
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-09T00:00:00Z",
-    "completedScopes": ["scope-01", "scope-02"],
-    "completedPhaseClaims": ["analyze", "bootstrap", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"],
+    "completedScopes": [
+      "scope-01",
+      "scope-02"
+    ],
+    "completedPhaseClaims": [
+      "analyze",
+      "bootstrap",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "chaos",
+      "docs",
+      "spec-review"
+    ],
     "pendingTransitionRequests": []
   },
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:00:00Z",
@@ -25,7 +47,9 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:10:00Z",
@@ -34,16 +58,20 @@
     },
     {
       "agent": "bubbles.plan",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:20:00Z",
       "completedAt": "2026-04-09T00:30:00Z",
-      "summary": "Created scopes.md: 2-scope plan — Scope 1: Connector Implementation, Config & Registration; Scope 2: URL Dedup, Folder-to-Topic Mapping & Integration"
+      "summary": "Created scopes.md: 2-scope plan \u2014 Scope 1: Connector Implementation, Config & Registration; Scope 2: URL Dedup, Folder-to-Topic Mapping & Integration"
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:30:00Z",
@@ -52,16 +80,20 @@
     },
     {
       "agent": "bubbles.test",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:50:00Z",
       "completedAt": "2026-04-09T01:00:00Z",
-      "summary": "All 26 unit tests pass across 3 test files (connector_test.go: 15 tests, dedup_test.go: 8 tests, topics_test.go: 3 tests). ./smackerel.sh test unit — bookmarks package ok 0.083s."
+      "summary": "All 26 unit tests pass across 3 test files (connector_test.go: 15 tests, dedup_test.go: 8 tests, topics_test.go: 3 tests). ./smackerel.sh test unit \u2014 bookmarks package ok 0.083s."
     },
     {
       "agent": "bubbles.regression",
-      "phasesExecuted": ["regression"],
+      "phasesExecuted": [
+        "regression"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:00:00Z",
@@ -70,7 +102,9 @@
     },
     {
       "agent": "bubbles.simplify",
-      "phasesExecuted": ["simplify"],
+      "phasesExecuted": [
+        "simplify"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:10:00Z",
@@ -79,7 +113,9 @@
     },
     {
       "agent": "bubbles.gaps",
-      "phasesExecuted": ["gaps"],
+      "phasesExecuted": [
+        "gaps"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:15:00Z",
@@ -88,7 +124,9 @@
     },
     {
       "agent": "bubbles.harden",
-      "phasesExecuted": ["harden"],
+      "phasesExecuted": [
+        "harden"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:20:00Z",
@@ -97,43 +135,53 @@
     },
     {
       "agent": "bubbles.stabilize",
-      "phasesExecuted": ["stabilize"],
+      "phasesExecuted": [
+        "stabilize"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:25:00Z",
       "completedAt": "2026-04-09T01:30:00Z",
-      "summary": "Stabilization pass completed. All tests deterministic — no flaky failures. No time-dependent assertions. No external network calls in unit tests. Temp dirs cleaned up via t.TempDir()."
+      "summary": "Stabilization pass completed. All tests deterministic \u2014 no flaky failures. No time-dependent assertions. No external network calls in unit tests. Temp dirs cleaned up via t.TempDir()."
     },
     {
       "agent": "bubbles.security",
-      "phasesExecuted": ["security"],
+      "phasesExecuted": [
+        "security"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:30:00Z",
       "completedAt": "2026-04-09T01:35:00Z",
-      "summary": "Security review complete. Import directory validation prevents path traversal. Config uses SST pipeline — no hardcoded values. URL normalization strips tracking params without executing them. No SQL injection vectors (dedup/topics use parameterized queries)."
+      "summary": "Security review complete. Import directory validation prevents path traversal. Config uses SST pipeline \u2014 no hardcoded values. URL normalization strips tracking params without executing them. No SQL injection vectors (dedup/topics use parameterized queries)."
     },
     {
       "agent": "bubbles.validate",
-      "phasesExecuted": ["validate"],
+      "phasesExecuted": [
+        "validate"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:35:00Z",
       "completedAt": "2026-04-09T01:40:00Z",
-      "summary": "Validation complete. ./smackerel.sh test unit — all 25 packages pass. ./smackerel.sh lint — exit 0. ./smackerel.sh check — config in sync. Both scopes Done with all DoD items verified."
+      "summary": "Validation complete. ./smackerel.sh test unit \u2014 all 25 packages pass. ./smackerel.sh lint \u2014 exit 0. ./smackerel.sh check \u2014 config in sync. Both scopes Done with all DoD items verified."
     },
     {
       "agent": "bubbles.audit",
-      "phasesExecuted": ["audit"],
+      "phasesExecuted": [
+        "audit"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:40:00Z",
       "completedAt": "2026-04-09T01:45:00Z",
-      "summary": "Audit pass completed. Code follows existing connector patterns (Keep, Browser, Maps). No config SST violations. NATS contract not modified. No new migrations — uses existing tables. Docker Compose has bookmarks volume mount and env var."
+      "summary": "Audit pass completed. Code follows existing connector patterns (Keep, Browser, Maps). No config SST violations. NATS contract not modified. No new migrations \u2014 uses existing tables. Docker Compose has bookmarks volume mount and env var."
     },
     {
       "agent": "bubbles.chaos",
-      "phasesExecuted": ["chaos"],
+      "phasesExecuted": [
+        "chaos"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:45:00Z",
@@ -142,34 +190,45 @@
     },
     {
       "agent": "bubbles.chaos",
-      "phasesExecuted": ["chaos"],
+      "phasesExecuted": [
+        "chaos"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-13T00:00:00Z",
       "completedAt": "2026-04-13T00:30:00Z",
-      "summary": "Chaos R16 probe. Found and fixed: F-CHAOS-C16-001 (health state corruption on Sync() early exit before dedup — sync counters not flushed to struct before return), F-CHAOS-C16-002 (zero-bookmark files consumed silently without warning log). Added 4 adversarial regression tests: TestChaosC16_CancelledSyncWithDedupHealthError, TestChaosC16_CancelledDuringFileLoopWithDedup, TestChaosC16_NonBookmarkHTMLZeroArtifacts, TestChaosC16_PartialSuccessWithDedupHealthy. All 34+ bookmarks tests pass. Lint passes."
+      "summary": "Chaos R16 probe. Found and fixed: F-CHAOS-C16-001 (health state corruption on Sync() early exit before dedup \u2014 sync counters not flushed to struct before return), F-CHAOS-C16-002 (zero-bookmark files consumed silently without warning log). Added 4 adversarial regression tests: TestChaosC16_CancelledSyncWithDedupHealthError, TestChaosC16_CancelledDuringFileLoopWithDedup, TestChaosC16_NonBookmarkHTMLZeroArtifacts, TestChaosC16_PartialSuccessWithDedupHealthy. All 34+ bookmarks tests pass. Lint passes."
     },
     {
       "agent": "bubbles.chaos",
-      "phasesExecuted": ["chaos"],
+      "phasesExecuted": [
+        "chaos"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-14T00:00:00Z",
       "completedAt": "2026-04-14T00:30:00Z",
-      "summary": "Chaos R24 probe. Found and fixed 3 findings: R24-001 (Sync reads c.config without lock — data race with concurrent Connect; snapshot cfg := c.config under lock, aligned with maps/browser/markets/alerts pattern), R24-002 (NormalizeURL preserves userinfo — credential leak into SourceRef/DB; u.User = nil, CWE-522), R24-003 (Chrome date_added uncapped far-future timestamps; added maxReasonableUnixSec year-2100 ceiling). Added 8 adversarial regression tests. All bookmarks tests pass. Lint passes."
+      "summary": "Chaos R24 probe. Found and fixed 3 findings: R24-001 (Sync reads c.config without lock \u2014 data race with concurrent Connect; snapshot cfg := c.config under lock, aligned with maps/browser/markets/alerts pattern), R24-002 (NormalizeURL preserves userinfo \u2014 credential leak into SourceRef/DB; u.User = nil, CWE-522), R24-003 (Chrome date_added uncapped far-future timestamps; added maxReasonableUnixSec year-2100 ceiling). Added 8 adversarial regression tests. All bookmarks tests pass. Lint passes."
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["analyze", "implement", "test", "docs"],
+      "phasesExecuted": [
+        "analyze",
+        "implement",
+        "test",
+        "docs"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-14T22:00:00Z",
       "completedAt": "2026-04-14T22:30:00Z",
-      "summary": "Improve-existing sweep (stochastic-quality-sweep child). Found and fixed 2 findings: IMP-009-R-001 (ParseNetscapeHTML flat folder tracking lost nested hierarchy — replaced with stack-based DL/H3 tracking), IMP-009-R-002 (NormalizeURL missing www. prefix stripping — added 4-char prefix strip after host lowercasing). Added 8 adversarial regression tests across bookmarks_test.go and dedup_test.go. All 33 Go packages pass. Lint passes."
+      "summary": "Improve-existing sweep (stochastic-quality-sweep child). Found and fixed 2 findings: IMP-009-R-001 (ParseNetscapeHTML flat folder tracking lost nested hierarchy \u2014 replaced with stack-based DL/H3 tracking), IMP-009-R-002 (NormalizeURL missing www. prefix stripping \u2014 added 4-char prefix strip after host lowercasing). Added 8 adversarial regression tests across bookmarks_test.go and dedup_test.go. All 33 Go packages pass. Lint passes."
     },
     {
       "agent": "bubbles.docs",
-      "phasesExecuted": ["docs"],
+      "phasesExecuted": [
+        "docs"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:50:00Z",
@@ -178,7 +237,9 @@
     },
     {
       "agent": "bubbles.spec-review",
-      "phasesExecuted": ["spec-review"],
+      "phasesExecuted": [
+        "spec-review"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:55:00Z",
@@ -187,7 +248,9 @@
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["finalize"],
+      "phasesExecuted": [
+        "finalize"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "done",
       "startedAt": "2026-04-09T02:00:00Z",
@@ -196,34 +259,109 @@
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["gaps", "implement", "test", "docs"],
+      "phasesExecuted": [
+        "gaps",
+        "implement",
+        "test",
+        "docs"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-22T00:00:00Z",
       "completedAt": "2026-04-22T00:30:00Z",
-      "summary": "Gaps R2 sweep (stochastic-quality-sweep child). Revisited deferred GAP-004 from prior sweep. Found and fixed 3 findings: GAP-R2-001 (Health() never re-validates import dir existence post-Connect — added active os.Stat check), GAP-R2-002 (pendingFiles field missing from struct — added field and populated in findNewFiles), GAP-R2-003 (content_fetched metadata missing — added initial false value per R-006). Added 5 adversarial regression tests. All Go packages pass, 257 Python tests pass. Lint/check clean."
+      "summary": "Gaps R2 sweep (stochastic-quality-sweep child). Revisited deferred GAP-004 from prior sweep. Found and fixed 3 findings: GAP-R2-001 (Health() never re-validates import dir existence post-Connect \u2014 added active os.Stat check), GAP-R2-002 (pendingFiles field missing from struct \u2014 added field and populated in findNewFiles), GAP-R2-003 (content_fetched metadata missing \u2014 added initial false value per R-006). Added 5 adversarial regression tests. All Go packages pass, 257 Python tests pass. Lint/check clean."
     }
   ],
   "policySnapshot": {
-    "grill": { "mode": "off", "source": "repo-default" },
-    "tdd": { "mode": "scenario-first", "source": "repo-default" },
-    "autoCommit": { "mode": "off", "source": "repo-default" },
-    "lockdown": { "mode": "active", "source": "delivery-lockdown" },
-    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
-    "validation": { "mode": "certification-required", "source": "repo-default" }
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "active",
+      "source": "delivery-lockdown"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-09T02:05:00Z",
   "certification": {
-    "status": "certified",
-    "completedScopes": ["scope-01", "scope-02"],
-    "certifiedCompletedPhases": ["analyze", "bootstrap", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"],
-    "scopeProgress": [
-      { "scope": 1, "name": "Connector Implementation, Config & Registration", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:40:00Z" },
-      { "scope": 2, "name": "URL Dedup, Folder-to-Topic Mapping & Integration", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:40:00Z" }
+    "status": "done",
+    "completedScopes": [
+      "scope-01",
+      "scope-02"
     ],
-    "lockdownState": { "active": true, "lockedScenarioIds": ["SCN-BK-001", "SCN-BK-002", "SCN-BK-003", "SCN-BK-004", "SCN-BK-005", "SCN-BK-006", "SCN-BK-007", "SCN-BK-008", "SCN-BK-009", "SCN-BK-010"] }
+    "certifiedCompletedPhases": [
+      "analyze",
+      "bootstrap",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "chaos",
+      "docs",
+      "spec-review"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Connector Implementation, Config & Registration",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:40:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "URL Dedup, Folder-to-Topic Mapping & Integration",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:40:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": true,
+      "lockedScenarioIds": [
+        "SCN-BK-001",
+        "SCN-BK-002",
+        "SCN-BK-003",
+        "SCN-BK-004",
+        "SCN-BK-005",
+        "SCN-BK-006",
+        "SCN-BK-007",
+        "SCN-BK-008",
+        "SCN-BK-009",
+        "SCN-BK-010"
+      ]
+    }
   }
 }

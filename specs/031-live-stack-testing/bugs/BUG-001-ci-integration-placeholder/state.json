@@ -7,7 +7,13 @@
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
-    "completedPhaseClaims": ["planning", "implement", "test", "validate", "finalize"],
+    "completedPhaseClaims": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "finalize"
+    ],
     "runStartedAt": "2026-04-19T00:00:00Z",
     "executionHistory": [
       {
@@ -48,9 +54,17 @@
     ]
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": ["scope-1"],
-    "certifiedCompletedPhases": ["planning", "implement", "test", "validate", "finalize"],
+    "status": "done",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "finalize"
+    ],
     "scopeProgress": {
       "scope-1": "Done"
     }

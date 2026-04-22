@@ -32,7 +32,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       1,
       2,
@@ -88,7 +88,9 @@
         "scope": 7,
         "name": "GHCR Image Push on Tagged Releases",
         "status": "Done",
-        "dependsOn": [6]
+        "dependsOn": [
+          6
+        ]
       }
     ],
     "lockdownState": {

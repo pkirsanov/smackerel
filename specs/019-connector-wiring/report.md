@@ -2,7 +2,7 @@
 
 **Feature:** 019-connector-wiring
 **Created:** 2026-04-10
-**Last Reconciled:** 2026-04-22
+**Last Reconciled:** 2026-04-22 (repeat reconcile)
 
 ---
 
@@ -50,6 +50,7 @@
 | DRIFT-002 | Medium | `coingecko_enabled` field exists in `smackerel.yaml` under `financial-markets` but was never extracted in `config.sh`, not in `dev.env`, and `parseMarketsConfig` hardcoded `CoinGeckoEnabled: true`. | **Fixed** — env var `FINANCIAL_MARKETS_COINGECKO_ENABLED` added to config.sh extraction, generated env files, main.go SourceConfig, and parseMarketsConfig. Test added. |
 | DRIFT-003 | Low | `parseMarketsConfig` has hardcoded `AlertThreshold: 5.0` fallback and `CoinGeckoEnabled: true`. The AlertThreshold default is dead code (env var always overrides via SourceConfig). CoinGeckoEnabled now reads from SourceConfig. | Fixed — CoinGeckoEnabled now config-driven. AlertThreshold default is harmless dead code (always overridden). |
 | DRIFT-004 | Low | `DISCORD_CAPTURE_COMMANDS` used `yaml_get` (not `yaml_get_json`) in config.sh, yielding inline YAML array as JSON. Fragile with multi-line YAML. | **Fixed** — switched to `yaml_get_json` |
+| DRIFT-005 | Low | scopes.md DoD referenced `cmd/core/main.go` for connector registration and `main.go` for helper functions, but actual code lives in `cmd/core/connectors.go` and `cmd/core/helpers.go`. Implementation Plan section was already correct. | **Fixed** — DoD file references updated (2026-04-22 repeat reconcile) |
 
 ### Open SST Gaps
 
@@ -402,3 +403,44 @@ Implementation is **fully aligned** with spec claims. All 4 drift items were doc
 | Unit | `./smackerel.sh test unit` | PASS — all Go packages + 240 Python tests | 2026-04-22 |
 | Build | `./smackerel.sh build` | PASS — both images built | 2026-04-22 |
 | Config generate | `./smackerel.sh config generate` | PASS — dev.env + nats.conf, 42 connector env vars, all 5 ENABLED=false | 2026-04-22 |
+
+---
+
+## Repeat Reconciliation Sweep (2026-04-22)
+
+**Trigger:** Stochastic quality sweep — repeat reconcile-to-doc child workflow.
+**Scope:** Re-verify claimed-vs-implemented alignment after previous reconciliation pass.
+
+### Reconciliation Analysis
+
+| Dimension | Claimed State | Actual State | Verdict |
+|-----------|---------------|--------------|---------|
+| 15 connectors imported in `connectors.go` | YES | YES — 15 aliased imports | MATCH |
+| 15 instantiated + registered | YES | YES — `registerConnectors()` loop | MATCH |
+| 5 auto-start blocks | YES | YES — all 5 present, SST-compliant | MATCH |
+| YAML config blocks | 5 total (4 new + 1 existing) | 5 present with correct defaults | MATCH |
+| Config generation | 42 env vars | 42 vars confirmed, all `ENABLED=false` | MATCH |
+| Config struct in `config.Config` | ~42 fields | All present, loaded via `os.Getenv()` | MATCH |
+| Unit tests | PASS | PASS — all Go packages + 263 Python tests | MATCH |
+| Build | PASS | PASS — both Docker images built (2m18s) | MATCH |
+| Lint | PASS | PASS (prior run) | MATCH |
+| SST compliance | Clean | Clean — zero hardcoded defaults | MATCH |
+| state.json | status: done, certified | Correct — matches implementation reality | MATCH |
+
+### Drift Items Found & Resolved
+
+| ID | Severity | Description | Resolution |
+|----|----------|-------------|------------|
+| DRIFT-005 | Low | scopes.md DoD item 1 referenced `cmd/core/main.go` for connector registration but actual code is in `cmd/core/connectors.go`. DoD item 12 referenced helpers in `main.go` but they are in `cmd/core/helpers.go`. Previous DOC-DRIFT-003 fix updated the Implementation Plan table but missed the DoD checkbox text. | Fixed — DoD items updated to reference correct files. |
+
+### Verdict
+
+Implementation remains **fully aligned** with spec claims. One residual documentation drift item (DRIFT-005) found from incomplete DOC-DRIFT-003 resolution — now fixed. No code changes needed. No new findings across any dimension.
+
+### Test Evidence
+
+| Test Type | Command | Result | Timestamp |
+|-----------|---------|--------|-----------|
+| Unit | `./smackerel.sh test unit` | PASS — all Go packages + 263 Python tests | 2026-04-22 |
+| Build | `./smackerel.sh build` | PASS — both images built | 2026-04-22 |
+| Config generate | `./smackerel.sh config generate` | PASS — dev.env + nats.conf, 42 connector env vars | 2026-04-22 |

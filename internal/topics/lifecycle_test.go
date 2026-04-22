@@ -168,6 +168,36 @@ func TestCalculateMomentum_HighDecay(t *testing.T) {
 	}
 }
 
+// R-208: Archived → Active resurrection when new captures exist
+func TestTransitionState_ArchivedResurrection(t *testing.T) {
+	got := TransitionState(StateArchived, 15.0)
+	if got != StateActive {
+		t.Errorf("expected archived to resurrect to active with momentum 15.0, got %s", got)
+	}
+}
+
+func TestTransitionState_ArchivedStaysArchived(t *testing.T) {
+	got := TransitionState(StateArchived, 0.0)
+	if got != StateArchived {
+		t.Errorf("expected archived to stay archived with zero momentum, got %s", got)
+	}
+}
+
+func TestTransitionState_ArchivedResurrection_MinimalMomentum(t *testing.T) {
+	// Minimal momentum (0.1) routes through Emerging→normal machine.
+	// momentum<1.0 means Emerging→Dormant, so resurrection requires meaningful activity.
+	got := TransitionState(StateArchived, 0.1)
+	if got != StateDormant {
+		t.Errorf("expected archived with minimal momentum to route to dormant, got %s", got)
+	}
+
+	// Moderate momentum (3.0) resurrects to Emerging
+	got2 := TransitionState(StateArchived, 3.0)
+	if got2 != StateEmerging {
+		t.Errorf("expected archived with momentum 3.0 to resurrect to emerging, got %s", got2)
+	}
+}
+
 func TestCalculateMomentum_StarsAndConnections(t *testing.T) {
 	cfg := DefaultMomentumConfig()
 

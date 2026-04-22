@@ -1,7 +1,7 @@
 {
   "version": 3,
   "featureDir": "specs/035-recipe-enhancements",
-  "featureName": "Recipe Enhancements — Serving Scaler & Cook Mode",
+  "featureName": "Recipe Enhancements \u2014 Serving Scaler & Cook Mode",
   "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
@@ -9,37 +9,139 @@
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-19T00:00:00Z",
-    "completedPhaseClaims": ["analyze", "design", "plan", "implement", "test", "validate"],
+    "completedPhaseClaims": [
+      "analyze",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "validate"
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": [1, 2, 3, 4, 5, 6],
-    "certifiedCompletedPhases": ["implement", "test", "validate"],
-    "scopeProgress": [
-      { "scope": 1, "name": "Config & Shared Recipe Package", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-19T00:00:00Z" },
-      { "scope": 2, "name": "Serving Scaler Core", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-19T00:00:00Z" },
-      { "scope": 3, "name": "Serving Scaler Telegram & API", "status": "Done", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-19T00:00:00Z" },
-      { "scope": 4, "name": "Cook Mode Session Store", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-19T00:00:00Z" },
-      { "scope": 5, "name": "Cook Mode Navigation", "status": "Done", "dependsOn": [3, 4], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-19T00:00:00Z" },
-      { "scope": 6, "name": "Cook Mode Edge Cases", "status": "Done", "dependsOn": [4, 5], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-19T00:00:00Z" }
+    "status": "done",
+    "completedScopes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
     ],
-    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "validate"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Config & Shared Recipe Package",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-19T00:00:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "Serving Scaler Core",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-19T00:00:00Z"
+      },
+      {
+        "scope": 3,
+        "name": "Serving Scaler Telegram & API",
+        "status": "Done",
+        "dependsOn": [
+          1,
+          2
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-19T00:00:00Z"
+      },
+      {
+        "scope": 4,
+        "name": "Cook Mode Session Store",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-19T00:00:00Z"
+      },
+      {
+        "scope": 5,
+        "name": "Cook Mode Navigation",
+        "status": "Done",
+        "dependsOn": [
+          3,
+          4
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-19T00:00:00Z"
+      },
+      {
+        "scope": 6,
+        "name": "Cook Mode Edge Cases",
+        "status": "Done",
+        "dependsOn": [
+          4,
+          5
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-19T00:00:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
   },
   "policySnapshot": {
-    "grill": { "mode": "off", "source": "repo-default" },
-    "tdd": { "mode": "scenario-first", "source": "repo-default" },
-    "autoCommit": { "mode": "off", "source": "repo-default" },
-    "lockdown": { "mode": "off", "source": "repo-default" },
-    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
-    "validation": { "mode": "certification-required", "source": "repo-default" }
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-18T00:00:00Z",
@@ -48,7 +150,9 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["design"],
+      "phasesExecuted": [
+        "design"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-18T00:00:00Z",
@@ -57,7 +161,9 @@
     },
     {
       "agent": "bubbles.plan",
-      "phasesExecuted": ["plan"],
+      "phasesExecuted": [
+        "plan"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-18T00:00:00Z",
@@ -66,7 +172,9 @@
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-04-19T00:00:00Z",
@@ -75,21 +183,25 @@
     },
     {
       "agent": "bubbles.stabilize",
-      "phasesExecuted": ["stabilize"],
+      "phasesExecuted": [
+        "stabilize"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "runStartedAt": "2026-04-21T00:00:00Z",
       "runCompletedAt": "2026-04-21T00:00:00Z",
-      "summary": "Stability probe found 2 issues in CookSessionStore: (1) Stop() double-close panic risk — fixed with sync.Once; (2) StartCleanup() duplicate goroutine spawn — fixed with sync.Once. Added 2 tests. All 236 tests pass, lint clean, build OK."
+      "summary": "Stability probe found 2 issues in CookSessionStore: (1) Stop() double-close panic risk \u2014 fixed with sync.Once; (2) StartCleanup() duplicate goroutine spawn \u2014 fixed with sync.Once. Added 2 tests. All 236 tests pass, lint clean, build OK."
     },
     {
       "agent": "bubbles.simplify",
-      "phasesExecuted": ["simplify"],
+      "phasesExecuted": [
+        "simplify"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "runStartedAt": "2026-04-22T00:00:00Z",
       "runCompletedAt": "2026-04-22T00:00:00Z",
-      "summary": "Simplify probe found 3 DRY/consistency improvements in recipe_commands.go and cook_session.go: (1) Extracted doAPIRequest helper from duplicated apiGet/apiPost response handling (-20 lines); (2) Table-driven parseCookNavigation consistent with existing parseScaleTrigger pattern; (3) Collapsed 4 PendingReplacement/PendingRecipeData/PendingServings/PendingRecipeName fields into single Pending *PendingCookReplacement struct — eliminates 3 multi-field clear sites. All tests pass (Go + Python 257), lint clean, format clean, build OK."
+      "summary": "Simplify probe found 3 DRY/consistency improvements in recipe_commands.go and cook_session.go: (1) Extracted doAPIRequest helper from duplicated apiGet/apiPost response handling (-20 lines); (2) Table-driven parseCookNavigation consistent with existing parseScaleTrigger pattern; (3) Collapsed 4 PendingReplacement/PendingRecipeData/PendingServings/PendingRecipeName fields into single Pending *PendingCookReplacement struct \u2014 eliminates 3 multi-field clear sites. All tests pass (Go + Python 257), lint clean, format clean, build OK."
     }
   ],
   "activeBugs": [],

@@ -9,7 +9,14 @@
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-09T00:00:00Z",
-    "completedScopes": ["scope-01", "scope-02", "scope-03", "scope-04", "scope-05", "scope-06"],
+    "completedScopes": [
+      "scope-01",
+      "scope-02",
+      "scope-03",
+      "scope-04",
+      "scope-05",
+      "scope-06"
+    ],
     "completedPhaseClaims": [
       "select",
       "bootstrap",
@@ -24,7 +31,9 @@
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["select"],
+      "phasesExecuted": [
+        "select"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:00:00Z",
@@ -33,7 +42,9 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:10:00Z",
@@ -42,16 +53,20 @@
     },
     {
       "agent": "bubbles.plan",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:20:00Z",
       "completedAt": "2026-04-09T00:30:00Z",
-      "summary": "Created scopes.md: 6-scope plan — Archive Parser, Thread Reconstruction, Normalizer & Tier Assignment, Twitter Connector & Config, Tweet Link Extraction, API Client (Opt-In)"
+      "summary": "Created scopes.md: 6-scope plan \u2014 Archive Parser, Thread Reconstruction, Normalizer & Tier Assignment, Twitter Connector & Config, Tweet Link Extraction, API Client (Opt-In)"
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:30:00Z",
@@ -60,25 +75,31 @@
     },
     {
       "agent": "bubbles.test",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:00:00Z",
       "completedAt": "2026-04-09T01:10:00Z",
-      "summary": "All unit tests pass. ./smackerel.sh test unit — twitter package passes with comprehensive test coverage across parse, thread, classify, tier, normalize, connect, sync flows"
+      "summary": "All unit tests pass. ./smackerel.sh test unit \u2014 twitter package passes with comprehensive test coverage across parse, thread, classify, tier, normalize, connect, sync flows"
     },
     {
       "agent": "bubbles.validate",
-      "phasesExecuted": ["validate"],
+      "phasesExecuted": [
+        "validate"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:10:00Z",
       "completedAt": "2026-04-09T01:20:00Z",
-      "summary": "Validation complete. ./smackerel.sh test unit — all packages pass. ./smackerel.sh lint — pass. ./smackerel.sh check — config in sync. All 6 scopes Done with verified DoD items."
+      "summary": "Validation complete. ./smackerel.sh test unit \u2014 all packages pass. ./smackerel.sh lint \u2014 pass. ./smackerel.sh check \u2014 config in sync. All 6 scopes Done with verified DoD items."
     },
     {
       "agent": "bubbles.audit",
-      "phasesExecuted": ["audit"],
+      "phasesExecuted": [
+        "audit"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T01:20:00Z",
@@ -87,25 +108,31 @@
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["simplify"],
+      "phasesExecuted": [
+        "simplify"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-10T00:00:00Z",
       "completedAt": "2026-04-10T00:30:00Z",
-      "summary": "Simplify pass: removed redundant Thread.TweetIDs field (S1), replaced O(n²) reply chain scan with prebuilt childOf index (S2), updated syncArchive threadMap construction (S3). All tests pass."
+      "summary": "Simplify pass: removed redundant Thread.TweetIDs field (S1), replaced O(n\u00b2) reply chain scan with prebuilt childOf index (S2), updated syncArchive threadMap construction (S3). All tests pass."
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["security"],
+      "phasesExecuted": [
+        "security"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-10T00:30:00Z",
       "completedAt": "2026-04-10T01:00:00Z",
-      "summary": "Security pass: fixed 5 findings — file size limit (CWE-400), path traversal/symlink protection (CWE-22), tweet ID validation (CWE-20), bearer token redaction (CWE-532), archive path cleaning (CWE-22). Added 9 security regression tests."
+      "summary": "Security pass: fixed 5 findings \u2014 file size limit (CWE-400), path traversal/symlink protection (CWE-22), tweet ID validation (CWE-20), bearer token redaction (CWE-532), archive path cleaning (CWE-22). Added 9 security regression tests."
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["regression"],
+      "phasesExecuted": [
+        "regression"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-12T00:00:00Z",
@@ -114,52 +141,64 @@
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["chaos"],
+      "phasesExecuted": [
+        "chaos"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-12T00:30:00Z",
       "completedAt": "2026-04-12T01:00:00Z",
-      "summary": "Chaos hardening: fixed 4 findings — sync-close health race (CH-001), sync on disconnected connector (CH-002), concurrent double-sync (CH-003), health after sync failure (CH-004). Added 7 concurrency tests. Race detector clean."
+      "summary": "Chaos hardening: fixed 4 findings \u2014 sync-close health race (CH-001), sync on disconnected connector (CH-002), concurrent double-sync (CH-003), health after sync failure (CH-004). Added 7 concurrency tests. Race detector clean."
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["security"],
+      "phasesExecuted": [
+        "security"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-13T00:00:00Z",
       "completedAt": "2026-04-13T00:30:00Z",
-      "summary": "Security pass R2: fixed 4 findings — unsafe URL schemes (CWE-79/601), missing bearer token validation (CWE-287), unbounded tweet count (CWE-770), UTF-8 truncation (CWE-838). Added 17 adversarial tests."
+      "summary": "Security pass R2: fixed 4 findings \u2014 unsafe URL schemes (CWE-79/601), missing bearer token validation (CWE-287), unbounded tweet count (CWE-770), UTF-8 truncation (CWE-838). Added 17 adversarial tests."
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["improve"],
+      "phasesExecuted": [
+        "improve"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-13T00:30:00Z",
       "completedAt": "2026-04-13T01:00:00Z",
-      "summary": "Improve pass R16: fixed 3 findings — like.js/bookmark.js never read (IMP-015-R16-001), mentions metadata omitted (IMP-015-R16-002), control characters in titles (IMP-015-R16-003). 13 new tests. 58 total tests green."
+      "summary": "Improve pass R16: fixed 3 findings \u2014 like.js/bookmark.js never read (IMP-015-R16-001), mentions metadata omitted (IMP-015-R16-002), control characters in titles (IMP-015-R16-003). 13 new tests. 58 total tests green."
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["devops"],
+      "phasesExecuted": [
+        "devops"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-14T00:00:00Z",
       "completedAt": "2026-04-14T00:30:00Z",
-      "summary": "DevOps pass: fixed 3 findings — Twitter env vars missing from docker-compose.yml (DEV-015-001), archive volume mount missing (DEV-015-002), Discord/Weather/GovAlerts env vars missing (DEV-015-003). Added 2 adversarial docker security tests."
+      "summary": "DevOps pass: fixed 3 findings \u2014 Twitter env vars missing from docker-compose.yml (DEV-015-001), archive volume mount missing (DEV-015-002), Discord/Weather/GovAlerts env vars missing (DEV-015-003). Added 2 adversarial docker security tests."
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["improve"],
+      "phasesExecuted": [
+        "improve"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "startedAt": "2026-04-14T00:30:00Z",
       "completedAt": "2026-04-14T01:00:00Z",
-      "summary": "Improve pass R2: fixed 4 findings — graduated health escalation (IMP-015-001), sync metrics (IMP-015-002), connect health error state (IMP-015-003), media content types (IMP-015-004). Added 20 new tests."
+      "summary": "Improve pass R2: fixed 4 findings \u2014 graduated health escalation (IMP-015-001), sync metrics (IMP-015-002), connect health error state (IMP-015-003), media content types (IMP-015-004). Added 20 new tests."
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["finalize"],
+      "phasesExecuted": [
+        "finalize"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "done",
       "startedAt": "2026-04-14T01:00:00Z",
@@ -168,22 +207,47 @@
     }
   ],
   "policySnapshot": {
-    "grill": { "mode": "off", "source": "repo-default" },
-    "tdd": { "mode": "scenario-first", "source": "repo-default" },
-    "autoCommit": { "mode": "off", "source": "repo-default" },
-    "lockdown": { "mode": "active", "source": "delivery-lockdown" },
-    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
-    "validation": { "mode": "certification-required", "source": "repo-default" }
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "active",
+      "source": "delivery-lockdown"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-17T00:01:00Z",
   "certification": {
-    "status": "certified",
+    "status": "done",
     "certifiedAt": "2026-04-17T00:00:00Z",
     "certifiedBy": "bubbles.validate",
-    "completedScopes": ["scope-01", "scope-02", "scope-03", "scope-04", "scope-05", "scope-06"],
+    "completedScopes": [
+      "scope-01",
+      "scope-02",
+      "scope-03",
+      "scope-04",
+      "scope-05",
+      "scope-06"
+    ],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
@@ -200,16 +264,86 @@
       "devops"
     ],
     "scopeProgress": [
-      { "scope": 1, "name": "Archive Parser", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:10:00Z" },
-      { "scope": 2, "name": "Thread Reconstruction", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:10:00Z" },
-      { "scope": 3, "name": "Normalizer & Tier Assignment", "status": "Done", "dependsOn": [1, 2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:10:00Z" },
-      { "scope": 4, "name": "Twitter Connector & Config", "status": "Done", "dependsOn": [1, 2, 3], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:10:00Z" },
-      { "scope": 5, "name": "Tweet Link Extraction", "status": "Done", "dependsOn": [4], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:10:00Z" },
-      { "scope": 6, "name": "API Client (Opt-In)", "status": "Done", "dependsOn": [4], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-09T01:10:00Z" }
+      {
+        "scope": 1,
+        "name": "Archive Parser",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:10:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "Thread Reconstruction",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:10:00Z"
+      },
+      {
+        "scope": 3,
+        "name": "Normalizer & Tier Assignment",
+        "status": "Done",
+        "dependsOn": [
+          1,
+          2
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:10:00Z"
+      },
+      {
+        "scope": 4,
+        "name": "Twitter Connector & Config",
+        "status": "Done",
+        "dependsOn": [
+          1,
+          2,
+          3
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:10:00Z"
+      },
+      {
+        "scope": 5,
+        "name": "Tweet Link Extraction",
+        "status": "Done",
+        "dependsOn": [
+          4
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:10:00Z"
+      },
+      {
+        "scope": 6,
+        "name": "API Client (Opt-In)",
+        "status": "Done",
+        "dependsOn": [
+          4
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-09T01:10:00Z"
+      }
     ],
     "lockdownState": {
       "active": true,
-      "lockedScenarioIds": ["SCN-TW-ARC-001", "SCN-TW-ARC-002", "SCN-TW-THR-001", "SCN-TW-THR-002", "SCN-TW-CONN-001", "SCN-TW-CONN-002", "SCN-TW-001", "SCN-TW-002"]
+      "lockedScenarioIds": [
+        "SCN-TW-ARC-001",
+        "SCN-TW-ARC-002",
+        "SCN-TW-THR-001",
+        "SCN-TW-THR-002",
+        "SCN-TW-CONN-001",
+        "SCN-TW-CONN-002",
+        "SCN-TW-001",
+        "SCN-TW-002"
+      ]
     }
   },
   "scopeLayout": "single-file",

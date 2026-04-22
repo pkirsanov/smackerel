@@ -847,3 +847,187 @@ func TestList_Chaos_CascadeDeleteDuringConcurrentUpdates(t *testing.T) {
 
 	t.Logf("cascade delete verified: list deleted, %d update errors (expected for race), 0 orphaned items", updateErrors.Load())
 }
+
+// CHAOS-031-010: Vector embedding dimension mismatch.
+// The embedding column is vector(384). Inserting a 768-dim embedding MUST be
+// rejected by pgvector — if it silently truncates or accepts wrong-dimension
+// data, every subsequent cosine distance calculation is corrupted.
+// This simulates a model upgrade (e.g., MiniLM-L6 384-dim → a 768-dim model)
+// where the application code forgets to update the schema.
+func TestArtifact_Chaos_EmbeddingDimensionMismatch(t *testing.T) {
+	pool := testPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	id := testID(t) + "-dimfail"
+	cleanupArtifact(t, pool, id)
+
+	// 768-dim embedding — wrong for the vector(384) column
+	wrongDimEmb := make([]float32, 768)
+	for i := range wrongDimEmb {
+		wrongDimEmb[i] = float32(i) / 768.0
+	}
+	wrongJSON, _ := json.Marshal(wrongDimEmb)
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO artifacts (id, artifact_type, title, summary, content_raw, content_hash, source_id, embedding, created_at, updated_at)
+		VALUES ($1, 'article', 'Wrong Dim Article', 'Bad embedding', 'Content', $2, 'test', $3::vector, NOW(), NOW())
+	`, id, fmt.Sprintf("hash-%s", id), string(wrongJSON))
+
+	if err == nil {
+		t.Fatal("expected error when inserting 768-dim embedding into vector(384) column, but INSERT succeeded — dimension mismatch is silently accepted")
+	}
+
+	// Verify it's a dimension mismatch error from pgvector
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		t.Logf("correctly rejected: SQLSTATE=%s message=%s", pgErr.Code, pgErr.Message)
+	} else {
+		t.Logf("rejected with non-pg error: %v", err)
+	}
+
+	// Also test undersized embedding (128-dim)
+	shortEmb := make([]float32, 128)
+	for i := range shortEmb {
+		shortEmb[i] = float32(i) / 128.0
+	}
+	shortJSON, _ := json.Marshal(shortEmb)
+
+	shortID := testID(t) + "-shortdim"
+	cleanupArtifact(t, pool, shortID)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO artifacts (id, artifact_type, title, summary, content_raw, content_hash, source_id, embedding, created_at, updated_at)
+		VALUES ($1, 'article', 'Short Dim Article', 'Too few dims', 'Content', $2, 'test', $3::vector, NOW(), NOW())
+	`, shortID, fmt.Sprintf("hash-%s", shortID), string(shortJSON))
+
+	if err == nil {
+		t.Fatal("expected error when inserting 128-dim embedding into vector(384) column, but INSERT succeeded")
+	}
+	t.Logf("undersized embedding correctly rejected: %v", err)
+}
+
+// CHAOS-031-011: Annotation rating upper boundary (rating=6).
+// The chk_rating_range constraint is: rating IS NULL OR (rating >= 1 AND rating <= 5).
+// The existing test only checks rating=0 (lower boundary). This test verifies the
+// upper boundary (rating=6) is also rejected. Without this, a constraint widening
+// during a schema migration could go undetected.
+func TestAnnotation_Chaos_RatingBoundary(t *testing.T) {
+	pool := testPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Need an artifact to attach annotations to
+	artifactID := testID(t)
+	cleanupArtifact(t, pool, artifactID)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO artifacts (id, artifact_type, title, summary, content_raw, content_hash, source_id, created_at, updated_at)
+		VALUES ($1, 'article', 'Rating Boundary Test', 'Test', 'Content', $2, 'test', NOW(), NOW())
+	`, artifactID, fmt.Sprintf("hash-%s", artifactID))
+	if err != nil {
+		t.Fatalf("insert artifact: %v", err)
+	}
+
+	// Test cases: all should be rejected by chk_rating_range
+	invalidRatings := []struct {
+		name   string
+		rating int
+	}{
+		{"upper_boundary_6", 6},
+		{"large_value_100", 100},
+		{"negative_minus1", -1},
+		{"lower_boundary_0", 0},
+	}
+
+	for _, tc := range invalidRatings {
+		t.Run(tc.name, func(t *testing.T) {
+			annID := fmt.Sprintf("chaos-rating-%s-%s", tc.name, artifactID[:12])
+			cleanupAnnotation(t, pool, annID)
+
+			_, err := pool.Exec(ctx, `
+				INSERT INTO annotations (id, artifact_id, annotation_type, rating, source_channel, created_at)
+				VALUES ($1, $2, 'rating', $3, 'chaos-test', NOW())
+			`, annID, artifactID, tc.rating)
+			if err == nil {
+				t.Errorf("expected constraint violation for rating=%d, but INSERT succeeded", tc.rating)
+				// Clean up the incorrectly accepted row
+				pool.Exec(ctx, "DELETE FROM annotations WHERE id = $1", annID)
+			} else {
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr) && pgErr.ConstraintName == "chk_rating_range" {
+					t.Logf("rating=%d correctly rejected by chk_rating_range", tc.rating)
+				} else {
+					t.Logf("rating=%d rejected with: %v", tc.rating, err)
+				}
+			}
+		})
+	}
+
+	// Valid boundary values must succeed
+	validRatings := []struct {
+		name   string
+		rating int
+	}{
+		{"lower_valid_1", 1},
+		{"upper_valid_5", 5},
+		{"mid_value_3", 3},
+	}
+
+	for _, tc := range validRatings {
+		t.Run(tc.name, func(t *testing.T) {
+			annID := fmt.Sprintf("chaos-valid-%s-%s", tc.name, artifactID[:12])
+			cleanupAnnotation(t, pool, annID)
+
+			_, err := pool.Exec(ctx, `
+				INSERT INTO annotations (id, artifact_id, annotation_type, rating, source_channel, created_at)
+				VALUES ($1, $2, 'rating', $3, 'chaos-test', NOW())
+			`, annID, artifactID, tc.rating)
+			if err != nil {
+				t.Errorf("expected rating=%d to be accepted, got error: %v", tc.rating, err)
+			}
+		})
+	}
+}
+
+// CHAOS-031-012: Concurrent REFRESH MATERIALIZED VIEW CONCURRENTLY.
+// In production, multiple scheduler ticks, API handlers, or background jobs
+// could trigger annotation summary refresh simultaneously. PostgreSQL uses a
+// ShareUpdateExclusiveLock for CONCURRENTLY refreshes — concurrent calls block
+// rather than fail, but under heavy load the blocking could cascade into timeouts.
+// This test verifies that concurrent refreshes complete without errors or deadlocks.
+func TestAnnotation_Chaos_ConcurrentMaterializedViewRefresh(t *testing.T) {
+	pool := testPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	const concurrency = 5
+	var wg sync.WaitGroup
+	var refreshErrors atomic.Int32
+	var successCount atomic.Int32
+
+	for i := range concurrency {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := pool.Exec(ctx, "REFRESH MATERIALIZED VIEW CONCURRENTLY artifact_annotation_summary")
+			if err != nil {
+				refreshErrors.Add(1)
+				t.Logf("concurrent refresh %d failed: %v", idx, err)
+			} else {
+				successCount.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	successes := successCount.Load()
+	failures := refreshErrors.Load()
+	t.Logf("concurrent matview refreshes: successes=%d failures=%d", successes, failures)
+
+	if failures > 0 {
+		t.Errorf("expected all concurrent REFRESH MATERIALIZED VIEW CONCURRENTLY to succeed (blocking is OK, errors are not), got %d failures", failures)
+	}
+	if successes != int32(concurrency) {
+		t.Errorf("expected %d successful refreshes, got %d", concurrency, successes)
+	}
+}

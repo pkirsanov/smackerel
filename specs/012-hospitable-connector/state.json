@@ -246,7 +246,7 @@
       "statusAfter": "done",
       "startedAt": "2026-04-16T00:00:00Z",
       "completedAt": "2026-04-16T00:30:00Z",
-      "summary": "Governance artifact hardening: created scenario-manifest.json (30 scenarios, G057), enriched report.md with raw terminal output evidence blocks, fixed scopes.md test plan tables (client_test.go→connector_test.go, annotated phantom integration/e2e tests), added scenario-faithful DoD items (G068), added test plan tables for scopes 04/05. artifact-lint PASSED, traceability-guard PASSED (0 warnings). ./smackerel.sh test unit, lint, check, format all pass."
+      "summary": "Governance artifact hardening: created scenario-manifest.json (30 scenarios, G057), enriched report.md with raw terminal output evidence blocks, fixed scopes.md test plan tables (client_test.go\u2192connector_test.go, annotated phantom integration/e2e tests), added scenario-faithful DoD items (G068), added test plan tables for scopes 04/05. artifact-lint PASSED, traceability-guard PASSED (0 warnings). ./smackerel.sh test unit, lint, check, format all pass."
     },
     {
       "agent": "bubbles.workflow",
@@ -320,7 +320,7 @@
   "failures": [],
   "lastUpdatedAt": "2026-04-22T00:10:00Z",
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       "scope-01",
       "scope-02",

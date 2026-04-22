@@ -13,9 +13,22 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": [1, 2, 3],
-    "certifiedCompletedPhases": ["analyze", "bootstrap", "implement", "test", "validate", "harden", "gaps", "certify"],
+    "status": "done",
+    "completedScopes": [
+      1,
+      2,
+      3
+    ],
+    "certifiedCompletedPhases": [
+      "analyze",
+      "bootstrap",
+      "implement",
+      "test",
+      "validate",
+      "harden",
+      "gaps",
+      "certify"
+    ],
     "scopeProgress": [],
     "lockdownState": {
       "active": false,

@@ -23,7 +23,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       1,
       2,
@@ -133,7 +133,9 @@
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-04-10T15:00:00Z",
@@ -142,7 +144,9 @@
     },
     {
       "agent": "bubbles.test",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-04-10T16:00:00Z",
@@ -151,7 +155,9 @@
     },
     {
       "agent": "bubbles.harden",
-      "phasesExecuted": ["harden"],
+      "phasesExecuted": [
+        "harden"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-04-10T16:30:00Z",
@@ -160,7 +166,9 @@
     },
     {
       "agent": "bubbles.validate",
-      "phasesExecuted": ["validate"],
+      "phasesExecuted": [
+        "validate"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "done",
       "runStartedAt": "2026-04-15T18:00:00Z",

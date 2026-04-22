@@ -370,3 +370,32 @@ func TestNATS_Chaos_MaxDeliverExhaustion(t *testing.T) {
 	}
 	t.Logf("MaxDeliver=%d exhausted after %d Naks, no further redelivery confirmed", maxDeliver, nakCount)
 }
+
+// CHAOS-031-013: NATS publish to unmapped subject.
+// JetStream should reject publishes to subjects not covered by any stream's
+// subject filter. If the application code typos a subject (e.g., "artifact.process"
+// instead of "artifacts.process"), the message is silently lost unless JetStream
+// returns an error. This test verifies that no-stream-match publishes fail visibly.
+func TestNATS_Chaos_PublishToUnmappedSubject(t *testing.T) {
+	js, _ := testJetStream(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// Subjects that should NOT match any stream's filter
+	unmappedSubjects := []string{
+		"artifact.process",  // Typo: "artifact" instead of "artifacts"
+		"nonexistent.topic", // Completely unmapped
+		"search",            // Missing the wildcard part (.query, .embed, etc.)
+	}
+
+	for _, subject := range unmappedSubjects {
+		t.Run(subject, func(t *testing.T) {
+			_, err := js.Publish(ctx, subject, []byte(`{"test":"unmapped"}`))
+			if err == nil {
+				t.Errorf("publish to unmapped subject %q succeeded — message silently lost", subject)
+			} else {
+				t.Logf("correctly rejected publish to %q: %v", subject, err)
+			}
+		})
+	}
+}

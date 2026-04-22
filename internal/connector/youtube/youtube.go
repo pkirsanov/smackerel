@@ -87,6 +87,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		return nil, cursor, fmt.Errorf("fetch videos: %w", err)
 	}
 
+	// Deduplicate by video ID, merging metadata from duplicates.
+	// Same video may appear in liked + a named playlist; preserve both signals.
+	// Applied at Sync level so it covers both live API and test/source_config paths.
+	videos = deduplicateVideos(videos)
+
 	if len(videos) == 0 {
 		slog.Info("YouTube sync: no new videos", "id", c.id, "cursor", cursor)
 		return nil, cursor, nil
@@ -226,18 +231,9 @@ func (c *Connector) fetchYouTubeVideos(ctx context.Context, token string, cursor
 		}
 	}
 
-	// Deduplicate by video ID (same video may appear in liked + playlist)
-	seen := make(map[string]bool)
-	var deduped []VideoItem
-	for _, v := range allVideos {
-		if !seen[v.VideoID] {
-			seen[v.VideoID] = true
-			deduped = append(deduped, v)
-		}
-	}
-
-	slog.Info("youtube API fetch complete", "total_videos", len(deduped))
-	return deduped, nil
+	// Dedup already handled at Sync level; return all collected videos.
+	slog.Info("youtube API fetch complete", "total_videos", len(allVideos))
+	return allVideos, nil
 }
 
 type ytPlaylist struct {
@@ -357,6 +353,33 @@ var youtubeAPICall = connector.OAuthAPIGet
 
 // getCredential delegates to the shared connector.GetCredential helper.
 var getCredential = connector.GetCredential
+
+// deduplicateVideos merges duplicate video entries by VideoID,
+// preserving Liked, WatchLater, Playlist, and highest CompletionRate.
+func deduplicateVideos(videos []VideoItem) []VideoItem {
+	seen := make(map[string]int) // video_id → index in deduped
+	var deduped []VideoItem
+	for _, v := range videos {
+		if idx, exists := seen[v.VideoID]; exists {
+			if v.Liked {
+				deduped[idx].Liked = true
+			}
+			if v.WatchLater {
+				deduped[idx].WatchLater = true
+			}
+			if v.Playlist != "" && deduped[idx].Playlist == "" {
+				deduped[idx].Playlist = v.Playlist
+			}
+			if v.CompletionRate > deduped[idx].CompletionRate {
+				deduped[idx].CompletionRate = v.CompletionRate
+			}
+		} else {
+			seen[v.VideoID] = len(deduped)
+			deduped = append(deduped, v)
+		}
+	}
+	return deduped
+}
 
 // parseVideoItems converts interface{} video data into VideoItem structs.
 func parseVideoItems(raw interface{}) ([]VideoItem, error) {

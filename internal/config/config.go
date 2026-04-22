@@ -73,6 +73,7 @@ type Config struct {
 	BrowserHistoryContentFetchDomainDelay        string
 	BrowserHistoryCustomSkipDomains              string
 	BrowserHistorySocialMediaIndividualThreshold string
+	MapsEnabled                                  bool
 	MapsImportDir                                string
 
 	// Telegram assembly config (SST-compliant — from smackerel.yaml via config generate)
@@ -265,6 +266,7 @@ func Load() (*Config, error) {
 		BrowserHistoryContentFetchDomainDelay:        os.Getenv("BROWSER_HISTORY_CONTENT_FETCH_DOMAIN_DELAY"),
 		BrowserHistoryCustomSkipDomains:              os.Getenv("BROWSER_HISTORY_CUSTOM_SKIP_DOMAINS"),
 		BrowserHistorySocialMediaIndividualThreshold: os.Getenv("BROWSER_HISTORY_SOCIAL_MEDIA_INDIVIDUAL_THRESHOLD"),
+		MapsEnabled:                                  os.Getenv("MAPS_ENABLED") == "true",
 		MapsImportDir:                                os.Getenv("MAPS_IMPORT_DIR"),
 
 		// Connector enable/credential/schedule (SST-compliant)

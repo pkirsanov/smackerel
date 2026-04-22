@@ -9,13 +9,30 @@
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-10T12:00:00Z",
-    "completedPhaseClaims": ["analyze", "design", "plan", "implement", "docs", "validate"],
+    "completedPhaseClaims": [
+      "analyze",
+      "design",
+      "plan",
+      "implement",
+      "docs",
+      "validate"
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": [1, 2],
-    "certifiedCompletedPhases": ["analyze", "design", "plan", "implement", "docs", "validate"],
+    "status": "done",
+    "completedScopes": [
+      1,
+      2
+    ],
+    "certifiedCompletedPhases": [
+      "analyze",
+      "design",
+      "plan",
+      "implement",
+      "docs",
+      "validate"
+    ],
     "scopeProgress": [
       {
         "scope": 1,
@@ -30,7 +47,9 @@
         "scope": 2,
         "name": "Competitive Matrix + Phased Plan + Connectors",
         "status": "done",
-        "dependsOn": [1],
+        "dependsOn": [
+          1
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-10T14:30:00Z"
@@ -72,7 +91,9 @@
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-04-10T12:00:00Z",
@@ -81,12 +102,14 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-04-10T00:00:00Z",
       "runEndedAt": "2026-04-10T00:00:00Z",
-      "summary": "Created design.md with section-by-section edit plan for docs/smackerel.md: 15 edit groups covering header metadata, §2 principles, §4 OpenClaw superseded header, §6 capture channels, §7 processing pipeline, §8 storage diagram, §14 DDL rewrite (SQLite→PostgreSQL), §17 security, §18 privacy, §19 phased plan, §21.3 competitive matrix audit, §22 connector accuracy (14 committed connectors), §24 glossary. Implementation sequence and verification checklist defined."
+      "summary": "Created design.md with section-by-section edit plan for docs/smackerel.md: 15 edit groups covering header metadata, \u00a72 principles, \u00a74 OpenClaw superseded header, \u00a76 capture channels, \u00a77 processing pipeline, \u00a78 storage diagram, \u00a714 DDL rewrite (SQLite\u2192PostgreSQL), \u00a717 security, \u00a718 privacy, \u00a719 phased plan, \u00a721.3 competitive matrix audit, \u00a722 connector accuracy (14 committed connectors), \u00a724 glossary. Implementation sequence and verification checklist defined."
     }
   ],
   "activeBugs": [],
@@ -107,9 +130,31 @@
     "reworkQueue": "rework-queue.json"
   },
   "statusDiscipline": {
-    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "validStatuses": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "specs_hardened",
+      "docs_updated",
+      "validated",
+      "done"
+    ],
     "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
-    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "scopeDoneGates": [
+      "G020",
+      "G021",
+      "G022",
+      "G023",
+      "G024",
+      "G025",
+      "G055",
+      "G056",
+      "G057",
+      "G058",
+      "G059",
+      "G060",
+      "G061"
+    ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
   "notes": "Docs-only feature: reconcile design document drift. No code changes."

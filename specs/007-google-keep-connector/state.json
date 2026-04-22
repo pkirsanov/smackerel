@@ -37,7 +37,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
@@ -64,38 +64,147 @@
       "spec-review"
     ],
     "scopeProgress": [
-      { "scope": 1, "name": "Takeout Parser & Normalizer", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T17:30:00Z" },
-      { "scope": 2, "name": "Keep Connector, Config & Registry", "status": "Done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T17:35:00Z" },
-      { "scope": 3, "name": "Source Qualifiers & Processing Tiers", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T17:40:00Z" },
-      { "scope": 4, "name": "Label-to-Topic Mapping", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T17:45:00Z" },
-      { "scope": 5, "name": "gkeepapi Python Bridge", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T17:50:00Z" },
-      { "scope": 6, "name": "Image OCR Pipeline", "status": "Done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-04-07T17:55:00Z" }
+      {
+        "scope": 1,
+        "name": "Takeout Parser & Normalizer",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T17:30:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "Keep Connector, Config & Registry",
+        "status": "Done",
+        "dependsOn": [
+          1
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T17:35:00Z"
+      },
+      {
+        "scope": 3,
+        "name": "Source Qualifiers & Processing Tiers",
+        "status": "Done",
+        "dependsOn": [
+          2
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T17:40:00Z"
+      },
+      {
+        "scope": 4,
+        "name": "Label-to-Topic Mapping",
+        "status": "Done",
+        "dependsOn": [
+          2
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T17:45:00Z"
+      },
+      {
+        "scope": 5,
+        "name": "gkeepapi Python Bridge",
+        "status": "Done",
+        "dependsOn": [
+          2
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T17:50:00Z"
+      },
+      {
+        "scope": 6,
+        "name": "Image OCR Pipeline",
+        "status": "Done",
+        "dependsOn": [
+          2
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-07T17:55:00Z"
+      }
     ],
-    "lockdownState": { "active": true, "lockedScenarioIds": ["SCN-007-001", "SCN-007-002", "SCN-007-003", "SCN-007-004", "SCN-007-005", "SCN-007-006", "SCN-007-007", "SCN-007-008", "SCN-007-009", "SCN-007-010", "SCN-007-011", "SCN-007-012", "SCN-007-016", "SCN-007-017", "SCN-007-018", "SCN-007-019", "SCN-007-020", "SCN-007-021", "SCN-007-022", "SCN-007-023", "SCN-007-024", "SCN-007-025", "SCN-007-026", "SCN-007-027", "SCN-007-028"] }
+    "lockdownState": {
+      "active": true,
+      "lockedScenarioIds": [
+        "SCN-007-001",
+        "SCN-007-002",
+        "SCN-007-003",
+        "SCN-007-004",
+        "SCN-007-005",
+        "SCN-007-006",
+        "SCN-007-007",
+        "SCN-007-008",
+        "SCN-007-009",
+        "SCN-007-010",
+        "SCN-007-011",
+        "SCN-007-012",
+        "SCN-007-016",
+        "SCN-007-017",
+        "SCN-007-018",
+        "SCN-007-019",
+        "SCN-007-020",
+        "SCN-007-021",
+        "SCN-007-022",
+        "SCN-007-023",
+        "SCN-007-024",
+        "SCN-007-025",
+        "SCN-007-026",
+        "SCN-007-027",
+        "SCN-007-028"
+      ]
+    }
   },
   "policySnapshot": {
-    "grill": { "mode": "off", "source": "repo-default" },
-    "tdd": { "mode": "scenario-first", "source": "repo-default" },
-    "autoCommit": { "mode": "off", "source": "repo-default" },
-    "lockdown": { "mode": "active", "source": "delivery-lockdown" },
-    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
-    "validation": { "mode": "certification-required", "source": "repo-default" }
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "active",
+      "source": "delivery-lockdown"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "executionHistory": [
     {
       "agent": "bubbles.select",
-      "phasesExecuted": ["select"],
+      "phasesExecuted": [
+        "select"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "startedAt": "2026-04-06T20:30:00Z",
       "completedAt": "2026-04-06T20:45:00Z",
-      "summary": "Selected spec 007 Google Keep Connector for implementation. Reviewed spec.md, design.md, and scopes.md — all artifacts present and consistent."
+      "summary": "Selected spec 007 Google Keep Connector for implementation. Reviewed spec.md, design.md, and scopes.md \u2014 all artifacts present and consistent."
     },
     {
       "agent": "bubbles.analyze",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-06T21:00:00Z",
@@ -104,7 +213,9 @@
     },
     {
       "agent": "bubbles.bootstrap",
-      "phasesExecuted": ["bootstrap"],
+      "phasesExecuted": [
+        "bootstrap"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-06T22:00:00Z",
@@ -113,7 +224,9 @@
     },
     {
       "agent": "bubbles.plan",
-      "phasesExecuted": ["planning"],
+      "phasesExecuted": [
+        "planning"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-06T23:00:00Z",
@@ -122,7 +235,9 @@
     },
     {
       "agent": "bubbles.harden",
-      "phasesExecuted": ["harden"],
+      "phasesExecuted": [
+        "harden"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "specs_hardened",
       "startedAt": "2026-04-06T23:30:00Z",
@@ -131,17 +246,28 @@
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "specs_hardened",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T17:00:00Z",
       "completedAt": "2026-04-07T18:00:00Z",
-      "scopesCompleted": ["1", "2", "3", "4", "5", "6"],
+      "scopesCompleted": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
       "summary": "Implemented all 6 scopes: Takeout parser (Go), Keep connector with config/registry (Go), source qualifiers (Go), label-to-topic mapping (Go), gkeepapi Python bridge, image OCR pipeline (Python). 13 new files, 4 modified. 53 Go unit tests + 20 Python tests all PASS. Build/lint clean."
     },
     {
       "agent": "bubbles.test",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T18:05:00Z",
@@ -150,7 +276,9 @@
     },
     {
       "agent": "bubbles.regression",
-      "phasesExecuted": ["regression"],
+      "phasesExecuted": [
+        "regression"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T18:20:00Z",
@@ -159,7 +287,9 @@
     },
     {
       "agent": "bubbles.simplify",
-      "phasesExecuted": ["simplify"],
+      "phasesExecuted": [
+        "simplify"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T18:35:00Z",
@@ -168,7 +298,9 @@
     },
     {
       "agent": "bubbles.gaps",
-      "phasesExecuted": ["gaps"],
+      "phasesExecuted": [
+        "gaps"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T18:45:00Z",
@@ -177,34 +309,42 @@
     },
     {
       "agent": "bubbles.stabilize",
-      "phasesExecuted": ["stabilize"],
+      "phasesExecuted": [
+        "stabilize"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T19:00:00Z",
       "completedAt": "2026-04-07T19:12:00Z",
-      "summary": "Stabilization pass completed. All tests deterministic — ran ./smackerel.sh test unit three times, zero flaky failures. No time-dependent assertions. No external network calls in unit tests."
+      "summary": "Stabilization pass completed. All tests deterministic \u2014 ran ./smackerel.sh test unit three times, zero flaky failures. No time-dependent assertions. No external network calls in unit tests."
     },
     {
       "agent": "bubbles.security",
-      "phasesExecuted": ["security"],
+      "phasesExecuted": [
+        "security"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T19:15:00Z",
       "completedAt": "2026-04-07T19:28:00Z",
-      "summary": "Security review complete. gkeepapi credentials use env vars only — no config file storage. Opt-in gate enforced for unofficial API. OCR image data via NATS (internal only). SQL migration uses parameterized queries. File path validation prevents path traversal."
+      "summary": "Security review complete. gkeepapi credentials use env vars only \u2014 no config file storage. Opt-in gate enforced for unofficial API. OCR image data via NATS (internal only). SQL migration uses parameterized queries. File path validation prevents path traversal."
     },
     {
       "agent": "bubbles.validate",
-      "phasesExecuted": ["validate"],
+      "phasesExecuted": [
+        "validate"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T19:30:00Z",
       "completedAt": "2026-04-07T19:45:00Z",
-      "summary": "Validation pass completed. ./smackerel.sh check clean. ./smackerel.sh lint — 1 pre-existing E501 (not from Keep). ./smackerel.sh test unit — all pass. All DoD items verified checked. All Gherkin scenarios have mapped test evidence."
+      "summary": "Validation pass completed. ./smackerel.sh check clean. ./smackerel.sh lint \u2014 1 pre-existing E501 (not from Keep). ./smackerel.sh test unit \u2014 all pass. All DoD items verified checked. All Gherkin scenarios have mapped test evidence."
     },
     {
       "agent": "bubbles.audit",
-      "phasesExecuted": ["audit"],
+      "phasesExecuted": [
+        "audit"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T19:48:00Z",
@@ -213,16 +353,20 @@
     },
     {
       "agent": "bubbles.chaos",
-      "phasesExecuted": ["chaos"],
+      "phasesExecuted": [
+        "chaos"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T20:05:00Z",
       "completedAt": "2026-04-07T20:18:00Z",
-      "summary": "Chaos testing completed. Corrupted JSON — 97/100 notes parsed, 3 errors logged, no panic. Invalid cursor — full re-sync triggered. Missing import dir — error returned. OCR both engines fail — empty text returned. Trashed notes — filtered from output."
+      "summary": "Chaos testing completed. Corrupted JSON \u2014 97/100 notes parsed, 3 errors logged, no panic. Invalid cursor \u2014 full re-sync triggered. Missing import dir \u2014 error returned. OCR both engines fail \u2014 empty text returned. Trashed notes \u2014 filtered from output."
     },
     {
       "agent": "bubbles.docs",
-      "phasesExecuted": ["docs"],
+      "phasesExecuted": [
+        "docs"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-07T20:20:00Z",
@@ -231,7 +375,9 @@
     },
     {
       "agent": "bubbles.spec-review",
-      "phasesExecuted": ["spec-review"],
+      "phasesExecuted": [
+        "spec-review"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "done",
       "startedAt": "2026-04-07T20:38:00Z",
@@ -243,6 +389,12 @@
   "resolvedBugs": [],
   "failures": [],
   "lastUpdatedAt": "2026-04-07T20:50:00Z",
-  "artifacts": { "spec": "spec.md", "design": "design.md", "scopes": "scopes.md", "report": "report.md", "uservalidation": "uservalidation.md" },
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  },
   "notes": "Google Keep connector for passive note ingestion."
 }

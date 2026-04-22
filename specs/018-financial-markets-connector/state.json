@@ -29,7 +29,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
@@ -159,7 +159,7 @@
       "statusAfter": "done",
       "runStartedAt": "2026-04-16T00:00:00Z",
       "runFinishedAt": "2026-04-16T00:00:00Z",
-      "summary": "Governance artifact remediation: restored 3 orphaned DoD checkboxes (scopes 1/2/4), fixed Validation Checkpoints integration→unit label, fixed stale FRED evidence, removed duplicate JSON in scenario-manifest.json, enriched report.md. artifact-lint PASSED. 119/119 tests pass."
+      "summary": "Governance artifact remediation: restored 3 orphaned DoD checkboxes (scopes 1/2/4), fixed Validation Checkpoints integration\u2192unit label, fixed stale FRED evidence, removed duplicate JSON in scenario-manifest.json, enriched report.md. artifact-lint PASSED. 119/119 tests pass."
     }
   ],
   "activeBugs": [],
