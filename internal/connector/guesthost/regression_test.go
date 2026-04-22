@@ -665,3 +665,247 @@ func TestNormalizeTaskCompletedHasStatus(t *testing.T) {
 		t.Errorf("metadata task_status = %v, want 'completed'", a.Metadata["task_status"])
 	}
 }
+
+// --- H-013-R2-001: Context cancellation between pagination pages ---
+
+func TestFetchActivityContextCancelledBetweenPages(t *testing.T) {
+	// When a context is cancelled between pagination pages, FetchActivity
+	// should return a cancellation error instead of making the next request.
+	page := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ActivityFeedResponse{
+			Events: []ActivityEvent{
+				{ID: "e" + strings.Repeat("x", page), Type: "guest.created", Timestamp: "2026-04-01T10:00:00Z", EntityID: "g1", Data: json.RawMessage(`{"email":"a@b.com","name":"A"}`)},
+			},
+			HasMore: true,
+			Cursor:  "cursor-page-" + strings.Repeat("x", page),
+		})
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	client := NewClient(srv.URL, "token")
+
+	// Cancel context after one page has been fetched. The first request
+	// will succeed, then the context check before page 2 should catch it.
+	go func() {
+		for page < 1 {
+			// spin-wait for first page to complete
+		}
+		cancel()
+	}()
+
+	_, err := client.FetchActivity(ctx, "", "", 10)
+	if err == nil {
+		t.Fatal("expected cancellation error when context is cancelled between pages")
+	}
+	if !strings.Contains(err.Error(), "cancelled") && !strings.Contains(err.Error(), "context") {
+		t.Errorf("error should mention cancellation, got: %v", err)
+	}
+	// Before fix: would continue making requests until doGet noticed the cancelled context.
+	// After fix: explicit ctx.Done() check between pages catches it immediately.
+}
+
+// --- H-013-R2-002: Metadata value length caps ---
+
+func TestNormalizeBookingLongPropertyNameCapped(t *testing.T) {
+	// A malicious or buggy server returning a very long property name
+	// should have it capped in metadata to prevent storage bloat.
+	longName := strings.Repeat("A", 10000)
+	event := ActivityEvent{
+		ID:        "evt-long-prop",
+		Type:      "booking.created",
+		Timestamp: "2026-04-10T14:30:00Z",
+		EntityID:  "b1",
+		Data: json.RawMessage(`{
+			"propertyId": "p1",
+			"propertyName": "` + longName + `",
+			"guestName": "Guest",
+			"guestEmail": "g@e.com",
+			"checkinDate": "2026-05-01",
+			"checkoutDate": "2026-05-02",
+			"source": "direct",
+			"totalAmount": 100
+		}`),
+	}
+
+	a, err := NormalizeEvent(event)
+	if err != nil {
+		t.Fatalf("NormalizeEvent: %v", err)
+	}
+
+	propName, ok := a.Metadata["property_name"].(string)
+	if !ok {
+		t.Fatal("metadata property_name not string")
+	}
+	if len(propName) > maxMetadataValueLen {
+		t.Errorf("metadata property_name length = %d, exceeds cap %d — "+
+			"long API-supplied values should be capped to prevent storage bloat",
+			len(propName), maxMetadataValueLen)
+	}
+}
+
+func TestNormalizeReviewLongGuestEmailCapped(t *testing.T) {
+	longEmail := strings.Repeat("x", 10000) + "@example.com"
+	event := ActivityEvent{
+		ID:        "evt-long-email",
+		Type:      "review.received",
+		Timestamp: "2026-04-10T15:00:00Z",
+		EntityID:  "r1",
+		Data: json.RawMessage(`{
+			"propertyId": "p1",
+			"propertyName": "Lodge",
+			"guestEmail": "` + longEmail + `",
+			"guestName": "Bob",
+			"rating": "5",
+			"text": "Great!",
+			"hostResponse": ""
+		}`),
+	}
+
+	a, err := NormalizeEvent(event)
+	if err != nil {
+		t.Fatalf("NormalizeEvent: %v", err)
+	}
+
+	email, ok := a.Metadata["guest_email"].(string)
+	if !ok {
+		t.Fatal("metadata guest_email not string")
+	}
+	if len(email) > maxMetadataValueLen {
+		t.Errorf("metadata guest_email length = %d, exceeds cap %d",
+			len(email), maxMetadataValueLen)
+	}
+}
+
+func TestNormalizeShortMetadataUnchanged(t *testing.T) {
+	// Verify normal-length values pass through without modification.
+	event := ActivityEvent{
+		ID:        "evt-normal",
+		Type:      "booking.created",
+		Timestamp: "2026-04-10T14:30:00Z",
+		EntityID:  "b2",
+		Data: json.RawMessage(`{
+			"propertyId": "p1",
+			"propertyName": "Beach House",
+			"guestName": "Alice",
+			"guestEmail": "alice@example.com",
+			"checkinDate": "2026-05-01",
+			"checkoutDate": "2026-05-02",
+			"source": "direct",
+			"totalAmount": 200
+		}`),
+	}
+
+	a, err := NormalizeEvent(event)
+	if err != nil {
+		t.Fatalf("NormalizeEvent: %v", err)
+	}
+
+	if a.Metadata["property_name"] != "Beach House" {
+		t.Errorf("normal-length property_name modified: got %v", a.Metadata["property_name"])
+	}
+	if a.Metadata["guest_email"] != "alice@example.com" {
+		t.Errorf("normal-length guest_email modified: got %v", a.Metadata["guest_email"])
+	}
+}
+
+// --- H-013-R2-003: SourceRef length cap ---
+
+func TestNormalizeLongEventIDSourceRefCapped(t *testing.T) {
+	// A server returning an excessively long event ID should have it
+	// capped in sourceRef to prevent storage bloat.
+	longID := strings.Repeat("Z", 5000)
+	event := ActivityEvent{
+		ID:        longID,
+		Type:      "guest.created",
+		Timestamp: "2026-04-10T14:30:00Z",
+		EntityID:  "g1",
+		Data:      json.RawMessage(`{"email":"a@b.com","name":"Alice"}`),
+	}
+
+	a, err := NormalizeEvent(event)
+	if err != nil {
+		t.Fatalf("NormalizeEvent: %v", err)
+	}
+
+	if len(a.SourceRef) > maxSourceRefLen {
+		t.Errorf("sourceRef length = %d, exceeds cap %d — "+
+			"uncapped external IDs can bloat the database",
+			len(a.SourceRef), maxSourceRefLen)
+	}
+}
+
+func TestNormalizeNormalEventIDUnchanged(t *testing.T) {
+	event := ActivityEvent{
+		ID:        "evt-normal-id",
+		Type:      "guest.created",
+		Timestamp: "2026-04-10T14:30:00Z",
+		EntityID:  "g1",
+		Data:      json.RawMessage(`{"email":"a@b.com","name":"Alice"}`),
+	}
+
+	a, err := NormalizeEvent(event)
+	if err != nil {
+		t.Fatalf("NormalizeEvent: %v", err)
+	}
+
+	if a.SourceRef != "evt-normal-id" {
+		t.Errorf("normal sourceRef should be unchanged, got %q", a.SourceRef)
+	}
+}
+
+// --- H-013-R2-004: RawContent size cap ---
+
+func TestNormalizeLargeRawContentCapped(t *testing.T) {
+	// Simulate a large event data payload that exceeds the RawContent cap.
+	largeBody := strings.Repeat("X", 600*1024) // 600 KiB, exceeds 512 KiB cap
+	event := ActivityEvent{
+		ID:        "evt-large",
+		Type:      "message.received",
+		Timestamp: "2026-04-10T16:00:00Z",
+		EntityID:  "m1",
+		Data: json.RawMessage(`{
+			"propertyId": "p1",
+			"propertyName": "Lodge",
+			"guestEmail": "g@e.com",
+			"guestName": "Guest",
+			"senderRole": "guest",
+			"body": "` + largeBody + `",
+			"bookingId": "b1"
+		}`),
+	}
+
+	a, err := NormalizeEvent(event)
+	if err != nil {
+		t.Fatalf("NormalizeEvent: %v", err)
+	}
+
+	if len(a.RawContent) > maxRawContentLen {
+		t.Errorf("RawContent length = %d, exceeds cap %d — "+
+			"uncapped raw content can bloat artifact storage",
+			len(a.RawContent), maxRawContentLen)
+	}
+}
+
+func TestNormalizeNormalRawContentUnchanged(t *testing.T) {
+	event := ActivityEvent{
+		ID:        "evt-small",
+		Type:      "guest.created",
+		Timestamp: "2026-04-10T14:30:00Z",
+		EntityID:  "g1",
+		Data:      json.RawMessage(`{"email":"a@b.com","name":"Alice"}`),
+	}
+
+	a, err := NormalizeEvent(event)
+	if err != nil {
+		t.Fatalf("NormalizeEvent: %v", err)
+	}
+
+	// Normal-sized raw content should be the full event data
+	if a.RawContent != `{"email":"a@b.com","name":"Alice"}` {
+		t.Errorf("normal RawContent should be unchanged, got %q", a.RawContent)
+	}
+}

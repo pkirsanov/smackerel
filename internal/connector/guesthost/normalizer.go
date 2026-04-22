@@ -28,6 +28,10 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		contentHash := sha256.Sum256([]byte(event.Type + event.EntityID + event.Timestamp))
 		sourceRef = fmt.Sprintf("%x", contentHash[:])
 	}
+	// H-013-R2-003: Cap sourceRef to prevent storing excessively long external IDs.
+	if len(sourceRef) > maxSourceRefLen {
+		sourceRef = sourceRef[:maxSourceRefLen]
+	}
 
 	var contentType, title string
 	metadata := map[string]interface{}{}
@@ -72,8 +76,8 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		} else {
 			title = fmt.Sprintf("Guest updated: %s", d.Name)
 		}
-		metadata["guest_email"] = d.Email
-		metadata["guest_name"] = d.Name
+		metadata["guest_email"] = capMetaValue(d.Email)
+		metadata["guest_name"] = capMetaValue(d.Name)
 
 	case "review.received":
 		var d ReviewData
@@ -87,11 +91,11 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		d.Rating = stringutil.SanitizeControlChars(d.Rating)
 		contentType = "review"
 		title = fmt.Sprintf("%s — %s★ review from %s", d.PropertyName, d.Rating, d.GuestName)
-		metadata["property_id"] = d.PropertyID
-		metadata["property_name"] = d.PropertyName
-		metadata["guest_email"] = d.GuestEmail
-		metadata["guest_name"] = d.GuestName
-		metadata["rating"] = d.Rating
+		metadata["property_id"] = capMetaValue(d.PropertyID)
+		metadata["property_name"] = capMetaValue(d.PropertyName)
+		metadata["guest_email"] = capMetaValue(d.GuestEmail)
+		metadata["guest_name"] = capMetaValue(d.GuestName)
+		metadata["rating"] = capMetaValue(d.Rating)
 
 	case "message.received":
 		var d MessageData
@@ -107,11 +111,11 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		d.SenderRole = stringutil.SanitizeControlChars(d.SenderRole)
 		contentType = "guest_message"
 		title = fmt.Sprintf("%s — Message from %s", d.PropertyName, d.GuestName)
-		metadata["property_id"] = d.PropertyID
-		metadata["property_name"] = d.PropertyName
-		metadata["guest_email"] = d.GuestEmail
-		metadata["guest_name"] = d.GuestName
-		metadata["booking_id"] = d.BookingID
+		metadata["property_id"] = capMetaValue(d.PropertyID)
+		metadata["property_name"] = capMetaValue(d.PropertyName)
+		metadata["guest_email"] = capMetaValue(d.GuestEmail)
+		metadata["guest_name"] = capMetaValue(d.GuestName)
+		metadata["booking_id"] = capMetaValue(d.BookingID)
 
 	case "task.created", "task.completed":
 		var d TaskData
@@ -128,13 +132,13 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		} else {
 			title = fmt.Sprintf("%s — Task completed: %s", d.PropertyName, d.Title)
 		}
-		metadata["property_id"] = d.PropertyID
-		metadata["property_name"] = d.PropertyName
-		metadata["category"] = d.Category
+		metadata["property_id"] = capMetaValue(d.PropertyID)
+		metadata["property_name"] = capMetaValue(d.PropertyName)
+		metadata["category"] = capMetaValue(d.Category)
 		// IMP-013-IMP-002: Store task status so the hospitality linker can
 		// differentiate task.created (increment issue count) from
 		// task.completed (decrement issue count).
-		metadata["task_status"] = d.Status
+		metadata["task_status"] = capMetaValue(d.Status)
 
 	case "expense.created":
 		var d ExpenseData
@@ -150,8 +154,8 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		d.Description = stringutil.SanitizeControlChars(d.Description)
 		contentType = "financial"
 		title = fmt.Sprintf("%s — Expense: %s $%.2f", d.PropertyName, d.Description, d.Amount)
-		metadata["property_id"] = d.PropertyID
-		metadata["property_name"] = d.PropertyName
+		metadata["property_id"] = capMetaValue(d.PropertyID)
+		metadata["property_name"] = capMetaValue(d.PropertyName)
 		// Store as negative (expense). If the API already sent a negative value, preserve it.
 		if d.Amount > 0 {
 			metadata["amount"] = -d.Amount
@@ -168,10 +172,16 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		d.Name = stringutil.SanitizeControlChars(d.Name)
 		contentType = "property"
 		title = fmt.Sprintf("Property updated: %s", d.Name)
-		metadata["property_id"] = d.ID
+		metadata["property_id"] = capMetaValue(d.ID)
 
 	default:
 		return connector.RawArtifact{}, fmt.Errorf("unknown event type: %s", event.Type)
+	}
+
+	// H-013-R2-004: Cap raw content to prevent storing excessively large payloads.
+	rawContent := string(event.Data)
+	if len(rawContent) > maxRawContentLen {
+		rawContent = rawContent[:maxRawContentLen]
 	}
 
 	return connector.RawArtifact{
@@ -179,7 +189,7 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		SourceRef:   sourceRef,
 		ContentType: contentType,
 		Title:       truncateStr(title, 500),
-		RawContent:  string(event.Data),
+		RawContent:  rawContent,
 		URL:         "",
 		Metadata:    metadata,
 		CapturedAt:  capturedAt,
@@ -215,13 +225,22 @@ func bookingMetadata(d BookingData) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("booking total_price is not a finite number")
 	}
 	return map[string]interface{}{
-		"property_id":    d.PropertyID,
-		"property_name":  d.PropertyName,
-		"guest_email":    d.GuestEmail,
-		"guest_name":     d.GuestName,
-		"checkin_date":   d.CheckIn,
-		"checkout_date":  d.CheckOut,
-		"booking_source": d.Source,
+		"property_id":    capMetaValue(d.PropertyID),
+		"property_name":  capMetaValue(d.PropertyName),
+		"guest_email":    capMetaValue(d.GuestEmail),
+		"guest_name":     capMetaValue(d.GuestName),
+		"checkin_date":   capMetaValue(d.CheckIn),
+		"checkout_date":  capMetaValue(d.CheckOut),
+		"booking_source": capMetaValue(d.Source),
 		"total_price":    d.TotalPrice,
 	}, nil
+}
+
+// capMetaValue truncates a metadata string value to maxMetadataValueLen bytes
+// (H-013-R2-002: prevent storing excessively long API-supplied values).
+func capMetaValue(s string) string {
+	if len(s) <= maxMetadataValueLen {
+		return s
+	}
+	return stringutil.TruncateUTF8(s, maxMetadataValueLen)
 }

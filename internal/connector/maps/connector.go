@@ -48,6 +48,10 @@ type Connector struct {
 	config MapsConfig
 	pool   *pgxpool.Pool
 
+	// Re-entrancy guard: prevents concurrent Sync calls from processing
+	// the same files and producing duplicate artifacts.
+	syncing bool
+
 	// Sync metadata for health reporting
 	lastSyncTime   time.Time
 	lastSyncCount  int
@@ -118,15 +122,20 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 }
 
 func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
-	c.setHealth(connector.HealthSyncing)
-
-	// Snapshot config under RLock to prevent data races with concurrent Connect().
-	c.mu.RLock()
+	// Atomically check re-entrancy, set syncing flag, and snapshot config.
+	c.mu.Lock()
+	if c.syncing {
+		c.mu.Unlock()
+		return nil, cursor, fmt.Errorf("sync already in progress")
+	}
+	c.syncing = true
+	c.health = connector.HealthSyncing
 	cfg := c.config
-	c.mu.RUnlock()
+	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
+		c.syncing = false
 		c.lastSyncTime = time.Now()
 		if c.lastSyncErrors > 0 && c.lastSyncCount == 0 {
 			c.health = connector.HealthError
@@ -202,8 +211,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 		activities, err := ParseTakeoutJSON(data)
 		if err != nil {
-			slog.Warn("failed to parse takeout file", "file", file, "error", err)
+			slog.Warn("permanently unparseable takeout file, skipping", "file", file, "error", err)
 			syncErrors++
+			// Parse failures are permanent: a file that fails JSON parsing now
+			// won't become parseable later. Mark as processed to prevent infinite
+			// retry loops. The user can remove and re-add the file to trigger
+			// re-processing (cursor pruning drops entries for deleted files).
+			processedThisCycle = append(processedThisCycle, filepath.Base(file))
 			continue
 		}
 

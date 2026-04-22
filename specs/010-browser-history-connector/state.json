@@ -238,6 +238,15 @@
       "startedAt": "2026-04-22T00:00:00Z",
       "completedAt": "2026-04-22T00:15:00Z",
       "summary": "Stochastic quality sweep R92 improve-existing trigger. Cross-connector pattern analysis found 3 improvements: IMP-010-I1 (Medium) missing panic recovery in Sync — added defer recover matching guesthost pattern. IMP-010-I2 (Medium) Sync-after-Close overwrites HealthDisconnected — added guard in deferred cleanup. IMP-010-I3 (Low) dwell threshold ordering not validated — full>standard>light check added. 4 adversarial tests added. All 77 tests pass (59 connector + 18 browser). Build passes."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-22T01:00:00Z",
+      "completedAt": "2026-04-22T01:15:00Z",
+      "summary": "Stochastic quality sweep R93 simplify-to-doc trigger. 3 low-severity findings: S-010-S1 added setHealth() helper matching maps/discord/guesthost pattern, replaced 3 inline lock/unlock sites in Connect/Close. S-010-S2 removed stale ParseChromeHistory comment reference. S-010-S3 removed redundant contains() test helper, replaced 8 call sites with strings.Contains. Reviewed but left as-is: parseDurationWithDays (premature to promote), DwellTimeTier dual-path (intentional), extractDomain (not worth sharing), processEntries complexity (justified), config parsing verbosity (idiomatic Go). All 77 tests pass. Lint clean."
     }
   ],
   "policySnapshot": {
@@ -251,7 +260,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-22T00:15:00Z",
+  "lastUpdatedAt": "2026-04-22T01:15:00Z",
   "certification": {
     "status": "in_progress",
     "completedScopes": ["1", "2"],

@@ -4,6 +4,38 @@
 
 ---
 
+## Simplify Pass R93 (stochastic-quality-sweep, simplify trigger, April 22 2026)
+
+**Trigger:** `simplify` via `bubbles.workflow mode: simplify-to-doc`
+**Scope:** Code reuse, quality, efficiency review of browser connector
+
+**Files modified:**
+- `internal/connector/browser/connector.go` — Added `setHealth` helper, replaced 3 inline lock/health/unlock patterns
+- `internal/connector/browser/browser.go` — Removed stale `ParseChromeHistory` reference in comment
+- `internal/connector/browser/connector_test.go` — Removed redundant `contains()` wrapper, replaced 8 call sites with `strings.Contains`
+
+**Findings Detected:**
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| S-010-S1 | Low | **Missing `setHealth` helper** — Browser connector manually did `c.mu.Lock(); c.health = X; c.mu.Unlock()` in ~10 places. Maps, discord, and guesthost connectors all use a `setHealth()` helper. | Added `setHealth()` method matching other connectors. Replaced inline patterns in `Connect()` and `Close()`. `Sync()` retains inline locking where multi-field atomicity is needed (correct). |
+| S-010-S2 | Low | **Stale comment reference** — `browser.go:101` referenced `ParseChromeHistory` which no longer exists in the codebase. | Updated comment to describe behavior directly without referencing removed function. |
+| S-010-S3 | Low | **Redundant test helper** — `connector_test.go` defined `contains(s, substr string) bool` wrapping `strings.Contains`. | Removed helper, replaced 8 call sites with `strings.Contains` directly. |
+
+**Reviewed but not changed (acceptable as-is):**
+- `parseDurationWithDays` — only used in browser connector; promoting to shared package would be premature
+- `DwellTimeTier` (package-level) vs `dwellTimeTier` (method) — dual-path is intentional: package-level for tests/fallback, method for config-driven thresholds
+- `extractDomain` — unexported utility; bookmarks connector uses `net/url` instead; not worth sharing
+- `processEntries` complexity (~80 lines) — justified by the distinct pipeline stages (skip → repeat → dedup → social → content → privacy gate)
+- Config parsing verbosity — inherent to Go's type-assertion-based map parsing; consistent with other connectors
+
+**Verification:**
+```
+$ ./smackerel.sh test unit — all Go packages pass, browser package ok 0.016s
+$ No FAIL output across entire suite
+```
+
+---
+
 ## Improve-Existing Pass R92 (stochastic-quality-sweep, improve trigger, April 22 2026)
 
 **Trigger:** `improve` via `bubbles.workflow mode: improve-existing`
