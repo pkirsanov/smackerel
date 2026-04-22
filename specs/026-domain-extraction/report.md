@@ -227,3 +227,52 @@ The test plan references `tests/integration/domain_extraction_test.go` for T7-05
 ./smackerel.sh test unit — all Go packages pass, 236 Python tests pass
 ./smackerel.sh lint — clean
 ```
+
+---
+
+## Simplification Probe — 2026-04-22 (stochastic-quality-sweep round)
+
+**Trigger:** `simplify` via `simplify-to-doc` child workflow
+**Scope:** All domain extraction implementation surfaces — Go core (`internal/domain/`, `internal/pipeline/`, `internal/api/`, `internal/telegram/`), Python ML sidecar (`ml/app/domain.py`).
+
+### Methodology
+
+Reviewed all implementation files for:
+- Unnecessary abstraction layers
+- Duplicate code or data paths
+- Dead code or unused exports
+- Redundant DB queries
+- Over-engineered control flow
+- Consolidation opportunities
+
+### Findings
+
+| # | Finding | Severity | File | Status |
+|---|---------|----------|------|--------|
+| S-001 | Two separate DB queries to `artifacts` table for the same row in `publishDomainExtractionRequest` | Low | `internal/pipeline/subscriber.go` | Fixed |
+
+### Detail
+
+**S-001 — Consolidate two DB round-trips into one:**
+
+`publishDomainExtractionRequest` made two separate `QueryRow` calls against the same `artifacts` row:
+1. `SELECT COALESCE(source_url, '') FROM artifacts WHERE id = $1` — for URL qualifier matching
+2. `SELECT COALESCE(content_raw, ''), COALESCE(title, ''), COALESCE(summary, '') FROM artifacts WHERE id = $1` — for extraction content
+
+Merged into a single query selecting all four columns in one round-trip. Eliminates one DB call per domain extraction dispatch. Behavior unchanged.
+
+### Areas Reviewed — No Findings
+
+- **`internal/domain/registry.go`** (~150 lines) — Clean single-purpose package. Two maps (byContentType, byURLPattern), LoadRegistry/Match/Count. No over-engineering.
+- **`internal/pipeline/domain_types.go`** (~70 lines) — Minimal request/response types + validation. Defense-in-depth `maxDomainDataBytes` constant is justified.
+- **`internal/pipeline/domain_subscriber.go`** (~200 lines) — Separate lifecycle subscriber for domain.extracted. The split from `ResultSubscriber` is justified: different NATS stream, different consumer config, independent shutdown.
+- **`internal/api/domain_intent.go`** (~93 lines) — Five pre-compiled regexes at package level. Clean dispatch pattern. No dead paths.
+- **`internal/telegram/format.go`** domain section (~200 lines) — Struct-per-domain approach with constants for truncation limits. Clean switch dispatch.
+- **`ml/app/domain.py`** (~270 lines) — Hardcoded prompts per domain type are simpler than dynamic YAML loading (design drift noted but not a simplification target; current approach is actually the simpler path).
+
+### Verification
+
+```
+./smackerel.sh test unit — all Go packages pass (internal/pipeline recompiled), 263 Python tests pass
+./smackerel.sh check — config in sync, env_file drift guard OK
+```
