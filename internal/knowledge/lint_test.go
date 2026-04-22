@@ -489,11 +489,11 @@ func TestRunLint_NilPool(t *testing.T) {
 // and types matching the Gherkin scenarios in scopes.md.
 func TestLintFindingSeverityValues(t *testing.T) {
 	expectedFindings := map[string]string{
-		"orphan_concept":    "low",
-		"contradiction":     "high",
-		"stale_knowledge":   "medium",
-		"synthesis_backlog": "high",
-		"weak_entity":       "low",
+		"orphan_concept":     "low",
+		"contradiction":      "high",
+		"stale_knowledge":    "medium",
+		"synthesis_backlog":  "high",
+		"weak_entity":        "low",
 		"unreferenced_claim": "medium",
 	}
 
