@@ -78,6 +78,67 @@ func TestClassify_TelegramCaptionPersonal(t *testing.T) {
 	}
 }
 
+// IMP-034-004: Word boundary — "unprofessional" must NOT match "personal"
+func TestClassify_CaptionWordBoundary_Unprofessional(t *testing.T) {
+	ec := newTestClassifier()
+	expense := domain.NewExpenseMetadata()
+	notes := "unprofessional service at restaurant"
+	expense.Notes = &notes
+
+	result := ec.Classify(expense)
+	if result == "personal" {
+		t.Error("'unprofessional' should not match 'personal' — word boundary violated")
+	}
+	if result != "uncategorized" {
+		t.Errorf("expected 'uncategorized' (no whole-word match), got %q", result)
+	}
+}
+
+// IMP-034-004: Word boundary — "businesslike" must NOT match "business"
+func TestClassify_CaptionWordBoundary_Businesslike(t *testing.T) {
+	ec := newTestClassifier()
+	expense := domain.NewExpenseMetadata()
+	notes := "businesslike atmosphere at cafe"
+	expense.Notes = &notes
+
+	result := ec.Classify(expense)
+	if result == "business" {
+		t.Error("'businesslike' should not match 'business' — word boundary violated")
+	}
+	if result != "uncategorized" {
+		t.Errorf("expected 'uncategorized' (no whole-word match), got %q", result)
+	}
+}
+
+// IMP-034-004: Word boundary — exact word match still works
+func TestClassify_CaptionWordBoundary_ExactMatch(t *testing.T) {
+	ec := newTestClassifier()
+
+	// "business" at end of string
+	expense := domain.NewExpenseMetadata()
+	notes := "lunch for business"
+	expense.Notes = &notes
+	if result := ec.Classify(expense); result != "business" {
+		t.Errorf("expected 'business' (word at end), got %q", result)
+	}
+
+	// "personal" at start of string
+	expense2 := domain.NewExpenseMetadata()
+	notes2 := "personal errand"
+	expense2.Notes = &notes2
+	if result := ec.Classify(expense2); result != "personal" {
+		t.Errorf("expected 'personal' (word at start), got %q", result)
+	}
+
+	// keyword surrounded by punctuation
+	expense3 := domain.NewExpenseMetadata()
+	notes3 := "this is (business) related"
+	expense3.Notes = &notes3
+	if result := ec.Classify(expense3); result != "business" {
+		t.Errorf("expected 'business' (surrounded by parens), got %q", result)
+	}
+}
+
 // SCN-034-021: Business vendor list match → business
 func TestClassify_BusinessVendorMatch(t *testing.T) {
 	ec := newTestClassifier()
@@ -192,10 +253,8 @@ func TestVendorNormalizer_NoDB(t *testing.T) {
 // SCN-034-025: Cache hit avoids DB
 func TestVendorNormalizer_CacheHit(t *testing.T) {
 	n := NewVendorNormalizer(nil, 100)
-	// Manually populate cache
-	n.mu.Lock()
-	n.cache["amzn mktp us"] = "Amazon"
-	n.mu.Unlock()
+	// Populate cache via put (sets accessSeq too)
+	n.put("amzn mktp us", "Amazon")
 
 	canonical, found := n.Normalize(nil, "AMZN MKTP US")
 	if !found {
@@ -209,9 +268,7 @@ func TestVendorNormalizer_CacheHit(t *testing.T) {
 // SCN-034-025: Negative cache result
 func TestVendorNormalizer_NegativeCache(t *testing.T) {
 	n := NewVendorNormalizer(nil, 100)
-	n.mu.Lock()
-	n.cache["unknown vendor"] = "" // negative cache entry
-	n.mu.Unlock()
+	n.put("unknown vendor", "") // negative cache entry
 
 	_, found := n.Normalize(nil, "Unknown Vendor")
 	if found {
@@ -231,23 +288,58 @@ func TestCategoryDisplayName(t *testing.T) {
 	}
 }
 
-// Cache eviction when at capacity
+// Cache eviction when at capacity — LRU ordering
 func TestVendorNormalizer_CacheEviction(t *testing.T) {
 	n := NewVendorNormalizer(nil, 4)
-	n.mu.Lock()
-	n.cache["a"] = "A"
-	n.cache["b"] = "B"
-	n.cache["c"] = "C"
-	n.cache["d"] = "D"
-	n.mu.Unlock()
+	// Insert 4 entries with explicit sequence ordering
+	n.put("a", "A")
+	n.put("b", "B")
+	n.put("c", "C")
+	n.put("d", "D")
 
-	// Adding one more should trigger eviction
+	// Adding one more should trigger LRU eviction of oldest half (a, b)
 	n.put("e", "E")
 
 	n.mu.RLock()
-	// Should have evicted half (2 entries) and added 1 = 3 entries
 	if len(n.cache) > 4 {
 		t.Errorf("expected cache <= 4 after eviction, got %d", len(n.cache))
+	}
+	// Oldest entries (a, b) should be evicted; newest (c, d, e) should remain
+	if _, ok := n.cache["c"]; !ok {
+		t.Error("expected 'c' to survive eviction (recently inserted)")
+	}
+	if _, ok := n.cache["d"]; !ok {
+		t.Error("expected 'd' to survive eviction (recently inserted)")
+	}
+	if _, ok := n.cache["e"]; !ok {
+		t.Error("expected 'e' to survive eviction (just inserted)")
+	}
+	n.mu.RUnlock()
+}
+
+// LRU: access promotes entry and prevents eviction
+func TestVendorNormalizer_LRUPromotion(t *testing.T) {
+	n := NewVendorNormalizer(nil, 4)
+	n.put("a", "A")
+	n.put("b", "B")
+	n.put("c", "C")
+	n.put("d", "D")
+
+	// Access "a" to promote it (makes it recently used)
+	n.mu.Lock()
+	n.seqCtr++
+	n.accessSeq["a"] = n.seqCtr
+	n.mu.Unlock()
+
+	// Trigger eviction — "b" should be evicted (oldest access), not "a"
+	n.put("e", "E")
+
+	n.mu.RLock()
+	if _, ok := n.cache["a"]; !ok {
+		t.Error("expected 'a' to survive eviction (promoted by access)")
+	}
+	if _, ok := n.cache["b"]; ok {
+		t.Error("expected 'b' to be evicted (oldest access)")
 	}
 	n.mu.RUnlock()
 }

@@ -4,6 +4,53 @@ Links: [scopes.md](scopes.md) | [uservalidation.md](uservalidation.md)
 
 ---
 
+## Improve Analysis — 2026-04-22 (improve-existing, repeat 2)
+
+**Trigger:** Child workflow of stochastic-quality-sweep
+**Mode:** improve-existing (repeat)
+**Verdict:** 3 findings, ALL FIXED
+
+### Findings
+
+| ID | Surface | Severity | Description | Status |
+|----|---------|----------|-------------|--------|
+| IMP-034-004 | `internal/intelligence/expenses.go` Classify rule 3 | Medium | Notes-based classification used `strings.Contains` substring matching — "unprofessional" matched "personal", "businesslike" matched "business", causing false-positive misclassification | FIXED |
+| IMP-034-005 | `internal/intelligence/expenses.go` GenerateSuggestions | Low | Hardcoded `30 days` lookback and `LIMIT 100` candidate cap bypass SST — extracted as named constants `suggestionLookbackDays` and `suggestionCandidateLimit` | FIXED |
+| IMP-034-006 | `internal/intelligence/expenses.go` VendorNormalizer.put | Low | Cache eviction iterated `range` over Go map (random order) and deleted half — effectively random eviction, not LRU as documented. Replaced with monotonic sequence counter tracking for proper LRU ordering | FIXED |
+
+### Fixes Applied
+
+**IMP-034-004 — Word-Boundary Classification Matching:**
+- Added `containsWord()` helper that checks word boundaries (non-word characters before/after the keyword)
+- Added `isWordChar()` helper for ASCII word character detection
+- Changed Classify rule 3 from `strings.Contains(notesLower, "business")` to `containsWord(notesLower, "business")` (same for "personal")
+- Added 4 adversarial tests: "unprofessional" must not match "personal", "businesslike" must not match "business", plus exact-match and punctuation-boundary cases
+- Files: `internal/intelligence/expenses.go`, `internal/intelligence/expenses_test.go`
+
+**IMP-034-005 — Named Constants for Suggestion Generation:**
+- Extracted `suggestionLookbackDays = 30` and `suggestionCandidateLimit = 100` as package-level constants
+- Replaced inline SQL literals with `fmt.Sprintf` using constants
+- File: `internal/intelligence/expenses.go`
+
+**IMP-034-006 — Proper LRU Cache Eviction:**
+- Added `accessSeq map[string]int64` and `seqCtr int64` to VendorNormalizer for monotonic access tracking
+- `put()` records sequence number for each inserted key
+- Cache hits in `Normalize()` promote the key's access sequence (write-lock upgrade)
+- `Invalidate()` now cleans both `cache` and `accessSeq`
+- Eviction sorts by ascending sequence (oldest access first) and removes the oldest half
+- Added `TestVendorNormalizer_LRUPromotion` test proving that accessed entries survive eviction while non-accessed entries are evicted
+- Updated existing cache tests to use `put()` instead of direct map writes (consistent with new `accessSeq` tracking)
+- Files: `internal/intelligence/expenses.go`, `internal/intelligence/expenses_test.go`
+
+### Verification
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh test unit` | All 41 Go packages OK, 257 Python tests passed |
+| `./smackerel.sh lint` | All checks passed |
+
+---
+
 ## Regression Analysis — 2026-04-22 (regression-to-doc, repeat)
 
 **Trigger:** Child workflow of stochastic-quality-sweep
