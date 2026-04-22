@@ -4781,3 +4781,90 @@ func TestSync_NewsDropsUnsafeURL(t *testing.T) {
 		t.Errorf("data: URL should be cleared, got %q", newsArtifacts[2].URL)
 	}
 }
+
+// --- Stabilize Tests: STB-018-S2-001, STB-018-S2-002 ---
+
+func TestSTB018_S2_001_ContextCancelHealthDegraded(t *testing.T) {
+	// STB-018-S2-001: When Sync is canceled before any provider is attempted,
+	// health must be Degraded (indeterminate), not Healthy.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.httpClient = srv.Client()
+	c.finnhubBaseURL = srv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey: "test-key",
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL", "GOOGL", "MSFT"},
+		},
+	}
+
+	// Cancel context before Sync starts.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := c.Sync(ctx, "")
+	if err == nil {
+		t.Fatal("expected error from canceled context")
+	}
+
+	// Health must be Degraded, not Healthy.
+	health := c.Health(context.Background())
+	if health != connector.HealthDegraded {
+		t.Errorf("STB-018-S2-001: expected HealthDegraded after canceled Sync, got %v — incomplete sync should not report Healthy", health)
+	}
+}
+
+func TestSTB018_S2_002_ContextTimeoutMidSyncHealthDegraded(t *testing.T) {
+	// STB-018-S2-002: When Sync is canceled after processing some symbols,
+	// health must be Degraded, not computed from incomplete partial results.
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount > 1 {
+			// Slow response on second call — will trigger context timeout.
+			time.Sleep(200 * time.Millisecond)
+		}
+		if r.URL.Path == "/api/v1/company-news" {
+			json.NewEncoder(w).Encode([]map[string]interface{}{})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.httpClient = &http.Client{Timeout: 5 * time.Second}
+	c.finnhubBaseURL = srv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey: "test-key",
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL", "GOOGL", "MSFT", "AMZN", "META"},
+		},
+	}
+
+	// Use a short timeout that will expire during the sync loop.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, _, err := c.Sync(ctx, "")
+	if err == nil {
+		t.Fatal("expected error from context timeout")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Logf("error type: %v (may be transport-level timeout, acceptable)", err)
+	}
+
+	// Health must be Degraded regardless of how many symbols succeeded.
+	health := c.Health(context.Background())
+	if health != connector.HealthDegraded {
+		t.Errorf("STB-018-S2-002: expected HealthDegraded after timed-out Sync, got %v — partial sync should not report Healthy or Error", health)
+	}
+}
