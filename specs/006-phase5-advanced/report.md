@@ -2,6 +2,45 @@
 
 Links: [uservalidation.md](uservalidation.md)
 
+## Harden Pass (April 22, 2026)
+
+### Trigger: harden-to-doc (child of stochastic-quality-sweep)
+
+### Findings (4 total, 4 resolved)
+
+| # | Finding | Severity | Artifact | Fix |
+|---|---------|----------|----------|-----|
+| H-006-001 | Implementation Files sections across all 8 scopes referenced stale files (`engine.go`, `resurface.go`) instead of actual dedicated files (`expertise.go`, `learning.go`, `subscriptions.go`, `monthly.go`, `lookups.go`) | High | `scopes.md` | Updated all 8 scopes' Implementation Files to reference actual source and test files |
+| H-006-002 | scenario-manifest.json linkedTests pointed to generic type-check tests (e.g., `TestInsightType_Constants`) instead of behavior-validating tests (e.g., `TestAssignTier`, `TestDetectGaps`, `TestExtractAmount`) | High | `scenario-manifest.json` | Updated all 20 scenario entries with correct linkedTests and evidenceRefs |
+| H-006-003 | Test Plan tables across scopes referenced wrong files (e.g., `engine_test.go` for expertise, `resurface_test.go` for lookups) | Medium | `scopes.md` | Updated all 8 scope Test Plan tables to reference actual test files |
+| H-006-004 | DoD evidence citations across all 8 scopes pointed to `RunSynthesis`/`ResurfaceScore` instead of actual functions (`GenerateExpertiseMap`, `GetLearningPaths`, `DetectSubscriptions`, etc.) | High | `scopes.md` | Updated all DoD evidence to cite actual function paths with specific test function references |
+
+### Key Artifacts Changed
+- `specs/006-phase5-advanced/scopes.md` — All 8 scopes: Implementation Files, Test Plan, DoD evidence updated
+- `specs/006-phase5-advanced/scenario-manifest.json` — All 20 scenarios: linkedTests and evidenceRefs updated, generatedBy updated to `bubbles.harden`
+
+### Scope-to-File Traceability (Post-Harden)
+
+| Scope | Primary Source | Primary Test | Tests |
+|-------|---------------|-------------|-------|
+| 01 Expertise Mapping | `expertise.go` | `expertise_test.go` | 12 |
+| 02 Learning Paths | `learning.go` | `learning_test.go` | 18 |
+| 03 Subscription Tracker | `subscriptions.go` | `subscriptions_test.go` | 20+ |
+| 04 Serendipity Engine | `resurface.go` | `resurface_test.go` | 16 |
+| 05 Monthly Report | `monthly.go` | `monthly_test.go` | 20+ |
+| 06 Repeated Lookup | `lookups.go` | `lookups_test.go` | 20+ |
+| 07 Content Creation Fuel | `monthly.go` | `monthly_test.go` | (shared) |
+| 08 Seasonal Patterns | `monthly.go` | `monthly_test.go` | (shared) |
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit
+42 Go packages PASS, 238 Python tests PASS, 3 warnings
+Exit code: 0
+```
+
+---
+
 ## Improvement Pass (April 21, 2026)
 
 ### Trigger: improve-existing (child of stochastic-quality-sweep)
