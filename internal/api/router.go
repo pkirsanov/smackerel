@@ -189,8 +189,10 @@ func NewRouter(deps *Dependencies) http.Handler {
 // Health check and heartbeat endpoints are excluded to reduce log noise.
 func structuredLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip logging for health check and heartbeat endpoints
-		if r.URL.Path == "/api/health" || r.URL.Path == "/ping" {
+		// Skip logging for health check, heartbeat, readiness, and metrics endpoints
+		// to reduce log noise from high-frequency monitoring probes (SCN-023-08, C-023-C004).
+		switch r.URL.Path {
+		case "/api/health", "/ping", "/readyz", "/metrics":
 			next.ServeHTTP(w, r)
 			return
 		}

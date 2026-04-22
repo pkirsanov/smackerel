@@ -282,6 +282,83 @@ func TestHandleListCallback_InvalidData(t *testing.T) {
 	bot.handleListCallback(context.Background(), cb2)
 }
 
+func TestHandleList_GenerateShoppingList(t *testing.T) {
+	// Gherkin: "Generate shopping list via Telegram"
+	// Given the user sends "/list shopping from #weeknight"
+	// When the bot processes the command
+	// Then a shopping list is generated from #weeknight-tagged recipe artifacts
+	// And the list is sent as a formatted message with inline keyboard buttons
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+
+		var body map[string]string
+		json.NewDecoder(r.Body).Decode(&body)
+
+		if body["list_type"] != "shopping" {
+			t.Errorf("expected list_type 'shopping', got %q", body["list_type"])
+		}
+		if body["tag_filter"] != "#weeknight" {
+			t.Errorf("expected tag_filter '#weeknight', got %q", body["tag_filter"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(listWithItemsResponse{
+			List: listSummary{
+				ID:           "lst-gen-1",
+				Title:        "Shopping list from #weeknight",
+				ListType:     "shopping",
+				TotalItems:   3,
+				CheckedItems: 0,
+			},
+			Items: []listItemResponse{
+				{ID: "i1", ListID: "lst-gen-1", Content: "5 cloves garlic", Category: "produce", Status: "pending"},
+				{ID: "i2", ListID: "lst-gen-1", Content: "2 lbs chicken", Category: "proteins", Status: "pending"},
+				{ID: "i3", ListID: "lst-gen-1", Content: "1 cup rice", Category: "pantry", Status: "pending"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	var replied string
+	bot := &Bot{
+		listsURL:   server.URL,
+		httpClient: server.Client(),
+		replyFunc:  func(_ int64, text string) { replied = text },
+	}
+
+	msg := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
+	bot.handleList(context.Background(), msg, "shopping from #weeknight")
+
+	if replied == "" {
+		t.Fatal("expected a reply")
+	}
+	if !containsStr(replied, "Shopping list from #weeknight") {
+		t.Errorf("expected list title in reply, got: %s", replied)
+	}
+	if !containsStr(replied, "garlic") {
+		t.Errorf("expected 'garlic' in reply, got: %s", replied)
+	}
+	if !containsStr(replied, "chicken") {
+		t.Errorf("expected 'chicken' in reply, got: %s", replied)
+	}
+}
+
+func TestHandleList_GenerateInvalidType(t *testing.T) {
+	var replied string
+	bot := &Bot{
+		replyFunc: func(_ int64, text string) { replied = text },
+	}
+
+	msg := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
+	bot.handleList(context.Background(), msg, "unknown from #tag")
+
+	if !containsStr(replied, "Usage") {
+		t.Errorf("expected usage message for invalid type, got: %s", replied)
+	}
+}
+
 func containsStr(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {

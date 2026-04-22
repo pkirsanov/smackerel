@@ -121,9 +121,26 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	return nil
 }
 
-func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
-	// Atomically check re-entrancy, set syncing flag, and snapshot config.
+func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.RawArtifact, newCur string, retErr error) {
+	// STAB-F2: Recover from panics so health is not stuck on "syncing".
+	defer func() {
+		if r := recover(); r != nil {
+			c.mu.Lock()
+			c.syncing = false
+			c.health = connector.HealthError
+			c.lastSyncErrors = 1
+			c.mu.Unlock()
+			retErr = fmt.Errorf("maps timeline sync panic: %v", r)
+			slog.Error("maps-timeline: panic recovered in Sync", "panic", r)
+		}
+	}()
+
+	// Atomically check lifecycle state, re-entrancy, set syncing flag, and snapshot config.
 	c.mu.Lock()
+	if c.health == connector.HealthDisconnected {
+		c.mu.Unlock()
+		return nil, cursor, fmt.Errorf("connector is not connected")
+	}
 	if c.syncing {
 		c.mu.Unlock()
 		return nil, cursor, fmt.Errorf("sync already in progress")
@@ -137,6 +154,12 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		c.mu.Lock()
 		c.syncing = false
 		c.lastSyncTime = time.Now()
+		// STAB-F1: If Close() was called while Sync was in-flight, do not
+		// overwrite HealthDisconnected with HealthHealthy/HealthError.
+		if c.health == connector.HealthDisconnected {
+			c.mu.Unlock()
+			return
+		}
 		if c.lastSyncErrors > 0 && c.lastSyncCount == 0 {
 			c.health = connector.HealthError
 		} else {
