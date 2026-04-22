@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -76,18 +77,28 @@ func shutdownAll(
 
 	// Step 4: Stop result subscribers (NATS consumer drain) — 6s budget
 	// Budget covers NATS Fetch() MaxWait (5s) + processing margin (1s).
-	// If goroutines are still blocked in Fetch after 6s, step 6 (NATS close) will
-	// interrupt the call; the done channel ensures no new messages are processed.
+	// Subscribers are stopped in PARALLEL because they are independent (each has
+	// its own done channel, goroutines, and WaitGroup). Sequential stop would
+	// require up to 3×5s=15s in the common quiet-system case where consumer
+	// goroutines are blocked in Fetch(FetchMaxWait=5s) (STB-022-001).
+	// If goroutines are still blocked after 6s, step 6 (NATS close) will
+	// interrupt pending Fetch calls; the done channel ensures no new messages
+	// are processed.
 	runWithTimeout("result subscribers", 6*time.Second, deadline, func() {
+		var subWg sync.WaitGroup
 		if resultSub != nil {
-			resultSub.Stop()
+			subWg.Add(1)
+			go func() { defer subWg.Done(); resultSub.Stop() }()
 		}
 		if synthesisSub != nil {
-			synthesisSub.Stop()
+			subWg.Add(1)
+			go func() { defer subWg.Done(); synthesisSub.Stop() }()
 		}
 		if domainSub != nil {
-			domainSub.Stop()
+			subWg.Add(1)
+			go func() { defer subWg.Done(); domainSub.Stop() }()
 		}
+		subWg.Wait()
 	})
 
 	// Step 5: Stop connector supervisor (all connectors) — 2s budget
