@@ -92,10 +92,10 @@
 
 ## Database Schema
 
-### Migration: `015_user_annotations.sql`
+### Migration: `016_user_annotations.sql`
 
 ```sql
--- 015_user_annotations.sql
+-- 016_user_annotations.sql
 -- User annotations, interaction tracking, and Telegram message-to-artifact mapping.
 --
 -- ROLLBACK:
@@ -129,17 +129,17 @@ CREATE TYPE interaction_type AS ENUM (
 CREATE TABLE IF NOT EXISTS annotations (
     id              TEXT PRIMARY KEY,
     artifact_id     TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
-    ann_type        annotation_type NOT NULL,
-    rating          SMALLINT CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
+    annotation_type TEXT NOT NULL,
+    rating          INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
     note            TEXT,
     tag             TEXT,          -- single tag per event (normalized lowercase, trimmed)
-    interaction     interaction_type,
+    interaction_type TEXT,
     source_channel  TEXT NOT NULL, -- 'telegram', 'api', 'web'
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_annotations_artifact ON annotations(artifact_id);
-CREATE INDEX IF NOT EXISTS idx_annotations_type ON annotations(ann_type);
+CREATE INDEX IF NOT EXISTS idx_annotations_type ON annotations(annotation_type);
 CREATE INDEX IF NOT EXISTS idx_annotations_created ON annotations(created_at);
 CREATE INDEX IF NOT EXISTS idx_annotations_tag ON annotations(tag) WHERE tag IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_annotations_rating ON annotations(rating) WHERE rating IS NOT NULL;
@@ -158,6 +158,8 @@ CREATE TABLE IF NOT EXISTS telegram_message_artifacts (
 CREATE INDEX IF NOT EXISTS idx_tma_artifact ON telegram_message_artifacts(artifact_id);
 
 -- Materialized view: pre-aggregated annotation summary per artifact.
+-- Note: actual implementation uses TEXT columns (not PostgreSQL enums) for annotation_type
+-- and interaction_type. Functionally equivalent, simpler for consolidated migrations.
 -- Refreshed after annotation writes (REFRESH MATERIALIZED VIEW CONCURRENTLY).
 CREATE MATERIALIZED VIEW artifact_annotation_summary AS
 SELECT
@@ -165,31 +167,31 @@ SELECT
     -- Latest rating (most recent rating event)
     (SELECT ann.rating
      FROM annotations ann
-     WHERE ann.artifact_id = a.artifact_id AND ann.ann_type = 'rating'
+     WHERE ann.artifact_id = a.artifact_id AND ann.annotation_type = 'rating'
      ORDER BY ann.created_at DESC LIMIT 1
     ) AS current_rating,
     -- Average rating
-    AVG(a.rating) FILTER (WHERE a.ann_type = 'rating') AS average_rating,
+    AVG(a.rating) FILTER (WHERE a.annotation_type = 'rating') AS average_rating,
     -- Rating count
-    COUNT(*) FILTER (WHERE a.ann_type = 'rating') AS rating_count,
+    COUNT(*) FILTER (WHERE a.annotation_type = 'rating') AS rating_count,
     -- Interaction count (times used/made/read/etc.)
-    COUNT(*) FILTER (WHERE a.ann_type = 'interaction') AS times_used,
+    COUNT(*) FILTER (WHERE a.annotation_type = 'interaction') AS times_used,
     -- Last interaction timestamp
-    MAX(a.created_at) FILTER (WHERE a.ann_type = 'interaction') AS last_used,
+    MAX(a.created_at) FILTER (WHERE a.annotation_type = 'interaction') AS last_used,
     -- Active tags (added minus removed)
     ARRAY(
         SELECT DISTINCT sub.tag FROM annotations sub
         WHERE sub.artifact_id = a.artifact_id
-          AND sub.ann_type = 'tag_add'
+          AND sub.annotation_type = 'tag_add'
           AND sub.tag NOT IN (
               SELECT sub2.tag FROM annotations sub2
               WHERE sub2.artifact_id = a.artifact_id
-                AND sub2.ann_type = 'tag_remove'
+                AND sub2.annotation_type = 'tag_remove'
                 AND sub2.created_at > sub.created_at
           )
     ) AS tags,
     -- Notes count
-    COUNT(*) FILTER (WHERE a.ann_type = 'note') AS notes_count,
+    COUNT(*) FILTER (WHERE a.annotation_type = 'note') AS notes_count,
     -- Total annotation events
     COUNT(*) AS total_events,
     -- Most recent annotation of any type
@@ -451,9 +453,9 @@ func (s *Store) CreateAnnotation(ctx context.Context, ann *Annotation) error {
     ann.ID = ulid.Make().String()
 
     _, err := s.DB.Exec(ctx, `
-        INSERT INTO annotations (id, artifact_id, ann_type, rating, note, tag, interaction, source_channel, created_at)
+        INSERT INTO annotations (id, artifact_id, annotation_type, rating, note, tag, interaction_type, source_channel, created_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-    `, ann.ID, ann.ArtifactID, ann.Type, ann.Rating, ann.Note, ann.Tag, ann.Interaction, ann.SourceChannel)
+    `, ann.ID, ann.ArtifactID, ann.Type, ann.Rating, ann.Note, ann.Tag, ann.InteractionType, ann.SourceChannel)
     if err != nil {
         return fmt.Errorf("insert annotation: %w", err)
     }
@@ -585,7 +587,7 @@ func (s *Store) GetHistory(ctx context.Context, artifactID string, limit int) ([
         limit = 50
     }
     rows, err := s.DB.Query(ctx, `
-        SELECT id, artifact_id, ann_type, rating, note, tag, interaction, source_channel, created_at
+        SELECT id, artifact_id, annotation_type, rating, note, tag, interaction_type, source_channel, created_at
         FROM annotations
         WHERE artifact_id = $1
         ORDER BY created_at DESC
