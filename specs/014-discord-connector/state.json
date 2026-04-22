@@ -167,5 +167,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "All 6 scopes implemented. 16+ stochastic quality sweeps completed (gaps, security x3, harden, chaos, stabilize x2, simplify x3, regression x2, improve). 147 test functions (138 discord_test.go + 9 gateway_test.go), all pass with -race. No integration/E2E tests — all tests are unit-level with httptest mocking."
+  "notes": "All 6 scopes implemented. 17+ stochastic quality sweeps completed (gaps, security x3, harden, chaos, stabilize x3, simplify x2, regression x2, improve, reconcile, spec-review). 150 test functions (141 discord_test.go + 9 gateway_test.go), all pass with -race. No integration/E2E tests — all tests are unit-level with httptest mocking."
 }

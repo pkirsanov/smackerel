@@ -965,3 +965,37 @@ internal/connector/discord/gateway_test.go:9
 ```
 
 All 150 test functions pass. Zero regressions.
+
+---
+
+### Simplify-To-Doc Sweep (Pass 2) — 2026-04-22
+
+**Trigger:** `simplify` probe via stochastic-quality-sweep (REPEAT)
+**Mode:** `simplify-to-doc`
+**Agent:** `bubbles.workflow` (child of stochastic sweep)
+
+#### Context
+
+Second simplify pass on the Discord connector. Pass 1 (round 8) addressed S1 (redundant loops in Sync) and S2 (dead continue statements). This pass examines the codebase after 17+ quality sweeps for remaining simplification opportunities.
+
+#### Findings (1 simplification opportunity identified)
+
+| # | Finding | Severity | Status |
+|---|---------|----------|--------|
+| S3 | Repeated sanitize-and-truncate pattern in `normalizeMessage()` — the pattern `stringutil.TruncateUTF8(sanitizeControlChars(x), maxLen)` appeared 7 times for metadata strings (server_name, channel_name, author_name, thread_name, embed title, embed description, reaction emoji). Extracted `sanitizeStr(s string, maxLen int) string` helper. | Low | Fixed |
+
+#### Remediation Summary
+
+**Files modified:**
+- `internal/connector/discord/discord.go`:
+  - S3: Added `sanitizeStr(s string, maxLen int) string` helper that combines `sanitizeControlChars` + `stringutil.TruncateUTF8` into a single call. Replaced 7 inline call sites in `normalizeMessage()` with the new helper. Net reduction: 7 two-part calls → 7 single-call invocations, plus one 4-line helper function added. No behavior change — identical sanitization + truncation semantics.
+
+#### Validation
+
+```
+$ ./smackerel.sh build — clean (core + ml images built)
+$ ./smackerel.sh test unit — all 41 Go packages pass, 257 Python tests pass, zero FAIL
+ok  github.com/smackerel/smackerel/internal/connector/discord  7.861s
+```
+
+No behavior changes — all 150 discord test functions pass unchanged.
