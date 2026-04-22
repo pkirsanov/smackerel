@@ -489,26 +489,20 @@ func (rs *ResultSubscriber) publishDomainExtractionRequest(ctx context.Context, 
 		return nil
 	}
 
-	// Look up source URL from DB for URL qualifier matching
-	var sourceURL string
-	err := rs.DB.QueryRow(ctx, `SELECT COALESCE(source_url, '') FROM artifacts WHERE id = $1`, payload.ArtifactID).Scan(&sourceURL)
+	// Load artifact fields needed for domain registry matching and extraction request
+	var sourceURL, contentRaw, title, summary string
+	err := rs.DB.QueryRow(ctx,
+		`SELECT COALESCE(source_url, ''), COALESCE(content_raw, ''), COALESCE(title, ''), COALESCE(summary, '')
+		 FROM artifacts WHERE id = $1`,
+		payload.ArtifactID,
+	).Scan(&sourceURL, &contentRaw, &title, &summary)
 	if err != nil {
-		return fmt.Errorf("load source_url: %w", err)
+		return fmt.Errorf("load artifact for domain extraction: %w", err)
 	}
 
 	contract := rs.DomainRegistry.Match(payload.Result.ArtifactType, sourceURL)
 	if contract == nil {
 		return nil // no matching domain schema — skip silently
-	}
-
-	// Load content from DB
-	var contentRaw, title, summary string
-	err = rs.DB.QueryRow(ctx,
-		`SELECT COALESCE(content_raw, ''), COALESCE(title, ''), COALESCE(summary, '') FROM artifacts WHERE id = $1`,
-		payload.ArtifactID,
-	).Scan(&contentRaw, &title, &summary)
-	if err != nil {
-		return fmt.Errorf("load artifact content: %w", err)
 	}
 
 	// Content length gating
