@@ -587,3 +587,57 @@ Systematic review of all 14 Gherkin scenarios (SCN-022-01 through SCN-022-14), a
 - Shell: `backup.sh` uses `set -euo pipefail`, quoted variables, `${VAR:?error}` fail-loud, `trap` cleanup
 - Headers: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy all set
 - OAuth: `generateState()` uses `crypto/rand`, state entries evicted after 10m, capped at 100
+
+## DevOps Pass (stochastic sweep — devops-to-doc)
+
+**Date:** 2026-04-22
+**Trigger:** Stochastic quality sweep — devops (child workflow)
+**Scope:** CLI surface, Docker lifecycle, config pipeline, backup operations, shutdown mechanics, NATS dead-letter coverage
+
+### DevOps Probe Summary
+
+Full operational surface audit of spec 022 from a DevOps perspective: CLI commands, Docker Compose configuration, SST config pipeline, backup script safety, shutdown budget enforcement, and NATS message delivery guarantee completeness.
+
+### Areas Probed
+
+| Area | Status | Evidence |
+|------|--------|---------|
+| `./smackerel.sh check` | PASS | Config in sync with SST, env_file drift guard OK |
+| `./smackerel.sh build` | PASS | Both core and ml images built successfully |
+| `./smackerel.sh test unit` | PASS | All 41 Go packages PASS, 257 Python tests PASS |
+| `./smackerel.sh backup` CLI dispatch | CLEAN | Properly wired in smackerel.sh → scripts/commands/backup.sh |
+| Backup script safety | CLEAN | pg_dump stderr capture, gzip integrity, trap-based temp cleanup, fail-loud var validation |
+| Docker stop_grace_period | CLEAN | 30s on smackerel-core, 15s on smackerel-ml |
+| Shutdown budget alignment | CLEAN | Overall deadline enforcement via `context.WithTimeout(totalTimeout)`, per-step budgets race against deadline |
+| SST config flow (DB pool) | CLEAN | `smackerel.yaml` → `config generate` → env → `config.Load()` fail-loud → `db.Connect(maxConns, minConns)` |
+| SST config flow (shutdown) | CLEAN | `SHUTDOWN_TIMEOUT_S` flows through full SST pipeline |
+| SST config flow (ML health) | CLEAN | `ML_HEALTH_CACHE_TTL_S` flows through full SST pipeline |
+| NATS DEADLETTER stream | CLEAN | LimitsPolicy, 30d MaxAge, 10000 MaxMsgs, FileStorage |
+| Dead-letter: ResultSubscriber | CLEAN | `handleDeliveryFailure` → `publishToDeadLetter` with Nak-on-failure |
+| Dead-letter: DomainResultSubscriber | CLEAN | `handleDomainDeliveryFailure` → dead-letter publish with Nak-on-failure |
+| Dead-letter: SynthesisResultSubscriber | **FIXED** | Was missing — see DEVOPS-022-001 below |
+| `backups/` in .gitignore | CLEAN | Present at line 21 |
+| docker-compose.prod.yml | CLEAN | Restart=always, memory limits, log rotation, /readyz health probe |
+| Config cross-validation | CLEAN | `DB_MIN_CONNS <= DB_MAX_CONNS` check present |
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File(s) | Fix |
+|----|---------|----------|---------|-----|
+| DEVOPS-022-001 | `SynthesisResultSubscriber` has no dead-letter routing. Both `handleSynthesized` and `handleCrossSourceResult` use bare `msg.Nak()` on transient DB failures. After MaxDeliver (5) attempts, NATS silently discards the message — violating the spec's "zero silent data loss" contract. `ResultSubscriber` and `DomainResultSubscriber` both have proper dead-letter routing, but `SynthesisResultSubscriber` was never updated. This means synthesis extraction failures and cross-source edge creation failures are silently lost after 5 retries. | High | `internal/pipeline/synthesis_subscriber.go` | Added `handleSynthesisDeliveryFailure` and `publishSynthesisToDeadLetter` methods mirroring the established pattern from `ResultSubscriber.handleDeliveryFailure` and `DomainResultSubscriber.handleDomainDeliveryFailure`. Both `handleSynthesized` (artifact load failure, knowledge update failure) and `handleCrossSourceResult` (edge creation failure) now route through delivery failure handling with proper dead-letter routing at MaxDeliver. |
+
+### New Tests
+
+| Test | File | Purpose |
+|------|------|---------|
+| `TestSynthesisDeliveryFailure_RoutesToDeadLetter` | `internal/pipeline/synthesis_subscriber_test.go` | Verifies exhausted synthesis messages route to DEADLETTER with correct headers (subject, stream, consumer, delivery count, error, RFC3339 timestamp) |
+| `TestSynthesisDeliveryFailure_BelowMaxDeliver_Naks` | `internal/pipeline/synthesis_subscriber_test.go` | Verifies Nak for retry below MaxDeliver — no premature dead-letter routing |
+| `TestSynthesisDeliveryFailure_PublishFails_Naks` | `internal/pipeline/synthesis_subscriber_test.go` | Adversarial: dead-letter publish fails → Nak to preserve message (no silent loss) |
+
+### Evidence
+
+- Build: `./smackerel.sh build` — PASS (exit 0, both images built)
+- Check: `./smackerel.sh check` — PASS (config in sync with SST, env_file drift guard OK)
+- Unit tests: `./smackerel.sh test unit` — all 41 Go packages PASS (internal/pipeline 0.223s fresh), 257 Python tests PASS
+- All 3 new dead-letter routing tests PASS
+- Dead-letter routing now complete across all 3 NATS subscribers: `ResultSubscriber`, `DomainResultSubscriber`, `SynthesisResultSubscriber`
