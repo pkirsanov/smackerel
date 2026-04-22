@@ -1134,13 +1134,13 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 	if isValidSnowflake(msg.GuildID) {
 		metadata["server_id"] = msg.GuildID
 	}
-	metadata["server_name"] = stringutil.TruncateUTF8(sanitizeControlChars(msg.ServerName), maxMetadataStringLen)
-	metadata["channel_name"] = stringutil.TruncateUTF8(sanitizeControlChars(msg.ChannelName), maxMetadataStringLen)
+	metadata["server_name"] = sanitizeStr(msg.ServerName, maxMetadataStringLen)
+	metadata["channel_name"] = sanitizeStr(msg.ChannelName, maxMetadataStringLen)
 	// Only store author_id if it is a valid snowflake
 	if isValidSnowflake(msg.Author.ID) {
 		metadata["author_id"] = msg.Author.ID
 	}
-	metadata["author_name"] = stringutil.TruncateUTF8(sanitizeControlChars(msg.Author.Username), maxMetadataStringLen)
+	metadata["author_name"] = sanitizeStr(msg.Author.Username, maxMetadataStringLen)
 
 	// Sanitize and cap embeds
 	if len(msg.Embeds) > 0 {
@@ -1151,8 +1151,8 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 		for i := 0; i < limit; i++ {
 			e := msg.Embeds[i]
 			e.URL = sanitizeEmbedURL(e.URL)
-			e.Title = stringutil.TruncateUTF8(sanitizeControlChars(e.Title), maxEmbedTitleLen)
-			e.Description = stringutil.TruncateUTF8(sanitizeControlChars(e.Description), maxEmbedDescLen)
+			e.Title = sanitizeStr(e.Title, maxEmbedTitleLen)
+			e.Description = sanitizeStr(e.Description, maxEmbedDescLen)
 			safeEmbeds = append(safeEmbeds, e)
 		}
 		metadata["embeds"] = safeEmbeds
@@ -1187,7 +1187,7 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 				count = 0
 			}
 			safeReactions[i] = Reaction{
-				Emoji: stringutil.TruncateUTF8(sanitizeControlChars(rx.Emoji), maxReactionEmojiLen),
+				Emoji: sanitizeStr(rx.Emoji, maxReactionEmojiLen),
 				Count: count,
 			}
 		}
@@ -1209,7 +1209,7 @@ func normalizeMessage(msg DiscordMessage, defaultTier string, captureCommands []
 	// Validate thread ID is a snowflake before storing
 	if msg.ThreadID != "" && isValidSnowflake(msg.ThreadID) {
 		metadata["thread_id"] = msg.ThreadID
-		metadata["thread_name"] = stringutil.TruncateUTF8(sanitizeControlChars(msg.ThreadName), maxMetadataStringLen)
+		metadata["thread_name"] = sanitizeStr(msg.ThreadName, maxMetadataStringLen)
 	}
 	// Validate reply reference ID is a snowflake before storing
 	if msg.MessageReference != nil && isValidSnowflake(msg.MessageReference.MessageID) {
@@ -1342,6 +1342,12 @@ func buildTitle(msg DiscordMessage) string {
 		return string(runes[:80]) + "..."
 	}
 	return content
+}
+
+// sanitizeStr strips control characters and truncates to maxLen bytes (UTF-8 safe).
+// Combines sanitizeControlChars + TruncateUTF8 for metadata string fields.
+func sanitizeStr(s string, maxLen int) string {
+	return stringutil.TruncateUTF8(sanitizeControlChars(s), maxLen)
 }
 
 // sanitizeEmbedURL returns the URL unchanged if it passes full SSRF validation
