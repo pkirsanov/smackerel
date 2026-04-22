@@ -276,3 +276,34 @@ func TestGeneratePreMeetingBriefs_CancelledContext(t *testing.T) {
 		t.Error("expected error for nil pool or cancelled context")
 	}
 }
+
+// === Harden H-004-001: assembleBriefText word-cap regression guard ===
+
+func TestAssembleBriefText_WordCountCap(t *testing.T) {
+	// Build a meeting with many attendees each having verbose context
+	// to push the output well beyond maxBriefWords (120).
+	var attendees []AttendeeBrief
+	for i := 0; i < 20; i++ {
+		attendees = append(attendees, AttendeeBrief{
+			Name:          strings.Repeat("LongName ", 3),
+			Email:         "person@example.com",
+			RecentThreads: []string{"Thread alpha beta gamma", "Thread delta epsilon zeta", "Thread eta theta iota"},
+			SharedTopics:  []string{"distributed systems", "machine learning", "cloud architecture", "data engineering", "platform reliability"},
+			PendingItems:  []string{"Review the quarterly report", "Follow up on pricing proposal", "Schedule design review session"},
+			IsNewContact:  false,
+		})
+	}
+	brief := MeetingBrief{
+		EventTitle: "Extended Strategy Review Meeting With All Department Leads",
+		Attendees:  attendees,
+	}
+
+	text := assembleBriefText(brief)
+	wordCount := len(strings.Fields(text))
+	if wordCount > maxBriefWords {
+		t.Errorf("assembleBriefText exceeded maxBriefWords cap: got %d words, max %d", wordCount, maxBriefWords)
+	}
+	if wordCount == 0 {
+		t.Error("expected non-empty brief text")
+	}
+}

@@ -2,17 +2,70 @@ package api
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"fmt"
 	"html/template"
+	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	pwa "github.com/smackerel/smackerel/web/pwa"
 )
 
+// pwaContentHash is a SHA-256 digest of all embedded PWA static assets,
+// computed once at init. It is injected into sw.js CACHE_NAME so the
+// service worker cache invalidates whenever any asset changes.
+var pwaContentHash string
+
+func init() {
+	h := sha256.New()
+	_ = fs.WalkDir(pwa.StaticFiles, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, readErr := fs.ReadFile(pwa.StaticFiles, path)
+		if readErr != nil {
+			return readErr
+		}
+		h.Write([]byte(path))
+		h.Write(data)
+		return nil
+	})
+	pwaContentHash = hex.EncodeToString(h.Sum(nil))[:12]
+}
+
 // pwaFileServer returns an http.Handler that serves embedded PWA static files.
+// It intercepts requests for sw.js and replaces the hardcoded CACHE_NAME with
+// a content-hash-versioned name so browsers detect asset changes.
 func pwaFileServer() http.Handler {
-	return http.FileServerFS(pwa.StaticFiles)
+	base := http.FileServerFS(pwa.StaticFiles)
+	// Pre-render sw.js with the content hash baked in.
+	swRaw, err := fs.ReadFile(pwa.StaticFiles, "sw.js")
+	if err != nil {
+		// If sw.js is missing, fall back to the default file server.
+		return base
+	}
+	swPatched := strings.Replace(
+		string(swRaw),
+		"smackerel-pwa-v2",
+		fmt.Sprintf("smackerel-pwa-%s", pwaContentHash),
+		1,
+	)
+	swBytes := []byte(swPatched)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// After http.StripPrefix("/pwa", ...) the path arrives as /sw.js.
+		if r.URL.Path == "/sw.js" {
+			w.Header().Set("Content-Type", "application/javascript")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Write(swBytes)
+			return
+		}
+		base.ServeHTTP(w, r)
+	})
 }
 
 // sharePageTemplate is the HTML template served when the OS share target POSTs to /pwa/share.

@@ -56,8 +56,9 @@ Use `./smackerel.sh` for runtime work and keep the committed Bubbles validation 
 | Generate config | `./smackerel.sh config generate` | Render environment files from `config/smackerel.yaml` |
 | Build images | `./smackerel.sh build [--no-cache]` | Build the Go core and Python sidecar images |
 | Check compose wiring | `./smackerel.sh check` | Validate generated config and docker-compose interpolation |
-| Lint | `./smackerel.sh lint` | Run Go and Python linting in containers |
+| Lint | `./smackerel.sh lint` | Run Go vet, Python ruff, and web asset validation |
 | Format | `./smackerel.sh format` | Format Go and Python sources in containers |
+| Package extension | `./smackerel.sh package extension` | Package browser extension for Chrome and Firefox distribution |
 | Unit tests | `./smackerel.sh test unit [--go\|--python]` | Run Go and Python unit tests (or one language only) |
 | Integration tests | `./smackerel.sh test integration` | Run live-stack foundation integration validation |
 | E2E tests | `./smackerel.sh test e2e` | Run compose start, persistence, and config-failure E2E checks |

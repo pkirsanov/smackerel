@@ -1233,3 +1233,36 @@ Exit code: 0
 ### Conclusion
 
 Gaps probe clean. No remediation required. All functional requirements (R-401 through R-405) have corresponding implementation with passing tests and clean lint. Drift items are intentional architectural decisions already documented in the prior regression sweep (REG-005-001 through REG-005-003). Deferred items (R-406, R-407) are explicitly scoped out in spec.md Non-Goals.
+
+---
+
+## Gaps Pass (Stochastic Sweep — gaps trigger, repeat)
+
+### Findings
+
+| ID | Finding | Severity | Fix |
+|----|---------|----------|-----|
+| GAP-005-F1 | Privacy consent not checked at connector Sync level — R-401/R-402 require opt-in enforcement via `privacy_consent` table check before any Maps or Browser sync, but neither connector checked consent before processing data | High | Added `checkPrivacyConsent()` in maps connector Sync and inline consent query in browser connector Sync; both abort with logged skip when consent is absent. Added `SetPool()` to browser connector. |
+| GAP-005-F2 | Trail records never persisted to `trails` table — R-404 specifies trail storage, DB schema has `trails` table, `IsTrailQualified()` identifies trails, but `PersistTrailRecord()` was missing and Sync only counted trails without writing them | Medium | Added `PersistTrailRecord()` with deterministic ID, GeoJSON route serialization, and ON CONFLICT dedup. Wired into maps connector Sync after `IsTrailQualified()` check. |
+| GAP-005-F3 | Interaction trend used 3-tier model (warming/stable/cooling) instead of design's 4-tier (increasing/stable/decreasing/lapsed) — R-405 specifies ratio-based trend calculation with 4 tiers | Low | Aligned `classifyInteractionTrend()` to 4-tier model: increasing (recent+high activity), stable, decreasing (gap+any activity), lapsed (gap+low activity). Updated all tests. |
+| GAP-005-F4 (tracked) | NATS subjects for Phase 4 (`smk.trip.detect`, `smk.trail.enrich`, `smk.people.analyze`, `smk.browser.process`) missing from `config/nats_contract.json` — design specifies these but naming convention differs from established contract pattern | Medium | Not fixed — requires naming convention alignment decision. Tracked for future planning. |
+| GAP-005-F5 (tracked) | REST API endpoints for trips/trails/people not implemented — design specifies 10 endpoints (`GET /api/trips`, `GET /api/trails`, `GET /api/people/{id}/profile`, etc.) | Large | Not fixed — requires dedicated implementation scope. Tracked for future planning. |
+
+### Files Changed
+- `internal/connector/maps/connector.go` — Added `checkPrivacyConsent()` helper, `PersistTrailRecord()`, consent check in Sync, trail persistence in Sync loop, `encoding/json` import
+- `internal/connector/browser/connector.go` — Added `pool *pgxpool.Pool` field, `SetPool()` method, consent check in Sync, `pgxpool` import
+- `internal/intelligence/people.go` — Aligned `classifyInteractionTrend()` to 4-tier model (increasing/stable/decreasing/lapsed)
+- `internal/connector/maps/connector_test.go` — Added `TestCheckPrivacyConsent_NilPool`, `TestPersistTrailRecord_DeterministicID`, `TestPersistTrailRecord_NilPool`
+- `internal/intelligence/people_test.go` — Updated `TestClassifyInteractionTrend` cases, `TestClassifyInteractionTrend_BoundaryValues`, `TestClassifyInteractionTrend_ExtremeValues`, `TestPersonProfile_Struct` to match 4-tier model
+
+### Test Evidence
+```
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/connector/maps  0.390s
+ok  github.com/smackerel/smackerel/internal/connector/browser  (cached)
+ok  github.com/smackerel/smackerel/internal/intelligence  0.043s
+All 41 Go packages pass. 257 Python tests pass. Exit code: 0.
+
+$ ./smackerel.sh lint
+All checks passed!
+```

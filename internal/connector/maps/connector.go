@@ -2,6 +2,7 @@ package maps
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -168,6 +169,33 @@ func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.R
 		c.mu.Unlock()
 	}()
 
+	// GAP-005-F1: Check privacy_consent before syncing (R-401 opt-in enforcement).
+	// Maps is an opt-in source — sync must abort if user has not consented.
+	c.mu.RLock()
+	pool := c.pool
+	c.mu.RUnlock()
+	if pool != nil {
+		consented, err := checkPrivacyConsent(ctx, pool, "maps")
+		if err != nil {
+			slog.Warn("privacy consent check failed, aborting maps sync", "error", err)
+			c.mu.Lock()
+			c.lastSyncCount = 0
+			c.lastSyncErrors = 1
+			c.lastTrailCount = 0
+			c.mu.Unlock()
+			return nil, cursor, fmt.Errorf("privacy consent check: %w", err)
+		}
+		if !consented {
+			slog.Info("maps sync skipped: user has not consented to maps data collection")
+			c.mu.Lock()
+			c.lastSyncCount = 0
+			c.lastSyncErrors = 0
+			c.lastTrailCount = 0
+			c.mu.Unlock()
+			return nil, cursor, nil
+		}
+	}
+
 	processedFiles := parseCursor(cursor)
 
 	newFiles, err := findNewFiles(cfg.ImportDir, processedFiles)
@@ -279,6 +307,15 @@ func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.R
 
 			if IsTrailQualified(activity) {
 				trailCount++
+				// GAP-005-F2: Persist qualified trails to the trails table (R-404).
+				c.mu.RLock()
+				trailPool := c.pool
+				c.mu.RUnlock()
+				if trailPool != nil {
+					if err := PersistTrailRecord(ctx, trailPool, activity); err != nil {
+						slog.Warn("failed to persist trail record", "error", err)
+					}
+				}
 			}
 
 			// Insert location cluster row for pattern detection.
@@ -788,4 +825,71 @@ func configIntMin(sc map[string]interface{}, key string, min int) (int, error) {
 	default:
 		return -1, nil
 	}
+}
+
+// checkPrivacyConsent queries the privacy_consent table for the given source.
+// Returns true if the user has consented and consent has not been revoked.
+// GAP-005-F1: Enforces R-401/R-402 opt-in requirement at the connector level.
+func checkPrivacyConsent(ctx context.Context, pool *pgxpool.Pool, sourceID string) (bool, error) {
+	if pool == nil {
+		return false, fmt.Errorf("privacy consent check requires a database connection")
+	}
+	var consented bool
+	err := pool.QueryRow(ctx,
+		`SELECT consented FROM privacy_consent WHERE source_id = $1`,
+		sourceID,
+	).Scan(&consented)
+	if err != nil {
+		// No row means consent was never granted.
+		if err.Error() == "no rows in result set" {
+			return false, nil
+		}
+		return false, fmt.Errorf("query privacy_consent for %s: %w", sourceID, err)
+	}
+	return consented, nil
+}
+
+// PersistTrailRecord writes a qualified trail activity to the trails table.
+// GAP-005-F2: Implements R-404 trail persistence that was missing.
+func PersistTrailRecord(ctx context.Context, pool *pgxpool.Pool, activity TakeoutActivity) error {
+	if pool == nil {
+		return fmt.Errorf("trail persistence requires a database connection")
+	}
+
+	geoJSON := ToGeoJSON(activity.Route)
+
+	var routeJSON []byte
+	if geoJSON != nil {
+		var err error
+		routeJSON, err = json.Marshal(geoJSON)
+		if err != nil {
+			return fmt.Errorf("marshal trail route: %w", err)
+		}
+	}
+
+	// Use start time + type + distance as a deterministic ID to prevent duplicates.
+	trailID := fmt.Sprintf("trail-%s-%s-%.1f",
+		activity.StartTime.Format("20060102T150405"),
+		activity.Type,
+		activity.DistanceKm,
+	)
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO trails (id, activity_type, route, distance_km, duration_min,
+			elevation_m, start_time, end_time, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+		ON CONFLICT (id) DO NOTHING`,
+		trailID,
+		string(activity.Type),
+		routeJSON,
+		activity.DistanceKm,
+		activity.DurationMin,
+		activity.ElevationM,
+		activity.StartTime,
+		activity.EndTime,
+	)
+	if err != nil {
+		return fmt.Errorf("insert trail record: %w", err)
+	}
+	return nil
 }

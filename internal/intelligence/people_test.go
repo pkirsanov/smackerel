@@ -86,10 +86,12 @@ func TestClassifyInteractionTrend(t *testing.T) {
 		total    int
 		expected string
 	}{
-		{3, 10, "warming"},
+		{3, 15, "increasing"},
+		{3, 5, "stable"},
 		{14, 10, "stable"},
-		{50, 10, "cooling"},
-		{25, 3, "cooling"},
+		{50, 10, "decreasing"},
+		{50, 2, "lapsed"},
+		{25, 3, "decreasing"},
 		{25, 10, "stable"},
 	}
 
@@ -107,13 +109,13 @@ func TestPersonProfile_Struct(t *testing.T) {
 		Email:             "sarah@example.com",
 		TotalInteractions: 25,
 		DaysSinceContact:  3,
-		InteractionTrend:  "warming",
+		InteractionTrend:  "increasing",
 		SharedTopics:      []string{"product", "strategy"},
 		PendingItems:      []string{"Review proposal"},
 	}
 
-	if pp.InteractionTrend != "warming" {
-		t.Errorf("expected warming, got %s", pp.InteractionTrend)
+	if pp.InteractionTrend != "increasing" {
+		t.Errorf("expected increasing, got %s", pp.InteractionTrend)
 	}
 	if len(pp.SharedTopics) != 2 {
 		t.Errorf("expected 2 shared topics, got %d", len(pp.SharedTopics))
@@ -230,20 +232,21 @@ func TestClassifyInteractionTrend_BoundaryValues(t *testing.T) {
 		total    int
 		expected string
 	}{
-		// Boundary at 7 days (warming threshold)
+		// Boundary at 7 days (increasing/stable threshold)
 		{"exactly 7 days is stable", 7, 10, "stable"},
-		{"6 days is warming", 6, 10, "warming"},
-		// Boundary at 42 days (cooling threshold)
+		{"6 days, 10 interactions is stable", 6, 10, "stable"},
+		{"6 days, 15 interactions is increasing", 6, 15, "increasing"},
+		// Boundary at 42 days (decreasing/lapsed threshold)
 		{"exactly 42 days is stable", 42, 10, "stable"},
-		{"43 days is cooling", 43, 10, "cooling"},
+		{"43 days, 10 interactions is decreasing", 43, 10, "decreasing"},
 		// Boundary at 21 days with low interactions
 		{"21 days, 4 interactions is stable", 21, 4, "stable"},
-		{"22 days, 4 interactions is cooling", 22, 4, "cooling"},
+		{"22 days, 4 interactions is decreasing", 22, 4, "decreasing"},
 		{"22 days, 5 interactions is stable", 22, 5, "stable"},
 		// Zero interactions
-		{"0 days, 0 interactions is warming", 0, 0, "warming"},
-		{"30 days, 0 interactions is cooling", 30, 0, "cooling"},
-		{"50 days, 0 interactions is cooling", 50, 0, "cooling"},
+		{"0 days, 0 interactions is stable", 0, 0, "stable"},
+		{"30 days, 0 interactions is decreasing", 30, 0, "decreasing"},
+		{"50 days, 0 interactions is lapsed", 50, 0, "lapsed"},
 	}
 
 	for _, tt := range tests {
@@ -261,7 +264,7 @@ func TestPersonProfile_EmptyCollections(t *testing.T) {
 		Name:              "New Contact",
 		TotalInteractions: 1,
 		DaysSinceContact:  2,
-		InteractionTrend:  "warming",
+		InteractionTrend:  "stable",
 		SharedTopics:      nil,
 		PendingItems:      nil,
 	}
@@ -363,16 +366,22 @@ func TestEscapeLikePattern_ChaosEdgeCases(t *testing.T) {
 // === Chaos: classifyInteractionTrend with extreme values ===
 
 func TestClassifyInteractionTrend_ExtremeValues(t *testing.T) {
-	// Very large interactions should not panic or produce incorrect results
+	// Very large interactions with recent contact should be increasing
 	got := classifyInteractionTrend(0, 999999)
-	if got != "warming" {
-		t.Errorf("0 days, huge interactions should be warming, got %s", got)
+	if got != "increasing" {
+		t.Errorf("0 days, huge interactions should be increasing, got %s", got)
 	}
 
-	// Large days_since should always be cooling regardless of interactions
+	// Large days_since with high interactions should be decreasing (not lapsed)
 	got = classifyInteractionTrend(9999, 999999)
-	if got != "cooling" {
-		t.Errorf("huge days should be cooling, got %s", got)
+	if got != "decreasing" {
+		t.Errorf("huge days, high interactions should be decreasing, got %s", got)
+	}
+
+	// Large days_since with low interactions should be lapsed
+	got = classifyInteractionTrend(9999, 1)
+	if got != "lapsed" {
+		t.Errorf("huge days, low interactions should be lapsed, got %s", got)
 	}
 }
 

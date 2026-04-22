@@ -278,16 +278,26 @@ func (e *Engine) GetPeopleIntelligence(ctx context.Context) ([]PersonProfile, er
 	return profiles, nil
 }
 
-// classifyInteractionTrend determines if a relationship is warming, stable, or cooling.
+// classifyInteractionTrend determines the relationship trend using a 4-tier model
+// aligned with R-405 design: increasing, stable, decreasing, lapsed.
+// Uses daysSince and totalInteractions as a proxy for the designed ratio-based
+// calculation (current_month / avg_monthly) until per-month counters are available.
+// GAP-005-F3: Aligned with design's 4-tier trend model.
 func classifyInteractionTrend(daysSince, totalInteractions int) string {
+	if daysSince > 42 && totalInteractions < 3 {
+		return "lapsed"
+	}
 	if daysSince > 42 {
-		return "cooling"
+		return "decreasing"
 	}
 	if daysSince > 21 && totalInteractions < 5 {
-		return "cooling"
+		return "decreasing"
+	}
+	if daysSince < 7 && totalInteractions > 10 {
+		return "increasing"
 	}
 	if daysSince < 7 {
-		return "warming"
+		return "stable"
 	}
 	return "stable"
 }

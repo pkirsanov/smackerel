@@ -355,3 +355,58 @@ func TestPWAShareHandler_OversizedBodyRejected(t *testing.T) {
 		t.Errorf("oversized body: expected 400, got %d", rec.Code)
 	}
 }
+
+func TestPWAFileServer_SWContentHashInjected(t *testing.T) {
+	handler := pwaFileServer()
+
+	req := httptest.NewRequest(http.MethodGet, "/sw.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /sw.js: expected 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// The hardcoded cache name should be replaced with a content-hash version
+	if strings.Contains(body, "smackerel-pwa-v2") {
+		t.Error("sw.js must not contain hardcoded cache name 'smackerel-pwa-v2' — should be replaced with content hash")
+	}
+
+	// The replaced name should follow the pattern smackerel-pwa-<12-char-hex>
+	if !strings.Contains(body, "smackerel-pwa-") {
+		t.Error("sw.js must contain content-hash-based cache name starting with 'smackerel-pwa-'")
+	}
+}
+
+func TestPWAFileServer_SWNoCacheHeader(t *testing.T) {
+	handler := pwaFileServer()
+
+	req := httptest.NewRequest(http.MethodGet, "/sw.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /sw.js: expected 200, got %d", rec.Code)
+	}
+
+	cc := rec.Header().Get("Cache-Control")
+	if cc != "no-cache" {
+		t.Errorf("sw.js must have Cache-Control: no-cache, got %q", cc)
+	}
+
+	ct := rec.Header().Get("Content-Type")
+	if !strings.Contains(ct, "javascript") {
+		t.Errorf("sw.js must have javascript Content-Type, got %q", ct)
+	}
+}
+
+func TestPWAContentHash_NotEmpty(t *testing.T) {
+	if pwaContentHash == "" {
+		t.Fatal("pwaContentHash must be computed at init — cannot be empty")
+	}
+	if len(pwaContentHash) != 12 {
+		t.Errorf("pwaContentHash should be 12 hex chars, got %d: %q", len(pwaContentHash), pwaContentHash)
+	}
+}

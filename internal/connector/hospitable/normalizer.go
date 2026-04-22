@@ -15,6 +15,13 @@ import (
 // Reject javascript:, data:, vbscript: etc. to prevent XSS (CWE-79/601).
 var safeURLSchemes = map[string]bool{"http": true, "https": true}
 
+// hospAppReservationURL is the base URL for linking to reservations in the
+// Hospitable web app, extracted as a constant to avoid repetition (IMP-012-IMP-004).
+const hospAppReservationURL = "https://app.hospitable.com/reservations/"
+
+// hospAPIHost is the host substring used to decide whether to generate app URLs.
+const hospAPIHost = "api.hospitable.com"
+
 // isSafeURL checks that u is an absolute URL with an allowed scheme (http/https).
 func isSafeURL(u string) bool {
 	parsed, err := url.Parse(u)
@@ -147,8 +154,8 @@ func NormalizeReservation(r Reservation, propertyName string, config HospitableC
 	}
 
 	var reservationURL string
-	if strings.Contains(config.BaseURL, "api.hospitable.com") {
-		reservationURL = "https://app.hospitable.com/reservations/" + url.PathEscape(r.ID)
+	if strings.Contains(config.BaseURL, hospAPIHost) {
+		reservationURL = hospAppReservationURL + url.PathEscape(r.ID)
 	}
 
 	return connector.RawArtifact{
@@ -200,8 +207,8 @@ func NormalizeMessage(m Message, reservationID string, config HospitableConfig) 
 	// IMP-I-002: Generate app URL for messages pointing to the reservation's
 	// conversation page, consistent with NormalizeReservation URL generation.
 	var messageURL string
-	if reservationID != "" && strings.Contains(config.BaseURL, "api.hospitable.com") {
-		messageURL = "https://app.hospitable.com/reservations/" + url.PathEscape(reservationID)
+	if reservationID != "" && strings.Contains(config.BaseURL, hospAPIHost) {
+		messageURL = hospAppReservationURL + url.PathEscape(reservationID)
 	}
 
 	return connector.RawArtifact{
@@ -253,8 +260,8 @@ func NormalizeReview(r Review, propertyName string, config HospitableConfig) con
 	// IMP-I-003: Generate app URL for reviews pointing to the reservation page
 	// when a ReservationID is available, consistent with NormalizeReservation.
 	var reviewURL string
-	if r.ReservationID != "" && strings.Contains(config.BaseURL, "api.hospitable.com") {
-		reviewURL = "https://app.hospitable.com/reservations/" + url.PathEscape(r.ReservationID)
+	if r.ReservationID != "" && strings.Contains(config.BaseURL, hospAPIHost) {
+		reviewURL = hospAppReservationURL + url.PathEscape(r.ReservationID)
 	}
 
 	return connector.RawArtifact{
