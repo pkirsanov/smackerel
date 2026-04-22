@@ -77,15 +77,16 @@ jobs:
         CORE_IMAGE="ghcr.io/${{ github.repository_owner }}/smackerel-core"
         ML_IMAGE="ghcr.io/${{ github.repository_owner }}/smackerel-ml"
 
+        COMMIT_SHORT="${GITHUB_SHA:0:12}"
         docker tag smackerel-smackerel-core:latest "${CORE_IMAGE}:${VERSION}"
-        docker tag smackerel-smackerel-core:latest "${CORE_IMAGE}:latest"
+        docker tag smackerel-smackerel-core:latest "${CORE_IMAGE}:${COMMIT_SHORT}"
         docker push "${CORE_IMAGE}:${VERSION}"
-        docker push "${CORE_IMAGE}:latest"
+        docker push "${CORE_IMAGE}:${COMMIT_SHORT}"
 
         docker tag smackerel-smackerel-ml:latest "${ML_IMAGE}:${VERSION}"
-        docker tag smackerel-smackerel-ml:latest "${ML_IMAGE}:latest"
+        docker tag smackerel-smackerel-ml:latest "${ML_IMAGE}:${COMMIT_SHORT}"
         docker push "${ML_IMAGE}:${VERSION}"
-        docker push "${ML_IMAGE}:latest"
+        docker push "${ML_IMAGE}:${COMMIT_SHORT}"
 
   integration:
     if: github.ref == 'refs/heads/main'
@@ -116,7 +117,7 @@ jobs:
       run: |
         docker run -d --name nats-ci \
           --network host \
-          nats:2.10-alpine \
+          nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927 \
           --auth ci-test-token-integration \
           --http_port 8222 \
           --jetstream

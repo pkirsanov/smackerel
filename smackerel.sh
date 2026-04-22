@@ -140,10 +140,36 @@ case "$COMMAND" in
         echo "ERROR: docker-compose.yml missing env_file: directive — SST vars must flow through config/generated/dev.env"
         exit 1
     fi
-    # Check for common SST-managed vars that should NOT be individually declared
-    SST_VARS="(DATABASE_URL|NATS_URL|LLM_API_KEY|SMACKEREL_AUTH_TOKEN|OLLAMA_URL|OLLAMA_MODEL|EMBEDDING_MODEL|DIGEST_CRON|ML_SIDECAR_URL|CORE_API_URL):"
-    if grep -E "^\s+${SST_VARS}" docker-compose.yml >/dev/null 2>&1; then
-        echo "ERROR: docker-compose.yml contains individual SST-managed env declarations — use env_file: instead"
+    # Build comprehensive SST var list from the generated env file, then check that
+    # none appear as individual declarations in the core/ml environment blocks.
+    # Only check services that use env_file (core and ml); postgres/nats keep their own blocks.
+    # Allowed overrides in core/ml (container-path remaps, not SST-managed):
+    ALLOWED_OVERRIDES="^(PORT|BOOKMARKS_IMPORT_DIR|MAPS_IMPORT_DIR|BROWSER_HISTORY_PATH|TWITTER_ARCHIVE_DIR|PROMPT_CONTRACTS_DIR|LOG_LEVEL)$"
+    env_file="$(smackerel_env_file "$TARGET_ENV")"
+    # Extract the smackerel-core and smackerel-ml service blocks (indented 4+ spaces under the service)
+    core_ml_env="$(awk '
+        /^  smackerel-core:|^  smackerel-ml:/ { in_svc=1; next }
+        /^  [a-z]/ && in_svc { in_svc=0 }
+        in_svc && /^\s+environment:/ { in_env=1; next }
+        in_svc && in_env && /^      [A-Z_]+:/ { print; next }
+        in_svc && in_env && /^    [a-z]/ { in_env=0 }
+    ' docker-compose.yml)"
+    drift_violations=""
+    while IFS='=' read -r key _; do
+        # Skip comments and empty lines
+        [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+        # Skip allowed container-path overrides
+        if echo "$key" | grep -qE "$ALLOWED_OVERRIDES"; then
+            continue
+        fi
+        # Check if this SST var appears in core/ml environment blocks
+        if echo "$core_ml_env" | grep -qE "^\s+${key}:"; then
+            drift_violations="${drift_violations}  - ${key}\n"
+        fi
+    done < "$env_file"
+    if [[ -n "$drift_violations" ]]; then
+        echo "ERROR: docker-compose.yml core/ml services contain individual SST-managed env declarations — use env_file: instead"
+        printf "Offending vars:\n%b" "$drift_violations"
         exit 1
     fi
     echo "env_file drift guard: OK"

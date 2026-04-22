@@ -150,3 +150,29 @@ Reconciliation of all 7 scopes' claimed-vs-implemented state. Verified every DoD
 ### Verdict
 
 **NO DRIFT.** All 7 scopes' claimed implementations are present and verified in source. Prior test-to-doc and security-to-doc sweeps already remediated the only findings (BuildTime test gaps, drift guard regex, Action SHA pinning). State is clean.
+
+---
+
+## Chaos-Hardening Sweep (2026-04-22)
+
+### Probe Scope
+
+Chaos probe of spec 029 devops-pipeline: CI workflow edge cases, env_file drift guard robustness, GHCR push policy compliance, image pinning consistency. Probed for fragile guards, policy contradictions, and incomplete security posture.
+
+### Findings
+
+| # | Severity | Category | Location | Description | Disposition |
+|---|----------|----------|----------|-------------|-------------|
+| CH-029-001 | MEDIUM | Policy violation | `.github/workflows/ci.yml` | GHCR push step pushed both versioned tags and `:latest` to registry. `docs/Docker_Best_Practices.md` explicitly lists `:latest` tags as "Not acceptable as proof" of freshness. Mutable `:latest` tag defeats rollback guarantee and contradicts project governance. | **FIXED** — Removed `:latest` push. Now pushes only `${VERSION}` and `${COMMIT_SHORT}` (12-char SHA) tags. Both are immutable references. |
+| CH-029-002 | MEDIUM | False security | `smackerel.sh` | env_file drift guard used a hardcoded blocklist of 10 SST-managed vars, but `config/generated/dev.env` emits 100+ vars. Any of the other 90+ vars (e.g., `TELEGRAM_BOT_TOKEN`, `EXPENSES_ENABLED`, `KNOWLEDGE_ENABLED`) could be individually declared in docker-compose.yml without triggering the guard. | **FIXED** — Rewrote guard to dynamically read all vars from the generated env file and check against the core/ml service `environment:` blocks. Only allowed container-path overrides (PORT, BOOKMARKS_IMPORT_DIR, etc.) are exempt. Guard now covers all SST-managed vars. |
+| CH-029-003 | LOW | Inconsistency | `.github/workflows/ci.yml:107` | CI integration test `docker run` used mutable `nats:2.10-alpine` tag while all GitHub Actions were SHA-pinned per SEC-029-001. Inconsistent security posture for supply-chain integrity. | **FIXED** — Pinned NATS image to `nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927` (2.10-alpine digest). |
+
+### Evidence
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh check` | PASS — "Config is in sync with SST" + "env_file drift guard: OK" |
+| `./smackerel.sh test unit` | PASS — Go: 41 packages OK, Python: 257 passed, 2 warnings |
+| Drift guard awk extraction | Correctly extracts only 6 allowed override vars from core/ml service blocks |
+| CI YAML GHCR push | Only `${VERSION}` and `${COMMIT_SHORT}` tags — no `:latest` |
+| CI YAML NATS image | Pinned to immutable SHA digest |
