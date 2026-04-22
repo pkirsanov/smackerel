@@ -102,6 +102,9 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		d.PropertyName = stringutil.SanitizeControlChars(d.PropertyName)
 		d.GuestName = stringutil.SanitizeControlChars(d.GuestName)
 		d.GuestEmail = stringutil.SanitizeControlChars(d.GuestEmail)
+		// IMP-013-IMP-001: Sanitize Body and SenderRole (CWE-116).
+		d.Body = stringutil.SanitizeControlChars(d.Body)
+		d.SenderRole = stringutil.SanitizeControlChars(d.SenderRole)
 		contentType = "guest_message"
 		title = fmt.Sprintf("%s — Message from %s", d.PropertyName, d.GuestName)
 		metadata["property_id"] = d.PropertyID
@@ -128,6 +131,10 @@ func NormalizeEvent(event ActivityEvent) (connector.RawArtifact, error) {
 		metadata["property_id"] = d.PropertyID
 		metadata["property_name"] = d.PropertyName
 		metadata["category"] = d.Category
+		// IMP-013-IMP-002: Store task status so the hospitality linker can
+		// differentiate task.created (increment issue count) from
+		// task.completed (decrement issue count).
+		metadata["task_status"] = d.Status
 
 	case "expense.created":
 		var d ExpenseData

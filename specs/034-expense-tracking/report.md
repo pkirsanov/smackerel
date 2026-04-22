@@ -4,6 +4,47 @@ Links: [scopes.md](scopes.md) | [uservalidation.md](uservalidation.md)
 
 ---
 
+## Improve Analysis — 2026-04-22 (improve-existing, repeat)
+
+**Trigger:** Child workflow of stochastic-quality-sweep
+**Mode:** improve-existing
+**Verdict:** 3 findings, ALL FIXED
+
+### Findings
+
+| ID | Surface | Severity | Description | Status |
+|----|---------|----------|-------------|--------|
+| IMP-034-001 | `internal/api/expenses.go` List handler | Medium | List endpoint lacked pagination — hardcoded `LIMIT 50` with no offset/cursor parameter, making it impossible to retrieve beyond first 50 results | FIXED |
+| IMP-034-002 | `internal/digest/expenses.go` Assemble | Low | Dead code: `currTotals := make(map[string]float64)` allocated but never populated; explicit `_ = currTotals` silencer present | FIXED |
+| IMP-034-003 | `internal/intelligence/expenses.go` Classify | Low | Redundant vendor comparison: `strings.EqualFold(bv, vendorLower)` duplicated by `strings.EqualFold(bv, expense.Vendor)` since EqualFold is already case-insensitive | FIXED |
+
+### Fixes Applied
+
+**IMP-034-001 — List Pagination:**
+- Added `offset` query parameter (default 0, non-negative integer)
+- Added `limit` query parameter (default 50, range 1–200)
+- Response `meta` now includes `limit` and `offset` fields for pagination context
+- Files: `internal/api/expenses.go` (List handler), `internal/api/expenses_test.go` (pagination parameter tests)
+
+**IMP-034-002 — Dead Code Removal:**
+- Removed unused `currTotals` variable and its `_ = currTotals` silencer from `Assemble()`
+- Kept the second per-currency totals query (correct behavior — first query groups by classification+currency, second aggregates cross-classification per currency)
+- File: `internal/digest/expenses.go`
+
+**IMP-034-003 — Redundant Comparison:**
+- Replaced `strings.ToLower(expense.Vendor)` + dual `strings.EqualFold` with single `strings.EqualFold(bv, expense.Vendor)`
+- File: `internal/intelligence/expenses.go`
+
+### Verification
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh build` | All images built successfully |
+| `./smackerel.sh test unit` | All Go packages OK, 236 Python tests passed |
+| `./smackerel.sh lint` | All checks passed |
+
+---
+
 ## DevOps Analysis — 2026-04-21 (devops-to-doc)
 
 **Trigger:** Child workflow of stochastic-quality-sweep R52

@@ -48,47 +48,5 @@ func TestTruncateBytes_ValidUTF8Output(t *testing.T) {
 	}
 }
 
-// --- truncateUTF8 basic cases ---
-
-func TestTruncateUTF8_ShortString(t *testing.T) {
-	result := truncateUTF8("hello", 100)
-	if result != "hello" {
-		t.Errorf("short string should be returned unchanged, got %q", result)
-	}
-}
-
-func TestTruncateUTF8_ExactLength(t *testing.T) {
-	result := truncateUTF8("12345", 5)
-	if result != "12345" {
-		t.Errorf("string at exact maxBytes should be returned unchanged, got %q", result)
-	}
-}
-
-func TestTruncateUTF8_EmptyString(t *testing.T) {
-	result := truncateUTF8("", 10)
-	if result != "" {
-		t.Errorf("empty string should return empty, got %q", result)
-	}
-}
-
-func TestTruncateUTF8_ASCIITruncation(t *testing.T) {
-	result := truncateUTF8("abcdefghij", 5)
-	if result != "abcde" {
-		t.Errorf("expected 'abcde', got %q", result)
-	}
-}
-
-func TestTruncateUTF8_FourByteEmoji(t *testing.T) {
-	// "ab😀cd" → "ab" = 2 bytes, "😀" = 4 bytes (bytes 2-5), "cd" = 2 bytes
-	result := truncateUTF8("ab😀cd", 4)
-	// maxBytes=4 would cut the emoji → should step back to byte 2
-	if len(result) > 4 {
-		t.Errorf("expected at most 4 bytes, got %d", len(result))
-	}
-	if !utf8.ValidString(result) {
-		t.Errorf("result should be valid UTF-8, got %q", result)
-	}
-	if result != "ab" {
-		t.Errorf("expected 'ab' (emoji excluded), got %q", result)
-	}
-}
+// truncateUTF8 tests removed — local truncateUTF8 was eliminated in favour of
+// stringutil.TruncateUTF8 (SMP-022-001). Coverage lives in stringutil_test.go.
