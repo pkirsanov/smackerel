@@ -275,10 +275,31 @@ case "$COMMAND" in
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_ui.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_detail.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_web_settings.sh"
-        # Phase 4: Expansion (maps + browser + bookmarks)
+        # Phase 2: Passive Ingestion (connectors + topics + settings)
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_connector_framework.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_imap_sync.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_caldav_sync.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_youtube_sync.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_bookmark_import.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_topic_lifecycle.sh"
+        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_settings_connectors.sh"
+        # Phase 4: Expansion (maps + browser history)
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_maps_import.sh"
         timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_browser_sync.sh"
-        timeout 300 bash "$SCRIPT_DIR/tests/e2e/test_bookmark_import.sh"
+        # Go-based E2E tests (domain extraction, knowledge, capture-process-search)
+        smackerel_generate_config test >/dev/null
+        env_file="$(smackerel_require_env_file test)"
+        core_host_port="$(smackerel_env_value "$env_file" "CORE_HOST_PORT")"
+        auth_token="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
+        docker run --rm \
+          --network host \
+          -v "$SCRIPT_DIR:/workspace" \
+          -v smackerel-gomod-cache:/go/pkg/mod \
+          -v smackerel-gobuild-cache:/root/.cache/go-build \
+          -w /workspace \
+          -e "CORE_EXTERNAL_URL=http://127.0.0.1:${core_host_port}" \
+          -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+          golang:1.24.3-bookworm bash /workspace/scripts/runtime/go-e2e.sh
         ;;
       stress)
         timeout 300 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"

@@ -52,6 +52,16 @@ var DomainExtraction = prometheus.NewCounterVec(
 	[]string{"schema", "status"},
 )
 
+// DomainExtractionLatency records domain extraction processing time in milliseconds.
+var DomainExtractionLatency = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "smackerel_domain_extraction_duration_ms",
+		Help:    "Domain extraction processing time in milliseconds",
+		Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000, 30000},
+	},
+	[]string{"contract"},
+)
+
 // --- Connector Sync ---
 
 // ConnectorSync counts connector sync attempts by connector name and status.
@@ -150,6 +160,7 @@ func init() {
 		CaptureTotal,
 		SearchLatency,
 		DomainExtraction,
+		DomainExtractionLatency,
 		ConnectorSync,
 		NATSDeadLetter,
 		DBConnectionsActive,

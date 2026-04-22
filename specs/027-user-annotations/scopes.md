@@ -112,14 +112,14 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 Scenario: Annotation types are created by migration
   Given the database has the existing schema through migration 014
   When migration 016_user_annotations.sql is applied
-  Then enum type annotation_type exists with values rating, note, tag_add, tag_remove, interaction, status_change
-  And enum type interaction_type exists with values made_it, bought_it, read_it, visited, tried_it, used_it
+  Then column annotation_type (TEXT) stores values rating, note, tag_add, tag_remove, interaction, status_change
+  And column interaction_type (TEXT) stores values made_it, bought_it, read_it, visited, tried_it, used_it
 
 Scenario: Annotations table is created with correct schema
   Given migration 016_user_annotations.sql has been applied
   When the annotations table is inspected
-  Then it has columns id (TEXT PK), artifact_id (TEXT FK→artifacts), ann_type (annotation_type), rating (SMALLINT CHECK 1-5), note (TEXT), tag (TEXT), interaction (interaction_type), source_channel (TEXT NOT NULL), created_at (TIMESTAMPTZ)
-  And indexes exist on artifact_id, ann_type, created_at, tag (WHERE NOT NULL), rating (WHERE NOT NULL)
+  Then it has columns id (TEXT PK), artifact_id (TEXT FK→artifacts), annotation_type (TEXT NOT NULL), rating (INTEGER CHECK 1-5), note (TEXT), tag (TEXT), interaction_type (TEXT), source_channel (TEXT NOT NULL), created_at (TIMESTAMPTZ)
+  And indexes exist on artifact_id, annotation_type, created_at, tag (WHERE NOT NULL), rating (WHERE NOT NULL)
 
 Scenario: Telegram message-artifact mapping table is created
   Given migration 016_user_annotations.sql has been applied
@@ -169,10 +169,10 @@ Scenario: Annotations cascade on artifact deletion
 
 ### Definition of Done
 
-- [x] Migration `016_user_annotations.sql` creates `annotation_type` and `interaction_type` enum types
+- [x] Migration `016_user_annotations.sql` creates `annotation_type` and `interaction_type` as TEXT columns (values: rating/note/tag_add/tag_remove/interaction/status_change and made_it/bought_it/read_it/visited/tried_it/used_it)
   > **Phase:** implement
 
-- [x] `annotations` table created with id, artifact_id (FK CASCADE), ann_type, rating (CHECK 1-5), note, tag, interaction, source_channel, created_at
+- [x] `annotations` table created with id, artifact_id (FK CASCADE), annotation_type, rating (CHECK 1-5), note, tag, interaction_type, source_channel, created_at
   > **Phase:** implement
 
 - [x] Indexes: `idx_annotations_artifact`, `idx_annotations_type`, `idx_annotations_created`, `idx_annotations_tag` (partial), `idx_annotations_rating` (partial)
@@ -325,7 +325,7 @@ Scenario: Rating with "out of 5" syntax
 
 ```gherkin
 Scenario: CreateAnnotation inserts an annotation event
-  Given a valid Annotation struct with artifact_id, ann_type=rating, rating=4, source_channel=api
+  Given a valid Annotation struct with artifact_id, annotation_type=rating, rating=4, source_channel=api
   When CreateAnnotation is called
   Then a row is inserted into the annotations table with a ULID id
   And the materialized view is refreshed concurrently

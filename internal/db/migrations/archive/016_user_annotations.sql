@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS telegram_message_artifacts (
     PRIMARY KEY (message_id, chat_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_tma_artifact ON telegram_message_artifacts(artifact_id);
+
 -- Materialized view for fast annotation summary reads
 CREATE MATERIALIZED VIEW IF NOT EXISTS artifact_annotation_summary AS
 SELECT
