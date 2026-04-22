@@ -86,6 +86,12 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
 });
 
 // ---------------------------------------------------------------------------
+// Flush Serialization Guard (chaos-hardening: prevent concurrent flushes)
+// ---------------------------------------------------------------------------
+
+var flushInProgress = false;
+
+// ---------------------------------------------------------------------------
 // Capture Logic
 // ---------------------------------------------------------------------------
 
@@ -222,6 +228,11 @@ function getQueueCount() {
 }
 
 function flushQueue() {
+  if (flushInProgress) {
+    return Promise.resolve({ flushed: 0, errors: 0, authFailed: false, skipped: true });
+  }
+  flushInProgress = true;
+
   return getConfig().then(function(config) {
     if (!config.serverUrl || !config.authToken) {
       return { flushed: 0, errors: 0, authFailed: false };
@@ -293,6 +304,8 @@ function flushQueue() {
         };
       });
     });
+  }).finally(function() {
+    flushInProgress = false;
   });
 }
 

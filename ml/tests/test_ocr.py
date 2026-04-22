@@ -284,9 +284,7 @@ class TestCachePoisoningPrevention:
         fake_hash = "attacker-controlled-hash-value"
 
         with patch("app.ocr.extract_text_tesseract", return_value="extracted text from image"):
-            result = asyncio.run(
-                handle_ocr_request({"image_hash": fake_hash, "image_data": b64_data})
-            )
+            result = asyncio.run(handle_ocr_request({"image_hash": fake_hash, "image_data": b64_data}))
 
         assert result["image_hash"] == computed_hash
         assert result["image_hash"] != fake_hash
@@ -300,9 +298,7 @@ class TestCachePoisoningPrevention:
         fake_hash = "should-not-be-cache-key"
 
         with patch("app.ocr.extract_text_tesseract", return_value="OCR result text here"):
-            asyncio.run(
-                handle_ocr_request({"image_hash": fake_hash, "image_data": b64_data})
-            )
+            asyncio.run(handle_ocr_request({"image_hash": fake_hash, "image_data": b64_data}))
 
         # The result should be cached under the computed hash
         assert computed_hash in _ocr_cache
