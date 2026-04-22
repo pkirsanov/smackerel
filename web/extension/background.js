@@ -118,7 +118,8 @@ function doCapture(data) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + config.authToken
+        'Authorization': 'Bearer ' + config.authToken,
+        'X-Capture-Source': 'extension'
       },
       body: JSON.stringify(body)
     })
@@ -271,7 +272,8 @@ function flushQueue() {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': 'Bearer ' + config.authToken
+                  'Authorization': 'Bearer ' + config.authToken,
+                  'X-Capture-Source': 'extension'
                 },
                 body: JSON.stringify(body)
               })

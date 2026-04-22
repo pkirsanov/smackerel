@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/008-telegram-share-capture",
   "featureName": "Telegram Share & Chat Capture",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -13,7 +13,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "in_progress",
     "completedScopes": [
       "1",
       "2",

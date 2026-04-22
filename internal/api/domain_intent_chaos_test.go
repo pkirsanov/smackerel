@@ -17,9 +17,9 @@ func TestChaos_PriceFilterSQL_NumericRegex(t *testing.T) {
 	// Verify that parseDomainIntent correctly extracts PriceMax for valid prices
 	// and the SQL pattern would reject non-numeric values.
 	tests := []struct {
-		query    string
-		wantMax  float64
-		wantDom  string
+		query   string
+		wantMax float64
+		wantDom string
 	}{
 		{"cameras under $500", 500, "product"},
 		{"headphones under $29.99", 29.99, "product"},

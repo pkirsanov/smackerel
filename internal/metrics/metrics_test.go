@@ -19,6 +19,10 @@ func TestMetricsRegistered(t *testing.T) {
 	ConnectorSync.WithLabelValues("_test_reg", "success")
 	NATSDeadLetter.WithLabelValues("_test_reg")
 	DigestGeneration.WithLabelValues("_test_reg")
+	ListsGenerated.WithLabelValues("_test_reg", "_test_reg")
+	ListGenerationLatency.WithLabelValues("_test_reg")
+	ListItemStatusChanges.WithLabelValues("_test_reg")
+	ListsCompleted.WithLabelValues("_test_reg")
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -26,14 +30,18 @@ func TestMetricsRegistered(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"smackerel_artifacts_ingested_total": false,
-		"smackerel_capture_total":            false,
-		"smackerel_search_latency_seconds":   false,
-		"smackerel_domain_extraction_total":  false,
-		"smackerel_connector_sync_total":     false,
-		"smackerel_nats_deadletter_total":    false,
-		"smackerel_db_connections_active":    false,
-		"smackerel_digest_generation_total":  false,
+		"smackerel_artifacts_ingested_total":        false,
+		"smackerel_capture_total":                   false,
+		"smackerel_search_latency_seconds":          false,
+		"smackerel_domain_extraction_total":         false,
+		"smackerel_connector_sync_total":            false,
+		"smackerel_nats_deadletter_total":           false,
+		"smackerel_db_connections_active":           false,
+		"smackerel_digest_generation_total":         false,
+		"smackerel_lists_generated_total":           false,
+		"smackerel_list_generation_latency_seconds": false,
+		"smackerel_list_item_status_changes_total":  false,
+		"smackerel_lists_completed_total":           false,
 	}
 
 	for _, fam := range families {
