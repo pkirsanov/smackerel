@@ -275,6 +275,18 @@
       "startedAt": "2026-04-21T00:00:00Z",
       "completedAt": "2026-04-21T00:15:00Z",
       "summary": "security-to-doc (stochastic R82): Security scan found 3 CWE-116/79 defense-in-depth gaps in NormalizeProperty and NormalizeReservation. SEC-R82-001: Amenities/ChannelIDs array elements not sanitized for control characters. SEC-R82-002: ListingURLs stored raw in metadata without scheme filtering. SEC-R82-003: Reservation CheckIn/CheckOut date strings not sanitized. All 3 fixed in normalizer.go with 5 new targeted tests in normalizer_test.go. All 236 tests pass, lint clean, check clean. No regressions."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "validate",
+        "finalize"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-04-22T00:00:00Z",
+      "completedAt": "2026-04-22T00:10:00Z",
+      "summary": "reconcile-to-doc (stochastic child): Full state reconciliation. Verified: 7 source files present (types.go, client.go, connector.go, normalizer.go, connector_test.go, normalizer_test.go, chaos_test.go). SST pipeline fully wired (config.sh 15 HOSPITABLE_* vars, config.go 14 fields, connectors.go auto-start block). All Go packages pass, 257 Python tests pass. Lint clean. Config check in sync. Build succeeds (both images cached). All 5 scopes Done, 0 unchecked DoD items, 30 scenarios in manifest. No state drift detected. Claimed completion matches actual artifacts and code."
     }
   ],
   "policySnapshot": {
@@ -306,7 +318,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-21T00:15:00Z",
+  "lastUpdatedAt": "2026-04-22T00:10:00Z",
   "certification": {
     "status": "certified",
     "completedScopes": [
