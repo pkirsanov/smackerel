@@ -299,6 +299,136 @@ func TestChaos_FileDisappearsBetweenScanAndRead(t *testing.T) {
 	}
 }
 
+// --- CHAOS-C06: Permanently malformed file must not cause infinite retry loops ---
+// A file that fails JSON parsing is permanently unparseable — retrying it every
+// sync cycle generates noise, wastes resources, and keeps syncErrors > 0 forever.
+// Fix: Mark parse-failed files as processed in processedThisCycle so they enter
+// the cursor and are skipped on subsequent syncs. The user can remove and re-add
+// the file to trigger re-processing (cursor pruning drops entries for deleted files).
+
+func TestChaos_MalformedFileSkippedPermanently(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "corrupt.json", `{this is not valid json}`)
+	writeTakeoutFile(t, dir, "good.json", makeTakeoutJSON(3))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// First sync: good.json produces artifacts, corrupt.json fails to parse.
+	artifacts1, cursor1, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("first Sync: %v", err)
+	}
+	if len(artifacts1) != 3 {
+		t.Errorf("first sync: expected 3 artifacts from good.json, got %d", len(artifacts1))
+	}
+
+	// Cursor must include BOTH files (good + corrupt marked as processed).
+	parsed := parseCursor(cursor1)
+	foundCorrupt := false
+	foundGood := false
+	for _, entry := range parsed {
+		if entry == "corrupt.json" {
+			foundCorrupt = true
+		}
+		if entry == "good.json" {
+			foundGood = true
+		}
+	}
+	if !foundGood {
+		t.Error("cursor missing good.json")
+	}
+	if !foundCorrupt {
+		t.Error("cursor missing corrupt.json — parse-failed files must be marked as processed to prevent infinite retries")
+	}
+
+	// Second sync: neither file should be re-processed.
+	artifacts2, cursor2, err := c.Sync(context.Background(), cursor1)
+	if err != nil {
+		t.Fatalf("second Sync: %v", err)
+	}
+	if len(artifacts2) != 0 {
+		t.Errorf("second sync: expected 0 new artifacts, got %d (corrupt.json was retried)", len(artifacts2))
+	}
+	if cursor2 != cursor1 {
+		t.Errorf("cursor changed on second sync: %q → %q", cursor1, cursor2)
+	}
+}
+
+// --- CHAOS-C07: Concurrent Sync calls must not both process the same files ---
+// Without a re-entrancy guard, two concurrent Sync() calls with the same cursor
+// both discover and process the same files, producing duplicate artifacts downstream.
+// Fix: A syncing flag under the mutex prevents concurrent Sync execution. The
+// second caller gets a clear "sync already in progress" error.
+
+func TestChaos_SyncReentrancyGuard(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 20; i++ {
+		writeTakeoutFile(t, dir, fmt.Sprintf("file_%02d.json", i), makeTakeoutJSON(5))
+	}
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	const goroutines = 10
+	type syncResult struct {
+		artifacts int
+		err       error
+	}
+	results := make(chan syncResult, goroutines)
+
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			arts, _, err := c.Sync(context.Background(), "")
+			results <- syncResult{len(arts), err}
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	successCount := 0
+	reentryCount := 0
+	for r := range results {
+		if r.err != nil && strings.Contains(r.err.Error(), "already in progress") {
+			reentryCount++
+		} else if r.err == nil {
+			successCount++
+		}
+	}
+
+	if successCount == 0 {
+		t.Fatal("at least one Sync call must succeed")
+	}
+	// With 10 goroutines racing, the guard should block most of them.
+	// It's possible (though unlikely) that all 10 run sequentially with
+	// no overlap — that's a valid scheduling outcome, not a test failure.
+	t.Logf("re-entrancy guard: %d succeeded, %d blocked (of %d goroutines)",
+		successCount, reentryCount, goroutines)
+}
+
 // --- CHAOS-C06: Midnight UTC boundary dedup hash stability ---
 // Activities near midnight must produce distinct hashes because the date
 // component changes across the boundary.

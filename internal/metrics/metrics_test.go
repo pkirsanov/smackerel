@@ -268,9 +268,9 @@ func TestAlertDeliveryMetrics(t *testing.T) {
 	}
 
 	checks := map[string]bool{
-		"smackerel_alerts_delivered_total":         false,
-		"smackerel_alert_delivery_failures_total":  false,
-		"smackerel_alerts_produced_total":          false,
+		"smackerel_alerts_delivered_total":        false,
+		"smackerel_alert_delivery_failures_total": false,
+		"smackerel_alerts_produced_total":         false,
 	}
 
 	for _, fam := range families {

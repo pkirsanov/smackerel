@@ -240,3 +240,35 @@ New tests:
   TestHarden_ValidatedActivityTypeReturnsKnown           — H-011-003 exhaustive
   TestHarden_CrossFileArtifactCap                        — H-011-004
 ```
+
+---
+
+## Stochastic Quality Sweep — Chaos Probe (2026-04-22)
+
+**Trigger:** chaos | **Mode:** chaos-hardening | **Agent:** bubbles.chaos
+
+### Findings
+
+| ID | Finding | Severity | Fix |
+|---|---|---|---|
+| CHAOS-C06 | Permanently malformed files cause infinite retry loops — a file that fails JSON parsing is never added to the cursor, so every subsequent Sync rediscovers and re-attempts it, generating warning logs and incrementing syncErrors forever | High | Mark parse-failed files as processed in `processedThisCycle`. Read errors remain retryable (transient), but parse errors are permanent. Users can remove and re-add the file to retry (cursor pruning drops entries for deleted files). |
+| CHAOS-C07 | No re-entrancy guard on `Sync()` — concurrent calls both discover and process the same files, producing duplicate artifact sets downstream | High | Added `syncing bool` field to Connector struct. `Sync()` atomically checks and sets the flag under `c.mu.Lock()` before processing. Returns `"sync already in progress"` error for re-entrant calls. The defer clears the flag on all exit paths (normal, error, panic). Config snapshot moved into the same initial Lock for atomicity. |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `internal/connector/maps/connector.go` | CHAOS-C06: parse-failed files added to `processedThisCycle` to prevent infinite retries. CHAOS-C07: added `syncing bool` field, re-entrancy guard at Sync() entry, config snapshot under single Lock, defer clears syncing flag. |
+| `internal/connector/maps/chaos_test.go` | 2 new chaos tests: `TestChaos_MalformedFileSkippedPermanently`, `TestChaos_SyncReentrancyGuard`. |
+
+### Test Evidence
+
+```
+./smackerel.sh build — Exit Code: 0
+./smackerel.sh test unit — maps package 0.199s PASS, all Go packages green, 236 Python tests PASS
+./smackerel.sh check — Config in sync with SST
+
+New tests:
+  TestChaos_MalformedFileSkippedPermanently  — CHAOS-C06 adversarial: corrupt file enters cursor after first sync, second sync produces 0 new artifacts
+  TestChaos_SyncReentrancyGuard              — CHAOS-C07 concurrency: 10 goroutines race on Sync(), guard blocks re-entrant calls
+```

@@ -73,23 +73,26 @@ func New(id string) *Connector {
 	}
 }
 
+// setHealth sets the connector's health status under lock.
+func (c *Connector) setHealth(status connector.HealthStatus) {
+	c.mu.Lock()
+	c.health = status
+	c.mu.Unlock()
+}
+
 func (c *Connector) ID() string { return c.id }
 
 func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfig) error {
 	cfg, err := parseBrowserConfig(config)
 	if err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		return fmt.Errorf("parse browser config: %w", err)
 	}
 
 	// Validate History file exists and is readable (R-002: "exists and is readable")
 	f, err := os.Open(cfg.HistoryPath)
 	if err != nil {
-		c.mu.Lock()
-		c.health = connector.HealthError
-		c.mu.Unlock()
+		c.setHealth(connector.HealthError)
 		if os.IsNotExist(err) {
 			return fmt.Errorf("chrome history file not found: %s", cfg.HistoryPath)
 		}
@@ -274,9 +277,7 @@ func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 }
 
 func (c *Connector) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.health = connector.HealthDisconnected
+	c.setHealth(connector.HealthDisconnected)
 	slog.Info("browser history connector closed")
 	return nil
 }
