@@ -46,6 +46,10 @@ const maxAssemblyBuffers = 500
 // flushTimeout is the deadline for individual flush operations.
 const flushTimeout = 30 * time.Second
 
+// maxConcurrentFlushes limits in-flight flush goroutines to prevent goroutine storms
+// when the capture API is slow and buffer eviction pressure is high.
+const maxConcurrentFlushes = 20
+
 // ConversationAssembler manages all active assembly buffers.
 type ConversationAssembler struct {
 	mu          sync.Mutex
@@ -57,6 +61,7 @@ type ConversationAssembler struct {
 	notifyFn    func(chatID int64, msgCount int)
 	ctx         context.Context
 	wg          sync.WaitGroup
+	flushSem    chan struct{}
 }
 
 // NewConversationAssembler creates an assembler with config-driven parameters.
@@ -81,6 +86,7 @@ func NewConversationAssembler(
 		flushFn:     flushFn,
 		notifyFn:    notifyFn,
 		ctx:         ctx,
+		flushSem:    make(chan struct{}, maxConcurrentFlushes),
 	}
 }
 
@@ -119,6 +125,14 @@ func (a *ConversationAssembler) Add(key assemblyKey, cmsg ConversationMessage, m
 			a.wg.Add(1)
 			go func() {
 				defer a.wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("assembly notify panic recovered",
+							"chat_id", chatID,
+							"panic", r,
+						)
+					}
+				}()
 				notifyFn(chatID, 2)
 			}()
 		}
@@ -212,6 +226,9 @@ func (a *ConversationAssembler) asyncFlush(buf *ConversationBuffer, logMsg strin
 				)
 			}
 		}()
+		// Acquire semaphore to limit concurrent flush goroutines.
+		a.flushSem <- struct{}{}
+		defer func() { <-a.flushSem }()
 		flushCtx, cancel := context.WithTimeout(context.Background(), flushTimeout)
 		defer cancel()
 		if err := a.flushFn(flushCtx, buf); err != nil {

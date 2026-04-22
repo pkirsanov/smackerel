@@ -1,0 +1,28 @@
+{
+  "version": 3,
+  "featureDir": "specs/006-phase5-advanced/bugs/BUG-004-learning-path-time-estimation",
+  "featureName": "BUG-004: Learning Path Missing Time Estimation",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.gaps",
+    "currentPhase": "plan",
+    "currentScope": "1",
+    "runStartedAt": "2026-04-22T00:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "pending",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Add Time Estimation to Learning Paths",
+        "status": "Done",
+        "dependsOn": []
+      }
+    ]
+  }
+}

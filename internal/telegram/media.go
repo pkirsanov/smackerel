@@ -36,6 +36,9 @@ const maxMediaGroupBuffers = 200
 // mediaFlushTimeout is the deadline for individual media group flush operations.
 const mediaFlushTimeout = 30 * time.Second
 
+// maxConcurrentMediaFlushes limits in-flight media flush goroutines.
+const maxConcurrentMediaFlushes = 10
+
 // MediaGroupAssembler manages media group buffers.
 type MediaGroupAssembler struct {
 	mu         sync.Mutex
@@ -46,6 +49,7 @@ type MediaGroupAssembler struct {
 	flushFn    func(ctx context.Context, buf *MediaGroupBuffer) error
 	ctx        context.Context
 	wg         sync.WaitGroup
+	flushSem   chan struct{}
 }
 
 // NewMediaGroupAssembler creates a media group assembler.
@@ -64,6 +68,7 @@ func NewMediaGroupAssembler(
 		maxBuffers: maxMediaGroupBuffers,
 		flushFn:    flushFn,
 		ctx:        ctx,
+		flushSem:   make(chan struct{}, maxConcurrentMediaFlushes),
 	}
 }
 
@@ -83,6 +88,9 @@ func (m *MediaGroupAssembler) asyncFlush(buf *MediaGroupBuffer, logMsg string, l
 				)
 			}
 		}()
+		// Acquire semaphore to limit concurrent flush goroutines.
+		m.flushSem <- struct{}{}
+		defer func() { <-m.flushSem }()
 		flushCtx, cancel := context.WithTimeout(context.Background(), mediaFlushTimeout)
 		defer cancel()
 		if err := m.flushFn(flushCtx, buf); err != nil {

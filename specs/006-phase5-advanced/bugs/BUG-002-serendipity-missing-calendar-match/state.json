@@ -1,0 +1,28 @@
+{
+  "version": 3,
+  "featureDir": "specs/006-phase5-advanced/bugs/BUG-002-serendipity-missing-calendar-match",
+  "featureName": "BUG-002: Serendipity Engine Missing Calendar Matching",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.gaps",
+    "currentPhase": "plan",
+    "currentScope": "1",
+    "runStartedAt": "2026-04-22T00:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "pending",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Add Calendar Matching to SerendipityPick",
+        "status": "Done",
+        "dependsOn": []
+      }
+    ]
+  }
+}

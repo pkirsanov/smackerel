@@ -283,6 +283,56 @@ class NATSClient:
                             llm_api_key,
                             ollama_url,
                         )
+                    elif subject == "learning.classify":
+                        from .intelligence import handle_learning_classify
+
+                        result = await handle_learning_classify(
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                            ollama_url,
+                        )
+                    elif subject == "content.analyze":
+                        from .intelligence import handle_content_analyze
+
+                        result = await handle_content_analyze(
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                            ollama_url,
+                        )
+                    elif subject == "monthly.generate":
+                        from .intelligence import handle_monthly_generate
+
+                        result = await handle_monthly_generate(
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                            ollama_url,
+                        )
+                    elif subject == "quickref.generate":
+                        from .intelligence import handle_quickref_generate
+
+                        result = await handle_quickref_generate(
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                            ollama_url,
+                        )
+                    elif subject == "seasonal.analyze":
+                        from .intelligence import handle_seasonal_analyze
+
+                        result = await handle_seasonal_analyze(
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                            ollama_url,
+                        )
                     else:
                         logger.warning("Unknown subject: %s", subject)
                         await msg.ack()

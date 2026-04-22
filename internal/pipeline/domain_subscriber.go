@@ -5,15 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/smackerel/smackerel/internal/metrics"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
+
+// domainMaxDeliver is the maximum delivery attempts for domain.extracted messages
+// before dead-letter routing. Must match the MaxDeliver in the consumer config.
+const domainMaxDeliver = 5
 
 // DomainResultSubscriber consumes domain.extracted messages from the ML sidecar
 // and stores domain-specific structured data into the artifacts table.
@@ -142,8 +149,9 @@ func (d *DomainResultSubscriber) handleDomainExtracted(ctx context.Context, msg 
 	}
 
 	if !resp.Success {
+		// S-001: Set domain_extracted_at on failure path per SCN-026-03.
 		_, err := d.DB.Exec(ctx,
-			`UPDATE artifacts SET domain_extraction_status = 'failed', updated_at = NOW() WHERE id = $1`,
+			`UPDATE artifacts SET domain_extraction_status = 'failed', domain_extracted_at = NOW(), updated_at = NOW() WHERE id = $1`,
 			resp.ArtifactID,
 		)
 		if err != nil {
@@ -151,6 +159,10 @@ func (d *DomainResultSubscriber) handleDomainExtracted(ctx context.Context, msg 
 				"artifact_id", resp.ArtifactID,
 				"error", err,
 			)
+			// S-004: Nak instead of Ack when DB update fails so the message retries
+			// and status tracking isn't silently lost.
+			d.handleDomainDeliveryFailure(ctx, msg, err)
+			return
 		}
 		metrics.DomainExtraction.WithLabelValues(resp.ContractVersion, "failed").Inc()
 		_ = msg.Ack()
@@ -176,7 +188,8 @@ func (d *DomainResultSubscriber) handleDomainExtracted(ctx context.Context, msg 
 			"artifact_id", resp.ArtifactID,
 			"error", err,
 		)
-		_ = msg.Nak()
+		// S-003: Route to dead-letter after MaxDeliver exhausted instead of silent drop.
+		d.handleDomainDeliveryFailure(ctx, msg, err)
 		return
 	}
 
@@ -187,4 +200,50 @@ func (d *DomainResultSubscriber) handleDomainExtracted(ctx context.Context, msg 
 		"contract_version", resp.ContractVersion,
 		"processing_ms", resp.ProcessingTimeMs,
 	)
+}
+
+// handleDomainDeliveryFailure routes an exhausted domain.extracted message to the
+// DEADLETTER stream when MaxDeliver is reached; otherwise Naks for retry.
+// S-003: Mirrors the dead-letter routing from ResultSubscriber.handleDeliveryFailure.
+func (d *DomainResultSubscriber) handleDomainDeliveryFailure(ctx context.Context, msg jetstream.Msg, lastErr error) {
+	md, mdErr := msg.Metadata()
+	if mdErr != nil || int(md.NumDelivered) < domainMaxDeliver {
+		_ = msg.Nak()
+		return
+	}
+
+	headers := nats.Header{}
+	headers.Set("Smackerel-Original-Subject", smacknats.SubjectDomainExtracted)
+	headers.Set("Smackerel-Original-Stream", "DOMAIN")
+	headers.Set("Smackerel-Failed-At", time.Now().UTC().Format(time.RFC3339))
+	if lastErr != nil {
+		errStr := lastErr.Error()
+		if len(errStr) > 256 {
+			errStr = stringutil.TruncateUTF8(errStr, 256)
+		}
+		headers.Set("Smackerel-Last-Error", errStr)
+	}
+	if md != nil {
+		headers.Set("Smackerel-Delivery-Count", strconv.FormatUint(md.NumDelivered, 10))
+		if md.Consumer != "" {
+			headers.Set("Smackerel-Original-Consumer", md.Consumer)
+		}
+	}
+
+	dlSubject := "deadletter." + smacknats.SubjectDomainExtracted
+	dlMsg := &nats.Msg{
+		Subject: dlSubject,
+		Data:    msg.Data(),
+		Header:  headers,
+	}
+
+	if _, err := d.NATS.JetStream.PublishMsg(ctx, dlMsg); err != nil {
+		slog.Error("domain dead-letter publish failed, Nak to preserve message", "error", err)
+		_ = msg.Nak()
+		return
+	}
+
+	_ = msg.Ack()
+	metrics.NATSDeadLetter.WithLabelValues("DOMAIN").Inc()
+	slog.Warn("domain message routed to dead-letter", "subject", dlSubject)
 }

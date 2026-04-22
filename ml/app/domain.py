@@ -22,6 +22,8 @@ logger = logging.getLogger("smackerel-ml.domain")
 
 MAX_RETRIES = 2
 RETRY_DELAYS = [2, 5]
+# S-005: Overall budget for domain extraction per artifact (spec constraint: max 30s).
+DOMAIN_EXTRACTION_TIMEOUT = 30
 
 
 async def handle_domain_extract(
@@ -32,6 +34,39 @@ async def handle_domain_extract(
     ollama_url: str,
 ) -> dict[str, Any]:
     """Process a domain extraction request and return structured domain data."""
+    artifact_id = data.get("artifact_id", "")
+    contract_version = data.get("contract_version", "")
+
+    try:
+        return await asyncio.wait_for(
+            _do_domain_extract(data, provider, model, api_key, ollama_url),
+            timeout=DOMAIN_EXTRACTION_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "domain extraction exceeded %ds budget",
+            DOMAIN_EXTRACTION_TIMEOUT,
+            extra={"artifact_id": artifact_id},
+        )
+        return {
+            "artifact_id": artifact_id,
+            "success": False,
+            "error": f"domain extraction exceeded {DOMAIN_EXTRACTION_TIMEOUT}s budget",
+            "contract_version": contract_version,
+            "processing_time_ms": DOMAIN_EXTRACTION_TIMEOUT * 1000,
+            "model_used": model,
+            "tokens_used": 0,
+        }
+
+
+async def _do_domain_extract(
+    data: dict[str, Any],
+    provider: str,
+    model: str,
+    api_key: str,
+    ollama_url: str,
+) -> dict[str, Any]:
+    """Inner implementation of domain extraction, called under timeout."""
     artifact_id = data.get("artifact_id", "")
     contract_version = data.get("contract_version", "")
     content_type = data.get("content_type", "")

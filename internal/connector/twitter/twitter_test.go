@@ -2,6 +2,7 @@ package twitter
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -2164,5 +2165,191 @@ func TestSyncArchive_ChildURLDedup(t *testing.T) {
 	}
 	if childCount != 1 {
 		t.Errorf("expected 1 child URL artifact (deduped), got %d", childCount)
+	}
+}
+
+// --- Security probe R3: CWE-770 entity amplification and incremental tweet count ---
+
+func TestSecurity_IncrementalTweetCountCheck(t *testing.T) {
+	// SEC-015-R3-001: maxTweetCount must be enforced incrementally during
+	// multi-part file parsing, not after all files are loaded. If the check
+	// were post-deserialization, all tweets would already be in memory.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	// Build a tweets.js that triggers the count check. We use maxTweetCount+1
+	// entries in a single file to prove the check fires during iteration.
+	var buf strings.Builder
+	buf.WriteString(`window.YTD.tweet.part0 = [`)
+	for i := 0; i <= maxTweetCount; i++ {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		// Minimal tweet JSON to keep the test fast.
+		buf.WriteString(`{"tweet":{"id":"`)
+		buf.WriteString(fmt.Sprintf("%d", i))
+		buf.WriteString(`","full_text":"t","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}`)
+	}
+	buf.WriteByte(']')
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"), []byte(buf.String()), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	_, _, err := c.syncArchive(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error for archive exceeding maxTweetCount")
+	}
+	if !strings.Contains(err.Error(), "exceeding max") {
+		t.Errorf("expected 'exceeding max' in error, got: %v", err)
+	}
+}
+
+func TestSecurity_URLEntityAmplificationCapped(t *testing.T) {
+	// SEC-015-R3-002: A crafted tweet with more than maxURLsPerTweet URL
+	// entities must not generate more than maxURLsPerTweet child artifacts
+	// or metadata entries.
+	urls := make([]TweetURL, maxURLsPerTweet+50)
+	for i := range urls {
+		urls[i] = TweetURL{ExpandedURL: fmt.Sprintf("https://example.com/%d", i)}
+	}
+
+	tweet := ArchiveTweet{
+		ID:        "999",
+		FullText:  "Tweet with way too many URLs",
+		CreatedAt: "Wed Mar 15 14:30:00 +0000 2026",
+		Entities:  TweetEntities{URLs: urls},
+	}
+
+	artifact := normalizeTweet(tweet, false, false, nil)
+	urlMeta, ok := artifact.Metadata["urls"].([]string)
+	if !ok {
+		t.Fatal("expected urls metadata")
+	}
+	if len(urlMeta) > maxURLsPerTweet {
+		t.Errorf("URL metadata must be capped at %d, got %d", maxURLsPerTweet, len(urlMeta))
+	}
+}
+
+func TestSecurity_HashtagAmplificationCapped(t *testing.T) {
+	// SEC-015-R3-003: Hashtag metadata must be capped.
+	hashtags := make([]TweetHashtag, maxHashtagsPerTweet+50)
+	for i := range hashtags {
+		hashtags[i] = TweetHashtag{Text: fmt.Sprintf("tag%d", i)}
+	}
+
+	tweet := ArchiveTweet{
+		ID:       "998",
+		FullText: "Tweet with too many hashtags",
+		Entities: TweetEntities{Hashtags: hashtags},
+	}
+
+	artifact := normalizeTweet(tweet, false, false, nil)
+	hashMeta, ok := artifact.Metadata["hashtags"].([]string)
+	if !ok {
+		t.Fatal("expected hashtags metadata")
+	}
+	if len(hashMeta) > maxHashtagsPerTweet {
+		t.Errorf("hashtag metadata must be capped at %d, got %d", maxHashtagsPerTweet, len(hashMeta))
+	}
+	if len(hashMeta) != maxHashtagsPerTweet {
+		t.Errorf("expected exactly %d hashtags (capped), got %d", maxHashtagsPerTweet, len(hashMeta))
+	}
+}
+
+func TestSecurity_MentionAmplificationCapped(t *testing.T) {
+	// SEC-015-R3-003: Mention metadata must be capped.
+	mentions := make([]TweetMention, maxMentionsPerTweet+50)
+	for i := range mentions {
+		mentions[i] = TweetMention{ScreenName: fmt.Sprintf("user%d", i)}
+	}
+
+	tweet := ArchiveTweet{
+		ID:       "997",
+		FullText: "Tweet with too many mentions",
+		Entities: TweetEntities{Mentions: mentions},
+	}
+
+	artifact := normalizeTweet(tweet, false, false, nil)
+	mentionMeta, ok := artifact.Metadata["mentions"].([]string)
+	if !ok {
+		t.Fatal("expected mentions metadata")
+	}
+	if len(mentionMeta) > maxMentionsPerTweet {
+		t.Errorf("mention metadata must be capped at %d, got %d", maxMentionsPerTweet, len(mentionMeta))
+	}
+	if len(mentionMeta) != maxMentionsPerTweet {
+		t.Errorf("expected exactly %d mentions (capped), got %d", maxMentionsPerTweet, len(mentionMeta))
+	}
+}
+
+func TestSecurity_ChildArtifactURLCountCapped(t *testing.T) {
+	// SEC-015-R3-002: syncArchive must cap child artifacts generated per tweet's
+	// URL entities. Verify via a full sync round-trip.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	os.MkdirAll(dataDir, 0o755)
+
+	// Build a tweet with maxURLsPerTweet+20 URLs inline.
+	var urlJSON strings.Builder
+	for i := 0; i < maxURLsPerTweet+20; i++ {
+		if i > 0 {
+			urlJSON.WriteByte(',')
+		}
+		urlJSON.WriteString(fmt.Sprintf(`{"expanded_url":"https://example.com/u%d"}`, i))
+	}
+
+	tweetJSON := fmt.Sprintf(
+		`window.YTD.tweet.part0 = [{"tweet":{"id":"1","full_text":"URL flood tweet with enough content","created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[%s],"hashtags":[],"user_mentions":[]}}}]`,
+		urlJSON.String())
+
+	os.WriteFile(filepath.Join(dataDir, "tweets.js"), []byte(tweetJSON), 0o600)
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	artifacts, _, err := c.syncArchive(context.Background(), "")
+	if err != nil {
+		t.Fatalf("syncArchive failed: %v", err)
+	}
+
+	childCount := 0
+	for _, a := range artifacts {
+		if a.ContentType == "link" {
+			childCount++
+		}
+	}
+	// 1 tweet artifact + at most maxURLsPerTweet child URL artifacts
+	if childCount > maxURLsPerTweet {
+		t.Errorf("child URL artifacts must be capped at %d, got %d", maxURLsPerTweet, childCount)
+	}
+}
+
+func TestSecurity_EntityCapsPreserveNormalTweets(t *testing.T) {
+	// Verify that entity caps do not affect normal tweets (under the cap).
+	tweet := ArchiveTweet{
+		ID:       "500",
+		FullText: "Normal tweet with reasonable entities",
+		Entities: TweetEntities{
+			URLs:     []TweetURL{{ExpandedURL: "https://example.com/a"}, {ExpandedURL: "https://example.com/b"}},
+			Hashtags: []TweetHashtag{{Text: "go"}, {Text: "security"}},
+			Mentions: []TweetMention{{ScreenName: "alice"}, {ScreenName: "bob"}},
+		},
+	}
+
+	artifact := normalizeTweet(tweet, false, false, nil)
+
+	urlMeta := artifact.Metadata["urls"].([]string)
+	if len(urlMeta) != 2 {
+		t.Errorf("expected 2 URLs for normal tweet, got %d", len(urlMeta))
+	}
+	hashMeta := artifact.Metadata["hashtags"].([]string)
+	if len(hashMeta) != 2 {
+		t.Errorf("expected 2 hashtags for normal tweet, got %d", len(hashMeta))
+	}
+	mentionMeta := artifact.Metadata["mentions"].([]string)
+	if len(mentionMeta) != 2 {
+		t.Errorf("expected 2 mentions for normal tweet, got %d", len(mentionMeta))
 	}
 }

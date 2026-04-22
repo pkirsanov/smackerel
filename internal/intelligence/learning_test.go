@@ -281,3 +281,68 @@ func TestLearningPath_ResourcesSortedByDifficulty(t *testing.T) {
 			resources[0].Title, resources[1].Title)
 	}
 }
+
+// === BUG-004: Time estimation tests ===
+
+func TestEstimateReadingTime_Article(t *testing.T) {
+	// 5000 chars / 1000 chars per minute = 5 minutes
+	got := estimateReadingTime("article", 5000, "")
+	if got != 5 {
+		t.Errorf("estimateReadingTime(article, 5000) = %d, want 5", got)
+	}
+}
+
+func TestEstimateReadingTime_ShortArticle(t *testing.T) {
+	// 500 chars should be at least 1 minute
+	got := estimateReadingTime("article", 500, "")
+	if got != 1 {
+		t.Errorf("estimateReadingTime(article, 500) = %d, want 1", got)
+	}
+}
+
+func TestEstimateReadingTime_ZeroLength(t *testing.T) {
+	// Zero content length should default to 10
+	got := estimateReadingTime("article", 0, "")
+	if got != 10 {
+		t.Errorf("estimateReadingTime(article, 0) = %d, want 10", got)
+	}
+}
+
+func TestEstimateReadingTime_YouTube(t *testing.T) {
+	// Duration 600 seconds = 10 minutes
+	got := estimateReadingTime("youtube", 0, "600")
+	if got != 10 {
+		t.Errorf("estimateReadingTime(youtube, 0, 600) = %d, want 10", got)
+	}
+}
+
+func TestEstimateReadingTime_YouTubeNoDuration(t *testing.T) {
+	// No duration defaults to 15
+	got := estimateReadingTime("youtube", 0, "")
+	if got != 15 {
+		t.Errorf("estimateReadingTime(youtube, no duration) = %d, want 15", got)
+	}
+}
+
+func TestEstimateReadingTime_PDF(t *testing.T) {
+	// PDFs use same char-based estimation as articles
+	got := estimateReadingTime("pdf", 10000, "")
+	if got != 10 {
+		t.Errorf("estimateReadingTime(pdf, 10000) = %d, want 10", got)
+	}
+}
+
+func TestEstimateReadingTime_UnknownType(t *testing.T) {
+	got := estimateReadingTime("note/text", 0, "")
+	if got != 10 {
+		t.Errorf("estimateReadingTime(note/text) = %d, want 10", got)
+	}
+}
+
+func TestEstimateReadingTime_YouTubeRoundsUp(t *testing.T) {
+	// 91 seconds should round up to 2 minutes
+	got := estimateReadingTime("youtube", 0, "91")
+	if got != 2 {
+		t.Errorf("estimateReadingTime(youtube, 91s) = %d, want 2", got)
+	}
+}

@@ -21,8 +21,9 @@
 - Config generation: `yaml_get` extraction → env var → written to `config/generated/*.env` (see [config.sh](../../scripts/commands/config.sh#L183-L238))
 
 **Patterns to Avoid:**
-- Do NOT add connector fields to the `config.Config` struct — existing connectors read env vars directly in main.go via `os.Getenv()`, not through centralized config.
 - Do NOT add automatic token validation at startup — connectors validate their own credentials in `Connect()`.
+
+**Implementation Note (reconciled 2026-04-22):** Connector config fields were added to `config.Config` struct (e.g., `DiscordEnabled`, `DiscordBotToken`, etc.) and loaded via `os.Getenv()` in `config.Load()`. This is cleaner than raw `os.Getenv()` in `connectors.go` and follows the same pattern as file-based connectors. The original "Do NOT add connector fields" guidance was superseded during implementation.
 
 **Resolved Decisions:**
 - All 5 connectors default to `enabled: false`
@@ -39,12 +40,12 @@
 
 ## Architecture Overview
 
-No architectural changes. This work adds 5 import lines, 5 instantiation lines, 5 registration lines, and 5 conditional-start blocks to [cmd/core/main.go](../../cmd/core/main.go). It adds 4 YAML config blocks to [config/smackerel.yaml](../../config/smackerel.yaml) (Discord already exists). It extends the config generation script to extract new env vars.
+No architectural changes. This work adds 5 import lines, 5 instantiation lines, 5 registration lines, and 5 conditional-start blocks to [cmd/core/connectors.go](../../cmd/core/connectors.go). Helper functions (`parseJSONArray`, `parseJSONObject`, `parseFloatEnv`) are in [cmd/core/helpers.go](../../cmd/core/helpers.go). It adds 4 YAML config blocks to [config/smackerel.yaml](../../config/smackerel.yaml) (Discord already exists). It extends the config generation script to extract new env vars.
 
 The data flow for each new connector is identical to existing ones:
 
 ```
-smackerel.yaml → config generate → dev.env → os.Getenv() in main.go → ConnectorConfig → connector.Connect() → supervisor.StartConnector()
+smackerel.yaml → config generate → dev.env → os.Getenv() in config.Load() → config.Config → connectors.go → ConnectorConfig → connector.Connect() → supervisor.StartConnector()
 ```
 
 ---

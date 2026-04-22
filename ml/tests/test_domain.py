@@ -246,3 +246,35 @@ class TestResolveModel:
 
     def test_other_provider(self):
         assert _resolve_model("gemini-pro", "google", "") == "google/gemini-pro"
+
+
+class TestDomainExtractionTimeout:
+    """S-005: Verify the overall 30s budget is enforced."""
+
+    def test_timeout_constant_is_30s(self):
+        from app.domain import DOMAIN_EXTRACTION_TIMEOUT
+
+        assert DOMAIN_EXTRACTION_TIMEOUT == 30
+
+    def test_slow_extraction_returns_failure(self):
+        """If the LLM call takes longer than the budget, handle_domain_extract returns failure."""
+
+        async def slow_completion(*args, **kwargs):
+            await asyncio.sleep(60)  # Way over budget
+            return MagicMock()
+
+        with patch("app.domain.litellm.acompletion", side_effect=slow_completion):
+            data = {
+                "artifact_id": "art-timeout",
+                "contract_version": "recipe-extraction-v1",
+                "content_type": "recipe",
+                "content_raw": "Some long recipe",
+            }
+            # Use a real event loop with actual time, but patch DOMAIN_EXTRACTION_TIMEOUT
+            # to 0.1s so the test completes quickly.
+            with patch("app.domain.DOMAIN_EXTRACTION_TIMEOUT", 0.1):
+                result = asyncio.run(handle_domain_extract(data, "openai", "gpt-4o", "key", ""))
+
+        assert result["success"] is False
+        assert "budget" in result["error"]
+        assert result["artifact_id"] == "art-timeout"
