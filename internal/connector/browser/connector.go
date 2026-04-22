@@ -109,7 +109,19 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	return nil
 }
 
-func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArtifact, string, error) {
+func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.RawArtifact, newCur string, retErr error) {
+	// IMP-010-I1: Recover from panics so health is not stuck on "syncing".
+	defer func() {
+		if r := recover(); r != nil {
+			c.mu.Lock()
+			c.health = connector.HealthError
+			c.lastSyncErrors = 1
+			c.mu.Unlock()
+			retErr = fmt.Errorf("browser history sync panic: %v", r)
+			slog.Error("browser-history: panic recovered in Sync", "panic", r)
+		}
+	}()
+
 	c.mu.Lock()
 	c.health = connector.HealthSyncing
 	// CHAOS-F1: Snapshot config under lock to avoid data race with concurrent Connect.
@@ -119,6 +131,13 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	defer func() {
 		c.mu.Lock()
 		c.lastSyncTime = time.Now()
+		// IMP-010-I2: Only restore health if the connector has not been closed
+		// while this Sync was in-flight. Without this guard, Sync's deferred
+		// health update overwrites Close's HealthDisconnected.
+		if c.health == connector.HealthDisconnected {
+			c.mu.Unlock()
+			return
+		}
 		if c.lastSyncErrors > 0 {
 			c.health = connector.HealthError
 		} else {
@@ -743,6 +762,16 @@ func parseBrowserConfig(config connector.ConnectorConfig) (BrowserConfig, error)
 	}
 	if cfg.DwellLightMin < 0 {
 		return BrowserConfig{}, fmt.Errorf("dwell_time_thresholds.light_min must not be negative, got %v", cfg.DwellLightMin)
+	}
+
+	// IMP-010-I3: Validate dwell threshold ordering. If thresholds are set,
+	// full_min > standard_min > light_min must hold, otherwise the switch
+	// statement in dwellTimeTier matches the wrong tier first.
+	if cfg.DwellFullMin > 0 && cfg.DwellStandardMin > 0 && cfg.DwellFullMin <= cfg.DwellStandardMin {
+		return BrowserConfig{}, fmt.Errorf("dwell_time_thresholds: full_min (%v) must be greater than standard_min (%v)", cfg.DwellFullMin, cfg.DwellStandardMin)
+	}
+	if cfg.DwellStandardMin > 0 && cfg.DwellLightMin > 0 && cfg.DwellStandardMin <= cfg.DwellLightMin {
+		return BrowserConfig{}, fmt.Errorf("dwell_time_thresholds: standard_min (%v) must be greater than light_min (%v)", cfg.DwellStandardMin, cfg.DwellLightMin)
 	}
 
 	return cfg, nil

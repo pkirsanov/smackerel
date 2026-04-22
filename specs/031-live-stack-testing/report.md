@@ -155,3 +155,36 @@ Spec 031 establishes live-stack integration and E2E testing infrastructure: Dock
 
 - Unit tests: `./smackerel.sh test unit` — 41 Go packages PASS, 236 Python tests PASS
 - Integration tests compile cleanly (tagged `integration`, require live stack)
+
+---
+
+## Chaos-Hardening Pass R2 (April 22, 2026)
+
+**Trigger:** Stochastic quality sweep R12 repeat — chaos-hardening (child workflow)
+**Scope:** New edge cases not covered by the first chaos pass (CHAOS-031-001..004)
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File(s) | Fix |
+|----|---------|----------|---------|-----|
+| CHAOS-031-005 | `WaitForMLReady` is tested for timeout and empty URL but never for explicit context cancellation mid-wait. In production, if a client disconnects while core is waiting for ML readiness, the cancelled context must cause `WaitForMLReady` to return promptly — not hang until the 60s timeout. Without this test, a regression could cause goroutine leaks (each cancelled search hangs for the full timeout duration). | HIGH | `tests/integration/ml_readiness_test.go` | Added `TestMLReadiness_Chaos_ContextCancelledMidWait`: cancels context after 1s while WaitForMLReady has a 30s timeout. Verifies return within 5s (not 30s). |
+| CHAOS-031-006 | `TestNATS_ConsumerReplay_NakRedeliver` verifies 1 Nak → 1 redeliver, but never tests the terminal case when MaxDeliver is exhausted. In production, a permanently failing message (bad JSON, missing artifact) would be Nak'd up to MaxDeliver times, then NATS stops redelivering. If this terminal path is broken, poisonous messages could be redelivered forever, creating an infinite processing loop. | HIGH | `tests/integration/nats_stream_test.go` | Added `TestNATS_Chaos_MaxDeliverExhaustion`: Nak a message MaxDeliver (3) times, then verify NATS stops redelivering. Confirms the dead-message termination path works correctly. |
+| CHAOS-031-007 | No test validates pgvector behavior when an artifact has an all-zero embedding. Cosine distance (`<=>`) with a zero vector is mathematically undefined (division by zero). Failed embedding generation could produce all-zero vectors, and if pgvector crashes or returns unexpected results (NaN/Inf), the entire search pipeline breaks for ALL queries — not just the degenerate artifact. | HIGH | `tests/integration/artifact_crud_test.go` | Added `TestArtifact_Chaos_ZeroEmbeddingSearch`: inserts an all-zero embedding artifact alongside a normal one, then performs a vector search. Verifies the query completes without error and the normal artifact is still found. |
+| CHAOS-031-008 | Annotation CRUD is tested sequentially, but in production multiple sources (Telegram, web, API) annotate the same artifact concurrently. The `artifact_annotation_summary` materialized view refresh after a burst of concurrent writes was never tested. Concurrent INSERT + REFRESH could surface row locking or materialized view refresh failures. | MEDIUM | `tests/integration/artifact_crud_test.go` | Added `TestAnnotation_Chaos_ConcurrentCreation`: 10 concurrent goroutines insert annotations on the same artifact, then verifies all persist and `REFRESH MATERIALIZED VIEW CONCURRENTLY` succeeds with a coherent summary. |
+| CHAOS-031-009 | List cascade delete (`ON DELETE CASCADE` FK) is tested but never under concurrent item updates. In production, a user could delete a shopping list while background processing is still updating item statuses. If the FK cascade and concurrent updates race, orphaned items or constraint violations could result. | MEDIUM | `tests/integration/artifact_crud_test.go` | Added `TestList_Chaos_CascadeDeleteDuringConcurrentUpdates`: 5 concurrent item status updates race against parent list deletion. Verifies cascade completes cleanly with 0 orphaned items. |
+
+### New Tests
+
+| Test | File | Purpose |
+|------|------|---------|
+| `TestMLReadiness_Chaos_ContextCancelledMidWait` | `tests/integration/ml_readiness_test.go` | Context cancellation must preempt readiness timeout |
+| `TestNATS_Chaos_MaxDeliverExhaustion` | `tests/integration/nats_stream_test.go` | Poisonous message stops redelivering after MaxDeliver |
+| `TestArtifact_Chaos_ZeroEmbeddingSearch` | `tests/integration/artifact_crud_test.go` | Degenerate all-zero embedding doesn't crash pgvector search |
+| `TestAnnotation_Chaos_ConcurrentCreation` | `tests/integration/artifact_crud_test.go` | Concurrent annotation writes + materialized view refresh |
+| `TestList_Chaos_CascadeDeleteDuringConcurrentUpdates` | `tests/integration/artifact_crud_test.go` | FK cascade under concurrent item updates |
+
+### Evidence
+
+- Build: `./smackerel.sh build` — PASS (core and ML images built)
+- Unit tests: `./smackerel.sh test unit` — all 41 Go packages PASS, 236 Python tests PASS
+- Integration test compilation: verified clean (tagged `integration`, requires live stack)

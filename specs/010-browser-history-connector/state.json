@@ -229,6 +229,15 @@
       "startedAt": "2026-04-21T03:00:00Z",
       "completedAt": "2026-04-21T03:15:00Z",
       "summary": "Stochastic quality sweep harden-to-doc trigger. Found 2 findings: H-010-H01 missing Gherkin scenario for URL+date dedup (R-010) — spec declared 'Dedup via URL + visit date' as Hard Constraint, implementation and tests exist but no BDD scenario. Added SCN-BH-011 with test plan links (T-14b, T-14c) and DoD item. H-010-H02 state.json certification.scopeProgress showed 'Done' but scopes.md showed 'In Progress' (unchecked integration/E2E DoD items) — fixed certification status to match scopes.md. All 73 unit tests pass. Lint clean."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["analyze", "implement", "test", "docs"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-22T00:00:00Z",
+      "completedAt": "2026-04-22T00:15:00Z",
+      "summary": "Stochastic quality sweep R92 improve-existing trigger. Cross-connector pattern analysis found 3 improvements: IMP-010-I1 (Medium) missing panic recovery in Sync — added defer recover matching guesthost pattern. IMP-010-I2 (Medium) Sync-after-Close overwrites HealthDisconnected — added guard in deferred cleanup. IMP-010-I3 (Low) dwell threshold ordering not validated — full>standard>light check added. 4 adversarial tests added. All 77 tests pass (59 connector + 18 browser). Build passes."
     }
   ],
   "policySnapshot": {
@@ -242,7 +251,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-21T03:00:00Z",
+  "lastUpdatedAt": "2026-04-22T00:15:00Z",
   "certification": {
     "status": "in_progress",
     "completedScopes": ["1", "2"],
