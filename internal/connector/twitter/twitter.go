@@ -36,6 +36,13 @@ const (
 	// archive file. Prevents OOM when an archive contains millions of tiny tweets
 	// that individually pass the file-size check (CWE-770).
 	maxTweetCount = 500_000
+
+	// maxEntitiesPerTweet caps the number of URL, hashtag, and mention entities
+	// processed per tweet. Prevents child-artifact amplification and unbounded
+	// metadata arrays from crafted archives (CWE-770).
+	maxURLsPerTweet     = 100
+	maxHashtagsPerTweet = 100
+	maxMentionsPerTweet = 100
 )
 
 // tweetIDPattern validates that a tweet ID contains only digits.
@@ -313,12 +320,13 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 			return nil, cursor, fmt.Errorf("parse %s: %w", filepath.Base(tf), err)
 		}
 		allTweets = append(allTweets, tweets...)
-	}
 
-	// Enforce maximum tweet count to prevent OOM from archives with
-	// massive tweet counts that individually pass the file-size check (CWE-770).
-	if len(allTweets) > maxTweetCount {
-		return nil, cursor, fmt.Errorf("archive contains %d tweets, exceeding max %d", len(allTweets), maxTweetCount)
+		// Enforce maximum tweet count incrementally to prevent OOM from
+		// multi-part archives whose individual files pass the size check but
+		// whose combined tweet count causes unbounded allocation (CWE-770).
+		if len(allTweets) > maxTweetCount {
+			return nil, cursor, fmt.Errorf("archive contains %d tweets after %s, exceeding max %d", len(allTweets), filepath.Base(tf), maxTweetCount)
+		}
 	}
 
 	// Parse like.js and bookmark.js to build bookmarked/liked ID sets.
@@ -367,7 +375,12 @@ func (c *Connector) syncArchive(ctx context.Context, cursor string) ([]connector
 		artifacts = append(artifacts, artifact)
 
 		// Create child artifacts for embedded URLs per R-009.
-		for _, u := range tweet.Entities.URLs {
+		// Cap per-tweet URL processing to prevent child-artifact amplification (CWE-770).
+		urlEntities := tweet.Entities.URLs
+		if len(urlEntities) > maxURLsPerTweet {
+			urlEntities = urlEntities[:maxURLsPerTweet]
+		}
+		for _, u := range urlEntities {
 			if !isSafeURL(u.ExpandedURL) || seenURLs[u.ExpandedURL] {
 				continue
 			}
@@ -608,20 +621,33 @@ func normalizeTweet(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread) 
 		"processing_tier": tier,
 	}
 
-	hashtags := make([]string, len(tweet.Entities.Hashtags))
-	for i, h := range tweet.Entities.Hashtags {
+	// Cap entity arrays to prevent unbounded metadata from crafted archives (CWE-770).
+	hashtagSource := tweet.Entities.Hashtags
+	if len(hashtagSource) > maxHashtagsPerTweet {
+		hashtagSource = hashtagSource[:maxHashtagsPerTweet]
+	}
+	hashtags := make([]string, len(hashtagSource))
+	for i, h := range hashtagSource {
 		hashtags[i] = h.Text
 	}
 	metadata["hashtags"] = hashtags
 
-	mentions := make([]string, len(tweet.Entities.Mentions))
-	for i, m := range tweet.Entities.Mentions {
+	mentionSource := tweet.Entities.Mentions
+	if len(mentionSource) > maxMentionsPerTweet {
+		mentionSource = mentionSource[:maxMentionsPerTweet]
+	}
+	mentions := make([]string, len(mentionSource))
+	for i, m := range mentionSource {
 		mentions[i] = m.ScreenName
 	}
 	metadata["mentions"] = mentions
 
-	urls := make([]string, 0, len(tweet.Entities.URLs))
-	for _, u := range tweet.Entities.URLs {
+	urlSource := tweet.Entities.URLs
+	if len(urlSource) > maxURLsPerTweet {
+		urlSource = urlSource[:maxURLsPerTweet]
+	}
+	urls := make([]string, 0, len(urlSource))
+	for _, u := range urlSource {
 		if isSafeURL(u.ExpandedURL) {
 			urls = append(urls, u.ExpandedURL)
 		}

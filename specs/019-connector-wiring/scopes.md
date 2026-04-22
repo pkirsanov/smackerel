@@ -84,7 +84,9 @@ Scenario: SCN-019-006 Existing connectors unaffected by new registrations
 
 | File | Change |
 |------|--------|
-| `cmd/core/main.go` | Add 5 imports, 5 instantiations, 5 registrations, 5 auto-start blocks, helper functions (`parseJSONArray`, `parseJSONObject`, `parseFloatEnv`) |
+| `cmd/core/connectors.go` | Add 5 imports, 5 instantiations, 5 registrations, 5 auto-start blocks (refactored from main.go) |
+| `cmd/core/helpers.go` | Helper functions (`parseJSONArray`, `parseJSONObject`, `parseFloatEnv`) |
+| `internal/config/config.go` | Config struct fields + env var loading for all 5 connectors |
 | `config/smackerel.yaml` | Add 4 new YAML config blocks under `connectors:` (twitter, weather, gov-alerts, financial-markets) |
 | `scripts/commands/config.sh` | Add `yaml_get` extractions for all 5 connectors, write env vars to generated env files |
 

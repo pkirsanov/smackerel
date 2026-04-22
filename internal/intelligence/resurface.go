@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -241,6 +242,48 @@ func (e *Engine) SerendipityPick(ctx context.Context) (*SerendipityCandidate, er
 		}
 	}
 
+	// 3. Batch-fetch calendar matches: upcoming events in next 7 days from CalDAV
+	calendarKeywords := make(map[string]bool) // lowercase keywords from upcoming events
+	calRows, err := e.Pool.Query(ctx, `
+		SELECT LOWER(title)
+		FROM artifacts
+		WHERE source_id = 'caldav'
+		AND created_at > NOW() - INTERVAL '30 days'
+		AND (metadata->>'dtstart')::timestamptz BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+		LIMIT 50
+	`)
+	if err != nil {
+		slog.Warn("calendar event query failed", "error", err)
+	} else {
+		defer calRows.Close()
+		for calRows.Next() {
+			var title string
+			if calRows.Scan(&title) == nil {
+				// Extract meaningful words from event titles
+				for _, word := range strings.Fields(title) {
+					if len(word) > 3 { // skip short words
+						calendarKeywords[word] = true
+					}
+				}
+			}
+		}
+		if err := calRows.Err(); err != nil {
+			slog.Warn("calendar event iteration failed", "error", err)
+		}
+	}
+	calendarMatchSet := make(map[string]bool)
+	if len(calendarKeywords) > 0 {
+		for _, c := range candidates {
+			lower := strings.ToLower(c.title)
+			for kw := range calendarKeywords {
+				if strings.Contains(lower, kw) {
+					calendarMatchSet[c.id] = true
+					break
+				}
+			}
+		}
+	}
+
 	// Score each candidate with context matching
 	var best *SerendipityCandidate
 	var bestScore float64
@@ -263,6 +306,13 @@ func (e *Engine) SerendipityPick(ctx context.Context) (*SerendipityCandidate, er
 			score += 2.0
 			sc.TopicMatch = true
 			sc.ContextReason = "Connects to a currently active topic"
+		}
+
+		// Calendar match from upcoming events (+3 per R-505)
+		if calendarMatchSet[c.id] {
+			score += 3.0
+			sc.CalendarMatch = true
+			sc.ContextReason = "Matches an upcoming calendar event"
 		}
 
 		// Quality bonus

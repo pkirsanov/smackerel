@@ -58,7 +58,7 @@
   "certification": {
     "status": "certified",
     "completedScopes": [1],
-    "certifiedCompletedPhases": ["analyze", "bootstrap", "planning", "implement", "finalize", "certify"],
+    "certifiedCompletedPhases": ["analyze", "bootstrap", "planning", "implement", "test", "regression", "harden", "security", "improve", "devops", "stabilize", "validate", "audit", "docs", "finalize", "certify"],
     "scopeProgress": [],
     "lockdownState": {
       "active": false,

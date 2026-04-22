@@ -1,0 +1,28 @@
+{
+  "version": 3,
+  "featureDir": "specs/006-phase5-advanced/bugs/BUG-003-go-nats-fire-and-forget",
+  "featureName": "BUG-003: Go Runtime Fire-and-Forget NATS Publishes",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.gaps",
+    "currentPhase": "plan",
+    "currentScope": "1",
+    "runStartedAt": "2026-04-22T00:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "pending",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Convert Phase 5 NATS to Request/Reply",
+        "status": "Not Started",
+        "dependsOn": []
+      }
+    ]
+  }
+}

@@ -561,6 +561,11 @@ func (rs *ResultSubscriber) publishDomainExtractionRequest(ctx context.Context, 
 	)
 
 	if err := rs.NATS.Publish(ctx, smacknats.SubjectDomainExtract, data); err != nil {
+		// S-002: Revert pending status so the artifact isn't stuck in 'pending' forever.
+		_, _ = rs.DB.Exec(ctx,
+			`UPDATE artifacts SET domain_extraction_status = NULL WHERE id = $1 AND domain_extraction_status = 'pending'`,
+			payload.ArtifactID,
+		)
 		metrics.DomainExtraction.WithLabelValues(contract.Version, "error").Inc()
 		return fmt.Errorf("publish to domain.extract: %w", err)
 	}
