@@ -1885,6 +1885,10 @@ func TestSync_ProducesForecastArtifacts(t *testing.T) {
 	if !strings.Contains(fa.RawContent, "Rain") {
 		t.Errorf("forecast RawContent should contain rain description, got %q", fa.RawContent)
 	}
+	// IMP-016-R145-001: precipitation amount must appear for rainy days.
+	if !strings.Contains(fa.RawContent, "3.5mm") {
+		t.Errorf("forecast RawContent should contain precipitation amount, got %q", fa.RawContent)
+	}
 }
 
 func TestSync_ForecastFailure_StillProducesCurrent(t *testing.T) {
@@ -2049,5 +2053,120 @@ func TestFetchHistorical_ArchiveURL(t *testing.T) {
 	}
 	if gotPath != "/v1/archive" {
 		t.Errorf("expected archive API path /v1/archive, got %q", gotPath)
+	}
+}
+
+// ==========================================================================
+// IMP-016-R145: Improve-existing findings
+// ==========================================================================
+
+// IMP-016-R145-001: Forecast RawContent must include precipitation amount for rainy days.
+func TestSync_ForecastRawContentIncludesPrecipitation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if strings.Contains(r.URL.RawQuery, "daily=") {
+			fmt.Fprint(w, `{"daily":{"time":["2026-04-22","2026-04-23","2026-04-24"],"temperature_2m_max":[22,20,18],"temperature_2m_min":[12,10,9],"weather_code":[0,65,2],"precipitation_sum":[0.0,5.2,0.0]}}`)
+		} else {
+			fmt.Fprint(w, `{"current":{"temperature_2m":18.0,"apparent_temperature":16.5,"relative_humidity_2m":72,"wind_speed_10m":8.5,"weather_code":0,"is_day":1}}`)
+		}
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "PrecipCity", "latitude": 40.0, "longitude": -74.0},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+
+	// Find forecast artifact.
+	var forecast *connector.RawArtifact
+	for i := range artifacts {
+		if artifacts[i].ContentType == "weather/forecast" {
+			forecast = &artifacts[i]
+			break
+		}
+	}
+	if forecast == nil {
+		t.Fatal("expected a forecast artifact")
+	}
+
+	// Day with rain (5.2mm) should include precipitation in RawContent.
+	if !strings.Contains(forecast.RawContent, "5.2mm") {
+		t.Errorf("forecast RawContent should include precipitation amount for rainy days, got %q", forecast.RawContent)
+	}
+	// Day without rain should NOT include "(0.0mm)".
+	if strings.Contains(forecast.RawContent, "0.0mm") {
+		t.Errorf("forecast RawContent should not include precipitation for dry days, got %q", forecast.RawContent)
+	}
+}
+
+// IMP-016-R145-001 adversarial: removing precipitation from RawContent would make
+// this test fail — forecast day 2 has 5.2mm rain that must appear.
+func TestSync_ForecastPrecipitationAdversarial(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if strings.Contains(r.URL.RawQuery, "daily=") {
+			// All 3 days have rain — every line must include precipitation.
+			fmt.Fprint(w, `{"daily":{"time":["2026-04-22","2026-04-23","2026-04-24"],"temperature_2m_max":[22,20,18],"temperature_2m_min":[12,10,9],"weather_code":[65,65,65],"precipitation_sum":[1.5,12.0,0.3]}}`)
+		} else {
+			fmt.Fprint(w, `{"current":{"temperature_2m":18.0,"apparent_temperature":16.5,"relative_humidity_2m":72,"wind_speed_10m":8.5,"weather_code":0,"is_day":1}}`)
+		}
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "RainCity", "latitude": 40.0, "longitude": -74.0},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+
+	var forecast *connector.RawArtifact
+	for i := range artifacts {
+		if artifacts[i].ContentType == "weather/forecast" {
+			forecast = &artifacts[i]
+			break
+		}
+	}
+	if forecast == nil {
+		t.Fatal("expected a forecast artifact")
+	}
+
+	// All three days have precipitation — each amount must appear.
+	for _, expected := range []string{"1.5mm", "12.0mm", "0.3mm"} {
+		if !strings.Contains(forecast.RawContent, expected) {
+			t.Errorf("forecast RawContent should include %q, got %q", expected, forecast.RawContent)
+		}
+	}
+}
+
+// IMP-016-R145-003: decodeHistorical must reject inconsistent array lengths.
+func TestDecodeHistorical_InconsistentArrayLengths(t *testing.T) {
+	c := New("weather")
+	// Time has 2 entries but TempMax has only 1 — inconsistent.
+	body := io.NopCloser(strings.NewReader(`{"daily":{"time":["2026-03-15","2026-03-16"],"temperature_2m_max":[14],"temperature_2m_min":[6,5],"weather_code":[0,2],"precipitation_sum":[0,0]}}`))
+	_, err := c.decodeHistorical(body, "inconsistent-hist-key")
+	if err == nil {
+		t.Error("expected error for inconsistent array lengths in historical data")
+	}
+	if !strings.Contains(err.Error(), "inconsistent") {
+		t.Errorf("error should mention inconsistent lengths, got: %v", err)
 	}
 }

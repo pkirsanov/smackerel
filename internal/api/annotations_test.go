@@ -291,9 +291,9 @@ func TestDeleteTag_InvalidTagFormat(t *testing.T) {
 		{"valid-tag", http.StatusOK},
 		{"weeknight", http.StatusOK},
 		{"tag_with_underscore", http.StatusOK},
-		{"has%20spaces", http.StatusBadRequest},    // URL-encoded space
-		{"tag%3Bdrop", http.StatusBadRequest},      // URL-encoded semicolon
-		{"%3Cscript%3E", http.StatusBadRequest},    // URL-encoded angle brackets
+		{"has%20spaces", http.StatusBadRequest}, // URL-encoded space
+		{"tag%3Bdrop", http.StatusBadRequest},   // URL-encoded semicolon
+		{"%3Cscript%3E", http.StatusBadRequest}, // URL-encoded angle brackets
 	}
 
 	for _, tc := range cases {

@@ -243,3 +243,31 @@ These findings represent scope inflation where scopes are marked "Done" but thei
 - `./smackerel.sh test unit` — all pass; weather package: 36.5s
 - 3 new tests would fail if retry/permanent-error logic were reverted
 - Implementation reality findings IR1-IR4 verified by grep: no matches for `FetchHistorical`, `FetchForecast`, `NWSClient`, `archive-api.open-meteo`, `api.weather.gov`, `weather.enrich` in `internal/connector/weather/`
+
+---
+
+### Improve Pass (R145) — 2026-04-22
+
+**Trigger:** stochastic-quality-sweep R145 → improve-existing
+**Target:** `internal/connector/weather/weather.go`, `internal/connector/weather/weather_test.go`
+
+#### Findings
+
+| # | ID | Issue | Severity | Fix |
+|---|------|-------|----------|-----|
+| F1 | IMP-016-R145-001 | Forecast RawContent omits precipitation amount — digest consumers reading RawContent see "Rain" but not "5.2mm", losing a key decision signal for daily planning | Medium | Forecast summary lines now include `(Xmm)` suffix when `PrecipitationMM > 0`; dry days omit precipitation for clean output |
+| F2 | IMP-016-R145-002 | Cache full scenario silently discards new API responses with no log — operator has zero observability into stale-data risk when cache is saturated with all-valid entries | Medium | Added `slog.Warn("weather cache full, discarding new entry", ...)` in all three cache-write paths (`decodeCurrent`, `decodeForecast`, `decodeHistorical`) when the size limit prevents caching new data |
+| F3 | IMP-016-R145-003 | `decodeHistorical` lacks array length consistency check — unlike `decodeForecast` which validates all arrays match `len(Time)`, historical decoder only checks non-empty arrays, risking silent index mismatch on malformed API responses | Low | Replaced individual `len(...) == 0` checks with cross-array consistency check `len(...) != days` matching the `decodeForecast` pattern |
+
+#### Tests Added (4 new test functions + 1 assertion extension)
+
+1. `TestSync_ForecastRawContentIncludesPrecipitation` — verifies "5.2mm" appears in RawContent for rainy day, "0.0mm" absent for dry day (IMP-016-R145-001)
+2. `TestSync_ForecastPrecipitationAdversarial` — all 3 forecast days have rain; all three precipitation amounts must appear in RawContent; would fail if precipitation format reverted (IMP-016-R145-001)
+3. `TestDecodeHistorical_InconsistentArrayLengths` — Time has 2 entries, TempMax has 1; rejected with "inconsistent" error (IMP-016-R145-003)
+4. `TestSync_ProducesForecastArtifacts` — extended with assertion that RawContent contains "3.5mm" (IMP-016-R145-001)
+
+#### Evidence
+
+- `./smackerel.sh build` — clean
+- `./smackerel.sh test unit` — all pass; weather package: 98.9s; total: 90 weather test functions
+- All 4 adversarial tests would fail if their respective fixes were reverted

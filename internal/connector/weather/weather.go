@@ -179,7 +179,11 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			var forecastLines []string
 			forecastMeta := make([]map[string]interface{}, len(forecast))
 			for i, day := range forecast {
-				forecastLines = append(forecastLines, fmt.Sprintf("%s: %.0f/%.0f°C, %s", day.Date, day.TempMin, day.TempMax, day.Description))
+				if day.PrecipitationMM > 0 {
+					forecastLines = append(forecastLines, fmt.Sprintf("%s: %.0f/%.0f°C, %s (%.1fmm)", day.Date, day.TempMin, day.TempMax, day.Description, day.PrecipitationMM))
+				} else {
+					forecastLines = append(forecastLines, fmt.Sprintf("%s: %.0f/%.0f°C, %s", day.Date, day.TempMin, day.TempMax, day.Description))
+				}
 				forecastMeta[i] = map[string]interface{}{
 					"date":             day.Date,
 					"temperature_max":  day.TempMax,
@@ -391,6 +395,8 @@ func (c *Connector) decodeCurrent(body io.ReadCloser, cacheKey string) (*Current
 	// Only cache if there is room after eviction to enforce the size limit.
 	if len(c.cache) < maxCacheEntries {
 		c.cache[cacheKey] = &cacheEntry{data: cw, expiresAt: time.Now().Add(30 * time.Minute)}
+	} else {
+		slog.Warn("weather cache full, discarding new entry", "key", cacheKey, "size", len(c.cache))
 	}
 	c.mu.Unlock()
 
@@ -491,6 +497,8 @@ func (c *Connector) decodeForecast(body io.ReadCloser, cacheKey string) ([]Forec
 	}
 	if len(c.cache) < maxCacheEntries {
 		c.cache[cacheKey] = &cacheEntry{data: forecast, expiresAt: time.Now().Add(2 * time.Hour)}
+	} else {
+		slog.Warn("weather cache full, discarding new entry", "key", cacheKey, "size", len(c.cache))
 	}
 	c.mu.Unlock()
 
@@ -565,9 +573,10 @@ func (c *Connector) decodeHistorical(body io.ReadCloser, cacheKey string) (*Curr
 	if len(result.Daily.Time) == 0 {
 		return nil, fmt.Errorf("open-meteo historical returned no data for requested date")
 	}
-	if len(result.Daily.TempMax) == 0 || len(result.Daily.TempMin) == 0 ||
-		len(result.Daily.WeatherCode) == 0 || len(result.Daily.Precipitation) == 0 {
-		return nil, fmt.Errorf("open-meteo historical response has missing arrays")
+	days := len(result.Daily.Time)
+	if len(result.Daily.TempMax) != days || len(result.Daily.TempMin) != days ||
+		len(result.Daily.WeatherCode) != days || len(result.Daily.Precipitation) != days {
+		return nil, fmt.Errorf("open-meteo historical response has inconsistent array lengths")
 	}
 
 	tempMax := result.Daily.TempMax[0]
@@ -594,6 +603,8 @@ func (c *Connector) decodeHistorical(body io.ReadCloser, cacheKey string) (*Curr
 	}
 	if len(c.cache) < maxCacheEntries {
 		c.cache[cacheKey] = &cacheEntry{data: cw, expiresAt: time.Now().Add(100 * 365 * 24 * time.Hour)}
+	} else {
+		slog.Warn("weather cache full, discarding new entry", "key", cacheKey, "size", len(c.cache))
 	}
 	c.mu.Unlock()
 

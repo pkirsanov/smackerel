@@ -5182,3 +5182,75 @@ func TestSync_ParentContextCancellation_StopsSyncEarly(t *testing.T) {
 		t.Errorf("Sync took %v after parent cancellation — expected fast exit", elapsed)
 	}
 }
+
+// TestProximityVerified_Earthquake verifies earthquake artifacts have proximity_verified=true.
+func TestProximityVerified_Earthquake(t *testing.T) {
+	eq := Earthquake{ID: "eq1", Magnitude: 4.0, Latitude: 37.5, Longitude: -122.1, DepthKm: 10, Time: time.Now(), Place: "Near SF"}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 30}
+	art := normalizeEarthquake(eq, match)
+	if pv, ok := art.Metadata["proximity_verified"].(bool); !ok || !pv {
+		t.Errorf("earthquake artifact should have proximity_verified=true, got %v", art.Metadata["proximity_verified"])
+	}
+}
+
+// TestProximityVerified_NWS verifies NWS weather artifacts have proximity_verified=true.
+func TestProximityVerified_NWS(t *testing.T) {
+	alert := NWSAlert{ID: "nws1", Event: "Tornado Warning", Severity: "Extreme", Headline: "Tornado Warning issued"}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 0}
+	art := normalizeNWSAlert(alert, match)
+	if pv, ok := art.Metadata["proximity_verified"].(bool); !ok || !pv {
+		t.Errorf("NWS artifact should have proximity_verified=true, got %v", art.Metadata["proximity_verified"])
+	}
+}
+
+// TestProximityVerified_Volcano verifies volcano artifacts have proximity_verified=false
+// because the USGS volcano API lacks coordinate data (H-017-SW-003).
+func TestProximityVerified_Volcano(t *testing.T) {
+	alert := VolcanoAlert{ID: "vol1", Volcano: "Kilauea", AlertLevel: "WARNING", ColorCode: "RED", Severity: "severe"}
+	art := normalizeVolcanoAlert(alert)
+	pv, ok := art.Metadata["proximity_verified"].(bool)
+	if !ok || pv {
+		t.Errorf("volcano artifact should have proximity_verified=false (no coordinates), got %v", art.Metadata["proximity_verified"])
+	}
+}
+
+// TestProximityVerified_Wildfire verifies wildfire artifacts have proximity_verified=false
+// because InciWeb RSS lacks coordinate data (H-017-SW-003).
+func TestProximityVerified_Wildfire(t *testing.T) {
+	alert := WildfireAlert{ID: "wf1", Title: "Big Fire", Description: "Large fire in area.", Severity: "severe"}
+	art := normalizeWildfireAlert(alert)
+	pv, ok := art.Metadata["proximity_verified"].(bool)
+	if !ok || pv {
+		t.Errorf("wildfire artifact should have proximity_verified=false (no coordinates), got %v", art.Metadata["proximity_verified"])
+	}
+}
+
+// TestProximityVerified_Tsunami verifies tsunami artifacts have proximity_verified=true.
+func TestProximityVerified_Tsunami(t *testing.T) {
+	alert := TsunamiAlert{ID: "tsun1", Title: "Tsunami Warning", Summary: "Warning for Pacific coast", Severity: "severe", GeoPoint: "37.0 -122.0"}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 90}
+	art := normalizeTsunamiAlert(alert, match)
+	if pv, ok := art.Metadata["proximity_verified"].(bool); !ok || !pv {
+		t.Errorf("tsunami artifact should have proximity_verified=true, got %v", art.Metadata["proximity_verified"])
+	}
+}
+
+// TestProximityVerified_GDACS verifies GDACS artifacts have proximity_verified=true.
+func TestProximityVerified_GDACS(t *testing.T) {
+	alert := GDACSAlert{ID: "gd1", Title: "Earthquake", Description: "Major quake", Severity: "extreme", GeoPoint: "37.77 -122.42"}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 5}
+	art := normalizeGDACSAlert(alert, match)
+	if pv, ok := art.Metadata["proximity_verified"].(bool); !ok || !pv {
+		t.Errorf("GDACS artifact should have proximity_verified=true, got %v", art.Metadata["proximity_verified"])
+	}
+}
+
+// TestProximityVerified_AirNow verifies AirNow artifacts have proximity_verified=true.
+func TestProximityVerified_AirNow(t *testing.T) {
+	obs := AirNowObservation{ID: "aq1", AQI: 155, Category: "Unhealthy", Pollutant: "PM2.5", ReportingArea: "SF", Severity: "moderate"}
+	match := &ProximityMatch{LocationName: "Home", DistanceKm: 0}
+	art := normalizeAirNowAlert(obs, match)
+	if pv, ok := art.Metadata["proximity_verified"].(bool); !ok || !pv {
+		t.Errorf("AirNow artifact should have proximity_verified=true, got %v", art.Metadata["proximity_verified"])
+	}
+}
