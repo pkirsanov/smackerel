@@ -130,6 +130,10 @@ async def _do_domain_extract(
             if "domain" not in result:
                 result["domain"] = _domain_from_contract(contract_version)
 
+            # C026-CHAOS-02: Normalize ingredient names to lowercase for
+            # case-insensitive search matching on the Go side.
+            _normalize_ingredient_names(result)
+
             break
 
         except (json.JSONDecodeError, ValueError) as e:
@@ -265,3 +269,18 @@ RULES:
 - Identify pros and cons from reviews or descriptions.
 - If a field cannot be determined, use null.
 """
+
+
+def _normalize_ingredient_names(result: dict[str, Any]) -> None:
+    """Normalize ingredient names to lowercase for case-insensitive search.
+
+    C026-CHAOS-02: LLMs return mixed-case ingredient names (e.g., "Chicken Breast")
+    but user searches are lowercased by parseDomainIntent. Normalizing here ensures
+    JSONB containment and LIKE queries match regardless of LLM casing.
+    """
+    ingredients = result.get("ingredients")
+    if not isinstance(ingredients, list):
+        return
+    for item in ingredients:
+        if isinstance(item, dict) and isinstance(item.get("name"), str):
+            item["name"] = item["name"].lower()
