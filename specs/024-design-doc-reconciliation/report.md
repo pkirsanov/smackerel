@@ -184,3 +184,43 @@ $ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}' docs/sm
 $ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md → only Apple Notes ref
 $ find internal/connector -maxdepth 1 -mindepth 1 -type d | wc -l → 15
 ```
+
+---
+
+## Test-to-Doc Pass (2026-04-22, stochastic-quality-sweep child)
+
+### Probe Summary
+
+REPEAT test probe. Re-executed all grep/awk validation checks from both scopes' test plans and DoD items against current `docs/smackerel.md` (5 commits since original delivery).
+
+### Validation Results
+
+| Check | Command | Result | Status |
+|-------|---------|--------|--------|
+| SCN-024-01 OpenClaw outside §4 | `awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}'` | Only line 23 (TOC link) | ✅ PASS |
+| SCN-024-02 SQLite outside §4 | `awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite/{print NR": "$0}'` | Only line 2176 (Apple Notes factual ref) | ✅ PASS |
+| SCN-024-02 LanceDB outside §4 | `awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /LanceDB/{print NR": "$0}'` | Zero hits | ✅ PASS |
+| SCN-024-02 §14 PostgreSQL types | `grep -cE "JSONB\|TIMESTAMPTZ\|vector(384)\|BOOLEAN"` in §14 | 32 matches | ✅ PASS |
+| SCN-024-02 §14 no SQLite types | `grep -iE "INTEGER.*boolean\|TEXT.*json"` in §14 (excl. PG) | Zero hits | ✅ PASS |
+| SCN-024-02 §8 storage diagram | `grep` in §8 for PostgreSQL/pgvector | "PostgreSQL + pgvector" confirmed | ✅ PASS |
+| SCN-024-03 §3 no OpenClaw | `awk` scan of §3 body | Zero OpenClaw refs in §3 | ✅ PASS |
+| SCN-024-04 🔜 markers | `grep -c "🔜"` | 24 occurrences | ✅ PASS |
+| SCN-024-05 Phase markers | Phase 1-5 delivery status | ✅✅🔜✅✅ confirmed | ✅ PASS |
+| SCN-024-06 Connector count | `find internal/connector -maxdepth 1 -type d` | 15 dirs, all 15 in §22.7 | ✅ PASS |
+| Header metadata | Runtime Platform line | "Go + Docker Compose (self-hosted)" | ✅ PASS |
+| §4 SUPERSEDED header | First 3 lines of §4 | ⚠️ SUPERSEDED disclaimer present | ✅ PASS |
+
+### Post-Delivery Drift Check
+
+5 commits touched `docs/smackerel.md` since original delivery (2026-04-10):
+- `81f32e7` system review (024 delivery itself)
+- `54f47b2` stochastic sweep — 30 rounds
+- `12753d2` improve-existing sweep rounds 25-30
+- `dbce34c` feat(026-033) full delivery
+- `60cfd3d` state.json promotions
+
+**Result:** No regressions introduced. All reconciliation invariants hold across all 5 subsequent commits.
+
+### Findings
+
+**Zero findings.** All 6 Gherkin scenarios validated. All DoD items confirmed. No drift detected.

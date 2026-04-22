@@ -537,3 +537,140 @@ func TestListListsHandler_FilterByType(t *testing.T) {
 		t.Errorf("expected 1 reading list, got %d", len(lists))
 	}
 }
+
+func TestArchiveListHandler(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Delete("/api/lists/{id}", h.ArchiveListHandler)
+
+	req := httptest.NewRequest("DELETE", "/api/lists/test-list-1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify list was archived in store
+	lwi := store.lists["test-list-1"]
+	if lwi.List.Status != list.StatusArchived {
+		t.Errorf("expected status archived, got %s", lwi.List.Status)
+	}
+
+	var result map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result["status"] != "archived" {
+		t.Errorf("expected response status 'archived', got %q", result["status"])
+	}
+}
+
+func TestArchiveListHandler_NotFound(t *testing.T) {
+	store := newMockListStore()
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Delete("/api/lists/{id}", h.ArchiveListHandler)
+
+	req := httptest.NewRequest("DELETE", "/api/lists/nonexistent", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestUpdateListHandler_ArchiveViaUpdate(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Patch("/api/lists/{id}", h.UpdateListHandler)
+
+	body := `{"status":"archived"}`
+	req := httptest.NewRequest("PATCH", "/api/lists/test-list-1", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify list was archived
+	lwi := store.lists["test-list-1"]
+	if lwi.List.Status != list.StatusArchived {
+		t.Errorf("expected status archived, got %s", lwi.List.Status)
+	}
+}
+
+func TestUpdateListHandler_InvalidJSON(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Patch("/api/lists/{id}", h.UpdateListHandler)
+
+	req := httptest.NewRequest("PATCH", "/api/lists/test-list-1", bytes.NewBufferString("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestRemoveItemHandler(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Delete("/api/lists/{id}/items/{itemId}", h.RemoveItemHandler)
+
+	req := httptest.NewRequest("DELETE", "/api/lists/test-list-1/items/item-1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify item was removed from store
+	lwi := store.lists["test-list-1"]
+	for _, item := range lwi.Items {
+		if item.ID == "item-1" {
+			t.Error("item-1 should have been removed")
+		}
+	}
+}
+
+func TestRemoveItemHandler_NotFound(t *testing.T) {
+	store := newMockListStore()
+	seedTestList(store)
+
+	h := &ListHandlers{Store: store}
+
+	r := chi.NewRouter()
+	r.Delete("/api/lists/{id}/items/{itemId}", h.RemoveItemHandler)
+
+	req := httptest.NewRequest("DELETE", "/api/lists/test-list-1/items/nonexistent", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}

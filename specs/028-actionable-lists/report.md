@@ -168,3 +168,39 @@ The `ListHandlers` struct existed in `internal/api/lists.go`, the routes were re
 ./smackerel.sh test unit  → 236 passed (cmd/core re-validated, not cached)
 ./smackerel.sh lint       → All checks passed!
 ```
+
+---
+
+## Harden-to-Doc Sweep (2026-04-22)
+
+**Trigger:** stochastic-quality-sweep child workflow, harden probe (Gherkin coverage, DoD, test depth).
+
+### Findings
+
+| # | Finding | Scope | Severity | Disposition |
+|---|---------|-------|----------|-------------|
+| H1 | No test for "Handle uncountable quantities" Gherkin scenario — `ParseQuantity("a pinch", "")` returns 0 correctly but no test proves it; only empty-string was tested | 3 | Medium | Fixed |
+| H3 | No test for `ArchiveListHandler` (DELETE `/api/lists/{id}`) — added in R85 reconcile sweep but never tested | 6 | Medium | Fixed |
+| H4 | No test for `UpdateListHandler` (PATCH `/api/lists/{id}`) — added in R85 reconcile sweep but never tested | 6 | Medium | Fixed |
+| H5 | No test for `RemoveItemHandler` (DELETE `/api/lists/{id}/items/{itemId}`) — added in R85 reconcile sweep but never tested | 6 | Medium | Fixed |
+
+### Tests Added
+
+**`internal/list/recipe_aggregator_test.go`:**
+- `TestParseQuantity_UncountableQuantities` — verifies "a pinch", "to taste", "some", "a handful", "a dash" all return qty=0, covering Gherkin "Handle uncountable quantities"
+- `TestRecipeAggregator_UncountableQuantityPreserved` — end-to-end: "a pinch of salt" produces item with nil Quantity pointer, verifying the full aggregation path keeps uncountable items as-is
+
+**`internal/api/lists_test.go`:**
+- `TestArchiveListHandler` — verifies DELETE `/api/lists/{id}` returns 200 and archives the list (status=archived)
+- `TestArchiveListHandler_NotFound` — verifies 500 for nonexistent list
+- `TestUpdateListHandler_ArchiveViaUpdate` — verifies PATCH `/api/lists/{id}` with `{"status":"archived"}` archives the list
+- `TestUpdateListHandler_InvalidJSON` — verifies 400 for malformed body
+- `TestRemoveItemHandler` — verifies DELETE `/api/lists/{id}/items/{itemId}` returns 204 and removes the item from store
+- `TestRemoveItemHandler_NotFound` — verifies 500 for nonexistent item
+
+### Verification
+
+```
+./smackerel.sh test unit  → all Go packages pass (api 1.788s, list 0.011s re-run), 257 Python passed
+./smackerel.sh lint       → All checks passed!
+```

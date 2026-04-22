@@ -193,6 +193,15 @@
       "startedAt": "2026-04-09T02:00:00Z",
       "completedAt": "2026-04-09T02:05:00Z",
       "summary": "All unit tests pass (26 tests across 3 files), lint passes, format passes, check passes. Both scopes marked Done with verified DoD items. Delivery lockdown certification complete."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["gaps", "implement", "test", "docs"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-04-22T00:00:00Z",
+      "completedAt": "2026-04-22T00:30:00Z",
+      "summary": "Gaps R2 sweep (stochastic-quality-sweep child). Revisited deferred GAP-004 from prior sweep. Found and fixed 3 findings: GAP-R2-001 (Health() never re-validates import dir existence post-Connect — added active os.Stat check), GAP-R2-002 (pendingFiles field missing from struct — added field and populated in findNewFiles), GAP-R2-003 (content_fetched metadata missing — added initial false value per R-006). Added 5 adversarial regression tests. All Go packages pass, 257 Python tests pass. Lint/check clean."
     }
   ],
   "policySnapshot": {

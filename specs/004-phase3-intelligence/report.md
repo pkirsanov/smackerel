@@ -887,3 +887,87 @@ Exit code: 0
 ### Conclusion
 
 Clean probe — no new hardening findings. The intelligence layer's test depth and input validation are comprehensive for the unit-testable surface. Remaining untested paths (DB-dependent behavioral scenarios for alert batching, commitment auto-resolve, and full synthesis pipeline) are integration-test territory and correctly documented as such in the DoD evidence.
+
+---
+
+## Improve Pass — 2026-04-22 (Stochastic Sweep Child)
+
+**Trigger:** Stochastic quality sweep round (improve-existing, REPEAT improve)
+**Focus:** Correctness and robustness improvements in the intelligence layer
+
+### Findings & Changes
+
+| ID | Finding | Severity | File |
+|----|---------|----------|------|
+| IMP-004-F1 | `GeneratePreMeetingBriefs` uses `created_at` instead of event start time (`metadata->>'dtstart'`) for the 25-35 minute calendar window | High — briefs would never trigger correctly | `internal/intelligence/briefs.go` |
+| IMP-004-F2 | `collectOverdueItems` has no LIMIT clause — unbounded result set when many items are overdue | Medium — resource exhaustion risk | `internal/intelligence/briefs.go` |
+| IMP-004-F3 | Missing `ctx.Err()` check in `GeneratePreMeetingBriefs` outer meeting loop | Low — inconsistent with pattern in every other loop | `internal/intelligence/briefs.go` |
+
+#### IMP-004-F1: Pre-Meeting Brief Query Uses Wrong Time Column (FIXED)
+
+**Severity:** High — correctness bug (SCN-004-008, SCN-004-010)
+**Affected File:** `internal/intelligence/briefs.go` — `GeneratePreMeetingBriefs()`
+
+**Description:** The query filtered `a.created_at BETWEEN NOW() + INTERVAL '25 minutes' AND NOW() + INTERVAL '35 minutes'` to find upcoming meetings. `created_at` is when the artifact row was inserted into the database during connector sync — NOT when the calendar event occurs. A meeting synced yesterday at 3PM that starts tomorrow at 10AM would never match this window because `created_at` is 21 hours in the past.
+
+The correct column is `metadata->>'dtstart'`, which stores the event's actual start time. This pattern was already used correctly in `SerendipityPick` (`resurface.go`) for calendar affinity matching:
+```sql
+AND (metadata->>'dtstart')::timestamptz BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+```
+
+The SELECT clause also used `a.created_at` for the `startsAt` field, returning ingestion time instead of event start time.
+
+**Fix:** Changed both the WHERE clause and SELECT to use `(a.metadata->>'dtstart')::timestamptz`. Added `a.metadata->>'dtstart' IS NOT NULL` guard to skip malformed calendar artifacts. Changed ORDER BY to sort by event start time.
+
+#### IMP-004-F2: Unbounded Overdue Items Query (FIXED)
+
+**Severity:** Medium — resource exhaustion
+**Affected File:** `internal/intelligence/briefs.go` — `collectOverdueItems()`
+
+**Description:** The query had no `LIMIT` clause. If a user accumulated hundreds of overdue action items (e.g., imported a backlog of old emails with commitment language), every invocation would fetch all of them and attempt to create an alert for each. Other bounded queries in the intelligence package consistently use `LIMIT` (10 for synthesis clusters, 5 for meetings, 50 for serendipity candidates).
+
+**Fix:** Added `ORDER BY ai.expected_date ASC LIMIT 50` — processes oldest overdue items first, bounded per invocation. Subsequent cron runs will pick up remaining items.
+
+#### IMP-004-F3: Missing Context Cancellation in Meeting Loop (FIXED)
+
+**Severity:** Low — robustness
+**Affected File:** `internal/intelligence/briefs.go` — `GeneratePreMeetingBriefs()`
+
+**Description:** The outer `for rows.Next()` loop in `GeneratePreMeetingBriefs` processed all meetings without checking `ctx.Err()`. Every other loop in the intelligence package (`RunSynthesis`, `CheckOverdueCommitments`, `detectCapturePatterns`, `GenerateWeeklySynthesis`) checks context between iterations. Each meeting triggers 3 per-attendee DB queries plus an alert INSERT, so early abort on cancellation is meaningful.
+
+**Fix:** Added `ctx.Err()` check at the top of the outer meeting loop, returning partial results and the context error.
+
+### Test Evidence
+
+```
+$ ./smackerel.sh build
+[+] Building 2/2
+ ✔ smackerel-core  Built
+ ✔ smackerel-ml    Built
+
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/intelligence    0.031s
+41 Go packages pass, 0 failures
+257 Python tests passed
+Exit code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+Exit code: 0
+```
+
+### New Tests
+
+| Test | File | Finding |
+|------|------|---------|
+| `TestGeneratePreMeetingBriefs_UsesEventStartTime` | `briefs_test.go` | IMP-004-F1 |
+| `TestGeneratePreMeetingBriefs_CancelledContext` | `briefs_test.go` | IMP-004-F3 |
+
+### Net Impact
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Pre-meeting brief query column | `created_at` (ingestion time) | `(metadata->>'dtstart')::timestamptz` (event time) |
+| Overdue items query bound | Unbounded | `LIMIT 50` |
+| Context cancellation in meeting loop | Missing | Present |
+| Unit tests in `briefs_test.go` | 9 | 11 |

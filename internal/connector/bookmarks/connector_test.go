@@ -1811,3 +1811,125 @@ func TestChaosC17_NormalizeURLStripsUserinfo(t *testing.T) {
 		t.Errorf("CHAOS C17-006: NormalizeURL still has @ sign: %q", got)
 	}
 }
+
+// ============================================================================
+// GAP — R-012 active health validation and R-006 content_fetched metadata
+// ============================================================================
+
+// T-GAP-R012-001: Health() detects removed import directory and returns HealthError.
+func TestHealthDetectsRemovedImportDir(t *testing.T) {
+	dir := t.TempDir()
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	if h := c.Health(ctx); h != connector.HealthHealthy {
+		t.Fatalf("initial Health() = %q, want healthy", h)
+	}
+
+	// Remove the import directory after successful connect
+	if err := os.Remove(dir); err != nil {
+		t.Fatalf("remove dir: %v", err)
+	}
+
+	// Health should now detect the missing directory and return error
+	if h := c.Health(ctx); h != connector.HealthError {
+		t.Errorf("GAP R-012: Health() = %q after import dir removed, want %q", h, connector.HealthError)
+	}
+}
+
+// T-GAP-R012-002: Health() returns healthy when import directory is present.
+func TestHealthStaysHealthyWithValidDir(t *testing.T) {
+	dir := t.TempDir()
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Multiple health checks should all return healthy
+	for i := 0; i < 3; i++ {
+		if h := c.Health(ctx); h != connector.HealthHealthy {
+			t.Errorf("Health() call %d = %q, want healthy", i, h)
+		}
+	}
+}
+
+// T-GAP-R012-003: pendingFiles is populated after findNewFiles.
+func TestPendingFilesTracked(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"a.json": chromeJSONFixture(),
+		"b.html": netscapeHTMLFixture(),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Before sync, pendingFiles should be 0
+	c.mu.RLock()
+	before := c.pendingFiles
+	c.mu.RUnlock()
+	if before != 0 {
+		t.Errorf("pendingFiles before sync = %d, want 0", before)
+	}
+
+	// After sync, pendingFiles should have been set (then cleared by processing)
+	_, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// After full sync, there are no pending files left (all were processed)
+	c.mu.RLock()
+	after := c.pendingFiles
+	c.mu.RUnlock()
+	// pendingFiles was set to 2 when findNewFiles ran, stays at that value
+	// (it reflects the count at discovery time, not the current pending count)
+	if after != 2 {
+		t.Errorf("pendingFiles after sync = %d, want 2 (discovery count)", after)
+	}
+}
+
+// T-GAP-R006-002: content_fetched metadata is set to false on all artifacts.
+func TestContentFetchedMetadata(t *testing.T) {
+	dir := setupImportDir(t, map[string][]byte{
+		"export.json": chromeJSONFixture(),
+	})
+
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	if err := c.Connect(ctx, makeConfig(dir)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(ctx, "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	for _, a := range artifacts {
+		cf, ok := a.Metadata["content_fetched"]
+		if !ok {
+			t.Errorf("artifact %q missing content_fetched metadata", a.Title)
+			continue
+		}
+		if cf != false {
+			t.Errorf("artifact %q content_fetched = %v, want false (initial value)", a.Title, cf)
+		}
+	}
+}
+
+// T-GAP-R012-004: Health() returns disconnected when connector was never connected
+// (import dir is empty string).
+func TestHealthDisconnectedBeforeConnect(t *testing.T) {
+	c := NewConnector("bookmarks")
+	ctx := context.Background()
+	// No Connect() call — health should stay disconnected
+	if h := c.Health(ctx); h != connector.HealthDisconnected {
+		t.Errorf("Health() = %q before Connect, want disconnected", h)
+	}
+}
