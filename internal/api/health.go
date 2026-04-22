@@ -321,6 +321,7 @@ func (d *Dependencies) ReadyzHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
+	w.Header().Set("Content-Type", "application/json")
 	if d.DB == nil || !d.DB.Healthy(ctx) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		w.Write([]byte(`{"ready":false}`))

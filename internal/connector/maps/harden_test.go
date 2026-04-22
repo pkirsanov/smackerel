@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -428,5 +429,147 @@ func TestImprove_ArchiveFileFreeFunction(t *testing.T) {
 	archived := filepath.Join(dir, "archive", "test.json")
 	if _, err := os.Stat(archived); err != nil {
 		t.Errorf("archived file not found: %v", err)
+	}
+}
+
+// --- S-011-STAB-001: Sync after Close must fail with lifecycle error ---
+// After Close(), the connector is in HealthDisconnected state. Sync() must refuse
+// to process files and return a clear error instead of silently overwriting
+// health back to HealthHealthy. Without this guard, a scheduler that calls Sync()
+// after Close() gets phantom "healthy" status and no error signal.
+
+func TestStabilize_SyncAfterCloseReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "data.json", makeTakeoutJSON(3))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Close the connector.
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Fatalf("expected HealthDisconnected after Close, got %q", c.Health(context.Background()))
+	}
+
+	// Sync after Close MUST return error.
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("Sync after Close must return an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not connected") {
+		t.Errorf("error should mention 'not connected', got: %v", err)
+	}
+
+	// Health MUST remain HealthDisconnected — not overwritten to HealthHealthy.
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("health after rejected Sync = %q, want %q (must not be overwritten)",
+			c.Health(context.Background()), connector.HealthDisconnected)
+	}
+}
+
+// --- S-011-STAB-002: Sync before Connect must fail with lifecycle error ---
+// A newly created connector that was never connected has HealthDisconnected and
+// an empty config. Sync must fail instead of scanning the current working directory.
+
+func TestStabilize_SyncBeforeConnectReturnsError(t *testing.T) {
+	c := New("google-maps-timeline")
+
+	// Health starts as disconnected.
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Fatalf("expected HealthDisconnected on new connector, got %q", c.Health(context.Background()))
+	}
+
+	// Sync before Connect MUST return error.
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("Sync before Connect must return an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not connected") {
+		t.Errorf("error should mention 'not connected', got: %v", err)
+	}
+
+	// Health MUST remain HealthDisconnected.
+	if c.Health(context.Background()) != connector.HealthDisconnected {
+		t.Errorf("health after rejected Sync = %q, want %q",
+			c.Health(context.Background()), connector.HealthDisconnected)
+	}
+}
+
+// --- S-011-STAB-003: Connector is reusable after Close → re-Connect ---
+// After Close(), calling Connect() again must restore the connector to a usable
+// state, and subsequent Sync() must succeed.
+
+func TestStabilize_ReconnectAfterCloseRestoresLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "data.json", makeTakeoutJSON(2))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+
+	// First cycle: Connect → Sync → Close.
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("first Connect: %v", err)
+	}
+	artifacts1, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("first Sync: %v", err)
+	}
+	if len(artifacts1) != 2 {
+		t.Errorf("first Sync: expected 2 artifacts, got %d", len(artifacts1))
+	}
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Sync must fail while disconnected.
+	_, _, err = c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("Sync after Close must fail")
+	}
+
+	// Re-Connect must succeed and restore lifecycle.
+	dir2 := t.TempDir()
+	writeTakeoutFile(t, dir2, "new.json", makeTakeoutJSON(4))
+	cfg2 := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir2, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg2); err != nil {
+		t.Fatalf("re-Connect: %v", err)
+	}
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Errorf("health after re-Connect = %q, want healthy", c.Health(context.Background()))
+	}
+
+	// Sync must now succeed with the new directory.
+	artifacts2, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("post-reconnect Sync: %v", err)
+	}
+	if len(artifacts2) != 4 {
+		t.Errorf("post-reconnect Sync: expected 4 artifacts, got %d", len(artifacts2))
 	}
 }

@@ -674,3 +674,85 @@ func TestRemoveItemHandler_NotFound(t *testing.T) {
 		t.Fatalf("expected 500, got %d", w.Code)
 	}
 }
+
+// TestCreateListHandler_Success tests the happy path for POST /api/lists.
+// Gherkin Scope 6: "Create shopping list via API"
+// Given 2 recipe artifacts with domain_data exist
+// When POST /api/lists is called with {"list_type":"shopping","artifact_ids":["a1","a2"]}
+// Then status 201 is returned with the generated list and items
+func TestCreateListHandler_Success(t *testing.T) {
+	store := newMockListStore()
+
+	resolver := &mockAPIArtifactResolver{
+		byIDs: map[string][]list.AggregationSource{
+			"a1": {{
+				ArtifactID: "a1",
+				DomainData: []byte(`{"domain":"recipe","ingredients":[{"name":"garlic","quantity":"2","unit":"cloves"}]}`),
+			}},
+			"a2": {{
+				ArtifactID: "a2",
+				DomainData: []byte(`{"domain":"recipe","ingredients":[{"name":"garlic","quantity":"3","unit":"cloves"},{"name":"flour","quantity":"1","unit":"cup"}]}`),
+			}},
+		},
+	}
+
+	gen := list.NewGenerator(resolver, store, map[string]list.Aggregator{
+		"recipe": &list.RecipeAggregator{},
+	})
+
+	h := &ListHandlers{Generator: gen, Store: store}
+
+	r := chi.NewRouter()
+	r.Post("/api/lists", h.CreateListHandler)
+
+	body := `{"list_type":"shopping","title":"Weekend Groceries","artifact_ids":["a1","a2"]}`
+	req := httptest.NewRequest("POST", "/api/lists", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result list.ListWithItems
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.List.Title != "Weekend Groceries" {
+		t.Errorf("expected title 'Weekend Groceries', got %q", result.List.Title)
+	}
+	if result.List.ListType != list.TypeShopping {
+		t.Errorf("expected type shopping, got %s", result.List.ListType)
+	}
+	if result.List.Status != list.StatusDraft {
+		t.Errorf("expected status draft, got %s", result.List.Status)
+	}
+	// Garlic should be merged: 2+3 = 5 cloves. Flour is separate. Total 2 items.
+	if len(result.Items) != 2 {
+		t.Errorf("expected 2 items (merged garlic + flour), got %d", len(result.Items))
+	}
+}
+
+// mockAPIArtifactResolver implements list.ArtifactResolver for API handler tests.
+type mockAPIArtifactResolver struct {
+	byIDs map[string][]list.AggregationSource
+}
+
+func (m *mockAPIArtifactResolver) ResolveByIDs(_ context.Context, ids []string) ([]list.AggregationSource, error) {
+	var result []list.AggregationSource
+	for _, id := range ids {
+		if sources, ok := m.byIDs[id]; ok {
+			result = append(result, sources...)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockAPIArtifactResolver) ResolveByTag(_ context.Context, _ string) ([]list.AggregationSource, error) {
+	return nil, nil
+}
+
+func (m *mockAPIArtifactResolver) ResolveByQuery(_ context.Context, _ string) ([]list.AggregationSource, error) {
+	return nil, nil
+}

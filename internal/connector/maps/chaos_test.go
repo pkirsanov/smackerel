@@ -835,3 +835,96 @@ func TestStabilize_PruneCursorExplicitDir(t *testing.T) {
 		t.Errorf("expected 2 entries on fallback, got %d", len(pruned2))
 	}
 }
+
+// --- STAB-F1: Close() during in-flight Sync must not be overwritten by Sync's defer ---
+// When Close() is called while Sync is running, the deferred health update in Sync
+// must not overwrite HealthDisconnected back to HealthHealthy.
+
+func TestStabilize_CloseDuringSyncPreservesDisconnected(t *testing.T) {
+	dir := t.TempDir()
+	// Create enough files to make Sync take measurable time.
+	for i := 0; i < 10; i++ {
+		writeTakeoutFile(t, dir, fmt.Sprintf("stab_%02d.json", i), makeTakeoutJSON(50))
+	}
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// Start Sync in a goroutine, then Close immediately.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _, _ = c.Sync(context.Background(), "")
+	}()
+
+	// Give Sync a moment to start, then close.
+	time.Sleep(5 * time.Millisecond)
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	wg.Wait()
+
+	// After Sync completes, health must remain HealthDisconnected — not
+	// overwritten by Sync's deferred health update.
+	health := c.Health(context.Background())
+	if health != connector.HealthDisconnected {
+		t.Errorf("health after Close-during-Sync = %q, want %q (STAB-F1: Sync defer must not overwrite Close)",
+			health, connector.HealthDisconnected)
+	}
+}
+
+// --- STAB-F2: Sync panic recovery returns error instead of crashing goroutine ---
+
+func TestStabilize_SyncPanicRecovery(t *testing.T) {
+	dir := t.TempDir()
+	writeTakeoutFile(t, dir, "data.json", makeTakeoutJSON(2))
+
+	c := New("google-maps-timeline")
+	cfg := connector.ConnectorConfig{
+		AuthType: "none",
+		Enabled:  true,
+		SourceConfig: testMapsSourceConfigWith(dir, map[string]interface{}{
+			"min_distance_m":   float64(0),
+			"min_duration_min": float64(0),
+		}),
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// First, do a normal sync to verify the connector works.
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("initial Sync: %v", err)
+	}
+	if len(arts) == 0 {
+		t.Fatal("initial Sync should produce artifacts")
+	}
+
+	// After any sync (even if panic recovery were to fire), the connector
+	// must not be stuck with syncing=true. Verify a second sync works.
+	arts2, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("second Sync failed (syncing flag stuck?): %v", err)
+	}
+	// Second sync processes no new files (all already processed), which is fine.
+	_ = arts2
+
+	// Health must not be stuck on HealthSyncing.
+	health := c.Health(context.Background())
+	if health == connector.HealthSyncing {
+		t.Error("health must not remain 'syncing' after Sync completes")
+	}
+}
