@@ -656,3 +656,44 @@ All 40 Go packages PASS (imap 0.040s, caldav 0.016s, youtube 0.013s — all reco
 236 Python tests PASS
 Exit code: 0
 ```
+
+---
+
+## Simplify-to-Doc Sweep (April 22, 2026)
+
+**Trigger:** Stochastic quality sweep — simplify trigger (child workflow)
+**Agent:** bubbles.workflow (simplify-to-doc mode)
+
+### Scope
+
+Full code reuse, quality, and efficiency review of the Phase 2 ingestion surface: connector framework (`internal/connector/`), all 4 Phase 2 connectors (IMAP, CalDAV, YouTube, Bookmarks), topic lifecycle (`internal/topics/lifecycle.go`), auth subsystem (`internal/auth/oauth.go`), and web handlers.
+
+### Findings
+
+**None.** The previous simplify-to-doc sweep (April 21) addressed all duplication issues (S-003-001 through S-003-003). Shared helpers `GetCredential`, `GetStr`, `OAuthAPIGet` in `internal/connector/helpers.go` are in use across all connectors via package-level aliases. No new code duplication, dead code, or efficiency issues found.
+
+### Detailed Review
+
+| Area | Files Reviewed | Assessment |
+|------|---------------|------------|
+| Shared helpers | `internal/connector/helpers.go` | `GetCredential`, `GetStr`, `OAuthAPIGet` — 3 functions, used by IMAP/CalDAV/YouTube via `var getStr = connector.GetStr` aliases. Clean. |
+| Connector interface | `internal/connector/connector.go` | 5-method interface, well-typed config/artifact structs. No dead fields. |
+| Registry | `internal/connector/registry.go` | Concurrent-safe with `sync.RWMutex`. `ListConnectorHealth` snapshots under lock, calls Health() concurrently outside lock. Clean. |
+| State store | `internal/connector/state.go` | 3 methods (Get/Save/RecordError), parameterized SQL, UPSERT patterns. No redundancy. |
+| Backoff | `internal/connector/backoff.go` | Overflow-safe exponential with jitter. Pure, testable. No simplification needed. |
+| Supervisor | `internal/connector/supervisor.go` (452 lines) | Circuit breaker, crash recovery, bounded shutdown, per-connector configs. Complex but justified by operational requirements. |
+| IMAP connector | `internal/connector/imap/imap.go` | Gmail REST API path + test/local path. Qualifier parsing, tier assignment, action-item extraction. Config snapshotted under lock (F-SEC-003 fix). Clean. |
+| CalDAV connector | `internal/connector/caldav/caldav.go` | Google Calendar REST API with typed struct decoding (correctly deviates from shared `OAuthAPIGet` pattern). Clean. |
+| YouTube connector | `internal/connector/youtube/youtube.go` | Playlist + liked video fetching, engagement tier, dedup by video ID. Clean. |
+| Bookmarks | `internal/connector/bookmarks/bookmarks.go`, `dedup.go` | Chrome JSON + Netscape HTML parsers, URL normalization, tracking param stripping. Purpose-built, no shared pattern to extract. |
+| Topic lifecycle | `internal/topics/lifecycle.go` | `CalculateMomentum` (pure), `TransitionState` (pure state machine), `UpdateAllMomentum` (conditional DB writes). Clean functional separation. |
+| Auth/OAuth | `internal/auth/oauth.go` | Generic OAuth2 provider abstraction. No duplication. |
+| Health/Close boilerplate | 4 connectors × 2 methods | Identical 4-line methods. Abstraction cost exceeds duplication cost — acceptable per Go idioms. |
+
+### Verification
+
+```
+$ ./smackerel.sh test unit
+All 41 Go packages PASS, 236 Python tests PASS
+Exit code: 0
+```

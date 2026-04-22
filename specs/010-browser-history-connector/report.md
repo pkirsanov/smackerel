@@ -4,6 +4,32 @@
 
 ---
 
+## Improve-Existing Pass R92 (stochastic-quality-sweep, improve trigger, April 22 2026)
+
+**Trigger:** `improve` via `bubbles.workflow mode: improve-existing`
+**Scope:** Cross-connector pattern analysis for robustness improvements
+
+**Files reviewed:**
+- `internal/connector/browser/connector.go` — Sync lifecycle, health transitions, config validation
+- `internal/connector/guesthost/connector.go` — Panic recovery and Sync-after-Close patterns
+- `internal/connector/maps/connector.go` — Config validation patterns
+- `internal/connector/bookmarks/connector.go` — Pre-connect guard patterns
+
+**Findings Detected:**
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| IMP-010-I1 | Medium | **Missing panic recovery in `Sync()`** — Unlike guesthost connector (R27-H23-01), browser history connector's `Sync()` had no `defer recover()`. A panic in `processEntries` or SQLite library would leave health permanently stuck on `HealthSyncing`, breaking all future health checks. | Added `defer func() { if r := recover() ... }()` matching guesthost pattern. Health transitions to `HealthError` and error is returned. Added adversarial test `TestSync_PanicRecovery_HealthNotStuckOnSyncing`. |
+| IMP-010-I2 | Medium | **Sync-after-Close overwrites `HealthDisconnected`** — Same bug as CHAOS-013-002 in guesthost. If `Close()` runs while `Sync()` is in-flight, `Close` sets `HealthDisconnected` but `Sync`'s deferred cleanup unconditionally overwrites with `HealthHealthy`, making a closed connector appear healthy. | Added `HealthDisconnected` guard in `Sync`'s deferred cleanup: skip health update when connector is already disconnected. Added adversarial test `TestSync_DeferredCleanup_DoesNotOverwriteDisconnected`. |
+| IMP-010-I3 | Low | **Dwell threshold ordering not validated** — Config parser accepted `full_min: 1m, standard_min: 5m` without error. The `dwellTimeTier` switch matches `full` first at 1 minute, making `standard` unreachable — silent misconfiguration producing wrong tier assignments. | Added ordering validation: `full > standard > light` when all are set. Added adversarial test `TestParseBrowserConfig_DwellThresholdOrdering_Invalid` (4 sub-cases) and positive test `TestParseBrowserConfig_DwellThresholdOrdering_Valid`. |
+
+**Verification:**
+```
+$ ./smackerel.sh test unit — all Go packages pass, browser package ok 0.048s (59 connector + 18 browser = 77 tests)
+$ ./smackerel.sh build — both images built successfully
+```
+
+---
+
 ## Security Scan R91 (stochastic-quality-sweep, security trigger, April 21 2026)
 
 **Trigger:** `security` via `bubbles.workflow mode: security-to-doc`
@@ -120,37 +146,12 @@ $ grep sqlite3 go.mod — no match
 
 ## Reconciliation Pass V-010 (stochastic-quality-sweep, validate trigger, April 14 2026)
 
-### Improve-Existing Pass (stochastic-quality-sweep, improve trigger, April 21 2026)
+### Improve-Existing Pass R91 (stochastic-quality-sweep, improve trigger, April 21 2026)
 
 **Trigger:** `improve` via `bubbles.workflow mode: improve-existing`
 **Scope:** Full implementation review for improvement opportunities
 
-**Files reviewed:**
-- `internal/connector/browser/connector.go` (747 lines) — Connector struct, Sync pipeline, processEntries, config parsing, dedup, social aggregation, repeat detection, privacy gate
-- `internal/connector/browser/browser.go` (195 lines) — Chrome SQLite parsing, dwell-time tiering, skip filtering, domain extraction
-- `internal/connector/browser/connector_test.go` (1780 lines) — 52 tests covering all scenarios including chaos, adversarial, boundary, regression
-- `internal/connector/browser/browser_test.go` (375 lines) — 18 tests for core utility functions
-
-**Assessment: Clean — no actionable improvements found.**
-
-After 12+ prior quality sweeps (regression, simplification, gap analysis, hardening, stabilization, security, chaos, reconciliation, spec-review), the code is well-hardened across all quality dimensions:
-
-| Dimension | Status | Evidence |
-|-----------|--------|----------|
-| Concurrency | Clean | Mutex-protected state, config snapshot in Sync (CHAOS-F1) |
-| Error handling | Clean | Copy retry, corrupted cursor recovery (CHAOS-F2), content fetch failure isolation (R18-002) |
-| Security | Clean | Read-only SQLite, path injection prevention (SEC-005-001), temp file cleanup |
-| Privacy | Clean | Metadata-only gate, no individual URLs in social aggregates (R-402) |
-| Determinism | Clean | Sorted social aggregate keys (SQS-001) |
-| Config | Clean | SST-compliant, thorough validation including Inf/NaN guards (R18-001) |
-| Test coverage | Clean | 70 tests covering happy path, boundary, adversarial, chaos, regression |
-| Lint | Clean | `./smackerel.sh lint` — All checks passed |
-
-**Verification:**
-```
-$ ./smackerel.sh test unit — all Go packages pass, browser package ok
-$ ./smackerel.sh lint — All checks passed
-```
+**Assessment: Superseded by R92 (April 22) which found 3 cross-connector robustness improvements.**
 
 ---
 

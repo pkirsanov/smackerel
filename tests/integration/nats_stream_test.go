@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -274,4 +275,98 @@ func TestNATS_ConsumerReplay_NakRedeliver(t *testing.T) {
 		t.Errorf("expected 1 redelivered message, got %d", received)
 	}
 	t.Log("Nak + redeliver verified")
+}
+
+// CHAOS-031-006: MaxDeliver exhaustion — terminal dead-message path.
+// When a consumer Naks a message MaxDeliver times, NATS stops redelivering it.
+// This tests the critical path where a processing failure becomes permanent:
+// the consumer must NOT receive the message after exhausting all delivery attempts.
+// In production, this means the message lands in advisory territory and should be
+// routed to dead-letter handling.
+func TestNATS_Chaos_MaxDeliverExhaustion(t *testing.T) {
+	js, _ := testJetStream(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Use DEADLETTER stream (LimitsPolicy — messages survive Nak)
+	_, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+		Name:      "DEADLETTER",
+		Subjects:  []string{"deadletter.>"},
+		Retention: jetstream.LimitsPolicy,
+		MaxAge:    30 * 24 * time.Hour,
+		MaxMsgs:   10000,
+		Storage:   jetstream.FileStorage,
+	})
+	if err != nil {
+		t.Fatalf("ensure DEADLETTER stream: %v", err)
+	}
+
+	consumerName := testID(t)
+	maxDeliver := 3
+	cons, err := js.CreateOrUpdateConsumer(ctx, "DEADLETTER", jetstream.ConsumerConfig{
+		Durable:       consumerName,
+		FilterSubject: "deadletter.>",
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		MaxDeliver:    maxDeliver,
+		AckWait:       1 * time.Second, // Short AckWait to speed up redelivery
+	})
+	if err != nil {
+		t.Fatalf("create consumer: %v", err)
+	}
+	t.Cleanup(func() {
+		js.DeleteConsumer(context.Background(), "DEADLETTER", consumerName)
+	})
+
+	// Publish a poisonous message
+	subject := fmt.Sprintf("deadletter.chaos-maxdeliver-%d", time.Now().UnixNano())
+	testPayload := []byte(`{"test":"chaos-maxdeliver-exhaustion"}`)
+	_, err = js.Publish(ctx, subject, testPayload)
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+
+	// Nak the message maxDeliver times — each Nak should trigger a redeliver
+	nakCount := 0
+	for attempt := 0; attempt < maxDeliver; attempt++ {
+		fetchDeadline := time.Now().Add(10 * time.Second)
+		fetched := false
+		for time.Now().Before(fetchDeadline) {
+			msgs, fetchErr := cons.Fetch(1, jetstream.FetchMaxWait(2*time.Second))
+			if fetchErr != nil {
+				t.Fatalf("fetch attempt %d: %v", attempt+1, fetchErr)
+			}
+			for msg := range msgs.Messages() {
+				msg.Nak()
+				nakCount++
+				fetched = true
+			}
+			if fetched {
+				break
+			}
+		}
+		if !fetched {
+			t.Fatalf("delivery attempt %d: message not received within deadline", attempt+1)
+		}
+	}
+
+	if nakCount != maxDeliver {
+		t.Errorf("expected %d Nak'd deliveries, got %d", maxDeliver, nakCount)
+	}
+
+	// After exhausting MaxDeliver, the message must NOT be redelivered.
+	// Wait for AckWait to elapse, then try to fetch — should get nothing.
+	time.Sleep(2 * time.Second)
+	msgs, err := cons.Fetch(1, jetstream.FetchMaxWait(3*time.Second))
+	if err != nil {
+		t.Fatalf("post-exhaustion fetch: %v", err)
+	}
+	extraReceived := 0
+	for msg := range msgs.Messages() {
+		_ = msg
+		extraReceived++
+	}
+	if extraReceived != 0 {
+		t.Errorf("expected 0 messages after MaxDeliver exhaustion, got %d — dead-message path broken", extraReceived)
+	}
+	t.Logf("MaxDeliver=%d exhausted after %d Naks, no further redelivery confirmed", maxDeliver, nakCount)
 }

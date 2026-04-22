@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // LinterConfig holds configuration values for the knowledge linter.
@@ -43,6 +44,9 @@ func NewLinter(store *KnowledgeStore, pool *pgxpool.Pool, cfg LinterConfig, nats
 func (l *Linter) RunLint(ctx context.Context) error {
 	if l.pool == nil {
 		return fmt.Errorf("lint: database pool is nil")
+	}
+	if l.store == nil {
+		return fmt.Errorf("lint: knowledge store is nil")
 	}
 
 	start := time.Now()
@@ -414,7 +418,7 @@ func (l *Linter) retrySynthesisBacklog(ctx context.Context) {
 		// Truncate content for LLM context window budget
 		contentRaw := artifact.ContentRaw
 		if l.cfg.MaxSynthesisContentChars > 0 && len(contentRaw) > l.cfg.MaxSynthesisContentChars {
-			contentRaw = contentRaw[:l.cfg.MaxSynthesisContentChars]
+			contentRaw = stringutil.TruncateUTF8(contentRaw, l.cfg.MaxSynthesisContentChars)
 		}
 
 		// Load existing concepts for context

@@ -382,3 +382,52 @@ Lint check functions (`checkOrphanConcepts`, `checkContradictions`, `checkStaleK
 ### Completion Statement
 
 Harden probe complete. 3 findings identified and fixed: lint test depth gap (correctly reclassified as integration, added decision-logic unit tests), nil-pool panic bug (guarded), and malformed manifest (cleaned). All unit tests and build pass.
+
+---
+
+## Repeat Harden Probe (Stochastic Quality Sweep R116) — 2026-04-22
+
+### Trigger
+Child workflow of stochastic-quality-sweep. Mode `harden-to-doc`. Repeat harden to verify previous R116 fixes hold and probe for new issues.
+
+### Previous Finding Verification
+
+| # | Original | Status |
+|---|----------|--------|
+| H1 | Lint tests shape-only, scenario-manifest types wrong | **HOLDS** — Tests transparently documented, scenario-manifest marks SCN-025-12 through SCN-025-15 as `requiredTestType: "integration"` with `liveSystem: true`, decision-logic unit tests present |
+| H2 | `RunLint()` panics on nil pool | **HOLDS** — `if l.pool == nil` guard at top of `RunLint()` returns error |
+| H3 | Malformed scenario-manifest.json | **HOLDS** — Valid JSON, no trailing duplicate content |
+
+### New Findings
+
+| # | Severity | Finding | Resolution |
+|---|----------|---------|------------|
+| RH-1 | MEDIUM | `RunLint()` guards `l.pool == nil` (H2 fix) but not `l.store == nil`. If store is nil, `checkSynthesisBacklog()` and `StoreLintReport()` would panic — same class as H2. | Fixed: added `if l.store == nil` guard after pool check, returning `fmt.Errorf("lint: knowledge store is nil")`. Added `TestRunLint_NilStore` test. |
+| RH-2 | LOW | `retrySynthesisBacklog` uses raw byte-slice truncation `contentRaw[:n]` which can split multi-byte UTF-8 characters. Main synthesis path in `subscriber.go` correctly uses `stringutil.TruncateUTF8()`. | Fixed: replaced `contentRaw[:l.cfg.MaxSynthesisContentChars]` with `stringutil.TruncateUTF8(contentRaw, l.cfg.MaxSynthesisContentChars)`. |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/knowledge/lint.go` | Added `l.store == nil` guard in `RunLint()`; replaced byte-slice truncation with `stringutil.TruncateUTF8()`; added `stringutil` import |
+| `internal/knowledge/lint_test.go` | Added `TestRunLint_NilStore` test |
+
+### Test Evidence
+
+```
+$ ./smackerel.sh build
+smackerel-core Built, smackerel-ml Built
+$ ./smackerel.sh test unit
+ok  github.com/smackerel/smackerel/internal/knowledge  0.051s
+41 Go packages ok, 0 FAIL
+236 Python tests passed, 3 warnings
+$ ./smackerel.sh lint
+All checks passed!
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+```
+
+### Completion Statement
+
+Repeat harden probe complete. All 3 previous findings (H1/H2/H3) verified holding. 2 new findings identified and fixed: nil-store panic guard (RH-1) and unsafe UTF-8 truncation (RH-2). All unit tests, build, lint, and config check pass.

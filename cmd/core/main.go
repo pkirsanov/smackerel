@@ -106,6 +106,21 @@ func run() error {
 	annotationStore := annotation.NewStore(svc.pg.Pool, svc.nc)
 	deps.AnnotationHandlers = &api.AnnotationHandlers{Store: annotationStore}
 
+	// Wire actionable list handlers (spec 028)
+	listResolver := list.NewPostgresArtifactResolver(svc.pg.Pool)
+	listStore := list.NewStore(svc.pg.Pool, svc.nc)
+	listAggregators := map[string]list.Aggregator{
+		"recipe":  &list.RecipeAggregator{},
+		"reading": &list.ReadingAggregator{},
+		"product": &list.CompareAggregator{},
+	}
+	listGenerator := list.NewGenerator(listResolver, listStore, listAggregators)
+	deps.ListHandlers = &api.ListHandlers{
+		Generator: listGenerator,
+		Store:     listStore,
+	}
+	slog.Info("actionable list handlers configured")
+
 	router := api.NewRouter(deps)
 
 	// Start Telegram bot if configured
@@ -190,10 +205,7 @@ func run() error {
 		)
 
 		// Build shopping bridge using existing list infrastructure (spec 028)
-		resolver := list.NewPostgresArtifactResolver(svc.pg.Pool)
-		listStore := list.NewStore(svc.pg.Pool, svc.nc)
-		aggregator := &list.RecipeAggregator{}
-		shoppingBridge := mealplan.NewShoppingBridge(resolver, aggregator, listStore)
+		shoppingBridge := mealplan.NewShoppingBridge(listResolver, &list.RecipeAggregator{}, listStore)
 
 		mealPlanHandler := api.NewMealPlanHandler(mealPlanService, shoppingBridge, nil)
 		deps.MealPlanHandler = mealPlanHandler

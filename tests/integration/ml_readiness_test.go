@@ -110,3 +110,43 @@ func TestMLReadiness_ZeroTimeout(t *testing.T) {
 		t.Error("expected false when timeout is zero")
 	}
 }
+
+// CHAOS-031-005: Explicit context cancellation mid-wait.
+// WaitForMLReady must return false promptly when the parent context is
+// cancelled — not hang until the timeout deadline. This simulates the
+// scenario where the HTTP request that triggered search is cancelled by
+// the client while the core is still waiting for ML readiness.
+func TestMLReadiness_Chaos_ContextCancelledMidWait(t *testing.T) {
+	// Mock ML sidecar that never becomes healthy (simulates prolonged cold start)
+	mockML := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer mockML.Close()
+
+	engine := &api.SearchEngine{
+		MLSidecarURL:   mockML.URL,
+		HealthCacheTTL: 30 * time.Second,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Cancel after 1 second — well before the 30s timeout
+	go func() {
+		time.Sleep(1 * time.Second)
+		cancel()
+	}()
+
+	start := time.Now()
+	ready := engine.WaitForMLReady(ctx, 30*time.Second)
+	elapsed := time.Since(start)
+
+	if ready {
+		t.Error("expected false when context is cancelled")
+	}
+	// Must return within ~2s (1s cancel delay + polling interval headroom),
+	// NOT hang for 30s timeout
+	if elapsed > 5*time.Second {
+		t.Errorf("WaitForMLReady did not respect context cancellation: took %s (expected <5s)", elapsed)
+	}
+	t.Logf("context cancellation respected after %s", elapsed)
+}
