@@ -44,6 +44,10 @@ type DomainExtractResponse struct {
 	TokensUsed       int             `json:"tokens_used"`
 }
 
+// maxDomainDataBytes is the maximum allowed size for domain_data in a response.
+// Defense-in-depth: prevents oversized LLM output from bloating storage and NATS.
+const maxDomainDataBytes = 512 * 1024 // 512KB
+
 // ValidateDomainExtractResponse validates a domain extraction response.
 func ValidateDomainExtractResponse(r *DomainExtractResponse) error {
 	if r.ArtifactID == "" {
@@ -51,6 +55,10 @@ func ValidateDomainExtractResponse(r *DomainExtractResponse) error {
 	}
 	if r.Success && len(r.DomainData) == 0 {
 		return fmt.Errorf("DomainExtractResponse: domain_data is required when success is true")
+	}
+	// C026-CHAOS-03: Reject oversized domain_data to prevent storage/transport bloat.
+	if len(r.DomainData) > maxDomainDataBytes {
+		return fmt.Errorf("DomainExtractResponse: domain_data too large: %d bytes exceeds max %d", len(r.DomainData), maxDomainDataBytes)
 	}
 	return nil
 }

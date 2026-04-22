@@ -492,13 +492,16 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 	}
 
 	if req.Filters.Ingredient != "" {
-		query += fmt.Sprintf(` AND a.domain_data @> jsonb_build_object('ingredients', jsonb_build_array(jsonb_build_object('name', $%d)))`, argN)
+		// C026-CHAOS-02: Case-insensitive partial match instead of exact JSONB containment.
+		// LLM-extracted names are mixed-case ("Chicken Breast") while parseDomainIntent lowercases.
+		query += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM jsonb_array_elements(a.domain_data->'ingredients') elem WHERE LOWER(elem->>'name') LIKE '%%' || LOWER($%d) || '%%')`, argN)
 		args = append(args, req.Filters.Ingredient)
 		argN++
 	}
 
 	if req.Filters.PriceMax > 0 {
-		query += fmt.Sprintf(` AND (a.domain_data->'price'->>'amount')::float <= $%d`, argN)
+		// C026-CHAOS-01: Guard against non-numeric price.amount to prevent ::float cast crash.
+		query += fmt.Sprintf(` AND a.domain_data->'price'->>'amount' ~ '^[0-9]+(\.[0-9]+)?$' AND (a.domain_data->'price'->>'amount')::float <= $%d`, argN)
 		args = append(args, req.Filters.PriceMax)
 		argN++
 	}

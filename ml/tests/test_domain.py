@@ -23,6 +23,7 @@ from app.domain import (  # isort: skip
     _build_system_prompt,
     _build_user_prompt,
     _domain_from_contract,
+    _normalize_ingredient_names,
     _resolve_model,
     handle_domain_extract,
 )
@@ -246,6 +247,85 @@ class TestResolveModel:
 
     def test_other_provider(self):
         assert _resolve_model("gemini-pro", "google", "") == "google/gemini-pro"
+
+
+class TestNormalizeIngredientNames:
+    """C026-CHAOS-02: Verify ingredient name normalization to lowercase."""
+
+    def test_mixed_case_normalized(self):
+        result = {
+            "domain": "recipe",
+            "ingredients": [
+                {"name": "Chicken Breast", "quantity": "2", "unit": "lbs"},
+                {"name": "GARLIC", "quantity": "3", "unit": "cloves"},
+                {"name": "olive oil", "quantity": "2", "unit": "tbsp"},
+            ],
+        }
+        _normalize_ingredient_names(result)
+        assert result["ingredients"][0]["name"] == "chicken breast"
+        assert result["ingredients"][1]["name"] == "garlic"
+        assert result["ingredients"][2]["name"] == "olive oil"
+
+    def test_no_ingredients_key(self):
+        result = {"domain": "product", "product_name": "Camera"}
+        _normalize_ingredient_names(result)
+        # Should not raise
+
+    def test_empty_ingredients_list(self):
+        result = {"domain": "recipe", "ingredients": []}
+        _normalize_ingredient_names(result)
+        assert result["ingredients"] == []
+
+    def test_non_list_ingredients(self):
+        result = {"domain": "recipe", "ingredients": "not a list"}
+        _normalize_ingredient_names(result)
+        # Should not raise
+
+    def test_malformed_ingredient_item(self):
+        result = {
+            "domain": "recipe",
+            "ingredients": [
+                {"name": "Valid Item"},
+                "not a dict",
+                {"name": 123},  # name is not a string
+                {"quantity": "1"},  # missing name key
+            ],
+        }
+        _normalize_ingredient_names(result)
+        assert result["ingredients"][0]["name"] == "valid item"
+        # Non-dict, non-string name, and missing name are left untouched
+
+    def test_successful_extraction_normalizes(self):
+        """Verify end-to-end: successful LLM extraction normalizes ingredients."""
+        recipe_json = json.dumps(
+            {
+                "domain": "recipe",
+                "ingredients": [
+                    {"name": "Chicken Breast", "quantity": "2", "unit": "lbs"},
+                    {"name": "Fresh Basil", "quantity": "10", "unit": "leaves"},
+                ],
+                "steps": [{"number": 1, "instruction": "Cook chicken"}],
+            }
+        )
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = recipe_json
+        mock_response.usage = MagicMock()
+        mock_response.usage.total_tokens = 200
+
+        with patch("app.domain.litellm.acompletion", new_callable=AsyncMock, return_value=mock_response):
+            data = {
+                "artifact_id": "art-chaos-norm",
+                "contract_version": "recipe-extraction-v1",
+                "content_type": "recipe",
+                "content_raw": "Cook chicken breast with fresh basil",
+            }
+            result = asyncio.run(handle_domain_extract(data, "openai", "gpt-4o", "key", ""))
+
+        assert result["success"] is True
+        names = [i["name"] for i in result["domain_data"]["ingredients"]]
+        assert names == ["chicken breast", "fresh basil"]
 
 
 class TestDomainExtractionTimeout:
