@@ -1,10 +1,16 @@
 package pipeline
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
+
+	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/smackerel/smackerel/internal/knowledge"
+	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
 // T2-01: handleSynthesized success → conceptual validation of response handling
@@ -365,5 +371,112 @@ func TestLinterConfig_HasPromptContractVersion(t *testing.T) {
 	}
 	if cfg.PromptContractVersion == "" {
 		t.Fatal("PromptContractVersion must be set for lint retry to build complete requests")
+	}
+}
+
+// --- Dead-letter routing tests (DEVOPS-022-001) ---
+
+// DEVOPS-022-001: handleSynthesisDeliveryFailure routes to dead-letter when exhausted.
+func TestSynthesisDeliveryFailure_RoutesToDeadLetter(t *testing.T) {
+	js := &mockJetStream{}
+	sub := &SynthesisResultSubscriber{
+		NATS: &smacknats.Client{JetStream: js},
+	}
+
+	msg := &mockJetStreamMsg{
+		data:     []byte(`{"artifact_id":"synth-test-1"}`),
+		metadata: &jetstream.MsgMetadata{NumDelivered: uint64(synthesisMaxDeliver), Consumer: "smackerel-core-synthesized"},
+	}
+
+	sub.handleSynthesisDeliveryFailure(context.Background(), msg, "synthesis.extracted", "SYNTHESIS", fmt.Errorf("db connection reset"))
+
+	// Should Ack after dead-letter publish, NOT Nak
+	if !msg.acked {
+		t.Error("expected Ack after successful dead-letter publish")
+	}
+	if msg.naked {
+		t.Error("should NOT Nak when dead-letter publish succeeds")
+	}
+
+	// Verify dead-letter message published
+	if len(js.published) != 1 {
+		t.Fatalf("expected 1 dead-letter message, got %d", len(js.published))
+	}
+
+	dlMsg := js.published[0]
+	if dlMsg.Subject != "deadletter.synthesis.extracted" {
+		t.Errorf("expected subject deadletter.synthesis.extracted, got %s", dlMsg.Subject)
+	}
+	if string(dlMsg.Data) != `{"artifact_id":"synth-test-1"}` {
+		t.Errorf("payload not preserved: %s", string(dlMsg.Data))
+	}
+
+	// Verify required headers
+	wantHeaders := map[string]string{
+		"Smackerel-Original-Subject":  "synthesis.extracted",
+		"Smackerel-Original-Stream":   "SYNTHESIS",
+		"Smackerel-Original-Consumer": "smackerel-core-synthesized",
+		"Smackerel-Delivery-Count":    "5",
+		"Smackerel-Last-Error":        "db connection reset",
+	}
+	for key, expected := range wantHeaders {
+		actual := dlMsg.Header.Get(key)
+		if actual != expected {
+			t.Errorf("header %s: expected %q, got %q", key, expected, actual)
+		}
+	}
+
+	failedAt := dlMsg.Header.Get("Smackerel-Failed-At")
+	if failedAt == "" {
+		t.Error("missing Smackerel-Failed-At header")
+	} else if _, err := time.Parse(time.RFC3339, failedAt); err != nil {
+		t.Errorf("Smackerel-Failed-At is not valid RFC3339: %s", failedAt)
+	}
+}
+
+// DEVOPS-022-001: Below MaxDeliver → Nak for retry, no dead-letter.
+func TestSynthesisDeliveryFailure_BelowMaxDeliver_Naks(t *testing.T) {
+	js := &mockJetStream{}
+	sub := &SynthesisResultSubscriber{
+		NATS: &smacknats.Client{JetStream: js},
+	}
+
+	msg := &mockJetStreamMsg{
+		data:     []byte(`{"artifact_id":"synth-test-2"}`),
+		metadata: &jetstream.MsgMetadata{NumDelivered: 3},
+	}
+
+	sub.handleSynthesisDeliveryFailure(context.Background(), msg, "synthesis.extracted", "SYNTHESIS", fmt.Errorf("transient db error"))
+
+	if msg.acked {
+		t.Error("should NOT Ack below MaxDeliver")
+	}
+	if !msg.naked {
+		t.Error("expected Nak for retry below MaxDeliver")
+	}
+	if len(js.published) != 0 {
+		t.Errorf("expected no dead-letter publish, got %d", len(js.published))
+	}
+}
+
+// DEVOPS-022-001: Dead-letter publish fails → Nak to preserve message.
+func TestSynthesisDeliveryFailure_PublishFails_Naks(t *testing.T) {
+	js := &mockJetStream{publishErr: fmt.Errorf("NATS connection lost")}
+	sub := &SynthesisResultSubscriber{
+		NATS: &smacknats.Client{JetStream: js},
+	}
+
+	msg := &mockJetStreamMsg{
+		data:     []byte(`{"artifact_id":"synth-test-3"}`),
+		metadata: &jetstream.MsgMetadata{NumDelivered: uint64(synthesisMaxDeliver)},
+	}
+
+	sub.handleSynthesisDeliveryFailure(context.Background(), msg, "synthesis.extracted", "SYNTHESIS", fmt.Errorf("processing error"))
+
+	if msg.acked {
+		t.Error("should NOT Ack when dead-letter publish fails")
+	}
+	if !msg.naked {
+		t.Error("expected Nak to preserve message when dead-letter publish fails")
 	}
 }

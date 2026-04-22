@@ -6,15 +6,23 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/smackerel/smackerel/internal/knowledge"
+	"github.com/smackerel/smackerel/internal/metrics"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
+
+// synthesisMaxDeliver is the maximum delivery attempts before dead-letter routing.
+// Must match the MaxDeliver value in consumer configs created by Start().
+const synthesisMaxDeliver = 5
 
 // SynthesisResultSubscriber consumes synthesis.extracted messages and integrates
 // extracted knowledge into concept pages and entity profiles.
@@ -205,7 +213,7 @@ func (s *SynthesisResultSubscriber) handleSynthesized(ctx context.Context, msg j
 			"artifact_id", resp.ArtifactID,
 			"error", err,
 		)
-		_ = msg.Nak()
+		s.handleSynthesisDeliveryFailure(ctx, msg, smacknats.SubjectSynthesisExtracted, "SYNTHESIS", err)
 		return
 	}
 
@@ -216,7 +224,7 @@ func (s *SynthesisResultSubscriber) handleSynthesized(ctx context.Context, msg j
 			"artifact_id", resp.ArtifactID,
 			"error", err,
 		)
-		_ = msg.Nak()
+		s.handleSynthesisDeliveryFailure(ctx, msg, smacknats.SubjectSynthesisExtracted, "SYNTHESIS", err)
 		return
 	}
 
@@ -455,7 +463,7 @@ func (s *SynthesisResultSubscriber) handleCrossSourceResult(ctx context.Context,
 			"concept_id", resp.ConceptID,
 			"error", err,
 		)
-		_ = msg.Nak()
+		s.handleSynthesisDeliveryFailure(ctx, msg, smacknats.SubjectSynthesisCrossSourceResult, "SYNTHESIS", err)
 		return
 	}
 
@@ -466,4 +474,73 @@ func (s *SynthesisResultSubscriber) handleCrossSourceResult(ctx context.Context,
 		"artifact_count", len(resp.ArtifactIDs),
 		"model_used", resp.ModelUsed,
 	)
+}
+
+// handleSynthesisDeliveryFailure routes a failed message to dead-letter if delivery
+// is exhausted, otherwise Naks for retry. Mirrors ResultSubscriber.handleDeliveryFailure
+// to ensure no synthesis messages are silently discarded after MaxDeliver (DEVOPS-022-001).
+func (s *SynthesisResultSubscriber) handleSynthesisDeliveryFailure(ctx context.Context, msg jetstream.Msg, subject, stream string, lastErr error) {
+	md, mdErr := msg.Metadata()
+	if mdErr != nil || int(md.NumDelivered) < synthesisMaxDeliver {
+		_ = msg.Nak()
+		return
+	}
+
+	if dlErr := s.publishSynthesisToDeadLetter(ctx, msg, subject, stream, lastErr.Error()); dlErr != nil {
+		slog.Error("synthesis dead-letter publish failed, Nak to preserve message", "error", dlErr)
+		if nakErr := msg.Nak(); nakErr != nil {
+			slog.Error("Nak also failed after dead-letter failure — message may be lost",
+				"nak_error", nakErr,
+				"dead_letter_error", dlErr,
+				"subject", subject,
+			)
+		}
+		return
+	}
+	_ = msg.Ack()
+}
+
+// publishSynthesisToDeadLetter routes an exhausted synthesis message to the DEADLETTER stream.
+// Returns an error if the publish fails so callers can Nak instead of Ack.
+func (s *SynthesisResultSubscriber) publishSynthesisToDeadLetter(ctx context.Context, msg jetstream.Msg, originalSubject, originalStream, lastError string) error {
+	headers := nats.Header{}
+	headers.Set("Smackerel-Original-Subject", originalSubject)
+	headers.Set("Smackerel-Original-Stream", originalStream)
+	headers.Set("Smackerel-Failed-At", time.Now().UTC().Format(time.RFC3339))
+	if lastError != "" {
+		if len(lastError) > 256 {
+			lastError = stringutil.TruncateUTF8(lastError, 256)
+		}
+		headers.Set("Smackerel-Last-Error", lastError)
+	}
+
+	md, err := msg.Metadata()
+	if err == nil {
+		headers.Set("Smackerel-Delivery-Count", strconv.FormatUint(md.NumDelivered, 10))
+		if md.Consumer != "" {
+			headers.Set("Smackerel-Original-Consumer", md.Consumer)
+		}
+	}
+
+	dlSubject := "deadletter." + originalSubject
+	dlMsg := &nats.Msg{
+		Subject: dlSubject,
+		Data:    msg.Data(),
+		Header:  headers,
+	}
+
+	if _, err := s.NATS.JetStream.PublishMsg(ctx, dlMsg); err != nil {
+		slog.Error("failed to publish synthesis to dead-letter",
+			"subject", dlSubject,
+			"error", err,
+		)
+		return fmt.Errorf("publish to dead-letter %s: %w", dlSubject, err)
+	}
+
+	slog.Warn("synthesis message routed to dead-letter",
+		"subject", dlSubject,
+		"original_subject", originalSubject,
+	)
+	metrics.NATSDeadLetter.WithLabelValues(originalStream).Inc()
+	return nil
 }

@@ -205,7 +205,12 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		c.mu.Lock()
 		// Only update health if no concurrent Connect() has occurred since Sync started.
 		if c.configGen == gen {
-			if totalProviders > 0 && failCount >= totalProviders {
+			// STB-018-S2-001: If the context was canceled or expired, health is
+			// indeterminate — partial results don't represent full provider status.
+			// Report Degraded instead of computing from incomplete counters.
+			if ctx.Err() != nil {
+				c.health = connector.HealthDegraded
+			} else if totalProviders > 0 && failCount >= totalProviders {
 				c.health = connector.HealthError
 			} else if failCount > 0 || partialSkip {
 				c.health = connector.HealthDegraded
