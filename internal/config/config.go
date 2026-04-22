@@ -340,12 +340,12 @@ func Load() (*Config, error) {
 		HospitableAccessToken:         os.Getenv("HOSPITABLE_ACCESS_TOKEN"),
 		HospitableBaseURL:             os.Getenv("HOSPITABLE_BASE_URL"),
 		HospitableSyncSchedule:        os.Getenv("HOSPITABLE_SYNC_SCHEDULE"),
-		HospitableInitialLookbackDays: parseIntEnv("HOSPITABLE_INITIAL_LOOKBACK_DAYS", 90),
-		HospitablePageSize:            parseIntEnv("HOSPITABLE_PAGE_SIZE", 100),
-		HospitableSyncProperties:      os.Getenv("HOSPITABLE_SYNC_PROPERTIES") != "false",
-		HospitableSyncReservations:    os.Getenv("HOSPITABLE_SYNC_RESERVATIONS") != "false",
-		HospitableSyncMessages:        os.Getenv("HOSPITABLE_SYNC_MESSAGES") != "false",
-		HospitableSyncReviews:         os.Getenv("HOSPITABLE_SYNC_REVIEWS") != "false",
+		HospitableInitialLookbackDays: parseIntEnv("HOSPITABLE_INITIAL_LOOKBACK_DAYS", 0),
+		HospitablePageSize:            parseIntEnv("HOSPITABLE_PAGE_SIZE", 0),
+		HospitableSyncProperties:      os.Getenv("HOSPITABLE_SYNC_PROPERTIES") == "true",
+		HospitableSyncReservations:    os.Getenv("HOSPITABLE_SYNC_RESERVATIONS") == "true",
+		HospitableSyncMessages:        os.Getenv("HOSPITABLE_SYNC_MESSAGES") == "true",
+		HospitableSyncReviews:         os.Getenv("HOSPITABLE_SYNC_REVIEWS") == "true",
 		HospitableTierMessages:        os.Getenv("HOSPITABLE_TIER_MESSAGES"),
 		HospitableTierReviews:         os.Getenv("HOSPITABLE_TIER_REVIEWS"),
 		HospitableTierReservations:    os.Getenv("HOSPITABLE_TIER_RESERVATIONS"),
@@ -426,6 +426,16 @@ func Load() (*Config, error) {
 	// Cross-validate: DBMinConns must not exceed DBMaxConns
 	if cfg.DBMinConns > cfg.DBMaxConns {
 		return nil, fmt.Errorf("DB_MIN_CONNS (%d) must not exceed DB_MAX_CONNS (%d)", cfg.DBMinConns, cfg.DBMaxConns)
+	}
+
+	// Validate Hospitable config when enabled (SST-compliant — fail-fast for missing values)
+	if cfg.HospitableEnabled {
+		if cfg.HospitableInitialLookbackDays < 1 {
+			return nil, fmt.Errorf("HOSPITABLE_INITIAL_LOOKBACK_DAYS must be a positive integer when Hospitable is enabled")
+		}
+		if cfg.HospitablePageSize < 1 {
+			return nil, fmt.Errorf("HOSPITABLE_PAGE_SIZE must be a positive integer when Hospitable is enabled")
+		}
 	}
 
 	// Parse optional telegram assembly config (SST-compliant — defaults in smackerel.yaml)

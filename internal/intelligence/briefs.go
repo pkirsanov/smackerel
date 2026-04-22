@@ -257,6 +257,9 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 				ab.RecentThreads = append(ab.RecentThreads, t)
 			}
 		}
+		if rowErr := threadRows.Err(); rowErr != nil {
+			slog.Warn("attendee thread rows iteration error", "email", email, "error", rowErr)
+		}
 	}
 
 	if ctx.Err() != nil {
@@ -279,6 +282,9 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 				ab.SharedTopics = append(ab.SharedTopics, t)
 			}
 		}
+		if rowErr := topicRows.Err(); rowErr != nil {
+			slog.Warn("attendee topic rows iteration error", "email", email, "error", rowErr)
+		}
 	}
 
 	if ctx.Err() != nil {
@@ -300,12 +306,21 @@ func (e *Engine) buildAttendeeBrief(ctx context.Context, email string) AttendeeB
 				ab.PendingItems = append(ab.PendingItems, t)
 			}
 		}
+		if rowErr := aiRows.Err(); rowErr != nil {
+			slog.Warn("attendee action items rows iteration error", "email", email, "error", rowErr)
+		}
 	}
 
 	return ab
 }
 
+// maxBriefWords caps pre-meeting brief text to stay within R-303's
+// "2-3 sentences" contract. With 10 attendees the uncapped output
+// could grow arbitrarily large.
+const maxBriefWords = 120
+
 // assembleBriefText generates a 2-3 sentence brief for a meeting.
+// Output is capped at maxBriefWords to honour R-303.
 func assembleBriefText(brief MeetingBrief) string {
 	var parts []string
 	parts = append(parts, fmt.Sprintf("Meeting: %s", brief.EventTitle))
@@ -330,5 +345,10 @@ func assembleBriefText(brief MeetingBrief) string {
 		}
 	}
 
-	return strings.Join(parts, "\n")
+	text := strings.Join(parts, "\n")
+	words := strings.Fields(text)
+	if len(words) > maxBriefWords {
+		text = strings.Join(words[:maxBriefWords], " ")
+	}
+	return text
 }

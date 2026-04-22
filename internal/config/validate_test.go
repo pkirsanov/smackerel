@@ -862,3 +862,72 @@ func TestLoad_GuestHostConnectorFieldsOptional(t *testing.T) {
 		t.Errorf("expected empty GuestHostAPIKey, got %q", cfg.GuestHostAPIKey)
 	}
 }
+
+// --- Hospitable SST regression tests ---
+
+func TestLoad_HospitableEnabled_MissingLookbackDays_Fails(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("HOSPITABLE_ENABLED", "true")
+	t.Setenv("HOSPITABLE_ACCESS_TOKEN", "tok-test")
+	t.Setenv("HOSPITABLE_BASE_URL", "https://api.hospitable.com")
+	t.Setenv("HOSPITABLE_SYNC_SCHEDULE", "0 */2 * * *")
+	// HOSPITABLE_INITIAL_LOOKBACK_DAYS deliberately unset
+	t.Setenv("HOSPITABLE_PAGE_SIZE", "100")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when HOSPITABLE_INITIAL_LOOKBACK_DAYS is missing and Hospitable is enabled")
+	}
+	if !strings.Contains(err.Error(), "HOSPITABLE_INITIAL_LOOKBACK_DAYS") {
+		t.Errorf("error should name HOSPITABLE_INITIAL_LOOKBACK_DAYS, got: %v", err)
+	}
+}
+
+func TestLoad_HospitableEnabled_MissingPageSize_Fails(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("HOSPITABLE_ENABLED", "true")
+	t.Setenv("HOSPITABLE_ACCESS_TOKEN", "tok-test")
+	t.Setenv("HOSPITABLE_BASE_URL", "https://api.hospitable.com")
+	t.Setenv("HOSPITABLE_SYNC_SCHEDULE", "0 */2 * * *")
+	t.Setenv("HOSPITABLE_INITIAL_LOOKBACK_DAYS", "90")
+	// HOSPITABLE_PAGE_SIZE deliberately unset
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when HOSPITABLE_PAGE_SIZE is missing and Hospitable is enabled")
+	}
+	if !strings.Contains(err.Error(), "HOSPITABLE_PAGE_SIZE") {
+		t.Errorf("error should name HOSPITABLE_PAGE_SIZE, got: %v", err)
+	}
+}
+
+func TestLoad_HospitableDisabled_MissingNumericFields_OK(t *testing.T) {
+	setRequiredEnv(t)
+	// HOSPITABLE_ENABLED not set (defaults to false) — numeric fields not required
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.HospitableEnabled {
+		t.Error("expected HospitableEnabled=false when unset")
+	}
+}
+
+func TestLoad_HospitableSyncFlags_RequireExplicitTrue(t *testing.T) {
+	setRequiredEnv(t)
+	// When sync flag env vars are UNSET, they must default to false (not true)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.HospitableSyncProperties {
+		t.Error("HospitableSyncProperties should be false when HOSPITABLE_SYNC_PROPERTIES is unset")
+	}
+	if cfg.HospitableSyncReservations {
+		t.Error("HospitableSyncReservations should be false when HOSPITABLE_SYNC_RESERVATIONS is unset")
+	}
+	if cfg.HospitableSyncMessages {
+		t.Error("HospitableSyncMessages should be false when HOSPITABLE_SYNC_MESSAGES is unset")
+	}
+	if cfg.HospitableSyncReviews {
+		t.Error("HospitableSyncReviews should be false when HOSPITABLE_SYNC_REVIEWS is unset")
+	}
+}

@@ -127,7 +127,7 @@ func (e *Engine) GetPendingAlerts(ctx context.Context) ([]Alert, error) {
 	// The age filter (SEC-021-001) prevents poison alerts from retrying indefinitely.
 	// Uses MAKE_INTERVAL instead of fmt.Sprintf to keep all SQL parameterized.
 	rows, err := e.Pool.Query(ctx, `
-		SELECT id, alert_type, title, body, priority, status, artifact_id, created_at
+		SELECT id, alert_type, title, body, priority, status, COALESCE(artifact_id, ''), created_at
 		FROM alerts
 		WHERE (status = 'pending'
 		   OR (status = 'snoozed' AND snooze_until <= NOW()))
