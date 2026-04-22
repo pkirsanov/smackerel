@@ -29,7 +29,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
@@ -373,7 +373,7 @@
         "implement"
       ],
       "scopesCompleted": [],
-      "summary": "Re-certification: Fixed spec/code color mismatch (#E8E6E3 → #e8e8e4 in design.md, scopes.md). Fixed fabricated test function references (TestContainsEmoji → TestMarkerConstants_NoEmoji). Documented known gaps (missing negative scenarios, E2E limitations). Enriched report.md with actual test function names. Added knownGaps to scenario-manifest.json."
+      "summary": "Re-certification: Fixed spec/code color mismatch (#E8E6E3 \u2192 #e8e8e4 in design.md, scopes.md). Fixed fabricated test function references (TestContainsEmoji \u2192 TestMarkerConstants_NoEmoji). Documented known gaps (missing negative scenarios, E2E limitations). Enriched report.md with actual test function names. Added knownGaps to scenario-manifest.json."
     }
   ],
   "activeBugs": [],

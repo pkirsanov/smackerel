@@ -103,7 +103,7 @@
         "statusAfter": "done",
         "runStartedAt": "2026-04-21T00:00:00Z",
         "runEndedAt": "2026-04-21T00:00:00Z",
-        "summary": "Reconcile-to-doc R65 (stochastic sweep child): Verified all 9 implementation files, 14 test files, connector registration (connectors.go), context handler wiring (services.go L191), route registration (router.go L68-69), config section (smackerel.yaml L255). 41 Go packages pass. 2 minor doc fixes: package count 33→41 in report, connector file ref main.go→connectors.go in scopes. Verdict: CLEAN."
+        "summary": "Reconcile-to-doc R65 (stochastic sweep child): Verified all 9 implementation files, 14 test files, connector registration (connectors.go), context handler wiring (services.go L191), route registration (router.go L68-69), config section (smackerel.yaml L255). 41 Go packages pass. 2 minor doc fixes: package count 33\u219241 in report, connector file ref main.go\u2192connectors.go in scopes. Verdict: CLEAN."
       },
       {
         "agent": "bubbles.security",
@@ -114,12 +114,12 @@
         "statusAfter": "done",
         "runStartedAt": "2026-04-21T00:00:00Z",
         "runEndedAt": "2026-04-21T00:00:00Z",
-        "summary": "Security-to-doc (stochastic sweep child): Full security scan of guesthost connector, context API, normalizer, client, router. Verified: bearer auth with constant-time compare, parameterized SQL, MaxBytesReader on POST, entity ID length cap, URL scheme validation, SanitizeControlChars on text fields, UTF-8 safe truncation, Inf/NaN rejection, pagination caps, response size limits, security headers, no leaked secrets. Verdict: CLEAN — no actionable findings. report.md updated with security evidence."
+        "summary": "Security-to-doc (stochastic sweep child): Full security scan of guesthost connector, context API, normalizer, client, router. Verified: bearer auth with constant-time compare, parameterized SQL, MaxBytesReader on POST, entity ID length cap, URL scheme validation, SanitizeControlChars on text fields, UTF-8 safe truncation, Inf/NaN rejection, pagination caps, response size limits, security headers, no leaked secrets. Verdict: CLEAN \u2014 no actionable findings. report.md updated with security evidence."
       }
     ]
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",

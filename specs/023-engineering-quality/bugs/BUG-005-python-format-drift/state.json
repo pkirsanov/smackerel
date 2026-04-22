@@ -10,7 +10,13 @@
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-20T00:00:00Z",
-    "completedPhaseClaims": ["documentation", "implement", "test", "validate", "finalize"],
+    "completedPhaseClaims": [
+      "documentation",
+      "implement",
+      "test",
+      "validate",
+      "finalize"
+    ],
     "pendingTransitionRequests": [],
     "executionHistory": [
       {
@@ -50,9 +56,17 @@
     ]
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": [1],
-    "certifiedCompletedPhases": ["documentation", "implement", "test", "validate", "finalize"],
+    "status": "done",
+    "completedScopes": [
+      1
+    ],
+    "certifiedCompletedPhases": [
+      "documentation",
+      "implement",
+      "test",
+      "validate",
+      "finalize"
+    ],
     "scopeProgress": [
       {
         "scope": 1,
@@ -67,12 +81,30 @@
     }
   },
   "policySnapshot": {
-    "grill": { "value": "off", "provenance": "repo-default" },
-    "tdd": { "value": false, "provenance": "repo-default" },
-    "autoCommit": { "value": "off", "provenance": "repo-default" },
-    "lockdown": { "value": "off", "provenance": "repo-default" },
-    "regressionStrictness": { "value": "standard", "provenance": "repo-default" },
-    "validateCertificationRequired": { "value": true, "provenance": "repo-default" }
+    "grill": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "tdd": {
+      "value": false,
+      "provenance": "repo-default"
+    },
+    "autoCommit": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "lockdown": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "regressionStrictness": {
+      "value": "standard",
+      "provenance": "repo-default"
+    },
+    "validateCertificationRequired": {
+      "value": true,
+      "provenance": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": [],

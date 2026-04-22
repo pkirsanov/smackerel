@@ -121,7 +121,7 @@ Scenario: SCN-019-006 Existing connectors unaffected by new registrations
 
 ### Definition of Done
 
-- [x] All 5 connectors imported, instantiated, and registered in `cmd/core/main.go`
+- [x] All 5 connectors imported, instantiated, and registered in `cmd/core/connectors.go`
 - [x] 5 conditional-start blocks follow exact pattern of existing 10 connectors
 - [x] 4 new YAML config blocks added to `config/smackerel.yaml` (Discord already exists)
 - [x] `scripts/commands/config.sh` extracts all new env vars via `yaml_get`
@@ -132,4 +132,4 @@ Scenario: SCN-019-006 Existing connectors unaffected by new registrations
 - [x] Empty credentials cause `Connect()` to fail with descriptive error, not silent fallback
 - [x] All 5 connectors default to `enabled: false`
 - [x] Existing 10 connectors are completely unaffected (regression tests pass)
-- [x] Helper functions (`parseJSONArray`, `parseJSONObject`, `parseFloatEnv`) added to `main.go`
+- [x] Helper functions (`parseJSONArray`, `parseJSONObject`, `parseFloatEnv`) added to `cmd/core/helpers.go`

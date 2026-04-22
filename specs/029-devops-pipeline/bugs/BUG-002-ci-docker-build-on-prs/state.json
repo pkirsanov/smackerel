@@ -24,7 +24,7 @@
         "phase": "implement",
         "agent": "bubbles.workflow",
         "completedAt": "2026-04-19T00:00:00Z",
-        "note": "No code change required — bug verified as already resolved"
+        "note": "No code change required \u2014 bug verified as already resolved"
       },
       {
         "phase": "validate",
@@ -45,9 +45,18 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": [1],
-    "certifiedCompletedPhases": ["select", "bootstrap", "implement", "validate", "audit", "finalize"],
+    "status": "done",
+    "completedScopes": [
+      1
+    ],
+    "certifiedCompletedPhases": [
+      "select",
+      "bootstrap",
+      "implement",
+      "validate",
+      "audit",
+      "finalize"
+    ],
     "scopeProgress": [
       {
         "scope": 1,

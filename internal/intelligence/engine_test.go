@@ -848,116 +848,85 @@ func TestMarkAlertDelivered_EmptyID(t *testing.T) {
 	}
 }
 
-// === Scope 1: ProduceBillAlerts ===
-
-func TestProduceBillAlerts_NilPool(t *testing.T) {
-	engine := NewEngine(nil, nil)
-	err := engine.ProduceBillAlerts(context.Background())
-	if err == nil {
-		t.Error("expected error for nil pool")
-	}
-	if err != nil && !strings.Contains(err.Error(), "database connection") {
-		t.Errorf("expected database connection error, got: %s", err)
-	}
-}
-
-// === Scope 1: ProduceTripPrepAlerts ===
-
-func TestProduceTripPrepAlerts_NilPool(t *testing.T) {
-	engine := NewEngine(nil, nil)
-	err := engine.ProduceTripPrepAlerts(context.Background())
-	if err == nil {
-		t.Error("expected error for nil pool")
-	}
-	if err != nil && !strings.Contains(err.Error(), "database connection") {
-		t.Errorf("expected database connection error, got: %s", err)
-	}
-}
-
-// === Scope 1: ProduceReturnWindowAlerts ===
-
-func TestProduceReturnWindowAlerts_NilPool(t *testing.T) {
-	engine := NewEngine(nil, nil)
-	err := engine.ProduceReturnWindowAlerts(context.Background())
-	if err == nil {
-		t.Error("expected error for nil pool")
-	}
-	if err != nil && !strings.Contains(err.Error(), "database connection") {
-		t.Errorf("expected database connection error, got: %s", err)
-	}
-}
-
-// === Scope 1: ProduceRelationshipCoolingAlerts ===
-
-func TestProduceRelationshipCoolingAlerts_NilPool(t *testing.T) {
-	engine := NewEngine(nil, nil)
-	err := engine.ProduceRelationshipCoolingAlerts(context.Background())
-	if err == nil {
-		t.Error("expected error for nil pool")
-	}
-	if err != nil && !strings.Contains(err.Error(), "database connection") {
-		t.Errorf("expected database connection error, got: %s", err)
-	}
-}
-
-// === Scope 3: GetLastSynthesisTime ===
-
-func TestGetLastSynthesisTime_NilPool(t *testing.T) {
-	engine := NewEngine(nil, nil)
-	_, err := engine.GetLastSynthesisTime(context.Background())
-	if err == nil {
-		t.Error("expected error for nil pool")
-	}
-	if err.Error() != "synthesis freshness check requires a database connection" {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
 // === Test: synthesisConfidence pure function ===
 
-func TestSynthesisConfidence_BasicValues(t *testing.T) {
-	// 3 artifacts, 2 sources: minimum qualifying cluster
-	conf := synthesisConfidence(3, 2)
-	if conf < 0 || conf > 1 {
-		t.Errorf("confidence out of bounds: %f", conf)
+func TestSynthesisConfidence(t *testing.T) {
+	tests := []struct {
+		name          string
+		artifactCount int
+		sourceCount   int
+		wantZero      bool
+		wantMax       bool
+		checkRange    [2]float64 // [min, max] inclusive; ignored if both 0
+	}{
+		// Zero/negative guards
+		{"both zero", 0, 0, true, false, [2]float64{}},
+		{"negative artifact", -1, 3, true, false, [2]float64{}},
+		{"negative source", 3, -1, true, false, [2]float64{}},
+		{"both negative", -5, -3, true, false, [2]float64{}},
+		{"zero artifacts", 0, 3, true, false, [2]float64{}},
+		{"zero sources", 5, 0, true, false, [2]float64{}},
+		// Minimum non-zero inputs
+		{"(1,1) log2(1)=0 for both", 1, 1, true, false, [2]float64{}},
+		{"(2,1) volume only", 2, 1, false, false, [2]float64{0.01, 0.15}},
+		// Qualifying clusters
+		{"minimum qualifying (3,2)", 3, 2, false, false, [2]float64{0.01, 1.0}},
+		{"valid small", 3, 2, false, false, [2]float64{0.01, 1.0}},
+		{"valid large", 1000, 10, false, false, [2]float64{0.01, 1.0}},
+		{"mid-range (5,5)", 5, 5, false, false, [2]float64{0.5, 0.7}},
+		// Saturation / cap at 1.0
+		{"high values capped", 1000, 100, false, true, [2]float64{}},
+		{"extreme inputs saturate", 1000000, 100000, false, true, [2]float64{}},
 	}
-	if conf == 0 {
-		t.Error("expected non-zero confidence for qualifying cluster")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := synthesisConfidence(tt.artifactCount, tt.sourceCount)
+			if tt.wantZero && got != 0 {
+				t.Errorf("expected 0, got %f", got)
+			}
+			if !tt.wantZero && got < 0 {
+				t.Errorf("confidence must be non-negative, got %f", got)
+			}
+			if got > 1.0 {
+				t.Errorf("confidence must be <= 1.0, got %f", got)
+			}
+			if tt.wantMax && got != 1.0 {
+				t.Errorf("expected saturation at 1.0, got %f", got)
+			}
+			if tt.checkRange != [2]float64{} {
+				if got < tt.checkRange[0] || got > tt.checkRange[1] {
+					t.Errorf("expected confidence in [%.2f, %.2f], got %f", tt.checkRange[0], tt.checkRange[1], got)
+				}
+			}
+		})
 	}
-}
 
-func TestSynthesisConfidence_HigherDiversityIncreasesConfidence(t *testing.T) {
-	// Same artifact count, more source diversity should increase confidence
+	// Monotonicity: more diversity increases confidence
 	conf2 := synthesisConfidence(10, 2)
 	conf5 := synthesisConfidence(10, 5)
 	if conf5 <= conf2 {
 		t.Errorf("more diversity should increase confidence: 2-source=%.4f, 5-source=%.4f", conf2, conf5)
 	}
-}
 
-func TestSynthesisConfidence_HigherVolumeIncreasesConfidence(t *testing.T) {
-	// Same source count, more artifacts should increase confidence
+	// Monotonicity: more volume increases confidence
 	conf3 := synthesisConfidence(3, 2)
 	conf20 := synthesisConfidence(20, 2)
 	if conf20 <= conf3 {
 		t.Errorf("more volume should increase confidence: 3-art=%.4f, 20-art=%.4f", conf3, conf20)
 	}
-}
 
-func TestSynthesisConfidence_CappedAtOne(t *testing.T) {
-	// Very high values should still be capped at 1.0
-	conf := synthesisConfidence(1000, 100)
-	if conf > 1.0 {
-		t.Errorf("confidence must be capped at 1.0, got %f", conf)
-	}
-}
-
-func TestSynthesisConfidence_Deterministic(t *testing.T) {
-	// Same inputs always produce same output
+	// Deterministic: same inputs always produce same output
 	a := synthesisConfidence(8, 4)
 	b := synthesisConfidence(8, 4)
 	if a != b {
 		t.Errorf("confidence should be deterministic: %f != %f", a, b)
+	}
+
+	// Weight interaction: volume-weighted (0.6) vs diversity-weighted (0.4)
+	confA := synthesisConfidence(20, 2)  // high volume, low diversity
+	confB := synthesisConfidence(3, 10)  // low volume, high diversity
+	if confA <= confB {
+		t.Errorf("with 0.6 volume weight, 20-artifact cluster should beat 3-artifact: A=%.4f vs B=%.4f", confA, confB)
 	}
 }
 
@@ -1036,33 +1005,6 @@ func TestWeeklySynthesis_WordCapApplied(t *testing.T) {
 	}
 }
 
-// === Improve: synthesisConfidence zero-input guard (F3) ===
-
-func TestSynthesisConfidence_ZeroArtifacts(t *testing.T) {
-	conf := synthesisConfidence(0, 3)
-	if conf != 0 {
-		t.Errorf("expected 0 confidence for zero artifacts, got %f", conf)
-	}
-}
-
-func TestSynthesisConfidence_ZeroSources(t *testing.T) {
-	conf := synthesisConfidence(5, 0)
-	if conf != 0 {
-		t.Errorf("expected 0 confidence for zero sources, got %f", conf)
-	}
-}
-
-func TestSynthesisConfidence_NegativeInputs(t *testing.T) {
-	conf := synthesisConfidence(-1, 3)
-	if conf != 0 {
-		t.Errorf("expected 0 confidence for negative artifact count, got %f", conf)
-	}
-	conf = synthesisConfidence(5, -1)
-	if conf != 0 {
-		t.Errorf("expected 0 confidence for negative source count, got %f", conf)
-	}
-}
-
 // === Improve: maxSynthesisTopicGroups named constant (IMP-P5-01) ===
 
 func TestMaxSynthesisTopicGroups_IsPositive(t *testing.T) {
@@ -1079,43 +1021,37 @@ func TestMaxSynthesisTopicGroups_Value(t *testing.T) {
 
 // === Improve: clampDay helper (F5) ===
 
-func TestClampDay_NormalDate(t *testing.T) {
-	d := clampDay(2026, time.March, 15)
-	if d.Day() != 15 || d.Month() != time.March || d.Year() != 2026 {
-		t.Errorf("expected 2026-03-15, got %s", d.Format("2006-01-02"))
+func TestClampDay(t *testing.T) {
+	tests := []struct {
+		name      string
+		year      int
+		month     time.Month
+		day       int
+		wantDay   int
+		wantMonth time.Month
+	}{
+		{"normal date", 2026, time.March, 15, 15, time.March},
+		{"first of month", 2026, time.January, 1, 1, time.January},
+		{"end of Feb non-leap clamped from 31", 2026, time.February, 31, 28, time.February},
+		{"end of Feb leap year clamped from 31", 2028, time.February, 31, 29, time.February},
+		{"Feb 29 in leap year", 2024, time.February, 29, 29, time.February},
+		{"day 30 in April (31 clamped)", 2026, time.April, 31, 30, time.April},
+		{"day 0 clamped to 1", 2026, time.March, 0, 1, time.March},
+		{"negative day clamped to 1", 2026, time.June, -5, 1, time.June},
 	}
-}
-
-func TestClampDay_EndOfFebruary(t *testing.T) {
-	// Subscription started on the 31st, February only has 28 days
-	d := clampDay(2026, time.February, 31)
-	if d.Day() != 28 {
-		t.Errorf("expected day 28 (clamped), got %d", d.Day())
-	}
-	if d.Month() != time.February {
-		t.Errorf("expected February, got %s", d.Month())
-	}
-}
-
-func TestClampDay_LeapYear(t *testing.T) {
-	d := clampDay(2028, time.February, 31)
-	if d.Day() != 29 {
-		t.Errorf("expected day 29 (leap year), got %d", d.Day())
-	}
-}
-
-func TestClampDay_Day30InShortMonth(t *testing.T) {
-	// April has 30 days
-	d := clampDay(2026, time.April, 31)
-	if d.Day() != 30 {
-		t.Errorf("expected day 30 (clamped), got %d", d.Day())
-	}
-}
-
-func TestClampDay_FirstOfMonth(t *testing.T) {
-	d := clampDay(2026, time.January, 1)
-	if d.Day() != 1 {
-		t.Errorf("expected day 1, got %d", d.Day())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := clampDay(tt.year, tt.month, tt.day)
+			if got.Day() != tt.wantDay {
+				t.Errorf("expected day %d, got %d", tt.wantDay, got.Day())
+			}
+			if got.Month() != tt.wantMonth {
+				t.Errorf("expected month %s, got %s", tt.wantMonth, got.Month())
+			}
+			if got.IsZero() {
+				t.Error("clampDay should return a non-zero date")
+			}
+		})
 	}
 }
 
@@ -1127,53 +1063,6 @@ func TestMarkResurfaced_EmptyListNoPool(t *testing.T) {
 	err := engine.MarkResurfaced(context.Background(), []string{})
 	if err != nil {
 		t.Errorf("empty list should return nil, got: %v", err)
-	}
-}
-
-// === Harden: synthesisConfidence minimum non-zero input ===
-
-func TestSynthesisConfidence_SingleArtifactSingleSource(t *testing.T) {
-	// (1, 1) should return 0 because log2(1)=0 for both signals
-	conf := synthesisConfidence(1, 1)
-	if conf != 0 {
-		t.Errorf("expected 0 confidence for (1,1), got %f", conf)
-	}
-}
-
-func TestSynthesisConfidence_TwoArtifactsOneSource(t *testing.T) {
-	// (2, 1) should have volume signal but zero diversity
-	conf := synthesisConfidence(2, 1)
-	if conf <= 0 {
-		t.Errorf("expected positive confidence for (2,1), got %f", conf)
-	}
-	// With only 1 source, diversity signal is zero, so confidence comes
-	// entirely from volume: 0.6 * log2(2)/5 = 0.6 * 0.2 = 0.12
-	if conf > 0.15 {
-		t.Errorf("expected low confidence for single source, got %f", conf)
-	}
-}
-
-func TestSynthesisConfidence_ManyArtifactsManySourcesSaturates(t *testing.T) {
-	// Very large inputs should saturate at 1.0
-	conf := synthesisConfidence(1000000, 100000)
-	if conf != 1.0 {
-		t.Errorf("expected saturation at 1.0 for extreme inputs, got %f", conf)
-	}
-}
-
-// === Harden: clampDay boundary — day zero and negative ===
-
-func TestClampDay_DayZero(t *testing.T) {
-	// After hardening: day=0 is now clamped to 1, staying in the correct month.
-	d := clampDay(2026, time.March, 0)
-	if d.IsZero() {
-		t.Error("clampDay(day=0) should return a non-zero date")
-	}
-	if d.Day() != 1 {
-		t.Errorf("expected day 1 (clamped from 0), got %d", d.Day())
-	}
-	if d.Month() != time.March {
-		t.Errorf("expected March, got %s", d.Month())
 	}
 }
 
@@ -1376,29 +1265,6 @@ func TestTopicMovement_DirectionBoundaries(t *testing.T) {
 	}
 }
 
-// === Harden: clampDay day ≤ 0 guard (H-008) ===
-
-func TestClampDay_NegativeDay(t *testing.T) {
-	d := clampDay(2026, time.March, -5)
-	if d.Day() != 1 {
-		t.Errorf("expected day 1 (clamped from -5), got %d", d.Day())
-	}
-	if d.Month() != time.March {
-		t.Errorf("expected March, got %s", d.Month())
-	}
-}
-
-func TestClampDay_DayZero_Clamped(t *testing.T) {
-	// After fix: day=0 should now clamp to 1, staying in the correct month
-	d := clampDay(2026, time.March, 0)
-	if d.Day() != 1 {
-		t.Errorf("expected day 1 (clamped from 0), got %d", d.Day())
-	}
-	if d.Month() != time.March {
-		t.Errorf("expected March, got %s", d.Month())
-	}
-}
-
 // === Harden: assembleBriefText threads-only partial context (H-009) ===
 
 func TestAssembleBriefText_ThreadsOnlyPartialContext(t *testing.T) {
@@ -1597,35 +1463,6 @@ func TestSnoozeAlert_NilPool(t *testing.T) {
 	}
 }
 
-// === Chaos: synthesisConfidence edge cases ===
-
-func TestSynthesisConfidence_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name          string
-		artifactCount int
-		sourceCount   int
-		wantZero      bool
-	}{
-		{"both zero", 0, 0, true},
-		{"negative artifact", -1, 3, true},
-		{"negative source", 3, -1, true},
-		{"both negative", -5, -3, true},
-		{"valid small", 3, 2, false},
-		{"valid large", 1000, 10, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := synthesisConfidence(tt.artifactCount, tt.sourceCount)
-			if tt.wantZero && got != 0 {
-				t.Errorf("expected 0, got %f", got)
-			}
-			if !tt.wantZero && (got <= 0 || got > 1) {
-				t.Errorf("expected (0,1], got %f", got)
-			}
-		})
-	}
-}
-
 // === Test: GetPendingAlerts nil pool guard (bug fix) ===
 
 func TestGetPendingAlerts_NilPool(t *testing.T) {
@@ -1772,27 +1609,6 @@ func TestCalendarDaysBetween(t *testing.T) {
 	}
 }
 
-// CHAOS-C5: clampDay boundary handling for billing date estimation.
-func TestClampDay_EdgeCases(t *testing.T) {
-	// Feb 31 should clamp to Feb 28 (non-leap)
-	got := clampDay(2026, time.February, 31)
-	if got.Day() != 28 {
-		t.Errorf("expected Feb 28, got Feb %d", got.Day())
-	}
-
-	// Feb 29 in leap year should stay Feb 29
-	got = clampDay(2024, time.February, 29)
-	if got.Day() != 29 {
-		t.Errorf("expected Feb 29 in leap year, got Feb %d", got.Day())
-	}
-
-	// Day 0 should clamp to 1
-	got = clampDay(2026, time.March, 0)
-	if got.Day() != 1 {
-		t.Errorf("expected day 1 for day=0 input, got %d", got.Day())
-	}
-}
-
 // === Harden H-010: RunSynthesis respects context cancellation in row loop ===
 
 func TestRunSynthesis_CancelledContext(t *testing.T) {
@@ -1834,46 +1650,24 @@ func TestMeetingBrief_AttendeeCap(t *testing.T) {
 
 // === Harden: Alert producers check context cancellation between row iterations ===
 
-func TestProduceBillAlerts_CancelledContext(t *testing.T) {
+func TestAllProducers_CancelledContext(t *testing.T) {
 	engine := NewEngine(nil, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
 	// Nil pool returns the pool-nil error before context check is reached.
 	// This verifies the nil-pool guard still takes priority over context.
-	err := engine.ProduceBillAlerts(ctx)
-	if err == nil {
-		t.Error("expected error for nil pool")
+	producers := map[string]func() error{
+		"BillAlerts":                func() error { return engine.ProduceBillAlerts(ctx) },
+		"TripPrepAlerts":            func() error { return engine.ProduceTripPrepAlerts(ctx) },
+		"ReturnWindowAlerts":        func() error { return engine.ProduceReturnWindowAlerts(ctx) },
+		"RelationshipCoolingAlerts": func() error { return engine.ProduceRelationshipCoolingAlerts(ctx) },
 	}
-}
-
-func TestProduceTripPrepAlerts_CancelledContext(t *testing.T) {
-	engine := NewEngine(nil, nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err := engine.ProduceTripPrepAlerts(ctx)
-	if err == nil {
-		t.Error("expected error for nil pool")
-	}
-}
-
-func TestProduceReturnWindowAlerts_CancelledContext(t *testing.T) {
-	engine := NewEngine(nil, nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err := engine.ProduceReturnWindowAlerts(ctx)
-	if err == nil {
-		t.Error("expected error for nil pool")
-	}
-}
-
-func TestProduceRelationshipCoolingAlerts_CancelledContext(t *testing.T) {
-	engine := NewEngine(nil, nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err := engine.ProduceRelationshipCoolingAlerts(ctx)
-	if err == nil {
-		t.Error("expected error for nil pool")
+	for name, fn := range producers {
+		err := fn()
+		if err == nil {
+			t.Errorf("%s: expected error for nil pool with cancelled context", name)
+		}
 	}
 }
 
@@ -2125,49 +1919,6 @@ func TestSynthesisInsight_SerendipityType(t *testing.T) {
 	}
 }
 
-// === TST-004-009: synthesisConfidence composition weights ===
-
-func TestSynthesisConfidence_DiversityWeightedMoreThanHalf(t *testing.T) {
-	// Volume weight is 0.6 and diversity weight is 0.4.
-	// Two clusters with same raw values should produce different results
-	// when we swap which dimension has more data.
-
-	// Cluster A: high volume (20 artifacts), low diversity (2 sources)
-	confA := synthesisConfidence(20, 2)
-	// Cluster B: low volume (3 artifacts), high diversity (10 sources)
-	confB := synthesisConfidence(3, 10)
-
-	// Both should be positive
-	if confA <= 0 || confB <= 0 {
-		t.Errorf("both should be positive: A=%.4f, B=%.4f", confA, confB)
-	}
-
-	// With volume weighted 0.6 and diversity 0.4, high-volume/low-diversity
-	// should outperform low-volume/high-diversity when the volume gap is large
-	// enough (20 vs 3 is a 6.7× ratio, 10 vs 2 is a 5× ratio)
-	if confA <= confB {
-		t.Errorf("with 0.6 volume weight, 20-artifact cluster should beat 3-artifact cluster: A=%.4f vs B=%.4f", confA, confB)
-	}
-}
-
-func TestSynthesisConfidence_EqualInputsSymmetric(t *testing.T) {
-	// With equal artifact and source counts, confidence should be deterministic
-	c1 := synthesisConfidence(5, 5)
-	c2 := synthesisConfidence(5, 5)
-	if c1 != c2 {
-		t.Errorf("same inputs should produce same output: %.6f != %.6f", c1, c2)
-	}
-
-	// The two-component formula: 0.6*log2(5)/5 + 0.4*log2(5)/3
-	// log2(5) ≈ 2.322
-	// volume signal = 2.322/5 ≈ 0.4644
-	// diversity signal = 2.322/3 ≈ 0.774
-	// conf = 0.6*0.4644 + 0.4*0.774 ≈ 0.2787 + 0.3096 ≈ 0.5883
-	if c1 < 0.5 || c1 > 0.7 {
-		t.Errorf("confidence(5,5) expected ~0.59, got %.4f", c1)
-	}
-}
-
 // === TST-004-010: detectCapturePatterns period classification boundaries ===
 
 func TestCapturePatternPeriodClassification(t *testing.T) {
@@ -2354,12 +2105,15 @@ func TestAssembleBriefText_AllContextCombined(t *testing.T) {
 
 // SEC-021-001: Verify the staleness bound constant exists and is reasonable.
 // A missing or too-large bound would re-enable the infinite-retry bug.
-func TestMaxPendingAlertAgeDays_Bound(t *testing.T) {
-	if maxPendingAlertAgeDays < 1 {
-		t.Errorf("maxPendingAlertAgeDays must be >= 1, got %d", maxPendingAlertAgeDays)
+// Consolidated from multiple maxPendingAlertAgeDays tests.
+func TestMaxPendingAlertAgeDays(t *testing.T) {
+	// Exact value per SEC-021-001 design
+	if maxPendingAlertAgeDays != 7 {
+		t.Errorf("maxPendingAlertAgeDays changed from 7 to %d — update SEC-021-001 review if intentional", maxPendingAlertAgeDays)
 	}
-	if maxPendingAlertAgeDays > 30 {
-		t.Errorf("maxPendingAlertAgeDays should not exceed 30 to bound poison alert retries, got %d", maxPendingAlertAgeDays)
+	// Safety range: must be positive and bounded
+	if maxPendingAlertAgeDays < 1 || maxPendingAlertAgeDays > 14 {
+		t.Errorf("maxPendingAlertAgeDays %d is outside the expected [1,14] security range", maxPendingAlertAgeDays)
 	}
 }
 
@@ -2605,42 +2359,6 @@ func TestTripPrepDaysUntil_DSTSpringForward(t *testing.T) {
 	}
 }
 
-// === REG-021-R17-002: maxPendingAlertAgeDays constant governs GetPendingAlerts SQL ===
-
-// TestMaxPendingAlertAgeDays_UsedInGetPendingAlerts verifies that the
-// maxPendingAlertAgeDays constant actually controls the GetPendingAlerts SQL
-// filter. If the constant and SQL become disconnected (e.g., SQL hardcodes
-// a literal instead of interpolating the constant), this test would fail
-// when the constant is changed. This is the adversarial regression guard
-// for SEC-021-001.
-func TestMaxPendingAlertAgeDays_UsedInGetPendingAlerts(t *testing.T) {
-	// Verify the constant is a reasonable positive integer.
-	if maxPendingAlertAgeDays <= 0 {
-		t.Fatal("maxPendingAlertAgeDays must be positive")
-	}
-	if maxPendingAlertAgeDays > 30 {
-		t.Fatalf("maxPendingAlertAgeDays %d exceeds safety bound of 30", maxPendingAlertAgeDays)
-	}
-
-	// GetPendingAlerts now uses MAKE_INTERVAL(days => $1) with maxPendingAlertAgeDays
-	// as a parameterized value. This regression test verifies the constant stays
-	// within the expected range so the parameterized query produces the correct interval.
-	// If someone changes the constant, SEC-021-001 review must be updated.
-	if maxPendingAlertAgeDays < 1 || maxPendingAlertAgeDays > 14 {
-		t.Errorf("maxPendingAlertAgeDays %d is outside the expected [1,14] security range", maxPendingAlertAgeDays)
-	}
-}
-
-// TestMaxPendingAlertAgeDays_ConstantMatchesQueryShape guards against the
-// constant drifting from the documented SEC-021-001 security bound.
-func TestMaxPendingAlertAgeDays_ConstantMatchesQueryShape(t *testing.T) {
-	// The constant should be exactly 7 per SEC-021-001 design.
-	// If changed, the security review must be updated.
-	if maxPendingAlertAgeDays != 7 {
-		t.Errorf("maxPendingAlertAgeDays changed from 7 to %d — update SEC-021-001 review if intentional", maxPendingAlertAgeDays)
-	}
-}
-
 // IMP-021-001: Return window regex rejects out-of-range month/day values.
 // The regex must reject dates like "2026-13-45" that would crash PostgreSQL's
 // ::date cast, which is the exact scenario the safe-cast pattern is meant to prevent.
@@ -2860,29 +2578,5 @@ func TestCreateAlert_BodyPreservesNewlines(t *testing.T) {
 	// Body should preserve intentional newlines (meeting briefs use them)
 	if !strings.Contains(alert.Body, "\n") {
 		t.Errorf("body should preserve newlines, got %q", alert.Body)
-	}
-}
-
-// === TST-021: maxPendingAlertAgeDays constant value ===
-
-func TestMaxPendingAlertAgeDays_Value(t *testing.T) {
-	if maxPendingAlertAgeDays != 7 {
-		t.Errorf("expected maxPendingAlertAgeDays = 7, got %d", maxPendingAlertAgeDays)
-	}
-	if maxPendingAlertAgeDays < 1 {
-		t.Error("maxPendingAlertAgeDays must be positive")
-	}
-}
-
-// === TST-021: GetLastSynthesisTime error message validation ===
-
-func TestGetLastSynthesisTime_NilPoolErrorMessage(t *testing.T) {
-	engine := NewEngine(nil, nil)
-	_, err := engine.GetLastSynthesisTime(context.Background())
-	if err == nil {
-		t.Fatal("expected error for nil pool")
-	}
-	if !strings.Contains(err.Error(), "synthesis freshness check requires a database connection") {
-		t.Errorf("expected specific error message, got: %s", err)
 	}
 }

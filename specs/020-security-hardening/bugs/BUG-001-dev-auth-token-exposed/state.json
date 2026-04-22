@@ -7,7 +7,13 @@
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
-    "completedPhaseClaims": ["planning", "implement", "test", "validate", "finalize"],
+    "completedPhaseClaims": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "finalize"
+    ],
     "executionHistory": [
       {
         "phase": "planning",
@@ -47,20 +53,43 @@
     ]
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": ["scope-1"],
-    "certifiedCompletedPhases": ["planning", "implement", "test", "validate", "finalize"],
+    "status": "done",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "finalize"
+    ],
     "scopeProgress": {
       "scope-1": "Done"
     },
     "lockdownState": {}
   },
   "policySnapshot": {
-    "grill": { "value": "off", "provenance": "repo-default" },
-    "tdd": { "value": "scenario-first", "provenance": "repo-default" },
-    "autoCommit": { "value": "off", "provenance": "repo-default" },
-    "lockdown": { "value": "off", "provenance": "repo-default" },
-    "regression": { "value": "protected-scenarios", "provenance": "repo-default" }
+    "grill": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "tdd": {
+      "value": "scenario-first",
+      "provenance": "repo-default"
+    },
+    "autoCommit": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "lockdown": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "regression": {
+      "value": "protected-scenarios",
+      "provenance": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": []

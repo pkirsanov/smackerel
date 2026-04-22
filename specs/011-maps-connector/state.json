@@ -16,13 +16,39 @@
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-09T00:00:00Z",
-    "completedScopes": ["scope-01", "scope-02", "scope-03"],
-    "completedPhaseClaims": ["analyze", "bootstrap", "plan", "spec-review", "implement-scope-01", "implement-scope-02", "implement-scope-03", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "chaos", "validate", "audit", "docs", "finalize"],
+    "completedScopes": [
+      "scope-01",
+      "scope-02",
+      "scope-03"
+    ],
+    "completedPhaseClaims": [
+      "analyze",
+      "bootstrap",
+      "plan",
+      "spec-review",
+      "implement-scope-01",
+      "implement-scope-02",
+      "implement-scope-03",
+      "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
+      "chaos",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
     "pendingTransitionRequests": [],
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
-        "phasesExecuted": ["analyze"],
+        "phasesExecuted": [
+          "analyze"
+        ],
         "statusBefore": "not_started",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -31,23 +57,29 @@
       },
       {
         "agent": "bubbles.design",
-        "phasesExecuted": ["bootstrap"],
+        "phasesExecuted": [
+          "bootstrap"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
         "runCompletedAt": "2026-04-09T00:00:00Z",
-        "summary": "Created design.md: wrapper connector.go over existing maps parsing utilities, normalizer.go for Activity→RawArtifact, patterns.go for commute/trip/temporal-spatial detection. New migration 009_maps.sql for location_clusters table. No new NATS streams. Config section for smackerel.yaml. 4 new files in internal/connector/maps/. Cursor: pipe-delimited processed filenames. Dedup: date+location cluster SHA-256 hash."
+        "summary": "Created design.md: wrapper connector.go over existing maps parsing utilities, normalizer.go for Activity\u2192RawArtifact, patterns.go for commute/trip/temporal-spatial detection. New migration 009_maps.sql for location_clusters table. No new NATS streams. Config section for smackerel.yaml. 4 new files in internal/connector/maps/. Cursor: pipe-delimited processed filenames. Dedup: date+location cluster SHA-256 hash."
       },
       {
         "agent": "bubbles.plan",
-        "phasesExecuted": ["bootstrap"],
+        "phasesExecuted": [
+          "bootstrap"
+        ],
         "runStartedAt": "2026-04-09T00:00:00Z",
         "runCompletedAt": "2026-04-09T00:00:00Z",
         "summary": "3-scope plan created: Scope 1: Connector Implementation & Normalizer, Scope 2: Trail Journal, Dedup & Migration, Scope 3: Commute/Trip Detection & Temporal-Spatial Linking"
       },
       {
         "agent": "bubbles.spec-review",
-        "phasesExecuted": ["spec-review"],
+        "phasesExecuted": [
+          "spec-review"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -56,7 +88,9 @@
       },
       {
         "agent": "bubbles.implement",
-        "phasesExecuted": ["implement"],
+        "phasesExecuted": [
+          "implement"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -65,7 +99,9 @@
       },
       {
         "agent": "bubbles.implement",
-        "phasesExecuted": ["implement"],
+        "phasesExecuted": [
+          "implement"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -74,16 +110,20 @@
       },
       {
         "agent": "bubbles.implement",
-        "phasesExecuted": ["implement"],
+        "phasesExecuted": [
+          "implement"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
         "runCompletedAt": "2026-04-09T00:00:00Z",
-        "summary": "Implemented Scope 3: patterns.go (550+ lines), patterns_test.go (24 tests). DetectCommutes, DetectTrips, LinkTemporalSpatial, InferHome, PostSync. 15 unit tests PASS. Full quality chain: test, regression, simplify, gaps, harden, stabilize, security — all findings resolved."
+        "summary": "Implemented Scope 3: patterns.go (550+ lines), patterns_test.go (24 tests). DetectCommutes, DetectTrips, LinkTemporalSpatial, InferHome, PostSync. 15 unit tests PASS. Full quality chain: test, regression, simplify, gaps, harden, stabilize, security \u2014 all findings resolved."
       },
       {
         "agent": "bubbles.chaos",
-        "phasesExecuted": ["chaos"],
+        "phasesExecuted": [
+          "chaos"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -92,7 +132,9 @@
       },
       {
         "agent": "bubbles.validate",
-        "phasesExecuted": ["validate"],
+        "phasesExecuted": [
+          "validate"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -101,7 +143,9 @@
       },
       {
         "agent": "bubbles.audit",
-        "phasesExecuted": ["audit"],
+        "phasesExecuted": [
+          "audit"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -110,7 +154,9 @@
       },
       {
         "agent": "bubbles.docs",
-        "phasesExecuted": ["docs"],
+        "phasesExecuted": [
+          "docs"
+        ],
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "runStartedAt": "2026-04-09T00:00:00Z",
@@ -120,9 +166,31 @@
     ]
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": ["scope-01", "scope-02", "scope-03"],
-    "certifiedCompletedPhases": ["analyze", "bootstrap", "plan", "spec-review", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "chaos", "validate", "audit", "docs", "finalize"],
-    "validationNotes": "All 3 scopes implemented and validated. 78 maps unit tests pass, 26 Go packages green, 31 Python tests green. Full quality chain completed: test, regression, simplify, gaps, harden, stabilize, security, validate, audit, docs. DB-dependent integration/e2e tests deferred to live stack — all DB code audited correct."
+    "status": "done",
+    "completedScopes": [
+      "scope-01",
+      "scope-02",
+      "scope-03"
+    ],
+    "certifiedCompletedPhases": [
+      "analyze",
+      "bootstrap",
+      "plan",
+      "spec-review",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "gaps",
+      "harden",
+      "stabilize",
+      "security",
+      "chaos",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
+    "validationNotes": "All 3 scopes implemented and validated. 78 maps unit tests pass, 26 Go packages green, 31 Python tests green. Full quality chain completed: test, regression, simplify, gaps, harden, stabilize, security, validate, audit, docs. DB-dependent integration/e2e tests deferred to live stack \u2014 all DB code audited correct."
   }
 }

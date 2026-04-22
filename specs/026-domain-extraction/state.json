@@ -20,7 +20,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       1,
       2,
@@ -32,7 +32,11 @@
       8,
       9
     ],
-    "certifiedCompletedPhases": ["implement", "test", "validate"],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "validate"
+    ],
     "scopeProgress": [
       {
         "scope": 1,
