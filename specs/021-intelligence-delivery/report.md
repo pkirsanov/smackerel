@@ -99,6 +99,35 @@
 | Timezone-safe billing | `engine.go` — `localToday` uses `time.Date(..., time.Local)` not `Truncate`; `clampDay` uses `time.Local` | `internal/intelligence/engine.go:1079-1085` | Intact |
 | Deferred cancel | `search.go` — LogSearch uses detached `context.Background()` with 5s timeout via `defer logCancel()` | `internal/api/search.go:133-139` | Intact |
 
+## Test Coverage Sweep (2026-04-22, test-to-doc, stochastic child)
+
+### Finding
+
+4 Gherkin scenarios (SCN-021-001, SCN-021-002, SCN-021-014, SCN-021-015) had no behavior-level unit test for the alert delivery sweep. Existing tests only covered nil-guard error paths. The delivery loop was tightly coupled to concrete `*telegram.Bot` and `*intelligence.Engine` types, preventing mock-based testing.
+
+### Fix
+
+Extracted `deliverAlertBatch()` as a standalone function in `internal/scheduler/jobs.go` accepting functional parameters (`sendFn`, `markFn`). The existing `deliverPendingAlerts()` method now delegates to it. This enables mock-based unit tests without changing the Scheduler struct or its concrete dependencies.
+
+### Tests Added
+
+| Test | File | Covers |
+|------|------|--------|
+| `TestDeliverAlertBatch_HappyPath` | `jobs_test.go` | SCN-021-001: Alerts sent via sendFn + marked via markFn, correct counts |
+| `TestDeliverAlertBatch_SendFailure_AlertStaysPending` | `jobs_test.go` | SCN-021-014: Send failure → alert not marked, retry-safe |
+| `TestDeliverAlertBatch_EmptyList_NoOp` | `jobs_test.go` | SCN-021-015: Empty list → no sendFn/markFn calls |
+| `TestDeliverAlertBatch_CapEnforced_EmptyFromGetPendingAlerts` | `jobs_test.go` | SCN-021-002: Cap boundary documented as upstream (SQL), empty list handled |
+| `TestDeliverAlertBatch_MarkFailure` | `jobs_test.go` | SCN-021-014 variant: mark failure counts as failed, not delivered |
+
+### Validation
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh test unit` | PASS (257 passed) |
+| `./smackerel.sh build` | PASS |
+| `./smackerel.sh check` | PASS |
+| `./smackerel.sh lint` | PASS |
+
 ### Full Suite Results
 
 | Test Suite | Command | Result | Timestamp |

@@ -147,3 +147,29 @@ Triggered by stochastic-quality-sweep R92 stabilize-to-doc child workflow. Syste
 - **Input validation:** `maxServings = 1000` caps scale factor. `SearchRecipesByName` truncates input to 200 chars. `ParseQuantity` returns 0 for Inf/NaN results.
 - **Floating-point stability:** `FormatQuantity` uses epsilon-based comparison. `formatScaleFactor` uses epsilon-based near-integer detection (fixed in IMP-035-004).
 - **Error propagation:** API calls propagate errors with context. JSON unmarshal failures in search results are safely skipped.
+
+## Simplify Pass (2026-04-22)
+
+Triggered by stochastic-quality-sweep simplify-to-doc child workflow (REPEAT probe). Systematic DRY and structural consistency review of all spec-035 implementation code.
+
+### Simplify Findings
+
+**SIM-035-001: `apiGet`/`apiPost` duplicated HTTP response handling — FIXED**
+- **Finding:** `apiGet` and `apiPost` in `recipe_commands.go` contained identical 10-line blocks for auth header injection, response body reading (`io.LimitReader`), and status code validation.
+- **Fix:** Extracted shared `doAPIRequest(req *http.Request) ([]byte, error)` helper. Both `apiGet` and `apiPost` now construct the request and delegate. Net reduction: ~20 lines.
+- **Files changed:** `internal/telegram/recipe_commands.go`
+- **Verification:** `./smackerel.sh test unit` → all packages OK. `./smackerel.sh lint` → all checks passed.
+
+**SIM-035-002: `parseCookNavigation` serial if/else chain inconsistent with `parseScaleTrigger` table pattern — FIXED**
+- **Finding:** `parseScaleTrigger` used table-driven `scalePatterns`, but `parseCookNavigation` in the same file used a serial if/else chain for identical regex-to-action mapping.
+- **Fix:** Introduced `navPatterns` table. `parseCookNavigation` now iterates the table, falling through to jump-number matching last. Consistent with `parseScaleTrigger`.
+- **Files changed:** `internal/telegram/recipe_commands.go`
+- **Verification:** `./smackerel.sh test unit` → all packages OK. All `TestParseCookNavigation` cases pass unchanged.
+
+**SIM-035-003: 4 `Pending*` fields on `CookSession` scattered-clear anti-pattern — FIXED**
+- **Finding:** `CookSession` had 4 related fields (`PendingReplacement`, `PendingRecipeData`, `PendingServings`, `PendingRecipeName`) always set/checked/cleared together, with 4-line clear blocks in 3 call sites.
+- **Fix:** Extracted `PendingCookReplacement` struct. Single `Pending *PendingCookReplacement` field. Check: `session.Pending != nil`. Clear: `session.Pending = nil`.
+- **Files changed:** `internal/telegram/cook_session.go`, `internal/telegram/recipe_commands.go`, `internal/telegram/bot.go`
+- **Verification:** `./smackerel.sh test unit` → all packages OK. `./smackerel.sh build` → OK. `./smackerel.sh lint` → all checks passed. `./smackerel.sh format --check` → clean.
+
+All existing tests pass. No behavior changes. Net effect: ~30 lines removed, structural consistency improved.

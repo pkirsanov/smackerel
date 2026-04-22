@@ -84,12 +84,27 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	}
 
 	// Auto-start browser history connector (no OAuth needed — file-based)
-	if cfg.BrowserHistoryPath != "" {
+	if cfg.BrowserHistoryEnabled && cfg.BrowserHistoryPath != "" {
 		browserCfg := connector.ConnectorConfig{
-			AuthType: "none",
-			Enabled:  true,
+			AuthType:     "none",
+			Enabled:      true,
+			SyncSchedule: cfg.BrowserHistorySyncSchedule,
 			SourceConfig: map[string]interface{}{
-				"history_path": cfg.BrowserHistoryPath,
+				"history_path":                      cfg.BrowserHistoryPath,
+				"access_strategy":                   cfg.BrowserHistoryAccessStrategy,
+				"initial_lookback_days":             cfg.BrowserHistoryInitialLookbackDays,
+				"repeat_visit_window":               cfg.BrowserHistoryRepeatVisitWindow,
+				"repeat_visit_threshold":            cfg.BrowserHistoryRepeatVisitThreshold,
+				"content_fetch_timeout":             cfg.BrowserHistoryContentFetchTimeout,
+				"content_fetch_concurrency":         cfg.BrowserHistoryContentFetchConcurrency,
+				"content_fetch_domain_delay":        cfg.BrowserHistoryContentFetchDomainDelay,
+				"custom_skip_domains":               parseJSONArray(cfg.BrowserHistoryCustomSkipDomains),
+				"social_media_individual_threshold": cfg.BrowserHistorySocialMediaIndividualThreshold,
+				"dwell_time_thresholds": map[string]interface{}{
+					"full_min":     cfg.BrowserHistoryDwellFullMin,
+					"standard_min": cfg.BrowserHistoryDwellStandardMin,
+					"light_min":    cfg.BrowserHistoryDwellLightMin,
+				},
 			},
 		}
 		if err := browserHistConn.Connect(ctx, browserCfg); err == nil {

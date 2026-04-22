@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/metrics"
 )
 
@@ -397,7 +398,19 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		return
 	}
 
-	var delivered, failed int
+	delivered, failed := deliverAlertBatch(ctx, alerts, s.bot.SendAlertMessage, s.engine.MarkAlertDelivered)
+
+	slog.Info("alert delivery sweep complete", "delivered", delivered, "failed", failed, "total", len(alerts))
+}
+
+// deliverAlertBatch iterates over alerts, sends each via sendFn, and marks
+// delivered via markFn. Extracted for unit-testability (SCN-021-001, SCN-021-014).
+func deliverAlertBatch(
+	ctx context.Context,
+	alerts []intelligence.Alert,
+	sendFn func(string) error,
+	markFn func(context.Context, string) error,
+) (delivered, failed int) {
 	for i, a := range alerts {
 		if ctx.Err() != nil {
 			slog.Warn("alert delivery sweep context expired, remaining alerts deferred",
@@ -407,7 +420,7 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 
 		msg := FormatAlertMessage(string(a.AlertType), a.Title, a.Body)
 
-		if err := s.bot.SendAlertMessage(msg); err != nil {
+		if err := sendFn(msg); err != nil {
 			slog.Warn("alert delivery failed, will retry next sweep",
 				"alert_id", a.ID, "error", err)
 			metrics.AlertDeliveryFailures.Inc()
@@ -419,7 +432,7 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		// between send and mark doesn't leave sent-but-unmarked alerts (causing
 		// duplicate delivery on the next sweep cycle).
 		markCtx, markCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := s.engine.MarkAlertDelivered(markCtx, a.ID); err != nil {
+		if err := markFn(markCtx, a.ID); err != nil {
 			markCancel()
 			slog.Warn("failed to mark alert delivered", "alert_id", a.ID, "error", err)
 			metrics.AlertDeliveryFailures.Inc()
@@ -432,8 +445,7 @@ func (s *Scheduler) deliverPendingAlerts(ctx context.Context) {
 		delivered++
 		slog.Info("alert delivered", "alert_id", a.ID, "type", a.AlertType, "title", a.Title)
 	}
-
-	slog.Info("alert delivery sweep complete", "delivered", delivered, "failed", failed, "total", len(alerts))
+	return delivered, failed
 }
 
 func (s *Scheduler) runMealPlanAutoCompleteJob() {

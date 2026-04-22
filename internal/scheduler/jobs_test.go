@@ -2,9 +2,12 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/smackerel/smackerel/internal/intelligence"
 )
 
 // === FormatAlertMessage edge cases ===
@@ -210,6 +213,157 @@ func TestDeliverPendingAlerts_CancelledContext_NilEngine(t *testing.T) {
 	cancel()
 	s.deliverPendingAlerts(ctx)
 	// No panic = success
+}
+
+// === SCN-021-001: deliverAlertBatch happy path — alerts sent and marked delivered ===
+
+func TestDeliverAlertBatch_HappyPath(t *testing.T) {
+	alerts := []intelligence.Alert{
+		{ID: "a1", AlertType: intelligence.AlertCommitmentOverdue, Title: "Overdue", Body: "Task overdue", Priority: 1},
+		{ID: "a2", AlertType: intelligence.AlertBill, Title: "Bill Due", Body: "AWS invoice", Priority: 2},
+	}
+
+	var sentMessages []string
+	var markedIDs []string
+
+	sendFn := func(msg string) error {
+		sentMessages = append(sentMessages, msg)
+		return nil
+	}
+	markFn := func(_ context.Context, id string) error {
+		markedIDs = append(markedIDs, id)
+		return nil
+	}
+
+	delivered, failed := deliverAlertBatch(context.Background(), alerts, sendFn, markFn)
+
+	if delivered != 2 {
+		t.Errorf("expected 2 delivered, got %d", delivered)
+	}
+	if failed != 0 {
+		t.Errorf("expected 0 failed, got %d", failed)
+	}
+	if len(sentMessages) != 2 {
+		t.Fatalf("expected 2 sent messages, got %d", len(sentMessages))
+	}
+	if !strings.Contains(sentMessages[0], "Overdue") {
+		t.Errorf("first message should contain 'Overdue', got %q", sentMessages[0])
+	}
+	if !strings.Contains(sentMessages[1], "Bill Due") {
+		t.Errorf("second message should contain 'Bill Due', got %q", sentMessages[1])
+	}
+	if len(markedIDs) != 2 {
+		t.Fatalf("expected 2 marked IDs, got %d", len(markedIDs))
+	}
+	if markedIDs[0] != "a1" || markedIDs[1] != "a2" {
+		t.Errorf("unexpected marked IDs: %v", markedIDs)
+	}
+}
+
+// === SCN-021-014: deliverAlertBatch — Telegram send failure leaves alert pending for retry ===
+
+func TestDeliverAlertBatch_SendFailure_AlertStaysPending(t *testing.T) {
+	alerts := []intelligence.Alert{
+		{ID: "a1", AlertType: intelligence.AlertBill, Title: "Bill", Body: "Due soon", Priority: 2},
+		{ID: "a2", AlertType: intelligence.AlertTripPrep, Title: "Trip", Body: "Pack bags", Priority: 2},
+	}
+
+	var markedIDs []string
+
+	sendFn := func(msg string) error {
+		// First alert fails, second succeeds
+		if strings.Contains(msg, "Bill") {
+			return fmt.Errorf("telegram send failed")
+		}
+		return nil
+	}
+	markFn := func(_ context.Context, id string) error {
+		markedIDs = append(markedIDs, id)
+		return nil
+	}
+
+	delivered, failed := deliverAlertBatch(context.Background(), alerts, sendFn, markFn)
+
+	if delivered != 1 {
+		t.Errorf("expected 1 delivered, got %d", delivered)
+	}
+	if failed != 1 {
+		t.Errorf("expected 1 failed, got %d", failed)
+	}
+	// Only a2 should be marked delivered — a1 failed to send
+	if len(markedIDs) != 1 || markedIDs[0] != "a2" {
+		t.Errorf("expected only a2 marked delivered, got %v", markedIDs)
+	}
+}
+
+// === SCN-021-015: deliverAlertBatch — empty alert list is a no-op ===
+
+func TestDeliverAlertBatch_EmptyList_NoOp(t *testing.T) {
+	sendCalled := false
+	markCalled := false
+
+	sendFn := func(_ string) error {
+		sendCalled = true
+		return nil
+	}
+	markFn := func(_ context.Context, _ string) error {
+		markCalled = true
+		return nil
+	}
+
+	delivered, failed := deliverAlertBatch(context.Background(), nil, sendFn, markFn)
+
+	if delivered != 0 || failed != 0 {
+		t.Errorf("expected 0/0, got delivered=%d failed=%d", delivered, failed)
+	}
+	if sendCalled {
+		t.Error("sendFn should not be called for empty alert list")
+	}
+	if markCalled {
+		t.Error("markFn should not be called for empty alert list")
+	}
+}
+
+// === SCN-021-002: deliverAlertBatch — cap enforced by caller returning empty list ===
+
+func TestDeliverAlertBatch_CapEnforced_EmptyFromGetPendingAlerts(t *testing.T) {
+	// GetPendingAlerts enforces the 2/day cap by returning an empty list.
+	// When deliverAlertBatch receives an empty list, it must be a no-op.
+	// This test documents that the cap boundary is upstream (GetPendingAlerts SQL),
+	// and the batch function correctly handles the empty result.
+	delivered, failed := deliverAlertBatch(context.Background(), []intelligence.Alert{}, func(_ string) error {
+		t.Error("sendFn should not be called when cap is reached (empty list)")
+		return nil
+	}, func(_ context.Context, _ string) error {
+		t.Error("markFn should not be called when cap is reached (empty list)")
+		return nil
+	})
+
+	if delivered != 0 || failed != 0 {
+		t.Errorf("expected 0/0 for cap-enforced empty list, got delivered=%d failed=%d", delivered, failed)
+	}
+}
+
+// === SCN-021-014: deliverAlertBatch — mark-delivered failure counts as failed ===
+
+func TestDeliverAlertBatch_MarkFailure(t *testing.T) {
+	alerts := []intelligence.Alert{
+		{ID: "a1", AlertType: intelligence.AlertReturnWindow, Title: "Return", Body: "Deadline", Priority: 1},
+	}
+
+	sendFn := func(_ string) error { return nil }
+	markFn := func(_ context.Context, _ string) error {
+		return fmt.Errorf("db connection lost")
+	}
+
+	delivered, failed := deliverAlertBatch(context.Background(), alerts, sendFn, markFn)
+
+	if delivered != 0 {
+		t.Errorf("expected 0 delivered when mark fails, got %d", delivered)
+	}
+	if failed != 1 {
+		t.Errorf("expected 1 failed, got %d", failed)
+	}
 }
 
 // === Job overlap guard: each run*Job returns immediately on TryLock failure ===
