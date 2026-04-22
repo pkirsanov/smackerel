@@ -308,5 +308,72 @@ func TestChaos_MediaFlushPanic_MultipleGroups(t *testing.T) {
 	}
 }
 
-// Suppress unused import warnings.
-var _ = fmt.Sprintf
+// TestChaos_NotifyPanicRecovery verifies that a panicking notifyFn doesn't
+// block FlushAll. Before the fix, a panic in notifyFn would skip wg.Done()
+// and FlushAll would hang forever.
+func TestChaos_NotifyPanicRecovery(t *testing.T) {
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error {
+			return nil
+		},
+		func(chatID int64, count int) {
+			panic("chaos: simulated notify panic")
+		})
+
+	key := assemblyKey{chatID: 1, sourceName: "notify-panic-test"}
+	// Add two messages — second message triggers the notifyFn
+	a.Add(key, ConversationMessage{SenderName: "A", Text: "first", Timestamp: time.Now()}, ForwardedMeta{})
+	a.Add(key, ConversationMessage{SenderName: "A", Text: "second", Timestamp: time.Now()}, ForwardedMeta{})
+
+	// Give the notify goroutine time to fire and panic
+	time.Sleep(200 * time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		a.FlushAll()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// FlushAll completed — notifyFn panic was recovered
+	case <-time.After(5 * time.Second):
+		t.Fatal("FlushAll hung — panic recovery missing in notify goroutine")
+	}
+}
+
+// TestChaos_FlushSemaphoreLimits verifies that the flush semaphore prevents
+// unbounded concurrent flush goroutines under eviction pressure.
+func TestChaos_FlushSemaphoreLimits(t *testing.T) {
+	var maxConcurrent atomic.Int32
+	var current atomic.Int32
+
+	a := NewConversationAssembler(context.Background(), 60, 100,
+		func(_ context.Context, buf *ConversationBuffer) error {
+			n := current.Add(1)
+			// Track peak concurrency
+			for {
+				old := maxConcurrent.Load()
+				if n <= old || maxConcurrent.CompareAndSwap(old, n) {
+					break
+				}
+			}
+			time.Sleep(100 * time.Millisecond) // simulate slow capture API
+			current.Add(-1)
+			return nil
+		}, nil)
+
+	// Flush 30 buffers simultaneously (more than maxConcurrentFlushes=20)
+	for i := int64(0); i < 30; i++ {
+		a.Add(assemblyKey{chatID: i, sourceName: fmt.Sprintf("src-%d", i)},
+			ConversationMessage{SenderName: "User", Text: "msg", Timestamp: time.Now()},
+			ForwardedMeta{})
+	}
+
+	a.FlushAll()
+
+	peak := maxConcurrent.Load()
+	if peak > int32(maxConcurrentFlushes) {
+		t.Errorf("peak concurrent flushes %d exceeded limit %d — semaphore not working", peak, maxConcurrentFlushes)
+	}
+}

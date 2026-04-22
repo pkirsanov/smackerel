@@ -22,22 +22,25 @@ const (
 
 // LearningResource represents a single resource in a learning path.
 type LearningResource struct {
-	ArtifactID  string             `json:"artifact_id"`
-	Title       string             `json:"title"`
-	ContentType string             `json:"content_type"`
-	Position    int                `json:"position"`
-	Difficulty  LearningDifficulty `json:"difficulty"`
-	Completed   bool               `json:"completed"`
-	CompletedAt *time.Time         `json:"completed_at,omitempty"`
+	ArtifactID       string             `json:"artifact_id"`
+	Title            string             `json:"title"`
+	ContentType      string             `json:"content_type"`
+	Position         int                `json:"position"`
+	Difficulty       LearningDifficulty `json:"difficulty"`
+	EstimatedMinutes int                `json:"estimated_minutes"`
+	Completed        bool               `json:"completed"`
+	CompletedAt      *time.Time         `json:"completed_at,omitempty"`
 }
 
 // LearningPath represents an auto-assembled learning path for a topic.
 type LearningPath struct {
-	TopicID        string             `json:"topic_id"`
-	TopicName      string             `json:"topic_name"`
-	Resources      []LearningResource `json:"resources"`
-	TotalCount     int                `json:"total_count"`
-	CompletedCount int                `json:"completed_count"`
+	TopicID          string             `json:"topic_id"`
+	TopicName        string             `json:"topic_name"`
+	Resources        []LearningResource `json:"resources"`
+	TotalCount       int                `json:"total_count"`
+	CompletedCount   int                `json:"completed_count"`
+	TotalMinutes     int                `json:"total_minutes"`
+	RemainingMinutes int                `json:"remaining_minutes"`
 	Gaps           []string           `json:"gaps"`
 	GeneratedAt    time.Time          `json:"generated_at"`
 }
@@ -61,7 +64,9 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 				COALESCE(lp.position, 0) AS position,
 				COALESCE(lp.difficulty, '') AS difficulty,
 				COALESCE(lp.completed, FALSE) AS completed,
-				lp.completed_at
+				lp.completed_at,
+				COALESCE(LENGTH(a.raw_content), 0) AS content_length,
+				COALESCE(a.metadata->>'duration', '') AS duration_str
 			FROM topics t
 			JOIN edges e ON e.dst_id = t.id AND e.dst_type = 'topic' AND e.edge_type = 'BELONGS_TO'
 			JOIN artifacts a ON a.id = e.src_id AND e.src_type = 'artifact'
@@ -69,7 +74,8 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 			WHERE a.content_type IN ('article', 'youtube', 'url', 'note/text', 'pdf')
 		)
 		SELECT topic_id, topic_name, artifact_id, title, content_type,
-		       position, difficulty, completed, completed_at
+		       position, difficulty, completed, completed_at,
+		       content_length, duration_str
 		FROM topic_resources
 		WHERE topic_id IN (
 			SELECT topic_id FROM topic_resources GROUP BY topic_id HAVING COUNT(*) >= 5
@@ -88,9 +94,12 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 		var difficulty string
 		var completed bool
 		var completedAt *time.Time
+		var contentLength int
+		var durationStr string
 
 		if err := rows.Scan(&topicID, &topicName, &artifactID, &title, &contentType,
-			&position, &difficulty, &completed, &completedAt); err != nil {
+			&position, &difficulty, &completed, &completedAt,
+			&contentLength, &durationStr); err != nil {
 			slog.Warn("learning path scan failed", "error", err)
 			continue
 		}
@@ -110,20 +119,26 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 			diff = LearningDifficulty(difficulty)
 		}
 
+		estMinutes := estimateReadingTime(contentType, contentLength, durationStr)
+
 		resource := LearningResource{
-			ArtifactID:  artifactID,
-			Title:       title,
-			ContentType: contentType,
-			Position:    position,
-			Difficulty:  diff,
-			Completed:   completed,
-			CompletedAt: completedAt,
+			ArtifactID:       artifactID,
+			Title:            title,
+			ContentType:      contentType,
+			Position:         position,
+			Difficulty:       diff,
+			EstimatedMinutes: estMinutes,
+			Completed:        completed,
+			CompletedAt:      completedAt,
 		}
 
 		path.Resources = append(path.Resources, resource)
 		path.TotalCount++
+		path.TotalMinutes += estMinutes
 		if completed {
 			path.CompletedCount++
+		} else {
+			path.RemainingMinutes += estMinutes
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -182,6 +197,36 @@ func classifyDifficultyHeuristic(title, contentType string, position int) Learni
 		}
 	}
 	return DifficultyIntermediate
+}
+
+// estimateReadingTime estimates consumption time in minutes for a learning resource.
+// Articles/URLs: content length / 1000 chars per minute (~200 wpm).
+// Videos (YouTube): parse duration metadata if available.
+// Default: 10 minutes for unknown types.
+func estimateReadingTime(contentType string, contentLength int, durationStr string) int {
+	switch {
+	case strings.Contains(contentType, "youtube"):
+		if durationStr != "" {
+			// Try to parse duration in seconds
+			var seconds int
+			if _, err := fmt.Sscanf(durationStr, "%d", &seconds); err == nil && seconds > 0 {
+				return (seconds + 59) / 60 // round up to nearest minute
+			}
+		}
+		return 15 // default video estimate
+	case strings.Contains(contentType, "article"), strings.Contains(contentType, "url"), strings.Contains(contentType, "pdf"):
+		if contentLength > 0 {
+			// ~200 words per minute, ~5 chars per word = ~1000 chars per minute
+			minutes := contentLength / 1000
+			if minutes < 1 {
+				minutes = 1
+			}
+			return minutes
+		}
+		return 10 // default article estimate
+	default:
+		return 10 // default for notes and unknown types
+	}
 }
 
 // detectGaps identifies missing difficulty levels in a learning path.

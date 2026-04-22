@@ -1,0 +1,28 @@
+{
+  "version": 3,
+  "featureDir": "specs/006-phase5-advanced/bugs/BUG-001-ml-sidecar-missing-phase5-handlers",
+  "featureName": "BUG-001: ML Sidecar Missing Phase 5 NATS Handlers",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.gaps",
+    "currentPhase": "plan",
+    "currentScope": "1",
+    "runStartedAt": "2026-04-22T00:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "pending",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Implement Phase 5 NATS Handlers",
+        "status": "Done",
+        "dependsOn": []
+      }
+    ]
+  }
+}
