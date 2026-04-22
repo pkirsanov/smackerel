@@ -50,16 +50,30 @@ type Config struct {
 	MLReadinessTimeoutS int
 
 	// Optional connector path fields (SST-compliant — read from env, sourced from smackerel.yaml)
-	BookmarksImportDir        string
-	BookmarksEnabled          bool
-	BookmarksSyncSchedule     string
-	BookmarksWatchInterval    string
-	BookmarksArchiveProcessed bool
-	BookmarksProcessingTier   string
-	BookmarksMinURLLength     int
-	BookmarksExcludeDomains   string
-	BrowserHistoryPath        string
-	MapsImportDir             string
+	BookmarksImportDir                           string
+	BookmarksEnabled                             bool
+	BookmarksSyncSchedule                        string
+	BookmarksWatchInterval                       string
+	BookmarksArchiveProcessed                    bool
+	BookmarksProcessingTier                      string
+	BookmarksMinURLLength                        int
+	BookmarksExcludeDomains                      string
+	BrowserHistoryEnabled                        bool
+	BrowserHistoryPath                           string
+	BrowserHistorySyncSchedule                   string
+	BrowserHistoryAccessStrategy                 string
+	BrowserHistoryInitialLookbackDays            int
+	BrowserHistoryDwellFullMin                   string
+	BrowserHistoryDwellStandardMin               string
+	BrowserHistoryDwellLightMin                  string
+	BrowserHistoryRepeatVisitWindow              string
+	BrowserHistoryRepeatVisitThreshold           int
+	BrowserHistoryContentFetchTimeout            string
+	BrowserHistoryContentFetchConcurrency        int
+	BrowserHistoryContentFetchDomainDelay        string
+	BrowserHistoryCustomSkipDomains              string
+	BrowserHistorySocialMediaIndividualThreshold string
+	MapsImportDir                                string
 
 	// Telegram assembly config (SST-compliant — from smackerel.yaml via config generate)
 	TelegramAssemblyWindowSeconds        int
@@ -228,16 +242,30 @@ func Load() (*Config, error) {
 		MLSidecarURL:     os.Getenv("ML_SIDECAR_URL"),
 		CoreAPIURL:       os.Getenv("CORE_API_URL"),
 
-		BookmarksImportDir:        os.Getenv("BOOKMARKS_IMPORT_DIR"),
-		BookmarksEnabled:          os.Getenv("BOOKMARKS_ENABLED") == "true",
-		BookmarksSyncSchedule:     os.Getenv("BOOKMARKS_SYNC_SCHEDULE"),
-		BookmarksWatchInterval:    os.Getenv("BOOKMARKS_WATCH_INTERVAL"),
-		BookmarksArchiveProcessed: os.Getenv("BOOKMARKS_ARCHIVE_PROCESSED") == "true",
-		BookmarksProcessingTier:   os.Getenv("BOOKMARKS_PROCESSING_TIER"),
-		BookmarksMinURLLength:     parseIntEnv("BOOKMARKS_MIN_URL_LENGTH", 0),
-		BookmarksExcludeDomains:   os.Getenv("BOOKMARKS_EXCLUDE_DOMAINS"),
-		BrowserHistoryPath:        os.Getenv("BROWSER_HISTORY_PATH"),
-		MapsImportDir:             os.Getenv("MAPS_IMPORT_DIR"),
+		BookmarksImportDir:                           os.Getenv("BOOKMARKS_IMPORT_DIR"),
+		BookmarksEnabled:                             os.Getenv("BOOKMARKS_ENABLED") == "true",
+		BookmarksSyncSchedule:                        os.Getenv("BOOKMARKS_SYNC_SCHEDULE"),
+		BookmarksWatchInterval:                       os.Getenv("BOOKMARKS_WATCH_INTERVAL"),
+		BookmarksArchiveProcessed:                    os.Getenv("BOOKMARKS_ARCHIVE_PROCESSED") == "true",
+		BookmarksProcessingTier:                      os.Getenv("BOOKMARKS_PROCESSING_TIER"),
+		BookmarksMinURLLength:                        parseIntEnv("BOOKMARKS_MIN_URL_LENGTH", 0),
+		BookmarksExcludeDomains:                      os.Getenv("BOOKMARKS_EXCLUDE_DOMAINS"),
+		BrowserHistoryEnabled:                        os.Getenv("BROWSER_HISTORY_ENABLED") == "true",
+		BrowserHistoryPath:                           os.Getenv("BROWSER_HISTORY_PATH"),
+		BrowserHistorySyncSchedule:                   os.Getenv("BROWSER_HISTORY_SYNC_SCHEDULE"),
+		BrowserHistoryAccessStrategy:                 os.Getenv("BROWSER_HISTORY_ACCESS_STRATEGY"),
+		BrowserHistoryInitialLookbackDays:            parseIntEnv("BROWSER_HISTORY_INITIAL_LOOKBACK_DAYS", 0),
+		BrowserHistoryDwellFullMin:                   os.Getenv("BROWSER_HISTORY_DWELL_FULL_MIN"),
+		BrowserHistoryDwellStandardMin:               os.Getenv("BROWSER_HISTORY_DWELL_STANDARD_MIN"),
+		BrowserHistoryDwellLightMin:                  os.Getenv("BROWSER_HISTORY_DWELL_LIGHT_MIN"),
+		BrowserHistoryRepeatVisitWindow:              os.Getenv("BROWSER_HISTORY_REPEAT_VISIT_WINDOW"),
+		BrowserHistoryRepeatVisitThreshold:           parseIntEnv("BROWSER_HISTORY_REPEAT_VISIT_THRESHOLD", 0),
+		BrowserHistoryContentFetchTimeout:            os.Getenv("BROWSER_HISTORY_CONTENT_FETCH_TIMEOUT"),
+		BrowserHistoryContentFetchConcurrency:        parseIntEnv("BROWSER_HISTORY_CONTENT_FETCH_CONCURRENCY", 0),
+		BrowserHistoryContentFetchDomainDelay:        os.Getenv("BROWSER_HISTORY_CONTENT_FETCH_DOMAIN_DELAY"),
+		BrowserHistoryCustomSkipDomains:              os.Getenv("BROWSER_HISTORY_CUSTOM_SKIP_DOMAINS"),
+		BrowserHistorySocialMediaIndividualThreshold: os.Getenv("BROWSER_HISTORY_SOCIAL_MEDIA_INDIVIDUAL_THRESHOLD"),
+		MapsImportDir:                                os.Getenv("MAPS_IMPORT_DIR"),
 
 		// Connector enable/credential/schedule (SST-compliant)
 		MapsSyncSchedule:              os.Getenv("MAPS_SYNC_SCHEDULE"),

@@ -81,12 +81,21 @@
       "runStartedAt": "2026-04-21T00:00:00Z",
       "runCompletedAt": "2026-04-21T00:00:00Z",
       "summary": "Stability probe found 2 issues in CookSessionStore: (1) Stop() double-close panic risk — fixed with sync.Once; (2) StartCleanup() duplicate goroutine spawn — fixed with sync.Once. Added 2 tests. All 236 tests pass, lint clean, build OK."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-22T00:00:00Z",
+      "runCompletedAt": "2026-04-22T00:00:00Z",
+      "summary": "Simplify probe found 3 DRY/consistency improvements in recipe_commands.go and cook_session.go: (1) Extracted doAPIRequest helper from duplicated apiGet/apiPost response handling (-20 lines); (2) Table-driven parseCookNavigation consistent with existing parseScaleTrigger pattern; (3) Collapsed 4 PendingReplacement/PendingRecipeData/PendingServings/PendingRecipeName fields into single Pending *PendingCookReplacement struct — eliminates 3 multi-field clear sites. All tests pass (Go + Python 257), lint clean, format clean, build OK."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-21T00:00:00Z",
+  "lastUpdatedAt": "2026-04-22T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

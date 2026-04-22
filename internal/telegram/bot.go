@@ -247,7 +247,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		session := b.cookSessions.Get(chatID)
 		if session != nil {
 			// Handle pending replacement confirmation
-			if session.PendingReplacement != "" {
+			if session.Pending != nil {
 				if cookConfirmYesRe.MatchString(strings.TrimSpace(text)) {
 					b.handleCookReplacement(ctx, chatID, true)
 					return
