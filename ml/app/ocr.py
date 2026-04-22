@@ -175,7 +175,9 @@ async def handle_ocr_request(data: dict) -> dict:
             "error": f"image too large: {len(image_data_b64)} bytes base64 exceeds {MAX_IMAGE_SIZE_B64} limit",
         }
 
-    if not image_hash and image_data_b64:
+    # Always compute hash from actual image data when present to prevent
+    # cache poisoning via caller-controlled hash (CWE-345).
+    if image_data_b64:
         try:
             raw = base64.b64decode(image_data_b64)
         except Exception:

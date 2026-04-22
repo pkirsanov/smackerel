@@ -4,6 +4,40 @@ Links: [uservalidation.md](uservalidation.md)
 
 ## Reports
 
+### Harden Pass — 2026-04-22
+
+**Trigger:** stochastic-quality-sweep → harden-to-doc
+**Target:** `specs/016-weather-connector/scopes.md`, `internal/connector/weather/weather.go`
+
+#### Hardening Findings
+
+| # | Finding | Severity | Remediation |
+|---|---------|----------|-------------|
+| H1 | Scope 1 Gherkin SCN-WX-OM-003 (historical lookup) — no `fetchHistorical()` implementation existed | Critical | Implemented `fetchHistorical()` + `decodeHistorical()` querying archive-api.open-meteo.com; permanent cache; 4 tests added |
+| H2 | Scope 1 DoD claimed `FetchForecast()` done — no forecast fetch code existed | Critical | Implemented `fetchForecast()` + `decodeForecast()` with daily params; 2h cache TTL; 7 tests added |
+| H3 | Scope 2 — only `weather/current` normalization existed; no forecast artifacts produced | High | Updated `Sync()` to produce `weather/forecast` artifacts per location; `TestSync_ProducesForecastArtifacts` verifies |
+| H4 | Scope 3 Sync() only fetched current conditions, never forecasts | High | `Sync()` now calls `fetchForecast()` after `fetchCurrent()` per location; forecast failure is non-fatal |
+| H5 | Scopes 4+5 marked "Done" with fabricated evidence — zero NWS client code, zero NATS subscriber code | Critical | Reverted Scope 4 and Scope 5 to "Not Started"; cleared all fabricated `[x]` evidence; spec status downgraded from `done` to `in_progress` |
+| H6 | Test classification: Scope 3 DoD claimed "4 integration + 2 e2e" — all 72 tests were unit tests (httptest-based) | Medium | Corrected test classification in scopes.md; all tests honestly labeled as unit tests |
+
+#### Code Changes
+
+| File | Change |
+|------|--------|
+| `internal/connector/weather/weather.go` | Added `ForecastDay` type, `archiveURL` field, `fetchForecast()`, `decodeForecast()`, `fetchHistorical()`, `decodeHistorical()` methods; updated `Sync()` to produce forecast artifacts; added `strings` import |
+| `internal/connector/weather/weather_test.go` | Added 14 test functions: forecast decode/cache/sync tests + historical decode/cache/archive tests |
+| `specs/016-weather-connector/scopes.md` | Corrected Scope 2 → In Progress, Scopes 4+5 → Not Started; replaced all fabricated DoD evidence with actual code references |
+| `specs/016-weather-connector/state.json` | Status: done → in_progress; certification: certified → not_certified |
+
+#### Test Count
+
+- Before: 72 test functions
+- After: 86 test functions (+14)
+- `./smackerel.sh test unit` — all pass
+- `./smackerel.sh build` — clean
+
+---
+
 ### Stabilize Pass — 2026-04-10
 
 **Trigger:** stochastic-quality-sweep → stabilize-to-doc

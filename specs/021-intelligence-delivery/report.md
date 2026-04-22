@@ -451,3 +451,65 @@ All 3 scopes are fully implemented with correct behavior matching spec contracts
 |------------|---------|--------|-----------|
 | Go unit (all packages) | `./smackerel.sh test unit` | ALL PASS | 2026-04-21 |
 | Python ML sidecar | `./smackerel.sh test unit` | ALL PASS | 2026-04-21 |
+
+## Security Sweep (2026-04-22, security-to-doc stochastic R141+)
+
+### Scan Scope
+
+Full OWASP Top 10 (2021) and CWE audit of all code implementing spec 021-intelligence-delivery across 7 files:
+
+| File | Surface |
+|------|---------|
+| `internal/intelligence/alerts.go` | `CreateAlert`, `MarkAlertDelivered`, `GetPendingAlerts`, `HasStalePendingAlerts` |
+| `internal/intelligence/alert_producers.go` | `ProduceBillAlerts`, `ProduceTripPrepAlerts`, `ProduceReturnWindowAlerts`, `ProduceRelationshipCoolingAlerts`, `clampDay`, `calendarDaysBetween` |
+| `internal/intelligence/lookups.go` | `LogSearch`, `DetectFrequentLookups` |
+| `internal/intelligence/synthesis.go` | `GetLastSynthesisTime` |
+| `internal/scheduler/jobs.go` | `deliverPendingAlerts`, `FormatAlertMessage`, `runAlertDeliveryJob`, `doAlertProductionJob`, `runRelationshipCoolingJob` |
+| `internal/api/search.go` | `SearchHandler` (LogSearch wiring) |
+| `internal/api/health.go` | `HealthHandler` (intelligence freshness) |
+
+### OWASP Top 10 Audit
+
+| Category | Verdict | Evidence |
+|----------|---------|----------|
+| A01 Broken Access Control | PASS | Alert delivery is internal cron only — no external API. `SendAlertMessage` sends only to `allowedChats` whitelist. Search handler behind existing auth middleware. Health endpoint exposes status strings only — no PII or credentials. |
+| A02 Cryptographic Failures | PASS | No new cryptographic operations. `hashQuery` in LogSearch uses SHA-256 for dedup only (not security). No sensitive data in new transit paths. |
+| A03 Injection | PASS | All SQL queries parameterized (`$1`, `$2` etc.). `MAKE_INTERVAL(days => $1)` for alert age (IMP-021-R20-002). Return window regex validates date format before `::date` cast (IMP-021-R20-001). `SanitizeControlChars` on alert title/body (SEC-021-002). Search query truncated to 500 bytes in LogSearch, 10,000 bytes at HTTP level. Request body 1MB limit via `MaxBytesReader`. |
+| A04 Insecure Design | PASS | 2/day delivery cap. Poison alert dead-lettering after 7 days (SEC-021-001). Alert staleness in health. Deduplication in all producers. |
+| A05 Security Misconfiguration | PASS | No new configuration surfaces. Health endpoint exposes status strings, not config details. |
+| A06 Vulnerable Components | PASS | No new dependencies — uses existing `oklog/ulid`, `pgx`, `tgbotapi`. |
+| A07 Auth Failures | PASS | No new authentication paths. Search handler uses existing auth middleware. |
+| A08 Data Integrity Failures | PASS | JSON body decoding uses `MaxBytesReader` (1MB). No deserialization of untrusted types. No dynamic code execution. |
+| A09 Logging/Monitoring Failures | PASS | All failure paths have structured `slog` logging. Prometheus metrics for alert delivery/production. Health endpoint reports stale intelligence and stale alert delivery. |
+| A10 SSRF | PASS | No new outbound HTTP calls. Telegram uses existing bot API. No user-controlled URLs. |
+
+### CWE Deep Dive
+
+| CWE | Verdict | Evidence |
+|-----|---------|----------|
+| CWE-89 SQL Injection | PASS | All 12 queries use `$N` parameterization. Zero `fmt.Sprintf` in SQL. |
+| CWE-116 Output Encoding | PASS | `SanitizeControlChars` on title (with newline/tab collapse) and body. `FormatAlertMessage` produces plain text — no HTML/Markdown parse mode in Telegram. |
+| CWE-362 Race Conditions | PASS | Per-group mutexes: `muAlerts`, `muAlertProd`, `muRelCool`. Detached context for `MarkAlertDelivered` prevents sent-but-unmarked (C2). |
+| CWE-400 Resource Consumption | PASS | All queries LIMIT-bounded (10-20). Context timeouts on all jobs (1-5 min). `ctx.Err()` check in producer loops. LogSearch goroutine 5s timeout. |
+| CWE-476 NULL Dereference | PASS | Pool-nil guards on all 10 Engine methods. Engine-nil guard in `deliverPendingAlerts`. Bot-nil short-circuit before DB query. |
+| CWE-672 Double Use | PASS | Meeting brief creates alert as delivered immediately (SEC-021-003 + REG-021-R17-001). Detached context prevents double-delivery on context cancel (C2). |
+| CWE-770 Unbounded Allocation | PASS | `maxPendingAlertAgeDays = 7` dead-letters poison alerts. 2/day cap. Producer deduplication. Title/body length caps (200/2000). |
+
+### Prior Security Fix Verification
+
+| Fix | Status | Evidence |
+|-----|--------|----------|
+| SEC-021-001 Poison alert age limit | Intact | `maxPendingAlertAgeDays = 7` constant, `MAKE_INTERVAL(days => $1)` in `GetPendingAlerts` |
+| SEC-021-002 Control char sanitization | Intact | `SanitizeControlChars()` called in `CreateAlert` for title and body, title additionally collapses newlines/tabs |
+| SEC-021-003 Meeting brief double-delivery | Intact | `MarkAlertDelivered` called with detached context immediately after `CreateAlert` in `GeneratePreMeetingBriefs` |
+
+### Findings
+
+No new security findings. The implementation has been through 6 prior hardening/security/regression sweeps and all identified issues remain fixed with regression tests.
+
+### Full Suite Results
+
+| Test Suite | Command | Result | Timestamp |
+|------------|---------|--------|-----------|
+| Go unit (41 packages) | `./smackerel.sh test unit` | ALL PASS | 2026-04-22 |
+| Python ML sidecar (236 tests) | `./smackerel.sh test unit` | ALL PASS (12.48s) | 2026-04-22 |

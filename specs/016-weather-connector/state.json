@@ -2,8 +2,8 @@
   "version": 3,
   "featureDir": "specs/016-weather-connector",
   "featureName": "Weather Connector",
-  "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "status": "in_progress",
+  "workflowMode": "harden-to-doc",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -21,7 +21,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "not_certified",
     "completedScopes": [],
     "certifiedCompletedPhases": [
       "select",
