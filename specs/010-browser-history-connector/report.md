@@ -4,6 +4,35 @@
 
 ---
 
+## DevOps Pass (stochastic-quality-sweep, devops trigger, April 22 2026)
+
+**Trigger:** `devops` via `bubbles.workflow mode: devops-to-doc`
+**Scope:** SST config pipeline, Docker wiring, CLI surface, deployment readiness
+
+**Findings Detected:**
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| DEV-010-D1 | High | **Processing config SST pipeline broken** — 12+ config values in `smackerel.yaml` (access_strategy, dwell thresholds, repeat visit settings, content fetch settings, skip domains, social media threshold) were dead config that never reached the runtime. `config.sh` only extracted 3 values (enabled, sync_schedule, path). `config.go` only read `BROWSER_HISTORY_PATH`. `connectors.go` only passed `history_path` to SourceConfig. The connector used hardcoded defaults in `parseBrowserConfig()` instead of SST-sourced values. | Added all 12 extraction paths to `config.sh`. Added 14 new fields to `config.go` Config struct + Load function. Updated `connectors.go` to pass all values through SourceConfig. Flattened `dwell_time_thresholds` YAML nesting (was indent-8, beyond flatten_yaml's 4-level limit) to `dwell_full_min`/`dwell_standard_min`/`dwell_light_min` at indent-6. |
+| DEV-010-D2 | Medium | **Enabled flag bypass** — `connectors.go` checked `if cfg.BrowserHistoryPath != ""` but ignored `BROWSER_HISTORY_ENABLED`. A user setting `enabled: false` with a non-empty path would still have the connector start. Bookmarks connector correctly checks `cfg.BookmarksEnabled && cfg.BookmarksImportDir != ""`. | Changed condition to `cfg.BrowserHistoryEnabled && cfg.BrowserHistoryPath != ""`. |
+| DEV-010-D3 | Medium | **Sync schedule not wired** — `BROWSER_HISTORY_SYNC_SCHEDULE` was generated from SST but never consumed by `config.go` or passed to `ConnectorConfig.SyncSchedule` in `connectors.go`. | Added `BrowserHistorySyncSchedule` field to config.go, passed as `SyncSchedule` in `connectors.go` ConnectorConfig. |
+
+**Files modified:**
+- `config/smackerel.yaml` — Flattened `dwell_time_thresholds` nesting to fit SST pipeline depth limit
+- `scripts/commands/config.sh` — Added 12 extraction paths + 12 env file output lines for browser-history processing config
+- `internal/config/config.go` — Added 14 new Config struct fields + Load function mappings for browser-history
+- `cmd/core/connectors.go` — Added `BrowserHistoryEnabled` guard, `SyncSchedule` wiring, full SourceConfig passthrough
+
+**Verification:**
+```
+$ ./smackerel.sh config generate — all 15 BROWSER_HISTORY_* vars in dev.env and test.env
+$ ./smackerel.sh build — exit 0 (core + ml images)
+$ ./smackerel.sh test unit — all 41 Go packages pass, 257 Python tests pass
+$ ./smackerel.sh check — "Config is in sync with SST", "env_file drift guard: OK"
+$ ./smackerel.sh lint — "All checks passed!"
+```
+
+---
+
 ## Simplify Pass R93 (stochastic-quality-sweep, simplify trigger, April 22 2026)
 
 **Trigger:** `simplify` via `bubbles.workflow mode: simplify-to-doc`

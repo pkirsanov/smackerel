@@ -7,6 +7,14 @@ import (
 	"github.com/smackerel/smackerel/internal/recipe"
 )
 
+// PendingCookReplacement holds state for a session replacement prompt.
+type PendingCookReplacement struct {
+	ArtifactID string
+	RecipeData *recipe.RecipeData
+	Servings   int
+	RecipeName string
+}
+
 // CookSession holds the state of an active cook-mode walkthrough.
 type CookSession struct {
 	RecipeArtifactID string
@@ -22,10 +30,7 @@ type CookSession struct {
 	LastInteraction  time.Time
 
 	// Pending replacement state (Scope 06)
-	PendingReplacement string // artifact ID of pending new recipe
-	PendingRecipeData  *recipe.RecipeData
-	PendingServings    int
-	PendingRecipeName  string
+	Pending *PendingCookReplacement
 }
 
 // CookDisambiguationOption is a single recipe candidate for disambiguation.

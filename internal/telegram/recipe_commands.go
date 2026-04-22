@@ -84,22 +84,26 @@ func parseCookTrigger(text string) (string, int, bool) {
 	return "", 0, false
 }
 
+// navPatterns maps cook navigation regexes to their action names.
+var navPatterns = []struct {
+	re     *regexp.Regexp
+	action string
+}{
+	{cookNavNextRe, "next"},
+	{cookNavBackRe, "back"},
+	{cookNavIngrRe, "ingredients"},
+	{cookNavDoneRe, "done"},
+}
+
 // parseCookNavigation checks if text is a cook navigation command.
 // Returns the command type: "next", "back", "ingredients", "done", "jump:{N}", or "".
 func parseCookNavigation(text string) string {
 	text = strings.TrimSpace(text)
 
-	if cookNavNextRe.MatchString(text) {
-		return "next"
-	}
-	if cookNavBackRe.MatchString(text) {
-		return "back"
-	}
-	if cookNavIngrRe.MatchString(text) {
-		return "ingredients"
-	}
-	if cookNavDoneRe.MatchString(text) {
-		return "done"
+	for _, np := range navPatterns {
+		if np.re.MatchString(text) {
+			return np.action
+		}
 	}
 	if m := cookNavJumpRe.FindStringSubmatch(text); len(m) >= 2 {
 		return "jump:" + m[1]
@@ -208,9 +212,9 @@ func (b *Bot) handleCookEntry(ctx context.Context, chatID int64, recipeName stri
 	}
 
 	// Check for pending replacement confirmation
-	if session := b.cookSessions.Get(chatID); session != nil && session.PendingReplacement != "" {
+	if session := b.cookSessions.Get(chatID); session != nil && session.Pending != nil {
 		// Already in replacement flow — this is a new cook command, treat as a new replacement
-		session.PendingReplacement = ""
+		session.Pending = nil
 	}
 
 	var rd *recipe.RecipeData
@@ -264,10 +268,12 @@ func (b *Bot) handleCookEntry(ctx context.Context, chatID int64, recipeName stri
 
 	// Check for existing session — prompt replacement
 	if existing := b.cookSessions.Get(chatID); existing != nil {
-		existing.PendingReplacement = artifactID
-		existing.PendingRecipeData = rd
-		existing.PendingServings = servings
-		existing.PendingRecipeName = rd.Title
+		existing.Pending = &PendingCookReplacement{
+			ArtifactID: artifactID,
+			RecipeData: rd,
+			Servings:   servings,
+			RecipeName: rd.Title,
+		}
 		b.reply(chatID, fmt.Sprintf("? You're cooking %s (step %d of %d). Switch to %s?\n\nReply: yes · no",
 			existing.RecipeTitle, existing.CurrentStep, existing.TotalSteps, rd.Title))
 		return
@@ -347,12 +353,9 @@ func (b *Bot) handleCookNavigation(ctx context.Context, chatID int64, nav string
 	}
 
 	// Handle pending replacement confirmation
-	if session.PendingReplacement != "" {
+	if session.Pending != nil {
 		// Not a yes/no answer — clear pending and process as normal navigation
-		session.PendingReplacement = ""
-		session.PendingRecipeData = nil
-		session.PendingServings = 0
-		session.PendingRecipeName = ""
+		session.Pending = nil
 	}
 
 	// Touch the session
@@ -397,24 +400,19 @@ func (b *Bot) handleCookNavigation(ctx context.Context, chatID int64, nav string
 // handleCookReplacement handles yes/no response to session replacement prompt.
 func (b *Bot) handleCookReplacement(ctx context.Context, chatID int64, confirm bool) {
 	session := b.cookSessions.Get(chatID)
-	if session == nil || session.PendingReplacement == "" {
+	if session == nil || session.Pending == nil {
 		return
 	}
 
 	if confirm {
-		rd := session.PendingRecipeData
-		artifactID := session.PendingReplacement
-		servings := session.PendingServings
+		p := session.Pending
 		b.cookSessions.Delete(chatID)
-		b.startCookSession(chatID, rd, artifactID, servings)
+		b.startCookSession(chatID, p.RecipeData, p.ArtifactID, p.Servings)
 	} else {
 		title := session.RecipeTitle
 		step := session.CurrentStep
 		total := session.TotalSteps
-		session.PendingReplacement = ""
-		session.PendingRecipeData = nil
-		session.PendingServings = 0
-		session.PendingRecipeName = ""
+		session.Pending = nil
 		b.reply(chatID, fmt.Sprintf("> Continuing with %s. You're on step %d of %d.", title, step, total))
 	}
 }
@@ -504,20 +502,15 @@ func (b *Bot) SearchRecipesByName(ctx context.Context, name string) ([]recipeMat
 	return matches, nil
 }
 
-// apiGet performs an authenticated GET request to the core API.
-func (b *Bot) apiGet(ctx context.Context, path string) ([]byte, error) {
-	url := b.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
+// doAPIRequest executes an HTTP request with auth and standard response handling.
+func (b *Bot) doAPIRequest(req *http.Request) ([]byte, error) {
 	if b.authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+b.authToken)
 	}
 
 	resp, err := b.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("API GET %s: %w", path, err)
+		return nil, fmt.Errorf("API %s %s: %w", req.Method, req.URL.Path, err)
 	}
 	defer resp.Body.Close()
 
@@ -526,9 +519,18 @@ func (b *Bot) apiGet(ctx context.Context, path string) ([]byte, error) {
 		return nil, fmt.Errorf("read API response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API GET %s returned %d", path, resp.StatusCode)
+		return nil, fmt.Errorf("API %s %s returned %d", req.Method, req.URL.Path, resp.StatusCode)
 	}
 	return body, nil
+}
+
+// apiGet performs an authenticated GET request to the core API.
+func (b *Bot) apiGet(ctx context.Context, path string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.baseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return b.doAPIRequest(req)
 }
 
 // apiPost performs an authenticated POST request to the core API.
@@ -537,28 +539,10 @@ func (b *Bot) apiPost(ctx context.Context, path string, payload interface{}) ([]
 	if err != nil {
 		return nil, err
 	}
-	url := b.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.baseURL+path, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
-	}
-
-	resp, err := b.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("API POST %s: %w", path, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1MB limit
-	if err != nil {
-		return nil, fmt.Errorf("read API response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API POST %s returned %d", path, resp.StatusCode)
-	}
-	return body, nil
+	return b.doAPIRequest(req)
 }

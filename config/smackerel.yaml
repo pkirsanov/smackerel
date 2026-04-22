@@ -54,54 +54,54 @@ expenses:
 
   # Expense categories available for classification.
   categories:
-    - slug: "food-and-drink"
-      display: "Food & Drink"
-      tax_category: "Meals"
-    - slug: "transportation"
-      display: "Transportation"
-      tax_category: "Car and Truck Expenses"
-    - slug: "office-supplies"
-      display: "Office Supplies"
-      tax_category: "Office Expenses"
-    - slug: "technology"
-      display: "Technology"
-      tax_category: "Other Expenses"
-    - slug: "travel"
-      display: "Travel"
-      tax_category: "Travel"
-    - slug: "utilities"
-      display: "Utilities"
-      tax_category: "Utilities"
-    - slug: "home-improvement"
-      display: "Home Improvement"
-      tax_category: "Repairs and Maintenance"
-    - slug: "auto-and-transport"
-      display: "Auto & Transport"
-      tax_category: "Car and Truck Expenses"
-    - slug: "subscriptions"
-      display: "Subscriptions"
-      tax_category: "Other Expenses"
-    - slug: "professional-services"
-      display: "Professional Services"
-      tax_category: "Legal and Professional Services"
-    - slug: "insurance"
-      display: "Insurance"
-      tax_category: "Insurance"
-    - slug: "advertising"
-      display: "Advertising"
-      tax_category: "Advertising"
-    - slug: "education"
-      display: "Education"
-      tax_category: "Other Expenses"
-    - slug: "health"
-      display: "Health"
-      tax_category: "Other Expenses"
-    - slug: "entertainment"
-      display: "Entertainment"
-      tax_category: "Other Expenses"
-    - slug: "other"
-      display: "Other"
-      tax_category: "Other Expenses"
+  - slug: "food-and-drink"
+    display: "Food & Drink"
+    tax_category: "Meals"
+  - slug: "transportation"
+    display: "Transportation"
+    tax_category: "Car and Truck Expenses"
+  - slug: "office-supplies"
+    display: "Office Supplies"
+    tax_category: "Office Expenses"
+  - slug: "technology"
+    display: "Technology"
+    tax_category: "Other Expenses"
+  - slug: "travel"
+    display: "Travel"
+    tax_category: "Travel"
+  - slug: "utilities"
+    display: "Utilities"
+    tax_category: "Utilities"
+  - slug: "home-improvement"
+    display: "Home Improvement"
+    tax_category: "Repairs and Maintenance"
+  - slug: "auto-and-transport"
+    display: "Auto & Transport"
+    tax_category: "Car and Truck Expenses"
+  - slug: "subscriptions"
+    display: "Subscriptions"
+    tax_category: "Other Expenses"
+  - slug: "professional-services"
+    display: "Professional Services"
+    tax_category: "Legal and Professional Services"
+  - slug: "insurance"
+    display: "Insurance"
+    tax_category: "Insurance"
+  - slug: "advertising"
+    display: "Advertising"
+    tax_category: "Advertising"
+  - slug: "education"
+    display: "Education"
+    tax_category: "Other Expenses"
+  - slug: "health"
+    display: "Health"
+    tax_category: "Other Expenses"
+  - slug: "entertainment"
+    display: "Entertainment"
+    tax_category: "Other Expenses"
+  - slug: "other"
+    display: "Other"
+    tax_category: "Other Expenses"
 
   # Vendors that are always classified as business.
   business_vendors: []
@@ -133,9 +133,9 @@ annotations:
   history_default_limit: 50
   history_max_limit: 100
   relevance_boost:
-    rating_max: 0.05       # max boost for rating 5
-    usage_max: 0.03        # max boost capped at 10 uses
-    usage_cap: 10          # number of uses for full usage boost
+    rating_max: 0.05 # max boost for rating 5
+    usage_max: 0.03 # max boost capped at 10 uses
+    usage_cap: 10 # number of uses for full usage boost
 
 connectors:
   imap:
@@ -185,10 +185,9 @@ connectors:
 
     processing:
       initial_lookback_days: 30
-      dwell_time_thresholds:
-        full_min: "5m"
-        standard_min: "2m"
-        light_min: "30s"
+      dwell_full_min: "5m"
+      dwell_standard_min: "2m"
+      dwell_light_min: "30s"
       repeat_visit_window: "7d"
       repeat_visit_threshold: 3
       content_fetch_timeout: "15s"
@@ -350,7 +349,7 @@ knowledge:
 meal_planning:
   enabled: true
   default_servings: 2
-  meal_types: ["breakfast", "lunch", "dinner", "snack"]
+  meal_types: [ "breakfast", "lunch", "dinner", "snack" ]
   meal_times:
     breakfast: "08:00"
     lunch: "12:00"

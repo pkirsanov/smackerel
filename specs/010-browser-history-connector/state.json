@@ -10,7 +10,7 @@
     "currentScope": null,
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedScopes": [],
-    "completedPhaseClaims": ["analyze", "bootstrap", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review"],
+    "completedPhaseClaims": ["analyze", "bootstrap", "plan", "implement", "test", "regression", "simplify", "gaps", "harden", "stabilize", "security", "validate", "audit", "chaos", "docs", "spec-review", "devops"],
     "pendingTransitionRequests": []
   },
   "executionHistory": [
@@ -247,6 +247,15 @@
       "startedAt": "2026-04-22T01:00:00Z",
       "completedAt": "2026-04-22T01:15:00Z",
       "summary": "Stochastic quality sweep R93 simplify-to-doc trigger. 3 low-severity findings: S-010-S1 added setHealth() helper matching maps/discord/guesthost pattern, replaced 3 inline lock/unlock sites in Connect/Close. S-010-S2 removed stale ParseChromeHistory comment reference. S-010-S3 removed redundant contains() test helper, replaced 8 call sites with strings.Contains. Reviewed but left as-is: parseDurationWithDays (premature to promote), DwellTimeTier dual-path (intentional), extractDomain (not worth sharing), processEntries complexity (justified), config parsing verbosity (idiomatic Go). All 77 tests pass. Lint clean."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["devops", "implement", "test", "docs"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-22T16:00:00Z",
+      "completedAt": "2026-04-22T16:30:00Z",
+      "summary": "Stochastic quality sweep devops-to-doc trigger. Found and fixed 3 DevOps findings: DEV-010-D1 (High) 12+ processing config values in smackerel.yaml were dead config — SST pipeline only extracted 3 of 15 browser-history values. Added all extraction paths to config.sh, config.go, connectors.go. Flattened dwell_time_thresholds YAML nesting for flatten_yaml compatibility. DEV-010-D2 (Medium) Enabled flag bypass — connector started without checking BROWSER_HISTORY_ENABLED. Fixed guard to match bookmarks pattern. DEV-010-D3 (Medium) Sync schedule not wired — added BrowserHistorySyncSchedule field and passthrough. All 15 BROWSER_HISTORY_* env vars now flow from SST. Build passes, all 41 Go + 257 Python tests pass, check + lint clean."
     }
   ],
   "policySnapshot": {
@@ -260,7 +269,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-22T01:15:00Z",
+  "lastUpdatedAt": "2026-04-22T16:30:00Z",
   "certification": {
     "status": "in_progress",
     "completedScopes": ["1", "2"],
