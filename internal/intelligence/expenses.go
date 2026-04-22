@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 
@@ -13,6 +14,13 @@ import (
 
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/domain"
+)
+
+const (
+	// suggestionLookbackDays limits suggestion generation to recent uncategorized expenses.
+	suggestionLookbackDays = 30
+	// suggestionCandidateLimit caps the number of candidates evaluated per run.
+	suggestionCandidateLimit = 100
 )
 
 // ExpenseClassifier implements the 7-level rule priority chain for expense
@@ -61,12 +69,14 @@ func (ec *ExpenseClassifier) Classify(expense *domain.ExpenseMetadata) string {
 	}
 
 	// Rule 3: Telegram caption context — "business" or "personal" keyword
+	// Uses word-boundary matching to avoid false positives on substrings
+	// like "unprofessional" matching "personal".
 	if expense.Notes != nil {
 		notesLower := strings.ToLower(*expense.Notes)
-		if strings.Contains(notesLower, "business") {
+		if containsWord(notesLower, "business") {
 			return "business"
 		}
-		if strings.Contains(notesLower, "personal") {
+		if containsWord(notesLower, "personal") {
 			return "personal"
 		}
 	}
@@ -81,6 +91,35 @@ func (ec *ExpenseClassifier) Classify(expense *domain.ExpenseMetadata) string {
 	// Rules 5-6 are suggestion-only and handled by GenerateSuggestions.
 	// Rule 7: No match — uncategorized
 	return "uncategorized"
+}
+
+// containsWord returns true if text contains word as a whole word
+// (not as a substring of a larger word). Both text and word must be
+// the same case (caller lowercases both).
+func containsWord(text, word string) bool {
+	idx := 0
+	for {
+		pos := strings.Index(text[idx:], word)
+		if pos < 0 {
+			return false
+		}
+		start := idx + pos
+		end := start + len(word)
+		atStart := start == 0 || !isWordChar(text[start-1])
+		atEnd := end >= len(text) || !isWordChar(text[end])
+		if atStart && atEnd {
+			return true
+		}
+		idx = start + 1
+		if idx >= len(text) {
+			return false
+		}
+	}
+}
+
+// isWordChar returns true for ASCII letters, digits, and underscore.
+func isWordChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
 }
 
 // NormalizeVendor resolves a raw vendor name to its canonical form.
@@ -132,19 +171,19 @@ func (ec *ExpenseClassifier) GenerateSuggestions(ctx context.Context) (int, erro
 		return 0, fmt.Errorf("database pool is nil")
 	}
 
-	// Find uncategorized expenses from the last 30 days
-	rows, err := ec.Pool.Query(ctx, `
+	// Find uncategorized expenses from the recent lookback window
+	rows, err := ec.Pool.Query(ctx, fmt.Sprintf(`
 		SELECT a.id, metadata->'expense'->>'vendor' AS vendor
 		FROM artifacts a
 		WHERE metadata ? 'expense'
 		AND metadata->'expense'->>'classification' = 'uncategorized'
-		AND a.created_at > NOW() - INTERVAL '30 days'
+		AND a.created_at > NOW() - INTERVAL '%d days'
 		AND NOT EXISTS (
 			SELECT 1 FROM expense_suggestions s
 			WHERE s.artifact_id = a.id AND s.status = 'pending'
 		)
-		LIMIT 100
-	`)
+		LIMIT %d
+	`, suggestionLookbackDays, suggestionCandidateLimit))
 	if err != nil {
 		return 0, fmt.Errorf("query uncategorized expenses: %w", err)
 	}
@@ -252,18 +291,21 @@ func (ec *ExpenseClassifier) CategoryDisplayName(slug string) string {
 // VendorNormalizer resolves raw vendor names to canonical forms using an
 // LRU cache backed by the vendor_aliases database table.
 type VendorNormalizer struct {
-	pool    *pgxpool.Pool
-	mu      sync.RWMutex
-	cache   map[string]string
-	maxSize int
+	pool      *pgxpool.Pool
+	mu        sync.RWMutex
+	cache     map[string]string
+	accessSeq map[string]int64 // monotonic access counter per key for LRU ordering
+	seqCtr    int64            // monotonic counter incremented on every access/put
+	maxSize   int
 }
 
 // NewVendorNormalizer creates a VendorNormalizer with the given cache capacity.
 func NewVendorNormalizer(pool *pgxpool.Pool, maxSize int) *VendorNormalizer {
 	return &VendorNormalizer{
-		pool:    pool,
-		cache:   make(map[string]string, maxSize),
-		maxSize: maxSize,
+		pool:      pool,
+		cache:     make(map[string]string, maxSize),
+		accessSeq: make(map[string]int64, maxSize),
+		maxSize:   maxSize,
 	}
 }
 
@@ -276,6 +318,11 @@ func (n *VendorNormalizer) Normalize(ctx context.Context, vendorRaw string) (str
 	n.mu.RLock()
 	if canonical, ok := n.cache[key]; ok {
 		n.mu.RUnlock()
+		// Promote access for LRU ordering
+		n.mu.Lock()
+		n.seqCtr++
+		n.accessSeq[key] = n.seqCtr
+		n.mu.Unlock()
 		if canonical == "" {
 			return "", false // cached negative result
 		}
@@ -321,8 +368,10 @@ func (n *VendorNormalizer) Normalize(ctx context.Context, vendorRaw string) (str
 
 // Invalidate removes a cached entry.
 func (n *VendorNormalizer) Invalidate(vendorRaw string) {
+	key := strings.ToLower(vendorRaw)
 	n.mu.Lock()
-	delete(n.cache, strings.ToLower(vendorRaw))
+	delete(n.cache, key)
+	delete(n.accessSeq, key)
 	n.mu.Unlock()
 }
 
@@ -330,15 +379,23 @@ func (n *VendorNormalizer) put(key, value string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if len(n.cache) >= n.maxSize {
-		// Simple eviction: clear half the cache
-		i := 0
-		for k := range n.cache {
-			if i >= n.maxSize/2 {
-				break
-			}
-			delete(n.cache, k)
-			i++
+		// LRU eviction: sort by access sequence and evict oldest half
+		type entry struct {
+			key string
+			seq int64
+		}
+		entries := make([]entry, 0, len(n.accessSeq))
+		for k, seq := range n.accessSeq {
+			entries = append(entries, entry{k, seq})
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].seq < entries[j].seq })
+		evictCount := n.maxSize / 2
+		for i := 0; i < evictCount && i < len(entries); i++ {
+			delete(n.cache, entries[i].key)
+			delete(n.accessSeq, entries[i].key)
 		}
 	}
+	n.seqCtr++
 	n.cache[key] = value
+	n.accessSeq[key] = n.seqCtr
 }
