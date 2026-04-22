@@ -268,6 +268,48 @@ class TestOllamaURLValidation:
 
 
 # ---------------------------------------------------------------------------
+# Cache poisoning prevention (SEC-F001)
+# ---------------------------------------------------------------------------
+
+
+class TestCachePoisoningPrevention:
+    """Verify caller-provided hash is overridden by computed hash (CWE-345)."""
+
+    def test_caller_hash_ignored_when_image_data_present(self):
+        """When image_data is provided, the hash is always computed from the data,
+        ignoring any caller-supplied image_hash. Prevents cache poisoning."""
+        image_bytes = b"real image content"
+        computed_hash = hashlib.sha256(image_bytes).hexdigest()
+        b64_data = base64.b64encode(image_bytes).decode()
+        fake_hash = "attacker-controlled-hash-value"
+
+        with patch("app.ocr.extract_text_tesseract", return_value="extracted text from image"):
+            result = asyncio.run(
+                handle_ocr_request({"image_hash": fake_hash, "image_data": b64_data})
+            )
+
+        assert result["image_hash"] == computed_hash
+        assert result["image_hash"] != fake_hash
+        assert result["status"] == "ok"
+
+    def test_cache_keyed_by_computed_hash_not_caller_hash(self):
+        """Cached result must be stored under the computed hash, not the caller's."""
+        image_bytes = b"cache key test image"
+        computed_hash = hashlib.sha256(image_bytes).hexdigest()
+        b64_data = base64.b64encode(image_bytes).decode()
+        fake_hash = "should-not-be-cache-key"
+
+        with patch("app.ocr.extract_text_tesseract", return_value="OCR result text here"):
+            asyncio.run(
+                handle_ocr_request({"image_hash": fake_hash, "image_data": b64_data})
+            )
+
+        # The result should be cached under the computed hash
+        assert computed_hash in _ocr_cache
+        assert fake_hash not in _ocr_cache
+
+
+# ---------------------------------------------------------------------------
 # Constants sanity checks
 # ---------------------------------------------------------------------------
 
