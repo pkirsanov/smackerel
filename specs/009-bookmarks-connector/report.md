@@ -593,3 +593,71 @@ Config is in sync with SST
 $ ./smackerel.sh lint
 All checks passed
 ```
+
+### Gaps Quality Sweep R2 (Stochastic Quality Sweep)
+
+**Date:** 2026-04-22
+**Trigger:** gaps
+**Mode:** gaps-to-doc
+
+#### Pre-Sweep Assessment
+
+- **Prior gaps sweep (2026-04-20):** Fixed GAP-001 (bookmark_url metadata) and GAP-002 (added_at metadata). Deferred GAP-003 (duplicate URL metadata update) and GAP-004 (runtime health enrichment) as design-level concerns.
+- **This sweep revisits deferred GAP-004** and audits for any remaining spec-vs-implementation gaps after all prior sweeps.
+- **Methodology:** Systematic comparison of spec.md R-001 through R-013, design.md contracts, and current implementation code.
+
+#### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| GAP-R2-001 | Health Observability (R-012) | Medium | `Health()` returns cached `HealthStatus` without re-validating the import directory. If the directory is removed or becomes inaccessible after `Connect()`, health incorrectly reports `HealthHealthy`. R-012 explicitly requires "Whether the import directory exists and is readable" in health checks. Previously deferred as interface constraint, but can be addressed within the `HealthStatus` return — downgrade to `HealthError` when dir is missing. | Fixed |
+| GAP-R2-002 | Health Observability (R-012) | Low | `pendingFiles` field described in design.md struct definition but never added to the `BookmarksConnector` struct or populated. R-012 requires "Number of unprocessed files waiting in the import directory" as a health metric. While the `HealthStatus` interface can't expose the count, the field should exist for internal use and future health extensions. | Fixed |
+| GAP-R2-003 | Metadata Completeness (R-006) | Low | R-006 requires `content_fetched` metadata field on each artifact. Prior sweep set `bookmark_url` and `added_at` but not `content_fetched`. The connector produces raw artifacts before pipeline fetch, so initial value should be `false`. Pipeline sets `true` after successful content retrieval. | Fixed |
+
+#### Fixes Applied
+
+**GAP-R2-001 — Active Import Directory Health Check** (`internal/connector/bookmarks/connector.go`):
+- Modified `Health()` to perform `os.Stat()` on the configured import directory when status is `healthy` or `syncing`
+- Returns `HealthError` if the directory no longer exists or is inaccessible
+- Only runs when `importDir` is non-empty (avoids check before `Connect()`)
+- Reads `importDir` from struct under `RLock` to maintain concurrency safety
+- Does NOT change cached health state — only affects the returned value, preserving the Sync→health transition logic
+
+**GAP-R2-002 — Add and Populate `pendingFiles` Field** (`internal/connector/bookmarks/connector.go`):
+- Added `pendingFiles int` field to `BookmarksConnector` struct
+- Populated in `findNewFiles()` after scanning the import directory: `c.pendingFiles = len(newFiles)` under lock
+- Records the discovery-time count (how many files were found before processing)
+- Available for future health extensions or diagnostic endpoints
+
+**GAP-R2-003 — Set Initial `content_fetched` Metadata** (`internal/connector/bookmarks/connector.go`):
+- Added `artifacts[i].Metadata["content_fetched"] = false` in the `processFile()` enrichment loop
+- Placed after `bookmark_url` metadata and before `added_at` for logical grouping
+- Pipeline processors update to `true` after successful content fetch
+
+#### Tests Added (5 tests)
+
+| Test | File | Finding | Assertion | Would Fail Without Fix |
+|------|------|---------|-----------|----------------------|
+| `TestHealthDetectsRemovedImportDir` | connector_test.go | GAP-R2-001 | Connect with valid dir → healthy → remove dir → Health() returns `HealthError` | Yes — returns `HealthHealthy` with missing dir |
+| `TestHealthStaysHealthyWithValidDir` | connector_test.go | GAP-R2-001 | Multiple Health() calls with valid dir → all return `HealthHealthy` | Guards against false negatives |
+| `TestPendingFilesTracked` | connector_test.go | GAP-R2-002 | Before sync: pendingFiles=0 → after sync with 2 files: pendingFiles=2 | Yes — field never populated |
+| `TestContentFetchedMetadata` | connector_test.go | GAP-R2-003 | All artifacts have `content_fetched: false` metadata after sync | Yes — field not set |
+| `TestHealthDisconnectedBeforeConnect` | connector_test.go | GAP-R2-001 | Health() before Connect() returns `HealthDisconnected` (not affected by dir check) | Guards pre-connect behavior |
+
+#### Deferred Findings (Carried Forward)
+
+**GAP-003 (duplicate URL metadata update):** Deferred per prior sweep rationale. Requires DB update path not currently in connector architecture. Tracked as known limitation for multi-browser metadata merge.
+
+#### Verification Evidence
+
+```
+$ ./smackerel.sh test unit (2026-04-22)
+ok  github.com/smackerel/smackerel/internal/connector/bookmarks  0.070s
+All Go packages pass, 257 Python tests pass, 0 regressions
+
+$ ./smackerel.sh check
+Config is in sync with SST
+
+$ ./smackerel.sh lint
+All checks passed
+```

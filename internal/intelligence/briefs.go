@@ -71,6 +71,8 @@ func (e *Engine) collectOverdueItems(ctx context.Context) ([]overdueItem, error)
 		      AND al.alert_type = 'commitment_overdue'
 		      AND al.status IN ('pending', 'delivered')
 		  )
+		ORDER BY ai.expected_date ASC
+		LIMIT 50
 	`)
 	if err != nil {
 		return nil, err
@@ -119,18 +121,21 @@ func (e *Engine) GeneratePreMeetingBriefs(ctx context.Context) ([]MeetingBrief, 
 		return nil, fmt.Errorf("pre-meeting briefs require a database connection")
 	}
 
-	// 1. Find calendar events starting in 25-35 minutes
+	// 1. Find calendar events starting in 25-35 minutes.
+	// Use metadata->>'dtstart' for the actual event start time, not created_at
+	// which reflects artifact ingestion time (IMP-004-F1).
 	rows, err := e.Pool.Query(ctx, `
-		SELECT a.id, a.title, a.created_at,
+		SELECT a.id, a.title, (a.metadata->>'dtstart')::timestamptz,
 		       COALESCE(a.metadata->>'attendees', '[]') AS attendees
 		FROM artifacts a
 		WHERE a.source_id IN ('caldav', 'google-calendar', 'outlook-calendar')
-		  AND a.created_at BETWEEN NOW() + INTERVAL '25 minutes' AND NOW() + INTERVAL '35 minutes'
+		  AND a.metadata->>'dtstart' IS NOT NULL
+		  AND (a.metadata->>'dtstart')::timestamptz BETWEEN NOW() + INTERVAL '25 minutes' AND NOW() + INTERVAL '35 minutes'
 		  AND NOT EXISTS (
 			SELECT 1 FROM alerts al
 			WHERE al.alert_type = 'meeting_brief' AND al.artifact_id = a.id
 		  )
-		ORDER BY a.created_at ASC
+		ORDER BY (a.metadata->>'dtstart')::timestamptz ASC
 		LIMIT 5
 	`)
 	if err != nil {
@@ -140,6 +145,11 @@ func (e *Engine) GeneratePreMeetingBriefs(ctx context.Context) ([]MeetingBrief, 
 
 	var briefs []MeetingBrief
 	for rows.Next() {
+		// Check context between meetings to abort early on cancellation (IMP-004-F3).
+		if ctx.Err() != nil {
+			return briefs, ctx.Err()
+		}
+
 		var eventID, title, attendeesJSON string
 		var startsAt time.Time
 		if err := rows.Scan(&eventID, &title, &startsAt, &attendeesJSON); err != nil {
