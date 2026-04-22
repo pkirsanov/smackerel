@@ -188,3 +188,34 @@ Spec 031 establishes live-stack integration and E2E testing infrastructure: Dock
 - Build: `./smackerel.sh build` — PASS (core and ML images built)
 - Unit tests: `./smackerel.sh test unit` — all 41 Go packages PASS, 236 Python tests PASS
 - Integration test compilation: verified clean (tagged `integration`, requires live stack)
+
+---
+
+## Chaos-Hardening Pass R3 (April 22, 2026)
+
+**Trigger:** Stochastic quality sweep R12/R125 repeat — chaos-hardening (child workflow)
+**Scope:** New edge cases beyond R1 (CHAOS-031-001..004) and R2 (CHAOS-031-005..009)
+
+### Findings and Remediations
+
+| ID | Finding | Severity | File(s) | Fix |
+|----|---------|----------|---------|-----|
+| CHAOS-031-010 | Vector embedding dimension mismatch never tested. The `embedding` column is `vector(384)`. If application code passes a 768-dim or 128-dim embedding (e.g., after switching LLM model or a serialization bug), pgvector should reject the INSERT. Without a test, a regression that removes the dimension constraint would silently accept wrong-dimension embeddings, corrupting all cosine distance calculations. | HIGH | `tests/integration/artifact_crud_test.go` | Added `TestArtifact_Chaos_EmbeddingDimensionMismatch`: attempts INSERT with 768-dim (oversized) and 128-dim (undersized) embeddings into `vector(384)` column. Both must be rejected by pgvector. Verifies the constraint is enforced at the database level. |
+| CHAOS-031-011 | Annotation rating upper boundary (rating=6) never tested. The `chk_rating_range` constraint is `rating >= 1 AND rating <= 5`. The existing test only checks `rating=0` (lower boundary). Upper boundary, negative values, and extreme values were untested — a schema migration widening the constraint or a direct SQL mutation could accept invalid ratings undetected. | MEDIUM | `tests/integration/artifact_crud_test.go` | Added `TestAnnotation_Chaos_RatingBoundary`: tests invalid values (6, 100, -1, 0) are all rejected by `chk_rating_range`, and valid boundary values (1, 3, 5) are accepted. Validates both sides of the constraint. |
+| CHAOS-031-012 | Concurrent `REFRESH MATERIALIZED VIEW CONCURRENTLY artifact_annotation_summary` never tested. In production, multiple scheduler ticks or API handlers could trigger refresh simultaneously. PostgreSQL takes a `ShareUpdateExclusiveLock` for `CONCURRENTLY` refreshes — concurrent calls block each other. Under heavy annotation load, this could cascade into context timeouts. | MEDIUM | `tests/integration/artifact_crud_test.go` | Added `TestAnnotation_Chaos_ConcurrentMaterializedViewRefresh`: 5 concurrent goroutines call `REFRESH MATERIALIZED VIEW CONCURRENTLY`. Verifies all complete without errors (blocking is expected, errors or deadlocks are not). |
+| CHAOS-031-013 | NATS publish to unmapped subject silently succeeds or fails inconsistently. If application code typos a subject (e.g., `artifact.process` instead of `artifacts.process`), the message is silently lost unless JetStream returns an error. No test validated that no-stream-match publishes fail visibly. | MEDIUM | `tests/integration/nats_stream_test.go` | Added `TestNATS_Chaos_PublishToUnmappedSubject`: publishes to typo'd and non-existent subjects. Verifies JetStream rejects them (returns error), preventing silent message loss. |
+
+### New Tests
+
+| Test | File | Purpose |
+|------|------|---------|
+| `TestArtifact_Chaos_EmbeddingDimensionMismatch` | `tests/integration/artifact_crud_test.go` | Wrong-dimension vectors rejected by `vector(384)` column |
+| `TestAnnotation_Chaos_RatingBoundary` | `tests/integration/artifact_crud_test.go` | Full boundary testing for `chk_rating_range` constraint (1-5) |
+| `TestAnnotation_Chaos_ConcurrentMaterializedViewRefresh` | `tests/integration/artifact_crud_test.go` | Concurrent matview refresh doesn't deadlock or error |
+| `TestNATS_Chaos_PublishToUnmappedSubject` | `tests/integration/nats_stream_test.go` | Typo'd NATS subjects fail visibly, not silently |
+
+### Evidence
+
+- Build: `./smackerel.sh build` — PASS (core and ML images built)
+- Unit tests: `./smackerel.sh test unit` — 41 Go packages PASS, 263 Python tests PASS
+- Config: `./smackerel.sh check` — PASS (config in sync)

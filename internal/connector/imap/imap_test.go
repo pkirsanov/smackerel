@@ -86,23 +86,24 @@ func TestSync_WithMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync error: %v", err)
 	}
-	if len(artifacts) != 3 {
-		t.Fatalf("expected 3 artifacts, got %d", len(artifacts))
+	// SCN-003-008: promotions email is skipped entirely (skip_labels → "skip" tier)
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts (promotions skipped), got %d", len(artifacts))
 	}
 	if cursor != "102" {
 		t.Errorf("expected cursor 102, got %q", cursor)
 	}
 
 	// Verify boss email gets full tier
-	bossArtifact := artifacts[2]
+	bossArtifact := artifacts[1]
 	if bossArtifact.Metadata["processing_tier"] != "full" {
 		t.Errorf("expected full tier for boss email, got %v", bossArtifact.Metadata["processing_tier"])
 	}
 
-	// Verify promotions email gets metadata tier
-	promoArtifact := artifacts[1]
-	if promoArtifact.Metadata["processing_tier"] != "metadata" {
-		t.Errorf("expected metadata tier for promotions, got %v", promoArtifact.Metadata["processing_tier"])
+	// Verify standard email gets standard tier
+	stdArtifact := artifacts[0]
+	if stdArtifact.Metadata["processing_tier"] != "standard" {
+		t.Errorf("expected standard tier for regular email, got %v", stdArtifact.Metadata["processing_tier"])
 	}
 }
 
@@ -198,8 +199,8 @@ func TestAssignTier_PrioritySender(t *testing.T) {
 func TestAssignTier_SkipLabel(t *testing.T) {
 	q := QualifierConfig{SkipLabels: []string{"promotions"}}
 	tier := AssignTier("someone@example.com", []string{"promotions"}, q)
-	if tier != "metadata" {
-		t.Errorf("expected metadata tier for skip label, got %q", tier)
+	if tier != "skip" {
+		t.Errorf("expected skip tier for skip label, got %q", tier)
 	}
 }
 
@@ -251,7 +252,7 @@ func TestAssignTier_SkipLabelBeforePrioritySender(t *testing.T) {
 		SkipLabels:      []string{"promotions"},
 	}
 	tier := AssignTier("boss@example.com", []string{"promotions"}, q)
-	if tier != "metadata" {
+	if tier != "skip" {
 		t.Errorf("skip label should override priority sender, got %q", tier)
 	}
 }
@@ -641,8 +642,8 @@ func TestAssignTier_CaseInsensitiveSender(t *testing.T) {
 func TestAssignTier_CaseInsensitiveLabel(t *testing.T) {
 	q := QualifierConfig{SkipLabels: []string{"Promotions"}}
 	tier := AssignTier("a@b.com", []string{"PROMOTIONS"}, q)
-	if tier != "metadata" {
-		t.Errorf("expected metadata for case-insensitive label match, got %q", tier)
+	if tier != "skip" {
+		t.Errorf("expected skip for case-insensitive label match, got %q", tier)
 	}
 }
 

@@ -22,7 +22,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [
       "1",
       "2",
@@ -160,7 +160,9 @@
         "scope": 9,
         "name": "Extract Shared Pipeline Constants",
         "status": "Done",
-        "dependsOn": [2],
+        "dependsOn": [
+          2
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T00:00:00Z"
@@ -169,7 +171,9 @@
         "scope": 10,
         "name": "Decompose Process Into Pipeline Stages",
         "status": "Done",
-        "dependsOn": [9],
+        "dependsOn": [
+          9
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T00:00:00Z"
@@ -178,7 +182,9 @@
         "scope": 11,
         "name": "NATS Payload Contract Validation",
         "status": "Done",
-        "dependsOn": [10],
+        "dependsOn": [
+          10
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T00:00:00Z"
@@ -187,7 +193,9 @@
         "scope": 12,
         "name": "Cross-Language NATS Subject Contract",
         "status": "Done",
-        "dependsOn": [2],
+        "dependsOn": [
+          2
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T12:00:00Z"
@@ -196,7 +204,9 @@
         "scope": 13,
         "name": "Python-Side NATS Payload Validation",
         "status": "Done",
-        "dependsOn": [12],
+        "dependsOn": [
+          12
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T12:00:00Z"
@@ -205,7 +215,9 @@
         "scope": 14,
         "name": "Scheduler Data Race Fix",
         "status": "Done",
-        "dependsOn": [7],
+        "dependsOn": [
+          7
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T18:00:00Z"
@@ -214,7 +226,9 @@
         "scope": 15,
         "name": "Scheduler Test Coverage",
         "status": "Done",
-        "dependsOn": [14],
+        "dependsOn": [
+          14
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T18:00:00Z"
@@ -223,7 +237,9 @@
         "scope": 16,
         "name": "API Auth Middleware",
         "status": "Done",
-        "dependsOn": [3],
+        "dependsOn": [
+          3
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T18:00:00Z"
@@ -232,7 +248,9 @@
         "scope": 17,
         "name": "Export Scan Error Logging",
         "status": "Done",
-        "dependsOn": [1],
+        "dependsOn": [
+          1
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T18:00:00Z"
@@ -241,7 +259,9 @@
         "scope": 18,
         "name": "Auth Decryption Fallback Logging",
         "status": "Done",
-        "dependsOn": [1],
+        "dependsOn": [
+          1
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T18:00:00Z"
@@ -250,7 +270,9 @@
         "scope": 19,
         "name": "Supervisor Sleep Context Cancellation",
         "status": "Done",
-        "dependsOn": [1],
+        "dependsOn": [
+          1
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T21:00:00Z"
@@ -259,7 +281,9 @@
         "scope": 20,
         "name": "Remove Dead SYNTHESIS Stream",
         "status": "Done",
-        "dependsOn": [2],
+        "dependsOn": [
+          2
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T21:00:00Z"
@@ -268,7 +292,9 @@
         "scope": 21,
         "name": "CoreAPIURL Config SST Compliance",
         "status": "Done",
-        "dependsOn": [1],
+        "dependsOn": [
+          1
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T21:00:00Z"
@@ -277,7 +303,9 @@
         "scope": 22,
         "name": "Digest NATS Typed Payload",
         "status": "Done",
-        "dependsOn": [2],
+        "dependsOn": [
+          2
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-09T21:00:00Z"

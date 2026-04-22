@@ -516,3 +516,52 @@ func TestParseVideoItems_SkipsEmptyVideoID(t *testing.T) {
 		t.Errorf("expected video_id 'valid-id', got %q", vids[0].VideoID)
 	}
 }
+
+// Test that dedup merges metadata from duplicate video entries.
+// R-203: same video in liked + named playlist should preserve both signals.
+func TestSync_DedupMergesMetadata(t *testing.T) {
+	c := New("yt-dedup")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType: "oauth2",
+		SourceConfig: map[string]interface{}{
+			"videos": []interface{}{
+				map[string]interface{}{
+					"video_id":  "dup-1",
+					"title":     "Duplicate Video",
+					"liked":     true,
+					"published": "2026-04-01T10:00:00Z",
+				},
+				map[string]interface{}{
+					"video_id":        "dup-1",
+					"title":           "Duplicate Video",
+					"playlist":        "Leadership",
+					"completion_rate": 0.95,
+					"published":       "2026-04-01T10:00:00Z",
+				},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifact after dedup, got %d", len(artifacts))
+	}
+
+	m := artifacts[0].Metadata
+	if m["liked"] != true {
+		t.Errorf("expected liked=true after merge, got %v", m["liked"])
+	}
+	if m["playlist"] != "Leadership" {
+		t.Errorf("expected playlist='Leadership' after merge, got %v", m["playlist"])
+	}
+	if cr, ok := m["completion_rate"].(float64); !ok || cr < 0.9 {
+		t.Errorf("expected completion_rate >= 0.9 after merge, got %v", m["completion_rate"])
+	}
+	// Tier should be full (liked + high completion + named playlist)
+	if m["processing_tier"] != "full" {
+		t.Errorf("expected full tier after merge, got %v", m["processing_tier"])
+	}
+}

@@ -18,19 +18,37 @@
     ]
   },
   "certification": {
-    "status": "certified",
+    "status": "done",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": {},
     "lockdownState": {}
   },
   "policySnapshot": {
-    "grill": { "value": "off", "provenance": "repo-default" },
-    "tdd": { "value": false, "provenance": "repo-default" },
-    "autoCommit": { "value": "off", "provenance": "repo-default" },
-    "lockdown": { "value": "off", "provenance": "repo-default" },
-    "regressionStrictness": { "value": "standard", "provenance": "repo-default" },
-    "validateCertificationRequired": { "value": true, "provenance": "repo-default" }
+    "grill": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "tdd": {
+      "value": false,
+      "provenance": "repo-default"
+    },
+    "autoCommit": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "lockdown": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "regressionStrictness": {
+      "value": "standard",
+      "provenance": "repo-default"
+    },
+    "validateCertificationRequired": {
+      "value": true,
+      "provenance": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": []

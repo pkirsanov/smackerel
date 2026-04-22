@@ -1,7 +1,7 @@
 {
   "version": 3,
   "featureDir": "specs/020-security-hardening",
-  "featureName": "Security Hardening — Docker Binding, Auth Enforcement, Crypto Hygiene",
+  "featureName": "Security Hardening \u2014 Docker Binding, Auth Enforcement, Crypto Hygiene",
   "status": "done",
   "workflowMode": "delivery-lockdown",
   "execution": {
@@ -14,7 +14,9 @@
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
-        "phasesExecuted": ["analyze"],
+        "phasesExecuted": [
+          "analyze"
+        ],
         "statusBefore": "not-started",
         "statusAfter": "not-started",
         "timestamp": "2026-04-10T00:00:00Z",
@@ -22,7 +24,9 @@
       },
       {
         "agent": "bubbles.design",
-        "phasesExecuted": ["bootstrap"],
+        "phasesExecuted": [
+          "bootstrap"
+        ],
         "statusBefore": "not-started",
         "statusAfter": "not-started",
         "timestamp": "2026-04-10T00:00:00Z",
@@ -30,7 +34,10 @@
       },
       {
         "agent": "bubbles.plan",
-        "phasesExecuted": ["bootstrap", "planning"],
+        "phasesExecuted": [
+          "bootstrap",
+          "planning"
+        ],
         "statusBefore": "not-started",
         "statusAfter": "not-started",
         "timestamp": "2026-04-10T00:00:00Z",
@@ -38,15 +45,20 @@
       },
       {
         "agent": "bubbles.implement",
-        "phasesExecuted": ["implement", "test"],
+        "phasesExecuted": [
+          "implement",
+          "test"
+        ],
         "statusBefore": "not-started",
         "statusAfter": "done",
         "timestamp": "2026-04-10T12:00:00Z",
-        "summary": "Implemented all 3 scopes. Scope 1: Bound all 5 Docker service ports to 127.0.0.1, replaced NATS --auth CLI arg with config file mount, added host_bind_address to SST pipeline, generated nats.conf. Scope 2: Created ml/app/auth.py with verify_auth() FastAPI dependency using hmac.compare_digest, applied webAuthMiddleware to Web UI routes, added httprate.LimitByIP(10, 1min) to OAuth start endpoint, added go-chi/httprate dependency. Scope 3: Changed decrypt() to return errors on all 3 failure paths when encKey is non-nil, added startup WARN log for empty auth_token in cmd/core/main.go and ml/app/main.py. Updated 1 existing test (PlaintextFallback → FailClosed) and added 4 new Go tests + 7 new Python tests. All 51 unit tests pass (Go + Python)."
+        "summary": "Implemented all 3 scopes. Scope 1: Bound all 5 Docker service ports to 127.0.0.1, replaced NATS --auth CLI arg with config file mount, added host_bind_address to SST pipeline, generated nats.conf. Scope 2: Created ml/app/auth.py with verify_auth() FastAPI dependency using hmac.compare_digest, applied webAuthMiddleware to Web UI routes, added httprate.LimitByIP(10, 1min) to OAuth start endpoint, added go-chi/httprate dependency. Scope 3: Changed decrypt() to return errors on all 3 failure paths when encKey is non-nil, added startup WARN log for empty auth_token in cmd/core/main.go and ml/app/main.py. Updated 1 existing test (PlaintextFallback \u2192 FailClosed) and added 4 new Go tests + 7 new Python tests. All 51 unit tests pass (Go + Python)."
       },
       {
         "agent": "bubbles.validate",
-        "phasesExecuted": ["finalize"],
+        "phasesExecuted": [
+          "finalize"
+        ],
         "statusBefore": "done",
         "statusAfter": "done",
         "timestamp": "2026-04-17T00:00:00Z",
@@ -55,13 +67,36 @@
     ]
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": [1, 2, 3],
-    "certifiedCompletedPhases": ["implement", "test", "finalize"],
+    "status": "done",
+    "completedScopes": [
+      1,
+      2,
+      3
+    ],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "finalize"
+    ],
     "scopeProgress": [
-      {"scope": 1, "status": "done", "dodChecked": 11, "dodTotal": 11},
-      {"scope": 2, "status": "done", "dodChecked": 12, "dodTotal": 12},
-      {"scope": 3, "status": "done", "dodChecked": 9, "dodTotal": 9}
+      {
+        "scope": 1,
+        "status": "done",
+        "dodChecked": 11,
+        "dodTotal": 11
+      },
+      {
+        "scope": 2,
+        "status": "done",
+        "dodChecked": 12,
+        "dodTotal": 12
+      },
+      {
+        "scope": 3,
+        "status": "done",
+        "dodChecked": 9,
+        "dodTotal": 9
+      }
     ],
     "lockdownState": {
       "active": false,

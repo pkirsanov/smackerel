@@ -7,7 +7,13 @@
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
-    "completedPhaseClaims": ["planning", "implement", "test", "validate", "finalize"],
+    "completedPhaseClaims": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "finalize"
+    ],
     "executionHistory": [
       {
         "phase": "planning",
@@ -28,7 +34,7 @@
         "agent": "bubbles.test",
         "timestamp": "2026-04-19T12:00:00Z",
         "outcome": "completed_owned",
-        "summary": "Documentation-only bug — manual review confirms all 6 Gherkin scenarios satisfied. All config examples use smackerel.example.com. Port 40001 consistent with SST."
+        "summary": "Documentation-only bug \u2014 manual review confirms all 6 Gherkin scenarios satisfied. All config examples use smackerel.example.com. Port 40001 consistent with SST."
       },
       {
         "phase": "validate",
@@ -47,20 +53,43 @@
     ]
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": ["scope-1"],
-    "certifiedCompletedPhases": ["planning", "implement", "test", "validate", "finalize"],
+    "status": "done",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "finalize"
+    ],
     "scopeProgress": {
       "scope-1": "Done"
     },
     "lockdownState": {}
   },
   "policySnapshot": {
-    "grill": { "value": "off", "provenance": "repo-default" },
-    "tdd": { "value": "scenario-first", "provenance": "repo-default" },
-    "autoCommit": { "value": "off", "provenance": "repo-default" },
-    "lockdown": { "value": "off", "provenance": "repo-default" },
-    "regression": { "value": "protected-scenarios", "provenance": "repo-default" }
+    "grill": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "tdd": {
+      "value": "scenario-first",
+      "provenance": "repo-default"
+    },
+    "autoCommit": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "lockdown": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "regression": {
+      "value": "protected-scenarios",
+      "provenance": "repo-default"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": []

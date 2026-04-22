@@ -9,13 +9,34 @@
     "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-04-18T00:00:00Z",
-    "completedPhaseClaims": ["analyze", "design", "plan", "implement", "test", "validate"],
+    "completedPhaseClaims": [
+      "analyze",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "validate"
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": [1, 2, 3, 4, 5, 6, 7, 8, 9],
-    "certifiedCompletedPhases": ["implement", "test", "validate"],
+    "status": "done",
+    "completedScopes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "validate"
+    ],
     "scopeProgress": [
       {
         "scope": 1,
@@ -30,7 +51,9 @@
         "scope": 2,
         "name": "Receipt Detection & Extraction Pipeline",
         "status": "Done",
-        "dependsOn": [1],
+        "dependsOn": [
+          1
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-19T00:00:00Z"
@@ -39,7 +62,9 @@
         "scope": 3,
         "name": "Expense Data Model & Migration",
         "status": "Done",
-        "dependsOn": [1],
+        "dependsOn": [
+          1
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-19T00:00:00Z"
@@ -48,7 +73,10 @@
         "scope": 4,
         "name": "Classification Engine",
         "status": "Done",
-        "dependsOn": [2, 3],
+        "dependsOn": [
+          2,
+          3
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-19T00:00:00Z"
@@ -57,7 +85,10 @@
         "scope": 5,
         "name": "Vendor Normalization & Suggestions",
         "status": "Done",
-        "dependsOn": [3, 4],
+        "dependsOn": [
+          3,
+          4
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-19T00:00:00Z"
@@ -66,7 +97,10 @@
         "scope": 6,
         "name": "Expense API Endpoints",
         "status": "Done",
-        "dependsOn": [3, 4],
+        "dependsOn": [
+          3,
+          4
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-19T00:00:00Z"
@@ -75,7 +109,9 @@
         "scope": 7,
         "name": "CSV Export",
         "status": "Done",
-        "dependsOn": [6],
+        "dependsOn": [
+          6
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-19T00:00:00Z"
@@ -84,7 +120,10 @@
         "scope": 8,
         "name": "Telegram Expense Commands",
         "status": "Done",
-        "dependsOn": [4, 6],
+        "dependsOn": [
+          4,
+          6
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-19T00:00:00Z"
@@ -93,7 +132,10 @@
         "scope": 9,
         "name": "Digest Integration",
         "status": "Done",
-        "dependsOn": [4, 5],
+        "dependsOn": [
+          4,
+          5
+        ],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": "2026-04-19T00:00:00Z"
@@ -135,7 +177,9 @@
   "executionHistory": [
     {
       "agent": "bubbles.analyst",
-      "phasesExecuted": ["analyze"],
+      "phasesExecuted": [
+        "analyze"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-18T00:00:00Z",
@@ -144,7 +188,9 @@
     },
     {
       "agent": "bubbles.design",
-      "phasesExecuted": ["design"],
+      "phasesExecuted": [
+        "design"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-18T00:00:00Z",
@@ -153,7 +199,9 @@
     },
     {
       "agent": "bubbles.plan",
-      "phasesExecuted": ["plan"],
+      "phasesExecuted": [
+        "plan"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "not_started",
       "runStartedAt": "2026-04-18T00:00:00Z",
@@ -162,7 +210,9 @@
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
       "runStartedAt": "2026-04-19T00:00:00Z",
@@ -188,10 +238,32 @@
     "reworkQueue": "rework-queue.json"
   },
   "statusDiscipline": {
-    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "validStatuses": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "specs_hardened",
+      "docs_updated",
+      "validated",
+      "done"
+    ],
     "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
-    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "scopeDoneGates": [
+      "G020",
+      "G021",
+      "G022",
+      "G023",
+      "G024",
+      "G025",
+      "G055",
+      "G056",
+      "G057",
+      "G058",
+      "G059",
+      "G060",
+      "G061"
+    ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Implementation complete for all 9 scopes. All wiring gaps previously noted have been resolved: (1) expense routes registered in cmd/core/main.go lines 161-175 via ExpenseHandler when cfg.ExpensesEnabled, (2) receipt_detection imported in ml/app/synthesis.py line 15, (3) expense commands routed in internal/telegram/bot.go line 319, (4) migration file exists at internal/db/migrations/019_expense_tracking.sql. Unit tests pass (Go all packages, Python 236 passed). Config check clean. Reconciliation: 2026-04-21 reconcile-to-doc — zero drift found between claimed and implemented state."
+  "notes": "Implementation complete for all 9 scopes. All wiring gaps previously noted have been resolved: (1) expense routes registered in cmd/core/main.go lines 161-175 via ExpenseHandler when cfg.ExpensesEnabled, (2) receipt_detection imported in ml/app/synthesis.py line 15, (3) expense commands routed in internal/telegram/bot.go line 319, (4) migration file exists at internal/db/migrations/019_expense_tracking.sql. Unit tests pass (Go all packages, Python 236 passed). Config check clean. Reconciliation: 2026-04-21 reconcile-to-doc \u2014 zero drift found between claimed and implemented state."
 }

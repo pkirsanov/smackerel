@@ -311,6 +311,7 @@ func TestLoad_ConnectorPathFields(t *testing.T) {
 	t.Setenv("BOOKMARKS_IMPORT_DIR", "/data/bookmarks")
 	t.Setenv("BROWSER_HISTORY_PATH", "/home/user/.config/google-chrome/Default/History")
 	t.Setenv("MAPS_IMPORT_DIR", "/data/maps-takeout")
+	t.Setenv("MAPS_ENABLED", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -324,6 +325,9 @@ func TestLoad_ConnectorPathFields(t *testing.T) {
 	}
 	if cfg.MapsImportDir != "/data/maps-takeout" {
 		t.Errorf("expected MapsImportDir=/data/maps-takeout, got %q", cfg.MapsImportDir)
+	}
+	if !cfg.MapsEnabled {
+		t.Error("expected MapsEnabled=true when MAPS_ENABLED=true")
 	}
 }
 
@@ -343,6 +347,9 @@ func TestLoad_ConnectorPathFieldsOptional(t *testing.T) {
 	}
 	if cfg.MapsImportDir != "" {
 		t.Errorf("expected empty MapsImportDir, got %q", cfg.MapsImportDir)
+	}
+	if cfg.MapsEnabled {
+		t.Error("expected MapsEnabled=false when MAPS_ENABLED not set")
 	}
 }
 

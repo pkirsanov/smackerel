@@ -117,7 +117,7 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	}
 
 	// Auto-start Google Maps Timeline connector (no OAuth needed — file-based Takeout import)
-	if cfg.MapsImportDir != "" {
+	if cfg.MapsEnabled && cfg.MapsImportDir != "" {
 		mapsCfg := connector.ConnectorConfig{
 			AuthType:     "none",
 			Enabled:      true,

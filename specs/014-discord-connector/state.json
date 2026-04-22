@@ -22,8 +22,15 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": ["1", "2", "3", "4", "5", "6"],
+    "status": "done",
+    "completedScopes": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
@@ -35,12 +42,30 @@
       "spec-review"
     ],
     "scopeProgress": [
-      {"scope": 1, "status": "done"},
-      {"scope": 2, "status": "done"},
-      {"scope": 3, "status": "done"},
-      {"scope": 4, "status": "done"},
-      {"scope": 5, "status": "done"},
-      {"scope": 6, "status": "done"}
+      {
+        "scope": 1,
+        "status": "done"
+      },
+      {
+        "scope": 2,
+        "status": "done"
+      },
+      {
+        "scope": 3,
+        "status": "done"
+      },
+      {
+        "scope": 4,
+        "status": "done"
+      },
+      {
+        "scope": 5,
+        "status": "done"
+      },
+      {
+        "scope": 6,
+        "status": "done"
+      }
     ],
     "lockdownState": {
       "active": false,
@@ -78,7 +103,10 @@
   "executionHistory": [
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["implement", "test"],
+      "phasesExecuted": [
+        "implement",
+        "test"
+      ],
       "statusBefore": "not_started",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-09T00:00:00Z",
@@ -87,7 +115,9 @@
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-10T00:00:00Z",
@@ -96,7 +126,9 @@
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-11T00:00:00Z",
@@ -105,7 +137,9 @@
     },
     {
       "agent": "bubbles.workflow",
-      "phasesExecuted": ["test"],
+      "phasesExecuted": [
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-12T00:00:00Z",
@@ -114,7 +148,10 @@
     },
     {
       "agent": "bubbles.iterate",
-      "phasesExecuted": ["implement", "test"],
+      "phasesExecuted": [
+        "implement",
+        "test"
+      ],
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "startedAt": "2026-04-14T06:00:00Z",
@@ -167,5 +204,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "All 6 scopes implemented. 17+ stochastic quality sweeps completed (gaps, security x3, harden, chaos, stabilize x3, simplify x2, regression x2, improve, reconcile, spec-review). 150 test functions (141 discord_test.go + 9 gateway_test.go), all pass with -race. No integration/E2E tests — all tests are unit-level with httptest mocking."
+  "notes": "All 6 scopes implemented. 17+ stochastic quality sweeps completed (gaps, security x3, harden, chaos, stabilize x3, simplify x2, regression x2, improve, reconcile, spec-review). 150 test functions (141 discord_test.go + 9 gateway_test.go), all pass with -race. No integration/E2E tests \u2014 all tests are unit-level with httptest mocking."
 }

@@ -14,25 +14,41 @@
         "phase": "plan",
         "agent": "bubbles.workflow",
         "completedAt": "2026-04-19T00:00:00Z",
-        "scopes": [1, 2, 3]
+        "scopes": [
+          1,
+          2,
+          3
+        ]
       },
       {
         "phase": "implement",
         "agent": "bubbles.implement",
         "completedAt": "2026-04-19T00:00:00Z",
-        "scopes": [1, 2, 3]
+        "scopes": [
+          1,
+          2,
+          3
+        ]
       },
       {
         "phase": "test",
         "agent": "bubbles.test",
         "completedAt": "2026-04-19T00:00:00Z",
-        "scopes": [1, 2, 3]
+        "scopes": [
+          1,
+          2,
+          3
+        ]
       },
       {
         "phase": "validate",
         "agent": "bubbles.validate",
         "completedAt": "2026-04-19T00:00:00Z",
-        "scopes": [1, 2, 3]
+        "scopes": [
+          1,
+          2,
+          3
+        ]
       },
       "docs",
       "finalize"
@@ -40,8 +56,12 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "certified",
-    "completedScopes": [1, 2, 3],
+    "status": "done",
+    "completedScopes": [
+      1,
+      2,
+      3
+    ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {

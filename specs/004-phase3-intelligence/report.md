@@ -971,3 +971,33 @@ Exit code: 0
 | Overdue items query bound | Unbounded | `LIMIT 50` |
 | Context cancellation in meeting loop | Missing | Present |
 | Unit tests in `briefs_test.go` | 9 | 11 |
+
+---
+
+## Simplify Pass (Repeat — Stochastic Quality Sweep)
+
+**Date:** April 22, 2026
+**Trigger:** `simplify-to-doc` child workflow of stochastic-quality-sweep
+
+### Findings & Actions
+
+| # | Finding | Action | Lines Saved |
+|---|---------|--------|-------------|
+| S1 | 14 separate `synthesisConfidence` test functions for a 5-line pure math function | Consolidated into 1 table-driven `TestSynthesisConfidence` with subtests | ~120 |
+| S2 | 9 separate `clampDay` test functions | Consolidated into 1 table-driven `TestClampDay` | ~60 |
+| S3 | 4 individual producer nil-pool tests redundant with existing `TestAllProducers_NilPoolErrors` | Removed | ~52 |
+| S4 | 4 individual producer cancelled-context tests (identical pattern) | Consolidated into 1 `TestAllProducers_CancelledContext` | ~30 |
+| S5 | 4 duplicate `maxPendingAlertAgeDays` tests | Consolidated into 1 `TestMaxPendingAlertAgeDays` | ~40 |
+| S6 | `TestGetLastSynthesisTime_NilPool` subsumed by `TestGetLastSynthesisTime_NilPoolErrorMessage` | Removed duplicate | ~12 |
+| S7 | 4 duplicate resurface/serendipity nil-pool tests in `learning_test.go` (already in `resurface_test.go`) | Removed from `learning_test.go` | ~36 |
+| S8 | `TestSynthesisConfidence_DiversityWeightedMoreThanHalf` + `EqualInputsSymmetric` duplicate of consolidated test | Removed | ~30 |
+
+### Net Impact
+
+| Metric | Before | After |
+|--------|--------|-------|
+| `engine_test.go` lines | 2888 | 2582 (-306, -10.6%) |
+| `learning_test.go` lines | 348 | 312 (-36, -10.3%) |
+| Test function count (net) | Reduced by ~25 functions | Same coverage via table-driven subtests |
+| `./smackerel.sh test unit` | All pass | All pass (0.050s intelligence) |
+| `./smackerel.sh check` | Clean | Clean |
