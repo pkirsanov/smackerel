@@ -213,3 +213,45 @@ Full review of spec 033 client-side and server-side code:
 ### Verification
 
 `./smackerel.sh test unit` — all Go + Python tests pass (236 Python, full Go suite green). New security tests: `TestPWAShareHandler_CSPHeaderPresent`, `TestPWAShareHandler_CSPNonceUniqueness`, `TestPWAShareHandler_NoInlineEventHandlers` — all passing.
+
+---
+
+## DevOps Probe (devops-to-doc, SQS, 2026-04-22)
+
+### Probe Scope
+
+DevOps probe of spec 033 mobile-capture: CI/CD pipeline coverage for web assets, extension packaging/distribution, PWA build freshness, service worker cache management.
+
+### Findings
+
+| # | Severity | Category | Location | Description | Disposition |
+|---|----------|----------|----------|-------------|-------------|
+| DEVOPS-033-001 | MEDIUM | CI/CD coverage | `.github/workflows/ci.yml` | CI pipeline had zero coverage for JavaScript/web assets. No manifest validation, no JS syntax checking, no extension packaging verification. Spec 029 scenario "Extension and PWA artifacts built in CI" required "extension is linted and packaged" and "PWA manifest is validated" — neither was implemented. | **FIXED** — Added `scripts/runtime/web-validate.sh` (manifest schema validation, JS structural checks, version consistency) and wired into `./smackerel.sh lint`. CI now validates web assets via the lint step. |
+| DEVOPS-033-002 | LOW | Distribution | `web/extension/` | No extension packaging or distribution automation. Users must manually download source files. No CLI command for packaging. | **FIXED** — Added `scripts/commands/package-extension.sh` and `./smackerel.sh package extension` command. Produces `dist/extension/smackerel-chrome-{version}.zip` and `smackerel-firefox-{version}.zip` with correct manifest per platform. |
+| DEVOPS-033-003 | LOW | Build freshness | `web/pwa/sw.js` | PWA service worker had hardcoded `CACHE_NAME = 'smackerel-pwa-v2'`. When embedded assets changed but sw.js content stayed identical, browsers would not detect the update — serving stale cached assets indefinitely. | **FIXED** — `internal/api/pwa.go` now computes a SHA-256 content hash of all embedded PWA files at init and replaces the cache name in sw.js responses with `smackerel-pwa-{hash}`. Also sets `Cache-Control: no-cache` on sw.js to ensure browsers always check for updates. |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `scripts/runtime/web-validate.sh` | New — manifest validation, JS structural checks, version consistency |
+| `scripts/commands/package-extension.sh` | New — Chrome/Firefox extension packaging into distributable .zip |
+| `smackerel.sh` | Added web validation to `lint` command; added `package extension` command |
+| `internal/api/pwa.go` | Content-hash-based SW cache name injection; `Cache-Control: no-cache` for sw.js |
+| `internal/api/pwa_test.go` | Added `TestPWAFileServer_SWContentHashInjected`, `TestPWAFileServer_SWNoCacheHeader`, `TestPWAContentHash_NotEmpty` |
+
+### Tests Added
+
+| Test | Covers |
+|------|--------|
+| `TestPWAFileServer_SWContentHashInjected` | Verifies sw.js serves content-hash cache name, not hardcoded `v2` |
+| `TestPWAFileServer_SWNoCacheHeader` | Verifies sw.js includes `Cache-Control: no-cache` header |
+| `TestPWAContentHash_NotEmpty` | Verifies content hash is computed at init (12 hex chars) |
+
+### Verification
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh check` | PASS — "Config is in sync with SST" + "env_file drift guard: OK" |
+| `./smackerel.sh lint` | PASS — Go vet, Python ruff, and web validation all green |
+| `./smackerel.sh test unit` | PASS — all Go tests pass (including 3 new PWA DevOps tests), 257 Python tests pass |

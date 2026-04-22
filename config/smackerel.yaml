@@ -19,7 +19,7 @@ runtime:
   auth_token: "" # REQUIRED: set a secure random token (min 16 chars). Run: openssl rand -hex 24
   host_bind_address: "127.0.0.1"
   digest_cron: "0 7 * * *"
-  embedding_model: all-MiniLM-L6-v2
+  embedding_model: nomic-embed-text
 
 cors:
   # Allowed origins for cross-origin requests (empty = same-origin only).
@@ -29,11 +29,14 @@ cors:
 
 llm:
   provider: "ollama" # REQUIRED: set to ollama, openai, or anthropic
-  model: llama3.2
+  model: gemma4:26b
   api_key: "dev-not-needed-for-ollama"
   ollama_url: http://ollama:11434
-  ollama_model: llama3.2
-  ollama_vision_model: llava # Vision model used for OCR fallback on Keep image notes
+  ollama_model: gemma4:26b # Primary: MoE 26B, 52tok/s, vision+tools+256K context
+  ollama_vision_model: gemma4:26b # Built-in vision — no separate model needed
+  ollama_ocr_model: deepseek-ocr:3b # Fast OCR specialist for receipts/documents
+  ollama_reasoning_model: deepseek-r1:32b # Deep reasoning fallback for complex analysis
+  ollama_fast_model: gpt-oss:20b # Fast general tasks when MoE is loaded with another model
 
 telegram:
   bot_token: ""
@@ -102,7 +105,6 @@ expenses:
   - slug: "other"
     display: "Other"
     tax_category: "Other Expenses"
-
   # Vendors that are always classified as business.
   business_vendors: []
 

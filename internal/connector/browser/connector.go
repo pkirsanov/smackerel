@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/smackerel/smackerel/internal/connector"
 )
 
@@ -51,6 +52,7 @@ type Connector struct {
 	health connector.HealthStatus
 	mu     sync.RWMutex
 	config BrowserConfig
+	pool   *pgxpool.Pool
 
 	// Sync metadata for health reporting
 	lastSyncTime       time.Time
@@ -155,6 +157,34 @@ func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.R
 		c.lastSyncErrors = 1
 		c.mu.Unlock()
 		return nil, cursor, err
+	}
+
+	// GAP-005-F1: Check privacy_consent before syncing (R-402 opt-in enforcement).
+	// Browser history is an opt-in source — sync must abort if user has not consented.
+	c.mu.RLock()
+	bPool := c.pool
+	c.mu.RUnlock()
+	if bPool != nil {
+		var consented bool
+		scanErr := bPool.QueryRow(ctx,
+			`SELECT consented FROM privacy_consent WHERE source_id = $1`,
+			"browser",
+		).Scan(&consented)
+		if scanErr != nil {
+			// No row means consent was never granted.
+			if scanErr.Error() != "no rows in result set" {
+				slog.Warn("privacy consent check failed, aborting browser sync", "error", scanErr)
+				c.mu.Lock()
+				c.lastSyncErrors = 1
+				c.mu.Unlock()
+				return nil, cursor, fmt.Errorf("privacy consent check: %w", scanErr)
+			}
+			consented = false
+		}
+		if !consented {
+			slog.Info("browser sync skipped: user has not consented to browser data collection")
+			return nil, cursor, nil
+		}
 	}
 
 	// Step 1: Copy History file to temp location
@@ -280,6 +310,14 @@ func (c *Connector) Close() error {
 	c.setHealth(connector.HealthDisconnected)
 	slog.Info("browser history connector closed")
 	return nil
+}
+
+// SetPool sets the database connection pool for privacy consent checking.
+// GAP-005-F1: Required for R-402 opt-in enforcement.
+func (c *Connector) SetPool(pool *pgxpool.Pool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.pool = pool
 }
 
 // copyHistoryFileFrom copies a Chrome History SQLite file from the given path

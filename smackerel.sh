@@ -18,8 +18,9 @@ Commands:
   build [--no-cache]          Build docker images for the current environment
   backup                      Create a compressed pg_dump backup in backups/
   check                       Validate generated config and docker-compose wiring
-  lint                        Run Go vet and Python ruff inside containers
+  lint                        Run Go vet, Python ruff, and web asset validation
   format [--check]            Format Go and Python files, or check formatting
+  package extension           Package browser extension for Chrome and Firefox distribution
   test unit [--go|--python]   Run unit tests
   test integration            Run live-stack integration validation
   test e2e                    Run E2E scaffold tests
@@ -177,6 +178,20 @@ case "$COMMAND" in
   lint)
     run_go_tooling /workspace/scripts/runtime/go-lint.sh
     run_python_tooling /workspace/scripts/runtime/python-lint.sh
+    run_python_tooling /workspace/scripts/runtime/web-validate.sh
+    ;;
+  package)
+    SUBCOMMAND="${1:-}"
+    case "$SUBCOMMAND" in
+      extension)
+        bash "$SCRIPT_DIR/scripts/commands/package-extension.sh"
+        ;;
+      *)
+        echo "Unknown package target: $SUBCOMMAND" >&2
+        echo "Available: extension" >&2
+        exit 1
+        ;;
+    esac
     ;;
   format)
     if [[ "$FORMAT_CHECK" == true ]]; then
