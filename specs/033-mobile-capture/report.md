@@ -4,6 +4,51 @@ Links: [spec.md](spec.md) | [uservalidation.md](uservalidation.md)
 
 ---
 
+## Gaps Probe (gaps-to-doc, SQS child, 2026-04-22)
+
+### GAP-F01 (High) — FIXED: Firefox manifest missing host permissions for cross-origin API calls
+
+**Problem:** Chrome MV3 manifest declared `host_permissions: ["https://*/api/*", "http://*/api/*"]` for cross-origin fetch to the user's Smackerel server. The Firefox MV2 manifest (`manifest.firefox.json`) lacked equivalent URL-pattern permissions — it only had `activeTab`, `storage`, `contextMenus`, `notifications`, and `alarms`. Without host permissions, the Firefox extension's `fetch()` calls to the user's server would fail with CORS/permission errors, making the entire Firefox extension non-functional for capture.
+
+**Fix:** Added `"https://*/api/*"` and `"http://*/api/*"` to the Firefox manifest's `permissions` array. In MV2, host permissions are declared inline with API permissions.
+
+**Files changed:** `web/extension/manifest.firefox.json`
+
+### GAP-F02 (Medium) — FIXED: Neither PWA nor extension set X-Capture-Source header
+
+**Problem:** The capture API defines `X-Capture-Source` with valid values `"pwa"` and `"extension"`, verified by `TestCaptureSource` in `capture_test.go`. However, none of the client-side code set this header:
+- PWA share page `fetch('/api/capture')` — missing `X-Capture-Source: pwa`
+- Extension `doCapture()` — missing `X-Capture-Source: extension`
+- Extension `flushQueue()` (offline sync) — missing header
+- PWA service worker `flushWithConfig()` (offline sync) — missing header
+- Shared `CaptureQueue.flush()` in both PWA and extension copies — missing header
+
+All captures arrived with the default source `"api"`, defeating source attribution entirely.
+
+**Fix:** Added `X-Capture-Source` header to all six fetch call sites:
+1. PWA share page template (inline JS) — `'X-Capture-Source': 'pwa'`
+2. Extension `doCapture()` — `'X-Capture-Source': 'extension'`
+3. Extension `flushQueue()` — `'X-Capture-Source': 'extension'`
+4. PWA service worker `flushWithConfig()` — `'X-Capture-Source': 'pwa'`
+5. PWA shared `CaptureQueue.flush()` — added `captureSource` parameter
+6. Extension shared `CaptureQueue.flush()` — added `captureSource` parameter
+
+**Files changed:** `internal/api/pwa.go`, `web/extension/background.js`, `web/pwa/sw.js`, `web/pwa/lib/queue.js`, `web/extension/lib/queue.js`
+
+**Test added:** `TestPWAShareHandler_CaptureSourceHeader` in `internal/api/pwa_test.go` — verifies the share page template includes `X-Capture-Source` with value `pwa`
+
+### GAP-F03 (Low) — FIXED: Extension CSP used object-src 'self' instead of 'none'
+
+**Problem:** Both `manifest.json` and `manifest.firefox.json` declared CSP `object-src 'self'`, allowing embedding of `<object>`/`<embed>` elements from the extension origin. The extension has no legitimate use of object/plugin embeds. The PWA correctly used `object-src 'none'`.
+
+**Fix:** Tightened both extension manifests to `object-src 'none'` for defense-in-depth parity with the PWA.
+
+**Files changed:** `web/extension/manifest.json`, `web/extension/manifest.firefox.json`
+
+**Verification:** `./smackerel.sh check` passes, `./smackerel.sh lint` passes (including web manifest validation + JS syntax checks), `./smackerel.sh test unit` passes (263 Python tests, full Go suite green including new `TestPWAShareHandler_CaptureSourceHeader`).
+
+---
+
 ## Summary
 
 Spec 033 adds PWA share target for mobile and browser extension for desktop capture. All 7 scopes completed.

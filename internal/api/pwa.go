@@ -153,7 +153,8 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authToken ? 'Bearer ' + authToken : ''
+          'Authorization': authToken ? 'Bearer ' + authToken : '',
+          'X-Capture-Source': 'pwa'
         },
         body: JSON.stringify(body)
       })

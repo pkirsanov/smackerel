@@ -8,7 +8,9 @@
     "contextMenus",
     "notifications",
     "activeTab",
-    "alarms"
+    "alarms",
+    "https://*/api/*",
+    "http://*/api/*"
   ],
   "browser_specific_settings": {
     "gecko": {
@@ -34,5 +36,5 @@
     "48": "icons/icon-48.svg",
     "128": "icons/icon-128.svg"
   },
-  "content_security_policy": "script-src 'self'; object-src 'self'"
+  "content_security_policy": "script-src 'self'; object-src 'none'"
 }

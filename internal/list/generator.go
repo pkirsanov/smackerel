@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // GenerateRequest describes what list to generate.
@@ -45,6 +46,7 @@ func NewGenerator(resolver ArtifactResolver, store ListStore, aggregators map[st
 
 // Generate creates a list from the given request.
 func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*ListWithItems, error) {
+	start := time.Now()
 	if req.Title == "" {
 		return nil, fmt.Errorf("title is required")
 	}
@@ -125,6 +127,10 @@ func (g *Generator) Generate(ctx context.Context, req GenerateRequest) (*ListWit
 	if err := g.Store.CreateList(ctx, list, items); err != nil {
 		return nil, fmt.Errorf("persist list: %w", err)
 	}
+
+	// 7. Record metrics
+	metrics.ListsGenerated.WithLabelValues(string(listType), domain).Inc()
+	metrics.ListGenerationLatency.WithLabelValues(string(listType)).Observe(time.Since(start).Seconds())
 
 	return &ListWithItems{List: *list, Items: items}, nil
 }
