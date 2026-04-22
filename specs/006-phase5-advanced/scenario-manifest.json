@@ -2,8 +2,8 @@
   "version": 2,
   "specId": "006",
   "featureDir": "specs/006-phase5-advanced",
-  "generatedBy": "bubbles.iterate",
-  "generatedAt": "2026-04-07T16:00:00Z",
+  "generatedBy": "bubbles.harden",
+  "generatedAt": "2026-04-22T00:00:00Z",
   "scenarios": [
     {
       "scenarioId": "SCN-006-001",
@@ -12,12 +12,14 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"},
-        {"file": "internal/intelligence/engine_test.go", "function": "TestNewEngine_NilPool"}
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestComputeDepthScore"},
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestAssignTier"},
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestExpertiseMap_Struct"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/expertise_test.go::TestComputeDepthScore"},
+        {"type": "unit-test", "location": "internal/intelligence/expertise_test.go::TestAssignTier"},
+        {"type": "source", "location": "internal/intelligence/expertise.go::GenerateExpertiseMap"}
       ]
     },
     {
@@ -27,11 +29,12 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestBlindSpot_GapCalculation"},
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestGenerateExpertiseMap_NilPool"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/expertise_test.go::TestBlindSpot_GapCalculation"},
+        {"type": "source", "location": "internal/intelligence/expertise.go::GenerateExpertiseMap"}
       ]
     },
     {
@@ -41,11 +44,14 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestInsightType_Constants"}
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestAssignTier"},
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestAssignTier_ExactBoundaries"},
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestComputeTrajectory"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestInsightType_Constants"},
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/expertise_test.go::TestAssignTier"},
+        {"type": "unit-test", "location": "internal/intelligence/expertise_test.go::TestComputeTrajectory"},
+        {"type": "source", "location": "internal/intelligence/expertise.go::assignTier"}
       ]
     },
     {
@@ -55,10 +61,12 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestNewEngine_NilPool"}
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestExpertiseMap_ImmatureData"},
+        {"file": "internal/intelligence/expertise_test.go", "function": "TestGenerateExpertiseMap_NilPool"}
       ],
       "evidenceRefs": [
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/expertise_test.go::TestExpertiseMap_ImmatureData"},
+        {"type": "source", "location": "internal/intelligence/expertise.go::GenerateExpertiseMap"}
       ]
     },
     {
@@ -68,11 +76,13 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+        {"file": "internal/intelligence/learning_test.go", "function": "TestClassifyDifficultyHeuristic"},
+        {"file": "internal/intelligence/learning_test.go", "function": "TestLearningPath_ResourcesSortedByDifficulty"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/learning_test.go::TestClassifyDifficultyHeuristic"},
+        {"type": "unit-test", "location": "internal/intelligence/learning_test.go::TestLearningPath_ResourcesSortedByDifficulty"},
+        {"type": "source", "location": "internal/intelligence/learning.go::GetLearningPaths"}
       ]
     },
     {
@@ -82,10 +92,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestInsightType_Constants"}
+        {"file": "internal/intelligence/learning_test.go", "function": "TestDetectGaps"}
       ],
       "evidenceRefs": [
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/learning_test.go::TestDetectGaps"},
+        {"type": "source", "location": "internal/intelligence/learning.go::detectGaps"}
       ]
     },
     {
@@ -95,10 +106,12 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestInsightType_Constants"}
+        {"file": "internal/intelligence/learning_test.go", "function": "TestMarkLearningResourceCompleted_NilPool"},
+        {"file": "internal/intelligence/learning_test.go", "function": "TestLearningDifficulty_Constants"}
       ],
       "evidenceRefs": [
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/learning_test.go::TestMarkLearningResourceCompleted_NilPool"},
+        {"type": "source", "location": "internal/intelligence/learning.go::MarkLearningResourceCompleted"}
       ]
     },
     {
@@ -108,10 +121,12 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+        {"file": "internal/intelligence/learning_test.go", "function": "TestDifficultyOrder"},
+        {"file": "internal/intelligence/learning_test.go", "function": "TestLearningPath_ResourcesSortedByDifficulty"}
       ],
       "evidenceRefs": [
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/learning_test.go::TestDifficultyOrder"},
+        {"type": "source", "location": "internal/intelligence/learning.go::GetLearningPaths"}
       ]
     },
     {
@@ -121,12 +136,14 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"},
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+        {"file": "internal/intelligence/subscriptions_test.go", "function": "TestSubscription_ParseServiceName"},
+        {"file": "internal/intelligence/subscriptions_test.go", "function": "TestExtractAmount"},
+        {"file": "internal/intelligence/subscriptions_test.go", "function": "TestDetectFrequency"},
+        {"file": "internal/intelligence/subscriptions_test.go", "function": "TestParseSubscription_ActiveHappyPath"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertType_Constants"},
-        {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
+        {"type": "unit-test", "location": "internal/intelligence/subscriptions_test.go::TestParseSubscription_ActiveHappyPath"},
+        {"type": "source", "location": "internal/intelligence/subscriptions.go::DetectSubscriptions"}
       ]
     },
     {
@@ -136,11 +153,12 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertType_Constants"}
+        {"file": "internal/intelligence/subscriptions_test.go", "function": "TestCategorizeService"},
+        {"file": "internal/intelligence/subscriptions_test.go", "function": "TestGetSubscriptionSummary_NilPool"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertType_Constants"},
-        {"type": "source", "location": "internal/intelligence/engine.go::CreateAlert"}
+        {"type": "unit-test", "location": "internal/intelligence/subscriptions_test.go::TestCategorizeService"},
+        {"type": "source", "location": "internal/intelligence/subscriptions.go::GetSubscriptionSummary"}
       ]
     },
     {
@@ -150,11 +168,13 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlert_Lifecycle"}
+        {"file": "internal/intelligence/subscriptions_test.go", "function": "TestParseSubscription_Trial"},
+        {"file": "internal/intelligence/briefs_test.go", "function": "TestCheckOverdueCommitments_CancelledContext"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlert_Lifecycle"},
-        {"type": "source", "location": "internal/intelligence/engine.go::CheckOverdueCommitments"}
+        {"type": "unit-test", "location": "internal/intelligence/subscriptions_test.go::TestParseSubscription_Trial"},
+        {"type": "source", "location": "internal/intelligence/subscriptions.go::parseSubscription"},
+        {"type": "source", "location": "internal/intelligence/briefs.go::CheckOverdueCommitments"}
       ]
     },
     {
@@ -164,11 +184,13 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestAlertStatus_Lifecycle"}
+        {"file": "internal/intelligence/subscriptions_test.go", "function": "TestParseSubscription_Cancelled"},
+        {"file": "internal/intelligence/alerts_test.go", "function": "TestDismissAlert_ValidationOrder"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAlertStatus_Lifecycle"},
-        {"type": "source", "location": "internal/intelligence/engine.go::DismissAlert"}
+        {"type": "unit-test", "location": "internal/intelligence/subscriptions_test.go::TestParseSubscription_Cancelled"},
+        {"type": "unit-test", "location": "internal/intelligence/alerts_test.go::TestDismissAlert_ValidationOrder"},
+        {"type": "source", "location": "internal/intelligence/alerts.go::DismissAlert"}
       ]
     },
     {
@@ -236,12 +258,12 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_WithItems"},
-        {"file": "internal/digest/generator_test.go", "function": "TestNewGenerator"}
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestAssembleMonthlyReportText_AllSections"},
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestMonthlyReport_Struct"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_WithItems"},
-        {"type": "source", "location": "internal/digest/generator.go::Generate"}
+        {"type": "unit-test", "location": "internal/intelligence/monthly_test.go::TestAssembleMonthlyReportText_AllSections"},
+        {"type": "source", "location": "internal/intelligence/monthly.go::GenerateMonthlyReport"}
       ]
     },
     {
@@ -251,11 +273,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_WithItems"}
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestAssembleMonthlyReportText_PatternsOnly"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_WithItems"},
-        {"type": "source", "location": "internal/digest/generator.go::Generate"}
+        {"type": "unit-test", "location": "internal/intelligence/monthly_test.go::TestAssembleMonthlyReportText_PatternsOnly"},
+        {"type": "source", "location": "internal/intelligence/monthly.go::GenerateMonthlyReport"}
       ]
     },
     {
@@ -265,11 +287,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/digest/generator_test.go", "function": "TestDigestContext_QuietDay"}
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestAssembleMonthlyReportText_Empty"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/digest/generator_test.go::TestDigestContext_QuietDay"},
-        {"type": "source", "location": "internal/digest/generator.go::Generate"}
+        {"type": "unit-test", "location": "internal/intelligence/monthly_test.go::TestAssembleMonthlyReportText_Empty"},
+        {"type": "source", "location": "internal/intelligence/monthly.go::assembleMonthlyReportText"}
       ]
     },
     {
@@ -279,13 +301,15 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore"},
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_MaxAccessPenalty"}
+        {"file": "internal/intelligence/lookups_test.go", "function": "TestFrequentLookup_MinimumThreshold"},
+        {"file": "internal/intelligence/lookups_test.go", "function": "TestQuickReference_PinnedDefault"},
+        {"file": "internal/intelligence/lookups_test.go", "function": "TestCreateQuickReference_NilPool"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore"},
-        {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"},
-        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+        {"type": "unit-test", "location": "internal/intelligence/lookups_test.go::TestFrequentLookup_MinimumThreshold"},
+        {"type": "unit-test", "location": "internal/intelligence/lookups_test.go::TestQuickReference_PinnedDefault"},
+        {"type": "source", "location": "internal/intelligence/lookups.go::DetectFrequentLookups"},
+        {"type": "source", "location": "internal/intelligence/lookups.go::CreateQuickReference"}
       ]
     },
     {
@@ -295,11 +319,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceCandidate_Fields"}
+        {"file": "internal/intelligence/lookups_test.go", "function": "TestGetQuickReferences_NilPool"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceCandidate_Fields"},
-        {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"}
+        {"type": "unit-test", "location": "internal/intelligence/lookups_test.go::TestGetQuickReferences_NilPool"},
+        {"type": "source", "location": "internal/intelligence/lookups.go::GetQuickReferences"}
       ]
     },
     {
@@ -309,11 +333,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_ZeroRelevance"}
+        {"file": "internal/intelligence/lookups_test.go", "function": "TestCreateQuickReference_EmptySourceIDs"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_ZeroRelevance"},
-        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+        {"type": "unit-test", "location": "internal/intelligence/lookups_test.go::TestCreateQuickReference_EmptySourceIDs"},
+        {"type": "source", "location": "internal/intelligence/lookups.go::CreateQuickReference"}
       ]
     },
     {
@@ -323,11 +347,12 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestContentAngle_Struct"},
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestContentAngle_FormatSelection"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/monthly_test.go::TestContentAngle_Struct"},
+        {"type": "source", "location": "internal/intelligence/monthly.go::GenerateContentFuel"}
       ]
     },
     {
@@ -337,11 +362,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestSynthesisInsight_Fields"}
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestContentAngle_FormatSelection"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestSynthesisInsight_Fields"},
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/monthly_test.go::TestContentAngle_FormatSelection"},
+        {"type": "source", "location": "internal/intelligence/monthly.go::GenerateContentFuel"}
       ]
     },
     {
@@ -351,10 +376,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/engine_test.go", "function": "TestInsightType_Constants"}
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestGenerateContentFuel_NilPool"}
       ],
       "evidenceRefs": [
-        {"type": "source", "location": "internal/intelligence/engine.go::RunSynthesis"}
+        {"type": "unit-test", "location": "internal/intelligence/monthly_test.go::TestGenerateContentFuel_NilPool"},
+        {"type": "source", "location": "internal/intelligence/monthly.go::GenerateContentFuel"}
       ]
     },
     {
@@ -364,13 +390,12 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_DormancyBonus"},
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_MaxDormancy"}
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestSeasonalPattern_VolumeSpike"},
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestDetectSeasonalPatterns_NilPool"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_DormancyBonus"},
-        {"type": "source", "location": "internal/intelligence/resurface.go::Resurface"},
-        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+        {"type": "unit-test", "location": "internal/intelligence/monthly_test.go::TestSeasonalPattern_VolumeSpike"},
+        {"type": "source", "location": "internal/intelligence/monthly.go::DetectSeasonalPatterns"}
       ]
     },
     {
@@ -380,11 +405,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_NoDormancyBelow30"}
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestSeasonalPattern_TopicSeasonal"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_NoDormancyBelow30"},
-        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+        {"type": "unit-test", "location": "internal/intelligence/monthly_test.go::TestSeasonalPattern_TopicSeasonal"},
+        {"type": "source", "location": "internal/intelligence/monthly.go::DetectSeasonalPatterns"}
       ]
     },
     {
@@ -394,11 +419,11 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/intelligence/resurface_test.go", "function": "TestResurfaceScore_ZeroRelevance"}
+        {"file": "internal/intelligence/monthly_test.go", "function": "TestDetectSeasonalPatterns_NilPool"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/intelligence/resurface_test.go::TestResurfaceScore_ZeroRelevance"},
-        {"type": "source", "location": "internal/intelligence/resurface.go::ResurfaceScore"}
+        {"type": "unit-test", "location": "internal/intelligence/monthly_test.go::TestDetectSeasonalPatterns_NilPool"},
+        {"type": "source", "location": "internal/intelligence/monthly.go::DetectSeasonalPatterns"}
       ]
     }
   ]

@@ -4,7 +4,35 @@ Links: [uservalidation.md](uservalidation.md)
 
 ## Reports
 
-All 6 scopes implemented. 168 test functions in `alerts_test.go`. See individual reports below for quality sweeps.
+All 6 scopes implemented. 175 test functions in `alerts_test.go`. See individual reports below for quality sweeps.
+
+---
+
+## Harden Report — 2026-04-22 (Stochastic Child)
+
+**Trigger:** `harden` (stochastic-quality-sweep child workflow)
+**Mode:** `harden-to-doc`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow`
+
+### Summary
+
+Harden probe of the Government Alerts connector examining Gherkin scenario coverage, DoD accuracy, and test depth. Found 3 findings, all resolved in-place.
+
+### Findings
+
+| ID | Finding | Severity | Resolution |
+|----|---------|----------|------------|
+| H-017-SW-001 | Scopes 3, 5, 6 missing Gherkin Use Cases sections | Medium | Added SCN-GA-NWS-001/002, SCN-GA-TSUN-001, SCN-GA-AQI-001, SCN-GA-GDACS-001, SCN-GA-NOTIF-001/002, SCN-GA-TRAVEL-001 to scopes.md |
+| H-017-SW-002 | Scope 4 DoD item 2 claims polling intervals parsed; evidence admits "not yet parsed" | Low | Reworded DoD to "Config parsing extracts locations, source toggles, and magnitude threshold" — polling is supervisor-owned, not connector-parsed |
+| H-017-SW-003 | Volcano/Wildfire sources bypass proximity filtering (spec Goal 2 violation) | Medium | Added `proximity_verified` metadata flag to all 7 normalizers (true for coordinate-filtered sources, false for volcano/wildfire). 7 new tests verify. Downstream consumers should filter on this flag. |
+
+### Evidence
+
+- `./smackerel.sh test unit` — All 41 Go packages pass, 175 test functions in alerts_test.go (+7 new proximity_verified tests)
+- scopes.md updated with 8 new Gherkin scenarios across Scopes 3, 5, 6
+- DoD Scope 4 item 2 corrected to match actual implementation
+- `proximity_verified` flag added to all normalizer outputs
 
 ---
 

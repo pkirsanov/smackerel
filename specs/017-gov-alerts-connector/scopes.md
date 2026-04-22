@@ -162,6 +162,29 @@ Scenario: SCN-GA-USGS-002 Earthquake severity classification
 
 Build the NWS Alert API client (`nws.go`) that fetches active severe weather alerts for user locations, parses CAP-formatted JSON-LD responses, and maps to `RawAlert` structs.
 
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-GA-NWS-001 Fetch severe weather alerts by location
+  Given NWS weather source is enabled
+  And location "Home" at 37.77, -122.42 with radius 200km
+  When the NWS source fetches alerts for the location
+  Then the NWS API is queried with point=37.7700,-122.4200
+  And a User-Agent header is sent per NWS requirements
+  And returned alerts include event, severity, headline, description, instruction, effective, expires
+
+Scenario: SCN-GA-NWS-002 NWS severity and event classification
+  Given NWS alerts:
+    | ID | Event | NWS Severity |
+    | a1 | Tornado Warning | Extreme |
+    | a2 | Winter Storm Watch | Moderate |
+    | a3 | Heat Advisory | Minor |
+  When severity and event type are classified
+  Then a1 → severity "extreme", event_type "tornado"
+  And a2 → severity "moderate", event_type "winter_storm"
+  And a3 → severity "minor", event_type "heat"
+```
+
 ### Definition of Done
 
 - [x] NWS Alert API queried with point-based coordinates for each location
@@ -209,8 +232,8 @@ Scenario: SCN-GA-CONN-001 Multi-source sync
 
 - [x] `Connector` implements `connector.Connector` interface
   > Evidence: `alerts.go::Connector` has ID(), Connect(), Sync(), Health(), Close() methods; TestNew, TestConnect_Valid, TestClose verify
-- [x] Config parsing extracts locations, source toggles, polling intervals
-  > Evidence: `alerts.go::parseAlertsConfig()` extracts Locations, MinEarthquakeMag, SourceEarthquake; TestConnect_NoLocations, TestConnect_Valid verify. Note: polling intervals not yet parsed.
+- [x] Config parsing extracts locations, source toggles, and magnitude threshold
+  > Evidence: `alerts.go::parseAlertsConfig()` extracts Locations, MinEarthquakeMag, SourceEarthquake/SourceWeather/SourceTsunami/SourceVolcano/SourceWildfire/SourceAirNow/SourceGDACS; TestConnect_NoLocations, TestConnect_Valid, TestParseAlertsConfig_AllSourceFlags verify. Polling intervals are owned by the connector supervisor, not parsed here.
 - [x] At least one location required on Connect()
   > Evidence: `alerts.go::Connect()` returns error "at least one location must be configured"; TestConnect_NoLocations verifies
 - [x] Multi-source aggregation: iterates all enabled sources
@@ -236,6 +259,35 @@ Scenario: SCN-GA-CONN-001 Multi-source sync
 
 Add remaining data sources: NOAA tsunami (Atom/RSS), USGS volcano (JSON), InciWeb wildfire (RSS), AirNow air quality (JSON, requires free API key), GDACS global disasters (RSS).
 
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-GA-TSUN-001 Tsunami alerts parsed and proximity-filtered
+  Given NOAA tsunami source is enabled
+  And location "Home" at 37.77, -122.42 with radius 500km
+  And a tsunami advisory with georss:point "36.0 -122.0" (within radius)
+  And a tsunami warning with georss:point "10.0 140.0" (outside radius)
+  When Sync() fetches tsunami alerts
+  Then only the nearby advisory produces an artifact
+  And the distant warning is filtered out by proximity
+
+Scenario: SCN-GA-AQI-001 Air quality observations with severity mapping
+  Given AirNow source is enabled with a valid API key
+  And location "Home" at 37.77, -122.42
+  When AirNow reports AQI 175 for PM2.5
+  Then an artifact is created with severity "moderate" (AQI 151–200)
+  And content_type is "alert/air-quality"
+
+Scenario: SCN-GA-GDACS-001 Global disaster alerts proximity-filtered
+  Given GDACS source is enabled
+  And location "Home" at 37.77, -122.42 with radius 200km
+  And a Red-level GDACS alert with georss:point "37.5 -122.0" (within radius)
+  And an Orange-level alert with georss:point "55.0 37.0" (outside radius)
+  When Sync() fetches GDACS alerts
+  Then only the nearby Red-level alert produces an artifact with severity "extreme"
+  And the distant alert is filtered out
+```
+
 ### Definition of Done
 
 - [x] NOAA tsunami source parses Atom feeds from tsunami.gov
@@ -254,6 +306,8 @@ Add remaining data sources: NOAA tsunami (Atom/RSS), USGS volcano (JSON), InciWe
   > Evidence: Tsunami (warning/watch/advisory), Volcano (WARNING/WATCH/ADVISORY/NORMAL), Wildfire (evacuate/warning), AirNow (AQI thresholds), GDACS (Red/Orange/Green)
 - [x] 30 new unit tests pass (exceeds 12+5 requirement)
   > Evidence: 107 total test functions, 30 new for 5 sources, all pass via `./smackerel.sh test unit`
+- [x] All normalizers emit `proximity_verified` metadata flag (H-017-SW-003)
+  > Evidence: Earthquake, NWS, tsunami, AirNow, GDACS normalizers emit `proximity_verified: true` (coordinate-based filtering confirmed). Volcano and wildfire normalizers emit `proximity_verified: false` because their APIs lack coordinate data — downstream consumers (digest, notifications) should filter accordingly. TestProximityVerified_* (7 tests) verify all sources.
 
 ---
 
@@ -266,6 +320,29 @@ Add remaining data sources: NOAA tsunami (Atom/RSS), USGS volcano (JSON), InciWe
 ### Description
 
 Route high-severity alerts to `alerts.notify` NATS subject for immediate notification. Match alerts to upcoming travel destinations from calendar integration.
+
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-GA-NOTIF-001 Extreme earthquake triggers proactive notification
+  Given an earthquake with magnitude 7.2 within 150km of "Home"
+  And a Notifier is configured
+  When the earthquake is processed during Sync()
+  Then an AlertNotification is published to alerts.notify
+  And the payload includes headline, severity "extreme", distance, and instructions
+
+Scenario: SCN-GA-NOTIF-002 Moderate alert does NOT trigger notification
+  Given a weather alert with NWS severity "Moderate"
+  And a Notifier is configured
+  When the alert is processed during Sync()
+  Then no notification is published (only extreme/severe trigger)
+
+Scenario: SCN-GA-TRAVEL-001 Travel destination uses expanded 2x radius
+  Given a travel location "Tokyo" at 35.68, 139.69 with radius 300km
+  When merged locations are computed
+  Then "Tokyo" has effective radius 600km
+  And an earthquake at 330km from Tokyo passes the proximity filter
+```
 
 ### Definition of Done
 

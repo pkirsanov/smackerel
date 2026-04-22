@@ -595,17 +595,18 @@ func normalizeEarthquake(eq Earthquake, match *ProximityMatch) connector.RawArti
 		RawContent:  fmt.Sprintf("Magnitude %.1f earthquake at depth %.1f km. %s. %.0f km from %s.", eq.Magnitude, eq.DepthKm, eq.Place, match.DistanceKm, match.LocationName),
 		URL:         safeEventPageURL(eq.ID),
 		Metadata: map[string]interface{}{
-			"alert_id":         eq.ID,
-			"source":           "usgs",
-			"event_type":       "earthquake",
-			"magnitude":        eq.Magnitude,
-			"depth_km":         eq.DepthKm,
-			"latitude":         eq.Latitude,
-			"longitude":        eq.Longitude,
-			"severity":         severity,
-			"distance_km":      match.DistanceKm,
-			"nearest_location": match.LocationName,
-			"processing_tier":  tier,
+			"alert_id":           eq.ID,
+			"source":             "usgs",
+			"event_type":         "earthquake",
+			"magnitude":          eq.Magnitude,
+			"depth_km":           eq.DepthKm,
+			"latitude":           eq.Latitude,
+			"longitude":          eq.Longitude,
+			"severity":           severity,
+			"distance_km":        match.DistanceKm,
+			"nearest_location":   match.LocationName,
+			"processing_tier":    tier,
+			"proximity_verified": true,
 		},
 		CapturedAt: eq.Time,
 	}
@@ -987,17 +988,18 @@ func normalizeNWSAlert(alert NWSAlert, match *ProximityMatch) connector.RawArtif
 	}
 
 	metadata := map[string]interface{}{
-		"alert_id":         alert.ID,
-		"source":           "nws",
-		"event_type":       eventType,
-		"event":            alert.Event,
-		"severity":         severity,
-		"certainty":        alert.Certainty,
-		"urgency":          alert.Urgency,
-		"area_desc":        alert.AreaDesc,
-		"distance_km":      match.DistanceKm,
-		"nearest_location": match.LocationName,
-		"processing_tier":  tier,
+		"alert_id":           alert.ID,
+		"source":             "nws",
+		"event_type":         eventType,
+		"event":              alert.Event,
+		"severity":           severity,
+		"certainty":          alert.Certainty,
+		"urgency":            alert.Urgency,
+		"area_desc":          alert.AreaDesc,
+		"distance_km":        match.DistanceKm,
+		"nearest_location":   match.LocationName,
+		"processing_tier":    tier,
+		"proximity_verified": true,
 	}
 	// Store effective/expires timestamps for alert lifecycle management
 	// and temporal queries (IMP-017-IMPROVE-007).
@@ -1133,11 +1135,12 @@ func normalizeTsunamiAlert(alert TsunamiAlert, match *ProximityMatch) connector.
 	}
 
 	metadata := map[string]interface{}{
-		"alert_id":        alert.ID,
-		"source":          "noaa_tsunami",
-		"event_type":      "tsunami",
-		"severity":        alert.Severity,
-		"processing_tier": tier,
+		"alert_id":           alert.ID,
+		"source":             "noaa_tsunami",
+		"event_type":         "tsunami",
+		"severity":           alert.Severity,
+		"processing_tier":    tier,
+		"proximity_verified": true,
 	}
 	if match != nil {
 		metadata["distance_km"] = match.DistanceKm
@@ -1273,14 +1276,15 @@ func normalizeVolcanoAlert(alert VolcanoAlert) connector.RawArtifact {
 		RawContent:  fmt.Sprintf("Volcano %s has alert level %s with aviation color code %s.", alert.Volcano, alert.AlertLevel, alert.ColorCode),
 		URL:         "",
 		Metadata: map[string]interface{}{
-			"alert_id":        alert.ID,
-			"source":          "usgs_volcano",
-			"event_type":      "volcano",
-			"volcano_name":    alert.Volcano,
-			"alert_level":     alert.AlertLevel,
-			"color_code":      alert.ColorCode,
-			"severity":        alert.Severity,
-			"processing_tier": tier,
+			"alert_id":           alert.ID,
+			"source":             "usgs_volcano",
+			"event_type":         "volcano",
+			"volcano_name":       alert.Volcano,
+			"alert_level":        alert.AlertLevel,
+			"color_code":         alert.ColorCode,
+			"severity":           alert.Severity,
+			"processing_tier":    tier,
+			"proximity_verified": false,
 		},
 		CapturedAt: capturedAt,
 	}
@@ -1404,11 +1408,12 @@ func normalizeWildfireAlert(alert WildfireAlert) connector.RawArtifact {
 		RawContent:  alert.Description,
 		URL:         alert.Link,
 		Metadata: map[string]interface{}{
-			"alert_id":        alert.ID,
-			"source":          "inciweb",
-			"event_type":      "wildfire",
-			"severity":        alert.Severity,
-			"processing_tier": tier,
+			"alert_id":           alert.ID,
+			"source":             "inciweb",
+			"event_type":         "wildfire",
+			"severity":           alert.Severity,
+			"processing_tier":    tier,
+			"proximity_verified": false,
 		},
 		CapturedAt: capturedAt,
 	}
@@ -1531,16 +1536,17 @@ func normalizeAirNowAlert(obs AirNowObservation, match *ProximityMatch) connecto
 		RawContent:  fmt.Sprintf("AQI %d (%s) for %s in %s. Pollutant: %s.", obs.AQI, obs.Category, match.LocationName, obs.ReportingArea, obs.Pollutant),
 		URL:         "",
 		Metadata: map[string]interface{}{
-			"alert_id":         obs.ID,
-			"source":           "airnow",
-			"event_type":       "air_quality",
-			"aqi":              obs.AQI,
-			"category":         obs.Category,
-			"pollutant":        obs.Pollutant,
-			"reporting_area":   obs.ReportingArea,
-			"severity":         obs.Severity,
-			"nearest_location": match.LocationName,
-			"processing_tier":  tier,
+			"alert_id":           obs.ID,
+			"source":             "airnow",
+			"event_type":         "air_quality",
+			"aqi":                obs.AQI,
+			"category":           obs.Category,
+			"pollutant":          obs.Pollutant,
+			"reporting_area":     obs.ReportingArea,
+			"severity":           obs.Severity,
+			"nearest_location":   match.LocationName,
+			"processing_tier":    tier,
+			"proximity_verified": true,
 		},
 		CapturedAt: capturedAt,
 	}
@@ -1662,11 +1668,12 @@ func normalizeGDACSAlert(alert GDACSAlert, match *ProximityMatch) connector.RawA
 	}
 
 	metadata := map[string]interface{}{
-		"alert_id":        alert.ID,
-		"source":          "gdacs",
-		"event_type":      "disaster",
-		"severity":        alert.Severity,
-		"processing_tier": tier,
+		"alert_id":           alert.ID,
+		"source":             "gdacs",
+		"event_type":         "disaster",
+		"severity":           alert.Severity,
+		"processing_tier":    tier,
+		"proximity_verified": true,
 	}
 	if match != nil {
 		metadata["distance_km"] = match.DistanceKm
