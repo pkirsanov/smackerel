@@ -1692,3 +1692,362 @@ func TestValidateWeatherValues(t *testing.T) {
 		})
 	}
 }
+
+// ==========================================================================
+// Forecast tests — SCN-WX-OM-001 forecast coverage + Scope 2 normalization
+// ==========================================================================
+
+func TestDecodeForecast_ValidJSON(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{
+		"daily": {
+			"time": ["2026-04-22", "2026-04-23", "2026-04-24"],
+			"temperature_2m_max": [22.5, 20.0, 18.3],
+			"temperature_2m_min": [12.0, 10.5, 9.0],
+			"weather_code": [0, 2, 65],
+			"precipitation_sum": [0.0, 0.0, 5.2]
+		}
+	}`))
+	days, err := c.decodeForecast(body, "forecast-test-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(days) != 3 {
+		t.Fatalf("expected 3 forecast days, got %d", len(days))
+	}
+	if days[0].Date != "2026-04-22" {
+		t.Errorf("day 0 date = %q, want %q", days[0].Date, "2026-04-22")
+	}
+	if days[0].TempMax != 22.5 {
+		t.Errorf("day 0 TempMax = %v, want 22.5", days[0].TempMax)
+	}
+	if days[0].TempMin != 12.0 {
+		t.Errorf("day 0 TempMin = %v, want 12.0", days[0].TempMin)
+	}
+	if days[0].Description != "Clear sky" {
+		t.Errorf("day 0 Description = %q, want %q", days[0].Description, "Clear sky")
+	}
+	if days[2].PrecipitationMM != 5.2 {
+		t.Errorf("day 2 PrecipitationMM = %v, want 5.2", days[2].PrecipitationMM)
+	}
+	if days[2].Description != "Rain" {
+		t.Errorf("day 2 Description = %q, want %q", days[2].Description, "Rain")
+	}
+
+	// Verify caching with 2h TTL.
+	c.mu.RLock()
+	entry, ok := c.cache["forecast-test-key"]
+	c.mu.RUnlock()
+	if !ok {
+		t.Fatal("expected forecast to be cached")
+	}
+	cached := entry.data.([]ForecastDay)
+	if len(cached) != 3 {
+		t.Errorf("cached forecast has %d days, want 3", len(cached))
+	}
+}
+
+func TestDecodeForecast_MalformedJSON(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`not json`))
+	_, err := c.decodeForecast(body, "bad-forecast-key")
+	if err == nil {
+		t.Error("expected error for malformed JSON")
+	}
+}
+
+func TestDecodeForecast_EmptyDailyData(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{"daily":{"time":[],"temperature_2m_max":[],"temperature_2m_min":[],"weather_code":[],"precipitation_sum":[]}}`))
+	_, err := c.decodeForecast(body, "empty-forecast-key")
+	if err == nil {
+		t.Error("expected error for empty daily data")
+	}
+	if !strings.Contains(err.Error(), "no daily data") {
+		t.Errorf("error should mention missing data, got: %v", err)
+	}
+}
+
+func TestDecodeForecast_InconsistentArrayLengths(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{"daily":{"time":["2026-04-22","2026-04-23"],"temperature_2m_max":[20],"temperature_2m_min":[10,8],"weather_code":[0,2],"precipitation_sum":[0,0]}}`))
+	_, err := c.decodeForecast(body, "inconsistent-key")
+	if err == nil {
+		t.Error("expected error for inconsistent array lengths")
+	}
+}
+
+func TestDecodeForecast_InfValues(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{"daily":{"time":["2026-04-22"],"temperature_2m_max":[1e309],"temperature_2m_min":[10],"weather_code":[0],"precipitation_sum":[0]}}`))
+	_, err := c.decodeForecast(body, "inf-forecast-key")
+	if err == nil {
+		t.Fatal("expected error for +Inf temperature in forecast")
+	}
+}
+
+func TestFetchForecast_CacheHit(t *testing.T) {
+	hitCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"daily":{"time":["2026-04-22"],"temperature_2m_max":[20],"temperature_2m_min":[10],"weather_code":[0],"precipitation_sum":[0]}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	c.config.Precision = 2
+
+	// First call — API hit.
+	f1, err := c.fetchForecast(context.Background(), 37.77, -122.42, 7)
+	if err != nil {
+		t.Fatalf("first fetch error: %v", err)
+	}
+	if hitCount != 1 {
+		t.Errorf("expected 1 HTTP call, got %d", hitCount)
+	}
+	if len(f1) != 1 {
+		t.Fatalf("expected 1 forecast day, got %d", len(f1))
+	}
+
+	// Second call — cache hit, no HTTP.
+	f2, err := c.fetchForecast(context.Background(), 37.77, -122.42, 7)
+	if err != nil {
+		t.Fatalf("second fetch error: %v", err)
+	}
+	if hitCount != 1 {
+		t.Errorf("expected still 1 HTTP call after cache hit, got %d", hitCount)
+	}
+	if len(f2) != len(f1) {
+		t.Error("cached result should match first result")
+	}
+}
+
+func TestSync_ProducesForecastArtifacts(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if strings.Contains(r.URL.RawQuery, "daily=") {
+			// Forecast request.
+			fmt.Fprint(w, `{"daily":{"time":["2026-04-22","2026-04-23"],"temperature_2m_max":[22,20],"temperature_2m_min":[12,10],"weather_code":[0,65],"precipitation_sum":[0,3.5]}}`)
+		} else {
+			// Current conditions request.
+			fmt.Fprint(w, `{"current":{"temperature_2m":18.0,"apparent_temperature":16.5,"relative_humidity_2m":72,"wind_speed_10m":8.5,"weather_code":0,"is_day":1}}`)
+		}
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "TestCity", "latitude": 40.0, "longitude": -74.0},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("connect error: %v", err)
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+
+	// Should produce 2 artifacts: 1 current + 1 forecast.
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts (current + forecast), got %d", len(artifacts))
+	}
+
+	// Verify current artifact.
+	if artifacts[0].ContentType != "weather/current" {
+		t.Errorf("artifact 0 ContentType = %q, want %q", artifacts[0].ContentType, "weather/current")
+	}
+
+	// Verify forecast artifact.
+	fa := artifacts[1]
+	if fa.ContentType != "weather/forecast" {
+		t.Errorf("forecast ContentType = %q, want %q", fa.ContentType, "weather/forecast")
+	}
+	if !strings.Contains(fa.Title, "Forecast") {
+		t.Errorf("forecast Title should contain 'Forecast', got %q", fa.Title)
+	}
+	if !strings.Contains(fa.Title, "TestCity") {
+		t.Errorf("forecast Title should contain location name, got %q", fa.Title)
+	}
+	if fa.Metadata["forecast_days"] != 2 {
+		t.Errorf("forecast metadata forecast_days = %v, want 2", fa.Metadata["forecast_days"])
+	}
+	if !strings.Contains(fa.RawContent, "Clear sky") {
+		t.Errorf("forecast RawContent should contain weather description, got %q", fa.RawContent)
+	}
+	if !strings.Contains(fa.RawContent, "Rain") {
+		t.Errorf("forecast RawContent should contain rain description, got %q", fa.RawContent)
+	}
+}
+
+func TestSync_ForecastFailure_StillProducesCurrent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.RawQuery, "daily=") {
+			// Forecast fails.
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		// Current succeeds.
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{"temperature_2m":18.0,"relative_humidity_2m":72,"wind_speed_10m":8.5,"weather_code":0}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.baseURL = srv.URL
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"locations": []interface{}{
+				map[string]interface{}{"name": "City", "latitude": 40.0, "longitude": -74.0},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync should succeed even if forecast fails: %v", err)
+	}
+	// Only current — forecast failed gracefully.
+	if len(artifacts) != 1 {
+		t.Errorf("expected 1 artifact (current only), got %d", len(artifacts))
+	}
+	if artifacts[0].ContentType != "weather/current" {
+		t.Errorf("artifact should be current, got %q", artifacts[0].ContentType)
+	}
+}
+
+// ==========================================================================
+// Historical weather tests — SCN-WX-OM-003
+// ==========================================================================
+
+func TestDecodeHistorical_ValidJSON(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{
+		"daily": {
+			"time": ["2026-03-15"],
+			"temperature_2m_max": [14.0],
+			"temperature_2m_min": [6.0],
+			"weather_code": [65],
+			"precipitation_sum": [8.2]
+		}
+	}`))
+	cw, err := c.decodeHistorical(body, "historical-test-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Average of max 14 and min 6 = 10.
+	if cw.Temperature != 10.0 {
+		t.Errorf("temperature = %v, want 10.0 (avg of 14 and 6)", cw.Temperature)
+	}
+	if cw.Description != "Rain" {
+		t.Errorf("description = %q, want %q", cw.Description, "Rain")
+	}
+	if cw.WeatherCode != 65 {
+		t.Errorf("weather_code = %d, want 65", cw.WeatherCode)
+	}
+
+	// Historical entries should be cached permanently.
+	c.mu.RLock()
+	entry, ok := c.cache["historical-test-key"]
+	c.mu.RUnlock()
+	if !ok {
+		t.Fatal("expected historical weather to be cached")
+	}
+	if time.Until(entry.expiresAt) < 365*24*time.Hour {
+		t.Error("historical cache should have very long TTL (permanent)")
+	}
+}
+
+func TestDecodeHistorical_MalformedJSON(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`not json`))
+	_, err := c.decodeHistorical(body, "bad-key")
+	if err == nil {
+		t.Error("expected error for malformed JSON")
+	}
+}
+
+func TestDecodeHistorical_EmptyData(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{"daily":{"time":[],"temperature_2m_max":[],"temperature_2m_min":[],"weather_code":[],"precipitation_sum":[]}}`))
+	_, err := c.decodeHistorical(body, "empty-key")
+	if err == nil {
+		t.Error("expected error for empty historical data")
+	}
+}
+
+func TestDecodeHistorical_InfValues(t *testing.T) {
+	c := New("weather")
+	body := io.NopCloser(strings.NewReader(`{"daily":{"time":["2026-03-15"],"temperature_2m_max":[1e309],"temperature_2m_min":[10],"weather_code":[0],"precipitation_sum":[0]}}`))
+	_, err := c.decodeHistorical(body, "inf-key")
+	if err == nil {
+		t.Fatal("expected error for +Inf in historical data")
+	}
+}
+
+func TestFetchHistorical_CacheHit(t *testing.T) {
+	hitCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"daily":{"time":["2026-03-15"],"temperature_2m_max":[14],"temperature_2m_min":[6],"weather_code":[65],"precipitation_sum":[8]}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.archiveURL = srv.URL
+	c.config.Precision = 2
+
+	// First call — API hit.
+	h1, err := c.fetchHistorical(context.Background(), 47.37, 8.54, "2026-03-15")
+	if err != nil {
+		t.Fatalf("first fetch error: %v", err)
+	}
+	if hitCount != 1 {
+		t.Errorf("expected 1 HTTP call, got %d", hitCount)
+	}
+	if h1.Temperature != 10.0 {
+		t.Errorf("temperature = %v, want 10.0", h1.Temperature)
+	}
+
+	// Second call with same params — cache hit, no HTTP.
+	h2, err := c.fetchHistorical(context.Background(), 47.37, 8.54, "2026-03-15")
+	if err != nil {
+		t.Fatalf("second fetch error: %v", err)
+	}
+	if hitCount != 1 {
+		t.Errorf("expected still 1 HTTP call after cache hit, got %d", hitCount)
+	}
+	if h2.Temperature != h1.Temperature {
+		t.Error("cached result should match first result")
+	}
+}
+
+func TestFetchHistorical_ArchiveURL(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"daily":{"time":["2026-03-15"],"temperature_2m_max":[14],"temperature_2m_min":[6],"weather_code":[0],"precipitation_sum":[0]}}`)
+	}))
+	defer srv.Close()
+
+	c := New("weather")
+	c.archiveURL = srv.URL
+	c.config.Precision = 2
+
+	_, err := c.fetchHistorical(context.Background(), 37.77, -122.42, "2026-03-15")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPath != "/v1/archive" {
+		t.Errorf("expected archive API path /v1/archive, got %q", gotPath)
+	}
+}

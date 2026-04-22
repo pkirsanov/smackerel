@@ -535,7 +535,9 @@ SELECT
         SELECT DISTINCT t.tag FROM annotations t
         WHERE t.artifact_id = a.artifact_id AND t.annotation_type = 'tag_remove' AND t.tag IS NOT NULL
     ) AS tags,
-    COUNT(CASE WHEN a2.annotation_type = 'note' THEN 1 END)::INTEGER AS notes_count
+    COUNT(CASE WHEN a2.annotation_type = 'note' THEN 1 END)::INTEGER AS notes_count,
+    COUNT(*)::INTEGER AS total_events,
+    MAX(a2.created_at) AS last_annotated
 FROM (SELECT DISTINCT artifact_id FROM annotations) a
 LEFT JOIN annotations a2 ON a2.artifact_id = a.artifact_id
 GROUP BY a.artifact_id;

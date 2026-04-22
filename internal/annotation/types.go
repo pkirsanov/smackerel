@@ -75,4 +75,6 @@ type Summary struct {
 	LastUsed      *time.Time `json:"last_used,omitempty"`
 	Tags          []string   `json:"tags"`
 	NotesCount    int        `json:"notes_count"`
+	TotalEvents   int        `json:"total_events"`
+	LastAnnotated *time.Time `json:"last_annotated,omitempty"`
 }

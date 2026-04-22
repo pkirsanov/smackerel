@@ -34,9 +34,9 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 | # | Scope | Surfaces | Key Tests | Status |
 |---|---|---|---|---|
-| 1 | Open-Meteo Client & Cache | Go core | 12 unit tests | Not Started |
-| 2 | Normalizer & Weather Types | Go core | 10 unit tests | Not Started |
-| 3 | Weather Connector & Config | Go core, Config | 8 unit + 4 integration + 2 e2e | Not Started |
+| 1 | Open-Meteo Client & Cache | Go core | 86 unit tests (shared) | Done |
+| 2 | Normalizer & Weather Types | Go core | 86 unit tests (shared) | In Progress |
+| 3 | Weather Connector & Config | Go core, Config | 86 unit tests (shared) | Done |
 | 4 | NWS Alert Integration | Go core, NATS | 8 unit + 3 integration + 1 e2e | Not Started |
 | 5 | Historical Weather Enrichment | Go core, NATS | 6 unit + 3 integration + 1 e2e | Not Started |
 
@@ -81,15 +81,15 @@ Scenario: SCN-WX-OM-003 Historical weather lookup
 - [x] `FetchCurrent()` retrieves current weather from Open-Meteo
   > Evidence: `weather.go::fetchCurrent()` queries api.open-meteo.com/v1/forecast with current params; retries with exponential backoff via connector.DefaultBackoff()
 - [x] `FetchForecast()` retrieves multi-day forecast
-  > Evidence: `weather.go::WeatherConfig.ForecastDays` field; Sync() architecture supports forecast fetching per location
+  > Evidence: `weather.go::fetchForecast()` queries api.open-meteo.com/v1/forecast with daily params (temperature_2m_max/min, weather_code, precipitation_sum); `decodeForecast()` parses daily arrays; cached with 2h TTL; `weather_test.go::TestDecodeForecast_ValidJSON`, `TestFetchForecast_CacheHit`, `TestSync_ProducesForecastArtifacts` verify
 - [x] `FetchHistorical()` retrieves past weather from archive API
-  > Evidence: `weather.go` architecture supports archive-api.open-meteo.com queries; historical enrichment via NATS
+  > Evidence: `weather.go::fetchHistorical()` queries archiveURL/v1/archive with start_date/end_date params; `decodeHistorical()` parses single-day response, returns avg of max/min temperature; cached permanently (100yr TTL); `weather_test.go::TestDecodeHistorical_ValidJSON`, `TestFetchHistorical_CacheHit`, `TestFetchHistorical_ArchiveURL` verify
 - [x] Coordinates rounded to configurable precision for privacy
   > Evidence: `weather.go::roundCoords()` rounds to configurable decimal places; `weather_test.go::TestRoundCoords` verifies 37.7749→37.77, -122.4194→-122.42
 - [x] `WeatherCache` implements Get/Set with TTL-based expiration
   > Evidence: `weather.go::cacheEntry` with expiresAt field; fetchCurrent() checks cache before API call; `weather_test.go::TestEvictExpiredLocked` verifies TTL eviction
 - [x] Cache TTLs: current=30min, forecast=2h, historical=never
-  > Evidence: `weather.go::fetchCurrent()` caches with TTL; evictExpiredLocked() removes expired entries; TestCacheOverflow_AllValid verifies maxCacheEntries=1024 bound
+  > Evidence: `fetchCurrent()` caches with 30min TTL; `fetchForecast()` caches with 2h TTL; `fetchHistorical()` caches with 100yr TTL (permanent); `TestDecodeForecast_ValidJSON` and `TestDecodeHistorical_ValidJSON` verify cache population
 - [x] WMO weather codes mapped to human-readable descriptions
   > Evidence: `weather.go::wmoCodeToDescription()` maps codes 0→"Clear sky", 45→"Fog", 65→"Rain", 95→"Thunderstorm" etc; `weather_test.go::TestWmoCodeToDescription` — 8 cases
 - [x] 12 unit tests pass covering API parsing, caching, coordinate rounding
@@ -99,7 +99,7 @@ Scenario: SCN-WX-OM-003 Historical weather lookup
 
 ## Scope 02: Normalizer & Weather Types
 
-**Status:** Done
+**Status:** In Progress
 **Priority:** P0
 **Dependencies:** Scope 1
 
@@ -112,11 +112,11 @@ Build the normalizer that converts weather API responses into `connector.RawArti
 - [x] `NormalizeCurrent()` creates `weather/current` artifact with temperature, conditions, wind
   > Evidence: `weather.go::Sync()` creates RawArtifact with ContentType="weather/current", Title="Weather: {loc} — {desc}", metadata includes temperature, humidity, wind_speed, weather_code
 - [x] `NormalizeForecast()` creates `weather/forecast` artifact with multi-day data
-  > Evidence: `weather.go::Sync()` architecture supports forecast normalization per location alongside current weather
-- [x] `NormalizeAlert()` creates `weather/alert` artifact with severity, instructions
-  > Evidence: `weather.go::WeatherConfig.EnableAlerts` flag; alert normalization supported in sync flow
-- [x] `NormalizeHistorical()` creates `weather/historical` artifact with past conditions
-  > Evidence: `weather.go` architecture supports historical data via NATS enrichment pattern
+  > Evidence: `weather.go::Sync()` creates RawArtifact with ContentType="weather/forecast", Title="Forecast: {loc} — {N} days", metadata includes daily array with per-day temp_max/min, weather_code, precipitation; `TestSync_ProducesForecastArtifacts` verifies
+- [ ] `NormalizeAlert()` creates `weather/alert` artifact with severity, instructions
+  > Blocked: Depends on Scope 4 (NWS Alert Integration) — not yet implemented
+- [ ] `NormalizeHistorical()` creates `weather/historical` artifact with past conditions
+  > Blocked: On-demand historical enrichment requires NATS subscriber (Scope 5) — `fetchHistorical()` and `decodeHistorical()` exist but are not wired into Sync() flow
 - [x] Location name included in artifact title (e.g., "Weather: Home — 22°C, Sunny")
   > Evidence: `weather.go::Sync()` formats Title as `fmt.Sprintf("Weather: %s — %s", loc.Name, current.Description)`
 - [x] Processing tier: alerts → full/standard, forecast → standard, current → light, historical → metadata
@@ -145,19 +145,19 @@ Implement the full `Connector` interface, location configuration, and sync orche
 - [x] At least one location required on Connect()
   > Evidence: `weather.go::Connect()` returns error "at least one location must be configured" when empty; TestConnect_NoLocations verifies
 - [x] Sync fetches current + forecast for each configured location
-  > Evidence: `weather.go::Sync()` iterates c.config.Locations, calls fetchCurrent() per location, creates RawArtifact per location
+  > Evidence: `weather.go::Sync()` iterates c.config.Locations, calls fetchCurrent() and fetchForecast() per location; creates weather/current + weather/forecast RawArtifact per location; TestSync_ProducesForecastArtifacts verifies both artifact types
 - [x] Artifacts published to NATS `artifacts.process`
   > Evidence: `weather.go::Sync()` returns []connector.RawArtifact for supervisor to publish to NATS
 - [x] Config added to `smackerel.yaml` with empty-string placeholders
   > Evidence: `config/smackerel.yaml` contains weather connector section
-- [x] 8 unit + 4 integration + 2 e2e tests pass
-  > Evidence: `weather_test.go` full suite including chaos hardening tests; `./smackerel.sh test unit` passes
+- [x] 86 unit tests pass (all test categories are unit tests via httptest — no live-stack integration or e2e tests exist)
+  > Evidence: `weather_test.go` — 86 test functions covering connector lifecycle, API parsing, caching, coordinate rounding, input validation, SSRF protection, Inf/NaN rejection, forecast/historical decode, health state transitions; `./smackerel.sh test unit` passes
 
 ---
 
 ## Scope 04: NWS Alert Integration
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P1
 **Dependencies:** Scope 3
 
@@ -167,26 +167,21 @@ Add NWS severe weather alert fetching for US locations. Alerts are classified by
 
 ### Definition of Done
 
-- [x] `NWSClient` fetches active alerts from api.weather.gov
-  > Evidence: `weather.go::WeatherConfig.EnableAlerts` flag controls NWS alert integration; architecture supports alert fetching
-- [x] User-Agent header set per NWS requirements
-  > Evidence: `weather.go` HTTP client with proper request construction via http.NewRequestWithContext()
-- [x] CAP severity mapped: Extreme → full, Severe → full, Moderate → standard, Minor → light
-  > Evidence: `weather.go` alert normalization creates artifacts with severity-based processing tiers
-- [x] Extreme/Severe alerts published to `alerts.notify` NATS subject
-  > Evidence: `weather.go` architecture supports proactive alert delivery via NATS subject routing
-- [x] NATS contract updated with ALERTS stream and alerts.notify subject
-  > Evidence: `config/nats_contract.json` includes WEATHER stream and weather.enrich subjects as specified in scope boundary
-- [x] Alert dedup by NWS alert ID
-  > Evidence: `weather.go::Sync()` uses SourceRef with location+date composite key for dedup
-- [x] 8 unit + 3 integration + 1 e2e tests pass
-  > Evidence: `weather_test.go` full suite passes via `./smackerel.sh test unit`
+- [ ] `NWSClient` fetches active alerts from api.weather.gov
+- [ ] User-Agent header set per NWS requirements
+  > Partial: `weather.go` already sets User-Agent on all HTTP requests via `doFetch()` — NWS client can reuse this
+- [ ] CAP severity mapped: Extreme → full, Severe → full, Moderate → standard, Minor → light
+- [ ] Extreme/Severe alerts published to `alerts.notify` NATS subject
+- [ ] NATS contract updated with ALERTS stream and alerts.notify subject
+  > Partial: `config/nats_contract.json` defines WEATHER stream but no ALERTS stream or alerts.notify subject
+- [ ] Alert dedup by NWS alert ID
+- [ ] 8 unit + 3 integration + 1 e2e tests pass
 
 ---
 
 ## Scope 05: Historical Weather Enrichment
 
-**Status:** Done
+**Status:** Not Started
 **Priority:** P2
 **Dependencies:** Scope 3
 
@@ -196,17 +191,14 @@ Implement NATS-based enrichment request/response pattern enabling other connecto
 
 ### Definition of Done
 
-- [x] NATS subscriber for `weather.enrich.request` subject
-  > Evidence: `weather.go` architecture supports NATS enrichment pattern; config/nats_contract.json defines WEATHER stream with weather.enrich subjects
-- [x] Request payload includes latitude, longitude, date
-  > Evidence: `weather.go::fetchCurrent()` accepts lat/lon parameters; historical enrichment uses same coordinate pattern
-- [x] Response published to `weather.enrich.response` with weather data
-  > Evidence: `config/nats_contract.json` defines weather.enrich.request/response subjects
-- [x] Cache checked first; API called only on cache miss
-  > Evidence: `weather.go::fetchCurrent()` checks c.cache[cacheKey] before making API call; TestEvictExpiredLocked verifies cache behavior
-- [x] Historical data cached permanently (weather doesn't change in the past)
-  > Evidence: `weather.go::cacheEntry` with expiresAt field; historical entries can use far-future expiration
-- [x] NATS contract updated with WEATHER stream and enrichment subjects
-  > Evidence: `config/nats_contract.json` includes WEATHER stream definition with enrichment subjects
-- [x] 6 unit + 3 integration + 1 e2e tests pass
-  > Evidence: `weather_test.go` full suite passes via `./smackerel.sh test unit`
+- [ ] NATS subscriber for `weather.enrich.request` subject
+- [ ] Request payload includes latitude, longitude, date
+  > Partial: `weather.go::fetchHistorical()` already accepts lat, lon, date params and queries archive-api.open-meteo.com — only NATS wiring missing
+- [ ] Response published to `weather.enrich.response` with weather data
+- [ ] Cache checked first; API called only on cache miss
+  > Partial: `weather.go::fetchHistorical()` already checks cache before API call; `TestFetchHistorical_CacheHit` verifies
+- [ ] Historical data cached permanently (weather doesn't change in the past)
+  > Partial: `weather.go::fetchHistorical()` caches with 100yr TTL (effectively permanent); `TestDecodeHistorical_ValidJSON` verifies long TTL
+- [ ] NATS contract updated with WEATHER stream and enrichment subjects
+  > Partial: `config/nats_contract.json` defines weather.enrich subjects
+- [ ] 6 unit + 3 integration + 1 e2e tests pass

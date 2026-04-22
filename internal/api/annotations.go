@@ -5,11 +5,22 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/smackerel/smackerel/internal/annotation"
 )
+
+const (
+	// maxAnnotationBodySize limits request body for annotation endpoints (64 KB).
+	maxAnnotationBodySize = 64 << 10
+	// maxAnnotationTextLen limits the freeform annotation text length (2000 chars).
+	maxAnnotationTextLen = 2000
+)
+
+// validTagRe matches the tag pattern accepted by the annotation parser: word chars and hyphens.
+var validTagRe = regexp.MustCompile(`^[\w-]+$`)
 
 // CreateAnnotationRequest is the JSON body for POST /api/artifacts/{id}/annotations.
 type CreateAnnotationRequest struct {
@@ -40,6 +51,7 @@ func (h *AnnotationHandlers) CreateAnnotation(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxAnnotationBodySize)
 	var req CreateAnnotationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
@@ -48,6 +60,11 @@ func (h *AnnotationHandlers) CreateAnnotation(w http.ResponseWriter, r *http.Req
 
 	if req.Text == "" {
 		http.Error(w, `{"error":"text field required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Text) > maxAnnotationTextLen {
+		http.Error(w, `{"error":"annotation text too long (max 2000 chars)"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -135,6 +152,7 @@ func (h *AnnotationHandlers) RecordTelegramMessageArtifact(w http.ResponseWriter
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxAnnotationBodySize)
 	var req RecordTelegramMessageArtifactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
@@ -210,6 +228,11 @@ func (h *AnnotationHandlers) DeleteTag(w http.ResponseWriter, r *http.Request) {
 	tag := chi.URLParam(r, "tag")
 	if tag == "" {
 		http.Error(w, `{"error":"tag required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if !validTagRe.MatchString(tag) {
+		http.Error(w, `{"error":"invalid tag format"}`, http.StatusBadRequest)
 		return
 	}
 

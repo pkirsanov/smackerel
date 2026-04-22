@@ -182,10 +182,12 @@ func (s *Store) GetSummary(ctx context.Context, artifactID string) (*Summary, er
 
 	err := s.Pool.QueryRow(ctx, `
 		SELECT current_rating, average_rating, rating_count,
-		       times_used, last_used, COALESCE(tags, '{}'), notes_count
+		       times_used, last_used, COALESCE(tags, '{}'), notes_count,
+		       total_events, last_annotated
 		FROM artifact_annotation_summary WHERE artifact_id = $1
 	`, artifactID).Scan(&sum.CurrentRating, &sum.AverageRating, &sum.RatingCount,
-		&sum.TimesUsed, &sum.LastUsed, &sum.Tags, &sum.NotesCount)
+		&sum.TimesUsed, &sum.LastUsed, &sum.Tags, &sum.NotesCount,
+		&sum.TotalEvents, &sum.LastAnnotated)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return &sum, nil

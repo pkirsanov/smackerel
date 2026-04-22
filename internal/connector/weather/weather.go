@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,6 +52,7 @@ type Connector struct {
 	httpClient *http.Client
 	cache      map[string]*cacheEntry
 	baseURL    string // overridable for testing; defaults to Open-Meteo API
+	archiveURL string // overridable for testing; defaults to Open-Meteo Archive API
 }
 
 // WeatherConfig holds parsed weather-specific configuration.
@@ -87,8 +89,9 @@ func New(id string) *Connector {
 				return fmt.Errorf("weather connector refuses redirect to %s", req.URL.Hostname())
 			},
 		},
-		cache:   make(map[string]*cacheEntry),
-		baseURL: "https://api.open-meteo.com",
+		cache:      make(map[string]*cacheEntry),
+		baseURL:    "https://api.open-meteo.com",
+		archiveURL: "https://archive-api.open-meteo.com",
 	}
 }
 
@@ -167,6 +170,41 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			},
 			CapturedAt: now,
 		})
+
+		// Forecast (non-fatal — degraded if unavailable)
+		forecast, err := c.fetchForecast(syncCtx, lat, lon, cfg.ForecastDays)
+		if err != nil {
+			slog.Warn("weather forecast fetch failed", "location", loc.Name, "error", err)
+		} else if len(forecast) > 0 {
+			var forecastLines []string
+			forecastMeta := make([]map[string]interface{}, len(forecast))
+			for i, day := range forecast {
+				forecastLines = append(forecastLines, fmt.Sprintf("%s: %.0f/%.0f°C, %s", day.Date, day.TempMin, day.TempMax, day.Description))
+				forecastMeta[i] = map[string]interface{}{
+					"date":             day.Date,
+					"temperature_max":  day.TempMax,
+					"temperature_min":  day.TempMin,
+					"weather_code":     day.WeatherCode,
+					"description":      day.Description,
+					"precipitation_mm": day.PrecipitationMM,
+				}
+			}
+			artifacts = append(artifacts, connector.RawArtifact{
+				SourceID:    "weather",
+				SourceRef:   fmt.Sprintf("forecast-%s-%s", loc.Name, now.Format(time.RFC3339)),
+				ContentType: "weather/forecast",
+				Title:       fmt.Sprintf("Forecast: %s — %d days", loc.Name, len(forecast)),
+				RawContent:  fmt.Sprintf("Forecast for %s:\n%s", loc.Name, strings.Join(forecastLines, "\n")),
+				Metadata: map[string]interface{}{
+					"location":      loc.Name,
+					"latitude":      lat,
+					"longitude":     lon,
+					"forecast_days": len(forecast),
+					"daily":         forecastMeta,
+				},
+				CapturedAt: now,
+			})
+		}
 	}
 
 	// Reflect health based on failure ratio relative to total locations.
@@ -217,6 +255,16 @@ type CurrentWeather struct {
 	WeatherCode  int     `json:"weather_code"`
 	Description  string  `json:"description"`
 	IsDay        bool    `json:"is_day"`
+}
+
+// ForecastDay represents one day of forecast data from Open-Meteo.
+type ForecastDay struct {
+	Date            string  `json:"date"`
+	TempMax         float64 `json:"temperature_max"`
+	TempMin         float64 `json:"temperature_min"`
+	WeatherCode     int     `json:"weather_code"`
+	Description     string  `json:"description"`
+	PrecipitationMM float64 `json:"precipitation_mm"`
 }
 
 // fetchCurrent gets current weather from Open-Meteo API (free, no key needed).
@@ -343,6 +391,209 @@ func (c *Connector) decodeCurrent(body io.ReadCloser, cacheKey string) (*Current
 	// Only cache if there is room after eviction to enforce the size limit.
 	if len(c.cache) < maxCacheEntries {
 		c.cache[cacheKey] = &cacheEntry{data: cw, expiresAt: time.Now().Add(30 * time.Minute)}
+	}
+	c.mu.Unlock()
+
+	return cw, nil
+}
+
+// fetchForecast gets multi-day forecast from Open-Meteo API.
+// Retries transient failures with exponential backoff.
+func (c *Connector) fetchForecast(ctx context.Context, lat, lon float64, days int) ([]ForecastDay, error) {
+	cf := coordFmt(c.config.Precision)
+	cacheKey := fmt.Sprintf("forecast-"+cf+"-"+cf, lat, lon)
+
+	c.mu.RLock()
+	if entry, ok := c.cache[cacheKey]; ok && time.Now().Before(entry.expiresAt) {
+		result := entry.data.([]ForecastDay)
+		c.mu.RUnlock()
+		return result, nil
+	}
+	c.mu.RUnlock()
+
+	url := fmt.Sprintf(c.baseURL+"/v1/forecast?latitude="+cf+"&longitude="+cf+"&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum&forecast_days=%d", lat, lon, days)
+
+	backoff := connector.DefaultBackoff()
+	var lastErr error
+	for {
+		resp, err := c.doFetch(ctx, url)
+		if err == nil {
+			return c.decodeForecast(resp, cacheKey)
+		}
+		lastErr = err
+		var pe *permanentError
+		if errors.As(err, &pe) {
+			return nil, pe.err
+		}
+		delay, ok := backoff.Next()
+		if !ok {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("forecast fetch cancelled: %w", ctx.Err())
+		case <-time.After(delay):
+		}
+	}
+	return nil, fmt.Errorf("open-meteo forecast failed after %d attempts: %w", backoff.Attempt(), lastErr)
+}
+
+// decodeForecast parses the Open-Meteo daily forecast response and populates the cache.
+func (c *Connector) decodeForecast(body io.ReadCloser, cacheKey string) ([]ForecastDay, error) {
+	defer body.Close()
+
+	const maxWeatherResponseSize = 1 << 20
+	limitedBody := io.LimitReader(body, maxWeatherResponseSize)
+
+	var result struct {
+		Daily struct {
+			Time          []string  `json:"time"`
+			TempMax       []float64 `json:"temperature_2m_max"`
+			TempMin       []float64 `json:"temperature_2m_min"`
+			WeatherCode   []int     `json:"weather_code"`
+			Precipitation []float64 `json:"precipitation_sum"`
+		} `json:"daily"`
+	}
+
+	if err := json.NewDecoder(limitedBody).Decode(&result); err != nil {
+		_, _ = io.Copy(io.Discard, limitedBody)
+		return nil, fmt.Errorf("decode open-meteo forecast: %w", err)
+	}
+	_, _ = io.Copy(io.Discard, limitedBody)
+
+	days := len(result.Daily.Time)
+	if days == 0 {
+		return nil, fmt.Errorf("open-meteo forecast returned no daily data")
+	}
+	if len(result.Daily.TempMax) != days || len(result.Daily.TempMin) != days ||
+		len(result.Daily.WeatherCode) != days || len(result.Daily.Precipitation) != days {
+		return nil, fmt.Errorf("open-meteo forecast arrays have inconsistent lengths")
+	}
+
+	forecast := make([]ForecastDay, days)
+	for i := 0; i < days; i++ {
+		if err := validateWeatherValues(result.Daily.TempMax[i], result.Daily.TempMin[i], result.Daily.Precipitation[i], 0); err != nil {
+			return nil, fmt.Errorf("open-meteo forecast day %d: %w", i, err)
+		}
+		forecast[i] = ForecastDay{
+			Date:            result.Daily.Time[i],
+			TempMax:         result.Daily.TempMax[i],
+			TempMin:         result.Daily.TempMin[i],
+			WeatherCode:     result.Daily.WeatherCode[i],
+			Description:     wmoCodeToDescription(result.Daily.WeatherCode[i]),
+			PrecipitationMM: result.Daily.Precipitation[i],
+		}
+	}
+
+	c.mu.Lock()
+	if len(c.cache) >= maxCacheEntries {
+		c.evictExpiredLocked()
+	}
+	if len(c.cache) < maxCacheEntries {
+		c.cache[cacheKey] = &cacheEntry{data: forecast, expiresAt: time.Now().Add(2 * time.Hour)}
+	}
+	c.mu.Unlock()
+
+	return forecast, nil
+}
+
+// fetchHistorical gets historical weather from Open-Meteo archive API for a specific date.
+// Historical data is cached permanently since past weather never changes.
+func (c *Connector) fetchHistorical(ctx context.Context, lat, lon float64, date string) (*CurrentWeather, error) {
+	cf := coordFmt(c.config.Precision)
+	cacheKey := fmt.Sprintf("historical-"+cf+"-"+cf+"-%s", lat, lon, date)
+
+	c.mu.RLock()
+	if entry, ok := c.cache[cacheKey]; ok {
+		result := entry.data.(*CurrentWeather)
+		c.mu.RUnlock()
+		return result, nil
+	}
+	c.mu.RUnlock()
+
+	url := fmt.Sprintf(c.archiveURL+"/v1/archive?latitude="+cf+"&longitude="+cf+"&start_date=%s&end_date=%s&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum", lat, lon, date, date)
+
+	backoff := connector.DefaultBackoff()
+	var lastErr error
+	for {
+		resp, err := c.doFetch(ctx, url)
+		if err == nil {
+			return c.decodeHistorical(resp, cacheKey)
+		}
+		lastErr = err
+		var pe *permanentError
+		if errors.As(err, &pe) {
+			return nil, pe.err
+		}
+		delay, ok := backoff.Next()
+		if !ok {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("historical fetch cancelled: %w", ctx.Err())
+		case <-time.After(delay):
+		}
+	}
+	return nil, fmt.Errorf("open-meteo historical failed after %d attempts: %w", backoff.Attempt(), lastErr)
+}
+
+// decodeHistorical parses a single-day archive response into a CurrentWeather.
+// Cached permanently since historical weather never changes.
+func (c *Connector) decodeHistorical(body io.ReadCloser, cacheKey string) (*CurrentWeather, error) {
+	defer body.Close()
+
+	const maxWeatherResponseSize = 1 << 20
+	limitedBody := io.LimitReader(body, maxWeatherResponseSize)
+
+	var result struct {
+		Daily struct {
+			Time          []string  `json:"time"`
+			TempMax       []float64 `json:"temperature_2m_max"`
+			TempMin       []float64 `json:"temperature_2m_min"`
+			WeatherCode   []int     `json:"weather_code"`
+			Precipitation []float64 `json:"precipitation_sum"`
+		} `json:"daily"`
+	}
+
+	if err := json.NewDecoder(limitedBody).Decode(&result); err != nil {
+		_, _ = io.Copy(io.Discard, limitedBody)
+		return nil, fmt.Errorf("decode open-meteo historical: %w", err)
+	}
+	_, _ = io.Copy(io.Discard, limitedBody)
+
+	if len(result.Daily.Time) == 0 {
+		return nil, fmt.Errorf("open-meteo historical returned no data for requested date")
+	}
+	if len(result.Daily.TempMax) == 0 || len(result.Daily.TempMin) == 0 ||
+		len(result.Daily.WeatherCode) == 0 || len(result.Daily.Precipitation) == 0 {
+		return nil, fmt.Errorf("open-meteo historical response has missing arrays")
+	}
+
+	tempMax := result.Daily.TempMax[0]
+	tempMin := result.Daily.TempMin[0]
+	if err := validateWeatherValues(tempMax, tempMin, result.Daily.Precipitation[0], 0); err != nil {
+		return nil, fmt.Errorf("open-meteo historical invalid values: %w", err)
+	}
+
+	avgTemp := (tempMax + tempMin) / 2
+	cw := &CurrentWeather{
+		Temperature:  avgTemp,
+		ApparentTemp: avgTemp, // archive API does not provide feels-like
+		Humidity:     0,       // not available in daily archive
+		WindSpeed:    0,       // not available in daily archive
+		WeatherCode:  result.Daily.WeatherCode[0],
+		Description:  wmoCodeToDescription(result.Daily.WeatherCode[0]),
+		IsDay:        true, // historical daily data has no day/night distinction
+	}
+
+	// Cache permanently — 100 years expiry as "never".
+	c.mu.Lock()
+	if len(c.cache) >= maxCacheEntries {
+		c.evictExpiredLocked()
+	}
+	if len(c.cache) < maxCacheEntries {
+		c.cache[cacheKey] = &cacheEntry{data: cw, expiresAt: time.Now().Add(100 * 365 * 24 * time.Hour)}
 	}
 	c.mu.Unlock()
 
