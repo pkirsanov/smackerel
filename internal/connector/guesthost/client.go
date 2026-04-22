@@ -26,6 +26,15 @@ const maxTotalEvents = 10000
 // maxCursorLen caps server-returned pagination cursor length (OOM defence, IMP-013-003).
 const maxCursorLen = 4096
 
+// maxSourceRefLen caps the event ID used as sourceRef (OOM defence, H-013-R2-003).
+const maxSourceRefLen = 1024
+
+// maxRawContentLen caps the raw content stored per artifact (OOM defence, H-013-R2-004).
+const maxRawContentLen = 512 * 1024 // 512 KiB
+
+// maxMetadataValueLen caps individual metadata string values (OOM defence, H-013-R2-002).
+const maxMetadataValueLen = 4096
+
 // Client wraps the GuestHost REST API.
 type Client struct {
 	baseURL    string
@@ -100,6 +109,14 @@ func (c *Client) FetchActivity(ctx context.Context, since string, types string, 
 	var consecutiveEmptyPages int
 
 	for page := 0; page < maxPaginationPages; page++ {
+		// H-013-R2-001: Check context cancellation between pages to avoid
+		// unnecessary requests during shutdown or timeout.
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("fetch activity cancelled: %w", ctx.Err())
+		default:
+		}
+
 		body, err := c.doGet(ctx, buildURL(cursor))
 		if err != nil {
 			return nil, fmt.Errorf("fetch activity page %d: %w", page, err)

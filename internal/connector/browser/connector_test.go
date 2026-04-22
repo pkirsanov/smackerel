@@ -232,7 +232,7 @@ func TestParseBrowserConfig_ValidationErrors(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error containing %q", tt.errMsg)
 			}
-			if !contains(err.Error(), tt.errMsg) {
+			if !strings.Contains(err.Error(), tt.errMsg) {
 				t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
 			}
 		})
@@ -426,11 +426,6 @@ func TestParseBrowserConfig_CustomSkipDomains(t *testing.T) {
 	if cfg.CustomSkipDomains[0] != "internal.corp.com" || cfg.CustomSkipDomains[1] != "intranet.local" {
 		t.Errorf("unexpected custom skip domains: %v", cfg.CustomSkipDomains)
 	}
-}
-
-// contains checks if s contains substr.
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
 }
 
 // --- Scope 2: Social Media Aggregation, Repeat Visits & Privacy Gate ---
@@ -1068,7 +1063,7 @@ func TestParseBrowserConfig_DwellTimeThresholds_Invalid(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid dwell_time_thresholds.full_min")
 	}
-	if !contains(err.Error(), "invalid dwell_time_thresholds.full_min") {
+	if !strings.Contains(err.Error(), "invalid dwell_time_thresholds.full_min") {
 		t.Errorf("expected error about full_min, got: %v", err)
 	}
 }
@@ -1381,7 +1376,7 @@ func TestConnect_HistoryFileNotReadable(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unreadable history file")
 	}
-	if !contains(err.Error(), "not readable") {
+	if !strings.Contains(err.Error(), "not readable") {
 		t.Errorf("expected 'not readable' in error, got: %v", err)
 	}
 	if c.Health(context.Background()) != connector.HealthError {
@@ -1411,7 +1406,7 @@ func TestParseBrowserConfig_InitialLookbackDaysValidation(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error containing %q", tt.errMsg)
 			}
-			if !contains(err.Error(), tt.errMsg) {
+			if !strings.Contains(err.Error(), tt.errMsg) {
 				t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
 			}
 		})
@@ -1440,7 +1435,7 @@ func TestParseBrowserConfig_ContentFetchConcurrencyValidation(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error containing %q", tt.errMsg)
 			}
-			if !contains(err.Error(), tt.errMsg) {
+			if !strings.Contains(err.Error(), tt.errMsg) {
 				t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
 			}
 		})
@@ -1508,7 +1503,7 @@ func TestParseBrowserConfig_RepeatVisitThreshold_InfNaN(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error for repeat_visit_threshold=%v", tt.value)
 			}
-			if !contains(err.Error(), tt.errMsg) {
+			if !strings.Contains(err.Error(), tt.errMsg) {
 				t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
 			}
 		})
@@ -1528,7 +1523,7 @@ func TestParseBrowserConfig_RepeatVisitThreshold_Negative(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for negative repeat_visit_threshold")
 	}
-	if !contains(err.Error(), "repeat_visit_threshold must be >= 0") {
+	if !strings.Contains(err.Error(), "repeat_visit_threshold must be >= 0") {
 		t.Errorf("expected range validation error, got: %v", err)
 	}
 }
@@ -2081,7 +2076,7 @@ func TestParseBrowserConfig_DwellThresholdOrdering_Invalid(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error for invalid threshold ordering: %s", tt.name)
 			}
-			if !contains(err.Error(), tt.errContains) {
+			if !strings.Contains(err.Error(), tt.errContains) {
 				t.Errorf("expected error containing %q, got: %v", tt.errContains, err)
 			}
 		})

@@ -98,8 +98,8 @@ func ShouldSkip(url string, skipDomains []string) bool {
 }
 
 // ParseChromeHistorySince reads Chrome history entries with visit_time > cursor.
-// Unlike ParseChromeHistory, this orders ASC for cursor-based incremental sync
-// and limits results to 10000 entries per batch to prevent memory exhaustion.
+// Orders ASC for cursor-based incremental sync and limits results to 10000
+// entries per batch to prevent memory exhaustion.
 func ParseChromeHistorySince(dbPath string, chromeTimeCursor int64) ([]HistoryEntry, error) {
 	// SEC-005-001 (CWE-74): Validate dbPath doesn't contain SQLite DSN query
 	// string characters. The function appends "?mode=ro" to enforce read-only
