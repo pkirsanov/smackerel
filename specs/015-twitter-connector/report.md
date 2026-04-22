@@ -4,6 +4,94 @@ Links: [uservalidation.md](uservalidation.md)
 
 ---
 
+## DevOps Probe (Round 2) — 2026-04-22
+
+**Trigger:** stochastic-quality-sweep → devops-to-doc
+**Agent:** bubbles.devops (via bubbles.workflow child)
+**Scope:** `internal/connector/twitter/`, `config/smackerel.yaml`, `docker-compose.yml`, `.github/workflows/ci.yml`
+**Prior sweep history:** 11 prior quality sweep passes (gaps, security ×3, stabilize, test, simplify, chaos, improve ×2, devops) — all durable
+
+### Probe Summary
+
+Full DevOps surface audit of the Twitter connector across build, config SST pipeline, Docker integration, CI/CD, monitoring, and production readiness. All probes returned clean.
+
+### Build Pipeline
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| `./smackerel.sh build` | PASS | Both core and ML images built in 1.4s (cached layers) |
+| `./smackerel.sh check` | PASS | "Config is in sync with SST" + "env_file drift guard: OK" |
+| `./smackerel.sh lint` | PASS | "All checks passed!" (Go vet + Python ruff) |
+| `./smackerel.sh test unit` | PASS | All Go packages (including `internal/connector/twitter`) + 236 Python tests |
+| `./smackerel.sh config generate` | PASS | dev.env and nats.conf regenerated successfully |
+
+### Config SST Chain (5 fields, all verified end-to-end)
+
+| YAML Key | Env Var | config.go Field | Compose Usage |
+|----------|---------|----------------|---------------|
+| `connectors.twitter.enabled` | `TWITTER_ENABLED` | `TwitterEnabled` | Auto-start gate |
+| `connectors.twitter.sync_mode` | `TWITTER_SYNC_MODE` | `TwitterSyncMode` | `source_config` |
+| `connectors.twitter.archive_dir` | `TWITTER_ARCHIVE_DIR` | `TwitterArchiveDir` | Volume mount override |
+| `connectors.twitter.bearer_token` | `TWITTER_BEARER_TOKEN` | `TwitterBearerToken` | `credentials` map |
+| `connectors.twitter.sync_schedule` | `TWITTER_SYNC_SCHEDULE` | `TwitterSyncSchedule` | Supervisor schedule |
+
+SST flow verified: `config/smackerel.yaml` → `scripts/commands/config.sh` (yaml_get) → `config/generated/dev.env` → `internal/config/config.go` (os.Getenv, no defaults). No hardcoded fallbacks — fail-loud pattern enforced.
+
+### Docker Integration
+
+| Surface | Status | Evidence |
+|---------|--------|----------|
+| Volume mount | PASS | `${TWITTER_ARCHIVE_DIR:-./data/twitter-archive}:/data/twitter-archive:ro` — read-only |
+| Env override | PASS | `TWITTER_ARCHIVE_DIR: ${TWITTER_ARCHIVE_DIR:+/data/twitter-archive}` — container-internal path |
+| Data directory | PASS | `data/twitter-archive/` exists as empty placeholder |
+| Prod compose | PASS | Inherits base compose mounts; adds restart:always, memory limits, structured logging |
+| Image labels | PASS | OCI labels for version, revision, build time via build args |
+| Non-root user | PASS | `USER smackerel` in runtime stage, `no-new-privileges`, `cap_drop: ALL` |
+
+### CI/CD Pipeline
+
+| Stage | Status | Evidence |
+|-------|--------|----------|
+| Lint (PR/push) | PASS | `./smackerel.sh lint` in `lint-and-test` job |
+| Unit tests (PR/push) | PASS | `./smackerel.sh test unit` — covers twitter package |
+| Build (after lint) | PASS | `./smackerel.sh build` with version/commit/buildtime args |
+| Image tag (on tag push) | PASS | Tags by version + short SHA |
+| GHCR push (on tag push) | PASS | Pushes `smackerel-core:{version}` and `:latest` |
+| Integration (main only) | PASS | Runs against live postgres service |
+
+### Connector Registration & Auto-Start
+
+| Check | Status | Evidence |
+|-------|--------|----------|
+| Import | PASS | `cmd/core/connectors.go` imports `twitterConnector` |
+| Instantiation | PASS | `twitterConnector.New("twitter")` |
+| Registry | PASS | Registered in connector loop with all other connectors |
+| Auto-start | PASS | Conditional on `cfg.TwitterEnabled`; passes sync_mode, archive_dir via SourceConfig; bearer_token via Credentials |
+
+### Monitoring & Health
+
+| Surface | Status | Evidence |
+|---------|--------|----------|
+| `Health()` | PASS | Returns graduated status (Disconnected/Healthy/Syncing/Degraded/Failing/Error) |
+| `SyncMetrics()` | PASS | Exposes lastSyncTime, count, errors, consecutiveErrors |
+| Health escalation | PASS | <5 errors → Degraded, 5-9 → Failing, 10+ → Error (matches Keep connector pattern) |
+
+### Documentation Coverage
+
+| Document | Twitter Mentioned | Current |
+|----------|-------------------|---------|
+| `docs/Development.md` | ✅ | Lists Twitter in 15-connector roster |
+| `docs/Testing.md` | ✅ | Describes archive parsing + thread reconstruction + entity extraction tests |
+| `docs/Connector_Development.md` | ✅ | Lists Twitter with bearer token auth, archive+API data source |
+| `docs/Operations.md` | ✅ | Lists `data/twitter-archive/` in import data mounts |
+| `docs/smackerel.md` | ✅ | Twitter in architecture diagrams and connector catalog |
+
+### Findings
+
+**None.** All DevOps surfaces are healthy. Config SST chain is complete and drift-free. Docker integration is correctly wired with read-only mounts. CI/CD pipeline covers lint, test, build, and release. No regressions from prior sweep passes.
+
+---
+
 ## Gaps Analysis & Closure — 2026-04-21
 
 **Trigger:** stochastic-quality-sweep → gaps-to-doc

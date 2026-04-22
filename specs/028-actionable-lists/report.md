@@ -132,3 +132,39 @@ Spec 028 introduces actionable list generation from domain-extracted structured 
 ./smackerel.sh test unit  → all packages pass (236 passed)
 ./smackerel.sh lint       → All checks passed!
 ```
+
+---
+
+## DevOps-to-Doc Sweep (2026-04-22)
+
+**Trigger:** stochastic-quality-sweep child workflow, DevOps probe (build/deploy/CI/CD/monitoring).
+
+### Findings
+
+| # | Finding | Scope | Severity | Disposition |
+|---|---------|-------|----------|-------------|
+| D1 | `deps.ListHandlers` never assigned in `cmd/core/main.go` — list REST API routes silently dead at runtime, Telegram `/list` command also broken (calls internal API that returns 404) | 6, 7 | Critical | Fixed — wired `ListHandlers` unconditionally in startup |
+| D2 | Duplicate `list.NewStore`/`list.NewPostgresArtifactResolver` created inside meal plan block instead of reusing shared instances | infra | Low | Fixed — meal plan shopping bridge now reuses top-level list instances |
+
+### Root Cause
+
+The `ListHandlers` struct existed in `internal/api/lists.go`, the routes were registered in `internal/api/router.go` (guarded by `if deps.ListHandlers != nil`), but `cmd/core/main.go` never instantiated or assigned `ListHandlers` to `deps`. The list infrastructure (`Store`, `Generator`, `ArtifactResolver`) was only constructed locally inside the `if cfg.MealPlanEnabled` block for the shopping bridge — not exposed to the API layer. This meant the entire list REST API and its dependent Telegram `/list` command were non-functional at runtime.
+
+### Code Changes
+
+**`cmd/core/main.go`:**
+- Added unconditional list handler wiring between annotation handlers and router creation:
+  - `listResolver := list.NewPostgresArtifactResolver(svc.pg.Pool)`
+  - `listStore := list.NewStore(svc.pg.Pool, svc.nc)`
+  - `listAggregators` map with recipe, reading, and product aggregators
+  - `listGenerator := list.NewGenerator(listResolver, listStore, listAggregators)`
+  - `deps.ListHandlers = &api.ListHandlers{Generator: listGenerator, Store: listStore}`
+- Meal plan shopping bridge now reuses `listResolver` and `listStore` instead of creating duplicates
+
+### Verification
+
+```
+./smackerel.sh build      → ✔ smackerel-core Built, ✔ smackerel-ml Built
+./smackerel.sh test unit  → 236 passed (cmd/core re-validated, not cached)
+./smackerel.sh lint       → All checks passed!
+```

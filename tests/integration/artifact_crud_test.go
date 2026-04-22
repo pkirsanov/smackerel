@@ -570,3 +570,280 @@ func isUniqueViolation(err error) bool {
 	}
 	return false
 }
+
+// CHAOS-031-007: Vector search with degenerate (all-zero) embedding.
+// Cosine distance with a zero vector is mathematically undefined (division by zero
+// in the normalization step). This test verifies that pgvector handles all-zero
+// embeddings gracefully — either by returning NaN/Inf similarity (which we must
+// tolerate) or by excluding them from results. A crash or uncaught error here
+// would mean any artifact with a failed embedding generation (all zeros) could
+// poison the entire search pipeline.
+func TestArtifact_Chaos_ZeroEmbeddingSearch(t *testing.T) {
+	pool := testPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Insert an artifact with an all-zero 384-dim embedding
+	zeroID := testID(t) + "-zero"
+	cleanupArtifact(t, pool, zeroID)
+
+	zeroEmb := make([]float32, 384)
+	zeroJSON, _ := json.Marshal(zeroEmb)
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO artifacts (id, artifact_type, title, summary, content_raw, content_hash, source_id, embedding, created_at, updated_at)
+		VALUES ($1, 'article', 'Zero Embedding Article', 'All zeros', 'Content', $2, 'test', $3::vector, NOW(), NOW())
+	`, zeroID, fmt.Sprintf("hash-%s", zeroID), string(zeroJSON))
+	if err != nil {
+		t.Fatalf("insert zero-embedding artifact: %v", err)
+	}
+
+	// Insert a normal artifact to search for
+	normalID := testID(t) + "-normal"
+	cleanupArtifact(t, pool, normalID)
+
+	normalEmb := make([]float32, 384)
+	for i := range normalEmb {
+		normalEmb[i] = float32(i) / 384.0
+	}
+	normalJSON, _ := json.Marshal(normalEmb)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO artifacts (id, artifact_type, title, summary, content_raw, content_hash, source_id, embedding, created_at, updated_at)
+		VALUES ($1, 'article', 'Normal Embedding Article', 'Good data', 'Content', $2, 'test', $3::vector, NOW(), NOW())
+	`, normalID, fmt.Sprintf("hash-%s", normalID), string(normalJSON))
+	if err != nil {
+		t.Fatalf("insert normal artifact: %v", err)
+	}
+
+	// Search using the normal embedding as query — must not crash even with
+	// the zero-embedding artifact in the table.
+	rows, err := pool.Query(ctx, `
+		SELECT id, 1 - (embedding <=> $1::vector) AS similarity
+		FROM artifacts
+		WHERE embedding IS NOT NULL AND id IN ($2, $3)
+		ORDER BY embedding <=> $1::vector
+		LIMIT 5
+	`, string(normalJSON), zeroID, normalID)
+	if err != nil {
+		t.Fatalf("vector search with zero embedding present: %v", err)
+	}
+	defer rows.Close()
+
+	foundNormal := false
+	for rows.Next() {
+		var id string
+		var similarity float64
+		if err := rows.Scan(&id, &similarity); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		t.Logf("result: id=%s similarity=%.4f isNaN=%v isInf=%v", id, similarity, math.IsNaN(similarity), math.IsInf(similarity, 0))
+		if id == normalID {
+			foundNormal = true
+		}
+		// The key assertion: pgvector must not return an error, even if similarity
+		// is NaN or Inf for the zero-embedding row. The query must complete.
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows iteration error: %v", err)
+	}
+	if !foundNormal {
+		t.Error("normal artifact not found in search results — zero embedding may have poisoned the query")
+	}
+	t.Log("vector search completed safely with zero-embedding artifact present")
+}
+
+// CHAOS-031-008: Concurrent annotation creation on same artifact.
+// Tests that the annotations table and the artifact_annotation_summary
+// materialized view handle concurrent writes gracefully. In production,
+// multiple sources (Telegram, web, API) may annotate the same artifact
+// simultaneously.
+func TestAnnotation_Chaos_ConcurrentCreation(t *testing.T) {
+	pool := testPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create the target artifact
+	artifactID := testID(t)
+	cleanupArtifact(t, pool, artifactID)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO artifacts (id, artifact_type, title, summary, content_raw, content_hash, source_id, created_at, updated_at)
+		VALUES ($1, 'article', 'Concurrent Annotation Target', 'Test', 'Content', $2, 'test', NOW(), NOW())
+	`, artifactID, fmt.Sprintf("hash-%s", artifactID))
+	if err != nil {
+		t.Fatalf("insert target artifact: %v", err)
+	}
+
+	// Concurrently insert annotations from multiple "sources"
+	const concurrency = 10
+	var wg sync.WaitGroup
+	var insertErrors atomic.Int32
+
+	for i := range concurrency {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			annID := fmt.Sprintf("chaos-ann-%s-%d", artifactID[:16], idx)
+			cleanupAnnotation(t, pool, annID)
+
+			annType := "rating"
+			rating := (idx % 5) + 1 // ratings 1-5
+			if idx%3 == 0 {
+				annType = "interaction"
+			}
+
+			var insertErr error
+			if annType == "rating" {
+				_, insertErr = pool.Exec(ctx, `
+					INSERT INTO annotations (id, artifact_id, annotation_type, rating, source_channel, created_at)
+					VALUES ($1, $2, $3, $4, 'chaos-test', NOW())
+				`, annID, artifactID, annType, rating)
+			} else {
+				_, insertErr = pool.Exec(ctx, `
+					INSERT INTO annotations (id, artifact_id, annotation_type, interaction_type, source_channel, created_at)
+					VALUES ($1, $2, 'interaction', 'made_it', 'chaos-test', NOW())
+				`, annID, artifactID)
+			}
+			if insertErr != nil {
+				insertErrors.Add(1)
+				t.Logf("concurrent annotation insert %d failed: %v", idx, insertErr)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if insertErrors.Load() > 0 {
+		t.Errorf("expected 0 insert errors, got %d — concurrent annotation creation is unsafe", insertErrors.Load())
+	}
+
+	// Verify all annotations exist
+	var count int
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM annotations WHERE artifact_id = $1", artifactID).Scan(&count)
+	if err != nil {
+		t.Fatalf("count annotations: %v", err)
+	}
+	if count != concurrency {
+		t.Errorf("expected %d annotations, got %d", concurrency, count)
+	}
+
+	// Verify REFRESH MATERIALIZED VIEW CONCURRENTLY doesn't error after burst writes
+	_, err = pool.Exec(ctx, "REFRESH MATERIALIZED VIEW CONCURRENTLY artifact_annotation_summary")
+	if err != nil {
+		t.Fatalf("materialized view refresh after concurrent writes failed: %v", err)
+	}
+
+	// Verify the summary is coherent
+	var currentRating *int
+	var timesUsed int
+	err = pool.QueryRow(ctx, `
+		SELECT current_rating, times_used FROM artifact_annotation_summary WHERE artifact_id = $1
+	`, artifactID).Scan(&currentRating, &timesUsed)
+	if err != nil {
+		t.Fatalf("query summary after concurrent writes: %v", err)
+	}
+	t.Logf("concurrent annotation summary: rating=%v times_used=%d (from %d concurrent inserts)", currentRating, timesUsed, concurrency)
+}
+
+// CHAOS-031-009: List cascade delete under concurrent item updates.
+// Tests that deleting a list while items are being updated concurrently
+// does not produce constraint violations or data corruption. The ON DELETE
+// CASCADE FK on list_items should handle this atomically, but concurrent
+// updates to items (status changes, checked_at) racing against a parent
+// list deletion can expose FK enforcement gaps.
+func TestList_Chaos_CascadeDeleteDuringConcurrentUpdates(t *testing.T) {
+	pool := testPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create source artifact
+	artifactID := testID(t)
+	cleanupArtifact(t, pool, artifactID)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO artifacts (id, artifact_type, title, summary, content_raw, content_hash, source_id, created_at, updated_at)
+		VALUES ($1, 'article', 'Cascade Test Recipe', 'Test', 'Content', $2, 'test', NOW(), NOW())
+	`, artifactID, fmt.Sprintf("hash-%s", artifactID))
+	if err != nil {
+		t.Fatalf("insert artifact: %v", err)
+	}
+
+	// Create list with items
+	listID := testID(t)
+	cleanupList(t, pool, listID)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO lists (id, list_type, title, status, source_artifact_ids, total_items, checked_items, created_at, updated_at)
+		VALUES ($1, 'shopping', 'Cascade Test', 'active', ARRAY[$2]::text[], 5, 0, NOW(), NOW())
+	`, listID, artifactID)
+	if err != nil {
+		t.Fatalf("insert list: %v", err)
+	}
+
+	itemIDs := make([]string, 5)
+	for i := range 5 {
+		itemIDs[i] = fmt.Sprintf("%s-item-%d", listID[:20], i)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO list_items (id, list_id, content, category, status, source_artifact_ids, sort_order, created_at, updated_at)
+			VALUES ($1, $2, $3, 'produce', 'pending', ARRAY[$4]::text[], $5, NOW(), NOW())
+		`, itemIDs[i], listID, fmt.Sprintf("Item %d", i), artifactID, i)
+		if err != nil {
+			t.Fatalf("insert item %d: %v", i, err)
+		}
+	}
+
+	// Concurrently: update item statuses while deleting the parent list
+	var wg sync.WaitGroup
+	var updateErrors atomic.Int32
+	var deleteError atomic.Value
+
+	// Launch updaters for each item
+	for _, itemID := range itemIDs {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			_, err := pool.Exec(ctx, `
+				UPDATE list_items SET status = 'done', checked_at = NOW(), updated_at = NOW() WHERE id = $1
+			`, id)
+			if err != nil {
+				updateErrors.Add(1)
+				// Errors are expected: cascade may delete items before update runs
+			}
+		}(itemID)
+	}
+
+	// Launch the parent delete concurrently
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, err := pool.Exec(ctx, "DELETE FROM lists WHERE id = $1", listID)
+		if err != nil {
+			deleteError.Store(err)
+		}
+	}()
+
+	wg.Wait()
+
+	// The delete must succeed
+	if de := deleteError.Load(); de != nil {
+		t.Fatalf("cascade delete failed: %v", de)
+	}
+
+	// After cascade, no list or items should remain
+	var listCount int
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM lists WHERE id = $1", listID).Scan(&listCount)
+	if err != nil {
+		t.Fatalf("count lists: %v", err)
+	}
+	if listCount != 0 {
+		t.Errorf("expected 0 lists after delete, got %d", listCount)
+	}
+
+	var itemCount int
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM list_items WHERE list_id = $1", listID).Scan(&itemCount)
+	if err != nil {
+		t.Fatalf("count items: %v", err)
+	}
+	if itemCount != 0 {
+		t.Errorf("expected 0 items after cascade delete, got %d — FK cascade broken", itemCount)
+	}
+
+	t.Logf("cascade delete verified: list deleted, %d update errors (expected for race), 0 orphaned items", updateErrors.Load())
+}
