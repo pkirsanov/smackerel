@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/smackerel/smackerel/internal/metrics"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
@@ -180,6 +181,8 @@ func (s *Store) UpdateItemStatus(ctx context.Context, listID, itemID string, sta
 		return fmt.Errorf("update item status: %w", err)
 	}
 
+	metrics.ListItemStatusChanges.WithLabelValues(string(status)).Inc()
+
 	// Recalculate checked count
 	_, err = s.Pool.Exec(ctx, `
 		UPDATE lists SET
@@ -243,6 +246,8 @@ func (s *Store) CompleteList(ctx context.Context, listID string) error {
 		_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'done'`, listID).Scan(&itemsDone)
 		_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'skipped'`, listID).Scan(&itemsSkipped)
 		_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'substituted'`, listID).Scan(&itemsSubstituted)
+
+		metrics.ListsCompleted.WithLabelValues(listType).Inc()
 
 		event := map[string]any{
 			"list_id":           listID,

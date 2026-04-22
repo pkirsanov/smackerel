@@ -299,6 +299,34 @@ func TestPWAShareHandler_NoInlineEventHandlers(t *testing.T) {
 	}
 }
 
+func TestPWAShareHandler_CaptureSourceHeader(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	form := url.Values{}
+	form.Set("title", "Source Test")
+	form.Set("url", "https://example.com")
+
+	req := httptest.NewRequest(http.MethodPost, "/pwa/share", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	deps.PWAShareHandler(rec, req)
+
+	body := rec.Body.String()
+
+	// Share page must set X-Capture-Source: pwa in the fetch call to /api/capture
+	if !strings.Contains(body, "X-Capture-Source") {
+		t.Error("share page must include X-Capture-Source header in capture fetch call")
+	}
+	if !strings.Contains(body, "'pwa'") {
+		t.Error("share page X-Capture-Source value must be 'pwa'")
+	}
+}
+
 func TestPWAStaticFileServer(t *testing.T) {
 	handler := pwaFileServer()
 

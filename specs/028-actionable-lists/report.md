@@ -252,3 +252,54 @@ Systematic mapping of all 34 Gherkin scenarios across 8 scopes to their correspo
 ./smackerel.sh test unit  → all Go packages pass (api 1.780s, telegram 24.940s re-run), 257 Python passed
 ./smackerel.sh lint       → All checks passed!
 ```
+
+---
+
+## DevOps-to-Doc Sweep (D2 — 2026-04-22)
+
+**Trigger:** stochastic-quality-sweep child workflow, DevOps probe (observability/metrics).
+
+### Findings
+
+| # | Finding | Scope | Severity | Disposition |
+|---|---------|-------|----------|-------------|
+| D3 | No Prometheus metrics for list operations — list generation, item status changes, and list completion are unobservable while all other subsystems (artifacts, search, digest, intelligence, alerts, connectors) have metrics | all | Medium | Fixed |
+
+### Verified Clean Surfaces
+
+| Surface | Status | Evidence |
+|---------|--------|----------|
+| SST/config | Clean | `./smackerel.sh check` → "Config is in sync with SST", "env_file drift guard: OK" |
+| NATS contract | Clean | `lists.created`/`lists.completed` in LISTS stream in `config/nats_contract.json` |
+| NATS stream config | Clean | `LISTS` in `AllStreams()` in `internal/nats/client.go` |
+| Store NATS publishing | Clean | `CreateList` publishes `lists.created`, `CompleteList` publishes `lists.completed` |
+| Docker build | Clean | Dockerfile multi-stage build with identity labels, non-root user |
+| Health checks | Clean | Container healthcheck on `/api/health`, dependency ordering via `depends_on` |
+| Migration lifecycle | Clean | Tables verified in `tests/integration/db_migration_test.go` |
+
+### Code Changes
+
+**`internal/metrics/metrics.go`:**
+- Added `ListsGenerated` — counter by list_type and domain (`smackerel_lists_generated_total`)
+- Added `ListGenerationLatency` — histogram by list_type (`smackerel_list_generation_latency_seconds`)
+- Added `ListItemStatusChanges` — counter by status (`smackerel_list_item_status_changes_total`)
+- Added `ListsCompleted` — counter by list_type (`smackerel_lists_completed_total`)
+- All four metrics registered in `init()`
+
+**`internal/list/generator.go`:**
+- `Generate()` records `ListsGenerated` counter and `ListGenerationLatency` histogram on successful list creation
+
+**`internal/list/store.go`:**
+- `UpdateItemStatus()` increments `ListItemStatusChanges` counter on each status transition
+- `CompleteList()` increments `ListsCompleted` counter on each list completion
+
+**`internal/metrics/metrics_test.go`:**
+- Added all four list metrics to `TestMetricsRegistered` registration verification
+
+### Verification
+
+```
+./smackerel.sh check     → Config is in sync with SST / env_file drift guard: OK
+./smackerel.sh test unit → all packages pass (metrics 0.029s re-run, list 0.021s re-run)
+./smackerel.sh lint      → All checks passed!
+```

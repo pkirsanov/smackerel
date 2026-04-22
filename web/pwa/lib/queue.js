@@ -48,7 +48,7 @@ var CaptureQueue = (function() {
     });
   }
 
-  function flush(apiUrl, authToken) {
+  function flush(apiUrl, authToken, captureSource) {
     return open().then(function(db) {
       return new Promise(function(resolve) {
         var tx = db.transaction(STORE_NAME, 'readonly');
@@ -77,12 +77,15 @@ var CaptureQueue = (function() {
               if (item.text) body.text = item.text;
               if (item.title) body.context = 'Captured (offline): ' + item.title;
 
-              return fetch(apiUrl, {
-                method: 'POST',
-                headers: {
+              var headers = {
                   'Content-Type': 'application/json',
                   'Authorization': 'Bearer ' + authToken
-                },
+                };
+              if (captureSource) headers['X-Capture-Source'] = captureSource;
+
+              return fetch(apiUrl, {
+                method: 'POST',
+                headers: headers,
                 body: JSON.stringify(body)
               })
               .then(function(resp) {

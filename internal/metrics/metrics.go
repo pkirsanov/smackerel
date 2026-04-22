@@ -154,6 +154,45 @@ var AlertsProduced = prometheus.NewCounterVec(
 	[]string{"type"},
 )
 
+// --- Actionable Lists (Spec 028) ---
+
+// ListsGenerated counts list generation attempts by list_type and domain.
+var ListsGenerated = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_lists_generated_total",
+		Help: "List generation attempts by list type and domain",
+	},
+	[]string{"list_type", "domain"},
+)
+
+// ListGenerationLatency records list generation latency in seconds.
+var ListGenerationLatency = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "smackerel_list_generation_latency_seconds",
+		Help:    "List generation latency",
+		Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
+	},
+	[]string{"list_type"},
+)
+
+// ListItemStatusChanges counts list item status transitions by new status.
+var ListItemStatusChanges = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_list_item_status_changes_total",
+		Help: "List item status transitions",
+	},
+	[]string{"status"},
+)
+
+// ListsCompleted counts lists marked as completed by list_type.
+var ListsCompleted = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_lists_completed_total",
+		Help: "Lists marked as completed",
+	},
+	[]string{"list_type"},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -170,6 +209,10 @@ func init() {
 		AlertsDelivered,
 		AlertDeliveryFailures,
 		AlertsProduced,
+		ListsGenerated,
+		ListGenerationLatency,
+		ListItemStatusChanges,
+		ListsCompleted,
 	)
 }
 
