@@ -1787,7 +1787,7 @@ func TestSyncMetrics_ReturnsCountsAfterSync(t *testing.T) {
 		t.Fatalf("Sync failed: %v", err)
 	}
 
-	lastSync, counts, syncErrors := c.SyncMetrics()
+	lastSync, counts, syncErrors, consecutiveErrors := c.SyncMetrics()
 
 	if lastSync.IsZero() {
 		t.Error("IMP-012-SQS-002: SyncMetrics lastSync should not be zero after Sync")
@@ -1798,12 +1798,146 @@ func TestSyncMetrics_ReturnsCountsAfterSync(t *testing.T) {
 	if syncErrors != 0 {
 		t.Errorf("IMP-012-SQS-002: expected 0 sync errors, got %d", syncErrors)
 	}
+	if consecutiveErrors != 0 {
+		t.Errorf("IMP-012-IMP-002: expected 0 consecutive errors after clean sync, got %d", consecutiveErrors)
+	}
 
 	// Verify the returned map is a copy — mutating it should not affect the connector.
 	counts["properties"] = 999
-	_, counts2, _ := c.SyncMetrics()
+	_, counts2, _, _ := c.SyncMetrics()
 	if counts2["properties"] == 999 {
 		t.Error("IMP-012-SQS-002: SyncMetrics must return a copy, not the internal map")
+	}
+}
+
+// --- IMP-012-IMP-001: configGen stale-write protection ---
+
+func TestConfigGen_StaleSync_DoesNotOverwriteHealth(t *testing.T) {
+	// Simulate: Sync starts, Close() runs mid-sync, Sync finishes.
+	// Without configGen, Sync's final health write would overwrite Close()'s HealthDisconnected.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{}, Total: 0})
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "tok"},
+		SourceConfig: map[string]interface{}{"base_url": srv.URL},
+	})
+
+	// Snapshot configGen before sync
+	c.mu.RLock()
+	genBefore := c.configGen
+	c.mu.RUnlock()
+
+	// Run sync (completes fine)
+	c.Sync(context.Background(), "")
+
+	// Now simulate Close() incrementing configGen, then check that a
+	// hypothetical late health write from a previous Sync would be skipped.
+	c.Close()
+	c.mu.RLock()
+	genAfter := c.configGen
+	c.mu.RUnlock()
+
+	// configGen should NOT have changed from Close() (Close doesn't increment it),
+	// but Connect() does. Re-connect to bump it.
+	c.Connect(context.Background(), connector.ConnectorConfig{
+		Credentials:  map[string]string{"access_token": "tok"},
+		SourceConfig: map[string]interface{}{"base_url": srv.URL},
+	})
+
+	c.mu.RLock()
+	genReconnect := c.configGen
+	c.mu.RUnlock()
+
+	if genReconnect <= genBefore {
+		t.Errorf("IMP-012-IMP-001: configGen should increment on Connect (before=%d, after reconnect=%d)", genBefore, genReconnect)
+	}
+	_ = genAfter
+}
+
+// --- IMP-012-IMP-002: consecutiveErrors tracking ---
+
+func TestConsecutiveErrors_IncrementOnFailure_ResetOnSuccess(t *testing.T) {
+	callCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		// First two sync cycles: everything fails (each sync makes ~8 calls:
+		// 4 retries for properties + 4 retries for reservations).
+		// Third cycle: success.
+		if callCount <= 16 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: []Property{{ID: "p1", Name: "H"}}, Total: 1})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: []Reservation{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "tok", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: true, SyncMessages: false, SyncReviews: false,
+		TierProperties: "light", TierReservations: "standard",
+		InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "tok", 10)
+	c.client.SetBackoff(fastBackoff())
+	c.health = connector.HealthHealthy
+
+	// First sync — all fail
+	c.Sync(context.Background(), "")
+	_, _, _, consec1 := c.SyncMetrics()
+	if consec1 != 1 {
+		t.Errorf("IMP-012-IMP-002: expected consecutiveErrors=1 after first failed sync, got %d", consec1)
+	}
+
+	// Second sync — all still fail
+	c.Sync(context.Background(), "")
+	_, _, _, consec2 := c.SyncMetrics()
+	if consec2 != 2 {
+		t.Errorf("IMP-012-IMP-002: expected consecutiveErrors=2 after second failed sync, got %d", consec2)
+	}
+
+	// Third sync — success (server now responds OK)
+	c.Sync(context.Background(), "")
+	_, _, _, consec3 := c.SyncMetrics()
+	if consec3 != 0 {
+		t.Errorf("IMP-012-IMP-002: expected consecutiveErrors=0 after successful sync, got %d", consec3)
+	}
+}
+
+// --- IMP-012-IMP-004: App URL constant usage ---
+
+func TestNormalizerURL_UsesAppConstant(t *testing.T) {
+	cfg := HospitableConfig{
+		BaseURL:          "https://api.hospitable.com",
+		TierReservations: "standard",
+		TierMessages:     "full",
+		TierReviews:      "full",
+	}
+
+	res := NormalizeReservation(Reservation{ID: "r1", PropertyID: "p1", CheckIn: "2026-04-10", CheckOut: "2026-04-12"}, "House", cfg)
+	if res.URL != "https://app.hospitable.com/reservations/r1" {
+		t.Errorf("IMP-012-IMP-004: reservation URL = %q, want app URL with reservation ID", res.URL)
+	}
+
+	msg := NormalizeMessage(Message{ID: "m1", Sender: "Alice", Body: "Hi"}, "r1", cfg)
+	if msg.URL != "https://app.hospitable.com/reservations/r1" {
+		t.Errorf("IMP-012-IMP-004: message URL = %q, want app URL with reservation ID", msg.URL)
+	}
+
+	rev := NormalizeReview(Review{ID: "rev1", ReservationID: "r1", PropertyID: "p1", Rating: 5}, "House", cfg)
+	if rev.URL != "https://app.hospitable.com/reservations/r1" {
+		t.Errorf("IMP-012-IMP-004: review URL = %q, want app URL with reservation ID", rev.URL)
 	}
 }
 

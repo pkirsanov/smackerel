@@ -40,10 +40,15 @@ type Connector struct {
 	config HospitableConfig
 	client *Client
 
+	// configGen is incremented on Connect(); Sync() uses it to skip stale
+	// health writes when Close()/Connect() raced with a running Sync().
+	configGen uint64
+
 	// Sync metadata for health reporting
-	lastSyncTime   time.Time
-	lastSyncCounts map[string]int
-	lastSyncErrors int
+	lastSyncTime      time.Time
+	lastSyncCounts    map[string]int
+	lastSyncErrors    int
+	consecutiveErrors int
 
 	// Property name cache for enriching reservation/review titles
 	propertyNames map[string]string
@@ -83,6 +88,8 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	c.config = cfg
 	c.client = client
 	c.health = connector.HealthHealthy
+	c.configGen++
+	c.consecutiveErrors = 0
 	c.mu.Unlock()
 
 	slog.Info("Hospitable connector connected", "id", c.id)
@@ -121,6 +128,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	// nil-dereference the client pointer mid-sync.
 	client := c.client
 	config := c.config
+	gen := c.configGen
 	c.health = connector.HealthSyncing
 	c.lastSyncErrors = 0
 	c.lastSyncCounts = make(map[string]int)
@@ -342,12 +350,20 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	c.mu.Lock()
 	c.lastSyncTime = time.Now()
 	c.lastSyncErrors = syncErrors
-	if syncErrors > 0 && len(allArtifacts) == 0 {
-		c.health = connector.HealthError
-	} else if syncErrors > 0 {
-		c.health = connector.HealthDegraded
-	} else {
-		c.health = connector.HealthHealthy
+	// IMP-012-IMP-001: Only write health if configGen hasn't changed since we
+	// snapshotted it, preventing a stale Sync() from overwriting a newer
+	// Connect()/Close() health state.
+	if c.configGen == gen {
+		if syncErrors > 0 && len(allArtifacts) == 0 {
+			c.health = connector.HealthError
+			c.consecutiveErrors++
+		} else if syncErrors > 0 {
+			c.health = connector.HealthDegraded
+			c.consecutiveErrors++
+		} else {
+			c.health = connector.HealthHealthy
+			c.consecutiveErrors = 0
+		}
 	}
 	logProperties := c.lastSyncCounts["properties"]
 	logReservations := c.lastSyncCounts["reservations"]
@@ -374,17 +390,17 @@ func (c *Connector) Health(_ context.Context) connector.HealthStatus {
 	return c.health
 }
 
-// SyncMetrics returns the last sync time, per-resource counts, and error count
-// for monitoring and health observability (IMP-012-SQS-002).
-func (c *Connector) SyncMetrics() (lastSync time.Time, counts map[string]int, errors int) {
+// SyncMetrics returns the last sync time, per-resource counts, error count,
+// and consecutive error count for monitoring and health observability.
+func (c *Connector) SyncMetrics() (lastSync time.Time, counts map[string]int, errors int, consecutiveErrors int) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	// Return a copy of the counts map to prevent data races on the caller side.
-	copy := make(map[string]int, len(c.lastSyncCounts))
+	countsCopy := make(map[string]int, len(c.lastSyncCounts))
 	for k, v := range c.lastSyncCounts {
-		copy[k] = v
+		countsCopy[k] = v
 	}
-	return c.lastSyncTime, copy, c.lastSyncErrors
+	return c.lastSyncTime, countsCopy, c.lastSyncErrors, c.consecutiveErrors
 }
 
 func (c *Connector) Close() error {

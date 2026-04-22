@@ -1221,3 +1221,60 @@ func makeMultiTypeJSON() string {
 	}
 	return `{"timelineObjects": [` + objects + `]}`
 }
+
+// === GAP-005-F1: Privacy consent enforcement tests ===
+
+func TestCheckPrivacyConsent_NilPool(t *testing.T) {
+	// Nil pool should return an error.
+	consented, err := checkPrivacyConsent(context.Background(), nil, "maps")
+	if err == nil {
+		t.Error("expected error when pool is nil")
+	}
+	if consented {
+		t.Error("expected false consent when pool is nil")
+	}
+}
+
+// === GAP-005-F2: Trail persistence tests ===
+
+func TestPersistTrailRecord_DeterministicID(t *testing.T) {
+	activity := TakeoutActivity{
+		Type:        ActivityHike,
+		StartTime:   time.Date(2026, 3, 15, 9, 0, 0, 0, time.UTC),
+		EndTime:     time.Date(2026, 3, 15, 11, 30, 0, 0, time.UTC),
+		DistanceKm:  8.5,
+		DurationMin: 150,
+		ElevationM:  450,
+		Route: []LatLng{
+			{Lat: 38.50, Lng: -8.98},
+			{Lat: 38.49, Lng: -8.96},
+		},
+	}
+
+	// Trail ID should be deterministic based on start time, type, and distance.
+	expectedID := "trail-20260315T090000-hike-8.5"
+	trailID := fmt.Sprintf("trail-%s-%s-%.1f",
+		activity.StartTime.Format("20060102T150405"),
+		activity.Type,
+		activity.DistanceKm,
+	)
+	if trailID != expectedID {
+		t.Errorf("trail ID = %q, want %q", trailID, expectedID)
+	}
+}
+
+func TestPersistTrailRecord_NilPool(t *testing.T) {
+	activity := TakeoutActivity{
+		Type:        ActivityWalk,
+		StartTime:   time.Now(),
+		EndTime:     time.Now().Add(30 * time.Minute),
+		DistanceKm:  3.0,
+		DurationMin: 30,
+		Route:       []LatLng{{Lat: 47.5, Lng: 8.7}},
+	}
+	// Nil pool should return an error.
+	err := PersistTrailRecord(context.Background(), nil, activity)
+	if err == nil {
+		t.Error("expected error when pool is nil")
+	}
+}

@@ -24,6 +24,10 @@ const maxPaginationPages = 1000
 // sleeps beyond this cap.
 const maxRetryAfterCap = 60 * time.Second
 
+// maxErrorBodySnippet limits how many bytes of an error response body are logged
+// for diagnostic purposes, preventing oversized error bodies from flooding logs.
+const maxErrorBodySnippet = 512
+
 // Client wraps the Hospitable Public API.
 type Client struct {
 	baseURL    string
@@ -243,6 +247,14 @@ func (c *Client) doGetPaginated(ctx context.Context, rawURL string) ([]byte, str
 			if !ok {
 				return nil, "", fmt.Errorf("rate limited: max retries exceeded")
 			}
+			// IMP-012-IMP-005: Log a snippet of the error body for diagnostics.
+			if len(body) > 0 {
+				snippet := body
+				if len(snippet) > maxErrorBodySnippet {
+					snippet = snippet[:maxErrorBodySnippet]
+				}
+				slog.Debug("hospitable: 429 response body", "snippet", string(snippet))
+			}
 			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
 			// Cap Retry-After to prevent malicious servers from forcing
 			// arbitrarily long sleeps.
@@ -266,8 +278,18 @@ func (c *Client) doGetPaginated(ctx context.Context, rawURL string) ([]byte, str
 			if !ok {
 				return nil, "", fmt.Errorf("server error %d: max retries exceeded", resp.StatusCode)
 			}
+			// IMP-012-IMP-005: Log a snippet of the error body for diagnostics.
+			snippet := ""
+			if len(body) > 0 {
+				s := body
+				if len(s) > maxErrorBodySnippet {
+					s = s[:maxErrorBodySnippet]
+				}
+				snippet = string(s)
+			}
 			slog.Warn("hospitable: server error, retrying",
-				"status", resp.StatusCode, "delay", delay, "attempt", backoff.Attempt())
+				"status", resp.StatusCode, "delay", delay, "attempt", backoff.Attempt(),
+				"body_snippet", snippet)
 			select {
 			case <-ctx.Done():
 				return nil, "", ctx.Err()

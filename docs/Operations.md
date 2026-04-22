@@ -598,7 +598,21 @@ The Smackerel browser extension enables one-click capture of any web page. It su
 3. Select `web/extension/manifest.firefox.json` from the Smackerel repository
 4. The Smackerel icon appears in the toolbar
 
-> **Note:** Firefox temporary add-ons are removed when the browser closes. For persistent installation, package the extension as an `.xpi` file using `web-ext build` from the `web/extension/` directory.
+> **Note:** Firefox temporary add-ons are removed when the browser closes. For persistent installation, use `./smackerel.sh package extension` to create distributable `.zip` files, then install from the packaged file.
+
+### Packaging Extensions for Distribution
+
+To create distributable packages for Chrome and Firefox:
+
+```bash
+./smackerel.sh package extension
+```
+
+This produces:
+- `dist/extension/smackerel-chrome-{version}.zip` — Chrome extension package
+- `dist/extension/smackerel-firefox-{version}.zip` — Firefox extension package (with Firefox-specific manifest)
+
+Users can install the Chrome `.zip` by extracting it and loading via **Load unpacked** in `chrome://extensions/`, or by dragging the `.zip` into Chrome. For Firefox, rename the `.zip` to `.xpi` and install from `about:addons`.
 
 ### Extension Configuration
 
