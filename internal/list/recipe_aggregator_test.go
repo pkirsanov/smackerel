@@ -152,6 +152,59 @@ func TestParseQuantity_Empty(t *testing.T) {
 	}
 }
 
+func TestParseQuantity_UncountableQuantities(t *testing.T) {
+	// Gherkin: "Handle uncountable quantities"
+	// Given an ingredient "a pinch of salt", When parseQuantity is called,
+	// Then quantity is nil (0 in code) and the item is kept as-is with original text.
+	cases := []struct {
+		input string
+		unit  string
+	}{
+		{"a pinch", ""},
+		{"to taste", ""},
+		{"some", ""},
+		{"a handful", ""},
+		{"a dash", ""},
+	}
+	for _, tc := range cases {
+		qty, _ := recipe.ParseQuantity(tc.input, tc.unit)
+		if qty != 0 {
+			t.Errorf("ParseQuantity(%q, %q) = %f, want 0 (uncountable)", tc.input, tc.unit, qty)
+		}
+	}
+}
+
+func TestRecipeAggregator_UncountableQuantityPreserved(t *testing.T) {
+	// End-to-end: "a pinch of salt" keeps original text, no quantity pointer.
+	a := &RecipeAggregator{}
+	sources := []AggregationSource{
+		{ArtifactID: "a1", DomainData: json.RawMessage(`{"domain":"recipe","ingredients":[
+			{"name":"salt","quantity":"a pinch","unit":""},
+			{"name":"flour","quantity":"2","unit":"cups"}
+		]}`)},
+	}
+
+	seeds, err := a.Aggregate(sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(seeds) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(seeds))
+	}
+
+	// Find salt — should have nil quantity (uncountable)
+	for _, s := range seeds {
+		if s.NormalizedName == "salt" {
+			if s.Quantity != nil {
+				t.Errorf("expected nil quantity for uncountable 'a pinch', got %v", *s.Quantity)
+			}
+			return
+		}
+	}
+	t.Error("salt item not found in results")
+}
+
 func TestNormalizeUnit(t *testing.T) {
 	cases := map[string]string{
 		"tablespoon":  "tbsp",

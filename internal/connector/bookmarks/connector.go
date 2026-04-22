@@ -53,6 +53,7 @@ type BookmarksConnector struct {
 	lastSyncTime   time.Time
 	lastSyncCount  int
 	lastSyncErrors int
+	pendingFiles   int
 }
 
 // NewConnector creates a new Bookmarks connector.
@@ -275,8 +276,20 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 
 func (c *BookmarksConnector) Health(ctx context.Context) connector.HealthStatus {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.health
+	health := c.health
+	importDir := c.config.ImportDir
+	c.mu.RUnlock()
+
+	// R-012: Active check — verify import directory still exists and is readable.
+	// Only downgrade when we previously believed we were healthy or syncing.
+	if importDir != "" && (health == connector.HealthHealthy || health == connector.HealthSyncing) {
+		if _, err := os.Stat(importDir); err != nil {
+			slog.Warn("bookmarks import directory no longer accessible", "dir", importDir, "error", err)
+			return connector.HealthError
+		}
+	}
+
+	return health
 }
 
 func (c *BookmarksConnector) Close() error {
@@ -325,6 +338,11 @@ func (c *BookmarksConnector) findNewFiles(cfg Config, processedFiles []string) (
 
 		newFiles = append(newFiles, filepath.Join(cfg.ImportDir, name))
 	}
+
+	// R-012: Track pending file count for health reporting.
+	c.mu.Lock()
+	c.pendingFiles = len(newFiles)
+	c.mu.Unlock()
 
 	return newFiles, nil
 }
@@ -406,6 +424,8 @@ func (c *BookmarksConnector) processFile(ctx context.Context, cfg Config, filePa
 		artifacts[i].Metadata["processing_tier"] = cfg.ProcessingTier
 		// R-006: bookmark_url for dedup key and content fetch target
 		artifacts[i].Metadata["bookmark_url"] = artifacts[i].URL
+		// R-006: content_fetched initial value — pipeline sets true after fetch
+		artifacts[i].Metadata["content_fetched"] = false
 		// R-006: added_at as ISO 8601 string for timeline placement
 		if !artifacts[i].CapturedAt.IsZero() {
 			artifacts[i].Metadata["added_at"] = artifacts[i].CapturedAt.Format(time.RFC3339)
