@@ -229,6 +229,36 @@ func TestDomainExtractionCounter(t *testing.T) {
 	}
 }
 
+func TestDomainExtractionLatencyHistogram(t *testing.T) {
+	DomainExtractionLatency.WithLabelValues("recipe-extraction-v1").Observe(2500)
+	DomainExtractionLatency.WithLabelValues("recipe-extraction-v1").Observe(15000)
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather failed: %v", err)
+	}
+
+	found := false
+	for _, fam := range families {
+		if fam.GetName() == "smackerel_domain_extraction_duration_ms" {
+			for _, m := range fam.GetMetric() {
+				for _, l := range m.GetLabel() {
+					if l.GetName() == "contract" && l.GetValue() == "recipe-extraction-v1" {
+						h := m.GetHistogram()
+						if h.GetSampleCount() < 2 {
+							t.Errorf("expected >= 2 samples, got %d", h.GetSampleCount())
+						}
+						found = true
+					}
+				}
+			}
+		}
+	}
+	if !found {
+		t.Error("domain_extraction_duration_ms{contract=recipe-extraction-v1} not found")
+	}
+}
+
 func TestNATSDeadLetterCounter(t *testing.T) {
 	NATSDeadLetter.WithLabelValues("artifacts").Inc()
 

@@ -211,3 +211,38 @@ Full claimed-vs-implemented audit of all 8 scopes against:
 
 - `./smackerel.sh build` — clean build
 - `./smackerel.sh test unit` — all passed (Go 41 packages + Python 238 tests)
+
+---
+
+## Reconciliation Pass 2 (2026-04-22)
+
+**Trigger:** `reconcile-to-doc` child workflow of stochastic-quality-sweep (repeat).
+
+### Audit Method
+
+Full claimed-vs-implemented audit of all 8 scopes against actual source code, SQL migrations (both consolidated `001_initial_schema.sql` and `archive/016_user_annotations.sql`), Go struct fields, API routes, wiring, config, and NATS contract.
+
+### Drift Found & Fixed
+
+| # | Finding | Severity | Location | Fix |
+|---|---------|----------|----------|-----|
+| R3-001 | Missing `idx_tma_artifact` index on `telegram_message_artifacts(artifact_id)` — Scope 1 DoD and design doc both specify this index, but it was absent from both consolidated and archive migration SQL | Moderate | `001_initial_schema.sql`, `archive/016_user_annotations.sql` | Added `CREATE INDEX IF NOT EXISTS idx_tma_artifact ON telegram_message_artifacts(artifact_id)` to both files |
+| R3-002 | Design doc used stale column names: `ann_type` (actual: `annotation_type`), `interaction` (actual: `interaction_type`), `SMALLINT` (actual: `INTEGER` for rating), migration number `015` (actual: `016`) | Low | `specs/027-user-annotations/design.md` | Updated design doc SQL schema, Go code examples, and migration header to match implementation |
+| R3-003 | Scopes.md Gherkin and DoD referenced stale column names and types | Low | `specs/027-user-annotations/scopes.md` | Updated Scope 1 Gherkin scenarios and DoD items to use actual `annotation_type TEXT`, `interaction_type TEXT`, `INTEGER` |
+
+### Previously Documented Acceptable Drift (Still Accurate)
+
+| Surface | Status |
+|---------|--------|
+| API handlers use `AnnotationHandlers` struct instead of methods on `Dependencies` | Acceptable — cleaner separation |
+| Migration uses TEXT columns instead of PostgreSQL enums | Acceptable — simpler, functionally equivalent |
+
+### Verified Surfaces (No New Drift)
+
+All 12 implementation surfaces verified against design and scopes — types, parser, store, API handlers, search integration, Telegram annotation/mapping, intelligence subscriber, main.go wiring, router, config, NATS contract all match.
+
+### Verification
+
+- `./smackerel.sh check` — config in sync
+- `./smackerel.sh build` — clean build
+- `./smackerel.sh test unit` — all passed (Go 41 packages + Python 257 tests)

@@ -165,6 +165,9 @@ func (d *DomainResultSubscriber) handleDomainExtracted(ctx context.Context, msg 
 			return
 		}
 		metrics.DomainExtraction.WithLabelValues(resp.ContractVersion, "failed").Inc()
+		if resp.ProcessingTimeMs > 0 {
+			metrics.DomainExtractionLatency.WithLabelValues(resp.ContractVersion).Observe(float64(resp.ProcessingTimeMs))
+		}
 		_ = msg.Ack()
 		slog.Warn("domain extraction failed",
 			"artifact_id", resp.ArtifactID,
@@ -194,6 +197,9 @@ func (d *DomainResultSubscriber) handleDomainExtracted(ctx context.Context, msg 
 	}
 
 	metrics.DomainExtraction.WithLabelValues(resp.ContractVersion, "completed").Inc()
+	if resp.ProcessingTimeMs > 0 {
+		metrics.DomainExtractionLatency.WithLabelValues(resp.ContractVersion).Observe(float64(resp.ProcessingTimeMs))
+	}
 	_ = msg.Ack()
 	slog.Info("domain extraction completed",
 		"artifact_id", resp.ArtifactID,
