@@ -14,11 +14,11 @@ import (
 // LinterConfig holds configuration values for the knowledge linter.
 // All values originate from config/smackerel.yaml via config generate.
 type LinterConfig struct {
-	StaleDays                    int
-	MaxSynthesisRetries          int
-	PromptContractVersion        string // Required for building complete retry requests (C-025-C002)
-	MaxSynthesisContextItems     int    // Cap on existing concepts/entities included in retry requests
-	MaxSynthesisContentChars     int    // Content char limit sent to LLM
+	StaleDays                int
+	MaxSynthesisRetries      int
+	PromptContractVersion    string // Required for building complete retry requests (C-025-C002)
+	MaxSynthesisContextItems int    // Cap on existing concepts/entities included in retry requests
+	MaxSynthesisContentChars int    // Content char limit sent to LLM
 }
 
 // Linter performs periodic quality audits on the knowledge layer.
@@ -456,21 +456,21 @@ func (l *Linter) retrySynthesisBacklog(ctx context.Context) {
 		contractVersion := l.cfg.PromptContractVersion
 
 		req := map[string]interface{}{
-			"artifact_id":            a.ID,
-			"content_type":           artifact.ArtifactType,
-			"title":                  artifact.Title,
-			"summary":                artifact.Summary,
-			"content_raw":            contentRaw,
-			"key_ideas":              keyIdeas,
-			"entities":               entities,
-			"topics":                 topics,
-			"source_id":              artifact.SourceID,
-			"source_type":            artifact.ArtifactType,
-			"existing_concepts":      conceptSummaries,
-			"existing_entities":      entitySummaries,
+			"artifact_id":             a.ID,
+			"content_type":            artifact.ArtifactType,
+			"title":                   artifact.Title,
+			"summary":                 artifact.Summary,
+			"content_raw":             contentRaw,
+			"key_ideas":               keyIdeas,
+			"entities":                entities,
+			"topics":                  topics,
+			"source_id":               artifact.SourceID,
+			"source_type":             artifact.ArtifactType,
+			"existing_concepts":       conceptSummaries,
+			"existing_entities":       entitySummaries,
 			"prompt_contract_version": contractVersion,
-			"retry_count":            a.RetryCount + 1,
-			"triggered_by":           "lint_retry",
+			"retry_count":             a.RetryCount + 1,
+			"triggered_by":            "lint_retry",
 		}
 		data, err := json.Marshal(req)
 		if err != nil {
