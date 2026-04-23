@@ -125,9 +125,9 @@ After all rounds complete:
 - Follow-ups like "fix all found", "fix everything found", "address rest", "fix the rest", "resolve remaining findings" are workflow continuation — preserve the active mode and target from the continuation envelope.
 - Do NOT collapse stochastic sweep continuation into raw specialist advice like "run `/bubbles.implement`".
 
-### Phase 0.95: Delivery Lockdown Loop
+### Phase 0.95: Full-Delivery Convergence Loop
 
-This section owns the full delivery-lockdown loop contract, including:
+This section owns the full-delivery convergence loop contract, including:
 
 - per-spec certification rounds
 - improvement preludes and one-shot spec review handling

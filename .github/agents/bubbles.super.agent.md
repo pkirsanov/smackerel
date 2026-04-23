@@ -151,7 +151,7 @@ Before resolving any continuation-shaped request, inspect workflow continuation 
 
 Rules:
 - If a single active non-terminal workflow target and mode can be recovered, recommend that exact `/bubbles.workflow ...` continuation.
-- Preserve `stochastic-quality-sweep`, `iterate`, and `delivery-lockdown` when they are already active. Do NOT collapse them into raw `/bubbles.implement` or a narrower mode just because findings were mentioned.
+- Preserve `stochastic-quality-sweep`, `iterate`, and `full-delivery` when they are already active. Do NOT collapse them into raw `/bubbles.implement` or a narrower mode just because findings were mentioned.
 - If the workflow context explicitly narrowed the remaining work to a bug packet, docs-only pass, or validate-only pass, recommend that narrower workflow mode.
 - Only recommend a direct specialist when the user explicitly asks for that specialist.
 
@@ -320,7 +320,7 @@ After selecting the mode, scan the user's request for these signals and attach t
 | "parallel", "faster", "speed up", "concurrently" | `parallelScopes: dag-dry` (first time) or `parallelScopes: dag` | User wants parallel execution |
 | "second opinion", "cross-check", "another review" | `crossModelReview: codex` | User wants multi-model review |
 | "legacy", "old code", "might be stale" | `specReview: once-before-implement` | Legacy code needs freshness check |
-| "release", "ship", "production-ready", "no loose ends" | Mode: `delivery-lockdown` | User wants release-quality assurance |
+| "release", "ship", "production-ready", "no loose ends" | Mode: `full-delivery` | User wants release-quality assurance |
 | "competitive", "better than", "beat the competition" | Include `bubbles.analyst` in sequence | User wants competitive analysis |
 | "separate branch", "don't touch main", "isolated" | `gitIsolation: true` | User wants branch isolation |
 | "plan improvement before each round" | `improvementPrelude: analyze-design-plan` | User wants planning refreshed per round |
@@ -377,7 +377,7 @@ User: "deliver this fast with parallel scopes"
 -> /bubbles.workflow  specs/<feature> mode: full-delivery parallelScopes: dag maxParallelScopes: 2
 
 User: "release-ready, careful, TDD, commit each scope"
--> /bubbles.workflow  specs/<feature> mode: delivery-lockdown tdd: true grillMode: required-on-ambiguity autoCommit: scope
+-> /bubbles.workflow  specs/<feature> mode: full-delivery tdd: true grillMode: required-on-ambiguity autoCommit: scope
 
 User: "just make this feature work end-to-end, handle everything"
 -> /bubbles.goal  Implement the <feature> — full autonomous execution with convergence loop
@@ -463,20 +463,20 @@ For any user request, first discover the current agent/mode inventory, then matc
 | "Brainstorm then build" | `workflow mode: spec-scope-hardening analyze: true socratic: true` → `workflow mode: full-delivery` | — |
 | "Check stale specs then improve" | spec-review → `workflow mode: improve-existing` | `specReview: once-before-implement` |
 | "Safe maintenance pass" | spec-review → simplify/stabilize/security mode | — |
-| "Ship-readiness, no loose ends" | `workflow mode: delivery-lockdown` | `autoCommit: scope`, `grillMode: required-on-ambiguity` |
-| "Quality sweep with TDD" | `workflow mode: delivery-lockdown` | `tdd: true` |
-| "Explore then commit to full build" | `workflow mode: spec-scope-hardening analyze: true socratic: true` → `workflow mode: full-delivery strict: true` | `gitIsolation: true` |
+| "Ship-readiness, no loose ends" | `workflow mode: full-delivery` | `autoCommit: scope`, `grillMode: required-on-ambiguity` |
+| "Quality sweep with TDD" | `workflow mode: full-delivery` | `tdd: true` |
+| "Explore then commit to full build" | `workflow mode: spec-scope-hardening analyze: true socratic: true` → `workflow mode: full-delivery` | `gitIsolation: true` |
 | "Set up a brand new project" | `super doctor --heal` → `super install hooks` → commands | — |
 | "Reconcile stale artifacts" | `workflow mode: reconcile-to-doc` | — |
 | "Resume yesterday's work" | status → `workflow mode: resume-only` | — |
-| "Do the next thing from recap/status/handoff" | `workflow mode: delivery-lockdown` or `bugfix-fastlane` | Preserve workflow orchestration instead of mirroring raw specialist advice |
+| "Do the next thing from recap/status/handoff" | `workflow mode: full-delivery` or `bugfix-fastlane` | Preserve workflow orchestration instead of mirroring raw specialist advice |
 | "fix all found", "address rest", "fix the rest" after a workflow run | Resume the active workflow mode from continuation state | Preserve orchestration and required quality chain |
 | "One autonomous goal with no check-ins" | `/bubbles.goal  <goal>` | Use for feature, bug, ops, or hardening goals that should run to convergence |
 | "Several goals before a deadline" | `/bubbles.sprint  minutes: <N>` | Use for mixed feature, bug, ops, and cleanup backlogs |
 | "Package a reusable workflow" | create-skill → verify trigger | — |
 | "Speed up a well-planned spec" | `workflow mode: full-delivery` | `parallelScopes: dag maxParallelScopes: 2` |
 | "How am I doing?" | `/bubbles.retro week` | — |
-| "Plan with competitive analysis then deliver strict" | analyst → ux → design → plan → `workflow mode: delivery-lockdown` | `grillMode: required-on-ambiguity tdd: true` |
+| "Plan with competitive analysis then deliver strict" | analyst → ux → design → plan → `workflow mode: full-delivery` | `grillMode: required-on-ambiguity tdd: true` |
 
 For any multi-step request, discover current agents and compose the sequence from their descriptions, then apply the Tag Selection Matrix to each step.
 
@@ -520,7 +520,7 @@ When a user asks "which mode should I use?" or describes a situation:
 | Bug fix | Mode with "bugfix" or "fastlane" in name | — |
 | New feature from scratch | Mode with "product" or "discovery" in name/description | — |
 | Existing code improvement | Mode with "improve" or "existing" in name | `specReview: once-before-implement` |
-| Release candidate or "keep going until all green" | `delivery-lockdown` | `autoCommit: scope` |
+| Release candidate or "keep going until all green" | `full-delivery` | `autoCommit: scope` |
 | Reduce complexity only | Mode with "simplify" in name | — |
 | Check spec freshness | Mode with "spec-review" in name | — |
 | Data-driven simplify/harden/review | Mode with "retro-to-" prefix | — |
@@ -529,7 +529,7 @@ When a user asks "which mode should I use?" or describes a situation:
 | Adversarial / random probing | Mode with "stochastic" or "chaos" in name | — |
 | Continuing work | Mode with "iterate" or "resume" in name | — |
 | Speed up delivery | Any delivery mode | `parallelScopes: dag` |
-| High-assurance delivery | `full-delivery` with `strict: true` or `delivery-lockdown` | `tdd: true grillMode: required-on-ambiguity` |
+| High-assurance delivery | `full-delivery` | `tdd: true grillMode: required-on-ambiguity` |
 
 **Optional control-plane tags** that can be appended to most workflow commands:
 - `grillMode: on-demand|required-on-ambiguity|required-for-lockdown` — resolve whether `bubbles.grill` must interrogate assumptions before planning or invalidation
@@ -544,7 +544,7 @@ When a user asks "which mode should I use?" or describes a situation:
 - `crossModelReview: codex|terminal` — independent second-opinion review from a different AI model
 - `parallelScopes: dag|dag-dry` — execute DAG-independent scopes in parallel via worktrees
 - `maxParallelScopes: 2-4` — maximum concurrent scope executions
-- `improvementPrelude: analyze-design-plan|analyze-ux-design-plan` — refresh planning before each delivery-lockdown round
+- `improvementPrelude: analyze-design-plan|analyze-ux-design-plan` — refresh planning before each full-delivery round
 
 ### New v3.1 Capabilities (Know These)
 
@@ -629,7 +629,7 @@ When user asks about code quality, technical debt, or problem areas:
 |------------|--------------|-------------------|
 | **Design Brief** | `bubbles.design` now produces a short (~30-50 line) alignment checkpoint at the top of design.md: current state, target state, patterns to follow, patterns to avoid, resolved decisions, open questions. Reviewable in 5 minutes instead of reading entire design doc. | When user asks "what's the plan?", "can someone review this quickly?", "did the agent find the right patterns?" — point them to the Design Brief section |
 | **Execution Outline** | `bubbles.plan` now produces a short (~30-50 line) preamble at the top of scopes.md: phase order, new types/signatures being introduced, validation checkpoints. Like C header files for the plan. | When user asks "what order are we building things?", "what's the plan shape?", "where are the checkpoints?" — point them to the Execution Outline |
-| **Phase 0.55: Objective Research** | For brownfield modes (`improve-existing`, `redesign-existing`, `delivery-lockdown`, `bugfix-fastlane`, `reconcile-to-doc`), the workflow now runs a two-pass research phase: (1) generate questions about the codebase while knowing the intent, (2) research the codebase in a fresh context WITHOUT knowing the intent. Produces objective "current truth" instead of confirmation-biased research. | When user asks "why did it find the wrong pattern?", "how does improve-existing understand my code?" — explain the solution-blind research pass |
+| **Phase 0.55: Objective Research** | For brownfield modes (`improve-existing`, `redesign-existing`, `full-delivery`, `bugfix-fastlane`, `reconcile-to-doc`), the workflow now runs a two-pass research phase: (1) generate questions about the codebase while knowing the intent, (2) research the codebase in a fresh context WITHOUT knowing the intent. Produces objective "current truth" instead of confirmation-biased research. | When user asks "why did it find the wrong pattern?", "how does improve-existing understand my code?" — explain the solution-blind research pass |
 | **Horizontal plan detection** | `bubbles.plan` Phase 4 now mechanically detects horizontal scope sequences (3+ consecutive single-layer scopes like all-DB → all-service → all-API → all-UI) and restructures them into vertical slices. | When user asks "why were my scopes reordered?", "what's a horizontal plan?" — explain that layer-by-layer plans are the #1 AI planning failure mode |
 | **Slop Tax metrics** | `bubbles.retro` now tracks rework metrics: scope reopens, phase retries, post-validate reversions, design reversals, fix-on-fix chains, and a net forward progress score. Target: < 15% slop tax. | When user asks "is the framework helping or hurting?", "how much rework?", "are we writing slop or craft?" |
 | **Instruction budget lint** | `bash bubbles/scripts/cli.sh lint-budget` counts directive lines per agent prompt. Warning at 120, hard limit at 200, and `framework-validate` now blocks over-budget agents. | When user asks "why is the workflow agent inconsistent?", "how big are the prompts?" |
@@ -856,7 +856,7 @@ When the user provides a free-text request WITHOUT structured parameters, resolv
 "address the rest from the last workflow" -> /bubbles.workflow <active target> mode: <active workflow mode>
 "pressure test this feature and then plan it" -> /bubbles.grill <feature> then /bubbles.plan <feature> backlogExport: tasks
 "deliver this with TDD and grill the assumptions first" -> /bubbles.workflow <feature> mode: full-delivery grillMode: required-on-ambiguity tdd: true
-"I need the no-loose-ends release workflow" -> /bubbles.workflow <feature> mode: delivery-lockdown
+"I need the no-loose-ends release workflow" -> /bubbles.workflow <feature> mode: full-delivery
 "give me a command to chaos test everything for 2 hours" -> /bubbles.workflow mode: stochastic-quality-sweep minutes: 120 triggerAgents: chaos
 "how do I set up custom gates?" -> explain gates workflow + provide example command
 "how are we shipping? how fast?" -> /bubbles.retro week
@@ -875,8 +875,8 @@ When the user provides a free-text request WITHOUT structured parameters, resolv
 "reuse the validation stack if it is compatible" -> bash bubbles/scripts/cli.sh runtime acquire --purpose validation --share-mode shared-compatible --fingerprint-file docker-compose.yml
 "which agents have been running?" -> /bubbles.status (shows agent activity dashboard)
 "deliver this carefully, TDD, commit each scope, on a branch" -> /bubbles.workflow specs/<feature> mode: full-delivery tdd: true grillMode: required-on-ambiguity autoCommit: scope gitIsolation: true
-"ship this, no loose ends, parallel where possible" -> /bubbles.workflow specs/<feature> mode: delivery-lockdown parallelScopes: dag autoCommit: scope
-"brainstorm first then deliver strict" -> (1) /bubbles.workflow mode: spec-scope-hardening analyze: true socratic: true, (2) /bubbles.workflow specs/<feature> mode: delivery-lockdown tdd: true
+"ship this, no loose ends, parallel where possible" -> /bubbles.workflow specs/<feature> mode: full-delivery parallelScopes: dag autoCommit: scope
+"brainstorm first then deliver strict" -> (1) /bubbles.workflow mode: spec-scope-hardening analyze: true socratic: true, (2) /bubbles.workflow specs/<feature> mode: full-delivery tdd: true
 "which files keep breaking?" -> /bubbles.retro hotspots
 "where are the bug magnets?" -> /bubbles.retro hotspots (shows bug-fix density per file)
 "are there hidden dependencies in the code?" -> /bubbles.retro coupling (co-change coupling analysis)

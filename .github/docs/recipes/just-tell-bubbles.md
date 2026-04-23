@@ -39,7 +39,7 @@ Workflow has a Phase -1 (Intent Resolution) that classifies your input:
 
 # Structured input still works
 /bubbles.workflow  specs/042 mode: full-delivery tdd: true
-/bubbles.workflow  specs/042-catalog-assistant mode: delivery-lockdown
+/bubbles.workflow  specs/042-catalog-assistant mode: full-delivery
 /bubbles.workflow  011-037 mode: harden-to-doc
 ```
 
@@ -51,7 +51,7 @@ Workflow has a Phase -1 (Intent Resolution) that classifies your input:
 | `/bubbles.workflow  improve <feature>` | Objective brownfield research before design and implementation |
 | `/bubbles.workflow  fix the <bug>` | Reproduce/fix/verify bug loop with the quality chain intact |
 | `/bubbles.workflow  continue` | Resume the active workflow if possible; otherwise `iterate` picks the next slice |
-| `/bubbles.workflow  <feature> mode: delivery-lockdown` | Keep looping through implementation, tests, quality, validation, and audit until truly green |
+| `/bubbles.workflow  <feature> mode: full-delivery` | Keep looping through implementation, tests, quality, validation, and audit until truly green |
 
 The planning improvements are mostly artifact-driven:
 

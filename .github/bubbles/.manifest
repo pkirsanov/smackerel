@@ -7,6 +7,8 @@ bubbles/scripts/agnosticity-lint.sh
 bubbles/scripts/aliases.sh
 bubbles/scripts/artifact-freshness-guard.sh
 bubbles/scripts/artifact-lint.sh
+bubbles/scripts/batch-promotion-lint-selftest.sh
+bubbles/scripts/batch-promotion-lint.sh
 bubbles/scripts/capability-freshness-selftest.sh
 bubbles/scripts/capability-ledger-selftest.sh
 bubbles/scripts/cli.sh

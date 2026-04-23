@@ -14,8 +14,8 @@ Optional execution tags you can append to many workflow commands:
 - `autoCommit: scope` or `autoCommit: dod` for validated milestone commits
 - `maxScopeMinutes` and `maxDodMinutes` to keep scopes aggressively small
 - `microFixes: true` to keep failures in narrow repair loops
-- `improvementPrelude: analyze-design-plan|analyze-ux-design-plan` to make `delivery-lockdown` refresh planning before early rounds
-- `improvementPreludeRounds: N` to cap how many delivery-lockdown rounds include that prelude
+- `improvementPrelude: analyze-design-plan|analyze-ux-design-plan` to make `full-delivery` refresh planning before early rounds
+- `improvementPreludeRounds: N` to cap how many full-delivery rounds include that prelude
 - `specReview: once-before-implement` to run a one-shot stale/redundant spec audit before legacy improvement or implementation work starts
 - `crossModelReview: codex|terminal` to get an independent second-opinion review from a different AI model during code-review or audit phases
 - `parallelScopes: dag|dag-dry` to execute DAG-independent scopes in parallel via git worktrees (off by default)
@@ -41,7 +41,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 
 > **💡 Tip:** Repo-readiness is advisory framework guidance, not delivery certification. Use framework ops when you want to know if a repo is well-prepared for agentic work; use `bubbles.validate` when you need completion authority.
 
-> **💡 Tip:** For release-candidate or "no loose ends" work, ask for `delivery-lockdown` rather than a one-pass sweep. It reuses the test, quality, validation, and bug workflows until certification is actually clean.
+> **💡 Tip:** For release-candidate or "no loose ends" work, ask for `full-delivery` rather than a one-pass sweep. It reuses the test, quality, validation, and bug workflows until certification is actually clean.
 
 > **💡 Tip:** The newer planning improvements mostly show up as workflow behavior, not extra commands. Brownfield modes run objective research automatically, planning produces a short Design Brief and Execution Outline for steering, and `bubbles.retro` now exposes slop tax so you can see whether you are shipping craft or just rework.
 
@@ -75,7 +75,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | Improve a legacy feature with objective research first | `/bubbles.workflow  improve <feature>` |
 | Fix a bug in brownfield code | `/bubbles.workflow  fix the <bug>` or `/bubbles.goal  Fix <bug>` |
 | Keep shipping the next most important slice | `/bubbles.workflow  continue` |
-| Keep going until the whole thing is truly green | `/bubbles.workflow  <feature> mode: delivery-lockdown` |
+| Keep going until the whole thing is truly green | `/bubbles.workflow  <feature> mode: full-delivery` |
 | Review rework and churn after a run | `/bubbles.retro  week` |
 | Audit framework prompt size | `bash bubbles/scripts/cli.sh lint-budget` |
 

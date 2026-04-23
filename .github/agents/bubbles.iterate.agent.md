@@ -128,7 +128,7 @@ $ADDITIONAL_CONTEXT
 
 Supported options:
 - `type: tests|docs|stabilize|devops|gaps|harden|implement|refactor|feature|bugfix|analyze|improve|security|chaos` - Work type to focus on
-- `mode: full-delivery|full-delivery|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|improve-existing|iterate|resume-only` - Override automatic mode selection (default: auto-detect from work type)
+- `mode: full-delivery|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|improve-existing|iterate|resume-only` - Override automatic mode selection (default: auto-detect from work type)
 - `iterations: <N>` - Run N iterations (default: 1)
 - `run_mode: endless` - Keep iterating until time budget expires
 - `until: <RFC3339>` - Time budget end (finish active iteration, don't start new)

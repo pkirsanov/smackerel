@@ -86,7 +86,7 @@ fi
 
 if [[ "$should_enforce_mode_gates" == "true" && -n "$state_workflow_mode" ]]; then
   case "$state_workflow_mode" in
-    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing)
+    full-delivery|value-first-e2e-batch|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing)
       required_headers+=(
         "### Validation Evidence"
         "### Audit Evidence"

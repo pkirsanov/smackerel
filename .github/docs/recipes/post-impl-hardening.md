@@ -55,7 +55,7 @@ If you want to run just the hardening sequence on existing code:
 If the requirement is not just "run the hardening agents" but "keep going until the whole feature is actually green," use:
 
 ```
-/bubbles.workflow  delivery-lockdown for <feature>
+/bubbles.workflow  full-delivery for <feature>
 ```
 
 That parent workflow runs reusable child workflows for test verification, deterministic quality sweep, and final certification. New supported scenarios must update planning artifacts plus tests; true defects must be recorded as tracked bugs with regression tests and fixed inline before the run can finish.

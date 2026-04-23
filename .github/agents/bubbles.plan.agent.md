@@ -352,7 +352,7 @@ Created/updated: {FEATURE_DIR}/scopes.md
 Created (if missing): report.md, uservalidation.md
 Total scopes: N
 Next scope to execute: Scope 1
-Recommended continuation: /bubbles.workflow {FEATURE_DIR} mode: delivery-lockdown
+Recommended continuation: /bubbles.workflow {FEATURE_DIR} mode: full-delivery
 ```
 
 ---

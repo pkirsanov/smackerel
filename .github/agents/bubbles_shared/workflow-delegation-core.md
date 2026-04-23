@@ -51,7 +51,7 @@ Before applying the classification contract, perform this literal substring chec
 
 ### Continuation Preservation Rules
 
-- Preserve `stochastic-quality-sweep`, `iterate`, and `delivery-lockdown` when continuation context proves one of those modes is still active.
+- Preserve `stochastic-quality-sweep`, `iterate`, and `full-delivery` when continuation context proves one of those modes is still active.
 - Treat phrases such as `fix all found`, `fix everything found`, `address rest`, `fix the rest`, `resolve remaining findings`, or `handle remaining issues` as workflow continuation, not as permission to downshift into direct specialist execution.
 - If continuation context narrows the remaining work to bug-only, docs-only, or validate-only work, route to the narrower workflow mode instead of echoing raw specialist commands.
 
