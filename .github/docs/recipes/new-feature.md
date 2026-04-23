@@ -63,7 +63,7 @@ If UX sections are needed, run `bubbles.ux` after analyst work. If you skip that
 ### Step 4: Implement (Scope by Scope)
 
 ```
-/bubbles.workflow  notification-system mode: delivery-lockdown
+/bubbles.workflow  notification-system mode: full-delivery
 ```
 
 **What happens:** The workflow keeps driving the feature through implementation, tests, validation, and certification until the current state is legitimately clean.

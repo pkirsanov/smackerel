@@ -47,6 +47,6 @@ When recap can identify a concrete continuation target, end the response with:
 - directAgentOnly: false
 ```
 
-If the current or most recent actionable continuation is already an active workflow mode such as `stochastic-quality-sweep`, `iterate`, or `delivery-lockdown`, preserve that exact mode in the envelope instead of collapsing it to a raw specialist or generic fallback.
+If the current or most recent actionable continuation is already an active workflow mode such as `stochastic-quality-sweep`, `iterate`, or `full-delivery`, preserve that exact mode in the envelope instead of collapsing it to a raw specialist or generic fallback.
 
 If no actionable workflow target exists, set `target: none`, `preferredWorkflowMode: none`, and explain why in `reason`.

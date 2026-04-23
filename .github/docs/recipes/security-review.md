@@ -30,5 +30,5 @@ You need to check for security vulnerabilities before shipping.
 Fix findings, then validate:
 
 ```
-/bubbles.workflow  042-catalog-assistant mode: delivery-lockdown
+/bubbles.workflow  042-catalog-assistant mode: full-delivery
 ```

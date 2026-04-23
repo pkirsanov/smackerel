@@ -26,7 +26,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 14 | [Code Review Directly](recipes/review-code-directly.md) | `bubbles.code-review` | Engineering-only review, no gates |
 | 15 | [Review A Feature/System](recipes/system-review.md) | `bubbles.system-review` | Holistic product/UX/runtime review |
 | 16 | [Review Then Improve](recipes/review-then-improve.md) | Review → workflow | Assess first, choose follow-through |
-| 17 | [Quality Sweep](recipes/quality-sweep.md) | `delivery-lockdown` | Keep looping until green |
+| 17 | [Quality Sweep](recipes/quality-sweep.md) | `full-delivery` | Keep looping until green |
 | 18 | [Post-Impl Hardening](recipes/post-impl-hardening.md) | Hardening sequence | Clean up before shipping |
 | 19 | [Safe Shared-Infrastructure Refactor](recipes/safe-shared-infrastructure-refactor.md) | `simplify-to-doc` | Refactor shared fixtures/bootstrap safely |
 | 20 | [Simplify Existing Code](recipes/simplify-existing-code.md) | `simplify-to-doc` | Reduce complexity safely |

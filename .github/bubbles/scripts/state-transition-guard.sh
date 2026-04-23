@@ -354,6 +354,26 @@ info "Current workflowMode: ${state_workflow_mode:-MISSING}"
 echo ""
 
 # =============================================================================
+# CHECK 2B: workflowMode consistency (Gate G074)
+# =============================================================================
+# Detects contradictions between top-level workflowMode and
+# policySnapshot.workflowMode. Both fields claim to describe the active mode
+# but are written by different code paths; drift between them means at least
+# one is fabricated.
+echo "--- Check 2B: workflowMode Consistency ---"
+policy_workflow_mode="$(json_nested_string "policySnapshot" "workflowMode" "$state_file" || true)"
+if [[ -z "$policy_workflow_mode" ]]; then
+  info "No policySnapshot.workflowMode present — skipping consistency check"
+elif [[ -z "$state_workflow_mode" ]]; then
+  info "Top-level workflowMode missing — skipping consistency check"
+elif [[ "$state_workflow_mode" != "$policy_workflow_mode" ]]; then
+  fail "workflowMode contradiction: top-level='$state_workflow_mode' vs policySnapshot='$policy_workflow_mode' — at least one was fabricated"
+else
+  pass "workflowMode consistent across top-level and policySnapshot ($state_workflow_mode)"
+fi
+echo ""
+
+# =============================================================================
 # CHECK 2A: WI parity integrity (canonical + provisional intake mode)
 # =============================================================================
 echo "--- Check 2A: WI Parity Integrity ---"
@@ -422,7 +442,7 @@ if [[ -n "$state_workflow_mode" ]]; then
         info "Legacy workflow mode 'fix' allows status 'done'; current status is '$state_status'"
       fi
       ;;
-    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
+    full-delivery|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
       if [[ "$state_status" == "done" ]]; then
         pass "Workflow mode '$state_workflow_mode' allows status 'done'"
       else
@@ -1049,6 +1069,131 @@ fi
 echo ""
 
 # =============================================================================
+# CHECK 5B: _index.md ↔ scope.md status parity (Gate G075)
+# =============================================================================
+# In per-scope-directory layout, the _index.md "Status" column is a separate
+# source of truth from each scope-local scope.md. If they disagree, at least
+# one is fabricated. The 042 fabrication left _index.md showing every scope
+# as "In Progress" while individual scope.md files claimed "Done".
+echo "--- Check 5B: _index.md ↔ scope.md Status Parity ---"
+if [[ "$scope_layout" == "per-scope-directory" ]] && [[ -f "$scope_index_file" ]]; then
+  index_parity_failures=0
+  index_parity_checked=0
+  # Each scope.md path looks like: .../scopes/NN-name/scope.md
+  for scope_path in "${scope_files[@]}"; do
+    [[ -f "$scope_path" ]] || continue
+    scope_dir_name="$(basename "$(dirname "$scope_path")")"
+    # Strip leading "NN-" prefix to get the scope's natural-language identifier
+    scope_dir_suffix="${scope_dir_name#[0-9]*-}"
+    scope_dir_num="${scope_dir_name%%-*}"
+    scope_status_local="$(grep -m1 -E '^\*\*Status:\*\*' "$scope_path" \
+      | sed -E 's/.*\*\*Status:\*\*[[:space:]]*([A-Za-z ]+).*/\1/' \
+      | sed -E 's/[[:space:]]+$//' || true)"
+    if [[ -z "$scope_status_local" ]]; then
+      continue
+    fi
+
+    # Find the row in _index.md that begins with the scope number (allowing
+    # leading zeros, optional leading pipe and whitespace).
+    index_row="$(grep -E "^\|[[:space:]]*0*${scope_dir_num#0}[[:space:]]*\|" "$scope_index_file" \
+      | head -n 1 || true)"
+    if [[ -z "$index_row" ]]; then
+      # Fall back to matching by directory suffix in the row text
+      index_row="$(grep -F "$scope_dir_suffix" "$scope_index_file" \
+        | grep -E '^\|' | head -n 1 || true)"
+    fi
+    if [[ -z "$index_row" ]]; then
+      warn "_index.md has no row matching scope $scope_dir_name — cannot verify parity"
+      continue
+    fi
+    # Last pipe-delimited cell is the Status column
+    index_status="$(echo "$index_row" \
+      | awk -F'|' '{ for (i=NF; i>=1; i--) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i); if ($i != "") { print $i; exit } } }')"
+    if [[ -z "$index_status" ]]; then
+      continue
+    fi
+    index_parity_checked=$((index_parity_checked + 1))
+    if [[ "$index_status" != "$scope_status_local" ]]; then
+      fail "_index.md says '$index_status' for scope $scope_dir_name but scope.md says '$scope_status_local' — fabrication indicator"
+      index_parity_failures=$((index_parity_failures + 1))
+    fi
+  done
+  if [[ "$index_parity_checked" -gt 0 ]] && [[ "$index_parity_failures" -eq 0 ]]; then
+    pass "_index.md statuses match scope.md statuses for all $index_parity_checked checked scope(s)"
+  elif [[ "$index_parity_checked" -eq 0 ]]; then
+    info "Could not match any scope.md to an _index.md row (no rows checked)"
+  fi
+else
+  info "_index.md parity check skipped (single-file layout or no _index.md)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 5C: Phantom scope detection (Gate G076)
+# =============================================================================
+# Every entry in completedScopes (and certification.completedScopes) MUST map
+# to a real scope artifact on disk. The 042 fabrication added
+# "scope-15-stochastic-sweep-remediation" to completedScopes with no
+# corresponding directory or scope.md.
+#
+# Per-scope-directory layout only: in single-file layout, completedScopes
+# entries are agent-chosen labels with no canonical mapping to scope identity,
+# so we can only verify counts (Check 5 already does this).
+echo "--- Check 5C: Phantom Scope Detection ---"
+phantom_count=0
+if [[ "$scope_layout" != "per-scope-directory" ]]; then
+  info "Phantom scope detection skipped (single-file layout — entries are free-form labels)"
+elif [[ -f "$state_file" ]]; then
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    found=0
+    # Match completedScopes entry against any scope directory by suffix
+    for scope_path in "${scope_files[@]}"; do
+      scope_dir_name="$(basename "$(dirname "$scope_path")")"
+      scope_dir_num="${scope_dir_name%%-*}"
+      # Accept either full directory name match or numeric-prefix match
+      # (the entry typically looks like "scope-7-foo-bar" or "07-foo-bar").
+      if [[ "$entry" == *"$scope_dir_name"* ]] \
+        || [[ "$entry" == *"-${scope_dir_num#0}-"* ]] \
+        || [[ "$entry" == *"-${scope_dir_num}-"* ]] \
+        || [[ "$entry" == "${scope_dir_num#0}-"* ]] \
+        || [[ "$entry" == "${scope_dir_num}-"* ]]; then
+        found=1
+        break
+      fi
+    done
+    if [[ "$found" -eq 0 ]]; then
+      fail "Phantom scope in completedScopes: '$entry' has no corresponding artifact on disk"
+      phantom_count=$((phantom_count + 1))
+    fi
+  done < <(python3 - "$state_file" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+
+seen = set()
+for source in (data.get("completedScopes", []),
+               data.get("certification", {}).get("completedScopes", []) if isinstance(data.get("certification"), dict) else []):
+    if isinstance(source, list):
+        for entry in source:
+            if isinstance(entry, str) and entry not in seen:
+                seen.add(entry)
+                print(entry)
+PY
+)
+fi
+
+if [[ "$phantom_count" -eq 0 ]]; then
+  pass "All completedScopes entries map to real scope artifacts (or check skipped for single-file layout)"
+fi
+echo ""
+
+# =============================================================================
 # CHECK 5A: Stress coverage for SLA-scoped work (Gate G026)
 # =============================================================================
 echo "--- Check 5A: SLA Stress Coverage ---"
@@ -1104,10 +1249,10 @@ PY
 if [[ -n "$state_workflow_mode" ]]; then
   required_specialists=()
   case "$state_workflow_mode" in
-    full-delivery|full-delivery-strict|value-first-e2e-batch)
+    full-delivery|value-first-e2e-batch)
       required_specialists=("implement" "test" "regression" "simplify" "stabilize" "security" "docs" "validate" "audit" "chaos")
       ;;
-    delivery-lockdown)
+    full-delivery)
       required_specialists=("implement" "test" "regression" "simplify" "gaps" "harden" "stabilize" "security" "validate" "audit" "chaos" "docs")
       ;;
     feature-bootstrap)
@@ -1377,6 +1522,200 @@ elif [[ ${#timestamps[@]} -eq 0 ]]; then
   warn "No completedAt timestamps found in state.json"
 else
   info "Only ${#timestamps[@]} timestamp(s) found — skipping interval analysis"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 7A: executionHistory timestamp plausibility (Gate G077)
+# =============================================================================
+# The convergence-loop modes (full-delivery, bugfix-fastlane) produce many
+# executionHistory entries with runStartedAt/runCompletedAt. Detect:
+#   (a) uniform inter-entry intervals (e.g. exactly 15 minutes apart)
+#   (b) zero-duration entries (start == end) for non-trivial phases
+#   (c) overlapping entries (one agent's run overlaps the next)
+echo "--- Check 7A: executionHistory Timestamp Plausibility ---"
+exec_history_analysis="$(python3 - "$state_file" <<'PY'
+import json
+import sys
+from datetime import datetime
+
+ZERO_DURATION_EXEMPT = {"finalize", "select"}
+
+def parse_ts(value):
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        # Allow trailing Z
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+
+history = []
+container = data.get("execution", {}) if isinstance(data.get("execution"), dict) else data
+raw = container.get("executionHistory", [])
+if not isinstance(raw, list):
+    raw = []
+
+entries = []
+for entry in raw:
+    if not isinstance(entry, dict):
+        continue
+    started = parse_ts(entry.get("runStartedAt"))
+    completed = parse_ts(entry.get("runCompletedAt"))
+    if started is None or completed is None:
+        continue
+    phases = entry.get("phasesExecuted") or []
+    if not isinstance(phases, list):
+        phases = []
+    entries.append({
+        "agent": entry.get("agent", "<unknown>"),
+        "started": started,
+        "completed": completed,
+        "phases": [p for p in phases if isinstance(p, str)],
+    })
+
+if len(entries) < 3:
+    print(f"COUNT={len(entries)}")
+    sys.exit(0)
+
+entries.sort(key=lambda e: e["started"])
+print(f"COUNT={len(entries)}")
+
+# Check uniform intervals between consecutive runStartedAt timestamps
+intervals = []
+for i in range(1, len(entries)):
+    intervals.append(int((entries[i]["started"] - entries[i-1]["started"]).total_seconds()))
+if intervals and len(set(intervals)) == 1 and intervals[0] > 0:
+    print(f"UNIFORM_INTERVAL={intervals[0]}")
+
+# Check zero-duration entries (excluding intentionally zero phases)
+zero_dur_offenders = []
+for e in entries:
+    duration = (e["completed"] - e["started"]).total_seconds()
+    if duration <= 0:
+        if not e["phases"] or any(p not in ZERO_DURATION_EXEMPT for p in e["phases"]):
+            zero_dur_offenders.append(f"{e['agent']}:{','.join(e['phases']) or '?'}")
+if zero_dur_offenders:
+    print(f"ZERO_DURATION={'|'.join(zero_dur_offenders)}")
+
+# Check overlapping entries (entry N+1 starts before entry N ends)
+overlaps = []
+for i in range(1, len(entries)):
+    prev = entries[i-1]
+    curr = entries[i]
+    if curr["started"] < prev["completed"]:
+        overlaps.append(
+            f"{prev['agent']}({prev['started'].isoformat()}-{prev['completed'].isoformat()}) overlaps {curr['agent']}({curr['started'].isoformat()})"
+        )
+if overlaps:
+    print(f"OVERLAPS={len(overlaps)}")
+    for line in overlaps:
+        print(f"OVERLAP_DETAIL={line}")
+PY
+)"
+
+exec_count="$(echo "$exec_history_analysis" | grep -E '^COUNT=' | head -n 1 | sed 's/^COUNT=//' || true)"
+if [[ -z "$exec_count" ]] || [[ "$exec_count" -lt 3 ]]; then
+  info "executionHistory has fewer than 3 entries — plausibility check skipped"
+else
+  info "executionHistory entries analyzed: $exec_count"
+
+  uniform_interval="$(echo "$exec_history_analysis" | grep -E '^UNIFORM_INTERVAL=' | head -n 1 | sed 's/^UNIFORM_INTERVAL=//' || true)"
+  if [[ -n "$uniform_interval" ]]; then
+    fail "executionHistory has $exec_count entries with identical ${uniform_interval}s intervals — FABRICATION INDICATOR"
+  fi
+
+  zero_dur_line="$(echo "$exec_history_analysis" | grep -E '^ZERO_DURATION=' | head -n 1 | sed 's/^ZERO_DURATION=//' || true)"
+  if [[ -n "$zero_dur_line" ]]; then
+    fail "executionHistory contains zero-duration entries for non-trivial phases: $zero_dur_line"
+  fi
+
+  overlap_count="$(echo "$exec_history_analysis" | grep -E '^OVERLAPS=' | head -n 1 | sed 's/^OVERLAPS=//' || true)"
+  if [[ -n "$overlap_count" ]] && [[ "$overlap_count" -gt 0 ]]; then
+    fail "executionHistory contains $overlap_count overlapping entries — sequential agent execution is impossible if runs overlap"
+    while IFS= read -r detail; do
+      info "$detail"
+    done < <(echo "$exec_history_analysis" | grep -E '^OVERLAP_DETAIL=' | sed 's/^OVERLAP_DETAIL=//')
+  fi
+
+  if [[ -z "$uniform_interval" ]] && [[ -z "$zero_dur_line" ]] && { [[ -z "$overlap_count" ]] || [[ "$overlap_count" -eq 0 ]]; }; then
+    pass "executionHistory timestamps look plausible (no uniform spacing, zero-duration entries, or overlaps)"
+  fi
+fi
+echo ""
+
+# =============================================================================
+# CHECK 7B: Lockdown round consistency
+# =============================================================================
+# certification.lockdownState.round is an agent-written counter. If a non-zero
+# round count is claimed, executionHistory must contain enough distinct
+# implement-phase entries to plausibly back that claim.
+echo "--- Check 7B: Lockdown Round Consistency ---"
+lockdown_summary="$(python3 - "$state_file" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+
+cert = data.get("certification", {})
+if not isinstance(cert, dict):
+    sys.exit(0)
+state = cert.get("lockdownState")
+if not isinstance(state, dict):
+    sys.exit(0)
+round_count = state.get("round", 0)
+last_clean = state.get("lastCleanRound")
+print(f"ROUND={round_count}")
+if last_clean is not None:
+    print(f"LAST_CLEAN={last_clean}")
+
+container = data.get("execution", {}) if isinstance(data.get("execution"), dict) else data
+history = container.get("executionHistory", [])
+if not isinstance(history, list):
+    history = []
+
+implement_runs = 0
+for entry in history:
+    if not isinstance(entry, dict):
+        continue
+    phases = entry.get("phasesExecuted") or []
+    if not isinstance(phases, list):
+        continue
+    if "implement" in phases:
+        implement_runs += 1
+print(f"IMPLEMENT_RUNS={implement_runs}")
+PY
+)"
+
+if [[ -z "$lockdown_summary" ]]; then
+  info "No certification.lockdownState present — lockdown round check skipped"
+else
+  ld_round="$(echo "$lockdown_summary" | grep -E '^ROUND=' | head -n 1 | sed 's/^ROUND=//' || true)"
+  ld_last_clean="$(echo "$lockdown_summary" | grep -E '^LAST_CLEAN=' | head -n 1 | sed 's/^LAST_CLEAN=//' || true)"
+  ld_implement_runs="$(echo "$lockdown_summary" | grep -E '^IMPLEMENT_RUNS=' | head -n 1 | sed 's/^IMPLEMENT_RUNS=//' || true)"
+
+  ld_round="${ld_round:-0}"
+  ld_implement_runs="${ld_implement_runs:-0}"
+
+  if [[ "$ld_round" -gt 0 ]] && [[ "$ld_implement_runs" -lt "$ld_round" ]]; then
+    fail "lockdownState.round=$ld_round but executionHistory has only $ld_implement_runs implement-phase run(s) — round counter likely fabricated"
+  elif [[ -n "$ld_last_clean" ]] && [[ "$ld_last_clean" -gt "$ld_round" ]]; then
+    fail "lockdownState.lastCleanRound=$ld_last_clean exceeds round=$ld_round — impossible counter state"
+  else
+    pass "lockdownState round=$ld_round is consistent with $ld_implement_runs implement-phase run(s) in executionHistory"
+  fi
 fi
 echo ""
 
@@ -1823,7 +2162,7 @@ echo ""
 echo "--- Check 13B: Implementation Delta Evidence (Gate G053) ---"
 requires_impl_delta="false"
 case "$state_workflow_mode" in
-  full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|devops-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
+  full-delivery|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|devops-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
     requires_impl_delta="true"
     ;;
 esac
@@ -1910,7 +2249,7 @@ echo "--- Check 15: Phase-Scope Coherence (Gate G027) ---"
 if [[ -n "$state_workflow_mode" ]]; then
   # Only check modes that involve implementation
   case "$state_workflow_mode" in
-    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|devops-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
+    full-delivery|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|devops-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
       # Check if implement/test phases are claimed
       has_implement="false"
       has_test="false"
@@ -1977,7 +2316,7 @@ if [[ -f "$reality_scan_script" ]]; then
   # Only run for modes that involve implementation
   run_reality_scan="false"
   case "$state_workflow_mode" in
-    full-delivery|full-delivery-strict|delivery-lockdown|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|devops-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
+    full-delivery|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|devops-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
       run_reality_scan="true"
       ;;
   esac
@@ -2010,26 +2349,26 @@ echo ""
 # CHECK 17: Strict mode commit enforcement (commit-per-spec)
 # =============================================================================
 echo "--- Check 17: Strict Mode Commit Enforcement ---"
-if [[ "$state_workflow_mode" == "full-delivery-strict" ]] && [[ "$state_status" == "done" ]]; then
+if [[ "$state_workflow_mode" == "full-delivery" ]] && [[ "$state_status" == "done" ]]; then
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     spec_basename="$(basename "$feature_dir")"
     spec_id="${spec_basename%%-*}"
 
     feature_commit_count="$(git log --oneline -- "$feature_dir" 2>/dev/null | wc -l | tr -d ' ')"
     if [[ "$feature_commit_count" -eq 0 ]]; then
-      fail "full-delivery-strict requires at least one commit touching $feature_dir (none found)"
+      fail "full-delivery requires at least one commit touching $feature_dir (none found)"
     else
       pass "Found $feature_commit_count commit(s) touching $feature_dir"
     fi
 
     structured_commit_count="$(git log --format='%s' -- "$feature_dir" 2>/dev/null | grep -Ec "^spec\(${spec_id}\)|^bubbles\(${spec_id}/" || true)"
     if [[ "$structured_commit_count" -eq 0 ]]; then
-      fail "full-delivery-strict requires at least one structured commit message for spec $spec_id (expected prefix: spec(${spec_id}) or bubbles(${spec_id}/...)"
+      fail "full-delivery requires at least one structured commit message for spec $spec_id (expected prefix: spec(${spec_id}) or bubbles(${spec_id}/...)"
     else
       pass "Found $structured_commit_count structured commit(s) for spec $spec_id"
     fi
   else
-    fail "full-delivery-strict commit enforcement requires execution inside a git worktree"
+    fail "full-delivery commit enforcement requires execution inside a git worktree"
   fi
 else
   info "Strict-mode commit enforcement not required for workflowMode '$state_workflow_mode' with status '$state_status'"
@@ -2237,7 +2576,7 @@ echo ""
 # =============================================================================
 echo "--- Check 21: Spec Review Enforcement (specReview policy) ---"
 if [[ "$state_status" == "done" ]] && [[ -n "$state_workflow_mode" ]]; then
-  spec_review_required_modes="improve-existing|reconcile-to-doc|redesign-existing|delivery-lockdown"
+  spec_review_required_modes="improve-existing|reconcile-to-doc|redesign-existing|full-delivery"
   if echo "$state_workflow_mode" | grep -qE "^($spec_review_required_modes)$"; then
     if echo "$state_completed_phases_block" | grep -qE '"spec-review"'; then
       pass "Spec-review phase recorded for legacy-improvement mode '$state_workflow_mode'"

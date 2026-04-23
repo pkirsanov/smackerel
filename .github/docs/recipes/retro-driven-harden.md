@@ -50,4 +50,4 @@ Or in plain English:
 - [Code Health Analysis](code-health-analysis.md) — standalone hotspot analysis
 - [Post-Implementation Hardening](post-impl-hardening.md) — hardening without retro targeting
 - [Data-Driven Simplification](retro-driven-simplify.md) — retro → simplify instead of harden
-- [Quality Sweep](quality-sweep.md) — full quality sweep with delivery-lockdown
+- [Quality Sweep](quality-sweep.md) — full quality sweep with full-delivery

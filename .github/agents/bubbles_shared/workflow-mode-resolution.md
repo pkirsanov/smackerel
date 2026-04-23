@@ -14,10 +14,9 @@ Use this table to select the correct mode based on the execution goal.
 | Fix performance, infra, config, reliability, security issues | `stabilize-to-doc` | `done` | select -> bootstrap -> validate -> stabilize -> devops -> implement -> test -> regression -> simplify -> security -> chaos -> validate -> audit -> docs -> finalize |
 | Close design-vs-code gaps and fix | `gaps-to-doc` | `done` | select -> bootstrap -> validate -> gaps -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> chaos -> validate -> audit -> docs -> finalize |
 | Full quality sweep (harden + gaps + fix + test) | `harden-gaps-to-doc` | `done` | select -> bootstrap -> validate -> harden -> gaps -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> chaos -> validate -> audit -> docs -> finalize |
-| Full end-to-end delivery from scratch | `full-delivery` | `done` | select -> bootstrap -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> docs -> validate -> audit -> chaos -> finalize |
-| Maximum-assurance delivery until everything is truly green | `delivery-lockdown` | `done` | [repeat until certified done: optional analyze/ux/design/plan prelude -> bootstrap -> implement -> test -> regression -> simplify -> gaps -> harden -> stabilize -> security -> validate -> audit -> chaos -> docs] -> finalize |
+| Full end-to-end delivery with convergence loop | `full-delivery` | `done` | [repeat until certified done: optional analyze/ux/design/plan prelude -> bootstrap -> implement -> test -> regression -> simplify -> gaps -> harden -> stabilize -> devops -> security -> validate -> audit -> chaos -> docs] -> finalize |
 | Find highest-value work and deliver it | `value-first-e2e-batch` | `done` | discover -> select -> bootstrap -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> docs -> validate -> audit -> chaos -> finalize |
-| Fix a specific bug | `bugfix-fastlane` | `done` | select -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> validate -> audit -> finalize |
+| Fix a specific bug | `bugfix-fastlane` | `done` | select -> bootstrap -> implement -> test -> regression -> simplify -> gaps -> harden -> stabilize -> devops -> security -> validate -> audit -> finalize |
 | Run chaos probes and fix what breaks | `chaos-hardening` | `done` | select -> bootstrap -> chaos -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> validate -> audit -> docs -> finalize |
 | Run security review and fix what it finds | `security-to-doc` | `done` | select -> bootstrap -> security -> implement -> test -> regression -> simplify -> stabilize -> devops -> chaos -> validate -> audit -> docs -> finalize |
 | Run regression scan and fix what it finds | `regression-to-doc` | `done` | select -> bootstrap -> regression -> implement -> test -> simplify -> stabilize -> devops -> security -> chaos -> validate -> audit -> docs -> finalize |
@@ -48,7 +47,7 @@ Minimal syntax anchors retained in the workflow shell:
 
 ```text
 /bubbles.workflow <spec-targets> mode: <mode-name>
-/bubbles.workflow <spec-targets> mode: delivery-lockdown
+/bubbles.workflow <spec-targets> mode: full-delivery
 /bubbles.workflow <spec-targets> mode: stochastic-quality-sweep maxRounds: 10
 /bubbles.workflow <spec-targets> mode: iterate iterations: 3
 ```
@@ -63,8 +62,7 @@ Minimal syntax anchors retained in the workflow shell:
 /bubbles.workflow 011-037 mode: improve-existing
 /bubbles.workflow 011-037 mode: harden-to-doc batch: false
 /bubbles.workflow 042 mode: full-delivery
-/bubbles.workflow 011-037 mode: full-delivery strict: true
-/bubbles.workflow 042 mode: delivery-lockdown improvementPrelude: analyze-ux-design-plan improvementPreludeRounds: 2
+/bubbles.workflow 042 mode: full-delivery improvementPrelude: analyze-ux-design-plan improvementPreludeRounds: 2
 /bubbles.workflow 042 mode: improve-existing specReview: once-before-implement
 /bubbles.workflow mode: value-first-e2e-batch
 /bubbles.workflow 011-037 mode: spec-scope-hardening
@@ -115,4 +113,4 @@ When resolving mode in Phase 0, `bubbles.workflow` MUST check whether the user's
 
 - If the user's prompt contains words like `complete`, `implement`, `fix`, `test`, or `done` and the selected mode has `statusCeiling` below `done`, warn before starting and suggest a delivery-capable mode instead of silently proceeding.
 - Modes that cannot reach `done`: `spec-scope-hardening` (`specs_hardened`), `product-to-planning` (`specs_hardened`), `docs-only` (`docs_updated`), `validate-only` (`validated`), `audit-only` (`validated`), `validate-to-doc` (`validated`), `resume-only` (`in_progress`).
-- Modes that can reach `done`: all delivery modes, including `full-delivery`, `delivery-lockdown`, `bugfix-fastlane`, `product-to-delivery`, `stochastic-quality-sweep`, and `iterate`.
+- Modes that can reach `done`: all delivery modes, including `full-delivery`, `bugfix-fastlane`, `product-to-delivery`, `stochastic-quality-sweep`, and `iterate`.

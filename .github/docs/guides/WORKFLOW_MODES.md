@@ -76,7 +76,7 @@ Two short, human-reviewable alignment artifacts are now mandatory:
 
 ### Brownfield Research (Phase 0.55)
 
-For brownfield modes (`improve-existing`, `redesign-existing`, `delivery-lockdown`, `bugfix-fastlane`, `reconcile-to-doc`), the workflow now runs an **Objective Research Pass** before design:
+For brownfield modes (`improve-existing`, `redesign-existing`, `full-delivery`, `bugfix-fastlane`, `reconcile-to-doc`), the workflow now runs an **Objective Research Pass** before design:
 1. Questions are generated while knowing the solution intent
 2. Codebase research is done in a **fresh, solution-blind context** — it never sees the spec or ticket
 3. Results are recorded as a `## Current Truth` section in design.md
@@ -138,35 +138,17 @@ These run the complete pipeline. Use for new features.
 
 ### <img src="../../icons/julian-glass.svg" width="20"> full-delivery
 
-**The standard.** All phases, strict gates, complete coverage.
-
-```
-select → bootstrap → implement → test → regression → simplify → stabilize → devops → security → docs → validate → audit → chaos → finalize
-```
-
-**Use when:** New features, standard development work.
-
-```
-/bubbles.workflow  full-delivery for 042-catalog-assistant
-```
-
-### <img src="../../icons/julian-glass.svg" width="20"> full-delivery-strict
-
-Same as `full-delivery` but with stricter evidence and enforcement expectations.
-
-**Use when:** Critical features and production-facing changes.
-
-### <img src="../../icons/lahey-badge.svg" width="20"> delivery-lockdown
-
-Maximum-assurance delivery. The workflow loops until `bubbles.validate` can certify `done` or records a real blocker.
-
-This is also the default workflow continuation target emitted by recap, status, and handoff when active feature work remains and no narrower bug-only path has been identified.
+**The default — maximum-assurance delivery.** The workflow loops through the full improvement and certification chain until `bubbles.validate` certifies `done` or records a documented blocker. Includes gaps, harden, chaos, and all specialist phases.
 
 ```
 [repeat until certified done: optional analyze/ux/design/plan prelude → bootstrap → implement → test → regression → simplify → gaps → harden → stabilize → devops → security → validate → audit → chaos → docs] → finalize
 ```
 
-**Use when:** Release-candidate work and difficult legacy hardening where the system must keep going until it is legitimately green.
+**Use when:** All feature work, bug fixes (use `bugfix-fastlane` for focused bugs), release-candidate work, and legacy hardening. This is the default mode.
+
+```
+/bubbles.workflow  full-delivery for 042-catalog-assistant
+```
 
 ### <img src="../../icons/bubbles-glasses.svg" width="20"> value-first-e2e-batch
 
@@ -467,14 +449,11 @@ analyze → ux
 
 | Mode | Phases | Best For |
 |------|--------|----------|
-| `full-delivery` | All phases | Standard features |
-| `full-delivery` (with strict tag) | All phases + strict chaos | Critical features |
-| `delivery-lockdown` | Repeated full improvement/certification rounds | Release-candidate or zero-loose-ends delivery |
+| `full-delivery` | Convergence loop: all phases repeated until certified done | All features (default) |
 | `value-first-e2e-batch` | Prioritized + batched | Large backlogs |
 | `product-to-delivery` | Discovery → delivery | Product ideas |
 | `spec-scope-hardening` (with analyze) | Analysis only | Early exploration |
-| `bugfix-fastlane` | Fix → test → regression → hardening → validate → audit | Bug fixes that still need the full quality chain |
-| `full-delivery` (with bootstrap) | Bootstrap missing artifacts, then deliver | Missing planning artifacts plus implementation |
+| `bugfix-fastlane` | Reproduce → fix → test → regression → gaps → harden → validate → audit (loops until certified) | Bug fixes |
 | `iterate` | Implement → test loop | Continuing work |
 | `harden-to-doc` | Harden → fix → test → docs | Code quality |
 | `gaps-to-doc` | Gaps → fix → test → docs | Gap closure |

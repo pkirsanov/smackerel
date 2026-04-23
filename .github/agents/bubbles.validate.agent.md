@@ -484,7 +484,7 @@ If `{FEATURE_DIR}/scopes.md` exists:
 
 - Verify all scopes are marked Done (`[x]`) and each scope’s Definition of Done is satisfied.
 - If any scope is Not started/In progress/Blocked, validation is NOT complete:
-   - Continue through workflow orchestration with `/bubbles.workflow  {FEATURE_DIR} mode: delivery-lockdown`.
+   - Continue through workflow orchestration with `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery`.
    - Validation remains open until the workflow returns with clean certification evidence.
 
 ### Step 4: Documentation Check
@@ -628,7 +628,7 @@ For every `[ ]` item found, perform the following investigation:
 If ANY unchecked items were found:
 - **Validation status is FAILED** — unchecked items are blocking regressions
 - List all unchecked items with investigation results
-- Route the fix through workflow orchestration: `/bubbles.workflow  {FEATURE_DIR} mode: delivery-lockdown` (or `bugfix-fastlane` for a concrete bug target)
+- Route the fix through workflow orchestration: `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery` (or `bugfix-fastlane` for a concrete bug target)
 
 If NO unchecked items:
 - User validation: ✅ ALL items checked — user confirms features work as expected

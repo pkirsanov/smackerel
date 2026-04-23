@@ -11,7 +11,7 @@ Implementation is done but you want a thorough quality check — find gaps, hard
 ## The Command
 
 ```
-/bubbles.workflow  delivery-lockdown for 042-catalog-assistant
+/bubbles.workflow  full-delivery for 042-catalog-assistant
 ```
 
 Or just use natural language:
@@ -19,7 +19,7 @@ Or just use natural language:
 /bubbles.workflow  do a full quality sweep on the catalog feature until everything is green
 ```
 
-**Parent workflow:** delivery-lockdown
+**Parent workflow:** full-delivery
 
 **Built-in child workflows:**
 - `test-to-doc` for full required test execution and initial verification

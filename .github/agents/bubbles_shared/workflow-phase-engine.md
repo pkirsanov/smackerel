@@ -105,7 +105,7 @@ This section owns the truly terminal stop-condition contract, including:
 
 - the only valid workflow stop reasons
 - invalid stop reasons that must instead trigger inline escalation
-- strict-mode and delivery-lockdown stop restrictions
+- strict-mode and full-delivery stop restrictions
 - resume-envelope behavior for genuinely blocked specs only
 
 ### Agent Completion Validation

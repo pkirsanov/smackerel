@@ -194,7 +194,7 @@ $ADDITIONAL_CONTEXT
 ```
 
 Supported options:
-- `mode: value-first-e2e-batch|spec-scope-hardening|product-to-planning|full-delivery|delivery-lockdown|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|validate-to-doc|resume-only|product-to-delivery|stabilize-to-doc|security-to-doc|regression-to-doc|improve-existing|simplify-to-doc|devops-to-doc|spec-review-to-doc|retro-to-simplify|retro-to-harden|retro-quality-sweep|retro-to-review|stochastic-quality-sweep|iterate|autonomous-goal|autonomous-sprint`
+- `mode: value-first-e2e-batch|spec-scope-hardening|product-to-planning|full-delivery|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|validate-to-doc|resume-only|product-to-delivery|stabilize-to-doc|security-to-doc|regression-to-doc|improve-existing|simplify-to-doc|devops-to-doc|spec-review-to-doc|retro-to-simplify|retro-to-harden|retro-quality-sweep|retro-to-review|stochastic-quality-sweep|iterate|autonomous-goal|autonomous-sprint`
 - `continue_on_blocked: true|false` (default: true)
 - `final_global_pass: true|false` (default: true)
 - `socratic: true|false` (default: false)
@@ -214,9 +214,8 @@ Supported options:
 - `commit_per_spec: true|false` (default: false)
 - `commit_on_done_only: true|false` (default: true)
 - `commit_message_template: <string>` (default: `spec({spec_id}): complete {spec_slug}`)
-- `strict_execution_profile: true|false` (default: false)
-- `improvementPrelude: off|analyze-design-plan|analyze-ux-design-plan` (delivery-lockdown only, default: off)
-- `improvementPreludeRounds: <N>` (delivery-lockdown only, default: unlimited)
+- `improvementPrelude: off|analyze-design-plan|analyze-ux-design-plan` (full-delivery only, default: off)
+- `improvementPreludeRounds: <N>` (full-delivery only, default: unlimited)
 - `batch: true|false` (default: auto-detect — true when multiple specs targeted, false for single spec). When enabled, splits phases at the last `implement`: per-spec phases run for each spec, then ONE shared quality chain.
 - `maxRounds: <N>` (stochastic-quality-sweep only, default: 10)
 - `triggerAgents: chaos,harden,gaps,simplify,stabilize,validate,improve,security` (stochastic-quality-sweep only, comma-separated subset of trigger pool)
@@ -242,7 +241,7 @@ Follow [workflow-delegation-core.md](bubbles_shared/workflow-delegation-core.md)
 Follow [workflow-mode-resolution.md](bubbles_shared/workflow-mode-resolution.md) for the authoritative mode table, invocation syntax, examples, and ceiling guidance.
 
 Retained workflow-agent anchors:
-- `mode: delivery-lockdown` remains a first-class workflow mode.
+- `mode: full-delivery` is the default maximum-assurance delivery mode with convergence loop.
 - `mode: stochastic-quality-sweep` remains the randomized trigger-dispatch mode.
 - `mode: iterate` remains the priority-driven iterative delivery mode.
 - `spec-scope-hardening` retains the `specs_hardened` ceiling; delivery modes retain the `done` ceiling.
@@ -267,7 +266,7 @@ The `bubbles.workflow` agent is the orchestrator that executes already-resolved 
 Minimal retained syntax anchors:
 ```
 /bubbles.workflow <spec-targets> mode: <mode-name>
-/bubbles.workflow <spec-targets> mode: delivery-lockdown
+/bubbles.workflow <spec-targets> mode: full-delivery
 /bubbles.workflow <spec-targets> mode: stochastic-quality-sweep maxRounds: 10
 /bubbles.workflow <spec-targets> mode: iterate iterations: 3
 ```
@@ -328,12 +327,12 @@ Accepted packet shape:
 
 Rules:
 - If the packet provides a concrete `target` and `preferredWorkflowMode`, continue to Phase 0 using those values.
-- If the packet preserves an active stochastic or iterative mode (`stochastic-quality-sweep`, `iterate`, `delivery-lockdown`, or another delivery mode), keep that exact mode unless the packet explicitly narrows to a bug-only, docs-only, or validation-only continuation.
+- If the packet preserves an active stochastic or iterative mode (`stochastic-quality-sweep`, `iterate`, `full-delivery`, or another delivery mode), keep that exact mode unless the packet explicitly narrows to a bug-only, docs-only, or validation-only continuation.
 - If the surrounding prose includes raw specialist guidance such as `/bubbles.implement`, `/bubbles.test`, `/bubbles.validate`, or `/bubbles.audit`, treat that as advisory text only. Do NOT mirror it back into execution.
 - If the surrounding prose contains continuation phrases like `fix all found`, `address rest`, or `fix the rest` after a workflow summary, interpret that as `continue the active workflow's remaining work`, not as direct implementation.
 - If a packet is missing but workflow sees quoted continuation text from recap/status/handoff, upgrade it to the safest workflow mode instead of echoing the raw specialist:
    - bug target or bug intent → `bugfix-fastlane`
-   - active feature/spec continuation → `delivery-lockdown`
+   - active feature/spec continuation → `full-delivery`
    - docs-only follow-up → `docs-only`
    - validation-only finishing pass → `validate-to-doc`
    - framework follow-up → delegate to `bubbles.super`
@@ -343,7 +342,7 @@ Rules:
 
 1. Inspect the current conversation context, any pasted `## CONTINUATION-ENVELOPE`, any recent workflow `## RESULT-ENVELOPE`, `.specify/runtime/workflow-runs.json` (if present), and target specs' `state.json.workflowMode` / `state.json.execution.currentPhase` for a single concrete non-terminal workflow target.
 2. If an active or recent non-terminal workflow run can be resolved with a concrete target and mode, continue to Phase 0 using that exact target/mode instead of delegating to `bubbles.iterate`.
-3. If the recoverable mode is `stochastic-quality-sweep` or `iterate`, preserve that mode. Do NOT silently collapse it to `delivery-lockdown` just because findings were mentioned.
+3. If the recoverable mode is `stochastic-quality-sweep` or `iterate`, preserve that mode. Do NOT silently collapse it to `full-delivery` just because findings were mentioned.
 4. Only when no active workflow continuation can be resolved should the agent invoke `bubbles.iterate` for generic work discovery.
 
 **Fallback CONTINUE path → invoke `bubbles.iterate` via `runSubagent`:**
@@ -376,7 +375,7 @@ Parse the returned `FRAMEWORK-ENVELOPE` and report the result to the user. **STO
    - **Always confirm the resolved mode** before starting execution
 4. **Resolve batch execution (MANDATORY — do NOT skip):**
    - Count the number of resolved target specs
-   - If `mode: delivery-lockdown` → **force `batch = false`**. This mode requires per-spec certification loops and does not permit shared post-implement phases across specs.
+   - If `mode: full-delivery` → **force `batch = false`**. This mode requires per-spec certification loops and does not permit shared post-implement phases across specs.
    - If `batch: true` is set explicitly → enable batch execution
    - If `batch: false` is set explicitly → disable batch execution
    - Else if `batch` is NOT specified → **auto-detect**:
@@ -389,7 +388,7 @@ Parse the returned `FRAMEWORK-ENVELOPE` and report the result to the user. **STO
      - Phase 0.8 handles analyze, select, harden, gaps, implement per-spec internally
    - When batch is false: continue to Phase 0.3 → Phase 1 normally
 5. Load retry/routing/gate policy from `bubbles/workflows.yaml`.
-6. If `mode: full-delivery strict: true` OR `strict_execution_profile: true`, apply strict overrides:
+6. Load the full-delivery lockdown overrides (always applied since full-delivery is the default):
   - `continue_on_blocked: false`
   - `final_global_pass: true`
   - `commit_per_spec: true`
@@ -399,7 +398,7 @@ Parse the returned `FRAMEWORK-ENVELOPE` and report the result to the user. **STO
   - require real execution evidence; no fake/noop tests
   - continue iterating until all target specs are `done` or an explicit `blocked` stop condition is reached
 
-7. If `mode: delivery-lockdown`, apply lockdown overrides:
+7. If `mode: full-delivery`, apply lockdown overrides:
    - inherit all strict delivery safeguards EXCEPT commit-per-spec enforcement
    - `continue_on_blocked: false`
    - `final_global_pass: true`
@@ -423,7 +422,7 @@ If no specs resolve, STOP with explicit examples. **Exception:** `stochastic-qua
 
 **⚠️ ITERATE MODE ROUTING:** If `mode: iterate`, **SKIP Phase 0.3 through Phase 1 — go directly to Phase 0.10.** The iterate loop handles all work selection, mode determination, and specialist dispatch internally.
 
-**⚠️ DELIVERY-LOCKDOWN ROUTING:** If `mode: delivery-lockdown`, **SKIP Phase 0.3 through Phase 1 — go directly to Phase 0.95.** Delivery-lockdown runs a dedicated per-spec certification loop instead of the one-pass sequential phase runner.
+**⚠️ FULL-DELIVERY ROUTING:** If `mode: full-delivery`, **SKIP Phase 0.3 through Phase 1 — go directly to Phase 0.95.** Full-delivery runs a dedicated per-spec certification loop instead of the one-pass sequential phase runner.
 
 ### Phase 0.3: Analysis Loop (ONLY when batch is false AND mode includes `analyze`)
 
@@ -441,7 +440,7 @@ Follow [workflow-input-bootstrap.md](bubbles_shared/workflow-input-bootstrap.md)
 
 Retained workflow-agent anchors:
 - Run `bubbles.spec-review` exactly once per target spec for the current workflow invocation.
-- Batch and delivery-lockdown paths still perform this hook within their own per-spec loops at the documented first eligible moment.
+- Batch and full-delivery paths still perform this hook within their own per-spec loops at the documented first eligible moment.
 - If the review says the active artifacts are not trustworthy, route to the owning planning path before more implementation-capable work.
 
 ### Phase 0.65: Validation Reconciliation Loop (for validate-first delivery modes)
@@ -466,7 +465,7 @@ Retained workflow-agent anchors:
 Follow [workflow-input-bootstrap.md](bubbles_shared/workflow-input-bootstrap.md) for the authoritative current-truth research contract.
 
 Retained workflow-agent anchors:
-- This pass still applies to brownfield modes such as `improve-existing`, `delivery-lockdown`, `bugfix-fastlane`, and `reconcile-to-doc`.
+- This pass still applies to brownfield modes such as `improve-existing`, `full-delivery`, `bugfix-fastlane`, and `reconcile-to-doc`.
 - The protocol remains two-pass: question generation first, then solution-blind codebase fact gathering.
 - Findings still get recorded as `## Current Truth` at the top of `design.md`.
 
@@ -538,14 +537,14 @@ Retained workflow-agent anchors:
 
 ---
 
-### Phase 0.95: Delivery Lockdown Loop (for `mode: delivery-lockdown`)
+### Phase 0.95: Full-Delivery Convergence Loop (for `mode: full-delivery`)
 
 Follow [workflow-execution-loops.md](bubbles_shared/workflow-execution-loops.md) for the authoritative lockdown loop contract.
 
 Retained workflow-agent anchors:
-- Phase 0.95: Delivery Lockdown Loop.
-- `mode: delivery-lockdown` remains the maximum-assurance workflow-of-workflows.
-- Delivery-lockdown keeps cycling per spec until validate-owned certification is truly `done` or explicitly `blocked`.
+- Phase 0.95: Full-Delivery Convergence Loop.
+- `mode: full-delivery` is the maximum-assurance workflow-of-workflows.
+- Full-delivery keeps cycling per spec until validate-owned certification is truly `done` or explicitly `blocked`.
 - The parent owns round control and final certification; the child bundles remain `test-to-doc`, `harden-gaps-to-doc`, `validate-to-doc`, and `bugfix-fastlane` when defects are discovered.
 
 ---
