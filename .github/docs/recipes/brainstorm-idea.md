@@ -44,7 +44,7 @@ For messy legacy code or release-candidate work, prefer:
 
 ```
 /bubbles.workflow  specs/<NNN-feature> mode: improve-existing
-/bubbles.workflow  specs/<NNN-feature> mode: delivery-lockdown
+/bubbles.workflow  specs/<NNN-feature> mode: full-delivery
 ```
 
 ## Optional Tags

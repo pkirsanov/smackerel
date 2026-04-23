@@ -22,7 +22,7 @@ This section owns the one-shot `bubbles.spec-review` contract, including:
 - exactly-once-per-target invocation for the current workflow run
 - post-analysis timing for modes that include `analyze`
 - pre-implementation timing for modes that do not include `analyze`
-- batch and delivery-lockdown placement rules
+- batch and full-delivery placement rules
 - stale-artifact routing rules for `CURRENT`, `MINOR_DRIFT`, `PARTIAL`, `MAJOR_DRIFT`, `OBSOLETE`, and `route_required`
 - rerouting to `reconcile-to-doc`, `product-to-delivery`, or the narrower planning owners when the active artifacts are not trustworthy
 

@@ -29,7 +29,7 @@ Use this recipe when any of these are true:
 → /bubbles.workflow  <booking-spec> mode: improve-existing specReview: once-before-implement
 
 /bubbles.super  I need the no-loose-ends release workflow for booking
-→ /bubbles.workflow  <booking-spec> mode: delivery-lockdown
+→ /bubbles.workflow  <booking-spec> mode: full-delivery
 
 /bubbles.super  I have a rough idea and want to think it through before we write code
 → /bubbles.workflow  mode: brainstorm for <idea>
@@ -60,7 +60,7 @@ Use this recipe when any of these are true:
 → A short recommendation plus the exact command
 
 /bubbles.super  what should I run before release if it has to keep going until everything is green?
-→ A short recommendation plus `/bubbles.workflow  <feature> mode: delivery-lockdown`
+→ A short recommendation plus `/bubbles.workflow  <feature> mode: full-delivery`
 
 /bubbles.super  what's the difference between harden-to-doc and gaps-to-doc?
 → A concise comparison and the recommended choice for your situation

@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **36 Agents · 60 Gates · 34 Workflow Modes · 25 Phases**
+> **36 Agents · 60 Gates · 33 Workflow Modes · 25 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -145,9 +145,7 @@
 | Mode | Alias | What It Does |
 |------|-------|-------------|
 | `value-first-e2e-batch` | boys-plan | Auto-discover highest-value work, full delivery pipeline |
-| `full-delivery` | full-send | Standard complete delivery — the default |
-| `full-delivery` (with strict tag) | clean-and-sober | Strict enforcement, no blocked continuation |
-| `delivery-lockdown` | no-loose-ends | Keep looping through tests, quality sweep, validation, and bug closure until truly green |
+| `full-delivery` | full-send | Default maximum-assurance delivery — loops through implementation, tests, quality sweep, validation, and bug closure until truly green or blocked |
 | `devops-to-doc` | keep-the-park-online | Focused DevOps execution + operational verification + docs sync |
 | `simplify-to-doc` | strip-it-down | Simplify an existing implementation, prove it still works, then sync docs |
 | `spec-review-to-doc` | laser-eyes-sweep | Audit specs for freshness, classify trust levels, produce maintenance report |
@@ -158,7 +156,6 @@
 | `harden-gaps-to-doc` | conky-says | Thorough pre-release sweep |
 | `product-to-delivery` | freedom-35 | Full pipeline: analyst → UX → design → implement → ship |
 | `docs-only` | gnome-sayin | Documentation maintenance only |
-| `full-delivery` (with bootstrap) | smokes-and-setup | Repair missing artifacts, then continue delivery |
 | `iterate` | keep-going | Continue scope-by-scope implementation |
 | `resume-only` | resume-the-tape | Resume from last session state |
 | `spec-scope-hardening` (with analyze) | whats-the-big-idea | Business analysis + UX exploration only |
@@ -189,7 +186,7 @@
 | Improve an existing feature | `/bubbles.workflow  improve <feature>` | Objective research pass, then Design Brief + Execution Outline |
 | Fix a bug in existing code | `/bubbles.workflow  fix the <bug>` | Bugfix-fastlane with objective research and reproduce/fix/verify flow |
 | Keep moving the current work forward | `/bubbles.workflow  continue` | Resume active workflow or fall back to `iterate` |
-| Keep going until the feature is truly green | `/bubbles.workflow  <feature> mode: delivery-lockdown` | Repeated quality/certification rounds until done or concretely blocked |
+| Keep going until the feature is truly green | `/bubbles.workflow  <feature> mode: full-delivery` | Repeated quality/certification rounds until done or concretely blocked |
 | Inspect rework and bug-magnet patterns | `/bubbles.retro  week` | Slop Tax, retries, reversions, hotspots |
 | Audit framework prompt size | `bash bubbles/scripts/cli.sh lint-budget` | Instruction budget report for framework maintainers |
 
@@ -514,7 +511,7 @@ All agents accept natural language. `/bubbles.workflow` is the **universal entry
 | `/bubbles.system-review  review the booking feature as a user` | mode: full, scope: feature:booking |
 | `/bubbles.workflow  spend 2 hours working on whatever needs attention` | mode: iterate, minutes: 120 |
 | `/bubbles.iterate  fix tests for the page builder` | type: tests, feature: page-builder |
-| `/bubbles.workflow  do the next thing from recap` | mode: delivery-lockdown, target resolved from continuation envelope |
+| `/bubbles.workflow  do the next thing from recap` | mode: full-delivery, target resolved from continuation envelope |
 | `/bubbles.test  why are integration tests failing?` | action: triage, types: integration |
 | `/bubbles.analyst  how does our booking compare to competitors?` | mode: improve, competitive research on |
 | `/bubbles.security  scan for hardcoded secrets` | focus: secrets |
@@ -535,8 +532,8 @@ The super resolves intent and generates commands. Workflow delegates to it autom
 | `/bubbles.super  help me write a command for chaos testing` | `/bubbles.workflow mode: stochastic-quality-sweep maxRounds: 5` |
 | `/bubbles.super  before we improve booking, do one stale-spec check and then continue` | `/bubbles.workflow  <booking-spec> mode: improve-existing specReview: once-before-implement` |
 | `/bubbles.super  fix all found from the last sweep` | `/bubbles.workflow  <same-target> mode: stochastic-quality-sweep` |
-| `/bubbles.super  give me the no-loose-ends release workflow for booking` | `/bubbles.workflow  <booking-spec> mode: delivery-lockdown` |
-| `/bubbles.super  what should I do before shipping?` | `/bubbles.workflow  <feature> mode: delivery-lockdown` |
+| `/bubbles.super  give me the no-loose-ends release workflow for booking` | `/bubbles.workflow  <booking-spec> mode: full-delivery` |
+| `/bubbles.super  what should I do before shipping?` | `/bubbles.workflow  <feature> mode: full-delivery` |
 | `/bubbles.super  should I start here or call the agent directly?` | Policy answer: use `super` for vague intent; go direct when the target is already known |
 | `/bubbles.super  why did my workflow stop after validate?` | Short diagnosis + the next command to recover or continue |
 | `/bubbles.super  run framework validation before I upgrade` | `bash bubbles/scripts/cli.sh framework-validate` |
@@ -556,7 +553,7 @@ The super resolves intent and generates commands. Workflow delegates to it autom
 
 | Situation | Command |
 |-----------|---------|
-| Continue an active feature safely | `/bubbles.workflow  <feature> mode: delivery-lockdown` |
+| Continue an active feature safely | `/bubbles.workflow  <feature> mode: full-delivery` |
 | Continue routed work from a stochastic sweep | `/bubbles.workflow  fix all found` |
 | Implement a known scope surgically | `/bubbles.implement  execute scope 1 of <feature>` |
 | Continue next scope | `/bubbles.iterate  continue <feature>` |
@@ -583,7 +580,7 @@ The super resolves intent and generates commands. Workflow delegates to it autom
 | Security scan | `/bubbles.security` |
 | Check for regressions | `/bubbles.regression` |
 | Quality sweep | `/bubbles.workflow  harden-gaps-to-doc` |
-| Release lockdown | `/bubbles.workflow  delivery-lockdown` |
+| Release lockdown | `/bubbles.workflow  full-delivery` |
 
 ### Success & Wrap-Up
 

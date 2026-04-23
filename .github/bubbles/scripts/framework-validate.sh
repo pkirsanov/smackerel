@@ -66,6 +66,7 @@ run_check "Workflow delegation selftest" bash "$SCRIPT_DIR/workflow-delegation-s
 run_check "Continuation routing selftest" bash "$SCRIPT_DIR/continuation-routing-selftest.sh"
 run_check "Workflow planning provenance selftest" bash "$SCRIPT_DIR/workflow-planning-provenance-selftest.sh"
 run_check "Transition guard selftest" bash "$SCRIPT_DIR/state-transition-guard-selftest.sh"
+run_check "Batch promotion lint selftest" bash "$SCRIPT_DIR/batch-promotion-lint-selftest.sh"
 
 if [[ -x "$SCRIPT_DIR/runtime-lease-selftest.sh" ]]; then
   run_check "Runtime lease selftest" bash "$SCRIPT_DIR/runtime-lease-selftest.sh"

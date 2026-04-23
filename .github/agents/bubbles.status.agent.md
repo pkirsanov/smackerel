@@ -257,14 +257,14 @@ These recommendations are informational only. They do not certify completion, do
 | Condition | Recommended Action |
 |-----------|-------------------|
 | No scopes.md exists (but spec/design exists) | Run `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery` |
-| Scopes exist and incomplete | Run `/bubbles.workflow  {FEATURE_DIR} mode: delivery-lockdown` |
+| Scopes exist and incomplete | Run `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery` |
 | No agents.md exists | Run `/bubbles.commands` to configure project |
 | Docs drift suspected (spec/design/scopes changed) | Run `/bubbles.workflow  {FEATURE_DIR} mode: docs-only` |
-| Scopes pending, no errors | Run `/bubbles.workflow  {FEATURE_DIR} mode: delivery-lockdown` |
-| Error in fix.log, iteration < 3 | Run `/bubbles.workflow  {FEATURE_DIR} mode: delivery-lockdown` |
+| Scopes pending, no errors | Run `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery` |
+| Error in fix.log, iteration < 3 | Run `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery` |
 | Error in fix.log, iteration = 3 | 🔴 Human intervention needed - see fix.log |
 | All scopes/tasks complete | Run `/bubbles.workflow  {FEATURE_DIR} mode: validate-to-doc` |
-| Validation passed | Run `/bubbles.workflow  {FEATURE_DIR} mode: delivery-lockdown` for the no-loose-ends finish |
+| Validation passed | Run `/bubbles.workflow  {FEATURE_DIR} mode: full-delivery` for the no-loose-ends finish |
 
 **Example Output:**
 
@@ -272,7 +272,7 @@ These recommendations are informational only. They do not certify completion, do
 
 ### Available Actions
 
-1. ✅ **Immediate:** Run `/bubbles.workflow  specs/042-catalog-assistant mode: delivery-lockdown`
+1. ✅ **Immediate:** Run `/bubbles.workflow  specs/042-catalog-assistant mode: full-delivery`
    - Scopes pending, no blockers detected
 2. ⚠️ **Before merge:** Run `/bubbles.workflow  specs/042-catalog-assistant mode: validate-to-doc`
    - Ensures certification and evidence are current
@@ -288,7 +288,7 @@ These recommendations are informational only. They do not certify completion, do
 
 | Status         | Condition                  | Action                                 |
 | -------------- | -------------------------- | -------------------------------------- |
-| 🟢 HEALTHY     | No errors, making progress | Continue with `/bubbles.workflow  <feature> mode: delivery-lockdown` |
+| 🟢 HEALTHY     | No errors, making progress | Continue with `/bubbles.workflow  <feature> mode: full-delivery` |
 | 🟡 STUCK       | Same error 2 iterations    | Error auto-retrying, monitor progress  |
 | 🔴 ESCALATION  | Same error 3+ iterations   | Human review required - check fix.log  |
 | ⚪ NOT STARTED | No tasks attempted         | Run `/bubbles.workflow  <feature> mode: full-delivery` |
@@ -312,7 +312,7 @@ Before starting implementation, verify Bubbles artifacts are ready:
 /bubbles.workflow  <feature> mode: full-delivery
 
 # Once work exists and you want the highest-assurance finish:
-/bubbles.workflow  <feature> mode: delivery-lockdown
+/bubbles.workflow  <feature> mode: full-delivery
 ```
 
 Docs hardening (recommended when specs/scopes change):

@@ -34,7 +34,7 @@ That matters after workflows like `stochastic-quality-sweep`: follow-ups such as
 See what's in progress, what's done, what's remaining. Then:
 
 ```
-/bubbles.workflow  042-catalog-assistant mode: delivery-lockdown
+/bubbles.workflow  042-catalog-assistant mode: full-delivery
 ```
 
 If the next executable action is unclear, feed the recap/status recommendation back into `/bubbles.workflow`; it can consume continuation packets and keep orchestration intact.
