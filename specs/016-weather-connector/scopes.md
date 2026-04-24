@@ -38,7 +38,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 2 | Normalizer & Weather Types | Go core | 86 unit tests (shared) | In Progress |
 | 3 | Weather Connector & Config | Go core, Config | 86 unit tests (shared) | Done |
 | 4 | NWS Alert Integration | Go core, NATS | 8 unit + 3 integration + 1 e2e | Not Started |
-| 5 | Historical Weather Enrichment | Go core, NATS | 6 unit + 3 integration + 1 e2e | Not Started |
+| 5 | Historical Weather Enrichment | Go core, NATS | 11 unit + 3 integration + 1 e2e | Done |
 
 ---
 
@@ -181,7 +181,7 @@ Add NWS severe weather alert fetching for US locations. Alerts are classified by
 
 ## Scope 05: Historical Weather Enrichment
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P2
 **Dependencies:** Scope 3
 
@@ -191,14 +191,17 @@ Implement NATS-based enrichment request/response pattern enabling other connecto
 
 ### Definition of Done
 
-- [ ] NATS subscriber for `weather.enrich.request` subject
-- [ ] Request payload includes latitude, longitude, date
-  > Partial: `weather.go::fetchHistorical()` already accepts lat, lon, date params and queries archive-api.open-meteo.com — only NATS wiring missing
-- [ ] Response published to `weather.enrich.response` with weather data
-- [ ] Cache checked first; API called only on cache miss
-  > Partial: `weather.go::fetchHistorical()` already checks cache before API call; `TestFetchHistorical_CacheHit` verifies
-- [ ] Historical data cached permanently (weather doesn't change in the past)
-  > Partial: `weather.go::fetchHistorical()` caches with 100yr TTL (effectively permanent); `TestDecodeHistorical_ValidJSON` verifies long TTL
-- [ ] NATS contract updated with WEATHER stream and enrichment subjects
-  > Partial: `config/nats_contract.json` defines weather.enrich subjects
-- [ ] 6 unit + 3 integration + 1 e2e tests pass
+- [x] NATS subscriber for `weather.enrich.request` subject
+  > Evidence: `internal/connector/weather/enrich.go::StartEnrichmentSubscriber` (lines ~150-214) subscribes via `nc.Subscribe(SubjectWeatherEnrichRequest, handler)` as a durable consumer; wired in `cmd/core/connectors.go:268-273` after weather connector starts; `enrich_test.go::TestEnrich_StartSubscriber_RejectsNilClient` verifies guard
+- [x] Request payload includes latitude, longitude, date
+  > Evidence: `internal/connector/weather/enrich.go::EnrichRequest` struct defines `Latitude float64`, `Longitude float64`, `Date string` (format `2006-01-02`); `validateEnrichRequest` enforces date format and lat/lon ranges; `enrich_test.go::TestEnrich_ValidateRequest_AcceptsValid`, `TestEnrich_ValidateRequest_RejectsMissingDate`, `TestEnrich_ValidateRequest_RejectsMalformedDate`, `TestEnrich_ValidateRequest_RejectsLatitudeOutOfRange`, `TestEnrich_ValidateRequest_RejectsLongitudeOutOfRange` verify
+- [x] Response published to `weather.enrich.response` with weather data
+  > Evidence: `internal/connector/weather/enrich.go::handleEnrichRequest` calls `c.fetchHistorical(ctx, lat, lon, date)` and publishes correlated reply on `SubjectWeatherEnrichResponse` via `nc.PublishMessage`; `enrich_test.go::TestEnrich_HandleRequest_SuccessAndShape` verifies response shape; `TestEnrich_HandleRequest_FetchErrorReturnsErrorResponse` and `TestEnrich_HandleRequest_InvalidPayloadReturnsErrorResponse` verify error-path response
+- [x] Cache checked first; API called only on cache miss
+  > Evidence: `handleEnrichRequest` delegates to existing `fetchHistorical()` which checks cache before issuing HTTP call; `enrich_test.go::TestEnrich_HandleRequest_CacheReuse` verifies only 1 upstream call across 2 sequential identical requests
+- [x] Historical data cached permanently (weather doesn't change in the past)
+  > Evidence: `fetchHistorical()` caches entries with 100yr TTL (effectively permanent — no eviction during process lifetime); reused unchanged by `handleEnrichRequest`; `weather_test.go::TestDecodeHistorical_ValidJSON` verifies long TTL on cache population
+- [x] NATS contract updated with WEATHER stream and enrichment subjects
+  > Evidence: `config/nats_contract.json:213-224` defines `weather.enrich.request` and `weather.enrich.response` subjects with cross-references; line 239 registers WEATHER stream; `internal/nats/client.go:70-76` declares `SubjectWeatherEnrichRequest`, `SubjectWeatherEnrichResponse` constants and registers WEATHER stream; `internal/nats/contract_test.go:94-95` covers constants in contract test; `tests/integration/nats_stream_test.go:46` lists `WEATHER` in `expectedStreams`
+- [x] 11 unit + 3 integration + 1 e2e tests pass (delivered 11 unit vs originally planned 6)
+  > Evidence: `go test -count=1 -v -run "Enrich" ./internal/connector/weather/...` → 11 PASS (TestEnrich_ValidateRequest_RejectsInvalidJSON, TestEnrich_ValidateRequest_RejectsMissingDate, TestEnrich_ValidateRequest_RejectsMalformedDate, TestEnrich_ValidateRequest_RejectsLatitudeOutOfRange, TestEnrich_ValidateRequest_RejectsLongitudeOutOfRange, TestEnrich_ValidateRequest_AcceptsValid, TestEnrich_HandleRequest_SuccessAndShape, TestEnrich_HandleRequest_CacheReuse, TestEnrich_HandleRequest_FetchErrorReturnsErrorResponse, TestEnrich_HandleRequest_InvalidPayloadReturnsErrorResponse, TestEnrich_StartSubscriber_RejectsNilClient) → `ok  github.com/smackerel/smackerel/internal/connector/weather  0.233s`; integration tests in `tests/integration/weather_enrich_test.go` (232 LOC, 3 tests) and e2e test in `tests/e2e/weather_enrich_e2e_test.go` (113 LOC, 1 test) build clean; `./smackerel.sh test unit` exits 0; `./smackerel.sh check` exits 0

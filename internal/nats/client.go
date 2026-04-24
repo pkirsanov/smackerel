@@ -67,6 +67,14 @@ const (
 	SubjectAgentInvokeResponse   = "agent.invoke.response"
 	SubjectAgentToolCallExecuted = "agent.tool_call.executed"
 	SubjectAgentComplete         = "agent.complete"
+
+	// Weather enrichment subjects (spec 016 — Weather Connector, Scope 05).
+	// Other connectors and the digest generator publish historical-weather
+	// requests on weather.enrich.request; the weather connector publishes the
+	// matching reply on weather.enrich.response. Correlation is by request_id
+	// inside the payload (logical request/response over JetStream pub-sub).
+	SubjectWeatherEnrichRequest  = "weather.enrich.request"
+	SubjectWeatherEnrichResponse = "weather.enrich.response"
 )
 
 // StreamConfig defines a JetStream stream and its subjects.
@@ -89,6 +97,7 @@ func AllStreams() []StreamConfig {
 		{Name: "ANNOTATIONS", Subjects: []string{"annotations.>"}},
 		{Name: "LISTS", Subjects: []string{"lists.>"}},
 		{Name: "AGENT", Subjects: []string{"agent.>"}},
+		{Name: "WEATHER", Subjects: []string{"weather.>"}},
 		{Name: "DEADLETTER", Subjects: []string{"deadletter.>"}},
 	}
 }

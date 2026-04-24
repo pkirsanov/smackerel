@@ -210,6 +210,18 @@
       "direction": "core_internal",
       "stream": "AGENT",
       "critical": false
+    },
+    "weather.enrich.request": {
+      "direction": "core_internal",
+      "response": "weather.enrich.response",
+      "stream": "WEATHER",
+      "critical": false
+    },
+    "weather.enrich.response": {
+      "direction": "core_internal",
+      "request": "weather.enrich.request",
+      "stream": "WEATHER",
+      "critical": false
     }
   },
   "streams": {
@@ -224,6 +236,7 @@
     "ANNOTATIONS": { "subjects_pattern": "annotations.>" },
     "LISTS": { "subjects_pattern": "lists.>" },
     "AGENT": { "subjects_pattern": "agent.>" },
+    "WEATHER": { "subjects_pattern": "weather.>" },
     "DEADLETTER": { "subjects_pattern": "deadletter.>" }
   },
   "request_response_pairs": [

@@ -91,6 +91,8 @@ func TestSCN002054_GoSubjectsMatchContract(t *testing.T) {
 		"SubjectAgentInvokeResponse":        SubjectAgentInvokeResponse,
 		"SubjectAgentToolCallExecuted":      SubjectAgentToolCallExecuted,
 		"SubjectAgentComplete":              SubjectAgentComplete,
+		"SubjectWeatherEnrichRequest":       SubjectWeatherEnrichRequest,
+		"SubjectWeatherEnrichResponse":      SubjectWeatherEnrichResponse,
 	}
 
 	// Every Go constant must exist in the contract

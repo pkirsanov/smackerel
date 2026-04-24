@@ -8,8 +8,8 @@ import (
 
 func TestAllStreams_Coverage(t *testing.T) {
 	streams := AllStreams()
-	if len(streams) != 12 {
-		t.Fatalf("expected 12 streams, got %d", len(streams))
+	if len(streams) != 13 {
+		t.Fatalf("expected 13 streams, got %d", len(streams))
 	}
 
 	expected := map[string][]string{
@@ -24,6 +24,7 @@ func TestAllStreams_Coverage(t *testing.T) {
 		"ANNOTATIONS":  {"annotations.>"},
 		"LISTS":        {"lists.>"},
 		"AGENT":        {"agent.>"},
+		"WEATHER":      {"weather.>"},
 		"DEADLETTER":   {"deadletter.>"},
 	}
 

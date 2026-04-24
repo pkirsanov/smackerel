@@ -264,6 +264,14 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			svc.supervisor.SetConfig("weather", weatherCfg)
 			svc.supervisor.StartConnector(ctx, "weather")
 			slog.Info("weather connector started")
+
+			// Start the on-demand historical enrichment subscriber. Other
+			// connectors and the digest generator publish on
+			// weather.enrich.request and receive replies on
+			// weather.enrich.response (see spec 016 Scope 05).
+			if _, subErr := weatherConnector.StartEnrichmentSubscriber(ctx, svc.nc, weatherConn); subErr != nil {
+				slog.Warn("weather enrichment subscriber failed to start", "error", subErr)
+			}
 		} else {
 			slog.Warn("weather connector failed to start", "error", err)
 		}
