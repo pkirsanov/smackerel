@@ -52,4 +52,6 @@ tmp/
 
 # Prevent Bubbles framework README from overriding project README on GitHub
 .github/README.md
-core
+# Built core binary at repo root (not the cmd/core/ source directory)
+/core
+

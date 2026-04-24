@@ -2,27 +2,84 @@
   "version": 3,
   "specId": "023-engineering-quality",
   "bugId": "BUG-002-scheduler-god-orchestrator",
+  "featureDir": "specs/023-engineering-quality/bugs/BUG-002-scheduler-god-orchestrator",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
+  "status": "done",
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "documentation",
-    "completedPhaseClaims": [],
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-15T00:00:00Z",
+    "completedPhaseClaims": [
+      "documentation",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "pendingTransitionRequests": [],
     "executionHistory": [
       {
         "phase": "documentation",
         "agent": "bubbles.bug",
         "timestamp": "2026-04-15T00:00:00Z",
         "outcome": "completed_owned"
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-24T07:48:11Z",
+        "outcome": "completed_owned",
+        "summary": "Re-scoped from Job-interface refactor (which would change exported scheduler.New signature) to pragmatic file extraction. Moved Stop+runGuarded to lifecycle.go, retry-state accessors+CronEntryCount to state.go, MealPlanAutoCompleter+SetKnowledgeLinter+SetMealPlanAutoComplete to registration.go. Factored 10-entry intelligence-engine cron registration into private scheduleEngineJobs helper. scheduler.go reduced from 213 to 122 LOC (target ≤150). Zero exported API change; sole consumer cmd/core/main.go untouched for scheduler API."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-24T07:55:34Z",
+        "outcome": "completed_owned",
+        "summary": "go test -count=1 ./internal/scheduler/... returns ok in 5.026s. ./smackerel.sh test unit returns ok across all 41 Go packages and 330 Python tests pass. All pre-existing scheduler tests (TestStop_*, TestFormatAlertMessage_*, TestDeliverPendingAlerts_*, TestCronConcurrencyGuard_*, TestRelationshipCoolingUsesOwnMutex, etc.) PASS without modification."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-24T08:01:48Z",
+        "outcome": "completed_owned",
+        "summary": "wc -l scheduler.go = 122 (target ≤150). grep -E '^func ' confirms function placement: New+Start+scheduleEngineJobs in scheduler.go, Stop+runGuarded in lifecycle.go, retry accessors+CronEntryCount in state.go, SetKnowledgeLinter+SetMealPlanAutoComplete in registration.go. grep on cmd/core/main.go confirms scheduler.New(...) and sched.Start(ctx, cronExpr) call sites are unchanged. ./smackerel.sh format --check and lint both pass; go vet clean."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-24T08:05:22Z",
+        "outcome": "completed_owned",
+        "summary": "Artifact lint PASSED for BUG-002-scheduler-god-orchestrator. All 6 DoD items checked with inline real-terminal evidence. State, scope status, and report all coherent."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T08:09:17Z",
+        "outcome": "completed_owned",
+        "summary": "Bug closed. Status promoted to done with real captured evidence."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "scopeProgress": {},
-    "lockdownState": {}
+    "status": "done",
+    "completedScopes": [
+      "Scope 1: Extract scheduler methods to ≤150 LOC"
+    ],
+    "certifiedCompletedPhases": [
+      "documentation",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
   },
   "policySnapshot": {
     "grill": {
@@ -51,5 +108,19 @@
     }
   },
   "transitionRequests": [],
-  "reworkQueue": []
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-24T08:09:17Z",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "notes": "Scheduler god-orchestrator file extraction. Re-scoped from Job-interface refactor (forbidden under no-API-change rule) to pragmatic file extraction. Verified at HEAD on 2026-04-24 with real captured commands. scheduler.go = 122 LOC (target ≤150). 3 sibling files added: lifecycle.go (46), state.go (28), registration.go (26). Zero exported API change. All tests pass."
 }
