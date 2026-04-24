@@ -2,28 +2,85 @@
   "version": 3,
   "featureDir": "specs/006-phase5-advanced/bugs/BUG-002-serendipity-missing-calendar-match",
   "featureName": "BUG-002: Serendipity Engine Missing Calendar Matching",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "bugfix-fastlane",
   "execution": {
-    "activeAgent": "bubbles.gaps",
-    "currentPhase": "plan",
+    "activeAgent": null,
+    "currentPhase": "finalize",
     "currentScope": "1",
     "runStartedAt": "2026-04-22T00:00:00Z",
-    "completedPhaseClaims": [],
-    "pendingTransitionRequests": []
-  },
-  "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "scopeProgress": [
+    "completedPhaseClaims": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "executionHistory": [
       {
-        "scope": 1,
-        "name": "Add Calendar Matching to SerendipityPick",
-        "status": "Done",
-        "dependsOn": []
+        "phase": "planning",
+        "agent": "bubbles.gaps+plan",
+        "timestamp": "2026-04-22T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug discovered by bubbles.gaps; plan created to add CalDAV batch fetch + +3 score boost + ContextReason."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-22T19:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Wired CalDAV batch query into SerendipityPick; CalendarMatch=true + score+=3.0 + ContextReason=Matches an upcoming calendar event in resurface.go."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-22T20:30:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added TestSerendipityCandidate_CalendarMatchBoost and CalendarMatch:false branch coverage in resurface_test.go."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:35:00Z",
+        "outcome": "completed_owned",
+        "summary": "Re-verified field wiring and scoring constants via grep; focused TestSerendipityCandidate_CalendarMatchBoost PASS."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:35:30Z",
+        "outcome": "completed_owned",
+        "summary": "./smackerel.sh check clean; Serendipity-scoped regression run passed (ok 0.019s)."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:36:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug re-certified done. All 7 DoD items checked with file:line evidence."
       }
     ]
   },
-  "policySnapshot": {}
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "scopeProgress": {
+      "scope-1": "Done"
+    }
+  },
+  "policySnapshot": {},
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": []
 }

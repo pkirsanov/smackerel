@@ -17,12 +17,12 @@ No new types or signatures. Changes are to existing `Validate()` logic and confi
 
 | # | Name | Surfaces | Key Tests | Status |
 |---|------|----------|-----------|--------|
-| 1 | Reject default token + change YAML default | `internal/config/config.go`, `config/smackerel.yaml`, `internal/config/validate_test.go` | Unit: placeholder rejection, prefix rejection, case-insensitive | [ ] In Progress |
+| 1 | Reject default token + change YAML default | `internal/config/config.go`, `config/smackerel.yaml`, `internal/config/validate_test.go` | Unit: placeholder rejection, prefix rejection, case-insensitive | [x] Done |
 
 ---
 
 ## Scope 1: Reject default token + change YAML default
-**Status:** [ ] In Progress
+**Status:** [x] Done
 
 ### Gherkin Scenarios
 
@@ -81,11 +81,15 @@ Feature: Reject guessable dev auth tokens
 
 ### Definition of Done
 
-- [ ] `dev-token-smackerel-2026` is in the placeholder reject list
-- [ ] `dev-token-*` prefix check added (case-insensitive)
-- [ ] `config/smackerel.yaml` `auth_token` is `""` (empty string)
-- [ ] Regression tests cover literal, prefix, case-insensitive, valid token, and empty token
-- [ ] `./smackerel.sh test unit` passes
-- [ ] No existing tests broken
-
-DoD items un-checked because the fix has not been verified in this artifact pass (status: in_progress).
+- [x] `dev-token-smackerel-2026` is in the placeholder reject list
+  **Evidence:** `internal/config/config.go:865` — `"dev-token-smackerel-2026",` listed in placeholders slice (verified via `grep -n "dev-token" internal/config/config.go`).
+- [x] `dev-token-*` prefix check added (case-insensitive)
+  **Evidence:** `internal/config/config.go:872-874` — `if strings.HasPrefix(strings.ToLower(c.AuthToken), "dev-token-") { return fmt.Errorf(...) }`.
+- [x] `config/smackerel.yaml` `auth_token` is `""` (empty string)
+  **Evidence:** `config/smackerel.yaml:19` — `auth_token: "" # REQUIRED: set a secure random token (min 16 chars). Run: openssl rand -hex 24`.
+- [x] Regression tests cover literal, prefix, case-insensitive, valid token, and empty token
+  **Evidence:** `internal/config/validate_test.go:290-307` — `TestValidate_AuthTokenDevTokenPrefixRejected` table cases: `dev-token-smackerel-2026`, `dev-token-anything-here-1234`, `Dev-Token-MyProject-9999`. Empty/valid tokens covered by existing `TestValidate_AuthTokenExactly16Chars` and `setRequiredEnv` defaults.
+- [x] `./smackerel.sh test unit` passes
+  **Evidence:** Captured 2026-04-24 — `./smackerel.sh test unit` final summary `330 passed, 2 warnings in 11.48s` (Python ML) plus `ok github.com/smackerel/smackerel/internal/config 0.006s` for the focused Go run; see report.md Test Evidence.
+- [x] No existing tests broken
+  **Evidence:** Same `./smackerel.sh test unit` run reports `0 failed`; focused `go test -count=1 -v -run "TestValidate_AuthToken..."` shows all assertions PASS without touching other tests.

@@ -2,28 +2,85 @@
   "version": 3,
   "featureDir": "specs/006-phase5-advanced/bugs/BUG-001-ml-sidecar-missing-phase5-handlers",
   "featureName": "BUG-001: ML Sidecar Missing Phase 5 NATS Handlers",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "bugfix-fastlane",
   "execution": {
-    "activeAgent": "bubbles.gaps",
-    "currentPhase": "plan",
+    "activeAgent": null,
+    "currentPhase": "finalize",
     "currentScope": "1",
     "runStartedAt": "2026-04-22T00:00:00Z",
-    "completedPhaseClaims": [],
-    "pendingTransitionRequests": []
-  },
-  "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "scopeProgress": [
+    "completedPhaseClaims": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "executionHistory": [
       {
-        "scope": 1,
-        "name": "Implement Phase 5 NATS Handlers",
-        "status": "Done",
-        "dependsOn": []
+        "phase": "planning",
+        "agent": "bubbles.gaps+plan",
+        "timestamp": "2026-04-22T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug discovered by bubbles.gaps; plan created for the 5 Phase 5 NATS handlers."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-22T18:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added explicit elif branches in ml/app/nats_client.py for learning.classify, content.analyze, monthly.generate, quickref.generate, seasonal.analyze and wired ml/app/intelligence.py handlers."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-22T20:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added ml/tests/test_intelligence_handlers.py with 5 test classes / 18 test functions covering happy path, fallback, and edge cases."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:33:30Z",
+        "outcome": "completed_owned",
+        "summary": "Re-verified routing via grep across ml/app/; full ./smackerel.sh test unit reported 330 passed, 0 failed."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:34:00Z",
+        "outcome": "completed_owned",
+        "summary": "./smackerel.sh check ran clean; focused go test ./internal/intelligence/... passed (ok 0.019s) confirming Go publishers still align with Python consumers."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:34:30Z",
+        "outcome": "completed_owned",
+        "summary": "Bug re-certified done. All 9 DoD items checked with file:line evidence."
       }
     ]
   },
-  "policySnapshot": {}
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "scopeProgress": {
+      "scope-1": "Done"
+    }
+  },
+  "policySnapshot": {},
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": []
 }

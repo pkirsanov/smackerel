@@ -6,7 +6,7 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 
 ## Scope 1: Verify CI Build Runs on PRs
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
@@ -32,8 +32,9 @@ No code changes required. The existing CI workflow already satisfies both scenar
 
 ### Definition of Done
 
-- [ ] `.github/workflows/ci.yml` has `pull_request` in the `on:` block
-- [ ] `build` job has no `if:` condition limiting it to main-only
-- [ ] `build` job runs `./smackerel.sh build`
-
-DoD items un-checked because closure has not been independently re-verified in this artifact pass (status: in_progress).
+- [x] `.github/workflows/ci.yml` has `pull_request` in the `on:` block
+  **Evidence:** `.github/workflows/ci.yml:9-10` — `pull_request:\n    branches: [ main ]`. Verified via `sed -n '1,12p' .github/workflows/ci.yml`.
+- [x] `build` job has no `if:` condition limiting it to main-only
+  **Evidence:** `.github/workflows/ci.yml` — `build:` job declares `needs: lint-and-test` then jumps straight to `runs-on:` with no `if:` line. Verified via `awk '/^[[:space:]]*build:/,/^[a-z]/' .github/workflows/ci.yml | head -10` showing no `if:` clause before `steps:`.
+- [x] `build` job runs `./smackerel.sh build`
+  **Evidence:** `.github/workflows/ci.yml` build job step `Build Docker images` runs `./smackerel.sh build` after exporting `SMACKEREL_VERSION`, `SMACKEREL_COMMIT`, `SMACKEREL_BUILD_TIME`. Captured in report.md Validation Evidence.
