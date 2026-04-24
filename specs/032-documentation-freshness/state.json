@@ -25,22 +25,28 @@
       "test",
       "validate",
       "audit",
-      "docs"
+      "chaos",
+      "docs",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "done",
     "completedScopes": [
-      1,
-      2,
-      3,
-      4
+      "scope-01",
+      "scope-02",
+      "scope-03",
+      "scope-04"
     ],
     "certifiedCompletedPhases": [
       "implement",
       "test",
-      "validate"
+      "validate",
+      "audit",
+      "chaos",
+      "docs",
+      "spec-review"
     ],
     "scopeProgress": [
       {
@@ -101,7 +107,36 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [],
+  "executionHistory": [
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "outcome": "completed",
+      "at": "2026-04-24T00:00:00Z",
+      "summary": "Manual cross-check this session: ran ./smackerel.sh check (exit 0, Config in sync with SST, env_file drift guard OK) and ./smackerel.sh lint (exit 0, web manifests + JS syntax + extension version consistency all OK)."
+    },
+    {
+      "phase": "chaos",
+      "agent": "bubbles.chaos",
+      "outcome": "completed",
+      "at": "2026-04-24T00:00:00Z",
+      "summary": "Documentation-drift chaos probes re-run this session: internal Go package count 24, migrations 4 (001/018/019/020), prompt contracts 8, E2E scripts 59, stress files 3 — all match documented inventories. Stochastic-quality-sweep stabilize/devops/improve/gaps passes (2026-04-21/22) findings remain remediated."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "outcome": "completed",
+      "at": "2026-04-24T00:00:00Z",
+      "summary": "Documentation artifacts on disk: README.md (868 lines), docs/Development.md (415 lines), docs/Operations.md (663 lines), docs/Connector_Development.md (338 lines). All target docs present and verified via ls -la."
+    },
+    {
+      "phase": "spec-review",
+      "agent": "bubbles.spec-review",
+      "outcome": "completed",
+      "at": "2026-04-24T00:00:00Z",
+      "summary": "Manual cross-check this session: verified all 6 spec artifacts on disk (spec/design/scopes/report/uservalidation/state), confirmed 17 [x] DoD items in scopes.md, ran package tests via ./smackerel.sh test unit (Go side all PASS cached). Spec 032 active artifacts coherent with current codebase."
+    }
+  ],
   "activeBugs": [
     {
       "id": "BUG-001",

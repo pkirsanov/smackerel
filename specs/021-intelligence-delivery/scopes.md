@@ -155,14 +155,23 @@ Scenario: SCN-021-015 No alerts swept when none pending
 ### Definition of Done
 
 - [x] `MarkAlertDelivered()` method added to `intelligence.Engine`
+  - Evidence: `internal/intelligence/alerts.go` defines `MarkAlertDelivered(ctx, alertID)` (UPDATE alerts SET status='delivered', delivered_at=NOW() WHERE id=$1 AND status IN ('pending','snoozed')); covered by `TestMarkAlertDelivered_*` in `internal/intelligence/alerts_test.go`.
 - [x] Alert delivery sweep registered as `*/15 * * * *` cron job in scheduler
+  - Evidence: `internal/scheduler/scheduler.go` registers `*/15 * * * *` entry under `muAlerts`; verified by `TestCronEntries_WithEngine` (13 entries) and `TestCronConcurrencyGuard_AllEightGroupsIndependent`.
 - [x] Delivery sweep: `GetPendingAlerts` → format → `SendDigest` → `MarkAlertDelivered` per alert
+  - Evidence: `internal/scheduler/jobs.go` `deliverPendingAlerts()` + `deliverAlertBatch()` implement the GetPendingAlerts → FormatAlertMessage → sendFn → markFn pipeline; covered by `TestDeliverAlertBatch_HappyPath` and `TestDeliverPendingAlerts_*`.
 - [x] Telegram failure leaves alert as `pending` (retry-safe), logs warning
+  - Evidence: `TestDeliverAlertBatch_SendFailure_AlertStaysPending` in `internal/scheduler/jobs_test.go` asserts the alert is NOT marked when sendFn returns an error and a warning is emitted.
 - [x] `ProduceBillAlerts()` added — queries subscriptions ≤3 days to billing, deduplicates
+  - Evidence: `internal/intelligence/alert_producers.go` `ProduceBillAlerts(ctx)` with `clampDay(time.Local)` and dedup `NOT EXISTS` clause; covered by `TestProduceBillAlerts_*` and `TestBillingDate_LocalMidnightNotUTCTruncate`.
 - [x] `ProduceTripPrepAlerts()` added — queries trips ≤5 days to departure, deduplicates
+  - Evidence: `internal/intelligence/alert_producers.go` `ProduceTripPrepAlerts(ctx)` uses `calendarDaysBetween(localToday, startDate)`; covered by `TestTripPrepDaysUntil_UsesCalendarDays` and `TestTripPrepDaysUntil_DSTSpringForward`.
 - [x] `ProduceReturnWindowAlerts()` added — queries artifacts with return_deadline ≤5 days, deduplicates, priority 1
+  - Evidence: `internal/intelligence/alert_producers.go` `ProduceReturnWindowAlerts(ctx)` uses regex guard `metadata->>'return_deadline' ~ '^\d{4}-\d{2}-\d{2}$'` before `::date` cast; covered by `TestProduceReturnWindowAlerts_*` (incl. `_CancelledContext`).
 - [x] `ProduceRelationshipCoolingAlerts()` added — queries people with >30 day gap + prior ≥1/week, deduplicates per 30 days
+  - Evidence: `internal/intelligence/alert_producers.go` `ProduceRelationshipCoolingAlerts(ctx)` with 30-day dedup window; covered by `TestProduceRelationshipCoolingAlerts_*` and mutex isolation `TestRelationshipCoolingUsesOwnMutex`.
 - [x] 4 producer cron jobs registered: bills (6 AM daily), trip prep (6 AM daily), return window (6 AM daily), relationship cooling (Mon 7 AM weekly)
+  - Evidence: `internal/scheduler/scheduler.go` registers `0 6 * * *` (combined daily producers under `muAlertProd`) and `0 7 * * 1` (relationship cooling under `muRelCool`); verified by `TestCronEntries_WithEngine` and `TestCronConcurrencyGuard_AllEightGroupsIndependent`.
 - [x] All 6 alert types now have automated producers
 - [x] Alert delivery respects existing 2/day cap enforced by `GetPendingAlerts()`
 - [x] Snoozed alerts with expired `snooze_until` are delivered
@@ -275,8 +284,13 @@ Scenario: SCN-021-013 Health reports healthy when synthesis is recent
 ### Definition of Done
 
 - [x] `GetLastSynthesisTime()` method added to `intelligence.Engine`
+  - Evidence: `internal/intelligence/synthesis.go` `GetLastSynthesisTime(ctx)` runs `SELECT COALESCE(MAX(created_at), '1970-01-01'::timestamptz) FROM synthesis_insights`; covered by `TestGetLastSynthesisTime_*` in `internal/intelligence/synthesis_test.go`.
 - [x] Health handler queries `GetLastSynthesisTime()` instead of simple pool-nil check
+  - Evidence: `internal/api/health.go` calls `GetLastSynthesisTime()` and branches on result; verified by `TestHealthHandler_IntelligenceFreshInstallNotStale` and other `TestHealthHandler_*` cases in `internal/api/health_test.go`.
 - [x] Intelligence status = `down` when pool nil, `stale` when synthesis >48h, `up` otherwise
+  - Evidence: `internal/api/health.go` graduated branch (pool-nil → down; synth older than 48h → stale; else up); covered by `TestHealthHandler_IntelligenceStale` and `TestHealthHandler_IntelligenceUp` cases.
 - [x] `stale` status contributes to overall `degraded` health
+  - Evidence: `internal/api/health.go` aggregates intelligence==`stale` into the overall `degraded` rollup; verified by health test that asserts overall=degraded when synthesis >48h.
 - [x] `GetLastSynthesisTime()` query failure logs warning, defaults to `up` (not `stale`)
+  - Evidence: `internal/api/health.go` wraps the call in error-tolerant branch — logs warning via `slog.Warn` and falls back to `up`; covered by `TestHealthHandler_IntelligenceUp` fallback path and the fresh-install zero-time guard `TestHealthHandler_IntelligenceFreshInstallNotStale`.
 - [x] `./smackerel.sh test unit` passes

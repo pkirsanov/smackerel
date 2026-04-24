@@ -84,6 +84,12 @@ Connectors (passive ingestion):
   Twitter/X · Weather · Gov Alerts · Financial Markets
 ```
 
+Domain reasoning (classification, intent routing, multi-step workflows) follows an
+**LLM agent + tools** pattern: the Go core exposes typed, deterministic tools
+(parsing, CRUD, math, formatting) and an LLM agent — driven by prompt contracts in
+`config/prompt_contracts/` — orchestrates them. New scenarios are added by writing a
+new prompt that composes existing tools, not by adding new Go business logic.
+
 ## System Requirements
 
 ### Minimum (without local LLM)

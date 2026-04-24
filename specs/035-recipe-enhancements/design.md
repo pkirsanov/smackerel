@@ -555,6 +555,329 @@ If scaling validation fails (no baseline servings), start cook mode without scal
 
 ---
 
+## 4A. Agent + Tools Design (Spec 037 Integration)
+
+> **Status:** Adds the agent + tools surface introduced by the spec 037
+> reframe (BS-021..BS-028, IP-003, IP-004, UX-N1..UX-N5). This section
+> CONSUMES the runtime defined in
+> [`specs/037-llm-agent-tools/design.md`](../037-llm-agent-tools/design.md);
+> it does **not** redesign loader, registry, executor, router, tracer,
+> schema validator, NATS surface, or trace store. Cook-session state
+> machine (§4) and serving-scaler arithmetic (§3) are unchanged; only the
+> intent-routing layer and the categorization/clarification surfaces move
+> behind scenarios + tools.
+
+### 4A.1 Scenarios To Register
+
+All scenarios live under `config/scenarios/recipes/` (scanned by spec 037
+loader §2.1) and follow the YAML shape in spec 037 §2.1
+(`type: scenario`, `id`, `version`, `system_prompt`, `intent_examples`,
+`allowed_tools`, `input_schema`, `output_schema`, `limits`,
+`side_effect_class`). Side-effect class is `read` for every scenario in
+this section — no recipe scenario writes state. Final outputs are
+structured envelopes the Telegram surface renders into UX-N* wireframes.
+
+| Scenario id | File | Drives | Purpose |
+|-------------|------|--------|---------|
+| `recipe_intent_route` | `recipe_intent_route-v1.yaml` | BS-021, IP-004, UX-N1 | Front-door router for any recipe-context Telegram message: scale, cook, scale+cook, find, search, navigate, "double it", "make this for the 6 of us", "lemme cook the carbonara thing" |
+| `recipe_substitute` | `recipe_substitute-v1.yaml` | UX-N2.1, IP-003 | Single-ingredient swap with one-line reasoning |
+| `recipe_equipment_swap` | `recipe_equipment_swap-v1.yaml` | UX-N2.2, IP-003 | Equipment alternative (no stand mixer, no wok, etc.) |
+| `recipe_dietary_adapt` | `recipe_dietary_adapt-v1.yaml` | UX-N2.3, IP-003 | Whole-recipe scan against a target restriction (dairy-free, vegetarian, gluten-free) returning per-ingredient adapt/keep decisions |
+| `recipe_pairing` | `recipe_pairing-v1.yaml` | UX-N2.5, IP-003 | Side / drink / wine pairing pulled from the knowledge graph |
+| `recipe_disambiguate` | `recipe_disambiguate-v1.yaml` | UX-N3.1, BS-024 | Generates short agent-written descriptors when `recipe_search` returns >1 candidate; user reply completes the original intent |
+| `ingredient_categorize` | `ingredient_categorize-v1.yaml` | BS-023, BS-026, UX-N3.3 | Replaces the hardcoded `CategorizeIngredient` keyword map; returns category + confidence; consumed by spec 036 shopping list |
+| `recipe_unit_clarify` | `recipe_unit_clarify-v1.yaml` | BS-027, UX-N3.4 | Unknown-unit follow-up clarification ("what's a punnet?") — only invoked on user request; the scaler tool itself preserves the unit verbatim without invoking this scenario |
+
+#### 4A.1.1 `recipe_intent_route-v1`
+
+| Field | Value |
+|-------|-------|
+| Side-effect class | `read` |
+| Allowed tools | `recipe_search`, `recipe_get`, `recipe_recent`, `scale_recipe`, `format_kitchen_quantity`, `parse_quantity`, `normalize_unit`, `knowledge_graph_query`, `recipe_snapshot_cache` |
+| Intent examples | "8 servings", "double it", "for 6 of us tonight", "lemme cook the carbonara thing", "walk me through it", "what goes well with this", "convert this to metric", "I'm out of pecorino" (the latter two route INTO `recipe_substitute` / unit conversion via the agent's reasoning, not a hardcoded branch) |
+| Input shape | `{ chat_id: int64, raw_input: string, recent_recipe?: { artifact_id: string, title: string, original_servings: int|null, displayed_at: timestamp }, active_cook_session?: { artifact_id, current_step, scale_factor } }` |
+| Output shape | `{ outcome: "scale"|"cook_enter"|"scale_then_cook"|"substitute"|"equipment_swap"|"dietary_adapt"|"pairing"|"unit_convert"|"disambiguate"|"unknown", payload: object, render_template: string }` where `payload` matches the named outcome (e.g., scale → `{ artifact_id, target_servings, per_ingredient_overrides? }`) |
+| Disambiguation routing | If `recipe_search` returns >1 candidate, the agent emits `outcome: "disambiguate"` with the candidates and the original intent payload preserved so the user's "1" / "2" / "3" reply (handled by the next routing turn with prior `outcome` carried in `recent_recipe.disambiguation_pending`) completes the intent without re-typing the scale factor (UX-N3.1) |
+
+#### 4A.1.2 `recipe_substitute-v1`
+
+| Field | Value |
+|-------|-------|
+| Side-effect class | `read` |
+| Allowed tools | `recipe_get`, `knowledge_graph_query` |
+| Input | `{ artifact_id: string, ingredient: string, reason?: "out_of_stock"|"dietary"|"preference" }` |
+| Output | `{ ingredient: string, substitutes: [{ name: string, ratio: string, reasoning: string, confidence: "high"|"medium"|"low" }], rendered_lines: [string] }` |
+| Notes | One-line reasoning per UX-N2.1 open question #4 (deep-link to KG artifact deferred). |
+
+#### 4A.1.3 `recipe_equipment_swap-v1`
+
+| Field | Value |
+|-------|-------|
+| Side-effect class | `read` |
+| Allowed tools | `recipe_get`, `knowledge_graph_query` |
+| Input | `{ artifact_id: string, equipment: string }` |
+| Output | `{ equipment: string, swaps: [{ alternative: string, technique_change?: string, confidence }], rendered_lines: [string] }` |
+
+#### 4A.1.4 `recipe_dietary_adapt-v1`
+
+| Field | Value |
+|-------|-------|
+| Side-effect class | `read` |
+| Allowed tools | `recipe_get`, `knowledge_graph_query` |
+| Input | `{ artifact_id: string, restriction: "dairy_free"|"vegetarian"|"vegan"|"gluten_free"|"nut_free"|string }` |
+| Output | `{ restriction: string, decisions: [{ ingredient: string, action: "keep"|"swap"|"remove", replacement?: string, reasoning: string }], summary: string }` |
+
+#### 4A.1.5 `recipe_pairing-v1`
+
+| Field | Value |
+|-------|-------|
+| Side-effect class | `read` |
+| Allowed tools | `recipe_get`, `knowledge_graph_query`, `recipe_search` |
+| Input | `{ artifact_id: string, kind: "side"|"drink"|"wine"|"any" }` |
+| Output | `{ kind: string, suggestions: [{ title: string, source_artifact_id?: string, reasoning: string, prior_cook?: bool }] }` |
+| Notes | `prior_cook` flag (UX-N2.5) is true when KG shows the pairing was previously cooked or referenced from another captured artifact. Advisory only — does not mutate any artifact. |
+
+#### 4A.1.6 `recipe_disambiguate-v1`
+
+| Field | Value |
+|-------|-------|
+| Side-effect class | `read` |
+| Allowed tools | `recipe_search`, `recipe_get` |
+| Input | `{ candidates: [{ artifact_id }], original_intent: object }` |
+| Output | `{ rendered_options: [{ index: int, title: string, descriptor: string, artifact_id: string }], original_intent: object }` |
+| Notes | Descriptor strings (`Italian, 4 servings, last viewed 2 days ago`) are agent-generated from artifact metadata, not stored fixed strings (UX-N3.1). Cap at 3 visible per spec open question #5; emits trailing line `> N more — reply "more" to see them` when candidates exceed the cap. |
+
+#### 4A.1.7 `ingredient_categorize-v1`
+
+| Field | Value |
+|-------|-------|
+| Side-effect class | `read` |
+| Allowed tools | `knowledge_graph_query`, `normalize_unit` |
+| Input | `{ ingredient_name: string, normalized_name?: string, prior_signals?: [{ user_correction: string, timestamp }] }` |
+| Output | `{ category: string, confidence: "high"|"medium"|"low", rationale: string }` |
+| Notes | Replaces `CategorizeIngredient` keyword map in `internal/recipe/quantity.go`. Consumed by spec 036 shopping-list assembly; user-correction signals captured by spec 037's signal-capture path are passed back as `prior_signals` on the next call. Category `"uncategorized"` is allowed when confidence is too low (BS-026). |
+
+#### 4A.1.8 `recipe_unit_clarify-v1`
+
+| Field | Value |
+|-------|-------|
+| Side-effect class | `read` |
+| Allowed tools | `knowledge_graph_query`, `recipe_get` |
+| Input | `{ unit: string, context_artifact_id?: string }` |
+| Output | `{ unit: string, explanation: string, suggested_replacement?: { quantity: float, unit: string }, requires_confirmation: bool }` |
+| Notes | Only invoked when the user explicitly asks ("what's a punnet?"). `scale_recipe` itself never calls this scenario — it preserves the unit verbatim per BS-027 / UX-N3.4. The Telegram surface offers the `requires_confirmation` reply prompt; no recipe artifact is mutated by this scenario. |
+
+### 4A.2 Tools To Register
+
+All recipe tools live in `internal/recipe/tools.go` and are registered
+from `init()` per spec 037 §3.1 (decentralized — no central tool table).
+Math and formatting tools are **deterministic Go**; only retrieval tools
+touch storage. Every tool here is `SideEffectRead`.
+
+| Tool name | Owning package | Side-effect | Determinism |
+|-----------|----------------|-------------|-------------|
+| `recipe_search` | `internal/recipe` | read | non-deterministic (vector + ILIKE) |
+| `recipe_get` | `internal/recipe` | read | deterministic given artifact id |
+| `recipe_recent` | `internal/recipe` | read | deterministic given chat id |
+| `scale_recipe` | `internal/recipe` | read | **fully deterministic — pure Go arithmetic** |
+| `format_kitchen_quantity` | `internal/recipe` | read | **fully deterministic — pure Go** |
+| `parse_quantity` | `internal/recipe` | read | **fully deterministic — pure Go** |
+| `normalize_unit` | `internal/recipe` | read | **fully deterministic — pure Go** |
+| `knowledge_graph_query` | `internal/knowledge` (consumed; not owned by 035) | read | non-deterministic |
+| `recipe_snapshot_cache` | `internal/recipe` | read | deterministic given session id |
+
+#### 4A.2.1 `recipe_search`
+
+| Aspect | Value |
+|--------|-------|
+| Description | "Search recipes by name, tag, ingredient, or vector similarity. Returns ranked candidates with metadata for disambiguation." |
+| Input schema | `{ query: string, mode?: "name"|"tag"|"ingredient"|"vector"|"any" (default "any"), limit?: int (1..10, default 5) }` |
+| Output schema | `{ candidates: [{ artifact_id: string, title: string, source: string, captured_at: timestamp, last_viewed_at?: timestamp, original_servings?: int, cuisine?: string, score: float }] }` |
+| Side-effect class | `read` |
+
+#### 4A.2.2 `recipe_get`
+
+| Aspect | Value |
+|--------|-------|
+| Description | "Fetch full recipe domain_data by artifact id." |
+| Input schema | `{ artifact_id: string }` |
+| Output schema | `recipe.RecipeData` (existing struct in `internal/recipe/types.go`) |
+| Errors | `ARTIFACT_NOT_FOUND`, `NO_DOMAIN_DATA`, `DOMAIN_NOT_RECIPE` returned as structured `{ error_code, message }` (handler-level errors, not schema violations) |
+
+#### 4A.2.3 `recipe_recent`
+
+| Aspect | Value |
+|--------|-------|
+| Description | "Return the most recently displayed recipe in the given chat context, if any." |
+| Input schema | `{ chat_id: int64, max_age_minutes?: int (default from `recipes.recent_window_minutes` SST) }` |
+| Output schema | `{ found: bool, artifact_id?: string, title?: string, displayed_at?: timestamp }` |
+
+#### 4A.2.4 `scale_recipe` (deterministic math)
+
+| Aspect | Value |
+|--------|-------|
+| Description | "Scale ingredient quantities by a target serving count. Pure arithmetic; no LLM reasoning." |
+| Input schema | `{ artifact_id: string, target_servings: int, per_ingredient_overrides?: { [ingredient_name]: "keep_original"|float } }` |
+| Output schema | `{ original_servings: int, target_servings: int, scale_factor: float, ingredients: [{ name, original_quantity, original_unit, scaled_quantity?, scaled_unit?, display_quantity, scaled: bool, override_applied?: bool, indivisible_warning?: bool }] }` |
+| Implementation | Wraps existing `recipe.ScaleIngredients` (§3.1) — no new arithmetic. The `indivisible_warning` flag fires on whole-unit ingredients (eggs, garlic cloves, whole spices) producing fractional results, surfacing UX-N3.2. |
+
+#### 4A.2.5 `format_kitchen_quantity` (deterministic)
+
+| Aspect | Value |
+|--------|-------|
+| Description | "Format a float quantity as a kitchen-readable fraction string (e.g., 1.5 → \"1 1/2\")." |
+| Input schema | `{ quantity: float }` |
+| Output schema | `{ display: string }` |
+| Implementation | Wraps existing `recipe.FormatQuantity` (§3.4). |
+
+#### 4A.2.6 `parse_quantity` (deterministic)
+
+| Aspect | Value |
+|--------|-------|
+| Description | "Parse a quantity string (\"1 1/2\", \"½\", \"to taste\") into a numeric value. Returns 0 for unparseable input." |
+| Input schema | `{ quantity_string: string, unit_string?: string }` |
+| Output schema | `{ value: float, unit: string, parseable: bool }` |
+| Implementation | Wraps existing `recipe.ParseQuantity` (§3.3). |
+
+#### 4A.2.7 `normalize_unit` (deterministic)
+
+| Aspect | Value |
+|--------|-------|
+| Description | "Normalize a unit alias (tbs, T, tbsp.) to its canonical form (tbsp). Returns the input verbatim when no canonical form is known (BS-027)." |
+| Input schema | `{ unit: string }` |
+| Output schema | `{ canonical_unit: string, recognized: bool }` |
+| Implementation | Wraps existing `recipe.NormalizeUnit`. |
+
+#### 4A.2.8 `knowledge_graph_query` (consumed, not owned)
+
+| Aspect | Value |
+|--------|-------|
+| Description | "Query the knowledge graph for related artifacts (substitutions, pairings, prior cooks, captured corrections)." |
+| Owning package | `internal/knowledge` (registered there per spec 037 §3.1; this design only consumes it via the `allowed_tools` of the recipe scenarios) |
+| Input/Output schema | Defined by `internal/knowledge`; recipe scenarios pass through whatever shape that package registers. |
+
+#### 4A.2.9 `recipe_snapshot_cache`
+
+| Aspect | Value |
+|--------|-------|
+| Description | "Return the cached snapshot of the last-displayed step for an active cook session, used when the underlying artifact has been deleted (BS-028 / UX-N3.5)." |
+| Input schema | `{ chat_id: int64 }` |
+| Output schema | `{ found: bool, artifact_id?: string, recipe_title?: string, current_step?: int, total_steps?: int, instruction?: string, snapshot_taken_at?: timestamp }` |
+| Implementation | Reads from a per-`CookSession` snapshot field populated each time the session displays a step; cleared with the session itself per spec open question #7 (snapshot retained until the session-ending message is sent). |
+
+### 4A.3 Migration Plan (Phased)
+
+| Phase | Scope | Action | Status gate |
+|-------|-------|--------|-------------|
+| 0 | Spec 037 runtime live | Loader, registry, executor, tracer, NATS `AGENT` stream all functioning per `specs/037-llm-agent-tools/design.md` §1, §3, §5, §6. | **Hard prerequisite.** No phase below begins until 037 reports `done`. |
+| 1 | Tool registration | Add `internal/recipe/tools.go` registering the nine tools above via `init()`. Wraps existing `internal/recipe` functions; no behavior change. | Tools registered, schema self-test passes, `agent doctor` lists them. |
+| 2 | Scenario files | Drop the eight `*-v1.yaml` files into `config/scenarios/recipes/`. Loader validates allowlists against the registry. Existing Telegram regex paths (§4.3 priority 3 + 4) remain authoritative. | Scenarios load clean; not yet routed to. |
+| 3 | Shadow-mode routing | When `recipes.intent_router=agent`, every recipe-context Telegram message is dispatched BOTH through the agent (recording trace + outcome) AND through the existing regex paths (which still produce the user-visible reply). Outcomes are diffed in trace; user sees the legacy reply. | Trace store shows agent + regex agree on a configurable percentage of real traffic. |
+| 4 | Cutover | Flip `recipes.intent_router=agent` in `config/smackerel.yaml`. Agent owns the user-visible reply for non-cook-mode messages. Cook-mode navigation (`next`, `back`, etc.) continues to bypass the agent per UX-N5. Regex routers remain in code, never reached. | UX wireframes UX-N1.* render correctly against live recipes. |
+| 5 | Deletion | Delete the regex routers (§4A.4). Preserve their patterns as test fixtures only. Delete `CategorizeIngredient` from `internal/recipe/quantity.go`; spec 036 shopping list now calls `ingredient_categorize-v1`. | All references in §4A.4 removed; lint clean; test fixtures still pass via the agent path. |
+
+### 4A.4 Files / Symbols Marked For Deletion
+
+Phase 5 of the migration removes the following. Until phase 5, all of
+these remain authoritative.
+
+| Path / symbol | Reason | Disposition |
+|---------------|--------|-------------|
+| `internal/telegram/recipe_commands.go` → `parseScaleTrigger` | Regex intent routing replaced by `recipe_intent_route-v1` (BS-021, IP-004) | Delete; preserve regexes inline as comments in `internal/telegram/recipe_commands_test.go` fixture data only |
+| `internal/telegram/recipe_commands.go` → `parseCookTrigger` | Same | Same |
+| `internal/telegram/recipe_commands.go` → `parseCookNavigation` | Same | **Partial — keep.** Cook-mode navigation (`next`, `back`, `done`, `ingredients`, bare integer) MUST stay regex-based per UX-N5 ("Inside `CookMode`, navigation commands … bypass `recipe_interact`"). Function stays; only the *outside-cook-mode* call sites are removed. |
+| `internal/recipe/quantity.go` → `CategorizeIngredient` keyword map + function | Replaced by `ingredient_categorize-v1` scenario (BS-023, BS-026, UX-N3.3) | Delete the function and the keyword map. Spec 036 shopping list updated to call the scenario. |
+| `internal/list/recipe_aggregator.go` → any remaining hardcoded ingredient-name lists feeding categorization | Same | Delete; aggregator calls the scenario via the agent surface. |
+| `internal/telegram/recipe_commands_test.go` → `TestParseScaleTrigger`, `TestParseCookTrigger`, `TestParseScaleTrigger_MaxServingsCap`, `TestParseCookTrigger_MaxServingsCap` | Becomes MUST-handle examples for the routing scenario, not unit tests of regex parsing | Convert to scenario-routing assertions: each former regex case becomes a test that `recipe_intent_route-v1` returns the expected `outcome` + `payload`. The regex strings live in the test file as fixtures only. |
+
+`CookSession` state struct (§4.1) and `CookSessionStore` (§4.1, §4.2)
+are **not** deleted — they continue to own cook-mode mechanical state
+(current step, scale factor, last interaction, snapshot). The agent
+surface only handles intent classification and step content/format
+generation; session lifecycle stays in Go.
+
+### 4A.5 Cook-Session Integration
+
+The cook-session state machine (§4) is retained verbatim. The agent
+surface integrates at exactly two seams:
+
+1. **Cook-mode entry** (outside an active session): the user message
+   flows through `recipe_intent_route-v1`; `outcome: "cook_enter"` (or
+   `"scale_then_cook"`) returns the resolved `artifact_id` and optional
+   `target_servings`. The Go cook-mode handler then creates the session
+   via `CookSessionStore.Create(...)` exactly as today (§4.6, §4.7,
+   §4.9) and renders step 1 via the existing formatter (§4.4).
+2. **Cook-mode navigation** (inside an active session): bypasses the
+   agent entirely per UX-N5. `parseCookNavigation` continues to handle
+   `next` / `back` / `ingredients` / `done` / bare integer. This
+   preserves the short, voice-friendly contract and keeps cook-mode
+   latency at the existing in-process map lookup.
+
+The agent surface MAY influence rendering (e.g., for UX-N3.5 deleted
+recipe mid-cook the cook-mode handler calls `recipe_snapshot_cache` to
+fetch the cached step before sending the session-ended message), but it
+NEVER mutates `CookSession.CurrentStep`, `ScaleFactor`, or
+`LastInteraction`. Those remain Go-owned (§4.1).
+
+### 4A.6 Backward Compatibility
+
+| Surface | Preserved as-is | Why |
+|---------|------------------|-----|
+| `recipe-extraction-v1` prompt contract | Yes | This is an **extraction** contract, not an interaction surface. Spec 037 §"Resolved Decisions" explicitly keeps existing extraction contracts unchanged. |
+| `GET /api/artifacts/{id}/domain?servings={N}` | Yes | API endpoint unchanged. The handler still calls `recipe.ScaleIngredients` directly without going through the agent — the API has typed inputs and does not need intent routing. |
+| `CookSession*` API and lifecycle | Yes | Cook-mode mechanical state stays in Go (§4A.5). |
+| Telegram cook-mode navigation commands | Yes | UX-N5 explicitly preserves this short voice-friendly contract. |
+| Existing scaler trigger phrases (UX-1.1) and cook entry phrases (UX-2.1) | Yes — must continue to resolve | Per UX-N4, those are MUST-handle examples; the agent must produce identical outcomes for them. Migration phase 5 converts them into scenario-routing test fixtures, not deletions of behavior. |
+
+### 4A.7 Configuration
+
+Additions to `config/smackerel.yaml` under a new `recipes:` section. Per
+SST policy ([instructions/bubbles-config-sst.instructions.md](../../.github/instructions/bubbles-config-sst.instructions.md)),
+all values MUST be set; **no Go-side defaults**. `intent_router=agent`
+is the target end state but is not the loader default — the operator
+sets the value explicitly during migration phases 3 and 4.
+
+```yaml
+recipes:
+  intent_router: ""              # REQUIRED: "agent" | "legacy". Empty = startup fatal.
+  recent_window_minutes: 0       # REQUIRED: window for `recipe_recent` tool. 0 = startup fatal.
+  disambiguation_max_visible: 0  # REQUIRED: cap for `recipe_disambiguate-v1` rendered options. 0 = startup fatal.
+```
+
+Generated env vars (emitted by `./smackerel.sh config generate` into
+`config/generated/dev.env` and `config/generated/test.env`):
+
+| Env var | Source | Consumer |
+|---------|--------|----------|
+| `RECIPES_INTENT_ROUTER` | `recipes.intent_router` | `internal/telegram` dispatch — selects agent vs legacy path |
+| `RECIPES_RECENT_WINDOW_MINUTES` | `recipes.recent_window_minutes` | `recipe_recent` tool handler |
+| `RECIPES_DISAMBIGUATION_MAX_VISIBLE` | `recipes.disambiguation_max_visible` | `recipe_disambiguate-v1` scenario (passed through `structured_context`) |
+
+**Fail-loud validation:** every consumer reads `os.Getenv` and
+`log.Fatal`s on empty / zero / unknown enum value. No `getEnv("...",
+"default")` anywhere.
+
+### 4A.8 Failure-Mode Mapping (BS-024..BS-028)
+
+Each adversarial business scenario maps to a deterministic agent path
+and a UX-N3 wireframe. No silent failures; every leaf is a structured
+outcome.
+
+| BS | Trigger | Scenario / tool path | User-visible outcome | UX-N3 wireframe |
+|----|---------|----------------------|----------------------|-----------------|
+| BS-024 | `recipe_search` returns >1 candidate during routing | `recipe_intent_route-v1` → `recipe_search` (multi-result) → `outcome: "disambiguate"` → `recipe_disambiguate-v1` renders options; user reply re-enters `recipe_intent_route-v1` with `recent_recipe.disambiguation_pending` carrying the original intent | UX-N3.1 — numbered candidate list with agent-written descriptors; user reply completes the original intent without re-typing the scale factor | UX-N3.1 |
+| BS-025 | `scale_recipe` produces fractional value for an ingredient flagged `indivisible` (eggs, whole spices, garlic cloves) | `recipe_intent_route-v1` → `scale_recipe` (returns `indivisible_warning: true` per ingredient) → routing scenario emits `outcome: "scale"` with `payload.alternatives` populated by agent reasoning over the flagged ingredients | UX-N3.2 — honest fractional value PLUS agent-reasoned alternatives (round up, use beaten egg, use whites only, "keep") | UX-N3.2 |
+| BS-026 | `ingredient_categorize-v1` cannot find a category from KG signals + agent knowledge | `ingredient_categorize-v1` returns `category: "uncategorized"` with `confidence: "low"` and a best-guess `rationale`; spec 036 shopping list renders an `Uncategorized (?)` group with the best-guess line and a "teach the system" prompt; user correction is captured by spec 037 signal-capture and replayed as `prior_signals` on the next call | UX-N3.3 — `Uncategorized (?)` group with low-confidence best guess + teach prompt; ingredient never dropped | UX-N3.3 |
+| BS-027 | `scale_recipe` encounters a unit `normalize_unit` returns `recognized: false` for | `scale_recipe` scales the numeric quantity, preserves the unit verbatim, and emits a per-ingredient flag the routing scenario surfaces as `> "{unit}" left as-is (unit unrecognized)`. `recipe_unit_clarify-v1` is **only** invoked if the user later asks ("what's a punnet?") — never automatically | UX-N3.4 — scaled numeric quantity, unit preserved verbatim, annotation line; optional opt-in clarification with confirmation reply | UX-N3.4 |
+| BS-028 | Cook-mode navigation handler (Go, §4.8) detects `recipe_get` returns `ARTIFACT_NOT_FOUND` for an active session | Handler calls `recipe_snapshot_cache` (the only agent surface used here) to retrieve the cached last-displayed step, renders the UX-N3.5 message, and tears down the session via `CookSessionStore.Delete(chat_id)`. No further LLM call; the agent path is bounded to the snapshot lookup tool | UX-N3.5 — single clear message: "Recipe no longer available", cached step snapshot ("You were on step 3 of 6: …"), session-ended hint | UX-N3.5 |
+
+All five paths persist a trace row to `agent_traces` (spec 037 §6.1)
+with the matching `outcome` value and the rendered user-visible
+message in `final_output`, so post-hoc inspection and regression replay
+(spec 037 §6.2) work uniformly across happy and adversarial paths.
+
+---
+
 ## 5. Configuration
 
 ### 5.1 Additions to `config/smackerel.yaml`

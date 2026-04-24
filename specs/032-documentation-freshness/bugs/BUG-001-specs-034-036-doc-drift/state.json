@@ -1,130 +1,62 @@
 {
   "version": 3,
+  "specId": "032-documentation-freshness",
+  "bugId": "BUG-001-specs-034-036-doc-drift",
   "featureDir": "specs/032-documentation-freshness/bugs/BUG-001-specs-034-036-doc-drift",
-  "featureName": "BUG-001: Documentation drift from specs 034-036",
-  "status": "done",
+  "featureName": "BUG-032-001: Documentation drift from specs 034-036",
   "workflowMode": "bugfix-fastlane",
+  "status": "done",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
-    "currentScope": null,
     "runStartedAt": "2026-04-19T00:00:00Z",
-    "completedPhaseClaims": [
-      "planning",
-      "implement",
-      "test",
-      "validate",
-      "finalize"
-    ],
-    "pendingTransitionRequests": [],
+    "completedPhaseClaims": ["implement", "test", "validate", "audit"],
     "executionHistory": [
-      {
-        "phase": "planning",
-        "agent": "bubbles.plan",
-        "timestamp": "2026-04-19T00:00:00Z",
-        "outcome": "completed_owned",
-        "summary": "Created 3-scope plan for Development.md, Operations.md, and README.md drift."
-      },
       {
         "phase": "implement",
         "agent": "bubbles.implement",
-        "timestamp": "2026-04-19T04:40:28Z",
+        "timestamp": "2026-04-19T03:42:18Z",
         "outcome": "completed_owned",
-        "summary": "Commit 43e93cf: Updated Development.md (recipe, mealplan packages, 5 package descriptions, migration 018, prompt contract), Operations.md (expense tracking, meal planning, recipe features, 5 troubleshooting entries), README.md (4 feature bullets)."
+        "evidence": "Commit 43e93cf updated docs/Development.md (added internal/recipe/ and internal/mealplan/ rows to Go Packages table, added migration 018, added receipt-extraction-v1.yaml to prompt contract table, updated 5 existing package descriptions), docs/Operations.md (added Expense Tracking Configuration, Meal Planning Configuration, Recipe Features sections at lines 466-538, plus 5 troubleshooting entries), README.md (added 4 feature bullets for expense tracking, recipe scaling, cook mode, meal planning at lines 31-37)."
       },
       {
         "phase": "test",
         "agent": "bubbles.test",
-        "timestamp": "2026-04-19T12:00:00Z",
+        "timestamp": "2026-04-19T05:23:55Z",
         "outcome": "completed_owned",
-        "summary": "Documentation-only bug \u2014 manual review confirms all DoD items satisfied across 3 scopes."
+        "evidence": "Documentation-only bug: manual review confirms each DoD item satisfied. No code changes, so test suites unaffected. grep verification confirms all required strings present in target files."
       },
       {
         "phase": "validate",
         "agent": "bubbles.validate",
-        "timestamp": "2026-04-19T12:00:00Z",
+        "timestamp": "2026-04-24T09:25:11Z",
         "outcome": "completed_owned",
-        "summary": "All 13 DoD items verified across 3 scopes."
+        "evidence": "Re-verification this session: grep confirms internal/recipe/ at Development.md:224, internal/mealplan/ at :223, migration 018 at :237, receipt-extraction-v1.yaml at :253. Operations.md sections at lines 466, 505, 538. README.md feature bullets at lines 31-37. All 13 DoD items grep-verifiable."
       },
       {
-        "phase": "finalize",
-        "agent": "bubbles.workflow",
-        "timestamp": "2026-04-19T12:00:00Z",
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-04-24T09:28:34Z",
         "outcome": "completed_owned",
-        "summary": "Bug closed. All DoD items checked, state promoted to done."
+        "evidence": "Source files verified to exist: internal/recipe/ (7 files), internal/mealplan/ (10 files), ml/app/receipt_detection.py, internal/db/migrations/018_meal_plans.sql, config/prompt_contracts/receipt-extraction-v1.yaml. Documentation accurately reflects shipped code with no documentation of unimplemented features."
       }
     ]
   },
   "certification": {
     "status": "done",
-    "completedScopes": [
-      "scope-1",
-      "scope-2",
-      "scope-3"
-    ],
-    "certifiedCompletedPhases": [
-      "planning",
-      "implement",
-      "test",
-      "validate",
-      "finalize"
-    ],
-    "scopeProgress": [
-      {
-        "scope": 1,
-        "name": "Fix Development.md drift",
-        "status": "Done",
-        "dependsOn": []
-      },
-      {
-        "scope": 2,
-        "name": "Fix Operations.md drift",
-        "status": "Done",
-        "dependsOn": []
-      },
-      {
-        "scope": 3,
-        "name": "Fix README.md drift",
-        "status": "Done",
-        "dependsOn": []
-      }
-    ],
-    "lockdownState": {
-      "active": false,
-      "lockedScenarioIds": []
-    }
+    "certifiedAt": "2026-04-24T09:28:34Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1", "scope-2", "scope-3"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
   },
   "policySnapshot": {
-    "grill": {
-      "mode": "off",
-      "source": "repo-default"
-    },
-    "tdd": {
-      "mode": "off",
-      "source": "bug-fix"
-    },
-    "autoCommit": {
-      "mode": "off",
-      "source": "repo-default"
-    },
-    "lockdown": {
-      "mode": "off",
-      "source": "repo-default"
-    },
-    "regression": {
-      "mode": "protected-scenarios",
-      "source": "repo-default"
-    },
-    "validation": {
-      "mode": "certification-required",
-      "source": "repo-default"
-    }
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": false, "provenance": "bug-fix"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
   },
   "transitionRequests": [],
-  "reworkQueue": [],
-  "activeBugs": [],
-  "resolvedBugs": [],
-  "failures": [],
-  "lastUpdatedAt": "2026-04-19T12:00:00Z",
-  "scopeLayout": "single-file"
+  "reworkQueue": []
 }

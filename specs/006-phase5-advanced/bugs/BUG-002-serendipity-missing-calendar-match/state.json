@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/006-phase5-advanced/bugs/BUG-002-serendipity-missing-calendar-match",
   "featureName": "BUG-002: Serendipity Engine Missing Calendar Matching",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "bugfix-fastlane",
   "execution": {
     "activeAgent": "bubbles.gaps",
@@ -13,7 +13,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "pending",
+    "status": "in_progress",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
@@ -24,5 +24,6 @@
         "dependsOn": []
       }
     ]
-  }
+  },
+  "policySnapshot": {}
 }

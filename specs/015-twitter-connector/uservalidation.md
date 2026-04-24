@@ -5,7 +5,7 @@
 
 ## Checklist
 
-- [ ] Baseline checklist initialized for this feature
+- [x] Baseline checklist initialized for this feature
 - [ ] Spec reviewed and approved
 - [ ] Design reviewed and approved
 - [ ] Scopes planned (6 scopes)

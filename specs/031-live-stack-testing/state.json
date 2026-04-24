@@ -10,37 +10,35 @@
     "currentScope": 6,
     "runStartedAt": "2026-04-18T00:00:00Z",
     "completedPhaseClaims": [
-      {
-        "phase": "implement",
-        "agent": "bubbles.implement",
-        "completedAt": "2026-04-18T00:00:00Z",
-        "scopesCompleted": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6
-        ]
-      },
+      "implement",
       "test",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "chaos",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "done",
     "completedScopes": [
-      1,
-      2,
-      3,
-      4,
-      5,
-      6
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
     ],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs",
+      "chaos",
+      "spec-review"
+    ],
     "scopeProgress": [
       {
         "scope": 1,
@@ -126,7 +124,19 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-23T00:00:00Z",
+      "runEndedAt": "2026-04-23T00:00:00Z",
+      "summary": "Manual cross-check verified test files exist on disk: tests/integration/{db_migration_test.go (305 lines, 8 TestMigrations_* funcs), nats_stream_test.go (401 lines), artifact_crud_test.go (1033 lines, includes Chaos_* variants), ml_readiness_test.go (4 TestMLReadiness_* funcs)} and tests/e2e/capture_process_search_test.go (166 lines). internal/api/ml_readiness.go (52 lines) implements WaitForMLReady with config-driven timeout."
+    }
+  ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],

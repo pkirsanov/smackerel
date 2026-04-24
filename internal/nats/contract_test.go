@@ -87,6 +87,10 @@ func TestSCN002054_GoSubjectsMatchContract(t *testing.T) {
 		"SubjectAnnotationsCreated":         SubjectAnnotationsCreated,
 		"SubjectListsCreated":               SubjectListsCreated,
 		"SubjectListsCompleted":             SubjectListsCompleted,
+		"SubjectAgentInvokeRequest":         SubjectAgentInvokeRequest,
+		"SubjectAgentInvokeResponse":        SubjectAgentInvokeResponse,
+		"SubjectAgentToolCallExecuted":      SubjectAgentToolCallExecuted,
+		"SubjectAgentComplete":              SubjectAgentComplete,
 	}
 
 	// Every Go constant must exist in the contract
@@ -169,6 +173,7 @@ func TestSCN002054_GoSubjectPairsMatchContract(t *testing.T) {
 		{SubjectSynthesisExtract, SubjectSynthesisExtracted},
 		{SubjectSynthesisCrossSource, SubjectSynthesisCrossSourceResult},
 		{SubjectDomainExtract, SubjectDomainExtracted},
+		{SubjectAgentInvokeRequest, SubjectAgentInvokeResponse},
 	}
 
 	if len(contract.RequestResponsePairs) != len(goPairs) {

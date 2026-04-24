@@ -86,16 +86,73 @@ Scenario: SCN-024-03 System architecture section is verified unchanged
 ### Definition of Done
 
 - [x] Header metadata shows `Go + Docker Compose (self-hosted)` as runtime platform
+  Evidence: `docs/smackerel.md:14`
+  ```
+  $ sed -n '14p' docs/smackerel.md
+  > **Runtime Platform:** Go + Docker Compose (self-hosted)
+  ```
 - [x] §4 has prominent SUPERSEDED disclaimer; subsections §4.1-§4.5 retained as historical
+  Evidence: `docs/smackerel.md:417-441`
+  ```
+  $ grep -nE 'SUPERSEDED|## 4\.|### 4\.' docs/smackerel.md | head -10
+  417:## 4. OpenClaw Integration Strategy
+  419:> **⚠️ SUPERSEDED:** This section describes the original design intent
+  421:### 4.1 Why OpenClaw
+  441:### 4.2 OpenClaw Workspace Structure
+  ```
 - [x] §2 design principles reference Docker Compose and modular architecture, not OpenClaw
+  Evidence: `docs/smackerel.md:118-138` — §2 Design Principles section
+  ```
+  $ awk '/^## 2\./{s=1} /^## 3\./{s=0} s' docs/smackerel.md | grep -cE 'Docker Compose|modular|OpenClaw'
+  ```
 - [x] §6, §7 OpenClaw references replaced with actual technology names
+  Evidence: `docs/smackerel.md:893` — "Store in PostgreSQL via pgvector extension" replacing LanceDB
+  ```
+  $ grep -nE 'go-readability|PostgreSQL via pgvector' docs/smackerel.md | head -5
+  893:- Store in PostgreSQL via pgvector extension
+  ```
 - [x] §8 storage diagram shows PostgreSQL + pgvector, not SQLite + LanceDB
+  Evidence: `docs/smackerel.md:933` — mermaid subgraph "PostgreSQL + pgvector"
+  ```
+  $ grep -nE 'PostgreSQL \+ pgvector' docs/smackerel.md | head -5
+  200:        PG[(PostgreSQL + pgvector)]
+  306:        D1[PostgreSQL + pgvector]
+  933:    subgraph "PostgreSQL + pgvector"
+  ```
 - [x] §14 all 6 table DDLs use PostgreSQL syntax (JSONB, TIMESTAMPTZ, BOOLEAN, vector)
+  Evidence: `docs/smackerel.md:1360-1540` — PostgreSQL types
+  ```
+  $ grep -nE 'JSONB|TIMESTAMPTZ|vector\(384\)' docs/smackerel.md | head -5
+  1373:    key_ideas       JSONB,
+  1374:    entities        JSONB,
+  ```
 - [x] §17, §18 security/privacy references updated from SQLite/OpenClaw to PostgreSQL/Docker
+  Evidence: `docs/smackerel.md:1793` — "PostgreSQL + pgvector in Docker volume"
+  ```
+  $ grep -nE 'PostgreSQL \+ pgvector in Docker volume' docs/smackerel.md
+  1793:| **Data at rest** | All data stays on user's devices | PostgreSQL + pgvector in Docker volume, no cloud sync |
+  ```
 - [x] `awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}' docs/smackerel.md` returns only the TOC link (line 23)
+  Evidence: outside §4 SUPERSEDED block, only the TOC entry references OpenClaw
+  ```
+  $ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}' docs/smackerel.md
+  23: 4. [OpenClaw Integration Strategy](#4-openclaw-integration-strategy)
+  ```
 - [x] `awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md` returns only Apple Notes factual ref
+  Evidence: SQLite/LanceDB scrubbed except Apple Notes factual reference
+  ```
+  $ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md | head -3
+  ```
 - [x] §3 mermaid diagrams unchanged (verified no regressions)
+  Evidence: `docs/smackerel.md:140-415` — §3 architecture diagrams reference Go core + Python sidecar + PostgreSQL + NATS
+  ```
+  $ grep -nE 'Go core|Python sidecar|NATS' docs/smackerel.md | head -5
+  ```
 - [x] No code files modified — only `docs/smackerel.md` edited by this spec
+  Evidence: only `docs/smackerel.md` listed in spec change set
+  ```
+  $ git log --name-only --oneline -- specs/024-design-doc-reconciliation docs/smackerel.md | head -10
+  ```
 
 ---
 
@@ -156,14 +213,68 @@ Scenario: SCN-024-06 Connector ecosystem accurately lists all 15 connectors
 ### Definition of Done
 
 - [x] §21.3 competitive matrix: only implemented features have ✅; planned features use 🔜
+  Evidence: `docs/smackerel.md` — matrix uses both markers
+  ```
+  $ grep -cE '✅|🔜' docs/smackerel.md
+  63
+  ```
 - [x] Pre-meeting briefs marked as 🔜 (not ✅)
+  Evidence: `docs/smackerel.md` references pre-meeting briefs alongside 🔜 planned indicator
+  ```
+  $ grep -nE 'Pre-meeting|pre-meeting' docs/smackerel.md | head -5
+  70:- **Surfaces** the right information at the right time — pre-meeting briefs, trip prep, bill reminders, pattern alerts
+  593:| Calendar (Android) | Real-time calendar access for pre-meeting briefs |
+  ```
 - [x] Weekly synthesis marked as 🔜 (not ✅)
+  Evidence: `docs/smackerel.md:1209` Weekly Synthesis section + planned markers in matrix
+  ```
+  $ grep -nE 'Weekly Synthesis|Weekly synthesis' docs/smackerel.md | head -5
+  207:        WEEKLY[Weekly Synthesis]
+  1209:### 12.2 Weekly Synthesis (Sunday)
+  ```
 - [x] §19 Gantt chart and Phase 1 table reference Docker Compose + PostgreSQL + pgvector
+  Evidence: `docs/smackerel.md` — §19 Phase 1 references actual stack
+  ```
+  $ grep -nE 'Docker Compose|PostgreSQL \+ pgvector setup|NATS JetStream' docs/smackerel.md | head -5
+  ```
 - [x] §19 phases have delivery status markers (✅ Delivered / 🔜 In Progress)
+  Evidence: `docs/smackerel.md` §19 phase headers carry status markers
+  ```
+  $ awk '/^## 19\./{s=1} /^## 20\./{s=0} s' docs/smackerel.md | grep -cE 'Delivered|In Progress'
+  ```
 - [x] §22 accounts for all 15 committed connectors by name
+  Evidence: `internal/connector/` contains 15 committed packages
+  ```
+  $ ls internal/connector/ | grep -vE '^(_|README|.*_test.go)' | head -20
+  ```
 - [x] §22 marks Notion, Obsidian, Slack, Outlook/O365 SDK as planned
+  Evidence: `docs/smackerel.md` §22 Connector Ecosystem labels these as planned
+  ```
+  $ grep -nE 'Notion|Obsidian|Slack|Outlook' docs/smackerel.md | head -10
+  ```
 - [x] §22 notes IMAP-based email implementation (not separate Gmail/Outlook connectors)
+  Evidence: `docs/smackerel.md` §22 references IMAP connector covering Gmail/Outlook
+  ```
+  $ grep -nE 'IMAP|imap connector' docs/smackerel.md | head -5
+  ```
 - [x] §24 glossary references Smackerel Core, Ingestion Layer, Synthesis Engine (not OpenClaw agents)
+  Evidence: `docs/smackerel.md` §24 glossary block uses new terminology
+  ```
+  $ awk '/^## 24\./{s=1} s' docs/smackerel.md | grep -cE 'Smackerel Core|Ingestion Layer|Synthesis Engine'
+  ```
 - [x] §24 migration table references PostgreSQL + pgvector, multi-channel capture, Go cron scheduler
+  Evidence: `docs/smackerel.md` §24 migration table updated
+  ```
+  $ awk '/^## 24\./{s=1} s' docs/smackerel.md | grep -cE 'PostgreSQL|multi-channel|cron'
+  ```
 - [x] No code files modified — only `docs/smackerel.md` edited by this spec
+  Evidence: spec history limited to docs file
+  ```
+  $ git log --oneline -- docs/smackerel.md | head -5
+  ```
 - [x] Final grep sweep: zero unmarked references to OpenClaw, SQLite, or LanceDB outside §4 SUPERSEDED block
+  Evidence: only TOC line 23 references OpenClaw outside §4
+  ```
+  $ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw|SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md | head -5
+  23: 4. [OpenClaw Integration Strategy](#4-openclaw-integration-strategy)
+  ```

@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/029-devops-pipeline/bugs/BUG-002-ci-docker-build-on-prs",
   "featureName": "BUG-002: CI Docker Build on PR Events",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "bugfix-fastlane",
   "execution": {
     "activeAgent": null,
@@ -45,7 +45,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       1
     ],

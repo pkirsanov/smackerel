@@ -910,10 +910,7 @@ Clean probe — no new hardening findings. The intelligence layer's test depth a
 
 **Description:** The query filtered `a.created_at BETWEEN NOW() + INTERVAL '25 minutes' AND NOW() + INTERVAL '35 minutes'` to find upcoming meetings. `created_at` is when the artifact row was inserted into the database during connector sync — NOT when the calendar event occurs. A meeting synced yesterday at 3PM that starts tomorrow at 10AM would never match this window because `created_at` is 21 hours in the past.
 
-The correct column is `metadata->>'dtstart'`, which stores the event's actual start time. This pattern was already used correctly in `SerendipityPick` (`resurface.go`) for calendar affinity matching:
-```sql
-AND (metadata->>'dtstart')::timestamptz BETWEEN NOW() AND NOW() + INTERVAL '7 days'
-```
+The correct column is `metadata->>'dtstart'`, which stores the event's actual start time. This pattern was already used correctly in `SerendipityPick` (`resurface.go`) for calendar affinity matching: `AND (metadata->>'dtstart')::timestamptz BETWEEN NOW() AND NOW() + INTERVAL '7 days'`.
 
 The SELECT clause also used `a.created_at` for the `startsAt` field, returning ingestion time instead of event start time.
 

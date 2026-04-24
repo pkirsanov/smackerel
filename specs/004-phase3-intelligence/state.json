@@ -3,7 +3,7 @@
   "featureDir": "specs/004-phase3-intelligence",
   "featureName": "Phase 3: Intelligence",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -158,7 +158,7 @@
     {
       "id": "1",
       "agent": "bubbles.workflow",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T13:00:00Z",
       "completedAt": "2026-04-07T13:08:00Z",
       "statusBefore": "not_started",
@@ -173,7 +173,7 @@
     {
       "id": "2",
       "agent": "bubbles.select",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T13:08:00Z",
       "completedAt": "2026-04-07T13:12:00Z",
       "statusBefore": "in_progress",
@@ -187,7 +187,7 @@
     {
       "id": "3",
       "agent": "bubbles.bootstrap",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T13:12:00Z",
       "completedAt": "2026-04-07T13:18:00Z",
       "statusBefore": "in_progress",
@@ -201,7 +201,7 @@
     {
       "id": "4",
       "agent": "bubbles.implement",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T13:18:00Z",
       "completedAt": "2026-04-07T13:35:00Z",
       "statusBefore": "in_progress",
@@ -222,7 +222,7 @@
     {
       "id": "5",
       "agent": "bubbles.test",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T13:35:00Z",
       "completedAt": "2026-04-07T13:48:00Z",
       "statusBefore": "in_progress",
@@ -236,7 +236,7 @@
     {
       "id": "6",
       "agent": "bubbles.regression",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T13:48:00Z",
       "completedAt": "2026-04-07T13:53:00Z",
       "statusBefore": "in_progress",
@@ -250,7 +250,7 @@
     {
       "id": "7",
       "agent": "bubbles.simplify",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T13:53:00Z",
       "completedAt": "2026-04-07T13:57:00Z",
       "statusBefore": "in_progress",
@@ -264,7 +264,7 @@
     {
       "id": "8",
       "agent": "bubbles.gaps",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T13:57:00Z",
       "completedAt": "2026-04-07T14:02:00Z",
       "statusBefore": "in_progress",
@@ -278,7 +278,7 @@
     {
       "id": "9",
       "agent": "bubbles.harden",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T14:02:00Z",
       "completedAt": "2026-04-07T14:08:00Z",
       "statusBefore": "in_progress",
@@ -292,7 +292,7 @@
     {
       "id": "10",
       "agent": "bubbles.stabilize",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T14:08:00Z",
       "completedAt": "2026-04-07T14:13:00Z",
       "statusBefore": "in_progress",
@@ -306,7 +306,7 @@
     {
       "id": "11",
       "agent": "bubbles.security",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T14:13:00Z",
       "completedAt": "2026-04-07T14:18:00Z",
       "statusBefore": "in_progress",
@@ -320,7 +320,7 @@
     {
       "id": "12",
       "agent": "bubbles.validate",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T14:18:00Z",
       "completedAt": "2026-04-07T14:23:00Z",
       "statusBefore": "in_progress",
@@ -334,7 +334,7 @@
     {
       "id": "13",
       "agent": "bubbles.audit",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T14:23:00Z",
       "completedAt": "2026-04-07T14:27:00Z",
       "statusBefore": "in_progress",
@@ -348,7 +348,7 @@
     {
       "id": "14",
       "agent": "bubbles.chaos",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T14:27:00Z",
       "completedAt": "2026-04-07T14:32:00Z",
       "statusBefore": "in_progress",
@@ -362,7 +362,7 @@
     {
       "id": "15",
       "agent": "bubbles.docs",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T14:32:00Z",
       "completedAt": "2026-04-07T14:35:00Z",
       "statusBefore": "in_progress",
@@ -376,7 +376,7 @@
     {
       "id": "16",
       "agent": "bubbles.spec-review",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T14:35:00Z",
       "completedAt": "2026-04-07T14:38:00Z",
       "statusBefore": "in_progress",

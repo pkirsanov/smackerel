@@ -32,6 +32,23 @@ handoffs:
 - Write execution metadata only; never mutate `certification.*` or promote final `status: "done"`
 - Non-interactive by default: do NOT ask the user for clarifications; document open questions instead
 
+**⛔ Single-File Output Rule (NON-NEGOTIABLE — BLOCKING):**
+
+UX content MUST be written to `{FEATURE_DIR}/spec.md` under `## UI Wireframes` and `## User Flows` sections. Creating a separate UX file is a hard policy violation, regardless of perceived advantages (length, organization, separation of concerns).
+
+| FORBIDDEN | REQUIRED |
+|-----------|----------|
+| Creating `{FEATURE_DIR}/ux.md` | Append `## UI Wireframes` to `spec.md` |
+| Creating `{FEATURE_DIR}/wireframes.md` | Append `## User Flows` to `spec.md` |
+| Creating `{FEATURE_DIR}/flows.md` | Append `## Screen: <name>` subsections to `spec.md` |
+| Creating `{FEATURE_DIR}/user-flows.md` or `screens.md` | All wireframes inline in `spec.md` |
+| "Splitting for organization" because spec.md is long | Single source of truth: `spec.md` |
+| Linking from spec.md to an external UX file | Inline ASCII wireframes in spec.md |
+
+**Why:** Downstream agents (`bubbles.design`, `bubbles.implement`, `bubbles.cinematic-designer`) read wireframes from `spec.md`. Sidecar UX files break the handoff contract and are invisible to validation gates UX1–UX5.
+
+**Enforcement:** `validation-profiles.md` UX1 checks `spec.md` for `## UI Wireframes`. UX8 (new) checks that no forbidden sidecar UX file exists. `artifact-lint.sh` fails if any forbidden file is present in the feature directory.
+
 **Non-goals:**
 - Business requirements discovery (→ bubbles.analyst)
 - Technical architecture or API design (→ bubbles.design)
@@ -250,6 +267,8 @@ Create a mermaid flow for:
 
 ### Phase 5: Write to spec.md
 
+**⛔ ABSOLUTE: Write only to `{FEATURE_DIR}/spec.md`. Do NOT create `ux.md`, `wireframes.md`, `flows.md`, `ui.md`, or any other UX-content file. See Single-File Output Rule above.**
+
 Add/update UI sections in `spec.md`. Preserve all existing sections. Add:
 
 ```markdown
@@ -307,4 +326,19 @@ Next: /bubbles.design (technical design from enriched spec)
 
 Before reporting results, this agent MUST run Tier 1 universal checks from [validation-core.md](bubbles_shared/validation-core.md) plus the UX profile in [validation-profiles.md](bubbles_shared/validation-profiles.md).
 
-If any required check fails, fix the issue before reporting. Do NOT report incomplete wireframes.
+**Mechanical pre-report gate (MUST execute and pass):**
+
+```bash
+# UX1: Wireframes section in spec.md
+grep -q '^## UI Wireframes' "{FEATURE_DIR}/spec.md" || { echo "FAIL UX1: spec.md missing '## UI Wireframes'"; exit 1; }
+
+# UX8: No forbidden sidecar UX files
+for f in ux.md wireframes.md flows.md user-flows.md screens.md; do
+  if [[ -f "{FEATURE_DIR}/$f" ]]; then
+    echo "FAIL UX8: forbidden sidecar file exists: {FEATURE_DIR}/$f — wireframes MUST be inline in spec.md"
+    exit 1
+  fi
+done
+```
+
+If any required check fails, fix the issue (move content into spec.md, delete the sidecar) before reporting. Do NOT report incomplete wireframes. Do NOT report success while a sidecar UX file exists.

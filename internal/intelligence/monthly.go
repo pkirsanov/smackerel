@@ -11,6 +11,63 @@ import (
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
+// LLM request timeouts for the BUG-003 request/reply conversions. These match
+// the per-feature values agreed in BUG-003 Scope 01 DoD. They are expressed
+// as named constants (not magic numbers) so call sites stay readable, but
+// they remain functional behavior — not config — because they bound how long
+// a user-facing request will wait on the ML sidecar before falling back to
+// deterministic local generation.
+const (
+	monthlyReportLLMTimeout    = 30 * time.Second
+	contentAnalyzeLLMTimeout   = 15 * time.Second
+	learningClassifyLLMTimeout = 10 * time.Second
+	quickrefGenerateLLMTimeout = 15 * time.Second
+	seasonalAnalyzeLLMTimeout  = 15 * time.Second
+)
+
+// monthlyGenerateReply is the expected ML sidecar reply on
+// SubjectMonthlyGenerate. Only ReportText is consumed today; additional
+// fields (model_used, processing_time_ms, etc.) are ignored.
+type monthlyGenerateReply struct {
+	ReportText string `json:"report_text"`
+}
+
+// contentAnalyzeReply is the expected ML sidecar reply on
+// SubjectContentAnalyze for one topic. The Go side trusts the LLM's title /
+// rationale / format and pins SupportingIDs to the same artifact list it
+// sent in the request (so the reply cannot fabricate new IDs).
+type contentAnalyzeReply struct {
+	Title            string `json:"title"`
+	UniqueRationale  string `json:"uniqueness_rationale"`
+	FormatSuggestion string `json:"format_suggestion"`
+}
+
+// learningClassifyReply is the expected ML sidecar reply on
+// SubjectLearningClassify for one resource. Only Difficulty is consumed.
+type learningClassifyReply struct {
+	Difficulty string `json:"difficulty"`
+}
+
+// quickrefGenerateReply is the expected ML sidecar reply on
+// SubjectQuickrefGenerate. Content is the LLM-compiled reference body.
+type quickrefGenerateReply struct {
+	Content string `json:"content"`
+}
+
+// seasonalAnalyzeReply is the expected ML sidecar reply on
+// SubjectSeasonalAnalyze. Observations is a list of LLM-authored seasonal
+// commentary lines that supplement the local volume/topic patterns.
+type seasonalAnalyzeReply struct {
+	Observations []seasonalObservation `json:"observations"`
+}
+
+type seasonalObservation struct {
+	Pattern     string `json:"pattern"`
+	Month       string `json:"month"`
+	Observation string `json:"observation"`
+	Actionable  bool   `json:"actionable"`
+}
+
 // MonthlyReport is the monthly self-knowledge report per R-506.
 type MonthlyReport struct {
 	Month             string               `json:"month"`
@@ -243,16 +300,33 @@ func (e *Engine) GenerateMonthlyReport(ctx context.Context) (*MonthlyReport, err
 		report.SeasonalPatterns = seasonalPatterns
 	}
 
-	// Assemble report text — try NATS LLM generation first, fall back to local
+	// Assemble report text — try NATS LLM generation first, fall back to local.
+	// BUG-003: convert fire-and-forget Publish to synchronous Request so the
+	// LLM-enhanced report text is actually consumed when available. The
+	// 30-second timeout matches the Scope 01 DoD; on failure we fall back to
+	// the local template assembler so the API never hangs.
+	report.ReportText = ""
 	if e.NATS != nil {
 		data, err := json.Marshal(report)
 		if err == nil {
-			if pubErr := e.NATS.Publish(ctx, smacknats.SubjectMonthlyGenerate, data); pubErr != nil {
-				slog.Warn("NATS monthly report publish failed, using local assembly", "error", pubErr)
+			reply, reqErr := e.NATS.Request(ctx, smacknats.SubjectMonthlyGenerate, data, monthlyReportLLMTimeout)
+			if reqErr != nil {
+				slog.Warn("NATS monthly report request failed, using local assembly", "error", reqErr)
+			} else {
+				var resp monthlyGenerateReply
+				if err := json.Unmarshal(reply, &resp); err != nil {
+					slog.Warn("NATS monthly report reply unmarshal failed, using local assembly", "error", err)
+				} else if strings.TrimSpace(resp.ReportText) != "" {
+					report.ReportText = resp.ReportText
+				}
 			}
+		} else {
+			slog.Warn("monthly report payload marshal failed, using local assembly", "error", err)
 		}
 	}
-	report.ReportText = assembleMonthlyReportText(report)
+	if report.ReportText == "" {
+		report.ReportText = assembleMonthlyReportText(report)
+	}
 	report.WordCount = len(strings.Fields(report.ReportText))
 
 	return report, nil
@@ -376,7 +450,10 @@ func (e *Engine) GenerateContentFuel(ctx context.Context) ([]ContentAngle, error
 			artRows.Close()
 		}
 
-		// Publish to NATS for LLM-enhanced angle generation (R-503)
+		// BUG-003: synchronous Request to ML sidecar for LLM-enhanced angles
+		// per R-503. 15-second timeout from Scope 01 DoD. On any failure we
+		// fall through to the deterministic local angle below.
+		var llmAngle *ContentAngle
 		if e.NATS != nil {
 			payload := map[string]any{
 				"topic_id":         topicID,
@@ -386,10 +463,30 @@ func (e *Engine) GenerateContentFuel(ctx context.Context) ([]ContentAngle, error
 				"supporting_ids":   supportingIDs,
 			}
 			if data, err := json.Marshal(payload); err == nil {
-				if pubErr := e.NATS.Publish(ctx, smacknats.SubjectContentAnalyze, data); pubErr != nil {
-					slog.Warn("NATS content analyze publish failed, using local generation", "topic", topicName, "error", pubErr)
+				reply, reqErr := e.NATS.Request(ctx, smacknats.SubjectContentAnalyze, data, contentAnalyzeLLMTimeout)
+				if reqErr != nil {
+					slog.Warn("NATS content analyze request failed, using local generation", "topic", topicName, "error", reqErr)
+				} else {
+					var resp contentAnalyzeReply
+					if err := json.Unmarshal(reply, &resp); err != nil {
+						slog.Warn("NATS content analyze reply unmarshal failed, using local generation", "topic", topicName, "error", err)
+					} else if strings.TrimSpace(resp.Title) != "" && strings.TrimSpace(resp.UniqueRationale) != "" {
+						llmAngle = &ContentAngle{
+							Title:            resp.Title,
+							UniqueRationale:  resp.UniqueRationale,
+							SupportingIDs:    supportingIDs,
+							FormatSuggestion: resp.FormatSuggestion,
+						}
+					}
 				}
+			} else {
+				slog.Warn("content fuel payload marshal failed, using local generation", "topic", topicName, "error", err)
 			}
+		}
+
+		if llmAngle != nil {
+			angles = append(angles, *llmAngle)
+			continue
 		}
 
 		// Local fallback angle generation
@@ -499,6 +596,43 @@ func (e *Engine) DetectSeasonalPatterns(ctx context.Context) ([]SeasonalPattern,
 		}
 		if err := topicRows.Err(); err != nil {
 			slog.Warn("seasonal topic row iteration failed", "error", err)
+		}
+	}
+
+	// BUG-003: ask the ML sidecar for higher-level seasonal commentary on top
+	// of the local volume/topic patterns. 15-second timeout per Scope 01 DoD.
+	// On any failure we keep the locally-derived patterns only — never block
+	// the monthly report on LLM availability.
+	if e.NATS != nil {
+		payload := map[string]any{
+			"current_month":  time.Now().Format("January"),
+			"data_days":      dataDays,
+			"local_patterns": patterns,
+		}
+		if data, err := json.Marshal(payload); err == nil {
+			reply, reqErr := e.NATS.Request(ctx, smacknats.SubjectSeasonalAnalyze, data, seasonalAnalyzeLLMTimeout)
+			if reqErr != nil {
+				slog.Warn("NATS seasonal analyze request failed, using local patterns only", "error", reqErr)
+			} else {
+				var resp seasonalAnalyzeReply
+				if err := json.Unmarshal(reply, &resp); err != nil {
+					slog.Warn("NATS seasonal analyze reply unmarshal failed, using local patterns only", "error", err)
+				} else {
+					for _, obs := range resp.Observations {
+						if strings.TrimSpace(obs.Observation) == "" {
+							continue
+						}
+						patterns = append(patterns, SeasonalPattern{
+							Pattern:     obs.Pattern,
+							Month:       obs.Month,
+							Observation: obs.Observation,
+							Actionable:  obs.Actionable,
+						})
+					}
+				}
+			}
+		} else {
+			slog.Warn("seasonal analyze payload marshal failed, using local patterns only", "error", err)
 		}
 	}
 

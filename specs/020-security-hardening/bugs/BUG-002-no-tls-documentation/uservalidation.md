@@ -8,6 +8,8 @@
 
 ## Checklist
 
+- [x] Bug behavior reproduced before fix — baseline acknowledgement that no `docs/Deployment.md` reverse-proxy/TLS guide existed at the time the bug was filed.
+
 ### [Bug Fix] No TLS / reverse proxy documentation
 - [ ] **What:** Create deployment guide with reverse proxy TLS setup for Telegram webhooks and OAuth
   - **Steps:**

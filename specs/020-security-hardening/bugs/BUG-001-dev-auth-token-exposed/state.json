@@ -3,7 +3,7 @@
   "specId": "020-security-hardening",
   "bugId": "BUG-001-dev-auth-token-exposed",
   "workflowMode": "bugfix-fastlane",
-  "status": "done",
+  "status": "in_progress",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -53,7 +53,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "scope-1"
     ],

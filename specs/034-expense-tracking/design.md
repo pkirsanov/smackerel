@@ -949,6 +949,614 @@ No full in-memory buffer. Rows are streamed as they are read from PostgreSQL, ke
 
 ---
 
+## Agent + Tools Design
+
+> **Status — Reconciliation with spec 037.** Sections 3, 10, and parts of 8
+> describe the *legacy* implementation that predates the agent runtime. They
+> remain accurate as a starting point but are SUPERSEDED by this section
+> for all new code paths. Specifically:
+>
+> - Section 3 (Receipt Detection Heuristics in
+>   [ml/app/receipt_detection.py](../../ml/app/receipt_detection.py)) is
+>   superseded by the `receipt_detect-v1` scenario below.
+> - Section 10 (the 7-level rule chain in
+>   [internal/intelligence/expenses.go](../../internal/intelligence/expenses.go))
+>   is superseded by the `expense_classify-v1` scenario.
+> - The pre-seeded vendor map in
+>   [internal/intelligence/vendor_seeds.go](../../internal/intelligence/vendor_seeds.go)
+>   is superseded by the `vendor_normalize-v1` scenario calling the
+>   `vendor_alias_lookup` and `vendor_alias_upsert` tools over PostgreSQL.
+>
+> This design CONSUMES the agent runtime defined in
+> [specs/037-llm-agent-tools/design.md](../037-llm-agent-tools/design.md).
+> It does NOT redesign scenario loading, tool registration, allowlist
+> enforcement, schema validation, the LLM tool-calling loop, intent
+> routing, or the `agent_traces` / `agent_tool_calls` schema. Anything
+> below that touches those concerns is a CONSUMER concern (input shape,
+> output shape, allowlist composition, retention notes) only.
+
+### Scope
+
+This section specifies, for the expense-tracking domain:
+
+1. The scenarios to register under `config/scenarios/expenses/`.
+2. The tools to register from `internal/intelligence/expenses` and
+   `internal/api/expenses` (Go-side) via `RegisterTool` per spec 037.
+3. The migration plan from the legacy code paths in sections 3, 8, and 10.
+4. The storage shape changes on `artifacts.metadata.expense` and the new
+   trace-exposing endpoint.
+5. The mapping from BS-032..BS-038 adversarial cases to scenario / tool
+   paths and to the user-visible UX responses defined in T-016 R1..R7.
+6. The Go files / functions / data that become dead code once migration
+   completes.
+7. How backward compatibility (sticky `user_corrected`) is preserved
+   across the agent boundary.
+
+### Scenarios To Register
+
+All scenarios live under `config/scenarios/expenses/` and follow the
+prompt-contract shape from spec 037. Side-effect classes (`read` /
+`write` / `external`) on `allowed_tools` MUST match the side-effect class
+declared at tool registration; mismatch is a startup error per spec 037.
+
+#### `expense_classify-v1`
+
+- **Replaces:** the 7-level rule chain in `ExpenseClassifier.Classify` in
+  [internal/intelligence/expenses.go](../../internal/intelligence/expenses.go)
+  (see design section 10, "Rule Priority Chain"). Pre-extracted vendor,
+  source, captured user notes, and source labels remain the same input
+  signals; the decision logic moves into the scenario prompt.
+- **Spec traceability:** UC-005 (Main Flow + A1, A2, A3), BS-029, BS-035,
+  BS-038. UX surfaces T-012, T-016 R4, T-017, A-008.
+- **Input shape (rendered into the system prompt):**
+  ```json
+  {
+    "artifact_id": "01HW...",
+    "expense": {
+      "vendor_raw": "string",
+      "vendor": "string|null",
+      "amount": "decimal-string|null",
+      "currency": "ISO-4217|null",
+      "date": "YYYY-MM-DD|null",
+      "extraction_status": "ok|partial|failed",
+      "user_corrected": false,
+      "corrected_fields": []
+    },
+    "context": {
+      "source": "gmail|telegram|web|manual|pdf",
+      "source_labels": ["string"],
+      "captured_notes": "string|null"
+    }
+  }
+  ```
+- **Allowed tools (all `read` except where noted):**
+  - `expense_get` (read)
+  - `expense_lookup_history` (read)
+  - `expense_aggregate` (read)
+  - `vendor_alias_lookup` (read)
+  - `lookup_business_vendor_list` (read) — exposes the
+    `EXPENSES_BUSINESS_VENDORS` SST list as a tool, not as in-prompt config.
+  - `lookup_expense_label_map` (read) — exposes the Gmail
+    `IMAP_EXPENSE_LABELS` SST map as a tool.
+- **Output shape (validated against scenario JSON Schema):**
+  ```json
+  {
+    "classification": "business|personal|uncategorized",
+    "category": "string|null",
+    "rationale": "string",
+    "rationale_short": "string (≤ 80 chars)",
+    "tentative": false
+  }
+  ```
+- **Sticky-correction contract:** before deciding, the scenario MUST call
+  `expense_get` for the artifact and short-circuit to the existing
+  classification when `user_corrected == true` AND `"classification" ∈
+  corrected_fields`. This is enforced at both the prompt level and via a
+  Go-side post-validation hook that rejects any output that contradicts a
+  sticky correction (see "Backward Compatibility" below).
+- **Failure handling:** on schema-failure, loop-limit, or LLM error
+  (handled by spec 037 generically) the artifact is left at its prior
+  classification (or `uncategorized` for new artifacts) and surfaced in the
+  digest "needs review" block — matching UC-005 A3.
+- **Retention / eviction:** none specific. Trace rows follow the global
+  spec-037 retention (30 days hot in PostgreSQL).
+
+#### `vendor_normalize-v1`
+
+- **Replaces:** the static `vendorSeeds` slice in
+  [internal/intelligence/vendor_seeds.go](../../internal/intelligence/vendor_seeds.go)
+  AND the `VendorNormalizer.Normalize` cache lookup logic in
+  [internal/intelligence/expenses.go](../../internal/intelligence/expenses.go).
+  Real captured vendor history plus user overrides become the source of
+  truth; the seed list becomes one-time bootstrap data (see migration plan).
+- **Spec traceability:** BS-014, BS-036, IP-003, UX T-016 R5.
+- **Input shape:**
+  ```json
+  {
+    "vendor_raw": "string",
+    "source": "gmail|telegram|web|manual|pdf",
+    "amount_hint": "decimal-string|null"
+  }
+  ```
+- **Allowed tools:**
+  - `vendor_alias_lookup` (read)
+  - `expense_lookup_history` (read) — to check whether vendor candidates
+    have prior captured expenses.
+  - `vendor_alias_upsert` (write) — only when the scenario reaches a
+    high-confidence canonicalization that should be remembered. The output
+    schema MUST include `should_persist: bool` and the Go-side dispatch
+    only honors the upsert call when this flag is true; lower-confidence
+    candidates are returned without persisting (BS-036 "leave as captured
+    rather than guessing").
+- **Output shape:**
+  ```json
+  {
+    "vendor": "string",
+    "vendor_raw": "string",
+    "confidence": "high|medium|low",
+    "candidate_match": "string|null",
+    "rationale_short": "string"
+  }
+  ```
+- **Retention / eviction:** the per-process LRU cache that lived in
+  `VendorNormalizer` is removed; lookups go through the `vendor_aliases`
+  table behind the tool. PostgreSQL handles caching. If profiling later
+  shows a hot path, a tool-side LRU may be reintroduced inside
+  `vendor_alias_lookup` only.
+
+#### `receipt_detect-v1`
+
+- **Replaces:** the heuristic rules in
+  [ml/app/receipt_detection.py](../../ml/app/receipt_detection.py)
+  (design section 3) as the canonical decision point. Per spec 037
+  guidance, the existing Python heuristic MAY remain as an inexpensive
+  read-only tool the scenario consults — see `receipt_heuristic_score`.
+- **Spec traceability:** BS-020, BS-029, IP-002.
+- **Input shape:**
+  ```json
+  {
+    "artifact_id": "01HW...",
+    "source": "gmail|telegram|web|manual|pdf",
+    "subject": "string|null",
+    "from_domain": "string|null",
+    "text_excerpt": "string (truncated to N chars by Go side)"
+  }
+  ```
+- **Allowed tools:**
+  - `receipt_heuristic_score` (read) — wraps the existing Python heuristic
+    callable and returns its score and which signals fired. Implemented as
+    a Go tool that round-trips through the ML sidecar via the existing
+    `artifacts.process` boundary; no new NATS subjects.
+  - `vendor_alias_lookup` (read) — to recognise known vendors as a signal.
+  - `expense_lookup_history` (read) — to recognise repeat-sender patterns.
+- **Output shape:**
+  ```json
+  {
+    "is_receipt": true,
+    "rationale_short": "string"
+  }
+  ```
+- **Retention / eviction:** none specific.
+
+#### `expense_query-v1`
+
+- **Purpose:** handle free-form Telegram queries ("how much did I spend on
+  coffee last month?") and emit a structured response that the existing
+  Telegram formatter (T-012) renders.
+- **Spec traceability:** BS-029, UX T-012, UX T-017.
+- **Input shape:**
+  ```json
+  {
+    "user_text": "string",
+    "now": "RFC3339",
+    "user_timezone": "IANA"
+  }
+  ```
+- **Allowed tools:**
+  - `expense_aggregate` (read)
+  - `expense_lookup_history` (read)
+  - `vendor_alias_lookup` (read)
+- **Output shape:**
+  ```json
+  {
+    "answer_text": "string",
+    "breakdown": [{"label": "string", "amount": "decimal-string", "currency": "ISO-4217"}],
+    "rationale_short": "string",
+    "filters_used": {"date_from": "...", "date_to": "...", "vendor": "...", "category": "..."}
+  }
+  ```
+
+#### `subscription_detect-v1`
+
+- **Purpose:** recognize recurring charges and propose a subscription flag.
+  Replaces ad-hoc subscription seeding logic that would otherwise grow
+  inside the existing `DetectSubscriptions` intelligence cycle.
+- **Spec traceability:** BS-029, UX T-013.
+- **Input shape:**
+  ```json
+  {
+    "vendor": "string",
+    "lookback_days": 180
+  }
+  ```
+- **Allowed tools:**
+  - `expense_lookup_history` (read)
+  - `expense_aggregate` (read)
+  - `expense_subscription_mark` (write) — only when `should_mark: true`.
+- **Output shape:**
+  ```json
+  {
+    "is_subscription": true,
+    "cadence": "weekly|monthly|quarterly|yearly|irregular",
+    "typical_amount": "decimal-string",
+    "currency": "ISO-4217",
+    "should_mark": true,
+    "rationale_short": "string"
+  }
+  ```
+- **Retention / eviction:** scenario invocations are scheduled — not
+  per-artifact — and rate-limited at the caller (the existing intelligence
+  scheduler in `internal/intelligence/`). No new infrastructure.
+
+#### `unusual_spend-v1`
+
+- **Purpose:** anomaly detection on incoming expenses. Replaces the
+  current "new vendor in last 7 days" rule embedded in the digest section
+  10 of this design.
+- **Spec traceability:** BS-030, UX T-014, digest D-002.
+- **Input shape:**
+  ```json
+  {
+    "expense": { "...": "same shape as expense_classify-v1 input.expense" },
+    "category": "string|null"
+  }
+  ```
+- **Allowed tools:**
+  - `expense_aggregate` (read)
+  - `expense_lookup_history` (read)
+- **Output shape:**
+  ```json
+  {
+    "is_unusual": true,
+    "severity": "low|medium|high",
+    "comparison": "string (e.g., '5x typical weekly grocery spend')",
+    "rationale_short": "string"
+  }
+  ```
+
+#### `refund_recognize-v1`
+
+- **Purpose:** identify negative amounts / refund-language artifacts and
+  link them to the original purchase via the knowledge graph.
+- **Spec traceability:** BS-031, UX T-015.
+- **Input shape:**
+  ```json
+  {
+    "expense": { "...": "same shape as expense_classify-v1 input.expense" },
+    "extracted_text_excerpt": "string"
+  }
+  ```
+- **Allowed tools:**
+  - `expense_lookup_history` (read)
+  - `expense_get` (read)
+  - `expense_link_refund` (write) — only when `linked_artifact_id` is set.
+- **Output shape:**
+  ```json
+  {
+    "is_refund": true,
+    "linked_artifact_id": "01HW...|null",
+    "rationale_short": "string"
+  }
+  ```
+
+### Tools To Register
+
+All tools register via `RegisterTool` from package `init()` per spec 037
+(no central tools.go enumeration). Each tool declares a side-effect class;
+mismatched allowlist entries refuse to start. Schemas below are the
+JSON-Schema-equivalent field shapes, not the literal schema text.
+
+#### `expense_lookup_history` — read
+
+- **Owner:** `internal/intelligence/expenses` (data ownership matches the
+  legacy classifier package).
+- **Input:** `{ vendor?: string, vendor_raw?: string, category?: string,
+  date_from?: YYYY-MM-DD, date_to?: YYYY-MM-DD, classification?:
+  "business"|"personal"|"uncategorized", limit?: int (≤ 50) }`
+- **Output:** `{ expenses: [ExpenseSummary], truncated: bool }` where
+  `ExpenseSummary = { artifact_id, vendor, amount, currency, date,
+  category, classification, user_corrected }`.
+- **Side-effect class:** `read`. No mutations.
+
+#### `expense_get` — read
+
+- **Owner:** `internal/intelligence/expenses`.
+- **Input:** `{ artifact_id: string }`.
+- **Output:** the full `expense` metadata sub-document plus
+  `user_corrected`, `corrected_fields`, `is_subscription`, `is_refund`.
+- **Side-effect class:** `read`. Used by the sticky-correction contract.
+
+#### `expense_update_classification` — write
+
+- **Owner:** `internal/api/expenses` (the package that owns the
+  user-correction PATCH semantics today).
+- **Input:** `{ artifact_id: string, classification:
+  "business"|"personal"|"uncategorized", category?: string,
+  user_corrected: bool }`.
+- **Output:** `{ updated: bool, prior: { classification, category } }`.
+- **Side-effect class:** `write`. The `user_corrected` field MUST come
+  from the caller — scenarios MUST set it `true` only when the input
+  envelope itself originates from an explicit user correction. Scenario
+  output MUST NOT pass `user_corrected: true` based on inference.
+
+#### `expense_aggregate` — read
+
+- **Owner:** `internal/intelligence/expenses`.
+- **Input:** `{ group_by?:
+  "vendor"|"category"|"classification"|"day"|"week"|"month",
+  filter: { vendor?, category?, classification?, date_from?, date_to? } }`.
+- **Output:** `{ rows: [{ key, sum, count, currency }], mixed_currency:
+  bool }`.
+- **Side-effect class:** `read`. Implemented over the same `CAST(metadata
+  ->>'amount' AS NUMERIC)` query pattern as section 5.
+
+#### `vendor_alias_lookup` — read
+
+- **Owner:** `internal/intelligence/expenses`.
+- **Input:** `{ vendor_raw: string, mode?: "exact"|"prefix"|"fuzzy",
+  limit?: int (≤ 20) }`.
+- **Output:** `{ matches: [{ canonical, alias, confidence }] }`.
+- **Side-effect class:** `read`. Replaces the in-process LRU lookup.
+
+#### `vendor_alias_upsert` — write
+
+- **Owner:** `internal/intelligence/expenses`.
+- **Input:** `{ alias: string, canonical: string, source:
+  "scenario"|"user_correction"|"bootstrap" }`.
+- **Output:** `{ created: bool, updated: bool }`.
+- **Side-effect class:** `write`. Only `vendor_normalize-v1` and the
+  user-correction PATCH path are allowlisted to call it. Bootstrap (the
+  one-time seed import) calls it with `source: "bootstrap"` directly via
+  Go, NOT via the agent.
+
+#### `expense_link_refund` — write
+
+- **Owner:** `internal/intelligence/expenses`.
+- **Input:** `{ refund_artifact_id: string, original_artifact_id: string }`.
+- **Output:** `{ linked: bool }`.
+- **Side-effect class:** `write`. Sets `is_refund: true` and a
+  `refund_of_artifact_id` field on the refund's metadata. Aggregations
+  net the negative amount per BS-031.
+
+#### `expense_subscription_mark` — write
+
+- **Owner:** `internal/intelligence/expenses`.
+- **Input:** `{ vendor: string, cadence: string, typical_amount:
+  decimal-string, currency: ISO-4217 }`.
+- **Output:** `{ marked: bool, subscription_id: string }`.
+- **Side-effect class:** `write`. Writes to the existing `subscriptions`
+  table referenced in section 9 ("missing receipts" digest computation).
+
+#### `receipt_heuristic_score` — read (already implied above)
+
+- **Owner:** `internal/intelligence/expenses` (Go wrapper); the underlying
+  evaluator stays in
+  [ml/app/receipt_detection.py](../../ml/app/receipt_detection.py) for
+  v1 and is invoked over the existing `artifacts.process` boundary.
+- **Input:** `{ subject?, from_domain?, text_excerpt }`.
+- **Output:** `{ score: float, signals: [string] }`.
+- **Side-effect class:** `read`.
+
+### Migration Plan
+
+Phased removal of the legacy code paths. Each phase is verifiable, and
+the legacy code remains executable behind a feature flag until the
+acceptance gate is met.
+
+#### Feature Flag (SST, no default)
+
+A new SST key in [config/smackerel.yaml](../../config/smackerel.yaml):
+
+```yaml
+expenses:
+  classifier: agent  # or: legacy
+```
+
+- Generated as `EXPENSES_CLASSIFIER` in
+  `config/generated/{dev,test}.env` by `./smackerel.sh config generate`.
+- Read in Go via `os.Getenv("EXPENSES_CLASSIFIER")` followed by an
+  empty-check that calls `log.Fatal` per the SST zero-defaults rule
+  ("FORBIDDEN: `getEnv("KEY", "fallback")`"). No silent default to either
+  value — the operator MUST set it explicitly.
+- Same enforcement for `expenses.receipt_detector` (`agent|legacy`) and
+  `expenses.vendor_normalizer` (`agent|legacy`) so the three legacy paths
+  flip independently.
+
+#### Phases
+
+1. **Land the agent paths behind the flag.** All three flags default to
+   `legacy` in `config/smackerel.yaml` (the OPERATOR default — code still
+   has no default). Scenarios + tools are registered. Trace writes happen
+   even on the `legacy` path: every `legacy`-classified expense records a
+   shadow `expense_classify-v1` invocation in `agent_traces` for offline
+   comparison. The shadow path does NOT write `expense_update_classification`.
+2. **Backfill / re-evaluation in batches.** A one-shot operator command
+   (`./smackerel.sh ...` extension under
+   [scripts/runtime/](../../scripts/runtime/)) walks
+   `metadata.expense.classification IS NULL` artifacts and invokes
+   `expense_classify-v1`, recording old (null) → new in
+   `agent_tool_calls`. Bounded by a `--batch-size` flag (no default;
+   operator-supplied). Same pattern for `vendor_normalize-v1` against
+   `vendor_raw` rows whose canonical is the legacy seed-list output.
+3. **Acceptance gate.** Before flipping any flag's operator default to
+   `agent`, the agent path MUST match the legacy path on a labeled
+   holdout dataset:
+   - `expense_classify`: ≥ 95% agreement on ≥ 500 user-confirmed
+     classifications, computed by re-running both paths over the holdout
+     and diffing the result. Disagreements MUST be surfaced for human
+     review and either accepted (legacy was wrong) or filed as scenario
+     prompt regressions.
+   - `vendor_normalize`: ≥ 99% agreement on the existing seed-list
+     mappings (effectively a regression suite — the seed entries become
+     fixtures).
+   - `receipt_detect`: ≥ 95% agreement on a labeled set of receipt /
+     non-receipt emails sampled from prior captures.
+4. **Flip the operator default.** `expenses.classifier: agent` etc.
+   becomes the default in `config/smackerel.yaml`. The legacy paths
+   remain compiled in for one further release in case rollback is needed.
+5. **Delete legacy code.** See "What Gets Deleted" below. The vendor
+   seeds are imported once via a bootstrap migration that calls
+   `vendor_alias_upsert` directly (bypassing the agent loop) with
+   `source: "bootstrap"`. After this migration runs, `vendor_seeds.go`
+   is deleted.
+
+### Storage Changes
+
+`metadata.expense` (JSONB sub-document on `artifacts.metadata`, schema in
+section 5.1) gains four optional fields, all `null`-safe for legacy rows:
+
+```json
+{
+  "scenario": "expense_classify-v1",
+  "rationale": "Vendor 'Stripe' has 14 prior business-classified charges; ...",
+  "rationale_short": "Repeat business vendor",
+  "agent_trace_id": "01HW..."
+}
+```
+
+- `scenario`: the scenario id+version that produced the value. `null`
+  for legacy rows or for fields produced by user correction.
+- `rationale`: full prose rationale string. Surfaced in T-017 expandable
+  display and in `GET /api/expenses/{id}/trace`.
+- `rationale_short`: ≤ 80 chars. Surfaced in T-012 / T-013 / T-017
+  compact display, A-001 list response, and digest blocks.
+- `agent_trace_id`: foreign key to `agent_traces.id` from spec 037.
+  `null` when the value did not come from the agent (legacy classifier,
+  user correction, or bootstrap). Same field is reused by every
+  scenario that touches the expense (`expense_classify-v1`,
+  `vendor_normalize-v1`, `unusual_spend-v1`, etc.) — when multiple
+  scenarios contribute, the most recent agent invocation's id wins for
+  the artifact-level field; per-field provenance lives in the trace.
+
+A new endpoint joins the trace:
+
+#### `A-008: GET /api/expenses/{id}/trace`
+
+- Already specified in spec.md UX A-008. This design wires it to
+  `agent_traces` + `agent_tool_calls`:
+  - Look up the artifact's `metadata.expense.agent_trace_id`.
+  - If null → 404 with `{ "error": "no_agent_trace" }`.
+  - If set → join `agent_traces` and `agent_tool_calls` and return the
+    spec-037 trace shape unchanged. Including `rejected_calls` for
+    BS-038 visibility per the UX spec.
+- Implemented as a thin handler in `internal/api/expenses.go`. The agent
+  trace store is owned by spec 037; this design only consumes it.
+
+### Failure-Mode Mapping (BS-032..BS-038)
+
+| BS | Scenario / Tool Path | Enforcement Layer | User-Visible Response |
+|----|----------------------|-------------------|------------------------|
+| BS-032 Corrupted OCR | `receipt_detect-v1` returns `is_receipt: false` OR `expense_classify-v1` schema-failure | spec 037 schema validator + receipt-detect short-circuit | UX T-016 R1 — "Couldn't read this receipt clearly. Stored as-is." Artifact stored with `extraction_status: failed`. Surfaced in digest "needs review". No hallucinated vendor / amount. |
+| BS-033 Missing amount, otherwise valid | `expense_classify-v1` allowed to produce `tentative: true` with `amount_missing: true` carried in metadata | scenario output schema (`tentative` field) | UX T-016 R2 — tentative classification with explicit "amount missing" rationale; appears in digest "needs review". |
+| BS-034 Mixed currency | extraction stores per-line-item currency (section 5); `expense_classify-v1` consumes the dual-currency record without coercing | extraction prompt contract (unchanged) + scenario prompt | UX T-016 R3 — both currencies surfaced verbatim; aggregations use BS-010 mixed-currency rules; no silent coercion. |
+| BS-035 Ambiguous business / personal | `expense_classify-v1` returns `classification: "uncategorized"` + rationale | scenario prompt + Go-side post-validation rejecting fabricated confidence | UX T-016 R4 + T-017 — uncategorized + compact rationale. May be re-evaluated later when more user-corrected similars exist (UC-005 A2). |
+| BS-036 Vendor typo | `vendor_normalize-v1`; high-confidence ⇒ `vendor_alias_upsert` write; low ⇒ `should_persist: false` | scenario output `confidence` field + Go gate on `should_persist` | UX T-016 R5 — silent normalization on high confidence; surfaced candidate match on low confidence; `vendor_raw` always preserved. |
+| BS-037 Foreign-language receipt | extraction handles language; `expense_classify-v1` reasons over translated context (LLM-native) | scenario prompt; no English-only keyword filter exists in the agent path | UX T-016 R6 — category determined from receipt content; amount normalized to dot-decimal per BS-023. |
+| BS-038 Hallucinated tool call | spec-037 allowlist enforcement rejects the call before execution; recorded in `agent_tool_calls.rejected = true` | spec 037 dispatch (NOT this design) | UX T-016 R7 — user sees the same response as a normal "no classification" outcome. Operator sees the rejected call in `GET /api/expenses/{id}/trace` (A-008). |
+
+### What Gets Deleted
+
+Once the migration acceptance gate passes for all three flags and one
+release of dual-path operation is shipped, the following becomes dead
+code and is removed in the same change set that flips the operator
+defaults to `agent`:
+
+- [internal/intelligence/expenses.go](../../internal/intelligence/expenses.go):
+  - `func (ec *ExpenseClassifier) Classify(...)` — the entire 7-level
+    rule chain.
+  - `type VendorNormalizer struct { ... }` and its methods
+    (`Normalize`, `Invalidate`, `put`, plus the `NewVendorNormalizer`
+    constructor) — the in-process LRU and seed-bootstrap path.
+  - The seed-load loop at lines ~150-160 that ranges over `vendorSeeds`.
+  - The `vendorNormalizer` field on `ExpenseClassifier` and its wiring
+    in the constructor; replaced by direct tool invocation from the
+    relevant scenarios.
+- [internal/intelligence/vendor_seeds.go](../../internal/intelligence/vendor_seeds.go):
+  the entire file is deleted after the one-time bootstrap migration runs
+  in production. The seed data lives only in `vendor_aliases` rows after
+  migration.
+- [ml/app/receipt_detection.py](../../ml/app/receipt_detection.py):
+  retained as a callable invoked by the `receipt_heuristic_score` tool;
+  the public Python entrypoint that is currently called directly from
+  `ml/app/synthesis.py` is removed and the synthesis path goes through
+  `receipt_detect-v1` instead. The heuristic functions themselves stay
+  as they are still consulted by the tool.
+- [internal/intelligence/expenses_test.go](../../internal/intelligence/expenses_test.go):
+  tests covering the deleted `Classify` rule chain and the
+  `VendorNormalizer` LRU are removed. Tests covering sticky
+  `user_corrected` behavior MOVE to the agent test surface and become
+  scenario-level adversarial tests.
+- The hardcoded expense-intent regex / keyword branches in any
+  `internal/telegram/` files that fan out to expense handlers (no such
+  file is present today; the existing telegram package has no
+  `expense*` or `intent*` files, but spec 037 explicitly removes the
+  Telegram regex/switch dispatcher pattern as an anti-pattern). When
+  any such branches are added in the interim, they MUST be deleted at
+  the same time the agent path becomes default. The kept regex
+  examples (e.g., "show expenses", "export expenses MONTH") remain in
+  the codebase as MUST-handle examples in the intent-routing test
+  suite ONLY — not as production dispatch logic.
+
+### Backward Compatibility
+
+- **Sticky `user_corrected` is preserved across the agent boundary.** The
+  `expense_classify-v1` scenario MUST call `expense_get` first; when the
+  result has `user_corrected == true` AND `"classification" ∈
+  corrected_fields`, the scenario MUST short-circuit and emit the prior
+  classification verbatim. A Go-side post-validation hook on the
+  scenario's output rejects any contradicting result (it returns the
+  prior classification regardless and records a scenario-defect trace
+  event). This double-enforcement (prompt + Go gate) is deliberate:
+  spec 037's generic schema validation cannot encode "must equal another
+  field's prior value", so this domain rule lives here.
+- **User corrections flow through `expense_update_classification` with
+  `user_corrected: true`** from the existing PATCH handler in
+  `internal/api/expenses.go`. The PATCH handler is the ONLY caller in
+  the codebase that may pass `user_corrected: true`; scenario-driven
+  writes always pass `false`. This invariant is asserted by a unit test
+  on the tool registration.
+- **Legacy rows without `scenario` / `agent_trace_id` continue to work.**
+  All four new fields are nullable. `GET /api/expenses` (A-001) returns
+  empty strings for `rationale` / `rationale_short` and omits
+  `scenario` / `agent_trace_id` when null, matching the field-rules
+  table in spec.md UX A-001.
+- **Existing extraction prompt contracts are unchanged.**
+  `receipt-extraction-v1` (section 4) keeps its current schema; the
+  agent layer only governs detection (`receipt_detect-v1`) and post-
+  extraction reasoning, not the extraction shape itself. This matches
+  spec 037's "Existing extraction prompt contracts ... are unchanged.
+  Migration to scenarios is opt-in per contract."
+
+### Constraints Honored
+
+- **No agent runtime redesign.** All scenario loading, tool dispatch,
+  allowlist enforcement, JSON Schema validation, the LLM tool-calling
+  loop, intent routing, and the `agent_traces` / `agent_tool_calls`
+  schema are defined in
+  [specs/037-llm-agent-tools/design.md](../037-llm-agent-tools/design.md).
+- **SST zero-defaults.** `EXPENSES_CLASSIFIER`,
+  `EXPENSES_RECEIPT_DETECTOR`, `EXPENSES_VENDOR_NORMALIZER` MUST be set
+  in `config/smackerel.yaml` (operator default `legacy` until the
+  acceptance gate flips it). Code reads with no fallback and
+  `log.Fatal` on empty.
+- **Existing package boundaries preserved.** Tools register from
+  `internal/intelligence/expenses` (data-owning package) and
+  `internal/api/expenses` (HTTP-owning package). No new top-level
+  packages, no central `tools.go`, no cross-package data ownership
+  inversions.
+
+---
+
 ## 12. Testing Strategy
 
 ### Test Type Mapping

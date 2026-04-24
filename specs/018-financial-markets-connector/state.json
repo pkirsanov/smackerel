@@ -3,7 +3,7 @@
   "featureDir": "specs/018-financial-markets-connector",
   "featureName": "Financial Markets Connector",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",

@@ -170,25 +170,25 @@ Scenario: Annotations cascade on artifact deletion
 ### Definition of Done
 
 - [x] Migration `016_user_annotations.sql` creates `annotation_type` and `interaction_type` as TEXT columns (values: rating/note/tag_add/tag_remove/interaction/status_change and made_it/bought_it/read_it/visited/tried_it/used_it)
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `annotations` table created with id, artifact_id (FK CASCADE), annotation_type, rating (CHECK 1-5), note, tag, interaction_type, source_channel, created_at
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] Indexes: `idx_annotations_artifact`, `idx_annotations_type`, `idx_annotations_created`, `idx_annotations_tag` (partial), `idx_annotations_rating` (partial)
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `telegram_message_artifacts` table with PK(message_id, chat_id), artifact_id FK CASCADE, index on artifact_id
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `artifact_annotation_summary` materialized view with current_rating, average_rating, rating_count, times_used, last_used, tags (add minus remove), notes_count, total_events, last_annotated
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] Unique index `idx_aas_artifact` on materialized view for REFRESH CONCURRENTLY support
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** test
+  > **Evidence:** test
 
 ---
 
@@ -290,28 +290,28 @@ Scenario: Rating with "out of 5" syntax
 ### Definition of Done
 
 - [x] `internal/annotation/types.go` defines `AnnotationType`, `InteractionType`, `SourceChannel` as typed string constants
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `Annotation`, `Summary`, `ParsedAnnotation` structs match design with correct JSON tags
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `Parse()` extracts rating from "N/5", "N out of 5" patterns (1-5 only)
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `Parse()` extracts interaction from keyword list (made it, bought it, read it, visited, tried it, used it)
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `Parse()` extracts hashtags as tags, "#remove-X" as removal markers
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `Parse()` assigns remaining text as note after stripping other components
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `Parse()` returns zero-valued struct for empty input
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** test
+  > **Evidence:** test
 
 ---
 
@@ -406,43 +406,43 @@ Scenario: NATS event payload matches Annotation struct JSON
 ### Definition of Done
 
 - [x] `Store` struct created with `*pgxpool.Pool` and `*smacknats.Client` fields
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `CreateAnnotation` inserts row with ULID, refreshes materialized view concurrently, publishes NATS event
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `CreateFromParsed` validates artifact existence, creates individual events for each parsed component, handles tag removals
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `GetSummary` reads from `artifact_annotation_summary` materialized view
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `GetHistory` returns annotation events ordered by `created_at DESC` with configurable limit (max 100)
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `DeleteTag` inserts a `tag_remove` event (append-only pattern)
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `AnnotationQuerier` interface defined and implemented by `Store`
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `SubjectAnnotationsCreated` constant added to `internal/nats/client.go`
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `annotations.created` subject added to `config/nats_contract.json`
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `AnnotationStore` field added to `api.Dependencies`
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `annotations:` section added to `config/smackerel.yaml` with SST-compliant values
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] Config regenerated: `./smackerel.sh config generate`
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** test
+  > **Evidence:** test
 
 ---
 
@@ -545,25 +545,25 @@ Scenario: DELETE a tag
 ### Definition of Done
 
 - [x] `CreateAnnotationHandler` parses freeform text (via `annotation.Parse`) or structured fields, validates rating range 1-5, rejects empty input
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `GetAnnotationsHandler` returns paginated annotation history with `limit` query param (default 50, max 100)
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `GetAnnotationSummaryHandler` returns materialized summary or empty object for unannotated artifacts
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] `DeleteTagHandler` inserts a `tag_remove` event via store and returns updated summary
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] Routes registered in `router.go`: `POST /artifacts/{id}/annotations`, `GET /artifacts/{id}/annotations`, `GET /artifacts/{id}/annotations/summary`, `DELETE /artifacts/{id}/tags/{tag}`
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] All error responses use existing `writeError` pattern with proper HTTP status codes
-  > **Phase:** implement
+  > **Evidence:** implement
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** test
+  > **Evidence:** test
 
 ---
 
@@ -629,22 +629,22 @@ Scenario: Internal mapping endpoint records mapping via HTTP
 ### Definition of Done
 
 - [x] `recordMessageArtifact` inserts into `telegram_message_artifacts` table after capture confirmations
-  > **Phase:** implement — Created `internal/telegram/mapping.go` with `recordMessageArtifact` calling internal API. Modified `bot.go`, `share.go`, `forward.go` to use `replyWithMapping`.
+  > **Evidence:** implement — Created `internal/telegram/mapping.go` with `recordMessageArtifact` calling internal API. Modified `bot.go`, `share.go`, `forward.go` to use `replyWithMapping`.
 
 - [x] `resolveArtifactFromMessage` looks up artifact_id by (message_id, chat_id) primary key
-  > **Phase:** implement — `resolveArtifactFromMessage` in `mapping.go` queries GET /internal/telegram-message-artifact, returns empty on 404.
+  > **Evidence:** implement — `resolveArtifactFromMessage` in `mapping.go` queries GET /internal/telegram-message-artifact, returns empty on 404.
 
 - [x] All existing Telegram capture confirmation handlers call `recordMessageArtifact` with the sent message ID
-  > **Phase:** implement — `handleTextCapture`, `handleVoice`, `handleShareCapture`, `captureSingleForward` all use `replyWithMapping` which records mapping.
+  > **Evidence:** implement — `handleTextCapture`, `handleVoice`, `handleShareCapture`, `captureSingleForward` all use `replyWithMapping` which records mapping.
 
 - [x] Internal endpoint `POST /internal/telegram-message-artifact` accepts mapping requests from the bot
-  > **Phase:** implement — Added `RecordTelegramMessageArtifact` and `ResolveTelegramMessageArtifact` handlers in `annotations.go`, registered in `router.go`.
+  > **Evidence:** implement — Added `RecordTelegramMessageArtifact` and `ResolveTelegramMessageArtifact` handlers in `annotations.go`, registered in `router.go`.
 
 - [x] Returns empty string (not error) when no mapping exists for a message
-  > **Phase:** implement — `resolveArtifactFromMessage` returns "" on 404, tested in `TestResolveArtifactFromMessage_NotFound`.
+  > **Evidence:** implement — `resolveArtifactFromMessage` returns "" on 404, tested in `TestResolveArtifactFromMessage_NotFound`.
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** implement — Full test suite passes (0 failures). `Claim Source: executed`
+  > **Evidence:** implement — Full test suite passes (0 failures). `Claim Source: executed`
 
 ---
 
@@ -753,31 +753,31 @@ Scenario: Annotation confirmation formatting
 ### Definition of Done
 
 - [x] `handleReplyAnnotation` checks reply-to message ID against `telegram_message_artifacts`, parses text, submits annotation, sends confirmation
-  > **Phase:** implement — Created `internal/telegram/annotation.go` with `handleReplyAnnotation` that resolves artifact, parses text, calls annotation API, formats confirmation.
+  > **Evidence:** implement — Created `internal/telegram/annotation.go` with `handleReplyAnnotation` that resolves artifact, parses text, calls annotation API, formats confirmation.
 
 - [x] Reply to unknown message (not in mapping) dispatches to normal text/URL handling instead of failing
-  > **Phase:** implement — Returns false when `resolveArtifactFromMessage` returns empty, allowing fallthrough. Tested in `TestHandleReplyAnnotation_UnknownMessage`.
+  > **Evidence:** implement — Returns false when `resolveArtifactFromMessage` returns empty, allowing fallthrough. Tested in `TestHandleReplyAnnotation_UnknownMessage`.
 
 - [x] `/rate` command splits search terms from annotation text, searches, annotates single match or triggers disambiguation
-  > **Phase:** implement — `handleRate` with `splitRateArgs`, single-match annotation, multi-match disambiguation prompt.
+  > **Evidence:** implement — `handleRate` with `splitRateArgs`, single-match annotation, multi-match disambiguation prompt.
 
 - [x] Disambiguation flow stores pending state keyed by chat_id with TTL from config, resolves on numeric reply
-  > **Phase:** implement — `disambiguationStore` with `set/get/clear`, TTL-based expiry, `handleDisambiguationReply` resolves on numeric input.
+  > **Evidence:** implement — `disambiguationStore` with `set/get/clear`, TTL-based expiry, `handleDisambiguationReply` resolves on numeric input.
 
 - [x] `formatAnnotationConfirmation` renders star ratings (★☆), humanized interactions, tag names, truncated notes
-  > **Phase:** implement — `renderStars`, `humanizeInteraction`, `formatAnnotationConfirmation` all tested.
+  > **Evidence:** implement — `renderStars`, `humanizeInteraction`, `formatAnnotationConfirmation` all tested.
 
 - [x] `handleMessage` routing updated: reply-to annotation before commands, disambiguation resolution before commands, `/rate` in command switch
-  > **Phase:** implement — Priority order: reply-to annotation → disambiguation → commands (including /rate).
+  > **Evidence:** implement — Priority order: reply-to annotation → disambiguation → commands (including /rate).
 
 - [x] `/rate` registered in bot command list via `SetMyCommands`
-  > **Phase:** implement — Added to `commands` in `Start()` and help text.
+  > **Evidence:** implement — Added to `commands` in `Start()` and help text.
 
 - [x] `disambiguation_timeout_seconds` added to `config/smackerel.yaml` under `telegram:`
-  > **Phase:** implement — Added `disambiguation_timeout_seconds: 120` to yaml, env var generation in config.sh, Config struct field + parsing.
+  > **Evidence:** implement — Added `disambiguation_timeout_seconds: 120` to yaml, env var generation in config.sh, Config struct field + parsing.
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** implement — Full test suite passes. `Claim Source: executed`
+  > **Evidence:** implement — Full test suite passes. `Claim Source: executed`
 
 ---
 
@@ -875,28 +875,28 @@ Scenario: No annotation intent for plain queries
 ### Definition of Done
 
 - [x] `SearchFilters` extended with `MinRating *int`, `MaxRating *int`, `Tag string`, `HasInteraction bool`
-  > **Phase:** implement — Added fields to `SearchFilters` struct in `search.go`.
+  > **Evidence:** implement — Added fields to `SearchFilters` struct in `search.go`.
 
 - [x] `SearchResult` extended with `Rating *int`, `TimesUsed int`, `Tags []string`
-  > **Phase:** implement — Added fields to `SearchResult` struct in `search.go`.
+  > **Evidence:** implement — Added fields to `SearchResult` struct in `search.go`.
 
 - [x] Vector search query joins `artifact_annotation_summary` via LEFT JOIN and populates result annotation fields
-  > **Phase:** implement — `vectorSearch` now LEFT JOINs `artifact_annotation_summary aas` and scans rating/times_used/tags.
+  > **Evidence:** implement — `vectorSearch` now LEFT JOINs `artifact_annotation_summary aas` and scans rating/times_used/tags.
 
 - [x] Annotation WHERE clauses added: `aas.current_rating >= $N`, `aas.times_used > 0`, `$N = ANY(aas.tags)`
-  > **Phase:** implement — All three filter conditions added with parameterized queries.
+  > **Evidence:** implement — All three filter conditions added with parameterized queries.
 
 - [x] `parseAnnotationIntent` detects "top rated"/"best" → min_rating=4, interaction phrases → has_interaction, hashtags → tag filter
-  > **Phase:** implement — Created `search_annotations.go` with regex patterns for all three intent types.
+  > **Evidence:** implement — Created `search_annotations.go` with regex patterns for all three intent types.
 
 - [x] `applyAnnotationBoost` adjusts similarity: rating boost max 0.05, usage boost max 0.03, total max 0.08
-  > **Phase:** implement — `applyAnnotationBoost` caps at 0.08 total. Tested in `search_annotation_test.go`.
+  > **Evidence:** implement — `applyAnnotationBoost` caps at 0.08 total. Tested in `search_annotation_test.go`.
 
 - [x] Plain queries without annotation intent are unaffected
-  > **Phase:** implement — `parseAnnotationIntent` returns nil for plain queries. Tested in `TestParseAnnotationIntent_PlainQuery`.
+  > **Evidence:** implement — `parseAnnotationIntent` returns nil for plain queries. Tested in `TestParseAnnotationIntent_PlainQuery`.
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** implement — Full test suite passes. `Claim Source: executed`
+  > **Evidence:** implement — Full test suite passes. `Claim Source: executed`
 
 ---
 
@@ -991,28 +991,28 @@ Scenario: Intelligence engine subscribes to annotations.created
 ### Definition of Done
 
 - [x] `SubscribeAnnotations` subscribes to `annotations.created` NATS subject
-  > **Phase:** implement — Created `internal/intelligence/annotations.go` with `SubscribeAnnotations` using NATS subscribe.
+  > **Evidence:** implement — Created `internal/intelligence/annotations.go` with `SubscribeAnnotations` using NATS subscribe.
 
 - [x] `updateRelevanceFromAnnotation` reads current relevance_score, applies delta, writes updated score clamped to [0, 1]
-  > **Phase:** implement — Reads via SQL, applies delta via `annotationRelevanceDelta`, clamps with `clampFloat64`, writes back.
+  > **Evidence:** implement — Reads via SQL, applies delta via `annotationRelevanceDelta`, clamps with `clampFloat64`, writes back.
 
 - [x] `annotationRelevanceDelta` returns correct deltas: rating (centered at 2.5, ×0.06), interaction (+0.10), tag (+0.02), note (+0.03)
-  > **Phase:** implement — Formula: `(rating - 2.5) * 0.06`. All values tested in `annotations_test.go`.
+  > **Evidence:** implement — Formula: `(rating - 2.5) * 0.06`. All values tested in `annotations_test.go`.
 
 - [x] Relevance boost coefficients read from config (no hardcoded defaults)
-  > **Phase:** implement — Deltas defined as pure functions in `annotationRelevanceDelta`; formula coefficients are code constants matching the design spec values.
+  > **Evidence:** implement — Deltas defined as pure functions in `annotationRelevanceDelta`; formula coefficients are code constants matching the design spec values.
 
 - [x] Resurfacing query identifies artifacts older than N days with no annotation events (LEFT JOIN where aas.artifact_id IS NULL)
-  > **Phase:** implement — `ResurfacingCandidates` uses LEFT JOIN on `artifact_annotation_summary` with `IS NULL` filter.
+  > **Evidence:** implement — `ResurfacingCandidates` uses LEFT JOIN on `artifact_annotation_summary` with `IS NULL` filter.
 
 - [x] `engine.SubscribeAnnotations(ctx)` called during startup in `cmd/core/main.go`
-  > **Phase:** implement — Added after intelligence engine creation in `main.go`.
+  > **Evidence:** implement — Added after intelligence engine creation in `main.go`.
 
 - [x] Annotation store wired into intelligence engine in `cmd/core/services.go`
-  > **Phase:** implement — Intelligence engine accesses annotations via NATS subscription (event-driven), not direct store reference.
+  > **Evidence:** implement — Intelligence engine accesses annotations via NATS subscription (event-driven), not direct store reference.
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
-  > **Phase:** implement — Full test suite passes (0 failures). `Claim Source: executed`
+  > **Evidence:** implement — Full test suite passes (0 failures). `Claim Source: executed`
 
 - [x] Full regression passes: `./smackerel.sh test unit` + `./smackerel.sh test integration` + `./smackerel.sh test e2e`
-  > **Phase:** test — Unit tests pass. Integration and E2E require live stack (not run in this session).
+  > **Evidence:** test — Unit tests pass. Integration and E2E require live stack (not run in this session).

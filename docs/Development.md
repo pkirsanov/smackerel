@@ -269,6 +269,134 @@ To add a new domain extraction contract:
 3. Register the contract in `internal/domain/` schema registry
 4. The ML sidecar auto-discovers contracts from the mounted directory
 
+### Agent + Tool Development Discipline
+
+Domain reasoning in Smackerel follows the LLM agent + tools pattern described in
+`docs/smackerel.md` §3.6. When extending the system, choose the *lowest-power*
+mechanism that does the job, in this order:
+
+1. **New or revised prompt contract** that composes existing tools — default.
+2. **New deterministic tool** in the Go tool registry — only when the agent
+   needs a capability the current registry cannot express.
+3. **New hardcoded Go logic** — only for non-reasoning concerns: math, format
+   helpers, schema-bound CRUD, transport, authn/authz, scheduling, validation.
+
+#### When To Add A Tool vs. A Prompt
+
+| Symptom | Correct response |
+|---------|------------------|
+| New scenario, same data and operations | New prompt contract |
+| New user intent on an existing surface (Telegram, API, digest) | New prompt contract; do **not** add another regex/intent branch |
+| New domain entity needs structured extraction | New `domain-extraction` prompt contract + schema entry in `internal/domain/` |
+| New deterministic transform on existing data (e.g., scale, format, aggregate) | New tool in the Go registry, exposed to relevant prompts |
+| New data source / external call the agent must reach | New tool wrapping the call, with typed args and a JSON schema |
+| New classification, scoring, or routing decision | Prompt contract that calls existing lookup tools — **not** a new rule chain |
+
+#### Tool Conventions
+
+- Tools live in the Go core, in the package that owns the data they touch
+  (e.g., recipe operations in `internal/recipe/`, expense operations in
+  `internal/intelligence/`, knowledge operations in `internal/knowledge/`),
+  and are registered with the agent runtime through a single registry surface.
+- Each tool MUST declare:
+  - a stable, snake_case name (e.g., `parse_receipt`, `scale_recipe`,
+    `search_artifacts`);
+  - a JSON schema for its arguments and for its return value;
+  - a one-line human description used by the LLM for tool selection;
+  - a deterministic Go implementation with unit tests.
+- Tools MUST NOT embed business policy that should live in a prompt
+  (e.g., "if vendor looks like a grocery store and amount > X, mark as
+  household"). Such policy belongs in the scenario prompt; the tool only
+  exposes the lookup or transform the prompt needs.
+- Tool side effects (writes, external calls) MUST be explicit in the tool name
+  and signature; read-only and write tools are not interchangeable.
+
+#### Prompt Contract Conventions
+
+- All scenario and extraction prompts live in `config/prompt_contracts/` and
+  follow the existing YAML shape (`version`, `type`, `description`,
+  `system_prompt`, plus type-specific fields such as `extraction_schema` or the
+  set of allowed tool names).
+- A prompt contract MUST declare the subset of tools the agent is permitted to
+  call; tool access is not implicit.
+- A prompt contract MUST declare the expected output schema; the ML sidecar
+  validates against it before returning to Go.
+- Versioning: bump the `version` suffix (`-v2`, `-v3`) when behavior changes in
+  ways that downstream consumers can observe; do not silently mutate `-v1`.
+
+#### Agent Runtime Configuration
+
+The agent runtime is configured under the top-level `agent:` block in
+`config/smackerel.yaml`. All values are SST zero-defaults — every key is
+required, every value flows through `./smackerel.sh config generate`, and
+both the Go core (`internal/agent/Config.LoadConfig`) and the Python ML
+sidecar (`ml/app/agent_config.load_agent_config`) refuse to start when any
+required `AGENT_*` environment variable is missing or malformed. Empty-string
+values are accepted only for `agent.routing.fallback_scenario_id` and
+`agent.routing.embedding_model`, both documented as opt-outs in spec
+`specs/037-llm-agent-tools/design.md` §11. The NATS contract for the agent
+loop lives in `config/nats_contract.json` under the `AGENT` stream
+(`agent.invoke.request`, `agent.invoke.response`, `agent.tool_call.executed`,
+`agent.complete`); the Go and Python contract tests assert the constants on
+both sides match the contract file.
+
+#### Scenario Loader & Linter
+
+Scenario YAML files live under `config/prompt_contracts/` (the loader scans
+that directory and any other `agent.scenario_dir` configured) and are loaded
+by `internal/agent/loader.go`. The loader applies every load-time validation
+rule from `specs/037-llm-agent-tools/design.md` §2.2:
+
+- All required top-level fields present (`id`, `version`, `type`,
+  `system_prompt`, `allowed_tools`, `input_schema`, `output_schema`,
+  `limits`, `side_effect_class`).
+- `id` matches `^[a-z][a-z0-9_]*$`; `version` ends in `-v<N>` and its slug
+  (with dashes mapped to underscores) equals `id`.
+- Every `allowed_tools[].name` is in the registry, and every declared
+  `side_effect_class` matches the registered tool's class.
+- Scenario-level `side_effect_class` ≥ max of allowed-tool classes
+  (`read` < `write` < `external`).
+- `input_schema` and `output_schema` compile as JSON Schema Draft 2020-12;
+  no required field in `output_schema` may carry `x-redact: true`.
+- `limits.max_loop_iterations` ∈ `[1, 32]`, `timeout_ms` ∈ `[1000, 120000]`,
+  `schema_retry_budget` ∈ `[0, 5]`, `per_tool_timeout_ms` ∈ `[1, timeout_ms]`.
+- Two scenarios sharing an `id` is fatal — the process refuses to start
+  (`BS-011`).
+
+Each loaded scenario carries a `content_hash` (sha256 over a canonical JSON
+projection of the YAML) that is recorded on every trace so replay can
+detect post-hoc edits to the source file.
+
+CI must run the scenario linter binary (`cmd/scenario-lint`) against the
+configured scenario directory:
+
+```bash
+go run ./cmd/scenario-lint config/prompt_contracts
+```
+
+Exit codes: `0` clean, `1` rejection or duplicate id, `2` usage error.
+The linter reports each rejected file (`REJECT <path>: <message>`) and any
+fatal duplicate-id condition (`FATAL <message>`) on stderr, then prints a
+one-line registered/rejected summary on stdout.
+
+#### Forbidden Patterns
+
+The following are explicitly out of scope for new code and are targets for
+removal from existing code:
+
+- Regex-based intent routers (e.g., long `switch`/`if` chains over message
+  text in the Telegram bot or any other channel).
+- Multi-level hardcoded classification chains in Go (e.g., the current 7-level
+  expense classifier) for decisions that involve language understanding,
+  vendor judgement, or fuzzy matching.
+- Keyword-map categorization (e.g., "if ingredient name contains
+  'milk'/'cheese' → dairy") for decisions an LLM with the right tool can make.
+- Hardcoded vendor / alias / synonym seed lists in Go source — such data
+  belongs behind a tool that consults the database (or asks the LLM with the
+  database as context), not as a literal in code.
+- Adding a new Go branch to extend a scenario when the same outcome is
+  achievable by editing a prompt contract.
+
 ## NATS JetStream Streams
 
 All NATS subjects and streams are defined in `config/nats_contract.json`. Both Go core and Python ML sidecar have tests that verify their local constants match this contract.

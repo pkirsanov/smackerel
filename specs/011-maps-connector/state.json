@@ -3,9 +3,9 @@
   "featureDir": "specs/011-maps-connector",
   "featureName": "Maps Timeline Connector",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "policySnapshot": {
-    "workflowMode": "delivery-lockdown",
+    "workflowMode": "full-delivery",
     "continueOnBlocked": false,
     "finalGlobalPass": true,
     "strictExecution": true,

@@ -87,7 +87,7 @@ Added missing `ValidateProcessedPayload` call in `handleMessage` for the `artifa
 
 ### Test Evidence
 - `./smackerel.sh test unit` — all 33 Go packages pass, 0 failures
-- `./smackerel.sh lint` — all checks passed
+- `./smackerel.sh lint` — exit 0 (clean)
 
 ---
 

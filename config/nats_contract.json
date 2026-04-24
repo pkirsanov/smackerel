@@ -188,6 +188,28 @@
       "direction": "core_internal",
       "stream": "LISTS",
       "critical": false
+    },
+    "agent.invoke.request": {
+      "direction": "core_to_ml",
+      "response": "agent.invoke.response",
+      "stream": "AGENT",
+      "critical": false
+    },
+    "agent.invoke.response": {
+      "direction": "ml_to_core",
+      "request": "agent.invoke.request",
+      "stream": "AGENT",
+      "critical": false
+    },
+    "agent.tool_call.executed": {
+      "direction": "core_internal",
+      "stream": "AGENT",
+      "critical": false
+    },
+    "agent.complete": {
+      "direction": "core_internal",
+      "stream": "AGENT",
+      "critical": false
     }
   },
   "streams": {
@@ -201,6 +223,7 @@
     "DOMAIN": { "subjects_pattern": "domain.>" },
     "ANNOTATIONS": { "subjects_pattern": "annotations.>" },
     "LISTS": { "subjects_pattern": "lists.>" },
+    "AGENT": { "subjects_pattern": "agent.>" },
     "DEADLETTER": { "subjects_pattern": "deadletter.>" }
   },
   "request_response_pairs": [
@@ -217,6 +240,7 @@
     { "request": "seasonal.analyze", "response": "seasonal.analyzed" },
     { "request": "synthesis.extract", "response": "synthesis.extracted" },
     { "request": "synthesis.crosssource", "response": "synthesis.crosssource.result" },
-    { "request": "domain.extract", "response": "domain.extracted" }
+    { "request": "domain.extract", "response": "domain.extracted" },
+    { "request": "agent.invoke.request", "response": "agent.invoke.response" }
   ]
 }

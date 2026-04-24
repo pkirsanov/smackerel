@@ -3,21 +3,34 @@
   "featureDir": "specs/023-engineering-quality",
   "featureName": "Engineering Quality",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.validate",
     "currentPhase": "certify",
     "currentScope": 3,
     "runStartedAt": "2026-04-10T00:00:00Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      "analyze",
+      "bootstrap",
+      "implement",
+      "test",
+      "validate",
+      "harden",
+      "gaps",
+      "audit",
+      "chaos",
+      "spec-review",
+      "docs",
+      "certify"
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "done",
     "completedScopes": [
-      1,
-      2,
-      3
+      "1",
+      "2",
+      "3"
     ],
     "certifiedCompletedPhases": [
       "analyze",
@@ -27,6 +40,10 @@
       "validate",
       "harden",
       "gaps",
+      "audit",
+      "chaos",
+      "spec-review",
+      "docs",
       "certify"
     ],
     "scopeProgress": [],
@@ -85,6 +102,17 @@
       "runStartedAt": "2026-04-10T00:00:00Z",
       "runEndedAt": "2026-04-10T00:00:00Z",
       "summary": "Created design.md covering all 9 findings: sync.Once for mlClient race, SST-compliant connector config fields, 5 typed interfaces replacing interface{}, dead checkAuth removal, writeJSON in intelligence handlers, Ollama health probe via GET /api/tags, Telegram bot health interface, structuredLogger path exclusion, config-driven sync_schedule parsing. No new dependencies. No API contract changes."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-23T00:00:00Z",
+      "runEndedAt": "2026-04-23T00:00:00Z",
+      "summary": "Manual cross-check verified spec implementation files exist on disk: internal/api/health.go (448 lines, 6 typed interfaces Pipeliner/Searcher/DigestGenerator/WebUI/OAuthFlow/TelegramHealthChecker, mlClientOnce sync.Once), internal/api/router.go (309 lines, structuredLogger excludes /api/health, /ping, /readyz, /metrics), internal/api/capture.go (writeJSON+writeError helpers), internal/api/intelligence.go (160 lines, all handlers use writeJSON), internal/connector/supervisor.go (475 lines, getSyncInterval at line 399 replaces hardcoded 5min), cmd/core/connectors.go (cfg.BookmarksImportDir/BrowserHistoryPath/MapsImportDir from config.Config, zero os.Getenv). go test passes for api/connector/config packages including -race for TestMLClient_ConcurrentAccess."
     }
   ],
   "activeBugs": [],

@@ -3,7 +3,7 @@
   "featureDir": "specs/009-bookmarks-connector",
   "featureName": "Bookmarks Connector",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",

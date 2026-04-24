@@ -6,12 +6,12 @@
 **Priority:** P1
 
 ### Definition of Done
-- [x] `SerendipityPick` queries upcoming calendar events from CalDAV artifacts
-- [x] Calendar-matching candidates receive +3 score boost
-- [x] `CalendarMatch` field is set to `true` on matching candidates
-- [x] `ContextReason` includes calendar match explanation when applicable
-- [x] Unit tests verify calendar match scoring (+3 boost)
-  > Evidence: Existing `TestSerendipityCandidate_CalendarMatchBoost` verified; new calendar query in `resurface.go`
-- [x] Unit tests verify no match when no calendar events exist
-  > Evidence: Existing `TestSerendipityCandidate_NoContextBonus` covers this path
-- [x] `./smackerel.sh test unit` passes
+- [ ] `SerendipityPick` queries upcoming calendar events from CalDAV artifacts
+- [ ] Calendar-matching candidates receive +3 score boost
+- [ ] `CalendarMatch` field is set to `true` on matching candidates
+- [ ] `ContextReason` includes calendar match explanation when applicable
+- [ ] Unit tests verify calendar match scoring (+3 boost)
+- [ ] Unit tests verify no match when no calendar events exist
+- [ ] `./smackerel.sh test unit` passes
+
+DoD items un-checked because the fix has not been verified in this artifact pass (status: in_progress).
