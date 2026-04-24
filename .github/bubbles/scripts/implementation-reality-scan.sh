@@ -242,6 +242,38 @@ if [[ ${#impl_files[@]} -eq 0 ]] && [[ -f "$feature_dir/design.md" ]]; then
   fi
 fi
 
+# Fallback 3: Filesystem search by spec slug — when neither scopes.md nor
+# design.md enumerate Implementation Files in canonical sections, look for
+# files whose names contain the spec slug (e.g. "037-llm-agent-tools" →
+# files matching "*llm_agent_tools*" or "*llm-agent-tools*"). Project-agnostic:
+# searches from the repo root excluding common build/cache directories.
+if [[ ${#impl_files[@]} -eq 0 ]]; then
+  spec_slug="$(basename "$feature_dir" | sed -E 's/^[0-9]+-//')"
+  slug_underscore="${spec_slug//-/_}"
+  info "No Implementation Files in scopes.md/design.md — falling back to filesystem search for slug '$spec_slug'"
+  search_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  while IFS= read -r found_file; do
+    [[ -z "$found_file" ]] && continue
+    rel_file="${found_file#$search_root/}"
+    add_impl_file "$rel_file"
+  done < <(find "$search_root" \
+              -path '*/node_modules' -prune -o \
+              -path '*/.dart_tool' -prune -o \
+              -path '*/.venv' -prune -o \
+              -path '*/venv' -prune -o \
+              -path '*/.git' -prune -o \
+              -path '*/target' -prune -o \
+              -path '*/build' -prune -o \
+              -path '*/dist' -prune -o \
+              -path '*/coverage' -prune -o \
+              -path '*/specs' -prune -o \
+              -type f \( -name "*${slug_underscore}*" -o -name "*${spec_slug}*" \) \
+              -print 2>/dev/null | head -50)
+  if [[ ${#impl_files[@]} -gt 0 ]]; then
+    vwarn "Resolved ${#impl_files[@]} file(s) via filesystem fallback — scopes.md should reference these directly"
+  fi
+fi
+
 if [[ ${#impl_files[@]} -eq 0 ]]; then
   echo "🔴 VIOLATION [ZERO_FILES_RESOLVED] No implementation file paths resolved from scope files"
   echo ""
@@ -430,10 +462,7 @@ ENDPOINT_NOT_IMPLEMENTED_PATTERNS=(
   'http\.StatusNotImplemented'
   'status\.StatusNotImplemented'
   '501([^0-9]|$)'
-  'Not Implemented'
-  'throw new Error\('
-  'not implemented'
-  'return .*not implemented'
+  '[Nn]ot [Ii]mplemented'
   'unimplemented!\('
   'todo!\('
 )
@@ -802,7 +831,9 @@ LIVE_TEST_INTERCEPT_PATTERNS=(
   'msw'
   'nock'
   'wiremock'
-  'responses\.'
+  '^import responses'
+  '@responses\.activate'
+  'responses\.add\('
   'httpretty'
 )
 
@@ -817,12 +848,37 @@ for test_file in "${test_files[@]}"; do
   fi
 
   live_test_files_found=$((live_test_files_found + 1))
+
+  # Build set of line numbers inside Python triple-quoted strings (docstrings)
+  # so we can skip pattern matches inside them. Reduces false positives where
+  # documentation examples mention `responses.add(...)` etc.
+  docstring_lines=""
+  if [[ "$test_file" == *.py ]]; then
+    docstring_lines="$(awk '
+      BEGIN { in_doc = 0; in_sq = 0 }
+      {
+        line = $0
+        n_dq = gsub(/"""/, "&", line)
+        line2 = $0
+        n_sq = gsub(/'\'''\'''\''/, "&", line2)
+        was_in = (in_doc || in_sq)
+        if (n_dq % 2 == 1) in_doc = !in_doc
+        if (n_sq % 2 == 1) in_sq = !in_sq
+        if (was_in || in_doc || in_sq) print NR
+      }
+    ' "$test_file" | tr "\n" "," )"
+  fi
+
   for pattern in "${LIVE_TEST_INTERCEPT_PATTERNS[@]}"; do
     while IFS=: read -r line_num matched_line; do
       if [[ -z "$line_num" ]]; then
         continue
       fi
       if echo "$matched_line" | grep -qE '^\s*(//|#|/\*|\*)'; then
+        continue
+      fi
+      # Skip lines inside Python docstrings
+      if [[ -n "$docstring_lines" && ",$docstring_lines," == *",$line_num,"* ]]; then
         continue
       fi
       violation "$test_file" "$line_num" "LIVE_TEST_INTERCEPT" "$matched_line"

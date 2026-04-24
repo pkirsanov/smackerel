@@ -3,7 +3,7 @@
   "featureDir": "specs/007-google-keep-connector",
   "featureName": "Google Keep Connector",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",

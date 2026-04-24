@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/031-live-stack-testing/bugs/BUG-001-ci-integration-placeholder",
   "featureName": "BUG-031-001: CI Integration Test Placeholder",
-  "status": "done",
+  "status": "in_progress",
   "workflowMode": "bugfix-fastlane",
   "execution": {
     "activeAgent": null,
@@ -54,7 +54,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "scope-1"
     ],
@@ -71,5 +71,6 @@
   },
   "activeBugs": [],
   "resolvedBugs": [],
-  "lastUpdatedAt": "2026-04-19T12:00:00Z"
+  "lastUpdatedAt": "2026-04-19T12:00:00Z",
+  "policySnapshot": {}
 }

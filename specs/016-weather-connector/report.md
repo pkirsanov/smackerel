@@ -271,3 +271,43 @@ These findings represent scope inflation where scopes are marked "Done" but thei
 - `./smackerel.sh build` — clean
 - `./smackerel.sh test unit` — all pass; weather package: 98.9s; total: 90 weather test functions
 - All 4 adversarial tests would fail if their respective fixes were reverted
+
+---
+
+### Summary
+
+The weather connector (spec 016) has converged through analyze → bootstrap → implement → test → validate → audit → docs and a long sequence of stochastic-quality-sweep child workflows (stabilize, test, improve x4, harden). The harden pass on 2026-04-22 corrected fabricated DoD evidence in Scopes 4 and 5 (NWS alerts, NATS enrichment), which were reverted to `Not Started`. Scopes 1 and 3 remain certified `Done`. The current `harden-to-doc` workflow run is closing out documentation duties at its `docs_updated` ceiling — the spec is **not** being promoted to `done` because Scopes 4 and 5 are honestly outstanding.
+
+### Completion Statement
+
+This spec is **NOT promoted to `done`** by this report. The active workflow mode is `harden-to-doc`, whose status ceiling is `docs_updated`. The lint findings that motivated this report were structural (three missing required sections in `report.md`); they are addressed here without changing scope status, certification status, or any code.
+
+- `state.json.status`: `in_progress` (unchanged)
+- `state.json.certification.status`: `in_progress` (unchanged, already aligned with top-level)
+- `state.json.workflowMode`: `harden-to-doc` (unchanged)
+- `state.json.certification.completedScopes`: `["01", "03"]` (unchanged)
+- `scopes.md` Scopes 02, 04, 05: still `Not Started` per the 2026-04-22 harden correction
+
+The implementation surface is verified present and exercised:
+
+```bash
+$ ls -la internal/connector/weather/
+total 104
+drwxr-xr-x  2 philipk philipk  4096 Apr 14 21:12 .
+drwxr-xr-x 17 philipk philipk  4096 Apr 21 14:34 ..
+-rw-r--r--  1 philipk philipk 26773 Apr 22 12:46 weather.go
+-rw-r--r--  1 philipk philipk 65905 Apr 22 12:46 weather_test.go
+```
+
+Promotion to `done` requires Scopes 02, 04, 05 to be implemented and certified through their own workflow runs.
+
+### Test Evidence
+
+Real test execution this session against the weather connector package:
+
+```bash
+$ go test -count=1 ./internal/connector/weather/...
+ok      github.com/smackerel/smackerel/internal/connector/weather       93.830s
+```
+
+All weather-package unit tests pass. The test count and per-test breakdown are documented in the prior pass entries above (most recently 90 weather test functions after the R145 improve pass). No new tests were added in this documentation-closure session.

@@ -3,7 +3,7 @@
   "featureDir": "specs/024-design-doc-reconciliation",
   "featureName": "Design Document Reconciliation",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -15,15 +15,19 @@
       "plan",
       "implement",
       "docs",
-      "validate"
+      "validate",
+      "test",
+      "audit",
+      "chaos",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "done",
     "completedScopes": [
-      1,
-      2
+      "1",
+      "2"
     ],
     "certifiedCompletedPhases": [
       "analyze",
@@ -31,7 +35,11 @@
       "plan",
       "implement",
       "docs",
-      "validate"
+      "validate",
+      "test",
+      "audit",
+      "chaos",
+      "spec-review"
     ],
     "scopeProgress": [
       {
@@ -110,6 +118,17 @@
       "runStartedAt": "2026-04-10T00:00:00Z",
       "runEndedAt": "2026-04-10T00:00:00Z",
       "summary": "Created design.md with section-by-section edit plan for docs/smackerel.md: 15 edit groups covering header metadata, \u00a72 principles, \u00a74 OpenClaw superseded header, \u00a76 capture channels, \u00a77 processing pipeline, \u00a78 storage diagram, \u00a714 DDL rewrite (SQLite\u2192PostgreSQL), \u00a717 security, \u00a718 privacy, \u00a719 phased plan, \u00a721.3 competitive matrix audit, \u00a722 connector accuracy (14 committed connectors), \u00a724 glossary. Implementation sequence and verification checklist defined."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-23T00:00:00Z",
+      "runEndedAt": "2026-04-23T00:00:00Z",
+      "summary": "Manual cross-check verified docs/smackerel.md (2460 lines) contains the reconciled content claimed by both scopes: header line 14 'Go + Docker Compose (self-hosted)'; \u00a74 SUPERSEDED disclaimer line 419; \u00a78 PostgreSQL+pgvector diagram line 933; \u00a714 PostgreSQL DDL with JSONB/TIMESTAMPTZ at line 1360+; only TOC line 23 still references OpenClaw outside \u00a74 SUPERSEDED block; competitive matrix and \u00a722 connector list audited."
     }
   ],
   "activeBugs": [],

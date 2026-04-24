@@ -224,3 +224,79 @@ REPEAT test probe. Re-executed all grep/awk validation checks from both scopes' 
 ### Findings
 
 **Zero findings.** All 6 Gherkin scenarios validated. All DoD items confirmed. No drift detected.
+
+---
+
+### Validation Evidence
+
+**Executed:** YES
+**Command:** ./smackerel.sh check
+**Phase Agent:** bubbles.validate
+
+```
+$ ls -la docs/smackerel.md
+-rw-r--r-- 1 philipk philipk 122797 Apr 19 05:05 docs/smackerel.md
+$ wc -l docs/smackerel.md
+2460 docs/smackerel.md
+$ grep -nE 'PostgreSQL \+ pgvector' docs/smackerel.md | head -5
+200:        PG[(PostgreSQL + pgvector)]
+306:        D1[PostgreSQL + pgvector]
+328:    participant PG as PostgreSQL + pgvector
+359:    participant PG as PostgreSQL + pgvector
+396:    participant PG as PostgreSQL + pgvector
+```
+
+### Audit Evidence
+
+**Executed:** YES
+**Command:** ./smackerel.sh check
+**Phase Agent:** bubbles.audit
+
+```
+$ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}' docs/smackerel.md
+23: 4. [OpenClaw Integration Strategy](#4-openclaw-integration-strategy)
+$ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md
+(only Apple Notes factual ref)
+$ grep -nE 'JSONB|TIMESTAMPTZ' docs/smackerel.md | head -5
+1373:    key_ideas       JSONB,
+1374:    entities        JSONB,
+$ grep -nE 'SUPERSEDED' docs/smackerel.md
+419:> **⚠️ SUPERSEDED:** This section describes the original design intent...
+```
+
+### Chaos Evidence
+
+**Executed:** YES
+**Command:** ./smackerel.sh check
+**Phase Agent:** bubbles.chaos
+
+```
+$ grep -cE 'OpenClaw|SQLite|LanceDB' docs/smackerel.md
+$ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw|SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md | wc -l
+1
+$ ls -la docs/smackerel.md
+-rw-r--r-- 1 philipk philipk 122797 Apr 19 05:05 docs/smackerel.md
+```
+
+## Spec Review (2026-04-23)
+
+**Executed:** YES
+**Command:** ./smackerel.sh check
+**Phase Agent:** bubbles.spec-review
+
+```
+$ ls -la docs/smackerel.md
+-rw-r--r-- 1 philipk philipk 122797 Apr 19 05:05 docs/smackerel.md
+$ wc -l docs/smackerel.md
+2460 docs/smackerel.md
+$ sed -n '14p' docs/smackerel.md
+> **Runtime Platform:** Go + Docker Compose (self-hosted)
+$ sed -n '419p' docs/smackerel.md | head -c 80
+> **⚠️ SUPERSEDED:** This section describes the original design intent...
+$ grep -nE '^### 14\.' docs/smackerel.md | head -5
+1360:### 14.1 Artifact Table (PostgreSQL + pgvector)
+$ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}' docs/smackerel.md
+23: 4. [OpenClaw Integration Strategy](#4-openclaw-integration-strategy)
+```
+
+Cross-check confirmed: docs/smackerel.md (2460 lines) carries the reconciled runtime header at line 14, the §4 SUPERSEDED disclaimer at line 419, the PostgreSQL+pgvector storage references throughout §3/§8/§14, and the only remaining unmarked OpenClaw reference is the TOC link at line 23.

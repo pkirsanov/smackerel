@@ -773,8 +773,13 @@ Improvement analysis pass on the Discord connector after 15+ prior quality sweep
 #### Test Evidence
 
 ```
-./smackerel.sh test unit — 33 Go packages ok, 0 FAIL
-./smackerel.sh build — clean
+$ go test -count=1 ./internal/connector/discord/
+ok      github.com/smackerel/smackerel/internal/connector/discord       8.743s
+$ go test -count=1 ./internal/connector/discord/ -v 2>&1 | grep -cE '^=== RUN '
+185
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
 ```
 
 #### Validation
@@ -892,7 +897,7 @@ DevOps probe on the certified Discord connector. Assessed build pipeline, deploy
 | Config check | `./smackerel.sh check` | Clean — "Config is in sync with SST", "env_file drift guard: OK" |
 | Docker Compose | Service integration in `smackerel-core` container | Clean — env_file injection, healthcheck, resource limits, labels, `stop_grace_period: 30s` |
 | Health/Monitoring | `Health()` method with 5 states, gateway health factoring, structured `slog` logging | Clean — Supervisor-visible health transitions (Healthy/Syncing/Degraded/Error/Disconnected) |
-| Lint | `./smackerel.sh lint` | Clean — "All checks passed!" |
+| Lint | `./smackerel.sh lint` | Clean — exit 0 |
 | Unit tests | `./smackerel.sh test unit` | Clean — 33 Go packages + 236 Python tests pass, discord package cached/passing |
 | Rate limiting | Per-route Discord API rate limiting with header parsing, exponential backoff | Clean — `awaitRateLimit()` helper, `RateLimiter` with bucket pruning |
 | Graceful shutdown | `Close()` with gateway cleanup, closed-connector guard, sync serialization | Clean — `syncMu` prevents concurrent cursor regression, `closed` flag prevents post-close sync |

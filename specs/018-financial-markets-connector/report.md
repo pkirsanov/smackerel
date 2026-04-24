@@ -284,7 +284,7 @@ $ go test -race -count=1 -run 'CHAOS018' ./internal/connector/markets/
 ok      github.com/smackerel/smackerel/internal/connector/markets       1.639s
 ```
 
-All tests pass including race detector. Zero regressions across full suite (236 tests).
+Race detector exit code: 0. Re-run on 2026-04-23 also clean: race-mode markets package completes in 3.585s; full Go suite reports 41 packages `ok`.
 
 _No scopes have been implemented yet._
 
@@ -490,8 +490,12 @@ All 41 Go packages pass. Zero FAIL results. Lint clean.
 #### Evidence
 
 ```
-$ ./smackerel.sh test unit --go 2>&1 | grep markets
-ok      github.com/smackerel/smackerel/internal/connector/markets       2.199s
+$ go test -count=1 ./internal/connector/markets/
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.368s
+$ go test -count=1 -race ./internal/connector/markets/
+ok      github.com/smackerel/smackerel/internal/connector/markets       3.585s
+$ ./smackerel.sh test unit --go 2>&1 | grep -cE '^ok'
+41
 ```
 
 ### Simplification Sweep: 2026-04-21

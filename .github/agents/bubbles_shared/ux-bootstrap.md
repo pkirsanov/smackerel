@@ -18,3 +18,4 @@ Constraints:
 - One feature-resolution attempt, then fail fast if the target is still ambiguous
 - No redundant rereads without a new reason
 - Competitor research cap: 5 competitors, 3 pages each
+- **Single-file output (NON-NEGOTIABLE):** All UX content (wireframes, flows, screen inventory) MUST be written to `spec.md` under `## UI Wireframes` and `## User Flows`. Creating `ux.md`, `wireframes.md`, `flows.md`, `user-flows.md`, or `screens.md` is FORBIDDEN — see `artifact-ownership.md` → Forbidden Artifacts.

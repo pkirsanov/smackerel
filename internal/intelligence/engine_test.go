@@ -923,8 +923,8 @@ func TestSynthesisConfidence(t *testing.T) {
 	}
 
 	// Weight interaction: volume-weighted (0.6) vs diversity-weighted (0.4)
-	confA := synthesisConfidence(20, 2)  // high volume, low diversity
-	confB := synthesisConfidence(3, 10)  // low volume, high diversity
+	confA := synthesisConfidence(20, 2) // high volume, low diversity
+	confB := synthesisConfidence(3, 10) // low volume, high diversity
 	if confA <= confB {
 		t.Errorf("with 0.6 volume weight, 20-artifact cluster should beat 3-artifact: A=%.4f vs B=%.4f", confA, confB)
 	}

@@ -3,7 +3,7 @@
   "featureDir": "specs/012-hospitable-connector",
   "featureName": "Hospitable Connector",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",

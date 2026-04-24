@@ -3,7 +3,7 @@
   "specId": "023-engineering-quality",
   "bugId": "BUG-002-scheduler-god-orchestrator",
   "workflowMode": "bugfix-fastlane",
-  "status": "done",
+  "status": "in_progress",
   "execution": {
     "activeAgent": "bubbles.bug",
     "currentPhase": "documentation",
@@ -18,7 +18,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": {},

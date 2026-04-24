@@ -1,17 +1,62 @@
 {
   "version": 3,
+  "specId": "019-connector-wiring",
+  "bugId": "BUG-001-parseFloatEnv-accepts-inf-nan",
   "featureDir": "specs/019-connector-wiring/bugs/BUG-001-parseFloatEnv-accepts-inf-nan",
   "featureName": "BUG-019-001: parseFloatEnv Accepts Inf/NaN",
-  "status": "done",
   "workflowMode": "bugfix-fastlane",
+  "status": "done",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
-    "runStartedAt": "2026-04-14T00:00:00Z"
+    "runStartedAt": "2026-04-14T00:00:00Z",
+    "completedPhaseClaims": ["implement", "test", "validate", "audit"],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-14T00:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "math.IsNaN/IsInf guard added at cmd/core/helpers.go:75 (parseFloatEnv rejects non-finite values, logs warning, returns 0)"
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-14T00:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "5 adversarial tests added under CHAOS-019-001 banner at cmd/core/main_test.go:292+ (TestParseFloatEnv_Inf, _NegInf, _PosInf, _NaN, _NaN_Lowercase)"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-20T06:19:00Z",
+        "outcome": "completed_owned",
+        "evidence": "./smackerel.sh test unit — cmd/core package passes (cached); ./smackerel.sh check — Config is in sync with SST"
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-04-20T06:19:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Adversarial regression tests cover all 5 IEEE 754 special values; existing parseFloatEnv tests still pass; warning log emitted on rejection"
+      }
+    ]
   },
   "certification": {
     "status": "done",
     "certifiedAt": "2026-04-20T06:19:00Z",
-    "certifiedBy": "bubbles.workflow"
-  }
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["Scope 1: Add Non-Finite Guard to parseFloatEnv"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": false, "provenance": "repo-default"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
 }

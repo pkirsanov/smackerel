@@ -11,7 +11,7 @@
 
 Replace individual `KEY: ${KEY}` environment declarations with `env_file: config/generated/dev.env` for both `smackerel-core` and `smackerel-ml` services.
 
-### DoD
+### Definition of Done
 - [x] `smackerel-core` uses `env_file: config/generated/dev.env`
   **Evidence:** docker-compose.yml line 67: `env_file: - config/generated/dev.env`
 - [x] `smackerel-ml` uses `env_file: config/generated/dev.env`
@@ -27,7 +27,7 @@ Replace individual `KEY: ${KEY}` environment declarations with `env_file: config
 
 Add env_file drift detection to `./smackerel.sh check` to prevent future regressions.
 
-### DoD
+### Definition of Done
 - [x] `./smackerel.sh check` verifies `env_file:` directive exists in docker-compose.yml
   **Evidence:** smackerel.sh line 139: `grep -q 'env_file:' docker-compose.yml`
 - [x] `./smackerel.sh check` detects individual SST-managed var declarations
@@ -41,7 +41,7 @@ Add env_file drift detection to `./smackerel.sh check` to prevent future regress
 
 Verify no regressions from the migration.
 
-### DoD
+### Definition of Done
 - [x] `./smackerel.sh test unit` passes (Go + Python)
   **Evidence:** All Go packages pass; Python: 214 passed, 0 failed
 - [x] `./smackerel.sh check` passes with no drift detected

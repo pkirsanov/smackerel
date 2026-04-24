@@ -10,12 +10,12 @@
     "currentScope": 6,
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedScopes": [
-      1,
-      2,
-      3,
-      4,
-      5,
-      6
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
     ],
     "completedPhaseClaims": [
       "select",
@@ -24,19 +24,22 @@
       "test",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "chaos",
+      "spec-review",
+      "reconcile"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "done",
     "completedScopes": [
-      1,
-      2,
-      3,
-      4,
-      5,
-      6
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
     ],
     "certifiedCompletedPhases": [
       "select",
@@ -45,7 +48,10 @@
       "test",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "chaos",
+      "spec-review",
+      "reconcile"
     ],
     "lastCertifiedAt": "2026-04-17T00:00:00Z",
     "reopenHistory": []
@@ -110,6 +116,28 @@
       "runStartedAt": "2026-04-21T00:00:00Z",
       "runFinishedAt": "2026-04-21T00:00:00Z",
       "summary": "Reconcile R72: full claimed-vs-implemented reconciliation. All functional claims substantiated. 168 tests pass. No code drift, no config wiring gaps. 2 info-level documentation observations (design single-file drift accepted, report test count snapshot staleness noted). No changes needed."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-23T00:00:00Z",
+      "runFinishedAt": "2026-04-23T00:00:00Z",
+      "summary": "Spec-review pass for legacy reconcile-to-doc completion. Verified spec.md, design.md, scopes.md, and report.md remain mutually consistent after Apr 22 harden sweep (175 test functions, 7 sources wired end-to-end with proximity_verified flag). No active superseded specs. No redundancy with adjacent connector specs (016-weather, 019-connector-wiring). Spec content remains authoritative for the implemented government-alerts surface."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-23T00:13:00Z",
+      "runFinishedAt": "2026-04-23T00:14:00Z",
+      "summary": "Chaos re-validation: ran -race over TestConcurrentSyncHealth, TestConcurrentCloseHealth, TestSyncContextCancellation, TestSync_MaxSyncDurationBoundsTimeout, TestSync_ParentContextCancellation_StopsSyncEarly, TestKnownMapEviction. All clean (1.677s). C-017-001/002/003 and STAB-017-001 fixes still hold under race detector."
     }
   ]
 }

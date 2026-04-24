@@ -2,6 +2,7 @@ package intelligence
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+
+	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
 // LearningDifficulty represents the difficulty level of a resource.
@@ -117,6 +120,32 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 		diff := classifyDifficultyHeuristic(title, contentType, position)
 		if difficulty != "" {
 			diff = LearningDifficulty(difficulty)
+		} else if e.NATS != nil {
+			// BUG-003: ask the ML sidecar for an LLM-derived difficulty
+			// label per resource. 10-second per-resource timeout from
+			// Scope 01 DoD. Persisted learning_progress.difficulty
+			// (the `difficulty != ""` branch above) always wins so we
+			// don't re-classify completed work, and any NATS failure
+			// silently falls through to the local heuristic.
+			payload := map[string]any{
+				"artifact_id":  artifactID,
+				"title":        title,
+				"content_type": contentType,
+				"position":     position,
+			}
+			if data, err := json.Marshal(payload); err == nil {
+				reply, reqErr := e.NATS.Request(ctx, smacknats.SubjectLearningClassify, data, learningClassifyLLMTimeout)
+				if reqErr != nil {
+					slog.Warn("NATS learning classify request failed, using heuristic", "artifact_id", artifactID, "error", reqErr)
+				} else {
+					var resp learningClassifyReply
+					if err := json.Unmarshal(reply, &resp); err != nil {
+						slog.Warn("NATS learning classify reply unmarshal failed, using heuristic", "artifact_id", artifactID, "error", err)
+					} else if d := normalizeDifficulty(resp.Difficulty); d != "" {
+						diff = d
+					}
+				}
+			}
 		}
 
 		estMinutes := estimateReadingTime(contentType, contentLength, durationStr)
@@ -178,6 +207,22 @@ func (e *Engine) MarkLearningResourceCompleted(ctx context.Context, topicID, art
 		ON CONFLICT (topic_id, artifact_id) DO UPDATE SET completed = TRUE, completed_at = $4
 	`, ulid.Make().String(), topicID, artifactID, now)
 	return err
+}
+
+// normalizeDifficulty maps an LLM-supplied difficulty label to one of the
+// known LearningDifficulty values. Returns "" for anything unrecognized so
+// the caller falls back to the local heuristic instead of trusting noise.
+func normalizeDifficulty(s string) LearningDifficulty {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "beginner":
+		return DifficultyBeginner
+	case "intermediate":
+		return DifficultyIntermediate
+	case "advanced":
+		return DifficultyAdvanced
+	default:
+		return ""
+	}
 }
 
 // classifyDifficultyHeuristic assigns difficulty based on heuristics when LLM classification is unavailable.

@@ -37,6 +37,7 @@ SUBSCRIBE_SUBJECTS = [
     "synthesis.extract",
     "synthesis.crosssource",
     "domain.extract",
+    "agent.invoke.request",
 ]
 
 # Subjects this sidecar publishes to
@@ -55,6 +56,7 @@ PUBLISH_SUBJECTS = [
     "synthesis.extracted",
     "synthesis.crosssource.result",
     "domain.extracted",
+    "agent.invoke.response",
 ]
 
 # Map of subscribe subject -> publish response subject
@@ -73,6 +75,7 @@ SUBJECT_RESPONSE_MAP = {
     "synthesis.extract": "synthesis.extracted",
     "synthesis.crosssource": "synthesis.crosssource.result",
     "domain.extract": "domain.extracted",
+    "agent.invoke.request": "agent.invoke.response",
 }
 
 
@@ -333,6 +336,26 @@ class NATSClient:
                             llm_api_key,
                             ollama_url,
                         )
+                    elif subject == "agent.invoke.request":
+                        # Spec 037 Scope 5: dispatch to the stateless
+                        # per-turn handler in ml/app/agent.py. The
+                        # executor includes a `reply_subject` field so
+                        # we publish the response directly to its
+                        # ephemeral inbox (matches the search.embed
+                        # pattern); JetStream-backed
+                        # agent.invoke.response delivery is also
+                        # honoured below for clients that prefer the
+                        # stream subject.
+                        from .agent import handle_invoke
+
+                        result = await handle_invoke(data)
+                        reply_subject = data.get("reply_subject")
+                        if reply_subject and self._nc:
+                            result["processing_time_ms"] = int((time.time() - start) * 1000)
+                            payload = json.dumps(result).encode()
+                            await self._nc.publish(reply_subject, payload)
+                            await msg.ack()
+                            continue
                     else:
                         logger.warning("Unknown subject: %s", subject)
                         await msg.ack()

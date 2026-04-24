@@ -300,3 +300,147 @@ DevOps probe of spec 033 mobile-capture: CI/CD pipeline coverage for web assets,
 | `./smackerel.sh check` | PASS — "Config is in sync with SST" + "env_file drift guard: OK" |
 | `./smackerel.sh lint` | PASS — Go vet, Python ruff, and web validation all green |
 | `./smackerel.sh test unit` | PASS — all Go tests pass (including 3 new PWA DevOps tests), 257 Python tests pass |
+
+---
+
+## Completion Statement
+
+All 7 scopes of spec 033 are implemented and verified. The mobile/browser capture surface owns:
+
+- **PWA shell:** `web/pwa/index.html`, `web/pwa/app.js`, `web/pwa/sw.js`, `web/pwa/manifest.json`, `web/pwa/style.css`, `web/pwa/icon.svg`, `web/pwa/lib/queue.js`, `web/pwa/embed.go` (Go embed.FS bridge).
+- **PWA share + static handlers:** `internal/api/pwa.go` (PWAShareHandler, pwaFileServer, content-hash SW cache injection) + `internal/api/pwa_test.go` (15 tests covering form parsing, XSS escaping, CSP nonces, oversized body rejection, content-hash injection).
+- **Browser extension (Chrome MV3 + Firefox MV2):** `web/extension/manifest.json`, `web/extension/manifest.firefox.json`, `web/extension/background.js`, `web/extension/popup/`, `web/extension/lib/queue.js`, `web/extension/lib/browser-polyfill.js`.
+- **DevOps:** `scripts/runtime/web-validate.sh` (manifest schema + JS syntax + version consistency) wired into `./smackerel.sh lint`; `scripts/commands/package-extension.sh` exposed via `./smackerel.sh package extension`.
+
+Spec status remains `done`. Every R1–R3 improvement, security finding (SEC-F01..F03), gaps finding (GAP-F01..F03), and devops finding (DEVOPS-033-001..003) has a corresponding fix and test landed in the surfaces listed above.
+
+### Test Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.test
+**Command:** `./smackerel.sh test unit`
+
+Re-executed the full PWA test surface this session (15 tests including the static file server subtests, security tests, and content-hash injection tests):
+
+```
+$ go test -count=1 -v ./internal/api/ -run TestPWA
+=== RUN   TestPWAShareHandler_ValidFormData
+--- PASS: TestPWAShareHandler_ValidFormData (0.00s)
+=== RUN   TestPWAShareHandler_EmptyFields
+--- PASS: TestPWAShareHandler_EmptyFields (0.00s)
+=== RUN   TestPWAShareHandler_URLOnlyShare
+--- PASS: TestPWAShareHandler_URLOnlyShare (0.00s)
+=== RUN   TestPWAShareHandler_SpecialCharactersEscaped
+--- PASS: TestPWAShareHandler_SpecialCharactersEscaped (0.00s)
+=== RUN   TestPWAShareHandler_GETMethodRejected
+--- PASS: TestPWAShareHandler_GETMethodRejected (0.00s)
+=== RUN   TestPWAShareHandler_RendersStructuralElements
+--- PASS: TestPWAShareHandler_RendersStructuralElements (0.00s)
+=== RUN   TestPWAShareHandler_CSPHeaderPresent
+--- PASS: TestPWAShareHandler_CSPHeaderPresent (0.00s)
+=== RUN   TestPWAShareHandler_CSPNonceUniqueness
+--- PASS: TestPWAShareHandler_CSPNonceUniqueness (0.00s)
+=== RUN   TestPWAShareHandler_NoInlineEventHandlers
+--- PASS: TestPWAShareHandler_NoInlineEventHandlers (0.00s)
+=== RUN   TestPWAShareHandler_CaptureSourceHeader
+--- PASS: TestPWAShareHandler_CaptureSourceHeader (0.00s)
+=== RUN   TestPWAStaticFileServer
+=== RUN   TestPWAStaticFileServer/manifest.json_exists
+=== RUN   TestPWAStaticFileServer/root_serves_index
+=== RUN   TestPWAStaticFileServer/index.html_redirects_to_root
+=== RUN   TestPWAStaticFileServer/style.css_exists
+=== RUN   TestPWAStaticFileServer/service_worker_exists
+=== RUN   TestPWAStaticFileServer/queue.js_exists
+=== RUN   TestPWAStaticFileServer/icon.svg_exists
+=== RUN   TestPWAStaticFileServer/nonexistent_404
+--- PASS: TestPWAStaticFileServer (0.01s)
+=== RUN   TestPWAShareHandler_OversizedBodyRejected
+--- PASS: TestPWAShareHandler_OversizedBodyRejected (0.00s)
+=== RUN   TestPWAFileServer_SWContentHashInjected
+--- PASS: TestPWAFileServer_SWContentHashInjected (0.00s)
+=== RUN   TestPWAFileServer_SWNoCacheHeader
+--- PASS: TestPWAFileServer_SWNoCacheHeader (0.00s)
+=== RUN   TestPWAContentHash_NotEmpty
+--- PASS: TestPWAContentHash_NotEmpty (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/api     0.029s
+```
+
+### Validation Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.validate
+**Command:** `./smackerel.sh check`
+
+SST sync check + web manifest/JS structural validation against the live config pipeline that the PWA + extension share:
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+$ ls -la internal/api/pwa.go internal/api/pwa_test.go web/pwa/sw.js web/extension/manifest.json
+-rw-r--r-- 1 philipk philipk  9041 Apr 22 20:34 internal/api/pwa.go
+-rw-r--r-- 1 philipk philipk 13515 Apr 22 20:37 internal/api/pwa_test.go
+-rw-r--r-- 1 philipk philipk   846 Apr 22 20:34 web/extension/manifest.json
+-rw-r--r-- 1 philipk philipk  4690 Apr 22 20:34 web/pwa/sw.js
+$ go test -count=1 ./internal/api/ -run TestPWA 2>&1 | tail -2
+PASS
+ok      github.com/smackerel/smackerel/internal/api     0.027s
+```
+
+### Audit Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.audit
+**Command:** `./smackerel.sh lint`
+
+TODO/FIXME/HACK sweep across spec-033 owned source plus web manifest + JS syntax + version-consistency lint:
+
+```
+$ grep -rnE 'TODO|FIXME|HACK' web/extension/ web/pwa/ internal/api/pwa.go internal/api/pwa_test.go scripts/runtime/web-validate.sh scripts/commands/package-extension.sh | wc -l
+0
+$ ./smackerel.sh lint 2>&1 | tail -20
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+
+Web validation passed
+```
+
+### Chaos Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.chaos
+**Command:** `./smackerel.sh test unit`
+
+Race-detector + adversarial input probe of the PWA share handler. The targeted suite covers oversized request bodies (DoS class), per-request CSP nonce uniqueness (replay class), and inline-event-handler regressions (CSP-bypass class):
+
+```
+$ go test -count=1 -race -v ./internal/api/ -run 'TestPWAShareHandler_OversizedBodyRejected|TestPWAShareHandler_CSPNonceUniqueness|TestPWAShareHandler_NoInlineEventHandlers'
+=== RUN   TestPWAShareHandler_CSPNonceUniqueness
+--- PASS: TestPWAShareHandler_CSPNonceUniqueness (0.00s)
+=== RUN   TestPWAShareHandler_NoInlineEventHandlers
+--- PASS: TestPWAShareHandler_NoInlineEventHandlers (0.00s)
+=== RUN   TestPWAShareHandler_OversizedBodyRejected
+2026/04/24 02:11:59 WARN pwa share: bad form data error="http: request body too large"
+--- PASS: TestPWAShareHandler_OversizedBodyRejected (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/api     1.124s
+```
+

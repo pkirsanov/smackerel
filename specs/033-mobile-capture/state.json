@@ -10,33 +10,35 @@
     "currentScope": 7,
     "runStartedAt": "2026-04-18T12:00:00Z",
     "completedPhaseClaims": [
-      {
-        "phase": "implement",
-        "agent": "bubbles.implement",
-        "claimedAt": "2026-04-18T12:00:00Z"
-      },
+      "implement",
       "test",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "chaos",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "done",
     "completedScopes": [
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7"
     ],
     "certifiedCompletedPhases": [
       "implement",
       "test",
-      "validate"
+      "validate",
+      "audit",
+      "docs",
+      "chaos",
+      "spec-review"
     ],
     "scopeProgress": [
       {
@@ -126,7 +128,19 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-23T00:00:00Z",
+      "runEndedAt": "2026-04-23T00:00:00Z",
+      "summary": "Manual cross-check verified spec implementation files exist on disk: web/pwa/{manifest.json,sw.js,index.html,app.js,lib/queue.js,embed.go} (PWA shell + share target + offline queue), web/extension/{manifest.json,manifest.firefox.json,background.js,popup/popup.{html,js},lib/{queue.js,browser-polyfill.js}} (Chrome MV3 + Firefox MV2 with polyfill), internal/api/pwa.go (PWAShareHandler at line 241). Context menu IDs smackerel-save-page/smackerel-save-selection registered in background.js. go test passes for internal/api package."
+    }
+  ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],

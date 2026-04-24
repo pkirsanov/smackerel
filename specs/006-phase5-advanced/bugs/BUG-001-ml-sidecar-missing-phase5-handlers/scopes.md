@@ -6,12 +6,14 @@
 **Priority:** P1
 
 ### Definition of Done
-- [x] `learning.classify` handler processes messages and returns difficulty classification
-- [x] `content.analyze` handler processes messages and returns writing angles
-- [x] `monthly.generate` handler processes messages and returns report text
-- [x] `quickref.generate` handler processes messages and returns compiled reference
-- [x] `seasonal.analyze` handler processes messages and returns seasonal insights
-- [x] Each handler has LLM fallback for when provider is unavailable
-- [x] Unit tests cover all 5 handlers (happy path + LLM failure fallback)
-- [x] ML sidecar logs no longer show "Unknown subject" for Phase 5 subjects
-- [x] `./smackerel.sh test unit` passes
+- [ ] `learning.classify` handler processes messages and returns difficulty classification
+- [ ] `content.analyze` handler processes messages and returns writing angles
+- [ ] `monthly.generate` handler processes messages and returns report text
+- [ ] `quickref.generate` handler processes messages and returns compiled reference
+- [ ] `seasonal.analyze` handler processes messages and returns seasonal insights
+- [ ] Each handler has LLM fallback for when provider is unavailable
+- [ ] Unit tests cover all 5 handlers (happy path + LLM failure fallback)
+- [ ] ML sidecar logs no longer show "Unknown subject" for Phase 5 subjects
+- [ ] `./smackerel.sh test unit` passes
+
+DoD items un-checked because the fix has not been verified in this artifact pass (status: in_progress).

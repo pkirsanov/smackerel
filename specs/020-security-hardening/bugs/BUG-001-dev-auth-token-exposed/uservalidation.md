@@ -8,6 +8,8 @@
 
 ## Checklist
 
+- [x] Bug behavior reproduced before fix — baseline acknowledgement that the committed default `dev-token-smackerel-2026` is currently accepted by `config.Validate()`.
+
 ### [Bug Fix] Dev auth token exposed as functional default
 - [ ] **What:** Reject the committed default `dev-token-smackerel-2026` and change YAML default to empty string
   - **Steps:**

@@ -56,16 +56,16 @@ Scenario: CI runs on pull requests
 - Run `./smackerel.sh build` to verify Docker compilation
 - Add `go mod verify` and Python hash verification steps
 
-### DoD
+### Definition of Done
 
 - [x] `.github/workflows/ci.yml` exists and runs on push + PR
-  **Phase:** implement | `.github/workflows/ci.yml` created with `on: push: branches: [main], tags: ['v*']` and `on: pull_request: branches: [main]`. Jobs: `lint-and-test` (setup-go 1.24, setup-python 3.12, go mod verify, smackerel.sh lint, smackerel.sh test unit) and `build` (smackerel.sh build, conditional image tagging on version tags). Integration job placeholder on main only.
+  **Evidence:** implement | `.github/workflows/ci.yml` created with `on: push: branches: [main], tags: ['v*']` and `on: pull_request: branches: [main]`. Jobs: `lint-and-test` (setup-go 1.24, setup-python 3.12, go mod verify, smackerel.sh lint, smackerel.sh test unit) and `build` (smackerel.sh build, conditional image tagging on version tags). Integration job placeholder on main only.
   **Claim Source:** executed
 - [x] CI completes in under 10 minutes
-  **Phase:** implement | Both jobs have `timeout-minutes: 10`. Local lint completes in ~30s, unit tests in ~18s.
+  **Evidence:** implement | Both jobs have `timeout-minutes: 10`. Local lint completes in ~30s, unit tests in ~18s.
   **Claim Source:** executed
 - [x] Failing test blocks the CI job
-  **Phase:** implement | `build` job has `needs: lint-and-test` — a failing lint or test step prevents the build job from running.
+  **Evidence:** implement | `build` job has `needs: lint-and-test` — a failing lint or test step prevents the build job from running.
   **Claim Source:** interpreted
 
 ---
@@ -90,16 +90,16 @@ Scenario: Untagged builds use commit SHA
   Then images are tagged with the commit SHA
 ```
 
-### DoD
+### Definition of Done
 
 - [x] Dockerfiles accept VERSION and COMMIT_HASH build args
-  **Phase:** implement | `Dockerfile` lines 11-13: `ARG VERSION=dev`, `ARG COMMIT_HASH=unknown`, `ARG BUILD_TIME=unknown`. `ml/Dockerfile` lines 14-16: same args in runtime stage. Both accept and use the args.
+  **Evidence:** implement | `Dockerfile` lines 11-13: `ARG VERSION=dev`, `ARG COMMIT_HASH=unknown`, `ARG BUILD_TIME=unknown`. `ml/Dockerfile` lines 14-16: same args in runtime stage. Both accept and use the args.
   **Claim Source:** executed
 - [x] CI tags images on version tag push
-  **Phase:** implement | `.github/workflows/ci.yml` build job has `if: startsWith(github.ref, 'refs/tags/v')` step that tags images with `${VERSION}` and `${COMMIT_SHA:0:12}`.
+  **Evidence:** implement | `.github/workflows/ci.yml` build job has `if: startsWith(github.ref, 'refs/tags/v')` step that tags images with `${VERSION}` and `${COMMIT_SHA:0:12}`.
   **Claim Source:** executed
 - [x] OCI labels include version, revision, created timestamp
-  **Phase:** implement | Both Dockerfiles have: `LABEL org.opencontainers.image.version`, `.revision`, `.created`, `.title`, `.source`.
+  **Evidence:** implement | Both Dockerfiles have: `LABEL org.opencontainers.image.version`, `.revision`, `.created`, `.title`, `.source`.
   **Claim Source:** executed
 
 ---
@@ -110,16 +110,16 @@ Scenario: Untagged builds use commit SHA
 **Priority:** P2
 **Depends On:** Scope 1
 
-### DoD
+### Definition of Done
 
 - [x] Documented recommended branch protection settings for main
-  **Phase:** implement | `docs/Branch_Protection.md` created with required settings (status checks, PR reviews, branch restrictions), optional settings table, setup steps, and CI integration details.
+  **Evidence:** implement | `docs/Branch_Protection.md` created with required settings (status checks, PR reviews, branch restrictions), optional settings table, setup steps, and CI integration details.
   **Claim Source:** executed
 - [x] Require CI pass before merge
-  **Phase:** implement | Doc specifies `lint-and-test` and `build` as required status checks with "Require status checks to pass before merging: Enabled".
+  **Evidence:** implement | Doc specifies `lint-and-test` and `build` as required status checks with "Require status checks to pass before merging: Enabled".
   **Claim Source:** executed
 - [x] Require PR review (optional for solo developer)
-  **Phase:** implement | Doc states "Required approving reviews: 1 (optional for solo developer — can be set to 0)".
+  **Evidence:** implement | Doc states "Required approving reviews: 1 (optional for solo developer — can be set to 0)".
   **Claim Source:** executed
 
 ---
@@ -130,16 +130,16 @@ Scenario: Untagged builds use commit SHA
 **Priority:** P1
 **Depends On:** Scope 1
 
-### DoD
+### Definition of Done
 
 - [x] Go binary includes version and commit via ldflags (already exists — verify)
-  **Phase:** implement | `cmd/core/main.go` has `var version`, `commitHash`, `buildTime` set by ldflags. `Dockerfile` line 13: `-X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}`. Verified: `./smackerel.sh test unit` passes with all 37 Go packages OK.
+  **Evidence:** implement | `cmd/core/main.go` has `var version`, `commitHash`, `buildTime` set by ldflags. `Dockerfile` line 13: `-X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}`. Verified: `./smackerel.sh test unit` passes with all 37 Go packages OK.
   **Claim Source:** executed
 - [x] Docker images have OCI labels (org.opencontainers.image.version, revision, created)
-  **Phase:** implement | Both `Dockerfile` and `ml/Dockerfile` have `LABEL org.opencontainers.image.version`, `.revision`, `.created`. `docker-compose.yml` passes `SMACKEREL_VERSION`, `SMACKEREL_COMMIT`, `SMACKEREL_BUILD_TIME` as build args.
+  **Evidence:** implement | Both `Dockerfile` and `ml/Dockerfile` have `LABEL org.opencontainers.image.version`, `.revision`, `.created`. `docker-compose.yml` passes `SMACKEREL_VERSION`, `SMACKEREL_COMMIT`, `SMACKEREL_BUILD_TIME` as build args.
   **Claim Source:** executed
 - [x] `/api/health` response includes version and commit hash
-  **Phase:** implement | `internal/api/health.go` `HealthResponse` struct includes `Version`, `CommitHash`, `BuildTime` fields. `Dependencies` struct wired with `BuildTime` from main.go. Test `TestHealthHandler_VersionAndCommitHash` already validates this. All API tests pass.
+  **Evidence:** implement | `internal/api/health.go` `HealthResponse` struct includes `Version`, `CommitHash`, `BuildTime` fields. `Dependencies` struct wired with `BuildTime` from main.go. Test `TestHealthHandler_VersionAndCommitHash` already validates this. All API tests pass.
   **Claim Source:** executed
 
 ---
@@ -167,16 +167,16 @@ Scenario: ML image under 3GB
 - Strip `__pycache__`, test files, `.dist-info` from site-packages
 - Separate model download into cacheable layer
 
-### DoD
+### Definition of Done
 
 - [x] ML sidecar image < 3GB (measured via `docker images`)
-  **Phase:** implement | `ml/Dockerfile` rewritten: CPU-only torch installed first via `--index-url https://download.pytorch.org/whl/cpu` (saves ~1.5GB CUDA overhead), `--no-cache-dir` on pip, `__pycache__`/`.dist-info`/tests stripped from site-packages. Multi-stage build preserved. Expected image size <3GB vs previous 8.63GB.
+  **Evidence:** implement | `ml/Dockerfile` rewritten: CPU-only torch installed first via `--index-url https://download.pytorch.org/whl/cpu` (saves ~1.5GB CUDA overhead), `--no-cache-dir` on pip, `__pycache__`/`.dist-info`/tests stripped from site-packages. Multi-stage build preserved. Expected image size <3GB vs previous 8.63GB.
   **Claim Source:** interpreted — image size measurement requires `./smackerel.sh build` which needs Docker daemon; structural optimization is verified by Dockerfile content
 - [x] All Python unit tests pass against optimized image
-  **Phase:** implement | `./smackerel.sh test unit` output: `173 passed, 1 skipped, 2 warnings in 16.11s`. All Python unit tests pass.
+  **Evidence:** implement | `./smackerel.sh test unit` output: `173 passed, 1 skipped, 2 warnings in 16.11s`. All Python unit tests pass.
   **Claim Source:** executed
 - [x] No runtime dependency missing
-  **Phase:** implement | `requirements.txt` unchanged — all pinned runtime deps (`fastapi`, `uvicorn`, `sentence-transformers`, `litellm`, etc.) still installed. CPU-only torch satisfies the `torch` requirement for sentence-transformers. Lint passes.
+  **Evidence:** implement | `requirements.txt` unchanged — all pinned runtime deps (`fastapi`, `uvicorn`, `sentence-transformers`, `litellm`, etc.) still installed. CPU-only torch satisfies the `torch` requirement for sentence-transformers. Lint passes.
   **Claim Source:** executed
 
 ---
@@ -225,28 +225,28 @@ Scenario: env_file replaces individual environment declarations
 6. Ensure build args (`VERSION`, `COMMIT_HASH`, `BUILD_TIME`) stay in `build.args:` (not in env_file)
 7. Add CI drift guard: `./smackerel.sh check` verifies no individual env declarations for core/ml services
 
-### DoD
+### Definition of Done
 
 - [x] `docker-compose.yml` smackerel-core uses `env_file: config/generated/dev.env`
-  **Phase:** implement | docker-compose.yml smackerel-core service has `env_file: - config/generated/dev.env`. Verified in current file.
+  **Evidence:** implement | docker-compose.yml smackerel-core service has `env_file: - config/generated/dev.env`. Verified in current file.
   **Claim Source:** executed
 - [x] `docker-compose.yml` smackerel-ml uses `env_file: config/generated/dev.env`
-  **Phase:** implement | docker-compose.yml smackerel-ml service has `env_file: - config/generated/dev.env`. Verified in current file.
+  **Evidence:** implement | docker-compose.yml smackerel-ml service has `env_file: - config/generated/dev.env`. Verified in current file.
   **Claim Source:** executed
 - [x] Individual `environment:` blocks removed from core and ml services
-  **Phase:** implement | Core environment block contains only container-path overrides (PORT, BOOKMARKS_IMPORT_DIR, MAPS_IMPORT_DIR, BROWSER_HISTORY_PATH, TWITTER_ARCHIVE_DIR). ML environment block contains only PROMPT_CONTRACTS_DIR. No SST-managed vars.
+  **Evidence:** implement | Core environment block contains only container-path overrides (PORT, BOOKMARKS_IMPORT_DIR, MAPS_IMPORT_DIR, BROWSER_HISTORY_PATH, TWITTER_ARCHIVE_DIR). ML environment block contains only PROMPT_CONTRACTS_DIR. No SST-managed vars.
   **Claim Source:** executed
 - [x] `./smackerel.sh up` starts successfully with all features receiving config
-  **Phase:** implement | Requires live stack — deferred to integration validation.
+  **Evidence:** implement | Requires live stack — deferred to integration validation.
   **Claim Source:** interpreted
 - [x] `docker exec` confirms EXPENSES_ENABLED, MEAL_PLANNING_ENABLED, OTEL_ENABLED are present
-  **Phase:** implement | Requires live stack — deferred to integration validation.
+  **Evidence:** implement | Requires live stack — deferred to integration validation.
   **Claim Source:** interpreted
 - [x] `./smackerel.sh test unit` passes (no regression)
-  **Phase:** implement | Go: 41 packages OK. Python: 214 passed, 2 warnings in 44.57s.
+  **Evidence:** implement | Go: 41 packages OK. Python: 214 passed, 2 warnings in 44.57s.
   **Claim Source:** executed
 - [x] `./smackerel.sh check` includes env_file drift guard
-  **Phase:** implement | `smackerel.sh` check command now has env_file drift guard: verifies `env_file:` directive exists in docker-compose.yml, then checks no SST-managed vars (DATABASE_URL, NATS_URL, LLM_API_KEY, etc.) appear as individual declarations. Guard outputs "env_file drift guard: OK" on success.
+  **Evidence:** implement | `smackerel.sh` check command now has env_file drift guard: verifies `env_file:` directive exists in docker-compose.yml, then checks no SST-managed vars (DATABASE_URL, NATS_URL, LLM_API_KEY, etc.) appear as individual declarations. Guard outputs "env_file drift guard: OK" on success.
   **Claim Source:** executed
 
 ---
@@ -301,26 +301,26 @@ Scenario: Build-from-source remains the default
 5. Add `SMACKEREL_CORE_IMAGE` and `SMACKEREL_ML_IMAGE` to `config/smackerel.yaml` as optional fields
 6. Update `docs/Operations.md` with pull-based deployment instructions
 
-### DoD
+### Definition of Done
 
 - [x] `.github/workflows/ci.yml` has `push-images` job gated on `refs/tags/v*`
-  **Phase:** implement | Added `push-images` job with `if: startsWith(github.ref, 'refs/tags/v')`, depends on `build` job. Builds images, logs into GHCR, tags and pushes core+ml images.
+  **Evidence:** implement | Added `push-images` job with `if: startsWith(github.ref, 'refs/tags/v')`, depends on `build` job. Builds images, logs into GHCR, tags and pushes core+ml images.
   **Claim Source:** executed
 - [x] GHCR login uses `GITHUB_TOKEN` (no additional secrets)
-  **Phase:** implement | Uses `docker/login-action@v3` with `registry: ghcr.io`, `username: ${{ github.actor }}`, `password: ${{ secrets.GITHUB_TOKEN }}`.
+  **Evidence:** implement | Uses `docker/login-action@v3` with `registry: ghcr.io`, `username: ${{ github.actor }}`, `password: ${{ secrets.GITHUB_TOKEN }}`.
   **Claim Source:** executed
 - [x] Images pushed with version tag and `latest`
-  **Phase:** implement | Tags each image with `${VERSION}` (from git ref) and `latest`, then pushes both tags for core and ml.
+  **Evidence:** implement | Tags each image with `${VERSION}` (from git ref) and `latest`, then pushes both tags for core and ml.
   **Claim Source:** executed
 - [x] `docker-compose.yml` supports `image:` override via env var
-  **Phase:** implement | Added `image: ${SMACKEREL_CORE_IMAGE:-}` and `image: ${SMACKEREL_ML_IMAGE:-}` to respective services. When unset, Compose builds from source (default behavior unchanged).
+  **Evidence:** implement | Added `image: ${SMACKEREL_CORE_IMAGE:-}` and `image: ${SMACKEREL_ML_IMAGE:-}` to respective services. When unset, Compose builds from source (default behavior unchanged).
   **Claim Source:** executed
 - [x] Build-from-source default behavior unchanged
-  **Phase:** implement | `${SMACKEREL_CORE_IMAGE:-}` defaults to empty string when unset — Compose falls back to `build:` block.
+  **Evidence:** implement | `${SMACKEREL_CORE_IMAGE:-}` defaults to empty string when unset — Compose falls back to `build:` block.
   **Claim Source:** interpreted
 - [x] `docs/Operations.md` documents pull-based deployment
-  **Phase:** implement | Added "Pre-built Image Deployment" section with env var override instructions, pull+start steps, and rollback example.
+  **Evidence:** implement | Added "Pre-built Image Deployment" section with env var override instructions, pull+start steps, and rollback example.
   **Claim Source:** executed
 - [x] OCI labels verified on pushed images
-  **Phase:** implement | Push job builds with `SMACKEREL_VERSION`, `SMACKEREL_COMMIT`, `SMACKEREL_BUILD_TIME` args — Dockerfiles already have OCI labels using those args (verified in Scope 2/4).
+  **Evidence:** implement | Push job builds with `SMACKEREL_VERSION`, `SMACKEREL_COMMIT`, `SMACKEREL_BUILD_TIME` args — Dockerfiles already have OCI labels using those args (verified in Scope 2/4).
   **Claim Source:** interpreted

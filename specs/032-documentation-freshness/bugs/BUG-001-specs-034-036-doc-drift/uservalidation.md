@@ -4,13 +4,12 @@ Links: [spec.md](spec.md) | [report.md](report.md)
 
 ---
 
-## Validation Criteria
+## Checklist
 
-| # | Criterion | Status |
-|---|-----------|--------|
-| 1 | Development.md accurately describes specs 034-036 features | ✅ Verified |
-| 2 | Operations.md covers expense, meal plan, recipe operational guidance | ✅ Verified |
-| 3 | README.md feature list includes all shipped capabilities | ✅ Verified |
+- [x] Development.md accurately describes specs 034-036 features (recipe, mealplan, migration 018, prompt contract)
+- [x] Operations.md covers expense, meal plan, recipe operational guidance
+- [x] README.md feature list includes all shipped capabilities (expense, recipe scaling, cook mode, meal planning)
+- [x] No documentation of unimplemented features (per spec 032 constraint)
 
 ## Notes
 

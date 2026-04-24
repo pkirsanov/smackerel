@@ -58,6 +58,15 @@ const (
 	// Actionable list subjects (spec 028)
 	SubjectListsCreated   = "lists.created"
 	SubjectListsCompleted = "lists.completed"
+
+	// Agent subjects (spec 037 — LLM Scenario Agent & Tool Registry)
+	// agent.invoke.request / agent.invoke.response form the per-turn cross-language
+	// pair between the Go executor and the Python ML sidecar. tool_call.executed and
+	// agent.complete are core-internal events consumed by the tracer.
+	SubjectAgentInvokeRequest    = "agent.invoke.request"
+	SubjectAgentInvokeResponse   = "agent.invoke.response"
+	SubjectAgentToolCallExecuted = "agent.tool_call.executed"
+	SubjectAgentComplete         = "agent.complete"
 )
 
 // StreamConfig defines a JetStream stream and its subjects.
@@ -79,6 +88,7 @@ func AllStreams() []StreamConfig {
 		{Name: "DOMAIN", Subjects: []string{"domain.>"}},
 		{Name: "ANNOTATIONS", Subjects: []string{"annotations.>"}},
 		{Name: "LISTS", Subjects: []string{"lists.>"}},
+		{Name: "AGENT", Subjects: []string{"agent.>"}},
 		{Name: "DEADLETTER", Subjects: []string{"deadletter.>"}},
 	}
 }
@@ -175,6 +185,42 @@ func (c *Client) PublishWithHeaders(ctx context.Context, subject string, data []
 		return fmt.Errorf("publish to %s: %w", subject, err)
 	}
 	return nil
+}
+
+// Request issues a synchronous core-NATS request to subject and waits up to
+// timeout for a single reply. Used for cross-language request/reply where the
+// Go core blocks on an LLM-enhanced response from the Python ML sidecar.
+//
+// This intentionally uses the underlying core nats.Conn (not JetStream),
+// because JetStream Publish is fire-and-forget and does not deliver the
+// responder's reply on the auto-generated inbox. Callers that want delivery
+// guarantees with no reply should keep using Publish.
+//
+// SST: timeout MUST be > 0. There is no hidden default — callers pass an
+// explicit per-feature timeout (see internal/intelligence callers and the
+// BUG-003 scope DoD for the agreed values).
+//
+// Returns the reply payload on success. On timeout, no responder, or transport
+// failure, returns a wrapped error so the caller can decide whether to fall
+// back. The provided ctx is also honored: if it is cancelled before the reply
+// arrives, RequestWithContext returns ctx.Err wrapped.
+func (c *Client) Request(ctx context.Context, subject string, data []byte, timeout time.Duration) ([]byte, error) {
+	if c == nil || c.Conn == nil {
+		return nil, fmt.Errorf("nats request to %s: client is nil", subject)
+	}
+	if timeout <= 0 {
+		return nil, fmt.Errorf("nats request to %s: timeout must be > 0", subject)
+	}
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	msg, err := c.Conn.RequestWithContext(reqCtx, subject, data)
+	if err != nil {
+		return nil, fmt.Errorf("nats request to %s: %w", subject, err)
+	}
+	if msg == nil {
+		return nil, fmt.Errorf("nats request to %s: nil reply message", subject)
+	}
+	return msg.Data, nil
 }
 
 // Healthy checks if the NATS connection is active.
