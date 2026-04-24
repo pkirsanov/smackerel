@@ -2,26 +2,82 @@
   "version": 3,
   "featureDir": "specs/006-phase5-advanced/bugs/BUG-003-go-nats-fire-and-forget",
   "featureName": "BUG-003: Go Runtime Fire-and-Forget NATS Publishes",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "bugfix-fastlane",
   "execution": {
-    "activeAgent": "bubbles.gaps",
-    "currentPhase": "plan",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
     "currentScope": "1",
     "runStartedAt": "2026-04-22T00:00:00Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": ["implement", "test", "validate", "audit"],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "done",
+    "completedScopes": ["1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"],
     "scopeProgress": [
       {
         "scope": 1,
         "name": "Convert Phase 5 NATS to Request/Reply",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": []
+      }
+    ],
+    "phaseRecords": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "startedAt": "2026-04-24T13:42:11Z",
+        "completedAt": "2026-04-24T15:18:47Z",
+        "outcome": "completed_owned",
+        "evidenceRefs": [
+          "internal/nats/client.go:207 (Client.Request added)",
+          "internal/nats/request_test.go (4 guard tests + 2 live-broker skip-by-default tests)",
+          "internal/intelligence/monthly.go:312,466,613 (3 Request call sites)",
+          "internal/intelligence/learning.go:137 (Request call site)",
+          "internal/intelligence/lookups.go:133 (Request call site)",
+          "internal/intelligence/bug003_test.go (TestNormalizeDifficulty, TestLLMReplyShapes, TestNilNATS_FallbackPaths)"
+        ]
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "startedAt": "2026-04-24T15:21:33Z",
+        "completedAt": "2026-04-24T15:54:09Z",
+        "outcome": "completed_owned",
+        "evidenceRefs": [
+          "go test -count=1 ./internal/nats/ ./internal/intelligence/ -> both ok",
+          "TestRequest_NilClient/NilConn/ZeroTimeoutRejected/NegativeTimeoutRejected -> PASS",
+          "TestNormalizeDifficulty_KnownLabels, TestLLMReplyShapes (5 sub-tests), TestNilNATS_FallbackPaths -> PASS",
+          "Pre-existing flaky test fixes landed in commit 16fe71b (discord gateway race; ml/tests/test_auth asyncio.get_event_loop deprecation)"
+        ]
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "startedAt": "2026-04-24T15:57:42Z",
+        "completedAt": "2026-04-24T16:31:05Z",
+        "outcome": "completed_owned",
+        "evidenceRefs": [
+          "./smackerel.sh build -> smackerel-core Built, smackerel-ml Built (exit 0)",
+          "./smackerel.sh check -> Config is in sync with SST; env_file drift guard: OK",
+          "./smackerel.sh test unit -> Go all packages ok; 330 ML passed, 2 warnings; exit 0"
+        ]
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "startedAt": "2026-04-24T16:33:18Z",
+        "completedAt": "2026-04-24T16:48:52Z",
+        "outcome": "completed_owned",
+        "evidenceRefs": [
+          "bash .github/bubbles/scripts/artifact-lint.sh specs/006-phase5-advanced/bugs/BUG-003-go-nats-fire-and-forget -> Artifact lint PASSED at status: done",
+          "All v3 state.json required fields present (status, execution, certification, policySnapshot)",
+          "Top-level status equals certification.status (both done)",
+          "All 8 Scope 01 DoD items checked with evidence blocks",
+          "No fabrication template placeholders; no repo-CLI bypass"
+        ]
       }
     ]
   },
@@ -35,5 +91,34 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": []
+  "executionHistory": [
+    {
+      "ts": "2026-04-24T15:18:47Z",
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "outcome": "completed_owned",
+      "note": "Added Client.Request to internal/nats; converted 5 Publish call sites in intelligence package to Request with explicit timeouts and local fallbacks; added unit tests for guards and nil-NATS fallback."
+    },
+    {
+      "ts": "2026-04-24T15:54:09Z",
+      "phase": "test",
+      "agent": "bubbles.test",
+      "outcome": "completed_owned",
+      "note": "Targeted package tests pass (internal/nats, internal/intelligence). Fixed 2 pre-existing flaky tests (commit 16fe71b) so the full unit suite is now green."
+    },
+    {
+      "ts": "2026-04-24T16:31:05Z",
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "outcome": "completed_owned",
+      "note": "./smackerel.sh build, check, and test unit all pass with exit 0; SST guards green; 330 ML tests pass; all Go packages ok."
+    },
+    {
+      "ts": "2026-04-24T16:48:52Z",
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "outcome": "completed_owned",
+      "note": "Artifact lint PASSED at status: done. v3 schema complete, top-level status aligned with certification.status, all DoD items have evidence blocks."
+    }
+  ]
 }
