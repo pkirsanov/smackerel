@@ -188,15 +188,20 @@ Periodic fetch of multi-day forecasts for all monitored locations:
 
 ### R-005: Historical Weather Enrichment
 
-On-demand fetch of historical weather for a specific date + location:
+On-demand fetch of historical weather for a specific date + location.
+
+This requirement is delivered as a **NATS request/response enrichment**, not as a standalone artifact emitted by the weather connector. This matches the design's on-demand enrichment data flow (`design.md` §“Data Flow — On-Demand Enrichment”), which states: *“Returns weather data via `weather.enrich.response`. Caller incorporates weather into its own artifact metadata.”*
+
+Rationale: historical weather for a given date+location is immutable contextual data, not a first-class user-facing capture. Producing standalone `weather/historical` artifacts on every enrichment request would generate downstream noise without consumer value. The semantic linkage is owned by the requesting connector (e.g., Maps), which embeds the returned weather as metadata on its own activity artifact.
 
 - **Trigger:** Enrichment request from another connector or the digest generator, via NATS subject `weather.enrich.request`
 - **Request payload:** `{ "latitude": float, "longitude": float, "date": "YYYY-MM-DD", "source_artifact_id": "string" }`
 - **Data captured:** Same fields as current conditions, but for a specific historical date
-- **Artifact type:** `weather/historical`
-- **Linking:** The historical weather artifact is linked to the requesting artifact (e.g., a Maps timeline hike) via a `WEATHER_CONTEXT` edge in the knowledge graph
-- **Caching:** Historical weather for a given date+location NEVER changes — cache permanently. Store in PostgreSQL alongside the artifact.
-- **Primary use case:** Maps connector detects a hike on March 15 → requests historical weather for that date and GPS location → weather connector returns "12°C, overcast, light rain" → hike artifact is annotated with weather context
+- **Response subject:** `weather.enrich.response` carrying an `EnrichResponse` payload that includes the resolved weather record (see `internal/connector/weather/enrich.go::EnrichResponse`)
+- **Artifact emission:** The weather connector does NOT emit a standalone `weather/historical` `RawArtifact`. The caller incorporates the response into its own artifact's metadata.
+- **Linking:** The semantic linkage between the activity and its weather context is owned by the requesting connector when it persists its own artifact (e.g., the Maps connector annotates the hike artifact directly with the weather fields)
+- **Caching:** Historical weather for a given date+location NEVER changes — cache permanently in the connector's response cache so subsequent identical enrichment requests are served without an upstream call
+- **Primary use case:** Maps connector detects a hike on March 15 → publishes a `weather.enrich.request` for that date and GPS location → weather connector replies on `weather.enrich.response` with "12°C, overcast, light rain" → Maps connector annotates its own hike artifact with the weather metadata
 
 ### R-006: Severe Weather Alerts
 
@@ -226,7 +231,8 @@ Monitor for severe weather watches, warnings, and advisories:
 | Current conditions | `weather/current` | `light` | Reference data, not insight-generating. Embedding the raw weather data adds minimal semantic value. |
 | Forecast | `weather/forecast` | `standard` | Useful for trip planning enrichment. Summary extraction is valuable ("rainy weekend ahead"). |
 | Severe weather alert | `weather/alert` | `full` | Safety-critical, needs full processing for urgency routing and notification generation. |
-| Historical enrichment | `weather/historical` | `metadata` | Pure metadata annotation on an existing artifact. The value is in the link, not standalone processing. |
+
+**Note on historical enrichment:** Historical weather is delivered exclusively via the `weather.enrich.request`/`weather.enrich.response` NATS pattern (R-005). The weather connector does not emit a standalone `weather/historical` artifact type — there is no row in this table for historical because the data flows back through the response and is incorporated by the caller as metadata on its own artifact. See R-005 and `design.md` §"Data Flow — On-Demand Enrichment".
 
 ### R-008: Caching Strategy
 
@@ -250,7 +256,7 @@ Each weather artifact MUST carry the following metadata in `RawArtifact.Metadata
 
 | Field | Type | Purpose |
 |-------|------|---------|
-| `weather_type` | `string` | One of: `current`, `forecast`, `alert`, `historical` |
+| `weather_type` | `string` | One of: `current`, `forecast`, `alert` (standalone artifacts emitted by `Sync()`). The `weather.enrich.response` payload carries historical/current weather as response data, not as a standalone artifact's metadata. |
 | `latitude` | `float64` | Location latitude (rounded to 2 decimal places) |
 | `longitude` | `float64` | Location longitude (rounded to 2 decimal places) |
 | `location_name` | `string` | User-configured display name for the location |

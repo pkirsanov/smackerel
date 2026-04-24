@@ -4,6 +4,57 @@ Links: [uservalidation.md](uservalidation.md)
 
 ## Reports
 
+### Spec Reconciliation — 2026-04-24
+
+**Trigger:** User-requested spec reconciliation (bubbles.plan)
+**Target:** `specs/016-weather-connector/spec.md`, `specs/016-weather-connector/scopes.md`, `specs/016-weather-connector/state.json`
+**Decision:** Option A — the Scope 02 `NormalizeHistorical()` DoD line was stale and predated the Scope 05 NATS-enrichment design choice; reconcile spec + scopes to match the implemented (and design-aligned) response-only pattern.
+
+#### Contradiction
+
+`scopes.md` Scope 02 carried an unchecked DoD item: *"`NormalizeHistorical()` creates `weather/historical` artifact with past conditions."*
+
+That contract is contradicted by:
+
+| Source | What it actually says |
+|---|---|
+| `design.md` §"Data Flow — On-Demand Enrichment" (lines 94–99) | Historical/current weather is returned via `weather.enrich.response`; "Caller incorporates weather into its own artifact metadata." No standalone artifact is emitted by the weather connector for the enrichment path. |
+| `design.md` §"Data Flow — Scheduled Sync" | Scheduled `Sync()` emits only current + forecast (+ alerts). Historical is not in the scheduled-sync artifact set. |
+| Scope 05 implementation `internal/connector/weather/enrich.go::handleEnrichRequest` | Calls `c.fetchHistorical()` and publishes an `EnrichResponse{Weather *CurrentWeather, ...}` on `SubjectWeatherEnrichResponse`. No `RawArtifact` emission. |
+| `internal/connector/weather/weather.go::Sync()` | Emits only `weather/current`, `weather/forecast`, and `weather/alert` artifacts (intentional). |
+
+`spec.md` R-005 itself was internally inconsistent — it described the request/response trigger and an "Artifact type: `weather/historical`" in the same requirement, mixing two delivery models.
+
+#### Why Option A (not Option B)
+
+- Historical weather for a (date, lat, lon) tuple is **immutable contextual data**, not a first-class user-facing capture. Emitting a standalone artifact for every Maps activity, digest enrichment, or temporal query would generate downstream noise (processing tier routing, dedup, embedding, search hits) without consumer value.
+- `design.md` is unambiguous that the caller incorporates the response as metadata on its own artifact (e.g., the Maps connector annotates its hike artifact directly).
+- The implementation followed the design correctly. The stale DoD line was the only artifact disagreeing — fixing the line, not the code, restores consistency.
+
+#### Files Modified
+
+| File | Change |
+|---|---|
+| `specs/016-weather-connector/spec.md` | R-005 rewritten to describe response-only enrichment with explicit "Artifact emission: weather connector does NOT emit a standalone `weather/historical` `RawArtifact`" clause. R-007 artifact-type table: removed `weather/historical` row and added a "Note on historical enrichment" pointing back to R-005 + design.md. R-009 metadata table: tightened `weather_type` enum to `current`/`forecast`/`alert` and noted that historical lives in the response payload, not in standalone artifact metadata. |
+| `specs/016-weather-connector/scopes.md` | Phase Order line for Scope 2 updated to remove `weather/historical` from the content-type list and reference the design's enrichment-response flow. Scope Summary status `In Progress` → `Done`. Scope 02 status `In Progress` → `Done`. Scope 02 description gained a "Scope reconciliation — 2026-04-24" paragraph. The `[ ] NormalizeHistorical()...` DoD item was rewritten as `[x] Historical weather delivery (response-only; no standalone artifact)` with reconciliation evidence pointing to `enrich.go` and citing the spec/design changes in this same pass. |
+| `specs/016-weather-connector/state.json` | `certification.completedScopes` updated from `["01","03","04","05"]` to `["01","02","03","04","05"]`. Spec-level `status` left at `in_progress` (no full-delivery re-cert performed in this pass, per task constraints). |
+| `specs/016-weather-connector/report.md` | This block. |
+
+#### Scope 02 Status Transition
+
+- **Before:** In Progress (1 unchecked DoD item, blocked on routing)
+- **After:** Done (all DoD items checked; the historical-delivery item is satisfied by Scope 05's response pattern, with the spec/scopes contracts reconciled in this same pass to remove the stale `weather/historical` artifact contract)
+
+#### Source Code Changes
+
+None. Per task hard rules, no source code, framework files, or workflows were modified.
+
+#### Acceptance
+
+- `bash .github/bubbles/scripts/artifact-lint.sh specs/016-weather-connector` — see verification block below
+
+---
+
 ### Harden Pass — 2026-04-22
 
 **Trigger:** stochastic-quality-sweep → harden-to-doc
