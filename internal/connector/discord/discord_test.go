@@ -2591,6 +2591,7 @@ func TestSyncEndToEnd_CursorPreventsRefetch(t *testing.T) {
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"api_url":         ts.URL,
+			"enable_gateway":  false, // disable poller to avoid race with Sync (test verifies REST cursor logic only)
 			"include_pins":    false,
 			"include_threads": false,
 			"monitored_channels": []interface{}{
@@ -2601,6 +2602,7 @@ func TestSyncEndToEnd_CursorPreventsRefetch(t *testing.T) {
 			},
 		},
 	})
+	defer c.Close()
 
 	// First sync: get 1 message
 	artifacts1, cursor1, err := c.Sync(context.Background(), "")
