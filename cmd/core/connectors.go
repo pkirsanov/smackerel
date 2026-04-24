@@ -265,6 +265,13 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			svc.supervisor.StartConnector(ctx, "weather")
 			slog.Info("weather connector started")
 
+			// Wire the proactive NWS alert notifier so that Extreme/Severe
+			// alerts surfaced during sync are published on alerts.notify
+			// (see spec 016 Scope 04). SetNWSURL("") enables NWS alert
+			// fetching against the public api.weather.gov endpoint.
+			weatherConn.SetNWSURL("")
+			weatherConn.SetAlertPublisher(svc.nc.Publish, smacknats.SubjectAlertsNotify)
+
 			// Start the on-demand historical enrichment subscriber. Other
 			// connectors and the digest generator publish on
 			// weather.enrich.request and receive replies on
