@@ -3,7 +3,7 @@
   "specId": "020-security-hardening",
   "bugId": "BUG-001-dev-auth-token-exposed",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
+  "status": "done",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -12,6 +12,7 @@
       "implement",
       "test",
       "validate",
+      "audit",
       "finalize"
     ],
     "executionHistory": [
@@ -38,22 +39,29 @@
       },
       {
         "phase": "validate",
-        "agent": "bubbles.validate",
-        "timestamp": "2026-04-19T12:00:00Z",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:29:45Z",
         "outcome": "completed_owned",
-        "summary": "All 6 DoD items verified against committed code. Scope 1 marked Done."
+        "summary": "Re-verified DoD items against committed code via grep on internal/config/config.go and config/smackerel.yaml; focused go test -count=1 -run TestValidate_AuthToken... passed (ok 0.006s)."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:30:29Z",
+        "outcome": "completed_owned",
+        "summary": "./smackerel.sh check ran clean (Config is in sync with SST + env_file drift guard: OK). YAML default change honoured by generated env files."
       },
       {
         "phase": "finalize",
         "agent": "bubbles.workflow",
-        "timestamp": "2026-04-19T12:00:00Z",
+        "timestamp": "2026-04-24T07:31:10Z",
         "outcome": "completed_owned",
-        "summary": "Bug closed. All DoD items checked, state promoted to done."
+        "summary": "Bug re-certified done. All 6 DoD items checked with file:line evidence; report.md carries Test/Validation/Audit Evidence sections from this re-cert pass."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "scope-1"
     ],
@@ -62,6 +70,7 @@
       "implement",
       "test",
       "validate",
+      "audit",
       "finalize"
     ],
     "scopeProgress": {
@@ -92,5 +101,6 @@
     }
   },
   "transitionRequests": [],
-  "reworkQueue": []
+  "reworkQueue": [],
+  "executionHistory": []
 }

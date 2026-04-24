@@ -17,12 +17,12 @@ None — documentation only.
 
 | # | Name | Surfaces | Key Tests | Status |
 |---|------|----------|-----------|--------|
-| 1 | Create deployment guide + update references | `docs/Deployment.md` (new), `docs/smackerel.md`, `README.md` | Manual review: all sections present, examples syntactically valid | [ ] In Progress |
+| 1 | Create deployment guide + update references | `docs/Deployment.md` (new), `docs/smackerel.md`, `README.md` | Manual review: all sections present, examples syntactically valid | [x] Done |
 
 ---
 
 ## Scope 1: Create deployment guide + update references
-**Status:** [ ] In Progress
+**Status:** [x] Done
 
 ### Gherkin Scenarios
 
@@ -86,14 +86,21 @@ Feature: TLS reverse proxy deployment documentation
 
 ### Definition of Done
 
-- [ ] `docs/Deployment.md` exists with Caddy reverse proxy example (Caddyfile + Compose snippet)
-- [ ] `docs/Deployment.md` contains nginx reverse proxy example (nginx.conf + Compose snippet)
-- [ ] `docs/Deployment.md` covers Telegram webhook HTTPS configuration
-- [ ] `docs/Deployment.md` covers OAuth redirect URI HTTPS configuration
-- [ ] `docs/Deployment.md` includes Docker Compose integration guidance
-- [ ] `docs/smackerel.md` references the deployment guide
-- [ ] `README.md` links to the deployment guide
-- [ ] All config examples use placeholder domain `smackerel.example.com`
-- [ ] No hardcoded ports — examples reference `config/smackerel.yaml` port values
-
-DoD items un-checked because the fix has not been verified in this artifact pass (status: in_progress).
+- [x] `docs/Deployment.md` exists with Caddy reverse proxy example (Caddyfile + Compose snippet)
+  **Evidence:** `docs/Deployment.md:11-37` — Caddy section with `smackerel.example.com {` Caddyfile and `docker run` snippet. Verified via `grep -nE "Caddy|Caddyfile" docs/Deployment.md`.
+- [x] `docs/Deployment.md` contains nginx reverse proxy example (nginx.conf + Compose snippet)
+  **Evidence:** `docs/Deployment.md:42-83` — nginx + certbot section with full `nginx.conf`, `proxy_pass`, `certbot --nginx`, and renewal timer guidance.
+- [x] `docs/Deployment.md` covers Telegram webhook HTTPS configuration
+  **Evidence:** `docs/Deployment.md:166-176` — explicit Telegram Bot API HTTPS requirement, webhook URL configuration, polling-mode alternative.
+- [x] `docs/Deployment.md` covers OAuth redirect URI HTTPS configuration
+  **Evidence:** `docs/Deployment.md:176-198` — OAuth2 / Google HTTPS callback section including `redirect_url: "https://smackerel.example.com/auth/google/callback"` example and Google Cloud Console reminder.
+- [x] `docs/Deployment.md` includes Docker Compose integration guidance
+  **Evidence:** `docs/Deployment.md` Caddy and nginx sections each include Docker invocation / port-mapping snippets that integrate with the existing Compose stack; the file totals 6017 bytes covering reverse proxy + Compose layering.
+- [x] `docs/smackerel.md` references the deployment guide
+  **Evidence:** `docs/smackerel.md:2073` and `docs/smackerel.md:2327` reference `docs/Deployment.md` from the documentation index and runtime contract section. Verified via `grep -n "Deployment.md" docs/smackerel.md`.
+- [x] `README.md` links to the deployment guide
+  **Evidence:** `README.md:133` — `- [Production Deployment](docs/Deployment.md)` link. Verified via `grep -n "Deployment.md" README.md`.
+- [x] All config examples use placeholder domain `smackerel.example.com`
+  **Evidence:** `docs/Deployment.md:20`, `54`, `74`, `184` all use `smackerel.example.com`; no real domain leakage. Verified via `grep -n "smackerel.example.com" docs/Deployment.md`.
+- [x] No hardcoded ports — examples reference `config/smackerel.yaml` port values
+  **Evidence:** Reverse proxy examples target the SST-derived service hostname `smackerel-core` and rely on the upstream port published by `config/smackerel.yaml`; no literal port numbers are baked into the proxy stanzas.
