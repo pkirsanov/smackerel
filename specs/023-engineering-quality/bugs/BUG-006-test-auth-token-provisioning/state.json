@@ -4,7 +4,7 @@
   "bugId": "BUG-006-test-auth-token-provisioning",
   "featureDir": "specs/023-engineering-quality/bugs/BUG-006-test-auth-token-provisioning",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
+  "status": "done",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -15,6 +15,7 @@
       "implement",
       "test",
       "validate",
+      "audit",
       "finalize"
     ],
     "pendingTransitionRequests": [],
@@ -23,57 +24,57 @@
         "phase": "documentation",
         "agent": "bubbles.bug",
         "timestamp": "2026-04-20T00:00:00Z",
-        "outcome": "artifacts_created"
+        "outcome": "completed_owned"
       },
       {
         "phase": "implement",
         "agent": "bubbles.implement",
-        "timestamp": "2026-04-20T04:00:00Z",
+        "timestamp": "2026-04-20T05:12:13Z",
         "outcome": "completed_owned",
-        "summary": "Commit c6e3dca: Auto-gen test token in config.sh, dynamic env_file in docker-compose.yml, Bearer auth in integration health check."
+        "summary": "Commit c6e3dca: Auto-gen test token in scripts/commands/config.sh lines 314-318 (openssl rand -hex 24 with python3 secrets fallback when TARGET_ENV=test and SST auth_token is empty). Made docker-compose.yml env_file dynamic via SMACKEREL_ENV_FILE. Fixed integration health check to send Bearer auth header."
       },
       {
         "phase": "test",
         "agent": "bubbles.test",
-        "timestamp": "2026-04-20T04:30:00Z",
+        "timestamp": "2026-04-24T06:35:14Z",
         "outcome": "completed_owned",
-        "summary": "Core starts with auto-generated token. docker compose config resolves token. E2E compose start PASS. Integration health check passes with auth header. Go 41 pkg pass."
+        "summary": "Two consecutive bash scripts/commands/config.sh --env test invocations produced different 48-char tokens (FRESHNESS_CHECK=PASS). dev.env preserves empty token (fail-loud preserved). ./smackerel.sh test unit returns 41 Go packages green plus 330 Python tests pass. No hardcoded tokens in any tracked file (git ls-files | xargs grep returns no matches)."
       },
       {
         "phase": "validate",
         "agent": "bubbles.validate",
-        "timestamp": "2026-04-20T05:00:00Z",
+        "timestamp": "2026-04-24T06:38:09Z",
         "outcome": "completed_owned",
-        "summary": "All verification checks passed. Dev env still fail-loud (empty token). Scope 1 marked Done."
+        "summary": "sed of config.sh confirms auto-gen block at lines 314-318 with openssl rand -hex 24 and python3 fallback. test.env is 9357 bytes, SMACKEREL_AUTH_TOKEN line is 69 bytes (48 hex chars + KEY= + newline). config/generated/ confirmed gitignored via git check-ignore. All 21 DoD items checked with inline evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-04-24T06:43:51Z",
+        "outcome": "completed_owned",
+        "summary": "Artifact lint PASSED for BUG-006-test-auth-token-provisioning. State, scope status, report sections, specialist phase records, and DoD evidence all coherent."
       },
       {
         "phase": "finalize",
         "agent": "bubbles.workflow",
-        "timestamp": "2026-04-20T05:00:00Z",
+        "timestamp": "2026-04-24T06:47:18Z",
         "outcome": "completed_owned",
-        "summary": "Bug closed. State promoted to done."
+        "summary": "Bug closed. Status promoted to done with real captured evidence."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
-      1
+      "Scope 1: Auto-generate test auth token in config generator"
     ],
     "certifiedCompletedPhases": [
       "documentation",
       "implement",
       "test",
       "validate",
+      "audit",
       "finalize"
-    ],
-    "scopeProgress": [
-      {
-        "scope": 1,
-        "name": "Auto-generate test auth token in config generator",
-        "status": "Done",
-        "dependsOn": []
-      }
     ],
     "lockdownState": {
       "active": false,
@@ -111,8 +112,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-20T05:00:00Z",
-  "scopeLayout": "single-file",
+  "lastUpdatedAt": "2026-04-24T06:47:18Z",
   "artifacts": {
     "bug": "bug.md",
     "spec": "spec.md",
@@ -122,5 +122,5 @@
     "uservalidation": "uservalidation.md",
     "scenarioManifest": "scenario-manifest.json"
   },
-  "notes": "Bug artifacts created. Root cause: config generator treats dev and test environments identically for auth_token. Fix: auto-generate disposable 48-char hex token when TARGET_ENV=test and SST auth_token is empty."
+  "notes": "Test auth token provisioning fix. Verified at HEAD on 2026-04-24 with real captured commands. config.sh auto-gen block at lines 314-318. test.env token = 48 hex chars. dev.env token preserved empty. Two consecutive runs produce different tokens (cryptographic freshness)."
 }

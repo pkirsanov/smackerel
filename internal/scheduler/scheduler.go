@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/robfig/cron/v3"
 
@@ -67,8 +66,7 @@ func New(digestGen *digest.Generator, bot *telegram.Bot, engine *intelligence.En
 
 // Start begins running scheduled tasks.
 func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
-	_, err := s.cron.AddFunc(cronExpr, s.runDigestJob)
-	if err != nil {
+	if _, err := s.cron.AddFunc(cronExpr, s.runDigestJob); err != nil {
 		return err
 	}
 	if s.lifecycle != nil {
@@ -77,36 +75,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 		}
 	}
 	if s.engine != nil {
-		if _, err := s.cron.AddFunc("0 2 * * *", s.runSynthesisJob); err != nil {
-			slog.Warn("failed to schedule synthesis", "error", err)
-		}
-		if _, err := s.cron.AddFunc("0 8 * * *", s.runResurfacingJob); err != nil {
-			slog.Warn("failed to schedule resurfacing", "error", err)
-		}
-		if _, err := s.cron.AddFunc("*/5 * * * *", s.runPreMeetingBriefsJob); err != nil {
-			slog.Warn("failed to schedule pre-meeting briefs", "error", err)
-		}
-		if _, err := s.cron.AddFunc("0 16 * * 0", s.runWeeklySynthesisJob); err != nil {
-			slog.Warn("failed to schedule weekly synthesis", "error", err)
-		}
-		if _, err := s.cron.AddFunc("0 3 1 * *", s.runMonthlyReportJob); err != nil {
-			slog.Warn("failed to schedule monthly report", "error", err)
-		}
-		if _, err := s.cron.AddFunc("0 3 * * 1", s.runSubscriptionDetectionJob); err != nil {
-			slog.Warn("failed to schedule subscription detection", "error", err)
-		}
-		if _, err := s.cron.AddFunc("0 4 * * *", s.runFrequentLookupsJob); err != nil {
-			slog.Warn("failed to schedule frequent lookup detection", "error", err)
-		}
-		if _, err := s.cron.AddFunc("*/15 * * * *", s.runAlertDeliveryJob); err != nil {
-			slog.Warn("failed to schedule alert delivery sweep", "error", err)
-		}
-		if _, err := s.cron.AddFunc("0 6 * * *", s.runAlertProductionJob); err != nil {
-			slog.Warn("failed to schedule daily alert production", "error", err)
-		}
-		if _, err := s.cron.AddFunc("0 7 * * 1", s.runRelationshipCoolingJob); err != nil {
-			slog.Warn("failed to schedule relationship cooling alert production", "error", err)
-		}
+		s.scheduleEngineJobs()
 	}
 	if s.knowledgeLinter != nil && s.knowledgeLintCron != "" {
 		if _, err := s.cron.AddFunc(s.knowledgeLintCron, s.runKnowledgeLintJob); err != nil {
@@ -127,87 +96,27 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 	return nil
 }
 
-// Stop halts all scheduled tasks and waits for background goroutines to finish.
-// Safe to call multiple times — second and subsequent calls are no-ops.
-func (s *Scheduler) Stop() {
-	s.stopOnce.Do(func() {
-		s.baseCancel()
-		close(s.done)
-		cronCtx := s.cron.Stop()
-		select {
-		case <-cronCtx.Done():
-		case <-time.After(5 * time.Second):
-			slog.Warn("scheduler: cron.Stop() timed out waiting for running callbacks")
-		}
-		done := make(chan struct{})
-		go func() {
-			s.wg.Wait()
-			close(done)
-		}()
-		select {
-		case <-done:
-			slog.Info("scheduler stopped cleanly")
-		case <-time.After(5 * time.Second):
-			slog.Warn("scheduler stop timed out waiting for background goroutines")
-		}
-	})
-}
-
-// DigestPendingRetry returns the current retry state (thread-safe).
-func (s *Scheduler) DigestPendingRetry() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.digestPendingRetry
-}
-
-// SetKnowledgeLinter configures the knowledge linter and its cron expression.
-// Must be called before Start().
-func (s *Scheduler) SetKnowledgeLinter(linter *knowledge.Linter, cronExpr string) {
-	s.knowledgeLinter = linter
-	s.knowledgeLintCron = cronExpr
-}
-
-// MealPlanAutoCompleter is the interface for auto-completing meal plans.
-type MealPlanAutoCompleter interface {
-	AutoCompletePastPlans(ctx context.Context) (int, error)
-}
-
-// SetMealPlanAutoComplete configures the meal plan auto-complete job.
-// Must be called before Start().
-func (s *Scheduler) SetMealPlanAutoComplete(svc MealPlanAutoCompleter, cronExpr string) {
-	s.mealPlanSvc = svc
-	s.mealPlanCron = cronExpr
-}
-
-// DigestPendingDate returns the current pending date (thread-safe).
-func (s *Scheduler) DigestPendingDate() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.digestPendingDate
-}
-
-// SetDigestPending sets the retry state (thread-safe, used in tests).
-func (s *Scheduler) SetDigestPending(retry bool, date string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.digestPendingRetry = retry
-	s.digestPendingDate = date
-}
-
-// CronEntryCount returns the number of registered cron entries.
-func (s *Scheduler) CronEntryCount() int {
-	return len(s.cron.Entries())
-}
-
-// runGuarded runs fn under a TryLock guard. If the mutex is already held
-// (another invocation of the same job is in progress), the call is skipped
-// with a warning log. This centralises the overlap-prevention pattern used
-// by all 14 cron jobs (SCN-022-09 through SCN-022-11).
-func (s *Scheduler) runGuarded(mu *sync.Mutex, group, job string, fn func()) {
-	if !mu.TryLock() {
-		slog.Warn("skipping overlapping job", "group", group, "job", job)
-		return
+// scheduleEngineJobs registers all intelligence-engine-backed cron jobs.
+func (s *Scheduler) scheduleEngineJobs() {
+	entries := []struct {
+		name string
+		cron string
+		fn   func()
+	}{
+		{"synthesis", "0 2 * * *", s.runSynthesisJob},
+		{"resurfacing", "0 8 * * *", s.runResurfacingJob},
+		{"pre-meeting briefs", "*/5 * * * *", s.runPreMeetingBriefsJob},
+		{"weekly synthesis", "0 16 * * 0", s.runWeeklySynthesisJob},
+		{"monthly report", "0 3 1 * *", s.runMonthlyReportJob},
+		{"subscription detection", "0 3 * * 1", s.runSubscriptionDetectionJob},
+		{"frequent lookup detection", "0 4 * * *", s.runFrequentLookupsJob},
+		{"alert delivery sweep", "*/15 * * * *", s.runAlertDeliveryJob},
+		{"daily alert production", "0 6 * * *", s.runAlertProductionJob},
+		{"relationship cooling alert production", "0 7 * * 1", s.runRelationshipCoolingJob},
 	}
-	defer mu.Unlock()
-	fn()
+	for _, e := range entries {
+		if _, err := s.cron.AddFunc(e.cron, e.fn); err != nil {
+			slog.Warn("failed to schedule "+e.name, "error", err)
+		}
+	}
 }
