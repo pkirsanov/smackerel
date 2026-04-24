@@ -43,7 +43,7 @@ func TestNATS_EnsureStreams(t *testing.T) {
 	expectedStreams := []string{
 		"ARTIFACTS", "SEARCH", "DIGEST", "KEEP",
 		"INTELLIGENCE", "ALERTS", "SYNTHESIS", "DOMAIN",
-		"ANNOTATIONS", "LISTS", "DEADLETTER",
+		"ANNOTATIONS", "LISTS", "WEATHER", "DEADLETTER",
 	}
 
 	for _, name := range expectedStreams {

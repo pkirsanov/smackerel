@@ -22,7 +22,7 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": ["01", "03"],
+    "completedScopes": ["01", "03", "05"],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
@@ -66,11 +66,26 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [],
+  "executionHistory": [
+    {
+      "scope": "05",
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "timestamp": "2026-04-24T16:40:00Z",
+      "evidence": "internal/connector/weather/enrich.go (214 LOC) + cmd/core/connectors.go:268-273 wiring + internal/nats/client.go:70-76 constants/stream + config/nats_contract.json:213-224,239 contract"
+    },
+    {
+      "scope": "05",
+      "phase": "test",
+      "agent": "bubbles.implement",
+      "timestamp": "2026-04-24T16:50:50Z",
+      "evidence": "go test -count=1 -v -run \"Enrich\" ./internal/connector/weather/... → 11/11 PASS in 0.233s; ./smackerel.sh test unit exit 0; ./smackerel.sh check exit 0"
+    }
+  ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-24T00:00:00Z",
+  "lastUpdatedAt": "2026-04-24T16:55:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
@@ -112,5 +127,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Initialized by bubbles.analyst for weather connector analysis."
+  "notes": "Initialized by bubbles.analyst for weather connector analysis. Scope 05 (Historical Weather Enrichment) implemented and unit-tested 2026-04-24 (enrich.go 214 LOC, 11/11 unit tests PASS, integration + e2e files build clean). Spec remains in_progress: Scope 02 still In Progress and Scope 04 still Not Started — promotion to done requires both scopes implemented and certified."
 }
