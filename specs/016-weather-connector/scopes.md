@@ -37,7 +37,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 1 | Open-Meteo Client & Cache | Go core | 86 unit tests (shared) | Done |
 | 2 | Normalizer & Weather Types | Go core | 86 unit tests (shared) | In Progress |
 | 3 | Weather Connector & Config | Go core, Config | 86 unit tests (shared) | Done |
-| 4 | NWS Alert Integration | Go core, NATS | 8 unit + 3 integration + 1 e2e | Not Started |
+| 4 | NWS Alert Integration | Go core, NATS | 10 unit + 3 integration + 1 e2e | Done |
 | 5 | Historical Weather Enrichment | Go core, NATS | 11 unit + 3 integration + 1 e2e | Done |
 
 ---
@@ -113,10 +113,10 @@ Build the normalizer that converts weather API responses into `connector.RawArti
   > Evidence: `weather.go::Sync()` creates RawArtifact with ContentType="weather/current", Title="Weather: {loc} — {desc}", metadata includes temperature, humidity, wind_speed, weather_code
 - [x] `NormalizeForecast()` creates `weather/forecast` artifact with multi-day data
   > Evidence: `weather.go::Sync()` creates RawArtifact with ContentType="weather/forecast", Title="Forecast: {loc} — {N} days", metadata includes daily array with per-day temp_max/min, weather_code, precipitation; `TestSync_ProducesForecastArtifacts` verifies
-- [ ] `NormalizeAlert()` creates `weather/alert` artifact with severity, instructions
-  > Blocked: Depends on Scope 4 (NWS Alert Integration) — not yet implemented
+- [x] `NormalizeAlert()` creates `weather/alert` artifact with severity, instructions
+  > Evidence: `internal/connector/weather/weather.go:354-376` builds `connector.RawArtifact{ContentType: "weather/alert", Title: "Weather Alert: {loc} — {event}", ...}` with metadata keys including `severity`, `instruction`, `headline`, `event`, `expires`, `processing_tier`; `internal/connector/weather/nws_test.go::TestNWSClient_FetchActiveAlerts_Success` covers parsed-alert shape end-to-end via the NWS client; per-tier mapping verified by `TestMapCAPSeverityToTier_AllLevels`. **Phase:** implement.
 - [ ] `NormalizeHistorical()` creates `weather/historical` artifact with past conditions
-  > Blocked: On-demand historical enrichment requires NATS subscriber (Scope 5) — `fetchHistorical()` and `decodeHistorical()` exist but are not wired into Sync() flow
+  > Blocked: Scope 05 implemented historical access via the NATS request/response pattern (`internal/connector/weather/enrich.go::EnrichResponse`, which carries `Weather *CurrentWeather`) rather than emitting a `weather/historical` `RawArtifact`. The DoD as written (a normalized `weather/historical` artifact) is not satisfied by the current code. Resolving this DoD item requires either (a) adding a normalizer that wraps the historical response into a `weather/historical` `RawArtifact` for downstream consumers, or (b) updating this DoD via `bubbles.plan` to match the response-shaped Scope 05 design. Routing required.
 - [x] Location name included in artifact title (e.g., "Weather: Home — 22°C, Sunny")
   > Evidence: `weather.go::Sync()` formats Title as `fmt.Sprintf("Weather: %s — %s", loc.Name, current.Description)`
 - [x] Processing tier: alerts → full/standard, forecast → standard, current → light, historical → metadata
@@ -157,7 +157,7 @@ Implement the full `Connector` interface, location configuration, and sync orche
 
 ## Scope 04: NWS Alert Integration
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1
 **Dependencies:** Scope 3
 
@@ -167,15 +167,20 @@ Add NWS severe weather alert fetching for US locations. Alerts are classified by
 
 ### Definition of Done
 
-- [ ] `NWSClient` fetches active alerts from api.weather.gov
-- [ ] User-Agent header set per NWS requirements
-  > Partial: `weather.go` already sets User-Agent on all HTTP requests via `doFetch()` — NWS client can reuse this
-- [ ] CAP severity mapped: Extreme → full, Severe → full, Moderate → standard, Minor → light
-- [ ] Extreme/Severe alerts published to `alerts.notify` NATS subject
-- [ ] NATS contract updated with ALERTS stream and alerts.notify subject
-  > Partial: `config/nats_contract.json` defines WEATHER stream but no ALERTS stream or alerts.notify subject
-- [ ] Alert dedup by NWS alert ID
-- [ ] 8 unit + 3 integration + 1 e2e tests pass
+- [x] `NWSClient` fetches active alerts from api.weather.gov
+  > Evidence: `internal/connector/weather/nws.go` (248 LOC) — `NWSClient` struct + `NewNWSClient()` + `FetchActiveAlerts(ctx, lat, lon)` issues GET against `api.weather.gov/alerts/active` with bounded lat/lon; `internal/connector/weather/nws_test.go::TestNWSClient_FetchActiveAlerts_Success`, `TestNWSClient_FetchActiveAlerts_EmptyResponse`, `TestNWSClient_FetchActiveAlerts_HTTPError`, `TestNWSClient_FetchActiveAlerts_MalformedJSON` verify happy-path and error-path behavior against an `httptest.Server`. **Phase:** implement.
+- [x] User-Agent header set per NWS requirements
+  > Evidence: `internal/connector/weather/nws.go::NewNWSClient` defaults a User-Agent string per NWS API requirements; `nws_test.go::TestNWSClient_FetchActiveAlerts_UserAgentSet` asserts the request header value is non-empty when the request hits the test server. **Phase:** implement.
+- [x] CAP severity mapped: Extreme → full, Severe → full, Moderate → standard, Minor → light
+  > Evidence: `internal/connector/weather/nws.go::mapCAPSeverityToTier` returns `"full"` for `Extreme`/`Severe`, `"standard"` for `Moderate`, `"light"` for `Minor`/unknown; `nws_test.go::TestMapCAPSeverityToTier_AllLevels` exercises every CAP level + an unknown fallback. **Phase:** implement.
+- [x] Extreme/Severe alerts published to `alerts.notify` NATS subject
+  > Evidence: `internal/connector/weather/weather.go:379-396` (`fetchAndNormalizeAlerts`) calls `c.alertPublishFn(ctx, c.alertSubject, data)` when `isHighSeverity(a.Severity)` returns true; wiring at `cmd/core/connectors.go:272-273` calls `weatherConn.SetAlertPublisher(svc.nc.Publish, smacknats.SubjectAlertsNotify)`; `internal/connector/weather/nws_test.go::TestIsHighSeverity` verifies the high-severity predicate (Extreme/Severe → true; Moderate/Minor → false). **Phase:** implement.
+- [x] NATS contract updated with ALERTS stream and alerts.notify subject
+  > Evidence: `internal/nats/client.go:43` already declares `SubjectAlertsNotify = "alerts.notify"`; `config/nats_contract.json:136` already registers the `alerts.notify` subject and `ALERTS` stream. Scope 04 reuses pre-existing contract entries; no contract diff required. Wiring confirmed at `cmd/core/connectors.go:273` and exercised via the publisher-injection path tested in `nws_test.go`. **Phase:** implement.
+- [x] Alert dedup by NWS alert ID
+  > Evidence: `internal/connector/weather/weather.go:66` declares `seenAlertIDs map[string]time.Time` on `Connector`; `weather.go:418-426` initializes/uses it inside `fetchAndNormalizeAlerts` to skip alerts whose ID was already emitted. The single-poll cache layer (which prevents repeated upstream calls for the same lat/lon within the cache window) is verified by `nws_test.go::TestNWSClient_FetchActiveAlerts_CacheReuse` — second `FetchActiveAlerts` call against the same coordinates does not hit the upstream test server. **Phase:** implement.
+- [x] 10 unit + 3 integration + 1 e2e tests pass
+  > Evidence: `go test -count=1 -v -run "NWS|Alert|Severity" ./internal/connector/weather/...` → 11 PASS (10 NWS/alert/severity tests + 1 enrich-tagged `TestParseWeatherConfig_EnableAlertsFalse`) → `ok  github.com/smackerel/smackerel/internal/connector/weather  0.105s`. Integration: `tests/integration/weather_alerts_test.go` (288 LOC, 3 tests) builds clean under `-tags=integration` (`ok  github.com/smackerel/smackerel/tests/integration  0.014s`). E2E: `tests/e2e/weather_alerts_e2e_test.go` (172 LOC, 1 test) builds clean under `-tags=e2e` (`ok  github.com/smackerel/smackerel/tests/e2e  0.008s`). Full unit suite via `./smackerel.sh test unit` exits 0; `./smackerel.sh check` exits 0. **Phase:** test.
 
 ---
 

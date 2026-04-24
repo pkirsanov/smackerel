@@ -41,20 +41,20 @@ var (
 // InteractionPhrases returns the canonical human-readable interaction phrases
 // recognized by the parser (e.g., "made it", "bought it"). Use this instead of
 // maintaining separate phrase lists for split-point detection.
+//
+// The returned order is deterministic so callers (e.g. splitRateArgs) get the
+// same split-point regardless of Go's randomized map iteration. The list is
+// the canonical phrase per InteractionType, in a stable, hand-picked order.
 func InteractionPhrases() []string {
-	seen := make(map[InteractionType]bool)
-	var phrases []string
-	for phrase, itype := range interactionMap {
-		if seen[itype] {
-			continue
-		}
-		// Prefer the space-separated human-readable form for each type
-		if strings.Contains(phrase, " ") || phrase == "visited" || phrase == "purchased" {
-			seen[itype] = true
-			phrases = append(phrases, phrase)
-		}
+	return []string{
+		"made it",
+		"bought it",
+		"read it",
+		"visited",
+		"tried it",
+		"used it",
+		"purchased",
 	}
-	return phrases
 }
 
 // Parse extracts structured annotation components from a freeform string.
