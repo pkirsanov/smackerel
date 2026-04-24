@@ -1,5 +1,35 @@
 # Feature: 035 Recipe Enhancements — Serving Scaler & Cook Mode
 
+> **Architectural alignment (added with spec 037).**
+> This feature is reframed onto the LLM-Agent + Tools pattern committed to in
+> [docs/smackerel.md §3.6 LLM Agent + Tools Pattern](../../docs/smackerel.md)
+> and [docs/Development.md "Agent + Tool Development Discipline"](../../docs/Development.md),
+> and provided by [spec 037 — LLM Scenario Agent & Tool Registry](../037-llm-agent-tools/spec.md).
+>
+> User-visible behavior is preserved. The mechanism by which the system
+> achieves it changes:
+>
+> - Recipe interactions over Telegram (cook-mode entry, scaling requests,
+>   ingredient questions, recipe lookup, future substitution and dietary-
+>   adaptation requests) flow through scenarios on the agent runtime.
+>   Users do not need to learn a fixed phrase grammar.
+> - New recipe capabilities (substitutions, dietary adaptation, equipment
+>   swap suggestions) MUST be addable as new scenarios + (optional) new
+>   tools, NOT as new branches in regex intent code.
+> - Mechanical operations remain deterministic tools: scale a quantity by a
+>   factor, format a kitchen-practical fraction, look up a recipe, advance
+>   a cook-mode session, fetch ingredients for a step. The trigger-pattern
+>   tables in this spec describe inputs the system MUST handle, not a
+>   required grammar at the surface.
+> - Ingredient categorization (e.g., for shopping list grouping) MUST be
+>   handled by an agent scenario consulting the knowledge graph, not by a
+>   hardcoded keyword list.
+>
+> **Deprecated.** Any prior language in this spec or in scopes/design that
+> mandates a regex-based intent router for recipe commands, a fixed phrase
+> grammar as the only acceptable input form, or a keyword-based ingredient
+> categorizer is deprecated. See spec 037 for the replacement capability.
+
 ## Problem Statement
 
 Smackerel already extracts structured recipe data (ingredients with quantities/units, numbered steps with durations, servings count) via the domain extraction pipeline (spec 026). The Telegram bot displays a recipe card with timing, servings, cuisine, and up to 10 ingredients. But the extracted data stops at display — the user cannot scale a recipe to a different number of servings, and there is no way to walk through a recipe step-by-step while cooking. These are the two most common interactions people have with recipes after finding them, and both are pure transforms on data the system already has.
@@ -251,6 +281,81 @@ When the user scales to 100 servings
 Then the system scales to "50 tsp vanilla extract" or "1 cup + 2 tbsp vanilla extract" (unit upgrade)
 And no overflow or precision errors occur
 
+### BS-021: Natural-Language Recipe Interaction Without Fixed Grammar
+Given the user has just viewed a recipe "Pasta Carbonara" (4 servings)
+When the user sends "make this for the 6 of us tonight" (a phrasing the
+trigger-pattern tables do not literally enumerate)
+Then a `recipe_interact` scenario routes the intent to the scaling tool with
+servings=6 and to the cook-mode-entry tool
+And the user receives the scaled ingredient list and step 1
+And no regex grammar change was required to support this phrasing
+
+### BS-022: New Recipe Capability Added Without Code Change
+Given the agent runtime is deployed with the existing recipe tools
+(scale_recipe, format_kitchen_quantity, get_recipe_steps, ...)
+When the developer wants the system to suggest ingredient substitutions
+("I'm out of pecorino — what can I use?")
+Then a new scenario `recipe_substitute` is added to
+`config/prompt_contracts/`, allowlisting the existing recipe-lookup tools
+plus (if needed) a new read-only `find_substitutes` tool
+And no Go intent-routing or grammar code is modified
+And substitution requests begin working after service reload
+
+### BS-023: Ingredient Categorization Via Scenario, Not Keywords
+Given a recipe ingredient is "dragon fruit" (not in any prior keyword list)
+When the meal-planning shopping-list assembly (spec 036) requests a category
+for grouping
+Then the `ingredient_categorize` scenario returns a category (e.g., "produce")
+based on the agent's knowledge plus prior captured categorizations
+And no Go keyword list is consulted as the source of truth
+And adding categories for novel ingredients does not require Go changes
+
+### BS-024: Adversarial — Ambiguous Recipe Reference
+Given the user has multiple recipes named "Pasta" in the knowledge base
+When the user sends "scale pasta to 6 servings"
+Then the agent does NOT silently pick one
+And it returns a structured disambiguation outcome listing the matching
+recipes with enough context (source, last-viewed time) for the user to choose
+And the user's reply identifying the recipe completes the original intent
+without re-typing the scale factor
+
+### BS-025: Adversarial — Scale That Loses Precision
+Given a recipe with "1 egg" for 4 servings
+When the user requests 1 serving
+Then the system reports the scaled value honestly ("1/4 egg") with a note
+that the user may need to round
+And does NOT silently round to 0
+And does NOT silently round to 1 either
+
+### BS-026: Adversarial — Ingredient With No Known Category
+Given an ingredient the system has never categorized before and no prior
+captured categorization exists in the knowledge graph
+When the `ingredient_categorize` scenario runs
+Then it MAY return an "uncategorized" category with a rationale
+OR propose a best-guess category with low confidence and ask for
+confirmation in the next user-facing surface that uses the categorization
+(e.g., the shopping list display in spec 036)
+And the user's confirmation is captured as a future signal
+
+### BS-027: Adversarial — Unit The System Has Never Seen
+Given a recipe specifies an unusual unit (e.g., "1 punnet strawberries")
+When the user asks to scale the recipe to 8 servings (from 4)
+Then the system scales the numeric quantity ("2 punnet strawberries")
+without rejecting the request
+And the unit is preserved verbatim
+And the unit-upgrade tool (if invoked) does NOT attempt to convert an
+unknown unit to a known one — it leaves the unit alone
+
+### BS-028: Adversarial — Recipe Deleted Mid-Cook-Session
+Given an active cook session for a recipe artifact
+When that artifact is deleted (e.g., user cleanup)
+And the user sends "next"
+Then the agent's cook-mode tool reports "Recipe no longer available" via a
+structured outcome
+And the session is cleaned up
+And the user receives a single, clear message — not silent failure or a
+crash trace
+
 ---
 
 ## Competitive Analysis
@@ -284,6 +389,27 @@ And no overflow or precision errors occur
 - **Competitive Advantage:** When scaling produces large quantities of small units (16 tsp → 1/3 cup), auto-upgrade to the next practical unit. Reduces cognitive load.
 - **Actors Affected:** User
 - **Business Scenarios:** BS-016, BS-020
+
+### IP-003: Substitution & Dietary-Adaptation Scenarios ⭐ Generic-By-Default
+- **Impact:** High
+- **Effort:** S (per scenario, after spec 037 ships)
+- **Competitive Advantage:** "I'm out of pecorino", "make this vegetarian",
+  "what if I don't have a wok?" all become individual scenario files calling
+  existing recipe-lookup tools (and possibly one new `find_substitutes` tool).
+  No competitor in the self-hosted recipe-app space exposes this kind of
+  open-ended, additive interaction surface.
+- **Actors Affected:** User
+- **Business Scenarios:** BS-022, BS-024
+
+### IP-004: Free-Form Recipe Intent Routing
+- **Impact:** Medium
+- **Effort:** S
+- **Competitive Advantage:** A single `recipe_interact` scenario fronts all
+  recipe Telegram messages, removing the need for users to memorize phrases
+  like "for {N}" or "scale to {N}". Replaces the regex-based intent grammar
+  in `internal/telegram/recipe_commands.go`.
+- **Actors Affected:** User
+- **Business Scenarios:** BS-021
 
 ---
 
@@ -329,6 +455,17 @@ And no overflow or precision errors occur
 ### UX-1: Telegram Serving Scaler
 
 #### UX-1.1: Trigger Patterns
+
+> **MUST-handle, not exhaustive (spec 037 reframe — see UX-N4).** The
+> patterns in the table below are phrasings the system MUST handle. They
+> are NOT the only acceptable input grammar. Per spec 037 and BS-021 /
+> IP-004, recipe Telegram intent is routed by the `recipe_interact`
+> scenario; equivalent natural-language phrasings (e.g., "double it",
+> "make this for 6 of us tonight", "lemme cook the carbonara thing for
+> like 5 people") MUST also work without code changes. The bot MUST NOT
+> respond `? I don't understand "double it". Try "8 servings".` for any
+> phrasing semantically equivalent to a MUST-handle row. See UX-N1 and
+> UX-N4 for the wireframe contract for unexpected phrasing.
 
 The scaler activates on natural-language messages matching these patterns (case-insensitive):
 
@@ -413,6 +550,15 @@ Mixed numbers display as: `1 1/2 cup`, `2 1/3 tsp`
 ### UX-2: Telegram Cook Mode
 
 #### UX-2.1: Entry
+
+> **MUST-handle, not exhaustive (spec 037 reframe — see UX-N4).** The
+> patterns in the table below are phrasings the system MUST handle. They
+> are NOT the only acceptable cook-mode entry grammar. Per spec 037 and
+> BS-021 / IP-004, equivalent natural-language phrasings ("let's cook
+> this", "walk me through it", "lemme cook the carbonara thing for like
+> 5 people") MUST also enter cook mode without code changes. The bot
+> MUST NOT reject such phrasings with a "try `cook {recipe name}`"
+> message. See UX-N1 and UX-N4 for the wireframe contract.
 
 Trigger patterns (case-insensitive):
 
@@ -880,8 +1026,728 @@ No new environment variables. Config flows through the existing `config generate
 
 ---
 
+### UX-N1: Free-Form Recipe Intent Routing
+
+**Drives:** BS-021, IP-004
+**Front-door scenario:** `recipe_interact` (spec 037)
+
+All wireframes in UX-N1..UX-N5 use the same Telegram plain-text marker
+conventions as §UX-1.2 / §UX-2.2 (`#` heading, `>` info, `~` continued,
+`?` warning, `.` confirmation, `-` list).
+
+#### UX-N1.1: Routing Contract
+
+When the user sends a message in a Telegram chat where a recipe was recently
+displayed, the bot routes the message through the `recipe_interact` scenario.
+The scenario inspects the message + recent-recipe context and decides which
+recipe tool(s) to call. The user does not have to use any specific phrase.
+
+**MUST handle (illustrative, not exhaustive):**
+
+| Intent class | Example phrasing | Tool(s) the agent calls |
+|--------------|------------------|--------------------------|
+| Scale | "8 servings", "for 6", "double it", "lemme cook the carbonara thing for like 5 people", "make this for the 6 of us tonight" | `scale_recipe`, optionally `cook_mode_enter` |
+| Enter cook mode | "cook this", "let's cook", "walk me through it", "start cooking carbonara" | `cook_mode_enter` |
+| Substitute ingredient | "I'm out of pecorino", "what can I use instead of guanciale?", "make this dairy-free" | `find_substitutes` (new tool, IP-003) + `recipe_substitute` scenario |
+| Equipment swap | "I don't have a stand mixer, what can I use?", "no wok — alternatives?" | `find_equipment_swap` (new tool, IP-003) |
+| Pairing | "what goes well with this for a side?", "what wine pairs?" | `recipe_pairing` scenario + knowledge-graph lookup |
+| Unit conversion | "convert this to metric", "how much is that in grams?" | `convert_units` tool |
+| Partial scaling | "half this but keep eggs whole" | `scale_recipe` with per-ingredient overrides + agent reasoning about indivisible units |
+| Disambiguation reply | "the chicken one", "yes", "no" | scenario continues prior outcome |
+
+#### UX-N1.2: Wireframe — Unexpected Phrasing Routed Correctly
+
+```
++-------------------------------------------------------------+
+| User just viewed: Pasta Carbonara (4 servings)             |
++-------------------------------------------------------------+
+
+User -> Bot:
+  "lemme cook the carbonara thing for like 5 people"
+
+          |
+          | recipe_interact scenario routes:
+          |   - scale_recipe(recipe=carbonara, servings=5)
+          |   - cook_mode_enter(recipe=carbonara, scale_factor=1.25)
+          v
+
++-------------------------------------------------------------+
+| # Pasta Carbonara — 5 servings                              |
+| ~ Scaled from 4 to 5 servings (1.25x)                       |
+|                                                             |
+| - 250g guanciale                                            |
+| - 5 egg yolks                                               |
+| - 125g pecorino romano                                      |
+| - 1 1/4 tsp black pepper                                    |
+| - 500g spaghetti                                            |
+| - salt to taste (unscaled)                                  |
++-------------------------------------------------------------+
++-------------------------------------------------------------+
+| # Pasta Carbonara                                           |
+| > Step 1 of 5                                               |
+|                                                             |
+| Cut guanciale into strips.                                  |
+|                                                             |
+| ~ 5 min · knife work                                        |
+|                                                             |
+| Reply: next · back · ingredients · done                     |
++-------------------------------------------------------------+
+```
+
+**Interactions:**
+- The agent infers servings=5 from "for like 5 people" and combined intent
+  (scale + cook) from "lemme cook ... for".
+- No regex change is required to accept this phrasing.
+
+**States:**
+- Confident routing → execute both tools, return both responses.
+- Low-confidence routing → fall back to disambiguation (see UX-N3.1).
+
+#### UX-N1.3: Wireframe — Unit Conversion Intent
+
+```
+User just viewed: Banana Bread (uses cups, oz, °F)
+
+User -> Bot:
+  "convert this to metric"
+
+          |
+          | recipe_interact -> convert_units(target="metric")
+          v
+
++-------------------------------------------------------------+
+| # Banana Bread — metric                                     |
+| ~ Converted from US customary to metric                     |
+|                                                             |
+| - 240g flour (was 2 cups)                                   |
+| - 200g sugar (was 1 cup)                                    |
+| - 113g butter (was 4 oz)                                    |
+| - 2 eggs                                                    |
+| - 3 ripe bananas                                            |
+|                                                             |
+| Oven: 175°C (was 350°F)                                     |
++-------------------------------------------------------------+
+```
+
+#### UX-N1.4: Wireframe — Partial Scaling With Indivisibles
+
+```
+User just viewed: Lemon Tart (4 servings, 3 eggs, 200g sugar, 1 lemon)
+
+User -> Bot:
+  "half this but keep eggs whole"
+
+          |
+          | recipe_interact -> scale_recipe(
+          |   factor=0.5,
+          |   per_ingredient_overrides={"eggs": "keep_original"})
+          v
+
++-------------------------------------------------------------+
+| # Lemon Tart — 2 servings                                   |
+| ~ Scaled from 4 to 2 (0.5x), eggs kept at 3 per request     |
+|                                                             |
+| - 100g sugar                                                |
+| - 3 eggs (kept whole as requested)                          |
+| - 1/2 lemon                                                 |
+| - 75g flour                                                 |
++-------------------------------------------------------------+
+```
+
+**Accessibility:**
+- The `~` annotation line MUST explain any deviation from straight scaling
+  so screen-reader users understand why eggs did not halve.
+
+---
+
+### UX-N2: Substitution & Dietary Adaptation Flows
+
+**Drives:** BS-022, IP-003
+**Scenarios:** `recipe_substitute`, `recipe_dietary_adapt`
+**Tools (new, read-only):** `find_substitutes`, `find_equipment_swap`
+
+#### UX-N2.1: Wireframe — Single-Ingredient Substitution
+
+```
+User just viewed: Pasta Carbonara
+
+User -> Bot:
+  "I'm out of pecorino, what can I use?"
+
+          |
+          | recipe_substitute -> find_substitutes(
+          |   ingredient="pecorino romano",
+          |   role="finishing cheese, salty/sharp",
+          |   dietary_constraints=[])
+          v
+
++-------------------------------------------------------------+
+| > Substitutes for pecorino romano (100g)                    |
+|                                                             |
+| - parmigiano reggiano (100g) — closest match, slightly      |
+|   nuttier, less sharp                                       |
+| - grana padano (100g) — milder, very common                 |
+| - aged manchego (90g) — sheep's milk like pecorino,         |
+|   different flavor profile                                  |
+|                                                             |
+| Reply with the name to swap it in, or "keep" to leave as is |
++-------------------------------------------------------------+
+
+User -> Bot:
+  "parmigiano"
+
+          |
+          | recipe_substitute applies swap
+          v
+
++-------------------------------------------------------------+
+| . Swapped: pecorino romano -> parmigiano reggiano (100g)    |
+|                                                             |
+| Updated ingredient list:                                    |
+| - 200g guanciale                                            |
+| - 4 egg yolks                                               |
+| - 100g parmigiano reggiano                                  |
+| - 1 tsp black pepper                                        |
+| - 400g spaghetti                                            |
++-------------------------------------------------------------+
+```
+
+**Interactions:**
+- Each suggestion shows an adjusted quantity (the substitution tool may
+  recommend a different amount, e.g., 90g manchego for 100g pecorino).
+- Each suggestion shows a one-line reasoning string so the user understands
+  the trade-off.
+- Swap is non-destructive: original recipe stored data is unchanged; the
+  swap applies to the current chat-scoped view only.
+
+#### UX-N2.2: Wireframe — Equipment Swap
+
+```
+User just viewed: Brioche (calls for stand mixer)
+
+User -> Bot:
+  "I don't have a stand mixer, what can I use?"
+
+          |
+          | recipe_interact -> find_equipment_swap(equipment="stand mixer")
+          v
+
++-------------------------------------------------------------+
+| > Alternatives to stand mixer for this recipe               |
+|                                                             |
+| - hand mixer with dough hooks — works but tires the motor;  |
+|   knead in 2-min bursts                                     |
+| - food processor (dough blade) — fast; pulse to avoid       |
+|   overheating the dough                                     |
+| - by hand — slap-and-fold, expect 15-20 min of kneading     |
+|                                                             |
+| Reply: next · back · ingredients · done                     |
++-------------------------------------------------------------+
+```
+
+**Interactions:**
+- Equipment swap does NOT mutate the recipe steps; it adds an inline
+  advisory message above the existing cook-mode controls.
+
+#### UX-N2.3: Wireframe — Dietary Adaptation (Whole-Recipe Scan)
+
+```
+User just viewed: Pasta Carbonara
+
+User -> Bot:
+  "make this dairy-free"
+
+          |
+          | recipe_dietary_adapt scenario:
+          |   1. scan_ingredients_for_tag(tag="dairy")
+          |   2. find_substitutes(per matched ingredient,
+          |      dietary_constraints=["dairy-free"])
+          v
+
++-------------------------------------------------------------+
+| > Dairy-free adaptation                                     |
+|                                                             |
+| Found 1 dairy ingredient:                                   |
+|                                                             |
+| - 100g pecorino romano                                      |
+|     -> 80g nutritional yeast + 1 tsp miso (umami + salt)    |
+|     -> 100g vegan parmesan (store-bought)                   |
+|                                                             |
+| Note: traditional carbonara uses no cream. Eggs are not     |
+| dairy and stay as-is.                                       |
+|                                                             |
+| Reply: "use yeast", "use vegan parm", or "keep" to skip     |
++-------------------------------------------------------------+
+
+User -> Bot:
+  "use yeast"
+
+          |
+          v
+
++-------------------------------------------------------------+
+| . Adapted to dairy-free.                                    |
+|                                                             |
+| - 200g guanciale                                            |
+| - 4 egg yolks                                               |
+| - 80g nutritional yeast + 1 tsp miso                        |
+| - 1 tsp black pepper                                        |
+| - 400g spaghetti                                            |
+|                                                             |
+| Tag applied: dairy-free                                     |
++-------------------------------------------------------------+
+```
+
+**States:**
+- Empty state (no matching ingredients): `> Already dairy-free. No changes needed.`
+- Multi-match state: each matched ingredient gets its own choose-one block.
+- Partial state: user can accept some swaps and skip others; unaccepted
+  ingredients remain unchanged with a `(not adapted)` annotation.
+
+#### UX-N2.4: Mermaid Flow — Dietary Adaptation
+
+```mermaid
+stateDiagram-v2
+    [*] --> RecipeViewed
+    RecipeViewed --> DietaryRequest: "make this {tag}"
+    DietaryRequest --> ScanIngredients: scan_ingredients_for_tag
+    ScanIngredients --> NoMatches: no matching ingredients
+    ScanIngredients --> SuggestSwaps: matches found
+    NoMatches --> [*]: "Already {tag}"
+    SuggestSwaps --> UserChoice: per-ingredient options
+    UserChoice --> ApplySwap: user picks a substitute
+    UserChoice --> SkipSwap: user says "keep"
+    ApplySwap --> SuggestSwaps: more ingredients?
+    SkipSwap --> SuggestSwaps: more ingredients?
+    SuggestSwaps --> AdaptedRecipe: all decided
+    AdaptedRecipe --> [*]
+```
+
+#### UX-N2.5: Wireframe — Pairing Suggestion
+
+**Trigger:** user asks what to serve alongside the current recipe.
+**Scenario:** `recipe_pairing` (consults knowledge graph for cuisine,
+dietary tags, season, prior-cooked pairings).
+
+```
+User just viewed: Pasta Carbonara (Italian, 4 servings)
+
+User -> Bot:
+  "what goes well with this for a side?"
+
+          |
+          | recipe_interact -> recipe_pairing(
+          |   recipe=carbonara,
+          |   role="side",
+          |   constraints={cuisine: "Italian", dietary: []})
+          v
+
++-------------------------------------------------------------+
+| > Side dish pairings for Pasta Carbonara                    |
+|                                                             |
+| - Simple green salad with lemon vinaigrette                 |
+|     > cuts the richness; ~ 5 min, no cook                   |
+| - Roasted broccolini with chili and garlic                  |
+|     > Italian-aligned; ~ 15 min                             |
+|     > you cooked this on 2026-03-22                         |
+| - Crusty bread + good olive oil                             |
+|     > traditional; no recipe needed                         |
+|                                                             |
+| Reply with a number to open that recipe, or "more" for      |
+| wine / drink pairings                                       |
++-------------------------------------------------------------+
+
+User -> Bot:
+  "more"
+
+          |
+          | recipe_pairing(role="drink")
+          v
+
++-------------------------------------------------------------+
+| > Drink pairings for Pasta Carbonara                        |
+|                                                             |
+| - Frascati (dry white, Lazio) — regional match              |
+| - Pinot Grigio — widely available, clean                    |
+| - Sparkling water with lemon — non-alcoholic                |
++-------------------------------------------------------------+
+```
+
+**Rules:**
+- Pairings MUST be drawn from the user's knowledge graph (prior recipes,
+  dietary preferences, what's in season) — never a hardcoded list.
+- Each suggestion shows a one-line reason so the user understands why.
+- A pairing the user has previously cooked MUST be annotated with the
+  most recent cook date so they can recognize repeats.
+- Empty state (no graph data yet): `> Not enough cooking history to suggest sides. Try /find {cuisine}.`
+- Pairing does NOT mutate the source recipe; suggestions are advisory.
+
+---
+
+### UX-N3: Adversarial UX
+
+This section covers the adversarial business scenarios added in the spec
+037 reframe (BS-024, BS-025, BS-026, BS-027, BS-028). Each maps to a
+structured outcome from an agent tool — never a silent failure.
+
+#### UX-N3.1: Ambiguous Recipe Reference (BS-024)
+
+**Trigger:** user references a recipe by name (or vague pronoun) and the
+recipe-lookup tool finds more than one match.
+
+```
+User -> Bot:
+  "scale pasta to 6 servings"        (or "cook the chicken one")
+
+          |
+          | recipe_lookup returns multiple matches
+          | recipe_interact returns disambiguation outcome
+          v
+
++-------------------------------------------------------------+
+| ? I have 3 recipes that match "pasta". Which one?           |
+|                                                             |
+| 1. Pasta Carbonara                                          |
+|    > Italian, 4 servings, last viewed 2 days ago            |
+|    > from: silvia-recipes.it (captured 2026-04-12)          |
+|                                                             |
+| 2. Pasta alla Norma                                         |
+|    > Sicilian, 4 servings, last viewed 3 weeks ago          |
+|    > from: telegram share (captured 2026-03-30)             |
+|                                                             |
+| 3. Pasta with Lemon and Olive Oil                           |
+|    > Italian, 2 servings, last viewed never                 |
+|    > from: nytimes.com (captured 2026-04-20)                |
+|                                                             |
+| Reply: 1, 2, or 3 — or send a more specific name            |
++-------------------------------------------------------------+
+
+User -> Bot:
+  "1"
+
+          |
+          | scenario completes original intent
+          | (scale_recipe applied to Pasta Carbonara, servings=6)
+          v
+
++-------------------------------------------------------------+
+| # Pasta Carbonara — 6 servings                              |
+| ~ Scaled from 4 to 6 servings (1.5x)                        |
+|                                                             |
+| - 300g guanciale                                            |
+| - 6 egg yolks                                               |
+| - 150g pecorino romano                                      |
+| - 1 1/2 tsp black pepper                                    |
+| - 600g spaghetti                                            |
++-------------------------------------------------------------+
+```
+
+**Rules:**
+- The agent generates the short descriptor lines (`> Italian, 4 servings,
+  last viewed 2 days ago`) from artifact metadata; they are not stored
+  fixed strings.
+- The user's reply with `1` / `2` / `3` MUST complete the original intent
+  (`scale to 6 servings`) without the user re-typing `to 6 servings`.
+- The agent MUST NOT silently pick a default.
+- Empty state: zero matches → `? I don't have a recipe matching "pasta". Try /find pasta to search.`
+
+#### UX-N3.2: Precision Loss On Scale (BS-025)
+
+**Trigger:** scaling produces a fractional quantity of an indivisible
+ingredient (eggs, whole spices, garlic cloves, etc.).
+
+```
+User just viewed: Vanilla Custard (4 servings, "1 egg")
+
+User -> Bot:
+  "1 serving"
+
+          |
+          | scale_recipe detects indivisible ingredient
+          v
+
++-------------------------------------------------------------+
+| # Vanilla Custard — 1 serving                               |
+| ~ Scaled from 4 to 1 (0.25x)                                |
+|                                                             |
+| - 1/4 egg  (heads up: hard to measure)                      |
+|     Options:                                                |
+|       a) round up to 1 whole egg — richer custard           |
+|       b) use 1 tbsp beaten egg (~ 1/4 of a large egg)       |
+|       c) use 1 tbsp egg whites only — leaner result         |
+|     Reply: a, b, or c — or "keep" to leave as 1/4 egg       |
+| - 60ml milk                                                 |
+| - 12g sugar                                                 |
+| - 1/4 tsp vanilla extract                                   |
++-------------------------------------------------------------+
+```
+
+**Rules:**
+- The agent MUST NOT silently round 1/4 egg to 0 (hides the ingredient).
+- The agent MUST NOT silently round 1/4 egg to 1 (changes the recipe).
+- It MUST report the honest scaled value AND offer agent-reasoned
+  alternatives whose trade-offs are explained.
+- "keep" preserves the literal `1/4 egg` line with the heads-up note.
+
+#### UX-N3.3: Unknown Ingredient Category (BS-026)
+
+**Trigger:** the `ingredient_categorize` scenario sees an ingredient with
+no prior categorization in the knowledge graph (e.g., "yuzu kosho",
+"black garlic"). Surfaces in the meal-planning shopping list (spec 036).
+
+```
++-------------------------------------------------------------+
+| # Shopping List — Week of Apr 27                            |
+|                                                             |
+| ## Produce                                                  |
+| - 2 lemons                                                  |
+| - 1 bunch parsley                                           |
+|                                                             |
+| ## Pantry                                                   |
+| - 200g spaghetti                                            |
+|                                                             |
+| ## Uncategorized  (?)                                       |
+| - 1 jar yuzu kosho                                          |
+|     > Best guess: pantry/condiments (low confidence)        |
+|     > Reply "yuzu kosho is produce" or "yuzu kosho is       |
+|       pantry" to teach the system                           |
++-------------------------------------------------------------+
+```
+
+**Rules:**
+- The shopping list MUST NOT drop the ingredient.
+- The `Uncategorized` group is rendered with a `(?)` marker so the user
+  notices.
+- Each uncategorized item shows the agent's best-guess category and
+  confidence indicator (`low confidence` text marker).
+- The user's correction is captured by spec 037's signal-capture path
+  and used as future input to `ingredient_categorize`. It does NOT
+  require a code change.
+
+#### UX-N3.4: Unknown Unit (BS-027)
+
+**Trigger:** scaling encounters an unfamiliar unit (e.g., "1 punnet
+strawberries", "2 nubs ginger").
+
+```
+User just viewed: Pavlova (4 servings, "1 punnet strawberries")
+
+User -> Bot:
+  "8 servings"
+
+          |
+          | scale_recipe scales numeric quantity, preserves unit verbatim
+          v
+
++-------------------------------------------------------------+
+| # Pavlova — 8 servings                                      |
+| ~ Scaled from 4 to 8 servings (2x)                          |
+|                                                             |
+| - 6 egg whites                                              |
+| - 300g caster sugar                                         |
+| - 2 punnet strawberries                                     |
+|     > "punnet" left as-is (unit unrecognized)               |
+| - 500ml double cream                                        |
++-------------------------------------------------------------+
+```
+
+**Optional follow-up (only if the user asks):**
+
+```
+User -> Bot:
+  "what's a punnet?"
+
+          |
+          | recipe_interact -> convert_units in clarification mode
+          v
+
++-------------------------------------------------------------+
+| > A punnet is a small basket, typically 250g of berries     |
+| in the UK / AU. Want me to switch the recipe to "500g       |
+| strawberries" instead?                                      |
+|                                                             |
+| Reply: yes · no                                             |
++-------------------------------------------------------------+
+```
+
+**Rules:**
+- Scaling MUST NOT reject an unknown unit.
+- The unit MUST be preserved verbatim (no silent conversion).
+- The annotation `> "punnet" left as-is (unit unrecognized)` is required
+  so the user notices.
+
+#### UX-N3.5: Recipe Deleted Mid-Cook (BS-028)
+
+**Trigger:** the recipe artifact backing an active cook session is
+deleted (manual cleanup, retention policy, etc.).
+
+```
+User has active session: Pasta Carbonara, step 3 of 6
+Artifact deleted (out-of-band)
+
+User -> Bot:
+  "next"
+
+          |
+          | cook_mode tool returns RECIPE_NOT_FOUND structured outcome
+          v
+
++-------------------------------------------------------------+
+| ? Recipe no longer available — it was deleted while you     |
+|   were cooking.                                             |
+|                                                             |
+| > You were on step 3 of 6: "Whisk eggs and pecorino in a    |
+|   bowl." (cached snapshot)                                  |
+|                                                             |
+| > Cook session ended. Send "cook {recipe name}" to start a  |
+|   new one, or /find to search.                              |
++-------------------------------------------------------------+
+```
+
+**Rules:**
+- The user MUST see one clear message — not silent failure, not a crash
+  trace, not a generic error.
+- The agent MUST surface the cached snapshot of the user's last seen step
+  so the cooking-in-progress is not lost.
+- The session is cleaned up after this message — subsequent navigation
+  commands fall back to the standard "no active cook session" message
+  from §UX-2.7.
+
+#### UX-N3.6: Mermaid Flow — Adversarial Outcomes
+
+```mermaid
+stateDiagram-v2
+    [*] --> RecipeIntent
+    RecipeIntent --> Disambiguate: multiple recipe matches (BS-024)
+    RecipeIntent --> ScaleRequested: single recipe match
+    Disambiguate --> ScaleRequested: user picks recipe
+    ScaleRequested --> PrecisionWarn: indivisible ingredient (BS-025)
+    ScaleRequested --> UnknownUnitWarn: unrecognized unit (BS-027)
+    ScaleRequested --> Scaled: clean scale
+    PrecisionWarn --> Scaled: user picks alternative
+    UnknownUnitWarn --> Scaled: unit preserved verbatim
+    Scaled --> [*]
+
+    [*] --> CookActive
+    CookActive --> RecipeGone: artifact deleted (BS-028)
+    RecipeGone --> SessionEnded: snapshot shown, session cleaned up
+    SessionEnded --> [*]
+```
+
+---
+
+### UX-N4: Trigger-Table Reframe Annotation
+
+The trigger-pattern tables in §UX-1.1 (scaler) and §UX-2.1 (cook mode
+entry) are **MUST-handle examples**, not the only valid grammar. This
+section binds the contract; the disclaimers in §UX-1.1 and §UX-2.1
+reference UX-N4 as the source of truth.
+
+| Spec table | Reframe |
+|------------|---------|
+| §UX-1.1 scaler triggers | Examples the system MUST handle. The `recipe_interact` scenario MUST also handle equivalent natural-language phrasing without code change (BS-021, IP-004). |
+| §UX-2.1 cook entry triggers | Examples the system MUST handle. Equivalent phrasings ("let's cook this", "walk me through it", "lemme cook the carbonara thing for like 5 people") MUST also enter cook mode. |
+| §UX-2.3 navigation commands | Stays exact. These are short voice-friendly commands inside an active cook session and the alias table is the source of truth. |
+
+**Wireframe — Unexpected scaler phrasing (mirrors UX-N1.2 but scaler-only):**
+
+```
+User just viewed: Pasta Carbonara (4 servings)
+
+User -> Bot:
+  "double it"
+
+          |
+          | recipe_interact -> scale_recipe(factor=2)
+          v
+
++-------------------------------------------------------------+
+| # Pasta Carbonara — 8 servings                              |
+| ~ Scaled from 4 to 8 servings (2x)                          |
+|                                                             |
+| - 400g guanciale                                            |
+| - 8 egg yolks                                               |
+| - 200g pecorino romano                                      |
+| - 2 tsp black pepper                                        |
+| - 800g spaghetti                                            |
++-------------------------------------------------------------+
+```
+
+The bot must NOT respond `? I don't understand "double it". Try "8 servings".`
+
+---
+
+### UX-N5: Updated Interaction State Machine (Agent-Routed)
+
+Supersedes the simplified state machine in §UX-5 for any
+recipe-Telegram interaction that flows through `recipe_interact`. The
+§UX-5 diagram is preserved as the legacy reference.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> RecipeIntentReceived: any message in chat with recent recipe
+    RecipeIntentReceived --> AgentRoute: recipe_interact scenario
+    AgentRoute --> ScaleResponse: scale_recipe
+    AgentRoute --> CookEntry: cook_mode_enter
+    AgentRoute --> SubstituteFlow: recipe_substitute (BS-022)
+    AgentRoute --> EquipmentSwap: find_equipment_swap
+    AgentRoute --> DietaryFlow: recipe_dietary_adapt
+    AgentRoute --> PairingResponse: recipe_pairing
+    AgentRoute --> UnitConversion: convert_units
+    AgentRoute --> Disambiguate: ambiguous (BS-024)
+    AgentRoute --> ClarifyUnknown: unknown ingredient/unit (BS-026, BS-027)
+    AgentRoute --> Idle: not a recipe intent (passes through)
+    Disambiguate --> AgentRoute: user picks an option
+    ClarifyUnknown --> AgentRoute: user clarifies
+    ScaleResponse --> Idle
+    CookEntry --> CookMode
+    CookMode --> CookMode: next/back/number/ingredients
+    CookMode --> RecipeGone: artifact deleted (BS-028)
+    RecipeGone --> Idle
+    CookMode --> Idle: done | timeout | recipe deleted
+    SubstituteFlow --> Idle: swap applied or "keep"
+    EquipmentSwap --> Idle
+    DietaryFlow --> Idle: adaptations applied
+    PairingResponse --> Idle
+    UnitConversion --> Idle
+```
+
+**Rules:**
+- Inside `CookMode`, navigation commands (`next`, `back`, `done`,
+  `ingredients`, bare number) bypass `recipe_interact` and go straight to
+  the cook-mode tool — see §UX-2.10. This preserves the existing short,
+  voice-friendly contract.
+- Outside `CookMode`, recipe-context messages flow through
+  `recipe_interact` so new capabilities (substitution, equipment swap,
+  pairing, conversion) are added by adding scenarios, not by changing the
+  router.
+
+---
+
+### UX-N6: Scenario-to-Wireframe Cross-Reference
+
+| Scenario | Wireframe |
+|----------|-----------|
+| BS-021 (free-form intent) | UX-N1.2, UX-N4 |
+| BS-022 (additive scenarios) | UX-N2.1, UX-N2.2, UX-N2.3, UX-N2.5 |
+| BS-023 (agent-based ingredient categorization) | UX-N3.3 |
+| BS-024 (ambiguous recipe reference) | UX-N3.1 |
+| BS-025 (precision loss on scale) | UX-N3.2 |
+| BS-026 (unknown category) | UX-N3.3 |
+| BS-027 (unknown unit) | UX-N3.4 |
+| BS-028 (recipe deleted mid-cook) | UX-N3.5 |
+| IP-003 (substitution / dietary) | UX-N2.1, UX-N2.2, UX-N2.3, UX-N2.4, UX-N2.5 |
+| IP-004 (free-form intent routing) | UX-N1.1, UX-N1.2, UX-N4, UX-N5 |
+
+---
+
 ## Open Questions
 
 1. **Unit upgrading:** Should the scaler convert 16 tsp to ~1/3 cup, or always preserve the original unit? (Recommendation: preserve original unit in v1, add unit upgrading as IP-002)
 2. **Cook mode persistence:** Should cook sessions survive a bot restart? (Recommendation: no — ephemeral in-memory is simpler and losing a cook position is a minor inconvenience)
 3. **Cook mode in web UI:** Should cook mode also work in the web UI? (Recommendation: yes in the future, but Telegram-only in v1 since the web UI doesn't have a real-time messaging model yet)
+4. **Substitution rendering depth (UX-N2.1).** Should each substitute show only one-line reasoning (current draft) or also link to the underlying knowledge-graph artifact that justified it? (Recommendation: one-line in v1; deep link is a follow-up.)
+5. **Disambiguation max options (UX-N3.1).** UX-N3.1 caps the visible list at 3. What if the agent finds 8 matches? (Recommendation: show top 3 by recency/relevance, append `> 5 more — reply "more" to see them`.)
+6. **"keep" semantics across flows.** UX-N2.1, UX-N2.3, UX-N3.2 all use `keep`. Is that consistent enough or should each flow have its own verb? (Recommendation: keep `keep` consistent; it is short and voice-friendly.)
+7. **Snapshot retention for BS-028 (UX-N3.5).** UX-N3.5 shows a cached snapshot of the last viewed step. How long should the snapshot persist after deletion? (Recommendation: until the cook session is cleaned up — i.e., until the session-ending message is sent.)

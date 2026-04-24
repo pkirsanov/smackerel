@@ -7,6 +7,7 @@ Artifact authorship is a hard boundary, not a suggestion. Violations are blockin
 | Artifact | Owner | Notes |
 |----------|-------|-------|
 | `spec.md` business requirements, actors, use cases, scenarios | `bubbles.analyst` | `bubbles.ux` may update only UX sections of `spec.md` |
+| `spec.md` UX sections (`## UI Wireframes`, `## User Flows`, `### Screen: *`) | `bubbles.ux` | MUST be written inline in `spec.md` — sidecar UX files are forbidden (see Forbidden Artifacts below) |
 | `design.md` | `bubbles.design` | Technical design only |
 | `scopes.md` / `scopes/*/scope.md` planning content | `bubbles.plan` | Gherkin, Test Plan, DoD, execution structure |
 | `report.md` template structure | `bubbles.plan` | Execution evidence is appended by execution agents |
@@ -54,6 +55,24 @@ Owning one planning artifact does NOT grant permission to mutate sibling plannin
 `bubbles.implement` may update `scopes.md` only for execution-progress concerns already defined by planning artifacts: inline evidence, DoD checkbox completion, and scope progress tied to completed work. It MUST NOT invent new Gherkin scenarios, Test Plan rows, or DoD structures that belong to `bubbles.plan`.
 
 **DoD Text Immutability (NON-NEGOTIABLE):** The text description of existing DoD items is owned by `bubbles.plan` and MUST NOT be modified by execution agents. `bubbles.implement` may only transition checkboxes (`- [ ]` → `- [x]`) and append inline evidence blocks beneath items. Rewriting a DoD item's behavioral claim to match what was delivered instead of what the Gherkin scenario specified is **content fabrication** — semantically equivalent to deleting the original DoD item and inventing a new one. If the planned DoD text does not match what can be delivered, the agent MUST route to `bubbles.plan` for a plan correction, not silently rewrite the item.
+
+## Forbidden Artifacts (NON-NEGOTIABLE)
+
+These filenames MUST NOT exist anywhere under `specs/<feature>/` (or `specs/<feature>/bugs/<bug>/`). Their content belongs inside owned artifacts.
+
+| Forbidden File | Reason | Correct Home |
+|----------------|--------|--------------|
+| `ux.md`, `wireframes.md`, `flows.md`, `user-flows.md`, `screens.md` | UX content sidecar — bypasses validation gates UX1–UX5 and breaks `bubbles.design`/`bubbles.implement` handoff | `spec.md` `## UI Wireframes` and `## User Flows` sections (owned by `bubbles.ux`) |
+| `actors.md`, `scenarios.md`, `use-cases.md` | Business-content sidecar — fragments `bubbles.analyst` ownership | `spec.md` (owned by `bubbles.analyst`) |
+| `architecture.md`, `tech-design.md` | Technical-design sidecar — fragments `bubbles.design` ownership | `design.md` (owned by `bubbles.design`) |
+| `dod.md`, `gherkin.md` | Planning sidecar — fragments `bubbles.plan` ownership | `scopes.md` or `scopes/NN-name/scope.md` (owned by `bubbles.plan`) |
+| `evidence.md`, `results.md` | Evidence sidecar — bypasses report.md ownership rules | `report.md` or `scopes/NN-name/report.md` |
+
+**Why this is a hard rule:** Bubbles workflow gates and downstream agents read from a fixed set of artifacts. Sidecar files are invisible to validation, gates, and handoffs — content placed there is functionally lost even when it appears thorough. Length, organization, or "separation of concerns" are NOT valid reasons to create a sidecar; if an artifact is too long, the planning agent splits it via the per-scope-directory layout, not via off-spec files.
+
+**Speckit interop note:** `tasks.md`, `data-model.md`, `requirements.md` (under `checklists/`), and `test-plan.md` are NOT forbidden — they are produced by the speckit workflow (which coexists with bubbles) and serve different purposes. The forbidden list above targets only filenames that duplicate bubbles-owned content.
+
+**Enforcement:** `artifact-lint.sh` fails when any forbidden file exists. `bubbles.ux` Tier 2 self-check rejects sidecar UX files before reporting.
 
 ## Enforcement
 

@@ -1,5 +1,32 @@
 # Feature: 034 Expense Tracking
 
+> **Architectural alignment (added with spec 037).**
+> This feature is reframed onto the LLM-Agent + Tools pattern committed to in
+> [docs/smackerel.md §3.6 LLM Agent + Tools Pattern](../../docs/smackerel.md)
+> and [docs/Development.md "Agent + Tool Development Discipline"](../../docs/Development.md),
+> and provided by [spec 037 — LLM Scenario Agent & Tool Registry](../037-llm-agent-tools/spec.md).
+>
+> User-visible behavior is preserved. The mechanism by which the system
+> achieves it changes:
+>
+> - Receipt detection, expense classification (business / personal /
+>   uncategorized / category), business-classification suggestions, vendor
+>   normalization, and natural-language expense queries all flow through
+>   scenarios on the agent runtime, calling read-only tools against the
+>   knowledge graph.
+> - New use cases — recurring-subscription detection, unusual-spend
+>   surfacing, refund recognition, foreign-language receipt handling — MUST
+>   be addable as new scenarios (and at most one or two new tools), NOT by
+>   editing classification or routing code.
+> - Mechanical operations remain deterministic tools: parse a decimal
+>   amount, normalize a currency code, format a CSV row, perform schema-bound
+>   CRUD on expense metadata.
+>
+> **Deprecated.** Any prior language in this spec or in scopes/design that
+> mandates a fixed multi-level rule chain, a hardcoded vendor alias seed list
+> in Go source, or a regex-based Telegram intent router for expense commands
+> is deprecated. See spec 037 for the replacement capability.
+
 ## Problem Statement
 
 The user already captures bills, receipts, and financial emails through Smackerel's ingestion pipeline (Gmail connector, Telegram share, web capture, PDF extraction, OCR). The system detects subscriptions and surfaces bill-due alerts. But the captured financial data stops at raw artifacts — there is no structured expense extraction, no categorization beyond subscription detection, no way to filter receipts by business vs. personal purpose, no expense aggregation, and no export in formats compatible with accounting systems. A user who wants to track business expenses or file taxes must manually sift through artifacts, re-enter data into spreadsheets, and lose the intelligence Smackerel already has about their purchases.
@@ -121,20 +148,46 @@ The user already captures bills, receipts, and financial emails through Smackere
 
 ### UC-005: Expense Classification and Business Tagging
 
+> **Reframed for spec 037.** Classification is performed by an
+> `expense_classify` scenario on the agent runtime. The scenario receives
+> available context (vendor, source labels, captured user notes,
+> classification history for similar expenses) and decides
+> business / personal / uncategorized plus a category, with a stated
+> rationale. The previous prescription of a fixed multi-level rule chain is
+> deprecated. New classification heuristics ship as scenario prompt edits
+> (or new read-only tools when genuinely needed), not as new branches in Go.
+
 - **Actor:** User
 - **Preconditions:** Expense artifacts exist
 - **Main Flow:**
-  1. System applies classification rules in order of priority:
-     a. Gmail label match → mapped classification (highest priority)
-     b. Source-level rule (e.g., all Telegram captures default to personal unless context says "business")
-     c. Vendor match against user-configured business vendor list
-     d. LLM-extracted category from receipt content
-  2. If no rule matches → classified as "uncategorized"
-  3. User can override any classification via API or chat command
+  1. The system invokes the `expense_classify` scenario for each new or
+     re-evaluated expense, passing available context: extracted vendor,
+     source (Gmail, Telegram, manual, web), source labels (e.g., Gmail
+     label set), captured user notes (e.g., Telegram caption), and
+     historical context (prior classifications for the same vendor, the
+     user's configured business-vendor list).
+  2. The scenario produces a classification (`business` / `personal` /
+     `uncategorized`), a category, and a rationale string explaining which
+     contextual signals drove the decision.
+  3. Configured user inputs (e.g., a vendor explicitly placed on the
+     business-vendor list, an unambiguous Gmail label mapping) act as
+     hard signals the scenario MUST honor.
+  4. If no signal is sufficient, the classification is `uncategorized`.
+  5. The user can override any classification via API or chat command;
+     overrides are sticky and survive re-classification.
 - **Alternative Flows:**
-  - A1: User changes classification from personal to business → metadata updated; any cached aggregation invalidated
-  - A2: User adds a vendor to the business vendor list → all past uncategorized expenses from that vendor are re-classified
-- **Postconditions:** Every expense artifact has a classification (business/personal/uncategorized) and a category
+  - A1: User changes classification → metadata updated, marked
+    `user_corrected: true`, downstream aggregations invalidated.
+  - A2: User adds a vendor to the business-vendor list → past uncategorized
+    expenses from that vendor are re-evaluated by the scenario, which
+    treats the new list entry as a hard signal.
+  - A3: The scenario fails (LLM error, schema-failure, timeout per
+    spec 037) → the expense remains in its prior classification (or
+    `uncategorized` if new) and is surfaced in the digest's "needs review"
+    block; no silent default to `business` or `personal`.
+- **Postconditions:** Every expense artifact has a classification and a
+  category. Every classification carries a rationale recorded in the
+  expense's metadata for auditability.
 
 ### UC-006: Business Classification Suggestions
 
@@ -302,9 +355,13 @@ And the CSV export returns a file with only the header row
 ### BS-014: Vendor Name Normalization
 Given the user receives receipts from "AMZN MKTP US", "Amazon.com", and "AMAZON MARKETPLACE"
 When the receipt extraction processes each
-Then the system attempts to normalize to a canonical vendor name "Amazon"
+Then the system normalizes them to a canonical vendor display name (the
+canonical mapping is produced by a `vendor_normalize` scenario consulting
+prior captured artifacts and the configured user overrides — NOT by a
+hardcoded alias seed list in code)
 And expense queries for vendor "Amazon" return all three
 And the user can override the normalization via correction
+And adding a new vendor variant later does not require a code change
 
 ### BS-015: Tax Amount Extraction
 Given a receipt contains subtotal $100.00, tax $8.25, total $108.25
@@ -394,6 +451,135 @@ And date format is MM/DD/YYYY (QBO requirement)
 And amount uses dot-decimal with no currency symbol in the amount column
 And a separate Currency column is included for non-USD entries
 
+### BS-029: New Use Case Added Without Classification Code Change
+
+_See UX: T-012 (free-form query + reasoning), T-013 (subscription notification), A-008 (operator trace), Flow F-002, F-003._
+
+Given the deployment currently classifies expenses via the
+`expense_classify` scenario
+When the user wants the system to additionally flag "recurring subscription"
+expenses based on capture history
+Then a new scenario `recurring_subscription_flag` is added to
+`config/prompt_contracts/`, allowlisting the existing read-only tools
+(e.g., search_expenses, aggregate_amounts)
+And no Go code in the classification path is modified
+And subscription flags begin appearing on matching expenses after the
+service is reloaded
+
+### BS-030: Unusual-Spend Surfacing As A Scenario
+
+_See UX: T-014 (unusual-spend alert + breakdown), digest D-002 unusual-spend block._
+
+Given the user has a normal weekly grocery spend of around $120
+When a $640 grocery charge appears
+Then an `unusual_spend` scenario flags it for the digest with a rationale
+("5x typical weekly grocery spend, single vendor")
+And adding new "unusual" criteria (geographic, time-of-day, frequency) does
+not require modifying the classifier or routing code
+
+### BS-031: Refund Recognition Via Scenario
+
+_See UX: T-015 (refund recognition with linked / unlinked / manual link variants), digest D-002 refund block, Flow F-004._
+
+Given a captured artifact contains a credit / refund (negative amount,
+"refund" / "credit" / "rückerstattung" language, or a return order id)
+When the `refund_recognize` scenario runs
+Then the resulting expense is recorded with negative amount AND with
+`is_refund: true` AND linked to the original purchase artifact when one is
+found in the knowledge graph
+And aggregations correctly net the refund against the original purchase
+
+### BS-032: Adversarial — Corrupted OCR Output
+
+_See UX: T-016 R1, Flow F-005._
+
+Given OCR returns garbled text with no recognizable amount or vendor
+When the receipt-processing scenario runs
+Then it returns a structured "extraction_failed" outcome via spec 037's
+schema-failure / loop-limit handling
+And the artifact is stored with `extraction_status: failed`
+And no hallucinated vendor or amount is written to metadata
+And the failure is surfaced in the digest's "needs review" block
+
+### BS-033: Adversarial — Missing Amount in Otherwise Valid Receipt
+
+_See UX: T-016 R2 (tentative classification), Flow F-005._
+
+Given OCR / extraction yields vendor + date + line items but no clear total
+When the classification scenario runs
+Then the expense is stored with `amount_missing: true`
+And classification still proceeds where context allows (e.g., source
+labels, vendor history) and may produce a tentative classification with a
+rationale that explicitly notes the missing amount
+And the expense appears in the digest's "needs review" block
+
+### BS-034: Adversarial — Mixed-Currency Receipt
+
+_See UX: T-016 R3, Flow F-005._
+
+Given a single receipt contains items in two currencies (e.g., a duty-free
+purchase showing both EUR and USD totals)
+When extraction runs
+Then the system records each line item with its own currency code
+And the expense's primary amount uses the receipt's stated total currency,
+recorded explicitly
+And the classification scenario does NOT silently coerce to a single
+currency
+And BS-010's mixed-currency reporting rules apply to aggregations including
+this expense
+
+### BS-035: Adversarial — Ambiguous Business / Personal Context
+
+_See UX: T-016 R4 (uncategorized + rationale), T-017 (compact reasoning display), A-008 (operator trace), Flow F-005._
+
+Given a receipt for "Olive Garden $47.82" from a personal credit card with
+no caption and no Gmail label
+When the `expense_classify` scenario runs
+Then the result MAY be `uncategorized` rather than guessing
+And the rationale field explains why no signal was sufficient
+And a business-suggestion scenario MAY later flag this expense if the user
+classifies similar expenses as business going forward
+
+### BS-036: Adversarial — Vendor Name With Typo
+
+_See UX: T-016 R5 (high-confidence silent normalization + low-confidence candidate), Flow F-005._
+
+Given a captured artifact records vendor "Amzaon" (typo from manual entry)
+When the `vendor_normalize` scenario runs
+Then it MAY map "Amzaon" to the canonical "Amazon" vendor based on
+similarity AND on the existence of prior "Amazon" expenses in the
+knowledge graph
+And the original raw value is preserved in `vendor_raw`
+And if the scenario is uncertain, it leaves `vendor` as captured rather
+than guessing — surfacing the candidate match in the digest for
+confirmation
+
+### BS-037: Adversarial — Foreign-Language Receipt
+
+_See UX: T-016 R6, Flow F-005._
+
+Given a receipt in German showing "Lebensmittel, Gesamt: €47,50"
+When the receipt-processing scenario runs
+Then the amount is normalized to dot-decimal "47.50" with currency "EUR"
+(BS-023 still holds)
+And the category is determined by the agent based on the receipt content,
+not by an English-only keyword list
+And no English-only categorizer rejects the receipt as uncategorizable
+
+### BS-038: Adversarial — Hallucinated Tool Call During Classification
+
+_See UX: T-016 R7 (user-visible fallback identical to "no classification"), A-008 (rejected tool call surfaced in operator trace only), Flow F-005._
+
+Given the `expense_classify` scenario is allowlisted to call only
+read-only lookup tools
+When the LLM, mid-loop, proposes calling a non-existent or unallowed tool
+(e.g., `delete_expense`, `update_user_email`)
+Then per spec 037 the agent rejects the call before execution
+And no write occurs
+And the trace records the rejected call
+And classification still produces a result based on the legitimate tool
+calls that did execute
+
 ---
 
 ## Competitive Analysis
@@ -428,19 +614,32 @@ And a separate Currency column is included for non-USD entries
 - **Actors Affected:** User
 - **Business Scenarios:** BS-025
 
-### IP-002: Smart Receipt Detection Heuristics
+### IP-002: Receipt Detection As A Scenario
 - **Impact:** Medium
 - **Effort:** S
-- **Competitive Advantage:** Rather than relying solely on LLM extraction, build a fast heuristic layer that detects receipt-like content using patterns (dollar amounts + vendor-like headers + "total" keyword) before engaging the LLM. Reduces unnecessary LLM calls and speeds up processing.
+- **Competitive Advantage:** Receipt detection (deciding whether a captured
+  email or document is in fact a receipt worth extracting) runs as a
+  `receipt_detect` scenario calling lightweight read-only lookup tools.
+  Adding new detection signals (new vendor domain patterns, new languages,
+  new receipt types) ships as scenario edits, not Go changes. Replaces the
+  current Python receipt-detection heuristic (`ml/app/receipt_detection.py`)
+  as the canonical decision point; the heuristic may remain as an
+  inexpensive read-only tool the scenario consults.
 - **Actors Affected:** System (Ingestion Pipeline)
-- **Business Scenarios:** BS-020
+- **Business Scenarios:** BS-020, BS-029
 
-### IP-003: Vendor Normalization Knowledge Base
+### IP-003: Vendor Normalization As A Scenario ⭐ Generic-By-Default
 - **Impact:** Medium
 - **Effort:** S
-- **Competitive Advantage:** Build a growing map of vendor aliases (AMZN MKTP → Amazon, SQ *COFFEE → Square/Corner Coffee) that improves over time. No competitor in the self-hosted space offers this.
+- **Competitive Advantage:** Vendor display normalization is a
+  `vendor_normalize` scenario that consults the knowledge graph for prior
+  captured vendors and the user's configured overrides. New vendor variants
+  do not require Go code or a hardcoded seed list. The ~50 vendor seed
+  aliases currently in `internal/intelligence/vendor_seeds.go` are
+  superseded by this scenario's lookup over real captured data plus user
+  overrides. No competitor in the self-hosted space offers this.
 - **Actors Affected:** User, System
-- **Business Scenarios:** BS-014
+- **Business Scenarios:** BS-014, BS-036
 
 ### IP-004: Tax Category Mapping
 - **Impact:** Medium
@@ -926,6 +1125,636 @@ Suggestions appear within the digest, not as separate messages. See the Digest s
 
 ---
 
+#### Agent + Tools UX Additions (T-012 .. T-017)
+
+The wireframes below extend Surface 1 to cover the LLM-Agent + Tools
+shift introduced by spec 037. They cover BS-029..BS-038. All previously
+specified screens (T-001..T-011) remain authoritative. The agent runtime
+now accepts a strict superset of the existing trigger phrases.
+
+##### Screen / Flow Inventory (New & Modified)
+
+| ID    | Surface  | Status   | Scenarios Served                  | Purpose |
+|-------|----------|----------|------------------------------------|---------|
+| T-012 | Telegram | New      | BS-025, BS-029                     | Free-form expense intent ("how much did I spend on coffee last month?") with agent-generated breakdown + reasoning |
+| T-013 | Telegram | New      | BS-029 (subscription scenario)     | Subscription detection notification ("I noticed Netflix charges every month — track as subscription?") |
+| T-014 | Telegram | New      | BS-030                             | Unusual-spend alert with breakdown offer |
+| T-015 | Telegram | New      | BS-031                             | Refund recognition confirmation linking back to original purchase |
+| T-016 | Telegram | New      | BS-032..BS-038                     | Adversarial-case responses (corrupted OCR, missing amount, mixed currency, ambiguous classification, vendor typo, foreign-language receipt, hallucinated tool fallback) |
+| T-017 | Telegram | New      | UC-005, BS-035                     | Compact rationale display embedded in confirmations and queries |
+| A-001 | API      | Modify   | UC-005, UC-007                     | Add `rationale`, `rationale_short`, and `scenario` fields to expense response objects |
+| A-008 | API      | New      | UC-005, BS-029, BS-035             | Operator-grade tool-call trace via `GET /api/expenses/{id}/trace` |
+| D-002 | Digest   | New      | BS-030, BS-031                     | Unusual-spend and refund blocks within the existing expense digest section |
+| F-001 | All      | Modify   | T-005, T-006, T-007, T-009         | Existing trigger-pattern tables become **MUST-handle examples**, not the full grammar |
+
+> **No screens superseded.** All existing wireframes remain valid.
+
+##### Phrasing Flexibility Note (applies to all existing Telegram flows)
+
+The trigger-pattern examples elsewhere in this section (e.g. `show
+{classification} expenses for {month}`, `export {classification}
+expenses {month_year}`, `accept {vendor} as business`, `fix`, `done`,
+`details`) are **MUST-handle exemplars** — the agent runtime MUST
+recognize them verbatim. They are NOT the full grammar.
+
+The agent classifies the user's intent from any phrasing, including:
+
+- Synonyms ("export", "download", "send me a CSV", "give me the file")
+- Question forms ("how much did I spend on …", "what did I spend at …",
+  "what's my total for …")
+- Imperatives ("show me business expenses for last month", "list April
+  business expenses", "pull up business stuff from April")
+- Mixed scope ("group April business expenses by vendor")
+- Conversational repair ("actually make that personal", "no, last month
+  not this month")
+- Implicit references ("export those", "send that as CSV") immediately
+  after a query response
+
+If the agent cannot resolve the intent within its allowlisted tools, it
+falls back to a single clarifying question (T-016 R3) rather than
+guessing. It never silently mis-routes a recognized command.
+
+#### T-012: Free-Form Expense Query With Reasoning (BS-025, BS-029)
+
+**Trigger:** User asks any question about their expenses in natural
+language. Examples (all MUST work; none is privileged):
+
+- "how much did I spend on coffee last month?"
+- "what did I drop at restaurants in March?"
+- "what's my Amazon total for Q1?"
+- "did I spend more on groceries this month vs last?"
+
+**Happy path response:**
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: how much did I spend on    │
+│              coffee last month?          │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Coffee · Mar 2026                      │
+│  $87.45 across 21 expenses              │
+│                                         │
+│  Top vendors:                           │
+│  Corner Coffee     $42.50 (12 visits)   │
+│  Blue Bottle       $28.95  (5 visits)   │
+│  Starbucks         $16.00  (4 visits)   │
+│                                         │
+│  Why: matched expenses tagged           │
+│  food-and-drink with vendors typed as   │
+│  "coffee" or category "coffee-shop".    │
+│                                         │
+│  Reply "details" for the full list      │
+│  Reply "compare" for last 3 months      │
+└─────────────────────────────────────────┘
+```
+
+**Response format:**
+
+```
+{topic_label} · {period}
+{currency_symbol}{total} across {count} expenses
+
+Top vendors:
+{vendor}  {currency_symbol}{amount}  ({visit_count} visits)
+...
+
+Why: {one_sentence_rationale}
+
+Reply "details" for the full list
+Reply "compare" for last 3 months
+```
+
+**Rules:**
+- `Why:` line is the compact rationale (T-017). Always one sentence,
+  always lowercase after the colon, never blames the user, never
+  references internal tool names. If the rationale would exceed one
+  sentence, truncate and offer "Reply 'why' for full reasoning" instead.
+- Top vendors block omitted if total expense count is less than 3.
+- "compare" appears only when at least 2 prior periods of the same
+  length exist.
+- Mixed currencies: same rules as T-006 — show count only, append
+  "Multiple currencies — see export".
+- Empty result: `No coffee expenses found for Mar 2026. Why: no
+  expenses matched food-and-drink vendors typed as "coffee".`
+- The agent MUST NOT invent categories. If the requested topic does
+  not match any classification, category, or vendor pattern in the
+  knowledge graph, respond: `Not sure what counts as "{topic}". Reply
+  with example vendors and I'll learn.`
+
+**Expanded reasoning (user replies "why"):**
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: why                        │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Reasoning:                             │
+│  • Resolved "coffee" to category        │
+│    food-and-drink + vendor type         │
+│    coffee-shop.                         │
+│  • Resolved "last month" to Mar 2026.   │
+│  • Searched expenses in that range,     │
+│    matched 21 of 184 total.             │
+│  • Excluded 3 catering charges          │
+│    (vendor type "restaurant").          │
+│                                         │
+│  Reply "include catering" to add them   │
+└─────────────────────────────────────────┘
+```
+
+**Rules for expanded reasoning:**
+- Bulleted, at most 6 lines.
+- Lists the resolved terms (what "coffee" and "last month" became), the
+  filter, the match count, and any explicit exclusions.
+- Never reveals internal tool names, prompt-contract IDs, or trace IDs
+  (those live in the API trace view A-008).
+- Always offers a corrective reply when an exclusion was applied.
+
+#### T-013: Subscription Detection Notification (BS-029)
+
+**Trigger:** The `recurring_subscription_flag` scenario detects ≥3
+charges from the same vendor at a regular cadence (weekly, monthly,
+quarterly, annually) within a 25% time-window tolerance, and the
+vendor is not already tracked as a subscription.
+
+**Happy path response (delivered in the next digest, NOT as a separate
+ping):**
+
+```
+┌─────────────────────────────────────────┐
+│  (within daily digest, Subscriptions    │
+│   block under ── Expenses ──)           │
+│                                         │
+│  Looks like a subscription:             │
+│  • Netflix $15.99 · monthly · 4 charges │
+│    Last 4 dates: Jan 12, Feb 12,        │
+│    Mar 12, Apr 12.                      │
+│                                         │
+│  Reply "track netflix as subscription"  │
+│  or "not a subscription netflix"        │
+└─────────────────────────────────────────┘
+```
+
+**User confirmation flow:**
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: track netflix as           │
+│              subscription                │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Tracking Netflix as a monthly          │
+│  subscription. Next charge expected     │
+│  May 12.                                │
+│                                         │
+│  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─    │
+│                                         │
+│  User sends: not a subscription netflix │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Noted. Won't suggest Netflix as a      │
+│  subscription again.                    │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- Subscription suggestion appears in digest only, never as a standalone
+  push message (consistent with "silent unless spoken to").
+- Cadence label is one of: `weekly`, `monthly`, `quarterly`, `annually`,
+  or `every {N} days` if irregular but consistent.
+- Charge count and sample dates are mandatory; never propose a
+  subscription on fewer than 3 historical charges.
+- "track {vendor} as subscription" sets the artifact's
+  `is_subscription: true`, links prior charges, and seeds an expected
+  next-charge date in the `Missing receipt` block (T-010).
+- "not a subscription {vendor}" suppresses future suggestions for that
+  vendor for 90 days. After 90 days, if pattern persists, suggest
+  again.
+- If the vendor is ambiguous, fall back to the disambiguation pattern
+  from E-008.
+
+#### T-014: Unusual-Spend Alert (BS-030)
+
+**Trigger:** The `unusual_spend` scenario flags an expense whose
+amount, frequency, geography, or time-of-day deviates from the user's
+established baseline for that vendor or category by a margin the
+scenario itself defines (the criteria live in the prompt contract,
+not in code).
+
+**Happy path response (delivered in the next digest, "Unusual charges"
+block):**
+
+```
+┌─────────────────────────────────────────┐
+│  (within daily digest, Unusual block    │
+│   under ── Expenses ──)                 │
+│                                         │
+│  Unusual:                               │
+│  • Whole Foods $640.12 (Apr 21) — about │
+│    5x your typical weekly grocery       │
+│    spend ($120 avg over 12 weeks).      │
+│                                         │
+│  Reply "breakdown groceries this week"  │
+│  to see what changed                    │
+└─────────────────────────────────────────┘
+```
+
+**User-initiated breakdown (T-006 variant):**
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: breakdown groceries this   │
+│              week                        │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Groceries · Apr 19–Apr 25, 2026        │
+│  $712.40 across 4 expenses              │
+│  (vs $128 avg over prior 12 weeks)      │
+│                                         │
+│  Apr 19  Trader Joe's      $52.18       │
+│  Apr 20  Local Market      $19.80       │
+│  Apr 21  Whole Foods      $640.12       │
+│  Apr 22  Corner Bodega       $0.30      │
+│                                         │
+│  Why: the Whole Foods charge accounts   │
+│  for 90% of the spike. Reply "details   │
+│  whole foods apr 21" for that receipt.  │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- Rationale always names the dominant contributor (vendor + amount +
+  share of the delta) when one expense accounts for >50% of the spike.
+- Baseline window stated explicitly (e.g. "12 weeks") so the user can
+  judge the comparison.
+- The agent MUST NOT trigger an unusual-spend alert outside the
+  digest. No standalone "unusual charge" pings.
+- If the user replies "not unusual" with the vendor, the scenario
+  records the suppression and won't flag the same vendor for the same
+  category for 30 days.
+
+#### T-015: Refund Recognition (BS-031)
+
+**Trigger:** Receipt-processing scenario classifies an artifact as a
+refund (negative amount, refund/credit/return language, or matched
+return order id).
+
+**Happy path response (immediate, like T-001):**
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: [photo of Amazon refund    │
+│              email]                     │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Saved: Amazon refund −$47.99           │
+│  Linked to: Amazon $47.99 (Apr 02)      │
+│  Net for that purchase: $0.00           │
+│                                         │
+│  Reply "details" to see both            │
+│  Reply "fix" if this isn't a refund     │
+└─────────────────────────────────────────┘
+```
+
+**Unlinked refund (no original purchase found):**
+
+```
+┌─────────────────────────────────────────┐
+│  Bot responds:                          │
+│                                         │
+│  Saved: Amazon refund −$22.50           │
+│  No matching original purchase found in │
+│  capture history.                       │
+│                                         │
+│  Reply "link" to associate it manually  │
+│  Reply "fix" if this isn't a refund     │
+└─────────────────────────────────────────┘
+```
+
+**Manual link flow:**
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: link                       │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Recent Amazon purchases:               │
+│  • Apr 02  $47.99  USB-C cable          │
+│  • Mar 28  $22.50  Coffee filters       │
+│  • Mar 21  $89.00  Desk lamp            │
+│                                         │
+│  Reply with the date or amount          │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- Refund displayed with leading minus sign (`−$47.99`); never wrapped
+  in parentheses (parentheses are reserved for classification labels).
+- "Linked to:" line appears only when the scenario found exactly one
+  high-confidence match. If multiple candidates exist, show the
+  unlinked variant and offer "link".
+- "Net for that purchase:" computed only for fully-netted purchases
+  (refund equals original amount). Otherwise show "Partial refund of
+  $47.99 charge".
+- If the user marks "fix" → the artifact is reclassified as a regular
+  expense via the same correction flow as T-009.
+- Refund expenses appear in queries with negative amounts and are
+  netted in aggregations (BS-031).
+
+#### T-016: Adversarial-Case Responses (BS-032..BS-038)
+
+These wireframes specify what the user sees when the agent runtime
+encounters an adversarial input or an internal failure. All responses
+share a structural contract: **state what was understood, state what
+failed, offer the next step.** Never blame the user, never invent
+data, never silently store hallucinated values.
+
+##### T-016 R1: Corrupted OCR (BS-032)
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: [photo with unreadable     │
+│              OCR output]                │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Couldn't read this receipt clearly.    │
+│  Saved as needs-review with no amount   │
+│  or vendor.                             │
+│                                         │
+│  Reply with the details, e.g.           │
+│  "Lunch at Deli $12.50 business"        │
+│  Or reply "discard" to remove it        │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- Distinct from T-002: T-002 returns no artifact; T-016 R1 returns an
+  artifact with `extraction_status: failed` so the failure is visible
+  in the digest's "needs review" block.
+- No partial vendor or amount is ever shown; the agent does not guess.
+- "discard" deletes the artifact (the only Telegram-driven delete
+  path).
+
+##### T-016 R2: Missing Amount With Tentative Classification (BS-033)
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: [photo with vendor + date  │
+│              but no clear total]        │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Saved: Uber · amount not detected      │
+│  Tentative: business (matches your past │
+│  Uber rides on weekday mornings).       │
+│                                         │
+│  Reply with the amount, e.g. "$23.50"   │
+│  Reply "personal" if this wasn't work   │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- Extends T-004: where T-004 omits classification, T-016 R2 shows a
+  tentative classification only when historical evidence supports it.
+- The rationale is the compact T-017 form: one sentence, naming the
+  evidence.
+- "personal" / "business" replies update classification without
+  requiring the amount.
+
+##### T-016 R3: Mixed-Currency Receipt (BS-034)
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: [photo of duty-free        │
+│              receipt with EUR + USD]    │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Saved: Duty Free Shop                  │
+│  Receipt total: €87.40 EUR              │
+│  Line items in 2 currencies: EUR, USD   │
+│                                         │
+│  Stored each line in its own currency.  │
+│  Aggregations will keep them separate.  │
+│                                         │
+│  Reply "details" to see line items      │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- Primary amount uses the receipt's stated total currency, named
+  explicitly ("€87.40 EUR" not just "€87.40").
+- The line "Line items in N currencies: …" lists every currency code
+  found.
+- The agent MUST NOT ask the user "which currency dominates?" — that
+  would imply silent coercion. It states the receipt's stated total
+  and stores granular line-item currencies (BS-034).
+
+##### T-016 R4: Ambiguous Business / Personal (BS-035)
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: [photo of Olive Garden     │
+│              $47.82, no caption]        │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Saved: Olive Garden $47.82             │
+│  Classification: uncategorized          │
+│                                         │
+│  Why: no signal to choose business or   │
+│  personal — no caption, no Gmail label, │
+│  no past Olive Garden expenses tagged   │
+│  either way.                            │
+│                                         │
+│  Reply "business" or "personal" to set  │
+│  it. I'll learn from the choice.        │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- The classification is `uncategorized` — never a coin-flip guess.
+- Rationale enumerates the missing signals (caption, label, history).
+- The closing line tells the user the choice will inform future
+  classifications, satisfying BS-035's learning clause.
+
+##### T-016 R5: Vendor Typo Normalization (BS-036)
+
+**High-confidence normalization (silent, with disclosure on details):**
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: Amzaon $14.99              │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Saved: Amazon $14.99                   │
+│                                         │
+│  Reply "details" for the original entry │
+│  Reply "fix" to correct anything        │
+└─────────────────────────────────────────┘
+```
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: details                    │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Amazon · Apr 23, 2026                  │
+│                                         │
+│  Original entry: "Amzaon"               │
+│  Normalized to:  Amazon                 │
+│  Why: matched canonical vendor with     │
+│  17 prior Amazon expenses.              │
+│                                         │
+│  Source: telegram-text                  │
+└─────────────────────────────────────────┘
+```
+
+**Low-confidence normalization (preserves raw, surfaces candidate):**
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: Amzaon $14.99              │
+│              (no prior Amazon history)  │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Saved: Amzaon $14.99                   │
+│  Possible match: Amazon? Reply          │
+│  "rename to amazon" to confirm.         │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- High confidence = canonical vendor exists in the knowledge graph
+  with prior expenses AND similarity score above the scenario's
+  threshold.
+- `vendor_raw` always preserves the original (BS-036).
+- Low confidence keeps the raw value as `vendor`, offers the candidate
+  but does NOT apply it.
+- "rename to {canonical}" applies the normalization and back-fills
+  `vendor_raw` from the original input.
+
+##### T-016 R6: Foreign-Language Receipt (BS-037)
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: [photo of German receipt:  │
+│              "Lebensmittel Gesamt €47,50"]│
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Saved: Edeka €47.50 EUR                │
+│  Category: groceries                    │
+│                                         │
+│  Reply "details" to see line items      │
+│  Reply "fix" to correct anything        │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- Amount normalized to dot-decimal (`47.50`), currency explicit
+  (`EUR`) — same rule as BS-023.
+- Category derived from the receipt content ("Lebensmittel" =
+  groceries) by the agent, NOT by an English-only keyword list
+  (BS-037).
+- The bot never echoes the original-language tokens in the
+  confirmation — that would feel like the system is showing off its
+  translation. The original text is preserved in artifact metadata
+  and visible via "details" → `Receipt language: de` line.
+- If the agent cannot determine a category from the content, it falls
+  through to T-016 R4 (uncategorized + rationale).
+
+##### T-016 R7: Hallucinated Tool Call / Scenario Failure (BS-038)
+
+The user-visible behavior is identical to "scenario produced no
+classification" — the rejected tool call is invisible at the chat
+surface (it lives in the trace via A-008).
+
+```
+┌─────────────────────────────────────────┐
+│  User sends: [receipt that triggers a   │
+│              scenario failure]          │
+│                                         │
+│  Bot responds:                          │
+│                                         │
+│  Saved: Acme Hardware $89.10            │
+│  Couldn't classify automatically this   │
+│  time. Set as uncategorized.            │
+│                                         │
+│  Reply "business" or "personal" to set  │
+│  it manually.                           │
+└─────────────────────────────────────────┘
+```
+
+**Rules:**
+- The user is never told a tool was hallucinated, blocked, or that the
+  loop limit fired. That is operator-grade information (trace, logs).
+- The artifact is created with `extraction_status: complete` if the
+  parse succeeded but classification failed, or `partial` if both.
+- The artifact's metadata records `classification_failed: true` and
+  the digest includes it under "Needs review".
+- Manual entry is always available as the fallback (consistent with
+  the "Corrections over perfection" design principle).
+
+#### T-017: Compact Reasoning Display (UC-005, BS-035)
+
+The agent's rationale appears in two compact forms throughout
+Telegram:
+
+##### T-017 A: Inline `Why:` line
+
+Used in confirmations (T-001, T-013, T-014, T-015), uncategorized
+results (T-016 R4), and queries (T-012). One sentence. Lowercase
+after the colon. Never names internal tool, scenario, or contract
+IDs.
+
+```
+Why: matched expenses tagged food-and-drink with vendors typed as
+"coffee" or category "coffee-shop".
+```
+
+##### T-017 B: `Reasoning:` block (on demand)
+
+Used when the user replies `why`. Bulleted, max 6 lines, structured
+as: resolved-terms → filter → match-count → exclusions → corrective
+hint.
+
+```
+Reasoning:
+• Resolved "coffee" to category food-and-drink + vendor type
+  coffee-shop.
+• Resolved "last month" to Mar 2026.
+• Searched expenses in that range, matched 21 of 184 total.
+• Excluded 3 catering charges (vendor type "restaurant").
+
+Reply "include catering" to add them
+```
+
+**Rules across both forms:**
+- Plain English; no jargon, no schema names, no JSON snippets.
+- Never references the LLM, the prompt contract name, the scenario
+  name, or any internal trace ID.
+- If the rationale is genuinely empty (e.g. classification fell
+  through to `uncategorized`), say so explicitly: `Why: no signal to
+  choose business or personal — no caption, no label, no vendor
+  history.`
+- Operator-grade detail (tool call list, rejected calls, loop
+  iterations) belongs in A-008, not in chat.
+
+---
+
 ### Surface 2: REST API Contract UX
 
 All expense endpoints live under the existing API namespace. Responses follow the standard Smackerel API envelope. All monetary values are strings. All dates are ISO 8601.
@@ -999,7 +1828,10 @@ Error responses:
         "notes": null,
         "extraction_status": "complete",
         "user_corrected": false,
-        "artifact_id": "01HWXYZ..."
+        "artifact_id": "01HWXYZ...",
+        "scenario": "expense_classify",
+        "rationale": "Matched user-defined business vendor list and weekday-morning pattern.",
+        "rationale_short": "matches your past coffee runs on workdays"
       }
     ],
     "summary": {
@@ -1025,6 +1857,18 @@ Error responses:
 - Default sort: date ascending
 - Amounts are strings, never numeric types
 - `null` for fields not extracted (not empty string, not `0`)
+
+**Agent runtime fields (added with the LLM-Agent + Tools shift; see
+[spec 037](../037-llm-agent-tools/spec.md)).** Always present in the
+response shape; may be `null` when the expense predates the agent
+runtime or the scenario produced no rationale. Existing clients that
+ignore unknown fields continue to work.
+
+| Field            | Type            | Rules |
+|------------------|-----------------|-------|
+| `scenario`       | string \| null  | The scenario name that produced the classification (e.g. `expense_classify`, `recurring_subscription_flag`, `unusual_spend`, `refund_recognize`, `vendor_normalize`). Stable identifier; safe for clients to switch on. |
+| `rationale`      | string \| null  | Full rationale, max 280 chars. Plain English. No tool names, no schema fragments. |
+| `rationale_short`| string \| null  | One-clause version (max 80 chars) suitable for Telegram's `Why:` line. |
 
 **Error responses:**
 
@@ -1236,6 +2080,73 @@ Date,Payee,Category,Amount,Memo
 }
 ```
 
+#### A-008: GET /api/expenses/{id}/trace — Operator Reasoning Trace
+
+**Purpose:** Expose the agent runtime's tool-call trace for debugging
+classification, refund linking, vendor normalization, or unusual-spend
+flags. This is operator-grade data, not user-facing UX. Surfaces
+BS-029, BS-035, BS-038 for operator inspection.
+
+**Authorization:** Same as other `/api/expenses/*` endpoints.
+
+**Response (200 OK):**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "expense_id": "01HWXYZ...",
+    "scenario": "expense_classify",
+    "scenario_version": "v3",
+    "trace": {
+      "tool_calls": [
+        {
+          "tool": "search_expenses",
+          "args": { "vendor": "corner coffee", "limit": 25 },
+          "outcome": "ok",
+          "result_summary": "12 prior expenses, 11 classified business"
+        },
+        {
+          "tool": "aggregate_amounts",
+          "args": { "ids": ["..."], "group_by": "classification" },
+          "outcome": "ok",
+          "result_summary": "business: $42.50, personal: $4.00"
+        }
+      ],
+      "rejected_calls": [
+        {
+          "tool": "delete_expense",
+          "reason": "tool not allowlisted for scenario expense_classify"
+        }
+      ],
+      "loop_iterations": 2,
+      "loop_limit_hit": false,
+      "schema_failure": false,
+      "duration_ms": 412
+    },
+    "rationale": "Matched user-defined business vendor list and weekday-morning pattern."
+  }
+}
+```
+
+**Rules:**
+- `rejected_calls` MUST list any hallucinated or disallowed tool the
+  LLM proposed (BS-038). Empty array if none.
+- `tool_calls[].args` MUST be redacted of any user-secret fields
+  (`auth_token`, `api_key`, `bot_token`).
+- `loop_limit_hit: true` always pairs with a non-null
+  `extraction_status` of `partial` or `failed` on the underlying
+  expense.
+- This endpoint is purely informational — calling it never mutates
+  the expense.
+
+**Error responses:**
+
+| Code | HTTP Status | Condition |
+|------|-------------|-----------|
+| `EXPENSE_NOT_FOUND`  | 404 | No expense with that ID |
+| `TRACE_UNAVAILABLE`  | 410 | Expense predates the agent runtime or trace expired |
+
 #### API Error Model Summary
 
 All error codes follow the pattern `EXPENSE_{NOUN}` or `{VALIDATION_NOUN}`:
@@ -1263,10 +2174,49 @@ The expense section integrates into the existing daily digest assembly. It is no
 
 {suggestions_block}
 
+{subscription_suggestion_block}   ← new (T-013, BS-029)
+
 {missing_receipts_block}
 
 {unusual_charges_block}
+
+{unusual_spend_block}             ← new (T-014, BS-030)
+
+{refund_block}                    ← new (T-015, BS-031)
 ```
+
+**Subscription suggestion block (D-002, T-013):**
+```
+Looks like a subscription:
+• {vendor} {currency_symbol}{amount} · {cadence} · {N} charges
+  Last {min(N,4)} dates: {date}, {date}, {date}, {date}.
+```
+
+**Unusual-spend block (D-002, T-014):**
+```
+Unusual:
+• {vendor} {currency_symbol}{amount} ({date}) — {one_clause_rationale}
+```
+
+**Refund block (D-002, T-015) — only when refunds occurred since last
+digest:**
+```
+Refunds:
+• {vendor} −{currency_symbol}{amount} (linked to {orig_date} purchase)
+• {vendor} −{currency_symbol}{amount} (unlinked — reply "link" to match)
+```
+
+**Caps & omission for new blocks:**
+- Each new block follows the same omission contract as existing blocks
+  in T-010: omitted when empty, no "None" placeholders.
+- Subscription suggestions: max 3 per digest, then `... and N more
+  subscription suggestions`.
+- Unusual-spend items: max 3 per digest, then `... and N more unusual
+  charges`.
+- Refunds: max 5 per digest, then `... and N more refunds`.
+- The 100-word cap from T-010 still applies. Drop order extended:
+  summary → unusual → refunds → missing receipts → subscriptions →
+  suggestions → needs review (highest priority retained).
 
 **Summary line:** `This week: {count} expenses, {currency_symbol}{total} ({business_count} business, {personal_count} personal)`
 
@@ -1301,6 +2251,86 @@ New vendor: {vendor} {currency_symbol}{amount}
 - Entire section omitted if no expenses exist for the period
 - Individual blocks omitted if empty (no "None" or "Nothing to report")
 - If total content exceeds 100 words, blocks are dropped in reverse priority order (summary first, then unusual charges, then missing receipts)
+
+---
+
+### User Flow Diagrams
+
+The following flows complement the existing wireframes by visualizing
+multi-screen journeys introduced by the agent + tools shift. They are
+complementary visualization; the ASCII wireframes above remain the
+authoritative specification.
+
+#### Flow F-002: Free-Form Query With Reasoning Drill-Down
+
+```mermaid
+stateDiagram-v2
+    [*] --> Query: user asks anything
+    Query --> Resolved: agent maps intent to scenario
+    Query --> Clarify: intent ambiguous
+    Clarify --> Resolved: user disambiguates
+    Resolved --> Result: T-012 with Why: line
+    Result --> Reasoning: user replies "why"
+    Result --> Details: user replies "details"
+    Result --> Compare: user replies "compare"
+    Reasoning --> Refined: user replies "include …"
+    Refined --> Result
+    Result --> [*]
+```
+
+#### Flow F-003: Subscription Detection Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Charges: 3+ matching charges captured
+    Charges --> Suggested: digest delivers T-013
+    Suggested --> Tracked: user "track {vendor} as subscription"
+    Suggested --> Suppressed: user "not a subscription {vendor}"
+    Suppressed --> Suggested: 90 days elapsed AND pattern persists
+    Tracked --> MissingAlert: expected charge date passes without capture
+    Tracked --> [*]
+    Suppressed --> [*]
+```
+
+#### Flow F-004: Refund Recognition
+
+```mermaid
+stateDiagram-v2
+    [*] --> Captured: refund artifact ingested
+    Captured --> Linked: scenario finds 1 high-confidence original
+    Captured --> Unlinked: 0 or multiple candidates
+    Linked --> Confirmed: T-015 confirmation sent
+    Unlinked --> ManualLink: user replies "link"
+    Unlinked --> Confirmed: user accepts unlinked
+    ManualLink --> Linked: user picks original
+    Confirmed --> Reclassified: user replies "fix"
+    Confirmed --> [*]
+    Reclassified --> [*]
+```
+
+#### Flow F-005: Adversarial Receipt Handling
+
+```mermaid
+stateDiagram-v2
+    [*] --> Capture: photo / text / email arrives
+    Capture --> ScenarioRun: receipt-processing scenario invoked
+    ScenarioRun --> Clean: extraction OK
+    ScenarioRun --> CorruptedOCR: BS-032 — no readable text
+    ScenarioRun --> MissingAmount: BS-033 — vendor OK, no total
+    ScenarioRun --> MixedCurrency: BS-034 — multi-currency total
+    ScenarioRun --> Ambiguous: BS-035 — no signal for class
+    ScenarioRun --> VendorTypo: BS-036 — fuzzy vendor match
+    ScenarioRun --> ForeignLang: BS-037 — non-English receipt
+    ScenarioRun --> ToolFailure: BS-038 — hallucinated / blocked tool
+    Clean --> Confirm: T-001
+    CorruptedOCR --> NeedsReview: T-016 R1 + digest
+    MissingAmount --> Tentative: T-016 R2
+    MixedCurrency --> ConfirmMulti: T-016 R3
+    Ambiguous --> Uncategorized: T-016 R4
+    VendorTypo --> Normalized: T-016 R5 (high) or candidate (low)
+    ForeignLang --> Confirm: T-016 R6 (translated category)
+    ToolFailure --> Uncategorized: T-016 R7 + digest needs-review
+```
 
 ---
 
@@ -1381,6 +2411,21 @@ Reply with the date or amount to clarify.
 - Correction flow uses conversational text, not numbered menus
 - Natural language queries accepted; no rigid command syntax required (though structured commands like "export business expenses April" work too)
 
+#### Agent Runtime Additions
+- **Reasoning lines (`Why:` and `Reasoning:`)** are plain prose. No
+  emoji, no symbols other than the bullet `•`, no table structures.
+  Screen readers announce them naturally.
+- **Negative amounts for refunds** use the Unicode minus sign `−`
+  (U+2212), which screen readers reliably announce as "minus". ASCII
+  hyphen `-` is forbidden in amount displays because some readers
+  ignore it.
+- **Cadence labels for subscriptions** (`weekly`, `monthly`,
+  `quarterly`, `annually`) use English words, never abbreviations like
+  `wk` or `mo`, to remain clear for screen readers and translation.
+- **Disambiguation prompts** ("Reply with the date or amount") always
+  offer at least two distinguishing attributes per candidate, so a
+  user navigating by audio can tell candidates apart.
+
 ---
 
 ## Open Questions
@@ -1389,3 +2434,7 @@ Reply with the date or amount to clarify.
 2. **Vendor normalization scope:** Should the vendor alias map be pre-seeded with common mappings or learned purely from user corrections? (Recommendation: pre-seed with ~100 common vendor aliases, augment with user corrections)
 3. **Attachment handling:** When a receipt email has a PDF attachment, should the system extract from the email body, the PDF, or both? (Recommendation: try PDF first as it's usually more structured, fall back to email body)
 4. **Batch re-classification trigger:** When the user adds a vendor to the business list, should re-classification run immediately or on the next scheduled intelligence cycle? (Recommendation: immediate for UX, but bounded to 100 most recent matching artifacts to avoid long-running operations)
+5. **Reasoning verbosity default (A-001).** Should `rationale` always be returned by `GET /api/expenses` (default on), or require `?include=rationale` (default off)? (Recommendation: default on — cost is small, and existing clients ignore unknown fields.)
+6. **Subscription cadence tolerance (T-013).** The 25% time-window tolerance for `recurring_subscription_flag` is a UX decision (false positives vs missed detections). Should it live in `config/smackerel.yaml` under `expense.subscription_cadence_tolerance` so users can tune it? (Recommendation: yes, exposed as a config knob with a sane default.)
+7. **Foreign-language receipt details surface (T-016 R6).** When the user replies "details" on a foreign-language receipt, should line items be shown in original language, translated, or both? (Recommendation: original tokens with translated category labels alongside, to preserve auditability without sacrificing readability.)
+8. **Trace retention (A-008).** How long should A-008 trace data be retained? (Recommendation: 30 days for individual expenses, indefinite for any expense the user has explicitly corrected, so the correction loop is debuggable.)

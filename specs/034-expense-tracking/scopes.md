@@ -1,6 +1,57 @@
 # Scopes: 034 Expense Tracking
 
-Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](uservalidation.md)
+Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](uservalidation.md) | [spec 037 — LLM Agent + Tools](../037-llm-agent-tools/spec.md)
+
+> **Architectural shift (April 2026).** With the commitment to spec 037 LLM Agent + Tools, classification, vendor normalization, intent routing, and several new use cases (subscription detect, refund link, unusual spend) MUST be delivered as scenarios over registered tools rather than hardcoded Go logic. This affects scopes below: legacy implementations are marked DEPRECATED with one-line replacement notes, and new Scopes 10–16 cover the agent+tools delivery. Existing user-facing surfaces (REST API, Telegram bot formats, digest, CSV export) MUST continue to work with no behavioral regression during and after the migration.
+
+## Execution Outline
+
+### Phase Order (post-037 work)
+
+1. **Scope 10 — Expense Tool Registration & Scenario Bootstrap.** Register the 7 expense-domain tools via spec 037 `RegisterTool`; create empty scenario skeletons under `config/scenarios/expense/` so the loader recognizes them.
+2. **Scope 11 — Classification Migration (`expense.classify-v1`).** Move the 7-rule chain into a scenario; preserve sticky `user_corrected`; cover ambiguous (BS-035), tentative-on-missing-amount (BS-033), foreign-language (BS-037), and hallucinated-tool (BS-038) cases.
+3. **Scope 12 — Vendor Normalization Migration (`expense.normalize_vendor-v1`).** Replace `vendor_seeds.go` and the in-process LRU with a tool-backed scenario; honor BS-036 (typo) confidence gate.
+4. **Scope 13 — Receipt Extraction Resilience (`receipt_extract_tool`).** Harden the receipt path for BS-032 (corrupted OCR), BS-033 (missing amount), BS-034 (mixed currency), BS-037 (foreign language).
+5. **Scope 14 — New Scenarios: Subscription Detect, Refund Link, Unusual Spend.** Deliver BS-029, BS-030, BS-031 entirely as scenarios + at most the existing tools.
+6. **Scope 15 — Natural-Language Query & Intent Routing (`expense.query-v1`, `expense.intent_route-v1`).** Replace the regex intent patterns in `internal/telegram/expenses.go` with a scenario.
+7. **Scope 17 — Operator Rationale & Trace Surfaces.** Surface the rationale populated in Scope 11 and the agent_trace_id chain via API response fields (A-001), the new `GET /api/expenses/{id}/trace` endpoint (A-008), and the Telegram `Why:` line (T-017). Additive only; no shipped behavior changes.
+8. **Scope 16 — Legacy Removal & Acceptance Gate.** Flip operator defaults, run agreement gates per design §11 migration plan, delete dead code.
+
+### New Tool Signatures (via `agent.RegisterTool` in spec 037)
+
+```go
+// All tools register from package init(). Side-effect class enforced at startup.
+expense_classify_tool        // read+write — invokes expense.classify-v1; updates metadata.expense.classification
+vendor_normalize_tool        // read+write — invokes expense.normalize_vendor-v1; may upsert vendor_aliases
+receipt_extract_tool         // read       — wraps receipt-extraction-v1 prompt contract; returns structured expense
+expense_query_tool           // read       — structured query over artifacts.metadata.expense (date/vendor/category/class)
+subscription_detect_tool     // read+write — invokes expense.subscription_detect-v1; may write subscriptions row
+refund_link_tool             // read+write — invokes expense.refund_link-v1; may set is_refund + refund_of_artifact_id
+unusual_spend_detect_tool    // read       — invokes expense.unusual_spend-v1; returns severity + comparison
+```
+
+### New Scenarios (under `config/scenarios/expense/`)
+
+```
+expense.classify-v1            — classification (replaces 7-rule chain in expenses.go)
+expense.normalize_vendor-v1    — vendor canonicalization (replaces vendor_seeds.go + LRU)
+expense.query-v1               — natural-language expense query
+expense.subscription_detect-v1 — recurring-charge detection
+expense.refund_link-v1         — refund recognition + link to original
+expense.unusual_spend-v1       — anomaly surfacing
+expense.intent_route-v1        — Telegram expense-intent routing (replaces regex dispatch)
+```
+
+### Validation Checkpoints
+
+- **After Scope 10:** Tools register; scenario files lint clean per spec 037 IP-001; no behavior change yet.
+- **After Scope 11:** `expense.classify-v1` matches legacy classifier on ≥ 95% holdout (per design §11 acceptance gate); legacy path still default.
+- **After Scope 12:** `expense.normalize_vendor-v1` matches seed-list output on ≥ 99% of historical aliases.
+- **After Scope 13:** All adversarial extraction cases (BS-032, BS-033, BS-034, BS-037) pass live-stack tests.
+- **After Scope 14:** Adding a new "recurring subscription flag" scenario requires only a YAML edit + reload (BS-029 acceptance).
+- **After Scope 15:** Telegram expense-intent dispatch contains zero regex; intent routing is scenario-driven.
+- **After Scope 17:** API responses for `GET /api/expenses` and `GET /api/expenses/{id}` include `rationale`, `rationale_short`, `scenario` fields; `GET /api/expenses/{id}/trace` returns the operator-grade tool-call trace; Telegram confirmations and queries render the compact `Why:` line; existing clients ignoring unknown fields see no regression.
+- **After Scope 16:** `internal/intelligence/vendor_seeds.go` deleted; rule chain removed from `internal/intelligence/expenses.go`; regex intent patterns removed from `internal/telegram/expenses.go`; existing API + Telegram + digest surfaces still pass full E2E regression suite (no shipped behavior regressed).
 
 ## Summary Table
 
@@ -9,12 +60,20 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 01 | Configuration & Config Pipeline | P0 | — | Config, Scripts | Done |
 | 02 | Receipt Detection & Extraction Pipeline | P0 | 01 | Python ML Sidecar, Prompt Contract | Done |
 | 03 | Expense Data Model & Migration | P0 | 01 | Go Core, PostgreSQL | Done |
-| 04 | Classification Engine | P1 | 02, 03 | Go Core | Done |
-| 05 | Vendor Normalization & Suggestions | P1 | 03, 04 | Go Core, PostgreSQL | Done |
+| 04 | Classification Engine | P1 | 02, 03 | Go Core | Done — **DEPRECATED by Scope 11** (7-rule chain superseded by `expense.classify-v1` scenario) |
+| 05 | Vendor Normalization & Suggestions | P1 | 03, 04 | Go Core, PostgreSQL | Done — **DEPRECATED by Scope 12** (`vendor_seeds.go` + LRU superseded by `expense.normalize_vendor-v1` scenario) |
 | 06 | Expense API Endpoints | P1 | 03, 04 | Go Core, REST API | Done |
 | 07 | CSV Export | P1 | 06 | Go Core, REST API | Done |
-| 08 | Telegram Expense Commands | P1 | 04, 06 | Go Core, Telegram Bot | Done |
+| 08 | Telegram Expense Commands | P1 | 04, 06 | Go Core, Telegram Bot | Done — **partially DEPRECATED by Scope 15** (regex intent patterns superseded by `expense.intent_route-v1`; format functions and OCR flow retained) |
 | 09 | Digest Integration | P2 | 04, 05 | Go Core, Digest | Done |
+| 10 | Expense Tool Registration & Scenario Bootstrap | P0 | spec 037 (Scopes 2, 3) | Go Core, Scenarios | Not started |
+| 11 | Classification Scenario Migration | P0 | 10 | Go Core, Scenarios | Not started |
+| 12 | Vendor Normalization Scenario Migration | P1 | 10 | Go Core, Scenarios, PostgreSQL | Not started |
+| 13 | Receipt Extraction Resilience | P1 | 10 | Go Core, Python ML, Scenarios | Not started |
+| 14 | Subscription Detect / Refund Link / Unusual Spend Scenarios | P1 | 10, 11 | Go Core, Scenarios | Not started |
+| 15 | Natural-Language Query & Intent Routing Scenarios | P1 | 10, 11 | Go Core, Telegram, Scenarios | Not started |
+| 16 | Legacy Removal & Acceptance Gate | P1 | 11, 12, 13, 14, 15, 17 | Go Core, Python ML, Telegram | Not started |
+| 17 | Operator Rationale & Trace Surfaces | P1 | 11, 14, 15 | Go Core, REST API, Telegram | Not started |
 
 ## Dependency Graph
 
@@ -348,9 +407,11 @@ Scenario: SCN-034-018 — Expense query by date range uses index (BS-009)
 
 ## Scope 04: Classification Engine
 
-**Status:** Done
+**Status:** Done — **DEPRECATED by Scope 11**
 **Priority:** P1
 **Depends On:** 02, 03
+
+> **Replacement:** The 7-level rule chain in `internal/intelligence/expenses.go` is superseded by the `expense.classify-v1` scenario delivered in Scope 11. New classification heuristics ship as scenario prompt edits, not Go branches. This scope's code remains executable behind the `EXPENSES_CLASSIFIER=legacy` flag until Scope 16's acceptance gate flips the operator default to `agent` and deletes the rule chain.
 
 ### Gherkin Scenarios
 
@@ -447,9 +508,11 @@ Scenario: SCN-034-024 — Category assigned from LLM extraction (BS-017)
 
 ## Scope 05: Vendor Normalization & Suggestions
 
-**Status:** Done
+**Status:** Done — **DEPRECATED by Scope 12**
 **Priority:** P1
 **Depends On:** 03, 04
+
+> **Replacement:** The hardcoded vendor seed list in `internal/intelligence/vendor_seeds.go` and the in-process `VendorNormalizer` LRU are superseded by the `expense.normalize_vendor-v1` scenario plus `vendor_alias_lookup` / `vendor_alias_upsert` tools delivered in Scope 12. The `vendor_aliases` table itself is retained as the canonical store. This scope's code remains executable behind the `EXPENSES_VENDOR_NORMALIZER=legacy` flag until Scope 16 deletes `vendor_seeds.go` and the LRU. Suggestion generation is unchanged in v1.
 
 ### Gherkin Scenarios
 
@@ -798,9 +861,11 @@ Scenario: SCN-034-047 — Streaming export does not buffer full result set
 
 ## Scope 08: Telegram Expense Commands
 
-**Status:** Done
+**Status:** Done — **partially DEPRECATED by Scope 15**
 **Priority:** P1
 **Depends On:** 04, 06
+
+> **Replacement:** The regex-based expense intent routing in `internal/telegram/expenses.go` ("show expenses", "how much", "export expenses", "accept ... as business", etc.) is superseded by the `expense.intent_route-v1` scenario delivered in Scope 15. The format functions (T-001..T-011), photo → OCR → extraction flow, conversation state machine for fix/amount prompts, and document-attachment CSV path are RETAINED — they are user-visible surfaces and MUST keep working unchanged. Scope 15 removes only the regex dispatch.
 
 ### Gherkin Scenarios
 
@@ -1042,3 +1107,746 @@ Scenario: SCN-034-065 — Empty period omits entire expense section (UC-009 A1)
   **Evidence:** format check passes (included in lint pipeline)
 - [x] Artifact lint clean: `bash .github/bubbles/scripts/artifact-lint.sh specs/034-expense-tracking`
   **Evidence:** artifact lint passes for specs/034-expense-tracking
+
+---
+
+## Scope 10: Expense Tool Registration & Scenario Bootstrap
+
+**ID:** 034-S10
+**Status:** Not started
+**Priority:** P0
+**Depends On:** spec 037 Scope 2 (Tool Registry), Scope 3 (Scenario Loader & Linter)
+**BS coverage:** BS-029 (preconditions), BS-038 (allowlist surface)
+
+### Goal
+
+Register the seven expense-domain tools via spec 037's `agent.RegisterTool` and create empty scenario YAML skeletons under `config/scenarios/expense/` so the loader recognizes them and the linter passes. No behavior changes; legacy paths still own all decisions. This scope is the dependency floor for every later agent-shift scope.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-034-066 — All seven expense tools register at startup
+  Given the Go core service starts with spec 037 agent runtime enabled
+  When package init() in internal/intelligence/expenses and internal/api/expenses runs
+  Then agent.RegisterTool is invoked for expense_classify_tool, vendor_normalize_tool, receipt_extract_tool, expense_query_tool, subscription_detect_tool, refund_link_tool, and unusual_spend_detect_tool
+  And each tool's declared side-effect class matches its handler's actual database access pattern
+  And the registry refuses to start if any of the seven names collide with another package's registration
+
+Scenario: SCN-034-067 — Seven scenario skeletons load clean (BS-029 precondition)
+  Given config/scenarios/expense/ contains expense.classify-v1.yaml, expense.normalize_vendor-v1.yaml, expense.query-v1.yaml, expense.subscription_detect-v1.yaml, expense.refund_link-v1.yaml, expense.unusual_spend-v1.yaml, and expense.intent_route-v1.yaml
+  When the spec 037 scenario loader runs on startup
+  Then all seven scenarios parse, every allowed_tools entry resolves to a registered tool, and side-effect classes match
+  And the spec 037 scenario linter (IP-001) reports zero errors for config/scenarios/expense/
+
+Scenario: SCN-034-068 — Adversarial: scenario referencing unknown tool refuses to load (BS-038 surface)
+  Given expense.classify-v1.yaml lists allowed_tools: [expense_get_nonexistent]
+  When the loader runs
+  Then startup fails with a fatal error naming the scenario and the unknown tool
+  And no expense scenarios are registered (all-or-nothing)
+```
+
+### File Outline
+
+- **NEW:** `config/scenarios/expense/expense.classify-v1.yaml` — skeleton (input schema, output schema, allowed_tools list, system_prompt placeholder).
+- **NEW:** `config/scenarios/expense/expense.normalize_vendor-v1.yaml` — skeleton.
+- **NEW:** `config/scenarios/expense/expense.query-v1.yaml` — skeleton.
+- **NEW:** `config/scenarios/expense/expense.subscription_detect-v1.yaml` — skeleton.
+- **NEW:** `config/scenarios/expense/expense.refund_link-v1.yaml` — skeleton.
+- **NEW:** `config/scenarios/expense/expense.unusual_spend-v1.yaml` — skeleton.
+- **NEW:** `config/scenarios/expense/expense.intent_route-v1.yaml` — skeleton.
+- **NEW:** `internal/intelligence/expenses/tools.go` — `init()` calls `agent.RegisterTool` for `expense_classify_tool`, `vendor_normalize_tool`, `expense_query_tool`, `subscription_detect_tool`, `refund_link_tool`, `unusual_spend_detect_tool`. Handlers initially delegate to existing legacy code (no agent loop yet — wired in Scopes 11–15).
+- **NEW:** `internal/intelligence/expenses/tools_test.go` — registration assertions, side-effect class assertions.
+- **MODIFY:** `internal/api/expenses` — register `receipt_extract_tool` from `init()` (the package that owns the receipt-extraction prompt-contract dispatch).
+- **NEW:** `config/smackerel.yaml` keys (per design §11): `expenses.classifier`, `expenses.receipt_detector`, `expenses.vendor_normalizer`, each accepting `agent|legacy`. Operator default is `legacy` for this scope.
+- **MODIFY:** `scripts/commands/config.sh` — emit `EXPENSES_CLASSIFIER`, `EXPENSES_RECEIPT_DETECTOR`, `EXPENSES_VENDOR_NORMALIZER` to `config/generated/{dev,test}.env` with no fallbacks (fail-loud per SST).
+
+### Test Plan
+
+| ID | Type | File | Scenario | Description |
+|----|------|------|----------|-------------|
+| T-10-01 | Unit | `internal/intelligence/expenses/tools_test.go` | SCN-034-066 | All seven tool names present in `agent.All()`; side-effect class matches expected |
+| T-10-02 | Unit | `internal/intelligence/expenses/tools_test.go` | SCN-034-066 | `RegisterTool` panics if any name collides (uses spec 037 fail-fast) |
+| T-10-03 | Unit | `internal/agent/loader_test.go` (extend) | SCN-034-067 | All seven `expense.*-v1` scenarios load clean against the registered tool set |
+| T-10-04 | Unit (adversarial) | `internal/agent/loader_test.go` (extend) | SCN-034-068 | Scenario with unknown tool causes loader fatal; **no fallback, no partial load** |
+| T-10-05 | Unit | `internal/config/validate_test.go` | SST | Empty `EXPENSES_CLASSIFIER` → `log.Fatal`; same for the other two flags |
+| T-10-06 | Integration | `tests/integration/agent_expense_bootstrap_test.go` | SCN-034-066, SCN-034-067 | Live core starts, registry contains all seven tools, loader contains all seven scenarios |
+| T-10-07 | Regression E2E | `tests/e2e/expense_legacy_parity_test.go` | — | With all three flags = `legacy`, full existing E2E suite for Scopes 04–08 still passes (no shipped behavior regressed) |
+
+### Definition of Done
+
+- [ ] All seven tools registered via `agent.RegisterTool` from package `init()`; side-effect classes documented in tool struct
+- [ ] All seven `expense.*-v1` scenario YAML files exist under `config/scenarios/expense/` with valid input/output schemas, allowed_tools, and placeholder system_prompts
+- [ ] Spec 037 scenario linter passes for `config/scenarios/expense/`
+- [ ] `EXPENSES_CLASSIFIER`, `EXPENSES_RECEIPT_DETECTOR`, `EXPENSES_VENDOR_NORMALIZER` config keys defined in `config/smackerel.yaml`, emitted to env, fail-loud on empty (zero defaults in source)
+- [ ] All three flags default to `legacy` in `config/smackerel.yaml` (operator default, not code default)
+- [ ] Adversarial test: scenario referencing unknown tool → startup refuses (no partial registry)
+- [ ] Adversarial test: tool name collision → `RegisterTool` panics
+- [ ] Existing API + Telegram + digest E2E regression suite passes unchanged with flags = `legacy`
+- [ ] `./smackerel.sh test unit` and `./smackerel.sh test integration` pass
+- [ ] `./smackerel.sh lint` and `./smackerel.sh format --check` pass
+- [ ] Artifact lint clean for `specs/034-expense-tracking`
+
+---
+
+## Scope 11: Classification Scenario Migration
+
+**ID:** 034-S11
+**Status:** Not started
+**Priority:** P0
+**Depends On:** 10
+**BS coverage:** BS-029, BS-033 (missing amount tentative), BS-035 (ambiguous), BS-037 (foreign language), BS-038 (hallucinated tool)
+
+### Goal
+
+Move the classification decision from the 7-rule chain in `internal/intelligence/expenses.go` into the `expense.classify-v1` scenario. Preserve sticky `user_corrected: true` across the agent boundary via prompt rule **and** Go-side post-validation hook (per design §11 Backward Compatibility). The legacy path continues to run in shadow mode, recording disagreement traces, until Scope 16's acceptance gate.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-034-069 — expense.classify-v1 produces classification + rationale (BS-029)
+  Given EXPENSES_CLASSIFIER=agent and an expense artifact with vendor "Stripe", source "gmail", source_labels ["Tax-Deductible"]
+  When expense_classify_tool is invoked for the artifact
+  Then the scenario calls lookup_expense_label_map and returns classification "business" with a non-empty rationale and rationale_short ≤ 80 chars
+  And metadata.expense.scenario = "expense.classify-v1", metadata.expense.agent_trace_id is set, metadata.expense.rationale is populated
+
+Scenario: SCN-034-070 — Sticky user correction is honored across agent boundary (BS-008 regression)
+  Given an expense has user_corrected=true with "classification" in corrected_fields and prior classification "personal"
+  When expense_classify_tool runs under EXPENSES_CLASSIFIER=agent
+  Then the scenario short-circuits via expense_get and returns classification "personal" verbatim
+  And the Go-side post-validation hook would reject any other value (asserted by injecting a contradicting scenario response in test)
+  And expense_update_classification is NOT called
+
+Scenario: SCN-034-071 — Adversarial BS-035: ambiguous context returns uncategorized + rationale
+  Given an expense for vendor "Olive Garden" with no label, no caption, vendor not in business list, and no matching vendor history
+  When the classification scenario runs
+  Then the result is classification "uncategorized" with a rationale explaining no signal was sufficient
+  And the system does NOT silently default to "business" or "personal"
+
+Scenario: SCN-034-072 — Adversarial BS-033: tentative classification when amount missing
+  Given extraction yields vendor "Uber", source "gmail", source_labels ["Business-Receipts"], but amount_missing=true
+  When the classification scenario runs
+  Then classification is "business" with tentative=true and rationale explicitly notes the missing amount
+  And the expense appears in the digest "needs review" block
+
+Scenario: SCN-034-073 — Adversarial BS-037: foreign-language receipt classified by content not English keywords
+  Given a German receipt with vendor "Edeka" and notes "Lebensmittel"
+  When the classification scenario runs
+  Then a category is assigned based on content (e.g., "food-and-drink")
+  And no English-only keyword filter rejects the receipt as uncategorizable
+
+Scenario: SCN-034-074 — Adversarial BS-038: hallucinated tool call rejected, classification still produced
+  Given the LLM mid-loop proposes calling a non-allowlisted tool "delete_expense"
+  When the spec 037 dispatch evaluates the tool call
+  Then the call is rejected before execution and recorded in agent_tool_calls.rejected=true
+  And the scenario completes with a valid classification produced from the legitimate read-only tool calls
+  And no write side-effect occurs from the rejected call
+```
+
+### File Outline
+
+- **MODIFY:** `config/scenarios/expense/expense.classify-v1.yaml` — full system_prompt, input/output schemas per design §"Agent + Tools Design", allowed_tools list (`expense_get`, `expense_lookup_history`, `expense_aggregate`, `vendor_alias_lookup`, `lookup_business_vendor_list`, `lookup_expense_label_map`).
+- **NEW:** `internal/intelligence/expenses/classify_agent.go` — agent-path implementation of `expense_classify_tool`: invokes scenario, applies Go-side post-validation hook for sticky `user_corrected`, writes `metadata.expense.{scenario,rationale,rationale_short,agent_trace_id}`.
+- **NEW:** `internal/intelligence/expenses/lookup_tools.go` — register `expense_get`, `expense_lookup_history`, `expense_aggregate`, `lookup_business_vendor_list`, `lookup_expense_label_map` (read-only) per design §"Tools To Register".
+- **MODIFY:** `internal/intelligence/expenses.go` — add dispatch by `EXPENSES_CLASSIFIER`: `agent` → new path, `legacy` → existing rule chain. Shadow-trace mode when `legacy` (records what `agent` would have decided, no write).
+- **NEW:** `internal/intelligence/expenses/classify_agent_test.go`, `lookup_tools_test.go`.
+- **MODIFY:** `internal/api/expenses` — `expense_update_classification` tool gates `user_corrected: true` to API PATCH callers only (asserted by unit test).
+
+### Test Plan
+
+| ID | Type | File | Scenario | Description |
+|----|------|------|----------|-------------|
+| T-11-01 | Unit | `classify_agent_test.go` | SCN-034-069 | Agent path returns valid classification + rationale; metadata fields populated |
+| T-11-02 | Unit (adversarial) | `classify_agent_test.go` | SCN-034-070 | **Sticky correction guard**: inject contradicting scenario output; Go hook rejects; prior classification returned verbatim |
+| T-11-03 | Unit (adversarial) | `classify_agent_test.go` | SCN-034-071 (BS-035) | Ambiguous fixture → "uncategorized" + non-empty rationale; assert NOT business and NOT personal |
+| T-11-04 | Unit (adversarial) | `classify_agent_test.go` | SCN-034-072 (BS-033) | amount_missing fixture → tentative=true; rationale contains "amount" |
+| T-11-05 | Unit (adversarial) | `classify_agent_test.go` | SCN-034-073 (BS-037) | German fixture → category assigned; no English-keyword reject path triggered |
+| T-11-06 | Unit (adversarial) | `classify_agent_test.go` | SCN-034-074 (BS-038) | Spec 037 mock dispatch rejects hallucinated tool; classification still produced; rejected call surfaces in trace |
+| T-11-07 | Unit | `internal/api/expenses/expenses_test.go` | — | `expense_update_classification` tool refuses `user_corrected:true` from non-PATCH caller |
+| T-11-08 | Integration | `tests/integration/expense_classify_agent_test.go` | SCN-034-069, SCN-034-070 | End-to-end agent path against live PostgreSQL + spec 037 runtime |
+| T-11-09 | Integration | `tests/integration/expense_classify_shadow_test.go` | — | Shadow mode: with flag=legacy, agent trace is recorded but `metadata.expense.classification` still comes from legacy chain |
+| T-11-10 | Regression E2E | `tests/e2e/expense_classify_e2e_test.go` | SCN-034-069 | Live stack: capture receipt → classify via agent → query via API → expected classification + rationale present |
+| T-11-11 | Regression E2E (adversarial) | `tests/e2e/expense_classify_sticky_e2e_test.go` | SCN-034-070 | **No bailout returns**: live PATCH correction → re-classify via agent → corrected value persists; injected contradicting LLM response (via test seam) does NOT overwrite |
+| T-11-12 | Regression E2E | `tests/e2e/expense_legacy_parity_test.go` | — | Existing Scope 04 E2E tests still pass with flag=legacy |
+
+### Definition of Done
+
+- [ ] `expense.classify-v1` scenario fully populated; passes spec 037 linter
+- [ ] `expense_classify_tool` agent path implemented; legacy path retained behind `EXPENSES_CLASSIFIER` flag
+- [ ] Sticky `user_corrected` enforced at both prompt and Go-side post-validation hook (double enforcement); contradiction test passes
+- [ ] Five lookup tools (`expense_get`, `expense_lookup_history`, `expense_aggregate`, `lookup_business_vendor_list`, `lookup_expense_label_map`) registered as `read`
+- [ ] `metadata.expense.{scenario,rationale,rationale_short,agent_trace_id}` populated when agent path runs; null on legacy path (legacy rows safe)
+- [ ] Adversarial regressions for BS-033, BS-035, BS-037, BS-038 pass; each has at least one assertion that would fail if the bug were reintroduced
+- [ ] Shadow-mode trace recorded under flag=legacy (per design §11 Phase 1)
+- [ ] Existing Scope 04 unit + E2E tests pass unchanged with flag=legacy (no shipped behavior regressed)
+- [ ] `./smackerel.sh test unit`, `test integration`, `test e2e` pass
+- [ ] `./smackerel.sh lint` and `format --check` pass
+- [ ] Artifact lint clean
+
+---
+
+## Scope 12: Vendor Normalization Scenario Migration
+
+**ID:** 034-S12
+**Status:** Not started
+**Priority:** P1
+**Depends On:** 10
+**BS coverage:** BS-014, BS-036 (vendor typo)
+
+### Goal
+
+Replace the `vendorSeeds` slice in `internal/intelligence/vendor_seeds.go` and the `VendorNormalizer` LRU with the `expense.normalize_vendor-v1` scenario. The `vendor_aliases` table remains the canonical store; the seed list becomes one-time bootstrap data imported via `vendor_alias_upsert(source: "bootstrap")` calling Go directly (not the agent). The scenario's `should_persist` output gate prevents low-confidence guesses from polluting the alias table (BS-036).
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-034-075 — High-confidence canonicalization persists alias (BS-014)
+  Given vendor_raw "AMZN MKTP US" arrives and vendor_aliases contains exact-match alias "AMZN MKTP US" → "Amazon"
+  When vendor_normalize_tool runs the expense.normalize_vendor-v1 scenario
+  Then the scenario returns vendor="Amazon", confidence="high", should_persist=true
+  And vendor_alias_upsert is called once
+  And metadata.expense.vendor="Amazon", vendor_raw="AMZN MKTP US"
+
+Scenario: SCN-034-076 — Adversarial BS-036: typo "Amzaon" with prior "Amazon" history → low-confidence candidate, no persist
+  Given vendor_raw "Amzaon" arrives and the knowledge graph has 12 prior expenses for canonical "Amazon"
+  When the normalization scenario runs
+  Then it returns confidence ∈ {"medium","low"}, candidate_match="Amazon", should_persist=false
+  And vendor_alias_upsert is NOT called
+  And metadata.expense.vendor remains "Amzaon" (vendor_raw preserved)
+  And the candidate match is surfaced in the digest review block for user confirmation
+
+Scenario: SCN-034-077 — One-time bootstrap import populates vendor_aliases from legacy seeds
+  Given the vendor_aliases table contains zero rows with source="bootstrap"
+  When the bootstrap migration command runs
+  Then every legacy vendor_seeds.go entry is upserted with source="bootstrap" via direct Go call (NOT via the agent loop)
+  And the migration is idempotent (running twice produces zero new rows)
+```
+
+### File Outline
+
+- **MODIFY:** `config/scenarios/expense/expense.normalize_vendor-v1.yaml` — full prompt + schemas; allowed_tools = [`vendor_alias_lookup` (read), `expense_lookup_history` (read), `vendor_alias_upsert` (write, gated on `should_persist`)].
+- **NEW:** `internal/intelligence/expenses/vendor_agent.go` — agent path for `vendor_normalize_tool`: invokes scenario, applies `should_persist` gate before allowing the upsert tool call to take effect.
+- **NEW:** `internal/intelligence/expenses/vendor_alias_tools.go` — register `vendor_alias_lookup` (read) and `vendor_alias_upsert` (write).
+- **MODIFY:** `internal/intelligence/expenses.go` — dispatch by `EXPENSES_VENDOR_NORMALIZER`: `agent` → new path, `legacy` → existing LRU + seeds.
+- **NEW:** `scripts/runtime/bootstrap_vendor_aliases.sh` and the wiring under `./smackerel.sh` to invoke a one-shot Go command that imports `vendorSeeds` into `vendor_aliases` with `source="bootstrap"`.
+- **NEW:** `internal/intelligence/expenses/vendor_agent_test.go`, `vendor_alias_tools_test.go`, `tests/integration/vendor_agent_test.go`.
+
+### Test Plan
+
+| ID | Type | File | Scenario | Description |
+|----|------|------|----------|-------------|
+| T-12-01 | Unit | `vendor_agent_test.go` | SCN-034-075 | High-confidence path triggers upsert; metadata populated |
+| T-12-02 | Unit (adversarial) | `vendor_agent_test.go` | SCN-034-076 (BS-036) | **Low-confidence guess fixture**: assert vendor remains raw value, upsert NOT called, candidate surfaced — would fail if `should_persist` gate were bypassed |
+| T-12-03 | Unit | `vendor_alias_tools_test.go` | — | `vendor_alias_upsert` rejects calls from scenarios other than `expense.normalize_vendor-v1` and the API PATCH path |
+| T-12-04 | Unit | `vendor_agent_test.go` | — | Agent path matches legacy seed list output on ≥ 99% of seed entries (acceptance gate fixture) |
+| T-12-05 | Integration | `tests/integration/vendor_bootstrap_test.go` | SCN-034-077 | Bootstrap command imports all seeds; second run is no-op |
+| T-12-06 | Integration | `tests/integration/vendor_agent_test.go` | SCN-034-075, SCN-034-076 | Live PostgreSQL: variants normalize correctly; typo case does not persist |
+| T-12-07 | Regression E2E (adversarial) | `tests/e2e/vendor_typo_e2e_test.go` | SCN-034-076 | Live stack: ingest expense with vendor typo → normalization scenario runs → alias table is unchanged → digest surfaces candidate. Test would fail if scenario silently upserted on low confidence. |
+| T-12-08 | Regression E2E | `tests/e2e/vendor_parity_e2e_test.go` | — | Existing Scope 05 vendor-normalization E2E tests pass with flag=legacy AND with flag=agent for high-confidence cases |
+
+### Definition of Done
+
+- [ ] `expense.normalize_vendor-v1` scenario fully populated, allowlist matches design §"Agent + Tools Design"
+- [ ] `vendor_normalize_tool` agent path implemented; `should_persist` gate enforced in Go (not just prompt)
+- [ ] `vendor_alias_lookup` and `vendor_alias_upsert` tools registered with correct side-effect classes
+- [ ] One-time bootstrap import of `vendorSeeds` to `vendor_aliases` with `source="bootstrap"`; idempotent
+- [ ] Adversarial BS-036 regression fails if `should_persist` gate is removed
+- [ ] Agreement with legacy seed-list output ≥ 99% on historical aliases (acceptance gate fixture committed)
+- [ ] Existing Scope 05 unit + E2E behavior unchanged under flag=legacy
+- [ ] `./smackerel.sh test unit`, `test integration`, `test e2e` pass
+- [ ] `./smackerel.sh lint` and `format --check` pass
+- [ ] Artifact lint clean
+
+---
+
+## Scope 13: Receipt Extraction Resilience
+
+**ID:** 034-S13
+**Status:** Not started
+**Priority:** P1
+**Depends On:** 10
+**BS coverage:** BS-032 (corrupted OCR), BS-033 (missing amount), BS-034 (mixed currency), BS-037 (foreign language)
+
+### Goal
+
+Wire `receipt_extract_tool` as the canonical entrypoint for the receipt-extraction-v1 prompt contract from the agent runtime, and harden the extraction path so that adversarial inputs produce structured, non-hallucinated outcomes consumed by downstream scenarios. The existing receipt-extraction-v1 prompt contract (design §4) is unchanged; resilience comes from explicit failure shapes and adversarial test fixtures.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-034-078 — Adversarial BS-032: corrupted OCR returns extraction_failed
+  Given OCR yields garbled text with no recognizable vendor or amount
+  When receipt_extract_tool runs against the artifact
+  Then the tool returns {extraction_status:"failed", reason:<non-empty>} via spec 037's structured failure shape
+  And metadata.expense.extraction_status="failed"
+  And metadata.expense.vendor and amount remain null (no hallucination)
+  And the artifact appears in the digest "needs review" block
+
+Scenario: SCN-034-079 — Adversarial BS-033: missing amount with otherwise valid receipt
+  Given OCR yields vendor "Uber" + date + line items but no clear total
+  When receipt_extract_tool runs
+  Then extraction_status="partial", amount_missing=true, vendor and date populated
+  And classification scenario downstream may still produce a tentative classification (covered by SCN-034-072)
+
+Scenario: SCN-034-080 — Adversarial BS-034: mixed-currency receipt records both
+  Given a duty-free receipt shows EUR line items and USD total
+  When receipt_extract_tool runs
+  Then each line_item carries its own currency code
+  And the receipt's primary amount uses the explicitly stated total currency
+  And no silent coercion to a single currency occurs
+
+Scenario: SCN-034-081 — Adversarial BS-037: foreign-language receipt amount normalized
+  Given a German receipt "Gesamt: €47,50"
+  When receipt_extract_tool runs
+  Then amount="47.50", currency="EUR", raw_amount="47,50" (BS-023 holds)
+  And no English-only keyword filter rejects the receipt
+```
+
+### File Outline
+
+- **NEW:** `internal/intelligence/expenses/receipt_extract_tool.go` — `init()` registers `receipt_extract_tool` (read). Handler invokes the existing receipt-extraction-v1 prompt contract via the ML sidecar, returns structured outcomes per spec 037 schema-failure / loop-limit handling.
+- **MODIFY:** `ml/app/synthesis.py` — when called via the agent path (header marker), emit per-line-item currency for BS-034 and stable failure shape for BS-032.
+- **NEW:** `internal/intelligence/expenses/receipt_extract_tool_test.go` — adversarial fixtures for BS-032/033/034/037.
+- **NEW:** `ml/tests/test_receipt_extraction_adversarial.py` — Python-side adversarial cases.
+- **NEW:** `tests/integration/receipt_extract_agent_test.go`, `tests/e2e/receipt_extract_resilience_e2e_test.go`.
+- **NEW:** Test-fixture corpus `tests/fixtures/receipts/{corrupted,missing_amount,mixed_currency,german}/` — small text/image fixtures committed to the repo.
+
+### Test Plan
+
+| ID | Type | File | Scenario | Description |
+|----|------|------|----------|-------------|
+| T-13-01 | Unit (adversarial) | `receipt_extract_tool_test.go` | SCN-034-078 (BS-032) | Garbled-OCR fixture → `extraction_status="failed"`; vendor/amount null; **fails if any field is auto-populated with a guess** |
+| T-13-02 | Unit (adversarial) | `receipt_extract_tool_test.go` | SCN-034-079 (BS-033) | Missing-amount fixture → `extraction_status="partial"`, `amount_missing=true`, vendor present |
+| T-13-03 | Unit (adversarial) | `receipt_extract_tool_test.go` | SCN-034-080 (BS-034) | Mixed-currency fixture → per-line-item currency preserved; primary currency from stated total; **fails if a single currency is coerced** |
+| T-13-04 | Unit (adversarial) | `receipt_extract_tool_test.go` | SCN-034-081 (BS-037) | German fixture → amount "47.50", currency "EUR", raw_amount "47,50"; **fails if English-keyword filter rejects** |
+| T-13-05 | Python unit | `ml/tests/test_receipt_extraction_adversarial.py` | SCN-034-078..081 | Python-side schema validation rejects malformed extractor outputs for each adversarial fixture |
+| T-13-06 | Integration | `tests/integration/receipt_extract_agent_test.go` | SCN-034-078, 080 | Live ML sidecar + Go core: corrupted and mixed-currency artifacts produce expected structured outcomes |
+| T-13-07 | Regression E2E | `tests/e2e/receipt_extract_resilience_e2e_test.go` | SCN-034-078..081 | Live stack: each adversarial fixture flows from capture → extract → classify → digest; needs-review surfaces correctly; no hallucinated metadata |
+| T-13-08 | Regression E2E | `tests/e2e/receipt_extract_parity_e2e_test.go` | — | Existing Scope 02 happy-path extraction E2E tests pass unchanged |
+
+### Definition of Done
+
+- [ ] `receipt_extract_tool` registered (read); wired to existing receipt-extraction-v1 prompt contract
+- [ ] Adversarial fixtures committed under `tests/fixtures/receipts/`
+- [ ] BS-032 path: structured failure, no hallucinated fields, surfaces in digest
+- [ ] BS-033 path: partial extraction with `amount_missing=true`; downstream classification can still produce tentative result (paired with Scope 11)
+- [ ] BS-034 path: per-line-item currency preserved; no coercion
+- [ ] BS-037 path: comma-decimal normalized; no English-keyword reject
+- [ ] Each adversarial test would fail if the corresponding bug were reintroduced (no tautologies, no early-return bailouts)
+- [ ] Existing Scope 02 happy-path tests pass unchanged
+- [ ] `./smackerel.sh test unit`, `test integration`, `test e2e` pass
+- [ ] `./smackerel.sh lint` and `format --check` pass
+- [ ] Artifact lint clean
+
+---
+
+## Scope 14: Subscription Detect / Refund Link / Unusual Spend Scenarios
+
+**ID:** 034-S14
+**Status:** Not started
+**Priority:** P1
+**Depends On:** 10, 11
+**BS coverage:** BS-029, BS-030 (unusual spend), BS-031 (refund recognition)
+
+### Goal
+
+Deliver the three new use cases — recurring subscription detection, refund recognition + linking, and unusual spend surfacing — entirely as scenarios over the registered tools. Adding these MUST require zero changes to classification or routing Go code (BS-029 acceptance criterion). The existing `subscriptions` table and digest blocks are reused; the digest's "missing receipts" computation in `internal/digest/expenses.go` already consumes the `subscriptions` table written by `subscription_detect_tool`.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-034-082 — BS-029: recurring subscription scenario added without classifier code change
+  Given the deployment has shipped Scope 11 with classification owned by expense.classify-v1
+  When the operator adds expense.subscription_detect-v1.yaml allowlisting [expense_lookup_history, expense_aggregate, expense_subscription_mark]
+  Then no Go file under internal/intelligence/expenses/ classify_agent.go or rule chain is modified
+  And after service reload, subscription_detect_tool produces is_subscription flags on matching expenses
+
+Scenario: SCN-034-083 — BS-031: refund recognized and linked to original purchase
+  Given a captured artifact with negative amount and "refund" in extracted text exists for a prior Amazon purchase artifact
+  When refund_link_tool invokes expense.refund_link-v1
+  Then the refund is recorded with is_refund=true
+  And refund_of_artifact_id points to the original Amazon purchase
+  And aggregations net the negative amount (verified via expense_aggregate)
+
+Scenario: SCN-034-084 — BS-030: unusual spend surfaced via scenario
+  Given the user's typical weekly grocery spend is $120
+  When a $640 grocery charge is captured and unusual_spend_detect_tool runs
+  Then expense.unusual_spend-v1 returns is_unusual=true, severity ∈ {medium,high}, comparison string referencing typical spend
+  And the digest unusual-spend block surfaces the charge
+
+Scenario: SCN-034-085 — Adversarial: refund without matching original is recorded but unlinked
+  Given a refund artifact exists with no recognizable original purchase in the knowledge graph
+  When expense.refund_link-v1 runs
+  Then is_refund=true, linked_artifact_id=null
+  And expense_link_refund is NOT called (write tool gated on linked_artifact_id != null)
+```
+
+### File Outline
+
+- **MODIFY:** `config/scenarios/expense/expense.subscription_detect-v1.yaml`, `expense.refund_link-v1.yaml`, `expense.unusual_spend-v1.yaml` — full prompts + schemas + allowed_tools per design §"Scenarios To Register".
+- **NEW:** `internal/intelligence/expenses/scenario_dispatch.go` — handlers for `subscription_detect_tool`, `refund_link_tool`, `unusual_spend_detect_tool`. Each invokes its scenario and gates write-class sub-calls (`expense_subscription_mark`, `expense_link_refund`) on the scenario's `should_*` / `linked_artifact_id` output.
+- **NEW:** `internal/intelligence/expenses/write_tools.go` — register `expense_subscription_mark` (write) and `expense_link_refund` (write) per design §"Tools To Register".
+- **MODIFY:** `internal/digest/expenses.go` — unusual-spend block consumes `unusual_spend_detect_tool` output instead of inline "new vendor in 7 days" rule (design §11 explicitly supersedes this).
+- **NEW:** `internal/intelligence/expenses/scenario_dispatch_test.go`, `tests/integration/scenarios_extras_test.go`, `tests/e2e/scenarios_extras_e2e_test.go`.
+
+### Test Plan
+
+| ID | Type | File | Scenario | Description |
+|----|------|------|----------|-------------|
+| T-14-01 | Unit | `scenario_dispatch_test.go` | SCN-034-083 | Refund linking writes `refund_of_artifact_id`; aggregations net the amount |
+| T-14-02 | Unit (adversarial) | `scenario_dispatch_test.go` | SCN-034-085 | **Unlinked refund**: write tool NOT called when `linked_artifact_id` null; would fail if dispatch ignored the gate |
+| T-14-03 | Unit | `scenario_dispatch_test.go` | SCN-034-084 | Unusual-spend severity computed from comparison vs. history |
+| T-14-04 | Unit | `write_tools_test.go` | — | `expense_subscription_mark` and `expense_link_refund` are write-class; allowlist enforced (only the matching scenarios may call) |
+| T-14-05 | Integration | `tests/integration/scenarios_extras_test.go` | SCN-034-082 | Adding `expense.subscription_detect-v1.yaml` and reloading registers a working scenario without any Go change (governance test: `git diff` over Go classifier files must be empty) |
+| T-14-06 | Integration | `tests/integration/scenarios_extras_test.go` | SCN-034-083 | Live PostgreSQL: refund pair is correctly netted |
+| T-14-07 | Regression E2E | `tests/e2e/scenarios_extras_e2e_test.go` | SCN-034-083, 084 | Live stack: refund recognition + unusual-spend digest block; both surface end-to-end |
+| T-14-08 | Regression E2E | `tests/e2e/digest_unusual_spend_parity_test.go` | — | Existing Scope 09 unusual-charge digest behavior is preserved (no shipped-behavior regression) |
+
+### Definition of Done
+
+- [ ] All three scenarios fully populated; spec 037 linter clean
+- [ ] Three corresponding tools wired with correct side-effect classes; write tools gated on scenario output flags
+- [ ] Adding `expense.subscription_detect-v1.yaml` requires zero Go changes (BS-029 governance test passes)
+- [ ] Refund linking and aggregation netting verified against live PostgreSQL
+- [ ] Unusual-spend digest block consumes scenario output; existing digest behavior preserved
+- [ ] Adversarial unlinked-refund regression passes
+- [ ] Existing Scope 09 digest E2E tests pass unchanged
+- [ ] `./smackerel.sh test unit`, `test integration`, `test e2e` pass
+- [ ] `./smackerel.sh lint` and `format --check` pass
+- [ ] Artifact lint clean
+
+---
+
+## Scope 15: Natural-Language Query & Intent Routing Scenarios
+
+**ID:** 034-S15
+**Status:** Not started
+**Priority:** P1
+**Depends On:** 10, 11
+**BS coverage:** BS-029, BS-025 (NL query), spec 037 BS-002 (intent routing)
+
+### Goal
+
+Replace the regex intent dispatch in `internal/telegram/expenses.go` with the `expense.intent_route-v1` scenario, and deliver natural-language expense queries via `expense.query-v1`. The existing Telegram format functions (T-001..T-011) and conversation state machine (fix flow, amount prompts) are RETAINED and called by the dispatcher post-routing. Existing API endpoints in `internal/api/expenses.go` continue to handle structured calls unchanged.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-034-086 — BS-025: natural-language expense query returns structured filters
+  Given expenses exist for April 2026 with category "food-and-drink"
+  When the user sends "how much did I spend on coffee last month?" via Telegram
+  Then expense.intent_route-v1 routes to expense.query-v1
+  And expense.query-v1 returns answer_text, breakdown, and filters_used (date_from, date_to, category="food-and-drink")
+  And the existing formatExpenseList renders the result via the retained T-006 format
+
+Scenario: SCN-034-087 — Intent routing dispatches to scoped tools (no regex)
+  Given the user sends "export business expenses for April" via Telegram
+  When expense.intent_route-v1 runs
+  Then the scenario returns intent="export" with parameters {classification:"business", month:"2026-04"}
+  And the existing CSV export handler is invoked with those parameters
+  And no regex pattern in internal/telegram/expenses.go is consulted for routing
+
+Scenario: SCN-034-088 — Adversarial: ambiguous Telegram message yields structured "unknown intent" outcome
+  Given the user sends "hmm" with no recognizable expense intent
+  When expense.intent_route-v1 runs
+  Then per spec 037 BS-014 the scenario returns a structured unknown-intent outcome
+  And the bot responds with a calm "I'm not sure what you'd like to do with expenses." prompt
+  And no regex fallback or silent default to a query/export action occurs
+
+Scenario: SCN-034-089 — Existing structured commands still work (no regression)
+  Given the user sends an exact "show expenses" message
+  When expense.intent_route-v1 runs
+  Then routing produces intent="list" with default filters
+  And the existing T-006 formatted list is sent
+  And the response is byte-equivalent to the pre-migration response on the same input
+```
+
+### File Outline
+
+- **MODIFY:** `config/scenarios/expense/expense.intent_route-v1.yaml` — full prompt; output schema includes `intent` enum (list, export, classify, accept_suggestion, dismiss_suggestion, fix, query, unknown) and `parameters` object.
+- **MODIFY:** `config/scenarios/expense/expense.query-v1.yaml` — full prompt + schema; allowed_tools = [`expense_aggregate`, `expense_lookup_history`, `vendor_alias_lookup`].
+- **MODIFY:** `internal/telegram/expenses.go` — replace the regex intent block with a call to `expense.intent_route-v1`; route to existing handlers based on returned `intent`. **No removal of format functions or state machine.**
+- **NEW:** `internal/telegram/expenses_intent_test.go` — unit tests covering routing for every intent and the unknown-intent outcome.
+- **NEW:** `tests/integration/telegram_intent_test.go`, `tests/e2e/telegram_intent_e2e_test.go`.
+
+### Test Plan
+
+| ID | Type | File | Scenario | Description |
+|----|------|------|----------|-------------|
+| T-15-01 | Unit | `expenses_intent_test.go` | SCN-034-086 | NL query routes to `expense.query-v1`; filters_used populated |
+| T-15-02 | Unit | `expenses_intent_test.go` | SCN-034-087 | Export intent dispatches with correct parameters; **`grep` for legacy regex literals in `internal/telegram/expenses.go` returns zero matches** (governance assertion) |
+| T-15-03 | Unit (adversarial) | `expenses_intent_test.go` | SCN-034-088 | Ambiguous message → unknown-intent outcome; bot responds with prompt; **no regex fallback path executed** (covered by removal assertion T-15-02) |
+| T-15-04 | Unit | `expenses_intent_test.go` | SCN-034-089 | Pre-migration golden inputs (e.g., "show expenses", "export business expenses April") produce byte-equivalent responses |
+| T-15-05 | Integration | `tests/integration/telegram_intent_test.go` | SCN-034-086, 087 | Live spec 037 dispatch + Telegram handler: NL query and export intents flow end-to-end |
+| T-15-06 | Regression E2E | `tests/e2e/telegram_intent_e2e_test.go` | SCN-034-086, 089 | Live stack: NL query "how much on coffee last month" returns expected list; structured "show expenses" still returns T-006 list |
+| T-15-07 | Regression E2E | `tests/e2e/telegram_format_parity_test.go` | — | Existing Scope 08 format tests (T-001..T-011) pass unchanged |
+
+### Definition of Done
+
+- [ ] `expense.intent_route-v1` and `expense.query-v1` scenarios fully populated; linter clean
+- [ ] Regex intent patterns removed from `internal/telegram/expenses.go` dispatch (format functions and state machine retained)
+- [ ] Governance test asserts zero regex literals remain in the dispatch function
+- [ ] Pre-migration golden inputs produce byte-equivalent responses
+- [ ] Unknown-intent path produces a calm structured response; no silent defaults
+- [ ] Existing Scope 08 format-function tests pass unchanged
+- [ ] Existing API endpoints in `internal/api/expenses.go` continue to handle structured calls (no regression)
+- [ ] `./smackerel.sh test unit`, `test integration`, `test e2e` pass
+- [ ] `./smackerel.sh lint` and `format --check` pass
+- [ ] Artifact lint clean
+
+---
+
+## Scope 16: Legacy Removal & Acceptance Gate
+
+**ID:** 034-S16
+**Status:** Not started
+**Priority:** P1
+**Depends On:** 11, 12, 13, 14, 15, 17
+**BS coverage:** BS-029 (final acceptance), regression protection for all shipped behavior
+
+### Goal
+
+Run the design §11 acceptance gate (≥ 95% classification agreement, ≥ 99% vendor-normalization agreement, ≥ 95% receipt-detect agreement on labeled holdouts). On pass, flip the operator defaults in `config/smackerel.yaml` to `agent` and delete the dead legacy code: the 7-rule chain, `vendor_seeds.go`, the `VendorNormalizer` LRU, the regex intent dispatch, and the deprecated tests. The existing API + Telegram format + digest + CSV export E2E surfaces MUST continue to pass with zero behavioral regression.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-034-090 — Acceptance gate passes for all three flags
+  Given the holdout datasets for classification (≥ 500 user-confirmed), vendor normalization (legacy seed list), and receipt detect (labeled receipt/non-receipt) exist under tests/fixtures/agent_acceptance/
+  When ./smackerel.sh test acceptance runs both legacy and agent paths over the holdouts
+  Then classification agreement ≥ 95%, vendor agreement ≥ 99%, receipt-detect agreement ≥ 95%
+  And disagreements are emitted to a report for human triage
+
+Scenario: SCN-034-091 — Operator defaults flipped to agent
+  Given all three acceptance gates have passed
+  When config/smackerel.yaml is updated to set expenses.classifier=agent, expenses.receipt_detector=agent, expenses.vendor_normalizer=agent
+  And ./smackerel.sh config generate runs
+  Then the generated env files contain EXPENSES_*=agent for all three flags
+
+Scenario: SCN-034-092 — Legacy code is deleted
+  Given the operator defaults are agent for all three flags
+  When the legacy-removal change set is applied
+  Then internal/intelligence/vendor_seeds.go does not exist
+  And the 7-level rule-chain function in internal/intelligence/expenses.go is absent
+  And the regex intent dispatch block in internal/telegram/expenses.go is absent
+  And the corresponding tests in internal/intelligence/expenses_test.go that covered the removed code are removed
+  And the build still passes
+
+Scenario: SCN-034-093 — No shipped-behavior regression after removal
+  Given legacy code is removed and operator defaults are agent
+  When the full E2E suite runs (Scope 02, 04, 05, 06, 07, 08, 09 regression tests)
+  Then every test passes
+  And the existing API responses and Telegram formatted responses are unchanged for golden inputs
+  And the daily digest still produces summary, needs-review, suggestions, missing-receipts, and unusual-charges blocks
+```
+
+### File Outline
+
+- **NEW:** `tests/fixtures/agent_acceptance/{classify,normalize,receipt_detect}/` — labeled holdout datasets (committed; sizes documented above).
+- **NEW:** `scripts/runtime/agent_acceptance.sh` and `./smackerel.sh test acceptance` wiring — runs both paths over holdouts, computes agreement, emits report.
+- **MODIFY:** `config/smackerel.yaml` — flip operator defaults for the three flags.
+- **DELETE:** `internal/intelligence/vendor_seeds.go`.
+- **MODIFY:** `internal/intelligence/expenses.go` — remove the 7-level `Classify` rule chain, `VendorNormalizer` struct + methods, the `vendorNormalizer` field on `ExpenseClassifier`, and the seed-load loop. Keep the agent dispatch added in Scopes 11–12.
+- **MODIFY:** `internal/intelligence/expenses_test.go` — remove tests covering removed code; keep sticky-correction coverage that now lives at the agent boundary.
+- **MODIFY:** `internal/telegram/expenses.go` — remove the regex intent block (already deprecated by Scope 15; this scope deletes the now-dead code).
+- **MODIFY:** `ml/app/synthesis.py` — remove the direct call to the legacy receipt-detection entrypoint; keep the heuristic functions as the read-only tool implementation.
+
+### Test Plan
+
+| ID | Type | File | Scenario | Description |
+|----|------|------|----------|-------------|
+| T-16-01 | Acceptance | `scripts/runtime/agent_acceptance.sh` | SCN-034-090 | Holdout agreement thresholds met for all three flags; report committed |
+| T-16-02 | Unit | `internal/intelligence/expenses_test.go` | SCN-034-092 | Build passes; symbol assertions: removed functions/files/structs are absent (governance test using `go/parser`) |
+| T-16-03 | Unit | `internal/telegram/expenses_test.go` | SCN-034-092 | Regex literal assertion: zero regex constants remain in the dispatch path |
+| T-16-04 | Integration | `tests/integration/post_removal_smoke_test.go` | SCN-034-093 | Live PostgreSQL + agent path: classification, vendor normalization, intent routing all functional with operator defaults = agent |
+| T-16-05 | Regression E2E | `tests/e2e/expense_full_regression_test.go` | SCN-034-093 | Full E2E suite covering Scopes 02, 04, 05, 06, 07, 08, 09 passes with operator defaults = agent |
+| T-16-06 | Regression E2E (adversarial) | `tests/e2e/expense_full_regression_test.go` | SCN-034-093 | Golden API + Telegram response fixtures: byte-equivalent to pre-migration baseline. **No bailout returns; would fail if any shipped surface regressed.** |
+| T-16-07 | Regression E2E | `tests/e2e/csv_export_parity_test.go` | — | CSV export (standard + QuickBooks) byte-equivalent to pre-migration |
+| T-16-08 | Regression E2E | `tests/e2e/digest_full_parity_test.go` | — | Daily digest expense section byte-equivalent for golden fixtures |
+
+### Definition of Done
+
+- [ ] Acceptance gate report committed; thresholds met (classify ≥ 95%, normalize ≥ 99%, receipt-detect ≥ 95%)
+- [ ] Operator defaults flipped to `agent` in `config/smackerel.yaml`; env files regenerated
+- [ ] `internal/intelligence/vendor_seeds.go` deleted
+- [ ] 7-level rule chain function removed from `internal/intelligence/expenses.go`
+- [ ] `VendorNormalizer` struct + LRU removed
+- [ ] Regex intent dispatch removed from `internal/telegram/expenses.go`
+- [ ] Direct call to legacy receipt-detection entrypoint removed from `ml/app/synthesis.py` (heuristic functions retained as tool backing)
+- [ ] Removed-code tests deleted; sticky-correction coverage retained at agent boundary
+- [ ] Build passes; governance unit tests assert removed symbols are absent
+- [ ] Full E2E regression suite for Scopes 02, 04, 05, 06, 07, 08, 09 passes with operator defaults = agent (no shipped-behavior regression)
+- [ ] Golden API + Telegram + CSV + digest fixtures byte-equivalent to pre-migration baseline
+- [ ] `./smackerel.sh test unit`, `test integration`, `test e2e`, `test stress` pass
+- [ ] `./smackerel.sh lint` and `format --check` pass
+- [ ] Artifact lint clean
+
+---
+
+## Scope 17: Operator Rationale & Trace Surfaces
+
+**ID:** 034-S17
+**Status:** Not started
+**Priority:** P1
+**Depends On:** 11 (rationale + agent_trace_id populated), 14 (write-tool traces), 15 (intent-routing trace)
+**BS coverage:** BS-029, BS-035 (rationale visibility for uncategorized), BS-038 (rejected tool call surfaced in trace only). Spec UX coverage: A-001, A-008, T-016 R4, T-017.
+
+### Goal
+
+Surface the operator-facing reasoning produced by the agent path: add `rationale`, `rationale_short`, and `scenario` fields to the existing expense API response objects (A-001), introduce `GET /api/expenses/{id}/trace` (A-008) for the full tool-call trace, and render the compact `Why:` line (T-017) in Telegram confirmations and query results. This scope is **additive only** — existing API shapes remain backward-compatible (clients that ignore unknown fields see no regression), existing Telegram format functions (T-001..T-011) gain an optional rationale tail, and no classification or routing logic changes.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-034-094 — A-001: API response includes rationale fields when agent path produced them
+  Given an expense was classified via expense.classify-v1 in Scope 11 with rationale "Matched user-defined business vendor list and weekday-morning pattern."
+  When the client calls GET /api/expenses/{id}
+  Then the response includes "scenario":"expense.classify-v1", "rationale":<full string ≤ 280 chars>, and "rationale_short":<one clause ≤ 80 chars>
+  And the response also includes every pre-migration field unchanged (existing clients see no regression)
+
+Scenario: SCN-034-095 — A-001: legacy-path expense returns null rationale fields
+  Given an expense was classified before Scope 11 shipped (no agent_trace_id, no rationale in metadata)
+  When the client calls GET /api/expenses/{id}
+  Then "rationale", "rationale_short", and "scenario" are present with value null
+  And no synthetic rationale is fabricated by the API layer
+
+Scenario: SCN-034-096 — A-008: trace endpoint returns operator-grade tool-call trace
+  Given an expense classified via expense.classify-v1 with agent_trace_id "trc_abc123"
+  When the client calls GET /api/expenses/{id}/trace
+  Then 200 OK is returned with trace.scenario, trace.tool_calls[] (each with name, side_effect, accepted, args_summary, duration_ms), trace.outcome, and trace.rationale
+  And rejected tool calls (BS-038) appear with accepted=false and a reason field
+  And no internal tool name leaks into A-001 or Telegram surfaces (operator-only)
+
+Scenario: SCN-034-097 — A-008: missing trace returns 410 TRACE_UNAVAILABLE
+  Given an expense predates the agent runtime (no agent_trace_id) or its trace has expired per retention policy
+  When the client calls GET /api/expenses/{id}/trace
+  Then 410 is returned with error code TRACE_UNAVAILABLE and a non-empty message
+  And no fabricated trace shape is returned
+
+Scenario: SCN-034-098 — T-017: Telegram confirmation renders one-sentence Why line
+  Given an expense was just captured and classified as "business" with rationale_short "matches your past coffee runs on workdays"
+  When the bot sends the capture confirmation
+  Then the message body includes a single "Why: matches your past coffee runs on workdays" line
+  And the line never references internal tool names, prompt-contract IDs, or trace IDs (those live only in A-008)
+  And if rationale_short is null the Why line is omitted entirely (no empty placeholder)
+
+Scenario: SCN-034-099 — T-016 R4: uncategorized expense surfaces user-visible rationale
+  Given an ambiguous expense (BS-035) was classified "uncategorized" with rationale_short "no signal was strong enough to choose a category"
+  When the bot sends the confirmation
+  Then the Why line appears with the rationale_short
+  And no fallback default category is shown to the user
+
+Scenario: SCN-034-100 — Adversarial: BS-038 rejected tool call is operator-only
+  Given an expense's classification trace contains a rejected hallucinated tool call (BS-038)
+  When the client calls GET /api/expenses/{id} (A-001) and the bot renders T-017
+  Then neither surface mentions the rejected tool, its name, or any reject reason
+  And only GET /api/expenses/{id}/trace exposes the rejected entry
+  And rationale_short does not allude to the rejection
+```
+
+### File Outline
+
+- **MODIFY:** `internal/api/expenses.go` (or the response-shaping layer it delegates to) — extend `expenseResponse` struct with `Scenario *string`, `Rationale *string`, `RationaleShort *string`; populate from `metadata.expense.{scenario,rationale,rationale_short}`; null when absent. Backward-compatible field addition only.
+- **NEW:** `internal/api/expense_trace.go` — handler for `GET /api/expenses/{id}/trace` (A-008). Reads from the `agent_tool_calls` / trace store written by spec 037. Returns 410 `TRACE_UNAVAILABLE` when no trace exists. Serializes per the schema in spec.md §A-008.
+- **MODIFY:** `internal/api/router.go` (or wherever expense routes are registered) — register `GET /api/expenses/{id}/trace` with the same auth class as `GET /api/expenses/{id}`.
+- **MODIFY:** `internal/telegram/expenses.go` — extend the format helpers used by capture confirmations and query results to append the optional `Why: {rationale_short}` line (T-017). Helper accepts an `*string`; emits nothing when nil. **No change to dispatch or state machine; no internal tool names ever passed to the formatter.**
+- **NEW:** `internal/api/expense_trace_test.go` — unit coverage for A-008 happy path, 410 path, and rejected-call shape.
+- **NEW:** `internal/api/expenses_response_test.go` — unit coverage for A-001 additive fields (agent path, legacy path null, no-leak assertion).
+- **NEW:** `internal/telegram/expenses_format_why_test.go` — unit coverage for T-017 line presence/absence and the no-internal-name assertion.
+- **NEW:** `tests/integration/expense_rationale_trace_test.go` — live-stack agent path → A-001 fields populated, A-008 returns trace.
+- **NEW:** `tests/e2e/expense_rationale_trace_e2e_test.go` — capture → classify (agent) → API GET (rationale present) → Telegram confirmation (Why line present) → API trace GET (tool calls present, rejected entries flagged).
+
+### Test Plan
+
+| ID | Type | File | Scenario | Description |
+|----|------|------|----------|-------------|
+| T-17-01 | Unit | `expenses_response_test.go` | SCN-034-094 | Agent-classified fixture → response includes `scenario`, `rationale`, `rationale_short`; pre-migration fields unchanged (golden response diff bounded to additions) |
+| T-17-02 | Unit | `expenses_response_test.go` | SCN-034-095 | Legacy-path fixture → fields present with value null; no fabrication |
+| T-17-03 | Unit | `expense_trace_test.go` | SCN-034-096 | Agent-classified fixture → 200 trace with tool_calls[], outcome, rationale; matches A-008 schema |
+| T-17-04 | Unit (adversarial) | `expense_trace_test.go` | SCN-034-097 | No-trace fixture → 410 `TRACE_UNAVAILABLE`; **fails if any synthesized/empty trace shape is returned** |
+| T-17-05 | Unit (adversarial) | `expenses_response_test.go` | SCN-034-100 (BS-038) | Rejected-tool-call trace fixture → A-001 response contains zero references to the rejected tool name or reject reason; assertion would fail if the API leaked operator-only fields |
+| T-17-06 | Unit | `expenses_format_why_test.go` | SCN-034-098 | Capture-confirmation formatter with `rationale_short` → one `Why:` line; with nil → no `Why:` line at all (no empty placeholder) |
+| T-17-07 | Unit (adversarial) | `expenses_format_why_test.go` | SCN-034-100 | **No-internal-name leak**: any test fixture with internal tool names (`expense_classify_tool`, etc.) in metadata.rationale_short fails fast at the formatter (sanitization assertion); would fail if formatter passed metadata through unchecked |
+| T-17-08 | Unit | `expenses_format_why_test.go` | SCN-034-099 (T-016 R4) | Uncategorized fixture → Why line surfaces rationale_short; no fallback category text added |
+| T-17-09 | Integration | `tests/integration/expense_rationale_trace_test.go` | SCN-034-094, 096 | Live PostgreSQL + agent path: capture → classify → A-001 fields populated; A-008 returns full trace from `agent_tool_calls` |
+| T-17-10 | Regression E2E | `tests/e2e/expense_rationale_trace_e2e_test.go` | SCN-034-094, 096, 098 | Live stack: end-to-end rationale + trace + Telegram Why line; **no bailout returns**; assertions on actual API JSON and actual Telegram message body |
+| T-17-11 | Regression E2E | `tests/e2e/expense_api_backcompat_e2e_test.go` | SCN-034-094 | Pre-migration golden API responses for `GET /api/expenses` are byte-equivalent except for the additive `scenario`/`rationale`/`rationale_short` keys (existing field set unchanged); existing client fixtures still parse |
+| T-17-12 | Regression E2E | `tests/e2e/telegram_format_parity_test.go` (extend) | — | Existing T-001..T-011 format tests pass with `rationale_short=nil`; with non-nil, golden body equals pre-migration body + one `Why:` line tail |
+
+### Definition of Done
+
+- [ ] `GET /api/expenses` and `GET /api/expenses/{id}` include `scenario`, `rationale`, `rationale_short` (null on legacy path); existing fields unchanged
+- [ ] `GET /api/expenses/{id}/trace` implemented per spec §A-008; 410 `TRACE_UNAVAILABLE` when no trace; no fabricated shape
+- [ ] Telegram capture confirmations and expense query results render T-017 `Why:` line when `rationale_short` is non-nil; omit entirely when nil
+- [ ] Sanitization guard in formatter rejects any rationale text containing internal tool names, prompt-contract IDs, or trace IDs (operator-only data)
+- [ ] BS-038 rejected tool calls appear ONLY in A-008; never in A-001 or Telegram (adversarial assertion enforced)
+- [ ] BS-035 uncategorized rationale visible to user via Why line (T-016 R4)
+- [ ] Backward compatibility: pre-migration golden API and Telegram responses byte-equivalent to baseline plus the additive surfaces
+- [ ] Existing Scopes 06, 07, 08 E2E tests pass unchanged (no shipped-behavior regression)
+- [ ] No regex literals or routing logic introduced in this scope (additive surfaces only)
+- [ ] `./smackerel.sh test unit`, `test integration`, `test e2e` pass
+- [ ] `./smackerel.sh lint` and `format --check` pass
+- [ ] Artifact lint clean
+
+---
+
+## RESULT-ENVELOPE
+
+```yaml
+agent: bubbles.plan
+role: Sequential scope planner (agent+tools shift)
+outcome: completed_owned
+affected_artifacts:
+  - specs/034-expense-tracking/scopes.md (UPDATED)
+evidence_summary: |
+  Updated scopes.md for the spec-037 LLM Agent + Tools shift.
+
+  Marked DEPRECATED (with one-line replacement notes):
+    - Scope 04 Classification Engine → replaced by Scope 11 (expense.classify-v1)
+    - Scope 05 Vendor Normalization & Suggestions → replaced by Scope 12
+      (expense.normalize_vendor-v1; vendor_seeds.go bootstrap-imported)
+    - Scope 08 Telegram Expense Commands (partial) → regex intent patterns
+      replaced by Scope 15 (expense.intent_route-v1); format functions and
+      OCR flow retained.
+
+  Added new Scopes 10–16 covering the agent shift:
+    10 Expense Tool Registration & Scenario Bootstrap
+       (registers all 7 tools, creates 7 scenario skeletons; SST flags;
+        depends on spec 037 Scopes 2 + 3)
+    11 Classification Scenario Migration
+       (BS-029, BS-033, BS-035, BS-037, BS-038; sticky user_corrected
+        guard at prompt + Go post-validation)
+    12 Vendor Normalization Scenario Migration
+       (BS-014, BS-036; should_persist gate; bootstrap import of seeds)
+    13 Receipt Extraction Resilience
+       (BS-032, BS-033, BS-034, BS-037; receipt_extract_tool; adversarial
+        fixtures)
+    14 Subscription Detect / Refund Link / Unusual Spend Scenarios
+       (BS-029, BS-030, BS-031; governance test for "no Go change to
+        add new scenario")
+    15 Natural-Language Query & Intent Routing Scenarios
+       (BS-025, BS-029; replaces telegram regex; format functions retained)
+    17 Operator Rationale & Trace Surfaces
+       (A-001 additive API fields, A-008 GET /api/expenses/{id}/trace,
+        T-017 Telegram Why: line; sanitization guard; BS-038 rejected
+        calls operator-only; backward-compatible additive surfaces only)
+    16 Legacy Removal & Acceptance Gate
+       (deletes vendor_seeds.go, 7-rule chain, regex dispatch; full
+        regression suite + golden parity fixtures protect shipped behavior)
+
+  Each new scope: ID, goal, BS-* coverage, file outline, Gherkin scenarios,
+  test plan with adversarial regressions for BS-032..BS-038, strict DoD
+  including ./smackerel.sh runner commands and SST zero-defaults compliance.
+
+  Honored:
+    - Existing expense API + Telegram surface continues to work; explicit
+      "no shipped-behavior regression" DoD items and golden parity tests.
+    - Spec 037 dependency declared on Scope 10.
+    - SST zero-defaults: EXPENSES_CLASSIFIER, EXPENSES_RECEIPT_DETECTOR,
+      EXPENSES_VENDOR_NORMALIZER are required env vars with no source
+      defaults; operator default = legacy until Scope 16 acceptance gate.
+    - All test commands route through ./smackerel.sh (unit, integration,
+      e2e, stress, lint, format).
+
+  No artifact-lint-blocking patterns introduced; existing Scopes 01–09
+  status fields and evidence preserved.
+```

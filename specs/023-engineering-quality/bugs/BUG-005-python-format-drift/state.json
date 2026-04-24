@@ -4,7 +4,7 @@
   "bugId": "BUG-005-python-format-drift",
   "featureDir": "specs/023-engineering-quality/bugs/BUG-005-python-format-drift",
   "workflowMode": "bugfix-fastlane",
-  "status": "done",
+  "status": "in_progress",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -56,7 +56,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       1
     ],

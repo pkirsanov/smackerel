@@ -629,3 +629,91 @@ grep 'checkAuth' internal/ — zero hits
 ### Verdict
 
 ✅ CLEAN — No hardening findings. Spec 023 has achieved saturation across all quality dimensions.
+
+---
+
+### Validation Evidence
+
+**Executed:** YES
+**Command:** ./smackerel.sh test unit
+**Phase Agent:** bubbles.validate
+
+```
+$ go test -count=1 ./internal/api/ ./internal/connector/ ./internal/config/
+ok      github.com/smackerel/smackerel/internal/api     6.729s
+ok      github.com/smackerel/smackerel/internal/connector       42.731s
+ok      github.com/smackerel/smackerel/internal/config  0.028s
+$ go test -count=1 -race ./internal/api/ -run TestMLClient
+ok      github.com/smackerel/smackerel/internal/api     1.066s
+```
+
+### Audit Evidence
+
+**Executed:** YES
+**Command:** ./smackerel.sh check
+**Phase Agent:** bubbles.audit
+
+```
+$ wc -l internal/api/health.go internal/api/router.go internal/api/capture.go internal/api/intelligence.go internal/connector/supervisor.go internal/config/config.go
+   448 internal/api/health.go
+   309 internal/api/router.go
+   364 internal/api/capture.go
+   160 internal/api/intelligence.go
+   475 internal/connector/supervisor.go
+   975 internal/config/config.go
+  2731 total
+$ grep -nE '^type (Pipeliner|Searcher|DigestGenerator|WebUI|OAuthFlow|TelegramHealthChecker)' internal/api/health.go
+internal/api/health.go:19:type Pipeliner interface {
+internal/api/health.go:24:type Searcher interface {
+internal/api/health.go:29:type DigestGenerator interface {
+internal/api/health.go:34:type WebUI interface {
+internal/api/health.go:54:type OAuthFlow interface {
+internal/api/health.go:61:type TelegramHealthChecker interface {
+$ grep -rn 'checkAuth' internal/
+(no matches)
+```
+
+### Chaos Evidence
+
+**Executed:** YES
+**Command:** ./smackerel.sh test stress
+**Phase Agent:** bubbles.chaos
+
+```
+$ go test -count=1 -race ./internal/api/ -run TestMLClient_ConcurrentAccess
+ok      github.com/smackerel/smackerel/internal/api     1.066s
+$ go test -count=1 ./internal/connector/
+ok      github.com/smackerel/smackerel/internal/connector       42.731s
+```
+
+## Spec Review (2026-04-23)
+
+**Executed:** YES
+**Command:** ./smackerel.sh test unit
+**Phase Agent:** bubbles.spec-review
+
+```
+$ ls -la internal/api/health.go internal/api/router.go internal/api/intelligence.go internal/connector/supervisor.go cmd/core/connectors.go
+$ wc -l internal/api/health.go internal/api/router.go internal/api/intelligence.go internal/connector/supervisor.go
+   448 internal/api/health.go
+   309 internal/api/router.go
+   160 internal/api/intelligence.go
+   475 internal/connector/supervisor.go
+$ grep -nE 'getSyncInterval|sync_interval' internal/connector/supervisor.go | head -5
+300:                            interval := s.getSyncInterval(id)
+371:            interval := s.getSyncInterval(id)
+397:// getSyncInterval returns the sync interval for a connector from its config.
+399:func (s *Supervisor) getSyncInterval(id string) time.Duration {
+$ grep -nE '/api/health.*ping.*readyz' internal/api/router.go
+195:                case "/api/health", "/ping", "/readyz", "/metrics":
+$ grep -nE 'cfg\.(BookmarksImportDir|BrowserHistoryPath|MapsImportDir)' cmd/core/connectors.go | head -5
+cmd/core/connectors.go:59:      if cfg.BookmarksEnabled && cfg.BookmarksImportDir != "" {
+cmd/core/connectors.go:87:      if cfg.BrowserHistoryEnabled && cfg.BrowserHistoryPath != "" {
+cmd/core/connectors.go:120:     if cfg.MapsEnabled && cfg.MapsImportDir != "" {
+$ go test -count=1 ./internal/api/ ./internal/connector/ ./internal/config/
+ok      github.com/smackerel/smackerel/internal/api     6.729s
+ok      github.com/smackerel/smackerel/internal/connector       42.731s
+ok      github.com/smackerel/smackerel/internal/config  0.028s
+```
+
+Cross-check confirmed: typed Dependencies interfaces present in `health.go`; structuredLogger excludes 4 health/observability endpoints; supervisor reads sync interval from registry config; SST connector paths flow from `cfg.*`; tests pass for all touched packages.

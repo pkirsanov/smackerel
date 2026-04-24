@@ -31,3 +31,11 @@ Replaced 100+ individual `KEY: ${KEY}` environment declarations in `docker-compo
 ## Impact
 
 All features added since the initial Compose wiring — expense tracking (034), recipe cook mode (035), meal planning (036), GuestHost connector (013), Telegram assembly (008), OTEL observability (030), and others — now receive their configuration in containerized deployment via `env_file`.
+
+## Completion Statement
+
+Status: in_progress. The fix is present in `docker-compose.yml` and `smackerel.sh`, but the bug folder has not been independently re-validated and certified in this artifact pass; closure is deferred until each DoD item in `scopes.md` is re-checked with captured evidence and `state.json` is promoted by the validate/audit phases.
+
+## Test Evidence
+
+No new test execution was performed during this artifact-cleanup pass. Re-running `./smackerel.sh check`, `./smackerel.sh test unit` (Go and Python), and the env_file drift guard with captured terminal output is required before any DoD item is re-checked and before this bug is promoted out of `in_progress`.

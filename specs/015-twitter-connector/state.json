@@ -3,7 +3,7 @@
   "featureDir": "specs/015-twitter-connector",
   "featureName": "Twitter/X Connector",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -24,7 +24,8 @@
       "test",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
@@ -204,6 +205,17 @@
       "startedAt": "2026-04-14T01:00:00Z",
       "completedAt": "2026-04-14T01:05:00Z",
       "summary": "All scopes Done. All quality sweeps pass. Delivery lockdown certification complete."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-04-23T00:00:00Z",
+      "completedAt": "2026-04-23T00:30:00Z",
+      "summary": "Spec-review pass: confirmed spec.md / design.md / scopes.md remain coherent with twitter.go (860 LOC) + twitter_test.go (2355 LOC, 127 tests). All 6 scopes Done with intact DoD evidence. No drift between active artifacts and implementation."
     }
   ],
   "policySnapshot": {
@@ -261,7 +273,8 @@
       "regression",
       "chaos",
       "improve",
-      "devops"
+      "devops",
+      "spec-review"
     ],
     "scopeProgress": [
       {

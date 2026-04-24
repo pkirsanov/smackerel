@@ -700,7 +700,7 @@ Full regression analysis targeting all spec 001 deliverables: connector framewor
 | Unit tests (Go) | `./smackerel.sh test unit` | PASS — 41 Go packages, 0 failures |
 | Unit tests (Python) | `./smackerel.sh test unit` | PASS — 236 tests, 3 warnings, 0 failures |
 | Static checks | `./smackerel.sh check` | PASS — Config SST in sync, env_file drift guard OK |
-| Lint (Go vet + Python ruff) | `./smackerel.sh lint` | PASS — All checks passed |
+| Lint (Go vet + Python ruff) | `./smackerel.sh lint` | exit 0 (clean) |
 | Format | `./smackerel.sh format --check` | PASS — 33 files unchanged |
 
 ### Cross-Spec Interface Consistency

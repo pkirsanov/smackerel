@@ -3,7 +3,7 @@
   "specId": "023-engineering-quality",
   "bugId": "BUG-004-main-god-wirer",
   "workflowMode": "bugfix-fastlane",
-  "status": "done",
+  "status": "in_progress",
   "execution": {
     "activeAgent": "bubbles.workflow",
     "currentPhase": "verification",
@@ -34,7 +34,7 @@
     ]
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "main-extraction"
     ],

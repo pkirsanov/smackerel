@@ -13,7 +13,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "pending",
+    "status": "in_progress",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
@@ -24,5 +24,16 @@
         "dependsOn": []
       }
     ]
-  }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": []
 }

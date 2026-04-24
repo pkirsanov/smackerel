@@ -29,6 +29,14 @@ var (
 )
 
 func main() {
+	// CLI subcommand dispatch (spec 037 Scope 6: `smackerel agent ...`).
+	// Subcommands run to completion and exit; the runtime loop is the
+	// default when no subcommand is supplied.
+	if len(os.Args) > 1 && os.Args[1] == "agent" {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		os.Exit(runAgentCommand(ctx, os.Args[2:]))
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal startup error", "error", err)
 		os.Exit(1)

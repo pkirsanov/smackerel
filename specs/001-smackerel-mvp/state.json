@@ -3,7 +3,7 @@
   "featureDir": "specs/001-smackerel-mvp",
   "featureName": "Smackerel MVP",
   "status": "done",
-  "workflowMode": "delivery-lockdown",
+  "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -149,7 +149,7 @@
     {
       "id": "2",
       "agent": "bubbles.select",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T08:00:00Z",
       "completedAt": "2026-04-07T08:05:00Z",
       "statusBefore": "in_progress",
@@ -163,7 +163,7 @@
     {
       "id": "3",
       "agent": "bubbles.bootstrap",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T08:05:00Z",
       "completedAt": "2026-04-07T08:12:00Z",
       "statusBefore": "in_progress",
@@ -177,7 +177,7 @@
     {
       "id": "4",
       "agent": "bubbles.implement",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T08:12:00Z",
       "completedAt": "2026-04-07T08:40:00Z",
       "statusBefore": "in_progress",
@@ -196,7 +196,7 @@
     {
       "id": "5",
       "agent": "bubbles.test",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T08:40:00Z",
       "completedAt": "2026-04-07T09:05:00Z",
       "statusBefore": "in_progress",
@@ -210,7 +210,7 @@
     {
       "id": "6",
       "agent": "bubbles.regression",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T09:05:00Z",
       "completedAt": "2026-04-07T09:12:00Z",
       "statusBefore": "in_progress",
@@ -224,7 +224,7 @@
     {
       "id": "7",
       "agent": "bubbles.simplify",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T09:12:00Z",
       "completedAt": "2026-04-07T09:17:00Z",
       "statusBefore": "in_progress",
@@ -238,7 +238,7 @@
     {
       "id": "8",
       "agent": "bubbles.gaps",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T09:17:00Z",
       "completedAt": "2026-04-07T09:23:00Z",
       "statusBefore": "in_progress",
@@ -252,7 +252,7 @@
     {
       "id": "9",
       "agent": "bubbles.harden",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T09:23:00Z",
       "completedAt": "2026-04-07T09:30:00Z",
       "statusBefore": "in_progress",
@@ -266,7 +266,7 @@
     {
       "id": "10",
       "agent": "bubbles.stabilize",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T09:30:00Z",
       "completedAt": "2026-04-07T09:37:00Z",
       "statusBefore": "in_progress",
@@ -280,7 +280,7 @@
     {
       "id": "11",
       "agent": "bubbles.security",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T09:37:00Z",
       "completedAt": "2026-04-07T09:43:00Z",
       "statusBefore": "in_progress",
@@ -294,7 +294,7 @@
     {
       "id": "12",
       "agent": "bubbles.validate",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T09:43:00Z",
       "completedAt": "2026-04-07T09:50:00Z",
       "statusBefore": "in_progress",
@@ -308,7 +308,7 @@
     {
       "id": "13",
       "agent": "bubbles.audit",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T09:50:00Z",
       "completedAt": "2026-04-07T09:56:00Z",
       "statusBefore": "in_progress",
@@ -322,7 +322,7 @@
     {
       "id": "14",
       "agent": "bubbles.chaos",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T09:56:00Z",
       "completedAt": "2026-04-07T10:03:00Z",
       "statusBefore": "in_progress",
@@ -336,7 +336,7 @@
     {
       "id": "15",
       "agent": "bubbles.docs",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T10:03:00Z",
       "completedAt": "2026-04-07T10:12:00Z",
       "statusBefore": "in_progress",
@@ -350,7 +350,7 @@
     {
       "id": "16",
       "agent": "bubbles.spec-review",
-      "workflowMode": "delivery-lockdown",
+      "workflowMode": "full-delivery",
       "startedAt": "2026-04-07T10:12:00Z",
       "completedAt": "2026-04-07T10:16:00Z",
       "statusBefore": "in_progress",

@@ -21,8 +21,8 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not_certified",
-    "completedScopes": [],
+    "status": "in_progress",
+    "completedScopes": ["01", "03"],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
@@ -70,7 +70,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-09T00:00:00Z",
+  "lastUpdatedAt": "2026-04-24T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

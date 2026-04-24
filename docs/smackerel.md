@@ -414,6 +414,79 @@ sequenceDiagram
 
 ---
 
+### 3.6 LLM Agent + Tools Pattern
+
+Domain reasoning in Smackerel — classification, intent routing, multi-step
+workflows, cross-domain composition — is **LLM-driven, not rule-driven**. The Go
+core is responsible for *capabilities* (deterministic, typed operations on the
+knowledge graph and connectors); the LLM is responsible for *decisions* (when to
+invoke which capability, in what order, with what arguments).
+
+#### 3.6.1 Roles
+
+- **Agent runtime (Go core, calling the ML sidecar via NATS).**
+  Owns orchestration. Given a user input, a scenario prompt, relevant context
+  pulled from PostgreSQL/pgvector, and a set of available tools, it asks the LLM
+  to plan and execute a sequence of tool calls until the scenario completes.
+
+- **Tool registry (Go core).**
+  A declarative catalogue of typed functions exposed to the agent. Each tool
+  carries a name, a JSON schema for its arguments and return value, a short
+  description, and a Go implementation. Tools are deterministic, side-effect
+  scoped, and individually testable. Examples of the *kinds* of tools the
+  registry holds: structured extraction from raw text, vendor/entity
+  normalization, expense classification helpers, recipe scaling and quantity
+  formatting, shopping list aggregation, meal plan CRUD, semantic search, and
+  knowledge-graph traversal. (Concrete tool names are owned by the per-feature
+  specs that introduce them.)
+
+- **Scenarios (prompt contracts).**
+  Each scenario — "process a forwarded receipt", "answer a recipe question",
+  "create a meal plan from this week's intent" — is defined as a prompt contract
+  in `config/prompt_contracts/`, declaring the system prompt, the subset of
+  tools the agent may call, the expected output schema, and validation rules.
+  Scenarios live in YAML, not in Go.
+
+- **ML sidecar (Python).**
+  Routes the agent loop to the configured LLM provider (litellm / Ollama),
+  enforces the contract's output schema, and returns structured results to the
+  Go core for persistence and delivery.
+
+#### 3.6.2 Generic-By-Default Rule
+
+Adding a new domain capability — a new expense category, a new intent the
+Telegram bot should understand, a new digest variant, a new connector-driven
+workflow — must follow this priority order:
+
+1. **Compose existing tools via a new or revised prompt contract.** Default path.
+2. **Add a new deterministic tool to the registry,** *only if* the agent
+   genuinely needs a capability the current registry cannot express (e.g., a new
+   data lookup, a new structured transform, a new CRUD surface).
+3. **Write hardcoded Go business logic,** *only* for things that are not
+   reasoning at all: pure math, format helpers, schema-bound CRUD, transport,
+   authn/authz, scheduling, validation of typed inputs.
+
+Hardcoded rule chains, regex-based intent routers, keyword-based
+classification trees, and seed lists of vendor/alias strings embedded in Go are
+**not** an acceptable target architecture. Where they exist today (notably in
+expense classification, Telegram intent dispatch, and ingredient/vendor
+heuristics), they are technical debt to be replaced by `(prompt + tools)` over
+time, not extended.
+
+#### 3.6.3 Why This Shape
+
+- **Generality.** New scenarios ship as prompt files plus, occasionally, a new
+  tool — not as a new branch in a Go switch statement.
+- **Determinism where it matters.** Tools remain deterministic and unit-tested;
+  only the orchestration layer is probabilistic.
+- **Auditability.** The agent's tool-call trace is the explanation for any
+  outcome — what was looked up, what was classified, what was written.
+- **Local-first compatibility.** The pattern is provider-agnostic; the same
+  scenarios run against Ollama for fully local operation or against a hosted
+  LLM via litellm.
+
+---
+
 ## 4. OpenClaw Integration Strategy
 
 > **⚠️ SUPERSEDED:** This section describes the original design intent to use OpenClaw as the runtime platform. The actual implementation uses a **standalone Go monolith + Python ML sidecar + Docker Compose** architecture, as described in §3 and §23. This section is retained as historical context for the design evolution. All subsections below reflect the original OpenClaw design, not the current implementation.

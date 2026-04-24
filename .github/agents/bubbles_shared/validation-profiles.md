@@ -38,6 +38,7 @@ Use these sections as the single source of truth for agent-specific Tier 2 compl
 | UX5 | Accessibility recorded | Every wireframe includes accessibility notes |
 | UX6 | State updated when owned | `state.json` includes UX execution when applicable |
 | UX7 | Active UX reconciled | Stale wireframes, screens, or flows are removed from active UX sections or explicitly marked superseded |
+| UX8 | No sidecar UX files | `{FEATURE_DIR}` MUST NOT contain `ux.md`, `wireframes.md`, `flows.md`, `user-flows.md`, or `screens.md` — all UX content lives in `spec.md` |
 
 ## Plan
 

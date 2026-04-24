@@ -22,7 +22,8 @@
       "docs",
       "validate",
       "audit",
-      "chaos"
+      "chaos",
+      "spec-review"
     ],
     "pendingTransitionRequests": [],
     "executionHistory": [
@@ -140,7 +141,8 @@
       "docs",
       "validate",
       "audit",
-      "chaos"
+      "chaos",
+      "spec-review"
     ],
     "scopeProgress": [
       {

@@ -141,12 +141,12 @@ Scenario: List type constants compile
   And List, ListItem, ListWithItems, AggregationSource, and ListItemSeed structs compile
 ```
 
-### DoD
+### Definition of Done
 
-- [x] Migration file `017_actionable_lists.sql` created and applies cleanly **Phase:** implement — consolidated into `internal/db/migrations/001_initial_schema.sql` lines 545-588; `lists` and `list_items` tables with FK, indexes on status/type/created_at/list_id/category
-- [x] Go types defined in `internal/list/types.go` **Phase:** implement — ListType, ListStatus, ItemStatus constants + List, ListItem, ListWithItems, AggregationSource, ListItemSeed, Aggregator interface, ListStore interface
-- [x] `./smackerel.sh test unit` passes **Phase:** implement — all packages pass including `internal/list` (cached). **Claim Source:** executed
-- [x] `./smackerel.sh lint` passes **Phase:** implement — "All checks passed!" **Claim Source:** executed
+- [x] Migration file `017_actionable_lists.sql` created and applies cleanly **Evidence:** implement — consolidated into `internal/db/migrations/001_initial_schema.sql` lines 545-588; `lists` and `list_items` tables with FK, indexes on status/type/created_at/list_id/category
+- [x] Go types defined in `internal/list/types.go` **Evidence:** implement — ListType, ListStatus, ItemStatus constants + List, ListItem, ListWithItems, AggregationSource, ListItemSeed, Aggregator interface, ListStore interface
+- [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list` (cached). **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
 
 ---
 
@@ -197,13 +197,13 @@ Scenario: Archive list
   Then list.status is "archived"
 ```
 
-### DoD
+### Definition of Done
 
-- [x] Store CRUD operations implemented with tests **Phase:** implement — `internal/list/store.go` has CreateList, GetList, ListLists, UpdateItemStatus, AddManualItem, RemoveItem, CompleteList, ArchiveList
-- [x] Denormalized counter updates (total_items, checked_items) correct **Phase:** implement — UpdateItemStatus recalculates checked_items via subquery; AddManualItem increments total_items; RemoveItem recalculates both; CreateList sets total_items = len(items)
-- [x] NATS events published for create and complete **Phase:** reconcile — Store now accepts `*smacknats.Client`; CreateList publishes `lists.created`, CompleteList publishes `lists.completed` with item stats. **Claim Source:** executed (R85 reconcile sweep)
-- [x] `./smackerel.sh test unit` passes **Phase:** implement — all packages pass including `internal/list` and `internal/nats`. **Claim Source:** executed
-- [x] `./smackerel.sh lint` passes **Phase:** implement — "All checks passed!" **Claim Source:** executed
+- [x] Store CRUD operations implemented with tests **Evidence:** implement — `internal/list/store.go` has CreateList, GetList, ListLists, UpdateItemStatus, AddManualItem, RemoveItem, CompleteList, ArchiveList
+- [x] Denormalized counter updates (total_items, checked_items) correct **Evidence:** implement — UpdateItemStatus recalculates checked_items via subquery; AddManualItem increments total_items; RemoveItem recalculates both; CreateList sets total_items = len(items)
+- [x] NATS events published for create and complete **Evidence:** reconcile — Store now accepts `*smacknats.Client`; CreateList publishes `lists.created`, CompleteList publishes `lists.completed` with item stats. **Claim Source:** executed (R85 reconcile sweep)
+- [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list` and `internal/nats`. **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
 
 ---
 
@@ -251,16 +251,16 @@ Scenario: Handle uncountable quantities
   Then quantity is nil and the item is kept as-is with original text
 ```
 
-### DoD
+### Definition of Done
 
-- [x] Aggregator interface defined **Phase:** implement — `internal/list/types.go` Aggregator interface with Aggregate(), Domain(), DefaultListType()
-- [x] RecipeAggregator implemented with full test coverage **Phase:** implement — `internal/list/recipe_aggregator.go` + `recipe_aggregator_test.go`; merges ingredients by normalized name+unit
-- [x] parseQuantity handles integers, decimals, fractions, mixed numbers, "a pinch", "to taste" **Phase:** implement — `internal/recipe/quantity.go` ParseQuantity with mixed fraction regex, simple fraction regex, Unicode fraction normalization; returns 0 for unparseable
-- [x] normalizeUnit converts between volume units (tsp/tbsp/cup/ml/l) and weight units (oz/lb/g/kg) **Phase:** implement — `internal/recipe/quantity.go` NormalizeUnit with 24 aliases covering tablespoon→tbsp, teaspoon→tsp, cups→cup, ounce→oz, pound→lb, gram→g, kilogram→kg, milliliter→ml, liter→l
-- [x] normalizeIngredientName handles plurals and common synonyms **Phase:** implement — `internal/recipe/quantity.go` NormalizeIngredientName strips trailing "s" and "oes" plurals
-- [x] categorizeIngredient maps 50+ common ingredients to categories **Phase:** implement — `internal/recipe/quantity.go` CategorizeIngredient maps 88 ingredients across 7 categories (proteins, dairy, produce, spices, baking, pantry, beverages)
-- [x] `./smackerel.sh test unit` passes **Phase:** implement — all packages pass including `internal/list` and `internal/recipe`. **Claim Source:** executed
-- [x] `./smackerel.sh lint` passes **Phase:** implement — "All checks passed!" **Claim Source:** executed
+- [x] Aggregator interface defined **Evidence:** implement — `internal/list/types.go` Aggregator interface with Aggregate(), Domain(), DefaultListType()
+- [x] RecipeAggregator implemented with full test coverage **Evidence:** implement — `internal/list/recipe_aggregator.go` + `recipe_aggregator_test.go`; merges ingredients by normalized name+unit
+- [x] parseQuantity handles integers, decimals, fractions, mixed numbers, "a pinch", "to taste" **Evidence:** implement — `internal/recipe/quantity.go` ParseQuantity with mixed fraction regex, simple fraction regex, Unicode fraction normalization; returns 0 for unparseable
+- [x] normalizeUnit converts between volume units (tsp/tbsp/cup/ml/l) and weight units (oz/lb/g/kg) **Evidence:** implement — `internal/recipe/quantity.go` NormalizeUnit with 24 aliases covering tablespoon→tbsp, teaspoon→tsp, cups→cup, ounce→oz, pound→lb, gram→g, kilogram→kg, milliliter→ml, liter→l
+- [x] normalizeIngredientName handles plurals and common synonyms **Evidence:** implement — `internal/recipe/quantity.go` NormalizeIngredientName strips trailing "s" and "oes" plurals
+- [x] categorizeIngredient maps 50+ common ingredients to categories **Evidence:** implement — `internal/recipe/quantity.go` CategorizeIngredient maps 88 ingredients across 7 categories (proteins, dairy, produce, spices, baking, pantry, beverages)
+- [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list` and `internal/recipe`. **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
 
 ---
 
@@ -292,13 +292,13 @@ Scenario: Estimate read time
   Then the result is approximately 10 minutes (at 200 WPM)
 ```
 
-### DoD
+### Definition of Done
 
-- [x] ReadingAggregator implemented with tests **Phase:** implement — `internal/list/reading_aggregator.go` with EstimateReadTime + `reading_aggregator_test.go` (TestReadingAggregator_BasicList, TestReadingAggregator_MissingTitle)
-- [x] CompareAggregator implemented with tests **Phase:** implement — `internal/list/reading_aggregator.go` CompareAggregator with product name/brand/price/rating/specs aggregation
-- [x] Both register with the aggregator registry **Phase:** implement — Generator.Aggregators map[string]Aggregator in `internal/list/generator.go`; keyed by domain ("recipe", "reading", "product")
-- [x] `./smackerel.sh test unit` passes **Phase:** implement — all packages pass including `internal/list`. **Claim Source:** executed
-- [x] `./smackerel.sh lint` passes **Phase:** implement — "All checks passed!" **Claim Source:** executed
+- [x] ReadingAggregator implemented with tests **Evidence:** implement — `internal/list/reading_aggregator.go` with EstimateReadTime + `reading_aggregator_test.go` (TestReadingAggregator_BasicList, TestReadingAggregator_MissingTitle)
+- [x] CompareAggregator implemented with tests **Evidence:** implement — `internal/list/reading_aggregator.go` CompareAggregator with product name/brand/price/rating/specs aggregation
+- [x] Both register with the aggregator registry **Evidence:** implement — Generator.Aggregators map[string]Aggregator in `internal/list/generator.go`; keyed by domain ("recipe", "reading", "product")
+- [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list`. **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
 
 ---
 
@@ -335,15 +335,15 @@ Scenario: Handle artifacts without domain_data
   And a warning is logged for the artifact without domain_data
 ```
 
-### DoD
+### Definition of Done
 
-- [x] Generator resolves artifacts from IDs, tags, and search queries **Phase:** implement — ArtifactResolver interface + PostgresArtifactResolver
-- [x] Generator selects correct aggregator based on list_type + domain **Phase:** implement — validateDomains() + aggregator map lookup
-- [x] Generator persists list via Store **Phase:** implement — ListStore interface injection
-- [x] Handles missing domain_data gracefully (skip with warning) **Phase:** implement — slog.Warn when resolved < requested
-- [x] Rejects incompatible domain combinations **Phase:** implement — TestGenerator_RejectMixedDomains passes
-- [x] `./smackerel.sh test unit` passes **Phase:** implement — **Claim Source:** executed
-- [x] `./smackerel.sh lint` passes **Phase:** implement — **Claim Source:** executed
+- [x] Generator resolves artifacts from IDs, tags, and search queries **Evidence:** implement — ArtifactResolver interface + PostgresArtifactResolver
+- [x] Generator selects correct aggregator based on list_type + domain **Evidence:** implement — validateDomains() + aggregator map lookup
+- [x] Generator persists list via Store **Evidence:** implement — ListStore interface injection
+- [x] Handles missing domain_data gracefully (skip with warning) **Evidence:** implement — slog.Warn when resolved < requested
+- [x] Rejects incompatible domain combinations **Evidence:** implement — TestGenerator_RejectMixedDomains passes
+- [x] `./smackerel.sh test unit` passes **Evidence:** implement — **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Evidence:** implement — **Claim Source:** executed
 
 ---
 
@@ -390,15 +390,15 @@ Scenario: List all active lists
   Then status 200 is returned with 3 lists
 ```
 
-### DoD
+### Definition of Done
 
-- [x] All list CRUD endpoints implemented **Phase:** reconcile — POST/GET /api/lists, GET/PATCH/DELETE /api/lists/{id}
-- [x] All item-level operation endpoints implemented **Phase:** reconcile — POST items, POST check, DELETE items/{itemId}, POST complete
-- [x] Route group registered in router.go **Phase:** implement — Chi r.Route("/lists", ...) with all routes including PATCH, DELETE
-- [x] Dependencies wired (Generator, Store) **Phase:** implement — ListHandlers struct + Dependencies field
-- [x] Error responses follow existing API error format **Phase:** implement — JSON error pattern
-- [x] `./smackerel.sh test unit` passes **Phase:** reconcile — **Claim Source:** executed (R85 reconcile sweep)
-- [x] `./smackerel.sh lint` passes **Phase:** reconcile — **Claim Source:** executed (R85 reconcile sweep)
+- [x] All list CRUD endpoints implemented **Evidence:** reconcile — POST/GET /api/lists, GET/PATCH/DELETE /api/lists/{id}
+- [x] All item-level operation endpoints implemented **Evidence:** reconcile — POST items, POST check, DELETE items/{itemId}, POST complete
+- [x] Route group registered in router.go **Evidence:** implement — Chi r.Route("/lists", ...) with all routes including PATCH, DELETE
+- [x] Dependencies wired (Generator, Store) **Evidence:** implement — ListHandlers struct + Dependencies field
+- [x] Error responses follow existing API error format **Evidence:** implement — JSON error pattern
+- [x] `./smackerel.sh test unit` passes **Evidence:** reconcile — **Claim Source:** executed (R85 reconcile sweep)
+- [x] `./smackerel.sh lint` passes **Evidence:** reconcile — **Claim Source:** executed (R85 reconcile sweep)
 
 ---
 
@@ -441,15 +441,15 @@ Scenario: Complete list via Telegram
   And a summary of the completed list is sent
 ```
 
-### DoD
+### Definition of Done
 
-- [x] `/list` command parser implemented and registered **Phase:** implement — parseListCommand() + bot command switch
-- [x] List display with inline keyboard renders correctly **Phase:** implement — formatListMessage() with keyboard buttons
-- [x] Callback handler for check/skip/substitute works **Phase:** implement — handleListCallback() with callback data parsing
-- [x] Message editing on item state change works **Phase:** implement — NewEditMessageText after callback
-- [x] `/list add` and `/list done` sub-commands work **Phase:** implement — tested with mock HTTP servers
-- [x] `./smackerel.sh test unit` passes **Phase:** implement — **Claim Source:** executed
-- [x] `./smackerel.sh lint` passes **Phase:** implement — **Claim Source:** executed
+- [x] `/list` command parser implemented and registered **Evidence:** implement — parseListCommand() + bot command switch
+- [x] List display with inline keyboard renders correctly **Evidence:** implement — formatListMessage() with keyboard buttons
+- [x] Callback handler for check/skip/substitute works **Evidence:** implement — handleListCallback() with callback data parsing
+- [x] Message editing on item state change works **Evidence:** implement — NewEditMessageText after callback
+- [x] `/list add` and `/list done` sub-commands work **Evidence:** implement — tested with mock HTTP servers
+- [x] `./smackerel.sh test unit` passes **Evidence:** implement — **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Evidence:** implement — **Claim Source:** executed
 
 ---
 
@@ -475,13 +475,13 @@ Scenario: Frequently purchased ingredients detected
   And this data is available for future list pre-population
 ```
 
-### DoD
+### Definition of Done
 
-- [x] NATS subscriber for `lists.completed` implemented in intelligence engine **Phase:** implement — SubscribeListsCompleted() + NATS subjects in contract
-- [x] Completed list analysis updates artifact relevance scores **Phase:** implement — boostArtifactRelevance() +0.1 capped at 1.0
-- [x] Frequency tracking for purchased items stored (for future pantry awareness) **Phase:** implement — trackPurchaseFrequency() upserts
-- [x] `./smackerel.sh test unit` passes **Phase:** implement — **Claim Source:** executed
-- [x] `./smackerel.sh lint` passes **Phase:** implement — **Claim Source:** executed
+- [x] NATS subscriber for `lists.completed` implemented in intelligence engine **Evidence:** implement — SubscribeListsCompleted() + NATS subjects in contract
+- [x] Completed list analysis updates artifact relevance scores **Evidence:** implement — boostArtifactRelevance() +0.1 capped at 1.0
+- [x] Frequency tracking for purchased items stored (for future pantry awareness) **Evidence:** implement — trackPurchaseFrequency() upserts
+- [x] `./smackerel.sh test unit` passes **Evidence:** implement — **Claim Source:** executed
+- [x] `./smackerel.sh lint` passes **Evidence:** implement — **Claim Source:** executed
 
 ---
 

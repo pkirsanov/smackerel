@@ -6,11 +6,12 @@
 **Priority:** P2
 
 ### Definition of Done
-- [x] `LearningResource` has `EstimatedMinutes` field
-- [x] `LearningPath` has `TotalMinutes` and `RemainingMinutes` fields
-- [x] Time estimated from content length for articles/URLs
-- [x] Time estimated from duration metadata for videos
-- [x] Default estimate applied for unknown content types
-- [x] Unit tests verify time estimation logic
-  > Evidence: 8 new tests in `learning_test.go` (TestEstimateReadingTime_*)
-- [x] `./smackerel.sh test unit` passes
+- [ ] `LearningResource` has `EstimatedMinutes` field
+- [ ] `LearningPath` has `TotalMinutes` and `RemainingMinutes` fields
+- [ ] Time estimated from content length for articles/URLs
+- [ ] Time estimated from duration metadata for videos
+- [ ] Default estimate applied for unknown content types
+- [ ] Unit tests verify time estimation logic
+- [ ] `./smackerel.sh test unit` passes
+
+DoD items un-checked because the fix has not been verified in this artifact pass (status: in_progress).

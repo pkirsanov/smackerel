@@ -11,6 +11,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
@@ -115,6 +116,37 @@ func (e *Engine) CreateQuickReference(ctx context.Context, concept, content stri
 
 	if e.Pool == nil {
 		return nil, fmt.Errorf("quick reference creation requires a database connection")
+	}
+
+	// BUG-003: ask the ML sidecar to compile the source artifacts into a
+	// cleaner reference body. 15-second timeout from Scope 01 DoD. If NATS
+	// is unavailable or replies with junk we keep the caller-provided
+	// `content` exactly as-is — the caller has already produced a usable
+	// fallback (or chosen to provide canned content directly).
+	if e.NATS != nil {
+		payload := map[string]any{
+			"concept":             concept,
+			"content":             content,
+			"source_artifact_ids": sourceIDs,
+		}
+		if data, err := json.Marshal(payload); err == nil {
+			reply, reqErr := e.NATS.Request(ctx, smacknats.SubjectQuickrefGenerate, data, quickrefGenerateLLMTimeout)
+			if reqErr != nil {
+				slog.Warn("NATS quickref generate request failed, using caller content", "concept", concept, "error", reqErr)
+			} else {
+				var resp quickrefGenerateReply
+				if err := json.Unmarshal(reply, &resp); err != nil {
+					slog.Warn("NATS quickref generate reply unmarshal failed, using caller content", "concept", concept, "error", err)
+				} else if trimmed := strings.TrimSpace(resp.Content); trimmed != "" {
+					if len(trimmed) > maxContentLen {
+						trimmed = stringutil.TruncateUTF8(trimmed, maxContentLen)
+					}
+					content = trimmed
+				}
+			}
+		} else {
+			slog.Warn("quickref generate payload marshal failed, using caller content", "concept", concept, "error", err)
+		}
 	}
 
 	qr := &QuickReference{

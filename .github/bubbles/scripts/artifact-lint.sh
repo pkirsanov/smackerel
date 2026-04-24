@@ -249,6 +249,46 @@ else
   fi
 fi
 
+# Forbidden sidecar artifacts (see artifact-ownership.md → Forbidden Artifacts)
+# These filenames fragment ownership and bypass validation gates. Their content
+# belongs inside spec.md / design.md / scopes.md / report.md.
+#
+# NOTE: tasks.md, data-model.md, requirements.md (under checklists/), and
+# test-plan.md are NOT forbidden — they are produced by the speckit workflow
+# (which coexists with bubbles) and serve different purposes.
+forbidden_artifacts=(
+  "ux.md"
+  "wireframes.md"
+  "flows.md"
+  "user-flows.md"
+  "screens.md"
+  "actors.md"
+  "scenarios.md"
+  "use-cases.md"
+  "architecture.md"
+  "tech-design.md"
+  "dod.md"
+  "gherkin.md"
+  "evidence.md"
+  "results.md"
+)
+
+forbidden_found=0
+while IFS= read -r forbidden_path; do
+  [[ -z "$forbidden_path" ]] && continue
+  forbidden_found=$((forbidden_found + 1))
+  rel_path="${forbidden_path#$feature_dir/}"
+  fail "Forbidden sidecar artifact present: $rel_path — content MUST live inside spec.md / design.md / scopes.md / report.md (see artifact-ownership.md → Forbidden Artifacts)"
+done < <(
+  for forbidden_name in "${forbidden_artifacts[@]}"; do
+    find "$feature_dir" -type f -name "$forbidden_name" 2>/dev/null
+  done
+)
+
+if [[ "$forbidden_found" -eq 0 ]]; then
+  pass "No forbidden sidecar artifacts present"
+fi
+
 for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
 

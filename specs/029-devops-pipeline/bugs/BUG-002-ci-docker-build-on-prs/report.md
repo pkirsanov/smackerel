@@ -41,3 +41,11 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [scopes.md](scopes.md) | [userval
 ## Conclusion
 
 Bug BUG-002 (finding DO-002) is formally closed. The reported issue was already addressed by Scope 1 of spec 029-devops-pipeline. No code changes were required for this bug closure.
+
+## Completion Statement
+
+Status: in_progress. Verification claims in this report were not independently re-captured in this artifact pass; closure is deferred until each DoD item in `scopes.md` is re-checked with captured `grep` output against `.github/workflows/ci.yml` and `state.json` is promoted by the validate/audit phases.
+
+## Test Evidence
+
+No new test execution was performed during this artifact-cleanup pass. The CI workflow itself is exercised by GitHub Actions on push/PR; capturing a green build run reference plus `grep` evidence against `.github/workflows/ci.yml` is required before any DoD item is re-checked and before this bug is promoted out of `in_progress`.
