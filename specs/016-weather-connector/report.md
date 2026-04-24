@@ -311,3 +311,83 @@ ok      github.com/smackerel/smackerel/internal/connector/weather       93.830s
 ```
 
 All weather-package unit tests pass. The test count and per-test breakdown are documented in the prior pass entries above (most recently 90 weather test functions after the R145 improve pass). No new tests were added in this documentation-closure session.
+
+---
+
+### Scope 05 Implementation — 2026-04-24
+
+**Trigger:** Implementation of Scope 05 (Historical Weather Enrichment)
+**Target:** `internal/connector/weather/enrich.go`, `internal/connector/weather/enrich_test.go`, `tests/integration/weather_enrich_test.go`, `tests/e2e/weather_enrich_e2e_test.go`, `cmd/core/connectors.go`, `internal/nats/client.go`, `internal/nats/contract_test.go`, `internal/nats/client_test.go`, `tests/integration/nats_stream_test.go`, `config/nats_contract.json`
+
+#### Files Added / Changed
+
+```bash
+$ wc -l internal/connector/weather/enrich.go internal/connector/weather/enrich_test.go tests/integration/weather_enrich_test.go tests/e2e/weather_enrich_e2e_test.go
+  214 internal/connector/weather/enrich.go
+  284 internal/connector/weather/enrich_test.go
+  232 tests/integration/weather_enrich_test.go
+  113 tests/e2e/weather_enrich_e2e_test.go
+  843 total
+
+$ ls -la internal/connector/weather/enrich.go internal/connector/weather/enrich_test.go tests/integration/weather_enrich_test.go tests/e2e/weather_enrich_e2e_test.go
+-rw-r--r-- 1 philipk philipk 7757 Apr 24 16:40 internal/connector/weather/enrich.go
+-rw-r--r-- 1 philipk philipk 9755 Apr 24 16:40 internal/connector/weather/enrich_test.go
+-rw-r--r-- 1 philipk philipk 7786 Apr 24 16:40 tests/integration/weather_enrich_test.go
+-rw-r--r-- 1 philipk philipk 3839 Apr 24 16:40 tests/e2e/weather_enrich_e2e_test.go
+```
+
+| File | Change |
+|------|--------|
+| `internal/connector/weather/enrich.go` | NEW (214 LOC). `EnrichRequest`, `EnrichResponse`, `validateEnrichRequest`, `handleEnrichRequest`, `StartEnrichmentSubscriber`. Subscribes to `weather.enrich.request`, validates payload (date `2006-01-02`, lat/lon ranges), calls cached `fetchHistorical`, publishes correlated reply on `weather.enrich.response` |
+| `internal/connector/weather/enrich_test.go` | NEW (284 LOC). 11 unit tests (validation rejects + accepts, handle success/cache-reuse/fetch-error/invalid-payload, subscriber nil-client guard) |
+| `tests/integration/weather_enrich_test.go` | NEW (232 LOC). 3 integration tests (build clean) |
+| `tests/e2e/weather_enrich_e2e_test.go` | NEW (113 LOC). 1 e2e test (build clean) |
+| `cmd/core/connectors.go:268-273` | Wires `StartEnrichmentSubscriber` after weather connector starts |
+| `internal/nats/client.go:70-76` | Adds `SubjectWeatherEnrichRequest`, `SubjectWeatherEnrichResponse` constants and registers WEATHER stream |
+| `internal/nats/contract_test.go:94-95` | Registers new constants in contract test |
+| `internal/nats/client_test.go` | Bumps stream count 12 → 13 and adds WEATHER expectation |
+| `tests/integration/nats_stream_test.go:46` | Adds `WEATHER` to `expectedStreams` |
+| `config/nats_contract.json:213-224,239` | Adds WEATHER stream and `weather.enrich.request`/`weather.enrich.response` subjects with cross-references |
+
+#### Test Evidence
+
+```bash
+$ cd /home/philipk/smackerel && go test -count=1 -v -run "Enrich" ./internal/connector/weather/... 2>&1 | head -40
+=== RUN   TestEnrich_ValidateRequest_RejectsInvalidJSON
+--- PASS: TestEnrich_ValidateRequest_RejectsInvalidJSON (0.00s)
+=== RUN   TestEnrich_ValidateRequest_RejectsMissingDate
+--- PASS: TestEnrich_ValidateRequest_RejectsMissingDate (0.00s)
+=== RUN   TestEnrich_ValidateRequest_RejectsMalformedDate
+--- PASS: TestEnrich_ValidateRequest_RejectsMalformedDate (0.00s)
+=== RUN   TestEnrich_ValidateRequest_RejectsLatitudeOutOfRange
+--- PASS: TestEnrich_ValidateRequest_RejectsLatitudeOutOfRange (0.00s)
+=== RUN   TestEnrich_ValidateRequest_RejectsLongitudeOutOfRange
+--- PASS: TestEnrich_ValidateRequest_RejectsLongitudeOutOfRange (0.00s)
+=== RUN   TestEnrich_ValidateRequest_AcceptsValid
+--- PASS: TestEnrich_ValidateRequest_AcceptsValid (0.00s)
+=== RUN   TestEnrich_HandleRequest_SuccessAndShape
+--- PASS: TestEnrich_HandleRequest_SuccessAndShape (0.07s)
+=== RUN   TestEnrich_HandleRequest_CacheReuse
+--- PASS: TestEnrich_HandleRequest_CacheReuse (0.01s)
+=== RUN   TestEnrich_HandleRequest_FetchErrorReturnsErrorResponse
+--- PASS: TestEnrich_HandleRequest_FetchErrorReturnsErrorResponse (0.01s)
+=== RUN   TestEnrich_HandleRequest_InvalidPayloadReturnsErrorResponse
+--- PASS: TestEnrich_HandleRequest_InvalidPayloadReturnsErrorResponse (0.00s)
+=== RUN   TestEnrich_StartSubscriber_RejectsNilClient
+--- PASS: TestEnrich_StartSubscriber_RejectsNilClient (0.00s)
+=== RUN   TestDecodeCurrent_EnrichedFields
+--- PASS: TestDecodeCurrent_EnrichedFields (0.00s)
+=== RUN   TestSync_ArtifactEnrichedMetadata
+2026/04/24 16:50:50 INFO weather connector connected id=weather locations=1
+2026/04/24 16:50:50 WARN weather forecast fetch failed location=Enriched error="open-meteo forecast returned no daily data"
+2026/04/24 16:50:50 INFO weather sync complete id=weather locations=1 artifacts=1 failures=0 duration=3.033127ms
+--- PASS: TestSync_ArtifactEnrichedMetadata (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/weather       0.233s
+```
+
+DoD delivered 11 unit tests vs the originally planned 6. Integration (3) and e2e (1) test files build clean. `./smackerel.sh test unit` exits 0 (Go all packages ok, Python 330 passed). `./smackerel.sh check` exits 0.
+
+#### Spec Status Note
+
+Scope 05 promoted `Not Started` → `Done`. Spec status remains `in_progress` because Scope 02 (Normalizer & Weather Types — In Progress, two DoD items blocked on Scope 04/05 normalization wiring) and Scope 04 (NWS Alert Integration — Not Started) are not yet complete. Promotion to `done` requires Scopes 02 and 04 to be implemented and certified through their own workflow runs.
