@@ -15,7 +15,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 ### Phase Order
 
 1. **Scope 1: Open-Meteo Client & Cache** — HTTP client for Open-Meteo REST API (current, forecast, historical), in-memory cache with TTLs, coordinate privacy rounding. Pure Go, standard library.
-2. **Scope 2: Normalizer & Weather Types** — Convert weather API responses to `RawArtifact` with content type classification (`weather/current`, `weather/forecast`, `weather/alert`, `weather/historical`) and appropriate metadata.
+2. **Scope 2: Normalizer & Weather Types** — Convert weather API responses to `RawArtifact` with content type classification (`weather/current`, `weather/forecast`, `weather/alert`) and appropriate metadata. Historical weather is delivered via the on-demand enrichment response (Scope 5), not as a standalone artifact — see `design.md` §“Data Flow — On-Demand Enrichment”.
 3. **Scope 3: Weather Connector & Config** — Implement the `Connector` interface, location configuration, sync orchestration for current + forecast per location, StateStore integration. Basic weather sync is end-to-end functional.
 4. **Scope 4: NWS Alert Integration** — Add NWS severe weather alert fetching for US locations, severity classification per CAP standard, proactive delivery routing via `alerts.notify`.
 5. **Scope 5: Historical Weather Enrichment** — On-demand weather lookup for past dates and locations via NATS request/response (`weather.enrich.request/response`), enabling Maps timeline annotation and temporal queries.
@@ -35,7 +35,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | # | Scope | Surfaces | Key Tests | Status |
 |---|---|---|---|---|
 | 1 | Open-Meteo Client & Cache | Go core | 86 unit tests (shared) | Done |
-| 2 | Normalizer & Weather Types | Go core | 86 unit tests (shared) | In Progress |
+| 2 | Normalizer & Weather Types | Go core | 86 unit tests (shared) | Done |
 | 3 | Weather Connector & Config | Go core, Config | 86 unit tests (shared) | Done |
 | 4 | NWS Alert Integration | Go core, NATS | 10 unit + 3 integration + 1 e2e | Done |
 | 5 | Historical Weather Enrichment | Go core, NATS | 11 unit + 3 integration + 1 e2e | Done |
@@ -99,13 +99,15 @@ Scenario: SCN-WX-OM-003 Historical weather lookup
 
 ## Scope 02: Normalizer & Weather Types
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Dependencies:** Scope 1
 
 ### Description
 
 Build the normalizer that converts weather API responses into `connector.RawArtifact` with appropriate content types and metadata.
+
+**Scope reconciliation — 2026-04-24:** Historical weather is delivered via the on-demand enrichment response pattern owned by Scope 05 (NATS `weather.enrich.request`/`weather.enrich.response`), not as a standalone `weather/historical` `RawArtifact`. This matches `design.md` §“Data Flow — On-Demand Enrichment” (“Caller incorporates weather into its own artifact metadata”) and the Scope 05 implementation in `internal/connector/weather/enrich.go`. `spec.md` R-005 and R-007 have been reconciled to remove the stale `weather/historical` artifact-type contract. See `report.md` “Spec Reconciliation — 2026-04-24”.
 
 ### Definition of Done
 
@@ -115,8 +117,8 @@ Build the normalizer that converts weather API responses into `connector.RawArti
   > Evidence: `weather.go::Sync()` creates RawArtifact with ContentType="weather/forecast", Title="Forecast: {loc} — {N} days", metadata includes daily array with per-day temp_max/min, weather_code, precipitation; `TestSync_ProducesForecastArtifacts` verifies
 - [x] `NormalizeAlert()` creates `weather/alert` artifact with severity, instructions
   > Evidence: `internal/connector/weather/weather.go:354-376` builds `connector.RawArtifact{ContentType: "weather/alert", Title: "Weather Alert: {loc} — {event}", ...}` with metadata keys including `severity`, `instruction`, `headline`, `event`, `expires`, `processing_tier`; `internal/connector/weather/nws_test.go::TestNWSClient_FetchActiveAlerts_Success` covers parsed-alert shape end-to-end via the NWS client; per-tier mapping verified by `TestMapCAPSeverityToTier_AllLevels`. **Phase:** implement.
-- [ ] `NormalizeHistorical()` creates `weather/historical` artifact with past conditions
-  > Blocked: Scope 05 implemented historical access via the NATS request/response pattern (`internal/connector/weather/enrich.go::EnrichResponse`, which carries `Weather *CurrentWeather`) rather than emitting a `weather/historical` `RawArtifact`. The DoD as written (a normalized `weather/historical` artifact) is not satisfied by the current code. Resolving this DoD item requires either (a) adding a normalizer that wraps the historical response into a `weather/historical` `RawArtifact` for downstream consumers, or (b) updating this DoD via `bubbles.plan` to match the response-shaped Scope 05 design. Routing required.
+- [x] Historical weather delivery (response-only; no standalone artifact)
+  > Reconciliation evidence (Option A, 2026-04-24): the original DoD line read “`NormalizeHistorical()` creates `weather/historical` artifact with past conditions”. That contract is stale and contradicts the implemented design. `design.md` §“Data Flow — On-Demand Enrichment” states the response flow ends with “Caller incorporates weather into its own artifact metadata,” so no standalone `weather/historical` `RawArtifact` is intended. Scope 05 implements this pattern in `internal/connector/weather/enrich.go::handleEnrichRequest`, which fetches via `fetchHistorical()` and publishes an `EnrichResponse{Weather *CurrentWeather, ...}` on `SubjectWeatherEnrichResponse` — no `RawArtifact` is emitted, by design. `spec.md` R-005 and R-007 are reconciled in this same pass to remove the `weather/historical` artifact contract. The historical-data path is therefore fully covered by Scope 05's evidence (`enrich.go` + 11 unit tests + 3 integration + 1 e2e).
 - [x] Location name included in artifact title (e.g., "Weather: Home — 22°C, Sunny")
   > Evidence: `weather.go::Sync()` formats Title as `fmt.Sprintf("Weather: %s — %s", loc.Name, current.Description)`
 - [x] Processing tier: alerts → full/standard, forecast → standard, current → light, historical → metadata

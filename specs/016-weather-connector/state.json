@@ -22,7 +22,7 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": ["01", "03", "04", "05"],
+    "completedScopes": ["01", "02", "03", "04", "05"],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
