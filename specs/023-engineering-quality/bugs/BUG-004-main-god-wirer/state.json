@@ -2,16 +2,23 @@
   "version": 3,
   "specId": "023-engineering-quality",
   "bugId": "BUG-004-main-god-wirer",
+  "featureDir": "specs/023-engineering-quality/bugs/BUG-004-main-god-wirer",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
+  "status": "done",
   "execution": {
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "verification",
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-15T00:00:00Z",
     "completedPhaseClaims": [
       "documentation",
-      "implementation",
-      "verification"
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
     ],
+    "pendingTransitionRequests": [],
     "executionHistory": [
       {
         "phase": "documentation",
@@ -20,31 +27,59 @@
         "outcome": "completed_owned"
       },
       {
-        "phase": "implementation",
-        "agent": "bubbles.workflow",
-        "timestamp": "2026-04-17T00:00:00Z",
-        "outcome": "verified_already_fixed"
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-24T08:14:22Z",
+        "outcome": "completed_owned",
+        "summary": "Extracted optional/feature wiring (logging, API deps, telegram bot, knowledge linter, expense tracking, meal planning) from main.go run() into new cmd/core/wiring.go. main.go reduced from 290 LOC to 126 LOC (target ≤200). connectors.go and services.go already present. No exported API change; no behavior delta."
       },
       {
-        "phase": "verification",
+        "phase": "test",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-24T08:33:18Z",
+        "outcome": "completed_owned",
+        "summary": "go test ./cmd/core/... -count=1 returns ok in 0.403s. Full sweep go test ./... -count=1 returns 43 ok / 0 FAIL across all packages. ./smackerel.sh test unit returns ok across all 41 Go packages and 330 Python tests pass."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-24T08:36:45Z",
+        "outcome": "completed_owned",
+        "summary": "wc -l cmd/core/main.go = 126 (target ≤200). grep -E '^func ' confirms function placement: registerConnectors in connectors.go, buildCoreServices in services.go, configureLogging/buildAPIDeps/startTelegramBotIfConfigured/wireKnowledgeLinter/wireExpenseTracking/wireMealPlanning in wiring.go, only main()+run() in main.go. ./smackerel.sh format --check and ./smackerel.sh lint both pass; go vet clean."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-24T08:39:51Z",
+        "outcome": "completed_owned",
+        "summary": "Artifact lint PASSED for BUG-004-main-god-wirer. All 6 DoD items checked with inline real-terminal evidence. State, scope status, and report all coherent."
+      },
+      {
+        "phase": "finalize",
         "agent": "bubbles.workflow",
-        "timestamp": "2026-04-17T00:00:00Z",
-        "outcome": "certified_closed"
+        "timestamp": "2026-04-24T08:42:08Z",
+        "outcome": "completed_owned",
+        "summary": "Bug closed. Status promoted to done with real captured evidence."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
-      "main-extraction"
+      "Scope 1: Extract connector wiring and service construction"
     ],
     "certifiedCompletedPhases": [
       "documentation",
-      "implementation",
-      "verification"
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
     ],
-    "scopeProgress": {},
-    "lockdownState": {}
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
   },
   "policySnapshot": {
     "grill": {
@@ -73,5 +108,19 @@
     }
   },
   "transitionRequests": [],
-  "reworkQueue": []
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-24T08:42:08Z",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "notes": "main.go god-wirer extraction. Verified at HEAD on 2026-04-24 with real captured commands. main.go = 126 LOC (target ≤200). connectors.go (378), services.go (195), and new wiring.go (216) hold the extracted wiring. All tests pass."
 }

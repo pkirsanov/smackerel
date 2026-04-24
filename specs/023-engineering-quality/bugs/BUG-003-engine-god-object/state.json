@@ -2,27 +2,84 @@
   "version": 3,
   "specId": "023-engineering-quality",
   "bugId": "BUG-003-engine-god-object",
+  "featureDir": "specs/023-engineering-quality/bugs/BUG-003-engine-god-object",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
+  "status": "done",
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "documentation",
-    "completedPhaseClaims": [],
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-15T00:00:00Z",
+    "completedPhaseClaims": [
+      "documentation",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "pendingTransitionRequests": [],
     "executionHistory": [
       {
         "phase": "documentation",
         "agent": "bubbles.bug",
         "timestamp": "2026-04-15T00:00:00Z",
         "outcome": "completed_owned"
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-22T18:04:00Z",
+        "outcome": "completed_owned",
+        "summary": "engine.go split into synthesis.go, alerts.go, alert_producers.go, briefs.go. engine.go reduced to 83 LOC (struct + constructor + shared types only). Methods stay on *Engine; no consumer import changes."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-24T05:51:33Z",
+        "outcome": "completed_owned",
+        "summary": "go test -count=1 ./internal/intelligence/... returns ok in 0.025s. ./smackerel.sh test unit returns ok across all 41 Go packages and 330 Python tests pass. bug003_test.go (TestNormalizeDifficulty_KnownLabels, TestLLMReplyShapes, TestNilNATS_FallbackPaths) all PASS."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-24T05:54:08Z",
+        "outcome": "completed_owned",
+        "summary": "wc -l engine.go = 83 (target ≤150). All 4 domain files present with correct method placement. cat engine.go confirms only NewEngine func remains. Consumer packages (cmd/core, internal/api, internal/scheduler, internal/digest) compile and test green."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-04-24T05:57:42Z",
+        "outcome": "completed_owned",
+        "summary": "Artifact lint PASSED for BUG-003-engine-god-object. All 6 DoD items checked with inline real-terminal evidence. State, scope status, and report all coherent."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T06:01:11Z",
+        "outcome": "completed_owned",
+        "summary": "Bug closed. Status promoted to done with real captured evidence."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "scopeProgress": {},
-    "lockdownState": {}
+    "status": "done",
+    "completedScopes": [
+      "Scope 1: Split engine.go into domain files"
+    ],
+    "certifiedCompletedPhases": [
+      "documentation",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
   },
   "policySnapshot": {
     "grill": {
@@ -51,5 +108,19 @@
     }
   },
   "transitionRequests": [],
-  "reworkQueue": []
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-24T06:01:11Z",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "notes": "Engine god-object file split. Verified at HEAD on 2026-04-24 with real captured commands. engine.go = 83 LOC (target ≤150). 4 domain files present. All tests pass."
 }
