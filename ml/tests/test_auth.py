@@ -125,7 +125,7 @@ class TestMLSidecarAuthAdversarial:
         mock_request.client.host = "127.0.0.1"
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.get_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))
+            asyncio.new_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))
         assert exc_info.value.status_code == 401
 
     def test_non_ascii_x_auth_token_returns_401(self):
@@ -149,7 +149,7 @@ class TestMLSidecarAuthAdversarial:
         mock_request.client.host = "127.0.0.1"
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.get_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))
+            asyncio.new_event_loop().run_until_complete(auth_mod.verify_auth(mock_request))
         assert exc_info.value.status_code == 401
 
     def test_empty_bearer_prefix_returns_401(self):
