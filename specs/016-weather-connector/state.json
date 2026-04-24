@@ -22,7 +22,7 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": ["01", "03", "05"],
+    "completedScopes": ["01", "03", "04", "05"],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
@@ -80,12 +80,26 @@
       "agent": "bubbles.implement",
       "timestamp": "2026-04-24T16:50:50Z",
       "evidence": "go test -count=1 -v -run \"Enrich\" ./internal/connector/weather/... → 11/11 PASS in 0.233s; ./smackerel.sh test unit exit 0; ./smackerel.sh check exit 0"
+    },
+    {
+      "scope": "04",
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "timestamp": "2026-04-24T17:42:13Z",
+      "evidence": "internal/connector/weather/nws.go (248 LOC) NEW + internal/connector/weather/weather.go MODIFIED (added nws/alertPublishFn/seenAlertIDs fields; fetchAndNormalizeAlerts; SetNWSURL/SetBaseURL/SetAlertPublisher) + cmd/core/connectors.go:268-273 wiring (SetNWSURL + SetAlertPublisher with smacknats.SubjectAlertsNotify); internal/annotation/parser.go side-fix (deterministic InteractionPhrases ordering); pre-existing infra reused at internal/nats/client.go:43 (SubjectAlertsNotify) and config/nats_contract.json:136 (alerts.notify subject + ALERTS stream)"
+    },
+    {
+      "scope": "04",
+      "phase": "test",
+      "agent": "bubbles.implement",
+      "timestamp": "2026-04-24T17:48:02Z",
+      "evidence": "go test -count=1 -v -run \"NWS|Alert|Severity\" ./internal/connector/weather/... → 11/11 PASS in 0.105s (10 NWS/alert/severity + 1 enrich-tagged TestParseWeatherConfig_EnableAlertsFalse); tests/integration/weather_alerts_test.go (288 LOC, 3 tests) builds clean under -tags=integration (ok 0.014s); tests/e2e/weather_alerts_e2e_test.go (172 LOC, 1 test) builds clean under -tags=e2e (ok 0.008s); ./smackerel.sh test unit exit 0; ./smackerel.sh check exit 0"
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-24T16:55:00Z",
+  "lastUpdatedAt": "2026-04-24T17:50:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

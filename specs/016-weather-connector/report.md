@@ -391,3 +391,110 @@ DoD delivered 11 unit tests vs the originally planned 6. Integration (3) and e2e
 #### Spec Status Note
 
 Scope 05 promoted `Not Started` → `Done`. Spec status remains `in_progress` because Scope 02 (Normalizer & Weather Types — In Progress, two DoD items blocked on Scope 04/05 normalization wiring) and Scope 04 (NWS Alert Integration — Not Started) are not yet complete. Promotion to `done` requires Scopes 02 and 04 to be implemented and certified through their own workflow runs.
+
+---
+
+### Scope 04 Implementation — 2026-04-24
+
+**Phase:** implement + test
+**Agent:** bubbles.implement
+**Scope status:** Not Started → Done
+
+#### Files Changed
+
+```text
+$ wc -l internal/connector/weather/nws.go internal/connector/weather/nws_test.go tests/integration/weather_alerts_test.go tests/e2e/weather_alerts_e2e_test.go
+  248 internal/connector/weather/nws.go
+  243 internal/connector/weather/nws_test.go
+  288 tests/integration/weather_alerts_test.go
+  172 tests/e2e/weather_alerts_e2e_test.go
+  951 total
+```
+
+| File | Change |
+|---|---|
+| `internal/connector/weather/nws.go` | NEW (248 LOC). `NWSClient`, `NewNWSClient`, `FetchActiveAlerts(ctx, lat, lon)` against `api.weather.gov/alerts/active`; CAP severity → tier mapping (`mapCAPSeverityToTier`); `isHighSeverity` predicate; default User-Agent per NWS API requirements; bounded lat/lon validation; in-memory cache to dedup repeated polls |
+| `internal/connector/weather/nws_test.go` | NEW (243 LOC). 10 unit tests covering success, empty response, HTTP error, malformed JSON, lat/lon bounds, User-Agent, CAP→tier mapping, cache reuse, high-severity predicate |
+| `internal/connector/weather/weather.go` | MODIFIED. Added `nws *NWSClient`, `alertMu sync.Mutex`, `alertPublishFn`, `alertSubject`, `seenAlertIDs map[string]time.Time` to `Connector`; `Sync()` calls `fetchAndNormalizeAlerts(syncCtx, loc, lat, lon, now)` when `cfg.EnableAlerts == true`; new methods `SetNWSURL`, `SetBaseURL`, `SetAlertPublisher`, `fetchAndNormalizeAlerts` (dedup via `seenAlertIDs`, normalization to `weather/alert` `RawArtifact`s, proactive notify path for Extreme/Severe via `alertPublishFn`) |
+| `cmd/core/connectors.go:268-273` | MODIFIED. After weather connector starts, calls `weatherConn.SetNWSURL("")` (defaults to `api.weather.gov`) and `weatherConn.SetAlertPublisher(svc.nc.Publish, smacknats.SubjectAlertsNotify)` |
+| `tests/integration/weather_alerts_test.go` | NEW (288 LOC). 3 integration tests; builds clean under `-tags=integration` |
+| `tests/e2e/weather_alerts_e2e_test.go` | NEW (172 LOC). 1 e2e test; builds clean under `-tags=e2e` |
+| `internal/annotation/parser.go` | SIDE-FIX. Replaced randomized-map iteration in `InteractionPhrases()` with a deterministic hand-ordered slice; restores test stability for `TestSplitRateArgs` ("pasta made it" split point) |
+
+Pre-existing infra reused (no diff): `internal/nats/client.go:43` (`SubjectAlertsNotify = "alerts.notify"`), `config/nats_contract.json:136` (`alerts.notify` subject + `ALERTS` stream).
+
+#### Test Evidence
+
+```bash
+$ cd /home/philipk/smackerel && go test -count=1 -v -run "NWS|Alert|Severity" ./internal/connector/weather/... 2>&1 | head -40
+=== RUN   TestNWSClient_FetchActiveAlerts_Success
+--- PASS: TestNWSClient_FetchActiveAlerts_Success (0.03s)
+=== RUN   TestNWSClient_FetchActiveAlerts_EmptyResponse
+--- PASS: TestNWSClient_FetchActiveAlerts_EmptyResponse (0.01s)
+=== RUN   TestNWSClient_FetchActiveAlerts_HTTPError
+--- PASS: TestNWSClient_FetchActiveAlerts_HTTPError (0.03s)
+=== RUN   TestNWSClient_FetchActiveAlerts_MalformedJSON
+--- PASS: TestNWSClient_FetchActiveAlerts_MalformedJSON (0.00s)
+=== RUN   TestNWSClient_FetchActiveAlerts_RejectsInvalidLatitude
+--- PASS: TestNWSClient_FetchActiveAlerts_RejectsInvalidLatitude (0.00s)
+=== RUN   TestNWSClient_FetchActiveAlerts_RejectsInvalidLongitude
+--- PASS: TestNWSClient_FetchActiveAlerts_RejectsInvalidLongitude (0.00s)
+=== RUN   TestNWSClient_FetchActiveAlerts_UserAgentSet
+--- PASS: TestNWSClient_FetchActiveAlerts_UserAgentSet (0.01s)
+=== RUN   TestMapCAPSeverityToTier_AllLevels
+--- PASS: TestMapCAPSeverityToTier_AllLevels (0.00s)
+=== RUN   TestNWSClient_FetchActiveAlerts_CacheReuse
+--- PASS: TestNWSClient_FetchActiveAlerts_CacheReuse (0.01s)
+=== RUN   TestIsHighSeverity
+--- PASS: TestIsHighSeverity (0.00s)
+=== RUN   TestParseWeatherConfig_EnableAlertsFalse
+--- PASS: TestParseWeatherConfig_EnableAlertsFalse (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/weather       0.105s
+```
+
+Integration build (no live infra in this run; build-only verification):
+
+```bash
+$ go test -tags=integration -count=1 -run "WeatherAlert" ./tests/integration/... 2>&1 | tail -5
+ok      github.com/smackerel/smackerel/tests/integration        0.014s
+ok      github.com/smackerel/smackerel/tests/integration/agent  0.021s [no tests to run]
+```
+
+E2E build (no live infra in this run; build-only verification):
+
+```bash
+$ go test -tags=e2e -count=1 -run "WeatherAlert" ./tests/e2e/... 2>&1 | tail -5
+ok      github.com/smackerel/smackerel/tests/e2e        0.008s
+```
+
+`./smackerel.sh test unit` exits 0 (Go all packages ok, 330 Python passed). `./smackerel.sh check` exits 0.
+
+DoD delivered 10 unit + 3 integration + 1 e2e (matches plan; integration/e2e validated build-clean only — live-stack execution belongs to subsequent phases).
+
+---
+
+### Scope 02 Re-evaluation — 2026-04-24
+
+**Phase:** implement (artifact reconciliation only; no source code change)
+**Agent:** bubbles.implement
+**Scope status:** In Progress → In Progress (one DoD item unblocked, one remains routed)
+
+Scope 02 had two DoD items previously marked `Blocked` pending Scopes 04 and 05. Re-evaluation against shipped code:
+
+- `NormalizeAlert()` creates `weather/alert` artifact with severity, instructions — **NOW SATISFIED**. `internal/connector/weather/weather.go:354-376` builds `connector.RawArtifact{ContentType: "weather/alert", ...}` with `Metadata` keys including `severity`, `instruction`, `event`, `headline`, `expires`, `processing_tier`. Verified by Scope 04 unit tests (see above).
+- `NormalizeHistorical()` creates `weather/historical` artifact — **NOT SATISFIED AS WRITTEN**. Scope 05 implemented historical access through a NATS request/response payload (`internal/connector/weather/enrich.go::EnrichResponse{Weather *CurrentWeather}`) rather than emitting a `RawArtifact` with `ContentType: "weather/historical"`. The existing code does not emit a `weather/historical` artifact. Resolving this DoD requires either:
+  1. Adding a normalizer step that wraps the historical response into a `weather/historical` `RawArtifact` for downstream consumers, OR
+  2. Updating the DoD via `bubbles.plan` to match the response-shaped Scope 05 design.
+
+  Routing required to `bubbles.plan` (and possibly `bubbles.design` if the artifact-vs-response decision needs re-planning) before Scope 02 can be promoted to `Done`.
+
+Net Scope 02 status: 1 of 2 blocked items unblocked; 1 still requires planning routing. Scope 02 stays `In Progress`.
+
+---
+
+### Spec Re-cert Readiness Note — 2026-04-24
+
+After Scope 04 closure: Scopes 01, 03, 04, 05 are `Done`. Scope 02 remains `In Progress` (1 DoD item routed for re-planning, see above). The spec is **not yet ready for full-delivery re-cert** because Scope 02 is incomplete.
+
+Once Scope 02's `NormalizeHistorical` DoD is resolved (either by code addition or by `bubbles.plan` updating the DoD to match Scope 05's response-shaped design), this spec will need full-delivery re-cert across the remaining `harden-to-doc` workflow phases: `harden`, `regression`, `simplify`, `stabilize`, `devops`, `security`, `chaos`, `validate`, `audit`, `docs`, `finalize`. Spec-level `status` MUST NOT be promoted to `done` from this implementation pass.

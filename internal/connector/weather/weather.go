@@ -53,6 +53,17 @@ type Connector struct {
 	cache      map[string]*cacheEntry
 	baseURL    string // overridable for testing; defaults to Open-Meteo API
 	archiveURL string // overridable for testing; defaults to Open-Meteo Archive API
+
+	// NWS alert integration (Scope 04). nws is always non-nil so that
+	// SetNWSURL on a fresh connector works without an extra construction
+	// path. alertPublishFn / alertSubject are set by wiring code when a
+	// live NATS client is available; when nil, alerts are still captured
+	// as artifacts but the proactive notify channel is skipped.
+	nws            *NWSClient
+	alertMu        sync.Mutex
+	alertPublishFn func(ctx context.Context, subject string, data []byte) error
+	alertSubject   string
+	seenAlertIDs   map[string]time.Time
 }
 
 // WeatherConfig holds parsed weather-specific configuration.
@@ -89,9 +100,13 @@ func New(id string) *Connector {
 				return fmt.Errorf("weather connector refuses redirect to %s", req.URL.Hostname())
 			},
 		},
-		cache:      make(map[string]*cacheEntry),
-		baseURL:    "https://api.open-meteo.com",
-		archiveURL: "https://archive-api.open-meteo.com",
+		cache:        make(map[string]*cacheEntry),
+		baseURL:      "https://api.open-meteo.com",
+		archiveURL:   "https://archive-api.open-meteo.com",
+		seenAlertIDs: make(map[string]time.Time),
+		// nws is left nil; callers that want NWS alerts must explicitly
+		// opt in via SetNWSURL. This keeps unit tests that exercise only
+		// Open-Meteo paths from accidentally hitting api.weather.gov.
 	}
 }
 
@@ -209,6 +224,14 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				CapturedAt: now,
 			})
 		}
+
+		// NWS active alerts (Scope 04). Only attempted when EnableAlerts is
+		// configured. Errors are non-fatal: alerts are auxiliary and a
+		// degraded NWS upstream must not block current/forecast capture.
+		if cfg.EnableAlerts {
+			alertArtifacts := c.fetchAndNormalizeAlerts(syncCtx, loc, lat, lon, now)
+			artifacts = append(artifacts, alertArtifacts...)
+		}
 	}
 
 	// Reflect health based on failure ratio relative to total locations.
@@ -248,6 +271,172 @@ func (c *Connector) Close() error {
 	c.mu.Unlock()
 	c.httpClient.CloseIdleConnections()
 	return nil
+}
+
+// SetNWSURL overrides the NWS active-alerts base URL. Exported so that
+// integration and e2e tests can point the alert client at an httptest server
+// instead of the real api.weather.gov endpoint.
+func (c *Connector) SetNWSURL(url string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.nws = NewNWSClient(url, "")
+}
+
+// SetBaseURL overrides the Open-Meteo base URL. Exported for integration
+// tests that need to redirect the current/forecast paths to an httptest
+// server. Production callers should never invoke this.
+func (c *Connector) SetBaseURL(url string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.baseURL = url
+}
+
+// SetAlertPublisher wires the proactive notification path. publishFn is the
+// JetStream publish function (typically smacknats.Client.Publish) and
+// subject is the NATS subject to publish to (typically alerts.notify).
+// Passing a nil publishFn disables the notify path while leaving alert
+// artifact capture intact.
+func (c *Connector) SetAlertPublisher(publishFn func(ctx context.Context, subject string, data []byte) error, subject string) {
+	c.alertMu.Lock()
+	defer c.alertMu.Unlock()
+	c.alertPublishFn = publishFn
+	c.alertSubject = subject
+}
+
+// alertNotification is the JSON payload published on alerts.notify. The
+// shape mirrors internal/connector/alerts.AlertNotification so downstream
+// consumers (digest, telegram) can decode either source uniformly.
+type alertNotification struct {
+	AlertID      string                 `json:"alert_id"`
+	Headline     string                 `json:"headline"`
+	Severity     string                 `json:"severity"`
+	Source       string                 `json:"source"`
+	LocationName string                 `json:"location_name"`
+	Instructions string                 `json:"instructions,omitempty"`
+	ContentType  string                 `json:"content_type"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// fetchAndNormalizeAlerts retrieves NWS active alerts for a location,
+// dedups by alert ID against seenAlertIDs, builds weather/alert artifacts
+// with severity-mapped processing tiers, and publishes high-severity alerts
+// to the configured alerts.notify subject. Returns the new artifacts to
+// append to the sync output.
+func (c *Connector) fetchAndNormalizeAlerts(ctx context.Context, loc LocationConfig, lat, lon float64, now time.Time) []connector.RawArtifact {
+	c.mu.RLock()
+	nws := c.nws
+	c.mu.RUnlock()
+	if nws == nil {
+		return nil
+	}
+
+	alerts, err := nws.FetchActiveAlerts(ctx, lat, lon)
+	if err != nil {
+		slog.Warn("nws alerts fetch failed", "location", loc.Name, "error", err)
+		return nil
+	}
+	if len(alerts) == 0 {
+		return nil
+	}
+
+	c.alertMu.Lock()
+	publishFn := c.alertPublishFn
+	subject := c.alertSubject
+	c.alertMu.Unlock()
+
+	out := make([]connector.RawArtifact, 0, len(alerts))
+	for _, a := range alerts {
+		if c.markAlertSeen(a.ID) {
+			continue
+		}
+
+		tier := mapCAPSeverityToTier(a.Severity)
+		artifact := connector.RawArtifact{
+			SourceID:    "weather",
+			SourceRef:   a.ID,
+			ContentType: "weather/alert",
+			Title:       fmt.Sprintf("Weather Alert: %s — %s", loc.Name, a.Event),
+			RawContent:  fmt.Sprintf("%s\n\n%s\n\nInstruction: %s", a.Headline, a.Description, a.Instruction),
+			Metadata: map[string]interface{}{
+				"location":        loc.Name,
+				"latitude":        lat,
+				"longitude":       lon,
+				"alert_id":        a.ID,
+				"event":           a.Event,
+				"severity":        a.Severity,
+				"headline":        a.Headline,
+				"description":     a.Description,
+				"instruction":     a.Instruction,
+				"area_desc":       a.AreaDesc,
+				"effective":       a.Effective.Format(time.RFC3339),
+				"expires":         a.Expires.Format(time.RFC3339),
+				"processing_tier": tier,
+			},
+			CapturedAt: now,
+		}
+		out = append(out, artifact)
+
+		if isHighSeverity(a.Severity) && publishFn != nil && subject != "" {
+			notif := alertNotification{
+				AlertID:      a.ID,
+				Headline:     a.Headline,
+				Severity:     a.Severity,
+				Source:       "nws",
+				LocationName: loc.Name,
+				Instructions: a.Instruction,
+				ContentType:  "weather/alert",
+				Metadata:     artifact.Metadata,
+			}
+			data, mErr := json.Marshal(notif)
+			if mErr != nil {
+				slog.Warn("nws alert marshal failed", "alert_id", a.ID, "error", mErr)
+				continue
+			}
+			if pErr := publishFn(ctx, subject, data); pErr != nil {
+				slog.Warn("nws alert publish failed", "alert_id", a.ID, "subject", subject, "error", pErr)
+			}
+		}
+	}
+
+	// Periodically purge expired entries from the dedup map so it can't grow
+	// without bound across long-running processes.
+	c.purgeExpiredAlerts(now)
+	return out
+}
+
+// markAlertSeen returns true if the alert ID has already been processed
+// within the dedup retention window. Otherwise it records the alert and
+// returns false.
+//
+// Retention is 24h: NWS alerts rarely span more than a day, and a sync
+// run that re-encounters the same alert ID inside that window is a
+// duplicate that must not produce a second artifact or notify.
+const alertDedupTTL = 24 * time.Hour
+
+func (c *Connector) markAlertSeen(id string) bool {
+	if id == "" {
+		return false
+	}
+	c.alertMu.Lock()
+	defer c.alertMu.Unlock()
+	if c.seenAlertIDs == nil {
+		c.seenAlertIDs = make(map[string]time.Time)
+	}
+	if seenAt, ok := c.seenAlertIDs[id]; ok && time.Since(seenAt) < alertDedupTTL {
+		return true
+	}
+	c.seenAlertIDs[id] = time.Now()
+	return false
+}
+
+func (c *Connector) purgeExpiredAlerts(now time.Time) {
+	c.alertMu.Lock()
+	defer c.alertMu.Unlock()
+	for id, seenAt := range c.seenAlertIDs {
+		if now.Sub(seenAt) > alertDedupTTL {
+			delete(c.seenAlertIDs, id)
+		}
+	}
 }
 
 // CurrentWeather represents current weather conditions from Open-Meteo.
