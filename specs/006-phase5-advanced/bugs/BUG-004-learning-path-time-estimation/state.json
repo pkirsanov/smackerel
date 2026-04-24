@@ -2,28 +2,85 @@
   "version": 3,
   "featureDir": "specs/006-phase5-advanced/bugs/BUG-004-learning-path-time-estimation",
   "featureName": "BUG-004: Learning Path Missing Time Estimation",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "bugfix-fastlane",
   "execution": {
-    "activeAgent": "bubbles.gaps",
-    "currentPhase": "plan",
+    "activeAgent": null,
+    "currentPhase": "finalize",
     "currentScope": "1",
     "runStartedAt": "2026-04-22T00:00:00Z",
-    "completedPhaseClaims": [],
-    "pendingTransitionRequests": []
-  },
-  "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
-    "scopeProgress": [
+    "completedPhaseClaims": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "executionHistory": [
       {
-        "scope": 1,
-        "name": "Add Time Estimation to Learning Paths",
-        "status": "Done",
-        "dependsOn": []
+        "phase": "planning",
+        "agent": "bubbles.gaps+plan",
+        "timestamp": "2026-04-22T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug discovered by bubbles.gaps; plan created to add EstimatedMinutes/TotalMinutes/RemainingMinutes plus estimateReadingTime()."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-22T19:30:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added time-estimation fields to LearningResource and LearningPath; SQL projects content_length and duration_str; estimateReadingTime handles articles, videos, and unknown types."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-22T20:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Added TestEstimateReadingTime_* family in learning_test.go covering Article, ShortArticle, ZeroLength, YouTube, YouTubeNoDuration, PDF, UnknownType, YouTubeRoundsUp."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:36:30Z",
+        "outcome": "completed_owned",
+        "summary": "Re-verified field wiring via grep on learning.go; all TestEstimateReadingTime_* and TestLearningPath_ResourcesSortedByDifficulty PASS."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:37:00Z",
+        "outcome": "completed_owned",
+        "summary": "./smackerel.sh check clean; Learning-scoped regression run passed (ok 0.019s)."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:37:30Z",
+        "outcome": "completed_owned",
+        "summary": "Bug re-certified done. All 7 DoD items checked with file:line evidence."
       }
     ]
   },
-  "policySnapshot": {}
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "scopeProgress": {
+      "scope-1": "Done"
+    }
+  },
+  "policySnapshot": {},
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": []
 }

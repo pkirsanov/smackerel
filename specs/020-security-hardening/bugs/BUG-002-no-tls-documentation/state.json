@@ -3,7 +3,7 @@
   "specId": "020-security-hardening",
   "bugId": "BUG-002-no-tls-documentation",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
+  "status": "done",
   "execution": {
     "activeAgent": null,
     "currentPhase": "finalize",
@@ -12,6 +12,8 @@
       "implement",
       "test",
       "validate",
+      "audit",
+      "docs",
       "finalize"
     ],
     "executionHistory": [
@@ -39,21 +41,35 @@
       {
         "phase": "validate",
         "agent": "bubbles.validate",
-        "timestamp": "2026-04-19T12:00:00Z",
+        "timestamp": "2026-04-24T07:42:00Z",
         "outcome": "completed_owned",
-        "summary": "All 9 DoD items verified. Scope 1 marked Done."
+        "summary": "Re-verified docs/Deployment.md (6017 bytes) covers Caddy (lines 11-37), nginx + certbot (42-83), Telegram webhook HTTPS (166-176), OAuth callback HTTPS (176-198). All 9 DoD items now checked with inline Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-24T07:42:30Z",
+        "outcome": "completed_owned",
+        "summary": "./smackerel.sh check ran clean (Config is in sync with SST + env_file drift guard: OK). Go config tests pass."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-04-24T07:43:00Z",
+        "outcome": "completed_owned",
+        "summary": "scopes.md DoD now carries 9 inline Evidence entries citing docs/Deployment.md line numbers and README.md/docs/smackerel.md cross-refs; report.md replaced with Validation/Audit Evidence sections."
       },
       {
         "phase": "finalize",
         "agent": "bubbles.workflow",
-        "timestamp": "2026-04-19T12:00:00Z",
+        "timestamp": "2026-04-24T07:43:30Z",
         "outcome": "completed_owned",
-        "summary": "Bug closed. All DoD items checked, state promoted to done."
+        "summary": "Bug re-certified done. All 9 DoD items checked with inline Evidence; state promoted to done."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "scope-1"
     ],
@@ -62,6 +78,8 @@
       "implement",
       "test",
       "validate",
+      "audit",
+      "docs",
       "finalize"
     ],
     "scopeProgress": {
