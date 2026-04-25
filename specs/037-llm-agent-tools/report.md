@@ -1,5 +1,19 @@
 # Execution Report — 037 LLM Scenario Agent & Tool Registry
 
+## Summary
+
+Spec 037 delivers an LLM scenario agent and tool registry: SST-driven config (Scope 1), tool registry with side-effect classes (Scope 2), scenario YAML loader and linter (Scope 3), embedding-based intent router (Scope 4), Go ↔ Python NATS execution loop with allowlist/schema/timeout/loop-limit enforcement (Scope 5), and PostgreSQL trace persistence + replay CLI (Scope 6). Scopes 7-10 (security hardening, operator UI, end-user surfaces, CI wiring) remain `Not Started`.
+
+## Completion Statement
+
+Scopes 1-6 are implemented in code with executed evidence. Spec status remains `drafting` because Scopes 7, 8, 9, 10 are Not Started, and Scope 5 has a documented Ollama-infra E2E gap. This report is the canonical execution evidence for the implemented scopes; per-scope DoD evidence with file:line references is in `scopes.md`.
+
+## Test Evidence
+
+All implemented scopes pass: `./smackerel.sh check`, `./smackerel.sh build`, `./smackerel.sh lint`, `./smackerel.sh format --check`, `./smackerel.sh test unit`. Live-stack integration and e2e tests for Scope 6 PASS against the manually-brought-up test stack (`go test -tags=integration ./tests/integration/agent/...` → 13 PASS in 1.301s; `go test -tags=e2e ./tests/e2e/agent/...` → 2 PASS in 2.784s). Per-scope evidence blocks with real captured output are in scopes.md and in the per-scope sections below.
+
+---
+
 ## Scope 1 — Config & NATS Contract (SST Foundation)
 
 **Status:** Done
@@ -237,3 +251,117 @@ are realised:
   (loaded by Scope 2's loader), every provider/model pair comes from the
   scenario's `model_preference` resolved against env vars (loaded by
   Scope 1's `LoadConfig`), the NATS subject comes from the contract.
+
+---
+
+## Scope 6 Implementation — 2026-04-25
+
+**Phase:** implement  
+**Claim Source:** executed (real test stack: smackerel-test postgres + nats up; integration + e2e binaries built and run against it).
+
+### Files created / modified
+
+- `internal/db/migrations/020_agent_traces.sql` — pre-existing in repo; verified contents match design §6.1 (both tables + all four indexes).
+- `internal/agent/tracer.go` — pre-existing; PostgresTracer with Begin/RecordTurn/RecordToolCall/RecordRejection/RecordToolError/RecordReturnInvalid/RecordSchemaRetry/RecordOutcome plus NATS mirror to `agent.tool_call.executed` and `agent.complete`.
+- `internal/agent/replay.go` — pre-existing; LoadTrace + ReplayTrace + ReplayOptions (AllowVersionDrift, AllowContentDrift); diff kinds: scenario_missing, scenario_version_changed, scenario_content_changed, tool_missing.
+- `cmd/core/cmd_agent.go` — pre-existing; `smackerel agent replay` CLI dispatcher with PASS=0 / FAIL=1 / ERROR=2 exit codes and `--allow-version-drift`, `--allow-content-drift`, `--json` flags.
+- **NEW** `cmd/core/agent_e2e_tools.go` (37 LOC, build tag `e2e_agent_tools`) — registers a diagnostic `scope6_e2e_echo` read-only tool only when the binary is built with the e2e tag, so the prod registry contract stays clean while the replay-CLI e2e tests can compile a binary that satisfies the loader's allowed_tools registry check.
+- **NEW** `tests/integration/agent/hotreload_test.go` (282 LOC, build tag `integration`) — BS-019 in-flight version isolation. Gated driver halts mid-loop between turn 1 and turn 2; test installs scenario v2 at the checkpoint and asserts the persisted trace + JSONB snapshot record v1's version + content_hash. G5 then runs a fresh invocation against v2 and asserts v2's identity is recorded — guaranteeing G3/G4 didn't pass for the wrong reason.
+- **NEW** `tests/integration/agent/trace_completeness_test.go` (213 LOC, build tag `integration`) — BS-012 trace completeness regression. G1+G2 enumerate every required column from design §6.1 with contracted-value assertions (not just non-null). G3 cross-checks denormalized vs. normalized tool-call counts. G4-G7 run EXPLAIN against the four canonical query shapes with seqscan disabled and assert the planner picks the matching `idx_agent_traces_*` index.
+- **NEW** `tests/e2e/agent/helpers_test.go` (272 LOC, build tag `e2e`) — live-stack e2e helpers: liveDB / liveNATS, scriptedDriver, scenario YAML writer, `recordOneTrace` (drives a happy-path invocation against the real Postgres + NATS), `runReplayCLI` (subprocess `go run -tags=e2e_agent_tools ./cmd/core agent replay …` with the workspace's generated `config/generated/test.env` AGENT_* vars layered on top of the test process env).
+- **NEW** `tests/e2e/agent/replay_pass_test.go` (66 LOC) — records a trace, invokes the CLI against the same scenario, asserts exit 0, `verdict=PASS`, parses `--json` output and asserts `Pass=true` with empty diff.
+- **NEW** `tests/e2e/agent/replay_fail_test.go` (96 LOC) — records a trace, mutates the scenario YAML's system_prompt in place (which changes content_hash), invokes the CLI: G1 exit 1, G2 `verdict=FAIL`, G3 JSON parses with a single `scenario_content_changed` diff entry whose recorded/current hash endpoints match the original/mutated values, G4 `--allow-content-drift` flag flips exit to 0.
+
+### Test outputs (real, captured 2026-04-25)
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+
+$ ./smackerel.sh build
+… smackerel-core  Built
+   smackerel-ml    Built
+
+$ ./smackerel.sh lint
+… All checks passed!
+   Web validation passed
+
+$ ./smackerel.sh format --check
+… 39 files left unchanged
+
+$ ./smackerel.sh test unit --go
+ok      github.com/smackerel/smackerel/internal/agent   (cached)
+… (all internal/* + cmd/* OK)
+
+$ ./smackerel.sh test unit --python
+…
+330 passed, 2 warnings in 13.05s
+
+$ ./smackerel.sh --env test up
+ Container smackerel-test-postgres-1   Healthy
+ Container smackerel-test-nats-1       Healthy
+ Container smackerel-test-smackerel-ml-1   Started
+ Container smackerel-test-smackerel-core-1 Started
+
+$ DATABASE_URL=postgres://smackerel:smackerel@127.0.0.1:47001/smackerel?sslmode=disable \
+  NATS_URL=nats://127.0.0.1:47002 \
+  SMACKEREL_AUTH_TOKEN=… \
+  go test -tags=integration -count=1 -v -timeout=180s ./tests/integration/agent/...
+=== RUN   TestForbiddenRouterPatterns_ScopedDirectories
+--- PASS: TestForbiddenRouterPatterns_ScopedDirectories (0.00s)
+=== RUN   TestForbiddenRouterPatterns_DetectsSyntheticRouter
+--- PASS: TestForbiddenRouterPatterns_DetectsSyntheticRouter (0.00s)
+=== RUN   TestBS019_InFlightUsesPinnedScenarioUnderHotReload
+--- PASS: TestBS019_InFlightUsesPinnedScenarioUnderHotReload (0.04s)
+=== RUN   TestLoader_BS009_MalformedScenarioRejectionsAreIsolated
+--- PASS: TestLoader_BS009_MalformedScenarioRejectionsAreIsolated (0.01s)
+=== RUN   TestLoader_BS010_UnknownToolRejectsScenarioOnly
+--- PASS: TestLoader_BS010_UnknownToolRejectsScenarioOnly (0.00s)
+=== RUN   TestLoader_BS011_DuplicateIDIsFatalAndNamesBothFiles
+--- PASS: TestLoader_BS011_DuplicateIDIsFatalAndNamesBothFiles (0.00s)
+=== RUN   TestLoader_MixedDirectory_IsolatesFailures
+--- PASS: TestLoader_MixedDirectory_IsolatesFailures (0.00s)
+=== RUN   TestExecutor_LoopRoundTrip_ToolCallThenFinal
+--- PASS: TestExecutor_LoopRoundTrip_ToolCallThenFinal (0.02s)
+=== RUN   TestExecutor_BS021_LLMTimeout
+--- PASS: TestExecutor_BS021_LLMTimeout (1.01s)
+=== RUN   TestBS012_TraceCompletenessAndIndexUsage
+--- PASS: TestBS012_TraceCompletenessAndIndexUsage (0.04s)
+=== RUN   TestTracerPersistsTraceAndReplayPasses
+--- PASS: TestTracerPersistsTraceAndReplayPasses (0.04s)
+=== RUN   TestReplayDetectsMutatedScenarioSnapshot
+--- PASS: TestReplayDetectsMutatedScenarioSnapshot (0.04s)
+=== RUN   TestTracerMirrorsNATSEvents
+--- PASS: TestTracerMirrorsNATSEvents (0.08s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/agent  1.301s
+
+$ DATABASE_URL=… NATS_URL=… SMACKEREL_AUTH_TOKEN=… \
+  go test -tags=e2e -count=1 -v -timeout=300s ./tests/e2e/agent/...
+=== RUN   TestReplayCLI_FailsWhenScenarioContentDrifts
+--- PASS: TestReplayCLI_FailsWhenScenarioContentDrifts (1.72s)
+=== RUN   TestReplayCLI_PassWhenScenarioUnchanged
+--- PASS: TestReplayCLI_PassWhenScenarioUnchanged (1.05s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/agent  2.784s
+```
+
+### DoD evidence map
+
+| DoD item | File / mechanism | Verification |
+|----------|------------------|--------------|
+| Migrations applied; tables and indexes present | `internal/db/migrations/020_agent_traces.sql` | `TestBS012_TraceCompletenessAndIndexUsage` G4-G7 EXPLAIN proves the four `idx_agent_traces_*` indexes exist and the planner uses them. |
+| Tracer writes one trace + N tool-call rows per invocation | `internal/agent/tracer.go::writeTrace` (single tx: 1 INSERT into `agent_traces` + N INSERTs into `agent_tool_calls`) | `TestTracerPersistsTraceAndReplayPasses` G1+G4; `TestBS012_…` G3 cross-checks denorm vs norm count. |
+| `smackerel agent replay` CLI returns 0/1/2 per design §6.2 | `cmd/core/cmd_agent.go::runAgentReplay` | `TestReplayCLI_PassWhenScenarioUnchanged` (exit 0); `TestReplayCLI_FailsWhenScenarioContentDrifts` (exit 1, then exit 0 with `--allow-content-drift`); ERROR=2 paths covered by CLI source (DATABASE_URL missing, bad args, trace not found). |
+| BS-019 in-flight version isolation tested under hot-reload | `tests/integration/agent/hotreload_test.go` | `TestBS019_InFlightUsesPinnedScenarioUnderHotReload` PASS in 0.04s; gates G1-G5 prove the v1 trace records v1's version/hash even after v2 is constructed mid-flight, AND a post-swap fresh invocation records v2's identity (proves the swap is real). |
+| Live-stack PASS and FAIL replay tests green | `tests/e2e/agent/replay_pass_test.go`, `tests/e2e/agent/replay_fail_test.go` | Both PASS against real Postgres + NATS via `go test -tags=e2e ./tests/e2e/agent/...` (output above). |
+| `./smackerel.sh test integration e2e` pass | The agent test packages used the live test stack the harness brings up; verified manually as above. The harness’s e2e Docker container does NOT inject `DATABASE_URL`/`NATS_URL` today (only `CORE_EXTERNAL_URL`+token), so the agent e2e tests skip cleanly under the stock harness. The tests run green when invoked with the test stack’s envs (the canonical pattern this codebase uses for live-stack tests, see `tests/e2e/weather_enrich_e2e_test.go`). |
+
+### Anti-patterns avoided
+
+- No mocks in the new integration/e2e tests — every assertion is against rows the real Postgres holds and exit codes the real `go run` subprocess returns.
+- No bailout returns in `TestBS019_…` — the gated driver forces the swap to happen mid-flight via a synchronisation channel; if the executor enters turn 2 before the swap, the test FAILs with "executor never entered turn 2 (hot-reload checkpoint missed)".
+- No tautological diff in `TestReplayCLI_FailsWhen…` — the test sanity-checks that mutating `system_prompt` actually changes `content_hash` BEFORE asserting the FAIL diff, so a regression that breaks the loader's hash function would surface as the setup error rather than silently masking the test.
+- No prod-tool fixture pollution — `cmd/core/agent_e2e_tools.go` is gated by `//go:build e2e_agent_tools`; the default-tag binary has zero diagnostic tool registrations.
+- No hidden defaults in CLI — `runAgentReplay` requires `DATABASE_URL` and exits 2 if missing; `loadScenarioRegistry` calls `agent.LoadConfig()` which fails loud on any missing AGENT_* var.
