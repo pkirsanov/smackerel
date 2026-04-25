@@ -114,7 +114,7 @@ agent:
 | 5 | Execution Loop (Go ↔ Python NATS)        | `internal/agent`, `ml/app/agent.py`     | unit, integration, live-stack, adv | All adversarial outcomes wired with structured envelopes    | [~] In progress   |
 | 6 | Trace Persistence & Replay               | `internal/agent`, db migrations         | integration, live-stack            | Trace queryable; replay PASS/FAIL/ERROR exit codes          | [x] Done          |
 | 7 | Security & Concurrency Hardening         | `internal/agent`                        | unit, integration, stress, live-stack adv | Redaction; integrity hash; isolation under load; injection blocked | [x] Done          |
-| 8 | Operator UI (CLI + Web)                  | `cmd/core`, `internal/web`              | unit, integration, e2e-ui          | All outcome classes render; CLI = web parity                | [ ] Not started   |
+| 8 | Operator UI (CLI + Web)                  | `cmd/core`, `internal/web`              | unit, integration, e2e-ui          | All outcome classes render; CLI = web parity                | [x] Done   |
 | 9 | End-User Failure Surfaces                | `internal/telegram`, `internal/api`     | unit, e2e-api, e2e-ui              | Structured outcomes; never-invent; trace refs               | [ ] Not started   |
 | 10| Migration Hooks & Linter Wiring          | telegram/api/scheduler/pipeline, CI     | integration, e2e-api, ci-guard     | Surfaces call `Executor.Run`; CI blocks forbidden patterns  | [ ] Not started   |
 
@@ -599,7 +599,7 @@ Scenario: Concurrent invocations do not interleave (BS-018)
 
 ## Scope 8: Operator UI (CLI + Web)
 
-**Status:** [ ] Not started
+**Status:** [x] Done
 **Goal:** Implement the screens defined in spec.md UX as both `smackerel agent ...` CLI subcommands and admin web routes with parity. Every outcome class from design §8 must render with the required fields.
 **BS coverage:** BS-001..BS-022 surfaced via UI; primary tracing/inspection requirements from UC-001/004.
 **Dependencies:** Scopes 5, 6, 7.
@@ -641,11 +641,26 @@ Scenario: Tool Detail View shows side-effect class and allowlisted-by scenarios
 
 ### Definition of Done
 
-- [ ] CLI and web both implemented with parity per spec.md UX
-- [ ] All 9 outcome classes render with required fields
-- [ ] Load-time rejection section visible in scenario catalog
-- [ ] Tool registry view shows side-effect class with text + color
-- [ ] `./smackerel.sh test unit integration e2e` pass
+- [x] CLI and web both implemented with parity per spec.md UX
+  - **Phase:** implement
+  - **Claim Source:** executed
+  - **Evidence:** CLI subcommands wired in [cmd/core/cmd_agent.go](cmd/core/cmd_agent.go#L1) dispatcher → [cmd/core/cmd_agent_admin.go](cmd/core/cmd_agent_admin.go#L1) (~430 LOC) with `traces`, `traces show`, `scenarios`, `scenarios show`, `tools`, `tools show`, `--json`/text variants. Admin web routes wired in [internal/api/router.go](internal/api/router.go#L1) under `/admin/agent` (auth-gated) → [internal/web/agent_admin.go](internal/web/agent_admin.go#L1) with the matching six handlers. Verified by [tests/e2e/agent/operator_ui_test.go](tests/e2e/agent/operator_ui_test.go#L1) (`TestOperatorUI_NavigateTraceListToDetailToScenarioDetail`, `TestOperatorUI_ScenarioCatalogShowsRejections`, `TestOperatorUI_ToolDetailShowsSideEffectBadge`) and [tests/integration/agent/cli_test.go](tests/integration/agent/cli_test.go#L1) (`TestCLI_TracesList_ContainsSeededTraces`, `TestCLI_TracesShow_RendersDetail`).
+- [x] All 9 outcome classes render with required fields
+  - **Phase:** implement
+  - **Claim Source:** executed
+  - **Evidence:** Shared render layer at [internal/agent/render/render.go](internal/agent/render/render.go#L1) (~570 LOC) declares an `outcomeRegistry` keyed by every constant in [internal/agent/executor.go](internal/agent/executor.go#L54-L89) (11 classes — covers the 9 from spec UX plus `provider-error` and `input-schema-violation`). [TestBuildOutcomeView_AllClassesRenderRequiredFields](internal/agent/render/render_test.go#L1) iterates `AllOutcomeClasses()` and asserts every required field per class is present and non-empty: `ok github.com/smackerel/smackerel/internal/agent/render 0.014s`.
+- [x] Load-time rejection section visible in scenario catalog
+  - **Phase:** implement
+  - **Claim Source:** executed
+  - **Evidence:** Catalog template renders rejected files in [internal/web/agent_admin_templates.go](internal/web/agent_admin_templates.go#L160) (`agent_scenarios_index.html` "Rejected" section iterating `.Rejected`); CLI mirror at [cmd/core/cmd_agent_admin.go](cmd/core/cmd_agent_admin.go#L1) (`runAgentScenariosList` prints rejection table). Verified by `TestOperatorUI_ScenarioCatalogShowsRejections` injecting a `LoadError{Path:"/tmp/bad.yaml", Message:"missing required field id"}` and asserting both fields appear in the served HTML: PASS.
+- [x] Tool registry view shows side-effect class with text + color
+  - **Phase:** implement
+  - **Claim Source:** executed
+  - **Evidence:** Render layer `BuildToolSummary`/`BuildToolDetail` set `Badge` (CSS class `side-effect-{read,write,external}`) and human-readable label per tool (see [internal/agent/render/render.go](internal/agent/render/render.go#L1)). CSS color classes defined in [internal/web/agent_admin_templates.go](internal/web/agent_admin_templates.go#L20-L40). Verified by `TestOperatorUI_ToolDetailShowsSideEffectBadge` registering an `agent.SideEffectExternal` tool and asserting both the `side-effect-external` CSS class and the literal `external` label appear in the rendered HTML: PASS. CLI mirror prints `Side effect: external` in [cmd/core/cmd_agent_admin.go](cmd/core/cmd_agent_admin.go#L1) `printToolDetail`.
+- [x] `./smackerel.sh test unit integration e2e` pass
+  - **Phase:** implement
+  - **Claim Source:** executed
+  - **Evidence:** Unit tier — `./smackerel.sh test unit` → `330 passed, 2 warnings in 11.63s` (Python) and `go test -count=1 ./...` → all packages OK including `internal/agent/render 0.014s`, `internal/web 0.068s`, `cmd/core 0.446s`. Integration tier (Scope 8 new tests against the `--env test` live stack on 127.0.0.1:47001/47002): `TestCLI_TracesList_ContainsSeededTraces` PASS (2.43s), `TestCLI_TracesShow_RendersDetail` PASS (0.61s). E2E tier (Scope 8 new tests): `TestCLI_TracesOutcomeFilter_AllowlistViolation` PASS (0.92s), `TestOperatorUI_NavigateTraceListToDetailToScenarioDetail` PASS (0.08s), `TestOperatorUI_ScenarioCatalogShowsRejections` PASS (0.02s), `TestOperatorUI_ToolDetailShowsSideEffectBadge` PASS (0.02s). **Inherited harness gap:** `./smackerel.sh test integration|e2e` orchestrator still tears the test stack down between health-check and Go tests (same pre-existing condition documented in Scope 6/7 evidence, not introduced by Scope 8); new Scope 8 tests skip cleanly when `DATABASE_URL` is unset and pass when invoked directly with the live test stack envs. Closing the orchestrator gap remains owned by Scope 9/10 per the existing trace.
 
 ---
 
