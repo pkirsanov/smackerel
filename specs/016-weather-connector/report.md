@@ -4,6 +4,116 @@ Links: [uservalidation.md](uservalidation.md)
 
 ## Reports
 
+### Full-Delivery Re-Cert Pass — 2026-04-24
+
+**Trigger:** User-requested full-delivery re-cert (`mode: full-delivery`, `specs/016-weather-connector`)
+**Target:** All 5 scopes already Done — re-cert pipeline against the actual code
+**Outcome:** PARTIAL — 9 phases passed, 1 phase skipped (chaos, live stack down). Spec remains `in_progress`.
+
+#### Phase Results
+
+| Phase | Agent | Outcome | Evidence Summary |
+|---|---|---|---|
+| harden | bubbles.harden | passed | `go vet` clean across weather + cmd/core + internal/nats; `./smackerel.sh check` SST-sync OK; `go test -count=1 -v ./internal/connector/weather/...` all PASS incl. NaN/+Inf/-Inf bounds. Source-level: bounds, 30s timeouts, refuse-redirect, fail-loud nil checks all present in [nws.go](internal/connector/weather/nws.go) and [enrich.go](internal/connector/weather/enrich.go). |
+| regression | bubbles.regression | passed | `./smackerel.sh test unit` → 39 Go packages all `ok`, Python 330 passed in 15.77s. No cross-spec regression in alerts/, maps/, annotation/. |
+| simplify | bubbles.simplify | passed | enrich.go (214 LOC) + nws.go (248 LOC) reviewed: no dead code, no over-abstraction. Helpers `mapCAPSeverityToTier` / `isHighSeverity` justified by callers. No simplification action required. |
+| stabilize | bubbles.stabilize | passed | 5-min `nwsAlertCacheTTL` prevents upstream hammering; per-process `seenAlertIDs` dedup; bounded 30s timeouts on NWS + enrich; subscriber failures log+continue (no goroutine leak); `CheckRedirect` prevents retry storms. |
+| devops | bubbles.devops | passed | Tests auto-discovered by `./smackerel.sh test {unit,integration,e2e}`; `-tags=integration` / `-tags=e2e` build constraints honored; NATS_URL env gate verified — integration & e2e tests SKIP cleanly when stack absent. |
+| security | bubbles.security | passed | SSRF blocked (CheckRedirect on both Open-Meteo and NWS clients); lat/lon bounds enforced before network call; response capped at 2 MiB, error-body drain capped at 64 KiB; no API keys (Open-Meteo + NWS are public, User-Agent identifies caller); NATS auth via existing `svc.nc`; alert publisher injected (decoupled from raw NATS); error codes are fixed strings (no log-injection vector). No vulnerabilities found. |
+| chaos | bubbles.chaos | **skipped** | Live stack required. `./smackerel.sh status` → `curl: (28) Connection timed out after 5002 milliseconds`. Per task hard-rule: skip honestly. **Sole blocker** preventing promotion to `done`. |
+| validate | bubbles.validate | partial | All five scopes Done; tests/check/lint clean; SST compliance verified (weather config flows from `config/smackerel.yaml` → `cmd/core/wiring.go` → `connector.SourceConfig` with no hardcoded fallbacks). PARTIAL because chaos was skipped. |
+| audit | bubbles.audit | passed | spec.md R-005 (response-only enrichment) matches `enrich.go::handleEnrichmentRequest`; R-007 artifact-type table matches `weather.go::Sync()` emit set; R-009 `weather_type` enum matches normalize helpers; Scope 04 alert routing via `SetAlertPublisher` → `SubjectAlertsNotify` aligns with `design.md`; NATS contract aligned with `internal/nats/client.go` constants. No spec/code drift. |
+| docs | bubbles.docs | passed | docs/Connector_Development.md (line 20), docs/Development.md (line 31, 208), docs/smackerel.md (lines 153/229/785/844/2280/2382), docs/Testing.md (line 18, 78) all reference weather accurately and consistently with the post-Scope-02 reconciliation (no stale `weather/historical` artifact references). No managed-doc updates required. |
+| finalize | bubbles.workflow | spec_remains_in_progress | Decision: `state.json status` stays `in_progress`, `certification.status` stays `in_progress`. Reason: chaos skipped. |
+
+#### Captured Output Excerpts
+
+**`./smackerel.sh check`:**
+
+```
+Config is in sync with SST
+env_file drift guard: OK
+```
+
+**`go test -count=1 -v ./internal/connector/weather/...` (tail):**
+
+```
+--- PASS: TestDecodeHistorical_InconsistentArrayLengths (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/weather       102.388s
+```
+
+**`./smackerel.sh test unit` (tail):**
+
+```
+330 passed, 2 warnings in 15.77s
+```
+
+(Plus 39 Go packages all `ok` — see executionHistory entry for full list.)
+
+**`./smackerel.sh lint` (tail):**
+
+```
+Web validation passed
+```
+
+(Preceded by `All checks passed!` from Python ruff and `OK:` lines for every web manifest + JS file.)
+
+**Integration/E2E live-stack gate behavior:**
+
+```
+=== RUN   TestWeatherAlerts_PublishedToAlertsNotify
+    weather_alerts_test.go:105: integration: NATS_URL not set — live stack not available
+--- SKIP: TestWeatherAlerts_PublishedToAlertsNotify (0.00s)
+... (5 more SKIP, 0 FAIL)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.013s
+```
+
+```
+=== RUN   TestWeatherAlerts_E2E_FullStack
+    weather_alerts_e2e_test.go:33: e2e: NATS_URL not set — live stack not available
+--- SKIP: TestWeatherAlerts_E2E_FullStack (0.00s)
+=== RUN   TestWeatherEnrich_E2E_LiveStackRoundTrip
+    weather_enrich_e2e_test.go:49: e2e: NATS_URL not set — live stack not available
+--- SKIP: TestWeatherEnrich_E2E_LiveStackRoundTrip (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.011s
+```
+
+**`./smackerel.sh status` (chaos skip evidence):**
+
+```
+NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS
+curl: (28) Connection timed out after 5002 milliseconds
+```
+
+#### Source Code Changes
+
+None. No defects found across any phase. All updates were to `state.json` (phaseRecords, completedPhaseClaims, skippedPhaseClaims, lastUpdatedAt, notes) and this report.
+
+#### Spec Status
+
+- `state.json status`: `in_progress` (unchanged)
+- `certification.status`: `in_progress` (unchanged)
+- `certification.completedScopes`: `["01","02","03","04","05"]` (unchanged)
+- `certification.skippedPhases`: `["chaos"]` (NEW — explicit honest record)
+- `certification.chaosBlocker`: short note describing what to do to clear it
+
+#### Path to `done`
+
+1. `./smackerel.sh up`
+2. Wait for NATS / Postgres / Ollama health-checks green
+3. `./smackerel.sh test integration` and `./smackerel.sh test e2e` — verify weather_*_test.go scenarios run (not SKIP)
+4. Re-invoke `bubbles.chaos` against the live stack (NWS 503 injection, malformed GeoJSON, NATS publish failures, enrich timeout exhaustion)
+5. Re-run `bubbles.validate`; if clean, promote `state.json status` → `done` and `certification.status` → `done`
+
+#### Acceptance
+
+- `bash .github/bubbles/scripts/artifact-lint.sh specs/016-weather-connector` — see verification below
+
+---
+
 ### Spec Reconciliation — 2026-04-24
 
 **Trigger:** User-requested spec reconciliation (bubbles.plan)
