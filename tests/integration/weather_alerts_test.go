@@ -43,7 +43,7 @@ func weatherAlertsTestClient(t *testing.T) *smacknats.Client {
 	if _, err := c.JetStream.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:      "ALERTS",
 		Subjects:  []string{"alerts.>"},
-		Retention: jetstream.LimitsPolicy,
+		Retention: jetstream.WorkQueuePolicy,
 		MaxAge:    7 * 24 * time.Hour,
 		Storage:   jetstream.FileStorage,
 	}); err != nil {
