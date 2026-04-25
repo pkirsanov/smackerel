@@ -15,6 +15,7 @@ import (
 	"github.com/smackerel/smackerel/internal/mealplan"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
+	"github.com/smackerel/smackerel/internal/web"
 )
 
 // configureLogging sets up the global slog handler based on cfg.LogLevel.
@@ -64,6 +65,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		KnowledgeConceptSearchThreshold: cfg.KnowledgeConceptSearchThreshold,
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
+		AgentAdminHandler:               web.NewAgentAdminHandler(svc.pg.Pool),
 	}
 
 	// Wire annotation handlers (spec 027)

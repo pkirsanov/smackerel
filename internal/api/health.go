@@ -50,6 +50,17 @@ type WebUI interface {
 	LintFindingDetail(w http.ResponseWriter, r *http.Request)
 }
 
+// AgentAdminUI exposes the spec 037 Scope 8 operator-UI handlers. The
+// concrete implementation lives in internal/web (AgentAdminHandler).
+type AgentAdminUI interface {
+	TracesIndex(w http.ResponseWriter, r *http.Request)
+	TracesShow(w http.ResponseWriter, r *http.Request)
+	ScenariosIndex(w http.ResponseWriter, r *http.Request)
+	ScenariosShow(w http.ResponseWriter, r *http.Request)
+	ToolsIndex(w http.ResponseWriter, r *http.Request)
+	ToolsShow(w http.ResponseWriter, r *http.Request)
+}
+
 // OAuthFlow handles OAuth2 authorization flows and status.
 type OAuthFlow interface {
 	StartHandler(w http.ResponseWriter, r *http.Request)
@@ -99,6 +110,10 @@ type Dependencies struct {
 	Version            string
 	CommitHash         string
 	BuildTime          string
+
+	// Spec 037 Scope 8 — admin web routes for the operator UI
+	// (optional — nil when the agent runtime is not enabled).
+	AgentAdminHandler AgentAdminUI
 
 	// Annotation handlers (optional — nil when annotations not configured)
 	AnnotationHandlers *AnnotationHandlers
