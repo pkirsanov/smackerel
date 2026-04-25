@@ -16,7 +16,7 @@ project:
 
 runtime:
   log_level: info
-  auth_token: "" # REQUIRED: set a secure random token (min 16 chars). Run: openssl rand -hex 24
+  auth_token: "3d8b160ea6440c30d8b38485aed71e4b6e95a280b659f48a" # dev token (48 hex). Override per environment.
   host_bind_address: "127.0.0.1"
   digest_cron: "0 7 * * *"
   embedding_model: nomic-embed-text
@@ -371,24 +371,24 @@ agent:
   # value is missing. There are no Go fallbacks. Empty-string values are
   # explicitly allowed only where noted (fallback_scenario_id, embedding_model).
   scenario_dir: "config/prompt_contracts" # REQUIRED: directory containing scenario YAMLs
-  scenario_glob: "*.yaml"                 # REQUIRED: glob applied beneath scenario_dir
-  hot_reload: true                        # REQUIRED: SIGHUP triggers a rescan
+  scenario_glob: "*.yaml" # REQUIRED: glob applied beneath scenario_dir
+  hot_reload: true # REQUIRED: SIGHUP triggers a rescan
   routing:
-    confidence_floor: 0.65                # REQUIRED: minimum cosine similarity to select a scenario
-    consider_top_n: 5                     # REQUIRED: number of candidates retained for trace
-    fallback_scenario_id: ""              # REQUIRED ("" = no fallback; below-floor → unknown-intent)
-    embedding_model: ""                   # REQUIRED ("" = inherit runtime.embedding_model)
+    confidence_floor: 0.65 # REQUIRED: minimum cosine similarity to select a scenario
+    consider_top_n: 5 # REQUIRED: number of candidates retained for trace
+    fallback_scenario_id: "" # REQUIRED ("" = no fallback; below-floor → unknown-intent)
+    embedding_model: "" # REQUIRED ("" = inherit runtime.embedding_model)
   trace:
-    retention_days: 30                    # REQUIRED: days to retain agent_traces rows
-    record_llm_messages: false            # REQUIRED: capture full LLM transcript (true in dev/test only)
-    redact_marker: "***"                  # REQUIRED: replacement token for x-redact fields
+    retention_days: 30 # REQUIRED: days to retain agent_traces rows
+    record_llm_messages: false # REQUIRED: capture full LLM transcript (true in dev/test only)
+    redact_marker: "***" # REQUIRED: replacement token for x-redact fields
   defaults:
     # Failsafe ceilings — NOT Go fallbacks. A scenario MUST declare its own
     # limits; these caps clamp scenario values that exceed them at load time.
-    max_loop_iterations_ceiling: 32       # REQUIRED
-    timeout_ms_ceiling: 120000            # REQUIRED
-    schema_retry_budget_ceiling: 5        # REQUIRED
-    per_tool_timeout_ms_ceiling: 30000    # REQUIRED
+    max_loop_iterations_ceiling: 32 # REQUIRED
+    timeout_ms_ceiling: 120000 # REQUIRED
+    schema_retry_budget_ceiling: 5 # REQUIRED
+    per_tool_timeout_ms_ceiling: 30000 # REQUIRED
   provider_routing:
     # Maps scenario.model_preference → ml/app/agent.py provider/model. SST.
     default:
