@@ -1,13 +1,11 @@
+package render
 // Spec 037 Scope 8 — render layer unit tests.
-//
 // Asserts that every outcome class from design §8 produces an
 // OutcomeView whose Fields list contains every key declared in the
 // outcomeRegistry.required slice, and that the values are non-empty
 // strings (the Field renderer substitutes "(unset)" rather than
 // returning an empty string, so a present-but-blank value is also a
 // rendering bug worth catching).
-
-package render
 
 import (
 	"encoding/json"
