@@ -115,6 +115,10 @@ type Dependencies struct {
 	// (optional — nil when the agent runtime is not enabled).
 	AgentAdminHandler AgentAdminUI
 
+	// Spec 037 Scope 9 — POST /v1/agent/invoke handler
+	// (optional — nil when the agent runtime is not enabled).
+	AgentInvokeHandler *AgentInvokeHandler
+
 	// Annotation handlers (optional — nil when annotations not configured)
 	AnnotationHandlers *AnnotationHandlers
 

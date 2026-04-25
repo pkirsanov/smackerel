@@ -200,6 +200,22 @@ func NewRouter(deps *Dependencies) http.Handler {
 		})
 	}
 
+	// Spec 037 Scope 9 — POST /v1/agent/invoke (end-user failure
+	// surfaces). Behind bearer auth (same policy as /api/*) so callers
+	// must authenticate; replies always carry a structured outcome
+	// envelope per spec §UX. Mounted at /v1/* (NOT /api/*) so it is
+	// versioned independently from the rest of the API surface, per
+	// spec §UX.
+	if deps.AgentInvokeHandler != nil {
+		r.Route("/v1", func(r chi.Router) {
+			r.Use(middleware.Throttle(100))
+			r.Group(func(r chi.Router) {
+				r.Use(deps.bearerAuthMiddleware)
+				r.Post("/agent/invoke", deps.AgentInvokeHandler.AgentInvokeHandlerFunc)
+			})
+		})
+	}
+
 	return r
 }
 
