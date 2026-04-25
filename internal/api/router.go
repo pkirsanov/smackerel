@@ -182,6 +182,24 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Handle("/*", http.StripPrefix("/pwa", pwaFileServer()))
 	})
 
+	// Spec 037 Scope 8 — Agent Operator UI (admin web routes).
+	// Behind webAuthMiddleware so the same Bearer/cookie auth as the
+	// rest of the admin web applies. Routes mirror the
+	// `smackerel agent ...` CLI subcommands one-for-one.
+	if deps.AgentAdminHandler != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(deps.webAuthMiddleware)
+			r.Route("/admin/agent", func(r chi.Router) {
+				r.Get("/traces", deps.AgentAdminHandler.TracesIndex)
+				r.Get("/traces/{id}", deps.AgentAdminHandler.TracesShow)
+				r.Get("/scenarios", deps.AgentAdminHandler.ScenariosIndex)
+				r.Get("/scenarios/{id}", deps.AgentAdminHandler.ScenariosShow)
+				r.Get("/tools", deps.AgentAdminHandler.ToolsIndex)
+				r.Get("/tools/{name}", deps.AgentAdminHandler.ToolsShow)
+			})
+		})
+	}
+
 	return r
 }
 

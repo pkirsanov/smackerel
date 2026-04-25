@@ -22,14 +22,20 @@ import (
 //	2  ERROR — could not load the trace, scenarios, or DB.
 func runAgentCommand(ctx context.Context, args []string) int {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: smackerel agent <replay> [args...]")
+		fmt.Fprintln(os.Stderr, "usage: smackerel agent <replay|traces|scenarios|tools> [args...]")
 		return 2
 	}
 	switch args[0] {
 	case "replay":
 		return runAgentReplay(ctx, args[1:])
+	case "traces":
+		return runAgentTraces(ctx, args[1:])
+	case "scenarios":
+		return runAgentScenarios(ctx, args[1:])
+	case "tools":
+		return runAgentTools(ctx, args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "smackerel agent: unknown subcommand %q (expected: replay)\n", args[0])
+		fmt.Fprintf(os.Stderr, "smackerel agent: unknown subcommand %q (expected: replay|traces|scenarios|tools)\n", args[0])
 		return 2
 	}
 }
