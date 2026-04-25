@@ -1,4 +1,5 @@
 package render
+
 // Spec 037 Scope 8 — render layer unit tests.
 // Asserts that every outcome class from design §8 produces an
 // OutcomeView whose Fields list contains every key declared in the
