@@ -95,9 +95,22 @@ type PostgresTracer struct {
 	pool         *pgxpool.Pool
 	publisher    TracePublisher
 	recordLLM    bool
+	redactMarker string
 	mu           sync.Mutex
 	pads         map[string]*tracePad
 	publishCtxFn func() (context.Context, context.CancelFunc)
+}
+
+// WithRedactMarker enables x-redact processing at the persistence
+// boundary (Scope 7, BS-022). When marker is non-empty, every
+// scenario/tool JSON Schema property tagged `x-redact: true` will be
+// replaced with marker in the persisted trace row, the per-call rows,
+// the turn_log, and the final_output column. Handler-visible values
+// are NEVER mutated. Pass the value of agent.Config.Trace.RedactMarker.
+// Calling with "" disables redaction.
+func (t *PostgresTracer) WithRedactMarker(marker string) *PostgresTracer {
+	t.redactMarker = marker
+	return t
 }
 
 // tracePad accumulates per-invocation state from Begin to RecordOutcome.
@@ -312,7 +325,7 @@ func (t *PostgresTracer) writeTrace(ctx context.Context, pad *tracePad, result *
 	if err != nil {
 		return fmt.Errorf("scenario snapshot: %w", err)
 	}
-	envelopeJSON, err := buildEnvelopeJSON(pad.tc.Envelope)
+	envelopeJSON, err := buildEnvelopeJSON(pad.tc.Envelope, pad.tc.Scenario, t.redactMarker)
 	if err != nil {
 		return fmt.Errorf("input envelope: %w", err)
 	}
@@ -320,12 +333,16 @@ func (t *PostgresTracer) writeTrace(ctx context.Context, pad *tracePad, result *
 	if err != nil {
 		return fmt.Errorf("routing decision: %w", err)
 	}
-	toolCallsJSON, err := json.Marshal(result.ToolCalls)
+	// Build a redacted DEEP COPY of the tool calls for persistence so
+	// the in-memory result.ToolCalls handed back to the surface
+	// (telegram bridge, API response) is never mutated.
+	persistedCalls := redactToolCalls(result.ToolCalls, pad.tc.Scenario, t.redactMarker)
+	toolCallsJSON, err := json.Marshal(persistedCalls)
 	if err != nil {
 		return fmt.Errorf("tool calls snapshot: %w", err)
 	}
 	pad.mu.Lock()
-	turnLogCopy := append([]recordedTurn(nil), pad.turnLog...)
+	turnLogCopy := redactTurnLog(pad.turnLog, pad.tc.Scenario, t.redactMarker)
 	pad.mu.Unlock()
 	turnLogJSON, err := json.Marshal(turnLogCopy)
 	if err != nil {
@@ -333,7 +350,7 @@ func (t *PostgresTracer) writeTrace(ctx context.Context, pad *tracePad, result *
 	}
 	var finalJSON []byte
 	if len(result.Final) > 0 {
-		finalJSON = []byte(result.Final)
+		finalJSON = RedactValue(json.RawMessage(result.Final), pad.tc.Scenario.OutputSchema, t.redactMarker)
 	}
 	var outcomeDetailJSON []byte
 	if result.OutcomeDetail != nil {
@@ -393,7 +410,7 @@ INSERT INTO agent_traces (
 		return fmt.Errorf("insert agent_traces: %w", err)
 	}
 
-	for _, c := range result.ToolCalls {
+	for _, c := range persistedCalls {
 		// Look up side_effect_class from the registry; if the tool was
 		// removed mid-run (or was rejected as hallucinated and never
 		// existed), persist "unknown" so the row remains queryable.
@@ -498,8 +515,10 @@ func buildScenarioSnapshot(sc *Scenario) ([]byte, error) {
 
 // buildEnvelopeJSON projects the IntentEnvelope to a queryable JSON
 // payload. The structured_context field is preserved verbatim so
-// replay can re-feed the executor with the exact same input.
-func buildEnvelopeJSON(env IntentEnvelope) ([]byte, error) {
+// replay can re-feed the executor with the exact same input. When
+// marker is non-empty, structured_context is redacted against
+// scenario.input_schema before serialisation (BS-022).
+func buildEnvelopeJSON(env IntentEnvelope, sc *Scenario, marker string) ([]byte, error) {
 	payload := map[string]any{
 		"source":           env.Source,
 		"raw_input":        env.RawInput,
@@ -507,9 +526,79 @@ func buildEnvelopeJSON(env IntentEnvelope) ([]byte, error) {
 		"confidence_floor": env.ConfidenceFloor,
 	}
 	if len(env.StructuredContext) > 0 {
-		payload["structured_context"] = json.RawMessage(env.StructuredContext)
+		var schema json.RawMessage
+		if sc != nil {
+			schema = sc.InputSchema
+		}
+		redacted := RedactValue(env.StructuredContext, schema, marker)
+		if len(redacted) == 0 {
+			redacted = json.RawMessage(env.StructuredContext)
+		}
+		payload["structured_context"] = json.RawMessage(redacted)
 	}
 	return json.Marshal(payload)
+}
+
+// redactToolCalls returns a deep-cloned slice with arguments and
+// result fields redacted against each tool's registered input/output
+// schema. Hallucinated calls (whose name was never registered) are
+// passed through with empty schema, which means RedactValue clones
+// without redacting (no schema means no x-redact tags can be honoured).
+func redactToolCalls(calls []ExecutedToolCall, _ *Scenario, marker string) []ExecutedToolCall {
+	out := make([]ExecutedToolCall, len(calls))
+	for i, c := range calls {
+		// Shallow-copy the struct first; then deep-clone the JSON
+		// fields so the caller's slice is never aliased.
+		nc := c
+		var argsSchema, resultSchema json.RawMessage
+		if t, ok := ByName(c.Name); ok {
+			argsSchema = t.InputSchema
+			resultSchema = t.OutputSchema
+		}
+		if len(c.Arguments) > 0 {
+			nc.Arguments = RedactValue(c.Arguments, argsSchema, marker)
+		}
+		if len(c.Result) > 0 {
+			nc.Result = RedactValue(c.Result, resultSchema, marker)
+		}
+		out[i] = nc
+	}
+	return out
+}
+
+// redactTurnLog returns a deep-cloned slice with each turn's Final
+// field redacted against scenario.OutputSchema and each LLM-proposed
+// tool call's Arguments redacted against the tool's InputSchema. The
+// in-memory pad.turnLog is untouched.
+func redactTurnLog(turns []recordedTurn, sc *Scenario, marker string) []recordedTurn {
+	out := make([]recordedTurn, len(turns))
+	var outSchema json.RawMessage
+	if sc != nil {
+		outSchema = sc.OutputSchema
+	}
+	for i, tn := range turns {
+		nt := tn
+		if len(tn.Final) > 0 {
+			nt.Final = RedactValue(tn.Final, outSchema, marker)
+		}
+		if len(tn.ToolCalls) > 0 {
+			cloned := make([]LLMToolCall, len(tn.ToolCalls))
+			for j, c := range tn.ToolCalls {
+				cc := c
+				if len(c.Arguments) > 0 {
+					var argsSchema json.RawMessage
+					if tool, ok := ByName(c.Name); ok {
+						argsSchema = tool.InputSchema
+					}
+					cc.Arguments = RedactValue(c.Arguments, argsSchema, marker)
+				}
+				cloned[j] = cc
+			}
+			nt.ToolCalls = cloned
+		}
+		out[i] = nt
+	}
+	return out
 }
 
 // nullableJSON returns nil for an empty buffer so pgx writes SQL NULL.
