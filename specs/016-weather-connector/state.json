@@ -14,9 +14,18 @@
       "bootstrap",
       "implement",
       "test",
+      "harden",
+      "regression",
+      "simplify",
+      "stabilize",
+      "devops",
+      "security",
       "validate",
       "audit",
       "docs"
+    ],
+    "skippedPhaseClaims": [
+      "chaos"
     ],
     "pendingTransitionRequests": []
   },
@@ -28,10 +37,18 @@
       "bootstrap",
       "implement",
       "test",
+      "harden",
+      "regression",
+      "simplify",
+      "stabilize",
+      "devops",
+      "security",
       "validate",
       "audit",
       "docs"
     ],
+    "skippedPhases": ["chaos"],
+    "chaosBlocker": "Live stack required (NATS/Postgres/Ollama). Re-run ./smackerel.sh up && bubbles.chaos to clear.",
     "scopeProgress": [],
     "lockdownState": {
       "active": false,
@@ -94,12 +111,184 @@
       "agent": "bubbles.implement",
       "timestamp": "2026-04-24T17:48:02Z",
       "evidence": "go test -count=1 -v -run \"NWS|Alert|Severity\" ./internal/connector/weather/... → 11/11 PASS in 0.105s (10 NWS/alert/severity + 1 enrich-tagged TestParseWeatherConfig_EnableAlertsFalse); tests/integration/weather_alerts_test.go (288 LOC, 3 tests) builds clean under -tags=integration (ok 0.014s); tests/e2e/weather_alerts_e2e_test.go (172 LOC, 1 test) builds clean under -tags=e2e (ok 0.008s); ./smackerel.sh test unit exit 0; ./smackerel.sh check exit 0"
+    },
+    {
+      "scope": "spec",
+      "phase": "harden",
+      "agent": "bubbles.harden",
+      "timestamp": "2026-04-24T22:31:42Z",
+      "evidence": "go vet ./internal/connector/weather/... ./cmd/core/... ./internal/nats/... → clean (no output); ./smackerel.sh check → 'Config is in sync with SST / env_file drift guard: OK'; go test -count=1 -v ./internal/connector/weather/... → all PASS (compile 102.388s due to cold cache, 0 failures across full weather suite incl. TestValidateWeatherValues NaN/+Inf/-Inf bounds, TestDecodeForecast_*, TestDecodeHistorical_*, TestSync_ProducesForecastArtifacts). Hardening verified in source: nws.go enforces lat/lon bounds (lines 137-142), CheckRedirect refuses redirects (lines 116-118), bounded response size 2 MiB (line 41), bounded error-body drain 64 KiB (line 45), nwsRequestTimeout 30s; enrich.go validates payload+lat+lon+date with stable error codes enrichErr* (lines 33-39, 86-127), bounded enrichFetchTimeout 30s, fail-loud nil checks in StartEnrichmentSubscriber (lines 188-194)."
+    },
+    {
+      "scope": "spec",
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "timestamp": "2026-04-24T22:33:05Z",
+      "evidence": "./smackerel.sh test unit → all 39 Go packages 'ok' (cached, no FAIL): annotation, api, auth, config, connector, connector/{alerts,bookmarks,browser,caldav,discord,guesthost,hospitable,imap,keep,maps,markets,rss,twitter,weather,youtube}, db, digest, domain, extract, graph, intelligence, knowledge, list, mealplan, metrics, nats, pipeline, recipe, scheduler, stringutil, telegram, topics, web, web/icons; Python pytest 330 passed in 15.77s. No cross-spec regression from Scope 04/05 additions: alerts/, maps/, annotation/ packages remain green (deterministic InteractionPhrases ordering side-fix landed in Scope 04 implement remains intact)."
+    },
+    {
+      "scope": "spec",
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "timestamp": "2026-04-24T22:35:12Z",
+      "evidence": "Code review of internal/connector/weather/enrich.go (214 LOC) and internal/connector/weather/nws.go (248 LOC): no dead code, no redundant abstractions, no over-engineering. enrich.go: validateEnrichRequest is a single switch-style validator with stable error codes; mustMarshalEnrichResponse falls back to a hard-coded JSON envelope rather than dropping (correct trade-off, not over-engineered). nws.go: NWSClient has one cache map, one mutex, one HTTP client — minimal surface; mapCAPSeverityToTier and isHighSeverity are 5-line helpers used by callers in weather.go (justified). Reused infra (smacknats.SubjectWeatherEnrichRequest/Response, smacknats.SubjectAlertsNotify) — no duplicated subject constants. No simplification action required."
+    },
+    {
+      "scope": "spec",
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "timestamp": "2026-04-24T22:36:48Z",
+      "evidence": "Reliability/perf review of NWS poll loop + enrichment subscriber: (1) nwsAlertCacheTTL=5min prevents hammering api.weather.gov when scheduler ticks faster (nws.go:36); (2) seenAlertIDs map in weather.go provides per-process dedup so the same NWS alert ID is only published once on alerts.notify even across cache misses; (3) nwsRequestTimeout=30s and enrichFetchTimeout=30s bound upstream wait so a stuck call cannot block the connector loop (nws.go:31, enrich.go:46); (4) StartEnrichmentSubscriber uses core NATS Subscribe (fire-and-forget) — failures publish to slog and continue, no goroutine leak (enrich.go:200-206); (5) httpClient.CheckRedirect refuses redirects — no retry storm (nws.go:116). No additional stabilization action required."
+    },
+    {
+      "scope": "spec",
+      "phase": "devops",
+      "agent": "bubbles.devops",
+      "timestamp": "2026-04-24T22:37:55Z",
+      "evidence": "./smackerel.sh test unit picks up internal/connector/weather/* automatically (Go package discovery via ./...); integration tests under tests/integration/weather_*.go run via ./smackerel.sh test integration with -tags=integration build constraint and are properly gated on NATS_URL env (verified: TestWeatherAlerts_Publish*, TestWeatherEnrich_Integration_* all SKIP cleanly when NATS_URL unset); e2e tests under tests/e2e/weather_*_e2e_test.go use -tags=e2e and same env gate. ./smackerel.sh check passes (config + env_file drift guard OK). No new Docker services, no new pipeline gaps."
+    },
+    {
+      "scope": "spec",
+      "phase": "security",
+      "agent": "bubbles.security",
+      "timestamp": "2026-04-24T22:40:05Z",
+      "evidence": "Security review: (1) SSRF: both NWS httpClient (nws.go:116-118) and Open-Meteo httpClient (weather.go) refuse redirects via CheckRedirect, blocking open-redirect → internal-net pivots; (2) Bounds: nwsLat/Lon and enrichLat/Lon enforced before any network call (rejects -200/+200 etc); (3) Resource exhaustion: nwsMaxResponseSize=2MiB and limited.io.LimitReader on decode prevent OOM from hostile upstream; nwsMaxErrorBodyDrain=64KiB on non-200 limits drain; (4) API keys: neither Open-Meteo nor NWS require API keys — no secrets to leak (User-Agent identifies caller per NWS terms); (5) NATS auth: enrichment subscriber + alert publisher use the existing svc.nc client which is wired through smacknats.NewClient with the SST-resolved NATS_URL and auth (cmd/core/wiring.go); no separate credential surface; (6) Alert publish authorization: SetAlertPublisher takes an injected publish fn (decoupled from raw NATS) so wiring controls who can publish to alerts.notify (cmd/core/connectors.go:273); (7) Error code stability: enrichErr* constants are fixed strings (not free-form text) preventing log-injection via crafted request payload echoing. No vulnerabilities found."
+    },
+    {
+      "scope": "spec",
+      "phase": "chaos",
+      "agent": "bubbles.chaos",
+      "timestamp": "2026-04-24T22:40:35Z",
+      "outcome": "skipped",
+      "reason": "Live stack required (NATS, Postgres, Ollama). ./smackerel.sh status → 'curl: (28) Connection timed out after 5002 milliseconds' confirms stack is down. Per task hard-rule: skip honestly rather than mark passed. Remediation: bring stack up via './smackerel.sh up' and re-run chaos to inject random NWS outage (httptest server returning 503), malformed GeoJSON, NATS publish failures (nc.Drain mid-publish), and enrichment timeout exhaustion. Chaos coverage gap is the sole blocker preventing spec promotion to done.",
+      "evidence": "./smackerel.sh status output: 'NAME IMAGE COMMAND SERVICE CREATED STATUS PORTS / curl: (28) Connection timed out after 5002 milliseconds'. Live-stack integration/e2e tests SKIP cleanly with 'NATS_URL not set — live stack not available' guard message confirming the in-test gate is functional."
+    },
+    {
+      "scope": "spec",
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "timestamp": "2026-04-24T22:42:48Z",
+      "outcome": "partial",
+      "evidence": "All five scopes Done per scopes.md Scope Summary; certification.completedScopes=['01','02','03','04','05']. ./smackerel.sh test unit → 0 failures (39 Go packages, 330 Python tests). ./smackerel.sh check → 0 drift. ./smackerel.sh lint → 'All checks passed!' + web validation passed. Integration/e2e files build clean under their tags and gate on NATS_URL. SST compliance verified (weather config flows from config/smackerel.yaml → cmd/core/wiring.go → connector.SourceConfig with no hardcoded fallbacks). Validation status: PARTIAL — chaos phase skipped due to live-stack absence, so full certification requires re-running chaos with stack up before promotion to done."
+    },
+    {
+      "scope": "spec",
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "timestamp": "2026-04-24T22:44:55Z",
+      "evidence": "Spec adherence audit: (1) spec.md R-005 (response-only enrichment) matches enrich.go::handleEnrichmentRequest publishing CurrentWeather on SubjectWeatherEnrichResponse with no standalone artifact; (2) R-007 artifact-type table (current/forecast/alert only) matches weather.go::Sync() emit set; (3) R-009 weather_type enum (current/forecast/alert) matches normalize* helpers; (4) Scope 04 NWS alert proactive delivery: alert publishing via injected SetAlertPublisher → smacknats.SubjectAlertsNotify wired in connectors.go:273 matches design.md alert-routing flow; (5) NATS contract: SubjectWeatherEnrichRequest/Response in client.go:76-77 and config/nats_contract.json:213-224 align; (6) artifact-lint.sh specs/016-weather-connector → 'Artifact lint PASSED' (re-run below). No spec/code drift detected."
+    },
+    {
+      "scope": "spec",
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "timestamp": "2026-04-24T22:46:08Z",
+      "evidence": "Managed-doc review for weather connector additions: docs/Connector_Development.md line 20 already lists 'Weather | internal/connector/weather | None | Open-Meteo API | 016-weather-connector' (accurate); docs/Development.md line 31 already counts Weather among the 15 passive connectors and line 208 lists weather/ in the connector sub-package inventory (accurate); docs/smackerel.md weather references (lines 153, 229, 785, 844, 2280, 2382) describe the connector at the right altitude — none reference weather/historical artifact (consistent with Scope 02 reconciliation); docs/Testing.md lines 18+78 mention weather location config + WMO mapping. No managed-doc updates required for this re-cert pass; the prior Scope 02 reconciliation already brought spec.md/design.md/scopes.md in sync with implementation."
+    },
+    {
+      "scope": "spec",
+      "phase": "finalize",
+      "agent": "bubbles.workflow",
+      "timestamp": "2026-04-24T22:46:50Z",
+      "outcome": "spec_remains_in_progress",
+      "evidence": "Decision: spec status remains 'in_progress' and certification.status remains 'in_progress'. Reason: chaos phase was honestly skipped due to live stack not being available (./smackerel.sh status timeout). All other phases (harden, regression, simplify, stabilize, devops, security, validate-partial, audit, docs) PASSED with real evidence captured above. Per task hard-rule: 'Do NOT promote state.json status to done unless ALL required phases pass with evidence.' To complete certification: run './smackerel.sh up && ./smackerel.sh test e2e' (or invoke bubbles.chaos with live stack) and re-run validate."
+    }
+  ],
+  "phaseRecords": [
+    {
+      "phase": "harden",
+      "agent": "bubbles.harden",
+      "startedAt": "2026-04-24T22:25:00Z",
+      "completedAt": "2026-04-24T22:31:42Z",
+      "outcome": "passed",
+      "evidence": "go vet clean across weather + cmd/core + internal/nats; ./smackerel.sh check → SST sync OK; go test -count=1 -v ./internal/connector/weather/... → all subtests PASS (incl. NaN/+Inf/-Inf bounds in TestValidateWeatherValues); source-level audit: bounds/timeouts/refuse-redirect/fail-loud nil checks verified in nws.go and enrich.go."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "startedAt": "2026-04-24T22:32:18Z",
+      "completedAt": "2026-04-24T22:33:05Z",
+      "outcome": "passed",
+      "evidence": "./smackerel.sh test unit → 39 Go packages all 'ok' + Python 330 passed in 15.77s. No cross-spec regression in alerts/, maps/, annotation/."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "startedAt": "2026-04-24T22:33:50Z",
+      "completedAt": "2026-04-24T22:35:12Z",
+      "outcome": "passed",
+      "evidence": "enrich.go (214 LOC) + nws.go (248 LOC) reviewed: no dead code, no redundant abstractions, helpers (mapCAPSeverityToTier/isHighSeverity) justified. No simplification action required."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "startedAt": "2026-04-24T22:35:40Z",
+      "completedAt": "2026-04-24T22:36:48Z",
+      "outcome": "passed",
+      "evidence": "5-min NWS cache TTL prevents upstream hammering; per-process seenAlertIDs dedup; bounded 30s timeouts on NWS + enrich; subscriber failures log+continue; CheckRedirect prevents retry storms."
+    },
+    {
+      "phase": "devops",
+      "agent": "bubbles.devops",
+      "startedAt": "2026-04-24T22:37:15Z",
+      "completedAt": "2026-04-24T22:37:55Z",
+      "outcome": "passed",
+      "evidence": "Tests auto-discovered by ./smackerel.sh test {unit,integration,e2e}; -tags=integration and -tags=e2e build constraints honored; NATS_URL env gate works (tests SKIP cleanly when stack absent). No CI/Docker gaps."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "startedAt": "2026-04-24T22:38:20Z",
+      "completedAt": "2026-04-24T22:40:05Z",
+      "outcome": "passed",
+      "evidence": "SSRF blocked (CheckRedirect), bounds enforced pre-call, response/error-body size capped, no API keys required, NATS auth via existing svc.nc client, alert publisher injected (decoupled), error codes are fixed strings (no log-injection vector). No vulnerabilities found."
+    },
+    {
+      "phase": "chaos",
+      "agent": "bubbles.chaos",
+      "startedAt": "2026-04-24T22:40:30Z",
+      "completedAt": "2026-04-24T22:40:35Z",
+      "outcome": "skipped",
+      "reason": "Live stack not available (./smackerel.sh status timeout). Per hard rules, skip honestly rather than mark passed.",
+      "evidence": "./smackerel.sh status: 'curl: (28) Connection timed out after 5002 milliseconds'. Integration/e2e tests SKIP cleanly with 'NATS_URL not set' guard."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "startedAt": "2026-04-24T22:41:10Z",
+      "completedAt": "2026-04-24T22:42:48Z",
+      "outcome": "partial",
+      "evidence": "Five scopes Done; tests/check/lint clean; SST compliance verified. PARTIAL because chaos was skipped — full cert requires live-stack chaos run."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "startedAt": "2026-04-24T22:43:20Z",
+      "completedAt": "2026-04-24T22:44:55Z",
+      "outcome": "passed",
+      "evidence": "spec.md R-005/R-007/R-009 align with enrich.go/Sync()/normalize helpers; Scope 04 alert routing matches design.md; NATS contract aligned; no spec/code drift."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "startedAt": "2026-04-24T22:45:25Z",
+      "completedAt": "2026-04-24T22:46:08Z",
+      "outcome": "passed",
+      "evidence": "Connector_Development.md, Development.md, smackerel.md, Testing.md weather references already accurate post-Scope-02 reconciliation. No managed-doc updates required."
+    },
+    {
+      "phase": "finalize",
+      "agent": "bubbles.workflow",
+      "startedAt": "2026-04-24T22:46:35Z",
+      "completedAt": "2026-04-24T22:46:50Z",
+      "outcome": "spec_remains_in_progress",
+      "evidence": "Cannot promote to done: chaos phase skipped. All other phases passed. Spec ready for promotion once live-stack chaos runs cleanly."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-24T17:50:00Z",
+  "lastUpdatedAt": "2026-04-24T22:46:50Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
@@ -141,5 +330,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Initialized by bubbles.analyst for weather connector analysis. Scope 05 (Historical Weather Enrichment) implemented and unit-tested 2026-04-24 (enrich.go 214 LOC, 11/11 unit tests PASS, integration + e2e files build clean). Spec remains in_progress: Scope 02 still In Progress and Scope 04 still Not Started — promotion to done requires both scopes implemented and certified."
+  "notes": "Full-delivery re-cert run 2026-04-24T22:25-22:47Z: harden, regression, simplify, stabilize, devops, security, validate (partial), audit, docs all PASSED with real evidence (see phaseRecords + executionHistory). chaos SKIPPED — live stack down (./smackerel.sh status connection timeout). Spec remains in_progress; promotion to done blocked solely on chaos. Re-run with stack up to complete certification."
 }
