@@ -64,6 +64,16 @@ func run() error {
 	// Build API dependencies (annotations, lists, etc.)
 	deps, listResolver, listStore := buildAPIDeps(cfg, svc)
 
+	// Spec 037 Scope 10 — wire the agent runtime (bridge + router +
+	// executor) into deps so POST /v1/agent/invoke is live and
+	// scheduler/pipeline call sites have a runner to invoke.
+	agentBridge, err := wireAgentBridge(ctx, svc, deps)
+	if err != nil {
+		// Fail-loud per SST: missing agent config or DB/NATS-derived
+		// dependencies must surface, not be silently disabled.
+		return fmt.Errorf("agent bridge wiring: %w", err)
+	}
+
 	router := api.NewRouter(deps)
 
 	// Start Telegram bot if configured
@@ -108,6 +118,28 @@ func run() error {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Spec 037 Scope 10 — SIGHUP triggers an agent.Bridge reload so
+	// scenario YAML changes (BS-001) and hot-reload pinning (BS-019)
+	// can be exercised without restarting the runtime.
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	go func() {
+		for range hup {
+			if agentBridge == nil {
+				continue
+			}
+			rejected, err := agentBridge.Reload(ctx)
+			if err != nil {
+				slog.Warn("agent bridge reload failed", "error", err)
+				continue
+			}
+			for _, r := range rejected {
+				slog.Warn("agent scenario rejected on reload", "path", r.Path, "message", r.Message)
+			}
+			slog.Info("agent bridge reloaded", "scenario_count", len(agentBridge.KnownIntents()))
+		}
+	}()
 
 	select {
 	case sig := <-quit:

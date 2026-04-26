@@ -145,7 +145,7 @@ case "$COMMAND" in
     # none appear as individual declarations in the core/ml environment blocks.
     # Only check services that use env_file (core and ml); postgres/nats keep their own blocks.
     # Allowed overrides in core/ml (container-path remaps, not SST-managed):
-    ALLOWED_OVERRIDES="^(PORT|BOOKMARKS_IMPORT_DIR|MAPS_IMPORT_DIR|BROWSER_HISTORY_PATH|TWITTER_ARCHIVE_DIR|PROMPT_CONTRACTS_DIR|LOG_LEVEL)$"
+    ALLOWED_OVERRIDES="^(PORT|BOOKMARKS_IMPORT_DIR|MAPS_IMPORT_DIR|BROWSER_HISTORY_PATH|TWITTER_ARCHIVE_DIR|PROMPT_CONTRACTS_DIR|AGENT_SCENARIO_DIR|LOG_LEVEL)$"
     env_file="$(smackerel_env_file "$TARGET_ENV")"
     # Extract the smackerel-core and smackerel-ml service blocks (indented 4+ spaces under the service)
     core_ml_env="$(awk '
@@ -174,6 +174,11 @@ case "$COMMAND" in
         exit 1
     fi
     echo "env_file drift guard: OK"
+    # Spec 037 Scope 10 — scenario-lint guards every scenario YAML
+    # against the load-time rules (BS-009 / BS-010 / BS-011) before any
+    # runtime can pick them up.
+    run_go_tooling /workspace/scripts/runtime/scenario-lint.sh "config/generated/${TARGET_ENV}.env"
+    echo "scenario-lint: OK"
     ;;
   lint)
     run_go_tooling /workspace/scripts/runtime/go-lint.sh
@@ -227,7 +232,16 @@ case "$COMMAND" in
         pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
         pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
 
-        # Run existing shell-based integration health check
+        # Spec 037 Scope 10 — orchestrator owns the test-stack
+        # lifecycle so the Go integration runner sees a live stack.
+        # test_runtime_health.sh now leaves the stack UP on success;
+        # we tear it down here regardless of test outcome.
+        integration_cleanup() {
+          timeout 60 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes >/dev/null 2>&1 || true
+        }
+        trap integration_cleanup EXIT
+
+        # Run shell-based health probe (brings stack up + asserts health)
         timeout 300 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
 
         # Run Go integration tests against the live test stack
@@ -238,7 +252,8 @@ case "$COMMAND" in
           -v smackerel-gobuild-cache:/root/.cache/go-build \
           -w /workspace \
           -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
-          -e "NATS_URL=nats://127.0.0.1:${nats_host_port}" \
+          -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
+          -e "NATS_URL=nats://${auth_token}@127.0.0.1:${nats_host_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
           golang:1.24.3-bookworm bash /workspace/scripts/runtime/go-integration.sh
         ;;
@@ -290,7 +305,25 @@ case "$COMMAND" in
         smackerel_generate_config test >/dev/null
         env_file="$(smackerel_require_env_file test)"
         core_host_port="$(smackerel_env_value "$env_file" "CORE_HOST_PORT")"
+        pg_host_port="$(smackerel_env_value "$env_file" "POSTGRES_HOST_PORT")"
+        nats_host_port="$(smackerel_env_value "$env_file" "NATS_CLIENT_HOST_PORT")"
         auth_token="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
+        pg_user="$(smackerel_env_value "$env_file" "POSTGRES_USER")"
+        pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
+        pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
+
+        # Spec 037 Scope 10 — bring the test stack up for the Go e2e
+        # block (the prior shell tests may have torn their own stacks
+        # down) and tear it down at the very end. Mirrors the
+        # integration runner so agent e2e tests see a real
+        # DATABASE_URL/NATS_URL instead of skipping.
+        e2e_cleanup() {
+          timeout 60 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes >/dev/null 2>&1 || true
+        }
+        trap e2e_cleanup EXIT
+
+        timeout 300 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
+
         docker run --rm \
           --network host \
           -v "$SCRIPT_DIR:/workspace" \
@@ -298,6 +331,9 @@ case "$COMMAND" in
           -v smackerel-gobuild-cache:/root/.cache/go-build \
           -w /workspace \
           -e "CORE_EXTERNAL_URL=http://127.0.0.1:${core_host_port}" \
+          -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
+          -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
+          -e "NATS_URL=nats://${auth_token}@127.0.0.1:${nats_host_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
           golang:1.24.3-bookworm bash /workspace/scripts/runtime/go-e2e.sh
         ;;
