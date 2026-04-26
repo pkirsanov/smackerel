@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -112,6 +113,14 @@ func (l *defaultLoader) Load(dir, glob string) ([]*Scenario, []LoadError, error)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		// Spec 037 BS-001: a missing scenario directory is equivalent to an
+		// empty scenario set. Operators "drop a YAML and SIGHUP" — the dir
+		// may legitimately not exist yet (fresh deploy, ephemeral test
+		// container, sidecar built without the bundled config tree). Do
+		// NOT make the loader fatal in that case; report zero scenarios.
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil, nil
+		}
 		return nil, nil, fmt.Errorf("read scenario dir %s: %w", dir, err)
 	}
 
