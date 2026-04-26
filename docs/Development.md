@@ -397,6 +397,65 @@ removal from existing code:
 - Adding a new Go branch to extend a scenario when the same outcome is
   achievable by editing a prompt contract.
 
+#### Adding A New Scenario (BS-001 — zero Go changes)
+
+Spec 037 Scope 10 wires the agent runtime so adding a new scenario is a
+**configuration change, not a code change**. The end-to-end procedure:
+
+1. Drop a new YAML file under `config/prompt_contracts/` (or any directory
+   pointed at by `agent.scenario_dir`) following the schema in
+   `specs/037-llm-agent-tools/design.md` §2.2.
+2. Make sure every name in `allowed_tools` is already registered by some
+   Go package's `init()` (see "Adding A New Tool" below). If a tool you
+   need does not exist, that is the rare case where Go *is* required —
+   add the tool first, then the scenario.
+3. Run `./smackerel.sh check` — `cmd/scenario-lint` is wired into this
+   command (Scope 10) and rejects any scenario that fails the load-time
+   rules (BS-009 / BS-010 / BS-011).
+4. Send the running `smackerel-core` process a `SIGHUP`. The agent
+   bridge atomically reloads the scenario directory and rebuilds the
+   router. In-flight invocations pin the version of the scenario they
+   started with (BS-019).
+5. Invoke the new scenario by id via any surface (`POST /v1/agent/invoke`,
+   the Telegram bridge, `scheduler.FireScenario`, or
+   `pipeline.FireScenario`). No restart, no rebuild, no Go diff.
+
+The end-user-observable contract is exercised by
+`tests/e2e/agent/bs001_zero_go_change_test.go::TestBS001_DropYAMLAndReload_NewScenarioInvokable`,
+which writes a fresh YAML, calls `Bridge.Reload`, asserts the new id
+appears in `KnownIntents`, invokes it, and proves the pre-existing
+scenario still works.
+
+#### Adding A New Tool
+
+Tools always require a Go change — but the change is bounded to one
+package and one `init()` registration. The procedure:
+
+1. Decide which package owns the data the tool touches (e.g., recipe
+   reads/writes go in `internal/recipe/`, expense reads/writes in
+   `internal/intelligence/`). Do **not** create a new package just for
+   the tool.
+2. Implement the `agent.ToolHandler` (deterministic Go function with
+   typed JSON Schema args/return).
+3. Call `agent.RegisterTool(...)` from a package-level `init()` with
+   the tool name, description, input/output schema, side-effect class
+   (`read` / `write` / `external`), and owning-package label.
+4. Add a unit test in the owning package that exercises the handler
+   directly.
+5. Add or extend a scenario YAML that lists the new tool in
+   `allowed_tools`. The Go core enforces the allowlist independently
+   of the LLM (BS-003); the ML sidecar only renders the tool list.
+6. Run `./smackerel.sh check lint test unit` to confirm the registry
+   is healthy and the scenario lints clean. The forbidden-pattern
+   guard at `tests/integration/agent/forbidden_pattern_test.go`
+   continues to enforce that no regex/switch routers slip into
+   `internal/agent/`, `internal/telegram/`, `internal/api/`, or
+   `internal/scheduler/`.
+
+Tool registration is decentralized (each package's `init()` registers
+its own tools); there is no central registration table to update. This
+is the design choice that makes "add a tool" a one-package change.
+
 ## NATS JetStream Streams
 
 All NATS subjects and streams are defined in `config/nats_contract.json`. Both Go core and Python ML sidecar have tests that verify their local constants match this contract.

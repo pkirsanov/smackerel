@@ -85,6 +85,10 @@ services:
       MAPS_IMPORT_DIR: ${MAPS_IMPORT_DIR:+/data/maps-import}
       BROWSER_HISTORY_PATH: ${BROWSER_HISTORY_PATH:+/data/browser-history/History}
       TWITTER_ARCHIVE_DIR: ${TWITTER_ARCHIVE_DIR:+/data/twitter-archive}
+      # Spec 037 Scope 10: agent scenario YAMLs are mounted read-only at the
+      # container path below; AGENT_SCENARIO_DIR in the env_file points at the
+      # host path, so we override it for the container view.
+      AGENT_SCENARIO_DIR: /app/prompt_contracts
     stop_grace_period: 30s
     depends_on:
       postgres:
@@ -96,6 +100,10 @@ services:
       - ${MAPS_IMPORT_DIR:-./data/maps-import}:/data/maps-import:ro
       - ${BROWSER_HISTORY_PATH:-./data/browser-history/History}:/data/browser-history/History:ro
       - ${TWITTER_ARCHIVE_DIR:-./data/twitter-archive}:/data/twitter-archive:ro
+      # Spec 037 Scope 10: scenario YAMLs read-only — paired with the
+      # AGENT_SCENARIO_DIR override in `environment:` above. Operators
+      # drop new YAMLs in the host dir and SIGHUP triggers Bridge.Reload.
+      - ./config/prompt_contracts:/app/prompt_contracts:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${CORE_CONTAINER_PORT}/api/health"]
       interval: 10s
