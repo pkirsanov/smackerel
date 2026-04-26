@@ -76,6 +76,44 @@ Brief statement of what this agent does.
 Description of expected output structure.
 ```
 
+### Structural YAML Body Pattern For Orchestrators
+
+Router/orchestrator agents such as `bubbles.workflow`, `bubbles.goal`, `bubbles.sprint`, and `bubbles.iterate` may use structural YAML blocks near the top of the body when deterministic routing is more important than narrative prose.
+
+Required shape:
+
+````markdown
+## TOOL ALLOWLIST (ENFORCED)
+
+```yaml
+allowed_tools:
+  always:
+    - read_file
+    - search_subagent
+    - runSubagent
+forbidden_tools:
+  - runTests
+```
+
+## PHASE ROUTER (EXECUTE TOP-TO-BOTTOM)
+
+```yaml
+phase_1_understand:
+  do: classify input and load minimal context
+  call_runSubagent: no
+phase_2_dispatch:
+  do: route to the owning specialist or child workflow
+  call_runSubagent: yes
+```
+````
+
+Rules:
+- Frontmatter remains authoritative for runtime tool availability. If the body allowlist names `runSubagent`, frontmatter MUST include the VS Code `agent` tool alias.
+- Body-level allowlists are governance contracts, not a replacement for frontmatter `tools`.
+- Structural YAML must declare phase order, delegation targets, stop conditions, and forbidden direct work clearly enough that downstream reviewers can distinguish routing from implementation.
+- Keep prose outside the structural blocks short and reserved for identity, policy references, and result-envelope expectations.
+- Do not use structural YAML to hide missing ownership, missing evidence, or implementation work performed by an orchestrator.
+
 ### Writing Effective Rules (Negative Rules First)
 
 **Explicit prohibitions yield the biggest quality improvements.** When defining agent rules, prioritize what the agent must NEVER do over what it should do. The AI can often infer positive patterns from code context, but it cannot infer architectural boundaries, security constraints, or project-specific prohibitions.
