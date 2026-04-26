@@ -73,6 +73,7 @@ Orchestrator rule:
 - orchestrators pick work and dispatch specialists or child workflows
 - orchestrators do not implement fixes directly
 - only orchestrators may invoke child workflows
+- orchestration-heavy agents may use structural YAML body sections such as `TOOL ALLOWLIST` and `PHASE ROUTER`, but frontmatter still controls actual VS Code tool availability
 
 ## Owners And Executors
 
