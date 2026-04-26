@@ -77,6 +77,20 @@ agents:
     delegatesRequired: true
     ownsArtifacts: []
     ownsPhases: [ select ]
+  bubbles.goal:
+    class: orchestrator
+    canInvokeChildWorkflows: true
+    canAskUserDirectly: false
+    delegatesRequired: true
+    ownsArtifacts: []
+    ownsPhases: [ autonomous-goal ]
+  bubbles.sprint:
+    class: orchestrator
+    canInvokeChildWorkflows: true
+    canAskUserDirectly: false
+    delegatesRequired: true
+    ownsArtifacts: []
+    ownsPhases: [ autonomous-sprint ]
   bubbles.analyst:
     class: planning-owner
     canAskUserDirectly: false

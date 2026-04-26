@@ -287,8 +287,8 @@ replace_block "$repo_root/docs/its-not-rocket-appliances.html" "GENERATED:FRAMEW
 
 block_temp=$(mktemp)
 cat <<EOF > "$block_temp"
-  "$gate_count gates, boys. That's more security than the trailer park has ever had. 
-  Something's fucky? We'll find it. That's greasy? We'll clean it. 
+  "$gate_count gates, boys. That's more security than the trailer park has ever had.
+  Something's fucky? We'll find it. That's greasy? We'll clean it.
   Red first, green after. Small scopes. Tiny fix loops.
   Can't defer things either — you can't just NOT do things, Corey!
   Worst case Ontario, we revert and try again. DEEEE-CENT."

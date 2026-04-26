@@ -1,4 +1,6 @@
+---
 description: Bug discovery, documentation, and root cause analysis - identify bugs, create structured bug artifacts, analyze root cause, then delegate fixing to specialist agents via the bugfix-fastlane workflow
+tools: [read, search, edit, agent, todo, web, execute]
 handoffs:
   - label: Draft/Update Bug Design (Non-Interactive)
     agent: bubbles.design

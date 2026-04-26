@@ -85,7 +85,7 @@ check_no_match "$agents_dir/bubbles.validate.agent.md" 'Do NOT emit `✅ ALL VAL
 unexpected_child_callers="$({ awk '
   /^  bubbles\./ { agent=$1; sub(":", "", agent) }
   /canInvokeChildWorkflows:[[:space:]]*true/ { print agent }
-' "$capabilities_file" | grep -vE '^bubbles\.(workflow|iterate|bug)$'; } || true)"
+' "$capabilities_file" | grep -vE '^bubbles\.(workflow|iterate|goal|sprint|bug)$'; } || true)"
 
 if [[ -n "$unexpected_child_callers" ]]; then
   echo "ERROR: only orchestrators may enable child workflows; found unexpected callers:"

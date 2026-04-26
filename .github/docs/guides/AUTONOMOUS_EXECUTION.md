@@ -210,6 +210,12 @@ sprint_report:
 - `bubbles.workflow` **orchestrates** specialist agents — existing phase/gate system unchanged
 - All existing gates, policies, and anti-fabrication rules apply at every level
 
+### Outcome-First Dispatch
+
+Autonomous agents optimize for the user's requested outcome, not for staying inside the initially selected mode. If `bubbles.sprint`, `bubbles.goal`, `bubbles.workflow`, `bubbles.iterate`, or `bubbles.bug` discovers that another Bubbles mode or owner is the right vehicle, it invokes that agent with `runSubagent` and continues. It should not ask the user to switch modes or reissue the prompt.
+
+If the runtime does not expose the subagent tool, the correct result is a blocked envelope that names the missing `agent` tool and the child invocation that would have run. The agent must not emulate a child specialist inline or claim work was attempted without a real delegation.
+
 ---
 
 ## TPB Vocabulary

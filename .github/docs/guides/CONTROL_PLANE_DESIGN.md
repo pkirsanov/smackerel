@@ -433,7 +433,7 @@ This keeps the loop fast while preserving strict ownership.
 
 Only orchestrators may invoke child workflows, and child workflow depth must be bounded.
 
-- allowed callers: `bubbles.workflow`, `bubbles.iterate`, `bubbles.bug`
+- allowed callers: `bubbles.workflow`, `bubbles.iterate`, `bubbles.goal`, `bubbles.sprint`, `bubbles.bug`
 - non-orchestrator agents may emit packets but may not spawn workflows directly
 - child workflow depth should be limited to 1
 - child workflows inherit policy snapshot, target context, and packet references from the parent orchestrator
