@@ -297,6 +297,12 @@ autoEscalation:
     artifactFreshnessDrift:
       description: spec.md, design.md, or scopes.md contain stale active content that no longer matches current truth
       action: invoke bubbles.analyst and/or bubbles.ux and/or bubbles.design and/or bubbles.plan inline to reconcile active artifacts before continuing
+    modeOrAgentFit:
+      description: The active mode or agent is not the best vehicle for the user's requested outcome, but another Bubbles mode or owner can perform the work
+      action: invoke the better-fit Bubbles mode, child workflow, or owning specialist inline via runSubagent, then resume the original workflow context
+    missingAgentTool:
+      description: The active custom-agent runtime lacks the agent/subagent tool required for mandated delegation
+      action: return a blocked RESULT-ENVELOPE naming the missing agent tool and intended child invocation; do not ask the user to switch mode, do not emulate the child agent inline, and do not claim completion
   # Self-healing loop configuration (consolidated into G038)
   selfHealingLoop:
     maxDepth: 1 # NEVER nest — a fix attempt cannot trigger another fix attempt
@@ -320,6 +326,7 @@ autoEscalation:
   neverStopFor:
   - mode_seems_suboptimal
   - different_workflow_would_be_better
+  - better_fit_agent_available
   - artifacts_need_repair
   - specs_need_hardening
   - bugs_need_fixing
