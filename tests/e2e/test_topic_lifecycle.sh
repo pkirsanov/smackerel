@@ -38,10 +38,12 @@ DORMANT_MOMENTUM=$(e2e_psql "SELECT momentum_score FROM topics WHERE id='topic-d
 echo "  Dormant topic momentum: $DORMANT_MOMENTUM"
 
 # Verify topic list via topics page
-STATUS=$(curl -s --max-time 15 -o /dev/null -w '%{http_code}' "$CORE_URL/topics")
+STATUS=$(curl -s --max-time 15 -o /dev/null -w '%{http_code}' \
+  -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/topics")
 e2e_assert_eq "$STATUS" "200" "Topics page renders"
 
-BODY=$(curl -sf --max-time 15 "$CORE_URL/topics" 2>/dev/null || true)
+BODY=$(curl -sf --max-time 15 \
+  -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/topics" 2>/dev/null || true)
 e2e_assert_contains "$BODY" "pricing" "Topics page shows pricing topic"
 e2e_pass "Topic lifecycle: states and momentum verified"
 

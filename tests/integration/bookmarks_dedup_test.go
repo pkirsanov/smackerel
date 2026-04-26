@@ -24,9 +24,9 @@ func TestFilterNew_ReturnsOnlyNewURLs(t *testing.T) {
 	// Insert a known bookmark artifact
 	knownURL := "https://example.com/known-" + tid
 	_, err := pool.Exec(ctx, `
-		INSERT INTO artifacts (id, source_id, source_ref, artifact_type, title, created_at, updated_at)
-		VALUES ($1, 'bookmarks', $2, 'bookmark', 'Known Bookmark', NOW(), NOW())
-	`, "test-"+tid, knownURL)
+		INSERT INTO artifacts (id, source_id, source_ref, artifact_type, title, content_hash, created_at, updated_at)
+		VALUES ($1, 'bookmarks', $2, 'bookmark', 'Known Bookmark', $3, NOW(), NOW())
+	`, "test-"+tid, knownURL, "hash-known-"+tid)
 	if err != nil {
 		t.Fatalf("insert known artifact: %v", err)
 	}
@@ -95,9 +95,9 @@ func TestIsKnown_ReturnsTrueForExistingURL(t *testing.T) {
 	knownURL := "https://example.com/isknown-" + tid
 
 	_, err := pool.Exec(ctx, `
-		INSERT INTO artifacts (id, source_id, source_ref, artifact_type, title, created_at, updated_at)
-		VALUES ($1, 'bookmarks', $2, 'bookmark', 'Known', NOW(), NOW())
-	`, "test-ik-"+tid, knownURL)
+		INSERT INTO artifacts (id, source_id, source_ref, artifact_type, title, content_hash, created_at, updated_at)
+		VALUES ($1, 'bookmarks', $2, 'bookmark', 'Known', $3, NOW(), NOW())
+	`, "test-ik-"+tid, knownURL, "hash-isknown-"+tid)
 	if err != nil {
 		t.Fatalf("insert artifact: %v", err)
 	}

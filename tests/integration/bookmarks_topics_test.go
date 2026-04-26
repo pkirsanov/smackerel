@@ -4,6 +4,8 @@ package integration
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -98,8 +100,15 @@ func TestTopicMapper_HierarchicalPath(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	tid := testID(t)
-	folderPath := "ParentFolder-" + tid + "/ChildFolder-" + tid
+	// Use trigram-distinct random suffixes so pg_trgm fuzzyMatch (threshold
+	// 0.4) does NOT match the second segment to the first via shared
+	// substring overlap. testID() shares the long t.Name() suffix between
+	// segments which trigram-overlaps above threshold; random hex avoids it.
+	parentSfx := randomHex(t, 6)
+	childSfx := randomHex(t, 6)
+	parentName := "Zyxparent" + parentSfx
+	childName := "Mnochild" + childSfx
+	folderPath := parentName + "/" + childName
 
 	tm := bookmarks.NewTopicMapper(pool)
 	matches, err := tm.MapFolder(ctx, folderPath)
@@ -116,10 +125,10 @@ func TestTopicMapper_HierarchicalPath(t *testing.T) {
 		defer pool.Exec(ctx, `DELETE FROM topics WHERE id = $1`, m.TopicID)
 	}
 
-	if matches[0].FolderName != "ParentFolder-"+tid {
+	if matches[0].FolderName != parentName {
 		t.Errorf("matches[0].FolderName = %q", matches[0].FolderName)
 	}
-	if matches[1].FolderName != "ChildFolder-"+tid {
+	if matches[1].FolderName != childName {
 		t.Errorf("matches[1].FolderName = %q", matches[1].FolderName)
 	}
 
@@ -130,4 +139,16 @@ func TestTopicMapper_HierarchicalPath(t *testing.T) {
 	if matches[1].MatchType != "created" {
 		t.Errorf("matches[1].MatchType = %q, want created", matches[1].MatchType)
 	}
+}
+
+// randomHex returns a hex string of the given byte length (2*nBytes chars).
+// Used to produce trigram-distinct topic names that do not overlap with
+// other test fixtures via t.Name() shared suffixes.
+func randomHex(t *testing.T, nBytes int) string {
+	t.Helper()
+	b := make([]byte, nBytes)
+	if _, err := rand.Read(b); err != nil {
+		t.Fatalf("randomHex: %v", err)
+	}
+	return hex.EncodeToString(b)
 }

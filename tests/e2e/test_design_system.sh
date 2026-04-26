@@ -11,7 +11,8 @@ trap e2e_cleanup EXIT
 echo "=== Design System E2E Tests ==="
 e2e_start
 
-BODY=$(curl -sf --max-time 15 "$CORE_URL/" 2>/dev/null || true)
+BODY=$(curl -sf --max-time 15 \
+  -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/" 2>/dev/null || true)
 
 # --- SCN-001-005 / SCN-001-006: Light and dark themes ---
 echo "Test: CSS custom properties for theming..."
