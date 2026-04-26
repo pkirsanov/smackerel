@@ -14,14 +14,16 @@ e2e_start
 # Icons are embedded as Go template partials. Verify they're available via web UI.
 echo "Test: Web UI pages render without errors..."
 for PAGE in "/" "/topics" "/settings"; do
-  STATUS=$(curl -s --max-time 15 -o /dev/null -w '%{http_code}' "$CORE_URL$PAGE")
+  STATUS=$(curl -s --max-time 15 -o /dev/null -w '%{http_code}' \
+    -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL$PAGE")
   e2e_assert_eq "$STATUS" "200" "Page $PAGE returns 200"
 done
 e2e_pass "All web pages render (icon rendering implicit)"
 
 # Verify CSS includes theme support
 echo "Test: CSS includes dark/light theme..."
-BODY=$(curl -sf --max-time 15 "$CORE_URL/" 2>/dev/null || true)
+BODY=$(curl -sf --max-time 15 \
+  -H "Authorization: Bearer $AUTH_TOKEN" "$CORE_URL/" 2>/dev/null || true)
 if echo "$BODY" | grep -q "prefers-color-scheme"; then
   e2e_pass "SCN-001-002: Dark mode CSS media query present"
 else
