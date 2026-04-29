@@ -40,6 +40,10 @@ type DigestContext struct {
 	Hospitality        *HospitalityDigestContext     `json:"hospitality,omitempty"`
 	KnowledgeHealth    *KnowledgeHealthDigestContext `json:"knowledge_health,omitempty"`
 	Expenses           *ExpenseDigestContext         `json:"expenses,omitempty"`
+	// Weather is populated by AssembleWeatherContext when a home location is
+	// configured and fresh weather/current or weather/forecast artifacts exist.
+	// Restored per BUG-016-W1 — see specs/016-weather-connector/bugs/BUG-016-W1-digest-no-weather/.
+	Weather *WeatherDigestContext `json:"weather,omitempty"`
 }
 
 // KnowledgeHealthDigestContext holds critical knowledge lint findings for the digest.
@@ -215,6 +219,29 @@ func (g *Generator) GetLatest(ctx context.Context, date string) (*Digest, error)
 	}
 
 	return &d, nil
+}
+
+// MarkDelivered records successful outbound delivery for a stored digest.
+func (g *Generator) MarkDelivered(ctx context.Context, id string) error {
+	if id == "" {
+		return fmt.Errorf("digest id is required")
+	}
+	if g.Pool == nil {
+		return fmt.Errorf("database pool is nil")
+	}
+
+	cmd, err := g.Pool.Exec(ctx, `
+		UPDATE digests
+		SET delivered_at = NOW()
+		WHERE id = $1
+	`, id)
+	if err != nil {
+		return fmt.Errorf("mark digest delivered: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("digest not found: %s", id)
+	}
+	return nil
 }
 
 func (g *Generator) getPendingActionItems(ctx context.Context) ([]ActionItem, error) {

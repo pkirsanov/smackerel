@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "specId": "036-meal-planning-bug-036-001",
+  "scenarios": [
+    { "scenarioId": "SCN-BUG-036-001-A", "title": "Pre-fix guard reports the documented 130 failures", "scope": 1, "requiredTestType": "artifact", "linkedTests": [".github/bubbles/scripts/traceability-guard.sh"], "evidenceRefs": ["report.md#pre-fix-reproduction-phase-3-failing-baseline"], "regressionProtected": true },
+    { "scenarioId": "SCN-BUG-036-001-B", "title": "Post-fix guard eliminates all G068 / G059 / G057-fidelity failures", "scope": 1, "requiredTestType": "artifact", "linkedTests": [".github/bubbles/scripts/traceability-guard.sh"], "evidenceRefs": ["report.md#post-fix-validation-phase-6"], "regressionProtected": true },
+    { "scenarioId": "SCN-BUG-036-001-C", "title": "Artifact lint stays clean", "scope": 1, "requiredTestType": "artifact", "linkedTests": [".github/bubbles/scripts/artifact-lint.sh"], "evidenceRefs": ["report.md#artifact-lint-validation"], "regressionProtected": true }
+  ]
+}

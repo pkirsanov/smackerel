@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "009-bookmarks-connector",
+  "bugId": "BUG-009-001-dod-scenario-fidelity-gap",
+  "featureDir": "specs/009-bookmarks-connector/bugs/BUG-009-001-dod-scenario-fidelity-gap",
+  "featureName": "BUG-009-001: DoD scenario fidelity gap (SCN-BK-004/006/007/008)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T01:00:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T01:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: added 4 trace-ID-bearing DoD bullets (SCN-BK-004 in Scope 1; SCN-BK-006/007/008 in Scope 2) to specs/009-bookmarks-connector/scopes.md with raw `go test` output and source-file pointers; generated specs/009-bookmarks-connector/scenario-manifest.json covering all 10 SCN-BK-* scenarios; inserted Test Plan row T-2-20 mapping SCN-BK-010 to internal/connector/bookmarks/connector_test.go::TestSyncChromeJSON; appended BUG-009-001 cross-reference section to specs/009-bookmarks-connector/report.md. No production code changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T01:35:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Underlying behavior tests for SCN-BK-004/006/007/008 all PASS: `go test -count=1 -v -run 'TestConnect... |TestNormalizeURL_*|TestFilterNew_*|TestMapFolder_*|TestTopicMapper_*|TestTopicMatch_Fields' ./internal/connector/bookmarks/` exit 0 (14/14 PASS). Output recorded inline in report.md > Test Evidence."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T01:40:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability guard PASS: `timeout 300 bash .github/bubbles/scripts/traceability-guard.sh specs/009-bookmarks-connector` returns RESULT: PASSED (0 warnings) with 10/10 scenarios mapped to DoD, 10 concrete test file references, 10 report evidence references. Pre-fix baseline was RESULT: FAILED (6 failures, 4 unmapped scenarios). Output recorded inline in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T01:45:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (`bash .github/bubbles/scripts/artifact-lint.sh specs/009-bookmarks-connector`) and bug folder (`bash .github/bubbles/scripts/artifact-lint.sh specs/009-bookmarks-connector/bugs/BUG-009-001-dod-scenario-fidelity-gap`). git diff --name-only confirms boundary: zero changes under internal/, cmd/, ml/, config/, tests/. All edits confined to specs/009-bookmarks-connector/* and the bug folder."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T01:45:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

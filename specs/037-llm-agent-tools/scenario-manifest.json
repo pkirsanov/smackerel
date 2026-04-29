@@ -1,0 +1,513 @@
+{
+  "version": 2,
+  "specId": "037",
+  "featureDir": "specs/037-llm-agent-tools",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-037-001",
+      "name": "Agent block is the only source for agent runtime values",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/agent/config_test.go", "function": "TestLoadConfig"},
+        {"file": "internal/agent/sst_guard_test.go", "function": "TestSST_NoHardcodedAgentDefaults"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/config_test.go"},
+        {"type": "source", "location": "config/smackerel.yaml#agent"}
+      ],
+      "linkedDoD": ["agent: block present in config/smackerel.yaml"]
+    },
+    {
+      "scenarioId": "SCN-037-002",
+      "name": "AGENT NATS stream is contract-verified",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/nats/contract_test.go", "function": "TestSCN002054_GoSubjectsMatchContract"},
+        {"file": "ml/tests/test_nats_contract.py", "function": "test_scn002055_subscribe_map"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/nats/contract_test.go"},
+        {"type": "source", "location": "config/nats_contract.json"}
+      ],
+      "linkedDoD": ["AGENT stream contract-verified Go + Python"]
+    },
+    {
+      "scenarioId": "SCN-037-003",
+      "name": "Tool registers from its owning package",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/registry_test.go", "function": "TestRegisterTool_HappyPath"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/registry_test.go"}
+      ],
+      "linkedDoD": ["RegisterTool implemented with all validation panics"]
+    },
+    {
+      "scenarioId": "SCN-037-004",
+      "name": "Duplicate tool name refuses startup",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/registry_test.go", "function": "TestRegisterTool_DuplicateNamePanicsWithBothCallSites"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/registry_test.go"}
+      ],
+      "linkedDoD": ["Duplicate tool name refuses startup"]
+    },
+    {
+      "scenarioId": "SCN-037-005",
+      "name": "Malformed argument or return schema is rejected at registration",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/registry_schema_test.go", "function": "TestRegisterTool_MalformedInputSchemaPanics"},
+        {"file": "internal/agent/registry_schema_test.go", "function": "TestRegisterTool_MalformedOutputSchemaPanics"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/registry_schema_test.go"}
+      ],
+      "linkedDoD": ["Malformed schema rejected at registration"]
+    },
+    {
+      "scenarioId": "SCN-037-006",
+      "name": "Valid scenario file registers cleanly",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/loader_rules_test.go", "function": "TestLoader_Rule_RejectsBadInputs"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/loader_rules_test.go"}
+      ],
+      "linkedDoD": ["All §2.2 rules implemented and unit-tested"]
+    },
+    {
+      "scenarioId": "SCN-037-007",
+      "name": "Missing required field rejects only that file (BS-009)",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/loader_bs009_test.go", "function": "TestLoader_BS009_MalformedScenarioRejectionsAreIsolated"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/loader_bs009_test.go"}
+      ],
+      "linkedDoD": ["BS-009 adversarial regression test in place"]
+    },
+    {
+      "scenarioId": "SCN-037-008",
+      "name": "Allowlisted tool not in registry rejects scenario (BS-010)",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/loader_bs010_test.go", "function": "TestLoader_BS010_UnknownToolRejectsScenarioOnly"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/loader_bs010_test.go"}
+      ],
+      "linkedDoD": ["BS-010 adversarial regression test in place"]
+    },
+    {
+      "scenarioId": "SCN-037-009",
+      "name": "Two scenarios with the same id refuse startup (BS-011)",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/loader_bs011_test.go", "function": "TestLoader_BS011_DuplicateIDIsFatalAndNamesBothFiles"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/loader_bs011_test.go"}
+      ],
+      "linkedDoD": ["BS-011 adversarial regression test in place"]
+    },
+    {
+      "scenarioId": "SCN-037-010",
+      "name": "Explicit scenario id bypasses similarity (BS-002 fast path)",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/router_similarity_test.go", "function": "TestRouter_ExplicitScenarioID_ShortCircuit"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/router_similarity_test.go"}
+      ],
+      "linkedDoD": ["Router selects via explicit id, never via regex/switch"]
+    },
+    {
+      "scenarioId": "SCN-037-011",
+      "name": "Similarity routing picks the right scenario (BS-002)",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/router_similarity_test.go", "function": "TestRouter_Similarity_TopPick"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/router_similarity_test.go"}
+      ],
+      "linkedDoD": ["Router selects via similarity"]
+    },
+    {
+      "scenarioId": "SCN-037-012",
+      "name": "Below-threshold input returns unknown-intent (BS-014)",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/router_floor_test.go", "function": "TestRouter_BelowFloor_UnknownIntent"},
+        {"file": "internal/agent/router_bs014_test.go", "function": "TestRouter_BS014_BelowFloor_NeverSilentlyTopPicks"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/router_floor_test.go"}
+      ],
+      "linkedDoD": ["BS-014 adversarial regression in place"]
+    },
+    {
+      "scenarioId": "SCN-037-013",
+      "name": "Allowlist blocks tool not declared by scenario (BS-003)",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/executor_allowlist_test.go", "function": "TestExecutor_Allowlist_RejectsDisallowedTool"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/executor_allowlist_test.go"}
+      ],
+      "linkedDoD": ["Allowlist rejection envelope to LLM, no dispatch"]
+    },
+    {
+      "scenarioId": "SCN-037-014",
+      "name": "Hallucinated tool name rejected before lookup (BS-006)",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/executor_bs006_test.go", "function": "TestExecutor_BS006_HallucinatedTool_RejectsBeforeLookup"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/executor_bs006_test.go"}
+      ],
+      "linkedDoD": ["BS-006 adversarial regression"]
+    },
+    {
+      "scenarioId": "SCN-037-015",
+      "name": "Loop limit terminates runaway invocation (BS-008)",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/executor_bs008_test.go", "function": "TestExecutor_BS008_LoopLimit_TerminatesRunaway"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/executor_bs008_test.go"}
+      ],
+      "linkedDoD": ["BS-008 adversarial regression"]
+    },
+    {
+      "scenarioId": "SCN-037-016",
+      "name": "Schema-retry exhaustion produces schema-failure (BS-007)",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/executor_arg_schema_test.go", "function": "TestExecutor_BS007_SchemaRetryExhaustion"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/executor_arg_schema_test.go"}
+      ],
+      "linkedDoD": ["BS-007 adversarial regression"]
+    },
+    {
+      "scenarioId": "SCN-037-017",
+      "name": "Provider timeout returns structured timeout (BS-021)",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/loop_test.go", "function": "TestExecutor_BS021_LLMTimeout"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/loop_test.go"}
+      ],
+      "linkedDoD": ["BS-021 adversarial regression"]
+    },
+    {
+      "scenarioId": "SCN-037-018",
+      "name": "Trace fully reconstructs an outcome (BS-012)",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/trace_completeness_test.go", "function": "TestBS012_TraceCompletenessAndIndexUsage"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/trace_completeness_test.go"}
+      ],
+      "linkedDoD": ["Tracer writes one trace row + N tool-call rows"]
+    },
+    {
+      "scenarioId": "SCN-037-019",
+      "name": "Replay detects no-drift (BS-013 happy)",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/agent/replay_pass_test.go", "function": "TestReplayCLI_PassWhenScenarioUnchanged"}
+      ],
+      "evidenceRefs": [
+        {"type": "e2e-test", "location": "tests/e2e/agent/replay_pass_test.go"}
+      ],
+      "linkedDoD": ["replay CLI returns 0/1/2 per design §6.2"]
+    },
+    {
+      "scenarioId": "SCN-037-020",
+      "name": "Replay detects behavior drift (BS-013 sad)",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/agent/replay_fail_test.go", "function": "TestReplayCLI_FailsWhenScenarioContentDrifts"}
+      ],
+      "evidenceRefs": [
+        {"type": "e2e-test", "location": "tests/e2e/agent/replay_fail_test.go"}
+      ],
+      "linkedDoD": ["replay returns FAIL with structured diff"]
+    },
+    {
+      "scenarioId": "SCN-037-021",
+      "name": "In-flight invocation completes against the version it started with (BS-019)",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/hotreload_test.go", "function": "TestBS019_InFlightUsesPinnedScenarioUnderHotReload"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/hotreload_test.go"}
+      ],
+      "linkedDoD": ["BS-019 in-flight version isolation"]
+    },
+    {
+      "scenarioId": "SCN-037-022",
+      "name": "Trace redacts schema-marked sensitive fields (BS-022)",
+      "scope": "scope-07",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/agent/redact_test.go", "function": "TestRedactValue_DoesNotMutateInput"},
+        {"file": "tests/integration/agent/redact_e2e_test.go", "function": "TestRedactionAtPersistenceBoundary"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/redact_test.go"}
+      ],
+      "linkedDoD": ["x-redact enforced at persistence boundary"]
+    },
+    {
+      "scenarioId": "SCN-037-023",
+      "name": "Adversarial prompt cannot escape allowlist (BS-020)",
+      "scope": "scope-07",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/agent/bs020_prompt_injection_test.go", "function": "TestBS020_PromptInjectionCannotEscapeAllowlist"}
+      ],
+      "evidenceRefs": [
+        {"type": "e2e-test", "location": "tests/e2e/agent/bs020_prompt_injection_test.go"}
+      ],
+      "linkedDoD": ["BS-020 adversarial live-stack test passes"]
+    },
+    {
+      "scenarioId": "SCN-037-024",
+      "name": "Concurrent invocations do not interleave (BS-018)",
+      "scope": "scope-07",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["stress"],
+      "linkedTests": [
+        {"file": "tests/stress/agent/concurrency_test.go", "function": "TestConcurrentInvocationIsolation_BS018"}
+      ],
+      "evidenceRefs": [
+        {"type": "stress-test", "location": "tests/stress/agent/concurrency_test.go"}
+      ],
+      "linkedDoD": ["BS-018 stress test passes with no cross-trace leakage"]
+    },
+    {
+      "scenarioId": "SCN-037-025",
+      "name": "Trace List View renders every outcome class",
+      "scope": "scope-08",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/agent/render/render_test.go", "function": "TestBuildOutcomeView_AllClassesRenderRequiredFields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/agent/render/render_test.go"}
+      ],
+      "linkedDoD": ["All 9 outcome classes render with required fields"]
+    },
+    {
+      "scenarioId": "SCN-037-026",
+      "name": "Scenario Catalog surfaces load-time rejections (BS-009/010/011)",
+      "scope": "scope-08",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/cli_test.go", "function": "TestCLI_TracesList_ContainsSeededTraces"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/cli_test.go"}
+      ],
+      "linkedDoD": ["Load-time rejection section visible in scenario catalog"]
+    },
+    {
+      "scenarioId": "SCN-037-027",
+      "name": "Tool Detail View shows side-effect class and allowlisted-by scenarios",
+      "scope": "scope-08",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/cli_test.go", "function": "TestCLI_TracesShow_RendersDetail"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/cli_test.go"}
+      ],
+      "linkedDoD": ["Tool registry view shows side-effect class with text + color"]
+    },
+    {
+      "scenarioId": "SCN-037-028",
+      "name": "Telegram unknown-intent reply (BS-014)",
+      "scope": "scope-09",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/agent/telegram_replies_test.go", "function": "TestTelegramReply_AllOutcomesAreCappedAndTraced"}
+      ],
+      "evidenceRefs": [
+        {"type": "e2e-test", "location": "tests/e2e/agent/telegram_replies_test.go"}
+      ],
+      "linkedDoD": ["Telegram bridge calls Executor.Run; never invents"]
+    },
+    {
+      "scenarioId": "SCN-037-029",
+      "name": "API allowlist-violation envelope (BS-020)",
+      "scope": "scope-09",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/agent/api_invoke_test.go", "function": "TestAgentInvoke_AllowlistViolation"}
+      ],
+      "evidenceRefs": [
+        {"type": "e2e-test", "location": "tests/e2e/agent/api_invoke_test.go"}
+      ],
+      "linkedDoD": ["API endpoint returns documented envelopes for every outcome class"]
+    },
+    {
+      "scenarioId": "SCN-037-030",
+      "name": "Telegram timeout reply (BS-021)",
+      "scope": "scope-09",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/agent/telegram_replies_test.go", "function": "TestTelegramReply_AllOutcomesAreCappedAndTraced"}
+      ],
+      "evidenceRefs": [
+        {"type": "e2e-test", "location": "tests/e2e/agent/telegram_replies_test.go"}
+      ],
+      "linkedDoD": ["All replies include trace ref"]
+    },
+    {
+      "scenarioId": "SCN-037-031",
+      "name": "Scheduler/pipeline call into the agent",
+      "scope": "scope-10",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/scheduler_bridge_test.go", "function": "TestScope10_SchedulerBridge_FiresExecutorWithSchedulerSource"},
+        {"file": "tests/integration/agent/pipeline_bridge_test.go", "function": "TestScope10_PipelineBridge_FiresExecutorWithPipelineSource"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/scheduler_bridge_test.go"}
+      ],
+      "linkedDoD": ["Scheduler and pipeline surfaces call Executor.Run"]
+    },
+    {
+      "scenarioId": "SCN-037-032",
+      "name": "CI rejects forbidden-pattern regression",
+      "scope": "scope-10",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/agent/ci_forbidden_pattern_test.go", "function": "TestScope10_ForbiddenPatternGuard_ActiveInCI"},
+        {"file": "tests/integration/agent/forbidden_pattern_test.go", "function": "TestForbiddenRouterPatterns_ScopedDirectories"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/agent/ci_forbidden_pattern_test.go"}
+      ],
+      "linkedDoD": ["Forbidden-pattern guard active in CI"]
+    },
+    {
+      "scenarioId": "SCN-037-033",
+      "name": "Adding a new scenario requires zero Go changes (BS-001)",
+      "scope": "scope-10",
+      "status": "active",
+      "source": "specs/037-llm-agent-tools/scopes.md",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/agent/bs001_zero_go_change_test.go", "function": "TestBS001_DropYAMLAndReload_NewScenarioInvokable"}
+      ],
+      "evidenceRefs": [
+        {"type": "e2e-test", "location": "tests/e2e/agent/bs001_zero_go_change_test.go"}
+      ],
+      "linkedDoD": ["BS-001 zero-Go-change live-stack test"]
+    }
+  ]
+}

@@ -213,16 +213,17 @@ func (p *Postgres) RecentArtifacts(ctx context.Context, limit int) ([]RecentArti
 
 // ArtifactDetail is the full detail of a single artifact.
 type ArtifactDetail struct {
-	ID             string
-	Title          string
-	ArtifactType   string
-	Summary        string
-	SourceURL      string
-	Sentiment      string
-	SourceQuality  string
-	ProcessingTier string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID               string
+	Title            string
+	ArtifactType     string
+	Summary          string
+	SourceURL        string
+	Sentiment        string
+	SourceQuality    string
+	ProcessingTier   string
+	ProcessingStatus string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // GetArtifact retrieves a single artifact by ID.
@@ -231,11 +232,11 @@ func (p *Postgres) GetArtifact(ctx context.Context, id string) (*ArtifactDetail,
 	err := p.Pool.QueryRow(ctx, `
 		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
 		       COALESCE(sentiment, ''), COALESCE(source_quality, ''), COALESCE(processing_tier, ''),
-		       created_at, updated_at
+		       processing_status, created_at, updated_at
 		FROM artifacts WHERE id = $1
 	`, id).Scan(&a.ID, &a.Title, &a.ArtifactType, &a.Summary, &a.SourceURL,
 		&a.Sentiment, &a.SourceQuality, &a.ProcessingTier,
-		&a.CreatedAt, &a.UpdatedAt)
+		&a.ProcessingStatus, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get artifact: %w", err)
 	}
@@ -245,7 +246,8 @@ func (p *Postgres) GetArtifact(ctx context.Context, id string) (*ArtifactDetail,
 // ArtifactWithDomain extends ArtifactDetail with domain_data.
 type ArtifactWithDomain struct {
 	ArtifactDetail
-	DomainData json.RawMessage
+	DomainData             json.RawMessage
+	DomainExtractionStatus string
 }
 
 // GetArtifactWithDomain retrieves a single artifact by ID including domain_data.
@@ -255,11 +257,13 @@ func (p *Postgres) GetArtifactWithDomain(ctx context.Context, id string) (*Artif
 	err := p.Pool.QueryRow(ctx, `
 		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
 		       COALESCE(sentiment, ''), COALESCE(source_quality, ''), COALESCE(processing_tier, ''),
-		       created_at, updated_at, COALESCE(domain_data::text, '')
+		       processing_status, created_at, updated_at, COALESCE(domain_data::text, ''),
+		       COALESCE(domain_extraction_status, '')
 		FROM artifacts WHERE id = $1
 	`, id).Scan(&a.ID, &a.Title, &a.ArtifactType, &a.Summary, &a.SourceURL,
 		&a.Sentiment, &a.SourceQuality, &a.ProcessingTier,
-		&a.CreatedAt, &a.UpdatedAt, &domainData)
+		&a.ProcessingStatus, &a.CreatedAt, &a.UpdatedAt, &domainData,
+		&a.DomainExtractionStatus)
 	if err != nil {
 		return nil, fmt.Errorf("get artifact with domain: %w", err)
 	}

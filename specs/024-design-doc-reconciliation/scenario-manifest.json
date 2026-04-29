@@ -1,0 +1,116 @@
+{
+  "specId": "024-design-doc-reconciliation",
+  "version": 1,
+  "generatedAt": "2026-04-27T03:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-024-01",
+      "scope": "scope-1",
+      "title": "OpenClaw references are reconciled",
+      "requiredTestType": "doc",
+      "linkedTests": [
+        {
+          "file": "docs/smackerel.md",
+          "function": "grep -n \"OpenClaw\" docs/smackerel.md | grep -v \"SUPERSEDED\" | grep -v \"## 4\\\\.\"",
+          "type": "grep-validation"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/smackerel.md:14",
+        "docs/smackerel.md:417-441"
+      ],
+      "linkedDoD": "Scope 1 DoD: Header metadata shows `Go + Docker Compose (self-hosted)` as runtime platform; \u00a74 has prominent SUPERSEDED disclaimer."
+    },
+    {
+      "scenarioId": "SCN-024-02",
+      "scope": "scope-1",
+      "title": "Storage references match implementation",
+      "requiredTestType": "doc",
+      "linkedTests": [
+        {
+          "file": "docs/smackerel.md",
+          "function": "grep -nE 'PostgreSQL \\+ pgvector|JSONB|TIMESTAMPTZ|vector\\(384\\)' docs/smackerel.md",
+          "type": "grep-validation"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/smackerel.md:200",
+        "docs/smackerel.md:933",
+        "docs/smackerel.md:1360-1540"
+      ],
+      "linkedDoD": "Scope 1 DoD: \u00a78 storage diagram shows PostgreSQL + pgvector; \u00a714 all 6 table DDLs use PostgreSQL syntax (JSONB, TIMESTAMPTZ, BOOLEAN, vector(384)); Scenario SCN-024-02 covered bullet."
+    },
+    {
+      "scenarioId": "SCN-024-03",
+      "scope": "scope-1",
+      "title": "System architecture section is verified unchanged",
+      "requiredTestType": "doc",
+      "linkedTests": [
+        {
+          "file": "docs/smackerel.md",
+          "function": "awk '/^## 3\\./{s=1} /^## 4\\./{s=0} s' docs/smackerel.md | grep -cE 'OpenClaw'",
+          "type": "grep-validation"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/smackerel.md:140-415",
+        "specs/024-design-doc-reconciliation/report.md#scope-1-openclaw--storage-reconciliation"
+      ],
+      "linkedDoD": "Scope 1 DoD: \u00a73 mermaid diagrams unchanged (verified no regressions); Scenario SCN-024-03 covered bullet."
+    },
+    {
+      "scenarioId": "SCN-024-04",
+      "scope": "scope-2",
+      "title": "Competitive matrix distinguishes implemented vs planned",
+      "requiredTestType": "doc",
+      "linkedTests": [
+        {
+          "file": "docs/smackerel.md",
+          "function": "Manual audit of \u00a721.3 each \u2705 verified against committed internal/connector/ directories",
+          "type": "manual-audit"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/smackerel.md#section-213",
+        "specs/024-design-doc-reconciliation/report.md#213-competitive-matrix-audit"
+      ],
+      "linkedDoD": "Scope 2 DoD: \u00a721.3 competitive matrix \u2014 only implemented features have \u2705; planned features use \ud83d\udd1c."
+    },
+    {
+      "scenarioId": "SCN-024-05",
+      "scope": "scope-2",
+      "title": "Phased plan reflects actual technology and delivery state",
+      "requiredTestType": "doc",
+      "linkedTests": [
+        {
+          "file": "docs/smackerel.md",
+          "function": "awk '/^## 19\\./{s=1} /^## 20\\./{s=0} s' docs/smackerel.md | grep -cE 'Docker Compose|PostgreSQL \\+ pgvector|NATS JetStream'",
+          "type": "grep-validation"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/smackerel.md#section-19",
+        "specs/024-design-doc-reconciliation/report.md#19-phased-plan-updates"
+      ],
+      "linkedDoD": "Scope 2 DoD: \u00a719 Gantt chart and Phase 1 table reference Docker Compose + PostgreSQL + pgvector; phases have delivery markers; Scenario SCN-024-05 covered bullet."
+    },
+    {
+      "scenarioId": "SCN-024-06",
+      "scope": "scope-2",
+      "title": "Connector ecosystem accurately lists all 15 connectors",
+      "requiredTestType": "doc",
+      "linkedTests": [
+        {
+          "file": "docs/smackerel.md",
+          "function": "find internal/connector -maxdepth 1 -mindepth 1 -type d | wc -l == 15",
+          "type": "directory-count"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/smackerel.md:2261",
+        "specs/024-design-doc-reconciliation/report.md#22-connector-inventory"
+      ],
+      "linkedDoD": "Scope 2 DoD: \u00a722 accounts for all 15 committed connectors by name; Notion/Obsidian/Slack/Outlook marked planned; Scenario SCN-024-06 covered bullet."
+    }
+  ]
+}

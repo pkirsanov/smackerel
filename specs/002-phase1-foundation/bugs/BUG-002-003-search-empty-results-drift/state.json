@@ -1,0 +1,127 @@
+{
+  "version": 3,
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-003-search-empty-results-drift",
+  "parentFeatureDir": "specs/002-phase1-foundation",
+  "featureName": "BUG-002-003: Search empty results drift",
+  "bugId": "BUG-002-003",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implementation-evidence",
+    "currentScope": "scope-1-restore-search-empty-results-live-stack-contract",
+    "runStartedAt": "2026-04-28T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-28T00:00:00Z",
+        "summary": "Created in-progress bug packet for SCN-002-023 search empty-results drift. No source, test, parent artifact, or certification-owned fields modified."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-28T00:00:00Z",
+        "summary": "Added raw vector-search confidence gating and text fallback, plus SCN-002-023 unit regressions for low-confidence, raw-before-boost, and explicit-filter behavior."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-28T00:00:00Z",
+        "summary": "Unit and check commands passed; post-fix shared shell search E2E scripts passed, but ./smackerel.sh test e2e exited 1 due unrelated shell and Go E2E failures and is not certified green."
+      }
+    ],
+    "pendingTransitionRequests": [
+      {
+        "targetAgent": "bubbles.validate",
+        "reason": "Search-owned implementation evidence is ready for validation review, but certification must remain blocked until broad-suite non-search failures are classified or resolved."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Restore search empty-results live-stack contract",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T00:00:00Z",
+      "runCompletedAt": "2026-04-28T00:00:00Z",
+      "summary": "Packetized uncovered broad E2E blocker for the spec 002 search empty-results scenario."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement", "test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T00:00:00Z",
+      "runCompletedAt": "2026-04-28T00:00:00Z",
+      "summary": "Implemented vector confidence gating and verified unit/check/search E2E evidence. Scope remains in progress because broad E2E has unrelated failures and validation-owned certification is not set."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "bubbles.workflow classification input",
+      "summary": "test_search.sh SCN-002-023 unknown query expected 0 results, actual 5."
+    },
+    {
+      "source": "bubbles.implement broad E2E evidence",
+      "summary": "Post-fix shell search E2E scripts passed, but broad E2E exited 1. Remaining unrelated failures: test_persistence.sh, test_postgres_readiness_gate.sh, test_digest_telegram.sh, test_topic_lifecycle.sh, TestE2E_DomainExtraction, and TestOperatorStatus_RecommendationProvidersEmptyByDefault."
+    }
+  ],
+  "lastUpdatedAt": "2026-04-28T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single bug scope; owner starts with targeted red-stage proof before edits.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G036", "G057", "G060"],
+    "specDoneRequires": "bubbles.validate certification after targeted and broader E2E evidence."
+  },
+  "routing": {
+    "nextOwner": "bubbles.validate",
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "targetSpec": "specs/002-phase1-foundation",
+    "targetScope": "scope-05-semantic-search"
+  }
+}

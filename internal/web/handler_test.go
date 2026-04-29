@@ -117,6 +117,37 @@ func TestStatusPage_NilPool(t *testing.T) {
 	}
 }
 
+func TestStatusPage_RecommendationProvidersEmptyState(t *testing.T) {
+	h := NewHandler(nil, nil, time.Now())
+
+	var body bytes.Buffer
+	err := h.Templates.ExecuteTemplate(&body, "status.html", map[string]interface{}{
+		"Title":                          "System Status",
+		"ArtifactCount":                  0,
+		"TopicCount":                     0,
+		"EdgeCount":                      0,
+		"Uptime":                         "0h 0m",
+		"DBHealthy":                      true,
+		"NATSHealthy":                    true,
+		"RecommendationsEnabled":         true,
+		"RecommendationProviderStatuses": []recommendationProviderStatus{},
+	})
+	if err != nil {
+		t.Fatalf("render status.html: %v", err)
+	}
+
+	rendered := body.String()
+	if !containsString(rendered, "Recommendation Providers") {
+		t.Fatal("status page missing Recommendation Providers block")
+	}
+	if !containsString(rendered, "0 recommendation providers configured") {
+		t.Fatal("status page missing empty provider registry message")
+	}
+	if containsString(rendered, "Google Places") || containsString(rendered, "Yelp") {
+		t.Fatal("status page should not fabricate disabled recommendation provider rows")
+	}
+}
+
 func TestArtifactDetail_NoID(t *testing.T) {
 	h := NewHandler(nil, nil, time.Now())
 

@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "featureDir": "specs/039-recommendations-engine/bugs/BUG-039-002-operator-status-provider-block",
+  "generatedAt": "2026-04-28T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-039-002-SCN-001",
+      "scope": "scope-1-restore-recommendation-provider-status-block",
+      "title": "Operator status shows empty recommendation providers block",
+      "gherkin": {
+        "given": "recommendations are enabled and no providers are configured",
+        "when": "the operator opens the status page",
+        "then": "the page shows the Recommendation Providers block and zero configured providers without fabricated rows"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/operator_status_test.go",
+          "testId": "TestOperatorStatus_RecommendationProvidersEmptyByDefault"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-039-002-SCN-002",
+      "scope": "scope-1-restore-recommendation-provider-status-block",
+      "title": "Operator status regression fails when the provider block is absent",
+      "gherkin": {
+        "given": "the status page response does not include Recommendation Providers",
+        "when": "the E2E validates the empty-provider state",
+        "then": "the test fails with diagnostics instead of accepting the missing section"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/operator_status_test.go",
+          "testId": "missing Recommendation Providers block regression"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "version": 2,
+  "specId": "040",
+  "featureDir": "specs/040-cloud-photo-libraries",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-04-27T19:50:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-040-001",
+      "scope": "scope-01-photo-platform-foundation",
+      "name": "Photo contracts bootstrap from SST and NATS",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/nats/contract_test.go", "function": "TestPhotoSubjectsMatchNATSContract"},
+        {"file": "tests/integration/photos_foundation_test.go", "function": "TestPhotosFoundation_ConfigNATSAndSchemaLiveStack"},
+        {"file": "tests/integration/photos_contract_canary_test.go", "function": "TestPhotosContractCanary_ConfigNATSDBAndMLAgree"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-002",
+      "scope": "scope-01-photo-platform-foundation",
+      "name": "Synthetic photo persists with provider-neutral shape",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/connector/photos/library_test.go", "function": "TestPhotoEventProviderNeutralShape"},
+        {"file": "tests/integration/photos_foundation_test.go", "function": "TestPhotosFoundation_ConfigNATSAndSchemaLiveStack"},
+        {"file": "tests/e2e/photos_foundation_test.go", "function": "TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-003",
+      "scope": "scope-01-photo-platform-foundation",
+      "name": "Stable signals cannot replace LLM-owned decisions",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/connector/photos/stable_signals_test.go", "function": "TestStableSignals_DoNotMakeLLMOwnedDecisions"},
+        {"file": "ml/tests/test_photos_contract.py", "function": "test_photo_result_requires_confidence_and_rationale"},
+        {"file": "tests/e2e/photos_foundation_test.go", "function": "TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-004",
+      "scope": "scope-02-immich-connect-scan-search",
+      "name": "User connects Immich and searches a classified photo",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-api", "e2e-ui"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_immich_test.go", "function": "TestPhotosImmich_ConnectScopeAndScanLiveProvider"},
+        {"file": "tests/e2e/photos_search_test.go", "function": "TestPhotosSearch_E2E_ImmichWhiteboardOCRResult"},
+        {"file": "web/pwa/tests/photos_connectors.spec.ts", "function": "test('photo libraries list and Immich wizard use live connector API')"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-005",
+      "scope": "scope-02-immich-connect-scan-search",
+      "name": "Immich monitoring updates metadata without unnecessary reclassification",
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_sync_test.go", "function": "TestPhotosImmich_IncrementalChangesUpdateState"},
+        {"file": "tests/e2e/photos_sync_test.go", "function": "TestPhotosSync_E2E_AlbumMoveDoesNotReclassify"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-006",
+      "scope": "scope-02-immich-connect-scan-search",
+      "name": "Scan progress and skip states are user-visible",
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-ui"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_skip_ledger_test.go", "function": "TestPhotosImmich_SkipLedgerVisibleAndRetryable"},
+        {"file": "web/pwa/tests/photos_connector_progress.spec.ts", "function": "test('connector detail renders progress and skip ledger from live API')"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-007",
+      "scope": "scope-03-lifecycle-duplicates-removal",
+      "name": "RAW-to-processed lifecycle is linked with editor rationale",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-ui"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_lifecycle_test.go", "function": "TestPhotosLifecycle_RAWExportsLinkedWithRationale"},
+        {"file": "ml/tests/test_photos_decisions.py", "function": "test_lifecycle_dedupe_removal_results_require_rationale_and_confidence"},
+        {"file": "web/pwa/tests/photos_lifecycle_review.spec.ts", "function": "test('low confidence RAW match stays in review until user confirms')"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-008",
+      "scope": "scope-03-lifecycle-duplicates-removal",
+      "name": "Duplicate clusters produce best-pick and rationale",
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api", "e2e-ui"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_dedupe_test.go", "function": "TestPhotosDedupe_BurstHDRPanoramaAndExactClusters"},
+        {"file": "ml/tests/test_photos_decisions.py", "function": "test_lifecycle_dedupe_removal_results_require_rationale_and_confidence"},
+        {"file": "tests/e2e/photos_cross_provider_dedupe_test.go", "function": "TestPhotosDedupe_E2E_CrossProviderDuplicateReturnedOnce"},
+        {"file": "web/pwa/tests/photos_duplicates.spec.ts", "function": "test('duplicate cluster best-pick and resolve flow uses live API')"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-009",
+      "scope": "scope-03-lifecycle-duplicates-removal",
+      "name": "Removal and destructive actions require confirmation",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-api", "e2e-ui"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_removal_test.go", "function": "TestPhotosRemovalCandidates_RequireRationaleAndNoMutationBeforeConfirm"},
+        {"file": "ml/tests/test_photos_decisions.py", "function": "test_lifecycle_dedupe_removal_results_require_rationale_and_confidence"},
+        {"file": "tests/e2e/photos_removal_review_test.go", "function": "TestPhotosRemoval_E2E_ActionPlanDoesNotMutateBeforeConfirm"},
+        {"file": "web/pwa/tests/photos_confirm_action.spec.ts", "function": "test('destructive photo action requires exact batch confirmation')"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-010",
+      "scope": "scope-04-capture-telegram-routing",
+      "name": "Uploads from Telegram, mobile, and web route through the same photo pipeline",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_upload_test.go", "function": "TestPhotosUpload_TelegramMobileWebEnterSamePipeline"},
+        {"file": "tests/e2e/photos_telegram_test.go", "function": "TestPhotosTelegram_E2E_UploadClassifySearchAndRetrieve"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-011",
+      "scope": "scope-04-capture-telegram-routing",
+      "name": "Document, receipt, and recipe photos create downstream artifacts",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-api", "e2e-ui"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_docscan_test.go", "function": "TestPhotosDocumentScan_MultiPageOCRAndCleanArtifact"},
+        {"file": "tests/e2e/photos_routing_test.go", "function": "TestPhotosRouting_E2E_ReceiptRecipeDocumentCreateDownstreamArtifacts"},
+        {"file": "web/pwa/tests/photos_docscan.spec.ts", "function": "test('mobile document scan creates multi-page OCR artifact from live upload API')"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-012",
+      "scope": "scope-04-capture-telegram-routing",
+      "name": "Sensitive retrieval blocks unsafe delivery",
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_sensitivity_test.go", "function": "TestPhotosSensitivity_ServerSidePreviewRevealAndAudit"},
+        {"file": "tests/e2e/photos_sensitivity_retrieval_test.go", "function": "TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-013",
+      "scope": "scope-05-multi-provider-operations",
+      "name": "Provider limitation is visible and non-mutating",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-api", "e2e-ui"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_capability_test.go", "function": "TestPhotosCapability_UnsupportedOperationIs409AndNonMutating"},
+        {"file": "tests/integration/photos_capability_taxonomy_canary_test.go", "function": "TestPhotosCapabilityTaxonomyCanary_GoRegistryMatchesPWALimitationCodes"},
+        {"file": "tests/e2e/photos_capability_test.go", "function": "TestPhotosCapability_E2E_AlbumWriteBlockedWhileSearchWorks"},
+        {"file": "web/pwa/tests/photos_capability_banner.spec.ts", "function": "test('provider limitation banner renders exact live limitation code')"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-014",
+      "scope": "scope-05-multi-provider-operations",
+      "name": "Cross-provider search and dedupe are provider-neutral",
+      "status": "active",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_provider_neutrality_test.go", "function": "TestPhotosProviderNeutrality_SecondAdapterMatchesImmichShape"},
+        {"file": "tests/e2e/photos_search_test.go", "function": "TestPhotosSearch_E2E_CrossProviderUnifiedRanking"}
+      ],
+      "evidenceRefs": []
+    },
+    {
+      "scenarioId": "SCN-040-015",
+      "scope": "scope-05-multi-provider-operations",
+      "name": "Photo health and observability prove large-library readiness",
+      "status": "active",
+      "requiredTestType": ["integration", "e2e-ui", "stress"],
+      "linkedTests": [
+        {"file": "tests/integration/photos_health_test.go", "function": "TestPhotosHealth_ProgressMetricsAndCapabilityLimitsFromLiveAPI"},
+        {"file": "web/pwa/tests/photos_health.spec.ts", "function": "test('photo health dashboard renders lifecycle duplicate sensitivity and confidence metrics')"},
+        {"file": "tests/stress/photos_ingest_stress_test.go", "function": "TestPhotosIngestStress_Synthetic15000PhotoLibrarySearchableWithinTarget"}
+      ],
+      "evidenceRefs": []
+    }
+  ]
+}

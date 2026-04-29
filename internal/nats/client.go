@@ -52,6 +52,12 @@ const (
 	SubjectDomainExtract   = "domain.extract"
 	SubjectDomainExtracted = "domain.extracted"
 
+	// Cloud drive subjects (spec 038)
+	SubjectDriveScanRequest  = "drive.scan.request"
+	SubjectDriveScanResult   = "drive.scan.result"
+	SubjectDriveChangeNotify = "drive.change.notify"
+	SubjectDriveHealthReport = "drive.health.report"
+
 	// Annotation subjects (spec 027)
 	SubjectAnnotationsCreated = "annotations.created"
 
@@ -94,6 +100,7 @@ func AllStreams() []StreamConfig {
 		{Name: "ALERTS", Subjects: []string{"alerts.>"}},
 		{Name: "SYNTHESIS", Subjects: []string{"synthesis.>"}},
 		{Name: "DOMAIN", Subjects: []string{"domain.>"}},
+		{Name: "DRIVE", Subjects: []string{"drive.>"}},
 		{Name: "ANNOTATIONS", Subjects: []string{"annotations.>"}},
 		{Name: "LISTS", Subjects: []string{"lists.>"}},
 		{Name: "AGENT", Subjects: []string{"agent.>"}},

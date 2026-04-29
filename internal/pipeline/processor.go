@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
@@ -601,6 +602,12 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 	// Convert embedding to pgvector format
 	embeddingStr := db.FormatEmbedding(payload.Embedding)
 
+	var existingArtifactType string
+	if err := p.DB.QueryRow(ctx, "SELECT artifact_type FROM artifacts WHERE id = $1", payload.ArtifactID).Scan(&existingArtifactType); err != nil && err != pgx.ErrNoRows {
+		return fmt.Errorf("load existing artifact type: %w", err)
+	}
+	artifactType := resolveProcessedArtifactType(existingArtifactType, payload.Result.ArtifactType)
+
 	ct, err := p.DB.Exec(ctx, `
 		UPDATE artifacts SET
 			artifact_type = $2,
@@ -617,7 +624,7 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 			processing_status = $13,
 			updated_at = NOW()
 		WHERE id = $1
-	`, payload.ArtifactID, payload.Result.ArtifactType, payload.Result.Title,
+	`, payload.ArtifactID, artifactType, payload.Result.Title,
 		payload.Result.Summary, keyIdeasJSON, entitiesJSON,
 		actionItemsJSON, topicsJSON, payload.Result.Sentiment,
 		payload.Result.SourceQuality, embeddingStr,
@@ -634,11 +641,10 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 
 	slog.Info("artifact ML processing complete",
 		"artifact_id", payload.ArtifactID,
-		"type", payload.Result.ArtifactType,
+		"type", artifactType,
 		"model", payload.ModelUsed,
 		"processing_ms", payload.ProcessingMs,
 	)
-
 	// Link artifact in knowledge graph — creates edges via similarity,
 	// entity, topic, and temporal strategies
 	if p.Linker != nil {
@@ -667,6 +673,37 @@ func (p *Processor) HandleProcessedResult(ctx context.Context, payload *NATSProc
 	}
 
 	return nil
+}
+
+func resolveProcessedArtifactType(existingArtifactType, processedArtifactType string) string {
+	processed := strings.TrimSpace(processedArtifactType)
+	if processed == "" {
+		return strings.TrimSpace(existingArtifactType)
+	}
+
+	existing := strings.TrimSpace(existingArtifactType)
+	if isDomainSpecificArtifactType(existing) && isBroadProcessedArtifactType(processed) {
+		return existing
+	}
+	return processed
+}
+
+func isDomainSpecificArtifactType(artifactType string) bool {
+	switch artifactType {
+	case string(extract.ContentTypeRecipe), string(extract.ContentTypeProduct):
+		return true
+	default:
+		return false
+	}
+}
+
+func isBroadProcessedArtifactType(artifactType string) bool {
+	switch artifactType {
+	case "", string(extract.ContentTypeGeneric), "note", string(extract.ContentTypeArticle):
+		return true
+	default:
+		return false
+	}
 }
 
 // DuplicateError indicates that the submitted content already exists.

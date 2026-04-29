@@ -1,0 +1,94 @@
+{
+  "version": 2,
+  "specId": "032",
+  "featureDir": "specs/032-documentation-freshness",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-DOCFRESH-001",
+      "name": "README documents measurable system requirements",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/032-documentation-freshness/scopes.md#scope-1-readme-system-requirements",
+      "requiredTestType": ["manual"],
+      "linkedTests": [
+        {"file": "specs/032-documentation-freshness/report.md", "function": "manual:readme-system-requirements"}
+      ],
+      "evidenceRefs": [
+        {"type": "doc", "location": "README.md::## System Requirements"},
+        {"type": "manual", "location": "specs/032-documentation-freshness/report.md"}
+      ],
+      "linkedDoD": [
+        "SCN-DOCFRESH-001 README documents measurable system requirements",
+        "README.md has System Requirements section"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DOCFRESH-002",
+      "name": "Development.md inventory matches on-disk reality",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/032-documentation-freshness/scopes.md#scope-2-developmentmd-update",
+      "requiredTestType": ["manual"],
+      "linkedTests": [
+        {"file": "docs/Development.md", "function": "manual:development-inventory-reconciliation"}
+      ],
+      "evidenceRefs": [
+        {"type": "doc", "location": "docs/Development.md::Go Packages (internal/)"},
+        {"type": "doc", "location": "docs/Development.md::Database Migrations"},
+        {"type": "doc", "location": "docs/Development.md::Prompt Contracts"},
+        {"type": "manual", "location": "specs/032-documentation-freshness/report.md"}
+      ],
+      "linkedDoD": [
+        "SCN-DOCFRESH-002 Development.md inventory matches on-disk reality",
+        "Every Go package under internal/ listed with description"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DOCFRESH-003",
+      "name": "Operations runbook covers deployment, connectors, troubleshooting, backup",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/032-documentation-freshness/scopes.md#scope-3-operations-runbook",
+      "requiredTestType": ["manual", "integration"],
+      "linkedTests": [
+        {"file": "docs/Operations.md", "function": "manual:operations-runbook-sections"},
+        {"file": "smackerel.sh", "function": "check"}
+      ],
+      "evidenceRefs": [
+        {"type": "doc", "location": "docs/Operations.md::Deployment"},
+        {"type": "doc", "location": "docs/Operations.md::Connector Management"},
+        {"type": "doc", "location": "docs/Operations.md::Troubleshooting"},
+        {"type": "doc", "location": "docs/Operations.md::Backup/Restore"},
+        {"type": "manual", "location": "specs/032-documentation-freshness/report.md"}
+      ],
+      "linkedDoD": [
+        "SCN-DOCFRESH-003 Operations runbook covers deployment, connectors, troubleshooting, backup",
+        "docs/Operations.md exists"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DOCFRESH-004",
+      "name": "TLS guide explains Caddy, nginx, port exposure, and PWA HTTPS",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/032-documentation-freshness/scopes.md#scope-4-tls-setup-guide",
+      "requiredTestType": ["manual"],
+      "linkedTests": [
+        {"file": "docs/Operations.md", "function": "manual:tls-setup-section"}
+      ],
+      "evidenceRefs": [
+        {"type": "doc", "location": "docs/Operations.md::Caddy (Recommended — Automatic HTTPS)"},
+        {"type": "doc", "location": "docs/Operations.md::nginx (Alternative)"},
+        {"type": "doc", "location": "docs/Operations.md::Which Ports to Expose"},
+        {"type": "manual", "location": "specs/032-documentation-freshness/report.md"}
+      ],
+      "linkedDoD": [
+        "SCN-DOCFRESH-004 TLS guide explains Caddy, nginx, port exposure, and PWA HTTPS",
+        "Caddy reverse proxy configuration documented",
+        "nginx reverse proxy configuration documented"
+      ]
+    }
+  ]
+}

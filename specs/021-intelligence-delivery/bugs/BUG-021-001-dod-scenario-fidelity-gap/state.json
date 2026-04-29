@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-001-dod-scenario-fidelity-gap",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-001-dod-scenario-fidelity-gap",
+  "featureName": "BUG-021-001: DoD scenario fidelity gap (SCN-021-003/004/005/006/007/009/010/012/013/015)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T02:25:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: added 10 trace-ID-bearing DoD bullets (SCN-021-003/004/005/006/007/015 in Scope 1; SCN-021-009/010 in Scope 2; SCN-021-012/013 in Scope 3) to specs/021-intelligence-delivery/scopes.md with raw `go test` output and source-file pointers; generated specs/021-intelligence-delivery/scenario-manifest.json covering all 15 SCN-021-* scenarios; inserted Test Plan proxy rows T-1-PROXY-003 mapping SCN-021-003 to internal/scheduler/jobs_test.go::TestDeliverAlertBatch_HappyPath and T-2-PROXY-010 mapping SCN-021-010 to internal/intelligence/lookups_test.go::TestFrequentLookup_MinimumThreshold; appended BUG-021-001 cross-reference section to specs/021-intelligence-delivery/report.md. No production code changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:32:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Underlying behavior tests for SCN-021-003/004/005/006/007/009/010/012/013/015 all PASS: `go test -count=1 -v -run '<filtered set>' ./internal/intelligence/... ./internal/api/... ./internal/scheduler/...` exit 0. Output recorded inline in report.md > Test Evidence."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:35:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability guard PASS: `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/021-intelligence-delivery` returns RESULT: PASSED (0 warnings) with 15/15 scenarios mapped to DoD. Pre-fix baseline was RESULT: FAILED (15 failures, 0 warnings, 9 unmapped scenarios). Output recorded inline in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:38:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (`bash .github/bubbles/scripts/artifact-lint.sh specs/021-intelligence-delivery`) and bug folder (`bash .github/bubbles/scripts/artifact-lint.sh specs/021-intelligence-delivery/bugs/BUG-021-001-dod-scenario-fidelity-gap`). git diff --name-only confirms boundary: zero changes under internal/, cmd/, ml/, config/, tests/. All edits confined to specs/021-intelligence-delivery/* and the bug folder."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T02:38:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

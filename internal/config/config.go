@@ -221,6 +221,10 @@ type Config struct {
 
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
+
+	// Shared typed config blocks (SST-compliant — from smackerel.yaml via config generate)
+	Drive           DriveConfig
+	Recommendations RecommendationsConfig
 }
 
 // Load reads configuration from environment variables.
@@ -371,6 +375,18 @@ func Load() (*Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
+	driveCfg, err := loadDriveConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Drive = driveCfg
+
+	recommendationsCfg, err := loadRecommendationsConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Recommendations = recommendationsCfg
 
 	// Parse numeric config after string validation passes
 	dbMaxConnsStr := os.Getenv("DB_MAX_CONNS")

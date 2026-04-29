@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "featureDir": "specs/003-phase2-ingestion/bugs/BUG-003-001-topic-lifecycle-duplicate-seed",
+  "generatedAt": "2026-04-28T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-003-001-SCN-001",
+      "scope": "scope-1-restore-idempotent-topic-lifecycle-e2e-setup",
+      "title": "Topic lifecycle E2E setup is idempotent",
+      "gherkin": {
+        "given": "the disposable live stack already contains a topic named pricing",
+        "when": "the topic lifecycle E2E prepares its fixture data",
+        "then": "fixture setup does not violate the unique topic-name constraint and lifecycle assertions execute"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/test_topic_lifecycle.sh",
+          "testId": "topic lifecycle duplicate seed"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-003-001-SCN-002",
+      "scope": "scope-1-restore-idempotent-topic-lifecycle-e2e-setup",
+      "title": "Duplicate topic regression fails loudly before lifecycle proof",
+      "gherkin": {
+        "given": "fixture setup attempts to insert an already-existing topic name without ownership or upsert semantics",
+        "when": "the topic lifecycle E2E runs",
+        "then": "the test fails with diagnostics instead of treating setup as lifecycle success"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/test_topic_lifecycle.sh",
+          "testId": "duplicate topic setup regression"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

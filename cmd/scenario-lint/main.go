@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	_ "github.com/smackerel/smackerel/internal/recommendation/tools"
 )
 
 func main() {

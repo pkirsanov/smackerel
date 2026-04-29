@@ -1,0 +1,219 @@
+{
+  "version": 2,
+  "specId": "033",
+  "featureDir": "specs/033-mobile-capture",
+  "generatedBy": "bubbles.docs",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-MC-001",
+      "name": "Mobile share capture",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/033-mobile-capture/scopes.md#L82",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/pwa_test.go", "function": "TestPWAShareHandler_ValidFormData"},
+        {"file": "internal/api/pwa_test.go", "function": "TestPWAShareHandler_URLOnlyShare"},
+        {"file": "internal/api/pwa_test.go", "function": "TestPWAShareHandler_RendersStructuralElements"},
+        {"file": "internal/api/pwa_test.go", "function": "TestPWAShareHandler_CaptureSourceHeader"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/pwa_test.go::TestPWAShareHandler_ValidFormData"},
+        {"type": "unit-test", "location": "internal/api/pwa_test.go::TestPWAShareHandler_CaptureSourceHeader"},
+        {"type": "source", "location": "internal/api/pwa.go::PWAShareHandler"}
+      ],
+      "linkedDoD": [
+        "POST handler at /pwa/share processes share target data",
+        "URL and text captured via existing API",
+        "Success/error feedback displayed",
+        "Auto-close and return to source app"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MC-002",
+      "name": "Right-click capture",
+      "scope": "scope-04",
+      "status": "deferred",
+      "source": "specs/033-mobile-capture/scopes.md#L167",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "source", "location": "web/extension/background.js"},
+        {"type": "report", "location": "specs/033-mobile-capture/report.md"},
+        {"type": "user-validation", "location": "specs/033-mobile-capture/uservalidation.md"}
+      ],
+      "deferralReason": "Browser extension context-menu behaviour is implemented in web/extension/background.js (smackerel-save-page handler) but is exercised only via manual browser-extension validation; no automated extension test harness exists in this repo.",
+      "linkedDoD": [
+        "Context menu \"Save to Smackerel\" registered",
+        "Toolbar button captures current page with one click",
+        "Desktop notification confirms capture"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MC-003",
+      "name": "Selected text capture",
+      "scope": "scope-04",
+      "status": "deferred",
+      "source": "specs/033-mobile-capture/scopes.md#L173",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "source", "location": "web/extension/background.js"},
+        {"type": "report", "location": "specs/033-mobile-capture/report.md"},
+        {"type": "user-validation", "location": "specs/033-mobile-capture/uservalidation.md"}
+      ],
+      "deferralReason": "Extension selection-capture branch (smackerel-save-selection + info.selectionText) is implemented but verified only via manual extension validation; no automated extension test harness exists in this repo.",
+      "linkedDoD": [
+        "Context menu \"Save with selection\" when text selected"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MC-004",
+      "name": "Offline capture queued",
+      "scope": "scope-05",
+      "status": "deferred",
+      "source": "specs/033-mobile-capture/scopes.md#L217",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "source", "location": "web/extension/lib/queue.js"},
+        {"type": "source", "location": "web/pwa/lib/queue.js"},
+        {"type": "source", "location": "web/pwa/sw.js"},
+        {"type": "report", "location": "specs/033-mobile-capture/report.md"},
+        {"type": "user-validation", "location": "specs/033-mobile-capture/uservalidation.md"}
+      ],
+      "deferralReason": "Offline IndexedDB queue (CaptureQueue) is implemented in web/extension/lib/queue.js and web/pwa/lib/queue.js with ServiceWorker sync, but no JS test harness exists in this Go repo; verified via manual offline-capture validation.",
+      "linkedDoD": [
+        "IndexedDB queue stores pending captures",
+        "Queue survives page close and browser restart",
+        "Automatic sync on connectivity restore",
+        "Queue status visible in extension popup and PWA settings"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MC-005",
+      "name": "Auth failure preserves queue",
+      "scope": "scope-05",
+      "status": "deferred",
+      "source": "specs/033-mobile-capture/scopes.md#L223",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "source", "location": "web/extension/lib/queue.js"},
+        {"type": "report", "location": "specs/033-mobile-capture/report.md"},
+        {"type": "user-validation", "location": "specs/033-mobile-capture/uservalidation.md"}
+      ],
+      "deferralReason": "401-preserve-queue branch in queue.js flush() is implemented (sets authFailed flag, leaves items intact) but verified only via manual extension validation; no automated extension test harness in this repo.",
+      "linkedDoD": [
+        "401 errors preserve queue and signal re-auth"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MC-006",
+      "name": "Extension setup with validation",
+      "scope": "scope-07",
+      "status": "deferred",
+      "source": "specs/033-mobile-capture/scopes.md#L313",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "source", "location": "web/extension/popup/popup.js"},
+        {"type": "source", "location": "web/extension/popup/popup.html"},
+        {"type": "report", "location": "specs/033-mobile-capture/report.md"},
+        {"type": "user-validation", "location": "specs/033-mobile-capture/uservalidation.md"}
+      ],
+      "deferralReason": "Extension setup form + Test Connection flow against /api/health is implemented in popup.js but verified only via manual extension validation; no automated extension test harness in this repo.",
+      "linkedDoD": [
+        "Setup form with Server URL + Auth Token fields",
+        "\"Test Connection\" validates via /api/health"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MC-007",
+      "name": "HTTP security warning",
+      "scope": "scope-07",
+      "status": "deferred",
+      "source": "specs/033-mobile-capture/scopes.md#L320",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "source", "location": "web/extension/popup/popup.js"},
+        {"type": "report", "location": "specs/033-mobile-capture/report.md"},
+        {"type": "user-validation", "location": "specs/033-mobile-capture/uservalidation.md"}
+      ],
+      "deferralReason": "Insecure-HTTP warning banner is implemented in popup.js URL validation but verified only via manual extension validation; no automated extension test harness in this repo.",
+      "linkedDoD": [
+        "HTTP URL triggers insecure-connection warning banner"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MC-008",
+      "name": "PWA exposes share target on mobile install",
+      "scope": "scope-01",
+      "status": "deferred",
+      "source": "specs/033-mobile-capture/scopes.md",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "source", "location": "web/pwa/manifest.json"},
+        {"type": "source", "location": "web/pwa/sw.js"},
+        {"type": "source", "location": "web/pwa/index.html"},
+        {"type": "report", "location": "specs/033-mobile-capture/report.md"},
+        {"type": "user-validation", "location": "specs/033-mobile-capture/uservalidation.md"}
+      ],
+      "deferralReason": "PWA manifest, service worker, and shell are implemented under web/pwa/ but PWA installability and OS share-sheet integration are verified only via manual mobile-browser validation; no automated PWA install/share-sheet harness exists in this Go repo.",
+      "linkedDoD": [
+        "pwa/manifest.json with name, icons, share_target",
+        "Service worker caches static assets",
+        "PWA installable on Android Chrome and iOS Safari",
+        "Share target appears in OS share sheet after install"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MC-009",
+      "name": "Chrome extension popup shows current page title and URL with persisted auth token",
+      "scope": "scope-03",
+      "status": "deferred",
+      "source": "specs/033-mobile-capture/scopes.md",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "source", "location": "web/extension/manifest.json"},
+        {"type": "source", "location": "web/extension/popup/popup.js"},
+        {"type": "source", "location": "web/extension/background.js"},
+        {"type": "report", "location": "specs/033-mobile-capture/report.md"},
+        {"type": "user-validation", "location": "specs/033-mobile-capture/uservalidation.md"}
+      ],
+      "deferralReason": "Chrome MV3 extension core (manifest, popup tab/title/URL rendering, chrome.storage.local auth persistence, background service worker capture dispatch) is implemented in web/extension/ but verified only via manual extension validation; no automated extension test harness exists in this repo.",
+      "linkedDoD": [
+        "Extension installs on Chrome via developer mode",
+        "Popup shows current page title and URL",
+        "Auth token persisted in secure storage",
+        "Background service worker handles capture requests"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MC-010",
+      "name": "Firefox extension parity via WebExtension polyfill",
+      "scope": "scope-06",
+      "status": "deferred",
+      "source": "specs/033-mobile-capture/scopes.md",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "source", "location": "web/extension/manifest.firefox.json"},
+        {"type": "source", "location": "web/extension/lib/browser-polyfill.js"},
+        {"type": "report", "location": "specs/033-mobile-capture/report.md"},
+        {"type": "user-validation", "location": "specs/033-mobile-capture/uservalidation.md"}
+      ],
+      "deferralReason": "Firefox WebExtension parity (browser_specific_settings.gecko, browser-polyfill bridging chrome.* to Promise-based browser.*, parity for context menu and popup) is implemented but verified only via manual Firefox extension validation; no automated cross-browser extension test harness exists in this repo.",
+      "linkedDoD": [
+        "Extension loads in Firefox without errors",
+        "browser.* API used with Chrome polyfill",
+        "Firefox-specific manifest fields added (browser_specific_settings)",
+        "Context menu and popup work identically to Chrome"
+      ]
+    }
+  ]
+}

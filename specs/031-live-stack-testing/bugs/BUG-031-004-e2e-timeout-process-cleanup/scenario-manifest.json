@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-004-e2e-timeout-process-cleanup",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-031-004-SCN-001",
+      "scope": "scope-1-make-e2e-timeout-cleanup-process-group-safe",
+      "title": "E2E timeout terminates child processes",
+      "gherkin": {
+        "given": "the E2E harness has started child shell or container test work",
+        "when": "the parent E2E command is interrupted by timeout",
+        "then": "all child E2E work is terminated and disposable test stack cleanup runs"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "owner-selected DevOps regression",
+          "testId": "Timeout terminates E2E process group"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-031-004-SCN-002",
+      "scope": "scope-1-make-e2e-timeout-cleanup-process-group-safe",
+      "title": "E2E cleanup regression detects surviving child work",
+      "gherkin": {
+        "given": "a child E2E process continues after the parent exits",
+        "when": "the cleanup regression inspects the process group and test stack",
+        "then": "the regression fails and reports the surviving child work"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "owner-selected DevOps regression",
+          "testId": "surviving child work regression"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

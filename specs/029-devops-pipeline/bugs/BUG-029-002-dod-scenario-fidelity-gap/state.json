@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "029-devops-pipeline",
+  "bugId": "BUG-029-002-dod-scenario-fidelity-gap",
+  "featureDir": "specs/029-devops-pipeline/bugs/BUG-029-002-dod-scenario-fidelity-gap",
+  "featureName": "BUG-029-002: DoD scenario fidelity gap (SCN-029-001..005, 007..010 + T-7-03 path)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T03:00:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: embedded [SCN-029-001..005,007..011] trace IDs in Gherkin scenario names across Scopes 1, 2, 5, 6, 7 of specs/029-devops-pipeline/scopes.md and prefixed matching DoD bullets with the same trace IDs so scenario_matches_dod's trace-ID branch succeeds. Added 'cmd/core/main.go' (slash-bearing concrete path) to T-7-03 Test Plan row Location and assertion. No production code changed; boundary confined to scopes.md and this bug folder."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix; regression test is the traceability-guard run itself. Pre-fix RESULT: FAILED (11 failures, 9 unmapped scenarios). Post-fix RESULT: PASSED (0 warnings) with 14/14 scenarios mapped and 14 concrete test file references. Output recorded inline in report.md > Test Evidence and Validation Evidence."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:20:00Z",
+        "outcome": "completed_owned",
+        "evidence": "timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/029-devops-pipeline returns RESULT: PASSED (0 warnings) with 14 scenarios checked, 14 mapped to DoD, 0 unmapped. Output recorded inline in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:25:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (bash .github/bubbles/scripts/artifact-lint.sh specs/029-devops-pipeline) and bug folder (bash .github/bubbles/scripts/artifact-lint.sh specs/029-devops-pipeline/bugs/BUG-029-002-dod-scenario-fidelity-gap). git diff --name-only confirms boundary: edits this bug introduces are confined to specs/029-devops-pipeline/scopes.md and the bug folder. Pre-existing unrelated repo dirty state is out of scope."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T03:25:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

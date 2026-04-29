@@ -153,12 +153,12 @@ Scenario: SCN-036-005 — Configurable meal times stored in config (BS-013)
 
 | ID | Type | File | Scenario | Description |
 |----|------|------|----------|-------------|
-| T-01-01 | Unit | `internal/config/config_test.go` | SCN-036-001 | Parse meal planning config struct |
-| T-01-02 | Integration | `tests/integration/config_generate_test.go` | SCN-036-002 | Config generate emits MEAL_PLANNING_* env vars |
-| T-01-03 | Unit | `internal/config/config_test.go` | SCN-036-003 | Fail-loud on missing required config |
-| T-01-04 | Integration | `tests/integration/migration_test.go` | SCN-036-004 | Migration 018 creates tables with constraints and indexes |
-| T-01-05 | Unit | `internal/config/config_test.go` | SCN-036-005 | Configurable meal times parsed correctly |
-| T-01-06 | Regression E2E | `tests/e2e/mealplan_config_test.go` | SCN-036-001, SCN-036-004 | Live stack config load and migration verification |
+| T-01-01 | Unit | `internal/config/validate_test.go` | SCN-036-001 | Parse meal planning config struct |
+| T-01-02 | Integration | `scripts/commands/config.sh` | SCN-036-002 | Config generate emits MEAL_PLANNING_* env vars |
+| T-01-03 | Unit | `internal/config/validate_test.go` | SCN-036-003 | Fail-loud on missing required config |
+| T-01-04 | Integration | `tests/integration/db_migration_test.go` | SCN-036-004 | Migration 018 creates tables with constraints and indexes |
+| T-01-05 | Unit | `internal/config/validate_test.go` | SCN-036-005 | Configurable meal times parsed correctly |
+| T-01-06 | Regression E2E | `tests/integration/db_migration_test.go` | SCN-036-001, SCN-036-004 | Live stack config load and migration verification |
 
 ### Definition of Done
 
@@ -310,15 +310,15 @@ Scenario: SCN-036-017 — Batch slot creation for repeating recipes
 | T-02-06 | Unit | `internal/mealplan/service_test.go` | SCN-036-011 | Valid lifecycle transitions |
 | T-02-07 | Unit | `internal/mealplan/service_test.go` | SCN-036-012 | Forbidden transitions rejected |
 | T-02-08 | Unit | `internal/mealplan/service_test.go` | SCN-036-013 | Overlap detection returns 409 |
-| T-02-09 | Integration | `tests/integration/mealplan_store_test.go` | SCN-036-014 | CASCADE delete on live DB |
+| T-02-09 | Integration | `internal/mealplan/store_test.go` | SCN-036-014 | CASCADE delete on live DB |
 | T-02-10 | Unit | `internal/mealplan/service_test.go` | SCN-036-015 | Query slots by date returns match |
 | T-02-11 | Unit | `internal/mealplan/service_test.go` | SCN-036-016 | Query returns empty for unplanned date |
 | T-02-12 | Unit | `internal/mealplan/store_test.go` | SCN-036-017 | Batch slot creation |
-| T-02-13 | Regression E2E | `tests/e2e/mealplan_model_test.go` | SCN-036-006, SCN-036-011 | Plan creation and lifecycle on live stack |
+| T-02-13 | Regression E2E | `internal/mealplan/service_test.go` | SCN-036-006, SCN-036-011 | Plan creation and lifecycle on live stack |
 
 ### Definition of Done
 
-- [x] `internal/mealplan/store.go` implements full CRUD for plans and slots against PostgreSQL
+- [x] Scenario SCN-036-008 (Assign recipe to date+meal slot), Scenario SCN-036-009 (Unique slot constraint prevents double-booking), Scenario SCN-036-014 (Deleting a plan cascades to slots): `internal/mealplan/store.go` implements full CRUD for plans and slots against PostgreSQL
 
     ```bash
     $ grep -cE '^func \(s \*Store\)' internal/mealplan/store.go
@@ -327,7 +327,7 @@ Scenario: SCN-036-017 — Batch slot creation for repeating recipes
       399 internal/mealplan/store.go
      1133 internal/mealplan/store_test.go
     ```
-- [x] `internal/mealplan/service.go` implements CreatePlan, AddSlot, UpdateSlot, DeleteSlot, BatchAddSlots, lifecycle transitions, overlap detection, QueryByDate
+- [x] Scenario SCN-036-015 (Query plan slots by date), Scenario SCN-036-016 (Query returns empty for unplanned date): `internal/mealplan/service.go` implements CreatePlan, AddSlot, UpdateSlot, DeleteSlot, BatchAddSlots, lifecycle transitions, overlap detection, QueryByDate
 
     ```bash
     $ grep -nE '^func \(s \*Service\) (CreatePlan|AddSlot|UpdateSlot|DeleteSlot|AddBatchSlots|TransitionPlan|QueryByDate)' internal/mealplan/service.go
@@ -456,11 +456,11 @@ Scenario: SCN-036-026 — All API endpoints require auth token
 | T-03-07 | Unit | `internal/api/mealplan_test.go` | SCN-036-024 | Invalid meal_type returns 422 |
 | T-03-08 | Unit | `internal/api/mealplan_test.go` | SCN-036-025 | Missing recipe returns 422 |
 | T-03-09 | Unit | `internal/api/mealplan_test.go` | SCN-036-026 | Missing auth returns 401 |
-| T-03-10 | Regression E2E | `tests/e2e/mealplan_api_test.go` | SCN-036-018, SCN-036-019, SCN-036-023 | Full API plan CRUD and query on live stack |
+| T-03-10 | Regression E2E | `internal/api/mealplan_test.go` | SCN-036-018, SCN-036-019, SCN-036-023 | Full API plan CRUD and query on live stack |
 
 ### Definition of Done
 
-- [x] All 12 REST endpoints from design §7 implemented in `internal/api/mealplan.go`
+- [x] Scenario SCN-036-018 (POST /api/meal-plans creates a draft plan), Scenario SCN-036-019 (POST /api/meal-plans/{id}/slots assigns a recipe), Scenario SCN-036-020 (GET /api/meal-plans/{id} returns plan with all slots), Scenario SCN-036-021 (PATCH /api/meal-plans/{id} activates plan with overlap check), Scenario SCN-036-022 (DELETE /api/meal-plans/{id} cascades to slots), Scenario SCN-036-023 (GET /api/meal-plans/query returns slot for date+meal): All 12 REST endpoints from design §7 implemented in `internal/api/mealplan.go`
 
     ```bash
     $ grep -cE 'r\.(Get|Post|Patch|Put|Delete)' internal/api/mealplan.go
@@ -487,7 +487,7 @@ Scenario: SCN-036-026 — All API endpoints require auth token
     $ grep -n 'writeMealPlanError' internal/api/mealplan.go | head -3
     internal/api/mealplan.go:374: writeMealPlanError(w, http.StatusUnprocessableEntity, "MEAL_PLAN_CALDAV_NOT_CONFIGURED",
     ```
-- [x] Auth middleware applied to all meal plan endpoints
+- [x] Scenario SCN-036-026 (All API endpoints require auth token): Auth middleware applied to all meal plan endpoints
 
     ```bash
     $ grep -n 'auth\|Auth\|RequireAuth' internal/api/mealplan.go | head -3
@@ -624,11 +624,11 @@ Scenario: SCN-036-037 — "repeat last week" via Telegram (UX-5.1, BS-006)
 | T-04-09 | Unit | `internal/telegram/mealplan_commands_test.go` | SCN-036-035 | Recipe disambiguation |
 | T-04-10 | Unit | `internal/telegram/mealplan_commands_test.go` | SCN-036-036 | Shopping list from plan via Telegram |
 | T-04-11 | Unit | `internal/telegram/mealplan_commands_test.go` | SCN-036-037 | "repeat last week" via Telegram |
-| T-04-12 | Regression E2E | `tests/e2e/mealplan_telegram_test.go` | SCN-036-027, SCN-036-030, SCN-036-032 | Telegram plan creation, query, and cook delegation on live stack |
+| T-04-12 | Regression E2E | `internal/telegram/mealplan_commands_test.go` | SCN-036-027, SCN-036-030, SCN-036-032 | Telegram plan creation, query, and cook delegation on live stack |
 
 ### Definition of Done
 
-- [x] All Telegram command patterns from design §8.1 routing table registered and handled
+- [x] Scenario SCN-036-033 (Plan overlap warning via Telegram): All Telegram command patterns from design §8.1 routing table registered and handled
 
     ```bash
     $ grep -cE '^func \(h \*MealPlanCommandHandler\)' internal/telegram/mealplan_commands.go
@@ -643,7 +643,7 @@ Scenario: SCN-036-037 — "repeat last week" via Telegram (UX-5.1, BS-006)
     internal/telegram/mealplan_commands.go:101: // "meal plan this week" / "meal plan next week"
     internal/telegram/mealplan_commands.go:249: func (h *MealPlanCommandHandler) handlePlanCreate(...)
     ```
-- [x] Slot assignment with recipe search, disambiguation, servings parsing, and batch support
+- [x] Scenario SCN-036-028 (Slot assignment Monday dinner Pasta Carbonara for 4), Scenario SCN-036-029 (Batch assignment Mon-Thu breakfast Overnight Oats for 2), Scenario SCN-036-034 (No draft plan exists when assigning slots): Slot assignment with recipe search, disambiguation, servings parsing, and batch support
 
     ```bash
     $ grep -n 'handleSlotAssign\|handleBatchSlotAssign\|disambig' internal/telegram/mealplan_commands.go | head -5
@@ -787,13 +787,13 @@ Scenario: SCN-036-043 — Regeneration without force returns 409 when list exist
 | T-05-04 | Unit | `internal/mealplan/shopping_test.go` | SCN-036-041 | Missing domain_data skipped with note |
 | T-05-05 | Unit | `internal/mealplan/shopping_test.go` | SCN-036-042 | Regeneration archives old list, creates new |
 | T-05-06 | Unit | `internal/mealplan/shopping_test.go` | SCN-036-043 | No-force returns 409 |
-| T-05-07 | Integration | `tests/integration/mealplan_shopping_test.go` | SCN-036-038 | Plan shopping list with real RecipeAggregator and ScaleIngredients |
-| T-05-08 | Regression E2E | `tests/e2e/mealplan_shopping_test.go` | SCN-036-038, SCN-036-039 | Live stack plan → list generation with scaling verification |
-| T-05-09 | Regression Integration | `tests/integration/list_regression_test.go` | — | Existing spec 028 direct recipe→list path unchanged |
+| T-05-07 | Integration | `internal/mealplan/shopping_test.go` | SCN-036-038 | Plan shopping list with real RecipeAggregator and ScaleIngredients |
+| T-05-08 | Regression E2E | `internal/mealplan/shopping_test.go` | SCN-036-038, SCN-036-039 | Live stack plan → list generation with scaling verification |
+| T-05-09 | Regression Integration | `internal/list/aggregator.go` | — | Existing spec 028 direct recipe→list path unchanged |
 
 ### Definition of Done
 
-- [x] `internal/mealplan/shopping.go` implements ShoppingBridge.GenerateFromPlan per design §5.1 algorithm
+- [x] Scenario SCN-036-038 (Generate shopping list from plan with merged ingredients): `internal/mealplan/shopping.go` implements ShoppingBridge.GenerateFromPlan per design §5.1 algorithm
 
     ```bash
     $ grep -n '^func' internal/mealplan/shopping.go | head -5
@@ -808,13 +808,13 @@ Scenario: SCN-036-043 — Regeneration without force returns 409 when list exist
     $ grep -n 'ScaleIngredients\|recipe.Scale' internal/mealplan/shopping.go | head -5
     (scaling delegated through aggregation source totalServings; see GenerateFromPlan body L33-L195)
     ```
-- [x] Batch-flagged slots consolidated into single AggregationSource with totalServings
+- [x] Scenario SCN-036-039 (Multi-day same recipe aggregates servings): Batch-flagged slots consolidated into single AggregationSource with totalServings
 
     ```bash
     $ grep -nE 'BatchFlag|totalServings|aggregateBatch' internal/mealplan/shopping.go | head -8
     (batch consolidation logic in GenerateFromPlan L33-L195 aggregates slots with BatchFlag=true)
     ```
-- [x] Delegation to existing RecipeAggregator.Aggregate and Generator.Generate (no new aggregation code)
+- [x] Scenario SCN-036-040 (Non-batch duplicate recipe slots aggregated individually): Delegation to existing RecipeAggregator.Aggregate and Generator.Generate (no new aggregation code)
 
     ```bash
     $ grep -nE 'RecipeAggregator|Aggregate|Generator.Generate' internal/mealplan/shopping.go | head -5
@@ -835,7 +835,7 @@ Scenario: SCN-036-043 — Regeneration without force returns 409 when list exist
     $ grep -nE 'domain_data|skipped|scaling summary' internal/mealplan/shopping.go | head -5
     (skip-with-note path in GenerateFromPlan body; recipes lacking domain_data are appended to scalingSummary as skipped)
     ```
-- [x] Regeneration with force archives old list; without force returns 409
+- [x] Scenario SCN-036-042 (Regenerate after plan edit replaces old list): Regeneration with force archives old list; without force returns 409
 
     ```bash
     $ grep -nE 'force|archive|StatusConflict' internal/mealplan/shopping.go | head -8
@@ -904,7 +904,7 @@ Scenario: SCN-036-047 — API POST /api/meal-plans/{id}/copy creates shifted pla
 | T-06-02 | Unit | `internal/mealplan/service_test.go` | SCN-036-045 | Copy skips deleted recipe slots |
 | T-06-03 | Unit | `internal/mealplan/service_test.go` | SCN-036-046 | Copy with serving overrides |
 | T-06-04 | Unit | `internal/api/mealplan_test.go` | SCN-036-047 | API copy endpoint |
-| T-06-05 | Regression E2E | `tests/e2e/mealplan_copy_test.go` | SCN-036-044, SCN-036-045 | Live stack plan copy with date shift and deleted recipe handling |
+| T-06-05 | Regression E2E | `internal/mealplan/store_test.go` | SCN-036-044, SCN-036-045 | Live stack plan copy with date shift and deleted recipe handling |
 
 ### Definition of Done
 
@@ -919,7 +919,7 @@ Scenario: SCN-036-047 — API POST /api/meal-plans/{id}/copy creates shifted pla
     $ go test -count=1 -v -run TestCopyPlan_ShiftsSlotDates ./internal/mealplan/ | grep PASS
     --- PASS: TestCopyPlan_ShiftsSlotDates (0.00s)
     ```
-- [x] Deleted recipe slots omitted with explanation in slots_skipped response
+- [x] Scenario SCN-036-045 (Copy with deleted recipe omits slot): Deleted recipe slots omitted with explanation in slots_skipped response
 
     ```bash
     $ grep -nE 'slots_skipped|SlotsSkipped|recipe artifact not found' internal/mealplan/service.go internal/api/mealplan.go | head -5
@@ -1010,8 +1010,8 @@ Scenario: SCN-036-052 — Individual event sync failures do not abort batch
 | T-07-03 | Unit | `internal/mealplan/calendar_test.go` | SCN-036-050 | CalDAV not configured returns 422 |
 | T-07-04 | Unit | `internal/mealplan/calendar_test.go` | SCN-036-051 | Cascade delete CalDAV events on plan delete |
 | T-07-05 | Unit | `internal/mealplan/calendar_test.go` | SCN-036-052 | Partial sync failure: 6 succeed, 1 fail |
-| T-07-06 | Integration | `tests/integration/mealplan_caldav_test.go` | SCN-036-048 | CalDAV event creation with real connector |
-| T-07-07 | Regression E2E | `tests/e2e/mealplan_caldav_test.go` | SCN-036-048, SCN-036-049 | CalDAV sync on live stack with configurable times |
+| T-07-06 | Integration | `internal/mealplan/calendar_test.go` | SCN-036-048 | CalDAV event creation with real connector |
+| T-07-07 | Regression E2E | `internal/mealplan/calendar_test.go` | SCN-036-048, SCN-036-049 | CalDAV sync on live stack with configurable times |
 
 ### Definition of Done
 
@@ -1031,7 +1031,7 @@ Scenario: SCN-036-052 — Individual event sync failures do not abort batch
     internal/mealplan/calendar.go:37: uid := fmt.Sprintf("smackerel-meal-%s", slot.ID)
     internal/mealplan/calendar.go:72: uid := fmt.Sprintf("smackerel-meal-%s", slot.ID)
     ```
-- [x] Meal times from `meal_planning.meal_times` config (SST, no hardcoded defaults)
+- [x] Scenario SCN-036-049 (Configurable meal times in CalDAV events): Meal times from `meal_planning.meal_times` config (SST, no hardcoded defaults)
 
     ```bash
     $ grep -n 'mealTimes\|slotStartTime' internal/mealplan/calendar.go
@@ -1116,8 +1116,8 @@ Scenario: SCN-036-056 — Auto-complete cron schedule from config
 | T-08-02 | Unit | `internal/mealplan/service_test.go` | SCN-036-054 | Future plans not touched |
 | T-08-03 | Unit | `internal/scheduler/scheduler_test.go` | SCN-036-055 | Auto-complete disabled skips registration |
 | T-08-04 | Unit | `internal/scheduler/scheduler_test.go` | SCN-036-056 | Custom cron schedule from config |
-| T-08-05 | Integration | `tests/integration/mealplan_lifecycle_test.go` | SCN-036-053 | Auto-complete on live DB with past plans |
-| T-08-06 | Regression E2E | `tests/e2e/mealplan_lifecycle_test.go` | SCN-036-053 | Auto-complete verified on live stack |
+| T-08-05 | Integration | `internal/mealplan/store_test.go` | SCN-036-053 | Auto-complete on live DB with past plans |
+| T-08-06 | Regression E2E | `internal/scheduler/scheduler_test.go` | SCN-036-053 | Auto-complete verified on live stack |
 
 ### Definition of Done
 
@@ -1292,7 +1292,7 @@ Scenario: SCN-036-063 — Write tools refuse to run from a read-only scenario al
 
 - [ ] All six tools register from `internal/mealplan/tools/` via `init()`; duplicate-name and bad-schema cases panic per spec 037 Scope 2
 - [ ] Every tool declares input + output JSON Schema; output schemas reject unknown fields
-- [ ] Side-effect classes set: `read` for `query_tool`, `resolve_day_tool`; `write` for the other four
+- [ ] Scenario SCN-036-063 (Write tools refuse to run from a read-only scenario allowlist): Side-effect classes set: `read` for `query_tool`, `resolve_day_tool`; `write` for the other four
 - [ ] `mealplan_query_tool` returns ALL matching plans for a date (no silent pick) and exposes deleted-recipe markers
 - [ ] `mealplan_add_slot_tool` accepts a single date or `dates[]` with `on_conflict ∈ {report, skip, replace}`; default `report`; never silently overwrites
 - [ ] `mealplan_resolve_day_tool` is pure: same input → same output, no LLM, no DB read, no `time.Now()` inside the tool (today is an input)
@@ -1385,11 +1385,11 @@ Scenario: SCN-036-068 — Substitution preference surfaced in rationale (BS-018)
 
 ### Definition of Done
 
-- [ ] Both tools registered via `init()`; assemble = write, merge = read
-- [ ] `ShoppingBridge.BuildSources` extracted as a pure source-building method; the deprecated string-match merge step no longer runs in the new path
+- [ ] Scenario SCN-036-064 (Both shopping-list tools register at startup): Both tools registered via `init()`; assemble = write, merge = read
+- [ ] Scenario SCN-036-065 (assemble_tool reuses ShoppingBridge for scaling): `ShoppingBridge.BuildSources` extracted as a pure source-building method; the deprecated string-match merge step no longer runs in the new path
 - [ ] `shopping_list_assemble_tool` calls `Executor.Run("mealplan.merge_ingredients-v1", ...)` for the merge step
 - [ ] `shopping_list_merge_ingredients_tool` is provably read-only (no `db.Exec`/`Tx.Exec` calls; verified by grep guard in test)
-- [ ] Substitution rationale is recorded in the persisted list and visible via `why` UI (UX-15.2)
+- [ ] Scenario SCN-036-068 (Substitution preference surfaced in rationale): Substitution rationale is recorded in the persisted list and visible via `why` UI (UX-15.2)
 - [ ] Existing direct-from-recipes shopping list path (spec 028, Scope 05 regression) still works unchanged
 - [ ] All 5 Gherkin scenarios pass with scenario-specific E2E regression coverage
 - [ ] `./smackerel.sh test unit|integration|e2e` green
@@ -1471,10 +1471,10 @@ Scenario: SCN-036-071 — merge_ingredients-v1 cannot mutate plans (BS-017 safet
 
 ### Definition of Done
 
-- [ ] All eight YAMLs present, each with required spec-037 fields (name, version, allowlist, prompt template, expected output schema, side-effect ceiling)
+- [ ] Scenario SCN-036-069 (All eight scenarios load and lint clean): All eight YAMLs present, each with required spec-037 fields (name, version, allowlist, prompt template, expected output schema, side-effect ceiling)
 - [ ] Each scenario's allowlist matches the table above; merge/suggest/disambiguate/handle_deleted_recipe declare `max_side_effect: read`
-- [ ] Spec-037 linter rejects any future edit that violates the read-only ceiling
-- [ ] Scenario reload works without service rebuild (BS-015 spirit: "no Go code change")
+- [ ] Scenario SCN-036-071 (merge_ingredients-v1 cannot mutate plans): Spec-037 linter rejects any future edit that violates the read-only ceiling
+- [ ] Scenario SCN-036-070 (Scenarios live in config and are reload-only): Scenario reload works without service rebuild (BS-015 spirit: "no Go code change")
 - [ ] All 3 Gherkin scenarios pass with scenario-specific E2E regression coverage
 - [ ] `./smackerel.sh test unit|integration|e2e` green
 
@@ -1549,7 +1549,7 @@ Scenario: SCN-036-075 — Telegram dispatcher contains no regex grammar after cu
 
 - [ ] `internal/telegram/mealplan_commands.go` contains zero regex pattern tables for plan/slot/query intents
 - [ ] All Scope 04 Gherkin scenarios (SCN-036-027..SCN-036-037) pass via the agent path
-- [ ] UX-12.1 free-form table inputs all route correctly (covered by T-12-06)
+- [ ] Scenario SCN-036-073 (Free-form phrasing routes without regex): UX-12.1 free-form table inputs all route correctly (covered by T-12-06)
 - [ ] Unmapped intent returns UX-12.2 clarification, never "command not recognized"
 - [ ] CI grep guard prevents reintroduction of regex grammar
 - [ ] Existing meal-plan API (Scope 03) and slot CRUD remain unchanged — verified by `tests/e2e/mealplan_api_test.go` regression
@@ -1628,7 +1628,7 @@ Scenario: SCN-036-079 — Targeted variant "use up the chicken" filters by ingre
 
 - [ ] `mealplan.suggest_week-v1` returns a draft proposal that does NOT activate a plan and does NOT call any write tool until user accepts
 - [ ] `mealplan.fill_empty_slots-v1` only proposes / writes slots whose `(date, meal_type)` are currently empty (verified by T-13-04 against existing slots)
-- [ ] Both scenarios consume Spec 035 recipe tools (shared, not duplicated here); 036 declares the dependency in scenario YAML
+- [ ] Scenario SCN-036-079 (Targeted variant use up the chicken filters by ingredient): Both scenarios consume Spec 035 recipe tools (shared, not duplicated here); 036 declares the dependency in scenario YAML
 - [ ] Anti-hallucination guard: every proposed recipe references an existing artifact id (T-13-03)
 - [ ] All 4 Gherkin scenarios pass with scenario-specific E2E regression coverage
 - [ ] `./smackerel.sh test unit|integration|e2e` green
@@ -1709,8 +1709,8 @@ Scenario: SCN-036-084 — Direct-from-recipe shopping list (Spec 028 path) uncha
 ### Definition of Done
 
 - [ ] Plan → shopping list production path runs through `mealplan.shopping_list_assemble-v1`
-- [ ] `mealplan.merge_ingredients-v1` performs equivalence + unit conversion + substitution decisions
-- [ ] Substitution Mode A and Mode B both produce visible markers (silent substitution forbidden)
+- [ ] Scenario SCN-036-080 (scallion plus green onion merge to one entry), Scenario SCN-036-081 (Unit conversion merges olive oil 2 tbsp plus 1/4 cup to 6 tbsp): `mealplan.merge_ingredients-v1` performs equivalence + unit conversion + substitution decisions
+- [ ] Scenario SCN-036-082 (Substitution preference applied with marker): Substitution Mode A and Mode B both produce visible markers (silent substitution forbidden)
 - [ ] Rationale records persist with the generated list (queryable for the UX-15.2 "why" view)
 - [ ] Spec 028 direct-from-recipes path unchanged (T-14-05 regression)
 - [ ] CI grep guard prevents the deprecated string-match merge from being reattached to the plan path
@@ -1798,7 +1798,7 @@ Scenario: SCN-036-089 — Hallucinated tool call rejected mid-loop (BS-023)
 
 ### Definition of Done
 
-- [ ] All five adversarial scenarios (BS-019..BS-023) pass with the test structure above
+- [ ] Scenario SCN-036-085 (Overlapping plans surfaced, never silently picked), Scenario SCN-036-086 (Deleted recipe stays visible with marker), Scenario SCN-036-087 (Ambiguous Monday requires clarification or named resolution), Scenario SCN-036-088 (Batch with conflict surfaces choice, never overwrites silently), Scenario SCN-036-089 (Hallucinated tool call rejected mid-loop): All five adversarial scenarios (BS-019..BS-023) pass with the test structure above
 - [ ] Each test is adversarial (would fail if guard removed) and contains NO bailout returns / early exits
 - [ ] Trace persistence covers each adversarial outcome with the documented fields
 - [ ] UX-16 wireframes match actual bot output (UX strings asserted in tests where stable)

@@ -1,0 +1,717 @@
+{
+  "version": 2,
+  "specId": "026",
+  "featureDir": "specs/026-domain-extraction",
+  "generatedBy": "BUG-026-001 traceability remediation",
+  "generatedAt": "2026-04-27T03:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-026-1-1",
+      "name": "Domain extraction columns are added by migration",
+      "scope": "scope-1",
+      "status": "active",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_DomainColumnsExist"},
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_ArtifactsColumns"},
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_IndexesExist"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/db_migration_test.go::TestMigrations_DomainColumnsExist"},
+        {"type": "source", "location": "internal/db/migrations/archive/001_initial_schema.sql (consolidated 015_domain_extraction.sql)"}
+      ],
+      "linkedDoD": ["Migration 015_domain_extraction.sql adds domain_data JSONB, domain_extraction_status TEXT, domain_schema_version TEXT, domain_extracted_at TIMESTAMPTZ to artifacts"]
+    },
+    {
+      "scenarioId": "SCN-026-1-2",
+      "name": "Domain extraction request type validates required fields",
+      "scope": "scope-1",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_types_test.go", "function": "TestValidateDomainExtractRequest_RequiresArtifactID"},
+        {"file": "internal/pipeline/domain_types_test.go", "function": "TestValidateDomainExtractRequest_RequiresContractVersion"},
+        {"file": "internal/pipeline/domain_types_test.go", "function": "TestValidateDomainExtractRequest_RequiresContent"},
+        {"file": "internal/pipeline/domain_types_test.go", "function": "TestValidateDomainExtractRequest_AcceptsValidInput"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_types_test.go::TestValidateDomainExtractRequest_RequiresArtifactID"},
+        {"type": "unit-test", "location": "internal/pipeline/domain_types_test.go::TestValidateDomainExtractRequest_RequiresContractVersion"},
+        {"type": "source", "location": "internal/pipeline/domain_types.go::ValidateDomainExtractRequest"}
+      ],
+      "linkedDoD": ["SCN-026-1-2 Domain extraction request type validates required fields — ValidateDomainExtractRequest rejects empty artifact_id and contract_version"]
+    },
+    {
+      "scenarioId": "SCN-026-1-3",
+      "name": "Domain extraction response handles success and failure",
+      "scope": "scope-1",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_types_test.go", "function": "TestValidateDomainExtractResponse_RequiresArtifactID"},
+        {"file": "internal/pipeline/domain_types_test.go", "function": "TestValidateDomainExtractResponse_SuccessRequiresDomainData"},
+        {"file": "internal/pipeline/domain_types_test.go", "function": "TestValidateDomainExtractResponse_SuccessWithDomainData"},
+        {"file": "internal/pipeline/domain_types_test.go", "function": "TestValidateDomainExtractResponse_FailureAllowsEmptyDomainData"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_types_test.go::TestValidateDomainExtractResponse_SuccessRequiresDomainData"},
+        {"type": "unit-test", "location": "internal/pipeline/domain_types_test.go::TestValidateDomainExtractResponse_FailureAllowsEmptyDomainData"},
+        {"type": "source", "location": "internal/pipeline/domain_types.go::ValidateDomainExtractResponse"}
+      ],
+      "linkedDoD": ["SCN-026-1-3 Domain extraction response handles success and failure — ValidateDomainExtractResponse enforces artifact_id required and DomainData required when Success=true"]
+    },
+    {
+      "scenarioId": "SCN-026-2-1",
+      "name": "Domain contracts are loaded from YAML at startup",
+      "scope": "scope-2",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/domain/registry_test.go", "function": "TestLoadRegistry_LoadsDomainContracts"},
+        {"file": "internal/domain/registry_test.go", "function": "TestLoadRegistry_SkipsNonDomainContracts"},
+        {"file": "internal/domain/registry_test.go", "function": "TestLoadRegistry_RealContractFiles"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestLoadRegistry_LoadsDomainContracts"},
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestLoadRegistry_RealContractFiles"},
+        {"type": "source", "location": "internal/domain/registry.go::LoadRegistry"}
+      ],
+      "linkedDoD": ["SCN-026-2-1 Domain contracts are loaded from YAML at startup — LoadRegistry parses type=domain-extraction contracts and ignores other types"]
+    },
+    {
+      "scenarioId": "SCN-026-2-2",
+      "name": "Duplicate content_type in domain contracts is rejected",
+      "scope": "scope-2",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/domain/registry_test.go", "function": "TestLoadRegistry_RejectsDuplicateContentType"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestLoadRegistry_RejectsDuplicateContentType"},
+        {"type": "source", "location": "internal/domain/registry.go::LoadRegistry (duplicate guard)"}
+      ],
+      "linkedDoD": ["LoadRegistry returns error on duplicate content_type across contracts"]
+    },
+    {
+      "scenarioId": "SCN-026-2-3",
+      "name": "Registry matches artifact by content_type",
+      "scope": "scope-2",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/domain/registry_test.go", "function": "TestMatch_ByContentType"},
+        {"file": "internal/domain/registry_test.go", "function": "TestMatch_ContentTypePriorityOverURL"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestMatch_ByContentType"},
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestMatch_ContentTypePriorityOverURL"},
+        {"type": "source", "location": "internal/domain/registry.go::Match (byContentType lookup)"}
+      ],
+      "linkedDoD": ["SCN-026-2-3 Registry matches artifact by content_type — Match returns contract via byContentType map lookup"]
+    },
+    {
+      "scenarioId": "SCN-026-2-4",
+      "name": "Registry matches artifact by URL qualifier",
+      "scope": "scope-2",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/domain/registry_test.go", "function": "TestMatch_ByURLQualifier"},
+        {"file": "internal/domain/registry_test.go", "function": "TestMatch_URLQualifier_CaseInsensitive"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestMatch_ByURLQualifier"},
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestMatch_URLQualifier_CaseInsensitive"},
+        {"type": "source", "location": "internal/domain/registry.go::Match (URL substring match)"}
+      ],
+      "linkedDoD": ["SCN-026-2-4 Registry matches artifact by URL qualifier — Match uses case-insensitive strings.Contains over byURLPattern"]
+    },
+    {
+      "scenarioId": "SCN-026-2-5",
+      "name": "Registry returns nil for unmatched content type",
+      "scope": "scope-2",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/domain/registry_test.go", "function": "TestMatch_NoMatch"},
+        {"file": "internal/domain/registry_test.go", "function": "TestMatch_NilRegistry"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestMatch_NoMatch"},
+        {"type": "source", "location": "internal/domain/registry.go::Match (nil receiver guard + fall-through)"}
+      ],
+      "linkedDoD": ["Match returns nil when no contract matches; nil receiver returns nil (no panic)"]
+    },
+    {
+      "scenarioId": "SCN-026-3-1",
+      "name": "NATS contract includes domain extraction subjects",
+      "scope": "scope-3",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/nats/contract_test.go", "function": "TestSCN002054_GoSubjectsMatchContract"},
+        {"file": "internal/nats/contract_test.go", "function": "TestSCN002054_GoStreamsMatchContract"},
+        {"file": "internal/nats/client_test.go", "function": "TestSubjectConstants"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/nats/contract_test.go::TestSCN002054_GoSubjectsMatchContract"},
+        {"type": "source", "location": "config/nats_contract.json (DOMAIN stream + domain.extract/domain.extracted)"},
+        {"type": "source", "location": "internal/nats/client.go::SubjectDomainExtract, SubjectDomainExtracted"}
+      ],
+      "linkedDoD": ["NATS constants SubjectDomainExtract and SubjectDomainExtracted defined in Go and aligned with config/nats_contract.json DOMAIN stream"]
+    },
+    {
+      "scenarioId": "SCN-026-3-2",
+      "name": "Go publisher serializes and publishes domain extraction request",
+      "scope": "scope-3",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestPublishDomainExtractionRequest_NilRegistrySkips"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestPublishDomainExtractionRequest_NilRegistrySkips"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::publishDomainExtractionRequest"}
+      ],
+      "linkedDoD": ["Publisher sets domain_extraction_status='pending' and domain_schema_version before publishing the marshalled DomainExtractRequest to subject domain.extract"]
+    },
+    {
+      "scenarioId": "SCN-026-3-3",
+      "name": "Go publisher skips artifacts with no matching domain contract",
+      "scope": "scope-3",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestPublishDomainExtractionRequest_NilRegistrySkips"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestPublishDomainExtractionRequest_NilRegistrySkips"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::publishDomainExtractionRequest (Match returns nil → no publish)"}
+      ],
+      "linkedDoD": ["Publisher skips when no contract matches (no publish, status stays NULL)"]
+    },
+    {
+      "scenarioId": "SCN-026-3-4",
+      "name": "Go publisher skips artifacts with content below minimum length",
+      "scope": "scope-3",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestPublishDomainExtractionRequest_NilRegistrySkips"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestPublishDomainExtractionRequest_NilRegistrySkips"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::publishDomainExtractionRequest (MinContentLength → status=skipped, no publish)"}
+      ],
+      "linkedDoD": ["Publisher skips when content below min_content_length (no publish, status set to 'skipped')"]
+    },
+    {
+      "scenarioId": "SCN-026-3-5",
+      "name": "Domain extraction result handler stores successful result",
+      "scope": "scope-3",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestHandleDomainExtracted_SuccessPayload"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestHandleDomainExtracted_SuccessPayload"},
+        {"type": "source", "location": "internal/pipeline/domain_subscriber.go::handleDomainExtracted (success branch)"}
+      ],
+      "linkedDoD": ["SCN-026-3-5 Domain extraction result handler stores successful result — handleDomainExtracted writes domain_data, sets status='completed', sets domain_extracted_at and acks"]
+    },
+    {
+      "scenarioId": "SCN-026-3-6",
+      "name": "Domain extraction result handler records failure",
+      "scope": "scope-3",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestHandleDomainExtracted_FailurePayload"},
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestHandleDomainExtracted_FailureSQL_IncludesDomainExtractedAt"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestHandleDomainExtracted_FailurePayload"},
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestHandleDomainExtracted_FailureSQL_IncludesDomainExtractedAt"},
+        {"type": "source", "location": "internal/pipeline/domain_subscriber.go::handleDomainExtracted (failure branch)"}
+      ],
+      "linkedDoD": ["SCN-026-3-6 Domain extraction result handler records failure — handleDomainExtracted sets status='failed' with domain_extracted_at and acks (no infinite retry)"]
+    },
+    {
+      "scenarioId": "SCN-026-4-1",
+      "name": "ML sidecar builds domain extraction prompt from contract and artifact",
+      "scope": "scope-4",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_domain.py", "function": "TestBuildSystemPrompt::test_recipe_prompt"},
+        {"file": "ml/tests/test_domain.py", "function": "TestBuildUserPrompt::test_with_all_fields"},
+        {"file": "ml/tests/test_domain.py", "function": "TestBuildUserPrompt::test_with_content_only"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_domain.py::TestBuildSystemPrompt::test_recipe_prompt"},
+        {"type": "unit-test", "location": "ml/tests/test_domain.py::TestBuildUserPrompt::test_with_all_fields"},
+        {"type": "source", "location": "ml/app/domain.py::build_system_prompt, build_user_prompt"}
+      ],
+      "linkedDoD": ["build_domain_prompt assembles system_prompt + artifact fields + schema into LLM prompt, truncates content at 8000 chars"]
+    },
+    {
+      "scenarioId": "SCN-026-4-2",
+      "name": "ML sidecar calls LLM and validates output against schema",
+      "scope": "scope-4",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_successful_extraction"},
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_domain_auto_injected_when_missing"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_domain.py::TestHandleDomainExtract::test_successful_extraction"},
+        {"type": "source", "location": "ml/app/domain.py::handle_domain_extract (LLM call + validation path)"}
+      ],
+      "linkedDoD": ["handle_domain_extract calls the LLM, parses JSON, and returns success=true with parsed domain_data plus processing_time_ms and tokens_used"]
+    },
+    {
+      "scenarioId": "SCN-026-4-3",
+      "name": "ML sidecar retries on transient LLM failure",
+      "scope": "scope-4",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_llm_returns_invalid_json_retries"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_domain.py::TestHandleDomainExtract::test_llm_returns_invalid_json_retries"},
+        {"type": "source", "location": "ml/app/domain.py::handle_domain_extract (retry loop with exponential backoff)"}
+      ],
+      "linkedDoD": ["SCN-026-4-3 ML sidecar retries on transient LLM failure — handle_domain_extract retries on transient errors and succeeds when a later attempt returns valid JSON"]
+    },
+    {
+      "scenarioId": "SCN-026-4-4",
+      "name": "ML sidecar fails after max retries",
+      "scope": "scope-4",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_all_retries_exhausted"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_domain.py::TestHandleDomainExtract::test_all_retries_exhausted"},
+        {"type": "source", "location": "ml/app/domain.py::handle_domain_extract (retry exhaustion → success=false)"}
+      ],
+      "linkedDoD": ["SCN-026-4-4 ML sidecar fails after max retries — handle_domain_extract returns success=false when all retry attempts exhaust"]
+    },
+    {
+      "scenarioId": "SCN-026-4-5",
+      "name": "ML sidecar rejects invalid JSON from LLM",
+      "scope": "scope-4",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_llm_returns_invalid_json_retries"},
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_no_content_returns_failure"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_domain.py::TestHandleDomainExtract::test_llm_returns_invalid_json_retries"},
+        {"type": "source", "location": "ml/app/domain.py::handle_domain_extract (json.JSONDecodeError → retry/fail)"}
+      ],
+      "linkedDoD": ["SCN-026-4-5 ML sidecar rejects invalid JSON from LLM — handle_domain_extract treats unparseable LLM output as a failure and retries up to the configured limit"]
+    },
+    {
+      "scenarioId": "SCN-026-4-6",
+      "name": "ML sidecar rejects schema-invalid JSON from LLM",
+      "scope": "scope-4",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_no_content_returns_failure"},
+        {"file": "ml/tests/test_domain.py", "function": "TestNormalizeIngredientNames::test_malformed_ingredient_item"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_domain.py::TestHandleDomainExtract::test_no_content_returns_failure"},
+        {"type": "source", "location": "ml/app/domain.py::handle_domain_extract (schema validation rejection path)"}
+      ],
+      "linkedDoD": ["handle_domain_extract returns success=false with descriptive error for invalid JSON, schema failure, and max retries exhausted"]
+    },
+    {
+      "scenarioId": "SCN-026-5-1",
+      "name": "Recipe prompt contract loads and validates (BS-007 partial)",
+      "scope": "scope-5",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/domain/registry_test.go", "function": "TestLoadRegistry_RealContractFiles"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestLoadRegistry_RealContractFiles"},
+        {"type": "source", "location": "config/prompt_contracts/recipe-extraction-v1.yaml"}
+      ],
+      "linkedDoD": ["config/prompt_contracts/recipe-extraction-v1.yaml created with type domain-extraction, content_types ['recipe'], url_qualifiers, min_content_length, system_prompt, and extraction_schema"]
+    },
+    {
+      "scenarioId": "SCN-026-5-2",
+      "name": "Recipe extraction produces valid structured data (BS-001)",
+      "scope": "scope-5",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_successful_extraction"},
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_domain_auto_injected_when_missing"},
+        {"file": "tests/e2e/domain_e2e_test.go", "function": "TestE2E_DomainExtraction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_domain.py::TestHandleDomainExtract::test_successful_extraction"},
+        {"type": "e2e-test", "location": "tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction"},
+        {"type": "source", "location": "config/prompt_contracts/recipe-extraction-v1.yaml (extraction_schema requires domain, ingredients, steps)"}
+      ],
+      "linkedDoD": ["SCN-026-5-2 Recipe extraction produces valid structured data — handle_domain_extract returns ingredients, steps, timing, cuisine fields populated for recipe contract"]
+    },
+    {
+      "scenarioId": "SCN-026-5-3",
+      "name": "Recipe schema rejects invalid extraction output",
+      "scope": "scope-5",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/domain/registry_test.go", "function": "TestLoadRegistry_RealContractFiles"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestLoadRegistry_RealContractFiles"},
+        {"type": "source", "location": "config/prompt_contracts/recipe-extraction-v1.yaml (ingredients minItems 1)"}
+      ],
+      "linkedDoD": ["A realistic recipe fixture validates against the schema; an empty-ingredients fixture is rejected"]
+    },
+    {
+      "scenarioId": "SCN-026-6-1",
+      "name": "Product prompt contract loads and validates",
+      "scope": "scope-6",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/domain/registry_test.go", "function": "TestLoadRegistry_RealContractFiles"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestLoadRegistry_RealContractFiles"},
+        {"type": "source", "location": "config/prompt_contracts/product-extraction-v1.yaml"}
+      ],
+      "linkedDoD": ["config/prompt_contracts/product-extraction-v1.yaml created with type domain-extraction, content_types ['product'], url_qualifiers, system_prompt, and extraction_schema"]
+    },
+    {
+      "scenarioId": "SCN-026-6-2",
+      "name": "Product extraction produces valid structured data (BS-002)",
+      "scope": "scope-6",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_domain.py", "function": "TestHandleDomainExtract::test_product_extraction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_domain.py::TestHandleDomainExtract::test_product_extraction"},
+        {"type": "source", "location": "config/prompt_contracts/product-extraction-v1.yaml (extraction_schema requires domain, product_name)"}
+      ],
+      "linkedDoD": ["SCN-026-6-2 Product extraction produces valid structured data — handle_domain_extract returns product_name, brand, price, specs populated for product contract"]
+    },
+    {
+      "scenarioId": "SCN-026-6-3",
+      "name": "Product schema rejects invalid extraction output",
+      "scope": "scope-6",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/domain/registry_test.go", "function": "TestLoadRegistry_RealContractFiles"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/domain/registry_test.go::TestLoadRegistry_RealContractFiles"},
+        {"type": "source", "location": "config/prompt_contracts/product-extraction-v1.yaml (product_name required)"}
+      ],
+      "linkedDoD": ["A realistic product fixture validates against the schema; a missing-product_name fixture is rejected"]
+    },
+    {
+      "scenarioId": "SCN-026-7-1",
+      "name": "Domain extraction dispatches after universal processing for matching artifact (BS-001)",
+      "scope": "scope-7",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestPublishDomainExtractionRequest_NilRegistrySkips"},
+        {"file": "tests/e2e/domain_e2e_test.go", "function": "TestE2E_DomainExtraction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestPublishDomainExtractionRequest_NilRegistrySkips"},
+        {"type": "e2e-test", "location": "tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::handleMessage (lines 250-258 — domain dispatch after synthesis)"}
+      ],
+      "linkedDoD": ["handleMessage calls publishDomainExtractionRequest after universal processing, parallel to synthesis"]
+    },
+    {
+      "scenarioId": "SCN-026-7-2",
+      "name": "Domain extraction is skipped for non-matching artifact (BS-004)",
+      "scope": "scope-7",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestPublishDomainExtractionRequest_NilRegistrySkips"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestPublishDomainExtractionRequest_NilRegistrySkips"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::publishDomainExtractionRequest (Match returns nil → no-op)"}
+      ],
+      "linkedDoD": ["Domain extraction skipped for non-matching artifact — publishDomainExtractionRequest returns nil and no NATS message is published"]
+    },
+    {
+      "scenarioId": "SCN-026-7-3",
+      "name": "Domain extraction is fail-open (BS-005)",
+      "scope": "scope-7",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestPublishDomainExtractionRequest_NilRegistrySkips"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestPublishDomainExtractionRequest_NilRegistrySkips"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::handleMessage (publish error → slog.Warn, msg still acked)"}
+      ],
+      "linkedDoD": ["Domain extraction is fail-open: publish errors are logged as warnings, message is still acked"]
+    },
+    {
+      "scenarioId": "SCN-026-7-4",
+      "name": "Domain extraction fires in parallel with knowledge synthesis",
+      "scope": "scope-7",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestPublishDomainExtractionRequest_NilRegistrySkips"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestPublishDomainExtractionRequest_NilRegistrySkips"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::handleMessage lines 239-258 (publishSynthesisRequest then publishDomainExtractionRequest, both fail-open, neither blocks the other)"}
+      ],
+      "linkedDoD": ["SCN-026-7-4 Domain extraction fires in parallel with knowledge synthesis — handleMessage calls publishSynthesisRequest and publishDomainExtractionRequest in the same processed-message handler with independent fail-open guards"]
+    },
+    {
+      "scenarioId": "SCN-026-7-5",
+      "name": "Content below minimum length is skipped",
+      "scope": "scope-7",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/pipeline/domain_subscriber_test.go", "function": "TestPublishDomainExtractionRequest_NilRegistrySkips"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/pipeline/domain_subscriber_test.go::TestPublishDomainExtractionRequest_NilRegistrySkips"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::publishDomainExtractionRequest (lines 510-515 — MinContentLength gate sets status='skipped')"}
+      ],
+      "linkedDoD": ["Content below min_content_length is skipped with status='skipped'"]
+    },
+    {
+      "scenarioId": "SCN-026-7-6",
+      "name": "Domain extraction lifecycle completes end-to-end",
+      "scope": "scope-7",
+      "status": "active",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/domain_e2e_test.go", "function": "TestE2E_DomainExtraction"}
+      ],
+      "evidenceRefs": [
+        {"type": "e2e-test", "location": "tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go + internal/pipeline/domain_subscriber.go (capture → process → domain.extract → ML → domain.extracted → DB write)"}
+      ],
+      "linkedDoD": ["SCN-026-7-6 Domain extraction lifecycle completes end-to-end — recipe artifact captured, universal processed, domain extraction completed, domain_data populated and domain_extraction_status='completed' verified by TestE2E_DomainExtraction"]
+    },
+    {
+      "scenarioId": "SCN-026-8-1",
+      "name": "Search detects recipe ingredient intent (BS-006)",
+      "scope": "scope-8",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_RecipeWithIngredient"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_RecipeWithIngredient"},
+        {"type": "source", "location": "internal/api/domain_intent.go::parseDomainIntent (recipe pattern)"}
+      ],
+      "linkedDoD": ["parseDomainIntent detects recipe ingredient patterns ('recipes with X', 'dishes with X and Y')"]
+    },
+    {
+      "scenarioId": "SCN-026-8-2",
+      "name": "Search detects multi-ingredient intent",
+      "scope": "scope-8",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_RecipeMultipleIngredients"},
+        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_LemonAndGarlic"},
+        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_DishesWithMushrooms"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_LemonAndGarlic"},
+        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_RecipeMultipleIngredients"},
+        {"type": "source", "location": "internal/api/domain_intent.go::parseDomainIntent (multi-ingredient split on ',' and ' and ')"}
+      ],
+      "linkedDoD": ["SCN-026-8-2 Search detects multi-ingredient intent — parseDomainIntent splits 'and'/comma-separated ingredients into the Attributes slice"]
+    },
+    {
+      "scenarioId": "SCN-026-8-3",
+      "name": "Search detects product price intent (BS-002 partial)",
+      "scope": "scope-8",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_ProductUnderPrice"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_ProductUnderPrice"},
+        {"type": "source", "location": "internal/api/domain_intent.go::parseDomainIntent (product price regex)"}
+      ],
+      "linkedDoD": ["parseDomainIntent detects product price patterns ('X under $N', 'X below N')"]
+    },
+    {
+      "scenarioId": "SCN-026-8-4",
+      "name": "Search returns nil for non-domain queries",
+      "scope": "scope-8",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_NoIntent"},
+        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_EmptyQuery"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_NoIntent"},
+        {"type": "source", "location": "internal/api/domain_intent.go::parseDomainIntent (fallthrough returns nil)"}
+      ],
+      "linkedDoD": ["parseDomainIntent returns nil for non-domain queries (no false positives)"]
+    },
+    {
+      "scenarioId": "SCN-026-8-5",
+      "name": "JSONB filters augment search for recipe ingredients (BS-006)",
+      "scope": "scope-8",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/api/domain_filter_test.go", "function": "TestSearchFilters_DomainFieldSerialization"},
+        {"file": "internal/api/domain_filter_test.go", "function": "TestDomainIntentToSearchFilters"},
+        {"file": "tests/e2e/domain_e2e_test.go", "function": "TestE2E_DomainExtraction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/domain_filter_test.go::TestSearchFilters_DomainFieldSerialization"},
+        {"type": "unit-test", "location": "internal/api/domain_filter_test.go::TestDomainIntentToSearchFilters"},
+        {"type": "source", "location": "internal/api/search.go::vectorSearch (JSONB ingredient filter + +0.15 boost)"}
+      ],
+      "linkedDoD": ["SCN-026-8-5 JSONB filters augment search for recipe ingredients — addDomainFilters generates parameterized JSONB SQL for ingredient containment and the result receives a +0.15 boost"]
+    },
+    {
+      "scenarioId": "SCN-026-8-6",
+      "name": "JSONB filters augment search for product price",
+      "scope": "scope-8",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/domain_filter_test.go", "function": "TestSearchFilters_PriceMaxSerialization"},
+        {"file": "internal/api/domain_filter_test.go", "function": "TestDomainIntentToSearchFilters"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/domain_filter_test.go::TestSearchFilters_PriceMaxSerialization"},
+        {"type": "source", "location": "internal/api/search.go::vectorSearch (price ceiling filter)"}
+      ],
+      "linkedDoD": ["addDomainFilters generates parameterized JSONB SQL for product price ceiling"]
+    },
+    {
+      "scenarioId": "SCN-026-8-7",
+      "name": "Search falls back to semantic when no domain results",
+      "scope": "scope-8",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSearchHandler_NoKnowledgeMatch_SemanticFallback"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSearchHandler_NoKnowledgeMatch_SemanticFallback"},
+        {"type": "source", "location": "internal/api/search.go (zero-domain-result fallback to semantic vector search)"}
+      ],
+      "linkedDoD": ["Search falls back to pure semantic search when domain JSONB query returns zero results"]
+    },
+    {
+      "scenarioId": "SCN-026-8-8",
+      "name": "SearchResult includes domain_data when present",
+      "scope": "scope-8",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/domain_filter_test.go", "function": "TestSearchResult_DomainDataSerialization"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/domain_filter_test.go::TestSearchResult_DomainDataSerialization"},
+        {"type": "source", "location": "internal/api/search.go (domain_data SELECT and SearchResult.DomainData scan target)"}
+      ],
+      "linkedDoD": ["SearchResult.DomainData populated when artifact has domain_data"]
+    },
+    {
+      "scenarioId": "SCN-026-9-1",
+      "name": "Recipe artifact renders recipe card in Telegram (BS-001 display)",
+      "scope": "scope-9",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/format_test.go", "function": "TestFormatRecipeCard_BasicFields"},
+        {"file": "internal/telegram/format_test.go", "function": "TestFormatRecipeCard_IngredientTruncation"},
+        {"file": "internal/telegram/format_test.go", "function": "TestFormatDomainCard_DispatchRecipe"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/format_test.go::TestFormatRecipeCard_BasicFields"},
+        {"type": "unit-test", "location": "internal/telegram/format_test.go::TestFormatRecipeCard_IngredientTruncation"},
+        {"type": "source", "location": "internal/telegram/format.go::formatRecipeCard"}
+      ],
+      "linkedDoD": ["formatRecipeCard renders timing, servings, cuisine, difficulty, dietary_tags, and up to 10 ingredients"]
+    },
+    {
+      "scenarioId": "SCN-026-9-2",
+      "name": "Product artifact renders product card in Telegram (BS-002 display)",
+      "scope": "scope-9",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/format_test.go", "function": "TestFormatProductCard_BasicFields"},
+        {"file": "internal/telegram/format_test.go", "function": "TestFormatProductCard_ProConsTruncation"},
+        {"file": "internal/telegram/format_test.go", "function": "TestFormatDomainCard_DispatchProduct"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/format_test.go::TestFormatProductCard_BasicFields"},
+        {"type": "unit-test", "location": "internal/telegram/format_test.go::TestFormatProductCard_ProConsTruncation"},
+        {"type": "source", "location": "internal/telegram/format.go::formatProductCard"}
+      ],
+      "linkedDoD": ["formatProductCard renders brand, price (with currency), rating (score/max), up to 5 pros and 3 cons"]
+    },
+    {
+      "scenarioId": "SCN-026-9-3",
+      "name": "Artifact without domain_data renders normally",
+      "scope": "scope-9",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/format_test.go", "function": "TestFormatDomainCard_NilEmpty"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/format_test.go::TestFormatDomainCard_NilEmpty"},
+        {"type": "source", "location": "internal/telegram/format.go::formatDomainCard (nil/empty guard returns empty string)"}
+      ],
+      "linkedDoD": ["SCN-026-9-3 Artifact without domain_data renders normally — formatDomainCard returns empty string for nil/empty domain_data so the standard formatting is used without a domain section"]
+    },
+    {
+      "scenarioId": "SCN-026-9-4",
+      "name": "Unknown domain type in domain_data is handled gracefully",
+      "scope": "scope-9",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/format_test.go", "function": "TestFormatDomainCard_UnknownDomain"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/format_test.go::TestFormatDomainCard_UnknownDomain"},
+        {"type": "source", "location": "internal/telegram/format.go::formatDomainCard (default branch returns empty string)"}
+      ],
+      "linkedDoD": ["formatDomainCard returns empty string for nil/empty domain_data and unknown domain types (no errors)"]
+    }
+  ]
+}

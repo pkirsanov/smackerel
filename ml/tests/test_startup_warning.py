@@ -18,6 +18,7 @@ def _run_lifespan(auth_token: str, caplog) -> list[logging.LogRecord]:
         "LLM_PROVIDER": "ollama",
         "LLM_MODEL": "llama3",
         "OLLAMA_URL": "http://localhost:11434",
+        "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED": "false",
         "SMACKEREL_AUTH_TOKEN": auth_token,
     }
     nats_mock = AsyncMock()

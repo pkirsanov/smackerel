@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "014-discord-connector",
+  "bugId": "BUG-014-001-dod-scenario-fidelity-gap",
+  "featureDir": "specs/014-discord-connector/bugs/BUG-014-001-dod-scenario-fidelity-gap",
+  "featureName": "BUG-014-001: DoD scenario fidelity gap (SCN-DC-NRM/REST/CONN/GW/THR/CMD)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T04:00:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T04:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: added 8 trace-ID-bearing DoD bullets (SCN-DC-NRM-001/002 in Scope 01; SCN-DC-REST-001/002 in Scope 02; SCN-DC-CONN-001 in Scope 03; SCN-DC-GW-001 in Scope 04; SCN-DC-THR-004 in Scope 05; SCN-DC-CMD-003 in Scope 06) to specs/014-discord-connector/scopes.md, each restating the scenario name verbatim with test/source pointers (TestClassifyMessage, TestAssignTier, TestFetchChannelMessages_*, TestSyncEndToEnd_*, TestConnect_*, TestEventPoller_*, TestSync_IncludeThreadsFalse_SkipsThreads, TestParseBotCommand_SSRFProtection / TestIsSafeURL). No production code changed. scenario-manifest.json and Test Plan rows already covered all 13 scenarios so no manifest or table edits required."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T04:07:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Underlying behavior tests for all 8 SCN-DC-* scenarios PASS: `go test -count=1 -v -run 'TestClassifyMessage$|TestAssignTier$|TestFetchChannelMessages_Basic$|TestSyncEndToEnd_CursorPreventsRefetch$|TestConnect_TokenValidationSuccess$|TestEventPoller_ConnectStartsPolling$|TestSync_IncludeThreadsFalse_SkipsThreads$|TestIsSafeURL$|TestParseBotCommand_SSRFProtection$' ./internal/connector/discord/` exit 0 (9/9 named PASS, 0.130s). Output recorded inline in report.md > Test Evidence."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T04:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability guard PASS: `bash .github/bubbles/scripts/traceability-guard.sh specs/014-discord-connector` returns RESULT: PASSED (0 warnings) with 13/13 scenarios mapped to DoD, 13 concrete test file references, 13 report evidence references. Pre-fix baseline was RESULT: FAILED (9 failures, 8 unmapped scenarios). Output recorded inline in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T04:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (`bash .github/bubbles/scripts/artifact-lint.sh specs/014-discord-connector`) and bug folder (`bash .github/bubbles/scripts/artifact-lint.sh specs/014-discord-connector/bugs/BUG-014-001-dod-scenario-fidelity-gap`). git diff --name-only confirms boundary: zero changes under internal/, cmd/, ml/, config/, tests/. All edits confined to specs/014-discord-connector/scopes.md and the bug folder."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T04:12:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

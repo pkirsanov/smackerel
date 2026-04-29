@@ -18,32 +18,36 @@ import (
 	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/pipeline"
+	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
+	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
 	"github.com/smackerel/smackerel/internal/topics"
 	"github.com/smackerel/smackerel/internal/web"
 )
 
 // coreServices holds all runtime dependencies built during startup.
 type coreServices struct {
-	pg                *db.Postgres
-	nc                *smacknats.Client
-	guestRepo         *db.GuestRepository
-	propertyRepo      *db.PropertyRepository
-	hospitalityLinker *graph.HospitalityLinker
-	registry          *connector.Registry
-	supervisor        *connector.Supervisor
-	resultSub         *pipeline.ResultSubscriber
-	synthesisSub      *pipeline.SynthesisResultSubscriber
-	domainSub         *pipeline.DomainResultSubscriber
-	knowledgeStore    *knowledge.KnowledgeStore
-	proc              *pipeline.Processor
-	searchEngine      *api.SearchEngine
-	digestGen         *digest.Generator
-	intEngine         *intelligence.Engine
-	topicLifecycle    *topics.Lifecycle
-	tokenStore        *auth.TokenStore
-	oauthHandler      *auth.OAuthHandler
-	webHandler        *web.Handler
-	contextHandler    *api.ContextHandler
+	pg                     *db.Postgres
+	nc                     *smacknats.Client
+	guestRepo              *db.GuestRepository
+	propertyRepo           *db.PropertyRepository
+	hospitalityLinker      *graph.HospitalityLinker
+	registry               *connector.Registry
+	supervisor             *connector.Supervisor
+	resultSub              *pipeline.ResultSubscriber
+	synthesisSub           *pipeline.SynthesisResultSubscriber
+	domainSub              *pipeline.DomainResultSubscriber
+	knowledgeStore         *knowledge.KnowledgeStore
+	proc                   *pipeline.Processor
+	searchEngine           *api.SearchEngine
+	digestGen              *digest.Generator
+	intEngine              *intelligence.Engine
+	topicLifecycle         *topics.Lifecycle
+	tokenStore             *auth.TokenStore
+	oauthHandler           *auth.OAuthHandler
+	webHandler             *web.Handler
+	contextHandler         *api.ContextHandler
+	recommendationStore    *recstore.Store
+	recommendationRegistry *recprovider.Registry
 }
 
 // buildCoreServices constructs all infrastructure and service dependencies.
@@ -185,8 +189,15 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 	slog.Info("OAuth handler initialized")
 
 	// Create web UI handler
+	svc.recommendationStore = recstore.New(svc.pg.Pool)
+	svc.recommendationRegistry = recprovider.RuntimeRegistry()
 	svc.webHandler = web.NewHandler(svc.pg.Pool, svc.nc, time.Now())
 	svc.webHandler.KnowledgeStore = svc.knowledgeStore
+	svc.webHandler.RecommendationsEnabled = cfg.Recommendations.Enabled
+	svc.webHandler.RecommendationProviders = recprovider.DefaultRegistry
+	svc.webHandler.RecommendationStore = svc.recommendationStore
+	svc.webHandler.RecommendationRegistry = svc.recommendationRegistry
+	svc.webHandler.RecommendationConfig = cfg.Recommendations
 
 	// Create context enrichment handler for GuestHost connector
 	svc.contextHandler = api.NewContextHandler(svc.guestRepo, svc.propertyRepo, svc.pg.Pool)

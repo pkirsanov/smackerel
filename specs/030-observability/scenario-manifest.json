@@ -1,0 +1,175 @@
+{
+  "version": 2,
+  "specId": "030",
+  "featureDir": "specs/030-observability",
+  "generatedBy": "bubbles.docs",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-OBS-001",
+      "name": "Metrics endpoint returns Prometheus format",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/030-observability/scopes.md#L34",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/metrics/metrics_test.go", "function": "TestHandler_ReturnsPrometheusFormat"},
+        {"file": "internal/metrics/metrics_test.go", "function": "TestMetricsRegistered"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/metrics/metrics_test.go::TestHandler_ReturnsPrometheusFormat"},
+        {"type": "source", "location": "internal/metrics/metrics.go::Handler"}
+      ],
+      "linkedDoD": [
+        "internal/metrics/metrics.go exists with all metric definitions",
+        "GET /metrics returns valid Prometheus format",
+        "Metrics endpoint is unauthenticated"
+      ]
+    },
+    {
+      "scenarioId": "SCN-OBS-002",
+      "name": "Artifact ingestion is counted",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/030-observability/scopes.md#L66",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/metrics/metrics_test.go", "function": "TestCounterIncrement"},
+        {"file": "internal/metrics/metrics_test.go", "function": "TestMetricsRegistered"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/metrics/metrics_test.go::TestCounterIncrement"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::handleMessage"}
+      ],
+      "linkedDoD": [
+        "Ingestion counter incremented per artifact",
+        "Capture counter per source"
+      ]
+    },
+    {
+      "scenarioId": "SCN-OBS-003",
+      "name": "Search latency is recorded",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/030-observability/scopes.md#L71",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/metrics/metrics_test.go", "function": "TestHistogramObserve"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/metrics/metrics_test.go::TestHistogramObserve"},
+        {"type": "source", "location": "internal/api/search.go::SearchHandler"}
+      ],
+      "linkedDoD": [
+        "Search latency histogram observed per request"
+      ]
+    },
+    {
+      "scenarioId": "SCN-OBS-005",
+      "name": "Connector sync outcome is counted per connector",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/030-observability/scopes.md#scope-3-connector-sync-metrics",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/metrics/metrics_test.go", "function": "TestConnectorSyncCounter"},
+        {"file": "internal/metrics/metrics_test.go", "function": "TestGaugeSet"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/metrics/metrics_test.go::TestConnectorSyncCounter"},
+        {"type": "source", "location": "internal/connector/supervisor.go::Sync"},
+        {"type": "source", "location": "internal/db/postgres.go::Healthy"}
+      ],
+      "linkedDoD": [
+        "smackerel_connector_sync_total{connector, status} counter",
+        "Connector names from allowlist (15 registered connectors)",
+        "DB connection pool gauge: smackerel_db_connections_active"
+      ]
+    },
+    {
+      "scenarioId": "SCN-OBS-006",
+      "name": "NATS dead-letter publish is counted per stream",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/030-observability/scopes.md#scope-3-connector-sync-metrics",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/metrics/metrics_test.go", "function": "TestNATSDeadLetterCounter"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/metrics/metrics_test.go::TestNATSDeadLetterCounter"},
+        {"type": "source", "location": "internal/pipeline/subscriber.go::publishToDeadLetter"}
+      ],
+      "linkedDoD": [
+        "NATS dead letter counter: smackerel_nats_deadletter_total{stream}"
+      ]
+    },
+    {
+      "scenarioId": "SCN-OBS-007",
+      "name": "ML sidecar exposes Prometheus metrics endpoint",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/030-observability/scopes.md#scope-4-ml-sidecar-metrics",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_metrics.py", "function": "test_metrics_returns_200"},
+        {"file": "ml/tests/test_metrics.py", "function": "test_metrics_contains_llm_counter"},
+        {"file": "ml/tests/test_metrics.py", "function": "test_metrics_contains_processing_latency"},
+        {"file": "ml/tests/test_metrics.py", "function": "test_metrics_unauthenticated"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_metrics.py::test_metrics_returns_200"},
+        {"type": "source", "location": "ml/app/main.py::/metrics"}
+      ],
+      "linkedDoD": [
+        "prometheus_client added to ml/requirements.txt",
+        "GET /metrics on ML sidecar returns Prometheus format"
+      ]
+    },
+    {
+      "scenarioId": "SCN-OBS-008",
+      "name": "LLM token usage is counted per provider and model",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/030-observability/scopes.md#scope-4-ml-sidecar-metrics",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_metrics.py", "function": "test_increment_with_labels"},
+        {"file": "ml/tests/test_metrics.py", "function": "test_different_labels_independent"},
+        {"file": "ml/tests/test_metrics.py", "function": "test_unknown_model_mapped_to_other"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_metrics.py::test_increment_with_labels"},
+        {"type": "source", "location": "ml/app/metrics.py::llm_tokens_used"},
+        {"type": "source", "location": "ml/app/nats_client.py::_consume_loop"}
+      ],
+      "linkedDoD": [
+        "smackerel_llm_tokens_used_total{provider, model} counter",
+        "Processing latency histogram per operation type",
+        "Label cardinality bounded (<10 model values)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-OBS-004",
+      "name": "Trace spans NATS boundary",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/030-observability/scopes.md#L133",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/metrics/trace_test.go", "function": "TestTraceHeaders_WithTraceID"},
+        {"file": "internal/metrics/trace_test.go", "function": "TestExtractTraceID"},
+        {"file": "internal/metrics/trace_test.go", "function": "TestTraceRoundTrip"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/metrics/trace_test.go::TestTraceRoundTrip"},
+        {"type": "source", "location": "internal/metrics/trace.go::TraceHeaders"},
+        {"type": "source", "location": "internal/nats/client.go::PublishWithHeaders"}
+      ],
+      "linkedDoD": [
+        "Trace context injected into NATS message headers",
+        "Tracing disabled by default (zero overhead when off)"
+      ]
+    }
+  ]
+}

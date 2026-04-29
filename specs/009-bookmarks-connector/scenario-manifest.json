@@ -1,0 +1,205 @@
+{
+  "version": 2,
+  "specId": "009",
+  "featureDir": "specs/009-bookmarks-connector",
+  "generatedBy": "BUG-009-001 traceability remediation",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BK-001",
+      "name": "Connector lifecycle (connect, sync, health, close)",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestConnectorID"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestConnectValidConfig"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncChromeJSON"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestHealthTransitions"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestCloseResetsHealth"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestConnectorID"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestSyncChromeJSON"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestHealthTransitions"},
+        {"type": "source", "location": "internal/connector/bookmarks/connector.go::Connect"},
+        {"type": "source", "location": "internal/connector/bookmarks/connector.go::Sync"}
+      ],
+      "linkedDoD": ["BookmarksConnector implements ID, Connect, Sync, Health, Close per R-001"]
+    },
+    {
+      "scenarioId": "SCN-BK-002",
+      "name": "Auto-format detection routes to correct parser",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncChromeJSON"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncNetscapeHTML"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncHTMExtension"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncSkipsUnknownFormat"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestSyncNetscapeHTML"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestSyncSkipsUnknownFormat"},
+        {"type": "source", "location": "internal/connector/bookmarks/connector.go::processFile"}
+      ],
+      "linkedDoD": ["Format detection routes .json -> ParseChromeJSON(), .html/.htm -> ParseNetscapeHTML(), unknown -> skip with log"]
+    },
+    {
+      "scenarioId": "SCN-BK-003",
+      "name": "Incremental sync skips already-processed files",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncIncrementalSkipsProcessed"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestCursorEncodeDecodeCycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestSyncIncrementalSkipsProcessed"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestCursorEncodeDecodeCycle"},
+        {"type": "source", "location": "internal/connector/bookmarks/connector.go::findNewFiles"}
+      ],
+      "linkedDoD": ["Cursor management: JSON-encoded processed file list, incremental sync skips already-processed files"]
+    },
+    {
+      "scenarioId": "SCN-BK-004",
+      "name": "Config validation rejects invalid settings",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestConnectMissingImportDir"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestConnectEmptyImportDir"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestParseConfigDefaults"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestConnectMissingImportDir"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestConnectEmptyImportDir"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestParseConfigDefaults"},
+        {"type": "source", "location": "internal/connector/bookmarks/connector.go::Connect"},
+        {"type": "source", "location": "internal/connector/bookmarks/connector.go::parseConfig"}
+      ],
+      "linkedDoD": ["Scenario SCN-BK-004 - Config validation rejects invalid settings (missing import_dir, non-existent path, disabled flag) is delivered and tested"]
+    },
+    {
+      "scenarioId": "SCN-BK-005",
+      "name": "Corrupted export file is skipped without failing sync",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncCorruptedFileSkipped"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncCorruptedExportNoPanic"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestSyncCorruptedFileSkipped"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestSyncCorruptedExportNoPanic"},
+        {"type": "source", "location": "internal/connector/bookmarks/connector.go::processFile"}
+      ],
+      "linkedDoD": ["Corrupted export files are logged and skipped without crashing the sync"]
+    },
+    {
+      "scenarioId": "SCN-BK-006",
+      "name": "URL dedup prevents reprocessing same URL across exports",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/dedup_test.go", "function": "TestFilterNew_NilPool"},
+        {"file": "internal/connector/bookmarks/dedup_test.go", "function": "TestFilterNew_EmptyArtifacts"},
+        {"file": "internal/connector/bookmarks/dedup_test.go", "function": "TestFilterNew_NilArtifacts"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/dedup_test.go::TestFilterNew_NilPool"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/dedup_test.go::TestFilterNew_EmptyArtifacts"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/dedup_test.go::TestFilterNew_NilArtifacts"},
+        {"type": "source", "location": "internal/connector/bookmarks/dedup.go::FilterNew"},
+        {"type": "source", "location": "internal/connector/bookmarks/connector.go::Sync"}
+      ],
+      "linkedDoD": ["Scenario SCN-BK-006 - URL dedup prevents reprocessing same URL across exports is delivered and tested"]
+    },
+    {
+      "scenarioId": "SCN-BK-007",
+      "name": "URL normalization strips tracking parameters",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/dedup_test.go", "function": "TestNormalizeURL_Lowercase"},
+        {"file": "internal/connector/bookmarks/dedup_test.go", "function": "TestNormalizeURL_StripTrailingSlash"},
+        {"file": "internal/connector/bookmarks/dedup_test.go", "function": "TestNormalizeURL_StripUTMParams"},
+        {"file": "internal/connector/bookmarks/dedup_test.go", "function": "TestNormalizeURL_PreservesPath"},
+        {"file": "internal/connector/bookmarks/dedup_test.go", "function": "TestNormalizeURL_InvalidURL"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/dedup_test.go::TestNormalizeURL_Lowercase"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/dedup_test.go::TestNormalizeURL_StripTrailingSlash"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/dedup_test.go::TestNormalizeURL_StripUTMParams"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/dedup_test.go::TestNormalizeURL_PreservesPath"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/dedup_test.go::TestNormalizeURL_InvalidURL"},
+        {"type": "source", "location": "internal/connector/bookmarks/dedup.go::NormalizeURL"}
+      ],
+      "linkedDoD": ["Scenario SCN-BK-007 - URL normalization strips tracking parameters, lowercases scheme+host, removes trailing slash, and is robust to invalid input is delivered and tested"]
+    },
+    {
+      "scenarioId": "SCN-BK-008",
+      "name": "Folder hierarchy maps to topic graph",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/topics_test.go", "function": "TestMapFolder_EmptyPath"},
+        {"file": "internal/connector/bookmarks/topics_test.go", "function": "TestTopicMapper_NilPool"},
+        {"file": "internal/connector/bookmarks/topics_test.go", "function": "TestTopicMatch_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/topics_test.go::TestMapFolder_EmptyPath"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/topics_test.go::TestTopicMapper_NilPool"},
+        {"type": "unit-test", "location": "internal/connector/bookmarks/topics_test.go::TestTopicMatch_Fields"},
+        {"type": "source", "location": "internal/connector/bookmarks/topics.go::MapFolder"},
+        {"type": "source", "location": "internal/connector/bookmarks/topics.go::CreateParentEdge"},
+        {"type": "source", "location": "internal/connector/bookmarks/topics.go::CreateTopicEdge"}
+      ],
+      "linkedDoD": ["Scenario SCN-BK-008 - Folder hierarchy maps to topic graph (BELONGS_TO + CHILD_OF edges, root-level bookmarks have no edges) is delivered and tested"]
+    },
+    {
+      "scenarioId": "SCN-BK-009",
+      "name": "Topic resolution uses exact then fuzzy then create cascade",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/topics_test.go", "function": "TestTopicMapper_NilPool"},
+        {"file": "internal/connector/bookmarks/topics_test.go", "function": "TestTopicMatch_Fields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/topics_test.go::TestTopicMapper_NilPool"},
+        {"type": "source", "location": "internal/connector/bookmarks/topics.go::resolveSegment"},
+        {"type": "source", "location": "internal/connector/bookmarks/topics.go::fuzzyMatch"}
+      ],
+      "linkedDoD": ["Folder-to-topic 3-stage cascade works (exact -> fuzzy -> create)"]
+    },
+    {
+      "scenarioId": "SCN-BK-010",
+      "name": "Full end-to-end: export to searchable artifacts with topics",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncChromeJSON"},
+        {"file": "internal/connector/bookmarks/connector_test.go", "function": "TestSyncIncrementalSkipsProcessed"},
+        {"file": "internal/connector/bookmarks/dedup_test.go", "function": "TestFilterNew_NilPool"},
+        {"file": "internal/connector/bookmarks/topics_test.go", "function": "TestTopicMapper_NilPool"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/bookmarks/connector_test.go::TestSyncChromeJSON"},
+        {"type": "source", "location": "internal/connector/bookmarks/connector.go::Sync"},
+        {"type": "source", "location": "internal/connector/bookmarks/dedup.go::FilterNew"},
+        {"type": "source", "location": "internal/connector/bookmarks/topics.go::MapFolder"}
+      ],
+      "linkedDoD": ["Full end-to-end flow verified: export -> parse -> dedup -> topic map -> NATS publish -> DB artifacts with edges"]
+    }
+  ]
+}

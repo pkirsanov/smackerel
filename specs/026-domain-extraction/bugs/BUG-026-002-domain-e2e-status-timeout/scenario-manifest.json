@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "featureDir": "specs/026-domain-extraction/bugs/BUG-026-002-domain-e2e-status-timeout",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-026-002-SCN-001",
+      "scope": "scope-1-restore-domain-extraction-live-stack-status-proof",
+      "title": "Recipe capture completes domain extraction in the live stack",
+      "gherkin": {
+        "given": "the disposable live stack is healthy",
+        "when": "an E2E test captures recipe-like text",
+        "then": "artifact detail reports completed processing, completed domain extraction, and recipe domain data"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/domain_e2e_test.go",
+          "testId": "TestE2E_DomainExtraction"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-002-SCN-002",
+      "scope": "scope-1-restore-domain-extraction-live-stack-status-proof",
+      "title": "Domain extraction regression fails on empty statuses",
+      "gherkin": {
+        "given": "artifact detail returns empty processing or domain extraction status",
+        "when": "the E2E polling loop evaluates the artifact",
+        "then": "the test fails with diagnostics instead of treating extraction as complete"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/domain_e2e_test.go",
+          "testId": "empty domain status regression"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

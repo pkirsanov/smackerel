@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "specId": "002",
+  "bugId": "BUG-002-001-traceability-gaps",
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-001-traceability-gaps",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-04-27T03:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-002-FIX-001",
+      "name": "Trace guard accepts spec 002 with full manifest, complete report file references, and SCN-002-080 Test Plan row",
+      "scope": "scope-1",
+      "status": "active",
+      "requiredTestType": ["artifact"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/traceability-guard.sh"},
+        {"file": ".github/bubbles/scripts/artifact-lint.sh"}
+      ],
+      "evidenceRefs": [
+        {"type": "artifact-script", "location": ".github/bubbles/scripts/traceability-guard.sh"},
+        {"type": "artifact-script", "location": ".github/bubbles/scripts/artifact-lint.sh"}
+      ],
+      "linkedDoD": [
+        "specs/002-phase1-foundation/scenario-manifest.json contains 82 scenario entries covering SCN-002-001 through SCN-002-082",
+        "specs/002-phase1-foundation/report.md literally contains the four flagged test-file paths",
+        "specs/002-phase1-foundation/scopes.md Scope 24 Test Plan has a row mapping SCN-002-080 to an existing concrete test file",
+        "Traceability-guard PASSES against specs/002-phase1-foundation",
+        "Artifact-lint PASSES against parent and bug folder"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-003-capture-processing-timeout",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-031-003-SCN-001",
+      "scope": "scope-1-restore-capture-process-search-live-stack-proof",
+      "title": "Capture process search pipeline reaches processed status",
+      "gherkin": {
+        "given": "the disposable live stack is healthy",
+        "when": "an E2E test captures a unique text artifact",
+        "then": "artifact detail reports processing_status as processed or completed and search returns the artifact"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/capture_process_search_test.go",
+          "testId": "TestE2E_CaptureProcessSearch"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "report.md#validation-diagnostic-2026-04-28-broad-e2e-unblock",
+        "report.md#test-phase-evidence-2026-04-28"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-031-003-SCN-002",
+      "scope": "scope-1-restore-capture-process-search-live-stack-proof",
+      "title": "Capture process search regression fails on empty processing status",
+      "gherkin": {
+        "given": "artifact detail omits or empties processing_status",
+        "when": "the E2E polling loop evaluates the artifact",
+        "then": "the test fails with diagnostics instead of treating the artifact as processed"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/capture_process_search_test.go",
+          "testId": "empty processing_status regression"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "report.md#validation-diagnostic-2026-04-28-broad-e2e-unblock",
+        "report.md#test-phase-evidence-2026-04-28"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

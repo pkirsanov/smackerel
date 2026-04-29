@@ -1027,6 +1027,31 @@ func TestIsMLHealthy_ZeroTTL_ReturnsUnhealthy(t *testing.T) {
 	}
 }
 
+func TestSCN002023_VectorSearchRejectsLowConfidenceUnfilteredResults(t *testing.T) {
+	if vectorSearchConfidencePasses(0.39, SearchFilters{}) {
+		t.Fatal("unfiltered semantic search must reject low-confidence nearest-neighbor artifacts")
+	}
+}
+
+func TestSCN002023_VectorSearchUsesRawSimilarityBeforeAnnotationBoost(t *testing.T) {
+	rating := 5
+	uses := 10
+	boosted := applyAnnotationBoost(0.35, &rating, &uses)
+	if boosted <= minVectorSearchSimilarity {
+		t.Fatalf("test setup expected annotation boost above threshold, got %.2f", boosted)
+	}
+	if vectorSearchConfidencePasses(0.35, SearchFilters{}) {
+		t.Fatal("annotation boosts must not promote a low raw semantic match into an unfiltered result")
+	}
+}
+
+func TestSCN002023_VectorSearchAllowsExplicitFilters(t *testing.T) {
+	filters := SearchFilters{Type: "article"}
+	if !vectorSearchConfidencePasses(0.10, filters) {
+		t.Fatal("explicitly filtered search should preserve filtered result behavior")
+	}
+}
+
 func TestIsMLHealthy_ConcurrentProbes_Coalesced(t *testing.T) {
 	// Start a test HTTP server that counts how many probes it receives
 	var probeCount atomic.Int32

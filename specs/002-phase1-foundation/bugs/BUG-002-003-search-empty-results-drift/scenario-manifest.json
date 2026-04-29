@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-003-search-empty-results-drift",
+  "generatedAt": "2026-04-28T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-002-003-SCN-001",
+      "scope": "scope-1-restore-search-empty-results-live-stack-contract",
+      "title": "Unknown query returns honest empty result",
+      "gherkin": {
+        "given": "the disposable live stack contains artifacts unrelated to a deliberately unknown query",
+        "when": "the user searches for that unknown query",
+        "then": "the search response contains zero results and the honest nothing-found message"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/test_search.sh",
+          "testId": "SCN-002-023"
+        },
+        {
+          "file": "tests/e2e/test_search_empty.sh",
+          "testId": "SCN-002-023"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-002-003-SCN-002",
+      "scope": "scope-1-restore-search-empty-results-live-stack-contract",
+      "title": "Empty-results regression rejects leaked broad-suite artifacts",
+      "gherkin": {
+        "given": "prior E2E scenarios have created searchable artifacts",
+        "when": "the empty-results scenario runs in the same broad suite",
+        "then": "unrelated artifacts are not returned as matches for the unknown query"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/test_search.sh",
+          "testId": "unknown query leakage regression"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

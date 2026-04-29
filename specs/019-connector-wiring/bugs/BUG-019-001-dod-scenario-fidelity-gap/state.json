@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "019-connector-wiring",
+  "bugId": "BUG-019-001-dod-scenario-fidelity-gap",
+  "featureDir": "specs/019-connector-wiring/bugs/BUG-019-001-dod-scenario-fidelity-gap",
+  "featureName": "BUG-019-001: DoD scenario fidelity gap (SCN-019-002/003/004/005)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T02:00:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: replaced 3 wildcard *_test.go Test Plan rows in specs/019-connector-wiring/scopes.md with concrete file-path rows for SCN-019-002, SCN-019-003, SCN-019-004; added 2 trace-ID-bearing DoD bullets (Scenario SCN-019-002 and Scenario SCN-019-003) with raw `go test` output and source-file pointers; appended BUG-019-001 cross-reference section to specs/019-connector-wiring/report.md spelling internal/api/health_test.go verbatim. No production code changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Underlying behavior tests for SCN-019-002/003/005 + TestAllConnectorsRegistered all PASS: `go test -count=1 -v -run ...` exit 0 across internal/connector/discord, internal/connector/twitter, internal/connector/markets, internal/connector/alerts, internal/api, cmd/core (14/14 PASS). Output recorded inline in report.md > Test Evidence."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:20:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability guard PASS: `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/019-connector-wiring` returns RESULT: PASSED (0 warnings) with 6/6 scenarios mapped to DoD, 6 concrete test file references, 6 report evidence references. Pre-fix baseline was RESULT: FAILED (7 failures, 2 unmapped scenarios + 3 missing concrete paths + 1 missing report path + aggregate). Output recorded inline in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:25:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (`bash .github/bubbles/scripts/artifact-lint.sh specs/019-connector-wiring`) and bug folder (`bash .github/bubbles/scripts/artifact-lint.sh specs/019-connector-wiring/bugs/BUG-019-001-dod-scenario-fidelity-gap`). git diff --name-only confirms boundary: zero changes under internal/, cmd/, ml/, config/, scripts/, tests/. All edits confined to specs/019-connector-wiring/scopes.md, specs/019-connector-wiring/report.md, and the bug folder."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T02:25:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

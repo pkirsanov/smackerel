@@ -59,8 +59,8 @@ func TestDuplicateError_Message(t *testing.T) {
 }
 
 func TestDuplicateError_ImplementsError(t *testing.T) {
-	var err error = &DuplicateError{ExistingID: "x", Title: "y"}
-	if err == nil {
+	var value any = &DuplicateError{ExistingID: "x", Title: "y"}
+	if _, ok := value.(error); !ok {
 		t.Error("should implement error interface")
 	}
 }
@@ -157,6 +157,27 @@ func TestNATSProcessedPayload_Failure(t *testing.T) {
 	}
 	if decoded.Error != "LLM timeout after 30s" {
 		t.Errorf("expected error message, got %q", decoded.Error)
+	}
+}
+
+func TestResolveProcessedArtifactType_PreservesRecipeFromBroadMLType(t *testing.T) {
+	got := resolveProcessedArtifactType("recipe", "note")
+	if got != "recipe" {
+		t.Fatalf("expected recipe type to survive broad ML classification, got %q", got)
+	}
+}
+
+func TestResolveProcessedArtifactType_UsesSpecificMLType(t *testing.T) {
+	got := resolveProcessedArtifactType("generic", "recipe")
+	if got != "recipe" {
+		t.Fatalf("expected specific ML type to be used, got %q", got)
+	}
+}
+
+func TestResolveProcessedArtifactType_DoesNotPreserveGenericFromNote(t *testing.T) {
+	got := resolveProcessedArtifactType("generic", "note")
+	if got != "note" {
+		t.Fatalf("expected generic existing type to be replaced by note, got %q", got)
 	}
 }
 

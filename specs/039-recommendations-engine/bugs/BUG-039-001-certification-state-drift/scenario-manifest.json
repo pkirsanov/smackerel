@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "featureDir": "specs/039-recommendations-engine/bugs/BUG-039-001-certification-state-drift",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-039-001-SCN-001",
+      "scope": "scope-1-route-validate-owned-039-state-reconciliation",
+      "title": "Validate reconciles active 039 state without certifying completion",
+      "gherkin": {
+        "given": "039 Scope 1 is in progress and top-level state status is in_progress",
+        "when": "validate reconciles certification-owned status fields",
+        "then": "certification status reflects active work and Scope 1 is not marked done"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "artifact",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "specs/039-recommendations-engine/state.json",
+          "testId": "artifact-lint status coherence"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-039-001-SCN-002",
+      "scope": "scope-1-route-validate-owned-039-state-reconciliation",
+      "title": "Artifact lint passes the 039 status coherence check",
+      "gherkin": {
+        "given": "validate has reconciled certification-owned status fields",
+        "when": "artifact lint runs for specs/039-recommendations-engine",
+        "then": "status coherence passes and unrelated broad E2E blockers remain routed"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "artifact",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "specs/039-recommendations-engine/state.json",
+          "testId": "artifact-lint after validate reconciliation"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

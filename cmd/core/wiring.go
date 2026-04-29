@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/annotation"
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/drive"
+	"github.com/smackerel/smackerel/internal/drive/google"
 	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	"github.com/smackerel/smackerel/internal/list"
@@ -66,6 +69,21 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
 		AgentAdminHandler:               web.NewAgentAdminHandler(svc.pg.Pool),
+		DriveHandlers:                   api.NewDriveHandlersWithPool(drive.DefaultRegistry, svc.pg.Pool),
+		RecommendationHandlers:          api.NewRecommendationHandlers(svc.recommendationStore, svc.recommendationRegistry, cfg.Recommendations),
+	}
+
+	if provider, ok := drive.DefaultRegistry.Get("google"); ok {
+		if googleProvider, ok := provider.(*google.Provider); ok {
+			caps := googleProvider.Capabilities()
+			caps.MaxFileSizeBytes = cfg.Drive.Limits.MaxFileSizeBytes
+			googleProvider.Configure(caps)
+			googleProvider.ConfigureRuntime(svc.pg.Pool, http.DefaultClient, cfg.Drive.Providers.Google)
+		} else {
+			slog.Warn("registered google drive provider has unexpected type", "type", "not *google.Provider")
+		}
+	} else {
+		slog.Warn("google drive provider is not registered")
 	}
 
 	// Wire annotation handlers (spec 027)

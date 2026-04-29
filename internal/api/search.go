@@ -102,8 +102,36 @@ type SearchEngine struct {
 	healthProbeMu sync.Mutex
 }
 
-// maxQueryLen limits search query length to prevent abuse.
-const maxQueryLen = 10000
+const (
+	// maxQueryLen limits search query length to prevent abuse.
+	maxQueryLen = 10000
+
+	// minVectorSearchSimilarity rejects unfiltered nearest-neighbor artifacts that are
+	// semantically too weak to be honest search results.
+	minVectorSearchSimilarity = 0.40
+)
+
+func vectorSearchConfidencePasses(rawSimilarity float64, filters SearchFilters) bool {
+	if hasExplicitSearchFilter(filters) {
+		return true
+	}
+	return rawSimilarity > minVectorSearchSimilarity
+}
+
+func hasExplicitSearchFilter(filters SearchFilters) bool {
+	return filters.Type != "" ||
+		filters.DateFrom != "" ||
+		filters.DateTo != "" ||
+		filters.Person != "" ||
+		filters.Topic != "" ||
+		filters.Domain != "" ||
+		filters.Ingredient != "" ||
+		filters.PriceMax > 0 ||
+		filters.MinRating != nil ||
+		filters.MaxRating != nil ||
+		filters.Tag != "" ||
+		filters.HasInteraction
+}
 
 // SearchHandler handles POST /api/search.
 func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
@@ -316,6 +344,14 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	results, total, err := s.vectorSearch(ctx, embedding, req)
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("vector search: %w", err)
+	}
+	if len(results) == 0 {
+		textResults, textTotal, textErr := s.textSearch(ctx, req)
+		if textErr != nil {
+			slog.Warn("text fallback after empty vector search failed", "error", textErr, "query", req.Query)
+		} else if len(textResults) > 0 {
+			return textResults, textTotal, "text_fallback", nil
+		}
 	}
 
 	// Step 5: Graph expansion — find related artifacts via knowledge graph edges
@@ -565,6 +601,7 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		}
 
 		// Apply annotation boost (small enough not to overwhelm semantics)
+		rawSimilarity := similarity
 		similarity = applyAnnotationBoost(similarity, annRating, annTimesUsed)
 
 		// Apply domain score boost (+0.15 capped at 1.0) when a domain filter matched
@@ -573,6 +610,10 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 			if similarity > 1.0 {
 				similarity = 1.0
 			}
+		}
+
+		if !vectorSearchConfidencePasses(rawSimilarity, req.Filters) {
+			continue
 		}
 
 		// Parse topics
@@ -805,8 +846,18 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 		       COALESCE(topics::text, '[]'), created_at,
 		       similarity(title, $1) AS sim
 		FROM artifacts
-		WHERE title % $1 OR summary ILIKE '%' || $2 || '%'
-		ORDER BY sim DESC
+		WHERE title % $1
+		   OR title ILIKE '%' || $2 || '%' ESCAPE '\'
+		   OR summary ILIKE '%' || $2 || '%' ESCAPE '\'
+		   OR content_raw ILIKE '%' || $2 || '%' ESCAPE '\'
+		   OR to_tsvector('simple', title || ' ' || COALESCE(summary, '') || ' ' || COALESCE(content_raw, '')) @@ websearch_to_tsquery('simple', $1)
+		ORDER BY CASE
+			WHEN title ILIKE '%' || $2 || '%' ESCAPE '\' THEN 3
+			WHEN summary ILIKE '%' || $2 || '%' ESCAPE '\' THEN 2
+			WHEN content_raw ILIKE '%' || $2 || '%' ESCAPE '\' THEN 1
+			WHEN to_tsvector('simple', title || ' ' || COALESCE(summary, '') || ' ' || COALESCE(content_raw, '')) @@ websearch_to_tsquery('simple', $1) THEN 1
+			ELSE 0
+		END DESC, sim DESC, created_at DESC
 		LIMIT $3
 	`, req.Query, safeQuery, req.Limit)
 	if err != nil {

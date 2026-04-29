@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "020-security-hardening",
+  "bugId": "BUG-020-001-dod-scenario-fidelity-gap",
+  "featureDir": "specs/020-security-hardening/bugs/BUG-020-001-dod-scenario-fidelity-gap",
+  "featureName": "BUG-020-001: DoD scenario fidelity gap (SCN-020-001/002/006/013/014)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T02:30:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:35:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: added 5 trace-ID-bearing DoD bullets (SCN-020-001 and SCN-020-002 in Scope 1; SCN-020-006 in Scope 2; SCN-020-013 and SCN-020-014 in Scope 3) to specs/020-security-hardening/scopes.md with raw go test / pytest output and source-file pointers; generated specs/020-security-hardening/scenario-manifest.json covering all 18 SCN-020-* scenarios; inserted in-process proxy Test Plan rows at the top of Scope 1 mapping SCN-020-001..004 to internal/config/docker_security_test.go::TestDockerCompose_AllPortsBindLocalhost and TestDockerCompose_NATSUsesConfigFile; appended BUG-020-001 cross-reference section to specs/020-security-hardening/report.md referencing internal/config/docker_security_test.go, internal/auth/oauth_test.go, ml/tests/test_auth.py, and cmd/core/main_test.go. No production code changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:40:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Underlying behavior tests for SCN-020-001/002/006/013/014 all PASS: `go test -count=1 -v -run 'TestDockerCompose_AllPortsBindLocalhost$|TestDockerCompose_NATSUsesConfigFile$' ./internal/config/` exit 0 (2/2 PASS); `go test -count=1 -v -run 'TestTokenStore_Decrypt_FailClosed_*|TestTokenStore_Decrypt_NoKey_PlaintextPassthrough$|TestTokenStore_Decrypt_WrongKey_FailClosed$' ./internal/auth/` exit 0 (5/5 PASS); `pytest ml/tests/test_auth.py::TestMLSidecarAuthWithToken::test_accept_bearer_token ml/tests/test_auth.py::TestMLSidecarAuthWithToken::test_accept_x_auth_token_header -v` exit 0 (2/2 PASSED). Output recorded inline in scopes.md DoD evidence and report.md > Test Evidence."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:45:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability guard PASS: `bash .github/bubbles/scripts/traceability-guard.sh specs/020-security-hardening` returns RESULT: PASSED (0 warnings) with 18/18 scenarios mapped to DoD and full concrete test file + report evidence coverage. Pre-fix baseline was RESULT: FAILED (14 failures, 5 unmapped scenarios). Output recorded inline in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:50:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (`bash .github/bubbles/scripts/artifact-lint.sh specs/020-security-hardening`) and bug folder (`bash .github/bubbles/scripts/artifact-lint.sh specs/020-security-hardening/bugs/BUG-020-001-dod-scenario-fidelity-gap`). git diff --name-only confirms boundary: zero changes under internal/, cmd/, ml/, config/, tests/. All edits confined to specs/020-security-hardening/* and the bug folder."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T02:50:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

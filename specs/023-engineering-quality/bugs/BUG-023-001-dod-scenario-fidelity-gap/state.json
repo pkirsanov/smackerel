@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "023-engineering-quality",
+  "bugId": "BUG-023-001-dod-scenario-fidelity-gap",
+  "featureDir": "specs/023-engineering-quality/bugs/BUG-023-001-dod-scenario-fidelity-gap",
+  "featureName": "BUG-023-001: DoD scenario fidelity gap (SCN-023-01/02/04/06/07)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T03:00:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: added 5 trace-ID-bearing DoD bullets (SCN-023-01/02 in Scope 1; SCN-023-04/06/07 in Scope 2) to specs/023-engineering-quality/scopes.md with raw `go test`/`go build` output and source-file pointers; generated specs/023-engineering-quality/scenario-manifest.json covering all 9 SCN-023-* scenarios; inserted bridge Test Plan rows referencing internal/api/health_test.go, internal/api/intelligence_test.go, internal/config/validate_test.go, internal/connector/sync_interval_test.go in all 3 Scope Test Plan tables; appended BUG-023-001 cross-reference section to specs/023-engineering-quality/report.md. No production code changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:20:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Underlying behavior tests for SCN-023-01/02/04/06/07 all PASS: `go test -count=1 -v ./internal/api/ ./internal/config/` exit 0 with the 14 named tests for these scenarios all PASS. Output recorded inline in report.md > BUG-023-001 section."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability guard PASS: `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/023-engineering-quality` returns RESULT: PASSED (0 warnings) with 9/9 scenarios mapped to DoD, 9 concrete test file references, 9 report evidence references. Pre-fix baseline was RESULT: FAILED (16 failures, 5 unmapped scenarios). Output recorded inline in report.md > Post-fix Traceability Guard Output."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:35:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (`bash .github/bubbles/scripts/artifact-lint.sh specs/023-engineering-quality`) and bug folder (`bash .github/bubbles/scripts/artifact-lint.sh specs/023-engineering-quality/bugs/BUG-023-001-dod-scenario-fidelity-gap`). git diff --name-only confirms boundary: zero changes under internal/, cmd/, ml/, config/, tests/. All edits confined to specs/023-engineering-quality/* and the bug folder."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T03:35:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

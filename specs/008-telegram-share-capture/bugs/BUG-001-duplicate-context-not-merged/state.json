@@ -1,0 +1,91 @@
+{
+  "version": 3,
+  "bugId": "BUG-001",
+  "parentFeatureDir": "specs/008-telegram-share-capture",
+  "parentScope": 1,
+  "title": "Duplicate URL share discards new context server-side",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "filedAt": "2026-04-26T17:05:00Z",
+  "filedBy": "bubbles.workflow",
+  "fixedAt": "2026-04-26T17:05:00Z",
+  "lastUpdated": "2026-04-27T00:00:00Z",
+  "fixApproach": "option-a-server-side-merge",
+  "filesModified": [
+    "internal/pipeline/merge.go",
+    "internal/pipeline/merge_test.go",
+    "internal/pipeline/processor.go",
+    "tests/integration/capture_duplicate_context_test.go"
+  ],
+  "tests": {
+    "unit": {
+      "command": "./smackerel.sh test unit",
+      "result": "pass",
+      "newTests": [
+        "internal/pipeline/merge_test.go::TestMergeUserContext_AppendsContextToMetadata",
+        "internal/pipeline/merge_test.go::TestMergeUserContext_NoOpOnEmptyContext",
+        "internal/pipeline/merge_test.go::TestMergeUserContext_NoOpOnEmptyArtifactID",
+        "internal/pipeline/merge_test.go::TestMergeUserContext_PropagatesExecError",
+        "internal/pipeline/merge_test.go::TestMergeUserContext_NilExecutorReturnsError"
+      ]
+    },
+    "integration": {
+      "command": "./smackerel.sh test integration",
+      "result": "blocked-pre-existing-core-health",
+      "manualVerification": "DATABASE_URL=postgres://smackerel:smackerel@127.0.0.1:47001/smackerel?sslmode=disable go test -tags integration -count=1 -v -run TestBUG001_MergeUserContext_AppendsTwoContexts ./tests/integration/... → PASS",
+      "newTests": [
+        "tests/integration/capture_duplicate_context_test.go::TestBUG001_MergeUserContext_AppendsTwoContexts"
+      ]
+    }
+  },
+  "boundaryRespected": true,
+  "reopenParentScope": 1,
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "done",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation",
+      "analysis",
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-04-26T00:00:00Z",
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "completedScopes": [
+      "Scope 1 — Implement server-side context merge on duplicate capture"
+    ],
+    "evidence": "Parent spec specs/008-telegram-share-capture/scopes.md Scope 1 marked 'Done (re-certified 2026-04-26 by bubbles.validate after BUG-001 fix)'"
+  },
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "statusCeiling": "done",
+    "capturedAt": "2026-04-27T00:00:00Z"
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "action": "state-promotion",
+      "timestamp": "2026-04-27T00:00:00Z",
+      "from": "fixed",
+      "to": "done",
+      "evidence": "Parent spec specs/008-telegram-share-capture/scopes.md Scope 1 re-certified 2026-04-26 by bubbles.validate after BUG-001 fix; bug DoD all checked; report.md, scopes.md, uservalidation.md confirm completion"
+    }
+  ],
+  "deferred": {
+    "uservalidationFlip": "completed by bubbles.validate during 2026-04-26 re-certification"
+  }
+}

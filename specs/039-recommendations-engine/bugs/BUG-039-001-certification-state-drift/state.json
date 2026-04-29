@@ -1,0 +1,96 @@
+{
+  "version": 3,
+  "featureDir": "specs/039-recommendations-engine/bugs/BUG-039-001-certification-state-drift",
+  "parentFeatureDir": "specs/039-recommendations-engine",
+  "featureName": "BUG-039-001: Certification state drift",
+  "bugId": "BUG-039-001",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "documentation",
+    "currentScope": "scope-1-route-validate-owned-039-state-reconciliation",
+    "runStartedAt": "2026-04-27T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T00:00:00Z",
+        "summary": "Created in-progress bug packet for 039 status/certification state drift. Did not edit 039 spec.md, design.md, production code, tests, or certification-owned fields."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Route validate-owned 039 state reconciliation",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-27T00:00:00Z",
+      "runCompletedAt": "2026-04-27T00:00:00Z",
+      "summary": "Packetized validate-owned 039 state drift. Existing 039 artifacts remain in progress and certification fields were not modified."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "bubbles.stabilize context",
+      "summary": "039 artifact lint fails because top-level status is in_progress while certification.status is not_started."
+    }
+  ],
+  "lastUpdatedAt": "2026-04-27T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single bug scope; validate owner reconciles certification-owned state without completion promotion.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G056", "G061"],
+    "specDoneRequires": "bubbles.validate certification after artifact-lint coherence and no premature completion."
+  },
+  "routing": {
+    "nextOwner": "bubbles.validate",
+    "targetSpec": "specs/039-recommendations-engine",
+    "targetScope": "scope-01-foundation-schema",
+    "constraint": "Keep 039 Scope 1 in progress; do not edit 039 spec.md or design.md."
+  }
+}

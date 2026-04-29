@@ -353,8 +353,9 @@ class TestProcessContentErrors:
         assert result["success"] is False
         assert "Invalid JSON" in result["error"]
 
-    def test_total_llm_failure_returns_error(self):
-        """Non-transient exception produces error result."""
+    def test_total_llm_failure_returns_error(self, monkeypatch):
+        """LLM connection failures fail when degraded fallback is disabled."""
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
         with patch("app.processor.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(side_effect=ConnectionError("network down"))
 
@@ -372,6 +373,74 @@ class TestProcessContentErrors:
             )
 
         assert result["success"] is False
+
+    def test_connection_failure_uses_sst_gated_degraded_fallback(self, monkeypatch):
+        """LLM connection failures can only return fallback success when SST enables it."""
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "true")
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(side_effect=ConnectionError("connection refused"))
+
+            result = asyncio.run(
+                process_content(
+                    content="fallback content",
+                    content_type="article",
+                    source_id="s",
+                    processing_tier="standard",
+                    user_context="",
+                    model="m",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        assert result["success"] is True
+        assert result["model_used"] == "fallback"
+        assert result["result"]["topics"] == ["degraded-fallback"]
+
+    def test_degraded_fallback_preserves_domain_content_type(self, monkeypatch):
+        """Domain-eligible captures keep their content type when universal LLM fallback runs."""
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "true")
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(side_effect=ConnectionError("connection refused"))
+
+            result = asyncio.run(
+                process_content(
+                    content="Ingredients: dough, tomato sauce. Instructions: bake until crisp.",
+                    content_type="recipe",
+                    source_id="s",
+                    processing_tier="standard",
+                    user_context="",
+                    model="m",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        assert result["success"] is True
+        assert result["model_used"] == "fallback"
+        assert result["result"]["artifact_type"] == "recipe"
+
+    def test_degraded_fallback_maps_generic_to_note(self, monkeypatch):
+        """Generic captures still get a concrete note type under fallback."""
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "true")
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(side_effect=ConnectionError("connection refused"))
+
+            result = asyncio.run(
+                process_content(
+                    content="A generic note",
+                    content_type="generic",
+                    source_id="s",
+                    processing_tier="standard",
+                    user_context="",
+                    model="m",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        assert result["success"] is True
+        assert result["result"]["artifact_type"] == "note"
 
 
 # ---------------------------------------------------------------------------

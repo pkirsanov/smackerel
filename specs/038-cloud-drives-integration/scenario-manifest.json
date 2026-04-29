@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "featureDir": "specs/038-cloud-drives-integration",
+  "featureName": "Cloud Drives Integration",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-04-26T00:00:06Z",
+  "status": "not_started",
+  "liveBoundaryPolicy": "Live integration and e2e categories run the real Smackerel stack. External Google Drive traffic is represented by an owned fixture boundary while production GoogleDriveProvider code remains in the path.",
+  "allScenariosRegressionRequired": true,
+  "qualityGates": [
+    "Each scenario must retain one live regression expectation before a scope can be marked done.",
+    "Live categories must execute the real Smackerel stack with no internal request interception or mocked Smackerel service paths.",
+    "Evidence references are added only after implementation or validation phases run the planned tests."
+  ],
+  "evidenceRefs": [],
+  "scenarios": [
+    {
+      "scenarioId": "SCN-038-001",
+      "scopeId": "SCOPE-001",
+      "title": "Required drive configuration is generated and fail-loud",
+      "contract": "Drive SST values flow through generated runtime config and missing required values fail startup explicitly.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_foundation_e2e_test.go :: TestDriveFoundationE2E_MissingRequiredConfigFailsLoudly",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-002",
+      "scopeId": "SCOPE-001",
+      "title": "Google Drive can connect with scoped access and an empty drive",
+      "contract": "Google connect, access mode, folder scope, empty-drive health, and zero-count UI all succeed through the fixture boundary.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_connect_ui_test.go :: TestDriveConnectFlowShowsHealthyEmptyDriveConnector",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-003",
+      "scopeId": "SCOPE-001",
+      "title": "A second provider registers without downstream branching",
+      "contract": "Two drive providers expose capabilities through the same provider-neutral registry and downstream contract.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_foundation_e2e_test.go :: TestDriveFoundationE2E_SecondProviderUsesNeutralContract",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-004",
+      "scopeId": "SCOPE-002",
+      "title": "Bulk scan preserves folder hierarchy and provider metadata",
+      "contract": "Initial scan persists one drive identity per provider file, linked artifact identity, folder hierarchy, provider URL, owner, sharing, mime, size, and version metadata.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_scan_ui_test.go :: TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-005",
+      "scopeId": "SCOPE-002",
+      "title": "Empty drive remains healthy and emits no artifacts",
+      "contract": "Empty initial scan creates no artifact rows, remains healthy, and monitor detects later uploads.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_scan_e2e_test.go :: TestDriveScanE2E_EmptyDriveCreatesNoArtifacts",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-006",
+      "scopeId": "SCOPE-002",
+      "title": "Provider outage degrades visibly and queues work",
+      "contract": "Provider failures transition health through degraded/failing thresholds while work remains queued or retryable with visible status.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_health_ui_test.go :: TestDriveConnectorDetailSurfacesProviderOutageAndRetryState",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-007",
+      "scopeId": "SCOPE-003",
+      "title": "Multi-format files become searchable and domain-routable",
+      "contract": "PDF, scanned PDF, image, Office, audio, and text fixtures produce indexed content plus classification, sensitivity, evidence, and domain routing metadata.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_extract_e2e_test.go :: TestDriveExtractE2E_MultiFormatFilesBecomeSearchable",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-008",
+      "scopeId": "SCOPE-003",
+      "title": "Folder move refreshes taxonomy without re-extracting content",
+      "contract": "A folder move with unchanged content revision refreshes folder context and classification without repeating content extraction.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_folder_move_ui_test.go :: TestFolderMoveUpdatesArtifactContextWithoutDuplicateExtractionActivity",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-009",
+      "scopeId": "SCOPE-003",
+      "title": "Blocked and skipped files remain visible with reason and action",
+      "contract": "Size, encrypted, unsupported, permission, and extraction-timeout cases remain visible with identity, folder, reason, action, and health counters.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_skipped_blocked_ui_test.go :: TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-010",
+      "scopeId": "SCOPE-004",
+      "title": "Natural-language search returns drive files with context",
+      "contract": "Search results include snippets, provider chips, breadcrumbs, sharing badges, sensitivity badges, and provider links.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_search_ui_test.go :: TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-011",
+      "scopeId": "SCOPE-004",
+      "title": "Native Google Doc revisions update one artifact identity",
+      "contract": "Provider revisions keep one current artifact identity while version_chain stores prior revisions visible in the Versions tab.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_artifact_detail_ui_test.go :: TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-012",
+      "scopeId": "SCOPE-004",
+      "title": "Tombstoned or permission-lost files stay explainable",
+      "contract": "Retained metadata/content remains queryable within policy and UI explains tombstone or access-revoked states without offering unavailable bytes.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_access_state_ui_test.go :: TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-013",
+      "scopeId": "SCOPE-005",
+      "title": "Telegram receipt auto-files to Drive",
+      "contract": "A classified Telegram receipt writes through Save Service, records Telegram source and Drive provider URL, and replies with saved location.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_telegram_save_ui_test.go :: TestTelegramReceiptSaveReplyShowsDriveFolderAndCorrectionAction",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-014",
+      "scopeId": "SCOPE-005",
+      "title": "Generated meal plan saves back to Drive",
+      "contract": "Meal-plan save-back writes the expected Drive PDF through the provider fixture and exposes the provider URL to digest.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_save_e2e_test.go :: TestDriveSaveE2E_MealPlanSavedBackAndDigestLinkAvailable",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-015",
+      "scopeId": "SCOPE-005",
+      "title": "Concurrent missing-folder saves create exactly one folder",
+      "contract": "Two simultaneous saves to one missing folder create one provider folder, write both files, and persist one folder resolution mapping.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_save_e2e_test.go :: TestDriveSaveE2E_ConcurrentMissingFolderCreatesExactlyOneFolder",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-016",
+      "scopeId": "SCOPE-006",
+      "title": "Low-confidence classification pauses routing",
+      "contract": "Low-confidence save routing performs no provider write until web or Telegram confirmation resolves exactly once.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_confirmation_ui_test.go :: TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-017",
+      "scopeId": "SCOPE-006",
+      "title": "Sensitivity policy blocks unsafe auto-link sharing",
+      "contract": "Medical auto-link sharing is blocked or downgraded with explicit policy reason and no provider share link mutation.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_policy_e2e_test.go :: TestDrivePolicyE2E_SensitiveFileNeverReturnsTelegramBytesOrPublicShare",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-018",
+      "scopeId": "SCOPE-006",
+      "title": "Overlapping rules audit conflict and execute stable match",
+      "contract": "All matching rules are audited as conflicts while the first stable match executes and Screen 7 surfaces the conflict.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_rule_conflict_ui_test.go :: TestSaveRulesListShowsConflictChipAndAuditRowsForOverlappingRules",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-019",
+      "scopeId": "SCOPE-007",
+      "title": "Telegram retrieves a policy-allowed Drive file",
+      "contract": "Telegram retrieval searches drive artifacts, checks policy, and returns file, provider link, or disambiguation with drive labels.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_telegram_retrieve_ui_test.go :: TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-020",
+      "scopeId": "SCOPE-007",
+      "title": "Sensitive retrieval never sends bytes over Telegram",
+      "contract": "Sensitive Telegram retrieval sends no raw bytes and returns secure link, provider link, or refusal according to config.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_retrieve_e2e_test.go :: TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-021",
+      "scopeId": "SCOPE-007",
+      "title": "Drive agent tools enforce contracts and policy",
+      "contract": "drive_search, drive_get_file, drive_save_file, and drive_list_rules enforce authorization, sensitivity policy, neutral identifiers, and traces.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_agent_tools_e2e_test.go :: TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-022",
+      "scopeId": "SCOPE-008",
+      "title": "Drive artifacts feed downstream features without provider branching",
+      "contract": "Recipes, expenses, lists, annotations, meal plan, digest, and agent consumers read provider-neutral artifact metadata, not provider packages.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_cross_feature_e2e_test.go :: TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-023",
+      "scopeId": "SCOPE-008",
+      "title": "Synthetic large-drive workload meets performance and isolation targets",
+      "contract": "The 5,000-file/25 GB synthetic workload meets stress targets and proves disposable-state isolation.",
+      "liveTestExpectation": "Regression E2E API: tests/e2e/drive/drive_observability_e2e_test.go :: TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture",
+      "evidenceRefs": [],
+      "status": "not_started"
+    },
+    {
+      "scenarioId": "SCN-038-024",
+      "scopeId": "SCOPE-008",
+      "title": "Multi-provider search returns unified provider-neutral results",
+      "contract": "Google Drive and a second provider return one ranked list with provider, folder, sharing, audience, and sensitivity filters.",
+      "liveTestExpectation": "Regression E2E UI: tests/e2e/drive/drive_multi_provider_search_ui_test.go :: TestMultiProviderDriveSearchReturnsOneRankedListWithAudienceFilters",
+      "evidenceRefs": [],
+      "status": "not_started"
+    }
+  ]
+}

@@ -1,0 +1,458 @@
+{
+  "version": 3,
+  "bugId": "BUG-022-001",
+  "parentFeatureDir": "specs/022-operational-resilience",
+  "parentScope": "TBD-nats-reliability",
+  "title": "NATS workqueue consumer uniqueness collision (err_code=10100) + MaxDeliver=3 dead-message path does not exhaust",
+  "status": "done",
+  "filedAt": "2026-04-26T00:00:00Z",
+  "lastResolvedAt": "2026-04-29T05:45:00Z",
+  "reopenedAt": "2026-04-29T00:31:49Z",
+  "filedBy": "bubbles.bug",
+  "workflowMode": "bugfix-fastlane",
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "filingMode": "reopened-regression",
+    "fixDispatchDeferred": false,
+    "rationale": "2026-04-29 integration validation reproduced the same BUG-022-001 NATS failures after historical closure. This ownership repair reopens the existing packet, restores missing bug-owned artifacts, and routes implementation without creating a duplicate packet.",
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "workflow-forced"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "lastUpdatedAt": "2026-04-29T05:45:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-04-26T22:30:00Z",
+        "claimSource": "executed",
+        "summary": "Per-test non-overlapping FilterSubject for ARTIFACTS/DOMAIN workqueue tests; per-test FilterSubject + DeliverNewPolicy for chaos MaxDeliver test; workqueue consumers switched to DeliverAllPolicy. All three target tests pass on live integration stack with zero collateral regressions.",
+        "filesModified": [
+          "tests/integration/nats_stream_test.go"
+        ],
+        "validationCommands": [
+          "./smackerel.sh check",
+          "./smackerel.sh build",
+          "./smackerel.sh lint",
+          "./smackerel.sh format --check",
+          "./smackerel.sh test unit",
+          "./smackerel.sh --volumes --env test down && ./smackerel.sh test integration"
+        ]
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "completedAt": "2026-04-26T22:45:00Z",
+        "claimSource": "executed",
+        "summary": "Re-ran ./smackerel.sh test integration on a clean test stack: TestNATS_PublishSubscribe_Artifacts PASS (0.01s), TestNATS_PublishSubscribe_Domain PASS (0.02s), TestNATS_Chaos_MaxDeliverExhaustion PASS (5.02s) with assertion 'MaxDeliver=3 exhausted after 3 Naks, no further redelivery confirmed'. Both Go integration packages green: tests/integration 19.898s, tests/integration/agent 3.100s. artifact-lint.sh exit 0. No production code changes.",
+        "validationCommands": [
+          "./smackerel.sh test integration",
+          "bash .github/bubbles/scripts/artifact-lint.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver"
+        ]
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.validate",
+        "completedAt": "2026-04-26T22:45:00Z",
+        "claimSource": "executed",
+        "summary": "Test phase executed inline by bubbles.validate during certification (bugfix-fastlane). The three target tests (TestNATS_PublishSubscribe_Artifacts, TestNATS_PublishSubscribe_Domain, TestNATS_Chaos_MaxDeliverExhaustion) plus the full Go integration suite were re-run on a clean stack. All target tests PASS. See report.md Validation Evidence."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "completedAt": "2026-04-29T02:42:06Z",
+        "claimSource": "executed",
+        "summary": "Current test phase ownership recorded by bubbles.test for reopened BUG-022-001. Live integration target tests PASS, broad E2E produced 34/34 shell script passes plus go-e2e PASS, targeted mapped Go E2E command exited 0, and bugfix regression-quality guard exited 0 with adversarial signal detected. No NATS mocks or target skip markers were introduced.",
+        "filesModified": [
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/report.md",
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/scenario-manifest.json",
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/state.json"
+        ],
+        "validationCommands": [
+          "timeout 600 ./smackerel.sh test integration",
+          "timeout 3600 ./smackerel.sh test e2e",
+          "timeout 900 ./smackerel.sh test e2e --go-run 'TestE2E_CaptureProcessSearch|TestE2E_DomainExtraction'",
+          "timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/integration/nats_stream_test.go"
+        ]
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "completedAt": "2026-04-29T03:19:23Z",
+        "claimSource": "executed",
+        "summary": "Current regression phase verified BUG-022-001 has no in-scope regression: Go unit exited 0, Python unit exited 0 with 352 passed, full integration exited 0 with target and adjacent NATS tests PASS, broad E2E exited 0 with 34/34 shell E2E passes plus go-e2e PASS, stress exited 0, repo check exited 0, and regression-quality guard exited 0 with adversarial signal detected. Artifact lint and traceability guard pass after recording. State-transition guard now recognizes implement/test/regression but still blocks on later workflow phases. Cross-spec scan found no route, table, API, stream-contract, or design conflicts. Numeric coverage is not claimed because the repo CLI exposes no coverage command.",
+        "filesModified": [
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/report.md",
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/state.json"
+        ],
+        "validationCommands": [
+          "timeout 600 ./smackerel.sh test unit --go",
+          "timeout 600 ./smackerel.sh test unit --python",
+          "timeout 900 ./smackerel.sh test integration",
+          "timeout 3600 ./smackerel.sh test e2e",
+          "timeout 900 ./smackerel.sh test stress",
+          "timeout 180 ./smackerel.sh check",
+          "timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/integration/nats_stream_test.go",
+          "timeout 600 bash .github/bubbles/scripts/artifact-lint.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver"
+        ]
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "completedAt": "2026-04-29T03:32:00Z",
+        "claimSource": "executed",
+        "summary": "Reviewed the BUG-022-001 NATS integration fix across code reuse, code quality, and efficiency. No runtime source simplification was applied: the small ARTIFACTS/DOMAIN duplication is intentionally scenario-specific, and the MaxDeliver exact-zero flow remains explicit to preserve real NATS semantics. Live integration exited 0 with target NATS tests PASS; regression-quality guard exited 0 with adversarial signal detected. Post-recording artifact lint and traceability guard exited 0; state-transition guard exited 1 but recognizes simplify and blocks on later phases outside simplify ownership.",
+        "filesModified": [
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/report.md",
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/state.json"
+        ],
+        "validationCommands": [
+          "timeout 900 ./smackerel.sh test integration",
+          "timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/integration/nats_stream_test.go",
+          "timeout 600 bash .github/bubbles/scripts/artifact-lint.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver"
+        ]
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "completedAt": "2026-04-29T03:56:26Z",
+        "claimSource": "executed",
+        "summary": "Stabilize phase completed for BUG-022-001. Verified disposable test-stack lifecycle through repo CLI up/status/down --volumes; full live integration exited 0 with ARTIFACTS, DOMAIN, replay, MaxDeliver, and unmapped-subject NATS tests PASS; clean status showed no project containers after cleanup; repo check exited 0 with SST/env-file drift guard OK; stress smoke exited 0 with 25/25 health requests and 1100-artifact search average 2077ms below the 3000ms threshold. No code, tests, Docker, generated config, or certification-owned fields were changed.",
+        "filesModified": [
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/report.md",
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/state.json"
+        ],
+        "validationCommands": [
+          "timeout 180 ./smackerel.sh --env test down --volumes",
+          "timeout 360 ./smackerel.sh --env test up",
+          "timeout 180 ./smackerel.sh --env test status",
+          "timeout 180 ./smackerel.sh --env test down --volumes",
+          "timeout 900 ./smackerel.sh test integration",
+          "timeout 180 ./smackerel.sh clean status",
+          "timeout 180 ./smackerel.sh check",
+          "timeout 900 ./smackerel.sh test stress",
+          "timeout 180 ./smackerel.sh --env test down --volumes",
+          "timeout 600 bash .github/bubbles/scripts/artifact-lint.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver"
+        ]
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "completedAt": "2026-04-29T04:11:46Z",
+        "claimSource": "executed",
+        "summary": "Security phase completed for BUG-022-001. Reviewed the NATS integration repair for subject naming/wildcard injection, overbroad consumers, retained DEADLETTER exposure, credential leakage, unsafe config changes, and test semantics leaking into production. No in-scope security findings were found. Repo check exited 0, implementation reality scan exited 0 with 0 violations and 1 warning, and source review found the bug-owned change confined to integration-test child subjects and exact MaxDeliver deadletter filtering. No source, Docker, generated config, dependency, or certification-owned fields were changed by this security phase.",
+        "filesModified": [
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/report.md",
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/state.json"
+        ],
+        "validationCommands": [
+          "git --no-pager diff --name-only -- tests/integration/nats_stream_test.go internal/nats/client.go ml/app/nats_client.py config/nats_contract.json docker-compose.yml config/smackerel.yaml go.mod go.sum ml/requirements.txt ml/pyproject.toml",
+          "git --no-pager diff -- tests/integration/nats_stream_test.go",
+          "git --no-pager diff -- internal/nats/client.go",
+          "git --no-pager diff -- config/nats_contract.json",
+          "git --no-pager diff -- docker-compose.yml",
+          "git --no-pager diff -- config/smackerel.yaml",
+          "git --no-pager diff -- go.mod go.sum ml/requirements.txt ml/pyproject.toml",
+          "timeout 180 ./smackerel.sh check",
+          "timeout 600 bash .github/bubbles/scripts/implementation-reality-scan.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver --verbose",
+          "timeout 600 bash .github/bubbles/scripts/artifact-lint.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver"
+        ]
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "completedAt": "2026-04-29T04:20:42Z",
+        "claimSource": "executed",
+        "summary": "Validate phase completed diagnostic checks for reopened BUG-022-001 after security. Artifact lint exited 0, traceability guard exited 0 with all 3 scenarios mapped, and state-transition guard recognized implement/test/regression/simplify/stabilize/security while blocking only on validate and audit before this phase record was written. The bug remains in_progress and audit remains required before done-mode promotion.",
+        "filesModified": [
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/report.md",
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/state.json"
+        ],
+        "validationCommands": [
+          "timeout 600 bash .github/bubbles/scripts/artifact-lint.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver"
+        ]
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.validate",
+        "completedAt": "2026-04-26T22:45:00Z",
+        "claimSource": "executed",
+        "summary": "Audit phase executed inline by bubbles.validate during certification. Verified change-boundary respect (only tests/integration/nats_stream_test.go modified), test substance (per-test FilterSubject, preserved extraReceived != 0 assertion), no silent bailouts, adversarial regression robustness, and zero production-code mutation by validate. See report.md Audit Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "completedAt": "2026-04-29T04:53:26Z",
+        "claimSource": "executed",
+        "summary": "Current audit phase completed independent verification for reopened BUG-022-001. Artifact lint and traceability guard exited 0; implementation reality scan exited 0 with 0 violations and 1 warning; regression-quality guard exited 0 with adversarial signal detected; target skip/mock/status-only scans had no matches; Go unit exited 0; full integration exited 0 with ARTIFACTS, DOMAIN, and MaxDeliver target tests PASS. Pre-recording state-transition guard exited 1 only because current audit was not yet recorded, with legacy warnings about Test Plan path detection and historical evidence output signals. Audit did not modify source code or validation-owned certification fields and routes final certification/promotion to bubbles.validate.",
+        "filesModified": [
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/report.md",
+          "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver/state.json"
+        ],
+        "validationCommands": [
+          "timeout 600 bash .github/bubbles/scripts/artifact-lint.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+          "timeout 600 bash .github/bubbles/scripts/implementation-reality-scan.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver --verbose",
+          "timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/integration/nats_stream_test.go",
+          "grep -rn 't\\.Skip\\|\\.skip(\\|xit(\\|xdescribe(\\|\\.only(\\|test\\.todo\\|it\\.todo\\|pending(' tests/integration/nats_stream_test.go; status=$?; echo SKIP_SCAN_EXIT=$status; true",
+          "grep -rn 'page\\.route(\\|context\\.route(\\|msw\\|nock\\|intercept\\|jest\\.fn\\|sinon\\.stub\\|mock(' tests/integration/nats_stream_test.go; status=$?; echo MOCK_SCAN_EXIT=$status; true",
+          "grep -rn 'expect(.*status.*)\\.toBe(200)\\|toBe(201)\\|toBe(204)' tests/integration/nats_stream_test.go; status=$?; echo STATUS_ONLY_SCAN_EXIT=$status; true",
+          "timeout 600 ./smackerel.sh test unit --go",
+          "timeout 900 ./smackerel.sh test integration",
+          "timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver"
+        ]
+      }
+    ],
+    "currentHandoff": null
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1-restore-nats-integration-test-green-path"],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "lastCertifiedAt": "2026-04-29T05:45:00Z",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Restore NATS integration test green path",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-29T05:45:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "pendingOwner": null
+  },
+  "executionHistory": [
+    {
+      "phase": "filing",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-04-26T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Bug packet filed in document-only mode. Created spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json, bug.md (filing scope only)."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "timestamp": "2026-04-26T22:30:00Z",
+      "outcome": "completed_owned",
+      "summary": "Per-test non-overlapping FilterSubject for ARTIFACTS/DOMAIN workqueue tests; per-test FilterSubject + DeliverNewPolicy for chaos MaxDeliver test; workqueue consumers switched to DeliverAllPolicy. All three target tests pass on live integration stack with zero collateral regressions."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "timestamp": "2026-04-26T22:45:00Z",
+      "outcome": "completed_diagnostic",
+      "summary": "Live integration suite green: tests/integration 19.898s ok, tests/integration/agent 3.100s ok. All three target NATS tests PASS. artifact-lint exit 0."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.validate",
+      "timestamp": "2026-04-26T22:45:00Z",
+      "outcome": "completed_owned",
+      "summary": "Test phase executed inline by bubbles.validate (bugfix-fastlane); see report.md Validation Evidence."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.validate",
+      "timestamp": "2026-04-26T22:45:00Z",
+      "outcome": "completed_owned",
+      "summary": "Audit phase executed inline by bubbles.validate; see report.md Audit Evidence."
+    },
+    {
+      "phase": "reopen",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-04-29T00:31:49Z",
+      "outcome": "completed_owned",
+      "claimSource": "executed",
+      "summary": "Reproduced resurfaced integration failure with ./smackerel.sh test integration exit 1. Existing BUG-022-001 packet was reopened, missing bug.md and scenario-manifest.json were repaired, and implementation ownership was routed to bubbles.implement. No source code was modified."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-29T01:00:00Z",
+      "runCompletedAt": "2026-04-29T02:10:22Z",
+      "timestamp": "2026-04-29T01:00:00Z",
+      "outcome": "route_required",
+      "claimSource": "executed",
+      "summary": "Implemented reopened BUG-022-001 fix in tests/integration/nats_stream_test.go only. Integration target tests PASS, full integration suite PASS, check PASS, E2E PASS, regression-quality guard PASS, artifact lint PASS. Traceability guard exits 1 because scopes.md lacks planning-owned scenario-specific Test Plan/DoD mappings for ARTIFACTS and DOMAIN; routed to bubbles.plan before validate certification."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "timestamp": "2026-04-29T02:42:06Z",
+      "outcome": "completed_owned",
+      "claimSource": "executed",
+      "summary": "Recorded current BUG-022-001 test phase evidence. Live integration command exited 0 with TestNATS_PublishSubscribe_Artifacts, TestNATS_PublishSubscribe_Domain, and TestNATS_Chaos_MaxDeliverExhaustion PASS; broad E2E observed 34/34 shell passes and go-e2e PASS; targeted mapped Go E2E command exited 0; regression-quality guard exited 0 with adversarial signal detected. Certification fields were not modified."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "timestamp": "2026-04-29T03:19:23Z",
+      "runStartedAt": "2026-04-29T02:43:00Z",
+      "runCompletedAt": "2026-04-29T03:19:23Z",
+      "outcome": "completed_diagnostic",
+      "claimSource": "executed",
+      "summary": "Regression phase completed for BUG-022-001. Go unit, Python unit, full integration, broad E2E, stress, repo check, artifact lint, traceability guard, and regression-quality guard exited 0. State-transition guard exited 1 but now recognizes the regression phase and blocks on later workflow phases. Target and adjacent NATS stream/consumer/MaxDeliver behavior passed, broad E2E remained green, and cross-spec/design review found no conflicts. Numeric coverage was not claimed because no repo-standard coverage command is exposed. Certification fields were not modified."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "timestamp": "2026-04-29T03:32:00Z",
+      "runStartedAt": "2026-04-29T03:20:00Z",
+      "runCompletedAt": "2026-04-29T03:32:00Z",
+      "outcome": "completed_owned",
+      "claimSource": "executed",
+      "summary": "Simplify phase completed for BUG-022-001. Reviewed code reuse, quality, and efficiency in tests/integration/nats_stream_test.go; no source simplification was warranted because the explicit scenario-specific shape preserves real WorkQueue and MaxDeliver semantics. Live integration exited 0, regression-quality guard exited 0, artifact lint exited 0, traceability guard exited 0, and state-transition guard exited 1 while recognizing simplify and blocking on later phases. Only report.md/state.json execution-owned provenance was updated. Certification fields were not modified."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "timestamp": "2026-04-29T03:56:26Z",
+      "runStartedAt": "2026-04-29T03:46:03Z",
+      "runCompletedAt": "2026-04-29T03:56:26Z",
+      "outcome": "completed_diagnostic",
+      "claimSource": "executed",
+      "summary": "Stabilize phase completed for BUG-022-001. Repo CLI lifecycle checks created a disposable test stack, verified healthy NATS/Postgres/core/ML containers, and removed containers, network, and named test volumes. Full integration exited 0 with the target NATS WorkQueue and MaxDeliver tests passing; clean status showed no project containers after cleanup; repo check exited 0; stress smoke exited 0 with 25/25 health requests and 0 search failures under the threshold. No code/test/config/Docker changes were made, and certification fields were not modified."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "timestamp": "2026-04-29T04:11:46Z",
+      "runStartedAt": "2026-04-29T03:56:26Z",
+      "runCompletedAt": "2026-04-29T04:11:46Z",
+      "outcome": "completed_diagnostic",
+      "claimSource": "executed",
+      "summary": "Security phase completed for BUG-022-001. Reviewed NATS subject naming and wildcard injection, overbroad consumers, retained DEADLETTER exposure, credential leakage, unsafe config changes, and test-only semantics leaking into production. No in-scope security findings were found. Repo check exited 0 and implementation reality scan exited 0 with 0 violations and 1 warning. Certification fields were not modified."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "timestamp": "2026-04-29T04:20:42Z",
+      "runStartedAt": "2026-04-29T04:20:00Z",
+      "runCompletedAt": "2026-04-29T04:20:42Z",
+      "outcome": "route_required",
+      "claimSource": "executed",
+      "summary": "Validate phase completed after security. Artifact lint exited 0, traceability guard exited 0 with 3/3 scenarios mapped to concrete test evidence, and state-transition guard exited 1 before validate recording because validate and audit were missing. Validate recorded its own phase and routed the remaining completion owner to bubbles.audit without promoting status or certification.status."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "timestamp": "2026-04-29T04:53:26Z",
+      "runCompletedAt": "2026-04-29T04:53:26Z",
+      "outcome": "route_required",
+      "claimSource": "executed",
+      "summary": "Audit phase completed independent verification for reopened BUG-022-001. Artifact lint, traceability guard, regression-quality guard, Go unit, and full integration exited 0; implementation reality scan exited 0 with 0 violations and 1 warning; target skip/mock/status-only scans had no matches. State-transition guard before audit recording blocked only because current audit was not yet in phase records plus legacy warnings. Audit recorded execution-owned provenance and routes final certification/promotion to bubbles.validate without editing certification-owned fields."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "timestamp": "2026-04-29T05:45:00Z",
+      "runStartedAt": "2026-04-29T05:39:00Z",
+      "runCompletedAt": "2026-04-29T05:45:00Z",
+      "outcome": "completed_diagnostic",
+      "claimSource": "executed",
+      "summary": "Final validate certification completed after audit repair. Artifact lint exited 0, traceability guard exited 0, implementation reality scan exited 0 with 0 violations and 1 warning, artifact freshness guard exited 0, regression-quality guard exited 0, and state-transition guard exited 0 with TRANSITION PERMITTED and one non-blocking Test Plan file-scan warning. Validate cleared stale blockers and pending owner, closed the handoff, and promoted status and certification.status to done."
+    }
+  ],
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "symptom": {
+    "failingTests": [
+      "tests/integration/nats_stream_test.go::TestNATS_PublishSubscribe_Artifacts",
+      "tests/integration/nats_stream_test.go::TestNATS_PublishSubscribe_Domain",
+      "tests/integration/nats_stream_test.go::TestNATS_Chaos_MaxDeliverExhaustion"
+    ],
+    "errorSignatures": [
+      "nats: API error: code=400 err_code=10100 description=filtered consumer not unique on workqueue stream",
+      "expected 0 messages after MaxDeliver exhaustion, got 1 \u2014 dead-message path broken"
+    ],
+    "reproducedOn": "2026-04-29 workspace state via repo-standard integration command",
+    "reproducerCommand": "./smackerel.sh test integration",
+    "lastReproducedAt": "2026-04-29T00:31:49Z",
+    "lastReproducedExitCode": 1
+  },
+  "boundaryCandidates": [
+    "tests/integration/nats_stream_test.go",
+    "internal/nats/",
+    "config/nats_contract.json",
+    "docker-compose.yml"
+  ],
+  "severity": "HIGH",
+  "impact": "Blocks integration test certification across the codebase. Every spec that depends on `./smackerel.sh test integration` for certification has to defer integration DoD items while this bug is open.",
+  "preFixEvidenceCaptured": true,
+  "reopenEvidenceCaptured": true,
+  "deferred": {
+    "rootCauseReconfirmation": "bubbles.implement",
+    "implementation": "bubbles.implement",
+    "testExecution": "bubbles.test",
+    "parentUservalidationRecert": "bubbles.validate"
+  }
+}

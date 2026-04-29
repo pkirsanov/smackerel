@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "featureDir": "specs/010-browser-history-connector/bugs/BUG-010-003-e2e-search-method-drift",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-010-003-SCN-001",
+      "scope": "scope-1-align-browser-history-e2e-search-consumer",
+      "title": "Browser-history E2E uses the supported search contract",
+      "gherkin": {
+        "given": "the live stack exposes authenticated search as POST /api/search",
+        "when": "the browser-history E2E suite searches for browser-history artifacts",
+        "then": "the test sends a supported search request and asserts a successful parsed response"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/browser_history_e2e_test.go",
+          "testId": "TestBrowserHistory_E2E_InitialSyncProducesArtifacts"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-010-003-SCN-002",
+      "scope": "scope-1-align-browser-history-e2e-search-consumer",
+      "title": "Browser-history E2E fails if the stale GET search consumer returns",
+      "gherkin": {
+        "given": "the router does not expose authenticated GET /api/search",
+        "when": "a regression check scans or executes the browser-history E2E search path",
+        "then": "no browser-history E2E search request uses GET /api/search"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/browser_history_e2e_test.go",
+          "testId": "Regression guard for browser-history GET /api/search drift"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
