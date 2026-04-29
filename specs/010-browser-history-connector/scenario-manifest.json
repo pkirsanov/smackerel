@@ -1,0 +1,247 @@
+{
+  "version": 2,
+  "specId": "010",
+  "featureDir": "specs/010-browser-history-connector",
+  "generatedBy": "bubbles.docs",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BH-001",
+      "name": "Initial sync imports history with dwell-time tiering",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L99",
+      "requiredTestType": ["unit", "integration", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_DwellTimeTiering"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestSync_EmptyCursor_UsesLookback"},
+        {"file": "tests/integration/browser_history_test.go", "function": "TestBrowserHistorySync_InitialImport"},
+        {"file": "tests/e2e/browser_history_e2e_test.go", "function": "TestBrowserHistory_E2E_InitialSyncProducesArtifacts"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestProcessEntries_DwellTimeTiering"},
+        {"type": "integration-test", "location": "tests/integration/browser_history_test.go::TestBrowserHistorySync_InitialImport"},
+        {"type": "e2e-test", "location": "tests/e2e/browser_history_e2e_test.go::TestBrowserHistory_E2E_InitialSyncProducesArtifacts"},
+        {"type": "source", "location": "internal/connector/browser/connector.go::processEntries"}
+      ],
+      "linkedDoD": [
+        "Connector struct implements all 5 interface methods (ID, Connect, Sync, Health, Close)",
+        "Sync orchestrates: cursor parse → find new files → parse → filter → normalize → return artifacts + cursor"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-002",
+      "name": "Incremental sync processes only new visits",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L117",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/browser_test.go", "function": "TestParseChromeHistorySince_HasLimit"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestCursorConversion_RoundTrip"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_CursorAdvances"},
+        {"file": "tests/integration/browser_history_test.go", "function": "TestBrowserHistorySync_IncrementalCursor"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestProcessEntries_CursorAdvances"},
+        {"type": "integration-test", "location": "tests/integration/browser_history_test.go::TestBrowserHistorySync_IncrementalCursor"},
+        {"type": "source", "location": "internal/connector/browser/browser.go::ParseChromeHistorySince"}
+      ],
+      "linkedDoD": [
+        "ParseChromeHistorySince added to browser.go with cursor-based query, ASC order, LIMIT 10000 per batch",
+        "Cursor management: pipe-delimited filenames, empty cursor → full scan, populated cursor → incremental"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-003",
+      "name": "Skip rules filter non-content URLs",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L125",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_SkipFiltering"},
+        {"file": "internal/connector/browser/browser_test.go", "function": "TestShouldSkip"},
+        {"file": "internal/connector/browser/browser_test.go", "function": "TestShouldSkip_SchemePrefixedLocalhost"},
+        {"file": "tests/e2e/browser_history_e2e_test.go", "function": "TestBrowserHistory_E2E_HighDwellArticleSearchable"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestProcessEntries_SkipFiltering"},
+        {"type": "unit-test", "location": "internal/connector/browser/browser_test.go::TestShouldSkip"},
+        {"type": "source", "location": "internal/connector/browser/browser.go::ShouldSkip"}
+      ],
+      "linkedDoD": [
+        "Connect validates config: history_path non-empty and exists",
+        "Connector registered conditionally in cmd/core/main.go"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-004",
+      "name": "Chrome History file not found reports health error",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L138",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestConnect_HistoryFileNotFound"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestConnect_HistoryFileNotReadable"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestHealth_FileDisappearsAfterConnect"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestConnect_HistoryFileNotFound"},
+        {"type": "source", "location": "internal/connector/browser/connector.go::Connect"}
+      ],
+      "linkedDoD": [
+        "Health lifecycle transitions verified: disconnected → healthy → syncing → healthy and error paths"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-005",
+      "name": "Copy-then-read strategy handles locked file with retry",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L145",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestCopyHistoryFileFrom_RetryOnFailure"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestCopyHistoryFileFrom_RetryOnFailure"},
+        {"type": "source", "location": "internal/connector/browser/connector.go::copyHistoryFile"}
+      ],
+      "linkedDoD": [
+        "Copy-then-read strategy implemented with temp file cleanup via defer os.Remove",
+        "Retry-once-after-5s on copy failure implemented"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-006",
+      "name": "Social media visits are aggregated at domain level",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L265",
+      "requiredTestType": ["unit", "integration", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_SocialMediaAggregation"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_SocialMediaAggregation_MultiDay"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestBuildSocialAggregate_ArtifactFields"},
+        {"file": "tests/integration/browser_history_test.go", "function": "TestBrowserHistorySync_SocialMediaAggregation"},
+        {"file": "tests/e2e/browser_history_e2e_test.go", "function": "TestBrowserHistory_E2E_SocialMediaAggregateInStore"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestProcessEntries_SocialMediaAggregation"},
+        {"type": "integration-test", "location": "tests/integration/browser_history_test.go::TestBrowserHistorySync_SocialMediaAggregation"},
+        {"type": "e2e-test", "location": "tests/e2e/browser_history_e2e_test.go::TestBrowserHistory_E2E_SocialMediaAggregateInStore"},
+        {"type": "source", "location": "internal/connector/browser/connector.go::buildSocialAggregate"}
+      ],
+      "linkedDoD": [
+        "Social media visits aggregated at domain level per day with browsing/social-aggregate content type"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-007",
+      "name": "Long social media read gets individual processing",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L280",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_SocialMediaHighDwellIndividual"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_DedupPushesSocialMediaPastIndividualThreshold"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestProcessEntries_SocialMediaHighDwellIndividual"},
+        {"type": "source", "location": "internal/connector/browser/connector.go::processEntries"}
+      ],
+      "linkedDoD": [
+        "Individual processing exception for social media entries with dwell ≥ SocialMediaIndividualThreshold"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-008",
+      "name": "Repeat visits escalate processing tier",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L287",
+      "requiredTestType": ["unit", "integration", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestDetectRepeatVisits_TierEscalation"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestEscalateTier_AllTransitions"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestDetectRepeatVisits_BelowThreshold_NoEscalation"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestDetectRepeatVisits_RespectsWindow"},
+        {"file": "tests/integration/browser_history_test.go", "function": "TestBrowserHistorySync_RepeatVisitEscalation"},
+        {"file": "tests/e2e/browser_history_e2e_test.go", "function": "TestBrowserHistory_E2E_HighDwellArticleSearchable"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestDetectRepeatVisits_TierEscalation"},
+        {"type": "integration-test", "location": "tests/integration/browser_history_test.go::TestBrowserHistorySync_RepeatVisitEscalation"},
+        {"type": "source", "location": "internal/connector/browser/connector.go::detectRepeatVisits"}
+      ],
+      "linkedDoD": [
+        "Repeat visit detection counts URL frequency within configurable window",
+        "Tier escalation applied for URLs exceeding repeat visit threshold"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-009",
+      "name": "Metadata-tier entries produce only domain aggregates",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L295",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_PrivacyGate_MetadataTierNoArtifact"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_PrivacyGate_LightTierStoresURL"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestProcessEntries_PrivacyGate_MetadataTierNoArtifact"},
+        {"type": "source", "location": "internal/connector/browser/connector.go::processEntries"}
+      ],
+      "linkedDoD": [
+        "metadata-tier entries produce no individual artifacts — domain aggregates only",
+        "Full URLs stored only for light tier and above"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-010",
+      "name": "Content fetch failure produces metadata-only artifact",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L303",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_ContentFetchFailure"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_ContentFetchSuccess"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_FetchFails_NotSyncErrors"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestProcessEntries_ContentFetchFailure"},
+        {"type": "source", "location": "internal/connector/browser/connector.go::processEntries"}
+      ],
+      "linkedDoD": [
+        "Content fetch failures produce metadata-only artifacts with content_fetch_failed: true"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BH-011",
+      "name": "Same-URL same-day visits are merged with summed dwell time",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/010-browser-history-connector/scopes.md#L152",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestProcessEntries_DedupSameURLSameDay"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestDedupByURLDate"},
+        {"file": "internal/connector/browser/connector_test.go", "function": "TestDedupByURLDate_EmptyInput"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestProcessEntries_DedupSameURLSameDay"},
+        {"type": "unit-test", "location": "internal/connector/browser/connector_test.go::TestDedupByURLDate"},
+        {"type": "source", "location": "internal/connector/browser/connector.go::dedupByURLDate"}
+      ],
+      "linkedDoD": [
+        "URL+date dedup merges same-URL same-day visits with summed dwell time and correct tier assignment (SCN-BH-011)"
+      ]
+    }
+  ]
+}

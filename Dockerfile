@@ -15,7 +15,12 @@ COPY . .
 ARG VERSION=dev
 ARG COMMIT_HASH=unknown
 ARG BUILD_TIME=unknown
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}" -o /bin/smackerel-core ./cmd/core
+ARG GO_BUILD_TAGS
+RUN if [ -n "${GO_BUILD_TAGS}" ]; then \
+			CGO_ENABLED=0 GOOS=linux go build -tags "${GO_BUILD_TAGS}" -ldflags="-s -w -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}" -o /bin/smackerel-core ./cmd/core; \
+		else \
+			CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}" -o /bin/smackerel-core ./cmd/core; \
+		fi
 
 # --- Runtime stage ---
 FROM alpine:3.20

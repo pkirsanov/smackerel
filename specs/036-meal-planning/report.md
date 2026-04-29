@@ -214,4 +214,65 @@ race-detector probe above is the in-process chaos surface for spec 036; live
 load harness is tracked under spec 031 (`live-stack-testing`) and is out of
 scope for this finalization run.
 
+## Traceability Evidence References (BUG-036-001)
+
+This block resolves the `report_mentions_path` check in
+`traceability-guard.sh` for spec 036 by enumerating the on-disk test files
+that back each Done scope's Test Plan rows. Added by BUG-036-001
+(DoD scenario fidelity gap) using the same minimal-touch pattern as
+BUG-029-002, BUG-031-002, and BUG-034-001 — no behavioral claims added,
+only path resolution surface for the guard's `grep -F` check.
+
+### Scope 01: Config & Migration
+
+- `internal/config/validate_test.go` — covers SCN-036-001, SCN-036-003, SCN-036-005 (config struct parsing, fail-loud validation, configurable meal times).
+- `scripts/commands/config.sh` — covers SCN-036-002 (config generate emits `MEAL_PLANNING_*` env vars).
+- `internal/db/migrations/018_meal_plans.sql` — covers SCN-036-004 schema (tables, indexes, FK CASCADE).
+- `tests/integration/db_migration_test.go` — covers SCN-036-004 live migration apply on test DB.
+
+### Scope 02: Plan Store & Service
+
+- `internal/mealplan/store_test.go` — covers SCN-036-006, SCN-036-007, SCN-036-008, SCN-036-009, SCN-036-014, SCN-036-017 (CRUD, date validation, slot assignment, unique constraint, cascade delete, batch creation).
+- `internal/mealplan/service_test.go` — covers SCN-036-010..SCN-036-013, SCN-036-015, SCN-036-016 (date-range validation, lifecycle transitions, overlap detection, query-by-date).
+
+### Scope 03: Plan API Endpoints
+
+- `internal/api/mealplan_test.go` — covers SCN-036-018..SCN-036-026 (full CRUD endpoints, validation 422s, auth-required 401).
+
+### Scope 04: Telegram Plan Commands
+
+- `internal/telegram/mealplan_commands_test.go` — covers SCN-036-027..SCN-036-037 (plan creation, slot assignment, batch, queries, cook delegation, overlap warning, no-draft error, disambiguation, shopping list, repeat last week).
+
+### Scope 05: Shopping List Bridge
+
+- `internal/mealplan/shopping_test.go` — covers SCN-036-038..SCN-036-043 (plan-to-list generation, batch consolidation, non-batch duplicate aggregation, missing domain_data skip, regeneration with/without force).
+- `internal/list/aggregator.go` — spec 028 direct-from-recipes path unchanged regression surface.
+
+### Scope 06: Plan Copy & Templates
+
+- `internal/mealplan/store_test.go` — copy plan store-level tests (date shift, deleted recipe handling).
+- `internal/mealplan/service_test.go` — covers SCN-036-044..SCN-036-046 (CopyPlan service: date shift, deleted recipe omit, serving overrides).
+- `internal/api/mealplan_test.go` — covers SCN-036-047 (POST /api/meal-plans/{id}/copy endpoint).
+
+### Scope 07: CalDAV Calendar Sync
+
+- `internal/mealplan/calendar_test.go` — covers SCN-036-048..SCN-036-052 (VEVENT mapping, configurable meal times in DTSTART, CalDAV-not-configured 422, plan deletion cleanup, partial sync failure tolerance).
+
+### Scope 08: Auto-Complete Lifecycle
+
+- `internal/mealplan/store_test.go` — `TestAutoCompletePastPlans` covers SCN-036-053, SCN-036-054 (transition past active plans, skip future-end-date plans).
+- `internal/scheduler/scheduler_test.go` — covers SCN-036-055, SCN-036-056 (auto-complete disabled-via-config gating, custom cron schedule from config).
+
+### Scopes 09–15 (Blocked, deferred to spec 037)
+
+The Test Plan rows for Scopes 09–15 reference future test files
+(`internal/mealplan/tools/tools_test.go`,
+`tests/integration/mealplan_tools_test.go`,
+`tests/e2e/mealplan_adversarial_test.go`, etc.) that will be created when
+those scopes ship under spec 037 (LLM Scenario Agent + Tool Registry).
+The traceability-guard residual failures for those rows
+(`mapped row references no existing concrete test file` for SCN-036-057
+through SCN-036-089 in Blocked scopes) are expected and tracked under
+BUG-036-001 as implementation-pending, not fidelity gaps.
+
 

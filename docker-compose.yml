@@ -16,10 +16,11 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${POSTGRES_PASSWORD}\" pg_isready -h 127.0.0.1 -p ${POSTGRES_CONTAINER_PORT} -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" && PGPASSWORD=\"$${POSTGRES_PASSWORD}\" psql -h 127.0.0.1 -p ${POSTGRES_CONTAINER_PORT} -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -Atqc 'SELECT 1'"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 12
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -85,10 +86,11 @@ services:
       MAPS_IMPORT_DIR: ${MAPS_IMPORT_DIR:+/data/maps-import}
       BROWSER_HISTORY_PATH: ${BROWSER_HISTORY_PATH:+/data/browser-history/History}
       TWITTER_ARCHIVE_DIR: ${TWITTER_ARCHIVE_DIR:+/data/twitter-archive}
-      # Spec 037 Scope 10: agent scenario YAMLs are mounted read-only at the
-      # container path below; AGENT_SCENARIO_DIR in the env_file points at the
-      # host path, so we override it for the container view.
+      # Prompt contract YAMLs are mounted read-only at the container path below;
+      # generated env values point at host paths, so override them for the
+      # container view.
       AGENT_SCENARIO_DIR: /app/prompt_contracts
+      PROMPT_CONTRACTS_DIR: /app/prompt_contracts
     stop_grace_period: 30s
     depends_on:
       postgres:
@@ -142,6 +144,7 @@ services:
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts
     volumes:
       - ./config/prompt_contracts:/app/prompt_contracts:ro
+      - ./config/nats_contract.json:/config/nats_contract.json:ro
     stop_grace_period: 15s
     depends_on:
       nats:

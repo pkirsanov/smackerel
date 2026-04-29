@@ -1,0 +1,103 @@
+{
+  "version": 3,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-001-knowledge-stats-empty-store",
+  "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
+  "featureName": "BUG-025-001: Knowledge stats empty-store 500",
+  "bugId": "BUG-025-001",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "scope-1-return-valid-stats-for-an-empty-knowledge-store",
+    "runStartedAt": "2026-04-27T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T00:00:00Z",
+        "summary": "Created in-progress bug packet for knowledge stats empty-store 500. No source or parent certification fields modified."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-28T00:00:00Z",
+        "scope": "scope-1-return-valid-stats-for-an-empty-knowledge-store",
+        "summary": "Root-cause fix implemented in internal/knowledge/store.go: outer COALESCE handles an empty knowledge_concepts scalar subquery as an explicit empty prompt_contract_version, and lint stats only tolerate pgx.ErrNoRows. Added tests/integration/knowledge_stats_test.go adversarial empty-store regression and updated tests/e2e/knowledge_store_test.go to assert the empty-store HTTP 200 + zero/default stats contract. Targeted Go unit and focused E2E pass; new integration regression passes inside a broader integration run that still exits 1 due to unrelated NATS/Drive failures. Broad E2E exited 1 on a Docker host-port conflict for 127.0.0.1:45002 before producing a passing suite result; certification remains in_progress."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Return valid stats for an empty knowledge store",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-27T00:00:00Z",
+      "runCompletedAt": "2026-04-27T00:00:00Z",
+      "summary": "Packetized uncovered knowledge stats blocker. No prior bug folder existed under specs/025-knowledge-synthesis-layer."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "bubbles.stabilize context",
+      "summary": "Knowledge stats returns 500 on empty store."
+    }
+  ],
+  "lastUpdatedAt": "2026-04-28T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single bug scope; owner starts with targeted red-stage proof before edits.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G036", "G057", "G060"],
+    "specDoneRequires": "bubbles.validate certification after targeted and broader E2E evidence."
+  },
+  "routing": {
+    "nextOwner": "bubbles.implement",
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "targetSpec": "specs/025-knowledge-synthesis-layer"
+  }
+}

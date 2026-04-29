@@ -1,0 +1,454 @@
+{
+  "version": 2,
+  "specId": "011",
+  "featureDir": "specs/011-maps-connector",
+  "generatedBy": "bubbles.docs",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-MT-001",
+      "name": "Connector implements full lifecycle",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L104",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestConnectorID"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestConnectValidConfig"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestHealthTransitions"},
+        {"file": "internal/connector/maps/harden_test.go", "function": "TestStabilize_ReconnectAfterCloseRestoresLifecycle"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/connector_test.go::TestConnectorID"},
+        {"type": "unit-test", "location": "internal/connector/maps/connector_test.go::TestHealthTransitions"},
+        {"type": "source", "location": "internal/connector/maps/connector.go::Connect"}
+      ],
+      "linkedDoD": [
+        "internal/connector/maps/connector.go created with full Connector implementation",
+        "Connector registered in cmd/core/main.go following Keep pattern",
+        "Health transitions: disconnected → healthy → syncing → healthy/error → disconnected"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-002",
+      "name": "Config validation rejects invalid settings",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L115",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestConnectMissingImportDir"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestConnectEmptyImportDir"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestParseMapsConfigRejectsMissingFields"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestParseMapsConfigNegativeMinDistance"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestConnectImportDirIsFile"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/connector_test.go::TestConnectMissingImportDir"},
+        {"type": "unit-test", "location": "internal/connector/maps/connector_test.go::TestParseMapsConfigNegativeMinDistance"},
+        {"type": "source", "location": "internal/connector/maps/connector.go::parseMapsConfig"}
+      ],
+      "linkedDoD": [
+        "Connect validates config: import_dir non-empty and exists, min thresholds non-negative"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-003",
+      "name": "Takeout JSON parsing produces classified activities",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L124",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestSyncProducesArtifacts"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestSyncMultiActivityTypeDistribution"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestParseTakeoutJSON_HappyPath"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestClassifyActivity"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestClassifyActivityAllTransitTypes"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestNormalizeAllActivityTypes"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestAssignTierTrailFull"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/connector_test.go::TestSyncProducesArtifacts"},
+        {"type": "unit-test", "location": "internal/connector/maps/normalizer_test.go::TestNormalizeAllActivityTypes"},
+        {"type": "source", "location": "internal/connector/maps/maps.go::ClassifyActivity"}
+      ],
+      "linkedDoD": [
+        "NormalizeActivity produces RawArtifact with all 17 metadata fields per R-007",
+        "assignTier returns full for trail-qualified, standard for drive/transit/short"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-004",
+      "name": "Normalizer produces RawArtifact with full metadata",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L143",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestNormalizeActivityMetadata"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestNormalizeActivityTitle"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestBuildContent"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/normalizer_test.go::TestNormalizeActivityMetadata"},
+        {"type": "unit-test", "location": "internal/connector/maps/normalizer_test.go::TestNormalizeActivityTitle"},
+        {"type": "source", "location": "internal/connector/maps/normalizer.go::NormalizeActivity"}
+      ],
+      "linkedDoD": [
+        "Title formatted as \"{Type} — {distance}km, {duration}min\" for all 6 types"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-005",
+      "name": "Cursor-based incremental sync skips processed files",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L161",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestSyncCursorSkipsProcessed"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestSyncEmptyCursorFullScan"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestParseCursor"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestEncodeCursor"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestCursorPruningRemovesArchivedFiles"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/connector_test.go::TestSyncCursorSkipsProcessed"},
+        {"type": "source", "location": "internal/connector/maps/connector.go::Sync"}
+      ],
+      "linkedDoD": [
+        "Cursor management: pipe-delimited filenames, empty cursor → full scan, populated cursor → incremental"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-006",
+      "name": "Activities below minimum thresholds are skipped",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L169",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestSyncMinThresholdFiltering"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestSyncAllFilteredStillAdvancesCursor"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/connector_test.go::TestSyncMinThresholdFiltering"},
+        {"type": "source", "location": "internal/connector/maps/connector.go::Sync"}
+      ],
+      "linkedDoD": [
+        "Activities below min_distance_m / min_duration_min are filtered out"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-007",
+      "name": "Trail-qualified activities produce enriched journal entries",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L274",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestTrailQualifiedEnrichment"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestNonTrailNotEnriched"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestIsTrailQualified"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestIsTrailQualifiedBoundaries"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/normalizer_test.go::TestTrailQualifiedEnrichment"},
+        {"type": "unit-test", "location": "internal/connector/maps/maps_test.go::TestIsTrailQualified"},
+        {"type": "source", "location": "internal/connector/maps/maps.go::IsTrailQualified"}
+      ],
+      "linkedDoD": [
+        "Trail-qualified activities produce enriched metadata: trail_qualified=true, route_geojson, elevation, distance, duration"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-008",
+      "name": "GeoJSON route stored correctly in metadata",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L290",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestGeoJSONRouteStorage"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestGeoJSONFallbackTwoPoint"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestToGeoJSON"},
+        {"file": "internal/connector/maps/maps_test.go", "function": "TestToGeoJSON_TwoPoints_ValidLineString"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/normalizer_test.go::TestGeoJSONRouteStorage"},
+        {"type": "source", "location": "internal/connector/maps/maps.go::ToGeoJSON"}
+      ],
+      "linkedDoD": [
+        "GeoJSON routes stored as LineString in metadata, with fallback to 2-point for routeless activities"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-009",
+      "name": "Dedup hash prevents duplicate artifacts on re-import",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L300",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestComputeDedupHash"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestDedupHashSameGridSameHash"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestDedupHashDistinguishesTypesAtSameLocation"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/normalizer_test.go::TestComputeDedupHash"},
+        {"type": "source", "location": "internal/connector/maps/normalizer.go::computeDedupHash"}
+      ],
+      "linkedDoD": [
+        "computeDedupHash implemented: rounds coords to ~500m grid, SHA-256, returns 16-char hex prefix",
+        "Dedup prevents duplicate artifacts when same activities appear in different Takeout export files"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-010",
+      "name": "Dedup hash distinguishes nearby but different activities",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L308",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestDedupHashDistinguishesNearby"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestRoundToGrid"},
+        {"file": "internal/connector/maps/normalizer_test.go", "function": "TestDedupHashDistinguishesHoursAtSameLocation"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/normalizer_test.go::TestDedupHashDistinguishesNearby"},
+        {"type": "source", "location": "internal/connector/maps/normalizer.go::roundToGrid"}
+      ],
+      "linkedDoD": [
+        "computeDedupHash implemented: rounds coords to ~500m grid, SHA-256, returns 16-char hex prefix"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-011",
+      "name": "Database migration creates location_clusters table",
+      "scope": "scope-02",
+      "status": "deferred",
+      "source": "specs/011-maps-connector/scopes.md#L316",
+      "requiredTestType": ["manual"],
+      "linkedTests": [
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationSQL_Parseable"},
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationSQL_Indexes"}
+      ],
+      "evidenceRefs": [
+        {"type": "manual", "location": "specs/011-maps-connector/report.md"},
+        {"type": "source", "location": "internal/db/migrations/009_maps.sql"},
+        {"type": "spec", "location": "specs/011-maps-connector/scopes.md::SCN-MT-011"}
+      ],
+      "linkedDoD": [
+        "009_maps.sql migration creates location_clusters table with correct schema and 3 indexes"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-012",
+      "name": "Processed files are archived",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L323",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestArchiveFile"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestArchiveDisabled"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestSyncArchiveEnabled"},
+        {"file": "internal/connector/maps/harden_test.go", "function": "TestImprove_ArchiveFileFreeFunction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/connector_test.go::TestArchiveFile"},
+        {"type": "source", "location": "internal/connector/maps/connector.go::archiveFile"}
+      ],
+      "linkedDoD": [
+        "File archiving moves processed files to {import_dir}/archive/ when enabled, no-op when disabled"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-013",
+      "name": "Location clusters populated during sync",
+      "scope": "scope-02",
+      "status": "deferred",
+      "source": "specs/011-maps-connector/scopes.md#L332",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "manual", "location": "specs/011-maps-connector/report.md"},
+        {"type": "source", "location": "internal/connector/maps/connector.go::Sync"},
+        {"type": "spec", "location": "specs/011-maps-connector/scopes.md::SCN-MT-013"}
+      ],
+      "linkedDoD": [
+        "location_clusters rows populated for every synced activity with correctly rounded coordinates"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-014",
+      "name": "Commute pattern detected from repeated weekday route",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L424",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestDetectCommuteAboveThreshold"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestCommuteWeekdaysOnlyFilter"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestNormalizeCommutePattern"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestClassifyCommutesMultipleRoutes"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestDetectCommuteExactThreshold"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestDetectCommuteAboveThreshold"},
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestNormalizeCommutePattern"},
+        {"type": "source", "location": "internal/connector/maps/patterns.go::DetectCommutes"}
+      ],
+      "linkedDoD": [
+        "DetectCommutes finds repeated weekday routes ≥ min_occurrences within window_days",
+        "Commute pattern artifacts have ContentType pattern/commute with frequency, departure, duration metadata"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-015",
+      "name": "No commute detected below threshold",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L438",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestDetectCommuteBelowThreshold"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestClassifyCommutesEmptyClusters"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestDetectCommuteBelowThreshold"},
+        {"type": "source", "location": "internal/connector/maps/patterns.go::classifyCommutes"}
+      ],
+      "linkedDoD": [
+        "DetectCommutes finds repeated weekday routes ≥ min_occurrences within window_days"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-016",
+      "name": "Trip detected from overnight stay far from home",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L444",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestDetectTripOvernight"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestDetectTripBelowDistance"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestNormalizeTripEvent"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestClassifyTripsSingleDayBelowOvernight"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestClassifyTripsGapBreaks"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestDetectTripOvernight"},
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestNormalizeTripEvent"},
+        {"type": "source", "location": "internal/connector/maps/patterns.go::DetectTrips"}
+      ],
+      "linkedDoD": [
+        "DetectTrips identifies overnight stays >50km from inferred home and groups activities",
+        "Trip event artifacts have ContentType event/trip with destination, date range, activity breakdown metadata"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-017",
+      "name": "Temporal-spatial linking creates CAPTURED_DURING edges",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L458",
+      "requiredTestType": ["unit", "manual"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestDetermineLinkTypeSpatial"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestImprove_DetermineLinkTypeStartLocationFallback"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestImprove_DetermineLinkTypeEndLocationFallback"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestDetermineLinkTypeSpatial"},
+        {"type": "manual", "location": "specs/011-maps-connector/report.md"},
+        {"type": "source", "location": "internal/connector/maps/patterns.go::LinkTemporalSpatial"}
+      ],
+      "linkedDoD": [
+        "LinkTemporalSpatial creates CAPTURED_DURING edges with correct link_type (temporal-only vs temporal-spatial)",
+        "CAPTURED_DURING edges inserted via ON CONFLICT DO NOTHING (idempotent)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-018",
+      "name": "Temporal-only linking when time matches but no location proximity",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L466",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestDetermineLinkTypeSpatial"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestImprove_DetermineLinkTypeLocationsFarAway"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestDetermineLinkTypeEmptyRoute"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestImprove_DetermineLinkTypeLocationsFarAway"},
+        {"type": "source", "location": "internal/connector/maps/patterns.go::determineLinkType"}
+      ],
+      "linkedDoD": [
+        "LinkTemporalSpatial creates CAPTURED_DURING edges with correct link_type (temporal-only vs temporal-spatial)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-019",
+      "name": "No linking when time does not overlap",
+      "scope": "scope-03",
+      "status": "deferred",
+      "source": "specs/011-maps-connector/scopes.md#L472",
+      "requiredTestType": ["manual"],
+      "linkedTests": [],
+      "evidenceRefs": [
+        {"type": "manual", "location": "specs/011-maps-connector/report.md"},
+        {"type": "source", "location": "internal/connector/maps/patterns.go::LinkTemporalSpatial"},
+        {"type": "spec", "location": "specs/011-maps-connector/scopes.md::SCN-MT-019"}
+      ],
+      "linkedDoD": [
+        "LinkTemporalSpatial creates CAPTURED_DURING edges with correct link_type (temporal-only vs temporal-spatial)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-020",
+      "name": "PostSync orchestrates pattern detection after sync",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L478",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestPostSyncContinuesOnFailure"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestSyncCallsPostSyncOnActivities"},
+        {"file": "internal/connector/maps/connector_test.go", "function": "TestSyncNoPostSyncOnEmptyResult"},
+        {"file": "internal/connector/maps/chaos_test.go", "function": "TestStabilize_PostSyncUsesConfigSnapshot"},
+        {"file": "internal/connector/maps/chaos_test.go", "function": "TestStabilize_PostSyncNoPoolReturnsNil"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestPostSyncContinuesOnFailure"},
+        {"type": "source", "location": "internal/connector/maps/connector.go::PostSync"}
+      ],
+      "linkedDoD": [
+        "PostSync orchestrates commute → trip → linking, continues on per-step failures"
+      ]
+    },
+    {
+      "scenarioId": "SCN-MT-021",
+      "name": "Commute-classified activities downgraded to light tier",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/011-maps-connector/scopes.md#L486",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestTierDowngradeCommute"},
+        {"file": "internal/connector/maps/patterns_test.go", "function": "TestTierUpgradeTrip"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestTierDowngradeCommute"},
+        {"type": "unit-test", "location": "internal/connector/maps/patterns_test.go::TestTierUpgradeTrip"},
+        {"type": "source", "location": "internal/connector/maps/patterns.go"}
+      ],
+      "linkedDoD": [
+        "Commute-classified activities downgraded to light tier; trip-associated activities upgraded to full"
+      ]
+    }
+  ]
+}

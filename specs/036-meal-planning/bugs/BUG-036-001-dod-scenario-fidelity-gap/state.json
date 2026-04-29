@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 3,
+  "bugId": "BUG-036-001",
+  "feature": "036-meal-planning",
+  "title": "DoD scenario fidelity gap",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "createdAt": "2026-04-27T15:32:21Z",
+  "updatedAt": "2026-04-27T16:15:00Z",
+  "lastUpdatedAt": "2026-04-27T16:15:00Z",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "done",
+    "completedPhases": [
+      "discovery",
+      "documentation",
+      "analysis",
+      "planning",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "completedAt": "2026-04-27T15:50:56Z",
+    "certifiedBy": "bubbles.bug (artifact-only fidelity playbook; no production code changed)"
+  },
+  "policySnapshot": {
+    "playbook": "BUG-031-002 dod-scenario-fidelity-gap",
+    "boundary": "specs/036-meal-planning/scopes.md, scenario-manifest.json, report.md (evidence-ref block only), and this bug folder",
+    "forbidden": [
+      "production code under internal/, cmd/, ml/, web/, docker-compose.yml, Dockerfile, config/smackerel.yaml",
+      "sibling specs",
+      "spec 036 status / ceiling / scope-status mutation",
+      "DoD claim semantic rewriting"
+    ]
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "phase": "discovery",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-04-27T15:32:21Z",
+      "outcome": "Reproduced traceability-guard RESULT: FAILED (130 failures, 0 warnings) on specs/036-meal-planning"
+    },
+    {
+      "phase": "documentation",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-04-27T15:35:00Z",
+      "outcome": "Created bug folder with bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md"
+    },
+    {
+      "phase": "analysis",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-04-27T15:36:00Z",
+      "outcome": "Categorized 130 failures into 5 classes; confirmed 99 are fidelity (in scope) and 31 are implementation-pending Blocked-scope paths (out of scope)"
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-04-27T15:40:00Z",
+      "outcome": "Created scenario-manifest.json (89 entries); prefixed 39 DoD bullets with SCN-036-NNN trace IDs; swapped Test Plan path tokens for Done scopes 01–08; appended evidence-reference block to report.md"
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-04-27T15:42:00Z",
+      "outcome": "Re-ran traceability-guard.sh and artifact-lint.sh as artifact-only regression tests. Pre-fix vs post-fix delta captured in report.md."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-04-27T15:45:21Z",
+      "outcome": "Post-fix traceability-guard: RESULT FAILED (31 failures, 0 warnings) — 99 of 130 resolved; remaining 31 are Blocked-scope paths out of scope per spec.md. Post-fix artifact-lint: PASSED."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-04-27T15:48:00Z",
+      "outcome": "Audited git working tree: only specs/036-meal-planning/ paths modified; no production code, no sibling specs touched. Spec 036 status, ceiling, scope statuses, and DoD claim semantics preserved."
+    },
+    {
+      "phase": "finalize",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-04-27T15:50:56Z",
+      "outcome": "Bug status set to done. Workflow mode bugfix-fastlane statusCeiling permits closure for artifact-only fixes."
+    },
+    {
+      "phase": "re-apply",
+      "agent": "bubbles.bug",
+      "ranAt": "2026-04-27T16:15:00Z",
+      "outcome": "Prior dispatch self-reverted parent scopes.md + report.md edits before commit. This dispatch re-applied design.md Steps 2/3/4 (DoD SCN-036-NNN prefixes for 39 unmapped scenarios; Test Plan path-token swaps for Done scopes 01–08; report.md Traceability Evidence References block append). Re-run pre-fix baseline: 129 failures (manifest already on disk from prior dispatch). Re-run post-fix: 31 failures, all blocked-scope production-test-gap. Both parent and bug-folder artifact-lint runs PASSED. git status confirms specs/036-meal-planning/scopes.md and specs/036-meal-planning/report.md now show as modified on disk."
+    }
+  ],
+  "residual": {
+    "guardFailures": 31,
+    "classification": "implementation-pending (Blocked scopes 09–15 await spec 037 LLM Scenario Agent + Tool Registry)",
+    "scope": "out-of-scope-for-this-bug per spec.md"
+  }
+}

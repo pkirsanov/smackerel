@@ -234,6 +234,44 @@ class TestHandleDomainExtract:
         assert result["domain_data"]["brand"] == "Sony"
         assert result["domain_data"]["price"]["amount"] == 349.99
 
+    def test_llm_unavailable_uses_sst_gated_recipe_fallback(self, monkeypatch):
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "true")
+        with patch("app.domain.litellm.acompletion", new_callable=AsyncMock) as mock_completion:
+            mock_completion.side_effect = ConnectionError("connection refused")
+            data = {
+                "artifact_id": "art-fallback-recipe",
+                "contract_version": "recipe-extraction-v1",
+                "content_type": "recipe",
+                "title": "Classic Margherita Pizza Recipe",
+                "content_raw": (
+                    "Classic Margherita Pizza Recipe. Ingredients: pizza dough, tomato sauce, "
+                    "fresh mozzarella, basil, olive oil. Instructions: 1. Stretch dough. "
+                    "2. Add sauce and mozzarella. 3. Bake until crisp."
+                ),
+            }
+            result = asyncio.run(handle_domain_extract(data, "ollama", "gemma", "", "http://ollama:11434"))
+
+        assert result["success"] is True
+        assert result["model_used"] == "fallback"
+        assert result["domain_data"]["domain"] == "recipe"
+        assert "fresh mozzarella" in [ingredient["name"] for ingredient in result["domain_data"]["ingredients"]]
+        assert len(result["domain_data"]["steps"]) == 3
+
+    def test_llm_unavailable_fails_when_recipe_fallback_disabled(self, monkeypatch):
+        monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+        with patch("app.domain.litellm.acompletion", new_callable=AsyncMock) as mock_completion:
+            mock_completion.side_effect = ConnectionError("connection refused")
+            data = {
+                "artifact_id": "art-no-fallback",
+                "contract_version": "recipe-extraction-v1",
+                "content_type": "recipe",
+                "content_raw": "Ingredients: flour, water. Instructions: mix and bake.",
+            }
+            result = asyncio.run(handle_domain_extract(data, "ollama", "gemma", "", "http://ollama:11434"))
+
+        assert result["success"] is False
+        assert "connection refused" in result["error"]
+
 
 class TestResolveModel:
     def test_ollama_provider(self):

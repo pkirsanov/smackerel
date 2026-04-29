@@ -1,0 +1,83 @@
+{
+  "version": 3,
+  "specId": "031-live-stack-testing",
+  "bugId": "BUG-031-002-dod-scenario-fidelity-gap",
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-002-dod-scenario-fidelity-gap",
+  "featureName": "BUG-031-002: DoD scenario fidelity gap (SCN-LST-001/002/003/004)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T05:00:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "docs",
+      "validate",
+      "audit",
+      "chaos"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T05:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: prefixed 4 Gherkin scenario titles in specs/031-live-stack-testing/scopes.md (Scopes 2/5/6) with their SCN-LST-NNN trace IDs (SCN-LST-001 All migrations apply cleanly, SCN-LST-002 Schema DDL resilience, SCN-LST-003 Full pipeline flow, SCN-LST-004 Search works after cold start) and prefixed one corresponding DoD bullet per scenario with `Scenario SCN-LST-NNN (<title>):`. No production code, no other parent artifacts, and no scenario-manifest entries modified."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T05:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: regression test is the traceability-guard run itself (see validate phase). Underlying behavior tests (tests/integration/db_migration_test.go, tests/integration/ml_readiness_test.go, tests/e2e/capture_process_search_test.go) are unchanged and remain part of the parent feature's already-passing test suite."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T05:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug folder artifacts (spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json) populated with full content. No external doc syncing required (artifact-only fix; no API surface, runtime behavior, or operator workflow changed)."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T05:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability-guard PASS: `bash .github/bubbles/scripts/traceability-guard.sh specs/031-live-stack-testing` returns RESULT: PASSED (0 warnings) with 12/12 scenario-to-row mappings, 12/12 Gherkin scenarios mapped to DoD, 12 concrete test file references, and 12 report evidence references. Pre-fix baseline was RESULT: FAILED (7 failures, 0 warnings) with 3 unmapped scenarios on the row check and 3 unmapped scenarios on the G068 DoD check. Output recorded inline in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T05:14:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (`bash .github/bubbles/scripts/artifact-lint.sh specs/031-live-stack-testing`) and bug folder (`bash .github/bubbles/scripts/artifact-lint.sh specs/031-live-stack-testing/bugs/BUG-031-002-dod-scenario-fidelity-gap`). git diff --name-only confirms boundary: zero changes under internal/, cmd/, ml/, config/, tests/, or any other parent spec artifact. All edits confined to specs/031-live-stack-testing/scopes.md and the new bug folder."
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T05:14:30Z",
+        "outcome": "completed_owned",
+        "evidence": "Chaos N/A for artifact-only documentation/traceability fix: no runtime code path, no concurrency, no failure injection surface affected. Recorded for ceiling compliance per workflow specReview enforcement."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T05:15:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "docs", "validate", "audit", "chaos"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

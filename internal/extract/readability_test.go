@@ -87,6 +87,22 @@ func TestExtractText(t *testing.T) {
 	}
 }
 
+func TestExtractText_RecipeContentType(t *testing.T) {
+	text := "Classic Margherita Pizza Recipe\nIngredients: pizza dough, tomato sauce, mozzarella, basil.\nInstructions: stretch dough, add toppings, bake until crisp."
+	result := ExtractText(text)
+	if result.ContentType != ContentTypeRecipe {
+		t.Fatalf("expected recipe content type for recipe-shaped text, got %q", result.ContentType)
+	}
+}
+
+func TestExtractText_CookingNoteRemainsGeneric(t *testing.T) {
+	text := "I read a recipe article about cooking faster weeknight meals, but this is just a planning note."
+	result := ExtractText(text)
+	if result.ContentType != ContentTypeGeneric {
+		t.Fatalf("expected generic content type for non-recipe note, got %q", result.ContentType)
+	}
+}
+
 func TestExtractText_LongTitle(t *testing.T) {
 	longText := "x" + string(make([]byte, 200))
 	result := ExtractText(longText)

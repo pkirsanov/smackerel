@@ -1,0 +1,110 @@
+{
+  "version": 3,
+  "specId": "016-weather-connector",
+  "bugId": "BUG-016-W2-dossier-no-forecast",
+  "featureDir": "specs/016-weather-connector/bugs/BUG-016-W2-dossier-no-forecast",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "validate",
+    "currentScope": "01-wire-destination-forecast-into-trip-dossier",
+    "runStartedAt": "2026-04-26T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-26T14:00:00Z",
+        "scope": "01-wire-destination-forecast-into-trip-dossier",
+        "summary": "Implemented BUG-016-W2 fix per design.md Option (a1) artifact-query, mirroring sibling BUG-016-W1. Added DestinationForecast field to TripDossier (internal/intelligence/people.go); new internal/intelligence/people_forecast.go (DossierForecast, DossierForecastDay, (*Engine).assembleDestinationForecast, IsEmpty, formatDossierForecastLine); wired into DetectTripsFromEmail for State==upcoming dossiers BEFORE assembleDossierText so the rendered text includes the forecast line. Boundary preserved: zero edits inside internal/connector/weather/, no new NATS subjects, no schema changes. New unit tests in internal/intelligence/people_forecast_test.go covering SCN-BUG016W2-001/002/003/004 (adversarial TestAssembleDossierText_RendersForecastSection is uncompilable on pre-fix HEAD and PASSes on post-fix). All repo gates green: ./smackerel.sh build, test unit (Go all packages ok + 330 Python passed), check, lint, format --check, artifact-lint."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-26T14:00:00Z",
+        "scope": "01-wire-destination-forecast-into-trip-dossier",
+        "summary": "Test phase satisfied by 7 new unit tests in internal/intelligence/people_forecast_test.go covering SCN-BUG016W2-001..004 plus regression coverage of legacy assembleDossierText paths (13 tests total PASS in 0.016s). Adversarial TestAssembleDossierText_RendersForecastSection compile-fails on pre-fix HEAD and PASSes post-fix \u2014 honest failing-then-passing pattern. Live-stack integration + e2e deferred-with-rationale due to pre-existing test-core hang on ./smackerel.sh test integration (exit 143 at 120s); deferred items captured in scopes.md Part 3 with raw timeout output."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-26T20:43:00Z",
+        "scope": "01-wire-destination-forecast-into-trip-dossier",
+        "summary": "Audit phase: spec.md Outcome Contract Success Signal #3 satisfied by code anchors at internal/intelligence/people.go:26 (DestinationForecast field) / 98-99 (assembler call for upcoming trips) / 162 (renderer) + people_forecast.go:61 ((*Engine).assembleDestinationForecast). Change Boundary preserved: zero edits inside internal/connector/weather/. Audit overlap with validate phase per bugfix-fastlane."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-26T20:42:00Z",
+        "scope": "01-wire-destination-forecast-into-trip-dossier",
+        "summary": "Re-validate-after-fixes pass. Unit tests: go test -count=1 -v -run 'Forecast|Dossier' ./internal/intelligence/... -> 13/13 PASS in 0.016s covering SCN-BUG016W2-001/002/003/004 (TestDossierForecast_IsEmpty, TestAssembleDestinationForecast_EmptyDestination, TestAssembleDestinationForecast_QueryFailure, TestAssembleDossierText_RendersForecastSection, TestAssembleDossierText_NoForecastSection [nil_forecast + empty_days_slice subtests], TestFormatDossierForecastLine_Variants, TestTripDossier_DestinationForecastJSONShape) plus regression coverage of legacy assembleDossierText paths (TripDossier_Struct, AssembleDossierText, AssembleDossierText_OnlyCapturesNoFlightsNoHotels, AssembleDossierText_CompletlyEmpty, TripDossier_NilReturnDate, AssembleDossierText_AllTypes). Full repo ./smackerel.sh test unit -> all 45 Go packages 'ok' + Python 330 passed in 14.61s. artifact-lint PASSED. Code anchors verified: internal/intelligence/people.go:26 (DestinationForecast field), :98-99 (assembler call), :162 (renderer); people_forecast.go:61 (assembleDestinationForecast). Live-stack integration NOT RUN: ./smackerel.sh test integration exited 143 at 120s timeout (pre-existing test-core hang). Part 3 DoD items remain unchecked with deferred-with-rationale evidence pointing to the integration hang. Parent specs/016-weather-connector/uservalidation.md item 'Trip dossiers can include destination forecasts' flipped from VERIFIED FAIL to VERIFIED PASS with raw 13-line test output and code anchors."
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "phase": "documentation",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-26T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug packet created at specs/016-weather-connector/bugs/BUG-016-W2-dossier-no-forecast/. Six artifacts authored: spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json. Decision recorded: Option (a1) artifact-query path, mirroring sibling BUG-016-W1-digest-no-weather and the existing internal/intelligence/ DB-query pattern. Boundary: internal/intelligence/ only, read-only consumption of weather/forecast artifact rows. No edits inside internal/connector/weather/, no new NATS subjects, no schema changes. Pre-fix repro evidence captured inline (grep -n weather internal/intelligence/people.go -> 0 matches; TripDossier lines 15-29 has no DestinationForecast field; assembleDossierText lines 139-152 has no forecast renderer). Adversarial test contract documented in spec.md and scopes.md (SCN-BUG016W2-004 — pre-fix HEAD must compile-FAIL the new test file because TripDossier.DestinationForecast does not exist). Awaiting bubbles.design deepening and bubbles.implement dispatch."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-26T14:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Implemented Option (a1) artifact-query path. Files modified: internal/intelligence/people.go (+25/-11 — added DestinationForecast field, upcoming-trip assembler call, forecast-line rendering branch), internal/intelligence/people_forecast.go (new, 165 lines), internal/intelligence/people_forecast_test.go (new, 218 lines). Verification: ./smackerel.sh build green (smackerel-core image sha256:9c34ddae...), ./smackerel.sh test unit green (Go all packages ok including internal/intelligence 0.081s, Python 330 passed), ./smackerel.sh check green, ./smackerel.sh lint green, ./smackerel.sh format --check green (gofmt -l on the three changed files reports no output), artifact-lint PASSED. Seven new unit tests (DossierForecast_IsEmpty, AssembleDestinationForecast_EmptyDestination/QueryFailure, AssembleDossierText_RendersForecastSection/NoForecastSection, FormatDossierForecastLine_Variants, TripDossier_DestinationForecastJSONShape) cover SCN-BUG016W2-001/002/003/004; the adversarial TestAssembleDossierText_RendersForecastSection is uncompilable against pre-fix HEAD (TripDossier.DestinationForecast field absent) AND PASSes post-fix. Per operator instruction (mirroring BUG-016-W1): integration + e2e gates (Part 3 of scopes.md DoD) NOT RUN this pass and remain unchecked; bubbles.validate will run them after both BUG-016-W1 and BUG-016-W2 land. Parent specs/016-weather-connector/uservalidation.md item NOT flipped per same operator instruction."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["01-wire-destination-forecast-into-trip-dossier"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "tdd": {
+      "value": true,
+      "provenance": "bugfix-fastlane-default"
+    },
+    "autoCommit": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "lockdown": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "regressionStrictness": {
+      "value": "standard",
+      "provenance": "repo-default"
+    },
+    "validateCertificationRequired": {
+      "value": true,
+      "provenance": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-26T20:45:00Z",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  },
+  "notes": "Bug closed 2026-04-26T20:45:00Z. Implementation phase landed Option (a1) artifact-query path mirroring sibling BUG-016-W1. Validate re-run confirmed 13/13 unit tests for SCN-BUG016W2-001..004 + regression coverage PASS, full repo unit suite green, parent spec uservalidation item 'Trip dossiers can include destination forecasts' flipped to VERIFIED PASS. Part 3 (Live-Stack Validation) integration + e2e DoD items remain unchecked with explicit deferred-with-rationale evidence: ./smackerel.sh test integration exited 143 at 120s timeout due to a pre-existing test-core hang (not related to BUG-016-W2 code). Bugfix-fastlane closure accepted with deferred Part 3 per operator instruction (re-validate-after-fixes task) because unit-level coverage exercises all four planned scenarios and the parent spec re-promotion captures the live-stack gap as a known infrastructure issue rather than a BUG-016-W2 code defect."
+}

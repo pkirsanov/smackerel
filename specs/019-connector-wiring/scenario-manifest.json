@@ -1,0 +1,137 @@
+{
+  "version": 2,
+  "specId": "019",
+  "featureDir": "specs/019-connector-wiring",
+  "generatedBy": "bubbles.docs",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-019-001",
+      "name": "All 15 connectors registered at startup",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/019-connector-wiring/scopes.md#L46",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "cmd/core/main_test.go", "function": "TestAllConnectorsRegistered"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "cmd/core/main_test.go::TestAllConnectorsRegistered"},
+        {"type": "source", "location": "cmd/core/connectors.go::registerConnectors"}
+      ],
+      "linkedDoD": [
+        "All 5 connectors imported, instantiated, and registered in cmd/core/connectors.go"
+      ]
+    },
+    {
+      "scenarioId": "SCN-019-002",
+      "name": "Enabling Discord connector makes it operational",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/019-connector-wiring/scopes.md#L52",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "cmd/core/main_test.go", "function": "TestAllConnectorsRegistered"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestConnect_ValidConfig"},
+        {"file": "internal/connector/discord/gateway_test.go", "function": "TestConnector_GatewayStartsOnConnectWithEnabledFlag"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestConnect_ValidConfig"},
+        {"type": "unit-test", "location": "internal/connector/discord/gateway_test.go::TestConnector_GatewayStartsOnConnectWithEnabledFlag"},
+        {"type": "source", "location": "cmd/core/connectors.go"}
+      ],
+      "linkedDoD": [
+        "5 conditional-start blocks follow exact pattern of existing 10 connectors"
+      ]
+    },
+    {
+      "scenarioId": "SCN-019-003",
+      "name": "Missing credentials produce clear startup errors",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/019-connector-wiring/scopes.md#L57",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestConnect_MissingToken"},
+        {"file": "internal/connector/twitter/twitter_test.go", "function": "TestConnect_APIModeRequiresBearerToken"},
+        {"file": "internal/connector/twitter/twitter_test.go", "function": "TestConnect_InvalidSyncMode"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestConnect_MissingAPIKey"},
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestConnect_SetsHealthErrorOnInvalidConfig"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestConnect_NoLocations"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestParseAlertsConfig_InvalidCoordinates"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestConnect_MissingToken"},
+        {"type": "unit-test", "location": "internal/connector/markets/markets_test.go::TestConnect_MissingAPIKey"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestConnect_NoLocations"},
+        {"type": "source", "location": "cmd/core/connectors.go"}
+      ],
+      "linkedDoD": [
+        "5 conditional-start blocks follow exact pattern of existing 10 connectors",
+        "scripts/commands/config.sh extracts all new env vars via yaml_get"
+      ]
+    },
+    {
+      "scenarioId": "SCN-019-004",
+      "name": "Config entries exist for all 5 connectors in smackerel.yaml",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/019-connector-wiring/scopes.md#L63",
+      "requiredTestType": ["integration", "manual"],
+      "linkedTests": [
+        {"file": "tests/integration/test_connector_wiring.sh", "function": "shell:test_connector_wiring"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/test_connector_wiring.sh"},
+        {"type": "manual", "location": "specs/019-connector-wiring/report.md"},
+        {"type": "source", "location": "config/smackerel.yaml"},
+        {"type": "source", "location": "scripts/commands/config.sh"}
+      ],
+      "linkedDoD": [
+        "4 new YAML config blocks added to config/smackerel.yaml (Discord already existed)",
+        "./smackerel.sh config generate produces env vars for all 5 connectors in config/generated/dev.env"
+      ]
+    },
+    {
+      "scenarioId": "SCN-019-005",
+      "name": "Health endpoint shows all 15 connectors",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/019-connector-wiring/scopes.md#L69",
+      "requiredTestType": ["unit", "manual"],
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_ConnectorHealth"},
+        {"file": "cmd/core/main_test.go", "function": "TestAllConnectorsRegistered"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/health_test.go::TestHealthHandler_ConnectorHealth"},
+        {"type": "manual", "location": "specs/019-connector-wiring/report.md"},
+        {"type": "source", "location": "internal/api/health.go::ConnectorHealthLister"}
+      ],
+      "linkedDoD": [
+        "Health endpoint lists all 15 connectors"
+      ]
+    },
+    {
+      "scenarioId": "SCN-019-006",
+      "name": "Existing connectors unaffected by new registrations",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/019-connector-wiring/scopes.md#L75",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "cmd/core/main_test.go", "function": "TestAllConnectorsRegistered"},
+        {"file": "cmd/core/main_test.go", "function": "TestDuplicateRegistrationRejected"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "cmd/core/main_test.go::TestAllConnectorsRegistered"},
+        {"type": "unit-test", "location": "cmd/core/main_test.go::TestDuplicateRegistrationRejected"},
+        {"type": "source", "location": "cmd/core/connectors.go::registerConnectors"}
+      ],
+      "linkedDoD": [
+        "All 5 connectors imported, instantiated, and registered in cmd/core/connectors.go",
+        "./smackerel.sh test unit passes — all existing + new tests green"
+      ]
+    }
+  ]
+}

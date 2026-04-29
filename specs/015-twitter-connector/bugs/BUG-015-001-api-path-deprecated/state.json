@@ -1,0 +1,127 @@
+{
+  "version": 3,
+  "specId": "015-twitter-connector",
+  "bugId": "BUG-015-001-api-path-deprecated",
+  "featureDir": "specs/015-twitter-connector/bugs/BUG-015-001-api-path-deprecated",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-26T00:00:00Z",
+    "completedPhaseClaims": [
+      "documentation",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "phase": "documentation",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-26T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created bug packet (bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json). Captured option-(b) deprecation decision with four-bullet rationale."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-26T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Documentation-only amendments applied across specs/015-twitter-connector: spec.md (Deferred section + API-strategy banner + goal #5 rewording), scopes.md (Scope 6 → Deferred block, summary table updated, phase order entry marked deferred), uservalidation.md (item 13 → strikethrough non-applicable + disposition update), state.json (status + cert.status → done, scope-6 → Deferred, resolvedBugs entry added, priorReopens preserved), report.md (BUG-015-001 Deprecation Resolution section appended), scenario-manifest.json (created at parent feature root with 6 active scope-level scenarios)."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-26T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "./smackerel.sh test unit EXIT=0 — twitter package 127 sub-tests green; no regressions in any of the 41 Go packages or 330 Python tests. git diff --name-only HEAD -- internal/connector/twitter/ returns empty (no production code touched)."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-26T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "jq assertions confirm state.json status/cert.status=done, completedScopes=scope-01..05, scope-6 status=Deferred with deferredReason and deferredAt, resolvedBugs contains BUG-015-001 with priorReopens history. grep confirms no [ ] VERIFIED FAIL markers remain anywhere in spec. uservalidation item 13 is strikethrough non-applicable. spec.md Deferred section + API-strategy banner present."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-04-26T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "bash .github/bubbles/scripts/artifact-lint.sh specs/015-twitter-connector EXIT=0. bash .github/bubbles/scripts/traceability-guard.sh specs/015-twitter-connector EXIT=0 (scenario-manifest cross-check now passes after manifest creation)."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-04-26T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Bug closed. Status promoted to done with real captured evidence. Deprecation applied across all 015 artifacts. Parent spec status: in_progress → done. Scope 6 retired as Deferred / Non-Goal."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "Scope 1: Document the deprecation across all 015-twitter-connector artifacts"
+    ],
+    "certifiedCompletedPhases": [
+      "documentation",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "tdd": {
+      "value": false,
+      "provenance": "repo-default"
+    },
+    "autoCommit": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "lockdown": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "regressionStrictness": {
+      "value": "standard",
+      "provenance": "repo-default"
+    },
+    "validateCertificationRequired": {
+      "value": true,
+      "provenance": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-26T00:00:00Z",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "notes": "Documentation-only deprecation of Twitter API polling path. Option (b) selected: archive-import path (127/127 tests green) is the certified surface; API path retired as Non-Goal. All amendments preserve historical context — R-008 + SCN-TW-005 relocated to a Deferred section, Scope 6 moved to Deferred status with rationale block, uservalidation item 13 strikethrough with bug back-link. No production code under internal/connector/twitter/ was modified."
+}

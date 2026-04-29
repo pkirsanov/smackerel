@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "specId": "040",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-04-27T19:50:00Z",
+  "scopes": [
+    {
+      "scopeId": "01-photo-platform-foundation",
+      "scopeName": "Photo Platform Foundation",
+      "tests": [
+        {"type": "unit", "category": "unit", "file": "internal/connector/photos/library_test.go", "scenarioId": "SCN-040-002", "description": "Provider-neutral PhotoEvent shape persists without provider-specific branching", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "unit", "category": "unit", "file": "internal/connector/photos/stable_signals_test.go", "scenarioId": "SCN-040-003", "description": "Stable signals cannot create LLM-owned decisions", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "unit", "category": "unit", "file": "internal/nats/contract_test.go", "scenarioId": "SCN-040-001", "description": "Go photo subject constants match NATS contract", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "unit", "category": "unit", "file": "ml/tests/test_photos_contract.py", "scenarioId": "SCN-040-003", "description": "ML photo decision results require confidence and rationale", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_foundation_test.go", "scenarioId": "SCN-040-001", "description": "Config, NATS, DB schema, and ML validators agree on live stack", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_privacy_boundary_test.go", "scenarioId": "SCN-040-001", "description": "Test config rejects user-owned provider URLs", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_foundation_test.go", "scenarioId": "SCN-040-002", "description": "Synthetic photo detail can be fetched through live API", "command": "./smackerel.sh test e2e", "liveSystem": true}
+      ]
+    },
+    {
+      "scopeId": "02-immich-connect-scan-search",
+      "scopeName": "Immich Connect, Scan, And Search",
+      "tests": [
+        {"type": "unit", "category": "unit", "file": "internal/connector/photos/adapters/immich/immich_test.go", "scenarioId": "SCN-040-004", "description": "Immich media maps to provider-neutral PhotoEvent", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "unit", "category": "unit", "file": "internal/api/photos_test.go", "scenarioId": "SCN-040-004", "description": "Photo search response uses provider-neutral DTO", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_immich_test.go", "scenarioId": "SCN-040-004", "description": "Immich connect, scope selection, scan, and classification on live provider", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_sync_test.go", "scenarioId": "SCN-040-005", "description": "Incremental Immich changes update state correctly", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_skip_ledger_test.go", "scenarioId": "SCN-040-006", "description": "Skip ledger is visible and retryable", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_search_test.go", "scenarioId": "SCN-040-004", "description": "Immich whiteboard OCR result appears through live search API", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_sync_test.go", "scenarioId": "SCN-040-005", "description": "Album move updates metadata without reclassification", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "e2e-ui", "category": "e2e-ui", "file": "web/pwa/tests/photos_connectors.spec.ts", "scenarioId": "SCN-040-004", "description": "Photo libraries list and Immich wizard use live connector API", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "e2e-ui", "category": "e2e-ui", "file": "web/pwa/tests/photos_connector_progress.spec.ts", "scenarioId": "SCN-040-006", "description": "Connector detail renders progress and skip ledger from live API", "command": "./smackerel.sh test e2e", "liveSystem": true}
+      ]
+    },
+    {
+      "scopeId": "03-lifecycle-duplicates-removal",
+      "scopeName": "Lifecycle, Duplicates, And Removal Review",
+      "tests": [
+        {"type": "unit", "category": "unit", "file": "internal/connector/photos/exif_test.go", "scenarioId": "SCN-040-007", "description": "Editor signatures map to supported editors", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "unit", "category": "unit", "file": "internal/connector/photos/action_tokens_test.go", "scenarioId": "SCN-040-009", "description": "Action tokens reject scope drift and expiry", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "unit", "category": "unit", "file": "ml/tests/test_photos_decisions.py", "scenarioId": "SCN-040-007", "description": "Lifecycle, dedupe, and removal results require rationale and confidence", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_lifecycle_test.go", "scenarioId": "SCN-040-007", "description": "RAW exports link with editor and rationale", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_dedupe_test.go", "scenarioId": "SCN-040-008", "description": "Burst, HDR, panorama, exact, and near-duplicate clusters persist", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_removal_test.go", "scenarioId": "SCN-040-009", "description": "Removal candidates require rationale and no mutation before confirmation", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_removal_review_test.go", "scenarioId": "SCN-040-009", "description": "Action planning is non-mutating before confirmation", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_cross_provider_dedupe_test.go", "scenarioId": "SCN-040-008", "description": "Cross-provider duplicate returns once with provider links", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "e2e-ui", "category": "e2e-ui", "file": "web/pwa/tests/photos_lifecycle_review.spec.ts", "scenarioId": "SCN-040-007", "description": "Low confidence RAW match stays in review until user confirms", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "e2e-ui", "category": "e2e-ui", "file": "web/pwa/tests/photos_duplicates.spec.ts", "scenarioId": "SCN-040-008", "description": "Duplicate cluster best-pick and resolve flow uses live API", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "e2e-ui", "category": "e2e-ui", "file": "web/pwa/tests/photos_confirm_action.spec.ts", "scenarioId": "SCN-040-009", "description": "Destructive photo action requires exact batch confirmation", "command": "./smackerel.sh test e2e", "liveSystem": true}
+      ]
+    },
+    {
+      "scopeId": "04-capture-telegram-routing",
+      "scopeName": "Capture, Telegram, And Cross-Feature Routing",
+      "tests": [
+        {"type": "unit", "category": "unit", "file": "internal/api/photos_upload_test.go", "scenarioId": "SCN-040-010", "description": "Upload preserves source and provider refs", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "unit", "category": "unit", "file": "internal/connector/photos/routing_test.go", "scenarioId": "SCN-040-011", "description": "Photo routing targets require classification and confidence", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_upload_test.go", "scenarioId": "SCN-040-010", "description": "Telegram, mobile, and web uploads enter same pipeline", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_docscan_test.go", "scenarioId": "SCN-040-011", "description": "Multi-page document scan creates OCR and clean artifact", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_sensitivity_test.go", "scenarioId": "SCN-040-012", "description": "Server-side reveal and audit enforce sensitivity", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_telegram_test.go", "scenarioId": "SCN-040-010", "description": "Telegram upload classify search and retrieve flow", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_routing_test.go", "scenarioId": "SCN-040-011", "description": "Receipt recipe and document photos create downstream artifacts", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_sensitivity_retrieval_test.go", "scenarioId": "SCN-040-012", "description": "Telegram does not auto-send sensitive photo bytes", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "e2e-ui", "category": "e2e-ui", "file": "web/pwa/tests/photos_docscan.spec.ts", "scenarioId": "SCN-040-011", "description": "Mobile document scan creates multi-page OCR artifact from live upload API", "command": "./smackerel.sh test e2e", "liveSystem": true}
+      ]
+    },
+    {
+      "scopeId": "05-multi-provider-operations",
+      "scopeName": "Multi-Provider Capability Governance And Operations",
+      "tests": [
+        {"type": "unit", "category": "unit", "file": "internal/connector/photos/capabilities_test.go", "scenarioId": "SCN-040-013", "description": "Capability limitations return stable codes", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "unit", "category": "unit", "file": "internal/connector/photos/cross_provider_test.go", "scenarioId": "SCN-040-014", "description": "Cross-provider duplicate uses provider-neutral signals", "command": "./smackerel.sh test unit", "liveSystem": false},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_provider_neutrality_test.go", "scenarioId": "SCN-040-014", "description": "Second adapter matches Immich shape", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_health_test.go", "scenarioId": "SCN-040-015", "description": "Progress metrics and capability limits come from live API", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "integration", "category": "integration", "file": "tests/integration/photos_capability_test.go", "scenarioId": "SCN-040-013", "description": "Unsupported operation is 409 and non-mutating", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "Canary", "category": "integration", "file": "tests/integration/photos_capability_taxonomy_canary_test.go", "scenarioId": "SCN-040-013", "description": "Go capability registry, NATS payloads, API limitation codes, and PWA banner strings share one taxonomy", "command": "./smackerel.sh test integration", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_capability_test.go", "scenarioId": "SCN-040-013", "description": "Album write is blocked while search still works", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/photos_search_test.go", "scenarioId": "SCN-040-014", "description": "Cross-provider unified ranking returns provider links", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "e2e-ui", "category": "e2e-ui", "file": "web/pwa/tests/photos_capability_banner.spec.ts", "scenarioId": "SCN-040-013", "description": "Provider limitation banner renders exact live limitation code", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "e2e-ui", "category": "e2e-ui", "file": "web/pwa/tests/photos_health.spec.ts", "scenarioId": "SCN-040-015", "description": "Photo health dashboard renders live metrics", "command": "./smackerel.sh test e2e", "liveSystem": true},
+        {"type": "stress", "category": "stress", "file": "tests/stress/photos_ingest_stress_test.go", "scenarioId": "SCN-040-015", "description": "Synthetic 15000-photo library becomes searchable within target", "command": "./smackerel.sh test stress", "liveSystem": true}
+      ]
+    }
+  ]
+}

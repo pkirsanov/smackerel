@@ -1,0 +1,170 @@
+{
+  "version": 3,
+  "featureDir": "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push",
+  "featureName": "BUG-003: No Image Push to Container Registry",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-26T08:25:00Z",
+    "completedPhaseClaims": ["bootstrap", "analyze", "implement", "test", "validate", "audit"],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["Scope 01: Verify-and-Close Already-Implemented GHCR Push"],
+    "certifiedCompletedPhases": ["bootstrap", "analyze", "implement", "test", "validate", "audit"],
+    "phaseRecords": [
+      {
+        "phase": "bootstrap",
+        "agent": "bubbles.bug",
+        "startedAt": "2026-04-26T08:25:00Z",
+        "completedAt": "2026-04-26T08:42:00Z",
+        "outcome": "completed_owned",
+        "evidenceRefs": [
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/bug.md (pre-existing)",
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/state.json (created)",
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/design.md (created)",
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/scopes.md (created)",
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/report.md (created)",
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/uservalidation.md (created)"
+        ]
+      },
+      {
+        "phase": "analyze",
+        "agent": "bubbles.bug",
+        "startedAt": "2026-04-26T08:42:00Z",
+        "completedAt": "2026-04-26T08:58:00Z",
+        "outcome": "completed_owned",
+        "evidenceRefs": [
+          "specs/029-devops-pipeline/spec.md:33 (Non-Goals already amended — GHCR push permitted on tagged releases)",
+          ".github/workflows/ci.yml:45-90 (GHCR login + push job already implemented, gated on refs/tags/v)",
+          "specs/029-devops-pipeline/state.json (parent Scope 7 'GHCR Image Push on Tagged Releases' status: Done)",
+          "specs/029-devops-pipeline/scenario-manifest.json (GHCR push scenarios registered in parent feature)"
+        ]
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.validate",
+        "startedAt": "2026-04-26T09:05:00Z",
+        "completedAt": "2026-04-26T09:07:00Z",
+        "outcome": "skipped",
+        "evidenceRefs": [
+          "Resolved-Elsewhere closure: implementation already shipped under parent feature 029 Scope 7 — no source files modified by this bug.",
+          ".github/workflows/ci.yml:45-90 (existing tag-gated GHCR login + push job, authored under parent Scope 7)",
+          "transitionRequests[0] tr-001 (close-as-resolved-elsewhere) authorizes implement-skip"
+        ]
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.validate",
+        "startedAt": "2026-04-26T09:07:00Z",
+        "completedAt": "2026-04-26T09:09:00Z",
+        "outcome": "skipped",
+        "evidenceRefs": [
+          "Resolved-Elsewhere closure: no new code path introduced by this bug — test authorship belongs to parent feature 029 Scope 7.",
+          "scopes.md Test Plan explicitly marks Unit/Integration/E2E/Stress as 'No' (verification-only scope)",
+          "Verification commands (grep/sed/python json query) executed in validate phase serve as the substitute proof"
+        ]
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "startedAt": "2026-04-26T09:18:00Z",
+        "completedAt": "2026-04-26T09:34:00Z",
+        "outcome": "completed_diagnostic",
+        "evidenceRefs": [
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/report.md#validation-evidence (AC-1..AC-4 raw command output)",
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/scopes.md (Scope 01 DoD ticked with executed evidence)",
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/uservalidation.md (closure-step items ticked)",
+          "artifact-lint.sh exit 0 (run 2026-04-26 against bug folder)"
+        ]
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.validate",
+        "startedAt": "2026-04-26T09:34:00Z",
+        "completedAt": "2026-04-26T09:43:00Z",
+        "outcome": "completed_owned",
+        "evidenceRefs": [
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/bug.md (Status: Closed (Resolved Elsewhere))",
+          "specs/029-devops-pipeline/bugs/BUG-003-no-ghcr-image-push/report.md#audit-evidence (closure decision recorded)",
+          "transitionRequests[0] tr-001 honored — status=closed, target status=done reached"
+        ]
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [
+    {
+      "id": "tr-001",
+      "type": "close-as-resolved-elsewhere",
+      "requestedBy": "bubbles.bug",
+      "requestedAt": "2026-04-26T08:58:00Z",
+      "rationale": "Bug premise is stale. Parent spec Non-Goals already amended (spec.md:33) and GHCR push is implemented in .github/workflows/ci.yml under parent Scope 7 (state.json shows Done). No new work required. Recommend verification + close, not amendment.",
+      "targetStatus": "done",
+      "status": "closed",
+      "closedBy": "bubbles.validate",
+      "closedAt": "2026-04-26T09:43:00Z",
+      "closureNote": "Honored. AC-1..AC-4 verified against live repo; bug closed as Resolved Elsewhere by parent feature 029 Scope 7."
+    }
+  ],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "ts": "2026-04-26T08:42:00Z",
+      "phase": "bootstrap",
+      "agent": "bubbles.bug",
+      "outcome": "completed_owned",
+      "note": "Created the 5 missing artifacts (state.json, design.md, scopes.md, report.md, uservalidation.md) per bubbles.bug Phase 0.5 gate."
+    },
+    {
+      "ts": "2026-04-26T08:58:00Z",
+      "phase": "analyze",
+      "agent": "bubbles.bug",
+      "outcome": "completed_owned",
+      "note": "Cross-checked bug premise against current parent spec and CI. Found bug is STALE: spec amendment and GHCR push implementation both already shipped under parent feature 029 Scope 7. Recommendation: close as already-resolved (variant of option b — won't-fix-as-bug because no work remains)."
+    },
+    {
+      "ts": "2026-04-26T09:07:00Z",
+      "phase": "implement",
+      "agent": "bubbles.validate",
+      "outcome": "skipped",
+      "note": "Skipped under Resolved-Elsewhere closure path. The fix this bug requested already shipped under parent feature 029 Scope 7 (.github/workflows/ci.yml:45-90). No source files modified by this bug folder."
+    },
+    {
+      "ts": "2026-04-26T09:09:00Z",
+      "phase": "test",
+      "agent": "bubbles.validate",
+      "outcome": "skipped",
+      "note": "Skipped under Resolved-Elsewhere closure path. No new code path was introduced; tests for the GHCR push behavior belong to parent feature 029 Scope 7. Verification of the existing implementation (grep/sed/python state.json query) is recorded in the validate-phase evidence."
+    },
+    {
+      "ts": "2026-04-26T09:34:00Z",
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "outcome": "completed_diagnostic",
+      "note": "Verified all four acceptance criteria from spec.md against the live repo with executed commands (grep spec.md → line 33; sed ci.yml 45-90 → tag-gated GHCR login+push present; parent state.json scope 7 status=Done; artifact-lint exit 0). Ticked Scope 01 DoD with raw evidence. No source files modified."
+    },
+    {
+      "ts": "2026-04-26T09:43:00Z",
+      "phase": "audit",
+      "agent": "bubbles.validate",
+      "outcome": "completed_owned",
+      "note": "Promoted bug to status=done / certification.status=done. Honored transitionRequest tr-001 (close-as-resolved-elsewhere). Updated bug.md status to 'Closed (Resolved Elsewhere)'. Set currentPhase=finalize, activeAgent=null."
+    }
+  ]
+}

@@ -3,6 +3,7 @@ package knowledge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -473,7 +474,7 @@ func (ks *KnowledgeStore) GetStats(ctx context.Context) (*KnowledgeStats, error)
 			(SELECT COUNT(*) FROM artifacts WHERE synthesis_status = 'pending'),
 			(SELECT COUNT(*) FROM artifacts WHERE synthesis_status = 'failed'),
 			(SELECT MAX(synthesis_at) FROM artifacts WHERE synthesis_status = 'completed'),
-			(SELECT COALESCE(prompt_contract_version, '') FROM knowledge_concepts ORDER BY updated_at DESC LIMIT 1)`).Scan(
+			COALESCE((SELECT prompt_contract_version FROM knowledge_concepts ORDER BY updated_at DESC LIMIT 1), '')`).Scan(
 		&stats.ConceptCount, &stats.EntityCount, &stats.EdgeCount,
 		&stats.SynthesisCompleted, &stats.SynthesisPending, &stats.SynthesisFailed,
 		&stats.LastSynthesisAt, &stats.PromptContractVersion,
@@ -484,6 +485,9 @@ func (ks *KnowledgeStore) GetStats(ctx context.Context) (*KnowledgeStats, error)
 
 	// Latest lint report summary
 	report, err := ks.GetLatestLintReport(ctx)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("get knowledge lint stats: %w", err)
+	}
 	if err == nil && report != nil {
 		var summary LintSummary
 		if json.Unmarshal(report.Summary, &summary) == nil {

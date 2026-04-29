@@ -1,0 +1,287 @@
+{
+  "version": 2,
+  "specId": "014",
+  "featureDir": "specs/014-discord-connector",
+  "generatedBy": "bubbles.docs",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-DC-NRM-001",
+      "name": "Classify all message content types",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L75",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestClassifyMessage"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestNormalizeMessage"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestClassifyMessage"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestNormalizeMessage"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::classifyMessage"}
+      ],
+      "linkedDoD": [
+        "All 8 content types are classified correctly",
+        "All metadata fields per R-004 are populated"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-NRM-002",
+      "name": "Assign processing tiers per R-007",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L92",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestAssignTier"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestAssignTier"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::assignTier"}
+      ],
+      "linkedDoD": [
+        "Processing tier assignment matches R-007 rules"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-REST-001",
+      "name": "Fetch message history with pagination",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L148",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestFetchChannelMessages_Basic"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestFetchChannelMessages_Pagination"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestFetchChannelMessages_RespectsBackfillLimit"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestFetchChannelMessages_Pagination"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestFetchChannelMessages_RespectsBackfillLimit"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::fetchChannelMessages"}
+      ],
+      "linkedDoD": [
+        "fetchChannelMessages() paginates with backfill_limit",
+        "Rate limit headers parsed and fed to RateLimiter"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-REST-002",
+      "name": "Per-channel cursor advancement",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L156",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestSyncEndToEnd_CursorPreventsRefetch"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestSyncEndToEnd_WithMessagesAndPins"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestSyncEndToEnd_CursorPreventsRefetch"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::Sync"}
+      ],
+      "linkedDoD": [
+        "Per-channel cursors tracked via ChannelCursors map",
+        "Cursor serialized as JSON map of channel_id \u2192 snowflake_id"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-CONN-001",
+      "name": "Connector lifecycle",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L199",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestConnect_ValidConfig"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestConnect_TokenValidationSuccess"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestConnect_TokenValidationUnauthorized"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestSync_HealthTransitionsDuringSyncLifecycle"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestClose"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestConnect_TokenValidationSuccess"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestSync_HealthTransitionsDuringSyncLifecycle"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestClose"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::Connect"}
+      ],
+      "linkedDoD": [
+        "Connector implements connector.Connector interface",
+        "Bot token validation via Discord API (GET /users/@me)",
+        "Health status transitions correctly across lifecycle"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-GW-001",
+      "name": "Real-time message capture via Gateway",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L254",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/gateway_test.go", "function": "TestEventPoller_ConnectStartsPolling"},
+        {"file": "internal/connector/discord/gateway_test.go", "function": "TestEventPoller_EventsFilterToMonitoredChannels"},
+        {"file": "internal/connector/discord/gateway_test.go", "function": "TestEventPoller_SyncDrainsBufferedEvents"},
+        {"file": "internal/connector/discord/gateway_test.go", "function": "TestConnector_GatewayStartsOnConnectWithEnabledFlag"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/gateway_test.go::TestEventPoller_SyncDrainsBufferedEvents"},
+        {"type": "unit-test", "location": "internal/connector/discord/gateway_test.go::TestEventPoller_EventsFilterToMonitoredChannels"},
+        {"type": "source", "location": "internal/connector/discord/gateway.go::EventPoller"}
+      ],
+      "linkedDoD": [
+        "MESSAGE_CREATE events from monitored channels are buffered",
+        "Non-monitored channel events are filtered out",
+        "Sync() drains buffered events into artifacts"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-THR-001",
+      "name": "Auto-follow active threads in monitored channels",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L294",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestFetchActiveThreads_ParsesResponse"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestFetchActiveThreads_FiltersToMonitoredChannels"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestSync_IncludesThreadMessages"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestFetchActiveThreads_ParsesResponse"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestFetchActiveThreads_FiltersToMonitoredChannels"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestSync_IncludesThreadMessages"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::fetchActiveThreads"}
+      ],
+      "linkedDoD": [
+        "THREAD_CREATE events in monitored channels trigger thread following",
+        "Thread messages fetched via REST with pagination"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-THR-002",
+      "name": "Thread starter gets discord/thread content type",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L302",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestClassifyMessage"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestNormalizeMessage_ThreadMetadata"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestNormalizeMessage_ThreadMetadata"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::classifyMessage"}
+      ],
+      "linkedDoD": [
+        "Thread starter gets discord/thread content type",
+        "Thread replies carry thread_id and thread_name metadata"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-THR-003",
+      "name": "Archived thread backfill",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L307",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestSync_IncludesThreadMessages"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestSync_ThreadMetadataOnArtifacts"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestSync_IncludesThreadMessages"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestSync_ThreadMetadataOnArtifacts"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::fetchArchivedThreads"}
+      ],
+      "linkedDoD": [
+        "Active threads: monitored via Gateway; archived threads: fetched on backfill"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-THR-004",
+      "name": "Thread ingestion disabled via config",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L313",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestSync_IncludeThreadsFalse_SkipsThreads"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestSync_IncludeThreadsFalse_SkipsThreads"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::Sync"}
+      ],
+      "linkedDoD": [
+        "Thread ingestion respects include_threads config flag"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-CMD-001",
+      "name": "Capture command with URL and comment",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L349",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestParseBotCommand"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestNormalize_BotCommand_SetsCaptureType"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestSync_CaptureCommand_ProducesFullTierArtifact"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestAssignTier_CaptureContentType_ForceFull"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestNormalize_BotCommand_SetsCaptureType"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestSync_CaptureCommand_ProducesFullTierArtifact"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::ParseBotCommand"}
+      ],
+      "linkedDoD": [
+        "Bot detects !save and !capture prefixes in messages",
+        "URL extraction from command text",
+        "Captured artifacts get processing_tier full"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-CMD-002",
+      "name": "Capture command without URL",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L357",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestParseBotCommand"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestParseBotCommand_CommentTruncated"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestNormalize_BotCommand_SetsCaptureType"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestParseBotCommand"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestNormalize_BotCommand_SetsCaptureType"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::ParseBotCommand"}
+      ],
+      "linkedDoD": [
+        "Non-URL text preserved as capture comment in metadata"
+      ]
+    },
+    {
+      "scenarioId": "SCN-DC-CMD-003",
+      "name": "Capture command with unsafe URL rejected",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/014-discord-connector/scopes.md#L364",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestParseBotCommand_SSRFProtection"},
+        {"file": "internal/connector/discord/discord_test.go", "function": "TestIsSafeURL"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestParseBotCommand_SSRFProtection"},
+        {"type": "unit-test", "location": "internal/connector/discord/discord_test.go::TestIsSafeURL"},
+        {"type": "source", "location": "internal/connector/discord/discord.go::isSafeURL"}
+      ],
+      "linkedDoD": [
+        "URL extraction from command text",
+        "Non-URL text preserved as capture comment in metadata"
+      ]
+    }
+  ]
+}

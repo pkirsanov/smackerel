@@ -78,15 +78,16 @@ func TestNATS_PublishSubscribe_Artifacts(t *testing.T) {
 		t.Fatalf("ensure ARTIFACTS stream: %v", err)
 	}
 
-	// Create a consumer
 	consumerName := testID(t)
-	// STAB-031-001: DeliverNewPolicy ignores stale messages from crashed
-	// previous runs on WorkQueue streams, preventing payload-mismatch flakes.
+	subject := fmt.Sprintf("artifacts.process.%s", consumerName)
+
+	// WorkQueue streams reject overlapping consumer filters, so this test uses
+	// a child subject instead of colliding with the ML sidecar's artifacts.process consumer.
 	cons, err := js.CreateOrUpdateConsumer(ctx, "ARTIFACTS", jetstream.ConsumerConfig{
 		Durable:       consumerName,
-		FilterSubject: "artifacts.process",
+		FilterSubject: subject,
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		DeliverPolicy: jetstream.DeliverNewPolicy,
+		DeliverPolicy: jetstream.DeliverAllPolicy,
 	})
 	if err != nil {
 		t.Fatalf("create consumer: %v", err)
@@ -103,7 +104,7 @@ func TestNATS_PublishSubscribe_Artifacts(t *testing.T) {
 	payload := processMsg{ArtifactID: testID(t), TestMarker: "integration-test"}
 	data, _ := json.Marshal(payload)
 
-	_, err = js.Publish(ctx, "artifacts.process", data)
+	_, err = js.Publish(ctx, subject, data)
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -152,13 +153,15 @@ func TestNATS_PublishSubscribe_Domain(t *testing.T) {
 	}
 
 	consumerName := testID(t)
-	// STAB-031-001: DeliverNewPolicy ignores stale messages from crashed
-	// previous runs on WorkQueue streams, preventing payload-mismatch flakes.
+	subject := fmt.Sprintf("domain.extract.%s", consumerName)
+
+	// WorkQueue streams reject overlapping consumer filters, so this test uses
+	// a child subject instead of colliding with the ML sidecar's domain.extract consumer.
 	cons, err := js.CreateOrUpdateConsumer(ctx, "DOMAIN", jetstream.ConsumerConfig{
 		Durable:       consumerName,
-		FilterSubject: "domain.extract",
+		FilterSubject: subject,
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		DeliverPolicy: jetstream.DeliverNewPolicy,
+		DeliverPolicy: jetstream.DeliverAllPolicy,
 	})
 	if err != nil {
 		t.Fatalf("create consumer: %v", err)
@@ -174,7 +177,7 @@ func TestNATS_PublishSubscribe_Domain(t *testing.T) {
 	payload := extractMsg{ArtifactID: testID(t), URL: "https://example.com/recipe"}
 	data, _ := json.Marshal(payload)
 
-	_, err = js.Publish(ctx, "domain.extract", data)
+	_, err = js.Publish(ctx, subject, data)
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -303,10 +306,13 @@ func TestNATS_Chaos_MaxDeliverExhaustion(t *testing.T) {
 
 	consumerName := testID(t)
 	maxDeliver := 3
+	subject := fmt.Sprintf("deadletter.chaos-maxdeliver-%s", consumerName)
+
 	cons, err := js.CreateOrUpdateConsumer(ctx, "DEADLETTER", jetstream.ConsumerConfig{
 		Durable:       consumerName,
-		FilterSubject: "deadletter.>",
+		FilterSubject: subject,
 		AckPolicy:     jetstream.AckExplicitPolicy,
+		DeliverPolicy: jetstream.DeliverNewPolicy,
 		MaxDeliver:    maxDeliver,
 		AckWait:       1 * time.Second, // Short AckWait to speed up redelivery
 	})
@@ -318,7 +324,6 @@ func TestNATS_Chaos_MaxDeliverExhaustion(t *testing.T) {
 	})
 
 	// Publish a poisonous message
-	subject := fmt.Sprintf("deadletter.chaos-maxdeliver-%d", time.Now().UnixNano())
 	testPayload := []byte(`{"test":"chaos-maxdeliver-exhaustion"}`)
 	_, err = js.Publish(ctx, subject, testPayload)
 	if err != nil {

@@ -1,0 +1,145 @@
+{
+  "version": 3,
+  "specId": "002-phase1-foundation",
+  "bugId": "BUG-002-002-postgres-startup-health-gate",
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-002-postgres-startup-health-gate",
+  "featureName": "BUG-002-002: Postgres startup health gate blocks SCN-002-004",
+  "ownerSpec": "specs/002-phase1-foundation",
+  "workflowMode": "bugfix-fastlane",
+  "status": "in_progress",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "documentation",
+    "currentScope": "scope-1",
+    "runStartedAt": "2026-04-27T00:00:00Z",
+    "completedPhaseClaims": [
+      "documentation"
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "phase": "documentation",
+        "agent": "bubbles.bug",
+        "startedAt": "2026-04-27T00:00:00Z",
+        "completedAt": "2026-04-27T00:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Created owned bug artifact packet for the SCN-002-004 postgres startup health blocker. No source, Compose, CLI, test, or generated config files were changed. Tests were not executed by this documentation packet; report.md records the finding source and required red/green evidence for the implementation owner."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedAt": null,
+    "certifiedBy": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Restore postgres readiness and persistence lifecycle evidence",
+        "status": "Not Started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "value": "bugfix-fastlane",
+      "provenance": "workflow-forced"
+    },
+    "grill": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "tdd": {
+      "value": "scenario-first",
+      "provenance": "workflow-forced"
+    },
+    "autoCommit": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "lockdown": {
+      "value": "off",
+      "provenance": "repo-default"
+    },
+    "regression": {
+      "value": "protected-scenarios",
+      "provenance": "repo-default"
+    },
+    "validation": {
+      "value": "certification-required",
+      "provenance": "repo-default"
+    },
+    "regressionStrictness": {
+      "value": "strict-adversarial-bugfix",
+      "provenance": "workflow-forced"
+    },
+    "validateCertificationRequired": {
+      "value": true,
+      "provenance": "repo-default"
+    }
+  },
+  "transitionRequests": [
+    {
+      "id": "TR-BUG-002-002-001",
+      "status": "open",
+      "owner": "bubbles.devops",
+      "reason": "Shared live-stack lifecycle and E2E harness readiness blocker prevents SCN-002-004 and downstream BUG-031-003 evidence.",
+      "scenarioRefs": [
+        "SCN-002-004",
+        "SCN-002-BUG-002-001",
+        "SCN-002-BUG-002-002",
+        "SCN-002-BUG-002-003",
+        "SCN-002-BUG-002-004"
+      ],
+      "artifacts": [
+        "bug.md",
+        "spec.md",
+        "design.md",
+        "scopes.md",
+        "report.md",
+        "uservalidation.md",
+        "scenario-manifest.json"
+      ]
+    }
+  ],
+  "reworkQueue": [],
+  "invocationLedger": [],
+  "activeBugs": [
+    "BUG-002-002-postgres-startup-health-gate"
+  ],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "id": "F-BUG-002-002-001",
+      "source": "test-owner-verification",
+      "command": "./smackerel.sh test e2e",
+      "exitCode": 1,
+      "scenario": "SCN-002-004",
+      "summary": "tests/e2e/test_persistence.sh failed at Inserting test artifact with service postgres is not running before the Go E2E block could execute."
+    }
+  ],
+  "lastUpdatedAt": "2026-04-27T00:05:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "routing": {
+    "nextRequiredOwner": "bubbles.devops",
+    "reason": "Planning is complete enough for infrastructure implementation; the remaining work is live-stack lifecycle and test-harness repair with adversarial regression evidence."
+  }
+}

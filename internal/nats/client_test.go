@@ -8,8 +8,8 @@ import (
 
 func TestAllStreams_Coverage(t *testing.T) {
 	streams := AllStreams()
-	if len(streams) != 13 {
-		t.Fatalf("expected 13 streams, got %d", len(streams))
+	if len(streams) != 14 {
+		t.Fatalf("expected 14 streams, got %d", len(streams))
 	}
 
 	expected := map[string][]string{
@@ -21,6 +21,7 @@ func TestAllStreams_Coverage(t *testing.T) {
 		"ALERTS":       {"alerts.>"},
 		"SYNTHESIS":    {"synthesis.>"},
 		"DOMAIN":       {"domain.>"},
+		"DRIVE":        {"drive.>"},
 		"ANNOTATIONS":  {"annotations.>"},
 		"LISTS":        {"lists.>"},
 		"AGENT":        {"agent.>"},
@@ -75,6 +76,10 @@ func TestSubjectConstants(t *testing.T) {
 		{"SubjectSeasonalAnalyzed", SubjectSeasonalAnalyzed},
 		{"SubjectDomainExtract", SubjectDomainExtract},
 		{"SubjectDomainExtracted", SubjectDomainExtracted},
+		{"SubjectDriveScanRequest", SubjectDriveScanRequest},
+		{"SubjectDriveScanResult", SubjectDriveScanResult},
+		{"SubjectDriveChangeNotify", SubjectDriveChangeNotify},
+		{"SubjectDriveHealthReport", SubjectDriveHealthReport},
 		{"SubjectAnnotationsCreated", SubjectAnnotationsCreated},
 		{"SubjectListsCreated", SubjectListsCreated},
 		{"SubjectListsCompleted", SubjectListsCompleted},

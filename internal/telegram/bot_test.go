@@ -75,6 +75,33 @@ func TestIsAuthorized_NotInAllowlist(t *testing.T) {
 	}
 }
 
+func TestSendDigest_NoConfiguredChatsReturnsError(t *testing.T) {
+	bot := &Bot{allowedChats: map[int64]bool{}}
+	if err := bot.SendDigest("daily digest"); err == nil {
+		t.Fatal("expected SendDigest to fail when no proactive chat is configured")
+	}
+}
+
+func TestSendDigest_SendsToConfiguredChats(t *testing.T) {
+	sent := map[int64]string{}
+	bot := &Bot{
+		allowedChats: map[int64]bool{111: true, 222: true},
+		replyFunc: func(chatID int64, text string) {
+			sent[chatID] = text
+		},
+	}
+
+	if err := bot.SendDigest("daily digest"); err != nil {
+		t.Fatalf("SendDigest returned error: %v", err)
+	}
+	if len(sent) != 2 {
+		t.Fatalf("expected 2 configured chats to receive digest, got %d", len(sent))
+	}
+	if sent[111] != "daily digest" || sent[222] != "daily digest" {
+		t.Fatalf("unexpected sent digest map: %v", sent)
+	}
+}
+
 func TestExtractURL_EdgeCases(t *testing.T) {
 	tests := []struct {
 		text     string

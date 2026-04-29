@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-001-knowledge-stats-empty-store",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-025-001-SCN-001",
+      "scope": "scope-1-return-valid-stats-for-an-empty-knowledge-store",
+      "title": "Knowledge stats returns zero values for an empty store",
+      "gherkin": {
+        "given": "the knowledge store contains no concepts, entities, or synthesized artifacts",
+        "when": "an authenticated caller requests knowledge stats",
+        "then": "the response is successful and stats counts are zero"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/knowledge_synthesis_test.go",
+          "testId": "empty knowledge stats endpoint succeeds"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-025-001-SCN-002",
+      "scope": "scope-1-return-valid-stats-for-an-empty-knowledge-store",
+      "title": "Knowledge stats regression fails on unhandled empty prompt contract version",
+      "gherkin": {
+        "given": "knowledge_concepts has no rows",
+        "when": "the stats query computes the latest prompt contract version",
+        "then": "the empty result is handled explicitly without scanning NULL into a string"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/knowledge/store_test.go",
+          "testId": "empty prompt contract version regression"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

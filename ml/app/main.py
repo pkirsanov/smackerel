@@ -18,11 +18,21 @@ logger = logging.getLogger("smackerel-ml")
 
 def _check_required_config() -> dict[str, str]:
     """Validate required environment variables. Fail loudly if missing."""
-    keys = ["NATS_URL", "LLM_PROVIDER", "LLM_MODEL", "OLLAMA_URL"]
+    keys = [
+        "NATS_URL",
+        "LLM_PROVIDER",
+        "LLM_MODEL",
+        "OLLAMA_URL",
+        "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
+    ]
     required: dict[str, str] = {}
     missing: list[str] = []
     for k in keys:
-        val = os.environ.get(k)
+        try:
+            val = os.environ[k]
+        except KeyError:
+            missing.append(k)
+            continue
         if not val:
             missing.append(k)
         else:
@@ -39,6 +49,15 @@ def _check_required_config() -> dict[str, str]:
     if missing:
         logger.error("Missing required configuration: %s", ", ".join(missing))
         sys.exit(1)
+
+    fallback_enabled = required["ML_PROCESSING_DEGRADED_FALLBACK_ENABLED"].lower()
+    if fallback_enabled not in ("true", "false"):
+        logger.error(
+            "Invalid ML_PROCESSING_DEGRADED_FALLBACK_ENABLED=%r; expected true or false",
+            required["ML_PROCESSING_DEGRADED_FALLBACK_ENABLED"],
+        )
+        sys.exit(1)
+
     return required
 
 

@@ -1,0 +1,121 @@
+{
+  "version": 3,
+  "featureDir": "specs/040-cloud-photo-libraries",
+  "featureName": "Cloud Photo Libraries (Immich, Google Photos, Amazon Photos, ...)",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "currentScope": null,
+    "runStartedAt": "2026-04-27T19:50:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-04-27T19:34:07Z",
+        "summary": "Created planning artifacts for feature 040: scopes.md, report.md, uservalidation.md, scenario-manifest.json, and test-plan.json. Plan contains five sequential vertical scopes: photo platform foundation; Immich connect/scan/search; lifecycle/duplicates/removal review; capture/Telegram/cross-feature routing; multi-provider capability governance and operations. Certification fields intentionally untouched."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-04-27T19:50:00Z",
+        "summary": "Second-pass plan reconciliation for feature 040. Tightened planning artifacts without changing scope count or sequence: added Change Boundary blocks to Scopes 2, 3, and 4; added SST/secret fail-loud DoD lines for Immich access_token (Scope 2) and Telegram bot_token (Scope 4); added ML decisions schema-validator unit test to Scope 3 covering lifecycle, dedupe, and removal payload contracts (SCN-040-007/008/009); added capability-taxonomy canary integration test to Scope 5 proving Go registry, NATS payload, API limitation codes, and PWA banner strings share one definition (SCN-040-013). Synced test-plan.json and scenario-manifest.json with the new test rows. No scope was renamed, removed, or marked done. certification.* untouched."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "scenario-first", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-27T19:34:07Z",
+      "completedAt": "2026-04-27T19:34:07Z",
+      "summary": "Analyst greenfield run plus review pass: created spec.md with 9 current capability-map rows, 7 actors, 13 use cases, 32 business scenarios, 21 functional requirements, 10 improvement proposals (4 competitive edge), competitive analysis across 7 platforms, platform direction, cross-feature integration map (10 features), and 12 open questions for design. Category-defining capabilities: RAW-to-processed lifecycle tracking, editor signature detection, cross-feature photo routing, LLM-driven removal candidates, stable-signal/LLM decision boundary, provider capability visibility, and explicit confirmation for destructive cleanup. Immich-first with provider-neutral core. Foreign-owned artifacts intentionally not created."
+    },
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-27T00:00:00Z",
+      "completedAt": "2026-04-27T00:00:00Z",
+      "summary": "UX pass: appended ## UI Wireframes and ## User Flows sections inline in spec.md (single-file rule honored). 15 ASCII wireframes covering connectors list, Immich Add wizard, connector detail with scan progress, photo search, photo detail, four Photo Health tabs (Lifecycle, Duplicates, Removal, Quality), People (face clusters), Save Rules, Mobile document scan, Telegram conversation patterns, Confirm Destructive Action modal, and Provider Limitation Notice. 5 mermaid user flows (Connect+Scan, Search→Detail→Routing, Lifecycle Review→Removal, Telegram in-and-out, Duplicate Cluster Resolution). Wireframes encode FR-014 visible skip states, FR-019 provider capability visibility, FR-020 destructive/low-confidence confirmation, BS-016 sensitivity gating, and BS-024/025/029/030/031 explicitly. Competitor UI Insights table added. Summary counts updated to include 15 screens and 5 flows."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-27T00:00:00Z",
+      "completedAt": "2026-04-27T00:00:00Z",
+      "summary": "Design pass (mode: from-analysis, contract-grade): created design.md with 19 sections covering Design Brief, architecture, provider abstraction with capability matrix (6 providers x 11 capabilities), Postgres+pgvector data model (photos, photo_lifecycle_links, photo_clusters/_members, photo_removal_candidates, photo_capabilities, photo_sync_state, photo_face_links, photo_action_tokens), 16 new photos.* NATS subjects on a new PHOTOS stream, sync/scan pipeline, explicit LLM-vs-heuristic boundary (FR-004A allow-list), full Go core API surface under /v1/photos/* (connectors, photos, health, action tokens), UI component-to-route mapping for all 15 wireframes, cross-feature integration contracts for 12 sibling features, sensitivity model with reveal-token TTL, security + authorization matrix (5 actor classes), SST config under connectors.photos.*, observability metrics + traces + failure modes, scenario-to-test mapping for every FR/BS across unit/integration/e2e/stress, alternatives, FR/BS/UC coverage statement, and rollout outline. 7 design-specific open questions (O-040-D-01..07) with default decisions documented. design.md authored from scratch (no prior design content); no superseded sections required. state.json: activeAgent=bubbles.design, currentPhase=bootstrap. certification.* untouched. scopes.md/report.md/uservalidation.md intentionally not created (owned by bubbles.plan)."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-27T19:20:39Z",
+      "completedAt": "2026-04-27T19:20:39Z",
+      "summary": "Second-pass design reconciliation for feature 040: re-read spec.md, design.md, state.json, design/bootstrap validation docs, SST/test-integrity skills, and repo API/NATS/config/migration patterns. Updated design.md without replacing the active design: aligned photo schema with current artifacts.id TEXT and app-generated UUID migration style; added rollback SQL; tightened provider capability governance, Go/Python ML boundary, NATS contract updates, SST photos config pipeline, repo-standard API error envelope and DTO schemas, sensitivity labels/privacy/audit table, live-stack test integrity rules, and explicit FR + BS-001..BS-032 scenario-to-test coverage. Reduced design open questions to 3 real owner decisions. Active design presents one current truth; no superseded sections needed. certification.* untouched. scopes.md/report.md/uservalidation.md intentionally not created."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-27T00:00:00Z",
+      "completedAt": "2026-04-27T00:00:00Z",
+      "summary": "Created scopes.md, report.md, uservalidation.md, scenario-manifest.json, and test-plan.json for feature 040. Five active vertical scopes now map spec/design requirements into Gherkin scenarios SCN-040-001 through SCN-040-015, scenario-specific live E2E regression rows, UI matrices, implementation plans, consumer/shared-infrastructure sweeps, and DoD gates. No certification fields changed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-27T19:50:00Z",
+      "completedAt": "2026-04-27T19:50:00Z",
+      "summary": "Second-pass plan reconciliation for feature 040: tightened scopes.md, scenario-manifest.json, and test-plan.json without changing scope count, sequence, or status. Added Change Boundary blocks to Scopes 2/3/4; added SST/secret fail-loud DoD lines for Immich access_token (Scope 2) and Telegram bot_token (Scope 4); added ML decisions schema-validator unit test to Scope 3 covering SCN-040-007/008/009 payload contracts; added capability-taxonomy canary integration test to Scope 5 proving Go registry, NATS payloads, API limitation codes, and PWA banner strings share one definition (SCN-040-013). All DoD items remain unchecked. certification.* untouched."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-27T19:50:00Z",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "testPlan": "test-plan.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "notes": "Analyst + UX + Design passes complete.   Sibling to feature 038 (generic cloud drives). 038 owns generic file storage (Google Drive, Dropbox, OneDrive); 040 owns dedicated photo libraries (Immich, Google Photos, Amazon Photos, Apple iCloud Photos, Ente) with photo-native lifecycle (RAW vs. processed, editor-signature detection, duplicate clusters, removal candidates, faces/places/events). Cross-feature contracts referenced into 038 (storage), 008 (Telegram), 033 (Mobile capture), 034 (Expense), 035 (Recipe), 036 (Meal planning), 021 (Intelligence delivery), 026 (Domain extraction), 027 (Annotations), 037 (Agent tools)."
+}

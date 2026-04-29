@@ -1,0 +1,337 @@
+{
+  "version": 2,
+  "specId": "017",
+  "featureDir": "specs/017-gov-alerts-connector",
+  "generatedBy": "bubbles.docs",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-GA-PROX-001",
+      "name": "Filter by proximity radius",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L61",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestHaversineKm"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestHaversineKm_ExtremeDistances"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFindNearestLocation"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFindNearestLocation_MultipleCandidates"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFindNearestLocation_ExactBoundary"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestIsFiniteCoord"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestHaversineKm"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestFindNearestLocation"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::haversineKm"}
+      ],
+      "linkedDoD": [
+        "haversineKm calculates correct great-circle distances",
+        "FindNearest returns closest location within radius, or nil"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-LIFE-001",
+      "name": "Alert lifecycle transitions",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L70",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestKnownMapEviction"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_Deduplication"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_WeatherAlertDeduplication"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestKnownMapEviction"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_Deduplication"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::Sync"}
+      ],
+      "linkedDoD": [
+        "LifecycleManager.Process returns new/updated/unchanged/cancelled",
+        "ExpireOld transitions expired alerts"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-USGS-001",
+      "name": "Fetch earthquakes above minimum magnitude",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L116",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_PassesMinMagnitudeToURL"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_OutOfRangeFiltered"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_LargeEarthquakeBatch"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_EmptyEarthquakeID"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_PassesMinMagnitudeToURL"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_OutOfRangeFiltered"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::fetchUSGSEarthquakes"}
+      ],
+      "linkedDoD": [
+        "GeoJSON FeatureCollection response parsed correctly",
+        "Minimum magnitude filter applied before returning results"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-USGS-002",
+      "name": "Earthquake severity classification",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L124",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestClassifyEarthquakeSeverity"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestClassifyEarthquakeSeverity_Boundaries"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeEarthquake"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeEarthquake_TierAssignment"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeEarthquake_MetadataFields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestClassifyEarthquakeSeverity"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestNormalizeEarthquake_TierAssignment"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::classifyEarthquakeSeverity"}
+      ],
+      "linkedDoD": [
+        "Earthquake severity calculated from magnitude + distance"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-NWS-001",
+      "name": "Fetch severe weather alerts by location",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L168",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchNWSAlerts_ValidResponse"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchNWSAlerts_PointInURL"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchNWSAlerts_UserAgentHeader"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchNWSAlerts_EmptyResponse"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchNWSAlerts_MalformedJSON"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchNWSAlerts_HTTPError"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestFetchNWSAlerts_ValidResponse"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestFetchNWSAlerts_UserAgentHeader"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::fetchNWSAlerts"}
+      ],
+      "linkedDoD": [
+        "NWS Alert API queried with point-based coordinates for each location",
+        "User-Agent header set per NWS API requirements"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-NWS-002",
+      "name": "NWS severity and event classification",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L176",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestMapNWSSeverity"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestClassifyNWSEventType"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeNWSAlert"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeNWSAlert_TierAssignment"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestMapNWSSeverity"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestClassifyNWSEventType"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::mapNWSSeverity"}
+      ],
+      "linkedDoD": [
+        "Severity mapped from NWS categories to CAP standard",
+        "Event types classified (tornado, hurricane, flood, winter storm, heat, etc.)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-CONN-001",
+      "name": "Multi-source sync",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L220",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_BothEarthquakeAndWeather"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_PartialFailure_USGSDown_NWSUp"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_PartialFailure_NWSDown_USGSUp"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_AllSourcesFail"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_PartialFailure_SuccessfulSyncAfterPartial"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestParseAlertsConfig_AllSourceFlags"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_BothEarthquakeAndWeather"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_PartialFailure_USGSDown_NWSUp"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::Sync"}
+      ],
+      "linkedDoD": [
+        "Connector implements connector.Connector interface",
+        "Multi-source aggregation: iterates all enabled sources",
+        "Proximity filtering applied after source fetch",
+        "Lifecycle tracking prevents duplicate artifact creation for unchanged alerts"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-TSUN-001",
+      "name": "Tsunami alerts parsed and proximity-filtered",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L265",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchTsunamiAlerts_ValidResponse"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchTsunamiAlerts_EmptyResponse"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchTsunamiAlerts_HTTPError"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestClassifyTsunamiSeverity"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeTsunamiAlert"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_TsunamiSource"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestTsunamiAlerts_JavascriptURLRejected"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_TsunamiSource"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestNormalizeTsunamiAlert"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::fetchTsunamiAlerts"}
+      ],
+      "linkedDoD": [
+        "NOAA tsunami source parses Atom feeds from tsunami.gov"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-AQI-001",
+      "name": "Air quality observations with severity mapping",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L274",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchAirNowAQI_ValidResponse"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchAirNowAQI_EmptyResponse"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchAirNowAQI_HTTPError"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchAirNowAQI_APIKeyRedacted"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchAirNowAQI_IDIncludesDate"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestClassifyAQISeverity"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeAirNowAlert"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_AirNow_ProducesArtifacts"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestAirNowDedup_SameAQIDifferentDays"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_AirNow_ProducesArtifacts"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestClassifyAQISeverity"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::fetchAirNowAQI"}
+      ],
+      "linkedDoD": [
+        "AirNow source fetches AQI data (requires api_key in config)",
+        "Source-specific severity mapping applied"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-GDACS-001",
+      "name": "Global disaster alerts proximity-filtered",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L281",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchGDACSAlerts_ValidResponse"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchGDACSAlerts_EmptyResponse"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestFetchGDACSAlerts_HTTPError"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestClassifyGDACSAlertLevel"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeGDACSAlert"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeGDACSAlert_NoGeoPoint"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNormalizeGDACSAlert_InvalidCoordinatesRejected"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_GDACS_ProximityFiltered"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_GDACS_NoGeoPoint_Skipped"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_GDACS_InvalidGeoPoint_Skipped"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_GDACS_NearbyNotifies"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_GDACS_ProximityFiltered"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestClassifyGDACSAlertLevel"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::fetchGDACSAlerts"}
+      ],
+      "linkedDoD": [
+        "GDACS source parses RSS from gdacs.org",
+        "Source-specific severity mapping applied"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-NOTIF-001",
+      "name": "Extreme earthquake triggers proactive notification",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L327",
+      "requiredTestType": ["unit", "integration", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestMaybeNotify_Extreme"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestMaybeNotify_Severe"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestMaybeNotify_NilNotifier"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_ExtremeEarthquake_NotifiesAlert"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestAlertNotificationPayload"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestNATSAlertNotifier_PublishesJSON"},
+        {"file": "tests/integration/weather_alerts_test.go", "function": "TestWeatherAlerts_PublishedToAlertsNotify"},
+        {"file": "tests/e2e/weather_alerts_e2e_test.go", "function": "TestWeatherAlerts_E2E_FullStack"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_ExtremeEarthquake_NotifiesAlert"},
+        {"type": "integration-test", "location": "tests/integration/weather_alerts_test.go::TestWeatherAlerts_PublishedToAlertsNotify"},
+        {"type": "e2e-test", "location": "tests/e2e/weather_alerts_e2e_test.go::TestWeatherAlerts_E2E_FullStack"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::maybeNotify"}
+      ],
+      "linkedDoD": [
+        "Extreme and Severe alerts published to alerts.notify NATS subject",
+        "Alert notification payload includes headline, severity, distance, instructions"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-NOTIF-002",
+      "name": "Moderate alert does NOT trigger notification",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L334",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestMaybeNotify_Moderate_NoNotification"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_ModerateWeather_NoNotification"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_Volcano_NoNotification"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_Wildfire_NoNotification"},
+        {"file": "tests/integration/weather_alerts_test.go", "function": "TestWeatherAlerts_LowSeverityNotPublishedToNotify"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestMaybeNotify_Moderate_NoNotification"},
+        {"type": "integration-test", "location": "tests/integration/weather_alerts_test.go::TestWeatherAlerts_LowSeverityNotPublishedToNotify"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::maybeNotify"}
+      ],
+      "linkedDoD": [
+        "Extreme and Severe alerts published to alerts.notify NATS subject"
+      ]
+    },
+    {
+      "scenarioId": "SCN-GA-TRAVEL-001",
+      "name": "Travel destination uses expanded 2x radius",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/017-gov-alerts-connector/scopes.md#L340",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestTravelLocations_DoubleRadius"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_TravelLocation_ExpandedRadius"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestMergedLocations_TravelProviderError_FallsBackToConfig"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestMergedLocations_TravelProviderNaNCoords_Skipped"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestMergedLocations_TravelProviderInfRadius_Skipped"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestMergedLocations_TravelProviderZeroRadius_Skipped"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestSync_TravelProviderInfRadius_NoGlobalMatches"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestTravelLocations_DoubleRadius"},
+        {"type": "unit-test", "location": "internal/connector/alerts/alerts_test.go::TestSync_TravelLocation_ExpandedRadius"},
+        {"type": "source", "location": "internal/connector/alerts/alerts.go::mergedLocations"}
+      ],
+      "linkedDoD": [
+        "Travel destinations use expanded radius (2x normal)",
+        "Travel destination locations auto-derived from calendar events (future integration point)"
+      ]
+    }
+  ]
+}

@@ -490,17 +490,20 @@ func (rs *ResultSubscriber) publishDomainExtractionRequest(ctx context.Context, 
 	}
 
 	// Load artifact fields needed for domain registry matching and extraction request
-	var sourceURL, contentRaw, title, summary string
+	var artifactType, sourceURL, contentRaw, title, summary string
 	err := rs.DB.QueryRow(ctx,
-		`SELECT COALESCE(source_url, ''), COALESCE(content_raw, ''), COALESCE(title, ''), COALESCE(summary, '')
+		`SELECT COALESCE(artifact_type, ''), COALESCE(source_url, ''), COALESCE(content_raw, ''), COALESCE(title, ''), COALESCE(summary, '')
 		 FROM artifacts WHERE id = $1`,
 		payload.ArtifactID,
-	).Scan(&sourceURL, &contentRaw, &title, &summary)
+	).Scan(&artifactType, &sourceURL, &contentRaw, &title, &summary)
 	if err != nil {
 		return fmt.Errorf("load artifact for domain extraction: %w", err)
 	}
+	if artifactType == "" {
+		artifactType = payload.Result.ArtifactType
+	}
 
-	contract := rs.DomainRegistry.Match(payload.Result.ArtifactType, sourceURL)
+	contract := rs.DomainRegistry.Match(artifactType, sourceURL)
 	if contract == nil {
 		return nil // no matching domain schema — skip silently
 	}
@@ -527,7 +530,7 @@ func (rs *ResultSubscriber) publishDomainExtractionRequest(ctx context.Context, 
 
 	req := &DomainExtractRequest{
 		ArtifactID:      payload.ArtifactID,
-		ContentType:     payload.Result.ArtifactType,
+		ContentType:     artifactType,
 		Title:           title,
 		Summary:         summary,
 		ContentRaw:      contentRaw,

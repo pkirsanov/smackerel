@@ -18,8 +18,10 @@ e2e_setup() {
   CORE_URL="$(smackerel_env_value "$env_file" "CORE_EXTERNAL_URL")"
   AUTH_TOKEN="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
   POSTGRES_USER="$(smackerel_env_value "$env_file" "POSTGRES_USER")"
+  POSTGRES_PASSWORD="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
   POSTGRES_DB="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
-  export CORE_URL AUTH_TOKEN POSTGRES_USER POSTGRES_DB
+  POSTGRES_CONTAINER_PORT="$(smackerel_env_value "$env_file" "POSTGRES_CONTAINER_PORT")"
+  export CORE_URL AUTH_TOKEN POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_CONTAINER_PORT
 }
 
 e2e_cleanup() {
@@ -52,19 +54,89 @@ e2e_start() {
 }
 
 e2e_wait_healthy() {
-  local timeout="${1:-120}"
+  local timeout="${1:?timeout seconds required}"
   local elapsed=0
+  local health_response=""
+  local health_error="not checked"
+  local postgres_response=""
+  local postgres_error="not checked"
+  local postgres_result=""
+
+  : "${CORE_URL:?CORE_URL not set; call e2e_setup first}"
+  : "${AUTH_TOKEN:?AUTH_TOKEN not set; call e2e_setup first}"
+  : "${POSTGRES_USER:?POSTGRES_USER not set; call e2e_setup first}"
+  : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD not set; call e2e_setup first}"
+  : "${POSTGRES_DB:?POSTGRES_DB not set; call e2e_setup first}"
+  : "${POSTGRES_CONTAINER_PORT:?POSTGRES_CONTAINER_PORT not set; call e2e_setup first}"
+
   echo "Waiting for services to be healthy (max ${timeout}s)..."
   while [ $elapsed -lt "$timeout" ]; do
-    if curl -sf --max-time 3 "$CORE_URL/api/health" >/dev/null 2>&1; then
+    if health_response="$(e2e_health_response 2>&1)"; then
+      if health_error="$(e2e_health_payload_ready "$health_response" 2>&1)"; then
+        health_error=""
+      else
+        health_error="${health_error}; payload=${health_response}"
+      fi
+    else
+      health_error="$health_response"
+    fi
+
+    if postgres_response="$(e2e_postgres_select_one 2>&1)"; then
+      postgres_result="$(printf '%s' "$postgres_response" | tr -d '[:space:]')"
+      if [ "$postgres_result" = "1" ]; then
+        postgres_error=""
+      else
+        postgres_error="unexpected SELECT 1 result: ${postgres_response}"
+      fi
+    else
+      postgres_error="$postgres_response"
+    fi
+
+    if [ -z "$health_error" ] && [ -z "$postgres_error" ]; then
       echo "Services healthy after ${elapsed}s"
       return 0
     fi
+
     sleep 2
     elapsed=$((elapsed + 2))
   done
   echo "FAIL: Services did not become healthy within ${timeout}s"
+  if [ -n "$health_error" ]; then
+    echo "Last API health readiness error: $health_error"
+  fi
+  if [ -n "$postgres_error" ]; then
+    echo "Last postgres readiness error: $postgres_error"
+  fi
   return 1
+}
+
+e2e_health_response() {
+  curl -sf --max-time 5 \
+    -H "Authorization: Bearer $AUTH_TOKEN" \
+    "$CORE_URL/api/health"
+}
+
+e2e_health_payload_ready() {
+  python3 - "$1" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+if payload.get("status") not in {"healthy", "degraded"}:
+  raise SystemExit(f"api health status is {payload.get('status')!r}, expected 'healthy' or 'degraded'")
+
+services = payload.get("services") or {}
+for name in ("postgres", "nats", "ml_sidecar"):
+    status = (services.get(name) or {}).get("status")
+    if status != "up":
+        raise SystemExit(f"service {name!r} status is {status!r}, expected 'up'")
+PY
+}
+
+e2e_postgres_select_one() {
+  smackerel_compose "$TEST_ENV" exec --interactive=false -T postgres \
+    env PGPASSWORD="$POSTGRES_PASSWORD" \
+    psql -h 127.0.0.1 -p "$POSTGRES_CONTAINER_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SELECT 1"
 }
 
 e2e_api() {
@@ -81,7 +153,8 @@ e2e_api() {
 
 e2e_psql() {
   smackerel_compose "$TEST_ENV" exec --interactive=false -T postgres \
-    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "$1" | tr -d '[:space:]'
+    env PGPASSWORD="$POSTGRES_PASSWORD" \
+    psql -h 127.0.0.1 -p "$POSTGRES_CONTAINER_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "$1" | tr -d '[:space:]'
 }
 
 e2e_pass() {
@@ -144,7 +217,8 @@ e2e_seed_artifact() {
   local hash="${4:-hash-$(date +%s)-$RANDOM}"
 
   smackerel_compose "$TEST_ENV" exec --interactive=false -T postgres \
-    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+    env PGPASSWORD="$POSTGRES_PASSWORD" \
+    psql -h 127.0.0.1 -p "$POSTGRES_CONTAINER_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
 INSERT INTO artifacts (id, artifact_type, title, content_hash, source_id, summary, created_at, updated_at)
 VALUES ('$id', '$art_type', '$title', '$hash', 'test', 'Test summary for $title', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;

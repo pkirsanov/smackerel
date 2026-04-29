@@ -184,3 +184,76 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 
 	b.reply(msg.Chat.ID, "? Forwarded message has no text content to capture")
 }
+
+// flushSingleForward is invoked by flushConversation when the assembler
+// flushes a buffer containing exactly one message. Per BUG-002 / SC-TSC09
+// such a buffer must be captured as an individual forwarded artifact
+// (with forward_meta), NOT as a "conversation" payload. Mirrors the
+// URL-detection / text branches of captureSingleForward so single forwards
+// route through the same shape regardless of whether the assembler is
+// wired in front of them.
+func (b *Bot) flushSingleForward(ctx context.Context, buf *ConversationBuffer) error {
+	if buf == nil || len(buf.Messages) == 0 {
+		return nil
+	}
+	m := buf.Messages[0]
+
+	meta := ForwardedMeta{
+		SenderName:    m.SenderName,
+		SenderID:      m.SenderID,
+		SourceChat:    buf.SourceChat,
+		SourceChatID:  buf.Key.sourceChatID,
+		OriginalDate:  m.Timestamp,
+		IsFromChannel: buf.IsChannel,
+	}
+	if meta.SenderName == "" {
+		meta.SenderName = "Anonymous"
+	}
+
+	forwardContext := fmt.Sprintf("Forwarded from %s", meta.SenderName)
+	if meta.SourceChat != "" {
+		forwardContext = fmt.Sprintf("Forwarded from %s in %s", meta.SenderName, meta.SourceChat)
+	}
+	forwardContext += fmt.Sprintf(" (originally sent %s)", meta.OriginalDate.Format("2006-01-02 15:04"))
+
+	fwdMeta := meta.ToMap()
+	text := m.Text
+
+	if containsURL(text) {
+		url := extractURL(text)
+		body := map[string]interface{}{
+			"url":          url,
+			"context":      forwardContext,
+			"forward_meta": fwdMeta,
+		}
+		result, err := b.callCapture(ctx, body)
+		if err != nil {
+			b.captureErrorReply(buf.Key.chatID, err, "forward URL capture failed")
+			return err
+		}
+		title, _ := result["title"].(string)
+		artifactID, _ := result["artifact_id"].(string)
+		b.replyWithMapping(ctx, buf.Key.chatID, fmt.Sprintf(". Saved: forwarded from %s (\"%s\")", meta.SenderName, title), artifactID)
+		return nil
+	}
+
+	if text != "" {
+		body := map[string]interface{}{
+			"text":         text,
+			"context":      forwardContext,
+			"forward_meta": fwdMeta,
+		}
+		result, err := b.callCapture(ctx, body)
+		if err != nil {
+			b.captureErrorReply(buf.Key.chatID, err, "forward text capture failed")
+			return err
+		}
+		title, _ := result["title"].(string)
+		artifactID, _ := result["artifact_id"].(string)
+		b.replyWithMapping(ctx, buf.Key.chatID, fmt.Sprintf(". Saved: forwarded from %s (\"%s\")", meta.SenderName, title), artifactID)
+		return nil
+	}
+
+	b.reply(buf.Key.chatID, "? Forwarded message has no text content to capture")
+	return nil
+}

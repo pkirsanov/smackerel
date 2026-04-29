@@ -1,0 +1,255 @@
+{
+  "version": 3,
+  "featureDir": "specs/039-recommendations-engine",
+  "featureName": "Recommendations Engine",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "implement",
+    "currentScope": "scope-02-reactive-place-recommendation",
+    "runStartedAt": "2026-04-27T02:05:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "bootstrap",
+        "agent": "bubbles.design",
+        "timestamp": "2026-04-26T23:02:28Z",
+        "summary": "Created active design.md for Recommendations Engine: spec-037 scenario orchestration, internal/recommendation domain layer, read-only provider adapter contract, durable recommendation/watch/feedback/provenance persistence, precision reduction, policy and quality guards, API/watch/feedback/why contracts, SST config shape, observability, failure handling, and validation strategy. No certification fields changed."
+      },
+      {
+        "phase": "analyze",
+        "agent": "bubbles.ux",
+        "timestamp": "2026-04-26T23:13:18Z",
+        "summary": "Added inline UX sections to spec.md for the Recommendations Engine: screen inventory, ASCII wireframes for web recommendation results, provenance, watches, watch consent, watch audit, preference review, trip dossier recommendations, Telegram recommendation messages, Telegram watch alerts, and operator provider/trace views; mapped BS-001..BS-032 to user flows; added responsive, accessibility, interaction, state, and competitor UI insights. No sidecar UX files or plan-owned artifacts were created. Certification fields untouched."
+      },
+      {
+        "phase": "bootstrap",
+        "agent": "bubbles.design",
+        "timestamp": "2026-04-26T23:29:59Z",
+        "summary": "Reconciled design.md against the current analyst and UX-enriched spec.md. Upgraded the active design truth from standard depth to from-analysis contract-grade design, replacing stale UX-as-pending wording with active UI/component contracts, aligning API paths to the repo's authenticated /api surface plus /v1/agent/invoke, correcting data-model references to current TEXT artifact and trace identifiers, adding authorization, technical scenario contracts, scenario-to-test mapping, SST/config, observability, failure handling, and superseded design decisions. No plan-owned artifacts were created and certification fields were left untouched."
+      },
+      {
+        "phase": "bootstrap",
+        "agent": "bubbles.design",
+        "timestamp": "2026-04-27T00:05:30Z",
+        "summary": "Design review pass on existing reconciled design.md. Verified coverage of BS-001..BS-032, R-001..R-058, AC-01..AC-35, all 10 UX screens, all 5 user flows, and repo truth (current 021 highest migration; TEXT artifact/trace ids; /api authenticated group; /v1/agent/invoke; agent.RegisterTool, agent.Bridge, scheduler.FireScenario; smackerel_ metrics prefix; pg_trgm extension). Made surgical refinements: clarified /api/recommendations/{id}/why is single-path through recommendation-why-v1 with provider tools excluded from allowlist; made watch consent JSONB shape explicit (current snapshot plus append-only revisions[]); added /status and /admin/agent/traces operator route entries to web route inventory; added per-watch metrics cardinality note explaining join-with-table approach over high-cardinality labels. Updated Superseded Design Decisions to record the two now-superseded ambiguities. No certification fields changed and no plan-owned artifacts created."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-04-27T01:15:00Z",
+        "summary": "Authored the plan-owned artifact set for feature 039. Replaced the prior 8-scope planning skeleton with 6 sequential vertical-slice scopes: 01-foundation-schema, 02-reactive-place-recommendation, 03-feedback-suppression-why, 04-watches-and-scheduler, 05-policy-quality-and-trip-dossier, 06-observability-stress-and-cutover. Each scope defines Gherkin scenarios, UI scenario matrix where applicable, implementation plan, consumer/shared-infrastructure impact sweeps, change boundary, full Test Plan with scenario-specific E2E rows and a mandatory Regression E2E row, and Tiered DoD. Rebuilt scenario-manifest.json to exactly match the 30 active Gherkin scenarios in scopes.md (SCN-039-001..003, 010..012, 020..023, 030..039, 040..045, 050..053); every scenario retains its live regression test expectation. Refreshed report.md to a 6-scope evidence skeleton with a per-block evidence template. Refreshed uservalidation.md to a checked-by-default user-acceptance checklist mapped to BS-001..BS-032 and the NFR set. No certification fields changed; certification.scopeProgress remains empty pending implementation."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "scope-01-foundation-schema",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 2,
+        "name": "scope-02-reactive-place-recommendation",
+        "status": "Not Started",
+        "dependsOn": ["scope-01-foundation-schema"],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "name": "scope-03-feedback-suppression-why",
+        "status": "Not Started",
+        "dependsOn": ["scope-02-reactive-place-recommendation"],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 4,
+        "name": "scope-04-watches-and-scheduler",
+        "status": "Not Started",
+        "dependsOn": ["scope-03-feedback-suppression-why"],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 5,
+        "name": "scope-05-policy-quality-and-trip-dossier",
+        "status": "Not Started",
+        "dependsOn": ["scope-04-watches-and-scheduler"],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 6,
+        "name": "scope-06-observability-stress-and-cutover",
+        "status": "Not Started",
+        "dependsOn": ["scope-05-policy-quality-and-trip-dossier"],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-26T00:00:00Z",
+      "endedAt": "2026-04-26T00:00:00Z",
+      "summary": "Greenfield analysis for recommendations engine. Authored spec.md with actors, 9 use cases, 14 business scenarios, 17 acceptance criteria, competitive matrix vs Google/Yelp/Foursquare/Tripadvisor/Apple/Perplexity/Honey/camelcamelcamel/Reddit, platform-direction trends, UI scenario matrix, NFRs, and open questions. Outcome contract defined. Next required owners: bubbles.design, bubbles.ux, bubbles.plan."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-26T00:00:00Z",
+      "endedAt": "2026-04-26T00:00:00Z",
+      "summary": "Second analyst pass: added a repo-grounded current capability map, tightened requirements toward observable behavior, added place-category and financial-advice boundaries, removed avoidable deferral phrasing, incorporated fetched competitor evidence from Google Maps, Yelp Places API docs, Foursquare Places, and Honey, and clarified next owner handoff."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-26T00:00:00Z",
+      "endedAt": "2026-04-26T00:00:00Z",
+      "summary": "Third analyst pass: tightened implementation-heavy language in active requirements, added candidate quality/source-obligation requirements R-037..R-042, added use cases for ambiguity, quiet hours, and source conflicts, expanded business scenarios BS-015..BS-020, and extended acceptance criteria through AC-23. Certification fields untouched."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-26T00:00:00Z",
+      "endedAt": "2026-04-26T00:00:00Z",
+      "summary": "Fourth analyst pass: added trust-control requirements R-043..R-050 for explicit proactive-watch consent, sponsored/affiliate transparency, preference correction, restricted-category handling, safety/recall withholding, and explanation separation; added UC-013..UC-016, BS-021..BS-026, and AC-24..AC-29. Certification fields untouched."
+    },
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-26T00:00:00Z",
+      "endedAt": "2026-04-26T00:00:00Z",
+      "summary": "Fifth analyst pass: added result-quality requirements R-051..R-058 for diversity, seen-state, repeat cooldown, hard-constraint handling, route-effort labeling, total-cost transparency, low-confidence ranking, and recommendation style; added UC-017..UC-019, BS-027..BS-032, and AC-30..AC-35. Certification fields untouched."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-26T23:02:28Z",
+      "endedAt": "2026-04-26T23:02:28Z",
+      "summary": "Created design.md as the active design truth for feature 039 during the bubbles.design bootstrap/design pass. The design anchors recommendations in spec-037 scenarios and the existing Smackerel runtime, defines internal/recommendation responsibilities, read-only provider adapters, recommendation persistence, watch lifecycle, feedback/suppression/preference correction, location precision, policy and quality guards, API contracts, delivery integration, metrics, failure handling, and test strategy. No planning artifacts were created and certification fields were left untouched."
+    },
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-26T23:13:18Z",
+      "endedAt": "2026-04-26T23:13:18Z",
+      "summary": "Created UX-owned inline sections in spec.md for Recommendations Engine wireframes and flows. Added screen inventory across web, Telegram, trip dossier, preference, watch, provenance, and operator surfaces; created ASCII wireframes with interactions, states, responsive behavior, and accessibility notes; mapped BS-001..BS-032 to user flows; added competitor UI insights grounded in fetched Google Maps, Honey Droplist, Yelp Places API, and Foursquare Places API pages. No certification fields changed and no sidecar UX or plan-owned artifacts were created."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-26T23:29:59Z",
+      "endedAt": "2026-04-26T23:29:59Z",
+      "summary": "Reconciled design.md after UX enrichment in spec.md. The active design now uses from-analysis contract depth, keeps one active architecture/contract truth, treats inline UX wireframes and flows as active contracts, updates API paths, data model, authorization, UI component/data-flow specs, technical BS-001..BS-032 scenario contracts, scenario-to-test mapping, SST config, observability, failure modes, and superseded decisions. No plan-owned artifacts were created and certification fields were untouched."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-27T00:05:30Z",
+      "endedAt": "2026-04-27T00:05:30Z",
+      "summary": "Design review pass. Verified spec/UX/repo-truth coverage and made surgical refinements to design.md: clarified single-path /api/recommendations/{id}/why semantics with provider tools excluded from allowlist; made watch consent JSONB shape explicit with current snapshot plus append-only revisions[]; added /status and /admin/agent/traces operator routes to web route inventory; added per-watch metrics cardinality note explaining audit-table join over high-cardinality labels; recorded two new entries in Superseded Design Decisions. No certification fields changed and no plan-owned artifacts created."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "startedAt": "2026-04-27T01:15:00Z",
+      "endedAt": "2026-04-27T01:15:00Z",
+      "summary": "Authored plan-owned artifacts for feature 039. Replaced the prior 8-scope skeleton with 6 sequential vertical-slice scopes in scopes.md (foundation-schema, reactive-place-recommendation, feedback-suppression-why, watches-and-scheduler, policy-quality-and-trip-dossier, observability-stress-and-cutover). Each scope contains Gherkin, UI scenario matrix where applicable, implementation plan, consumer/shared-infrastructure impact sweeps, change boundary, Test Plan (with scenario-specific E2E rows and a mandatory Regression E2E row), and Tiered DoD. Refreshed report.md to a 6-scope evidence skeleton with a per-block evidence template. Refreshed uservalidation.md to a checked-by-default user-acceptance checklist mapped to BS-001..BS-032 plus NFRs. Rebuilt scenario-manifest.json to exactly match the 30 active Gherkin scenarios in scopes.md; every scenario retains its live regression test expectation. No certification fields changed."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-29T07:20:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Plan phase completed for feature 039 on 2026-04-27. bubbles.plan re-authored scopes.md as 6 sequential vertical-slice scopes, refreshed report.md and uservalidation.md to match, and rebuilt scenario-manifest.json to exactly match the 30 active Gherkin scenarios in scopes.md. Each scope defines Gherkin, UI scenario matrix where applicable, impact sweeps, change boundary, Test Plan with scenario-specific E2E rows and a mandatory Regression E2E row, and Tiered DoD. The explicit workflow invocation 039 mode: full-delivery reconciled workflow-owned state to full-delivery and selected scope-01-foundation-schema for implementation. Certification fields remain validate-owned and untouched."
+}

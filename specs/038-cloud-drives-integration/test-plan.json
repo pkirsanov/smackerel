@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "specId": "038-cloud-drives-integration",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-04-26T00:00:06Z",
+  "status": "not_started",
+  "liveBoundaryPolicy": "Live integration and e2e categories run the real Smackerel stack. External Google Drive traffic is represented by an owned fixture boundary while production GoogleDriveProvider code remains in the path.",
+  "qualityGates": [
+    {
+      "gate": "scenario-traceability",
+      "required": true,
+      "expectation": "Every SCN-038 scenario maps to at least one executable test row and one live regression row."
+    },
+    {
+      "gate": "live-test-authenticity",
+      "required": true,
+      "expectation": "Integration, e2e-api, e2e-ui, and stress tests run the real stack with no internal request interception or mocked Smackerel service paths."
+    },
+    {
+      "gate": "anti-silent-pass",
+      "required": true,
+      "expectation": "Required tests fail when the planned behavior is missing, misrouted, unauthenticated, blocked, or unavailable."
+    },
+    {
+      "gate": "assertion-audit",
+      "required": true,
+      "expectation": "Assertions prove the scenario behavior through persisted fields, state transitions, policy reasons, visible UI, or delivered channel response."
+    },
+    {
+      "gate": "self-validating-audit",
+      "required": true,
+      "expectation": "Tests do not pass by asserting values that only came from test setup without production code computing, transforming, persisting, routing, or enforcing them."
+    },
+    {
+      "gate": "sst-flow",
+      "required": true,
+      "expectation": "Drive config tests prove config/smackerel.yaml to generated runtime config to startup validation with no fallback values."
+    }
+  ],
+  "scopes": [
+    {
+      "scopeId": "SCOPE-001",
+      "name": "Drive Foundation",
+      "dependsOn": [],
+      "gherkinScenarioIds": ["SCN-038-001", "SCN-038-002", "SCN-038-003"],
+      "tests": [
+        { "scenarioId": "SCN-038-001", "type": "unit", "file": "internal/config/drive_config_test.go", "testTitle": "TestDriveConfigValidationRequiresEverySSTField", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-001", "type": "integration", "file": "tests/integration/drive/drive_config_contract_test.go", "testTitle": "TestDriveConfigGenerateAndRuntimeValidationStayInSync", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-001", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_foundation_e2e_test.go", "testTitle": "TestDriveFoundationE2E_MissingRequiredConfigFailsLoudly", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-002", "type": "integration", "file": "tests/integration/drive/google_provider_connect_test.go", "testTitle": "TestGoogleDriveFixtureConnectStoresHealthyScopedConnection", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-002", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_connect_ui_test.go", "testTitle": "TestDriveConnectFlowShowsHealthyEmptyDriveConnector", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-003", "type": "unit", "file": "internal/drive/provider_registry_test.go", "testTitle": "TestProviderRegistryExposesCapabilitiesWithoutProviderBranching", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-003", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_foundation_e2e_test.go", "testTitle": "TestDriveFoundationE2E_SecondProviderUsesNeutralContract", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-001", "type": "canary", "file": "tests/integration/drive/drive_foundation_canary_test.go", "testTitle": "TestDriveFoundationCanary_ConfigNATSAndMigrationContracts", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-002",
+      "name": "Scan And Monitor",
+      "dependsOn": ["SCOPE-001"],
+      "gherkinScenarioIds": ["SCN-038-004", "SCN-038-005", "SCN-038-006"],
+      "tests": [
+        { "scenarioId": "SCN-038-004", "type": "unit", "file": "internal/drive/scan/scan_test.go", "testTitle": "TestBulkScanPersistsDriveFilesWithArtifactLinks", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-004", "type": "integration", "file": "tests/integration/drive/drive_scan_fixture_test.go", "testTitle": "TestDriveScanFixturePreservesHierarchyAndMetadata", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-004", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_scan_ui_test.go", "testTitle": "TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-005", "type": "integration", "file": "tests/integration/drive/drive_empty_monitor_test.go", "testTitle": "TestEmptyDriveStaysHealthyAndDetectsLaterUpload", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-005", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_scan_e2e_test.go", "testTitle": "TestDriveScanE2E_EmptyDriveCreatesNoArtifacts", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-006", "type": "unit", "file": "internal/drive/health/health_test.go", "testTitle": "TestProviderErrorsTransitionHealthAndPreserveRetryableWork", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-006", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_health_ui_test.go", "testTitle": "TestDriveConnectorDetailSurfacesProviderOutageAndRetryState", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-004", "type": "canary", "file": "tests/integration/drive/drive_fixture_canary_test.go", "testTitle": "TestDriveFixtureCanary_ProductionProviderPathConsumesFixtureServer", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-003",
+      "name": "Extraction And Classification",
+      "dependsOn": ["SCOPE-002"],
+      "gherkinScenarioIds": ["SCN-038-007", "SCN-038-008", "SCN-038-009"],
+      "tests": [
+        { "scenarioId": "SCN-038-007", "type": "unit", "file": "ml/tests/test_drive_extract.py", "testTitle": "test_drive_extract_routes_pdf_image_office_audio_and_text", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-007", "type": "unit", "file": "ml/tests/test_drive_classify.py", "testTitle": "test_drive_classification_contract_requires_evidence_confidence_and_sensitivity", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-007", "type": "integration", "file": "tests/integration/drive/drive_extract_classify_test.go", "testTitle": "TestDriveExtractClassifyPersistsSearchableDomainMetadata", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-007", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_extract_e2e_test.go", "testTitle": "TestDriveExtractE2E_MultiFormatFilesBecomeSearchable", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-008", "type": "integration", "file": "tests/integration/drive/drive_folder_context_test.go", "testTitle": "TestFolderMoveRefreshesTaxonomyWithoutReextractingContent", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-008", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_folder_move_ui_test.go", "testTitle": "TestFolderMoveUpdatesArtifactContextWithoutDuplicateExtractionActivity", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-009", "type": "integration", "file": "tests/integration/drive/drive_skipped_blocked_test.go", "testTitle": "TestSkippedAndBlockedFilesPersistReasonAndAction", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-009", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_skipped_blocked_ui_test.go", "testTitle": "TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-004",
+      "name": "Search And Artifact Detail",
+      "dependsOn": ["SCOPE-003"],
+      "gherkinScenarioIds": ["SCN-038-010", "SCN-038-011", "SCN-038-012"],
+      "tests": [
+        { "scenarioId": "SCN-038-010", "type": "unit", "file": "internal/api/drive_search_test.go", "testTitle": "TestDriveSearchResponseIncludesSnippetBreadcrumbSharingAndSensitivity", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-010", "type": "integration", "file": "tests/integration/drive/drive_search_test.go", "testTitle": "TestDriveSearchFindsFilesByContentFolderAndMetadata", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-010", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_search_ui_test.go", "testTitle": "TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-011", "type": "unit", "file": "internal/drive/version_test.go", "testTitle": "TestNativeGoogleDocRevisionAppendsVersionChainWithoutNewArtifact", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-011", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_artifact_detail_ui_test.go", "testTitle": "TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-012", "type": "integration", "file": "tests/integration/drive/drive_access_state_test.go", "testTitle": "TestTombstoneAndPermissionLossRemainQueryableWithoutBytes", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-012", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_access_state_ui_test.go", "testTitle": "TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-005",
+      "name": "Save Rules And Write-Back",
+      "dependsOn": ["SCOPE-004"],
+      "gherkinScenarioIds": ["SCN-038-013", "SCN-038-014", "SCN-038-015"],
+      "tests": [
+        { "scenarioId": "SCN-038-013", "type": "unit", "file": "internal/drive/rules/rule_engine_test.go", "testTitle": "TestRuleEngineMatchesTelegramReceiptAndRendersTargetPath", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-013", "type": "integration", "file": "tests/integration/drive/drive_save_telegram_test.go", "testTitle": "TestTelegramReceiptSaveWritesProviderFileAndArtifactLocation", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-013", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_telegram_save_ui_test.go", "testTitle": "TestTelegramReceiptSaveReplyShowsDriveFolderAndCorrectionAction", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-014", "type": "integration", "file": "tests/integration/drive/drive_save_mealplan_test.go", "testTitle": "TestMealPlanSaveBackCreatesDriveFileAndDigestLink", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-014", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_save_e2e_test.go", "testTitle": "TestDriveSaveE2E_MealPlanSavedBackAndDigestLinkAvailable", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-015", "type": "unit", "file": "internal/drive/save/folder_resolution_test.go", "testTitle": "TestConcurrentFolderResolutionCreatesOneMapping", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-015", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_save_e2e_test.go", "testTitle": "TestDriveSaveE2E_ConcurrentMissingFolderCreatesExactlyOneFolder", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-015", "type": "canary", "file": "tests/integration/drive/drive_save_canary_test.go", "testTitle": "TestDriveSaveCanary_IdempotentFolderResolutionAndGraphLinks", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-006",
+      "name": "Policy And Confirmation",
+      "dependsOn": ["SCOPE-005"],
+      "gherkinScenarioIds": ["SCN-038-016", "SCN-038-017", "SCN-038-018"],
+      "tests": [
+        { "scenarioId": "SCN-038-016", "type": "unit", "file": "internal/drive/confirm/confirmations_test.go", "testTitle": "TestLowConfidenceRoutingRequiresUserConfirmationBeforeProviderWrite", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-016", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_confirmation_ui_test.go", "testTitle": "TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-017", "type": "unit", "file": "internal/drive/policy/sensitivity_policy_test.go", "testTitle": "TestMedicalPolicyBlocksAutoLinkShareWithoutProviderMutation", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-017", "type": "integration", "file": "tests/integration/drive/drive_sensitivity_policy_test.go", "testTitle": "TestSensitivityPolicyDowngradesOrRejectsUnsafeDelivery", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-017", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_policy_e2e_test.go", "testTitle": "TestDrivePolicyE2E_SensitiveFileNeverReturnsTelegramBytesOrPublicShare", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-018", "type": "unit", "file": "internal/drive/rules/rule_conflict_test.go", "testTitle": "TestOverlappingRulesAuditConflictAndExecuteStableMatch", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-018", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_rule_conflict_ui_test.go", "testTitle": "TestSaveRulesListShowsConflictChipAndAuditRowsForOverlappingRules", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-007",
+      "name": "Retrieval And Agent Tools",
+      "dependsOn": ["SCOPE-006"],
+      "gherkinScenarioIds": ["SCN-038-019", "SCN-038-020", "SCN-038-021"],
+      "tests": [
+        { "scenarioId": "SCN-038-019", "type": "unit", "file": "internal/drive/retrieve/retrieve_test.go", "testTitle": "TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-019", "type": "integration", "file": "tests/integration/drive/drive_telegram_retrieve_test.go", "testTitle": "TestTelegramRetrievalFindsDriveBoardingPassAndDisambiguates", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-019", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_telegram_retrieve_ui_test.go", "testTitle": "TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-020", "type": "unit", "file": "internal/drive/retrieve/sensitive_delivery_test.go", "testTitle": "TestSensitiveRetrievalNeverReturnsTelegramBytes", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-020", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_retrieve_e2e_test.go", "testTitle": "TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-021", "type": "unit", "file": "internal/drive/tools_test.go", "testTitle": "TestDriveToolsRegisterWithPolicyAndTraceContracts", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-021", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_agent_tools_e2e_test.go", "testTitle": "TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-021", "type": "canary", "file": "tests/integration/drive/drive_tools_canary_test.go", "testTitle": "TestDriveToolsCanary_ExistingAgentToolsStillRegisterAndTrace", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-008",
+      "name": "Cross-Feature And Scale Convergence",
+      "dependsOn": ["SCOPE-007"],
+      "gherkinScenarioIds": ["SCN-038-022", "SCN-038-023", "SCN-038-024"],
+      "tests": [
+        { "scenarioId": "SCN-038-022", "type": "unit", "file": "internal/drive/consumers/consumer_contract_test.go", "testTitle": "TestDriveConsumersUseArtifactStoreAndNeverProviderPackages", "command": "./smackerel.sh test unit", "liveSystem": false, "regression": false },
+        { "scenarioId": "SCN-038-022", "type": "integration", "file": "tests/integration/drive/drive_cross_feature_test.go", "testTitle": "TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-022", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_cross_feature_e2e_test.go", "testTitle": "TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-023", "type": "stress", "file": "tests/stress/drive/drive_scale_stress_test.go", "testTitle": "TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst", "command": "./smackerel.sh test stress", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-023", "type": "Regression E2E API", "file": "tests/e2e/drive/drive_observability_e2e_test.go", "testTitle": "TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-024", "type": "integration", "file": "tests/integration/drive/drive_multi_provider_search_test.go", "testTitle": "TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false },
+        { "scenarioId": "SCN-038-024", "type": "Regression E2E UI", "file": "tests/e2e/drive/drive_multi_provider_search_ui_test.go", "testTitle": "TestMultiProviderDriveSearchReturnsOneRankedListWithAudienceFilters", "command": "./smackerel.sh test e2e", "liveSystem": true, "regression": true },
+        { "scenarioId": "SCN-038-022", "type": "canary", "file": "tests/integration/drive/drive_consumer_canary_test.go", "testTitle": "TestDriveConsumerCanary_OneArtifactFlowsThroughArtifactStoreToDigest", "command": "./smackerel.sh test integration", "liveSystem": true, "regression": false }
+      ]
+    }
+  ]
+}

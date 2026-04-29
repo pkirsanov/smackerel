@@ -1,11 +1,14 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/drive"
 )
 
 // --- Mocks for router-level tests ---
@@ -26,6 +29,15 @@ func (m *mockWebUI) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 func (m *mockWebUI) StatusPage(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }
+func (m *mockWebUI) RecommendationsPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) RecommendationsResults(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) RecommendationDetail(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
 func (m *mockWebUI) SyncConnectorHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
@@ -65,6 +77,78 @@ func (m *mockOAuth) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 }
 func (m *mockOAuth) StatusHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
+}
+
+type routerDriveProvider struct {
+	id      string
+	disp    string
+	caps    drive.Capabilities
+	authURL string
+	state   string
+}
+
+func (provider *routerDriveProvider) ID() string          { return provider.id }
+func (provider *routerDriveProvider) DisplayName() string { return provider.disp }
+func (provider *routerDriveProvider) Capabilities() drive.Capabilities {
+	return provider.caps
+}
+func (provider *routerDriveProvider) BeginConnect(_ context.Context, _ drive.AccessMode, _ drive.Scope) (string, string, error) {
+	return provider.authURL, provider.state, nil
+}
+func (provider *routerDriveProvider) FinalizeConnect(_ context.Context, _ string, _ string) (string, error) {
+	return "", drive.ErrNotImplemented
+}
+func (provider *routerDriveProvider) Disconnect(_ context.Context, _ string) error {
+	return drive.ErrNotImplemented
+}
+func (provider *routerDriveProvider) Scope(_ context.Context, _ string) (drive.Scope, error) {
+	return drive.Scope{}, nil
+}
+func (provider *routerDriveProvider) SetScope(_ context.Context, _ string, _ drive.Scope) error {
+	return drive.ErrNotImplemented
+}
+func (provider *routerDriveProvider) ListFolder(_ context.Context, _ string, _ string, _ string) ([]drive.FolderItem, string, error) {
+	return nil, "", drive.ErrNotImplemented
+}
+func (provider *routerDriveProvider) GetFile(_ context.Context, _ string, _ string) (drive.FileBytes, error) {
+	return drive.FileBytes{}, drive.ErrNotImplemented
+}
+func (provider *routerDriveProvider) PutFile(_ context.Context, _ string, _ string, _ string, _ drive.FileBytes) (string, error) {
+	return "", drive.ErrNotImplemented
+}
+func (provider *routerDriveProvider) Changes(_ context.Context, _ string, _ string) ([]drive.Change, string, error) {
+	return nil, "", drive.ErrNotImplemented
+}
+func (provider *routerDriveProvider) Health(_ context.Context, _ string) (drive.Health, error) {
+	return drive.Health{Status: drive.HealthHealthy}, nil
+}
+
+func TestRouterMountsDriveConnectorRoutes(t *testing.T) {
+	reg := drive.NewRegistry()
+	reg.Register(&routerDriveProvider{
+		id:      "google",
+		disp:    "Google Drive",
+		caps:    drive.Capabilities{MaxFileSizeBytes: 104857600},
+		authURL: "https://accounts.example/oauth2/auth?state=state-123",
+		state:   "state-123",
+	})
+	router := NewRouter(&Dependencies{DriveHandlers: NewDriveHandlers(reg)})
+
+	getReq := httptest.NewRequest(http.MethodGet, "/v1/connectors/drive", nil)
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("GET /v1/connectors/drive status = %d, want 200; body=%s", getRec.Code, getRec.Body.String())
+	}
+
+	postBody := `{"provider_id":"google","owner_user_id":"00000000-0000-0000-0000-000000000001","access_mode":"read_save","scope":{"folder_ids":["folder-acme"],"include_shared":false}}`
+	postReq := httptest.NewRequest(http.MethodPost, "/v1/connectors/drive/connect", strings.NewReader(postBody))
+	postReq.Header.Set("Content-Type", "application/json")
+	postRec := httptest.NewRecorder()
+	router.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusOK {
+		t.Fatalf("POST /v1/connectors/drive/connect status = %d, want 200; body=%s", postRec.Code, postRec.Body.String())
+	}
 }
 
 // --- SCN-020-009: Web UI requires auth when auth_token is configured ---

@@ -1,0 +1,245 @@
+{
+  "specId": "022-operational-resilience",
+  "version": 1,
+  "generatedAt": "2026-04-27T02:30:00Z",
+  "generatedBy": "BUG-022-002-dod-scenario-fidelity-gap",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-022-01",
+      "scope": "Scope 1: Backup Command + DB Pool SST Config",
+      "title": "Successful database backup",
+      "requiredTestType": "e2e",
+      "linkedTests": [
+        { "file": "scripts/commands/backup.sh", "function": "(self-validating script: size check + gunzip -t)" }
+      ],
+      "evidenceRefs": [
+        "scripts/commands/backup.sh:42-100",
+        "specs/022-operational-resilience/report.md#bug-022-002-dod-scenario-fidelity-gap"
+      ],
+      "linkedDoD": "Scope 1 DoD: 'Scenario SCN-022-01 (Successful database backup)'"
+    },
+    {
+      "scenarioId": "SCN-022-02",
+      "scope": "Scope 1: Backup Command + DB Pool SST Config",
+      "title": "Backup fails when database is unreachable",
+      "requiredTestType": "e2e",
+      "linkedTests": [
+        { "file": "scripts/commands/backup.sh", "function": "(container-running check + pg_dump pipe failure handling)" }
+      ],
+      "evidenceRefs": [
+        "scripts/commands/backup.sh:51-72",
+        "specs/022-operational-resilience/report.md#bug-022-002-dod-scenario-fidelity-gap"
+      ],
+      "linkedDoD": "Scope 1 DoD: 'Scenario SCN-022-02 (Backup fails when database is unreachable)'"
+    },
+    {
+      "scenarioId": "SCN-022-03",
+      "scope": "Scope 1: Backup Command + DB Pool SST Config",
+      "title": "DB pool size flows from SST config",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "internal/config/validate_test.go", "function": "TestValidate_DBPoolConfig_Valid" },
+        { "file": "internal/config/validate_test.go", "function": "TestValidate_DBMaxConns_Invalid" },
+        { "file": "internal/config/validate_test.go", "function": "TestValidate_DBMinConns_EqualsMaxConns" }
+      ],
+      "evidenceRefs": [
+        "internal/config/validate.go",
+        "internal/db/postgres.go",
+        "specs/022-operational-resilience/report.md#bug-022-002-dod-scenario-fidelity-gap"
+      ],
+      "linkedDoD": "Scope 1 DoD: 'Scenario SCN-022-03 (DB pool size flows from SST config)'"
+    },
+    {
+      "scenarioId": "SCN-022-04",
+      "scope": "Scope 1: Backup Command + DB Pool SST Config",
+      "title": "Missing DB pool config fails loudly",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "internal/config/validate_test.go", "function": "TestValidate_DBMaxConns_Missing" },
+        { "file": "internal/config/validate_test.go", "function": "TestValidate_DBMinConns_Missing" },
+        { "file": "internal/config/validate_test.go", "function": "TestValidate_ShutdownTimeoutS_Missing" },
+        { "file": "internal/config/validate_test.go", "function": "TestValidate_MLHealthCacheTTLS_Missing" },
+        { "file": "internal/config/validate_test.go", "function": "TestValidate_DBMinConns_ExceedsMaxConns" }
+      ],
+      "evidenceRefs": [
+        "internal/config/validate.go",
+        "specs/022-operational-resilience/report.md#bug-022-002-dod-scenario-fidelity-gap"
+      ],
+      "linkedDoD": "Scope 1 DoD: 'Scenario SCN-022-04 (Missing DB pool config fails loudly)'"
+    },
+    {
+      "scenarioId": "SCN-022-05",
+      "scope": "Scope 2: Capture Resilience + ML Health Cache for Search",
+      "title": "Capture returns 503 when database is unreachable",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "internal/api/capture_test.go", "function": "TestCaptureHandler_DBUnavailable_Returns503" },
+        { "file": "internal/api/capture_test.go", "function": "TestCaptureHandler_NilDB_Returns503" }
+      ],
+      "evidenceRefs": [
+        "internal/api/capture.go",
+        "specs/022-operational-resilience/report.md"
+      ],
+      "linkedDoD": "Scope 2 DoD: 'POST /api/capture returns 503 with DB_UNAVAILABLE when PostgreSQL is unreachable'"
+    },
+    {
+      "scenarioId": "SCN-022-06",
+      "scope": "Scope 2: Capture Resilience + ML Health Cache for Search",
+      "title": "Capture succeeds during normal operation",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "internal/api/capture_test.go", "function": "TestCaptureHandler_DBHealthy_ContinuesProcessing" }
+      ],
+      "evidenceRefs": [
+        "internal/api/capture.go",
+        "specs/022-operational-resilience/report.md#bug-022-002-dod-scenario-fidelity-gap"
+      ],
+      "linkedDoD": "Scope 2 DoD: 'Scenario SCN-022-06 (Capture succeeds during normal operation)'"
+    },
+    {
+      "scenarioId": "SCN-022-07",
+      "scope": "Scope 2: Capture Resilience + ML Health Cache for Search",
+      "title": "Search degrades to text fallback when ML sidecar is down",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "internal/api/search_test.go", "function": "TestIsMLHealthy_CachedWithinTTL" },
+        { "file": "internal/api/search_test.go", "function": "TestIsMLHealthy_ZeroTTL_ReturnsUnhealthy" },
+        { "file": "internal/api/search_test.go", "function": "TestIsMLHealthy_ConcurrentProbes_Coalesced" }
+      ],
+      "evidenceRefs": [
+        "internal/api/search.go",
+        "specs/022-operational-resilience/report.md"
+      ],
+      "linkedDoD": "Scope 2 DoD: 'Search returns text-fallback results within 2s when ML sidecar is down'"
+    },
+    {
+      "scenarioId": "SCN-022-08",
+      "scope": "Scope 2: Capture Resilience + ML Health Cache for Search",
+      "title": "Search resumes semantic path when ML sidecar recovers",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "internal/api/search_test.go", "function": "TestIsMLHealthy_Recovery" },
+        { "file": "internal/api/search_test.go", "function": "TestIsMLHealthy_ExpiredTTL_ProbesServer" }
+      ],
+      "evidenceRefs": [
+        "internal/api/search.go",
+        "specs/022-operational-resilience/report.md"
+      ],
+      "linkedDoD": "Scope 2 DoD: 'Search resumes semantic path when ML sidecar recovers'"
+    },
+    {
+      "scenarioId": "SCN-022-09",
+      "scope": "Scope 3: Cron Concurrency Guards",
+      "title": "Overlapping cron job of same type is skipped",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunDigestJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunSynthesisJob_OverlapGuard" }
+      ],
+      "evidenceRefs": [
+        "internal/scheduler/scheduler.go",
+        "internal/scheduler/jobs.go",
+        "specs/022-operational-resilience/report.md"
+      ],
+      "linkedDoD": "Scope 3 DoD: 'Overlapping same-job invocations are skipped with warning log'"
+    },
+    {
+      "scenarioId": "SCN-022-10",
+      "scope": "Scope 3: Cron Concurrency Guards",
+      "title": "Different job groups run concurrently",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "internal/scheduler/scheduler_test.go", "function": "TestCronConcurrencyGuard_DifferentGroupsConcurrent" },
+        { "file": "internal/scheduler/scheduler_test.go", "function": "TestCronConcurrencyGuard_AllGroupsIndependent" }
+      ],
+      "evidenceRefs": [
+        "internal/scheduler/scheduler.go",
+        "specs/022-operational-resilience/report.md"
+      ],
+      "linkedDoD": "Scope 3 DoD: 'Different jobs run concurrently without interference'"
+    },
+    {
+      "scenarioId": "SCN-022-11",
+      "scope": "Scope 3: Cron Concurrency Guards",
+      "title": "All cron jobs are protected from self-overlap",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunDigestJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunTopicMomentumJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunSynthesisJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunResurfacingJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunPreMeetingBriefsJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunWeeklySynthesisJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunMonthlyReportJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunSubscriptionDetectionJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunFrequentLookupsJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunAlertDeliveryJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunAlertProductionJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunRelationshipCoolingJob_OverlapGuard" },
+        { "file": "internal/scheduler/jobs_test.go", "function": "TestRunKnowledgeLintJob_OverlapGuard" },
+        { "file": "internal/scheduler/scheduler_test.go", "function": "TestCronConcurrencyGuard_AllGroupsIndependent" },
+        { "file": "internal/scheduler/scheduler_test.go", "function": "TestCronConcurrencyGuard_AllEightGroupsIndependent" },
+        { "file": "internal/scheduler/scheduler_test.go", "function": "TestCronConcurrencyGuard_RaceDetectorClean" }
+      ],
+      "evidenceRefs": [
+        "internal/scheduler/scheduler.go",
+        "internal/scheduler/jobs.go",
+        "specs/022-operational-resilience/report.md#bug-022-002-dod-scenario-fidelity-gap"
+      ],
+      "linkedDoD": "Scope 3 DoD: 'Scenario SCN-022-11 (All cron jobs are protected from self-overlap)'"
+    },
+    {
+      "scenarioId": "SCN-022-12",
+      "scope": "Scope 4: Graceful Shutdown + Docker stop_grace_period + NATS Dead-Letter",
+      "title": "Graceful shutdown completes within Docker timeout",
+      "requiredTestType": "e2e",
+      "linkedTests": [
+        { "file": "cmd/core/main_test.go", "function": "TestShutdownAll_ParallelSubscriberStop" },
+        { "file": "cmd/core/main_test.go", "function": "TestShutdownAll_NilSubscribersHandled" },
+        { "file": "cmd/core/main_test.go", "function": "TestRunWithTimeout_CompletesBeforeBudget" },
+        { "file": "cmd/core/main_test.go", "function": "TestRunWithTimeout_ExceedsBudget" },
+        { "file": "internal/scheduler/scheduler_test.go", "function": "TestStop_CronStopBounded" },
+        { "file": "internal/scheduler/scheduler_test.go", "function": "TestStop_WgWaitBounded" }
+      ],
+      "evidenceRefs": [
+        "cmd/core/shutdown.go",
+        "cmd/core/main.go",
+        "docker-compose.yml",
+        "specs/022-operational-resilience/report.md#bug-022-002-dod-scenario-fidelity-gap"
+      ],
+      "linkedDoD": "Scope 4 DoD: 'Scenario SCN-022-12 (Graceful shutdown completes within Docker timeout)'"
+    },
+    {
+      "scenarioId": "SCN-022-13",
+      "scope": "Scope 4: Graceful Shutdown + Docker stop_grace_period + NATS Dead-Letter",
+      "title": "Shutdown order prevents NATS drain racing DB close",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        { "file": "cmd/core/main_test.go", "function": "TestShutdownAll_NilSubscribersHandled" },
+        { "file": "cmd/core/main_test.go", "function": "TestShutdownAll_ParallelSubscriberStop" }
+      ],
+      "evidenceRefs": [
+        "cmd/core/shutdown.go",
+        "specs/022-operational-resilience/report.md"
+      ],
+      "linkedDoD": "Scope 4 DoD: 'Shutdown order: scheduler → HTTP → Telegram → subscribers → connectors → NATS → DB'"
+    },
+    {
+      "scenarioId": "SCN-022-14",
+      "scope": "Scope 4: Graceful Shutdown + Docker stop_grace_period + NATS Dead-Letter",
+      "title": "NATS message exhaustion routes to dead-letter",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        { "file": "internal/pipeline/synthesis_subscriber_test.go", "function": "TestSynthesisDeliveryFailure_RoutesToDeadLetter" },
+        { "file": "internal/pipeline/synthesis_subscriber_test.go", "function": "TestSynthesisDeliveryFailure_BelowMaxDeliver_Naks" },
+        { "file": "internal/pipeline/synthesis_subscriber_test.go", "function": "TestSynthesisDeliveryFailure_PublishFails_Naks" }
+      ],
+      "evidenceRefs": [
+        "internal/pipeline/synthesis_subscriber.go",
+        "internal/nats/client.go",
+        "specs/022-operational-resilience/report.md#bug-022-002-dod-scenario-fidelity-gap"
+      ],
+      "linkedDoD": "Scope 4 DoD: 'Scenario SCN-022-14 (NATS message exhaustion routes to dead-letter)'"
+    }
+  ]
+}

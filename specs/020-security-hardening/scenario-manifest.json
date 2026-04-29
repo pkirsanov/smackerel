@@ -1,0 +1,295 @@
+{
+  "version": 2,
+  "specId": "020",
+  "featureDir": "specs/020-security-hardening",
+  "generatedBy": "BUG-020-001 traceability remediation",
+  "generatedAt": "2026-04-27T02:30:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-020-001",
+      "name": "All Docker host-forwarded ports bind to 127.0.0.1",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/config/docker_security_test.go", "function": "TestDockerCompose_AllPortsBindLocalhost"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/docker_security_test.go::TestDockerCompose_AllPortsBindLocalhost"},
+        {"type": "source", "location": "docker-compose.yml ports stanzas (postgres :11, nats :42-43, smackerel-core :76, smackerel-ml :137, ollama :174 — all literal 127.0.0.1: prefix)"}
+      ],
+      "linkedDoD": ["All ports: entries in docker-compose.yml use 127.0.0.1: prefix; SCN-020-001 DoD bullet in scopes.md Scope 1"]
+    },
+    {
+      "scenarioId": "SCN-020-002",
+      "name": "Config generation produces localhost-bound port mappings",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/config/docker_security_test.go", "function": "TestDockerCompose_AllPortsBindLocalhost"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/docker_security_test.go::TestDockerCompose_AllPortsBindLocalhost (in-process proxy: docker-compose.yml literal 127.0.0.1: prefixes match the SST host_bind_address value)"},
+        {"type": "source", "location": "scripts/commands/config.sh:326 HOST_BIND_ADDRESS=$(required_value runtime.host_bind_address) and :686 HOST_BIND_ADDRESS=${HOST_BIND_ADDRESS}"},
+        {"type": "source", "location": "config/smackerel.yaml runtime.host_bind_address: \"127.0.0.1\""}
+      ],
+      "linkedDoD": ["scripts/commands/config.sh reads host_bind_address and writes HOST_BIND_ADDRESS to env; SCN-020-002 DoD bullet in scopes.md Scope 1"]
+    },
+    {
+      "scenarioId": "SCN-020-003",
+      "name": "NATS auth token is not visible in docker ps",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/config/docker_security_test.go", "function": "TestDockerCompose_NATSUsesConfigFile"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/docker_security_test.go::TestDockerCompose_NATSUsesConfigFile"},
+        {"type": "source", "location": "docker-compose.yml NATS service uses --config /etc/nats/nats.conf instead of --auth"}
+      ],
+      "linkedDoD": ["NATS auth token is NOT visible in docker ps output; auth token now lives in mounted nats.conf (not in command: args)"]
+    },
+    {
+      "scenarioId": "SCN-020-004",
+      "name": "NATS uses config file for authentication",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/config/docker_security_test.go", "function": "TestDockerCompose_NATSUsesConfigFile"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/docker_security_test.go::TestDockerCompose_NATSUsesConfigFile"},
+        {"type": "unit-test", "location": "internal/config/docker_security_test.go::TestNATSConf_GeneratedFile_TokenProperlyQuoted"},
+        {"type": "source", "location": "scripts/commands/config.sh generates config/generated/nats.conf with resolved token"},
+        {"type": "source", "location": "docker-compose.yml mounts ./config/generated/nats.conf:/etc/nats/nats.conf:ro and references --config flag"}
+      ],
+      "linkedDoD": ["docker-compose.yml NATS service uses --config /etc/nats/nats.conf instead of --auth; mounts ./config/generated/nats.conf:/etc/nats/nats.conf:ro"]
+    },
+    {
+      "scenarioId": "SCN-020-005",
+      "name": "ML sidecar rejects unauthenticated requests when token configured",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_auth.py", "function": "TestMLSidecarAuthWithToken::test_reject_unauthenticated_request"},
+        {"file": "ml/tests/test_auth.py", "function": "TestMLSidecarAuthWithToken::test_reject_wrong_token"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_auth.py::TestMLSidecarAuthWithToken::test_reject_unauthenticated_request"},
+        {"type": "source", "location": "ml/app/auth.py::verify_auth raises HTTPException(401) when token missing or wrong"}
+      ],
+      "linkedDoD": ["ML sidecar non-health endpoints require auth when SMACKEREL_AUTH_TOKEN is set; SCN-020-005 DoD bullet in scopes.md Scope 2"]
+    },
+    {
+      "scenarioId": "SCN-020-006",
+      "name": "ML sidecar accepts authenticated requests",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_auth.py", "function": "TestMLSidecarAuthWithToken::test_accept_bearer_token"},
+        {"file": "ml/tests/test_auth.py", "function": "TestMLSidecarAuthWithToken::test_accept_x_auth_token_header"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_auth.py::TestMLSidecarAuthWithToken::test_accept_bearer_token"},
+        {"type": "unit-test", "location": "ml/tests/test_auth.py::TestMLSidecarAuthWithToken::test_accept_x_auth_token_header"},
+        {"type": "source", "location": "ml/app/auth.py::verify_auth uses hmac.compare_digest constant-time comparison and accepts both Authorization: Bearer and X-Auth-Token headers"}
+      ],
+      "linkedDoD": ["SCN-020-006 ML sidecar accepts authenticated requests DoD bullet in scopes.md Scope 2"]
+    },
+    {
+      "scenarioId": "SCN-020-007",
+      "name": "ML sidecar health endpoint remains unauthenticated",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_auth.py", "function": "TestMLSidecarAuthWithToken::test_health_unauthenticated"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_auth.py::TestMLSidecarAuthWithToken::test_health_unauthenticated"},
+        {"type": "source", "location": "ml/app/main.py @app.get(\"/health\") registered on app, not authed_router"}
+      ],
+      "linkedDoD": ["ML sidecar /health remains unauthenticated (Docker healthcheck works)"]
+    },
+    {
+      "scenarioId": "SCN-020-008",
+      "name": "ML sidecar allows all requests when auth_token is empty",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_auth.py", "function": "TestMLSidecarAuthDevMode::test_allow_unauthenticated_in_dev_mode"},
+        {"file": "ml/tests/test_auth.py", "function": "TestMLSidecarAuthDevMode::test_health_in_dev_mode"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_auth.py::TestMLSidecarAuthDevMode::test_allow_unauthenticated_in_dev_mode"},
+        {"type": "source", "location": "ml/app/auth.py::verify_auth early-returns when _AUTH_TOKEN is empty"}
+      ],
+      "linkedDoD": ["ML sidecar dev mode (empty token) allows all requests"]
+    },
+    {
+      "scenarioId": "SCN-020-009",
+      "name": "Web UI requires auth when auth_token is configured",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/router_test.go", "function": "TestWebUI_RequiresAuth_WhenTokenConfigured"},
+        {"file": "internal/api/router_test.go", "function": "TestWebUI_AcceptsBearerToken"},
+        {"file": "internal/api/router_test.go", "function": "TestWebUI_AcceptsCookie"},
+        {"file": "internal/api/router_test.go", "function": "TestWebUI_RejectsWrongToken"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/router_test.go::TestWebUI_RequiresAuth_WhenTokenConfigured"},
+        {"type": "source", "location": "internal/api/router.go:157 r.Use(deps.webAuthMiddleware) inside Web UI route group"}
+      ],
+      "linkedDoD": ["webAuthMiddleware applied to Web UI route group in internal/api/router.go; Web UI requires auth when auth_token configured"]
+    },
+    {
+      "scenarioId": "SCN-020-010",
+      "name": "Web UI allows all requests when auth_token is empty",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/router_test.go", "function": "TestWebUI_AllowsAll_WhenTokenEmpty"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/router_test.go::TestWebUI_AllowsAll_WhenTokenEmpty"},
+        {"type": "source", "location": "internal/api/router.go webAuthMiddleware: if d.AuthToken == \"\" { next.ServeHTTP(w, r); return }"}
+      ],
+      "linkedDoD": ["Web UI passthrough when auth_token empty (dev mode)"]
+    },
+    {
+      "scenarioId": "SCN-020-011",
+      "name": "OAuth start endpoint is rate-limited",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/router_test.go", "function": "TestOAuthStart_RateLimited"},
+        {"file": "internal/api/router_test.go", "function": "TestOAuthCallback_RateLimited"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/router_test.go::TestOAuthStart_RateLimited"},
+        {"type": "source", "location": "internal/api/router.go httprate.LimitByIP(10, 1*time.Minute) on OAuth start (and callback per SEC-SWEEP-001)"}
+      ],
+      "linkedDoD": ["httprate.LimitByIP(10, 1*time.Minute) applied to OAuth start endpoint"]
+    },
+    {
+      "scenarioId": "SCN-020-012",
+      "name": "OAuth start endpoint allows traffic within rate limit",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/router_test.go", "function": "TestOAuthStart_AllowsWithinLimit"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/router_test.go::TestOAuthStart_AllowsWithinLimit"},
+        {"type": "source", "location": "internal/api/router.go httprate.LimitByIP allows ≤10 req/min per IP"}
+      ],
+      "linkedDoD": ["OAuth start ≤10 req/min per IP allowed"]
+    },
+    {
+      "scenarioId": "SCN-020-013",
+      "name": "Decryption fails closed when encryption key is configured",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go", "function": "TestTokenStore_Decrypt_FailClosed_NotBase64"},
+        {"file": "internal/auth/oauth_test.go", "function": "TestTokenStore_Decrypt_FailClosed_TooShort"},
+        {"file": "internal/auth/oauth_test.go", "function": "TestTokenStore_Decrypt_FailClosed_GCMFailure"},
+        {"file": "internal/auth/oauth_test.go", "function": "TestTokenStore_Decrypt_WrongKey_FailClosed"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go::TestTokenStore_Decrypt_FailClosed_NotBase64"},
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go::TestTokenStore_Decrypt_FailClosed_TooShort"},
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go::TestTokenStore_Decrypt_FailClosed_GCMFailure"},
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go::TestTokenStore_Decrypt_WrongKey_FailClosed"},
+        {"type": "source", "location": "internal/auth/store.go::decrypt returns (\"\", error) on all 3 failure paths when encKey is non-nil; Get() propagates the error"}
+      ],
+      "linkedDoD": ["SCN-020-013 decrypt() returns (\"\", error) on all 3 failure paths when encKey is non-nil DoD bullet in scopes.md Scope 3"]
+    },
+    {
+      "scenarioId": "SCN-020-014",
+      "name": "No encryption key means plaintext passthrough",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go", "function": "TestTokenStore_Decrypt_NoKey_PlaintextPassthrough"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go::TestTokenStore_Decrypt_NoKey_PlaintextPassthrough"},
+        {"type": "source", "location": "internal/auth/store.go::decrypt no-key passthrough branch: if len(s.encKey) == 0 { return encoded, nil }"}
+      ],
+      "linkedDoD": ["SCN-020-014 decrypt() returns (encoded, nil) when encKey is nil (dev mode passthrough) DoD bullet in scopes.md Scope 3"]
+    },
+    {
+      "scenarioId": "SCN-020-015",
+      "name": "Valid encrypted data decrypts successfully",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go", "function": "TestTokenStore_EncryptDecrypt_SameKeyDifferentNonces"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go::TestTokenStore_EncryptDecrypt_SameKeyDifferentNonces (round-trip encrypt+decrypt with same key)"},
+        {"type": "source", "location": "internal/auth/store.go::decrypt AES-GCM Open path returns plaintext on success"}
+      ],
+      "linkedDoD": ["Valid encrypted data still decrypts correctly"]
+    },
+    {
+      "scenarioId": "SCN-020-016",
+      "name": "Startup emits warning when auth_token is empty (core)",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "cmd/core/main_test.go", "function": "(file exists; warn behavior verified by source pointer)"}
+      ],
+      "evidenceRefs": [
+        {"type": "source", "location": "cmd/core/main.go:71 slog.Warn(\"SMACKEREL_AUTH_TOKEN is empty — system running without authentication\") inside if cfg.AuthToken == \"\" branch"}
+      ],
+      "linkedDoD": ["cmd/core/main.go logs WARN on empty auth_token at startup"]
+    },
+    {
+      "scenarioId": "SCN-020-017",
+      "name": "ML sidecar emits warning when auth_token is empty",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_startup_warning.py", "function": "TestMLStartupWarningEmptyToken"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_startup_warning.py::TestMLStartupWarningEmptyToken"},
+        {"type": "source", "location": "ml/app/main.py:55-57 lifespan logger.warning when auth_token is empty"}
+      ],
+      "linkedDoD": ["ml/app/main.py logs WARNING on empty SMACKEREL_AUTH_TOKEN at startup"]
+    },
+    {
+      "scenarioId": "SCN-020-018",
+      "name": "No warning when auth_token is configured",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_startup_warning.py", "function": "TestMLStartupNoWarningWithToken"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_startup_warning.py::TestMLStartupNoWarningWithToken"},
+        {"type": "source", "location": "cmd/core/main.go and ml/app/main.py both gate the warning behind if token == \"\""}
+      ],
+      "linkedDoD": ["No warning emitted when auth_token is configured (non-empty)"]
+    }
+  ]
+}

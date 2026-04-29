@@ -751,3 +751,26 @@ Validation outcome: **PASSED** — ten scopes Done, check/build/lint/format/unit
 
 **F-1** (P2, environment hygiene): during the 2026-04-26 finalize, the host docker bridge entered a state where inter-container TCP failed even though DNS resolved and target services reported ready. Reproducible on `tests/e2e/test_compose_start.sh` standalone, resolved by docker daemon restart. Not a spec 037 defect — recorded as a follow-up note for the test-stack lifecycle, the same class of observation as F-1 in `specs/016-weather-connector/report.md`.
 
+---
+
+## Appendix: Traceability Evidence Index (BUG-037-002)
+
+This appendix lists the literal concrete-test-file path tokens referenced by Test Plan rows in `scopes.md` so the Bubbles traceability-guard's `report_mentions_path` check (`grep -Fq`) can verify each scenario's mapped file is named in this report. Added by BUG-037-002 (artifact-only fidelity fix; no production code, no behavioral change). Each path was verified to exist on disk and to contain the test functions cited inline in the corresponding scope's Definition of Done evidence above.
+
+| Scope | Scenario | Concrete test file | DoD evidence in scopes.md |
+|-------|----------|--------------------|---------------------------|
+| 2 | SCN-037-003 Tool registers from its owning package | `internal/agent/registry_test.go` | scopes.md Scope 2 DoD — `TestRegisterTool_HappyPath` and friends |
+| 2 | SCN-037-004 Duplicate tool name refuses startup | `internal/agent/registry_test.go` | scopes.md Scope 2 DoD — `TestRegisterTool_DuplicateNamePanicsWithBothCallSites` |
+| 2 | SCN-037-005 Malformed argument or return schema is rejected at registration | `internal/agent/registry_schema_test.go` | scopes.md Scope 2 DoD — `TestRegisterTool_MalformedInputSchemaPanics` / `…OutputSchemaPanics` |
+| 3 | SCN-037-006 Valid scenario file registers cleanly | `internal/agent/loader_rules_test.go` | scopes.md Scope 3 DoD — `TestLoader_Rule_RejectsBadInputs` (14 rejection paths) |
+| 3 | SCN-037-007 Missing required field rejects only that file (BS-009) | `tests/integration/agent/loader_bs009_test.go` | scopes.md Scope 3 DoD — `TestLoader_BS009_MalformedScenarioRejectionsAreIsolated` |
+| 3 | SCN-037-008 Allowlisted tool not in registry rejects scenario (BS-010) | `tests/integration/agent/loader_bs010_test.go` | scopes.md Scope 3 DoD — `TestLoader_BS010_UnknownToolRejectsScenarioOnly` |
+| 3 | SCN-037-009 Two scenarios with the same id refuse startup (BS-011) | `tests/integration/agent/loader_bs011_test.go` | scopes.md Scope 3 DoD — `TestLoader_BS011_DuplicateIDIsFatalAndNamesBothFiles` |
+| 4 | SCN-037-010 Explicit scenario id bypasses similarity (BS-002 fast path) | `internal/agent/router_similarity_test.go` | scopes.md Scope 4 DoD — top-pick + max-over-examples + one-embed-per-route |
+| 4 | SCN-037-011 Similarity routing picks the right scenario (BS-002) | `internal/agent/router_similarity_test.go` | scopes.md Scope 4 DoD — same `router_similarity_test.go` suite |
+| 4 | SCN-037-012 Below-threshold input returns unknown-intent (BS-014) | `internal/agent/router_floor_test.go` | scopes.md Scope 4 DoD — below-floor + envelope override |
+| 10 | SCN-037-031 Scheduler/pipeline call into the agent | `tests/integration/agent/scheduler_bridge_test.go` | scopes.md Scope 10 DoD — `TestScope10_SchedulerBridge_FiresExecutorWithSchedulerSource` |
+| 10 | SCN-037-032 CI rejects forbidden-pattern regression | `tests/integration/agent/ci_forbidden_pattern_test.go` | scopes.md Scope 10 DoD — `TestScope10_ForbiddenPatternGuard_ActiveInCI` |
+
+This appendix adds evidence cross-references only. No prior report content is removed or altered. See `specs/037-llm-agent-tools/bugs/BUG-037-002-dod-scenario-fidelity-gap/` for the full bug packet.
+
