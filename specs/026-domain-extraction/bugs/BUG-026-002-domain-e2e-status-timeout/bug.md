@@ -13,9 +13,9 @@ The domain extraction E2E times out with empty processing/domain status after ca
 - [x] Reported
 - [x] Confirmed (targeted red-stage output captured: focused domain E2E timed out with `processing=processed domain=`)
 - [x] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Fixed (commit c6d2b26 2026-04-29 — broader E2E suite GREEN including TestE2E_DomainExtraction and TestOperatorStatus_RecommendationProvidersEmptyByDefault)
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 1. Run the full E2E suite through `./smackerel.sh test e2e`.

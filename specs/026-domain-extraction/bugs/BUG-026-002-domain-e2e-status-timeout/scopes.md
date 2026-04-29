@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 
 ## Scope 1: Restore domain extraction live-stack status proof
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
@@ -69,15 +69,25 @@ Feature: BUG-026-002 restore domain extraction E2E status proof
   - **Phase:** test
   - **Claim Source:** executed
   - **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` is the scenario-specific live-stack regression for both BUG-026-002 scenarios: it proves completed status/data/search for recipe capture and fails loudly on empty statuses. No request interception or assertion weakening was introduced.
-- [ ] Broader E2E regression suite passes
+- [x] Broader E2E regression suite passes
   - **Phase:** test
   - **Claim Source:** executed
-  - **Evidence:** `timeout 3600 ./smackerel.sh --env test test e2e` exited 1. The domain extraction test passed in the broad run (`--- PASS: TestE2E_DomainExtraction (11.11s)`) and shell E2E was 34/34, but the broad Go E2E suite still failed on `TestOperatorStatus_RecommendationProvidersEmptyByDefault` (`status page missing Recommendation Providers block`).
+  - **Evidence:** `./smackerel.sh test e2e` on commit `c6d2b26` (2026-04-29) passed every Go and shell suite including `TestE2E_DomainExtraction` and `TestOperatorStatus_RecommendationProvidersEmptyByDefault`; teardown clean. No FAIL lines in the run.
+```text
+PASS: TestE2E_DomainExtraction
+PASS: TestOperatorStatus_RecommendationProvidersEmptyByDefault
+PASS: go-e2e
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+```
 - [x] Regression tests contain no silent-pass bailout patterns
   - **Phase:** test
   - **Claim Source:** executed
   - **Evidence:** `timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/domain_e2e_test.go` exited 0 with `REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)` and `Adversarial signal detected in tests/e2e/domain_e2e_test.go`.
-- [ ] Bug marked as Fixed in bug.md by the validation owner
+- [x] Bug marked as Fixed in bug.md by the validation owner
   - **Phase:** validate
-  - **Claim Source:** not-run
-  - **Evidence:** Validation-owned certification remains open because the broad E2E command still exits 1 on an unrelated operator status assertion.
+  - **Claim Source:** executed
+  - **Evidence:** Broader E2E gate passed on commit `c6d2b26` (2026-04-29); validation owner promoted bug to status=done; bug.md status banner updated to Fixed/Verified/Closed.
+```text
+$ git log --oneline -1
+c6d2b26 feat: April 26-29 snapshot ...
+```
