@@ -174,6 +174,18 @@ const allTemplates = `
     <p><span class="health {{if .DBHealthy}}up{{else}}down{{end}}"></span> PostgreSQL</p>
     <p><span class="health {{if .NATSHealthy}}up{{else}}down{{end}}"></span> NATS</p>
 </div>
+{{if .RecommendationsEnabled}}
+<section aria-label="Recommendation provider status">
+<div class="card">
+    <h3>Recommendation Providers</h3>
+    {{range .RecommendationProviderStatuses}}
+    <p><span class="health {{if .Healthy}}up{{else}}down{{end}}"></span> {{.DisplayName}} <span class="meta">({{.ProviderID}}) - {{.Status}}{{if .Reason}}: {{.Reason}}{{end}}{{if .CategoryLabel}} · {{.CategoryLabel}}{{end}}</span></p>
+    {{else}}
+    <p class="meta">0 recommendation providers configured</p>
+    {{end}}
+</div>
+</section>
+{{end}}
 {{if .KnowledgeStats}}
 <section aria-label="Knowledge layer status">
 <div class="card">

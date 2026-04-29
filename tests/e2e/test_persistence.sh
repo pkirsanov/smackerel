@@ -4,10 +4,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-source "$REPO_DIR/scripts/lib/runtime.sh"
-
 TEST_ENV="test"
+source "$SCRIPT_DIR/lib/helpers.sh"
+ARTIFACT_ID="test-persist-001"
 
 cleanup() {
     echo "Cleaning up test stack..."
@@ -22,31 +21,20 @@ cleanup
 
 # Start services
 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
-
-# Wait for healthy
-echo "Waiting for services..."
-sleep 20
-
-ENV_FILE="$(smackerel_require_env_file "$TEST_ENV")"
-POSTGRES_USER="$(smackerel_env_value "$ENV_FILE" "POSTGRES_USER")"
-POSTGRES_DB="$(smackerel_env_value "$ENV_FILE" "POSTGRES_DB")"
-COMPOSE_PROJECT="$(smackerel_compose_project "$TEST_ENV")"
-COMPOSE_ARGS=(docker compose --project-name "$COMPOSE_PROJECT" --env-file "$ENV_FILE" -f "$REPO_DIR/docker-compose.yml")
-
-sleep 20
+e2e_setup
+e2e_wait_healthy 120
 
 # Insert test data via psql
 echo "Inserting test artifact..."
-timeout 60 "${COMPOSE_ARGS[@]}" exec --interactive=false -T postgres \
-    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+INSERT_OUTPUT="$(e2e_psql "
 INSERT INTO artifacts (id, artifact_type, title, content_hash, source_id, created_at, updated_at)
-VALUES ('test-persist-001', 'note', 'Persistence Test', 'hash-persist-test', 'test', NOW(), NOW())
+VALUES ('$ARTIFACT_ID', 'note', 'Persistence Test', 'hash-persist-test', 'test', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
-"
+")"
+echo "Insert completed ($INSERT_OUTPUT)"
 
 # Verify insert
-COUNT_BEFORE=$("${COMPOSE_ARGS[@]}" exec --interactive=false -T postgres \
-    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "SELECT COUNT(*) FROM artifacts WHERE id='test-persist-001';")
+COUNT_BEFORE="$(e2e_psql "SELECT COUNT(*) FROM artifacts WHERE id='$ARTIFACT_ID';")"
 
 if [ "$COUNT_BEFORE" != "1" ]; then
     echo "FAIL: Insert verification failed (count=$COUNT_BEFORE)"
@@ -61,13 +49,11 @@ timeout 90 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down
 # Restart services
 echo "Restarting services..."
 timeout 180 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
-
-# Wait for postgres after restart
-sleep 20
+e2e_setup
+e2e_wait_healthy 120
 
 # Verify data persisted
-COUNT_AFTER=$("${COMPOSE_ARGS[@]}" exec --interactive=false -T postgres \
-    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "SELECT COUNT(*) FROM artifacts WHERE id='test-persist-001';")
+COUNT_AFTER="$(e2e_psql "SELECT COUNT(*) FROM artifacts WHERE id='$ARTIFACT_ID';")"
 
 if [ "$COUNT_AFTER" != "1" ]; then
     echo "FAIL: Data did not persist across restart (count=$COUNT_AFTER)"

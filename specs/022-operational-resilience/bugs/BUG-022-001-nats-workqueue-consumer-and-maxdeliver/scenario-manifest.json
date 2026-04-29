@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "featureDir": "specs/022-operational-resilience/bugs/BUG-022-001-nats-workqueue-consumer-and-maxdeliver",
+  "generatedAt": "2026-04-29T00:31:49Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-022-001-SCN-001",
+      "scope": "scope-1-restore-nats-integration-test-green-path",
+      "title": "ARTIFACTS workqueue consumer creation does not collide",
+      "gherkin": {
+        "given": "the disposable integration stack is running with the ARTIFACTS workqueue stream",
+        "when": "TestNATS_PublishSubscribe_Artifacts creates its consumer and publishes one artifact message",
+        "then": "consumer creation succeeds without err_code=10100 and exactly one message is fetched and acked"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/nats_stream_test.go",
+          "testId": "TestNATS_PublishSubscribe_Artifacts"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#reopened-regression-2026-04-29",
+        "report.md#test-phase-evidence-2026-04-29",
+        "bug.md#reproduction"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-022-001-SCN-002",
+      "scope": "scope-1-restore-nats-integration-test-green-path",
+      "title": "DOMAIN workqueue consumer creation does not collide",
+      "gherkin": {
+        "given": "the disposable integration stack is running with the DOMAIN workqueue stream",
+        "when": "TestNATS_PublishSubscribe_Domain creates its consumer and publishes one domain extraction message",
+        "then": "consumer creation succeeds without err_code=10100 and exactly one message is fetched and acked"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/nats_stream_test.go",
+          "testId": "TestNATS_PublishSubscribe_Domain"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#reopened-regression-2026-04-29",
+        "report.md#test-phase-evidence-2026-04-29",
+        "bug.md#reproduction"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-022-001-SCN-003",
+      "scope": "scope-1-restore-nats-integration-test-green-path",
+      "title": "MaxDeliver=3 exhaustion terminates redelivery",
+      "gherkin": {
+        "given": "the DEADLETTER stream has a consumer with MaxDeliver=3 and one poison message",
+        "when": "TestNATS_Chaos_MaxDeliverExhaustion NAKs the message three times and fetches after AckWait",
+        "then": "the post-exhaustion fetch returns exactly zero messages"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "integration",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/nats_stream_test.go",
+          "testId": "TestNATS_Chaos_MaxDeliverExhaustion"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#reopened-regression-2026-04-29",
+        "report.md#test-phase-evidence-2026-04-29",
+        "bug.md#reproduction"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

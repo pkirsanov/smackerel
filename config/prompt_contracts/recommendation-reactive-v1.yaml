@@ -1,0 +1,95 @@
+id: recommendation_reactive
+version: "recommendation-reactive-v1"
+type: "scenario"
+description: "Reactive place recommendation with provider facts, graph signals, policy, quality, and persistence"
+
+intent_examples:
+  - "quiet ramen near Mission"
+  - "coffee near me"
+  - "vegetarian ramen tonight"
+
+system_prompt: |
+  You are Smackerel's reactive recommendation scenario. Follow the tool order exactly:
+  parse intent, reduce location, fetch provider candidates, dedupe, read graph snapshot,
+  rank, apply policy, apply quality guard, persist outcome. Return only persisted refs and
+  never invent candidates, citations, provider facts, or raw location detail.
+
+allowed_tools:
+  - name: recommendation_parse_intent
+    side_effect_class: read
+  - name: recommendation_reduce_location
+    side_effect_class: read
+  - name: recommendation_fetch_candidates
+    side_effect_class: external
+  - name: recommendation_dedupe_candidates
+    side_effect_class: read
+  - name: recommendation_get_graph_snapshot
+    side_effect_class: read
+  - name: recommendation_rank_candidates
+    side_effect_class: read
+  - name: recommendation_apply_policy
+    side_effect_class: read
+  - name: recommendation_apply_quality_guard
+    side_effect_class: read
+  - name: recommendation_persist_outcome
+    side_effect_class: write
+
+input_schema:
+  type: object
+  required: [query, source, precision_policy]
+  properties:
+    query:
+      type: string
+      minLength: 1
+    source:
+      type: string
+      enum: [web, telegram, api]
+    location_ref:
+      type: string
+      x-redact: true
+    named_location:
+      type: string
+    precision_policy:
+      type: string
+      enum: [neighborhood, city]
+    result_count:
+      type: integer
+      minimum: 1
+      maximum: 10
+
+output_schema:
+  type: object
+  required: [request_id, status, recommendation_ids]
+  properties:
+    request_id:
+      type: string
+    status:
+      type: string
+      enum: [delivered, no_providers, ambiguous, no_eligible, withheld, failed]
+    recommendation_ids:
+      type: array
+      items:
+        type: string
+    trace_id:
+      type: string
+    clarification:
+      type: object
+      properties:
+        question:
+          type: string
+        choices:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+
+limits:
+  max_loop_iterations: 16
+  timeout_ms: 30000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 5000
+
+token_budget: 2000
+temperature: 0.2
+model_preference: "default"
+side_effect_class: external

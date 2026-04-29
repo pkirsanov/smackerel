@@ -257,11 +257,21 @@ func ExtractText(text string) *Result {
 	}
 
 	return &Result{
-		ContentType: ContentTypeGeneric,
+		ContentType: detectPlainTextContentType(text),
 		Title:       title,
 		Text:        text,
 		ContentHash: HashContent(text),
 	}
+}
+
+func detectPlainTextContentType(text string) ContentType {
+	lower := strings.ToLower(text)
+	hasIngredientSection := strings.Contains(lower, "ingredients")
+	hasInstructionSection := strings.Contains(lower, "instructions") || strings.Contains(lower, "directions") || strings.Contains(lower, "method")
+	if hasIngredientSection && hasInstructionSection && recipeRe.MatchString(lower) {
+		return ContentTypeRecipe
+	}
+	return ContentTypeGeneric
 }
 
 // HashContent returns the SHA-256 hex digest of the given content.

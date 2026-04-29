@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 import litellm
@@ -60,6 +61,20 @@ Rules:
 - For "light" tier: only return title, summary, topics, sentiment
 - For "metadata" tier: only return title, artifact_type
 """
+
+
+def _processing_degraded_fallback_enabled() -> bool:
+    raw = os.environ["ML_PROCESSING_DEGRADED_FALLBACK_ENABLED"].strip().lower()
+    if raw == "true":
+        return True
+    if raw == "false":
+        return False
+    raise RuntimeError("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED must be true or false")
+
+
+def _is_llm_unavailable_error(exc: Exception) -> bool:
+    error_msg = str(exc).lower()
+    return any(indicator in error_msg for indicator in ["connection", "connect", "refused", "timeout"])
 
 
 async def process_content(
@@ -152,6 +167,35 @@ async def process_content(
     except json.JSONDecodeError as e:
         logger.error("LLM returned invalid JSON: %s", e)
         return {"success": False, "error": f"Invalid JSON from LLM: {e}"}
-    except Exception:
+    except Exception as e:
         logger.error("LLM processing failed", exc_info=True)
+
+        try:
+            fallback_enabled = _processing_degraded_fallback_enabled()
+        except (KeyError, RuntimeError) as config_error:
+            logger.error("ML degraded fallback config invalid: %s", config_error)
+            fallback_enabled = False
+
+        if fallback_enabled and _is_llm_unavailable_error(e):
+            logger.warning("LLM service unavailable - providing SST-gated degraded fallback result")
+            fallback_artifact_type = content_type if content_type and content_type != "generic" else "note"
+            fallback_result = {
+                "artifact_type": fallback_artifact_type,
+                "title": content[:100].strip() or "Untitled",
+                "summary": "Processing completed with SST-gated degraded fallback - LLM service unavailable",
+                "key_ideas": [],
+                "entities": {"people": [], "orgs": [], "places": [], "products": [], "dates": []},
+                "action_items": [],
+                "topics": ["degraded-fallback"],
+                "sentiment": "neutral",
+                "temporal_relevance": {"relevant_from": None, "relevant_until": None},
+                "source_quality": "low",
+            }
+            return {
+                "success": True,
+                "result": fallback_result,
+                "model_used": "fallback",
+                "tokens_used": 0,
+            }
+
         return {"success": False, "error": "LLM processing failed"}

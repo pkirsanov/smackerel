@@ -454,17 +454,22 @@ func TestArtifactDetailHandler_NilArtifactStore_Returns503(t *testing.T) {
 func TestArtifactDetailHandler_Success(t *testing.T) {
 	now := time.Now()
 	store := &mockArtifactStore{
-		artifact: &db.ArtifactDetail{
-			ID:             "art-123",
-			Title:          "Test Article",
-			ArtifactType:   "article",
-			Summary:        "A test summary",
-			SourceURL:      "https://example.com",
-			Sentiment:      "neutral",
-			SourceQuality:  "high",
-			ProcessingTier: "full",
-			CreatedAt:      now,
-			UpdatedAt:      now,
+		artifactWithDom: &db.ArtifactWithDomain{
+			ArtifactDetail: db.ArtifactDetail{
+				ID:               "art-123",
+				Title:            "Test Article",
+				ArtifactType:     "recipe",
+				Summary:          "A test summary",
+				SourceURL:        "https://example.com",
+				Sentiment:        "neutral",
+				SourceQuality:    "high",
+				ProcessingTier:   "full",
+				ProcessingStatus: "processed",
+				CreatedAt:        now,
+				UpdatedAt:        now,
+			},
+			DomainExtractionStatus: "completed",
+			DomainData:             json.RawMessage(`{"domain":"recipe","ingredients":[{"name":"mozzarella"}],"steps":[{"number":1,"instruction":"Bake"}]}`),
 		},
 	}
 	deps := &Dependencies{
@@ -495,11 +500,24 @@ func TestArtifactDetailHandler_Success(t *testing.T) {
 	if body["title"] != "Test Article" {
 		t.Errorf("expected title=Test Article, got %v", body["title"])
 	}
+	if body["processing_status"] != "processed" {
+		t.Errorf("expected processing_status=processed, got %v", body["processing_status"])
+	}
+	if body["domain_extraction_status"] != "completed" {
+		t.Errorf("expected domain_extraction_status=completed, got %v", body["domain_extraction_status"])
+	}
+	domainData, ok := body["domain_data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected domain_data object, got %T", body["domain_data"])
+	}
+	if domainData["domain"] != "recipe" {
+		t.Errorf("expected domain_data.domain=recipe, got %v", domainData["domain"])
+	}
 }
 
 func TestArtifactDetailHandler_NotFound(t *testing.T) {
 	store := &mockArtifactStore{
-		artifactErr: fmt.Errorf("get artifact: no rows in result set"),
+		artifactWithDomErr: fmt.Errorf("get artifact: no rows in result set"),
 	}
 	deps := &Dependencies{
 		DB:            &mockDB{healthy: true},

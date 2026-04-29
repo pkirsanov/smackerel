@@ -1,0 +1,84 @@
+{
+  "version": 3,
+  "bugId": "BUG-002",
+  "parentFeatureDir": "specs/008-telegram-share-capture",
+  "parentScope": "2,3",
+  "title": "Single forwarded message routed as conversation (SC-TSC09 violation)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "filedAt": "2026-04-26T00:00:00Z",
+  "filedBy": "bubbles.workflow",
+  "fixedAt": "2026-04-26T00:00:00Z",
+  "lastUpdated": "2026-04-27T00:00:00Z",
+  "fixApproach": "single-message-buffer-shortcircuit-in-flushConversation",
+  "filesModified": [
+    "internal/telegram/bot.go",
+    "internal/telegram/forward.go",
+    "internal/telegram/forward_single_flush_test.go",
+    "internal/telegram/assembly_test.go"
+  ],
+  "tests": {
+    "unit": {
+      "command": "./smackerel.sh test unit",
+      "result": "pass",
+      "newTests": [
+        "internal/telegram/forward_single_flush_test.go::TestBUG002_SC_TSC09_SingleForward_NotConversation",
+        "internal/telegram/forward_single_flush_test.go::TestBUG002_SingleForward_WithURL_PreservesURLArtifact",
+        "internal/telegram/forward_single_flush_test.go::TestBUG002_TwoForwards_StillProduceConversation"
+      ],
+      "strengthenedTests": [
+        "internal/telegram/assembly_test.go::TestConversationAssembler_SingleMessage_FlushesAsSingle"
+      ]
+    }
+  },
+  "boundaryRespected": true,
+  "reopenParentScope": "2,3",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "done",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation",
+      "analysis",
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-04-26T00:00:00Z",
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "completedScopes": [
+      "Scope 1 — Route single-message buffers through single-forward capture"
+    ],
+    "evidence": "Parent spec specs/008-telegram-share-capture/scopes.md Scopes 2 & 3 marked 'Done (re-certified 2026-04-26 by bubbles.validate after BUG-002 fix)'"
+  },
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "statusCeiling": "done",
+    "capturedAt": "2026-04-27T00:00:00Z"
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "action": "state-promotion",
+      "timestamp": "2026-04-27T00:00:00Z",
+      "from": "fixed",
+      "to": "done",
+      "evidence": "Parent spec specs/008-telegram-share-capture/scopes.md Scopes 2 & 3 re-certified 2026-04-26 by bubbles.validate after BUG-002 fix; bug Scope 1 DoD all checked; Scope 2 deferred-to-validate completed during parent re-certification"
+    }
+  ],
+  "deferred": {
+    "uservalidationFlip": "completed by bubbles.validate during 2026-04-26 re-certification"
+  }
+}

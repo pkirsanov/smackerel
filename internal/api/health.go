@@ -39,6 +39,9 @@ type WebUI interface {
 	TopicsPage(w http.ResponseWriter, r *http.Request)
 	SettingsPage(w http.ResponseWriter, r *http.Request)
 	StatusPage(w http.ResponseWriter, r *http.Request)
+	RecommendationsPage(w http.ResponseWriter, r *http.Request)
+	RecommendationsResults(w http.ResponseWriter, r *http.Request)
+	RecommendationDetail(w http.ResponseWriter, r *http.Request)
 	SyncConnectorHandler(w http.ResponseWriter, r *http.Request)
 	BookmarkUploadHandler(w http.ResponseWriter, r *http.Request)
 	KnowledgeDashboard(w http.ResponseWriter, r *http.Request)
@@ -119,6 +122,9 @@ type Dependencies struct {
 	// (optional — nil when the agent runtime is not enabled).
 	AgentInvokeHandler *AgentInvokeHandler
 
+	// Spec 038 Scope 1 — drive connector API handlers.
+	DriveHandlers *DriveHandlers
+
 	// Annotation handlers (optional — nil when annotations not configured)
 	AnnotationHandlers *AnnotationHandlers
 
@@ -141,6 +147,9 @@ type Dependencies struct {
 
 	// Meal plan handler (optional — nil when meal planning not enabled)
 	MealPlanHandler *MealPlanHandler
+
+	// Recommendation handlers (optional — nil when recommendations not enabled)
+	RecommendationHandlers *RecommendationHandlers
 
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string

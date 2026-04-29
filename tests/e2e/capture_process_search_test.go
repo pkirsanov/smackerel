@@ -7,9 +7,40 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
+
+func parseProcessingStatus(detailBody []byte) (string, error) {
+	var detail struct {
+		ProcessingStatus *string `json:"processing_status"`
+	}
+	if err := json.Unmarshal(detailBody, &detail); err != nil {
+		return "", fmt.Errorf("parse artifact detail response: %w", err)
+	}
+	if detail.ProcessingStatus == nil {
+		return "", fmt.Errorf("artifact detail response missing processing_status")
+	}
+	status := strings.TrimSpace(*detail.ProcessingStatus)
+	if status == "" {
+		return "", fmt.Errorf("artifact detail response has empty processing_status")
+	}
+	return status, nil
+}
+
+func processingComplete(status string) (bool, error) {
+	switch status {
+	case "processed", "completed":
+		return true, nil
+	case "pending", "processing", "queued":
+		return false, nil
+	case "failed":
+		return false, fmt.Errorf("artifact processing failed")
+	default:
+		return false, fmt.Errorf("artifact detail response has unexpected processing_status %q", status)
+	}
+}
 
 // Scenario: Full pipeline flow
 // Given the full stack is running (core, ML, PostgreSQL, NATS)
@@ -83,20 +114,21 @@ func TestE2E_CaptureProcessSearch(t *testing.T) {
 			continue
 		}
 
-		var detail struct {
-			ProcessingStatus string `json:"processing_status"`
+		status, err := parseProcessingStatus(detailBody)
+		if err != nil {
+			t.Fatalf("invalid artifact detail processing status: %v; body=%s", err, string(detailBody))
 		}
-		if err := json.Unmarshal(detailBody, &detail); err != nil {
-			time.Sleep(2 * time.Second)
-			continue
+		complete, err := processingComplete(status)
+		if err != nil {
+			t.Fatalf("artifact did not reach a processable status: %v; body=%s", err, string(detailBody))
 		}
 
-		if detail.ProcessingStatus == "processed" || detail.ProcessingStatus == "completed" {
+		if complete {
 			processed = true
-			t.Logf("artifact processed: status=%s", detail.ProcessingStatus)
+			t.Logf("artifact processed: status=%s", status)
 			break
 		}
-		t.Logf("waiting for processing... status=%s", detail.ProcessingStatus)
+		t.Logf("waiting for processing... status=%s", status)
 		time.Sleep(2 * time.Second)
 	}
 
@@ -163,4 +195,59 @@ func TestE2E_CaptureProcessSearch(t *testing.T) {
 	// compose project with isolated volumes). Test data uses unique markers
 	// (e2e-test-{UnixNano}) for idempotency. Stack teardown removes all data.
 	t.Logf("e2e capture→process→search test completed, artifact_id=%s", captureResp.ArtifactID)
+}
+
+// TestE2E_CaptureProcessSearch_AdversarialEmptyStatus is a regression test for BUG-031-003.
+// This test verifies that when an artifact detail response omits or provides an empty
+// processing_status field, the E2E test fails loudly instead of silently passing.
+// This prevents regression of the original bug where empty status was treated as "processed".
+func TestE2E_CaptureProcessSearch_AdversarialEmptyStatus(t *testing.T) {
+	parseRejects := []struct {
+		name string
+		body string
+	}{
+		{name: "missing status", body: `{}`},
+		{name: "empty status", body: `{"processing_status":""}`},
+		{name: "whitespace status", body: `{"processing_status":"   "}`},
+	}
+	for _, tc := range parseRejects {
+		t.Run(tc.name, func(t *testing.T) {
+			if status, err := parseProcessingStatus([]byte(tc.body)); err == nil {
+				t.Fatalf("parseProcessingStatus(%s) = %q, nil; want failure", tc.body, status)
+			}
+		})
+	}
+
+	statusRejects := []string{"failed", "", "unknown"}
+	for _, status := range statusRejects {
+		t.Run("reject status "+status, func(t *testing.T) {
+			if complete, err := processingComplete(status); err == nil || complete {
+				t.Fatalf("processingComplete(%q) = complete=%v err=%v; want failure", status, complete, err)
+			}
+		})
+	}
+
+	statusWaits := []string{"pending", "processing", "queued"}
+	for _, status := range statusWaits {
+		t.Run("wait status "+status, func(t *testing.T) {
+			complete, err := processingComplete(status)
+			if err != nil || complete {
+				t.Fatalf("processingComplete(%q) = complete=%v err=%v; want wait/no error", status, complete, err)
+			}
+		})
+	}
+
+	for _, status := range []string{"processed", "completed"} {
+		t.Run("accept status "+status, func(t *testing.T) {
+			body := []byte(fmt.Sprintf(`{"processing_status":%q}`, status))
+			parsed, err := parseProcessingStatus(body)
+			if err != nil {
+				t.Fatalf("parseProcessingStatus(%s): %v", string(body), err)
+			}
+			complete, err := processingComplete(parsed)
+			if err != nil || !complete {
+				t.Fatalf("processingComplete(%q) = complete=%v err=%v; want complete/no error", parsed, complete, err)
+			}
+		})
+	}
 }

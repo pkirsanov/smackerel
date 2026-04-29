@@ -53,12 +53,15 @@ func (s *Scheduler) doDigestJob() {
 	if pendingRetry && s.bot != nil && pendingDate != "" {
 		d, err := s.digestGen.GetLatest(ctx, pendingDate)
 		if err == nil && d != nil && d.DigestDate.Format("2006-01-02") == pendingDate {
-			s.bot.SendDigest(d.DigestText)
-			slog.Info("pending digest delivered via retry", "date", pendingDate)
-			s.mu.Lock()
-			s.digestPendingRetry = false
-			s.digestPendingDate = ""
-			s.mu.Unlock()
+			if err := deliverDigest(ctx, d.ID, d.DigestText, s.bot.SendDigest, s.digestGen.MarkDelivered); err != nil {
+				slog.Warn("pending digest retry failed, will try again next cycle", "date", pendingDate, "error", err)
+			} else {
+				slog.Info("pending digest delivered via retry", "date", pendingDate)
+				s.mu.Lock()
+				s.digestPendingRetry = false
+				s.digestPendingDate = ""
+				s.mu.Unlock()
+			}
 		} else {
 			slog.Warn("pending digest retry failed, will try again next cycle", "date", pendingDate)
 		}
@@ -107,7 +110,14 @@ func (s *Scheduler) doDigestJob() {
 				case <-ticker.C:
 					d, err := s.digestGen.GetLatest(pollCtx, today)
 					if err == nil && d != nil && d.DigestDate.Format("2006-01-02") == today {
-						s.bot.SendDigest(d.DigestText)
+						if err := deliverDigest(pollCtx, d.ID, d.DigestText, s.bot.SendDigest, s.digestGen.MarkDelivered); err != nil {
+							slog.Warn("digest delivery failed — will retry next cycle", "date", today, "error", err)
+							s.mu.Lock()
+							s.digestPendingRetry = true
+							s.digestPendingDate = today
+							s.mu.Unlock()
+							return
+						}
 						slog.Info("digest delivered via Telegram", "date", today)
 						return
 					}
@@ -115,6 +125,28 @@ func (s *Scheduler) doDigestJob() {
 			}
 		}()
 	}
+}
+
+func deliverDigest(ctx context.Context, digestID, digestText string, sendFn func(string) error, markFn func(context.Context, string) error) error {
+	if digestID == "" {
+		return fmt.Errorf("digest id is required for delivery tracking")
+	}
+	if digestText == "" {
+		return fmt.Errorf("digest text is required for delivery")
+	}
+	if sendFn == nil {
+		return fmt.Errorf("digest send function is required")
+	}
+	if markFn == nil {
+		return fmt.Errorf("digest delivery tracking function is required")
+	}
+	if err := sendFn(digestText); err != nil {
+		return fmt.Errorf("send digest: %w", err)
+	}
+	if err := markFn(ctx, digestID); err != nil {
+		return fmt.Errorf("mark digest delivered: %w", err)
+	}
+	return nil
 }
 
 // runTopicMomentumJob updates topic momentum scores — hourly.

@@ -25,6 +25,10 @@ type TripDossier struct {
 	RelatedCaptures []string   `json:"related_captures"`
 	DossierText     string     `json:"dossier_text"`
 	GeneratedAt     time.Time  `json:"generated_at"`
+	// DestinationForecast carries fresh weather/forecast artifacts for the
+	// destination when available. Restored per BUG-016-W2 — see
+	// specs/016-weather-connector/bugs/BUG-016-W2-dossier-no-forecast/.
+	DestinationForecast *DossierForecast `json:"destination_forecast,omitempty"`
 }
 
 // DetectTripsFromEmail scans email artifacts for flight/hotel booking patterns per R-405.
@@ -147,6 +151,10 @@ func assembleDossierText(d *TripDossier) string {
 	}
 	if len(d.RelatedCaptures) > 0 {
 		parts = append(parts, fmt.Sprintf("📎 %d related capture(s)", len(d.RelatedCaptures)))
+	}
+	// BUG-016-W2: include destination forecast line when available.
+	if line := formatDossierForecastLine(d.DestinationForecast); line != "" {
+		parts = append(parts, line)
 	}
 	return strings.Join(parts, "\n")
 }

@@ -10,6 +10,8 @@ site-packages/
 .venv/
 venv/
 .Python
+.pytest_cache/
+.ruff_cache/
 
 # Generated config (contains resolved secrets)
 config/generated/

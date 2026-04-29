@@ -1,0 +1,187 @@
+{
+  "version": 3,
+  "featureDir": "specs/039-recommendations-engine/bugs/BUG-039-002-operator-status-provider-block",
+  "parentFeatureDir": "specs/039-recommendations-engine",
+  "featureName": "BUG-039-002: Operator status provider block",
+  "bugId": "BUG-039-002",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
+    "currentScope": "scope-1-restore-recommendation-provider-status-block",
+    "runStartedAt": "2026-04-28T17:59:59Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-28T00:00:00Z",
+        "summary": "Created in-progress bug packet for SCN-039-002 operator status provider block failure. No source, test, parent artifact, or certification-owned fields modified."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-28T14:41:00Z",
+        "summary": "Implemented status page recommendation provider block from SST-enabled config and the existing provider registry; captured targeted RED/GREEN, check, unit, broad E2E, and integration behavior evidence. Validation-owned bug status remains unchanged."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-28T16:36:46Z",
+        "summary": "Re-ran BUG-039-002 target-relevant tests through the repo CLI: targeted provider-status E2E exit 0, Go unit exit 0, broad E2E exit 0, full integration exit 1 with the provider-specific integration case passing and unrelated NATS workqueue/MaxDeliver failures preserved as the BUG-022-001 caveat. Regression-quality, mock-audit, and skip-marker scans were clean for the target test files."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-04-28T17:08:33Z",
+        "summary": "Completed regression-phase diagnostics for BUG-039-002. Focused provider-status E2E, Go unit, broad E2E, provider-specific integration behavior, and regression-quality guard show no status/web/recommendation-provider regression. Full integration remains exit 1 only from the unrelated NATS workqueue/MaxDeliver caveat; no global integration-green claim was made."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-04-28T17:20:52Z",
+        "summary": "Reviewed BUG-039-002 implementation diff for reuse, quality, and efficiency. Applied one low-risk simplification by removing duplicate RecommendationProviderCount view-model plumbing and using the template range-empty branch; format, check, Go unit, and focused operator-status E2E passed. Certification-owned fields were not modified."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-04-28T17:53:26Z",
+        "summary": "Completed BUG-039-002 stabilization diagnostics. Focused provider-status E2E, broad E2E, check, build, lint, and provider-specific integration evidence show no runtime or lifecycle fragility for the status provider block; full integration remains red only on the unrelated NATS BUG-022-001 caveat. No code changes were made."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-04-28T18:08:04Z",
+        "summary": "Completed BUG-039-002 security diagnostics for the /status Recommendation Providers block. Source review, sensitive-pattern scan, implementation reality scan, repo check, and live auth/content probes found no secret, token, internal URL, unsafe provider config, or auth semantics regression. Full integration caveat remains unchanged for unrelated NATS BUG-022-001."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-04-28T18:59:58Z",
+    "completedScopes": ["scope-1-restore-recommendation-provider-status-block"],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Restore recommendation provider status block",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-28T18:59:58Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": [
+      {
+        "owner": "BUG-022-001",
+        "summary": "The full integration command remains red due unrelated NATS workqueue/MaxDeliver failures. The BUG-039-002 provider-specific integration case passes, and this certification does not claim global integration-suite green."
+      }
+    ]
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T00:00:00Z",
+      "runCompletedAt": "2026-04-28T00:00:00Z",
+      "summary": "Packetized uncovered broad E2E blocker for the feature 039 operator status provider block scenario."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T14:41:00Z",
+      "runCompletedAt": "2026-04-28T14:41:00Z",
+      "summary": "Restored the Recommendation Providers status block, kept the empty provider registry honest, and recorded implemented evidence while leaving validation-owned Fixed/Verified/Closed status untouched."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T16:09:00Z",
+      "runCompletedAt": "2026-04-28T16:36:46Z",
+      "summary": "Completed BUG-039-002 test phase evidence for the provider-status behavior. Targeted E2E, Go unit, and broad E2E passed; full integration stayed red only because of unrelated NATS failures while TestRecommendationProviders_EmptyRegistryReturnsNoProvidersAndPersistsTrace passed; target-file regression-quality, mock-audit, and skip-marker scans were clean. Certification fields were not modified."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T16:45:00Z",
+      "runCompletedAt": "2026-04-28T17:08:33Z",
+      "summary": "Ran regression diagnostics for BUG-039-002 provider-status behavior. Focused E2E, Go unit, and broad E2E passed; the provider-specific integration case passed inside the full integration command, which remains red due unrelated NATS failures. Cross-spec and design review found no route, API, registry, or status-page conflict. Certification fields were not modified."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T17:09:00Z",
+      "runCompletedAt": "2026-04-28T17:20:52Z",
+      "summary": "Completed simplify review and cleanup for BUG-039-002. Reuse and efficiency passes found no actionable changes; quality pass removed redundant provider-count view-model data while preserving the status empty state. Runtime proof passed through format, check, Go unit, and focused operator-status E2E."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "bubbles.workflow classification input",
+      "summary": "TestOperatorStatus_RecommendationProvidersEmptyByDefault reports status page missing Recommendation Providers block."
+    }
+  ],
+  "lastUpdatedAt": "2026-04-28T18:59:58Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single bug scope; owner starts with targeted red-stage proof before edits.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G036", "G057", "G060"],
+    "specDoneRequires": "bubbles.validate certification after targeted and broader E2E evidence."
+  },
+  "routing": {
+    "nextOwner": null,
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "targetSpec": "specs/039-recommendations-engine",
+    "targetScope": "scope-01-foundation-schema"
+  }
+}

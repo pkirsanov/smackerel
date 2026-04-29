@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Connectors — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Connectors</h1>
+  <p class="subtitle">Cloud drives Smackerel can connect to</p>
+
+  <!--
+    Spec 038 Scope 1 Screen 1 — connectors list. The page is keyboard
+    reachable (every interactive element is a real button or link), uses
+    ARIA labels for status (no color-only signals), and consumes the
+    provider-neutral GET /v1/connectors/drive endpoint so adding a second
+    provider requires no PWA-side branching (SCN-038-003).
+  -->
+  <section
+    id="drive-connectors"
+    class="card"
+    aria-labelledby="drive-connectors-heading"
+    aria-busy="true"
+  >
+    <h2 id="drive-connectors-heading">Cloud Drives</h2>
+    <p
+      id="drive-connectors-status"
+      class="status status-loading"
+      role="status"
+      aria-live="polite"
+    >Loading available drives…</p>
+    <ul
+      id="drive-connectors-list"
+      class="connector-list"
+      aria-label="Available drive providers"
+      hidden
+    ></ul>
+    <p
+      id="drive-connectors-empty"
+      class="status status-empty"
+      role="status"
+      hidden
+    >No drive connectors are installed in this Smackerel deployment.</p>
+    <p
+      id="drive-connectors-error"
+      class="status status-error"
+      role="alert"
+      hidden
+    ></p>
+  </section>
+
+  <p class="footer">
+    <a href="/pwa/">← Back to home</a>
+  </p>
+
+  <template id="drive-connector-card-template">
+    <li class="connector-card">
+      <div class="connector-card-head">
+        <span class="connector-card-name" data-field="display-name"></span>
+        <span class="connector-card-status status status-not-connected" data-field="status">
+          Not connected
+        </span>
+      </div>
+      <dl class="connector-card-caps">
+        <div class="connector-card-cap">
+          <dt>Versions</dt>
+          <dd data-field="cap-versions"></dd>
+        </div>
+        <div class="connector-card-cap">
+          <dt>Sharing</dt>
+          <dd data-field="cap-sharing"></dd>
+        </div>
+        <div class="connector-card-cap">
+          <dt>Change history</dt>
+          <dd data-field="cap-change-history"></dd>
+        </div>
+        <div class="connector-card-cap">
+          <dt>Max file size</dt>
+          <dd data-field="cap-max-size"></dd>
+        </div>
+      </dl>
+      <div class="connector-card-actions">
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-field="connect"
+          aria-label="Connect this drive"
+          disabled
+          title="OAuth connect flow ships in a follow-up scope"
+        >Connect…</button>
+      </div>
+    </li>
+  </template>
+
+  <script src="/pwa/connectors.js"></script>
+</body>
+</html>

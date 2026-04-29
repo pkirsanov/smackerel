@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "featureDir": "specs/015-twitter-connector/bugs/BUG-015-001-api-path-deprecated",
+  "generatedAt": "2026-04-26T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG015001-001",
+      "scope": "01-document-deprecation",
+      "title": "spec.md flags API path as deferred with bug back-link",
+      "gherkin": {
+        "given": "specs/015-twitter-connector/spec.md",
+        "when": "the Deferred / Non-Goals section is read",
+        "then": "it lists the X API polling path, contains the BUG-015-001 deprecation rationale, and R-008 is no longer in the live Requirements list"
+      },
+      "testMapping": {
+        "type": "doc-grep",
+        "label": "Deferred section in spec.md"
+      },
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-BUG015001-002",
+      "scope": "01-document-deprecation",
+      "title": "scopes.md Scope 6 is Deferred not Reopened",
+      "gherkin": {
+        "given": "specs/015-twitter-connector/scopes.md",
+        "when": "Scope 06 is read",
+        "then": "its status reads Deferred, the rationale links to BUG-015-001, and no checkbox is marked [ ] VERIFIED FAIL"
+      },
+      "testMapping": {
+        "type": "doc-grep",
+        "label": "Scope 6 deprecation block"
+      },
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-BUG015001-003",
+      "scope": "01-document-deprecation",
+      "title": "uservalidation item 13 is non-applicable not failing",
+      "gherkin": {
+        "given": "specs/015-twitter-connector/uservalidation.md",
+        "when": "the checklist is read",
+        "then": "item 13 is rendered as a strikethrough non-applicable entry and points to BUG-015-001"
+      },
+      "testMapping": {
+        "type": "doc-grep",
+        "label": "Item 13 strikethrough"
+      },
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-BUG015001-004",
+      "scope": "01-document-deprecation",
+      "title": "state.json certifies done with scope-6 deferred",
+      "gherkin": {
+        "given": "specs/015-twitter-connector/state.json",
+        "when": "status, certification, and resolvedBugs fields are read",
+        "then": "status and certification.status are done, completedScopes is scope-01..05, scope-6 status is Deferred, and resolvedBugs contains BUG-015-001"
+      },
+      "testMapping": {
+        "type": "jq",
+        "label": "state.json structural assertions"
+      },
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-BUG015001-005",
+      "scope": "01-document-deprecation",
+      "title": "Governance scripts pass on the amended spec",
+      "gherkin": {
+        "given": "the amendments are applied",
+        "when": "artifact-lint and traceability-guard are run against specs/015-twitter-connector",
+        "then": "both exit 0"
+      },
+      "testMapping": {
+        "type": "governance",
+        "label": "artifact-lint + traceability-guard"
+      },
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-BUG015001-006",
+      "scope": "01-document-deprecation",
+      "title": "Unit tests remain green (no production code change)",
+      "gherkin": {
+        "given": "the amendments are applied",
+        "when": "./smackerel.sh test unit runs",
+        "then": "it exits 0 and the twitter package passes"
+      },
+      "testMapping": {
+        "type": "unit",
+        "label": "twitter unit suite"
+      },
+      "status": "done"
+    }
+  ]
+}

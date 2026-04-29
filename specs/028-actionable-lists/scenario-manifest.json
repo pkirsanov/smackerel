@@ -1,0 +1,681 @@
+{
+  "version": 2,
+  "specId": "028",
+  "featureDir": "specs/028-actionable-lists",
+  "generatedBy": "bubbles.docs",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-AL-001",
+      "name": "List tables created by migration",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L130",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_AllTablesExist"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/db_migration_test.go::TestMigrations_AllTablesExist"},
+        {"type": "source", "location": "internal/db/migrations/001_initial_schema.sql"}
+      ],
+      "linkedDoD": [
+        "Migration file 017_actionable_lists.sql created and applies cleanly (consolidated into 001_initial_schema.sql)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-002",
+      "name": "List type constants compile",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L138",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/types_test.go", "function": "TestListType_Constants"},
+        {"file": "internal/list/types_test.go", "function": "TestListStatus_Constants"},
+        {"file": "internal/list/types_test.go", "function": "TestItemStatus_Constants"},
+        {"file": "internal/list/types_test.go", "function": "TestList_JSONRoundTrip"},
+        {"file": "internal/list/types_test.go", "function": "TestListItem_JSONRoundTrip"},
+        {"file": "internal/list/types_test.go", "function": "TestListWithItems_JSONRoundTrip"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/types_test.go::TestListType_Constants"},
+        {"type": "source", "location": "internal/list/types.go"}
+      ],
+      "linkedDoD": [
+        "Go types defined in internal/list/types.go"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-003",
+      "name": "Create a list with items",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L162",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestCreateListHandler_Success"},
+        {"file": "tests/integration/artifact_crud_test.go", "function": "TestList_CreateAndUpdateStatus"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestCreateListHandler_Success"},
+        {"type": "integration-test", "location": "tests/integration/artifact_crud_test.go::TestList_CreateAndUpdateStatus"},
+        {"type": "source", "location": "internal/list/store.go::CreateList"}
+      ],
+      "linkedDoD": [
+        "Store CRUD operations implemented with tests",
+        "NATS events published for create and complete"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-004",
+      "name": "Get list with items (Store)",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L170",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestGetListHandler"},
+        {"file": "internal/api/lists_test.go", "function": "TestGetListHandler_NotFound"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestGetListHandler"},
+        {"type": "source", "location": "internal/list/store.go::GetList"}
+      ],
+      "linkedDoD": [
+        "Store CRUD operations implemented with tests"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-005",
+      "name": "Update item status to done",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L176",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestCheckItemHandler"},
+        {"file": "internal/api/lists_test.go", "function": "TestCheckItemHandler_DefaultDone"},
+        {"file": "tests/integration/artifact_crud_test.go", "function": "TestList_CreateAndUpdateStatus"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestCheckItemHandler"},
+        {"type": "integration-test", "location": "tests/integration/artifact_crud_test.go::TestList_CreateAndUpdateStatus"},
+        {"type": "source", "location": "internal/list/store.go::UpdateItemStatus"}
+      ],
+      "linkedDoD": [
+        "Denormalized counter updates (total_items, checked_items) correct"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-006",
+      "name": "Add manual item (Store)",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L182",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestAddItemHandler"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestAddItemHandler"},
+        {"type": "source", "location": "internal/list/store.go::AddManualItem"}
+      ],
+      "linkedDoD": [
+        "Denormalized counter updates (total_items, checked_items) correct"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-007",
+      "name": "Complete list (Store)",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L188",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestCompleteListHandler"},
+        {"file": "internal/api/lists_test.go", "function": "TestCompleteListHandler_NotFound"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestCompleteListHandler"},
+        {"type": "source", "location": "internal/list/store.go::CompleteList"}
+      ],
+      "linkedDoD": [
+        "NATS events published for create and complete"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-008",
+      "name": "Archive list (Store)",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L194",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestArchiveListHandler"},
+        {"file": "internal/api/lists_test.go", "function": "TestUpdateListHandler_ArchiveViaUpdate"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestArchiveListHandler"},
+        {"type": "source", "location": "internal/list/store.go::ArchiveList"}
+      ],
+      "linkedDoD": [
+        "Store CRUD operations implemented with tests"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-009",
+      "name": "Merge duplicate ingredients across recipes",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L219",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestRecipeAggregator_MergeDuplicates"},
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestRecipeAggregator_SameUnitsMerged"},
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestRecipeAggregator_ThreeRecipeMerge"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/recipe_aggregator_test.go::TestRecipeAggregator_MergeDuplicates"},
+        {"type": "source", "location": "internal/list/recipe_aggregator.go"}
+      ],
+      "linkedDoD": [
+        "RecipeAggregator implemented with full test coverage"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-010",
+      "name": "Normalize units before merging",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L224",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestRecipeAggregator_DifferentUnitsMergedByAlias"},
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestNormalizeUnit"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/recipe_aggregator_test.go::TestRecipeAggregator_DifferentUnitsMergedByAlias"},
+        {"type": "unit-test", "location": "internal/list/recipe_aggregator_test.go::TestNormalizeUnit"},
+        {"type": "source", "location": "internal/recipe/quantity.go::NormalizeUnit"}
+      ],
+      "linkedDoD": [
+        "normalizeUnit converts between volume units (tsp/tbsp/cup/ml/l) and weight units (oz/lb/g/kg)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-011",
+      "name": "Keep incompatible units separate",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L229",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestRecipeAggregator_IncompatibleUnitsKeptSeparate"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/recipe_aggregator_test.go::TestRecipeAggregator_IncompatibleUnitsKeptSeparate"},
+        {"type": "source", "location": "internal/list/recipe_aggregator.go"}
+      ],
+      "linkedDoD": [
+        "RecipeAggregator implemented with full test coverage"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-012",
+      "name": "Categorize ingredients",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L234",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestRecipeAggregator_CategoriesAssigned"},
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestCategorizeIngredient"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/recipe_aggregator_test.go::TestCategorizeIngredient"},
+        {"type": "source", "location": "internal/recipe/quantity.go::CategorizeIngredient"}
+      ],
+      "linkedDoD": [
+        "categorizeIngredient maps 50+ common ingredients to categories"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-013",
+      "name": "Parse fractional quantities",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L243",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestParseQuantity_MixedFraction"},
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestParseQuantity_SimpleFraction"},
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestParseQuantity_Decimal"},
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestParseQuantity_Integer"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/recipe_aggregator_test.go::TestParseQuantity_MixedFraction"},
+        {"type": "source", "location": "internal/recipe/quantity.go::ParseQuantity"}
+      ],
+      "linkedDoD": [
+        "parseQuantity handles integers, decimals, fractions, mixed numbers, \"a pinch\", \"to taste\""
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-014",
+      "name": "Handle uncountable quantities",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L248",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestParseQuantity_UncountableQuantities"},
+        {"file": "internal/list/recipe_aggregator_test.go", "function": "TestRecipeAggregator_UncountableQuantityPreserved"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/recipe_aggregator_test.go::TestParseQuantity_UncountableQuantities"},
+        {"type": "source", "location": "internal/recipe/quantity.go::ParseQuantity"}
+      ],
+      "linkedDoD": [
+        "parseQuantity handles \"a pinch\", \"to taste\""
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-015",
+      "name": "Generate reading list from articles",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L276",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/reading_aggregator_test.go", "function": "TestReadingAggregator_BasicList"},
+        {"file": "internal/list/reading_aggregator_test.go", "function": "TestReadingAggregator_SortOrder"},
+        {"file": "internal/list/reading_aggregator_test.go", "function": "TestReadingAggregator_SourceTraceability"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/reading_aggregator_test.go::TestReadingAggregator_BasicList"},
+        {"type": "source", "location": "internal/list/reading_aggregator.go"}
+      ],
+      "linkedDoD": [
+        "ReadingAggregator implemented with tests"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-016",
+      "name": "Generate product comparison",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L282",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/reading_aggregator_test.go", "function": "TestCompareAggregator_BasicComparison"},
+        {"file": "internal/list/reading_aggregator_test.go", "function": "TestCompareAggregator_MultiProductAlignment"},
+        {"file": "internal/list/reading_aggregator_test.go", "function": "TestCompareAggregator_MissingFields"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/reading_aggregator_test.go::TestCompareAggregator_MultiProductAlignment"},
+        {"type": "source", "location": "internal/list/reading_aggregator.go::CompareAggregator"}
+      ],
+      "linkedDoD": [
+        "CompareAggregator implemented with tests"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-017",
+      "name": "Estimate read time",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L289",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/reading_aggregator_test.go", "function": "TestEstimateReadTime"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/reading_aggregator_test.go::TestEstimateReadTime"},
+        {"type": "source", "location": "internal/list/reading_aggregator.go::EstimateReadTime"}
+      ],
+      "linkedDoD": [
+        "ReadingAggregator implemented with tests"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-018",
+      "name": "Generate list from explicit artifact IDs",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L314",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/generator_test.go", "function": "TestGenerator_GenerateFromIDs"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/generator_test.go::TestGenerator_GenerateFromIDs"},
+        {"type": "source", "location": "internal/list/generator.go"}
+      ],
+      "linkedDoD": [
+        "Generator resolves artifacts from IDs, tags, and search queries",
+        "Generator persists list via Store"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-019",
+      "name": "Generate list from tag filter",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L320",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/generator_test.go", "function": "TestGenerator_GenerateFromTagFilter"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/generator_test.go::TestGenerator_GenerateFromTagFilter"},
+        {"type": "source", "location": "internal/list/generator.go"}
+      ],
+      "linkedDoD": [
+        "Generator resolves artifacts from IDs, tags, and search queries"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-020",
+      "name": "Reject mixed-domain generation",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L326",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/generator_test.go", "function": "TestGenerator_RejectMixedDomains"},
+        {"file": "internal/list/generator_test.go", "function": "TestValidateDomains_MixedDomains"},
+        {"file": "internal/list/generator_test.go", "function": "TestValidateDomains_SingleDomain"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/generator_test.go::TestGenerator_RejectMixedDomains"},
+        {"type": "source", "location": "internal/list/generator.go::validateDomains"}
+      ],
+      "linkedDoD": [
+        "Rejects incompatible domain combinations"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-021",
+      "name": "Handle artifacts without domain_data",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L331",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/list/generator_test.go", "function": "TestGenerator_HandlesMissingDomainData"},
+        {"file": "internal/list/generator_test.go", "function": "TestValidateDomains_NoDomainField"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/list/generator_test.go::TestGenerator_HandlesMissingDomainData"},
+        {"type": "source", "location": "internal/list/generator.go"}
+      ],
+      "linkedDoD": [
+        "Handles missing domain_data gracefully (skip with warning)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-022",
+      "name": "Create shopping list via API",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L359",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestCreateListHandler_Success"},
+        {"file": "internal/api/lists_test.go", "function": "TestCreateListHandler_MissingTitle"},
+        {"file": "internal/api/lists_test.go", "function": "TestCreateListHandler_NoSources"},
+        {"file": "internal/api/lists_test.go", "function": "TestCreateListHandler_InvalidJSON"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestCreateListHandler_Success"},
+        {"type": "source", "location": "internal/api/lists.go"}
+      ],
+      "linkedDoD": [
+        "All list CRUD endpoints implemented",
+        "Route group registered in router.go"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-023",
+      "name": "Get list with items via API",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L364",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestGetListHandler"},
+        {"file": "internal/api/lists_test.go", "function": "TestGetListHandler_NotFound"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestGetListHandler"},
+        {"type": "source", "location": "internal/api/lists.go"}
+      ],
+      "linkedDoD": [
+        "All list CRUD endpoints implemented"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-024",
+      "name": "Check off an item",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L369",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestCheckItemHandler"},
+        {"file": "internal/api/lists_test.go", "function": "TestCheckItemHandler_DefaultDone"},
+        {"file": "internal/api/lists_test.go", "function": "TestCheckItemHandler_SkipItem"},
+        {"file": "internal/api/lists_test.go", "function": "TestCheckItemHandler_SubstituteItem"},
+        {"file": "internal/api/lists_test.go", "function": "TestCheckItemHandler_ItemNotFound"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestCheckItemHandler"},
+        {"type": "source", "location": "internal/api/lists.go"}
+      ],
+      "linkedDoD": [
+        "All item-level operation endpoints implemented"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-025",
+      "name": "Add manual item to list",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L375",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestAddItemHandler"},
+        {"file": "internal/api/lists_test.go", "function": "TestAddItemHandler_MissingContent"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestAddItemHandler"},
+        {"type": "source", "location": "internal/api/lists.go"}
+      ],
+      "linkedDoD": [
+        "All item-level operation endpoints implemented"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-026",
+      "name": "Complete a list via API",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L381",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestCompleteListHandler"},
+        {"file": "internal/api/lists_test.go", "function": "TestCompleteListHandler_NotFound"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestCompleteListHandler"},
+        {"type": "source", "location": "internal/api/lists.go"}
+      ],
+      "linkedDoD": [
+        "All item-level operation endpoints implemented"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-027",
+      "name": "List all active lists",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L387",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/lists_test.go", "function": "TestListListsHandler"},
+        {"file": "internal/api/lists_test.go", "function": "TestListListsHandler_Empty"},
+        {"file": "internal/api/lists_test.go", "function": "TestListListsHandler_FilterByType"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/lists_test.go::TestListListsHandler"},
+        {"type": "source", "location": "internal/api/lists.go"}
+      ],
+      "linkedDoD": [
+        "All list CRUD endpoints implemented"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-028",
+      "name": "Generate shopping list via Telegram",
+      "scope": "scope-07",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L414",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/list_test.go", "function": "TestHandleList_GenerateShoppingList"},
+        {"file": "internal/telegram/list_test.go", "function": "TestHandleList_GenerateInvalidType"},
+        {"file": "internal/telegram/list_test.go", "function": "TestParseListCommand"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/list_test.go::TestHandleList_GenerateShoppingList"},
+        {"type": "source", "location": "internal/telegram/list.go"}
+      ],
+      "linkedDoD": [
+        "/list command parser implemented and registered",
+        "List display with inline keyboard renders correctly"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-029",
+      "name": "Check item via inline keyboard",
+      "scope": "scope-07",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L420",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/list_test.go", "function": "TestHandleListCallback"},
+        {"file": "internal/telegram/list_test.go", "function": "TestHandleListCallback_InvalidData"},
+        {"file": "internal/telegram/list_test.go", "function": "TestFormatListMessage"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/list_test.go::TestHandleListCallback"},
+        {"type": "source", "location": "internal/telegram/list.go"}
+      ],
+      "linkedDoD": [
+        "Callback handler for check/skip/substitute works",
+        "Message editing on item state change works"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-030",
+      "name": "Show active lists",
+      "scope": "scope-07",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L426",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/list_test.go", "function": "TestHandleList_ShowActiveLists"},
+        {"file": "internal/telegram/list_test.go", "function": "TestHandleList_ShowEmpty"},
+        {"file": "internal/telegram/list_test.go", "function": "TestFormatListSummary"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/list_test.go::TestHandleList_ShowActiveLists"},
+        {"type": "source", "location": "internal/telegram/list.go"}
+      ],
+      "linkedDoD": [
+        "/list command parser implemented and registered"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-031",
+      "name": "Add manual item via Telegram",
+      "scope": "scope-07",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L431",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/list_test.go", "function": "TestHandleList_AddItem"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/list_test.go::TestHandleList_AddItem"},
+        {"type": "source", "location": "internal/telegram/list.go"}
+      ],
+      "linkedDoD": [
+        "/list add and /list done sub-commands work"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-032",
+      "name": "Complete list via Telegram",
+      "scope": "scope-07",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L437",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/list_test.go", "function": "TestHandleList_Done"},
+        {"file": "internal/telegram/list_test.go", "function": "TestFormatListMessage_AllDone"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/list_test.go::TestHandleList_Done"},
+        {"type": "source", "location": "internal/telegram/list.go"}
+      ],
+      "linkedDoD": [
+        "/list add and /list done sub-commands work"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-033",
+      "name": "Completed shopping list informs intelligence",
+      "scope": "scope-08",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L465",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/lists_test.go", "function": "TestHandleListCompleted_UnmarshalEvent"},
+        {"file": "internal/intelligence/lists_test.go", "function": "TestHandleListCompleted_InvalidJSON"},
+        {"file": "internal/intelligence/lists_test.go", "function": "TestHandleListCompleted_NilPool"},
+        {"file": "internal/intelligence/lists_test.go", "function": "TestSubscribeListsCompleted_NilNATS"},
+        {"file": "internal/intelligence/lists_test.go", "function": "TestBoostArtifactRelevance_NilPool"},
+        {"file": "internal/intelligence/lists_test.go", "function": "TestBoostArtifactRelevance_EmptyIDs"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/lists_test.go::TestHandleListCompleted_UnmarshalEvent"},
+        {"type": "source", "location": "internal/intelligence/lists.go"}
+      ],
+      "linkedDoD": [
+        "NATS subscriber for lists.completed implemented in intelligence engine"
+      ]
+    },
+    {
+      "scenarioId": "SCN-AL-034",
+      "name": "Frequently purchased ingredients detected",
+      "scope": "scope-08",
+      "status": "active",
+      "source": "specs/028-actionable-lists/scopes.md#L471",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/lists_test.go", "function": "TestTrackPurchaseFrequency_NilPool"},
+        {"file": "internal/intelligence/lists_test.go", "function": "TestPurchaseFrequency_Struct"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/lists_test.go::TestTrackPurchaseFrequency_NilPool"},
+        {"type": "unit-test", "location": "internal/intelligence/lists_test.go::TestPurchaseFrequency_Struct"},
+        {"type": "source", "location": "internal/intelligence/lists.go::trackPurchaseFrequency"}
+      ],
+      "linkedDoD": [
+        "Purchase-frequency tracking implemented; data available for future list pre-population"
+      ]
+    }
+  ]
+}

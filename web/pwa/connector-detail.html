@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Drive connector — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Drive connector</h1>
+  <p class="subtitle">Connection state, scope, and indexed counts</p>
+
+  <!--
+    Spec 038 Scope 1 Screen 3 — connector detail. Renders the per-connection
+    health banner, scope summary, and indexed/skipped counts. The empty-drive
+    case (status=healthy + indexed_count=0) renders as
+    "Healthy — no in-scope files yet" so the user has a confident affirmative
+    that the drive is connected and being watched even when zero files exist.
+    Every state pill carries text and an icon; status is never signalled by
+    color alone.
+  -->
+  <section
+    id="connector-detail"
+    class="card"
+    aria-labelledby="connector-detail-heading"
+    aria-busy="true"
+  >
+    <h2 id="connector-detail-heading">Connection</h2>
+    <p
+      id="connector-detail-status"
+      class="status status-loading"
+      role="status"
+      aria-live="polite"
+    >Loading connection…</p>
+
+    <div id="connector-detail-body" hidden>
+      <p class="status-banner" id="status-banner" role="status" aria-live="polite">
+        <span class="status-pill" id="status-pill" data-status="">
+          <span class="status-pill-text" id="status-pill-text">—</span>
+        </span>
+        <span class="status-detail" id="status-detail"></span>
+      </p>
+
+      <dl class="connector-detail-fields">
+        <div>
+          <dt>Provider</dt>
+          <dd id="field-provider">—</dd>
+        </div>
+        <div>
+          <dt>Account</dt>
+          <dd id="field-account">—</dd>
+        </div>
+        <div>
+          <dt>Access mode</dt>
+          <dd id="field-access-mode">—</dd>
+        </div>
+        <div>
+          <dt>Scope</dt>
+          <dd id="field-scope">—</dd>
+        </div>
+        <div>
+          <dt>Indexed files</dt>
+          <dd id="field-indexed">0</dd>
+        </div>
+        <div>
+          <dt>Skipped files</dt>
+          <dd id="field-skipped">0</dd>
+        </div>
+      </dl>
+    </div>
+
+    <p
+      id="connector-detail-error"
+      class="status status-error"
+      role="alert"
+      hidden
+    ></p>
+  </section>
+
+  <p class="footer">
+    <a href="/pwa/connectors.html">← Back to connectors</a>
+  </p>
+
+  <script src="/pwa/connector-detail.js"></script>
+</body>
+</html>

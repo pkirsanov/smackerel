@@ -366,6 +366,85 @@ func TestDeliverAlertBatch_MarkFailure(t *testing.T) {
 	}
 }
 
+func TestDeliverDigest_SuccessMarksDelivered(t *testing.T) {
+	var sentText string
+	var markedID string
+
+	sendFn := func(text string) error {
+		sentText = text
+		return nil
+	}
+	markFn := func(_ context.Context, id string) error {
+		markedID = id
+		return nil
+	}
+
+	if err := deliverDigest(context.Background(), "digest-1", "morning summary", sendFn, markFn); err != nil {
+		t.Fatalf("deliverDigest returned error: %v", err)
+	}
+	if sentText != "morning summary" {
+		t.Fatalf("expected digest text sent, got %q", sentText)
+	}
+	if markedID != "digest-1" {
+		t.Fatalf("expected digest-1 marked delivered, got %q", markedID)
+	}
+}
+
+func TestDeliverDigest_SendFailureDoesNotMarkDelivered(t *testing.T) {
+	markCalled := false
+	sendFn := func(_ string) error { return fmt.Errorf("telegram unavailable") }
+	markFn := func(_ context.Context, _ string) error {
+		markCalled = true
+		return nil
+	}
+
+	err := deliverDigest(context.Background(), "digest-1", "morning summary", sendFn, markFn)
+	if err == nil {
+		t.Fatal("expected send failure")
+	}
+	if markCalled {
+		t.Fatal("digest should not be marked delivered when Telegram send fails")
+	}
+}
+
+func TestDeliverDigest_MarkFailureReturnsError(t *testing.T) {
+	sendCalled := false
+	sendFn := func(_ string) error {
+		sendCalled = true
+		return nil
+	}
+	markFn := func(_ context.Context, _ string) error { return fmt.Errorf("db unavailable") }
+
+	err := deliverDigest(context.Background(), "digest-1", "morning summary", sendFn, markFn)
+	if err == nil {
+		t.Fatal("expected mark failure")
+	}
+	if !sendCalled {
+		t.Fatal("expected digest send attempted before mark failure")
+	}
+}
+
+func TestDeliverDigest_MissingIDRejectsGenerationOnlyProof(t *testing.T) {
+	sendCalled := false
+	markCalled := false
+	sendFn := func(_ string) error {
+		sendCalled = true
+		return nil
+	}
+	markFn := func(_ context.Context, _ string) error {
+		markCalled = true
+		return nil
+	}
+
+	err := deliverDigest(context.Background(), "", "morning summary", sendFn, markFn)
+	if err == nil {
+		t.Fatal("expected missing digest id to fail")
+	}
+	if sendCalled || markCalled {
+		t.Fatalf("missing digest id should fail before send/mark, send=%v mark=%v", sendCalled, markCalled)
+	}
+}
+
 // === Job overlap guard: each run*Job returns immediately on TryLock failure ===
 
 func TestRunDigestJob_OverlapGuard(t *testing.T) {

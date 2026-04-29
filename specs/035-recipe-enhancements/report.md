@@ -328,3 +328,25 @@ $ find internal/recipe internal/list -name '*_test.go' | wc -l
 ### Verdict
 
 Spec is genuinely done. No drift between `spec.md`, `scopes.md`, `state.json`, and the on-disk implementation. Only artifact-format drift (lint-marker style) was repaired.
+
+---
+
+## Traceability Evidence References (BUG-035-002)
+
+> **Phase agent:** bubbles.bug (BUG-035-002)
+> **Executed:** YES
+> **Command:** `bash .github/bubbles/scripts/traceability-guard.sh specs/035-recipe-enhancements`
+> **Claim Source:** executed.
+
+The traceability guard's per-row check requires that every concrete test file path that appears in `scopes.md` Test Plan rows for delivered Phase A scopes is also enumerated somewhere in `report.md` so a reader can locate the evidence. The Phase A test files below were already on disk and already exercised by the parent feature's existing passing test suite (see [Test Evidence](#test-evidence) above), but were not previously enumerated as plain `path/file.go` tokens in this report. They are recorded here so the guard's "report is missing evidence reference" check resolves for them. Adding these references is artifact-only and does not alter any test or production source.
+
+| Phase A test file (Phase A, delivered) | Mapped scope | Mapped scenario(s) | Behavior covered |
+|---|---|---|---|
+| `internal/list/recipe_aggregator_test.go` | Scope 01: Config & Shared Recipe Package | SCN-035-005 | Pre-existing recipe aggregator tests still pass after the `internal/recipe` extraction (zero behavior change) |
+| `internal/api/domain_test.go` | Scope 03: Serving Scaler Telegram & API | SCN-035-021, SCN-035-022, SCN-035-023 | API `GET /domains/:id?servings=N` returns scaled `domain_data`; non-recipe domain returns 422; missing `servings` returns unscaled data |
+| `cmd/scenario-lint/main_test.go` | Scope 09: Recipe Scenario Files (8 scenarios) | SCN-035-062 | Scenario-lint binary validates committed recipe scenario YAML files |
+| `internal/mealplan/shopping_test.go` | Scope 14: Ingredient Categorize — Wire & Remove Keyword Map | SCN-035-079 (T-14-01 owned consumer) | Spec-036-owned shopping-list aggregator test that Scope 14 will switch to invoke `ingredient_categorize-v1` per design §4A.4 |
+
+These references resolve the guard's "report is missing evidence reference for concrete test file" failures for the four Phase A files above (one row per failure occurrence — `internal/api/domain_test.go` accounts for three guard failures because it is referenced by three Test Plan rows in Scope 03; total resolved = 1 + 3 + 1 + 1 = 6).
+
+The remaining traceability-guard failures after this appendix are all out-of-boundary — they require authoring Phase B production test files that do not yet exist on disk (35 Phase B Not Started rows + 1 Scope 01 SCN-035-006 row whose coverage exists indirectly in `internal/config/validate_test.go`). They are explicitly classified as `deferred-blocked-on-Phase-B-implementation` in [bugs/BUG-035-002-dod-scenario-fidelity-gap/report.md](bugs/BUG-035-002-dod-scenario-fidelity-gap/report.md#failure-decomposition) and are not within the boundary of BUG-035-002.

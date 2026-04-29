@@ -1,0 +1,239 @@
+{
+  "version": 2,
+  "specId": "031",
+  "featureDir": "specs/031-live-stack-testing",
+  "generatedBy": "bubbles.docs",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-LST-001",
+      "name": "All migrations apply cleanly",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#L74",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_AllTablesExist"},
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_SchemaVersionCount"},
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_ExtensionsLoaded"},
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_ArtifactsColumns"},
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_IndexesExist"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/db_migration_test.go::TestMigrations_AllTablesExist"},
+        {"type": "integration-test", "location": "tests/integration/db_migration_test.go::TestMigrations_SchemaVersionCount"},
+        {"type": "source", "location": "internal/db/migrations/"}
+      ],
+      "linkedDoD": [
+        "All consolidated migrations verified",
+        "Table/column/index checks"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-002",
+      "name": "Schema DDL resilience",
+      "scope": "scope-02",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#L79",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/db_migration_test.go", "function": "TestMigrations_TableDropAndRecreate"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/db_migration_test.go::TestMigrations_TableDropAndRecreate"}
+      ],
+      "linkedDoD": [
+        "Schema DDL resilience tested"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-003",
+      "name": "Full pipeline flow",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#L187",
+      "requiredTestType": ["e2e"],
+      "linkedTests": [
+        {"file": "tests/e2e/capture_process_search_test.go", "function": "TestE2E_CaptureProcessSearch"}
+      ],
+      "evidenceRefs": [
+        {"type": "e2e-test", "location": "tests/e2e/capture_process_search_test.go::TestE2E_CaptureProcessSearch"}
+      ],
+      "linkedDoD": [
+        "Text capture → processing verified end-to-end",
+        "Search returns captured artifact"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-004",
+      "name": "Search works after cold start",
+      "scope": "scope-06",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#L231",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/ml_readiness_test.go", "function": "TestMLReadiness_WaitForHealthy"},
+        {"file": "tests/integration/ml_readiness_test.go", "function": "TestMLReadiness_TimeoutFallback"},
+        {"file": "tests/integration/ml_readiness_test.go", "function": "TestMLReadiness_Chaos_ContextCancelledMidWait"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/ml_readiness_test.go::TestMLReadiness_WaitForHealthy"},
+        {"type": "integration-test", "location": "tests/integration/ml_readiness_test.go::TestMLReadiness_TimeoutFallback"}
+      ],
+      "linkedDoD": [
+        "ML sidecar readiness gate prevents cold-start search failures"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-005",
+      "name": "Integration test helpers provide isolated DB and NATS connections",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#scope-1-integration-test-infrastructure",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/helpers_test.go", "function": "testPool"},
+        {"file": "tests/integration/helpers_test.go", "function": "testJetStream"},
+        {"file": "scripts/runtime/go-integration.sh", "function": "test_integration"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/helpers_test.go::testPool"},
+        {"type": "integration-test", "location": "tests/integration/helpers_test.go::testJetStream"},
+        {"type": "source", "location": "scripts/commands/test.sh"}
+      ],
+      "linkedDoD": [
+        "Test stack isolation via SST config",
+        "./smackerel.sh test integration starts test stack, runs shell health check, then runs Go integration tests"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-006",
+      "name": "Test helpers register Cleanup callbacks and emit unique artifact IDs",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#scope-1-integration-test-infrastructure",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/helpers_test.go", "function": "testID"},
+        {"file": "tests/integration/helpers_test.go", "function": "cleanupArtifact"},
+        {"file": "tests/integration/helpers_test.go", "function": "cleanupList"},
+        {"file": "tests/integration/helpers_test.go", "function": "cleanupAnnotation"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/helpers_test.go::testID"},
+        {"type": "integration-test", "location": "tests/integration/helpers_test.go::cleanupArtifact"}
+      ],
+      "linkedDoD": [
+        "Test cleanup via t.Cleanup() and cleanupArtifact/cleanupList/cleanupAnnotation helpers in tests/integration/helpers_test.go",
+        "Tests are idempotent: unique IDs via testID(t)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-007",
+      "name": "EnsureStreams provisions every configured stream against real NATS",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#scope-3-nats-stream-integration-tests",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/nats_stream_test.go", "function": "TestNATS_EnsureStreams"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/nats_stream_test.go::TestNATS_EnsureStreams"},
+        {"type": "source", "location": "internal/nats/streams.go"}
+      ],
+      "linkedDoD": [
+        "11 streams verified (ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER) via TestNATS_EnsureStreams"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-008",
+      "name": "Per-test consumer receives a published message on the ARTIFACTS WorkQueue",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#scope-3-nats-stream-integration-tests",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/nats_stream_test.go", "function": "TestNATS_PublishSubscribe_Artifacts"},
+        {"file": "tests/integration/nats_stream_test.go", "function": "TestNATS_PublishSubscribe_Domain"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/nats_stream_test.go::TestNATS_PublishSubscribe_Artifacts"},
+        {"type": "integration-test", "location": "tests/integration/nats_stream_test.go::TestNATS_PublishSubscribe_Domain"}
+      ],
+      "linkedDoD": [
+        "Publish + subscribe roundtrip verified on ARTIFACTS and DOMAIN streams"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-009",
+      "name": "Nak'd DEADLETTER message is redelivered to the consumer",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#scope-3-nats-stream-integration-tests",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/nats_stream_test.go", "function": "TestNATS_ConsumerReplay_NakRedeliver"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/nats_stream_test.go::TestNATS_ConsumerReplay_NakRedeliver"}
+      ],
+      "linkedDoD": [
+        "Consumer replay after simulated crash: TestNATS_ConsumerReplay_NakRedeliver"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-010",
+      "name": "Inserted artifact is retrievable via pgvector similarity search",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#scope-4-artifact-crud--vector-search",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/artifact_crud_test.go", "function": "TestArtifact_InsertAndVectorSearch"},
+        {"file": "tests/integration/artifact_crud_test.go", "function": "TestArtifact_VectorSimilarityDifferentEmbeddings"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/artifact_crud_test.go::TestArtifact_InsertAndVectorSearch"},
+        {"type": "integration-test", "location": "tests/integration/artifact_crud_test.go::TestArtifact_VectorSimilarityDifferentEmbeddings"}
+      ],
+      "linkedDoD": [
+        "Insert artifact with embedding → pgvector similarity search → find result"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-011",
+      "name": "Annotation history aggregates into the materialized summary view",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#scope-4-artifact-crud--vector-search",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/artifact_crud_test.go", "function": "TestAnnotation_CRUD"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/artifact_crud_test.go::TestAnnotation_CRUD"}
+      ],
+      "linkedDoD": [
+        "Annotation CRUD: create rating/interaction/tag, query history, refresh materialized view, verify summary"
+      ]
+    },
+    {
+      "scenarioId": "SCN-LST-012",
+      "name": "Recipe domain data is queryable via JSONB containment",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/scopes.md#scope-4-artifact-crud--vector-search",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/artifact_crud_test.go", "function": "TestArtifact_DomainDataContainmentQuery"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-test", "location": "tests/integration/artifact_crud_test.go::TestArtifact_DomainDataContainmentQuery"}
+      ],
+      "linkedDoD": [
+        "Domain data JSONB containment query verified: TestArtifact_DomainDataContainmentQuery (positive + negative cases)"
+      ]
+    }
+  ]
+}

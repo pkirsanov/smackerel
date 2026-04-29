@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-004-digest-telegram-delivery-tracking",
+  "generatedAt": "2026-04-28T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-002-004-SCN-001",
+      "scope": "scope-1-restore-telegram-digest-delivery-tracking-proof",
+      "title": "Generated digest is tracked after Telegram delivery",
+      "gherkin": {
+        "given": "Telegram digest delivery is configured for the disposable live stack",
+        "when": "a digest is generated for the E2E fixture",
+        "then": "the digest is delivered and tracked with the generated digest identity"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/test_digest_telegram.sh",
+          "testId": "SCN-002-032"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-002-004-SCN-002",
+      "scope": "scope-1-restore-telegram-digest-delivery-tracking-proof",
+      "title": "Digest delivery regression fails when tracking is absent",
+      "gherkin": {
+        "given": "a digest exists but no Telegram delivery tracking record exists",
+        "when": "the Telegram digest E2E verifies delivery",
+        "then": "the test fails with diagnostics instead of accepting generation-only proof"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/test_digest_telegram.sh",
+          "testId": "missing delivery tracking regression"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

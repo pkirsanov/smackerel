@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "featureDir": "specs/015-twitter-connector",
+  "generatedAt": "2026-04-26T00:00:00Z",
+  "notes": "Six active scope-level scenarios from scopes.md (Scopes 1, 2, 4). Scope 6 was deferred per BUG-015-001 on 2026-04-26; SCN-TW-005 (the original API polling scenario) was relocated to spec.md `Deferred / Non-Goals — API Path` and is intentionally NOT included here. Spec-level scenarios SCN-TW-001 through SCN-TW-006 in spec.md remain locked but are tracked via the lockdownState.lockedScenarioIds field in state.json.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-TW-ARC-001",
+      "scope": "01-archive-parser",
+      "title": "Parse tweets.js with JS wrapper",
+      "gherkin": {
+        "given": "a tweets.js file containing window.YTD.tweet.part0 = [...]",
+        "when": "the parser strips the JS wrapper",
+        "then": "valid JSON array remains and each element is deserialized to ArchiveTweet with ID, FullText, CreatedAt, FavoriteCount, RetweetCount, and Entities populated"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-ARC-002",
+      "scope": "01-archive-parser",
+      "title": "Parse like.js and bookmark.js",
+      "gherkin": {
+        "given": "like.js with 200 liked tweets and bookmark.js with 500 bookmarks",
+        "when": "the parser processes each file",
+        "then": "liked tweets and bookmarked tweets are returned as separate collections, each with tweet_id for cross-referencing with tweets.js"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-THR-001",
+      "scope": "02-thread-reconstruction",
+      "title": "Reconstruct self-reply thread",
+      "gherkin": {
+        "given": "tweets 100, 101, 102, 103 where each replies to the previous and all share the same author",
+        "when": "BuildThreads is called",
+        "then": "1 thread is returned with root_id=100 and 4 tweets in order"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-THR-002",
+      "scope": "02-thread-reconstruction",
+      "title": "Ignore replies to other users",
+      "gherkin": {
+        "given": "tweet 200 with no parent and tweet 201 replying to 200 but with a different in_reply_to_user_id",
+        "when": "BuildThreads is called",
+        "then": "tweet 201 is NOT treated as a thread continuation"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-NRM-001",
+      "scope": "03-normalizer-and-tier-assignment",
+      "title": "Normalize tweet with full metadata",
+      "gherkin": {
+        "given": "an ArchiveTweet with id=300, FullText=hello world, FavoriteCount=10, hashtags=[go]",
+        "when": "NormalizeTweet is called",
+        "then": "a RawArtifact is returned with SourceID=twitter, SourceRef=300, metadata contains favorite_count=10/hashtags=[go]/processing_tier=metadata, ContentType is tweet/text"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-NRM-002",
+      "scope": "03-normalizer-and-tier-assignment",
+      "title": "Tier assignment ladder",
+      "gherkin": {
+        "given": "tweets with bookmarked, liked, has-URL, thread, high-engagement, RT, and short-text variants",
+        "when": "assignTweetTier is called",
+        "then": "bookmarked/liked/has-URL/thread → full, high-engagement non-explicit → standard, retweets → light, short low-engagement → metadata"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-CONN-001",
+      "scope": "04-twitter-connector-and-config",
+      "title": "Full archive import",
+      "gherkin": {
+        "given": "a Twitter archive at the configured archive_dir",
+        "when": "Sync() is called with empty cursor",
+        "then": "all tweets, likes, and bookmarks are parsed, threads are reconstructed, all are normalized to RawArtifacts, and artifacts are returned with cursor = latest tweet timestamp"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-CONN-002",
+      "scope": "04-twitter-connector-and-config",
+      "title": "Dedup on re-import",
+      "gherkin": {
+        "given": "3000 tweets were previously imported and a new archive with 3400 tweets is provided",
+        "when": "Sync() is called",
+        "then": "only 400 new tweets are returned (dedup by tweet_id via cursor)"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-LNK-001",
+      "scope": "05-tweet-link-extraction",
+      "title": "Extract URLs into child artifacts",
+      "gherkin": {
+        "given": "a tweet with entities.urls = [https://example.com/a, https://example.com/b]",
+        "when": "syncArchive processes the tweet",
+        "then": "2 child RawArtifacts are emitted with ContentType=link and metadata edge_type=CONTAINS_LINK + parent_tweet_id"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-LNK-002",
+      "scope": "05-tweet-link-extraction",
+      "title": "Cross-tweet URL dedup",
+      "gherkin": {
+        "given": "two tweets that both reference https://example.com/shared",
+        "when": "syncArchive processes both tweets",
+        "then": "exactly 1 child RawArtifact is emitted for https://example.com/shared and both parent tweet artifacts are still emitted"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    }
+  ]
+}

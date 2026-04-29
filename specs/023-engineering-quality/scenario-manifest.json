@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "specId": "023-engineering-quality",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-023-01",
+      "scope": "Scope 1: mlClient Race Fix + Typed Dependencies + Dead Code Removal",
+      "title": "Concurrent health checks are race-free",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestMLClient_ConcurrentAccess"},
+        {"file": "internal/api/health_test.go", "function": "TestMLClient_PreSet"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_ConcurrentAccess"}
+      ],
+      "evidenceRefs": [
+        "internal/api/health.go::Dependencies.mlClient",
+        "internal/api/health.go::mlClientOnce sync.Once field",
+        "specs/023-engineering-quality/scopes.md Scope 1 DoD bullet for SCN-023-01"
+      ],
+      "linkedDoD": "Scope 1 DoD bullet: SCN-023-01 — mlClient() guarded by sync.Once is race-free under 50 concurrent health checks"
+    },
+    {
+      "scenarioId": "SCN-023-02",
+      "scope": "Scope 1: mlClient Race Fix + Typed Dependencies + Dead Code Removal",
+      "title": "Typed Dependencies catch method signature changes at compile time",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_AllHealthy"}
+      ],
+      "evidenceRefs": [
+        "internal/api/health.go (Pipeliner, Searcher, DigestGenerator, WebUI, OAuthFlow, TelegramHealthChecker interface declarations)",
+        "go build ./... exit 0",
+        "specs/023-engineering-quality/scopes.md Scope 1 DoD bullet for SCN-023-02"
+      ],
+      "linkedDoD": "Scope 1 DoD bullet: SCN-023-02 — typed Dependencies (Pipeliner/Searcher/DigestGenerator/WebUI/OAuthFlow) make method signature changes fail at compile time"
+    },
+    {
+      "scenarioId": "SCN-023-03",
+      "scope": "Scope 1: mlClient Race Fix + Typed Dependencies + Dead Code Removal",
+      "title": "Dead checkAuth method is removed",
+      "requiredTestType": "artifact",
+      "linkedTests": [
+        {"file": "internal/api/capture.go", "function": "(grep proof — no checkAuth symbol)"}
+      ],
+      "evidenceRefs": [
+        "grep -rn 'checkAuth' internal/ returns zero matches",
+        "specs/023-engineering-quality/scopes.md Scope 1 DoD bullet for SCN-023-03"
+      ],
+      "linkedDoD": "Scope 1 DoD bullet: Dead checkAuth method removed from capture.go; grep -rn checkAuth internal/ returns zero results"
+    },
+    {
+      "scenarioId": "SCN-023-04",
+      "scope": "Scope 2: SST Connector Env Vars + writeJSON Intelligence Handlers + Ollama/Telegram Health",
+      "title": "Connector paths flow through config.Config (SST)",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {"file": "internal/config/validate_test.go", "function": "TestLoad_ConnectorPathFields"},
+        {"file": "internal/config/validate_test.go", "function": "TestLoad_ConnectorPathFieldsOptional"}
+      ],
+      "evidenceRefs": [
+        "internal/config/validate.go (BookmarksImportDir, BrowserHistoryPath, MapsImportDir fields)",
+        "cmd/core/connectors.go (cfg.BookmarksImportDir, cfg.BrowserHistoryPath, cfg.MapsImportDir read paths)",
+        "specs/023-engineering-quality/scopes.md Scope 2 DoD bullet for SCN-023-04"
+      ],
+      "linkedDoD": "Scope 2 DoD bullet: SCN-023-04 — connector paths flow through config.Config (SST), zero raw os.Getenv for these keys in cmd/"
+    },
+    {
+      "scenarioId": "SCN-023-05",
+      "scope": "Scope 2: SST Connector Env Vars + writeJSON Intelligence Handlers + Ollama/Telegram Health",
+      "title": "Intelligence handlers use writeJSON for consistent responses",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {"file": "internal/api/intelligence.go", "function": "(grep proof — every handler uses writeJSON)"}
+      ],
+      "evidenceRefs": [
+        "internal/api/intelligence.go (writeJSON calls in all 4 intelligence handlers)",
+        "grep -c json.NewEncoder internal/api/intelligence.go returns 0",
+        "specs/023-engineering-quality/scopes.md Scope 2 DoD bullet for SCN-023-05"
+      ],
+      "linkedDoD": "Scope 2 DoD bullet: All 4 intelligence handlers use writeJSON and writeError — zero manual json.NewEncoder calls"
+    },
+    {
+      "scenarioId": "SCN-023-06",
+      "scope": "Scope 2: SST Connector Env Vars + writeJSON Intelligence Handlers + Ollama/Telegram Health",
+      "title": "Ollama health reflects actual reachability",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestCheckOllama_Healthy"},
+        {"file": "internal/api/health_test.go", "function": "TestCheckOllama_Down"},
+        {"file": "internal/api/health_test.go", "function": "TestCheckOllama_NotConfigured"},
+        {"file": "internal/api/health_test.go", "function": "TestCheckOllama_Unreachable"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_OllamaUp"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_OllamaNotConfigured"}
+      ],
+      "evidenceRefs": [
+        "internal/api/health.go::checkOllama",
+        "specs/023-engineering-quality/scopes.md Scope 2 DoD bullet for SCN-023-06"
+      ],
+      "linkedDoD": "Scope 2 DoD bullet: SCN-023-06 — Ollama health reflects actual reachability via live GET {OllamaURL}/api/tags with 2s timeout"
+    },
+    {
+      "scenarioId": "SCN-023-07",
+      "scope": "Scope 2: SST Connector Env Vars + writeJSON Intelligence Handlers + Ollama/Telegram Health",
+      "title": "Telegram bot health reflects actual connection state",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_TelegramConnected"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_TelegramDisconnected"}
+      ],
+      "evidenceRefs": [
+        "internal/api/health.go (TelegramHealthChecker interface + d.TelegramBot.Healthy() call)",
+        "internal/telegram/bot.go::Bot.Healthy",
+        "specs/023-engineering-quality/scopes.md Scope 2 DoD bullet for SCN-023-07"
+      ],
+      "linkedDoD": "Scope 2 DoD bullet: SCN-023-07 — Telegram bot health reflects actual connection state via TelegramHealthChecker.Healthy(), not hardcoded"
+    },
+    {
+      "scenarioId": "SCN-023-08",
+      "scope": "Scope 3: Health Log Exclusion + Connector sync_schedule From Config",
+      "title": "Health check requests excluded from request log",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestStructuredLogger_HealthExcluded"},
+        {"file": "internal/api/health_test.go", "function": "TestStructuredLogger_PingExcluded"},
+        {"file": "internal/api/health_test.go", "function": "TestStructuredLogger_OtherPathsLogged"}
+      ],
+      "evidenceRefs": [
+        "internal/api/router.go::structuredLogger (path switch excluding /api/health, /ping, /readyz, /metrics)",
+        "specs/023-engineering-quality/scopes.md Scope 3 DoD bullet for SCN-023-08"
+      ],
+      "linkedDoD": "Scope 3 DoD bullet: /api/health and /ping requests excluded from structuredLogger output; non-health paths still logged"
+    },
+    {
+      "scenarioId": "SCN-023-09",
+      "scope": "Scope 3: Health Log Exclusion + Connector sync_schedule From Config",
+      "title": "Connector sync interval from config",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {"file": "internal/connector/sync_interval_test.go", "function": "TestParseSyncInterval"}
+      ],
+      "evidenceRefs": [
+        "internal/connector/supervisor.go::getSyncInterval, parseSimplisticCronInterval",
+        "specs/023-engineering-quality/scopes.md Scope 3 DoD bullet for SCN-023-09"
+      ],
+      "linkedDoD": "Scope 3 DoD bullet: connector supervisor reads sync_schedule / sync_interval from ConnectorConfig; parseSimplisticCronInterval handles */N and 0 */N patterns; 5m default fallback"
+    }
+  ]
+}

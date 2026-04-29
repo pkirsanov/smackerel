@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "002-phase1-foundation",
+  "bugId": "BUG-002-001-traceability-gaps",
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-001-traceability-gaps",
+  "featureName": "BUG-002-001: Traceability gaps in spec 002 (manifest coverage + report evidence + SCN-002-080 Test Plan row)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T03:00:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: extended specs/002-phase1-foundation/scenario-manifest.json with 38 new entries (SCN-002-045 through SCN-002-082) for full 82-scenario coverage; appended a 'BUG-002-001 — Traceability Gaps' cross-reference section to specs/002-phase1-foundation/report.md naming the four concrete test files (internal/scheduler/scheduler_test.go, internal/auth/oauth_test.go, internal/connector/supervisor_test.go, ml/tests/test_ocr.py); inserted a Test Plan row in scope 24 mapping SCN-002-080 to ml/tests/test_ocr.py::TestExtractTextTesseract::test_returns_empty_on_exception. No production code changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Underlying behavior tests still pass: go test -count=1 against the four flagged scopes' tests exits 0. Output recorded inline in report.md > Test Evidence."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:20:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability guard PASS: timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/002-phase1-foundation returns RESULT: PASSED (0 warnings) with 82 scenarios, 82 test-file references, 82 report evidence references. Pre-fix baseline was RESULT: FAILED (12 failures, 0 warnings). Output recorded inline in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T03:25:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (bash .github/bubbles/scripts/artifact-lint.sh specs/002-phase1-foundation) and bug folder. git diff --name-only confirms boundary: zero changes under internal/, cmd/, ml/app/, config/, tests/. All edits confined to specs/002-phase1-foundation/* and the bug folder."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T03:25:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

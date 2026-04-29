@@ -1,0 +1,147 @@
+{
+  "version": 3,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-001-integration-stack-volume-and-migration-hang",
+  "featureName": "BUG-031-001: Integration stack volume retention + non-idempotent migration crash-loops core",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "validate",
+    "currentScope": "01-cli-argv-and-migration-idempotency",
+    "runStartedAt": "2026-04-26T00:00:00Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation",
+      "analysis",
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["01-cli-argv-and-migration-idempotency"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"],
+    "certifiedAt": "2026-04-26T22:45:00Z",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "01-cli-argv-and-migration-idempotency",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": "scopes/01-cli-argv-and-migration-idempotency",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-26T22:45:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "phase": "discovery",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-04-26T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Confirmed two cooperating defects: (A) smackerel.sh argv parser is pre-command-only so post-command --volumes is silently dropped; (B) internal/db/migrations/001_initial_schema.sql line 512 ADD CONSTRAINT chk_rating_range is non-idempotent and trips SQLSTATE 42710 when test postgres volume survives teardown."
+    },
+    {
+      "phase": "documentation",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-04-26T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Created bug.md, spec.md (with SCN-031-BUG001-A1, SCN-031-BUG001-B1, SCN-031-BUG001-Pre-fix-fail), design.md (root cause analysis + Fix A/B + audit plan + alternatives), scopes.md (Test Plan, DoD, Change Boundary), report.md (evidence skeleton), uservalidation.md, state.json."
+    },
+    {
+      "phase": "analysis",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-04-26T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Verified affected lines against HEAD: smackerel.sh argv loop lines 70-96 with break on positional; smackerel.sh down case lines 355-363 reads global DOWN_VOLUMES; tests/integration/test_runtime_health.sh:33 and :41 use post-command --volumes form; internal/db/migrations/001_initial_schema.sql:512 confirmed bare ADD CONSTRAINT chk_rating_range. Cross-spec coordination noted with 022-operational-resilience and 027-user-annotations."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "timestamp": "2026-04-26T21:30:00Z",
+      "outcome": "completed_owned",
+      "summary": "Implemented Fix A (positional-agnostic argv parser in smackerel.sh) and Fix B (DO $$ ... EXCEPTION WHEN duplicate_object guard around chk_rating_range in 001_initial_schema.sql). Added two scenario-specific shell regression tests under tests/integration/ (test_cli_flag_position.sh for SCN-031-BUG001-A1 and test_migration_idempotency.sh for SCN-031-BUG001-B1) and wired them into ./smackerel.sh test integration. Captured pre-fix FAIL evidence and post-fix PASS evidence for both scenarios in report.md. Migration audit of 001/018/019/020 found only the chk_rating_range occurrence in the FR4 audit class; out-of-scope CREATE TABLE non-idempotency in 018_meal_plans.sql declared with uncertainty and left for follow-up. Validation runs: check OK, lint OK, format --check OK, build OK, test unit 330 passed, test integration BUG-031-001 regressions PASS (3 pre-existing TestNATS_* failures in nats_stream_test.go are outside change boundary and originate in other agents' uncommitted Go code). Status remains in_progress pending bubbles.validate certification per bugfix-fastlane."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "timestamp": "2026-04-26T22:45:00Z",
+      "outcome": "completed_diagnostic",
+      "summary": "Re-ran ./smackerel.sh test integration on clean test stack. SCN-031-BUG001-A1 regression PASS: 'PASS: post-command --volumes removed smackerel-test-postgres-data'. SCN-031-BUG001-B1 regression PASS: 'PASS: core reached /api/health on consecutive runs over a retained postgres volume with re-applied initial migration'. Go integration packages both green: tests/integration 19.898s ok, tests/integration/agent 3.100s ok. TestMigrations_AnnotationsConstraints PASS confirms chk_rating_range guard intact. artifact-lint.sh exit 0. Co-resolution with BUG-022-001 closes the integration suite red bar that previously blocked spec-031 certification of bug regressions."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.validate",
+      "timestamp": "2026-04-26T22:45:00Z",
+      "outcome": "completed_owned",
+      "summary": "Test phase executed inline by bubbles.validate during certification (bugfix-fastlane). The two scenario-specific shell regression tests (test_cli_flag_position.sh, test_migration_idempotency.sh) plus the full Go integration suite were re-run on a clean stack. All target tests PASS. See report.md Validation Evidence."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.validate",
+      "timestamp": "2026-04-26T22:45:00Z",
+      "outcome": "completed_owned",
+      "summary": "Audit phase executed inline by bubbles.validate during certification. Verified change-boundary respect (only smackerel.sh + 001_initial_schema.sql + new shell tests modified), adversarial regression substance, test fidelity, and zero production-code mutation by validate. See report.md Audit Evidence."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-26T22:45:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "Scope 1 done. certification.completedScopes contains scope-1 and bubbles.validate has certified promotion."
+  },
+  "notes": "Bug packet initialized by bubbles.bug. Implementation dispatch (bubbles.implement) is a separate invocation per bugfix-fastlane workflow."
+}

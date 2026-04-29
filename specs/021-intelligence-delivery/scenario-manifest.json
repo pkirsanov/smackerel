@@ -1,0 +1,262 @@
+{
+  "version": 2,
+  "specId": "021",
+  "featureDir": "specs/021-intelligence-delivery",
+  "generatedBy": "BUG-021-001 traceability remediation",
+  "generatedAt": "2026-04-27T02:30:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-021-001",
+      "name": "Pending alert delivered via Telegram",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/scheduler/jobs_test.go", "function": "TestDeliverAlertBatch_HappyPath"},
+        {"file": "internal/intelligence/alerts_test.go", "function": "TestCreateAlert_SetsFieldsAfterValidation"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/jobs_test.go::TestDeliverAlertBatch_HappyPath"},
+        {"type": "source", "location": "internal/scheduler/jobs.go::deliverAlertBatch"},
+        {"type": "source", "location": "internal/intelligence/alerts.go::MarkAlertDelivered"}
+      ],
+      "linkedDoD": ["MarkAlertDelivered() method added to intelligence.Engine", "Delivery sweep: GetPendingAlerts -> format -> SendDigest -> MarkAlertDelivered per alert"]
+    },
+    {
+      "scenarioId": "SCN-021-002",
+      "name": "Alert delivery respects 2/day cap",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/scheduler/jobs_test.go", "function": "TestDeliverAlertBatch_CapEnforced_EmptyFromGetPendingAlerts"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/jobs_test.go::TestDeliverAlertBatch_CapEnforced_EmptyFromGetPendingAlerts"},
+        {"type": "source", "location": "internal/intelligence/alerts.go::GetPendingAlerts"}
+      ],
+      "linkedDoD": ["Alert delivery respects existing 2/day cap enforced by GetPendingAlerts()"]
+    },
+    {
+      "scenarioId": "SCN-021-003",
+      "name": "Snoozed alert delivered after snooze expires",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/scheduler/jobs_test.go", "function": "TestDeliverAlertBatch_HappyPath"},
+        {"file": "internal/intelligence/alerts_test.go", "function": "TestSnoozeAlert_ValidationOrder"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/jobs_test.go::TestDeliverAlertBatch_HappyPath"},
+        {"type": "source", "location": "internal/intelligence/alerts.go::GetPendingAlerts (snooze_until <= NOW() branch, line 133)"}
+      ],
+      "linkedDoD": ["Snoozed alerts with expired snooze_until are delivered (Scenario SCN-021-003)"]
+    },
+    {
+      "scenarioId": "SCN-021-004",
+      "name": "Bill alert created for upcoming subscription charge",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAllProducers_NilPoolErrors"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAllProducers_CancelledContext"},
+        {"file": "internal/intelligence/alert_producers_test.go", "function": "TestBillingTitleFormat_WithAmount"},
+        {"file": "internal/intelligence/alert_producers_test.go", "function": "TestBillingDate_LocalMidnightNotUTCTruncate"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAllProducers_NilPoolErrors"},
+        {"type": "unit-test", "location": "internal/intelligence/alert_producers_test.go::TestBillingTitleFormat_WithAmount"},
+        {"type": "source", "location": "internal/intelligence/alert_producers.go::ProduceBillAlerts"}
+      ],
+      "linkedDoD": ["ProduceBillAlerts() added — queries subscriptions <=3 days to billing, deduplicates (Scenario SCN-021-004)"]
+    },
+    {
+      "scenarioId": "SCN-021-005",
+      "name": "Bill alert deduplicated for same billing period",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAllProducers_NilPoolErrors"},
+        {"file": "internal/intelligence/alert_producers_test.go", "function": "TestBillingTitleFormat_WithAmount"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAllProducers_NilPoolErrors"},
+        {"type": "source", "location": "internal/intelligence/alert_producers.go::ProduceBillAlerts (NOT EXISTS dedup clause)"}
+      ],
+      "linkedDoD": ["ProduceBillAlerts() dedup NOT EXISTS clause prevents duplicate alerts for same billing period (Scenario SCN-021-005)"]
+    },
+    {
+      "scenarioId": "SCN-021-006",
+      "name": "Trip prep alert created for upcoming travel",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAllProducers_NilPoolErrors"},
+        {"file": "internal/intelligence/alert_producers_test.go", "function": "TestTripPrepDaysUntil_UsesCalendarDays"},
+        {"file": "internal/intelligence/alert_producers_test.go", "function": "TestTripPrepDaysUntil_DSTSpringForward"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/alert_producers_test.go::TestTripPrepDaysUntil_UsesCalendarDays"},
+        {"type": "source", "location": "internal/intelligence/alert_producers.go::ProduceTripPrepAlerts"}
+      ],
+      "linkedDoD": ["ProduceTripPrepAlerts() added — queries trips <=5 days to departure, deduplicates (Scenario SCN-021-006)"]
+    },
+    {
+      "scenarioId": "SCN-021-007",
+      "name": "Return window alert for expiring purchase",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAllProducers_NilPoolErrors"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAllProducers_CancelledContext"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAllProducers_NilPoolErrors"},
+        {"type": "source", "location": "internal/intelligence/alert_producers.go::ProduceReturnWindowAlerts"}
+      ],
+      "linkedDoD": ["ProduceReturnWindowAlerts() added — queries artifacts with return_deadline <=5 days, dedup, priority 1 (Scenario SCN-021-007)"]
+    },
+    {
+      "scenarioId": "SCN-021-008",
+      "name": "Relationship cooling detected",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/engine_test.go", "function": "TestAllProducers_NilPoolErrors"},
+        {"file": "internal/scheduler/scheduler_test.go", "function": "TestRelationshipCoolingUsesOwnMutex"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/engine_test.go::TestAllProducers_NilPoolErrors"},
+        {"type": "source", "location": "internal/intelligence/alert_producers.go::ProduceRelationshipCoolingAlerts"}
+      ],
+      "linkedDoD": ["ProduceRelationshipCoolingAlerts() added — queries people with >30 day gap + prior >=1/week, deduplicates per 30 days"]
+    },
+    {
+      "scenarioId": "SCN-021-009",
+      "name": "Search query logged for lookup tracking",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSearchHandler_LogSearchCalledWithMultipleResults"},
+        {"file": "internal/api/search_test.go", "function": "TestSearchHandler_LogSearchTopResultIDFromFirstResult"},
+        {"file": "internal/api/search_test.go", "function": "TestSearchHandler_LogSearchCalledWithZeroResults"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSearchHandler_LogSearchCalledWithMultipleResults"},
+        {"type": "unit-test", "location": "internal/intelligence/lookups_test.go::TestLogSearch_QueryTruncation"},
+        {"type": "source", "location": "internal/api/search.go::searchHandler (LogSearch goroutine)"},
+        {"type": "source", "location": "internal/intelligence/lookups.go::LogSearch"}
+      ],
+      "linkedDoD": ["engine.LogSearch(ctx, query, resultCount, topResultID) called in search handler after successful search (Scenario SCN-021-009)"]
+    },
+    {
+      "scenarioId": "SCN-021-010",
+      "name": "Frequent lookup detected after repeated searches",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/intelligence/lookups_test.go", "function": "TestFrequentLookup_MinimumThreshold"},
+        {"file": "internal/intelligence/lookups_test.go", "function": "TestDetectFrequentLookups_NilPool"},
+        {"file": "internal/scheduler/jobs_test.go", "function": "TestRunFrequentLookupsJob_OverlapGuard"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/lookups_test.go::TestFrequentLookup_MinimumThreshold"},
+        {"type": "source", "location": "internal/intelligence/lookups.go::DetectFrequentLookups"},
+        {"type": "source", "location": "internal/scheduler/jobs.go::runFrequentLookupsJob"}
+      ],
+      "linkedDoD": ["DetectFrequentLookups() correctly detects queries repeated 3+ times in 14 days with LogSearch data as input (Scenario SCN-021-010)"]
+    },
+    {
+      "scenarioId": "SCN-021-011",
+      "name": "LogSearch failure does not break search response",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_test.go", "function": "TestSearchHandler_LogSearchFailureNonBlocking"},
+        {"file": "internal/api/search_test.go", "function": "TestSearchHandler_LogSearchSkippedWhenEngineNil"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_test.go::TestSearchHandler_LogSearchFailureNonBlocking"},
+        {"type": "source", "location": "internal/api/search.go::searchHandler (LogSearch goroutine + slog.Warn)"}
+      ],
+      "linkedDoD": ["LogSearch() failure logs warning but does not affect search response (HTTP 200 returned)"]
+    },
+    {
+      "scenarioId": "SCN-021-012",
+      "name": "Health reports stale when synthesis is overdue",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_IntelligenceStalenessThreshold"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_IntelligenceDownDegrades"},
+        {"file": "internal/intelligence/engine_test.go", "function": "TestGetLastSynthesisTime_ValidatesPoolFirst"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/health_test.go::TestHealthHandler_IntelligenceStalenessThreshold"},
+        {"type": "source", "location": "internal/api/health.go::healthHandler (intelligence freshness branch)"},
+        {"type": "source", "location": "internal/intelligence/synthesis.go::GetLastSynthesisTime"}
+      ],
+      "linkedDoD": ["Intelligence status = stale when synthesis >48h, contributes to overall degraded (Scenario SCN-021-012)"]
+    },
+    {
+      "scenarioId": "SCN-021-013",
+      "name": "Health reports healthy when synthesis is recent",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_IntelligenceStalenessThreshold"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_IntelligenceFreshInstallNotStale"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/health_test.go::TestHealthHandler_IntelligenceStalenessThreshold"},
+        {"type": "unit-test", "location": "internal/api/health_test.go::TestHealthHandler_IntelligenceFreshInstallNotStale"},
+        {"type": "source", "location": "internal/api/health.go::healthHandler"}
+      ],
+      "linkedDoD": ["Intelligence status = up when synthesis <=48h (Scenario SCN-021-013)"]
+    },
+    {
+      "scenarioId": "SCN-021-014",
+      "name": "Alert delivery retries on Telegram failure",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/scheduler/jobs_test.go", "function": "TestDeliverAlertBatch_SendFailure_AlertStaysPending"},
+        {"file": "internal/scheduler/jobs_test.go", "function": "TestDeliverAlertBatch_MarkFailure"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/jobs_test.go::TestDeliverAlertBatch_SendFailure_AlertStaysPending"},
+        {"type": "source", "location": "internal/scheduler/jobs.go::deliverAlertBatch"}
+      ],
+      "linkedDoD": ["Telegram failure leaves alert as pending (retry-safe), logs warning"]
+    },
+    {
+      "scenarioId": "SCN-021-015",
+      "name": "No alerts swept when none pending",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/scheduler/jobs_test.go", "function": "TestDeliverAlertBatch_EmptyList_NoOp"},
+        {"file": "internal/scheduler/scheduler_test.go", "function": "TestDeliverPendingAlerts_NilEngine"},
+        {"file": "internal/scheduler/scheduler_test.go", "function": "TestDeliverPendingAlerts_NilBot"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/jobs_test.go::TestDeliverAlertBatch_EmptyList_NoOp"},
+        {"type": "source", "location": "internal/scheduler/jobs.go::deliverAlertBatch (empty list short-circuit)"}
+      ],
+      "linkedDoD": ["When GetPendingAlerts returns empty, deliverAlertBatch short-circuits without invoking SendDigest or MarkAlertDelivered (Scenario SCN-021-015)"]
+    }
+  ]
+}

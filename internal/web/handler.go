@@ -16,10 +16,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector/bookmarks"
 	"github.com/smackerel/smackerel/internal/graph"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
+	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
 )
 
 // SyncTrigger triggers an immediate sync for a connector.
@@ -36,6 +39,33 @@ type Handler struct {
 	SearchEngine   *api.SearchEngine
 	Supervisor     SyncTrigger
 	KnowledgeStore *knowledge.KnowledgeStore
+
+	RecommendationsEnabled  bool
+	RecommendationProviders RecommendationProviderLister
+	RecommendationStore     *recstore.Store
+	RecommendationRegistry  RecommendationRuntimeRegistry
+	RecommendationConfig    config.RecommendationsConfig
+}
+
+// RecommendationProviderLister lists configured recommendation providers for operator status.
+type RecommendationProviderLister interface {
+	List() []recprovider.Provider
+}
+
+// RecommendationRuntimeRegistry is the provider registry used by the web
+// request form to submit API-backed recommendation requests.
+type RecommendationRuntimeRegistry interface {
+	Len() int
+	List() []recprovider.Provider
+}
+
+type recommendationProviderStatus struct {
+	ProviderID    string
+	DisplayName   string
+	Status        string
+	Reason        string
+	CategoryLabel string
+	Healthy       bool
 }
 
 // NewHandler creates a web UI handler with embedded templates.
@@ -409,15 +439,21 @@ func (h *Handler) StatusPage(w http.ResponseWriter, r *http.Request) {
 	`).Scan(&artifactCount, &topicCount, &edgeCount)
 
 	uptime := time.Since(h.StartTime)
+	var recommendationProviderStatuses []recommendationProviderStatus
+	if h.RecommendationsEnabled {
+		recommendationProviderStatuses = h.recommendationProviderStatuses(r.Context())
+	}
 
 	data := map[string]interface{}{
-		"Title":         "System Status",
-		"ArtifactCount": artifactCount,
-		"TopicCount":    topicCount,
-		"EdgeCount":     edgeCount,
-		"Uptime":        fmt.Sprintf("%dh %dm", int(uptime.Hours()), int(uptime.Minutes())%60),
-		"DBHealthy":     h.Pool.Ping(r.Context()) == nil,
-		"NATSHealthy":   h.NATS != nil && h.NATS.Healthy(),
+		"Title":                          "System Status",
+		"ArtifactCount":                  artifactCount,
+		"TopicCount":                     topicCount,
+		"EdgeCount":                      edgeCount,
+		"Uptime":                         fmt.Sprintf("%dh %dm", int(uptime.Hours()), int(uptime.Minutes())%60),
+		"DBHealthy":                      h.Pool.Ping(r.Context()) == nil,
+		"NATSHealthy":                    h.NATS != nil && h.NATS.Healthy(),
+		"RecommendationsEnabled":         h.RecommendationsEnabled,
+		"RecommendationProviderStatuses": recommendationProviderStatuses,
 	}
 
 	if h.KnowledgeStore != nil {
@@ -430,6 +466,45 @@ func (h *Handler) StatusPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.Templates.ExecuteTemplate(w, "status.html", data)
+}
+
+func (h *Handler) recommendationProviderStatuses(ctx context.Context) []recommendationProviderStatus {
+	if h.RecommendationProviders == nil {
+		return nil
+	}
+
+	providerEntries := h.RecommendationProviders.List()
+	statuses := make([]recommendationProviderStatus, 0, len(providerEntries))
+	for _, providerEntry := range providerEntries {
+		health := providerEntry.Health(ctx)
+		providerID := health.ProviderID
+		if providerID == "" {
+			providerID = providerEntry.ID()
+		}
+		displayName := health.DisplayName
+		if displayName == "" {
+			displayName = providerEntry.DisplayName()
+		}
+		categories := health.CategoryList
+		if len(categories) == 0 {
+			categories = providerEntry.Categories()
+		}
+		categoryLabels := make([]string, 0, len(categories))
+		for _, category := range categories {
+			categoryLabels = append(categoryLabels, string(category))
+		}
+
+		statuses = append(statuses, recommendationProviderStatus{
+			ProviderID:    providerID,
+			DisplayName:   displayName,
+			Status:        string(health.Status),
+			Reason:        health.Reason,
+			CategoryLabel: strings.Join(categoryLabels, ", "),
+			Healthy:       health.Status == recprovider.StatusHealthy,
+		})
+	}
+
+	return statuses
 }
 
 // SyncConnectorHandler handles POST /settings/connectors/{id}/sync — triggers immediate sync.

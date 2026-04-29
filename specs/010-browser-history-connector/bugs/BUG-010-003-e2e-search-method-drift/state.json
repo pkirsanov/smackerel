@@ -1,0 +1,105 @@
+{
+  "version": 3,
+  "featureDir": "specs/010-browser-history-connector/bugs/BUG-010-003-e2e-search-method-drift",
+  "parentFeatureDir": "specs/010-browser-history-connector",
+  "featureName": "BUG-010-003: Browser-history E2E search method drift",
+  "bugId": "BUG-010-003",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "scope-1-align-browser-history-e2e-search-consumer",
+    "runStartedAt": "2026-04-28T12:39:51Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T00:00:00Z",
+        "summary": "Created in-progress bug packet for browser-history E2E GET /api/search drift. No source or parent certification fields modified."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Align browser-history E2E search consumer",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-27T00:00:00Z",
+      "runCompletedAt": "2026-04-27T00:00:00Z",
+      "summary": "Packetized uncovered e2e blocker. Existing BUG-010-001 and BUG-010-002 do not cover this method-contract drift."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T12:39:51Z",
+      "runCompletedAt": "2026-04-28T12:40:01Z",
+      "summary": "Aligned browser-history E2E search calls to POST /api/search, added stale-GET regression guard, captured focused green evidence, check, regression-quality guard, broad E2E exit 1 with unrelated Go E2E failures, and explicit test-stack down. Certification remains in_progress."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "bubbles.stabilize context",
+      "summary": "Browser-history Go E2E uses GET /api/search while router exposes POST /api/search."
+    }
+  ],
+  "lastUpdatedAt": "2026-04-28T12:43:58Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single bug scope; owner starts with pre-fix failing proof before edits.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G036", "G057", "G060"],
+    "specDoneRequires": "bubbles.validate certification after targeted and broader E2E evidence."
+  },
+  "routing": {
+    "nextOwner": "bubbles.stabilize",
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "targetSpec": "specs/010-browser-history-connector"
+  }
+}

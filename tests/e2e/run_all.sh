@@ -8,18 +8,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-source "$REPO_DIR/scripts/lib/runtime.sh"
-
 PATTERN="${1:-test_*.sh}"
 TEST_ENV="${TEST_ENV:-test}"
+source "$SCRIPT_DIR/lib/helpers.sh"
 
 PASSED=0
 FAILED=0
 RESULTS=()
 
 # Lifecycle tests manage their own stack boot/teardown and must run standalone.
-LIFECYCLE_TESTS="test_compose_start test_persistence test_config_fail"
+LIFECYCLE_TESTS="test_compose_start test_persistence test_postgres_readiness_gate test_config_fail"
 
 is_lifecycle_test() {
   local name="$1"
@@ -79,24 +77,8 @@ if [ ${#SHARED_TESTS[@]} -gt 0 ]; then
   "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
   "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
 
-  # Wait for healthy before starting any tests
-  ENV_FILE="$(smackerel_require_env_file "$TEST_ENV")"
-  CORE_URL="$(smackerel_env_value "$ENV_FILE" "CORE_EXTERNAL_URL")"
-  ELAPSED=0
-  echo "Waiting for services to be healthy..."
-  while [ $ELAPSED -lt 60 ]; do
-    if curl -sf --max-time 3 "$CORE_URL/api/health" >/dev/null 2>&1; then
-      echo "Services healthy after ${ELAPSED}s"
-      break
-    fi
-    sleep 2
-    ELAPSED=$((ELAPSED + 2))
-  done
-  if [ $ELAPSED -ge 60 ]; then
-    echo "FAIL: Services did not become healthy within 60s"
-    "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
-    exit 1
-  fi
+  e2e_setup
+  e2e_wait_healthy 120
 
   echo ""
 

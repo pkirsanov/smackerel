@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Add Drive — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Add a drive</h1>
+  <p class="subtitle">Connect a cloud drive provider</p>
+
+  <!--
+    Spec 038 Scope 1 Screen 2 — add-drive flow. Provider picker, access-mode
+    picker, folder-scope text input, and submit button. Every interactive
+    element is keyboard-reachable, every group has an accessible name, and
+    state is never signalled by color alone (status messages carry text).
+  -->
+  <form id="drive-add-form" class="card" aria-labelledby="drive-add-heading" novalidate>
+    <h2 id="drive-add-heading">Choose a drive provider</h2>
+
+    <fieldset id="provider-fieldset" aria-busy="true">
+      <legend>Provider</legend>
+      <p
+        id="provider-status"
+        class="status status-loading"
+        role="status"
+        aria-live="polite"
+      >Loading available drives…</p>
+      <div id="provider-options" class="radio-group" role="radiogroup" aria-label="Drive provider"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Access mode</legend>
+      <div class="radio-group" role="radiogroup" aria-label="Access mode">
+        <label class="radio">
+          <input type="radio" name="access_mode" value="read_only" required>
+          <span class="radio-label">
+            <strong>Read-only</strong>
+            <small>Smackerel can read in-scope files but cannot write back.</small>
+          </span>
+        </label>
+        <label class="radio">
+          <input type="radio" name="access_mode" value="read_save" required checked>
+          <span class="radio-label">
+            <strong>Read &amp; save</strong>
+            <small>Smackerel can read in-scope files and save new files into the configured folders.</small>
+          </span>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Folder scope</legend>
+      <p class="hint">
+        One folder ID per line, or leave blank to scope the entire connected drive.
+        A graphical folder picker lands in a follow-up scope; this text input is the
+        Scope 1 minimum-viable surface.
+      </p>
+      <label for="folder-scope-input" class="visually-hidden">Folder IDs</label>
+      <textarea
+        id="folder-scope-input"
+        name="folder_scope"
+        rows="4"
+        placeholder="folder-acme&#10;folder-receipts"
+        aria-describedby="folder-scope-hint"
+      ></textarea>
+      <p id="folder-scope-hint" class="hint">
+        IDs are provider-specific. Smackerel will request access only to these folders.
+      </p>
+      <div class="checkbox">
+        <label>
+          <input type="checkbox" id="include-shared" name="include_shared">
+          Include items shared with me from outside the listed folders
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="form-actions">
+      <button
+        type="submit"
+        id="drive-add-submit"
+        class="btn btn-primary"
+        aria-label="Connect this drive"
+        disabled
+      >Connect…</button>
+      <p
+        id="drive-add-error"
+        class="status status-error"
+        role="alert"
+        hidden
+      ></p>
+    </div>
+  </form>
+
+  <p class="footer">
+    <a href="/pwa/connectors.html">← Back to connectors</a>
+  </p>
+
+  <script src="/pwa/connectors-add.js"></script>
+</body>
+</html>

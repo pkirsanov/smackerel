@@ -1,0 +1,1093 @@
+{
+  "version": 2,
+  "specId": "027",
+  "featureDir": "specs/027-user-annotations",
+  "generatedBy": "BUG-027-001 traceability remediation",
+  "generatedAt": "2026-04-27T03:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-027-01",
+      "name": "Annotation types are created by migration",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationsEmbed"},
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationSQL_Parseable"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/db/migration_test.go::TestMigrationSQL_Parseable"},
+        {"type": "source", "location": "internal/db/migrations/001_initial_schema.sql"},
+        {"type": "source", "location": "internal/db/migrations/archive/016_user_annotations.sql"}
+      ],
+      "linkedDoD": ["SCN-027-01 Annotation types are created by migration"]
+    },
+    {
+      "scenarioId": "SCN-027-02",
+      "name": "Annotations table is created with correct schema",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationSQL_Constraints"},
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationSQL_Indexes"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/db/migration_test.go::TestMigrationSQL_Constraints"},
+        {"type": "source", "location": "internal/db/migrations/001_initial_schema.sql"}
+      ],
+      "linkedDoD": ["annotations table created with id, artifact_id (FK CASCADE), annotation_type, rating (CHECK 1-5)"]
+    },
+    {
+      "scenarioId": "SCN-027-03",
+      "name": "Telegram message-artifact mapping table is created",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationSQL_Constraints"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/db/migration_test.go::TestMigrationSQL_Constraints"},
+        {"type": "source", "location": "internal/db/migrations/001_initial_schema.sql"}
+      ],
+      "linkedDoD": ["telegram_message_artifacts table with PK(message_id, chat_id)"]
+    },
+    {
+      "scenarioId": "SCN-027-04",
+      "name": "Materialized view aggregates annotation data correctly",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationSQL_Parseable"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/db/migration_test.go::TestMigrationSQL_Parseable"},
+        {"type": "source", "location": "internal/db/migrations/001_initial_schema.sql"}
+      ],
+      "linkedDoD": ["artifact_annotation_summary materialized view"]
+    },
+    {
+      "scenarioId": "SCN-027-05",
+      "name": "Annotations cascade on artifact deletion",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/db/migration_test.go", "function": "TestMigrationSQL_Constraints"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/db/migration_test.go::TestMigrationSQL_Constraints"}
+      ],
+      "linkedDoD": ["ON DELETE CASCADE"]
+    },
+    {
+      "scenarioId": "SCN-027-06",
+      "name": "Parse rating only",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_RatingOnly"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_RatingOnly"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["Parse() extracts rating from N/5"]
+    },
+    {
+      "scenarioId": "SCN-027-07",
+      "name": "Parse full annotation",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_FullAnnotation"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_FullAnnotation"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["SCN-027-07 Parse full annotation"]
+    },
+    {
+      "scenarioId": "SCN-027-08",
+      "name": "Parse tags only",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_MultipleTags"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_MultipleTags"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["Parse() extracts hashtags as tags"]
+    },
+    {
+      "scenarioId": "SCN-027-09",
+      "name": "Parse tag removal",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_TagRemoval"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_TagRemoval"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["#remove-X as removal markers"]
+    },
+    {
+      "scenarioId": "SCN-027-10",
+      "name": "Parse interaction only",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_InteractionOnly"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_InteractionOnly"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["Parse() extracts interaction from keyword list"]
+    },
+    {
+      "scenarioId": "SCN-027-11",
+      "name": "Parse note only",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_NoteOnly"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_NoteOnly"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["Parse() assigns remaining text as note"]
+    },
+    {
+      "scenarioId": "SCN-027-12",
+      "name": "Parse empty input returns zero value",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_EmptyString"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_EmptyString"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["Parse() returns zero-valued struct for empty input"]
+    },
+    {
+      "scenarioId": "SCN-027-13",
+      "name": "Out-of-range rating is not matched",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_InvalidRating"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_InvalidRating"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["SCN-027-13 Out-of-range rating is not matched"]
+    },
+    {
+      "scenarioId": "SCN-027-14",
+      "name": "Interaction keywords are case-insensitive",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_CaseSensitiveInteraction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_CaseSensitiveInteraction"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["SCN-027-14 Interaction keywords are case-insensitive"]
+    },
+    {
+      "scenarioId": "SCN-027-15",
+      "name": "All interaction types are recognized",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_BoughtIt"},
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_ReadIt"},
+        {"file": "internal/annotation/store_test.go", "function": "TestAnnotationTypes_Constants"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_BoughtIt"},
+        {"type": "source", "location": "internal/annotation/types.go"}
+      ],
+      "linkedDoD": ["SCN-027-15 All interaction types are recognized"]
+    },
+    {
+      "scenarioId": "SCN-027-16",
+      "name": "Rating with out of 5 syntax",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_RatingAndNote"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/parser_test.go::TestParse_RatingAndNote"},
+        {"type": "source", "location": "internal/annotation/parser.go::Parse"}
+      ],
+      "linkedDoD": ["SCN-027-16 Rating with out of 5 syntax"]
+    },
+    {
+      "scenarioId": "SCN-027-17",
+      "name": "CreateAnnotation inserts an annotation event",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/store_test.go", "function": "TestStoreImplementsAnnotationQuerier"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/store_test.go::TestStoreImplementsAnnotationQuerier"},
+        {"type": "source", "location": "internal/annotation/store.go::CreateAnnotation"}
+      ],
+      "linkedDoD": ["CreateAnnotation inserts row with ULID"]
+    },
+    {
+      "scenarioId": "SCN-027-18",
+      "name": "CreateFromParsed converts parsed output into individual events",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/store_test.go", "function": "TestCreateFromParsed_GeneratesCorrectAnnotationTypes"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/store_test.go::TestCreateFromParsed_GeneratesCorrectAnnotationTypes"},
+        {"type": "source", "location": "internal/annotation/store.go::CreateFromParsed"}
+      ],
+      "linkedDoD": ["CreateFromParsed validates artifact existence, creates individual events"]
+    },
+    {
+      "scenarioId": "SCN-027-19",
+      "name": "CreateFromParsed rejects non-existent artifact",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/store_test.go", "function": "TestCreateFromParsed_GeneratesCorrectAnnotationTypes"},
+        {"file": "internal/annotation/store_test.go", "function": "TestNewStore_NilPool"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/store_test.go::TestNewStore_NilPool"},
+        {"type": "source", "location": "internal/annotation/store.go::CreateFromParsed"}
+      ],
+      "linkedDoD": ["SCN-027-19 CreateFromParsed rejects non-existent artifact"]
+    },
+    {
+      "scenarioId": "SCN-027-20",
+      "name": "GetSummary returns aggregated annotation data",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/store_test.go", "function": "TestSummary_DefaultValues"},
+        {"file": "internal/annotation/store_test.go", "function": "TestStoreImplementsAnnotationQuerier"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/store_test.go::TestSummary_DefaultValues"},
+        {"type": "source", "location": "internal/annotation/store.go::GetSummary"}
+      ],
+      "linkedDoD": ["SCN-027-20 GetSummary returns aggregated annotation data"]
+    },
+    {
+      "scenarioId": "SCN-027-21",
+      "name": "GetSummary returns error for artifact with no annotations",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/store_test.go", "function": "TestSummary_DefaultValues"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/store_test.go::TestSummary_DefaultValues"},
+        {"type": "source", "location": "internal/annotation/store.go::GetSummary"}
+      ],
+      "linkedDoD": ["SCN-027-21 GetSummary returns error for artifact with no annotations"]
+    },
+    {
+      "scenarioId": "SCN-027-22",
+      "name": "GetHistory returns events newest-first",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/store_test.go", "function": "TestStoreImplementsAnnotationQuerier"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/store_test.go::TestStoreImplementsAnnotationQuerier"},
+        {"type": "source", "location": "internal/annotation/store.go::GetHistory"}
+      ],
+      "linkedDoD": ["GetHistory returns annotation events ordered by created_at DESC"]
+    },
+    {
+      "scenarioId": "SCN-027-23",
+      "name": "DeleteTag inserts a tag_remove event",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/store_test.go", "function": "TestStoreImplementsAnnotationQuerier"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/store_test.go::TestStoreImplementsAnnotationQuerier"},
+        {"type": "source", "location": "internal/annotation/store.go::DeleteTag"}
+      ],
+      "linkedDoD": ["DeleteTag inserts a tag_remove event (append-only pattern)"]
+    },
+    {
+      "scenarioId": "SCN-027-24",
+      "name": "Tag add then tag remove results in empty tags",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/store_test.go", "function": "TestCreateFromParsed_GeneratesCorrectAnnotationTypes"},
+        {"file": "internal/annotation/store_test.go", "function": "TestStoreImplementsAnnotationQuerier"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/store_test.go::TestStoreImplementsAnnotationQuerier"},
+        {"type": "source", "location": "internal/annotation/store.go::DeleteTag"}
+      ],
+      "linkedDoD": ["SCN-027-24 Tag add then tag remove results in empty tags"]
+    },
+    {
+      "scenarioId": "SCN-027-25",
+      "name": "NATS event payload matches Annotation struct JSON",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/annotation/store_test.go", "function": "TestAnnotationTypes_Constants"},
+        {"file": "internal/annotation/store_test.go", "function": "TestCreateFromParsed_EmptyParsedGeneratesNothing"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/annotation/store_test.go::TestAnnotationTypes_Constants"},
+        {"type": "source", "location": "internal/annotation/store.go"},
+        {"type": "source", "location": "internal/nats/client.go::SubjectAnnotationsCreated"}
+      ],
+      "linkedDoD": ["SCN-027-25 NATS event payload matches Annotation struct JSON"]
+    },
+    {
+      "scenarioId": "SCN-027-26",
+      "name": "POST annotation with freeform text",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestCreateAnnotationRequest_JSONParse"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestCreateAnnotationRequest_JSONParse"},
+        {"type": "source", "location": "internal/api/annotations.go::CreateAnnotation"}
+      ],
+      "linkedDoD": ["CreateAnnotationHandler parses freeform text"]
+    },
+    {
+      "scenarioId": "SCN-027-27",
+      "name": "POST annotation with structured fields",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestCreateAnnotationRequest_JSONParse"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestCreateAnnotationRequest_JSONParse"},
+        {"type": "source", "location": "internal/api/annotations.go::CreateAnnotation"}
+      ],
+      "linkedDoD": ["CreateAnnotationHandler parses structured fields"]
+    },
+    {
+      "scenarioId": "SCN-027-28",
+      "name": "POST annotation with invalid rating",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestCreateAnnotation_TextTooLong"},
+        {"file": "internal/api/annotations_test.go", "function": "TestCreateAnnotationRequest_JSONParse"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestCreateAnnotation_TextTooLong"},
+        {"type": "source", "location": "internal/api/annotations.go::CreateAnnotation"}
+      ],
+      "linkedDoD": ["SCN-027-28 POST annotation with invalid rating"]
+    },
+    {
+      "scenarioId": "SCN-027-29",
+      "name": "POST annotation with empty body",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestCreateAnnotation_MissingBody"},
+        {"file": "internal/api/annotations_test.go", "function": "TestCreateAnnotation_EmptyText"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestCreateAnnotation_MissingBody"},
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestCreateAnnotation_EmptyText"},
+        {"type": "source", "location": "internal/api/annotations.go::CreateAnnotation"}
+      ],
+      "linkedDoD": ["SCN-027-29 POST annotation with empty body"]
+    },
+    {
+      "scenarioId": "SCN-027-30",
+      "name": "POST annotation for non-existent artifact",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestCreateAnnotation_MissingBody"},
+        {"file": "internal/annotation/store_test.go", "function": "TestCreateFromParsed_GeneratesCorrectAnnotationTypes"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestCreateAnnotation_MissingBody"},
+        {"type": "source", "location": "internal/api/annotations.go::CreateAnnotation"}
+      ],
+      "linkedDoD": ["SCN-027-30 POST annotation for non-existent artifact"]
+    },
+    {
+      "scenarioId": "SCN-027-31",
+      "name": "GET annotation history",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestGetAnnotations_NoStore"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestGetAnnotations_NoStore"},
+        {"type": "source", "location": "internal/api/annotations.go::GetAnnotations"}
+      ],
+      "linkedDoD": ["GetAnnotationsHandler returns paginated annotation history"]
+    },
+    {
+      "scenarioId": "SCN-027-32",
+      "name": "GET annotation history with limit",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestGetAnnotations_NoStore"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestGetAnnotations_NoStore"},
+        {"type": "source", "location": "internal/api/annotations.go::GetAnnotations"}
+      ],
+      "linkedDoD": ["limit query param (default 50, max 100)"]
+    },
+    {
+      "scenarioId": "SCN-027-33",
+      "name": "GET annotation summary",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestGetAnnotationSummary_NoStore"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestGetAnnotationSummary_NoStore"},
+        {"type": "source", "location": "internal/api/annotations.go::GetAnnotationSummary"}
+      ],
+      "linkedDoD": ["SCN-027-33 GET annotation summary"]
+    },
+    {
+      "scenarioId": "SCN-027-34",
+      "name": "GET annotation summary for unannotated artifact",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestGetAnnotationSummary_NoStore"},
+        {"file": "internal/annotation/store_test.go", "function": "TestSummary_DefaultValues"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestGetAnnotationSummary_NoStore"},
+        {"type": "source", "location": "internal/api/annotations.go::GetAnnotationSummary"}
+      ],
+      "linkedDoD": ["SCN-027-34 GET annotation summary for unannotated artifact"]
+    },
+    {
+      "scenarioId": "SCN-027-35",
+      "name": "DELETE a tag",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestDeleteTag_InvalidTagFormat"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestDeleteTag_InvalidTagFormat"},
+        {"type": "source", "location": "internal/api/annotations.go::DeleteTag"}
+      ],
+      "linkedDoD": ["DeleteTagHandler inserts a tag_remove event"]
+    },
+    {
+      "scenarioId": "SCN-027-36",
+      "name": "Record message-artifact mapping after capture confirmation",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/mapping_test.go", "function": "TestRecordMessageArtifact_CallsInternalEndpoint"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/mapping_test.go::TestRecordMessageArtifact_CallsInternalEndpoint"},
+        {"type": "source", "location": "internal/telegram/mapping.go::recordMessageArtifact"}
+      ],
+      "linkedDoD": ["recordMessageArtifact inserts into telegram_message_artifacts"]
+    },
+    {
+      "scenarioId": "SCN-027-37",
+      "name": "Resolve artifact from replied-to message",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/mapping_test.go", "function": "TestResolveArtifactFromMessage_Found"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/mapping_test.go::TestResolveArtifactFromMessage_Found"},
+        {"type": "source", "location": "internal/telegram/mapping.go::resolveArtifactFromMessage"}
+      ],
+      "linkedDoD": ["SCN-027-37 Resolve artifact from replied-to message"]
+    },
+    {
+      "scenarioId": "SCN-027-38",
+      "name": "Resolve returns empty for unknown message",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/mapping_test.go", "function": "TestResolveArtifactFromMessage_NotFound"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/mapping_test.go::TestResolveArtifactFromMessage_NotFound"},
+        {"type": "source", "location": "internal/telegram/mapping.go::resolveArtifactFromMessage"}
+      ],
+      "linkedDoD": ["Returns empty string when no mapping exists"]
+    },
+    {
+      "scenarioId": "SCN-027-39",
+      "name": "Multiple artifacts can be mapped to different messages in same chat",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/mapping_test.go", "function": "TestResolveArtifactFromMessage_MultipleMappings"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/mapping_test.go::TestResolveArtifactFromMessage_MultipleMappings"},
+        {"type": "source", "location": "internal/telegram/mapping.go::resolveArtifactFromMessage"}
+      ],
+      "linkedDoD": ["SCN-027-39 Multiple artifacts can be mapped to different messages in same chat"]
+    },
+    {
+      "scenarioId": "SCN-027-40",
+      "name": "Internal mapping endpoint records mapping via HTTP",
+      "scope": "scope-05",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/annotations_test.go", "function": "TestRecordTelegramMessageArtifact_NoStore"},
+        {"file": "internal/api/annotations_test.go", "function": "TestRecordTelegramMessageArtifactRequest_JSONParse"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/annotations_test.go::TestRecordTelegramMessageArtifact_NoStore"},
+        {"type": "source", "location": "internal/api/annotations.go::RecordTelegramMessageArtifact"}
+      ],
+      "linkedDoD": ["Internal endpoint POST /internal/telegram-message-artifact"]
+    },
+    {
+      "scenarioId": "SCN-027-41",
+      "name": "Reply-to annotation with rating",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestHandleReplyAnnotation_KnownMessage"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestHandleReplyAnnotation_KnownMessage"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleReplyAnnotation"}
+      ],
+      "linkedDoD": ["handleReplyAnnotation checks reply-to message ID"]
+    },
+    {
+      "scenarioId": "SCN-027-42",
+      "name": "Reply-to annotation with full annotation",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestHandleReplyAnnotation_KnownMessage"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestHandleReplyAnnotation_KnownMessage"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleReplyAnnotation"}
+      ],
+      "linkedDoD": ["handleReplyAnnotation parses text"]
+    },
+    {
+      "scenarioId": "SCN-027-43",
+      "name": "Reply-to annotation with tags",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestHandleReplyAnnotation_KnownMessage"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestHandleReplyAnnotation_KnownMessage"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleReplyAnnotation"}
+      ],
+      "linkedDoD": ["handleReplyAnnotation submits annotation"]
+    },
+    {
+      "scenarioId": "SCN-027-44",
+      "name": "Reply to unknown message falls through to normal handling",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestHandleReplyAnnotation_UnknownMessage"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestHandleReplyAnnotation_UnknownMessage"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleReplyAnnotation"}
+      ],
+      "linkedDoD": ["Reply to unknown message dispatches to normal handling"]
+    },
+    {
+      "scenarioId": "SCN-027-45",
+      "name": "Reply with plain text becomes a note",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestHandleReplyAnnotation_KnownMessage"},
+        {"file": "internal/annotation/parser_test.go", "function": "TestParse_NoteOnly"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestHandleReplyAnnotation_KnownMessage"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleReplyAnnotation"}
+      ],
+      "linkedDoD": ["SCN-027-45 Reply with plain text becomes a note"]
+    },
+    {
+      "scenarioId": "SCN-027-46",
+      "name": "/rate command with single match",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestSplitRateArgs"},
+        {"file": "internal/telegram/annotation_test.go", "function": "TestHandleRate_NoResults"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestSplitRateArgs"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleRate"}
+      ],
+      "linkedDoD": ["/rate command splits search terms from annotation text"]
+    },
+    {
+      "scenarioId": "SCN-027-47",
+      "name": "/rate command with multiple matches triggers disambiguation",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestDisambiguationStore_SetGetClear"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestDisambiguationStore_SetGetClear"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleRate"}
+      ],
+      "linkedDoD": ["multi-match disambiguation prompt"]
+    },
+    {
+      "scenarioId": "SCN-027-48",
+      "name": "Disambiguation resolution by number",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestDisambiguationStore_SetGetClear"},
+        {"file": "internal/telegram/annotation_test.go", "function": "TestDisambiguationStore_Expiry"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestDisambiguationStore_SetGetClear"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleDisambiguationReply"}
+      ],
+      "linkedDoD": ["Disambiguation flow stores pending state"]
+    },
+    {
+      "scenarioId": "SCN-027-49",
+      "name": "/rate command with no arguments shows usage",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestHandleRate_NoArgs"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestHandleRate_NoArgs"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleRate"}
+      ],
+      "linkedDoD": ["SCN-027-49 /rate command with no arguments shows usage"]
+    },
+    {
+      "scenarioId": "SCN-027-50",
+      "name": "/rate command with no search results",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestHandleRate_NoResults"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestHandleRate_NoResults"},
+        {"type": "source", "location": "internal/telegram/annotation.go::handleRate"}
+      ],
+      "linkedDoD": ["No matching artifacts found"]
+    },
+    {
+      "scenarioId": "SCN-027-51",
+      "name": "Annotation confirmation formatting",
+      "scope": "scope-06",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/telegram/annotation_test.go", "function": "TestFormatAnnotationConfirmation_Full"},
+        {"file": "internal/telegram/annotation_test.go", "function": "TestFormatAnnotationConfirmation_RatingOnly"},
+        {"file": "internal/telegram/annotation_test.go", "function": "TestFormatAnnotationConfirmation_TagsOnly"},
+        {"file": "internal/telegram/annotation_test.go", "function": "TestFormatAnnotationConfirmation_NoteOnly"},
+        {"file": "internal/telegram/annotation_test.go", "function": "TestRenderStars"},
+        {"file": "internal/telegram/annotation_test.go", "function": "TestHumanizeInteraction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/telegram/annotation_test.go::TestFormatAnnotationConfirmation_Full"},
+        {"type": "source", "location": "internal/telegram/annotation.go::formatAnnotationConfirmation"}
+      ],
+      "linkedDoD": ["formatAnnotationConfirmation renders star ratings"]
+    },
+    {
+      "scenarioId": "SCN-027-52",
+      "name": "Search with min_rating filter",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_RatingOnly"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestApplyAnnotationBoost_RatingOnly"},
+        {"type": "source", "location": "internal/api/search.go::vectorSearch"}
+      ],
+      "linkedDoD": ["min_rating filter applied via SearchFilters"]
+    },
+    {
+      "scenarioId": "SCN-027-53",
+      "name": "Search with tag filter",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestParseAnnotationIntent_TagInQuery"},
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_NoAnnotations"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestParseAnnotationIntent_TagInQuery"},
+        {"type": "source", "location": "internal/api/search.go::vectorSearch"}
+      ],
+      "linkedDoD": ["SCN-027-53 Search with tag filter"]
+    },
+    {
+      "scenarioId": "SCN-027-54",
+      "name": "Search with has_interaction filter",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_UsageOnly"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestApplyAnnotationBoost_UsageOnly"},
+        {"type": "source", "location": "internal/api/search.go::vectorSearch"}
+      ],
+      "linkedDoD": ["has_interaction filter via aas.times_used > 0"]
+    },
+    {
+      "scenarioId": "SCN-027-55",
+      "name": "Annotation intent detection for my top rated recipes",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestParseAnnotationIntent_TopRated"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestParseAnnotationIntent_TopRated"},
+        {"type": "source", "location": "internal/api/search_annotations.go::parseAnnotationIntent"}
+      ],
+      "linkedDoD": ["SCN-027-55 Annotation intent detection for my top rated recipes"]
+    },
+    {
+      "scenarioId": "SCN-027-56",
+      "name": "Annotation intent detection for things I've made",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestParseAnnotationIntent_Interaction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestParseAnnotationIntent_Interaction"},
+        {"type": "source", "location": "internal/api/search_annotations.go::parseAnnotationIntent"}
+      ],
+      "linkedDoD": ["SCN-027-56 Annotation intent detection for things made"]
+    },
+    {
+      "scenarioId": "SCN-027-57",
+      "name": "Annotation intent detection for tag in query",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestParseAnnotationIntent_TagInQuery"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestParseAnnotationIntent_TagInQuery"},
+        {"type": "source", "location": "internal/api/search_annotations.go::parseAnnotationIntent"}
+      ],
+      "linkedDoD": ["SCN-027-57 Annotation intent detection for tag in query"]
+    },
+    {
+      "scenarioId": "SCN-027-58",
+      "name": "Search results include annotation data",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_RatingOnly"},
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_UsageOnly"},
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_NoAnnotations"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestApplyAnnotationBoost_RatingOnly"},
+        {"type": "source", "location": "internal/api/search.go::vectorSearch"}
+      ],
+      "linkedDoD": ["SCN-027-58 Search results include annotation data"]
+    },
+    {
+      "scenarioId": "SCN-027-59",
+      "name": "Annotation boost adjusts ranking",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_RatingOnly"},
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_UsageOnly"},
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_LowRating"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestApplyAnnotationBoost_RatingOnly"},
+        {"type": "source", "location": "internal/api/search_annotations.go::applyAnnotationBoost"}
+      ],
+      "linkedDoD": ["SCN-027-59 Annotation boost adjusts ranking"]
+    },
+    {
+      "scenarioId": "SCN-027-60",
+      "name": "Annotation boost is small enough not to overwhelm semantics",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_MaxCap"},
+        {"file": "internal/api/search_annotation_test.go", "function": "TestApplyAnnotationBoost_SmallBoostDoesNotOverwhelmSemantics"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestApplyAnnotationBoost_MaxCap"},
+        {"type": "source", "location": "internal/api/search_annotations.go::applyAnnotationBoost"}
+      ],
+      "linkedDoD": ["SCN-027-60 Annotation boost is small enough"]
+    },
+    {
+      "scenarioId": "SCN-027-61",
+      "name": "No annotation intent for plain queries",
+      "scope": "scope-07",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/search_annotation_test.go", "function": "TestParseAnnotationIntent_PlainQuery"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/search_annotation_test.go::TestParseAnnotationIntent_PlainQuery"},
+        {"type": "source", "location": "internal/api/search_annotations.go::parseAnnotationIntent"}
+      ],
+      "linkedDoD": ["Plain queries return nil intent"]
+    },
+    {
+      "scenarioId": "SCN-027-62",
+      "name": "Rating annotation adjusts relevance score upward",
+      "scope": "scope-08",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_Rating5"},
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_Rating4"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/annotations_test.go::TestAnnotationRelevanceDelta_Rating5"},
+        {"type": "source", "location": "internal/intelligence/annotations.go::annotationRelevanceDelta"}
+      ],
+      "linkedDoD": ["SCN-027-62 Rating annotation adjusts relevance score upward"]
+    },
+    {
+      "scenarioId": "SCN-027-63",
+      "name": "Low rating annotation adjusts relevance score downward",
+      "scope": "scope-08",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_Rating1"},
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_AllRatings"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/annotations_test.go::TestAnnotationRelevanceDelta_Rating1"},
+        {"type": "source", "location": "internal/intelligence/annotations.go::annotationRelevanceDelta"}
+      ],
+      "linkedDoD": ["SCN-027-63 Low rating annotation adjusts relevance score downward"]
+    },
+    {
+      "scenarioId": "SCN-027-64",
+      "name": "Interaction annotation boosts relevance",
+      "scope": "scope-08",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_Interaction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/annotations_test.go::TestAnnotationRelevanceDelta_Interaction"},
+        {"type": "source", "location": "internal/intelligence/annotations.go::annotationRelevanceDelta"}
+      ],
+      "linkedDoD": ["SCN-027-64 Interaction annotation boosts relevance"]
+    },
+    {
+      "scenarioId": "SCN-027-65",
+      "name": "Tag annotation has small positive relevance effect",
+      "scope": "scope-08",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_TagAdd"},
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_TagRemove"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/annotations_test.go::TestAnnotationRelevanceDelta_TagAdd"},
+        {"type": "source", "location": "internal/intelligence/annotations.go::annotationRelevanceDelta"}
+      ],
+      "linkedDoD": ["SCN-027-65 Tag annotation has small positive relevance effect"]
+    },
+    {
+      "scenarioId": "SCN-027-66",
+      "name": "Note annotation has small positive relevance effect",
+      "scope": "scope-08",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_Note"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/annotations_test.go::TestAnnotationRelevanceDelta_Note"},
+        {"type": "source", "location": "internal/intelligence/annotations.go::annotationRelevanceDelta"}
+      ],
+      "linkedDoD": ["SCN-027-66 Note annotation has small positive relevance effect"]
+    },
+    {
+      "scenarioId": "SCN-027-67",
+      "name": "Relevance score is clamped to 0-1 range",
+      "scope": "scope-08",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestClampFloat64_Overflow"},
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestClampFloat64_InRange"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/annotations_test.go::TestClampFloat64_Overflow"},
+        {"type": "source", "location": "internal/intelligence/annotations.go::clampFloat64"}
+      ],
+      "linkedDoD": ["Relevance score clamped to [0, 1]"]
+    },
+    {
+      "scenarioId": "SCN-027-68",
+      "name": "Relevance score does not go below 0",
+      "scope": "scope-08",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestClampFloat64_Underflow"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/annotations_test.go::TestClampFloat64_Underflow"},
+        {"type": "source", "location": "internal/intelligence/annotations.go::clampFloat64"}
+      ],
+      "linkedDoD": ["SCN-027-68 Relevance score does not go below 0"]
+    },
+    {
+      "scenarioId": "SCN-027-69",
+      "name": "Resurfacing query finds old unannotated artifacts",
+      "scope": "scope-08",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_NilRating"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/annotations_test.go::TestAnnotationRelevanceDelta_NilRating"},
+        {"type": "source", "location": "internal/intelligence/annotations.go::ResurfacingCandidates"}
+      ],
+      "linkedDoD": ["Resurfacing query identifies artifacts older than N days with no annotation events"]
+    },
+    {
+      "scenarioId": "SCN-027-70",
+      "name": "Intelligence engine subscribes to annotations.created",
+      "scope": "scope-08",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/intelligence/annotations_test.go", "function": "TestAnnotationRelevanceDelta_AllRatings"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/intelligence/annotations_test.go::TestAnnotationRelevanceDelta_AllRatings"},
+        {"type": "source", "location": "internal/intelligence/annotations.go::SubscribeAnnotations"},
+        {"type": "source", "location": "cmd/core/main.go"}
+      ],
+      "linkedDoD": ["SubscribeAnnotations subscribes to annotations.created NATS subject"]
+    }
+  ]
+}

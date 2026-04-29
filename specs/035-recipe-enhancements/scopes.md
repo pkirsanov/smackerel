@@ -144,6 +144,7 @@ Scenario: SCN-035-006 — Config generation emits cook session env vars with fai
 
 ### Definition of Done
 
+- [x] Scenario SCN-035-003 (Unparseable quantities return zero value) — **Phase:** implement | **Evidence:** `internal/recipe/quantity_test.go`
 - [x] `internal/recipe/` package created with types.go and quantity.go — **Phase:** implement | **Evidence:** `internal/recipe/types.go` and `internal/recipe/quantity.go` exist with Ingredient, Step, ScaledIngredient, RecipeData structs and ParseQuantity, NormalizeUnit, NormalizeIngredientName, CategorizeIngredient, FormatIngredient functions
 - [x] ParseQuantity, NormalizeUnit, NormalizeIngredientName extracted from recipe_aggregator — **Phase:** implement | **Evidence:** Functions implemented in `internal/recipe/quantity.go`; `internal/recipe/quantity_test.go` covers integer, decimal, fraction, mixed number, and Unicode parsing
 - [x] Unicode fraction normalization added to ParseQuantity — **Phase:** implement | **Evidence:** `internal/recipe/quantity.go` handles ½, ⅓, ⅔, ¼, ¾, ⅛; tested in `internal/recipe/quantity_test.go`
@@ -243,6 +244,8 @@ Scenario: SCN-035-015 — FormatQuantity produces kitchen fractions per UX-1.3
 
 ### Definition of Done
 
+- [x] Scenario SCN-035-011 (Zero or negative servings returns nil) — **Phase:** implement | **Evidence:** `internal/recipe/scaler_test.go`
+- [x] Scenario SCN-035-014 (Mixed units scale independently (BS-016)) — **Phase:** implement | **Evidence:** `internal/recipe/scaler_test.go`
 - [x] `internal/recipe/scaler.go` implements ScaleIngredients with correct arithmetic — **Phase:** implement | **Evidence:** `internal/recipe/scaler.go` exists with ScaleIngredients function; `internal/recipe/scaler_test.go` covers 2×, fractional, scale-down, zero/negative, large factor scenarios
 - [x] `internal/recipe/fractions.go` implements FormatQuantity with UX-1.3 fraction table — **Phase:** implement | **Evidence:** `internal/recipe/fractions.go` exists with kitchen fraction lookup; `internal/recipe/fractions_test.go` tests ⅛, ¼, ⅓, ½, ⅔, ¾, mixed numbers, and integer display
 - [x] Scaling handles: integers, fractions, mixed numbers, unparseable quantities — **Phase:** implement | **Evidence:** `internal/recipe/scaler_test.go` covers SCN-035-007 (integer 2×), SCN-035-008 (fractional), SCN-035-009 (scale down), SCN-035-010 (unparseable preserved unscaled)
@@ -425,6 +428,7 @@ Scenario: SCN-035-030 — One session per chat enforced
 
 ### Definition of Done
 
+- [x] Scenario SCN-035-027 (Update session advances step position) — **Phase:** implement | **Evidence:** `internal/telegram/cook_session_test.go`
 - [x] CookSession struct stores recipe ID, title, steps, ingredients, position, scale factor, timestamps — **Phase:** implement | **Evidence:** `internal/telegram/cook_session.go` defines CookSession with all fields; timeout field sourced from config
 - [x] CookSessionStore uses sync.Map for concurrent-safe session management — **Phase:** implement | **Evidence:** `internal/telegram/cook_session.go` uses sync.Map for session storage
 - [x] Session CRUD: Create, Get, Delete operations work correctly — **Phase:** implement | **Evidence:** `internal/telegram/cook_session_test.go` covers SCN-035-025 (Create), SCN-035-026 (Get), SCN-035-028 (Delete)
@@ -724,6 +728,8 @@ Scenario: SCN-035-053 — intent_router accepts only "agent" or "legacy"
 
 ### Definition of Done
 
+- [ ] Scenario SCN-035-051 (Recipes block is the only source for recipe runtime values) — **Phase:** implement | **Evidence:** planned — `internal/config/recipes_test.go`
+- [ ] Scenario SCN-035-052 (Empty intent_router or zero ceilings cause startup fatal) — **Phase:** implement | **Evidence:** planned — `internal/config/recipes_test.go`
 - [ ] `recipes:` block present in `config/smackerel.yaml` with all three keys
 - [ ] `./smackerel.sh config generate` produces complete env files; missing/zero key fails generation
 - [ ] `internal/config/config.go` reads + validates all three keys with fail-loud
@@ -896,6 +902,8 @@ Each file MUST contain:
 
 ### Definition of Done
 
+- [ ] Scenario SCN-035-059 (All eight recipe scenarios load without error) — **Phase:** implement | **Evidence:** planned — `tests/integration/agent/recipe_scenarios_load_test.go`
+- [ ] Scenario SCN-035-060 (Scenario referencing an unregistered tool is rejected (spec 037 BS-010 inheritance)) — **Phase:** implement | **Evidence:** planned — `tests/integration/agent/recipe_scenarios_unknown_tool_test.go`
 - [ ] All eight YAML files committed under `config/scenarios/recipes/`
 - [ ] Loader registers all eight cleanly
 - [ ] Each `allowed_tools` list matches design §4A.1 verbatim
@@ -961,6 +969,7 @@ Scenario: SCN-035-065 — Shadow agent failure does NOT block legacy reply
 
 ### Definition of Done
 
+- [ ] Scenario SCN-035-063 (Shadow dispatch is gated by config) — **Phase:** implement | **Evidence:** planned — `internal/telegram/recipe_shadow_test.go`
 - [ ] `ShadowDispatch` implemented and gated by `RECIPES_INTENT_ROUTER`
 - [ ] Agent path never sends Telegram messages in shadow mode
 - [ ] Trace rows include `shadow_diff` for every shadow-mode invocation
@@ -1063,6 +1072,11 @@ Scenario: SCN-035-072 — Cook-mode in-session navigation bypasses the agent (UX
 
 ### Definition of Done
 
+- [ ] Scenario SCN-035-066 (Free-form scale phrasing routed and rendered (BS-021, UX-N1)) — **Phase:** implement | **Evidence:** planned — `internal/telegram/recipe_intent_dispatch_test.go`
+- [ ] Scenario SCN-035-067 (Free-form cook-mode entry (BS-021)) — **Phase:** implement | **Evidence:** planned — `internal/telegram/recipe_intent_dispatch_test.go`
+- [ ] Scenario SCN-035-068 (Scale-then-cook in one phrase) — **Phase:** implement | **Evidence:** planned — `internal/telegram/recipe_intent_dispatch_test.go`
+- [ ] Scenario SCN-035-069 (Adversarial — Ambiguous recipe disambiguation (BS-024, UX-N3.1)) — **Phase:** implement | **Evidence:** planned — `tests/e2e/recipe_disambiguate_test.go`
+- [ ] Scenario SCN-035-070 (Adversarial — Precision loss alternatives (BS-025, UX-N3.2)) — **Phase:** implement | **Evidence:** planned — `tests/e2e/recipe_precision_loss_test.go`
 - [ ] `RECIPES_INTENT_ROUTER=agent` makes the agent path authoritative for non-cook-navigation recipe messages
 - [ ] BS-021 paraphrase-matrix test passes with ≥99% equivalence to legacy
 - [ ] BS-024 adversarial regression: ambiguous "pasta" produces disambig list; numbered reply preserves original `target_servings`
@@ -1138,6 +1152,9 @@ Scenario: SCN-035-076 — Pairing suggestions with prior_cook flag (UX-N2.5)
 
 ### Definition of Done
 
+- [ ] Scenario SCN-035-073 (Substitution request renders one-line reasoning (UX-N2.1)) — **Phase:** implement | **Evidence:** planned — `internal/telegram/recipe_intent_render_test.go`
+- [ ] Scenario SCN-035-074 (Equipment swap rendered (UX-N2.2)) — **Phase:** implement | **Evidence:** planned — `internal/telegram/recipe_intent_render_test.go`
+- [ ] Scenario SCN-035-075 (Dietary adaptation per-ingredient decisions (UX-N2.3)) — **Phase:** implement | **Evidence:** planned — `internal/telegram/recipe_intent_render_test.go`
 - [ ] All four extension scenarios reachable from Telegram via the dispatch table
 - [ ] Renderers match UX-N2.1, UX-N2.2, UX-N2.3, UX-N2.5 wireframes (golden-file tests)
 - [ ] BS-022 adversarial regression: scenario-only addition is provably end-to-end functional with zero Go changes
@@ -1201,6 +1218,8 @@ Scenario: SCN-035-078 — BS-028 path is bounded — no agent reasoning loop
 
 ### Definition of Done
 
+- [ ] Scenario SCN-035-077 (Adversarial — Recipe deleted mid-cook (BS-028, UX-N3.5)) — **Phase:** implement | **Evidence:** planned — `internal/telegram/cook_format_test.go`
+- [ ] Scenario SCN-035-078 (BS-028 path is bounded — no agent reasoning loop) — **Phase:** implement | **Evidence:** planned — `tests/e2e/cook_deleted_recipe_bounded_test.go`
 - [ ] BS-028 path uses `recipe_snapshot_cache`; no in-Go deleted-recipe message string remains
 - [ ] UX-N3.5 wireframe matched by golden-file test
 - [ ] Snapshot captured on every step render
@@ -1263,7 +1282,7 @@ Scenario: SCN-035-082 — CategorizeIngredient keyword map is gone
 
 | ID | Type | File | Scenario | Description |
 |----|------|------|----------|-------------|
-| T-14-01 | Unit | (spec 036 test file) | SCN-035-079 | Aggregator invokes `ingredient_categorize-v1`; no call to `CategorizeIngredient` (use a build-time stub asserting zero invocations) |
+| T-14-01 | Unit | `internal/mealplan/shopping_test.go` (spec 036 owned consumer) | SCN-035-079 | Aggregator invokes `ingredient_categorize-v1`; no call to `CategorizeIngredient` (use a build-time stub asserting zero invocations) |
 | T-14-02 | Live-stack | `tests/e2e/shopping_list_categorize_test.go` | SCN-035-079 | Real shopping list across a multi-recipe meal plan; categories driven by scenario; render matches UX |
 | T-14-03 | Adversarial regression: BS-026 | `tests/e2e/shopping_list_unknown_ingredient_test.go` | SCN-035-080 | Inject "zarbleflarb"; render contains "Uncategorized (?)" group + teach prompt; ingredient present |
 | T-14-04 | Adversarial regression: BS-026 follow-up | `tests/e2e/shopping_list_user_correction_test.go` | SCN-035-081 | User correction → next categorization reflects it via `prior_signals`; confidence raised |
@@ -1271,6 +1290,7 @@ Scenario: SCN-035-082 — CategorizeIngredient keyword map is gone
 
 ### Definition of Done
 
+- [ ] Scenario SCN-035-079 (Categorization flows through the scenario, not the keyword map) — **Phase:** implement | **Evidence:** planned — `internal/mealplan/shopping_test.go`
 - [ ] All shopping-list categorization call sites use `ingredient_categorize-v1`
 - [ ] BS-026 adversarial regression: unknown ingredient produces `Uncategorized (?)` group + teach prompt; never dropped
 - [ ] User correction is captured and replayed via `prior_signals`
@@ -1327,6 +1347,7 @@ Scenario: SCN-035-084 — Adversarial — Auto-clarify is forbidden (BS-027)
 
 ### Definition of Done
 
+- [ ] Scenario SCN-035-083 (Opt-in unit clarification on user request (UX-N3.4)) — **Phase:** implement | **Evidence:** planned — `internal/telegram/recipe_intent_render_test.go`
 - [ ] `recipe_unit_clarify-v1` reachable only via explicit user `unit_convert` intent
 - [ ] BS-027 adversarial regression: auto-invocation forbidden, asserted via trace inspection
 - [ ] UX-N3.4 wireframe matched by golden-file test

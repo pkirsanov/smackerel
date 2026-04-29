@@ -284,7 +284,8 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 
 	// Priority 6: Meal plan commands (natural language)
 	if !msg.IsCommand() && b.mealPlanHandler != nil {
-		if b.mealPlanHandler.TryHandle(ctx, chatID, text, b.reply) {
+		reply := func(chatID int64, text string) { _ = b.reply(chatID, text) }
+		if b.mealPlanHandler.TryHandle(ctx, chatID, text, reply) {
 			return
 		}
 	}
@@ -789,15 +790,17 @@ func (b *Bot) callSearch(ctx context.Context, query string) (map[string]interfac
 
 // reply sends a text message to a chat.
 // If replyFunc is set (for testing), it delegates to that function instead.
-func (b *Bot) reply(chatID int64, text string) {
+func (b *Bot) reply(chatID int64, text string) error {
 	if b.replyFunc != nil {
 		b.replyFunc(chatID, text)
-		return
+		return nil
 	}
 	msg := tgbotapi.NewMessage(chatID, text)
 	if _, err := b.api.Send(msg); err != nil {
 		slog.Error("telegram send failed", "chat_id", chatID, "error", err)
+		return fmt.Errorf("telegram send to chat %d: %w", chatID, err)
 	}
+	return nil
 }
 
 // containsURL checks if text contains a URL.
@@ -823,10 +826,18 @@ func (b *Bot) IsAuthorized(chatID int64) bool {
 }
 
 // SendDigest sends a digest to all configured Telegram chats.
-func (b *Bot) SendDigest(text string) {
-	for chatID := range b.allowedChats {
-		b.reply(chatID, text)
+func (b *Bot) SendDigest(text string) error {
+	if len(b.allowedChats) == 0 {
+		return fmt.Errorf("no telegram chats configured for digest delivery")
 	}
+
+	var firstErr error
+	for chatID := range b.allowedChats {
+		if err := b.reply(chatID, text); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 // SendAlertMessage sends a message to all configured Telegram chats and returns
@@ -1020,6 +1031,13 @@ const maxCaptureTextLen = 32768
 // flushConversation is the callback for the ConversationAssembler.
 // It formats the conversation and sends it through the capture API.
 func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) error {
+	// BUG-002 / SC-TSC09: a single-message buffer must be captured as a
+	// single forwarded artifact (with forward_meta), not as a conversation.
+	// Short-circuit here so the multi-message conversation path below is
+	// only used when len(buf.Messages) >= 2.
+	if buf != nil && len(buf.Messages) == 1 {
+		return b.flushSingleForward(ctx, buf)
+	}
 	text := FormatConversation(buf)
 	if len(text) > maxCaptureTextLen {
 		text = stringutil.TruncateUTF8(text, maxCaptureTextLen)

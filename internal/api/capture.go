@@ -223,16 +223,19 @@ type RecentResponse struct {
 
 // ArtifactDetailResponse is the JSON response for GET /api/artifact/{id}.
 type ArtifactDetailResponse struct {
-	ArtifactID     string `json:"artifact_id"`
-	Title          string `json:"title"`
-	ArtifactType   string `json:"artifact_type"`
-	Summary        string `json:"summary"`
-	SourceURL      string `json:"source_url"`
-	Sentiment      string `json:"sentiment"`
-	SourceQuality  string `json:"source_quality"`
-	ProcessingTier string `json:"processing_tier"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
+	ArtifactID             string          `json:"artifact_id"`
+	Title                  string          `json:"title"`
+	ArtifactType           string          `json:"artifact_type"`
+	Summary                string          `json:"summary"`
+	SourceURL              string          `json:"source_url"`
+	Sentiment              string          `json:"sentiment"`
+	SourceQuality          string          `json:"source_quality"`
+	ProcessingTier         string          `json:"processing_tier"`
+	ProcessingStatus       string          `json:"processing_status"`
+	DomainExtractionStatus string          `json:"domain_extraction_status"`
+	DomainData             json.RawMessage `json:"domain_data,omitempty"`
+	CreatedAt              string          `json:"created_at"`
+	UpdatedAt              string          `json:"updated_at"`
 }
 
 // RecentHandler handles GET /api/recent.
@@ -295,23 +298,30 @@ func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	a, err := d.ArtifactStore.GetArtifact(r.Context(), artifactID)
+	a, err := d.ArtifactStore.GetArtifactWithDomain(r.Context(), artifactID)
 	if err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "Artifact not found")
+		return
+	}
+	if a == nil {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "Artifact not found")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, ArtifactDetailResponse{
-		ArtifactID:     a.ID,
-		Title:          a.Title,
-		ArtifactType:   a.ArtifactType,
-		Summary:        a.Summary,
-		SourceURL:      a.SourceURL,
-		Sentiment:      a.Sentiment,
-		SourceQuality:  a.SourceQuality,
-		ProcessingTier: a.ProcessingTier,
-		CreatedAt:      a.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:      a.UpdatedAt.Format(time.RFC3339),
+		ArtifactID:             a.ID,
+		Title:                  a.Title,
+		ArtifactType:           a.ArtifactType,
+		Summary:                a.Summary,
+		SourceURL:              a.SourceURL,
+		Sentiment:              a.Sentiment,
+		SourceQuality:          a.SourceQuality,
+		ProcessingTier:         a.ProcessingTier,
+		ProcessingStatus:       a.ProcessingStatus,
+		DomainExtractionStatus: a.DomainExtractionStatus,
+		DomainData:             a.DomainData,
+		CreatedAt:              a.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:              a.UpdatedAt.Format(time.RFC3339),
 	})
 }
 

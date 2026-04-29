@@ -1,0 +1,296 @@
+{
+  "version": 3,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-003-capture-processing-timeout",
+  "parentFeatureDir": "specs/031-live-stack-testing",
+  "featureName": "BUG-031-003: Capture process/search E2E processing timeout",
+  "bugId": "BUG-031-003",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "validate",
+    "currentScope": "scope-1-restore-capture-process-search-live-stack-proof",
+    "runStartedAt": "2026-04-28T21:48:19Z",
+    "completedPhaseClaims": [
+      "bug",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "audit",
+      "validate"
+    ],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T00:00:00Z",
+        "summary": "Created in-progress bug packet for capture process/search E2E processing_status timeout. No source or parent certification fields modified."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-27T15:59:00Z",
+        "summary": "Fixed ML sidecar LLM connection failure causing processing timeout. Added fallback mechanism for unavailable LLM services and adversarial regression test for empty processing status."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-27T23:50:39Z",
+        "summary": "Completed root-cause repair for TestE2E_CaptureProcessSearch without weakening status expectations. Fixed stale test image rebuild gap, ML Docker package metadata stripping, embedding cache/home provisioning for the non-root ML runtime, embedder pending-count leak on model-load failure, and degraded text search matching for processed captured content. Focused E2E now passes with artifact 01KQ8N1HC5QV99FTBG4YDGFZG0 reaching processed status and appearing in search results; adversarial empty/missing/failed/unknown status regression passes. Go unit, Python unit, check, and format gates pass. Validation-owned certification fields left unchanged."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-04-28T20:05:00Z",
+        "summary": "Recorded owned test-phase provenance for BUG-031-003. Current-session focused E2E through `./smackerel.sh test e2e --go-run TestE2E_CaptureProcessSearch` exited 0 with TestE2E_CaptureProcessSearch and TestE2E_CaptureProcessSearch_AdversarialEmptyStatus passing; fresh broad `./smackerel.sh test e2e` retry also exited 0 with shell E2E 34/34 passed and the target tests passing inside the full Go E2E package. Regression-quality guard exited 0 with an adversarial signal and 0 violations; skip-marker and mock/interception scans found no matches in tests/e2e/capture_process_search_test.go. Full integration green is intentionally not claimed because unrelated BUG-022-001 NATS failures remain. Certification fields left unchanged for bubbles.validate."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-04-28T20:38:47Z",
+        "summary": "Completed BUG-031-003 regression diagnostics. Focused capture/process/search E2E exited 0 with processed status, text_fallback search, and adversarial status coverage passing; broad E2E exited 0 across shell and Go packages; Go unit exited 0; Python ML unit exited 0 with 352 passed; regression-quality and skip/mock scans were clean. Full integration remains exit 1 only on known BUG-022-001 NATS cases, while ML readiness/fallback checks passed. Certification fields left unchanged."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-04-28T20:50:59Z",
+        "summary": "Completed BUG-031-003 simplification review across ML cache/embedder/processor/main, degraded search fallback, processing-status E2E polling, runtime health, Dockerfile cache/package behavior, and SST config generation. No source simplification changes were applied because the reviewed complexity preserves live-stack readiness, fail-loud config, adversarial status detection, non-root ML cache behavior, and degraded text search recovery. Full integration green was not claimed; the known BUG-022-001 NATS caveat remains preserved. Certification fields left unchanged."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-04-28T21:14:14Z",
+        "summary": "Completed BUG-031-003 stability diagnostic under repo-standard execution. Focused capture/process/search E2E exited 0 with the captured artifact reaching processed status and returning from search; broad E2E exited 0 with shell E2E 34/34 passed and target Go E2E passing inside the full package; check and regression-quality guard exited 0. No source, test, config, Docker, or generated config changes were required. Full integration green is not claimed; the unrelated BUG-022-001 NATS caveat remains preserved. Certification fields left unchanged."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-04-28T21:28:47Z",
+        "summary": "Completed BUG-031-003 security diagnostic. Reviewed secret leakage, generated config leakage, auth/search exposure, degraded fallback behavior, injection risk, IDOR/silent-decode scan gates, and Docker/runtime permissions. No secret leak, auth bypass, unsafe fallback, unsafe search exposure, or generated config leak was found. One medium Docker supply-chain/freshness finding remains open: docker-compose.yml changed Ollama from pinned 0.6 to floating latest and is routed to bubbles.implement. Full integration green is not claimed; the unrelated BUG-022-001 NATS caveat remains preserved. Certification fields left unchanged."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-28T21:41:30Z",
+        "summary": "Remediated SEC-031-003-01 by restoring docker-compose.yml Ollama image tag to ollama/ollama:0.6. Repo-standard check and build gates passed for the Docker image identity repair. Certification fields remain unchanged."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-04-28T21:51:16Z",
+        "summary": "Re-ran BUG-031-003 security closeout after SEC-031-003-01 remediation. Verified active Compose uses ollama/ollama:0.6 and contains no ollama/ollama:latest; current Compose diff contains no Ollama image change. Reassessed auth/search exposure, secret-log patterns, degraded fallback config, runtime permissions, IDOR/silent-decode gates, and governance surfaces. ./smackerel.sh check, ./smackerel.sh lint, ./smackerel.sh build, implementation-reality-scan, artifact-lint, and traceability-guard exited 0. No open security findings remain. Certification fields left unchanged."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-04-28T22:43:46Z",
+        "summary": "Recorded audit-owned phase provenance for the existing BUG-031-003 audit evidence in report.md. Prior audit disposition remains unchanged: runtime BUG-031 behavior is clean, promotion/certification stays validate-owned, and full integration green is not claimed because the unrelated BUG-022-001 NATS caveat remains preserved. Certification fields left unchanged."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-28T22:49:30Z",
+        "summary": "Recorded validate phase after audit provenance repair. Artifact lint and traceability guard exited 0 before certification edits; pre-certification state-transition guard isolated the remaining validate-owned blockers: missing validate phase and empty completedScopes while Scope 1 is Done. Reconciled certification.completedScopes and certification.scopeProgress. Post-edit done-mode artifact lint exposed report evidence blockers, so top-level status remains in_progress and full integration green remains unclaimed because unrelated BUG-022-001 NATS failures are preserved."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-04-28T23:31:00Z",
+    "completedScopes": [
+      "scope-1-restore-capture-process-search-live-stack-proof"
+    ],
+    "certifiedCompletedPhases": [
+      "bug",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "audit",
+      "validate"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Restore capture process search live-stack proof",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-28T23:31:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-27T00:00:00Z",
+      "runCompletedAt": "2026-04-27T00:00:00Z",
+      "summary": "Packetized uncovered live-stack blocker. Existing BUG-031-001 and BUG-031-002 do not cover this processing_status timeout."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-27T15:59:00Z",
+      "runCompletedAt": "2026-04-27T15:59:00Z",
+      "summary": "Mirrors existing implement completedPhaseClaim: fixed ML sidecar LLM connection failure causing processing timeout and added fallback/adversarial status regression coverage."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-27T23:50:39Z",
+      "runCompletedAt": "2026-04-27T23:50:39Z",
+      "summary": "Mirrors existing implement completedPhaseClaim: completed root-cause repair for TestE2E_CaptureProcessSearch with focused E2E, adversarial status regression, unit, check, and format evidence."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T19:30:00Z",
+      "runCompletedAt": "2026-04-28T20:12:00Z",
+      "summary": "Owned test phase recorded: focused BUG-031-003 E2E passed via repo CLI, broad E2E retry exited 0 with shell E2E 34/34 passed and go-e2e passed, adversarial empty/missing/failed/unknown status coverage remains live, regression-quality guard passed with 0 violations, and skip/mock scans of the target E2E file found no matches. No production code changed; validation-owned certification state remains in_progress."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T20:13:00Z",
+      "runCompletedAt": "2026-04-28T20:38:47Z",
+      "summary": "Ran regression diagnostics for BUG-031-003. Focused E2E, broad E2E, Go unit, Python ML unit, and regression-quality checks passed; integration preserved only the known BUG-022-001 NATS caveat while target-adjacent ML readiness/fallback checks passed. Cross-spec review found no route, API, search-mode, or processing-status conflict. Certification fields were not modified."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T20:39:00Z",
+      "runCompletedAt": "2026-04-28T20:50:59Z",
+      "summary": "Completed the required simplify phase for BUG-031-003. Reviewed implementation surfaces for reuse, quality, and efficiency; found no safe simplification that would preserve the existing live-stack timeout repair with lower complexity. No source, test, config, or Docker files were changed."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T21:00:00Z",
+      "runCompletedAt": "2026-04-28T21:14:14Z",
+      "summary": "Completed the required stabilize phase for BUG-031-003. Focused and broad repo-standard E2E runs passed with live-stack capture processing/search evidence; repo check and regression-quality guard passed; no in-scope stability issue or remediation was found. Certification fields were not modified."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T21:21:57Z",
+      "runCompletedAt": "2026-04-28T21:28:47Z",
+      "summary": "Completed security phase for BUG-031-003. No secret leak, auth bypass, unsafe search exposure, unsafe degraded fallback, generated config leak, or runtime permission defect was found in the core/ML paths. One medium in-scope Docker supply-chain finding remains open for implementation: the BUG-031 diff changes Ollama from pinned 0.6 to latest. Certification fields were not modified."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T21:32:00Z",
+      "runCompletedAt": "2026-04-28T21:41:30Z",
+      "summary": "Closed SEC-031-003-01 implementation work by restoring the Ollama Compose image tag from latest to ollama/ollama:0.6 and preserving all other Docker lifecycle behavior. Repo check and build exited 0. Certification fields were not modified."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T21:48:19Z",
+      "runCompletedAt": "2026-04-28T21:51:16Z",
+      "summary": "Closed the security phase after SEC-031-003-01 remediation. Verified ollama/ollama:0.6 is the active Compose image and ollama/ollama:latest is absent; no new security issues were found in BUG-031 auth/search, secret hygiene, degraded fallback, generated config, Docker runtime, IDOR, or silent-decode review surfaces. Repo check, lint, build, implementation-reality-scan, artifact-lint, and traceability guard exited 0. Certification fields were not modified."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T22:03:21Z",
+      "runCompletedAt": "2026-04-28T22:43:46Z",
+      "summary": "Recorded audit phase provenance for the prior BUG-031-003 audit evidence. Audit disposition remains unchanged: promotion is not certified by audit, validate owns certification reconciliation, and the unrelated BUG-022-001 NATS integration caveat remains preserved. No certification fields were modified."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-04-28T22:48:55Z",
+      "runCompletedAt": "2026-04-28T22:49:30Z",
+      "summary": "Recorded validate phase after audit provenance repair. Artifact lint and traceability guard exited 0 before certification edits. The pre-certification state-transition guard showed Scope 1 Done, all DoD checked, all required non-validate phases recorded, and blocked only on validate phase provenance plus empty certification.completedScopes. Validate reconciled certification.completedScopes and scopeProgress, but did not keep a done promotion because post-edit done-mode artifact lint exposed report evidence blockers. Full integration green remains unclaimed because unrelated BUG-022-001 NATS failures are preserved."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-28T23:25:16Z",
+      "runCompletedAt": "2026-04-28T23:31:00Z",
+      "summary": "Final certification for BUG-031-003 after audit report repair. Pre-promotion state-transition guard, artifact lint, traceability guard, artifact freshness guard, and implementation reality scan completed without blocking failures. Certification status, top-level status, completedScopes, scopeProgress, and certifiedCompletedPhases now reflect Scope 1 Done. Full integration green remains unclaimed because unrelated BUG-022-001 NATS failures are preserved."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "bubbles.stabilize context",
+      "summary": "Capture process/search e2e times out waiting for processing_status."
+    }
+  ],
+  "lastUpdatedAt": "2026-04-28T23:31:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single bug scope; owner starts with targeted red-stage proof before edits.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G036", "G057", "G060"],
+    "specDoneRequires": "bubbles.validate certification after targeted and broader E2E evidence."
+  },
+  "routing": {
+    "nextOwner": "bubbles.workflow",
+    "alternateOwnerIfHarnessConfirmed": "bubbles.devops",
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "targetSpec": "specs/031-live-stack-testing"
+  }
+}

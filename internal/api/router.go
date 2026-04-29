@@ -136,6 +136,15 @@ func NewRouter(deps *Dependencies) http.Handler {
 			if deps.MealPlanHandler != nil {
 				deps.MealPlanHandler.RegisterRoutes(r)
 			}
+
+			// Recommendation endpoints (spec 039)
+			if deps.RecommendationHandlers != nil {
+				r.Route("/recommendations", func(r chi.Router) {
+					r.Post("/requests", deps.RecommendationHandlers.CreateRequest)
+					r.Get("/requests/{id}", deps.RecommendationHandlers.GetRequest)
+					r.Get("/{id}", deps.RecommendationHandlers.GetRecommendation)
+				})
+			}
 		})
 	})
 
@@ -164,6 +173,9 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Post("/settings/connectors/{id}/sync", deps.WebHandler.SyncConnectorHandler)
 			r.Post("/settings/bookmarks/import", deps.WebHandler.BookmarkUploadHandler)
 			r.Get("/status", deps.WebHandler.StatusPage)
+			r.Get("/recommendations", deps.WebHandler.RecommendationsPage)
+			r.Post("/recommendations/results", deps.WebHandler.RecommendationsResults)
+			r.Get("/recommendations/{id}", deps.WebHandler.RecommendationDetail)
 
 			// Knowledge layer web routes
 			r.Get("/knowledge", deps.WebHandler.KnowledgeDashboard)
@@ -200,18 +212,26 @@ func NewRouter(deps *Dependencies) http.Handler {
 		})
 	}
 
-	// Spec 037 Scope 9 — POST /v1/agent/invoke (end-user failure
-	// surfaces). Behind bearer auth (same policy as /api/*) so callers
-	// must authenticate; replies always carry a structured outcome
-	// envelope per spec §UX. Mounted at /v1/* (NOT /api/*) so it is
-	// versioned independently from the rest of the API surface, per
-	// spec §UX.
-	if deps.AgentInvokeHandler != nil {
+	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil {
 		r.Route("/v1", func(r chi.Router) {
 			r.Use(middleware.Throttle(100))
+
+			if deps.DriveHandlers != nil {
+				r.Get("/connectors/drive", deps.DriveHandlers.ListConnectors)
+				r.Post("/connectors/drive/connect", deps.DriveHandlers.Connect)
+				r.Get("/connectors/drive/oauth/callback", deps.DriveHandlers.OAuthCallback)
+				r.Get("/connectors/drive/connection/{id}", deps.DriveHandlers.GetConnection)
+			}
+
+			// Spec 037 Scope 9 — POST /v1/agent/invoke (end-user failure
+			// surfaces). Behind bearer auth (same policy as /api/*) so callers
+			// must authenticate; replies always carry a structured outcome
+			// envelope per spec §UX.
 			r.Group(func(r chi.Router) {
-				r.Use(deps.bearerAuthMiddleware)
-				r.Post("/agent/invoke", deps.AgentInvokeHandler.AgentInvokeHandlerFunc)
+				if deps.AgentInvokeHandler != nil {
+					r.Use(deps.bearerAuthMiddleware)
+					r.Post("/agent/invoke", deps.AgentInvokeHandler.AgentInvokeHandlerFunc)
+				}
 			})
 		})
 	}

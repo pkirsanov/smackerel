@@ -31,6 +31,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/api"
+	_ "github.com/smackerel/smackerel/internal/recommendation/tools"
 )
 
 // wireAgentBridge constructs the production agent.Bridge and attaches

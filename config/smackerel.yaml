@@ -18,6 +18,7 @@ runtime:
   log_level: info
   auth_token: "3d8b160ea6440c30d8b38485aed71e4b6e95a280b659f48a" # dev token (48 hex). Override per environment.
   host_bind_address: "127.0.0.1"
+  compose_wait_timeout_s: 180
   digest_cron: "0 7 * * *"
   embedding_model: nomic-embed-text
 
@@ -361,6 +362,60 @@ meal_planning:
   auto_complete_past_plans: true
   auto_complete_cron: "0 1 * * *"
 
+recommendations:
+  enabled: true
+  providers:
+    google_places:
+      enabled: false
+      categories: [ "place", "event" ]
+      api_key: ""
+      quota_window_seconds: 60
+      max_requests_per_window: 30
+      attribution_label: "Google Places"
+    yelp:
+      enabled: false
+      categories: [ "place" ]
+      api_key: ""
+      quota_window_seconds: 60
+      max_requests_per_window: 30
+      attribution_label: "Yelp"
+  location_precision:
+    user_standard: "city"
+    mobile_standard: "neighborhood"
+    watch_standard: "neighborhood"
+    neighborhood_cell_system: "geohash"
+    neighborhood_cell_level: 6
+  watches:
+    max_alerts_per_window: 3
+    alert_window_seconds: 86400
+    cooldown_seconds_by_kind:
+      place: 86400
+      product: 604800
+      deal: 86400
+      event: 86400
+      content: 86400
+    quiet_hours_policy:
+      enabled: true
+      start: "22:00"
+      end: "07:00"
+  retention:
+    raw_provider_payload_seconds: 604800
+    trace_retention_seconds: 2592000
+  ranking:
+    max_candidates_per_provider: 25
+    max_final_results: 10
+    standard_result_count: 5
+    standard_style: "balanced"
+    low_confidence_threshold: 0.55
+  policy:
+    sponsored_promotions_enabled: false
+    restricted_categories: [ "adult", "gambling", "weapons" ]
+    safety_sources: [ "local-policy", "provider-rating" ]
+  delivery:
+    telegram_enabled: true
+    digest_enabled: true
+    trip_dossier_enabled: true
+
 observability:
   otel_enabled: false # Opt-in OpenTelemetry trace propagation (zero overhead when disabled)
   otel_exporter_endpoint: "" # OTLP gRPC endpoint (e.g. http://localhost:4317)
@@ -407,6 +462,41 @@ agent:
       provider: "ollama"
       model: "deepseek-ocr:3b"
 
+drive:
+  enabled: false
+  classification:
+    enabled: true
+    confidence_threshold: 0.7 # min confidence to apply classification automatically
+    low_confidence_action: "pause"
+  scan:
+    parallelism: 4
+    batch_size: 100
+  monitor:
+    poll_interval_seconds: 300
+    cursor_invalidation_rescan_max_files: 5000
+  policy:
+    sensitivity_default: "internal"
+    sensitivity_thresholds:
+      public: 0.95
+      internal: 0.80
+      sensitive: 0.60
+      secret: 0.50
+  telegram:
+    max_inline_size_bytes: 5242880
+    max_link_files_per_reply: 10
+  limits:
+    max_file_size_bytes: 104857600
+  rate_limits:
+    requests_per_minute: 600
+  providers:
+    google:
+      oauth_client_id: ""
+      oauth_client_secret: ""
+      oauth_redirect_url: "http://127.0.0.1:40001/v1/connectors/drive/oauth/callback"
+      oauth_base_url: "https://accounts.google.com"
+      api_base_url: "https://www.googleapis.com"
+      scope_defaults: [ "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive.readonly" ]
+
 services:
   core:
     container_port: 8080
@@ -415,6 +505,7 @@ services:
     container_port: 8081
     health_cache_ttl_s: 30
     readiness_timeout_s: 60
+    processing_degraded_fallback_enabled: false
 
 infrastructure:
   postgres:
@@ -454,3 +545,4 @@ environments:
     postgres_volume_name: smackerel-test-postgres-data
     nats_volume_name: smackerel-test-nats-data
     ollama_volume_name: smackerel-test-ollama-data
+    ml_processing_degraded_fallback_enabled: true

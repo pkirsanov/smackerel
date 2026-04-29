@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "featureDir": "specs/002-phase1-foundation/bugs/BUG-002-002-postgres-startup-health-gate",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-002-BUG-002-001",
+      "scope": "scope-1",
+      "title": "Health gate rejects a stopped postgres service",
+      "gherkin": {
+        "given": "The disposable test stack has a core health endpoint that is reachable or degraded and postgres is stopped, unhealthy, or unable to complete SELECT 1",
+        "when": "The E2E readiness gate is invoked",
+        "then": "The gate fails with a postgres readiness error and no persistence test continues as if the stack were healthy"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/lib/helpers.sh",
+          "testId": "Adversarial Regression E2E: stopped postgres cannot pass readiness"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-002-BUG-002-002",
+      "scope": "scope-1",
+      "title": "Clean initdb does not produce a false ready signal",
+      "gherkin": {
+        "given": "The disposable test postgres volume has been removed",
+        "when": "The test stack starts from a clean initdb state",
+        "then": "Startup and E2E readiness wait until PostgreSQL can complete a real psql SELECT 1 round trip"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/test_persistence.sh",
+          "testId": "Regression E2E: clean initdb transition waits for real DB readiness"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-002-BUG-002-003",
+      "scope": "scope-1",
+      "title": "Persistence survives restart after the readiness gate",
+      "gherkin": {
+        "given": "SCN-002-004 inserts a uniquely identifiable artifact into PostgreSQL",
+        "when": "The test stack is stopped without removing the postgres test volume and then started again",
+        "then": "The artifact is still present after restart and the scenario reports count 1"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/test_persistence.sh",
+          "testId": "Regression E2E: persistence survives restart"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-002-BUG-002-004",
+      "scope": "scope-1",
+      "title": "Canonical E2E reaches Go block after lifecycle scenarios",
+      "gherkin": {
+        "given": "The canonical E2E suite is running through ./smackerel.sh test e2e",
+        "when": "Phase 1 lifecycle scenarios complete",
+        "then": "The suite is not aborted by service postgres is not running and the Go E2E block is eligible to run"
+      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/capture_process_search_test.go",
+          "testId": "Go E2E block executes after lifecycle shell tests"
+        },
+        {
+          "file": "smackerel.sh",
+          "testId": "Broader E2E regression suite reaches Go block"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

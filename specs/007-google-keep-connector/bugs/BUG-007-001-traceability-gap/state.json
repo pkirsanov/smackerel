@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "007-google-keep-connector",
+  "bugId": "BUG-007-001-traceability-gap",
+  "featureDir": "specs/007-google-keep-connector/bugs/BUG-007-001-traceability-gap",
+  "featureName": "BUG-007-001: Traceability gap (scenario-manifest scenario count mismatch)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T02:00:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: appended one new entry SCN-007-030 to specs/007-google-keep-connector/scenario-manifest.json mapping to the existing internal/connector/keep/qualifiers_test.go::TestQualifierRecentArchivedGetsLight (test that already exists and passes) and source internal/connector/keep/qualifiers.go::Evaluate. No production code changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Underlying behavior test PASS: `go test -count=1 -v -run TestQualifierRecentArchivedGetsLight$ ./internal/connector/keep/` exits 0 (PASS in 0.00s). Output recorded in report.md > Test Evidence."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability guard PASS: `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/007-google-keep-connector` returns RESULT: PASSED (0 warnings) with 30/30 scenarios mapped to DoD, 30 concrete test file references, 30 report evidence references. Pre-fix baseline was RESULT: FAILED (1 failures, ❌ scenario-manifest.json covers only 29 scenarios but scopes define 30). Output recorded in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (`bash .github/bubbles/scripts/artifact-lint.sh specs/007-google-keep-connector`) and bug folder (`bash .github/bubbles/scripts/artifact-lint.sh specs/007-google-keep-connector/bugs/BUG-007-001-traceability-gap`). Boundary preserved: zero changes under internal/, cmd/, ml/, config/, tests/. All edits confined to specs/007-google-keep-connector/scenario-manifest.json and the new bug folder."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T02:12:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

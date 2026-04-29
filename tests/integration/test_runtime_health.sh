@@ -15,15 +15,16 @@ TEST_ENV="test"
 #
 # Behaviour now:
 #   - On FAILURE (any non-zero exit before the stack is healthy) we
-#     still tear down so the failed run does not leak containers /
-#     volumes onto the host.
-#   - On SUCCESS (health probe passes) we LEAVE THE STACK UP so the
-#     caller (smackerel.sh test integration) can run Go tests against
-#     it. The caller is responsible for the final teardown.
+#     tear down so the failed run does not leak containers / volumes
+#     onto the host.
+#   - On SUCCESS (health probe passes) we tear down by default unless
+#     the caller explicitly sets KEEP_STACK_UP=1. Orchestrators that
+#     need the live stack for follow-on Go tests are responsible for
+#     the final teardown.
 #
-# Set KEEP_STACK_UP=0 in the environment to restore the old auto-down
-# behaviour (used only by ad-hoc local runs, not by smackerel.sh).
-KEEP_STACK_UP="${KEEP_STACK_UP:-1}"
+# Set KEEP_STACK_UP=1 only when the caller owns the follow-on stack
+# lifecycle and has installed its own final cleanup trap.
+KEEP_STACK_UP="${KEEP_STACK_UP:-0}"
 HEALTH_OK=0
 
 cleanup() {
@@ -38,6 +39,7 @@ trap cleanup EXIT
 # containers from a previous run would otherwise confuse the health
 # probe.
 timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+"$REPO_DIR/smackerel.sh" --env "$TEST_ENV" build
 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
 
 ENV_FILE="$(smackerel_require_env_file "$TEST_ENV")"

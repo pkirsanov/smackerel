@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "specId": "022-operational-resilience",
+  "bugId": "BUG-022-002-dod-scenario-fidelity-gap",
+  "featureDir": "specs/022-operational-resilience/bugs/BUG-022-002-dod-scenario-fidelity-gap",
+  "featureName": "BUG-022-002: DoD scenario fidelity gap (SCN-022-01/02/03/04/06/11/12/14)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-04-27T02:25:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:35:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: added 8 trace-ID-bearing DoD bullets (SCN-022-01/02/03/04 in Scope 1; SCN-022-06 in Scope 2; SCN-022-11 in Scope 3; SCN-022-12/14 in Scope 4) to specs/022-operational-resilience/scopes.md with raw go test output and source-file pointers; enriched all 33 Test Plan rows in Scopes 1-4 with concrete *_test.go file paths so extract_path_candidates succeeds; generated specs/022-operational-resilience/scenario-manifest.json covering all 14 SCN-022-* scenarios; appended BUG-022-002 cross-reference section to specs/022-operational-resilience/report.md. No production code changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:40:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Underlying behavior tests for SCN-022-01/02/03/04/06/11/12/14 all PASS: 7 config tests (TestValidate_DBPoolConfig_Valid, TestValidate_DBMaxConns_Invalid, TestValidate_DBMinConns_EqualsMaxConns, TestValidate_DBMaxConns_Missing, TestValidate_DBMinConns_Missing, TestValidate_ShutdownTimeoutS_Missing, TestValidate_MLHealthCacheTTLS_Missing, TestValidate_DBMinConns_ExceedsMaxConns) PASS in internal/config; 3 capture tests (TestCaptureHandler_DBHealthy_ContinuesProcessing, TestCaptureHandler_DBUnavailable_Returns503, TestCaptureHandler_NilDB_Returns503) PASS in internal/api; 16 scheduler tests (13 TestRun*Job_OverlapGuard + TestCronConcurrencyGuard_AllGroupsIndependent + AllEightGroupsIndependent + RaceDetectorClean) PASS in internal/scheduler; 6 shutdown tests (TestShutdownAll_ParallelSubscriberStop, TestShutdownAll_NilSubscribersHandled, TestRunWithTimeout_CompletesBeforeBudget, TestRunWithTimeout_ExceedsBudget, TestStop_CronStopBounded, TestStop_WgWaitBounded) PASS across cmd/core and internal/scheduler; 3 dead-letter tests (TestSynthesisDeliveryFailure_RoutesToDeadLetter, _BelowMaxDeliver_Naks, _PublishFails_Naks) PASS in internal/pipeline. 35 named tests PASS total. Output recorded inline in report.md > Test Evidence."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:45:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Traceability guard PASS: bash .github/bubbles/scripts/traceability-guard.sh specs/022-operational-resilience returns RESULT: PASSED (0 warnings) with 14/14 scenarios mapped to DoD, 14 concrete test file references, 14 report evidence references. Pre-fix baseline was RESULT: FAILED (22 failures, 8 unmapped scenarios, 12 missing concrete file paths, 1 missing scenario-manifest.json). Output recorded inline in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-04-27T02:50:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (bash .github/bubbles/scripts/artifact-lint.sh specs/022-operational-resilience) and bug folder (bash .github/bubbles/scripts/artifact-lint.sh specs/022-operational-resilience/bugs/BUG-022-002-dod-scenario-fidelity-gap). git diff confirms boundary: zero changes under internal/, cmd/, ml/, config/, tests/, scripts/, docker-compose.yml. All edits confined to specs/022-operational-resilience/* and the bug folder."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-04-27T02:50:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

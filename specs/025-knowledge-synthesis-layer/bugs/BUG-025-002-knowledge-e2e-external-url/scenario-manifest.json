@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-002-knowledge-e2e-external-url",
+  "generatedAt": "2026-04-27T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-025-002-SCN-001",
+      "scope": "scope-1-make-knowledge-synthesis-e2e-deterministic",
+      "title": "Knowledge synthesis E2E uses deterministic stack-owned input",
+      "gherkin": {
+        "given": "the disposable live stack is healthy",
+        "when": "the knowledge synthesis E2E captures deterministic article content",
+        "then": "capture and synthesis complete through real services and stats reflect the processing outcome"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/knowledge_synthesis_test.go",
+          "testId": "TestKnowledgeSynthesis_PipelineRoundTrip"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-025-002-SCN-002",
+      "scope": "scope-1-make-knowledge-synthesis-e2e-deterministic",
+      "title": "Knowledge synthesis regression fails on non-owned external URL dependency",
+      "gherkin": {
+        "given": "a required E2E fixture points at a non-owned external URL",
+        "when": "the test requires that remote extraction for success",
+        "then": "the regression fails and routes the fixture back to deterministic stack-owned input"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/knowledge_synthesis_test.go",
+          "testId": "external URL fixture dependency regression"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
