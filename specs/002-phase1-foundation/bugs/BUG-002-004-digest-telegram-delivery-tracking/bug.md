@@ -11,11 +11,11 @@ SCN-002-032 reports `test_digest_telegram.sh` failing because digest delivery is
 
 ## Status
 - [x] Reported
-- [ ] Confirmed (targeted red-stage output must be captured by the fix owner)
-- [ ] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Confirmed (targeted red-stage output captured by the fix owner — see report.md `### Red-Stage Reproduction`)
+- [x] In Progress
+- [x] Fixed
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 1. Run the broad E2E command through `./smackerel.sh test e2e`.
