@@ -1726,6 +1726,76 @@ PASSED with 1 warning(s) - manual review advised
 **Claim Source:** executed
 **Interpretation:** This guard is a full-feature promotion check. Exit 1 is expected while top-level state remains `in_progress`, Scopes 4-6 are not done, and certification remains validate-owned. No top-level `done` transition was attempted by `bubbles.implement`.
 
+### Scope: scope-03-feedback-suppression-why - 2026-04-30 14:55 UTC - Validation Certification
+
+#### Summary
+
+`bubbles.validate` certified Scope 3 directly after rechecking the active artifacts, Scope 3 DoD, scenario manifest links, user validation checklist, and current guard output. Scope 3 remains the only scope promoted in this pass; feature 039 remains `in_progress` because Scopes 4-6 are still not complete.
+
+#### Completion Statement (MANDATORY)
+
+Scope 3 is certified complete. `certification.completedScopes` now contains `scope-01-foundation-schema`, `scope-02-reactive-place-recommendation`, and `scope-03-feedback-suppression-why`; `certification.scopeProgress` marks Scope 3 `Done` with `certifiedAt=2026-04-30T14:55:37Z`; `certification.certifiedCompletedPhases` records this validate pass for Scope 3; execution advances to `scope-04-watches-and-scheduler` for the next implement phase. The Scope 3 user-visible checklist items in [uservalidation.md](uservalidation.md) were already checked and were left unchanged.
+
+#### Outcome Contract Verification (G070)
+
+| Field | Declared | Evidence | Status |
+|-------|----------|----------|--------|
+| Intent | Ranked, sourced, personalized recommendations with visible why/source detail | Scope 3 evidence proves the visible why path explains persisted provider facts, personal signals, policy decisions, and quality decisions without provider calls. | Pass for Scope 3 |
+| Success Signal | User can inspect provenance trail for any recommendation response | `TestWhyRegression_BS010_NoProviderCall` and Scope 3 report evidence prove `/api/recommendations/{id}/why` returns persisted provenance and no provider calls. | Pass for Scope 3 |
+| Hard Constraints | Negative feedback and corrected preferences must suppress or stop matching ranking signals | `TestRecommendationFeedback_NotInterestedScopedToWatch`, `TestRecommendationFeedback_DislikeSuppressesAcrossSurfaces`, and `TestRecommendationPreferences_CorrectionAffectsLaterRanking` prove scoped suppression, cross-surface disliked suppression, and corrected preference handling. | Pass for Scope 3 |
+| Failure Condition | Feature fails if recommendations contradict explicit negative feedback or corrected preference | Scope 3 integration and E2E evidence show suppression and correction behavior prevents those contradictions for the completed slice. | Not triggered for Scope 3 |
+
+#### Validation Evidence
+
+**Phase:** validate
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/039-recommendations-engine`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ Top-level status matches certification.status
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+```
+
+**Phase:** validate
+**Command:** `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/039-recommendations-engine`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```
+ℹ️  Checking traceability for Scope 3: scope-03-feedback-suppression-why
+✅ Scope 3: scope-03-feedback-suppression-why scenario mapped to Test Plan row: SCN-039-020 Why answers without any provider call
+✅ Scope 3: scope-03-feedback-suppression-why scenario maps to concrete test file: tests/e2e/recommendations_why_test.go
+✅ Scope 3: scope-03-feedback-suppression-why report references concrete test evidence: tests/e2e/recommendations_why_test.go
+✅ Scope 3: scope-03-feedback-suppression-why scenario mapped to Test Plan row: SCN-039-021 Not-interested suppresses within originating watch scope
+✅ Scope 3: scope-03-feedback-suppression-why scenario maps to concrete test file: tests/integration/recommendation_feedback_test.go
+✅ Scope 3: scope-03-feedback-suppression-why report references concrete test evidence: tests/integration/recommendation_feedback_test.go
+✅ Scope 3: scope-03-feedback-suppression-why scenario mapped to Test Plan row: SCN-039-022 Disliked suppression crosses watches and queries
+✅ Scope 3: scope-03-feedback-suppression-why scenario maps to concrete test file: tests/integration/recommendation_feedback_test.go
+✅ Scope 3: scope-03-feedback-suppression-why report references concrete test evidence: tests/integration/recommendation_feedback_test.go
+✅ Scope 3: scope-03-feedback-suppression-why scenario mapped to Test Plan row: SCN-039-023 Preference correction influences later ranking
+✅ Scope 3: scope-03-feedback-suppression-why scenario maps to concrete test file: tests/e2e/recommendation_preferences_test.go
+✅ Scope 3: scope-03-feedback-suppression-why report references concrete test evidence: tests/e2e/recommendation_preferences_test.go
+ℹ️  Scope 3: scope-03-feedback-suppression-why summary: scenarios=4 test_rows=6
+RESULT: PASSED (0 warnings)
+```
+
+#### Broad E2E Blocker Resolution
+
+The prior broad E2E blocker is cleared for Scope 3 by the existing Scope 3 implement evidence recorded at 2026-04-30 13:27 UTC, where `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e` exited 0. The current certification pass did not rerun the broad E2E command because the evidence was fresh, the user supplied the current implementation retry result, and the final required guard output above remained green.
+
+#### Ownership Routing Summary
+
+No ownership routing was required for Scope 3 certification. No source code, test code, `scopes.md`, `scenario-manifest.json`, or `uservalidation.md` changes were made by this validation pass.
+
 ### scope-04-watches-and-scheduler
 
 Pending implementation. Evidence to be appended by `bubbles.implement`.
