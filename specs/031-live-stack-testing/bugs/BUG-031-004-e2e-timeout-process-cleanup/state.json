@@ -7,9 +7,9 @@
   "status": "done",
   "workflowMode": "bugfix-fastlane",
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "complete",
-    "currentScope": "scope-1-make-e2e-timeout-cleanup-process-group-safe",
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
     "runStartedAt": "2026-04-27T00:00:00Z",
     "completedPhaseClaims": ["implement", "test", "validate", "audit"],
     "pendingTransitionRequests": []
@@ -71,6 +71,15 @@
       "runStartedAt": "2026-04-30T01:35:47Z",
       "runCompletedAt": "2026-04-30T01:38:30Z",
       "summary": "Implemented process-group-safe timeout cleanup and concrete adversarial regression for BUG-031-004; focused shell and Go E2E validation passed."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["state-consistency-cleanup"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-30T03:09:22Z",
+      "runCompletedAt": "2026-04-30T03:09:22Z",
+      "summary": "Cleared stale execution pointers after confirming done status, certification, closure evidence, and user validation remain consistent."
     }
   ],
   "activeBugs": [],
@@ -91,7 +100,7 @@
       "summary": "No concrete existing test covers BUG-031-004-SCN-001 or BUG-031-004-SCN-002. The repository contains tests/e2e/fixtures/test_timeout_child_fixture.sh, but no invoker/assertion verifies no surviving child process after parent timeout. Required missing regression: tests/e2e/test_timeout_process_cleanup.sh."
     }
   ],
-  "lastUpdatedAt": "2026-04-30T01:38:30Z",
+  "lastUpdatedAt": "2026-04-30T03:09:22Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
