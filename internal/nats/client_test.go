@@ -8,8 +8,8 @@ import (
 
 func TestAllStreams_Coverage(t *testing.T) {
 	streams := AllStreams()
-	if len(streams) != 14 {
-		t.Fatalf("expected 14 streams, got %d", len(streams))
+	if len(streams) != 15 {
+		t.Fatalf("expected 15 streams, got %d", len(streams))
 	}
 
 	expected := map[string][]string{
@@ -22,6 +22,7 @@ func TestAllStreams_Coverage(t *testing.T) {
 		"SYNTHESIS":    {"synthesis.>"},
 		"DOMAIN":       {"domain.>"},
 		"DRIVE":        {"drive.>"},
+		"PHOTOS":       {"photos.>"},
 		"ANNOTATIONS":  {"annotations.>"},
 		"LISTS":        {"lists.>"},
 		"AGENT":        {"agent.>"},
@@ -80,6 +81,12 @@ func TestSubjectConstants(t *testing.T) {
 		{"SubjectDriveScanResult", SubjectDriveScanResult},
 		{"SubjectDriveChangeNotify", SubjectDriveChangeNotify},
 		{"SubjectDriveHealthReport", SubjectDriveHealthReport},
+		{"SubjectPhotosClassify", SubjectPhotosClassify},
+		{"SubjectPhotosClassified", SubjectPhotosClassified},
+		{"SubjectPhotosOCR", SubjectPhotosOCR},
+		{"SubjectPhotosOCRed", SubjectPhotosOCRed},
+		{"SubjectPhotosEmbed", SubjectPhotosEmbed},
+		{"SubjectPhotosEmbedded", SubjectPhotosEmbedded},
 		{"SubjectAnnotationsCreated", SubjectAnnotationsCreated},
 		{"SubjectListsCreated", SubjectListsCreated},
 		{"SubjectListsCompleted", SubjectListsCompleted},
@@ -121,6 +128,9 @@ func TestSubjectPairs(t *testing.T) {
 		{SubjectQuickrefGenerate, SubjectQuickrefGenerated},
 		{SubjectSeasonalAnalyze, SubjectSeasonalAnalyzed},
 		{SubjectDomainExtract, SubjectDomainExtracted},
+		{SubjectPhotosClassify, SubjectPhotosClassified},
+		{SubjectPhotosOCR, SubjectPhotosOCRed},
+		{SubjectPhotosEmbed, SubjectPhotosEmbedded},
 	}
 
 	for _, p := range pairs {

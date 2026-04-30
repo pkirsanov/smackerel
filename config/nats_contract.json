@@ -194,6 +194,102 @@
       "stream": "DRIVE",
       "critical": false
     },
+    "photos.classify": {
+      "direction": "core_to_ml",
+      "response": "photos.classified",
+      "stream": "PHOTOS",
+      "critical": true
+    },
+    "photos.classified": {
+      "direction": "ml_to_core",
+      "request": "photos.classify",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.ocr": {
+      "direction": "core_to_ml",
+      "response": "photos.ocred",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.ocred": {
+      "direction": "ml_to_core",
+      "request": "photos.ocr",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.embed": {
+      "direction": "core_to_ml",
+      "response": "photos.embedded",
+      "stream": "PHOTOS",
+      "critical": true
+    },
+    "photos.embedded": {
+      "direction": "ml_to_core",
+      "request": "photos.embed",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.lifecycle": {
+      "direction": "core_to_ml",
+      "response": "photos.lifecycle.result",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.lifecycle.result": {
+      "direction": "ml_to_core",
+      "request": "photos.lifecycle",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.dedupe": {
+      "direction": "core_to_ml",
+      "response": "photos.dedupe.result",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.dedupe.result": {
+      "direction": "ml_to_core",
+      "request": "photos.dedupe",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.sensitivity": {
+      "direction": "core_to_ml",
+      "response": "photos.sensitivity.result",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.sensitivity.result": {
+      "direction": "ml_to_core",
+      "request": "photos.sensitivity",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.aesthetic": {
+      "direction": "core_to_ml",
+      "response": "photos.aesthetic.result",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.aesthetic.result": {
+      "direction": "ml_to_core",
+      "request": "photos.aesthetic",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.removal.review": {
+      "direction": "core_to_ml",
+      "response": "photos.removal.reviewed",
+      "stream": "PHOTOS",
+      "critical": false
+    },
+    "photos.removal.reviewed": {
+      "direction": "ml_to_core",
+      "request": "photos.removal.review",
+      "stream": "PHOTOS",
+      "critical": false
+    },
     "annotations.created": {
       "direction": "core_internal",
       "stream": "ANNOTATIONS",
@@ -254,6 +350,7 @@
     "SYNTHESIS": { "subjects_pattern": "synthesis.>" },
     "DOMAIN": { "subjects_pattern": "domain.>" },
     "DRIVE": { "subjects_pattern": "drive.>" },
+    "PHOTOS": { "subjects_pattern": "photos.>" },
     "ANNOTATIONS": { "subjects_pattern": "annotations.>" },
     "LISTS": { "subjects_pattern": "lists.>" },
     "AGENT": { "subjects_pattern": "agent.>" },
@@ -275,6 +372,14 @@
     { "request": "synthesis.extract", "response": "synthesis.extracted" },
     { "request": "synthesis.crosssource", "response": "synthesis.crosssource.result" },
     { "request": "domain.extract", "response": "domain.extracted" },
+    { "request": "photos.classify", "response": "photos.classified" },
+    { "request": "photos.ocr", "response": "photos.ocred" },
+    { "request": "photos.embed", "response": "photos.embedded" },
+    { "request": "photos.lifecycle", "response": "photos.lifecycle.result" },
+    { "request": "photos.dedupe", "response": "photos.dedupe.result" },
+    { "request": "photos.sensitivity", "response": "photos.sensitivity.result" },
+    { "request": "photos.aesthetic", "response": "photos.aesthetic.result" },
+    { "request": "photos.removal.review", "response": "photos.removal.reviewed" },
     { "request": "agent.invoke.request", "response": "agent.invoke.response" }
   ]
 }

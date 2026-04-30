@@ -224,6 +224,7 @@ type Config struct {
 
 	// Shared typed config blocks (SST-compliant — from smackerel.yaml via config generate)
 	Drive           DriveConfig
+	Photos          PhotosConfig
 	Recommendations RecommendationsConfig
 }
 
@@ -381,6 +382,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg.Drive = driveCfg
+
+	photosCfg, err := loadPhotosConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Photos = photosCfg
 
 	recommendationsCfg, err := loadRecommendationsConfig()
 	if err != nil {

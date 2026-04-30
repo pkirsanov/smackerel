@@ -10,6 +10,7 @@ import (
 	"github.com/smackerel/smackerel/internal/annotation"
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/config"
+	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 	"github.com/smackerel/smackerel/internal/drive"
 	"github.com/smackerel/smackerel/internal/drive/google"
 	"github.com/smackerel/smackerel/internal/intelligence"
@@ -70,6 +71,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
 		AgentAdminHandler:               web.NewAgentAdminHandler(svc.pg.Pool),
 		DriveHandlers:                   api.NewDriveHandlersWithPool(drive.DefaultRegistry, svc.pg.Pool),
+		PhotosHandlers:                  api.NewPhotosHandlers(photolib.NewStore(svc.pg.Pool), cfg.Photos),
 		RecommendationHandlers:          api.NewRecommendationHandlers(svc.recommendationStore, svc.recommendationRegistry, cfg.Recommendations),
 	}
 
