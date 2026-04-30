@@ -7,7 +7,7 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "scope-03-feedback-suppression-why",
+    "currentScope": "scope-04-watches-and-scheduler",
     "runStartedAt": "2026-04-27T02:05:00Z",
     "completedPhaseClaims": [
       {
@@ -54,7 +54,8 @@
     "status": "in_progress",
     "completedScopes": [
       "scope-01-foundation-schema",
-      "scope-02-reactive-place-recommendation"
+      "scope-02-reactive-place-recommendation",
+      "scope-03-feedback-suppression-why"
     ],
     "certifiedCompletedPhases": [
       {
@@ -69,6 +70,13 @@
         "agent": "bubbles.validate",
         "scope": "scope-02-reactive-place-recommendation",
         "certifiedAt": "2026-04-30T06:52:15Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-03-feedback-suppression-why",
+        "certifiedAt": "2026-04-30T14:55:37Z",
         "mode": "full-delivery"
       }
     ],
@@ -94,11 +102,11 @@
       {
         "scope": 3,
         "name": "scope-03-feedback-suppression-why",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": ["scope-02-reactive-place-recommendation"],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-04-30T14:55:37Z"
       },
       {
         "scope": 4,
@@ -256,7 +264,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-30T06:52:15Z",
+  "lastUpdatedAt": "2026-04-30T14:55:37Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
