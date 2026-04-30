@@ -7,7 +7,7 @@
   "execution": {
     "activeAgent": "bubbles.workflow",
     "currentPhase": "implement",
-    "currentScope": "scope-02-reactive-place-recommendation",
+    "currentScope": "scope-03-feedback-suppression-why",
     "runStartedAt": "2026-04-27T02:05:00Z",
     "completedPhaseClaims": [
       {
@@ -45,26 +45,44 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "completedScopes": [
+      "scope-01-foundation-schema",
+      "scope-02-reactive-place-recommendation"
+    ],
+    "certifiedCompletedPhases": [
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-01-foundation-schema",
+        "certifiedAt": "2026-04-30T06:52:15Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-02-reactive-place-recommendation",
+        "certifiedAt": "2026-04-30T06:52:15Z",
+        "mode": "full-delivery"
+      }
+    ],
     "scopeProgress": [
       {
         "scope": 1,
         "name": "scope-01-foundation-schema",
-        "status": "In Progress",
+        "status": "Done",
         "dependsOn": [],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-04-30T06:52:15Z"
       },
       {
         "scope": 2,
         "name": "scope-02-reactive-place-recommendation",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": ["scope-01-foundation-schema"],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-04-30T06:52:15Z"
       },
       {
         "scope": 3,
@@ -231,7 +249,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-29T07:20:00Z",
+  "lastUpdatedAt": "2026-04-30T06:52:15Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
