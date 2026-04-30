@@ -60,6 +60,11 @@ check_pattern "$ROOT_DIR/bubbles/agent-capabilities.yaml" '^  bubbles\.goal:' "A
 check_pattern "$ROOT_DIR/bubbles/agent-capabilities.yaml" '^  bubbles\.sprint:' "Agent capabilities manifest declares sprint orchestrator"
 check_pattern "$ROOT_DIR/bubbles/workflows.yaml" 'modeOrAgentFit:' "Workflow policy defines better-fit mode/agent escalation"
 check_pattern "$ROOT_DIR/bubbles/workflows.yaml" 'missingAgentTool:' "Workflow policy defines missing agent-tool blocking outcome"
+check_pattern "$ROOT_DIR/bubbles/workflows.yaml" 'allowParentExpandedChildWorkflow: true' "Workflow policy enables parent-expanded child workflow fallback"
+check_pattern "$AGENTS_DIR/bubbles.workflow.agent.md" 'parent-expanded-child-mode' "Workflow agent documents parent-expanded child workflow execution"
+check_pattern "$AGENTS_DIR/bubbles_shared/workflow-delegation-core.md" 'Do not assume a subagent can invoke another subagent' "Delegation core documents one-level runtime compatibility"
+check_pattern "$AGENTS_DIR/bubbles.goal.agent.md" 'parent-expand bugfix-fastlane' "Goal agent avoids nested workflow deadlock for remediations"
+check_pattern "$AGENTS_DIR/bubbles.sprint.agent.md" 'parent-expanded-goal' "Sprint agent avoids nested goal deadlock"
 
 if [[ "$failures" -gt 0 ]]; then
   echo "workflow-delegation selftest failed with $failures issue(s)."

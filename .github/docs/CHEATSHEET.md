@@ -299,7 +299,7 @@
 | G061 | Rework packet | Route-required findings must produce structured transition or rework packets tied to scenarios, DoD items, and owning specialists |
 | G042 | Owner-only remediation | Only owning planning or execution specialists may remediate owned surfaces; diagnostics and certification must route |
 | G063 | Concrete result | Every agent or child-workflow invocation must end with `completed_owned`, `completed_diagnostic`, `route_required`, or `blocked` |
-| G064 | Child workflow depth | Only orchestrators may invoke child workflows, and nesting depth must stay bounded |
+| G064 | Child workflow depth | Only orchestrators may invoke child workflow modes; nesting stays bounded, with parent-expanded execution when nested delegation is unavailable |
 | G040 | Pseudo-completion language | Scope and report artifacts must not contain unresolved pseudo-completion language when transitioning to done |
 | G066 | Phase-claim provenance | Phase claims in completedPhaseClaims must have matching agent provenance in executionHistory; cross-phase impersonation is fabrication |
 | G067 | Shared infrastructure blast radius | High-fan-out shared infrastructure changes require blast-radius planning, canary coverage, rollback, and explicit change boundaries |

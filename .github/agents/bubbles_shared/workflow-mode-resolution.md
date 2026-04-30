@@ -32,7 +32,7 @@ Use this table to select the correct mode based on the execution goal.
 | Analyze existing feature, reconcile stale claims, then improve competitively | `improve-existing` | `done` | analyze -> [one-shot spec-review default] -> select -> validate -> harden -> gaps -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> validate -> audit -> chaos -> docs -> finalize |
 | Simplify an existing implementation, prove behavior still works, then sync docs | `simplify-to-doc` | `done` | select -> simplify -> test -> validate -> audit -> docs -> finalize |
 | Retro-target the hotspot mess, simplify first, then run the full quality crew | `retro-quality-sweep` | `done` | select -> retro -> simplify -> harden -> gaps -> implement -> test -> regression -> stabilize -> devops -> security -> validate -> audit -> docs -> finalize |
-| Randomized adversarial quality probing across specs | `stochastic-quality-sweep` | `done` | [N rounds: random spec + random trigger -> dispatch trigger-owned child workflow] -> sweep summary |
+| Randomized adversarial quality probing across specs | `stochastic-quality-sweep` | `done` | [N rounds: random spec + random trigger -> execute mapped trigger-owned workflow mode] -> sweep summary |
 | Priority-driven iterative work execution (N iterations or time-bounded) | `iterate` | `done` | [N iterations: pick highest-priority work -> auto-select mode -> execute full delivery cycle] -> finalize |
 
 ### Invocation Syntax

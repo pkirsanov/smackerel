@@ -186,7 +186,7 @@ gates:
   G064:
     name: child_workflow_depth_gate
     description: >-
-      BLOCKING gate. Only orchestrators may invoke child workflows, and workflow nesting depth MUST NOT exceed 1. Non-orchestrator agents may emit packets but may not recursively spawn workflow execution.
+      BLOCKING gate. Only orchestrators may invoke child workflow modes, and workflow nesting depth MUST NOT exceed 1. Non-orchestrator agents may emit packets but may not recursively spawn workflow execution. In runtimes that do not expose nested agent delegation, the active orchestrator MUST parent-expand the resolved child workflow mode instead of spawning a recursive child runtime or blocking solely on the child's missing agent tool.
   G067:
     name: shared_infrastructure_blast_radius_gate
     description: >-
@@ -302,7 +302,7 @@ autoEscalation:
       action: invoke the better-fit Bubbles mode, child workflow, or owning specialist inline via runSubagent, then resume the original workflow context
     missingAgentTool:
       description: The active custom-agent runtime lacks the agent/subagent tool required for mandated delegation
-      action: return a blocked RESULT-ENVELOPE naming the missing agent tool and intended child invocation; do not ask the user to switch mode, do not emulate the child agent inline, and do not claim completion
+      action: if the active top-level orchestrator lacks the agent tool, return a blocked RESULT-ENVELOPE naming the missing tool and intended owner invocation; if only a nested child workflow runtime lacks the agent tool, parent-expand the resolved child workflow mode from the current orchestrator and continue with explicit executionModel evidence
   # Self-healing loop configuration (consolidated into G038)
   selfHealingLoop:
     maxDepth: 1 # NEVER nest — a fix attempt cannot trigger another fix attempt
@@ -1675,7 +1675,7 @@ modes:
       requireIntegrationCompleteness: true
 
   stochastic-quality-sweep:
-    description: Run multiple randomized rounds where each round picks a random spec (from all specs by default, or from a user-provided subset) AND a random trigger, then dispatches the trigger-owned end-to-end workflow for that trigger. Stochastic sweep itself only chooses the target and trigger; the child workflow owns probing, remediation, verification, docs, and finalize.
+    description: Run multiple randomized rounds where each round picks a random spec (from all specs by default, or from a user-provided subset) AND a random trigger, then executes the mapped trigger-owned end-to-end workflow mode for that trigger. Stochastic sweep itself only chooses the target and trigger; the mapped mode owns probing, remediation, verification, docs, and finalize.
     statusCeiling: done
     phaseOrder: [ select, chaos, harden, gaps, simplify, stabilize, devops, security, regression, validate, bug, implement, test, validate, audit, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G008, G009, G010, G011, G012, G015, G016, G018, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G031, G033, G034, G035, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061 ]
@@ -1688,9 +1688,9 @@ modes:
       #      - Optional: user provides spec targets (range, list, paths) to limit the pool
       #   2. Pick a random trigger from triggerAgentPool (or user-specified subset)
       #   3. Resolve the trigger-owned child workflow mode from triggerWorkflowModes
-      #   4. Dispatch that child workflow against the selected spec
-      #   5. Record the child workflow outcome in the sweep ledger
-      # After all rounds: parent records a sweep summary only; child workflows own docs/finalize
+      #   4. Execute that mapped workflow mode against the selected spec
+      #   5. Record the mapped workflow outcome and execution model in the sweep ledger
+      # After all rounds: parent records a sweep summary only; mapped modes own docs/finalize
       stochasticRoundExecution: true
       # Spec pool discovery: when no spec targets provided, discover ALL spec
       # folders under specs/ as the pool. User can restrict with standard spec
@@ -1706,9 +1706,12 @@ modes:
       defaultTimeBudgetMinutes: 60
       # Trigger-owned child workflow map.
       # Every trigger in triggerAgentPool MUST resolve to a delivery-capable child workflow.
-      # The stochastic parent MUST NOT execute the trigger directly or build an inline
-      # bespoke fix cycle when a mapped child workflow exists.
+      # The stochastic parent MUST NOT execute the trigger directly as the entire round or build
+      # an inline bespoke fix cycle when a mapped child workflow mode exists. If nested workflow
+      # delegation is unavailable, the parent MUST execute the mapped mode in parent-expanded form.
       requireTriggerOwnedChildWorkflows: true
+      allowParentExpandedChildWorkflow: true
+      recordChildWorkflowExecutionModel: true
       triggerWorkflowModes:
         chaos: chaos-hardening
         harden: harden-to-doc
@@ -1721,7 +1724,7 @@ modes:
         improve: improve-existing
         security: security-to-doc
         regression: regression-to-doc
-      # Child workflows own docs/finalize/certification; parent only records sweep summary.
+      # Mapped child workflow modes own docs/finalize/certification; parent only records sweep summary.
       tailPhases: []
       sequentialSpecCompletion: true
       crossAgentVerification: true

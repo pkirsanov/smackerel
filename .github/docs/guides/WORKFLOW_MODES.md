@@ -289,7 +289,7 @@ Focused modes are still closure modes. If their starting specialist finds a legi
 - Planning workflow: `bubbles.analyst` → `bubbles.ux` when the finding touches UI or a user-visible journey → `bubbles.design` → `bubbles.plan`
 - Delivery workflow: `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` → finalize/certification
 
-This applies to `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, `gaps`, and future trigger-style workflows. Parent workflows must wait for the child workflow's terminal result envelope instead of accepting a diagnosis-only return.
+This applies to `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, `gaps`, and future trigger-style workflows. Parent workflows must wait for the mapped workflow mode's terminal result envelope instead of accepting a diagnosis-only return. If nested subagent delegation is unavailable, the active parent expands the mapped mode locally and records that execution model.
 
 ### <img src="../../icons/trinity-notebook.svg" width="20"> test-to-doc
 

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Photo Search — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/photo-libraries.html" class="logo-link" aria-label="Back to Photo Libraries">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Photo Search</h1>
+  <form id="photo-search" class="card" role="search">
+    <label class="field-label" for="photo-query">Search</label>
+    <input id="photo-query" name="q" required>
+    <p id="photo-search-status" class="status info" role="status" aria-live="polite">Ready</p>
+    <button class="btn btn-primary" type="submit">Search</button>
+    <ul id="photo-search-results" class="connector-list"></ul>
+  </form>
+
+  <script src="/pwa/photo-search.js"></script>
+</body>
+</html>
