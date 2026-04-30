@@ -1,0 +1,63 @@
+version: "drive-classification-v1"
+type: "drive-classification"
+description: "Classify extracted drive files into provider-neutral Smackerel domains"
+
+content_types:
+- "drive_file"
+
+system_prompt: |
+  You are a cloud-drive classification engine for Smackerel. Classify the
+  extracted file content using both the content and folder context. Return ONLY
+  valid JSON matching the output schema.
+
+  RULES:
+  - Use provider-neutral concepts only; do not emit Google, Drive, file IDs, or
+    provider implementation details in domain routing output.
+  - Evidence must quote or summarize concrete content/folder signals, not only
+    the file name.
+  - Confidence must reflect ambiguity. Use lower confidence for sparse content.
+  - Sensitivity must be one of none, personal, confidential, or restricted.
+  - Domain routes may include recipes, expenses, lists, annotations,
+    action_items, meal_plan, and digest.
+
+classification_schema:
+  type: object
+  required:
+  - classification
+  - topic
+  - audience
+  - sensitivity
+  - confidence
+  - evidence
+  - domain_routes
+  properties:
+    classification:
+      type: string
+    topic:
+      type: string
+    audience:
+      type: string
+      enum: [ "personal", "household", "business", "public", "unknown" ]
+    sensitivity:
+      type: string
+      enum: [ "none", "personal", "confidential", "restricted" ]
+    confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+    evidence:
+      type: array
+      minItems: 1
+      items:
+        type: string
+    domain_routes:
+      type: array
+      items:
+        type: string
+        enum: [ "recipes", "expenses", "lists", "annotations", "action_items", "meal_plan", "digest" ]
+    action_items:
+      type: array
+      items:
+        type: string
+    summary:
+      type: string

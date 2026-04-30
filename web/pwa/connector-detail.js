@@ -30,6 +30,10 @@
   const progressBarEl = document.getElementById("scan-progress-bar");
   const healthDetailEl = document.getElementById("provider-health-detail");
   const recentActivityEl = document.getElementById("recent-activity");
+  const skippedReviewEl = document.getElementById("skipped-review");
+  const skippedReviewGroupsEl = document.getElementById("skipped-review-groups");
+
+  const skipped_review = "skipped_review";
 
   function show(el) { el.hidden = false; }
   function hide(el) { el.hidden = true; }
@@ -95,6 +99,7 @@
     renderProgress(view.progress);
     renderProviderHealth(view);
     renderRecentActivity(view.recent_activity || []);
+    renderSkippedReview(view.id, view.skipped_count || 0);
 
     hide(statusEl);
     show(bodyEl);
@@ -138,6 +143,39 @@
       const li = document.createElement("li");
       li.textContent = (item.phase || "drive") + " " + (item.status || "") + " — " + (item.indexed_count || 0) + " indexed";
       recentActivityEl.appendChild(li);
+    }
+  }
+
+  async function renderSkippedReview(connectionId, skippedCount) {
+    skippedReviewGroupsEl.replaceChildren();
+    if (!connectionId || skippedCount === 0) {
+      hide(skippedReviewEl);
+      return;
+    }
+    try {
+      const resp = await fetch("/v1/connectors/drive/connection/" + encodeURIComponent(connectionId) + "/skipped", {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      });
+      if (!resp.ok) {
+        hide(skippedReviewEl);
+        return;
+      }
+      const view = await resp.json();
+      for (const group of view.groups || []) {
+        const li = document.createElement("li");
+        li.dataset.review = skipped_review;
+        li.textContent = group.extraction_state + " — " + group.skip_reason + " (" + group.count + "): " + group.recommended_action;
+        skippedReviewGroupsEl.appendChild(li);
+      }
+      if (skippedReviewGroupsEl.children.length > 0) {
+        show(skippedReviewEl);
+      } else {
+        hide(skippedReviewEl);
+      }
+    } catch (err) {
+      hide(skippedReviewEl);
     }
   }
 

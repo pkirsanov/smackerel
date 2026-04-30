@@ -10,13 +10,34 @@ import (
 
 // Service applies provider change-feed deltas to the scan read model.
 type Service struct {
-	provider drive.Provider
-	store    scan.Store
+	provider      drive.Provider
+	store         scan.Store
+	moveRefresher MoveRefresher
+}
+
+// MoveRefresher refreshes derived extraction/classification metadata after a
+// provider reports that a file moved but its content revision did not change.
+type MoveRefresher interface {
+	RefreshMovedFileContext(ctx context.Context, connectionID string, providerFileID string) error
+}
+
+// Option configures the monitor service.
+type Option func(*Service)
+
+// WithMoveRefresher installs the metadata-only move refresh hook.
+func WithMoveRefresher(refresher MoveRefresher) Option {
+	return func(service *Service) {
+		service.moveRefresher = refresher
+	}
 }
 
 // NewService returns a monitor service.
-func NewService(provider drive.Provider, store scan.Store) *Service {
-	return &Service{provider: provider, store: store}
+func NewService(provider drive.Provider, store scan.Store, opts ...Option) *Service {
+	service := &Service{provider: provider, store: store}
+	for _, opt := range opts {
+		opt(service)
+	}
+	return service
 }
 
 // RunOnce consumes one provider change page and persists cursor-backed deltas.
@@ -81,6 +102,12 @@ func (service *Service) RunOnce(ctx context.Context, connectionID string) (scan.
 			if _, err := service.store.UpsertFile(ctx, conn, change.Item); err != nil {
 				_ = service.store.FailJob(ctx, jobID, err)
 				return result, err
+			}
+			if service.moveRefresher != nil {
+				if err := service.moveRefresher.RefreshMovedFileContext(ctx, connectionID, change.Item.ProviderFileID); err != nil {
+					_ = service.store.FailJob(ctx, jobID, err)
+					return result, err
+				}
 			}
 			result.MovedCount = result.MovedCount + 1
 		case drive.ChangeTrash, drive.ChangeDelete, drive.ChangePermLost:

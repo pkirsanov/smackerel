@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/smackerel/smackerel/internal/drive"
+	driveextract "github.com/smackerel/smackerel/internal/drive/extract"
 )
 
 // DriveProviderCapabilities is the JSON shape of the provider-neutral
@@ -257,6 +258,23 @@ type DriveActivityView struct {
 	UpdatedAt    string `json:"updated_at"`
 }
 
+// DriveSkippedBlockedResponse is the Screen 4 review surface for files that
+// could not be extracted automatically.
+type DriveSkippedBlockedResponse struct {
+	ConnectionID string                     `json:"connection_id"`
+	Total        int                        `json:"total"`
+	Groups       []DriveSkippedBlockedGroup `json:"groups"`
+}
+
+// DriveSkippedBlockedGroup groups review items by state and concrete reason.
+type DriveSkippedBlockedGroup struct {
+	ExtractionState   string                            `json:"extraction_state"`
+	SkipReason        string                            `json:"skip_reason"`
+	RecommendedAction string                            `json:"recommended_action"`
+	Count             int                               `json:"count"`
+	Items             []driveextract.SkippedBlockedItem `json:"items"`
+}
+
 // GetConnection handles GET /v1/connectors/drive/connection/{id}. It
 // reads the persisted drive_connections row plus a count of drive_files
 // and exposes the empty-drive contract: a connection with status=healthy
@@ -353,6 +371,53 @@ func (h *DriveHandlers) GetConnection(w http.ResponseWriter, r *http.Request) {
 		RecentActivity:     recentActivity,
 	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+// GetSkippedBlocked handles GET
+// /v1/connectors/drive/connection/{id}/skipped.
+func (h *DriveHandlers) GetSkippedBlocked(w http.ResponseWriter, r *http.Request) {
+	if h.pool == nil {
+		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "drive connection DB pool is not wired")
+		return
+	}
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "missing connection id")
+		return
+	}
+
+	items, err := driveextract.NewPostgresStore(h.pool).ListSkippedBlocked(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, DriveSkippedBlockedResponse{
+		ConnectionID: id,
+		Total:        len(items),
+		Groups:       groupSkippedBlocked(items),
+	})
+}
+
+func groupSkippedBlocked(items []driveextract.SkippedBlockedItem) []DriveSkippedBlockedGroup {
+	groups := []DriveSkippedBlockedGroup{}
+	indexByKey := map[string]int{}
+	for _, item := range items {
+		key := item.ExtractionState + "\x00" + item.SkipReason + "\x00" + item.RecommendedAction
+		groupIndex, ok := indexByKey[key]
+		if !ok {
+			groups = append(groups, DriveSkippedBlockedGroup{
+				ExtractionState:   item.ExtractionState,
+				SkipReason:        item.SkipReason,
+				RecommendedAction: item.RecommendedAction,
+				Items:             []driveextract.SkippedBlockedItem{},
+			})
+			groupIndex = len(groups) - 1
+			indexByKey[key] = groupIndex
+		}
+		groups[groupIndex].Items = append(groups[groupIndex].Items, item)
+		groups[groupIndex].Count = len(groups[groupIndex].Items)
+	}
+	return groups
 }
 
 func (h *DriveHandlers) latestDriveProgress(ctx context.Context, connectionID string) (*DriveProgressView, error) {

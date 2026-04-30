@@ -57,7 +57,7 @@ This plan is intentionally vertical and sequential. Each scope delivers one user
 |---|-------|----------|-------|-------------|--------|
 | 1 | Drive Foundation | Config, NATS, schema, provider registry, API, PWA connect | unit, integration, e2e-api, e2e-ui | Config/SST, connection, empty drive, provider registry | Not Started |
 | 2 | Scan And Monitor | Provider fixture, scan loop, monitor, progress UI, health | unit, integration, e2e-api, e2e-ui | Bulk scan, cursor deltas, empty drive, outage degradation | Done |
-| 3 | Extraction And Classification | Go/Python workers, prompt contracts, skip UI | unit, integration, e2e-api, e2e-ui | Multi-format extraction, folder taxonomy, blocked files | Not Started |
+| 3 | Extraction And Classification | Go/Python workers, prompt contracts, skip UI | unit, integration, e2e-api, e2e-ui | Multi-format extraction, folder taxonomy, blocked files | Done |
 | 4 | Search And Detail | Search API, artifact detail, versions, tombstones | unit, integration, e2e-api, e2e-ui | Natural-language recall, native docs, access states | Not Started |
 | 5 | Save Rules And Write-Back | Rule engine, save service, Telegram, meal plan | unit, integration, e2e-api, e2e-ui | Auto-file captures, generated outputs, folder race safety | Not Started |
 | 6 | Policy And Confirmation | Confirmation, sensitivity policy, rule audit, UI | unit, integration, e2e-api, e2e-ui | Low-confidence pause, guardrails, conflict audit | Not Started |
@@ -1080,7 +1080,7 @@ Scenario: SCN-038-006 Provider outage degrades visibly and queues work
 
 ## Scope 3: Extraction And Classification
 
-Status: [ ] Not started | [ ] In progress | [ ] Done | [ ] Blocked
+Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
 
 ### Use Cases (Gherkin)
 
@@ -1148,17 +1148,71 @@ Scenario: SCN-038-009 Blocked and skipped files remain visible with reason and a
 
 ### Definition of Done
 
-- [ ] Drive extraction covers PDF text, scanned PDF OCR, image OCR/caption, Office text, audio transcript, and text/markdown/code files with representative synthetic fixtures.
-- [ ] Classification persists topic, sensitivity, audience, classification, confidence, and evidence through validated prompt contracts.
-- [ ] Folder summaries feed classification and folder-move deltas refresh taxonomy without re-extracting unchanged content.
-- [ ] Skipped/blocked files remain searchable by metadata and visible with concrete reason and action.
-- [ ] Domain consumers receive provider-neutral metadata for recipes, expenses, lists, annotations, action items, and digest inclusion.
-- [ ] Gherkin-to-test mapping for SCN-038-007 through SCN-038-009 is implemented exactly as planned.
-- [ ] Scenario-specific E2E regression tests for every extraction/classification behavior pass.
-- [ ] Broader E2E regression suite passes.
-- [ ] Consumer impact sweep is completed for extraction result fields, prompt contracts, skipped reason enums, UI filters, and domain metadata consumers; zero stale first-party references remain.
-- [ ] Change Boundary is respected and zero excluded file families were changed.
-- [ ] `./smackerel.sh check`, `lint`, `format --check`, `test unit`, `test integration`, and `test e2e` pass for this scope.
+- [x] Drive extraction covers PDF text, scanned PDF OCR, image OCR/caption, Office text, audio transcript, and text/markdown/code files with representative synthetic fixtures.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: RED proof was captured before implementation with `./smackerel.sh test unit` exit 1 on missing `app.drive_extract` and `app.drive_classify`. GREEN proof: `./smackerel.sh test unit` exit 0 after implementation with all Go packages passing and Python reporting `402 passed, 1 warning`. The planned unit row `ml/tests/test_drive_extract.py::test_drive_extract_routes_pdf_image_office_audio_and_text` exercises text, PDF text, scanned PDF OCR fallback, SVG/image OCR text, DOCX Office text, and audio transcript extraction; the adversarial oversized-file test returns `extraction_state="skipped"`, `skip_reason="file_too_large"`, and a non-empty action instead of silently succeeding.
+
+- [x] Classification persists topic, sensitivity, audience, classification, confidence, and evidence through validated prompt contracts.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: `config/prompt_contracts/drive-classification-v1.yaml` and `config/prompt_contracts/drive-folder-context-v1.yaml` were added and `./smackerel.sh check` exit 0 reported `scenario-lint: OK`. `./smackerel.sh test unit` exit 0 covered `ml/tests/test_drive_classify.py::test_drive_classification_contract_requires_evidence_confidence_and_sensitivity` and the adversarial weak-evidence rejection test. `./smackerel.sh test integration` exit 0 covered `tests/integration/drive/drive_extract_classify_test.go::TestDriveExtractClassifyPersistsSearchableDomainMetadata`, which asserts persisted artifact metadata includes classification, topic, audience, sensitivity, confidence, and evidence.
+
+- [x] Folder summaries feed classification and folder-move deltas refresh taxonomy without re-extracting unchanged content.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: `./smackerel.sh test integration` exit 0 covered `tests/integration/drive/drive_folder_context_test.go::TestFolderMoveRefreshesTaxonomyWithoutReextractingContent`. The test processes a file once, records fixture byte-fetch request counts, emits a provider move delta, runs the monitor with `monitor.WithMoveRefresher(processor)`, and asserts classification folder context refreshes while provider byte-fetch count is unchanged. The targeted E2E selector also exited 0 for `tests/e2e/drive/drive_folder_move_ui_test.go::TestFolderMoveUpdatesArtifactContextWithoutDuplicateExtractionActivity`.
+
+- [x] Skipped/blocked files remain searchable by metadata and visible with concrete reason and action.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: `./smackerel.sh test integration` exit 0 covered `tests/integration/drive/drive_skipped_blocked_test.go::TestSkippedAndBlockedFilesPersistReasonAndAction`, including an oversized fixture and unsupported archive fixture. `./smackerel.sh test e2e` exit 0 and the targeted selector exit 0 covered `tests/e2e/drive/drive_skipped_blocked_ui_test.go::TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions`, which calls `/v1/connectors/drive/connection/{id}/skipped`, verifies grouped reason/action payloads, and checks the PWA skipped-review surface marker exists.
+
+- [x] Domain consumers receive provider-neutral metadata for recipes, expenses, lists, annotations, action items, and digest inclusion.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: `./smackerel.sh test integration` exit 0 covered `tests/integration/drive/drive_extract_classify_test.go::TestDriveExtractClassifyPersistsSearchableDomainMetadata`. The test asserts extracted content is persisted in `artifacts.content_raw`, provider-neutral `domain_data` carries `domain_routes`, and recipe/meal-plan/list/digest routes are available without consumers calling provider APIs. The implementation keeps provider identifiers in drive metadata and domain routing in `domain_data`, preserving canonical artifact identity for downstream recipes, expenses, lists, annotations, action items, and digest inclusion.
+
+- [x] Gherkin-to-test mapping for SCN-038-007 through SCN-038-009 is implemented exactly as planned.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: all eight planned rows exist at their planned paths and titles: `ml/tests/test_drive_extract.py`, `ml/tests/test_drive_classify.py`, `tests/integration/drive/drive_extract_classify_test.go`, `tests/e2e/drive/drive_extract_e2e_test.go`, `tests/integration/drive/drive_folder_context_test.go`, `tests/e2e/drive/drive_folder_move_ui_test.go`, `tests/integration/drive/drive_skipped_blocked_test.go`, and `tests/e2e/drive/drive_skipped_blocked_ui_test.go`. GREEN proof: `./smackerel.sh test unit`, `./smackerel.sh test integration`, and `./smackerel.sh test e2e` all exited 0 after implementation.
+
+- [x] Scenario-specific E2E regression tests for every extraction/classification behavior pass.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: the targeted command `./smackerel.sh test e2e --go-run 'TestDriveExtractE2E_MultiFormatFilesBecomeSearchable|TestFolderMoveUpdatesArtifactContextWithoutDuplicateExtractionActivity|TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions'` exited 0. These scenario-specific regressions cover searchable extracted drive content, metadata-only folder-move reclassification, and skipped/blocked review grouping without request interception or bailout returns.
+
+- [x] Broader E2E regression suite passes.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: broad `./smackerel.sh test e2e` exited 0 after the Scope 3 implementation. The command ran through the repo CLI against the disposable live stack, and the follow-up targeted selector for all three Scope 3 drive E2E tests also exited 0, confirming the new regressions were included and passing.
+
+- [x] Consumer impact sweep is completed for extraction result fields, prompt contracts, skipped reason enums, UI filters, and domain metadata consumers; zero stale first-party references remain.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: workspace searches for `drive.extract|drive.classify`, `extraction_state|skip_reason|domain_routes|skipped_review`, and provider metadata fields found only the intended first-party surfaces: `config/nats_contract.json`, `internal/nats/client.go`, `internal/nats/contract_test.go`, `ml/app/nats_client.py`, `ml/app/nats_contract.py`, `ml/app/drive_extract.py`, `ml/app/drive_classify.py`, `internal/drive/extract/service.go`, `internal/api/drive_handlers.go`, Screen 4 PWA files, and the Scope 3 tests/docs. No Save Rules write-back, Telegram retrieval delivery, or non-drive prompt contract references were changed or left stale.
+
+- [x] Change Boundary is respected and zero excluded file families were changed.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: changes are limited to Scope 3 implementation/test surfaces: `internal/drive/extract/`, `internal/drive/monitor/` move-refresh hook, `ml/app/`, `ml/tests/`, `config/prompt_contracts/drive-*.yaml`, the required shared DRIVE NATS contract/constants/tests for `drive.extract.*` and `drive.classify.*`, Screen 4 API/PWA files, `tests/integration/drive/`, and `tests/e2e/drive/`. Excluded surfaces were not changed: provider connection scope/auth, Save Rules writes, Telegram retrieval delivery, and non-drive prompt contracts.
+
+- [x] `./smackerel.sh check`, `lint`, `format --check`, `test unit`, `test integration`, and `test e2e` pass for this scope.
+
+  **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
+
+  Evidence: required repo CLI gates passed after implementation: `./smackerel.sh check` exit 0 (`Config is in sync with SST`, `env_file drift guard: OK`, `scenario-lint: OK`); `./smackerel.sh format --check` exit 0 (`48 files already formatted`); `./smackerel.sh lint` exit 0 (`All checks passed!`, `Web validation passed`); `./smackerel.sh test unit` exit 0 (all Go packages plus Python `402 passed, 1 warning`); `./smackerel.sh test integration` exit 0; and `./smackerel.sh test e2e` exit 0. `bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration` also passed before evidence update; traceability was rerouted to report evidence and is rerun after this update.
 
 ---
 
