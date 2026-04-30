@@ -1327,6 +1327,218 @@ Lint: All checks passed! Web validation passed.
 
 Scope 2 implementation evidence is green. Remaining feature work is factual: scopes 03-06 are still `Not Started`, and validation-owned certification fields were not changed by this implement pass.
 
+### Scope: scope-02-reactive-place-recommendation - 2026-04-30 06:52 UTC - Validation Certification
+
+#### Summary
+
+`bubbles.validate` directly certified Scope 2 without invoking child agents. Scope 2 DoD evidence in [scopes.md](scopes.md) is sufficient for the implemented reactive place recommendation slice: SCN-039-010, SCN-039-011, and SCN-039-012 each map to concrete live tests and report evidence, and the current validation run re-executed the Scope 2 runtime and governance gates. Feature 039 remains `in_progress` because Scopes 3-6 are still `Not Started`.
+
+#### Outcome Contract Verification (G070)
+
+| Field | Declared | Scope 2 Evidence | Status |
+|-------|----------|------------------|--------|
+| Intent | Ranked, sourced, personalized external recommendations with visible why/source detail | Scope 2 delivers the reactive place slice for fixture place providers: ramen results are provider-backed, graph-reranked, persisted, rendered in web, and formatted for Telegram. | Satisfied for Scope 2 only |
+| Success Signal | User receives ranked recommendations with provider sources and rationale, plus later watch/provenance behavior | Scope 2 satisfies the reactive ramen portion via `TestReactiveRamenRegression_BS001`; proactive watch and full why inspection remain assigned to later scopes. | Satisfied for Scope 2 only |
+| Hard Constraints | Provider backing, graph/no-graph labeling, source citation, precision reduction, provider outage handling, no silent hard-constraint relaxation, disclosure | Scope 2 tests cover provider-fact backing, ART-123 graph rationale, no-personal-signal coffee output, precision reduction before provider fetch, outage degradation, attribution, hard constraints, and low-confidence disclosure. | Preserved for Scope 2 |
+| Failure Condition | Output violates graph/source/watch/precision/consent/safety/repeat/cost constraints | Current Scope 2 outputs do not trigger the declared failure conditions covered by reactive place behavior; later watch/safety/repeat/cost constraints remain unshipped scopes. | Not triggered for Scope 2 |
+
+#### Certification Decision
+
+- Certified scopes: `scope-01-foundation-schema`, `scope-02-reactive-place-recommendation`.
+- Certification timestamp: `2026-04-30T06:52:15Z`.
+- Certification boundary: feature 039 is not promoted to `done`; `status` and `certification.status` remain `in_progress`.
+- Execution cursor: advanced to `scope-03-feedback-suppression-why` with `currentPhase` remaining `implement`.
+- User validation: existing Scope 2 user-visible checklist items are satisfied by web, Telegram, and live API evidence. No uservalidation.md change was needed.
+- Planning handoff note: no `test-plan.json` exists in this feature folder; the active test handoff is the Test Plan tables in [scopes.md](scopes.md) plus [scenario-manifest.json](scenario-manifest.json), and artifact lint accepts the current artifact set.
+
+#### Validation Evidence
+
+**Phase:** validate
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/039-recommendations-engine`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+Required artifact exists: spec.md
+Required artifact exists: design.md
+Required artifact exists: uservalidation.md
+Required artifact exists: state.json
+Required artifact exists: scopes.md
+Required artifact exists: report.md
+Top-level status matches certification.status
+All checked DoD items in scopes.md have evidence blocks
+No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+```
+
+**Phase:** validate
+**Command:** `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/039-recommendations-engine`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+Checking traceability for Scope 2: scope-02-reactive-place-recommendation
+Scope 2 scenario mapped to Test Plan row: SCN-039-010 Reactive ramen recommendation cites graph signal
+Scope 2 scenario maps to concrete test file: tests/e2e/recommendations_api_test.go
+Scope 2 report references concrete test evidence: tests/e2e/recommendations_api_test.go
+Scope 2 scenario mapped to Test Plan row: SCN-039-011 Reactive coffee recommendation has no personal signal
+Scope 2 scenario maps to concrete test file: tests/integration/recommendations_test.go
+Scope 2 report references concrete test evidence: tests/integration/recommendations_test.go
+Scope 2 scenario mapped to Test Plan row: SCN-039-012 Mobile query reduces location before any provider call
+Scope 2 scenario maps to concrete test file: tests/integration/recommendation_privacy_test.go
+RESULT: PASSED (0 warnings)
+```
+
+**Phase:** validate
+**Command:** `timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh specs/039-recommendations-engine`
+**Exit Code:** 1
+**Claim Source:** interpreted
+**Interpretation:** The post-certification guard correctly blocks full-feature promotion because Scopes 3-6 remain unchecked and full-delivery phase records are not feature-complete. The same output confirms the Scope 2-relevant gates are clean: two Done scopes are detected, `completedScopes` count matches the Done scope count, scenario manifest integrity passes, checked DoD evidence is present, artifact lint passes, freshness passes, reality scan passes, and zero deferral language is found.
+
+```text
+Current state.json status: in_progress
+Top-level status matches certification.status (in_progress)
+certification block records certifiedCompletedPhases
+scenario-manifest.json records required live test types
+scenario-manifest.json records linkedTests
+Resolved scopes: total=6, Done=2, In Progress=0, Not Started=4, Blocked=0
+completedScopes count matches artifact Done scope count (2)
+All 27 checked DoD items across resolved scope files have evidence blocks
+Artifact lint passes (exit 0)
+Artifact freshness guard passes (exit 0)
+Implementation reality scan passed - no stub/fake/hardcoded data patterns detected
+TRANSITION BLOCKED: 13 failure(s), 5 warning(s)
+state.json status MUST NOT be set to 'done'.
+```
+
+**Phase:** validate
+**Command:** `timeout 600 bash .github/bubbles/scripts/artifact-freshness-guard.sh specs/039-recommendations-engine`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+BUBBLES ARTIFACT FRESHNESS GUARD
+Feature: specs/039-recommendations-engine
+spec.md has no superseded/suppressed sections
+design.md isolates superseded/suppressed sections at the end
+scopes.md has no superseded scope section
+Single-file scope layout detected
+RESULT: PASS (0 failures, 0 warnings)
+```
+
+**Phase:** validate
+**Command:** `timeout 600 bash .github/bubbles/scripts/implementation-reality-scan.sh specs/039-recommendations-engine --verbose`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** The scan passed with zero violations and one manual-review warning because implementation files were resolved from design.md fallback rather than direct scope references.
+
+```text
+IMPLEMENTATION REALITY SCAN RESULT
+Files scanned: 23
+Violations: 0
+Warnings: 1
+PASSED with 1 warning(s) - manual review advised
+```
+
+**Phase:** validate
+**Command:** `./smackerel.sh --env test check`; `./smackerel.sh build`; `./smackerel.sh format --check`; `./smackerel.sh lint`; `git diff --check`
+**Exit Code:** 0 for all
+**Claim Source:** executed
+
+```text
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: OK
+smackerel-core Built
+smackerel-ml Built
+42 files already formatted
+All checks passed!
+Web validation passed
+git diff --check produced no output
+```
+
+**Phase:** validate
+**Command:** `./smackerel.sh test unit`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+ok github.com/smackerel/smackerel/internal/recommendation/location (cached)
+ok github.com/smackerel/smackerel/internal/recommendation/provider (cached)
+ok github.com/smackerel/smackerel/internal/recommendation/rank (cached)
+ok github.com/smackerel/smackerel/internal/recommendation/tools (cached)
+ok github.com/smackerel/smackerel/internal/telegram (cached)
+ok github.com/smackerel/smackerel/internal/web (cached)
+Python unit tests:
+352 passed, 2 warnings in 12.16s
+```
+
+**Phase:** validate
+**Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+--- PASS: TestRecommendationAttribution_BadgeAndLinkPersisted
+--- PASS: TestRecommendationConflicts_OpeningHoursConflictVisible
+--- PASS: TestRecommendationPrivacy_PrecisionReducedBeforeProviderCall
+--- PASS: TestRecommendationProviderRegistry_AdditionalProviderParticipatesWithoutScenarioChange
+--- PASS: TestRecommendationProviders_EmptyRegistryReturnsNoProvidersAndPersistsTrace
+--- PASS: TestRecommendationProviders_OneProviderOutageDegradesWithoutBlocking
+--- PASS: TestRecommendationSchema_RejectsUnknownCandidateBeforeDelivery
+--- PASS: TestRecommendations_NoPersonalSignalsLabelOnEveryCandidate
+PASS
+ok github.com/smackerel/smackerel/tests/integration 22.208s
+```
+
+**Phase:** validate
+**Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run 'TestReactiveRamenRegression_BS001|TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification|TestRecommendationsConstraints_BS020_VegetarianHardConstraintExcludesIncompatible|TestRecommendationsConstraints_BS029_NoSilentRelaxationWhenNoCandidateQualifies|TestRecommendationsConfidence_BS032_LowConfidenceDisclosedWithoutOverstatingPersonalization|TestRecommendationsWeb_RendersAPIBoundResultsAndProvenance|TestRecommendationsTelegram_ReactiveCardUsesCompactActions'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+=== RUN   TestReactiveRamenRegression_BS001
+--- PASS: TestReactiveRamenRegression_BS001
+=== RUN   TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification
+--- PASS: TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification
+=== RUN   TestRecommendationsConfidence_BS032_LowConfidenceDisclosedWithoutOverstatingPersonalization
+--- PASS: TestRecommendationsConfidence_BS032_LowConfidenceDisclosedWithoutOverstatingPersonalization
+=== RUN   TestRecommendationsConstraints_BS020_VegetarianHardConstraintExcludesIncompatible
+--- PASS: TestRecommendationsConstraints_BS020_VegetarianHardConstraintExcludesIncompatible
+=== RUN   TestRecommendationsConstraints_BS029_NoSilentRelaxationWhenNoCandidateQualifies
+--- PASS: TestRecommendationsConstraints_BS029_NoSilentRelaxationWhenNoCandidateQualifies
+=== RUN   TestRecommendationsTelegram_ReactiveCardUsesCompactActions
+--- PASS: TestRecommendationsTelegram_ReactiveCardUsesCompactActions
+=== RUN   TestRecommendationsWeb_RendersAPIBoundResultsAndProvenance
+--- PASS: TestRecommendationsWeb_RendersAPIBoundResultsAndProvenance
+PASS: go-e2e
+```
+
+**Phase:** validate
+**Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+Shell E2E Test Results
+Total: 35
+Passed: 35
+Failed: 0
+--- PASS: TestOperatorStatus_RecommendationProvidersEmptyByDefault
+--- PASS: TestReactiveRamenRegression_BS001
+--- PASS: TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification
+--- PASS: TestRecommendationsConfidence_BS032_LowConfidenceDisclosedWithoutOverstatingPersonalization
+--- PASS: TestRecommendationsConstraints_BS020_VegetarianHardConstraintExcludesIncompatible
+--- PASS: TestRecommendationsConstraints_BS029_NoSilentRelaxationWhenNoCandidateQualifies
+--- PASS: TestRecommendationsTelegram_ReactiveCardUsesCompactActions
+--- PASS: TestRecommendationsWeb_RendersAPIBoundResultsAndProvenance
+PASS: go-e2e
+```
+
+#### Validation Summary
+
+Scope 2 is certified as complete. Feature 039 remains `in_progress`; full-feature promotion is blocked until Scopes 3-6 complete and pass their own validation.
+
 ### scope-03-feedback-suppression-why
 
 Pending implementation. Evidence to be appended by `bubbles.implement`.
