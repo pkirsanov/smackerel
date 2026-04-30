@@ -41,7 +41,7 @@ This plan delivers feature 039 in six sequential, vertical scopes. Each scope is
 |---|-------|------------|----------|--------|
 | 01 | foundation-schema | — | DB, internal/recommendation, config, /status | Done |
 | 02 | reactive-place-recommendation | 01 | API, web, telegram, scenario, providers | Done |
-| 03 | feedback-suppression-why | 02 | API, web, scenario, store | Not Started |
+| 03 | feedback-suppression-why | 02 | API, web, scenario, store | In Progress |
 | 04 | watches-and-scheduler | 03 | API, web, telegram, scheduler, scenario | Not Started |
 | 05 | policy-quality-and-trip-dossier | 04 | API, web, scenario, admin/agent/traces, trip dossier | Not Started |
 | 06 | observability-stress-and-cutover | 05 | metrics, logs, config validate, docs, stress | Not Started |
@@ -50,7 +50,7 @@ This plan delivers feature 039 in six sequential, vertical scopes. Each scope is
 
 ## Scope 1: scope-01-foundation-schema
 
-**Status:** Done
+**Status:** In Progress
 **Depends On:** —
 
 ### Gherkin Scenarios
@@ -270,7 +270,7 @@ Not applicable: additive routes; no rename/removal.
 
 ## Scope 3: scope-03-feedback-suppression-why
 
-**Status:** Not Started
+**Status:** Done
 **Depends On:** 02
 
 ### Gherkin Scenarios
@@ -345,18 +345,30 @@ Not applicable: additive endpoints.
 
 ### Definition of Done — Tiered Validation
 
-- [ ] SCN-039-020 why answers without any provider call (Tier: behavior)
-- [ ] SCN-039-021 not-interested suppresses within originating watch scope only (Tier: behavior)
-- [ ] SCN-039-022 disliked suppression crosses watches and queries (Tier: behavior)
-- [ ] SCN-039-023 preference correction influences later ranking and trace cites correction id (Tier: behavior)
-- [ ] BS-005, BS-010, BS-012, BS-024 pass via above tests (Tier: behavior)
-- [ ] `recommendation-why-v1.yaml` allowlist excludes provider tools; allowlist enforcement test passes (Tier: contract)
-- [ ] Suppression and correction stores persist with the schema in design.md (Tier: data)
-- [ ] Web feedback + preferences UIs render and mutate via API only (Tier: UI)
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior are added and passing; Scope 3 includes SCN-039-020/BS-010 regression coverage
-- [ ] Change Boundary is respected and zero excluded file families were changed
-- [ ] Broader E2E regression suite passes
-- [ ] `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh test unit/integration/e2e` pass
+- [x] SCN-039-020 why answers without any provider call (Tier: behavior)
+  - **Phase:** implement. **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run 'TestWhyRegression_BS010_NoProviderCall|TestRecommendationPreferences_CorrectionAffectsLaterRanking|TestRecommendationsFeedbackWeb_UpdatesCardAndPreferences|TestReactiveRamenRegression_BS001'`. **Exit Code:** 0. **Claim Source:** executed. Evidence: `TestWhyRegression_BS010_NoProviderCall` passed in the focused live E2E selector, proving `/api/recommendations/{id}/why` returns `provider_calls_issued=false`, persisted provider facts, graph refs, policy decisions, and quality decisions, and its why trace records zero provider/external tool calls.
+- [x] SCN-039-021 not-interested suppresses within originating watch scope only (Tier: behavior)
+  - **Phase:** implement. **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`. **Exit Code:** 0. **Claim Source:** executed. Evidence: `TestRecommendationFeedback_NotInterestedScopedToWatch` passed, proving `not_interested` feedback writes suppression scoped to the source watch and later watch evaluation with the same candidate records `suppressed:user-not-interested` while unrelated contexts remain eligible.
+- [x] SCN-039-022 disliked suppression crosses watches and queries (Tier: behavior)
+  - **Phase:** implement. **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`. **Exit Code:** 0. **Claim Source:** executed. Evidence: `TestRecommendationFeedback_DislikeSuppressesAcrossSurfaces` passed, proving `tried_disliked` feedback records active suppression across later reactive and watch-style surfaces with reason `suppressed:user-disliked`.
+- [x] SCN-039-023 preference correction influences later ranking and trace cites correction id (Tier: behavior)
+  - **Phase:** implement. **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run 'TestWhyRegression_BS010_NoProviderCall|TestRecommendationPreferences_CorrectionAffectsLaterRanking|TestRecommendationsFeedbackWeb_UpdatesCardAndPreferences|TestReactiveRamenRegression_BS001'`. **Exit Code:** 0. **Claim Source:** executed. Evidence: `TestRecommendationPreferences_CorrectionAffectsLaterRanking` passed, proving a `loves_spicy` correction is persisted, later ranking applies zero graph boost for the corrected signal, and the rank trace cites the active correction id.
+- [x] BS-005, BS-010, BS-012, BS-024 pass via above tests (Tier: behavior)
+  - **Phase:** implement. **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run 'TestWhyRegression_BS010_NoProviderCall|TestRecommendationPreferences_CorrectionAffectsLaterRanking|TestRecommendationsFeedbackWeb_UpdatesCardAndPreferences|TestReactiveRamenRegression_BS001'`. **Exit Code:** 0 for both. **Claim Source:** executed. Evidence: BS-005 and BS-012 are covered by `tests/integration/recommendation_feedback_test.go`; BS-010 and BS-024 are covered by the focused live E2E selector.
+- [x] `recommendation-why-v1.yaml` allowlist excludes provider tools; allowlist enforcement test passes (Tier: contract)
+  - **Phase:** implement. **Command:** `./smackerel.sh test unit`; `./smackerel.sh check`. **Exit Code:** 0 for both. **Claim Source:** executed. Evidence: `TestRecommendationWhyScenarioAllowlistExcludesProviderTools` and `TestRecommendationFeedbackScenarioAllowlist` passed in the unit suite, and `check` reported `scenario-lint: OK` with three registered scenarios and zero rejected scenarios.
+- [x] Suppression and correction stores persist with the schema in design.md (Tier: data)
+  - **Phase:** implement. **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`; `./smackerel.sh test unit`. **Exit Code:** 0 for both. **Claim Source:** executed. Evidence: live integration tests exercised `recommendation_feedback`, `recommendation_suppression_state`, and `recommendation_preference_corrections`; unit coverage for `rank.PreferenceCorrection` and active-correction behavior passed.
+- [x] Web feedback + preferences UIs render and mutate via API only (Tier: UI)
+  - **Phase:** implement. **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run 'TestWhyRegression_BS010_NoProviderCall|TestRecommendationPreferences_CorrectionAffectsLaterRanking|TestRecommendationsFeedbackWeb_UpdatesCardAndPreferences|TestReactiveRamenRegression_BS001'`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`. **Exit Code:** 0 for both. **Claim Source:** executed. Evidence: `TestRecommendationsFeedbackWeb_UpdatesCardAndPreferences` passed in the focused selector and the broad E2E suite, exercising the server-rendered feedback form and `/recommendations/preferences` page against the live API/runtime.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior are added and passing; Scope 3 includes SCN-039-020/BS-010 regression coverage
+  - **Phase:** implement. **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run 'TestWhyRegression_BS010_NoProviderCall|TestRecommendationPreferences_CorrectionAffectsLaterRanking|TestRecommendationsFeedbackWeb_UpdatesCardAndPreferences|TestReactiveRamenRegression_BS001'`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`. **Exit Code:** 0 for both. **Claim Source:** executed. Evidence: new persistent live E2E coverage exists in `tests/e2e/recommendations_why_test.go`, `tests/e2e/recommendation_preferences_test.go`, and `tests/e2e/recommendations_feedback_web_test.go`; the focused and broad E2E runs both passed.
+- [x] Change Boundary is respected and zero excluded file families were changed
+  - **Phase:** implement. **Command:** `git status --short`; `git diff --stat -- config/prompt_contracts/recommendation-feedback-v1.yaml config/prompt_contracts/recommendation-why-v1.yaml internal/api/health.go internal/api/recommendations.go internal/api/router.go internal/api/router_test.go internal/recommendation/rank/rank.go internal/recommendation/rank/correction_test.go internal/recommendation/reactive/engine.go internal/recommendation/store/feedback.go internal/recommendation/store/scenario.go internal/recommendation/store/why.go internal/recommendation/tools/register.go internal/recommendation/tools/scenario_contract_test.go internal/web/recommendations.go tests/e2e/recommendation_preferences_test.go tests/e2e/recommendations_feedback_web_test.go tests/e2e/recommendations_why_test.go tests/integration/recommendation_feedback_test.go`. **Exit Code:** 0 for both. **Claim Source:** interpreted. **Interpretation:** Scope 3-owned changes are confined to the planned recommendation scenario, store, rank, API, web, and test surfaces. The worktree also contains unrelated pre-existing drive/photos changes; those excluded-family changes are not part of this Scope 3 implementation and were not modified for this scope.
+- [x] Broader E2E regression suite passes
+  - **Phase:** implement. **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`. **Exit Code:** 0. **Claim Source:** executed. Evidence: the full live E2E suite passed after Scope 3 implementation and test isolation cleanup.
+- [x] `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh test unit/integration/e2e` pass
+  - **Phase:** implement. **Command:** `./smackerel.sh check`; `./smackerel.sh lint`; `./smackerel.sh test unit`; `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`. **Exit Code:** 0 for all five commands. **Claim Source:** executed. Evidence: config drift/scenario lint, lint, unit, live integration, and live E2E gates all passed; `./smackerel.sh format --check` also exited 0.
 
 ---
 

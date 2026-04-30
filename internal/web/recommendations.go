@@ -73,15 +73,77 @@ func (h *Handler) RecommendationDetail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	why, err := h.RecommendationStore.ExplainRecommendation(r.Context(), recommendationID)
+	if err != nil {
+		http.Error(w, "recommendation explanation unavailable", http.StatusInternalServerError)
+		return
+	}
 	_, _ = fmt.Fprintf(w, `<div class="container"><h1>%s</h1><section><h2>Why</h2><ul>`, template.HTMLEscapeString(rec.Title))
-	for _, reason := range rec.Rationale {
+	for _, reason := range why.Explanation {
 		_, _ = fmt.Fprintf(w, `<li>%s</li>`, template.HTMLEscapeString(reason))
 	}
-	_, _ = fmt.Fprint(w, `</ul></section><section><h2>Sources</h2><ul>`)
+	_, _ = fmt.Fprintf(w, `</ul><p>Provider calls issued: %t</p></section><section><h2>Sources</h2><ul>`, why.ProviderCallsIssued)
 	for _, badge := range rec.ProviderBadges {
 		_, _ = fmt.Fprintf(w, `<li>%s</li>`, template.HTMLEscapeString(badge.Label))
 	}
 	_, _ = fmt.Fprint(w, `</ul></section></div>`)
+}
+
+// RecommendationFeedback handles HTMX feedback actions from recommendation cards.
+func (h *Handler) RecommendationFeedback(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.RecommendationStore == nil {
+		http.Error(w, "recommendations unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid feedback form", http.StatusBadRequest)
+		return
+	}
+	recommendationID := strings.TrimSpace(chi.URLParam(r, "id"))
+	result, err := h.RecommendationStore.RecordFeedback(r.Context(), recstore.FeedbackInput{
+		RecommendationID: recommendationID,
+		ActorUserID:      "local",
+		FeedbackType:     r.FormValue("feedback_type"),
+		SourceWatchID:    r.FormValue("source_watch_id"),
+		PreferenceKey:    r.FormValue("preference_key"),
+		CorrectionKind:   r.FormValue("correction_kind"),
+		Payload:          map[string]any{"surface": "web"},
+	})
+	if err != nil {
+		http.Error(w, "feedback failed", http.StatusBadRequest)
+		return
+	}
+	state := "recorded"
+	if result.SuppressionEffect.Applied {
+		state = "suppressed"
+	}
+	_, _ = fmt.Fprintf(w, `<div class="feedback-state" data-feedback-state="%s"><strong>%s</strong><span>%s</span></div>`, template.HTMLEscapeString(state), template.HTMLEscapeString(result.Acknowledgement), template.HTMLEscapeString(result.SuppressionEffect.Reason))
+}
+
+// RecommendationPreferencesPage renders active preference corrections.
+func (h *Handler) RecommendationPreferencesPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.RecommendationStore == nil {
+		http.Error(w, "recommendations unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	view, err := h.RecommendationStore.ListPreferences(r.Context(), "local")
+	if err != nil {
+		http.Error(w, "preferences unavailable", http.StatusInternalServerError)
+		return
+	}
+	_, _ = fmt.Fprint(w, `<div class="container"><h1>Recommendations &gt; Preferences</h1><section><h2>Active corrections</h2>`)
+	if len(view.ActiveCorrections) == 0 {
+		_, _ = fmt.Fprint(w, `<p>No active corrections</p>`)
+	} else {
+		_, _ = fmt.Fprint(w, `<table><thead><tr><th>Preference</th><th>Correction</th><th>ID</th><th></th></tr></thead><tbody>`)
+		for _, correction := range view.ActiveCorrections {
+			_, _ = fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td><td>%s</td><td><button type="button">Revoke</button></td></tr>`, template.HTMLEscapeString(correction.PreferenceKey), template.HTMLEscapeString(correction.CorrectionKind), template.HTMLEscapeString(correction.ID))
+		}
+		_, _ = fmt.Fprint(w, `</tbody></table>`)
+	}
+	_, _ = fmt.Fprint(w, `</section></div>`)
 }
 
 func (h *Handler) renderRecommendationCards(w http.ResponseWriter, outcome recstore.RenderedRequest) {
@@ -109,6 +171,6 @@ func (h *Handler) renderRecommendationCards(w http.ResponseWriter, outcome recst
 		for _, reason := range rec.Rationale {
 			_, _ = fmt.Fprintf(w, `<li>%s</li>`, template.HTMLEscapeString(reason))
 		}
-		_, _ = fmt.Fprintf(w, `</ul><a href="/recommendations/%s">Why?</a></article>`, template.HTMLEscapeString(rec.ID))
+		_, _ = fmt.Fprintf(w, `</ul><a href="/recommendations/%s">Why?</a><form hx-post="/recommendations/%s/feedback" hx-target="closest article" method="post"><input type="hidden" name="feedback_type" value="not_interested"><button type="submit">Not interested</button></form></article>`, template.HTMLEscapeString(rec.ID), template.HTMLEscapeString(rec.ID))
 	}
 }

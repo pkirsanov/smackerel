@@ -15,6 +15,13 @@ type RankedCandidate struct {
 	Confidence      string
 }
 
+// PreferenceCorrection is the ranking-facing shape of an active user correction.
+type PreferenceCorrection struct {
+	ID             string
+	PreferenceKey  string
+	CorrectionKind string
+}
+
 // Ranker orders canonical candidates against bounded graph context.
 type Ranker interface {
 	Rank(ctx context.Context, candidateIDs []string, graphSignalRefs []string) ([]RankedCandidate, error)
@@ -38,4 +45,29 @@ func ValidateProviderBackedRankings(rankings []RankedCandidate, providerBackedCa
 		}
 	}
 	return nil
+}
+
+// ActiveCorrectionForPreference returns the active correction that blocks a
+// positive boost for preferenceKey, if one exists.
+func ActiveCorrectionForPreference(preferenceKey string, corrections []PreferenceCorrection) (PreferenceCorrection, bool) {
+	if preferenceKey == "" {
+		return PreferenceCorrection{}, false
+	}
+	for _, correction := range corrections {
+		if correction.PreferenceKey != preferenceKey {
+			continue
+		}
+		switch correction.CorrectionKind {
+		case "remove", "invert", "set_weight", "block_category":
+			return correction, true
+		}
+	}
+	return PreferenceCorrection{}, false
+}
+
+// PositiveBoostAllowed reports whether preferenceKey may still act as a
+// positive ranking signal after active user corrections are applied.
+func PositiveBoostAllowed(preferenceKey string, corrections []PreferenceCorrection) bool {
+	_, blocked := ActiveCorrectionForPreference(preferenceKey, corrections)
+	return !blocked
 }

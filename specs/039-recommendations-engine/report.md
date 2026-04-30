@@ -1537,11 +1537,194 @@ PASS: go-e2e
 
 #### Validation Summary
 
-Scope 2 is certified as complete. Feature 039 remains `in_progress`; full-feature promotion is blocked until Scopes 3-6 complete and pass their own validation.
+Scope 2 is certified as complete. Feature 039 remains `in_progress`; Scope 3 now has implement evidence, and Scopes 4-6 are not started.
 
 ### scope-03-feedback-suppression-why
 
-Pending implementation. Evidence to be appended by `bubbles.implement`.
+### Scope: scope-03-feedback-suppression-why - 2026-04-30 13:27 UTC - Implementation
+
+#### Summary
+
+`bubbles.implement` delivered the Scope 3 feedback, suppression, preference correction, why, and preferences UI slice. The implementation added `recommendation-feedback-v1` and `recommendation-why-v1` scenario contracts, store support for feedback/suppression/corrections and persisted why explanations, API routes for feedback/why/preferences, server-rendered feedback and preference surfaces, ranking suppression/correction consumption, and persistent live regression coverage.
+
+#### Decision Record
+
+- `/api/recommendations/{id}/why` is backed only by persisted recommendation state and records a `recommendation_why` trace with `recommendation_explain_from_trace`; provider/external tools are excluded from the why scenario allowlist.
+- `not_interested` suppression is watch-scoped while `tried_disliked` suppression applies across later surfaces during the retention window.
+- Preference corrections are stored independently from feedback rows and ranking reads active corrections before applying positive preference boosts.
+- Scope 3 E2E tests clean up their own live-stack feedback effects so scenario ordering cannot hide or create provenance regressions.
+
+#### Completion Statement (MANDATORY)
+
+Checked DoD items in [scopes.md](scopes.md): all Scope 3 behavior, contract, data, UI, regression, boundary, broader E2E, and repo CLI validation items are checked with inline evidence. Scope 3 implementation evidence is complete for the `bubbles.implement` surface. Feature 039 remains `in_progress` because Scopes 4-6 are outside this implementation slice and certification is validate-owned.
+
+#### Code Diff Evidence
+
+Scope 3-owned implementation and test files:
+
+- `config/prompt_contracts/recommendation-feedback-v1.yaml`
+- `config/prompt_contracts/recommendation-why-v1.yaml`
+- `internal/api/health.go`
+- `internal/api/recommendations.go`
+- `internal/api/router.go`
+- `internal/api/router_test.go`
+- `internal/recommendation/rank/rank.go`
+- `internal/recommendation/rank/correction_test.go`
+- `internal/recommendation/reactive/engine.go`
+- `internal/recommendation/store/feedback.go`
+- `internal/recommendation/store/scenario.go`
+- `internal/recommendation/store/why.go`
+- `internal/recommendation/tools/register.go`
+- `internal/recommendation/tools/scenario_contract_test.go`
+- `internal/web/recommendations.go`
+- `tests/e2e/recommendation_preferences_test.go`
+- `tests/e2e/recommendations_feedback_web_test.go`
+- `tests/e2e/recommendations_why_test.go`
+- `tests/integration/recommendation_feedback_test.go`
+
+**Phase:** implement
+**Command:** `git status --short`
+**Exit Code:** 0
+**Claim Source:** interpreted
+**Interpretation:** Scope 3-owned changes are confined to the planned recommendation scenario, store, rank, API, web, and test surfaces. The worktree also contains unrelated pre-existing drive/photos changes that are not part of this implementation slice.
+
+**Phase:** implement
+**Command:** `git diff --stat -- config/prompt_contracts/recommendation-feedback-v1.yaml config/prompt_contracts/recommendation-why-v1.yaml internal/api/health.go internal/api/recommendations.go internal/api/router.go internal/api/router_test.go internal/recommendation/rank/rank.go internal/recommendation/rank/correction_test.go internal/recommendation/reactive/engine.go internal/recommendation/store/feedback.go internal/recommendation/store/scenario.go internal/recommendation/store/why.go internal/recommendation/tools/register.go internal/recommendation/tools/scenario_contract_test.go internal/web/recommendations.go tests/e2e/recommendation_preferences_test.go tests/e2e/recommendations_feedback_web_test.go tests/e2e/recommendations_why_test.go tests/integration/recommendation_feedback_test.go`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```
+internal/api/health.go           |   2 +
+internal/api/recommendations.go  | 135 +++++++++
+internal/api/router.go           |   7 +
+internal/api/router_test.go      |   6 +
+internal/recommendation/rank/rank.go  |  32 ++
+internal/recommendation/reactive/engine.go | 73 ++++-
+internal/recommendation/tools/register.go  |   2 +
+internal/recommendation/tools/scenario_contract_test.go | 47 +++
+internal/web/recommendations.go  |  68 ++++-
+```
+
+Untracked new Scope 3 files listed by `git status --short`: `config/prompt_contracts/recommendation-feedback-v1.yaml`, `config/prompt_contracts/recommendation-why-v1.yaml`, `internal/recommendation/rank/correction_test.go`, `internal/recommendation/store/feedback.go`, `internal/recommendation/store/scenario.go`, `internal/recommendation/store/why.go`, `tests/e2e/recommendation_preferences_test.go`, `tests/e2e/recommendations_feedback_web_test.go`, `tests/e2e/recommendations_why_test.go`, and `tests/integration/recommendation_feedback_test.go`.
+
+#### Test Evidence (ALL TYPES REQUIRED)
+
+**Phase:** implement
+**Command:** `./smackerel.sh test unit --go`
+**Exit Code:** 1
+**Claim Source:** executed
+
+RED proof captured before implementation: the Scope 3 unit target failed because the rank preference-correction helpers and Scope 3 scenario contracts/tool allowlists were not implemented yet.
+
+**Phase:** implement
+**Command:** `./smackerel.sh format --check`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Formatting check passed after the Scope 3 source and test updates.
+
+**Phase:** implement
+**Command:** `./smackerel.sh check`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 3, rejected: 0
+scenario-lint: OK
+```
+
+**Phase:** implement
+**Command:** `./smackerel.sh lint`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Lint passed for Go vet, Python ruff, and web asset validation.
+
+**Phase:** implement
+**Command:** `./smackerel.sh test unit`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Unit suite passed, including `TestRecommendationWhyScenarioAllowlistExcludesProviderTools`, `TestRecommendationFeedbackScenarioAllowlist`, and active preference-correction rank tests.
+
+**Phase:** implement
+**Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Live integration passed, including `TestRecommendationFeedback_NotInterestedScopedToWatch` and `TestRecommendationFeedback_DislikeSuppressesAcrossSurfaces`.
+
+**Phase:** implement
+**Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run 'TestWhyRegression_BS010_NoProviderCall|TestRecommendationPreferences_CorrectionAffectsLaterRanking|TestRecommendationsFeedbackWeb_UpdatesCardAndPreferences|TestReactiveRamenRegression_BS001'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Focused live E2E passed for Scope 3 why, preference correction, web feedback/preferences, and the preserved Scope 2 reactive ramen regression.
+
+**Phase:** implement
+**Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Full live E2E suite passed after the Scope 3 changes.
+
+#### Uncertainty Declarations
+
+None for Scope 3 implement-owned DoD items. Certification remains validate-owned and was not modified by `bubbles.implement`.
+
+#### Scenario Contract Evidence
+
+- `SCN-039-020`: covered by `tests/e2e/recommendations_why_test.go::TestWhyRegression_BS010_NoProviderCall`.
+- `SCN-039-021`: covered by `tests/integration/recommendation_feedback_test.go::TestRecommendationFeedback_NotInterestedScopedToWatch`.
+- `SCN-039-022`: covered by `tests/integration/recommendation_feedback_test.go::TestRecommendationFeedback_DislikeSuppressesAcrossSurfaces`.
+- `SCN-039-023`: covered by `tests/e2e/recommendation_preferences_test.go::TestRecommendationPreferences_CorrectionAffectsLaterRanking`.
+
+#### Coverage Report
+
+No coverage mode was run. Scope 3 evidence is command-execution evidence from unit, integration, focused E2E, and broad E2E gates.
+
+#### Lint/Quality
+
+`./smackerel.sh format --check`, `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh test unit`, `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`, and `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e` all exited 0.
+
+#### Governance Evidence
+
+**Phase:** implement
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/039-recommendations-engine`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```
+Artifact lint PASSED.
+```
+
+**Phase:** implement
+**Command:** `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/039-recommendations-engine`
+**Exit Code:** 0
+**Claim Source:** executed
+
+Traceability guard passed for the updated Scope 3 scenario/test manifest links.
+
+**Phase:** implement
+**Command:** `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/039-recommendations-engine`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```
+Files scanned:  26
+Violations:     0
+Warnings:       1
+PASSED with 1 warning(s) - manual review advised
+```
+
+**Phase:** implement
+**Command:** `timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh specs/039-recommendations-engine`
+**Exit Code:** 1
+**Claim Source:** executed
+**Interpretation:** This guard is a full-feature promotion check. Exit 1 is expected while top-level state remains `in_progress`, Scopes 4-6 are not done, and certification remains validate-owned. No top-level `done` transition was attempted by `bubbles.implement`.
 
 ### scope-04-watches-and-scheduler
 

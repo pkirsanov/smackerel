@@ -149,9 +149,18 @@
       "liveTestExpectation": "Regression e2e-api: tests/e2e/recommendations_why_test.go :: TestWhyRegression_BS010_NoProviderCall",
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/e2e/recommendations_why_test.go",
+          "testId": "TestWhyRegression_BS010_NoProviderCall"
+        },
+        {
+          "file": "internal/recommendation/tools/scenario_contract_test.go",
+          "testId": "TestRecommendationWhyScenarioAllowlistExcludesProviderTools"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-03-feedback-suppression-why 2026-04-30 13:27 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-021",
@@ -163,9 +172,14 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_feedback_test.go :: TestRecommendationFeedback_NotInterestedScopedToWatch",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendation_feedback_test.go",
+          "testId": "TestRecommendationFeedback_NotInterestedScopedToWatch"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-03-feedback-suppression-why 2026-04-30 13:27 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-022",
@@ -177,9 +191,14 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_feedback_test.go :: TestRecommendationFeedback_DislikeSuppressesAcrossSurfaces",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendation_feedback_test.go",
+          "testId": "TestRecommendationFeedback_DislikeSuppressesAcrossSurfaces"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-03-feedback-suppression-why 2026-04-30 13:27 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-023",
@@ -191,9 +210,18 @@
       "liveTestExpectation": "Regression e2e-api: tests/e2e/recommendation_preferences_test.go :: TestRecommendationPreferences_CorrectionAffectsLaterRanking",
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/e2e/recommendation_preferences_test.go",
+          "testId": "TestRecommendationPreferences_CorrectionAffectsLaterRanking"
+        },
+        {
+          "file": "tests/e2e/recommendations_feedback_web_test.go",
+          "testId": "TestRecommendationsFeedbackWeb_UpdatesCardAndPreferences"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-03-feedback-suppression-why 2026-04-30 13:27 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-030",
