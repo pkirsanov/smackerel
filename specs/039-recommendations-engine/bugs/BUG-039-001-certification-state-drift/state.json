@@ -4,42 +4,70 @@
   "parentFeatureDir": "specs/039-recommendations-engine",
   "featureName": "BUG-039-001: Certification state drift",
   "bugId": "BUG-039-001",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "bugfix-fastlane",
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "documentation",
-    "currentScope": "scope-1-route-validate-owned-039-state-reconciliation",
-    "runStartedAt": "2026-04-27T00:00:00Z",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-04-30T01:55:00Z",
     "completedPhaseClaims": [
       {
         "phase": "bug",
         "agent": "bubbles.bug",
         "timestamp": "2026-04-27T00:00:00Z",
         "summary": "Created in-progress bug packet for 039 status/certification state drift. Did not edit 039 spec.md, design.md, production code, tests, or certification-owned fields."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-30T02:05:00Z",
+        "summary": "Closed the bug packet artifacts only after verifying that parent 039 status/certification drift was already reconciled. No product code or parent feature artifacts were edited in this closeout."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-30T02:05:00Z",
+        "summary": "Executed targeted artifact validation for the parent 039 feature and this BUG-039-001 packet. Parent artifact lint exited 0 and the packet artifact lint is recorded in report.md."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-30T02:05:00Z",
+        "summary": "Verified the parent 039 status/certification mismatch no longer exists and that parent certification still does not list completed scopes for feature-level completion."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-04-30T02:05:00Z",
+        "summary": "Reviewed the bug packet closeout evidence, user validation checklist, scope DoD, and canonical artifact-lint result for the closed packet."
       }
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-04-30T02:05:00Z",
+    "completedScopes": ["scope-1-route-validate-owned-039-state-reconciliation"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit"],
     "scopeProgress": [
       {
         "scope": 1,
         "name": "Route validate-owned 039 state reconciliation",
-        "status": "In Progress",
+        "status": "Done",
         "dependsOn": [],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-04-30T02:05:00Z"
       }
     ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
-    }
+    },
+    "blockers": [],
+    "concerns": []
   },
   "policySnapshot": {
     "grill": {"mode": "off", "source": "repo-default"},
@@ -59,19 +87,22 @@
       "statusAfter": "in_progress",
       "runStartedAt": "2026-04-27T00:00:00Z",
       "runCompletedAt": "2026-04-27T00:00:00Z",
-      "summary": "Packetized validate-owned 039 state drift. Existing 039 artifacts remain in progress and certification fields were not modified."
+      "summary": "Packetized validate-owned 039 state drift. Existing 039 artifacts remained in progress and certification fields were not modified by bug packet creation."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["implement", "test", "validate", "audit"],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "runStartedAt": "2026-04-30T01:55:00Z",
+      "runCompletedAt": "2026-04-30T02:05:00Z",
+      "summary": "Closed BUG-039-001 after targeted artifact validation showed parent 039 status/certification coherence and no feature-level completion certification. Edits were limited to the BUG-039-001 packet."
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
-  "failures": [
-    {
-      "source": "bubbles.stabilize context",
-      "summary": "039 artifact lint fails because top-level status is in_progress while certification.status is not_started."
-    }
-  ],
-  "lastUpdatedAt": "2026-04-27T00:00:00Z",
-  "scopeLayout": "single-file",
+  "resolvedBugs": ["BUG-039-001"],
+  "failures": [],
+  "lastUpdatedAt": "2026-04-30T02:05:00Z",
   "artifacts": {
     "bug": "bug.md",
     "spec": "spec.md",
@@ -81,16 +112,10 @@
     "uservalidation": "uservalidation.md",
     "scenarioManifest": "scenario-manifest.json"
   },
-  "statusDiscipline": {
-    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
-    "scopePickupRule": "Single bug scope; validate owner reconciles certification-owned state without completion promotion.",
-    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G056", "G061"],
-    "specDoneRequires": "bubbles.validate certification after artifact-lint coherence and no premature completion."
-  },
   "routing": {
-    "nextOwner": "bubbles.validate",
+    "nextOwner": null,
     "targetSpec": "specs/039-recommendations-engine",
-    "targetScope": "scope-01-foundation-schema",
-    "constraint": "Keep 039 Scope 1 in progress; do not edit 039 spec.md or design.md."
+    "targetScope": null,
+    "constraint": "Parent 039 feature completion remains governed by its own active workflow; this bug packet only closes the original status/certification mismatch."
   }
 }
