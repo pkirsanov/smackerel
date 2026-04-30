@@ -134,11 +134,12 @@ phase_4_verify:
   output: findings_ledger
 
 phase_5_remediate:
-  do: classify findings, route each to workflow
+  do: classify findings, route each through the mapped workflow mode
   call_runSubagent: yes — per finding
   route:
     for each finding:
-      runSubagent(bubbles.workflow): "mode: bugfix-fastlane specs: {path}. Finding: {desc}. Severity: {sev}."
+      preferred: runSubagent(bubbles.workflow): "mode: bugfix-fastlane specs: {path}. Finding: {desc}. Severity: {sev}."
+      if_nested_workflow_lacks_runSubagent: parent-expand bugfix-fastlane from this goal runtime by invoking the required owners directly
     if findings remain: goto phase_4_verify
 
 phase_6_optimize:
@@ -167,7 +168,7 @@ phase_7_convergence:
 
 - The `tools` frontmatter MUST include the VS Code `agent` tool alias. The body allowlist is a governance contract; frontmatter is what makes `runSubagent` available at runtime.
 - The user's outcome is the authority. If convergence requires a different Bubbles mode, a child workflow, or a specialist owner, invoke that agent via `runSubagent` and continue the loop instead of asking the user to reissue the request.
-- If `runSubagent` is unavailable despite the `agent` tool being declared, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact child invocation that would have run. Do not perform specialist work inline or claim convergence without delegation.
+- If this goal runtime lacks `runSubagent` despite the `agent` tool being declared, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact owner invocation that would have run. If only a nested workflow child lacks `runSubagent`, parent-expand the resolved workflow mode from this goal runtime and invoke the required owner agents directly; do not mark the finding blocked solely because recursive delegation is unavailable.
 
 ---
 
@@ -192,8 +193,8 @@ on_obstacle:
   build_failure:       runSubagent(bubbles.implement) with error output
   lint_warnings:       runSubagent(bubbles.implement)
   gate_failure:        runSubagent matching specialist for the gate
-  chaos_finding:       runSubagent(bubbles.workflow) mode: chaos-hardening
-  audit_finding:       runSubagent(bubbles.workflow) mode: bugfix-fastlane
+  chaos_finding:       runSubagent(bubbles.workflow) mode: chaos-hardening OR parent-expand chaos-hardening if nested workflow lacks runSubagent
+  audit_finding:       runSubagent(bubbles.workflow) mode: bugfix-fastlane OR parent-expand bugfix-fastlane if nested workflow lacks runSubagent
   docker_failure:      runSubagent(bubbles.implement) or runSubagent(bubbles.devops)
   blocked_2x_same:     search docs/web → runSubagent(bubbles.implement) with alternative
   blocked_3x:          mark scope blocked with evidence, continue next scope

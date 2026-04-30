@@ -42,6 +42,8 @@ stateModel:
 childWorkflowPolicy:
   defaultAllowed: false
   maxDepth: 1
+  nestedRuntimeFallback: parent-expanded-child-mode
+  allowParentExpandedExecution: true
   callers:
   - bubbles.workflow
   - bubbles.iterate

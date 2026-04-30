@@ -37,6 +37,13 @@ Before applying the classification contract, perform this literal substring chec
 
 ### Required Delegation Rules
 
+### Runtime Depth Compatibility Contract
+
+- Do not assume a subagent can invoke another subagent. Some host runtimes expose `agent`/`runSubagent` only to the active top-level agent.
+- Orchestrator-to-orchestrator delegation is allowed only when the child can complete without further delegation (for example, envelope-only `bubbles.super` or `bubbles.iterate` picker mode) or when nested delegation support has been confirmed.
+- If a child orchestrator would need to call other agents, the active orchestrator MUST parent-expand that workflow/goal/bug mode by invoking the required owner agents itself and recording `executionModel: parent-expanded-child-mode` (or `parent-expanded-goal`) in its ledger.
+- If the active orchestrator itself lacks `agent`/`runSubagent`, return `blocked`; do not emulate owner work inline and do not claim a delegation happened.
+
 - When the request is `VAGUE`, invoke `bubbles.super` as a subagent and require a `## RESOLUTION-ENVELOPE` only.
 - When the request is `CONTINUE` and no concrete workflow continuation can be recovered, invoke `bubbles.iterate` as a subagent and require a `## WORK-ENVELOPE` only.
 - When the request is `FRAMEWORK`, invoke `bubbles.super` as a subagent and require a `## FRAMEWORK-ENVELOPE` only.

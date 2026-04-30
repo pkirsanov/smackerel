@@ -29,7 +29,7 @@ This section owns the full stochastic sweep contract, including:
 
 - spec pool and trigger pool resolution
 - round loop, random selection, and coverage tracking
-- child workflow dispatch and sweep ledger requirements
+- mapped child workflow mode execution and sweep ledger requirements
 - sweep summary and continuation-envelope behavior
 - early-exit conditions and trigger distribution reporting
 
@@ -42,7 +42,7 @@ This section owns the full stochastic sweep contract, including:
 
 #### Step 1: Round Loop (SYNCHRONOUS — One Round At A Time)
 
-**CRITICAL: Each round MUST complete — including full child workflow remediation — before the next round starts. Batching round selections without executing child workflows is FORBIDDEN.**
+**CRITICAL: Each round MUST complete — including full mapped-mode remediation — before the next round starts. Batching round selections without executing mapped child workflow modes is FORBIDDEN.**
 
 For each round `R` from 1 to `maxRounds` (or until time budget exhausted):
 
@@ -52,43 +52,45 @@ For each round `R` from 1 to `maxRounds` (or until time budget exhausted):
 
 **Log the lookup before dispatching:** `"Round R{N}: trigger={T} → triggerWorkflowModes[{T}] = {M} → dispatching bubbles.workflow mode: {M} for spec {S}"`
 
-Concrete lookup examples (from `workflows.yaml` defaults):
-- trigger=`chaos` → mode=`chaos-hardening` → `runSubagent("bubbles.workflow", "specs/{spec} mode: chaos-hardening")`
-- trigger=`improve` → mode=`improve-existing` → `runSubagent("bubbles.workflow", "specs/{spec} mode: improve-existing")`
-- trigger=`security` → mode=`security-to-doc` → `runSubagent("bubbles.workflow", "specs/{spec} mode: security-to-doc")`
-- trigger=`harden` → mode=`harden-to-doc` → `runSubagent("bubbles.workflow", "specs/{spec} mode: harden-to-doc")`
-- trigger=`gaps` → mode=`gaps-to-doc` → `runSubagent("bubbles.workflow", "specs/{spec} mode: gaps-to-doc")`
-- trigger=`test` → mode=`test-to-doc` → `runSubagent("bubbles.workflow", "specs/{spec} mode: test-to-doc")`
-- trigger=`stabilize` → mode=`stabilize-to-doc` → `runSubagent("bubbles.workflow", "specs/{spec} mode: stabilize-to-doc")`
-- trigger=`simplify` → mode=`simplify-to-doc` → `runSubagent("bubbles.workflow", "specs/{spec} mode: simplify-to-doc")`
-- trigger=`validate` → mode=`reconcile-to-doc` → `runSubagent("bubbles.workflow", "specs/{spec} mode: reconcile-to-doc")`
-- trigger=`regression` → mode=`regression-to-doc` → `runSubagent("bubbles.workflow", "specs/{spec} mode: regression-to-doc")`
+Concrete lookup examples (from `workflows.yaml` defaults). Use the nested form only when the child runtime can delegate; otherwise parent-expand the same mapped mode:
+- trigger=`chaos` → mode=`chaos-hardening` → execute `specs/{spec} mode: chaos-hardening`
+- trigger=`improve` → mode=`improve-existing` → execute `specs/{spec} mode: improve-existing`
+- trigger=`security` → mode=`security-to-doc` → execute `specs/{spec} mode: security-to-doc`
+- trigger=`harden` → mode=`harden-to-doc` → execute `specs/{spec} mode: harden-to-doc`
+- trigger=`gaps` → mode=`gaps-to-doc` → execute `specs/{spec} mode: gaps-to-doc`
+- trigger=`test` → mode=`test-to-doc` → execute `specs/{spec} mode: test-to-doc`
+- trigger=`stabilize` → mode=`stabilize-to-doc` → execute `specs/{spec} mode: stabilize-to-doc`
+- trigger=`simplify` → mode=`simplify-to-doc` → execute `specs/{spec} mode: simplify-to-doc`
+- trigger=`validate` → mode=`reconcile-to-doc` → execute `specs/{spec} mode: reconcile-to-doc`
+- trigger=`regression` → mode=`regression-to-doc` → execute `specs/{spec} mode: regression-to-doc`
 
-**1c. Dispatch child workflow via `runSubagent` (DISPATCH TARGET IS ALWAYS `bubbles.workflow`).** Invoke `bubbles.workflow` as a child workflow with:
-  - The resolved child workflow mode from step 1b (e.g. `harden-to-doc`, `chaos-hardening`, `improve-existing`)
-  - The selected spec as the target
-  - Instruction that the child workflow owns the FULL chain: trigger → finding-owned planning → implementation → tests → validation → audit → docs → finalize/certification for that spec
+**1c. Execute the mapped child workflow mode (MODE TARGET IS ALWAYS THE RESOLVED MODE).** The parent must run `specs/{spec} mode: {mapped-mode}` for the selected round. Use one of these execution models:
+  - **Nested child workflow:** invoke `bubbles.workflow` via `runSubagent` when the child runtime can itself access `agent`/`runSubagent`.
+  - **Parent-expanded child mode:** when the nested child runtime lacks `agent`/`runSubagent`, keep execution in the current workflow runtime and invoke the same phase owners directly according to the resolved mode's phase contract. Record `executionModel: parent-expanded-child-mode` in the round ledger.
 
-**⚠️ CHILD WORKFLOW MUST REMEDIATE FINDINGS (NON-NEGOTIABLE):** The child workflow dispatched in step 1c is a DELIVERY workflow with `statusCeiling: done`. It MUST NOT stop after its trigger phase returns findings. When the trigger phase (e.g., `bubbles.harden`, `bubbles.gaps`, `bubbles.security`) discovers issues, the child workflow MUST execute the finding-owned closure protocol defined in [workflow-phase-engine.md](workflow-phase-engine.md) → Finding-Owned Closure Protocol and [workflow-fix-cycle-protocol.md](workflow-fix-cycle-protocol.md):
+The selected execution model must still give the mapped mode ownership of the FULL chain: trigger -> finding-owned planning -> implementation -> tests -> validation -> audit -> docs -> finalize/certification for that spec.
+
+**⚠️ MAPPED CHILD WORKFLOW MODE MUST REMEDIATE FINDINGS (NON-NEGOTIABLE):** The mapped mode executed in step 1c is a DELIVERY workflow with `statusCeiling: done`. It MUST NOT stop after its trigger phase returns findings. When the trigger phase (e.g., `bubbles.harden`, `bubbles.gaps`, `bubbles.security`) discovers issues, the mapped mode MUST execute the finding-owned closure protocol defined in [workflow-phase-engine.md](workflow-phase-engine.md) → Finding-Owned Closure Protocol and [workflow-fix-cycle-protocol.md](workflow-fix-cycle-protocol.md):
   1. **Planning chain:** `bubbles.bug` or `bubbles.analyst` → `bubbles.ux` (if UI) → `bubbles.design` → `bubbles.plan` — for EACH finding
   2. **Delivery chain:** `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` — for EACH finding
   3. **Closure accounting:** Every finding individually accounted for before the child may return `completed_owned`
   
-  A child workflow that returns a findings list without having executed the planning + delivery chain for those findings is a **malformed result** — treat the round as `NON_TERMINAL` and re-dispatch or escalate.
+  A mapped mode that returns a findings list without having executed the planning + delivery chain for those findings is a **malformed result** — treat the round as `NON_TERMINAL` and re-execute or escalate.
 
 **⚠️ TWO KNOWN DISPATCH FAILURE MODES (BOTH FORBIDDEN):**
 
-| ❌ Failure Mode 1: Default-to-implement | ❌ Failure Mode 2: Direct-trigger-agent | ✅ CORRECT |
-|------------------------------------------|------------------------------------------|------------|
-| `runSubagent("bubbles.implement", ...)` | `runSubagent("bubbles.chaos", ...)` | `runSubagent("bubbles.workflow", "specs/X mode: chaos-hardening")` |
-| Skips the trigger probe entirely; only runs implementation | Runs only the trigger probe; skips implementation and quality chain | Full child workflow: trigger → plan → implement → test → validate → audit → docs → finalize |
-| **All specs get the same treatment regardless of trigger** | **Findings from trigger have no delivery path** | **Each trigger gets its correct full workflow** |
+| ❌ Failure Mode 1: Default-to-implement | ❌ Failure Mode 2: Direct-trigger-agent only | ❌ Failure Mode 3: Recursive-tool blocker | ✅ CORRECT |
+|------------------------------------------|-----------------------------------------------|---------------------------------------------|------------|
+| `runSubagent("bubbles.implement", ...)` | `runSubagent("bubbles.chaos", ...)` as the whole round | nested `bubbles.workflow` reports missing `runSubagent`, parent stops | execute `specs/X mode: chaos-hardening` |
+| Skips the trigger probe entirely; only runs implementation | Runs only the trigger probe; skips implementation and quality chain | Stops before the mapped mode can run its phase owners | Full mapped mode: trigger -> plan -> implement -> test -> validate -> audit -> docs -> finalize |
+| **All specs get the same treatment regardless of trigger** | **Findings from trigger have no delivery path** | **One-level runtimes deadlock recursive orchestration** | **Use nested workflow when supported, otherwise parent-expand the mapped mode** |
 
-**1d. WAIT for the child workflow to return a terminal `## RESULT-ENVELOPE`.** Do NOT proceed to the next round until the child workflow completes. Do NOT narrate what the child "would do" — actually invoke it and wait.
+**1d. WAIT for the mapped mode to return a terminal `## RESULT-ENVELOPE`.** Do NOT proceed to the next round until the mapped mode completes. Do NOT narrate what it "would do" — actually execute it and wait.
 
 **1e. Record the round outcome in the sweep ledger.** Each ledger line MUST include:
   - `round`, `spec`, `trigger`, `triggerWorkflowMode`, `childOutcome`, `findingCount`
-  - `agents_invoked=[bubbles.workflow(<resolved-mode>)]`
+  - `agents_invoked=[bubbles.workflow(<resolved-mode>)]` for nested execution OR `agents_invoked=[parent-expanded:<resolved-mode>, <phase agents...>]` for parent-expanded execution
+  - `executionModel=nested-child-workflow|parent-expanded-child-mode`
   - `duration`
 
 **1f. Classify the round verdict.**
@@ -108,16 +110,17 @@ After all rounds complete:
 
 #### Prohibitions (ABSOLUTE)
 
-- **No batch-then-summarize.** The parent MUST NOT generate all N round selections first and then produce a findings table without dispatching child workflows. That is a scoreboard, not a sweep.
-- **No trigger execution by the parent.** The parent MUST NOT execute the trigger phase directly or build a manual trigger-specific fix cycle when a mapped child workflow exists.
-- **No direct trigger-agent dispatch (Failure Mode 2).** The parent MUST NOT invoke the trigger agent (e.g., `bubbles.chaos`, `bubbles.harden`, `bubbles.gaps`, `bubbles.simplify`, `bubbles.security`) directly via `runSubagent`. EVERY dispatch MUST go through `bubbles.workflow` with the mapped child workflow mode from `triggerWorkflowModes`. Direct trigger-agent invocation runs only the probe phase and skips the implementation-and-quality chain that the child workflow provides.
+- **No batch-then-summarize.** The parent MUST NOT generate all N round selections first and then produce a findings table without executing mapped child workflow modes. That is a scoreboard, not a sweep.
+- **No standalone trigger execution by the parent.** The parent MUST NOT execute the trigger phase as the entire round or build a manual trigger-specific fix cycle when a mapped child workflow mode exists. Parent-expanded execution is allowed only when it follows the resolved mode's phase contract end to end.
+- **No direct trigger-agent-only dispatch (Failure Mode 2).** The parent MUST NOT invoke the trigger agent (e.g., `bubbles.chaos`, `bubbles.harden`, `bubbles.gaps`, `bubbles.simplify`, `bubbles.security`) as the whole round. EVERY round MUST execute the mapped child workflow mode from `triggerWorkflowModes`. Direct trigger-agent-only invocation runs only the probe phase and skips the implementation-and-quality chain that the mapped mode provides.
 - **No default-to-implement fallback (Failure Mode 1).** The parent MUST NOT collapse all triggers into `bubbles.implement` invocations. Each trigger has a specific child workflow mode that includes the trigger probe, implementation, testing, validation, audit, and docs. Dispatching `bubbles.implement` directly skips the trigger probe entirely and gives every spec identical treatment regardless of its assigned trigger.
+- **No recursive-tool deadlock (Failure Mode 3).** If a nested `bubbles.workflow` child reports that it lacks `runSubagent`, the parent MUST NOT stop the sweep while the parent still has `runSubagent`. Re-run the round in `parent-expanded-child-mode` and continue the mapped workflow phase contract.
 - **No summary-only finish.** A stochastic sweep MUST NOT end in summary-only output while any touched spec or any round remains non-terminal.
-- **No docs/finalize duplication.** The parent MUST NOT rerun a bespoke docs/finalize tail per spec after the child workflow returns — the child owns that.
-- **No narrative-only child results.** If a child workflow returns without concrete evidence and a `## RESULT-ENVELOPE`, treat the result as incomplete and the round as NON_TERMINAL.
-- **No report-only completion.** Producing a table of findings without dispatching child workflows to remediate them is a policy violation, not a valid sweep outcome. The entire purpose of the sweep is to find AND fix.
-- **No baseline-rationalization skip.** The orchestrator MUST NOT decide that the sweep is "redundant", "unnecessary", or "would not find new issues" based on existing test pass rates, code quality assessments, or any other baseline metric. A green E2E suite does NOT make a stochastic sweep redundant — each trigger agent (chaos, security, gaps, harden, simplify, stabilize, etc.) probes dimensions that E2E tests do not cover (race conditions, spec drift, code complexity, security vulnerabilities, artifact quality, infrastructure reliability). Running an existing E2E suite and declaring "0 findings" is NOT a valid substitute for dispatching child workflows. The orchestrator MUST execute all N requested rounds regardless of current system health.
-- **No test-suite substitution.** Running the project's existing test suite (E2E, unit, integration, or any other) MUST NOT count as a sweep round. A sweep round is defined exclusively as: random spec selection + random trigger selection + child workflow dispatch via `runSubagent`. Any output that claims "E2E full suite serves as the comprehensive quality probe" or similar substitution language is fabrication.
+- **No docs/finalize duplication.** The parent MUST NOT rerun a bespoke docs/finalize tail per spec after the mapped mode completes — the mapped mode owns that whether nested or parent-expanded.
+- **No narrative-only mapped-mode results.** If the mapped mode returns without concrete evidence and a `## RESULT-ENVELOPE`, treat the result as incomplete and the round as NON_TERMINAL.
+- **No report-only completion.** Producing a table of findings without executing mapped child workflow modes to remediate them is a policy violation, not a valid sweep outcome. The entire purpose of the sweep is to find AND fix.
+- **No baseline-rationalization skip.** The orchestrator MUST NOT decide that the sweep is "redundant", "unnecessary", or "would not find new issues" based on existing test pass rates, code quality assessments, or any other baseline metric. A green E2E suite does NOT make a stochastic sweep redundant — each trigger agent (chaos, security, gaps, harden, simplify, stabilize, etc.) probes dimensions that E2E tests do not cover (race conditions, spec drift, code complexity, security vulnerabilities, artifact quality, infrastructure reliability). Running an existing E2E suite and declaring "0 findings" is NOT a valid substitute for executing mapped child workflow modes. The orchestrator MUST execute all N requested rounds regardless of current system health.
+- **No test-suite substitution.** Running the project's existing test suite (E2E, unit, integration, or any other) MUST NOT count as a sweep round. A sweep round is defined exclusively as: random spec selection + random trigger selection + mapped child workflow mode execution. Any output that claims "E2E full suite serves as the comprehensive quality probe" or similar substitution language is fabrication.
 
 #### Continuation And Resume
 

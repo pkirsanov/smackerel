@@ -63,9 +63,11 @@ Don't know what to check? Let the system randomly pick:
 /bubbles.workflow  stochastic-quality-sweep
 ```
 
-The stochastic parent now does exactly two things per round: pick a spec and pick a trigger. After that it dispatches the mapped trigger-owned end-to-end workflow via `runSubagent` and **waits for it to complete** before starting the next round.
+The stochastic parent now does exactly two things per round before execution: pick a spec and pick a trigger. After that it executes the mapped trigger-owned end-to-end workflow mode and **waits for it to complete** before starting the next round.
 
-**Rounds are synchronous.** The sweep MUST NOT batch-select all rounds first and then produce a findings table — that is a scoreboard, not a sweep. Each round dispatches a child workflow, waits for its terminal `RESULT-ENVELOPE`, records the outcome, and only then proceeds to the next round.
+When the host supports recursive agent delegation, the parent can invoke `bubbles.workflow` as a child with the mapped mode. When the child runtime lacks nested `runSubagent`, the parent expands that same mapped mode inside the current workflow runtime and invokes the phase owners directly. The mode mapping is still mandatory; the fallback only removes the recursive tool dependency.
+
+**Rounds are synchronous.** The sweep MUST NOT batch-select all rounds first and then produce a findings table — that is a scoreboard, not a sweep. Each round executes a mapped child workflow mode, waits for its terminal `RESULT-ENVELOPE`, records the outcome and `executionModel`, and only then proceeds to the next round.
 
 That child workflow is not allowed to stop at a diagnosis. If the trigger finds a legitimate bug, regression, gap, or improvement, it must run the full finding-owned closure workflow before returning a terminal result upward:
 
@@ -94,7 +96,7 @@ When a stochastic sweep turns up real work, keep the remediation inside workflow
 
 Those follow-ups now preserve the active sweep context when continuation state is available, so the system keeps the workflow-owned fix/finalize chain instead of collapsing into raw `/bubbles.implement` or `/bubbles.test` advice.
 
-The sweep is not allowed to stop at a scoreboard. Each round must either finish through the mapped trigger-owned workflow or emit a workflow-owned continuation packet that preserves the non-terminal child outcome. A summary-only finish is invalid while routed or blocked work remains.
+The sweep is not allowed to stop at a scoreboard. Each round must either finish through the mapped trigger-owned workflow mode or emit a workflow-owned continuation packet that preserves the non-terminal mapped-mode outcome. A summary-only finish is invalid while routed or blocked work remains.
 
 The same rule applies outside stochastic sweeps: if `chaos`, `test`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `harden`, or `gaps` is invoked inside another workflow and finds real work, that child workflow must launch the same planning-to-delivery closure substream and finish it before reporting upward.
 

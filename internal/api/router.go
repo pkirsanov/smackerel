@@ -234,7 +234,12 @@ func NewRouter(deps *Dependencies) http.Handler {
 			if deps.PhotosHandlers != nil {
 				r.Group(func(r chi.Router) {
 					r.Use(deps.bearerAuthMiddleware)
+					r.Get("/photos/search", deps.PhotosHandlers.Search)
 					r.Get("/photos/connectors", deps.PhotosHandlers.ListConnectors)
+					r.Post("/photos/connectors", deps.PhotosHandlers.Connect)
+					r.Post("/photos/connectors/test", deps.PhotosHandlers.TestConnector)
+					r.Get("/photos/connectors/{id}", deps.PhotosHandlers.GetConnector)
+					r.Get("/photos/{id}/preview", deps.PhotosHandlers.Preview)
 					r.Get("/photos/{id}", deps.PhotosHandlers.GetPhoto)
 				})
 			}

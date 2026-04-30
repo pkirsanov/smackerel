@@ -431,12 +431,13 @@ This keeps the loop fast while preserving strict ownership.
 
 ### Child Workflow Law
 
-Only orchestrators may invoke child workflows, and child workflow depth must be bounded.
+Only orchestrators may invoke child workflow modes, and child workflow depth must be bounded.
 
 - allowed callers: `bubbles.workflow`, `bubbles.iterate`, `bubbles.goal`, `bubbles.sprint`, `bubbles.bug`
 - non-orchestrator agents may emit packets but may not spawn workflows directly
 - child workflow depth should be limited to 1
-- child workflows inherit policy snapshot, target context, and packet references from the parent orchestrator
+- child workflow modes inherit policy snapshot, target context, and packet references from the parent orchestrator
+- when a runtime does not expose nested `runSubagent`, the active orchestrator parent-expands the resolved child workflow mode and invokes the same owner agents directly
 
 ## Mapping The Requested Changes To The Design
 
@@ -471,7 +472,7 @@ The current gate registry ends at G061. This design would add the following fram
 - `G061 rework_packet_gate` — route-required findings must produce structured packets, not narrative-only handoffs
 - `G042 artifact_ownership_enforcement_gate` (absorbs former G042) — only owning planning/execution specialists may modify their surfaces; diagnostics must route
 - `G063 concrete_result_gate` — every agent invocation must end with `completed_owned`, `completed_diagnostic`, `route_required`, or `blocked` plus the required concrete payload
-- `G064 child_workflow_depth_gate` — only orchestrators may invoke child workflows and nesting depth may not exceed 1
+- `G064 child_workflow_depth_gate` — only orchestrators may invoke child workflow modes, nesting depth may not exceed 1, and one-level runtimes use parent-expanded mode execution instead of recursive delegation
 
 ## Tradeoffs And Guardrails
 

@@ -152,8 +152,8 @@ agents:
 - agents must resolve into one primary class; hybrids are not allowed
 - certification fields may only be owned by `bubbles.validate`
 - `canAskUserDirectly` must be explicit for every agent
-- only orchestrators may invoke child workflows
-- child workflow depth must be bounded by registry policy
+- only orchestrators may invoke child workflow modes
+- child workflow depth must be bounded by registry policy, with parent-expanded execution when nested delegation is unavailable
 
 ## 2. Execution Policy Registry
 

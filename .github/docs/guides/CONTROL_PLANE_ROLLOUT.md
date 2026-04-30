@@ -167,7 +167,7 @@ Replace delegation-by-prose with delegation-by-registry.
   - every workflow phase has an owning agent
   - every specialist declares exactly one primary class: orchestrator, planning-owner, execution-owner, diagnostic, certification, or utility
   - every foreign-owned artifact route has a target owner
-  - only orchestrators may invoke child workflows
+  - only orchestrators may invoke child workflow modes, with parent-expanded execution for one-level runtimes
   - diagnostic agents are not allowed to advertise inline remediation rights
 
 ### Files Likely Touched

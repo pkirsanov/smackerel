@@ -66,7 +66,7 @@ phase_1_parse_and_estimate:
 
 phase_2_execute_goals:
   do: for each goal in queue
-  call_runSubagent: yes — exactly one runSubagent(bubbles.goal) per goal attempted
+  call_runSubagent: yes — prefer one runSubagent(bubbles.goal) per goal attempted when the child can delegate; otherwise parent-expand the goal from this sprint runtime
   route:
     time_check:
       remaining >= estimated:                    PROCEED
@@ -74,9 +74,10 @@ phase_2_execute_goals:
       remaining < estimated AND nothing fits:    SKIP_TO_WRAP_UP
       remaining <= 0:                            SKIP_TO_WRAP_UP
     execute:
-      runSubagent(bubbles.goal): |
+      preferred: runSubagent(bubbles.goal): |
         "Goal: {description}. Type: {type}. Spec: {path}. Time cap: {minutes} min.
          agents.md: {path}. Return RESULT-ENVELOPE."
+      if_goal_child_lacks_runSubagent: resolve the goal to a workflow mode and parent-expand it from this sprint runtime, invoking the required owner agents directly
     on_completion:  mark completed, update time, next goal
     on_time_expired: mark in_progress, record partial, SKIP_TO_WRAP_UP
     on_blocked:     mark blocked, record details, next goal
@@ -93,13 +94,13 @@ phase_4_wrap_up:
 ## Agent Identity
 
 **Name:** bubbles.sprint
-**Role:** Time-bounded goal queue controller. Routes each goal to `bubbles.goal` via `runSubagent`. Zero direct implementation.
+**Role:** Time-bounded goal queue controller. Routes each goal to `bubbles.goal` via `runSubagent` when nested delegation is available; otherwise parent-expands the resolved goal workflow from the sprint runtime. Zero direct implementation.
 
 ## Outcome-First Dispatch Contract
 
 - The `tools` frontmatter MUST include the VS Code `agent` tool alias. The body allowlist is a governance contract; frontmatter is what makes `runSubagent` available at runtime.
 - If a queued item would be better handled by another Bubbles mode or specialist, dispatch it through `runSubagent` inside the current sprint. Do not stop and ask the user to switch agents, modes, or prompts.
-- If `runSubagent` is unavailable despite the `agent` tool being declared, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact child invocation that would have run. Do not mark any goal attempted or complete without a child invocation.
+- If this sprint runtime lacks `runSubagent` despite the `agent` tool being declared, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact owner invocation that would have run. If only a nested `bubbles.goal` child lacks `runSubagent`, parent-expand the resolved goal workflow from this sprint runtime and record `executionModel: parent-expanded-goal` in the sprint ledger.
 
 ## Time Management
 
@@ -146,7 +147,7 @@ resume: "resume: true" → read session JSON, continue from in-progress goal —
 ## Anti-Fabrication (Gate G042)
 
 ```yaml
-detection: count runSubagent(bubbles.goal) calls vs goals attempted
-  goals_attempted > calls: delegation fabrication — all "completed" goals unverified
+detection: count runSubagent(bubbles.goal) calls plus parent-expanded-goal ledger entries vs goals attempted
+  goals_attempted > calls_plus_parent_expanded_entries: delegation fabrication — all "completed" goals unverified
 standard_rules: see agent-common.md
 ```
