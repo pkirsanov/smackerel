@@ -1916,6 +1916,19 @@ Concrete Scope 2 E2E evidence files referenced by the planned rows: `tests/e2e/d
 
 Scope 2 status is Done from the implementation perspective: 12/12 DoD items are checked in [scopes.md](scopes.md) with inline executed evidence. Certification remains owned by `bubbles.validate`; `state.json.certification.*` was not modified by this implementation pass.
 
+### Validation Certification - 2026-04-30
+
+**Phase:** validate
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration`; `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration`; `bash .github/bubbles/scripts/state-transition-guard.sh specs/038-cloud-drives-integration`; `./smackerel.sh check`; `./smackerel.sh format --check`; `./smackerel.sh lint`; `./smackerel.sh test unit`; `./smackerel.sh test integration`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`; `./smackerel.sh --env test build --no-cache`; `bash .github/bubbles/scripts/artifact-freshness-guard.sh specs/038-cloud-drives-integration`; `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/038-cloud-drives-integration --verbose`; `git diff --check`
+**Exit Code:** 0; 0; 1; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0
+**Claim Source:** executed
+
+Scope 2 is certified as complete without promoting the full feature. Artifact lint passed. Traceability guard passed with 24 scenarios checked, 70 test rows checked, Scope 2 mapped to `internal/drive/scan/scan_test.go`, `tests/integration/drive/drive_empty_monitor_test.go`, and `internal/drive/health/health_test.go`, and DoD fidelity 24/24 mapped. The state-transition guard was executed and exited 1 because it evaluates whole-feature promotion while Scopes 3-8 remain incomplete and because pre-existing scenario-manifest structured-field gaps still apply to the feature packet; top-level status stays `in_progress`.
+
+Runtime validation passed through the repo CLI: `check` reported config/SST clean and scenario-lint OK; `format --check` ended with `42 files already formatted`; `lint` ended with `All checks passed!` and `Web validation passed`; `test unit` passed all Go packages including `internal/drive/scan`, `internal/drive/monitor`, and `internal/drive/health`, plus Python `352 passed, 2 warnings`; `test integration` passed the full suite with `tests/integration/drive` green in `5.639s`, including `TestEmptyDriveStaysHealthyAndDetectsLaterUpload`, `TestDriveFixtureCanary_ProductionProviderPathConsumesFixtureServer`, and `TestDriveScanFixturePreservesHierarchyAndMetadata`; `test e2e` passed shell `35/35`, Go E2E packages, and `tests/e2e/drive` in `0.940s` with all six drive E2E tests green; the no-cache test build rebuilt `smackerel-core` and `smackerel-ml`; artifact freshness passed with zero failures and zero warnings; implementation reality scan reported zero violations and one warning that file discovery fell back through `design.md`; `git diff --check` produced no output.
+
+State certification updated `certification.completedScopes`, `certification.scopeProgress`, and `certification.certifiedCompletedPhases` for `Scope 2: Scan And Monitor` at `2026-04-30T05:17:15Z`. Execution is advanced to `Scope 3: Extraction And Classification` with `nextPhase` set to `implement`. `uservalidation.md` already had no unchecked user-reported regressions and was not changed.
+
 ## Scope 3: Extraction And Classification
 
 ### Summary
