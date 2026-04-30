@@ -11,11 +11,11 @@ Browser-history E2E tests call `GET /api/search` while the core router exposes a
 
 ## Status
 - [x] Reported
-- [ ] Confirmed (runtime reproduction to be captured by the implementation/test owner)
-- [ ] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Confirmed (pre-fix focused E2E reproduced `search returned 405`)
+- [x] In Progress
+- [x] Fixed
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 1. Run the full repo E2E suite through the repo CLI.
@@ -27,7 +27,7 @@ Browser-history E2E tests call `GET /api/search` while the core router exposes a
 Browser-history E2E tests should exercise the real supported search API method and assert the browser-history search behavior without receiving a method mismatch from the router.
 
 ## Actual Behavior
-The E2E consumer uses GET query-string requests for `/api/search` even though the router exposes POST `/api/search`; this leaves the browser-history E2E path red independent of connector ingestion behavior.
+Before the fix, the E2E consumer used GET query-string requests for `/api/search` even though the router exposes POST `/api/search`; the selected browser-history E2E tests failed with `search returned 405`.
 
 ## Environment
 - Service: Go core API and Go E2E test harness
@@ -36,14 +36,20 @@ The E2E consumer uses GET query-string requests for `/api/search` even though th
 
 ## Error Output
 ```text
-Workflow context from bubbles.stabilize: browser-history Go E2E uses GET /api/search, but router exposes POST /api/search.
-Source inspection in this packetization pass confirmed the mismatch:
-- tests/e2e/browser_history_e2e_test.go uses apiGet(cfg, "/api/search?source=browser-history&limit=10") and similar calls.
-- internal/api/router.go registers r.Post("/search", deps.SearchHandler).
+--- FAIL: TestBrowserHistory_E2E_InitialSyncProducesArtifacts
+search returned 405
+--- FAIL: TestBrowserHistory_E2E_SocialMediaAggregateInStore
+search returned 405
+--- FAIL: TestBrowserHistory_E2E_HighDwellArticleSearchable
+search returned 405
+FAIL: go-e2e (exit=1)
 ```
 
-## Root Cause (initial analysis)
+## Root Cause
 The first-party E2E consumer drifted from the API contract. The router's authenticated API surface treats search as a POST endpoint with a JSON body, while the browser-history E2E suite retained older GET/query-string calls.
+
+## Verification
+`tests/e2e/browser_history_e2e_test.go` now sends authenticated JSON `POST /api/search` requests for the browser-history search checks, parses the current `results`, `total_candidates`, and `search_mode` response fields, and includes `TestBrowserHistory_E2E_SearchRequestsUsePOSTContract` as an adversarial guard against stale GET search use. Focused browser-history E2E passed after the fix, the broad implementation-stage E2E run showed all browser-history search tests passing, and the later c6d2b26 baseline recorded full `./smackerel.sh test e2e` exit 0 with shell E2E 34/34 and Go E2E packages passed.
 
 ## Related
 - Feature: `specs/010-browser-history-connector/`
