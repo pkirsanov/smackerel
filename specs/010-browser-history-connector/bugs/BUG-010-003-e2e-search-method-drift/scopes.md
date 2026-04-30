@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 
 ## Scope 1: Align browser-history E2E search consumer
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
@@ -65,10 +65,13 @@ Feature: BUG-010-003 prevent browser-history E2E search method drift
   - **Phase:** implement
   - **Claim Source:** executed
   - **Evidence:** `TestBrowserHistory_E2E_InitialSyncProducesArtifacts`, `TestBrowserHistory_E2E_SocialMediaAggregateInStore`, and `TestBrowserHistory_E2E_HighDwellArticleSearchable` exercise the supported POST search contract for the changed browser-history searches; `TestBrowserHistory_E2E_SearchRequestsUsePOSTContract` covers the stale GET regression scenario.
-- [ ] Broader E2E regression suite passes
-  - **Phase:** implement
-  - **Claim Source:** executed
-  - **Evidence:** `timeout 3600 ./smackerel.sh test e2e` completed with exit 1. Browser-history search-method drift did not reappear, but broad Go E2E failed in `TestE2E_DomainExtraction` and `TestOperatorStatus_RecommendationProvidersEmptyByDefault`.
+- [x] Broader E2E regression suite passes
+  - **Phase:** validate
+  - **Command:** existing BUG-010-003 report evidence review plus c6d2b26 broad E2E baseline evidence from `specs/039-recommendations-engine/report.md`
+  - **Exit Code:** c6d2b26 broad baseline 0; not rerun during metadata-only closeout
+  - **Claim Source:** interpreted
+  - **Evidence:** report.md `### Validation Evidence` records the existing focused browser-history proof and the later c6d2b26 baseline: `timeout 3600 ./smackerel.sh test e2e` exit 0, shell E2E `34 total, 34 passed, 0 failed`, and Go E2E packages passed.
+  - **Interpretation:** The implementation-stage broad E2E exit 1 was caused by unrelated Go E2E failures after the browser-history search-method tests had passed. The later c6d2b26 broad baseline proves the broad suite no longer reports the BUG-010-003 GET/POST method mismatch.
 - [x] Regression tests contain no silent-pass bailout patterns
   - **Phase:** implement
   - **Claim Source:** executed
@@ -77,7 +80,9 @@ Feature: BUG-010-003 prevent browser-history E2E search method drift
   - **Phase:** implement
   - **Claim Source:** executed
   - **Evidence:** Workspace search found no `api/search?` query-string consumers under `tests/**`, `internal/**`, or `web/**`. Current first-party search callers use POST JSON, including shell E2E helpers, Go E2E callers, stress search, and Telegram API clients; no production API compatibility route was added.
-- [ ] Bug marked as Fixed in bug.md by the validation owner
-  - **Phase:** implement
-  - **Claim Source:** not-run
-  - **Evidence:** Implement did not edit `bug.md` status or validation certification fields.
+- [x] Bug marked as Fixed in bug.md by the validation owner
+  - **Phase:** validate
+  - **Command:** validation closeout artifact edit
+  - **Exit Code:** 0
+  - **Claim Source:** executed
+  - **Evidence:** bug.md `## Status` now checks Reported, Confirmed, In Progress, Fixed, Verified, and Closed; state.json now records `status=done`, `certification.status=done`, `currentPhase=finalize`, and `currentScope=null` for BUG-010-003.
