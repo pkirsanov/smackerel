@@ -194,6 +194,30 @@
       "stream": "DRIVE",
       "critical": false
     },
+    "drive.extract.request": {
+      "direction": "core_to_ml",
+      "response": "drive.extract.result",
+      "stream": "DRIVE",
+      "critical": false
+    },
+    "drive.extract.result": {
+      "direction": "ml_to_core",
+      "request": "drive.extract.request",
+      "stream": "DRIVE",
+      "critical": false
+    },
+    "drive.classify.request": {
+      "direction": "core_to_ml",
+      "response": "drive.classify.result",
+      "stream": "DRIVE",
+      "critical": false
+    },
+    "drive.classify.result": {
+      "direction": "ml_to_core",
+      "request": "drive.classify.request",
+      "stream": "DRIVE",
+      "critical": false
+    },
     "photos.classify": {
       "direction": "core_to_ml",
       "response": "photos.classified",
@@ -372,6 +396,8 @@
     { "request": "synthesis.extract", "response": "synthesis.extracted" },
     { "request": "synthesis.crosssource", "response": "synthesis.crosssource.result" },
     { "request": "domain.extract", "response": "domain.extracted" },
+    { "request": "drive.extract.request", "response": "drive.extract.result" },
+    { "request": "drive.classify.request", "response": "drive.classify.result" },
     { "request": "photos.classify", "response": "photos.classified" },
     { "request": "photos.ocr", "response": "photos.ocred" },
     { "request": "photos.embed", "response": "photos.embedded" },

@@ -1933,19 +1933,67 @@ State certification updated `certification.completedScopes`, `certification.scop
 
 ### Summary
 
-Execution evidence section reserved for the owning implementation, test, validation, and audit phases.
+Scope 3 implementation completed on 2026-04-30 by `bubbles.implement`. Delivered drive extraction and classification across the Go core, Python ML sidecar, shared DRIVE NATS contract, prompt contracts, folder-context move refresh, skipped/blocked review API and PWA surface, scenario-specific integration tests, and live-stack E2E regressions. RED proof was captured before implementation with `./smackerel.sh test unit` exit 1 on missing `app.drive_extract` and `app.drive_classify`; GREEN proof now covers unit, integration, broad E2E, targeted Scope 3 E2E, check, format, lint, artifact lint, and traceability rerun after this report update.
 
 ### Code Diff Evidence
 
-No implementation diff evidence recorded.
+- `ml/app/drive_extract.py` and `ml/tests/test_drive_extract.py` — provider-neutral extraction handler and unit coverage for text, PDF text, scanned PDF OCR fallback, image/SVG OCR text, DOCX Office text, audio transcript extraction, and adversarial oversized skip with concrete action.
+- `ml/app/drive_classify.py` and `ml/tests/test_drive_classify.py` — LLM-backed classification handler, schema validation, weak-evidence rejection, and provider-neutral classification metadata contract.
+- `internal/drive/extract/service.go` — Go extraction/classification pipeline, persisted folder summaries, classification metadata, skipped/blocked persistence, provider-neutral domain routes, and metadata-only move refresh entrypoint.
+- `internal/drive/monitor/monitor.go` — `MoveRefresher` option so move deltas can refresh taxonomy without provider byte re-fetch.
+- `internal/api/drive_handlers.go`, `internal/api/router.go`, `web/pwa/connector-detail.html`, `web/pwa/connector-detail.js`, and `web/pwa/style.css` — Screen 4 skipped/blocked API and grouped PWA review surface.
+- `config/nats_contract.json`, `internal/nats/client.go`, `internal/nats/contract_test.go`, `ml/app/nats_contract.py`, and `ml/app/nats_client.py` — shared DRIVE NATS request/result subjects for `drive.extract.*` and `drive.classify.*` plus Go/Python contract validation and sidecar dispatch.
+- `config/prompt_contracts/drive-classification-v1.yaml` and `config/prompt_contracts/drive-folder-context-v1.yaml` — prompt contracts validated by `./smackerel.sh check` scenario lint.
+- `tests/integration/drive/drive_extract_classify_test.go`, `tests/integration/drive/drive_folder_context_test.go`, and `tests/integration/drive/drive_skipped_blocked_test.go` — live integration coverage for SCN-038-007 through SCN-038-009.
+- `tests/e2e/drive/drive_extract_e2e_test.go`, `tests/e2e/drive/drive_folder_move_ui_test.go`, and `tests/e2e/drive/drive_skipped_blocked_ui_test.go` — live-stack scenario-specific E2E regressions.
 
 ### Test Evidence
 
-No test output recorded.
+**RED proof before implementation**
+**Phase:** implement
+**Command:** `./smackerel.sh test unit`
+**Exit Code:** 1
+**Claim Source:** executed
+The pre-implementation unit run failed on the newly added Scope 3 tests because the production modules did not exist yet: `ModuleNotFoundError: No module named 'app.drive_classify'` and `ModuleNotFoundError: No module named 'app.drive_extract'`. This proves the extraction/classification tests were RED before implementation.
+
+**Current unit proof**
+**Phase:** implement
+**Command:** `./smackerel.sh test unit`
+**Exit Code:** 0
+**Claim Source:** executed
+All Go packages passed and the Python ML sidecar reported `402 passed, 1 warning`. Scope 3 unit rows covered `ml/tests/test_drive_extract.py::test_drive_extract_routes_pdf_image_office_audio_and_text`, `ml/tests/test_drive_extract.py::test_drive_extract_oversized_file_is_skipped_with_action_not_silent_success`, `ml/tests/test_drive_classify.py::test_drive_classification_contract_requires_evidence_confidence_and_sensitivity`, `ml/tests/test_drive_classify.py::test_drive_classification_contract_rejects_low_information_evidence`, and `ml/tests/test_drive_classify.py::test_classify_drive_file_returns_provider_neutral_metadata_with_evidence`.
+
+**Current integration proof**
+**Phase:** implement
+**Command:** `./smackerel.sh test integration`
+**Exit Code:** 0
+**Claim Source:** executed
+Full integration passed after one repair loop. The Scope 3 drive integration tests passed: `tests/integration/drive/drive_extract_classify_test.go::TestDriveExtractClassifyPersistsSearchableDomainMetadata`, `tests/integration/drive/drive_folder_context_test.go::TestFolderMoveRefreshesTaxonomyWithoutReextractingContent`, and `tests/integration/drive/drive_skipped_blocked_test.go::TestSkippedAndBlockedFilesPersistReasonAndAction`. The repaired failure was limited to array path handling in the new tests; the final integration run exited 0 with these Scope 3 tests green.
+
+**Current E2E proof**
+**Phase:** implement
+**Command:** `./smackerel.sh test e2e`; `./smackerel.sh test e2e --go-run 'TestDriveExtractE2E_MultiFormatFilesBecomeSearchable|TestFolderMoveUpdatesArtifactContextWithoutDuplicateExtractionActivity|TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions'`
+**Exit Code:** 0; 0
+**Claim Source:** executed
+The broad E2E suite exited 0 against the disposable live stack. The targeted Scope 3 selector also exited 0 and covers `tests/e2e/drive/drive_extract_e2e_test.go::TestDriveExtractE2E_MultiFormatFilesBecomeSearchable`, `tests/e2e/drive/drive_folder_move_ui_test.go::TestFolderMoveUpdatesArtifactContextWithoutDuplicateExtractionActivity`, and `tests/e2e/drive/drive_skipped_blocked_ui_test.go::TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions`.
+
+**Repo quality gates**
+**Phase:** implement
+**Command:** `./smackerel.sh check`; `./smackerel.sh format --check`; `./smackerel.sh lint`; `bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration`
+**Exit Code:** 0; 0; 0; 0
+**Claim Source:** executed
+`check` reported `Config is in sync with SST`, `env_file drift guard: OK`, and `scenario-lint: OK`. `format --check` exited 0 with `48 files already formatted`. `lint` exited 0 with `All checks passed!` and `Web validation passed`. Artifact lint passed with required artifacts present, anti-fabrication evidence checks clean, and no repo-CLI bypass detected in report command evidence.
+
+**Consumer impact sweep**
+**Phase:** implement
+**Command:** workspace searches for `drive.extract|drive.classify`, `extraction_state|skip_reason|domain_routes|skipped_review`, and provider metadata fields
+**Exit Code:** 0
+**Claim Source:** executed
+Search hits were limited to the intended Scope 3 surfaces: `config/nats_contract.json`, `internal/nats/client.go`, `internal/nats/contract_test.go`, `ml/app/nats_client.py`, `ml/app/nats_contract.py`, `ml/app/drive_extract.py`, `ml/app/drive_classify.py`, `internal/drive/extract/service.go`, `internal/api/drive_handlers.go`, Screen 4 PWA files, Scope 3 tests, and feature artifacts. No Save Rules write-back, Telegram retrieval delivery, or non-drive prompt contract surface was changed.
 
 ### Completion Statement
 
-Scope 3 status is Not Started.
+Scope 3 status is Done from the implementation surface: 11/11 DoD items are checked in [scopes.md](scopes.md) with inline executed evidence. Certification remains owned by `bubbles.validate`; `state.json.certification.*` was not modified by this implementation pass.
 
 ## Scope 4: Search And Artifact Detail
 

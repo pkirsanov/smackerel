@@ -53,10 +53,14 @@ const (
 	SubjectDomainExtracted = "domain.extracted"
 
 	// Cloud drive subjects (spec 038)
-	SubjectDriveScanRequest  = "drive.scan.request"
-	SubjectDriveScanResult   = "drive.scan.result"
-	SubjectDriveChangeNotify = "drive.change.notify"
-	SubjectDriveHealthReport = "drive.health.report"
+	SubjectDriveScanRequest     = "drive.scan.request"
+	SubjectDriveScanResult      = "drive.scan.result"
+	SubjectDriveChangeNotify    = "drive.change.notify"
+	SubjectDriveHealthReport    = "drive.health.report"
+	SubjectDriveExtractRequest  = "drive.extract.request"
+	SubjectDriveExtractResult   = "drive.extract.result"
+	SubjectDriveClassifyRequest = "drive.classify.request"
+	SubjectDriveClassifyResult  = "drive.classify.result"
 
 	// Photo library subjects (spec 040)
 	SubjectPhotosClassify          = "photos.classify"

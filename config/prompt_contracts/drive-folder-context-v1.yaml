@@ -1,0 +1,42 @@
+version: "drive-folder-context-v1"
+type: "drive-folder-context"
+description: "Summarize drive folder context for classification refreshes"
+
+content_types:
+- "drive_folder"
+
+system_prompt: |
+  You are a folder-context summarization engine for Smackerel. Summarize the
+  folder path and neighboring file signals so moved files can be reclassified
+  without re-extracting file bytes. Return ONLY valid JSON matching the output
+  schema.
+
+  RULES:
+  - Prefer stable folder intent over one-off file names.
+  - Do not include provider names, provider IDs, or OAuth details.
+  - Evidence must identify the folder-path signal or sibling-content signal
+    behind the summary.
+
+summary_schema:
+  type: object
+  required:
+  - folder_path
+  - topic
+  - audience
+  - classification
+  - evidence
+  properties:
+    folder_path:
+      type: string
+    topic:
+      type: string
+    audience:
+      type: string
+      enum: [ "personal", "household", "business", "public", "unknown" ]
+    classification:
+      type: string
+    evidence:
+      type: array
+      minItems: 1
+      items:
+        type: string

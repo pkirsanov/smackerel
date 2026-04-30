@@ -5,15 +5,16 @@
   "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.workflow",
-    "currentPhase": "implement",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "validate",
     "currentScope": "Scope 3: Extraction And Classification",
     "runStartedAt": "2026-04-26T00:00:06Z",
     "workflowRunStartedAt": "2026-04-26T23:13:58Z",
-    "workflowRunLastEnvelopeAt": "2026-04-30T05:17:15Z",
-    "currentRound": 11,
+    "workflowRunLastEnvelopeAt": "2026-04-30T09:14:56Z",
+    "currentRound": 12,
     "scope1DoDProgress": "12/12",
     "scope2DoDProgress": "12/12",
+    "scope3DoDProgress": "11/11",
     "completedPhaseClaims": [
       "select",
       "bootstrap",
@@ -408,12 +409,25 @@
       "startedAt": "2026-04-30T04:57:35Z",
       "completedAt": "2026-04-30T05:17:15Z",
       "summary": "Full-delivery validation certified Scope 2 only. Scope 2 DoD is 12/12 checked with inline executed evidence; uservalidation.md has no unchecked user-reported regressions; artifact-lint and traceability-guard passed; check, format --check, lint, unit, integration, E2E, artifact freshness, implementation reality scan, git diff --check, and no-cache test build all passed. state-transition-guard was executed and exited 1 because it evaluates whole-feature promotion while Scopes 3-8 remain incomplete and scenario-manifest structured requiredTestType/linkedTests gaps predate this scope; top-level status remains in_progress. Certification updated completedScopes and scopeProgress for Scope 2, recorded this validate phase, and advanced execution to Scope 3 implement."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "scope": "Scope 3: Extraction And Classification",
+      "round": 12,
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-30T05:17:15Z",
+      "completedAt": "2026-04-30T09:14:56Z",
+      "summary": "Scope 3 implementation completed from the implement surface. Landed drive extraction/classification across Go and Python: ML sidecar extraction/classification handlers and tests; Go internal/drive/extract service with extraction, folder summaries, classification persistence, skipped/blocked persistence, provider-neutral domain routes, and metadata-only move refresh; monitor MoveRefresher hook; skipped/blocked API and Screen 4 PWA review; drive extract/classify NATS subjects and Go/Python contract wiring; prompt contracts; scenario-specific integration and E2E tests. RED proof captured before implementation with ./smackerel.sh test unit exit=1 on missing app.drive_extract and app.drive_classify. Current validation passed: ./smackerel.sh test unit exit=0 (Go packages pass; Python 402 passed, 1 warning), ./smackerel.sh test integration exit=0 after a narrow repair loop in the new drive tests, ./smackerel.sh test e2e exit=0, targeted Scope 3 drive E2E selector exit=0, ./smackerel.sh check exit=0, ./smackerel.sh format --check exit=0, ./smackerel.sh lint exit=0, and artifact lint exit=0 before evidence update. Traceability initially failed because report.md had not yet referenced the new Scope 3 concrete test files; report.md and scopes.md were updated with implementation-owned evidence and traceability is rerun after this state update. Updated scopes.md Scope 3 status to Done and checked 11/11 DoD items with inline evidence; appended Scope 3 report evidence. certification.* untouched; validation/certification remains owned by bubbles.validate."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-30T05:17:15Z",
+  "lastUpdatedAt": "2026-04-30T09:14:56Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",
@@ -444,7 +458,7 @@
       "implement",
       "validate"
     ],
-    "nextPhase": "implement"
+    "nextPhase": "validate"
   },
   "scopeLayout": "single-file",
   "artifacts": {
@@ -488,5 +502,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Planning initialized and refined. Scope 1 and Scope 2 are certified complete. Scope 3 is the next eligible scope; overall feature status remains in_progress because Scopes 3-8 are not complete."
+  "notes": "Planning initialized and refined. Scope 1 and Scope 2 are certified complete. Scope 3 implementation is complete with 11/11 DoD checked by bubbles.implement and is awaiting validation ownership. Overall feature status remains in_progress because Scopes 4-8 are not complete."
 }

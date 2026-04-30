@@ -46,6 +46,8 @@ SUBSCRIBE_SUBJECTS = [
     "photos.aesthetic",
     "photos.removal.review",
     "agent.invoke.request",
+    "drive.extract.request",
+    "drive.classify.request",
 ]
 
 # Subjects this sidecar publishes to
@@ -73,6 +75,8 @@ PUBLISH_SUBJECTS = [
     "photos.aesthetic.result",
     "photos.removal.reviewed",
     "agent.invoke.response",
+    "drive.extract.result",
+    "drive.classify.result",
 ]
 
 # Map of subscribe subject -> publish response subject
@@ -100,6 +104,8 @@ SUBJECT_RESPONSE_MAP = {
     "photos.aesthetic": "photos.aesthetic.result",
     "photos.removal.review": "photos.removal.reviewed",
     "agent.invoke.request": "agent.invoke.response",
+    "drive.extract.request": "drive.extract.result",
+    "drive.classify.request": "drive.classify.result",
 }
 
 
@@ -384,6 +390,19 @@ class NATSClient:
                             await self._nc.publish(reply_subject, payload)
                             await msg.ack()
                             continue
+                    elif subject == "drive.extract.request":
+                        from .drive_extract import handle_drive_extract_request
+
+                        result = await handle_drive_extract_request(data)
+                    elif subject == "drive.classify.request":
+                        from .drive_classify import handle_drive_classify_request
+
+                        result = await handle_drive_classify_request(
+                            data,
+                            llm_provider,
+                            llm_model,
+                            llm_api_key,
+                        )
                     else:
                         logger.warning("Unknown subject: %s", subject)
                         await msg.ack()

@@ -32,13 +32,16 @@ class ContractValidationError(RuntimeError):
     """Raised when the shared NATS contract fails Python-side validation."""
 
 
-# Required DRIVE-stream subjects for Spec 038 Scope 1.
-# Future scopes (extract / classify / save) will extend this list.
+# Required DRIVE-stream subjects for Spec 038 Scopes 1 and 3.
 REQUIRED_DRIVE_SUBJECTS: tuple[str, ...] = (
     "drive.scan.request",
     "drive.scan.result",
     "drive.change.notify",
     "drive.health.report",
+    "drive.extract.request",
+    "drive.extract.result",
+    "drive.classify.request",
+    "drive.classify.result",
 )
 
 REQUIRED_DRIVE_STREAM_NAME = "DRIVE"
