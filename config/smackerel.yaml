@@ -497,6 +497,38 @@ drive:
       api_base_url: "https://www.googleapis.com"
       scope_defaults: [ "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive.readonly" ]
 
+photos:
+  enabled: true
+  scan:
+    parallelism: 2
+    batch_size: 50
+    max_file_size_bytes: 52428800
+  monitor:
+    cursor_invalidation_rescan_max_items: 2500
+  policy:
+    lifecycle_confirmation_threshold: 0.8
+    duplicate_confirmation_threshold: 0.92
+    routing_confidence_threshold: 0.75
+    sensitivity_reveal_ttl_seconds: 600
+    archive_action_token_ttl_seconds: 86400
+    delete_action_token_ttl_seconds: 86400
+    telegram_max_inline_size_bytes: 8388608
+  intelligence:
+    classify_model: gemma4:26b
+    embed_model: nomic-embed-text
+    sensitivity_model: gemma4:26b
+    aesthetic_model: gemma4:26b
+    ocr_model: deepseek-ocr:3b
+    max_inflight_per_connector: 2
+  providers:
+    immich:
+      enabled: false
+      base_url: ""
+      api_key: ""
+      poll_interval_seconds: 300
+      tls_skip_verify: false
+      supported_api_versions: [ "v1" ]
+
 services:
   core:
     container_port: 8080

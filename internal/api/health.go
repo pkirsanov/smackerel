@@ -125,6 +125,9 @@ type Dependencies struct {
 	// Spec 038 Scope 1 — drive connector API handlers.
 	DriveHandlers *DriveHandlers
 
+	// Spec 040 Scope 1 — photo library API handlers.
+	PhotosHandlers *PhotosHandlers
+
 	// Annotation handlers (optional — nil when annotations not configured)
 	AnnotationHandlers *AnnotationHandlers
 

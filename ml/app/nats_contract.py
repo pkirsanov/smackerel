@@ -44,6 +44,28 @@ REQUIRED_DRIVE_SUBJECTS: tuple[str, ...] = (
 REQUIRED_DRIVE_STREAM_NAME = "DRIVE"
 REQUIRED_DRIVE_STREAM_PATTERN = "drive.>"
 
+REQUIRED_PHOTOS_SUBJECTS: tuple[str, ...] = (
+    "photos.classify",
+    "photos.classified",
+    "photos.ocr",
+    "photos.ocred",
+    "photos.embed",
+    "photos.embedded",
+    "photos.lifecycle",
+    "photos.lifecycle.result",
+    "photos.dedupe",
+    "photos.dedupe.result",
+    "photos.sensitivity",
+    "photos.sensitivity.result",
+    "photos.aesthetic",
+    "photos.aesthetic.result",
+    "photos.removal.review",
+    "photos.removal.reviewed",
+)
+
+REQUIRED_PHOTOS_STREAM_NAME = "PHOTOS"
+REQUIRED_PHOTOS_STREAM_PATTERN = "photos.>"
+
 
 def _default_contract_path() -> Path:
     """Resolve the contract path relative to the repo root.
@@ -109,6 +131,36 @@ def validate_drive_stream(contract: dict) -> None:
         raise ContractValidationError("NATS contract DRIVE validation failed:\n  - " + "\n  - ".join(problems))
 
 
+def validate_photos_stream(contract: dict) -> None:
+    """Validate the PHOTOS stream + Scope-1 photo subjects in ``contract``."""
+    problems: list[str] = []
+
+    streams = contract.get("streams") or {}
+    photos_stream = streams.get(REQUIRED_PHOTOS_STREAM_NAME)
+    if photos_stream is None:
+        problems.append(f"contract.streams is missing required stream {REQUIRED_PHOTOS_STREAM_NAME!r}")
+    else:
+        actual_pattern = photos_stream.get("subjects_pattern")
+        if actual_pattern != REQUIRED_PHOTOS_STREAM_PATTERN:
+            problems.append(
+                f"contract.streams[{REQUIRED_PHOTOS_STREAM_NAME!r}].subjects_pattern "
+                f"= {actual_pattern!r}, want {REQUIRED_PHOTOS_STREAM_PATTERN!r}"
+            )
+
+    subjects = contract.get("subjects") or {}
+    for subj in REQUIRED_PHOTOS_SUBJECTS:
+        meta = subjects.get(subj)
+        if meta is None:
+            problems.append(f"contract.subjects is missing required photo subject {subj!r}")
+            continue
+        stream = meta.get("stream")
+        if stream != REQUIRED_PHOTOS_STREAM_NAME:
+            problems.append(f"contract.subjects[{subj!r}].stream = {stream!r}, want {REQUIRED_PHOTOS_STREAM_NAME!r}")
+
+    if problems:
+        raise ContractValidationError("NATS contract PHOTOS validation failed:\n  - " + "\n  - ".join(problems))
+
+
 def validate_drive_stream_on_startup(path: Path | None = None) -> dict:
     """Startup hook called from ``ml/app/main.py`` lifespan.
 
@@ -122,4 +174,23 @@ def validate_drive_stream_on_startup(path: Path | None = None) -> dict:
         "NATS contract validated: DRIVE stream + %d Scope-1 drive subjects present",
         len(REQUIRED_DRIVE_SUBJECTS),
     )
+    return contract
+
+
+def validate_photos_stream_on_startup(path: Path | None = None) -> dict:
+    """Startup hook for the PHOTOS stream and Scope-1 subject contract."""
+    contract = load_contract(path)
+    validate_photos_stream(contract)
+    logger.info(
+        "NATS contract validated: PHOTOS stream + %d Scope-1 photo subjects present",
+        len(REQUIRED_PHOTOS_SUBJECTS),
+    )
+    return contract
+
+
+def validate_runtime_streams_on_startup(path: Path | None = None) -> dict:
+    """Validate every runtime stream owned by the Python ML sidecar."""
+    contract = load_contract(path)
+    validate_drive_stream(contract)
+    validate_photos_stream(contract)
     return contract

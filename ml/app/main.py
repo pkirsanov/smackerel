@@ -12,6 +12,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from .auth import verify_auth
 from .embedder import _model
 from .nats_client import NATSClient
+from .nats_contract import validate_runtime_streams_on_startup
 
 logger = logging.getLogger("smackerel-ml")
 
@@ -76,6 +77,7 @@ async def lifespan(app: FastAPI):
         logger.warning("SMACKEREL_AUTH_TOKEN is empty — ML sidecar running without authentication")
 
     nats_url = config["NATS_URL"]
+    validate_runtime_streams_on_startup()
     logger.info("Connecting to NATS at %s", nats_url)
 
     nats_client = NATSClient(nats_url)

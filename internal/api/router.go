@@ -212,7 +212,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 		})
 	}
 
-	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil {
+	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil || deps.PhotosHandlers != nil {
 		r.Route("/v1", func(r chi.Router) {
 			r.Use(middleware.Throttle(100))
 
@@ -221,6 +221,14 @@ func NewRouter(deps *Dependencies) http.Handler {
 				r.Post("/connectors/drive/connect", deps.DriveHandlers.Connect)
 				r.Get("/connectors/drive/oauth/callback", deps.DriveHandlers.OAuthCallback)
 				r.Get("/connectors/drive/connection/{id}", deps.DriveHandlers.GetConnection)
+			}
+
+			if deps.PhotosHandlers != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(deps.bearerAuthMiddleware)
+					r.Get("/photos/connectors", deps.PhotosHandlers.ListConnectors)
+					r.Get("/photos/{id}", deps.PhotosHandlers.GetPhoto)
+				})
 			}
 
 			// Spec 037 Scope 9 — POST /v1/agent/invoke (end-user failure

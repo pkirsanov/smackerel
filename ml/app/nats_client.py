@@ -37,6 +37,14 @@ SUBSCRIBE_SUBJECTS = [
     "synthesis.extract",
     "synthesis.crosssource",
     "domain.extract",
+    "photos.classify",
+    "photos.ocr",
+    "photos.embed",
+    "photos.lifecycle",
+    "photos.dedupe",
+    "photos.sensitivity",
+    "photos.aesthetic",
+    "photos.removal.review",
     "agent.invoke.request",
 ]
 
@@ -56,6 +64,14 @@ PUBLISH_SUBJECTS = [
     "synthesis.extracted",
     "synthesis.crosssource.result",
     "domain.extracted",
+    "photos.classified",
+    "photos.ocred",
+    "photos.embedded",
+    "photos.lifecycle.result",
+    "photos.dedupe.result",
+    "photos.sensitivity.result",
+    "photos.aesthetic.result",
+    "photos.removal.reviewed",
     "agent.invoke.response",
 ]
 
@@ -75,12 +91,20 @@ SUBJECT_RESPONSE_MAP = {
     "synthesis.extract": "synthesis.extracted",
     "synthesis.crosssource": "synthesis.crosssource.result",
     "domain.extract": "domain.extracted",
+    "photos.classify": "photos.classified",
+    "photos.ocr": "photos.ocred",
+    "photos.embed": "photos.embedded",
+    "photos.lifecycle": "photos.lifecycle.result",
+    "photos.dedupe": "photos.dedupe.result",
+    "photos.sensitivity": "photos.sensitivity.result",
+    "photos.aesthetic": "photos.aesthetic.result",
+    "photos.removal.review": "photos.removal.reviewed",
     "agent.invoke.request": "agent.invoke.response",
 }
 
 
 # Subjects that are critical — failure to subscribe is fatal
-CRITICAL_SUBJECTS = {"artifacts.process", "search.embed", "synthesis.extract"}
+CRITICAL_SUBJECTS = {"artifacts.process", "search.embed", "synthesis.extract", "photos.classify", "photos.embed"}
 
 
 class NATSClient:
@@ -286,6 +310,10 @@ class NATSClient:
                             llm_api_key,
                             ollama_url,
                         )
+                    elif subject.startswith("photos."):
+                        from .photos import handle_photo_request
+
+                        result = await handle_photo_request(subject, data)
                     elif subject == "learning.classify":
                         from .intelligence import handle_learning_classify
 
@@ -376,13 +404,18 @@ class NATSClient:
                             model=model_label,
                         ).inc(tokens)
 
-                    # Validate outgoing result before publishing
-                    try:
-                        validate_processed_result(result)
-                    except PayloadValidationError as ve:
-                        logger.error("Invalid outgoing result on %s: %s", subject, ve)
-
                     response_subject = SUBJECT_RESPONSE_MAP.get(subject)
+                    if subject.startswith("photos.") and response_subject:
+                        from .photos import validate_photo_result
+
+                        validate_photo_result(response_subject, result)
+                    else:
+                        # Validate outgoing result before publishing
+                        try:
+                            validate_processed_result(result)
+                        except PayloadValidationError as ve:
+                            logger.error("Invalid outgoing result on %s: %s", subject, ve)
+
                     if response_subject:
                         await self.publish(response_subject, result)
 

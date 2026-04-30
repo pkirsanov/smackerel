@@ -58,6 +58,24 @@ const (
 	SubjectDriveChangeNotify = "drive.change.notify"
 	SubjectDriveHealthReport = "drive.health.report"
 
+	// Photo library subjects (spec 040)
+	SubjectPhotosClassify          = "photos.classify"
+	SubjectPhotosClassified        = "photos.classified"
+	SubjectPhotosOCR               = "photos.ocr"
+	SubjectPhotosOCRed             = "photos.ocred"
+	SubjectPhotosEmbed             = "photos.embed"
+	SubjectPhotosEmbedded          = "photos.embedded"
+	SubjectPhotosLifecycle         = "photos.lifecycle"
+	SubjectPhotosLifecycleResult   = "photos.lifecycle.result"
+	SubjectPhotosDedupe            = "photos.dedupe"
+	SubjectPhotosDedupeResult      = "photos.dedupe.result"
+	SubjectPhotosSensitivity       = "photos.sensitivity"
+	SubjectPhotosSensitivityResult = "photos.sensitivity.result"
+	SubjectPhotosAesthetic         = "photos.aesthetic"
+	SubjectPhotosAestheticResult   = "photos.aesthetic.result"
+	SubjectPhotosRemovalReview     = "photos.removal.review"
+	SubjectPhotosRemovalReviewed   = "photos.removal.reviewed"
+
 	// Annotation subjects (spec 027)
 	SubjectAnnotationsCreated = "annotations.created"
 
@@ -101,6 +119,7 @@ func AllStreams() []StreamConfig {
 		{Name: "SYNTHESIS", Subjects: []string{"synthesis.>"}},
 		{Name: "DOMAIN", Subjects: []string{"domain.>"}},
 		{Name: "DRIVE", Subjects: []string{"drive.>"}},
+		{Name: "PHOTOS", Subjects: []string{"photos.>"}},
 		{Name: "ANNOTATIONS", Subjects: []string{"annotations.>"}},
 		{Name: "LISTS", Subjects: []string{"lists.>"}},
 		{Name: "AGENT", Subjects: []string{"agent.>"}},

@@ -88,6 +88,22 @@ func TestSCN002054_GoSubjectsMatchContract(t *testing.T) {
 		"SubjectDriveScanResult":            SubjectDriveScanResult,
 		"SubjectDriveChangeNotify":          SubjectDriveChangeNotify,
 		"SubjectDriveHealthReport":          SubjectDriveHealthReport,
+		"SubjectPhotosClassify":             SubjectPhotosClassify,
+		"SubjectPhotosClassified":           SubjectPhotosClassified,
+		"SubjectPhotosOCR":                  SubjectPhotosOCR,
+		"SubjectPhotosOCRed":                SubjectPhotosOCRed,
+		"SubjectPhotosEmbed":                SubjectPhotosEmbed,
+		"SubjectPhotosEmbedded":             SubjectPhotosEmbedded,
+		"SubjectPhotosLifecycle":            SubjectPhotosLifecycle,
+		"SubjectPhotosLifecycleResult":      SubjectPhotosLifecycleResult,
+		"SubjectPhotosDedupe":               SubjectPhotosDedupe,
+		"SubjectPhotosDedupeResult":         SubjectPhotosDedupeResult,
+		"SubjectPhotosSensitivity":          SubjectPhotosSensitivity,
+		"SubjectPhotosSensitivityResult":    SubjectPhotosSensitivityResult,
+		"SubjectPhotosAesthetic":            SubjectPhotosAesthetic,
+		"SubjectPhotosAestheticResult":      SubjectPhotosAestheticResult,
+		"SubjectPhotosRemovalReview":        SubjectPhotosRemovalReview,
+		"SubjectPhotosRemovalReviewed":      SubjectPhotosRemovalReviewed,
 		"SubjectAnnotationsCreated":         SubjectAnnotationsCreated,
 		"SubjectListsCreated":               SubjectListsCreated,
 		"SubjectListsCompleted":             SubjectListsCompleted,
@@ -179,6 +195,14 @@ func TestSCN002054_GoSubjectPairsMatchContract(t *testing.T) {
 		{SubjectSynthesisExtract, SubjectSynthesisExtracted},
 		{SubjectSynthesisCrossSource, SubjectSynthesisCrossSourceResult},
 		{SubjectDomainExtract, SubjectDomainExtracted},
+		{SubjectPhotosClassify, SubjectPhotosClassified},
+		{SubjectPhotosOCR, SubjectPhotosOCRed},
+		{SubjectPhotosEmbed, SubjectPhotosEmbedded},
+		{SubjectPhotosLifecycle, SubjectPhotosLifecycleResult},
+		{SubjectPhotosDedupe, SubjectPhotosDedupeResult},
+		{SubjectPhotosSensitivity, SubjectPhotosSensitivityResult},
+		{SubjectPhotosAesthetic, SubjectPhotosAestheticResult},
+		{SubjectPhotosRemovalReview, SubjectPhotosRemovalReviewed},
 		{SubjectAgentInvokeRequest, SubjectAgentInvokeResponse},
 	}
 
@@ -199,6 +223,80 @@ func TestSCN002054_GoSubjectPairsMatchContract(t *testing.T) {
 		}
 		if resp != gp.response {
 			t.Errorf("Go pair %q -> %q: contract says response should be %q", gp.request, gp.response, resp)
+		}
+	}
+}
+
+func TestPhotoSubjectsMatchNATSContract(t *testing.T) {
+	contract := loadContract(t)
+
+	photoSubjects := []string{
+		SubjectPhotosClassify,
+		SubjectPhotosClassified,
+		SubjectPhotosOCR,
+		SubjectPhotosOCRed,
+		SubjectPhotosEmbed,
+		SubjectPhotosEmbedded,
+		SubjectPhotosLifecycle,
+		SubjectPhotosLifecycleResult,
+		SubjectPhotosDedupe,
+		SubjectPhotosDedupeResult,
+		SubjectPhotosAesthetic,
+		SubjectPhotosAestheticResult,
+		SubjectPhotosSensitivity,
+		SubjectPhotosSensitivityResult,
+		SubjectPhotosRemovalReview,
+		SubjectPhotosRemovalReviewed,
+	}
+
+	stream, ok := contract.Streams["PHOTOS"]
+	if !ok {
+		t.Fatal("contract missing PHOTOS stream")
+	}
+	if stream.SubjectsPattern != "photos.>" {
+		t.Fatalf("PHOTOS subjects_pattern = %q, want photos.>", stream.SubjectsPattern)
+	}
+
+	for _, subject := range photoSubjects {
+		meta, ok := contract.Subjects[subject]
+		if !ok {
+			t.Errorf("photo subject %q missing from contract", subject)
+			continue
+		}
+		if meta.Stream != "PHOTOS" {
+			t.Errorf("photo subject %q stream = %q, want PHOTOS", subject, meta.Stream)
+		}
+	}
+
+	critical := map[string]bool{}
+	for subject, meta := range contract.Subjects {
+		if meta.Stream == "PHOTOS" && meta.Critical {
+			critical[subject] = true
+		}
+	}
+	for _, subject := range []string{SubjectPhotosClassify, SubjectPhotosEmbed} {
+		if !critical[subject] {
+			t.Errorf("%s must be marked critical in nats_contract.json", subject)
+		}
+	}
+
+	pairs := map[string]string{}
+	for _, pair := range contract.RequestResponsePairs {
+		pairs[pair.Request] = pair.Response
+	}
+	wantPairs := map[string]string{
+		SubjectPhotosClassify:      SubjectPhotosClassified,
+		SubjectPhotosOCR:           SubjectPhotosOCRed,
+		SubjectPhotosEmbed:         SubjectPhotosEmbedded,
+		SubjectPhotosLifecycle:     SubjectPhotosLifecycleResult,
+		SubjectPhotosDedupe:        SubjectPhotosDedupeResult,
+		SubjectPhotosAesthetic:     SubjectPhotosAestheticResult,
+		SubjectPhotosSensitivity:   SubjectPhotosSensitivityResult,
+		SubjectPhotosRemovalReview: SubjectPhotosRemovalReviewed,
+	}
+	for req, resp := range wantPairs {
+		if pairs[req] != resp {
+			t.Errorf("contract pair %q = %q, want %q", req, pairs[req], resp)
 		}
 	}
 }

@@ -5,9 +5,9 @@
   "status": "not_started",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
-    "currentScope": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "scope-01-photo-platform-foundation",
     "runStartedAt": "2026-04-27T19:50:00Z",
     "completedPhaseClaims": [
       {
@@ -21,6 +21,13 @@
         "agent": "bubbles.plan",
         "timestamp": "2026-04-27T19:50:00Z",
         "summary": "Second-pass plan reconciliation for feature 040. Tightened planning artifacts without changing scope count or sequence: added Change Boundary blocks to Scopes 2, 3, and 4; added SST/secret fail-loud DoD lines for Immich access_token (Scope 2) and Telegram bot_token (Scope 4); added ML decisions schema-validator unit test to Scope 3 covering lifecycle, dedupe, and removal payload contracts (SCN-040-007/008/009); added capability-taxonomy canary integration test to Scope 5 proving Go registry, NATS payload, API limitation codes, and PWA banner strings share one definition (SCN-040-013). Synced test-plan.json and scenario-manifest.json with the new test rows. No scope was renamed, removed, or marked done. certification.* untouched."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-04-30T08:14:49Z",
+        "scope": "Scope 1: Photo Platform Foundation",
+        "summary": "Completed Scope 1 implementation: provider-neutral photo domain/store, stable-signal versus LLM decision boundary, photos SST config flow, PHOTOS NATS stream/subjects across Go/Python/JSON, ML photo contract validators and live canary, photo schema migration, read-only photo API, integration privacy/canary tests, focused photo e2e, and broad repo gates. Verified via ./smackerel.sh config generate, ./smackerel.sh config generate --env test, ./smackerel.sh check, ./smackerel.sh format --check, ./smackerel.sh lint, ./smackerel.sh build, ./smackerel.sh test unit, COMPOSE_PROGRESS=plain ./smackerel.sh test integration, COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI, and COMPOSE_PROGRESS=plain ./smackerel.sh test e2e. certification.* untouched."
       }
     ],
     "pendingTransitionRequests": []
@@ -103,7 +110,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-27T19:50:00Z",
+  "lastUpdatedAt": "2026-04-30T08:14:49Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
