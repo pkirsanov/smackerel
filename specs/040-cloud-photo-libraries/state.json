@@ -2,12 +2,12 @@
   "version": 3,
   "featureDir": "specs/040-cloud-photo-libraries",
   "featureName": "Cloud Photo Libraries (Immich, Google Photos, Amazon Photos, ...)",
-  "status": "not_started",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "scope-01-photo-platform-foundation",
+    "currentScope": "scope-02-immich-connect-scan-search",
     "runStartedAt": "2026-04-27T19:50:00Z",
     "completedPhaseClaims": [
       {
@@ -33,9 +33,66 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "not_started",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "in_progress",
+    "completedScopes": [
+      "scope-01-photo-platform-foundation"
+    ],
+    "certifiedCompletedPhases": [
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-01-photo-platform-foundation",
+        "certifiedAt": "2026-04-30T08:23:21Z",
+        "mode": "full-delivery"
+      }
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "scope-01-photo-platform-foundation",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-04-30T08:23:21Z"
+      },
+      {
+        "scope": 2,
+        "name": "scope-02-immich-connect-scan-search",
+        "status": "Not Started",
+        "dependsOn": ["scope-01-photo-platform-foundation"],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "name": "scope-03-lifecycle-duplicates-removal",
+        "status": "Not Started",
+        "dependsOn": ["scope-02-immich-connect-scan-search"],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 4,
+        "name": "scope-04-capture-telegram-routing",
+        "status": "Not Started",
+        "dependsOn": ["scope-03-lifecycle-duplicates-removal"],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 5,
+        "name": "scope-05-multi-provider-operations",
+        "status": "Not Started",
+        "dependsOn": ["scope-04-capture-telegram-routing"],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -105,12 +162,21 @@
       "startedAt": "2026-04-27T19:50:00Z",
       "completedAt": "2026-04-27T19:50:00Z",
       "summary": "Second-pass plan reconciliation for feature 040: tightened scopes.md, scenario-manifest.json, and test-plan.json without changing scope count, sequence, or status. Added Change Boundary blocks to Scopes 2/3/4; added SST/secret fail-loud DoD lines for Immich access_token (Scope 2) and Telegram bot_token (Scope 4); added ML decisions schema-validator unit test to Scope 3 covering SCN-040-007/008/009 payload contracts; added capability-taxonomy canary integration test to Scope 5 proving Go registry, NATS payloads, API limitation codes, and PWA banner strings share one definition (SCN-040-013). All DoD items remain unchecked. certification.* untouched."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-30T08:21:00Z",
+      "completedAt": "2026-04-30T08:23:21Z",
+      "summary": "Certified Scope 1: Photo Platform Foundation only. Artifact lint passed. The traceability guard has no scope-only option; Scope 1 rows passed scenario-to-row, test-file, report-evidence, and DoD-fidelity checks, while remaining failures were missing linked test files for Scopes 2-5 while those scopes are Not Started. Full-feature state guard remains red for whole-feature completion, so feature certification stays in_progress and execution advances to Scope 2 implement."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-30T08:14:49Z",
+  "lastUpdatedAt": "2026-04-30T08:23:21Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",

@@ -16,7 +16,10 @@
         {"file": "tests/integration/photos_foundation_test.go", "function": "TestPhotosFoundation_ConfigNATSAndSchemaLiveStack"},
         {"file": "tests/integration/photos_contract_canary_test.go", "function": "TestPhotosContractCanary_ConfigNATSDBAndMLAgree"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-1-photo-platform-foundation",
+        "report.md#validate-certification-evidence"
+      ]
     },
     {
       "scenarioId": "SCN-040-002",
@@ -29,7 +32,10 @@
         {"file": "tests/integration/photos_foundation_test.go", "function": "TestPhotosFoundation_ConfigNATSAndSchemaLiveStack"},
         {"file": "tests/e2e/photos_foundation_test.go", "function": "TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-1-photo-platform-foundation",
+        "report.md#validate-certification-evidence"
+      ]
     },
     {
       "scenarioId": "SCN-040-003",
@@ -42,7 +48,10 @@
         {"file": "ml/tests/test_photos_contract.py", "function": "test_photo_result_requires_confidence_and_rationale"},
         {"file": "tests/e2e/photos_foundation_test.go", "function": "TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-1-photo-platform-foundation",
+        "report.md#validate-certification-evidence"
+      ]
     },
     {
       "scenarioId": "SCN-040-004",

@@ -78,6 +78,69 @@ Tier 1/Tier 2 implement checks passed by evidence: mode ceiling allowed implemen
 
 Scope 1 implementation evidence is complete and owned. Remaining feature scopes 2-5 are still planned work and were not implemented in this pass.
 
+### Validate Certification Evidence
+
+**Phase:** validate  
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/040-cloud-photo-libraries`  
+**Exit Code:** 0  
+**Claim Source:** executed
+
+```text
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ Top-level status matches certification.status
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+```
+
+**Phase:** validate  
+**Command:** `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/040-cloud-photo-libraries`  
+**Exit Code:** 1  
+**Claim Source:** interpreted  
+**Interpretation:** The canonical traceability guard has no Scope 1-only flag. Its Scope 1 checks passed scenario-to-row mapping, concrete test-file mapping, report-evidence mapping, and DoD fidelity for SCN-040-001 through SCN-040-003. The non-zero exit came from missing linked test files for Scopes 2-5, which remain Not Started and are not certified by this validation.
+
+```text
+ℹ️  Checking traceability for Scope 1: Photo Platform Foundation
+✅ Scope 1: Photo Platform Foundation scenario mapped to Test Plan row: SCN-040-001 Photo contracts bootstrap from SST and NATS
+✅ Scope 1: Photo Platform Foundation scenario maps to concrete test file: internal/nats/contract_test.go
+✅ Scope 1: Photo Platform Foundation report references concrete test evidence: internal/nats/contract_test.go
+✅ Scope 1: Photo Platform Foundation scenario mapped to Test Plan row: SCN-040-002 Synthetic photo persists with provider-neutral shape
+✅ Scope 1: Photo Platform Foundation scenario maps to concrete test file: internal/connector/photos/library_test.go
+✅ Scope 1: Photo Platform Foundation report references concrete test evidence: internal/connector/photos/library_test.go
+✅ Scope 1: Photo Platform Foundation scenario mapped to Test Plan row: SCN-040-003 Stable signals cannot replace LLM-owned decisions
+✅ Scope 1: Photo Platform Foundation scenario maps to concrete test file: internal/connector/photos/stable_signals_test.go
+✅ Scope 1: Photo Platform Foundation report references concrete test evidence: internal/connector/photos/stable_signals_test.go
+ℹ️  Scope 1: Photo Platform Foundation summary: scenarios=3 test_rows=9
+RESULT: FAILED (34 failures, 0 warnings)
+```
+
+**Phase:** validate  
+**Command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/040-cloud-photo-libraries`  
+**Exit Code:** 1  
+**Claim Source:** interpreted  
+**Interpretation:** The state-transition guard is full-feature oriented. It correctly blocks full-feature `done` because Scopes 2-5 are Not Started. Scope 1 was certified only in `certification.completedScopes` and `certification.scopeProgress`; top-level feature status remains `in_progress`.
+
+```text
+ℹ️  INFO: Current state.json status: in_progress
+✅ PASS: Top-level status matches certification.status (in_progress)
+✅ PASS: certification block records certifiedCompletedPhases
+✅ PASS: certification block records scopeProgress
+ℹ️  INFO: Resolved scopes: total=5, Done=1, In Progress=0, Not Started=4, Blocked=0
+🔴 BLOCK: Resolved scope artifacts have 4 scope(s) still marked 'Not Started' — ALL scopes must be Done
+✅ PASS: completedScopes count matches artifact Done scope count (1)
+🔴 BLOCK: Test Plan references non-existent file: web/pwa/tests/photos_connectors.spec.ts
+🔴 VIOLATION [DEFAULT_FALLBACK] ml/app/main.py:75
+🔴 TRANSITION BLOCKED: 50 failure(s), 3 warning(s)
+state.json status MUST NOT be set to 'done'.
+```
+
+Certification result: Scope 1 is certified as Done in validate-owned state. Feature 040 remains `in_progress`; Scopes 2-5 remain Not Started and uncertified.
+
 ## Scope 2: Immich Connect, Scan, And Search
 
 ### Summary
