@@ -74,11 +74,11 @@ func TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI(t *testing.T) {
 	}
 	var parsed struct {
 		Photo struct {
-			ID          string `json:"photo_id"`
-			ArtifactID  string `json:"artifact_id"`
-			Provider    string `json:"provider"`
-			ProviderRef string `json:"provider_ref"`
-			MediaRole   string `json:"media_role"`
+			ID          string          `json:"photo_id"`
+			ArtifactID  string          `json:"artifact_id"`
+			Provider    string          `json:"provider"`
+			ProviderRef string          `json:"provider_ref"`
+			MediaRole   string          `json:"media_role"`
 			RawProvider json.RawMessage `json:"raw_provider"`
 		} `json:"photo"`
 	}
