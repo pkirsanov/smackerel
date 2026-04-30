@@ -23,6 +23,7 @@ type mockJetStreamMsg struct {
 	metadataErr error
 	acked       bool
 	naked       bool
+	nakErr      error // when set, Nak() returns this error to simulate Nak failures
 }
 
 func (m *mockJetStreamMsg) Data() []byte                       { return m.data }
@@ -31,8 +32,8 @@ func (m *mockJetStreamMsg) Reply() string                      { return m.reply 
 func (m *mockJetStreamMsg) Headers() nats.Header               { return m.headers }
 func (m *mockJetStreamMsg) Ack() error                         { m.acked = true; return nil }
 func (m *mockJetStreamMsg) DoubleAck(_ context.Context) error  { m.acked = true; return nil }
-func (m *mockJetStreamMsg) Nak() error                         { m.naked = true; return nil }
-func (m *mockJetStreamMsg) NakWithDelay(_ time.Duration) error { m.naked = true; return nil }
+func (m *mockJetStreamMsg) Nak() error                         { m.naked = true; return m.nakErr }
+func (m *mockJetStreamMsg) NakWithDelay(_ time.Duration) error { m.naked = true; return m.nakErr }
 func (m *mockJetStreamMsg) InProgress() error                  { return nil }
 func (m *mockJetStreamMsg) Term() error                        { return nil }
 func (m *mockJetStreamMsg) TermWithReason(_ string) error      { return nil }

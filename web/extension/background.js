@@ -124,9 +124,13 @@ function doCapture(data) {
       body: JSON.stringify(body)
     })
     .then(function(resp) {
-      if (resp.ok || resp.status === 409) {
+      if (resp.ok) {
         showNotification('Saved!', data.title || data.url || 'Content captured');
         return { success: true };
+      }
+      if (resp.status === 409) {
+        showNotification('Already Captured', data.title || data.url || 'This item was already saved');
+        return { success: true, duplicate: true };
       }
       if (resp.status === 401) {
         showNotification('Auth Failed', 'Please check your auth token in settings.');

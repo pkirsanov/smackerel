@@ -179,6 +179,9 @@ func TestPWAShareHandler_RendersStructuralElements(t *testing.T) {
 	if !strings.Contains(body, `id="result-success"`) {
 		t.Error("template must contain success result element")
 	}
+	if !strings.Contains(body, `id="result-duplicate"`) {
+		t.Error("template must contain duplicate result element")
+	}
 	if !strings.Contains(body, `id="result-error"`) {
 		t.Error("template must contain error result element")
 	}
@@ -187,6 +190,9 @@ func TestPWAShareHandler_RendersStructuralElements(t *testing.T) {
 	}
 	if !strings.Contains(body, "Saved!") {
 		t.Error("template must contain success message text")
+	}
+	if !strings.Contains(body, "Already captured") {
+		t.Error("template must contain duplicate message text")
 	}
 	if !strings.Contains(body, "Retry") {
 		t.Error("template must contain retry button for error recovery")

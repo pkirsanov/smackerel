@@ -179,6 +179,33 @@ Chaos probe of spec 029 devops-pipeline: CI workflow edge cases, env_file drift 
 
 ---
 
+## Regression-to-Doc Sweep (2026-04-30)
+
+### Probe Scope
+
+Regression probe of spec 029 devops-pipeline. Ran `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh test unit` and cross-referenced all DoD evidence against current source artifacts.
+
+### Findings
+
+| # | Severity | Category | Location | Description | Disposition |
+|---|----------|----------|----------|-------------|-------------|
+| REG-029-001 | LOW | Evidence drift | `scopes.md` Scope 7 DoD #3 | DoD evidence still claimed `latest` tag is pushed to GHCR. The chaos-hardening sweep (CH-029-001) removed the `:latest` push, but the DoD text was not updated to reflect the fix. Actual behavior: `${VERSION}` and `${COMMIT_SHORT}` tags only. | **FIXED** — Updated DoD item text and evidence to say "version tag and commit SHA" instead of "version tag and `latest`". |
+| REG-029-002 | LOW | Undocumented deviation | `.github/workflows/ci.yml` integration job | CI integration job uses raw `go test -tags=integration` instead of `./smackerel.sh test integration`, deviating from spec hard constraint. This is architecturally necessary — GitHub Actions service containers manage postgres/NATS lifecycle, conflicting with the CLI's Docker Compose stack management. | **FIXED** — Added explanatory comment documenting the deviation and its rationale. |
+
+### Validation
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh check` | PASS — "Config is in sync with SST" + "env_file drift guard: OK" + "scenario-lint: OK" |
+| `./smackerel.sh test unit` | PASS — Go: all packages OK, Python: 402 passed |
+| `./smackerel.sh lint` | PASS for spec 029 artifacts (pre-existing immich lock-copy lint issue in spec 040 — not owned by this spec) |
+
+### Verdict
+
+**Two low-severity evidence/documentation fixes applied.** No functional regressions detected. All 7 scopes remain Done with correct DoD evidence matching source artifacts.
+
+---
+
 ## Completion Statement
 
 **Executed:** YES

@@ -717,3 +717,58 @@ ok      github.com/smackerel/smackerel/internal/config  0.028s
 ```
 
 Cross-check confirmed: typed Dependencies interfaces present in `health.go`; structuredLogger excludes 4 health/observability endpoints; supervisor reads sync interval from registry config; SST connector paths flow from `cfg.*`; tests pass for all touched packages.
+
+---
+
+## Security Scan — Repeat (2026-04-30)
+
+**Trigger:** stochastic-quality-sweep → security-to-doc (child workflow, repeat)
+**Agent:** bubbles.security (inline scan)
+**Result:** Clean — no actionable security findings
+
+### Delta Since Prior Scan (2026-04-21)
+
+Multiple commits touched spec 023 files since the last security scan. All changes are additive from other specs (037, 038, 039, 040):
+
+| File | Changes Since Last Scan | Security Impact |
+|------|------------------------|-----------------|
+| `internal/api/health.go` | New optional Dependencies fields: `AgentAdminHandler`, `AgentInvokeHandler`, `DriveHandlers`, `PhotosHandlers`, `RecommendationHandlers` | None — all nil-guarded, additive typed interfaces |
+| `internal/api/router.go` | New route groups for specs 037/038/039/040 (agent admin UI, drive connectors, photos, recommendations) | None — new authenticated routes follow established auth middleware patterns |
+| `internal/api/capture.go` | No security-relevant changes | None |
+| `internal/api/intelligence.go` | No changes since last scan | None |
+| `internal/connector/supervisor.go` | No security-relevant changes | None |
+| `internal/config/config.go` | New config fields for Drive, Photos, Recommendations | None — SST-compliant, same `os.Getenv` loading pattern |
+
+### Security Invariant Re-Verification
+
+| # | Invariant | Status | Evidence |
+|---|-----------|--------|----------|
+| 1 | **Constant-time token comparison** | ✅ Intact | 3 `subtle.ConstantTimeCompare` sites in `router.go` (lines 324, 345, 376) |
+| 2 | **Health endpoint auth-gating** | ✅ Intact | `isAuthenticated(r)` guards service topology, version, commit hash (line 334) |
+| 3 | **Request body size limits** | ✅ Intact | `MaxBytesReader` on all ingestion endpoints: capture (1MB), bookmarks (10MB), PWA (64KB), annotations, expenses |
+| 4 | **Security headers middleware** | ✅ Intact | CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy, Cache-Control (lines 289-299) |
+| 5 | **SST connector path compliance** | ✅ Intact | Zero `os.Getenv` for BOOKMARKS_IMPORT_DIR, BROWSER_HISTORY_PATH, MAPS_IMPORT_DIR in `cmd/` |
+| 6 | **CORS configuration** | ✅ Intact | SST-configured origins only, no wildcard default |
+| 7 | **OAuth rate limiting** | ✅ Intact | 10/min per IP on start + callback routes |
+| 8 | **API throttle** | ✅ Intact | 100 concurrent via `middleware.Throttle(100)` |
+| 9 | **SSRF protection on health probes** | ✅ Intact | `checkMLSidecar()` and `checkOllama()` URLs from config, 2s timeout, response body drain |
+| 10 | **Metric label injection protection** | ✅ Intact | `captureSource()` bounded whitelist (`validCaptureSources` map) |
+| 11 | **writeJSON/writeError consistency** | ✅ Intact | All intelligence handlers + health + capture use standardised helpers |
+| 12 | **Error information leakage** | ✅ Intact | Standardised `ErrorResponse`/`ErrorDetail` with generic messages; no stack traces or internal paths |
+| 13 | **Credential logging prevention** | ✅ Intact | Auth failures log path + remote_addr only; no tokens or secrets logged |
+| 14 | **New route auth coverage (post-delta)** | ✅ Verified | Agent invoke (`/v1/agent/invoke`) behind `bearerAuthMiddleware`; photos routes behind `bearerAuthMiddleware`; admin UI behind `webAuthMiddleware`; recommendations behind `bearerAuthMiddleware` |
+
+### Build & Test Baseline
+
+```
+./smackerel.sh check — Config is in sync with SST, env_file drift guard: OK
+./smackerel.sh test unit — All Go packages pass + Python ML sidecar pass
+```
+
+### Findings
+
+**None.** All 14 security invariants pass. Changes since the prior scan are additive from other specs and follow the security patterns spec 023 established. No regressions to the spec 023 security posture.
+
+### Verdict
+
+✅ CLEAN — No security findings. Repeat scan confirms spec 023 security posture is maintained.

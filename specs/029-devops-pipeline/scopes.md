@@ -309,8 +309,8 @@ Scenario: Build-from-source remains the default
 - [x] GHCR login uses `GITHUB_TOKEN` (no additional secrets)
   **Evidence:** implement | Uses `docker/login-action@v3` with `registry: ghcr.io`, `username: ${{ github.actor }}`, `password: ${{ secrets.GITHUB_TOKEN }}`.
   **Claim Source:** executed
-- [x] Images pushed with version tag and `latest`
-  **Evidence:** implement | Tags each image with `${VERSION}` (from git ref) and `latest`, then pushes both tags for core and ml.
+- [x] Images pushed with version tag and commit SHA
+  **Evidence:** implement | Tags each image with `${VERSION}` (from git ref) and `${COMMIT_SHORT}` (12-char SHA prefix), then pushes both tags for core and ml. No `latest` tag is pushed — per `docs/Docker_Best_Practices.md`, image identity uses immutable version/SHA tags, not mutable `latest`.
   **Claim Source:** executed
 - [x] `docker-compose.yml` supports `image:` override via env var
   **Evidence:** implement | Added `image: ${SMACKEREL_CORE_IMAGE:-}` and `image: ${SMACKEREL_ML_IMAGE:-}` to respective services. When unset, Compose builds from source (default behavior unchanged).

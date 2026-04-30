@@ -89,6 +89,13 @@ func run() error {
 		}
 	}
 
+	// Subscribe intelligence engine to list completion events (spec 028)
+	if svc.intEngine != nil {
+		if err := svc.intEngine.SubscribeListsCompleted(ctx); err != nil {
+			slog.Warn("list completion subscription failed", "error", err)
+		}
+	}
+
 	// Wire optional feature services (knowledge, expenses, meal planning)
 	wireKnowledgeLinter(sched, cfg, svc)
 	wireExpenseTracking(ctx, cfg, svc, deps)
