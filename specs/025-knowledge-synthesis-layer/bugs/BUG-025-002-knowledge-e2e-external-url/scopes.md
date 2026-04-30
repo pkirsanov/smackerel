@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 
 ## Scope 1: Make knowledge synthesis E2E deterministic
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
@@ -39,6 +39,12 @@ Feature: BUG-025-002 keep knowledge synthesis E2E deterministic
 | T-BUG-025-002-02 | Regression E2E: no mandatory external URL fixture | e2e-api | `tests/e2e/knowledge_synthesis_test.go` or quality guard owned by test phase | Fails if the required knowledge synthesis E2E depends on a non-owned external URL for success | BUG-025-002-SCN-002 |
 | T-BUG-025-002-03 | Broader E2E suite | e2e-api | `./smackerel.sh test e2e` | Broad suite no longer reports knowledge synthesis external URL extraction failure | BUG-025-002-SCN-001 |
 
+### Consumer Impact Sweep
+- API client: no product API route or response contract changed; only the required E2E fixture stopped sending a non-owned URL.
+- generated client: no generated client surface exists for this test fixture.
+- navigation, breadcrumb, redirect, deep link: no first-party UI routing surface changed.
+- stale-reference target: `tests/e2e/knowledge_synthesis_test.go` keeps `example.com/synthesis-e2e-test` only inside the regression guard that fails if the encoded required fixture depends on it again.
+
 ### Definition of Done
 - [x] Root cause confirmed and documented with pre-fix failure evidence
   - **Phase:** implement
@@ -65,11 +71,11 @@ Feature: BUG-025-002 keep knowledge synthesis E2E deterministic
   - **Claim Source:** executed
   - **Evidence:** The pre-fix required regression path failed on the external fixture with `EXTRACTION_FAILED` and `HTTP 404 fetching https://example.com/synthesis-e2e-test`, proving the old test depended on successful remote extraction.
 - [x] Adversarial regression case exists for non-owned external URL fixture dependency
-  - **Phase:** implement
-  - **Command:** `timeout 900 ./smackerel.sh test e2e --go-run TestKnowledgeSynthesis_PipelineRoundTrip`
+  - **Phase:** validate
+  - **Command:** `timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/knowledge_synthesis_test.go`
   - **Exit Code:** 0
-  - **Claim Source:** interpreted
-  - **Evidence:** `assertDeterministicKnowledgeSynthesisFixture` is part of the focused E2E and fails the test if the required fixture includes a `url` field or encoded `http://`, `https://`, or `example.com/synthesis-e2e-test` content.
+  - **Claim Source:** executed
+  - **Evidence:** Regression quality guard reported `Adversarial signal detected in tests/e2e/knowledge_synthesis_test.go` and `REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)`. The focused E2E evidence above shows the guarded path still passes through the live stack.
 - [x] Post-fix targeted knowledge synthesis E2E regression passes
   - **Phase:** implement
   - **Command:** `timeout 900 ./smackerel.sh test e2e --go-run TestKnowledgeSynthesis_PipelineRoundTrip`
@@ -82,21 +88,29 @@ Feature: BUG-025-002 keep knowledge synthesis E2E deterministic
   - **Exit Code:** 0
   - **Claim Source:** executed
   - **Evidence:** The focused E2E covers BUG-025-002-SCN-001 with deterministic live-stack capture/process/stats verification and BUG-025-002-SCN-002 with the external-URL guard in the same required regression path.
-- [ ] Broader E2E regression suite passes
-  - **Phase:** implement
-  - **Command:** `./smackerel.sh test e2e`
-  - **Exit Code:** 124
-  - **Claim Source:** executed
-  - **Uncertainty Declaration:** The broad run timed out, so a full broad-suite pass is not proven. Visible shell scenarios through IMAP sync passed, and no recurrence of the knowledge synthesis external URL failure appeared in the captured output, but the command did not complete successfully.
-- [x] Regression tests contain no silent-pass bailout patterns
-  - **Phase:** implement
-  - **Command:** source review of `tests/e2e/knowledge_synthesis_test.go`
-  - **Exit Code:** not-run
+- [x] Broader E2E regression suite passes
+  - **Phase:** validate
+  - **Command:** existing BUG-025-002 focused evidence review plus c6d2b26 broad E2E baseline evidence from `specs/039-recommendations-engine/report.md`
+  - **Exit Code:** c6d2b26 broad baseline 0; not rerun during metadata-only closeout
   - **Claim Source:** interpreted
-  - **Evidence:** The test uses fatal assertions for fixture drift, capture failures, artifact processing failures, stats parsing failures, and missing stats increase. It does not contain login/url bailout returns, skipped assertions, request interception, or external network dependency.
-- [ ] Bug marked as Fixed in bug.md by the validation owner
-  - **Phase:** implement
-  - **Command:** none
-  - **Exit Code:** not-run
-  - **Claim Source:** not-run
-  - **Uncertainty Declaration:** This item is validation-owned and was not modified by `bubbles.implement`; route remains open for validation ownership after the unresolved broad-suite timeout is addressed.
+  - **Evidence:** report.md `### Validation Evidence` records the focused knowledge synthesis proof and the later baseline: `timeout 3600 ./smackerel.sh test e2e` exit 0, shell E2E `34 total, 34 passed, 0 failed`, and Go E2E packages passed.
+  - **Interpretation:** The implementation-stage broad E2E timed out before certification, but the focused BUG-025-002 E2E had already passed without the external URL dependency. The later c6d2b26 full E2E baseline proves the broad suite no longer reports the knowledge synthesis external URL extraction failure.
+- [x] Regression tests contain no silent-pass bailout patterns
+  - **Phase:** validate
+  - **Command:** `timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/knowledge_synthesis_test.go`
+  - **Exit Code:** 0
+  - **Claim Source:** executed
+  - **Evidence:** Regression quality guard scanned `tests/e2e/knowledge_synthesis_test.go`, detected the adversarial signal, and returned `REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)`.
+- [x] Consumer impact sweep confirms zero stale first-party references remain
+  - **Phase:** validate
+  - **Command:** `git grep -n "example.com/synthesis-e2e-test" -- tests/e2e/knowledge_synthesis_test.go`
+  - **Exit Code:** 0
+  - **Claim Source:** interpreted
+  - **Evidence:** `git grep` returned one line, `tests/e2e/knowledge_synthesis_test.go:32`, where the old external URL appears inside `assertDeterministicKnowledgeSynthesisFixture` as a regression-guard rejection string.
+  - **Interpretation:** The required E2E fixture no longer sends the external URL as a success dependency; the remaining first-party reference is the guard that fails if the dependency returns.
+- [x] Bug marked as Fixed in bug.md by the validation owner
+  - **Phase:** validate
+  - **Command:** validation closeout artifact edit
+  - **Exit Code:** 0
+  - **Claim Source:** executed
+  - **Evidence:** bug.md `## Status` now checks Reported, Confirmed, In Progress, Fixed, Verified, and Closed; state.json now records `status=done`, `certification.status=done`, `currentPhase=finalize`, and `currentScope=null` for BUG-025-002.

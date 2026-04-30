@@ -11,11 +11,11 @@ The knowledge synthesis E2E captures `https://example.com/synthesis-e2e-test` an
 
 ## Status
 - [x] Reported
-- [ ] Confirmed (targeted red-stage output to be captured by owner)
-- [ ] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Confirmed (pre-fix focused E2E reproduced `EXTRACTION_FAILED` for `https://example.com/synthesis-e2e-test`)
+- [x] In Progress
+- [x] Fixed
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 1. Run the full E2E suite through `./smackerel.sh test e2e`.
@@ -41,8 +41,11 @@ Relevant test path: tests/e2e/knowledge_synthesis_test.go.
 The test body includes url "https://example.com/synthesis-e2e-test" plus text content.
 ```
 
-## Root Cause (initial analysis)
-The E2E fixture appears to rely on an external URL extraction path that is not owned by the test stack. Live-stack E2E should exercise real internal code paths, but external network dependencies need deterministic local fixtures or explicit, fail-loud environment gating.
+## Root Cause
+The required knowledge synthesis E2E fixture sent both `url` and `text`. The capture processor selected URL extraction when `url` was present, so the test required successful remote extraction from `https://example.com/synthesis-e2e-test` before deterministic text content could prove synthesis behavior.
+
+## Verification
+`tests/e2e/knowledge_synthesis_test.go` now captures deterministic text-only content through the real live-stack capture API, waits for real processing, and asserts knowledge synthesis stats. The test includes an adversarial fixture guard that fails if the required request reintroduces a `url` field, `http://`, `https://`, or `example.com/synthesis-e2e-test`. Focused post-fix E2E passed, the regression-quality guard detected an adversarial signal with zero violations, and the later `c6d2b26` baseline recorded full `./smackerel.sh test e2e` exit 0 with shell E2E 34/34 and Go E2E packages passed.
 
 ## Related
 - Feature: `specs/025-knowledge-synthesis-layer/`
