@@ -20,11 +20,11 @@
       "lockdown": false,
       "linkedTests": [
         {
-          "file": "owner-selected DevOps regression",
-          "testId": "Timeout terminates E2E process group"
+          "file": "tests/e2e/test_timeout_process_cleanup.sh",
+          "testId": "BUG-031-004-SCN-001"
         }
       ],
-      "evidenceRefs": ["report.md#test-evidence"],
+      "evidenceRefs": ["report.md#direct-bugfix-closure-evidence-2026-04-30"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -45,11 +45,11 @@
       "lockdown": false,
       "linkedTests": [
         {
-          "file": "owner-selected DevOps regression",
-          "testId": "surviving child work regression"
+          "file": "tests/e2e/test_timeout_process_cleanup.sh",
+          "testId": "BUG-031-004-SCN-002"
         }
       ],
-      "evidenceRefs": ["report.md#test-evidence"],
+      "evidenceRefs": ["report.md#direct-bugfix-closure-evidence-2026-04-30"],
       "replacedBy": null,
       "invalidatedBy": null
     }

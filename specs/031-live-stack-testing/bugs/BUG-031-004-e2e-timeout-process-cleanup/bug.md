@@ -11,11 +11,11 @@ The E2E harness can return from `timeout 1800 ./smackerel.sh test e2e` with exit
 
 ## Status
 - [x] Reported
-- [ ] Confirmed (targeted red-stage output to be captured by DevOps owner)
-- [ ] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Confirmed
+- [x] In Progress
+- [x] Fixed
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 1. Run the broad E2E suite through the repo CLI under an outer timeout.
@@ -42,8 +42,20 @@ Observed signature: child shell e2e continued after timeout 1800 ./smackerel.sh 
 Target likely specs/031-live-stack-testing / DevOps.
 ```
 
-## Root Cause (initial analysis)
-Root cause is not yet proven. Candidate surfaces include timeout not killing the whole process group, child bash runners not receiving forwarded termination, Docker container execution outliving the parent shell, or cleanup traps not firing consistently under timeout signal delivery.
+## Root Cause
+The E2E cleanup trap terminated the active child with `TERM` and then waited. A child process in the E2E process group that ignored `TERM`, `INT`, and `HUP` could survive the parent interruption path. The regression reproduced that behavior with `tests/e2e/fixtures/test_timeout_child_fixture.sh`: the nested runner cleanup path ran, but the marker process stayed alive until manual cleanup.
+
+## Resolution
+- `smackerel.sh` now supports `./smackerel.sh test e2e --shell-run <path>` for targeted shell E2E execution through the repo CLI.
+- `smackerel.sh` now sends `KILL` to the child process group after a short `TERM` grace during E2E cleanup, including the case where the process-group leader has exited but group members still exist.
+- `tests/e2e/test_timeout_process_cleanup.sh` invokes the adversarial fixture through the E2E runner, verifies the survivor detector fails when a marker child exists, interrupts the nested runner, and asserts marker processes are absent after cleanup.
+- `tests/e2e/run_all.sh` and the main E2E lifecycle script list include the new lifecycle regression.
+
+## Verification
+- `./smackerel.sh test e2e --shell-run test_timeout_process_cleanup.sh` exited 0 after the fix and reported both BUG-031-004 scenarios passing.
+- `./smackerel.sh test e2e --go-run TestKnowledgeStore_TablesExist` exited 0 and completed project-scoped stack teardown.
+- `bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/test_timeout_process_cleanup.sh` exited 0.
+- `./smackerel.sh check` exited 0.
 
 ## Related
 - Feature: `specs/031-live-stack-testing/`

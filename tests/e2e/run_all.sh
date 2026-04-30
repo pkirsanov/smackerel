@@ -17,7 +17,7 @@ FAILED=0
 RESULTS=()
 
 # Lifecycle tests manage their own stack boot/teardown and must run standalone.
-LIFECYCLE_TESTS="test_compose_start test_persistence test_postgres_readiness_gate test_config_fail"
+LIFECYCLE_TESTS="test_timeout_process_cleanup test_compose_start test_persistence test_postgres_readiness_gate test_config_fail"
 
 is_lifecycle_test() {
   local name="$1"
