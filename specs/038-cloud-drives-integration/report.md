@@ -1839,19 +1839,82 @@ files outside `specs/038-cloud-drives-integration/` were modified.
 
 ### Summary
 
-Execution evidence section reserved for the owning implementation, test, validation, and audit phases.
+Scope 2 implementation completed on 2026-04-30 by `bubbles.implement`. Delivered initial scan, cursor-backed monitor deltas, fixture-backed Google provider reads, durable progress/read models, empty-drive behavior, provider health degradation/retryable work, connector-detail API/PWA updates, and current-tree validation through the repo CLI. The production `GoogleDriveProvider` is the code path under the owned fixture boundary; no mock/intercept E2E shortcuts were introduced.
 
 ### Code Diff Evidence
 
-No implementation diff evidence recorded.
+- `internal/db/migrations/024_drive_scan_monitor_read_models.sql` — additive durable read models: `drive_scan_jobs` for scan/monitor progress and `drive_provider_work_queue` for retryable provider work.
+- `internal/drive/provider.go` and `internal/drive/google/google.go` — extended provider-neutral metadata and implemented Google `Scope`, `SetScope`, `ListFolder`, `GetFile`, and `Changes` against configured Drive/OAuth endpoints.
+- `internal/drive/scan/`, `internal/drive/monitor/`, `internal/drive/health/` — new scan service/store, monitor service, provider health tracker/recorder, and unit regressions.
+- `internal/api/drive_handlers.go`, `web/pwa/connector-detail.html`, `web/pwa/connector-detail.js`, `web/pwa/style.css` — connector detail read model and Screen 3 progress/activity/health rendering.
+- `tests/integration/drive/fixtures/server.go` plus Scope 2 integration tests — owned Google REST/OAuth fixture expanded with file pages, bytes, change feed, request counts, and outage controls.
+- `tests/e2e/drive/drive_scan_ui_test.go`, `drive_scan_e2e_test.go`, `drive_health_ui_test.go` — live-stack Scope 2 e2e coverage for progress/final counts, empty drive + later monitor upload, and provider outage/retry state.
+- `scripts/runtime/go-integration.sh` — integration packages now run with `go test -p 1` to avoid shared disposable DB cleanup races across integration packages while preserving the repo CLI entrypoint.
 
 ### Test Evidence
 
-No test output recorded.
+**RED proof before implementation**
+**Phase:** implement
+**Command:** `./smackerel.sh test unit --go`
+**Exit Code:** 1
+**Claim Source:** executed
+The pre-implementation unit run failed on the newly added Scope 2 tests because the production symbols did not exist yet. Missing symbols included `NewTracker`, `Policy`, `newMemoryStore`, `Connection`, and `NewService`, proving the tests were RED before scan/monitor/health implementation.
+
+**Current unit proof**
+**Phase:** implement
+**Command:** `./smackerel.sh test unit`
+**Exit Code:** 0
+**Claim Source:** executed
+All Go packages passed, including `internal/drive/scan`, `internal/drive/monitor`, and `internal/drive/health`. Python ML sidecar tests also passed: `352 passed, 2 warnings`. This includes `TestBulkScanPersistsDriveFilesWithArtifactLinks`, `TestMonitorAppliesProviderDeltasWithoutDuplicateArtifacts`, and `TestProviderErrorsTransitionHealthAndPreserveRetryableWork`.
+
+Concrete Scope 2 unit evidence files referenced by the planned rows: `internal/drive/scan/scan_test.go`, `internal/drive/monitor/monitor_test.go`, and `internal/drive/health/health_test.go`.
+
+**Current integration proof**
+**Phase:** implement
+**Command:** `./smackerel.sh test integration`
+**Exit Code:** 0
+**Claim Source:** executed
+Full integration suite passed. The drive package passed in `5.841s`, including:
+
+```
+--- PASS: TestEmptyDriveStaysHealthyAndDetectsLaterUpload (0.13s)
+--- PASS: TestDriveFixtureCanary_ProductionProviderPathConsumesFixtureServer (0.07s)
+--- PASS: TestDriveScanFixturePreservesHierarchyAndMetadata (4.60s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/drive    5.841s
+```
+
+`TestDriveScanFixturePreservesHierarchyAndMetadata` asserts 1,200 `drive_files`, 1,200 linked artifacts, 80 distinct folders, zero missing provider metadata, scan progress `complete/1200/0`, extraction state still `pending`, and healthy connection status. `TestEmptyDriveStaysHealthyAndDetectsLaterUpload` proves zero artifacts after empty scan + first monitor cycle, then a later fixture upload appears through monitor. The canary proves the production Google provider path consumes fixture server responses.
+
+Concrete Scope 2 integration evidence files referenced by the planned rows: `tests/integration/drive/drive_scan_fixture_test.go`, `tests/integration/drive/drive_empty_monitor_test.go`, and `tests/integration/drive/drive_fixture_canary_test.go`.
+
+**Current E2E proof**
+**Phase:** implement
+**Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
+**Exit Code:** 0
+**Claim Source:** executed
+Full E2E passed. Shell E2E reported `Total: 35`, `Passed: 35`, `Failed: 0`; Go E2E packages passed (`tests/e2e`, `tests/e2e/agent`, `tests/e2e/drive`) and the runner emitted `PASS: go-e2e`. The drive package passed all six drive E2E tests, including the three Scope 2 tests:
+
+```
+--- PASS: TestDriveConnectorDetailSurfacesProviderOutageAndRetryState (0.17s)
+--- PASS: TestDriveScanE2E_EmptyDriveCreatesNoArtifacts (0.18s)
+--- PASS: TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts (0.31s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/drive    0.989s
+```
+
+Concrete Scope 2 E2E evidence files referenced by the planned rows: `tests/e2e/drive/drive_scan_ui_test.go`, `tests/e2e/drive/drive_scan_e2e_test.go`, and `tests/e2e/drive/drive_health_ui_test.go`.
+
+**Repo quality gates and Docker freshness**
+**Phase:** implement
+**Command:** `./smackerel.sh check`; `./smackerel.sh format --check`; `./smackerel.sh lint`; `./smackerel.sh --env test build --no-cache`
+**Exit Code:** 0; 0; 0; 0
+**Claim Source:** executed
+`check` reported config/SST drift clean and scenario-lint OK. `format --check` reported `42 files already formatted`. `lint` reported `All checks passed!` and `Web validation passed`. The no-cache test build rebuilt fresh `smackerel-core` and `smackerel-ml` images after the connector-detail PWA changes.
 
 ### Completion Statement
 
-Scope 2 status is Not Started.
+Scope 2 status is Done from the implementation perspective: 12/12 DoD items are checked in [scopes.md](scopes.md) with inline executed evidence. Certification remains owned by `bubbles.validate`; `state.json.certification.*` was not modified by this implementation pass.
 
 ## Scope 3: Extraction And Classification
 

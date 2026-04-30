@@ -74,6 +74,21 @@
           <dd id="field-skipped">0</dd>
         </div>
       </dl>
+
+      <div id="scan-progress" class="scan-progress" hidden>
+        <div class="progress-row">
+          <span id="scan-progress-label">Scan progress</span>
+          <span id="scan-progress-counts">0 / 0</span>
+        </div>
+        <progress id="scan-progress-bar" max="1" value="0"></progress>
+      </div>
+
+      <p id="provider-health-detail" class="status status-info" role="status" hidden></p>
+
+      <section class="recent-activity" aria-labelledby="recent-activity-heading">
+        <h3 id="recent-activity-heading">Recent activity</h3>
+        <ul id="recent-activity"></ul>
+      </section>
     </div>
 
     <p

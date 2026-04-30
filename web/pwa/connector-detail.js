@@ -24,6 +24,13 @@
   const indexedEl = document.getElementById("field-indexed");
   const skippedEl = document.getElementById("field-skipped");
 
+  const progressEl = document.getElementById("scan-progress");
+  const progressLabelEl = document.getElementById("scan-progress-label");
+  const progressCountsEl = document.getElementById("scan-progress-counts");
+  const progressBarEl = document.getElementById("scan-progress-bar");
+  const healthDetailEl = document.getElementById("provider-health-detail");
+  const recentActivityEl = document.getElementById("recent-activity");
+
   function show(el) { el.hidden = false; }
   function hide(el) { el.hidden = true; }
 
@@ -85,9 +92,53 @@
     indexedEl.textContent = String(view.indexed_count != null ? view.indexed_count : 0);
     skippedEl.textContent = String(view.skipped_count != null ? view.skipped_count : 0);
 
+    renderProgress(view.progress);
+    renderProviderHealth(view);
+    renderRecentActivity(view.recent_activity || []);
+
     hide(statusEl);
     show(bodyEl);
     sectionEl.setAttribute("aria-busy", "false");
+  }
+
+  function renderProgress(progress) {
+    if (!progress) {
+      hide(progressEl);
+      return;
+    }
+    const total = progress.total_seen || progress.indexed_count || 0;
+    const indexed = progress.indexed_count || 0;
+    progressLabelEl.textContent = (progress.phase || "scan") + " — " + (progress.status || "running");
+    progressCountsEl.textContent = indexed + " / " + total;
+    progressBarEl.max = Math.max(total, 1);
+    progressBarEl.value = Math.min(indexed, progressBarEl.max);
+    show(progressEl);
+  }
+
+  function renderProviderHealth(view) {
+    const retryable = view.retryable_work_count || 0;
+    if (retryable === 0 && !view.health_reason) {
+      hide(healthDetailEl);
+      return;
+    }
+    const parts = [];
+    if (view.health_reason) {
+      parts.push(view.health_reason);
+    }
+    if (retryable > 0) {
+      parts.push("Provider work is queued for retry: " + retryable);
+    }
+    healthDetailEl.textContent = parts.join(". ");
+    show(healthDetailEl);
+  }
+
+  function renderRecentActivity(items) {
+    recentActivityEl.replaceChildren();
+    for (const item of items) {
+      const li = document.createElement("li");
+      li.textContent = (item.phase || "drive") + " " + (item.status || "") + " — " + (item.indexed_count || 0) + " indexed";
+      recentActivityEl.appendChild(li);
+    }
   }
 
   async function load() {

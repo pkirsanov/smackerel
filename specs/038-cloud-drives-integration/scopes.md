@@ -56,7 +56,7 @@ This plan is intentionally vertical and sequential. Each scope delivers one user
 | # | Scope | Surfaces | Tests | DoD Summary | Status |
 |---|-------|----------|-------|-------------|--------|
 | 1 | Drive Foundation | Config, NATS, schema, provider registry, API, PWA connect | unit, integration, e2e-api, e2e-ui | Config/SST, connection, empty drive, provider registry | Not Started |
-| 2 | Scan And Monitor | Provider fixture, scan loop, monitor, progress UI, health | unit, integration, e2e-api, e2e-ui | Bulk scan, cursor deltas, empty drive, outage degradation | Not Started |
+| 2 | Scan And Monitor | Provider fixture, scan loop, monitor, progress UI, health | unit, integration, e2e-api, e2e-ui | Bulk scan, cursor deltas, empty drive, outage degradation | Done |
 | 3 | Extraction And Classification | Go/Python workers, prompt contracts, skip UI | unit, integration, e2e-api, e2e-ui | Multi-format extraction, folder taxonomy, blocked files | Not Started |
 | 4 | Search And Detail | Search API, artifact detail, versions, tombstones | unit, integration, e2e-api, e2e-ui | Natural-language recall, native docs, access states | Not Started |
 | 5 | Save Rules And Write-Back | Rule engine, save service, Telegram, meal plan | unit, integration, e2e-api, e2e-ui | Auto-file captures, generated outputs, folder race safety | Not Started |
@@ -912,7 +912,7 @@ Scenario: SCN-038-003 A second provider registers without downstream branching
 
 ## Scope 2: Scan And Monitor
 
-Status: [ ] Not started | [ ] In progress | [ ] Done | [ ] Blocked
+Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
 
 ### Use Cases (Gherkin)
 
@@ -980,18 +980,101 @@ Scenario: SCN-038-006 Provider outage degrades visibly and queues work
 
 ### Definition of Done
 
-- [ ] Initial scan writes one durable drive identity per provider file and preserves folder/provider metadata.
-- [ ] Monitor cycles handle new, modified, moved, trashed, deleted, and cursor-invalidated files without duplicate artifacts.
-- [ ] Empty-drive behavior creates no artifacts and remains healthy until later uploads appear.
-- [ ] Provider outage and rate-limit states are visible, retryable, and do not silently drop queued work.
-- [ ] Screen 3 progress, activity, health, and empty/degraded states match the UX contract.
-- [ ] Gherkin-to-test mapping for SCN-038-004 through SCN-038-006 is implemented exactly as planned.
-- [ ] Scenario-specific E2E regression tests for every scan/monitor behavior pass.
-- [ ] Broader E2E regression suite passes.
-- [ ] Shared Infrastructure Impact Sweep canary coverage passes before broad suite reruns.
-- [ ] Rollback or restore path for fixture/server/test storage changes is documented and verified.
-- [ ] Change Boundary is respected and zero excluded file families were changed.
-- [ ] `./smackerel.sh check`, `lint`, `format --check`, `test unit`, `test integration`, and `test e2e` pass for this scope.
+- [x] Initial scan writes one durable drive identity per provider file and preserves folder/provider metadata.
+
+  **Phase:** implement
+  **Command:** `./smackerel.sh test integration`; `./smackerel.sh test unit`
+  **Exit Code:** 0; 0
+  **Claim Source:** executed
+  Evidence: `TestDriveScanFixturePreservesHierarchyAndMetadata` passed in the live drive integration package and asserts 1,200 `drive_files` rows, 1,200 linked artifacts, 80 distinct folder paths, zero missing provider metadata, progress `complete/1200/0`, no extraction/classification start (`extraction_state='pending'`), and healthy connection status. The unit suite also passed `internal/drive/scan` including `TestBulkScanPersistsDriveFilesWithArtifactLinks`.
+
+- [x] Monitor cycles handle new, modified, moved, trashed, deleted, and cursor-invalidated files without duplicate artifacts.
+
+  **Phase:** implement
+  **Command:** `./smackerel.sh test unit`; `./smackerel.sh test integration`
+  **Exit Code:** 0; 0
+  **Claim Source:** executed
+  Evidence: `TestMonitorAppliesProviderDeltasWithoutDuplicateArtifacts` passed in `internal/drive/monitor` and covers modified/upsert revision chains, moved folder metadata, trash/delete tombstones, permission-lost markers, cursor invalidation rescan, cursor persistence, and stable provider-file artifact identity. `TestEmptyDriveStaysHealthyAndDetectsLaterUpload` passed in live integration and proves a later fixture upload is detected by the monitor path.
+
+- [x] Empty-drive behavior creates no artifacts and remains healthy until later uploads appear.
+
+  **Phase:** implement
+  **Command:** `./smackerel.sh test integration`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
+  **Exit Code:** 0; 0
+  **Claim Source:** executed
+  Evidence: live integration `TestEmptyDriveStaysHealthyAndDetectsLaterUpload` passed with zero `drive_files` after initial scan + first monitor cycle, healthy connection status, and one indexed file after a later fixture upload. Live E2E `TestDriveScanE2E_EmptyDriveCreatesNoArtifacts` passed and asserts `indexed_count=0`, `empty_drive=true`, healthy status, then monitor upload makes `indexed_count=1` and `empty_drive=false`.
+
+- [x] Provider outage and rate-limit states are visible, retryable, and do not silently drop queued work.
+
+  **Phase:** implement
+  **Command:** `./smackerel.sh test unit`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
+  **Exit Code:** 0; 0
+  **Claim Source:** executed
+  Evidence: `TestProviderErrorsTransitionHealthAndPreserveRetryableWork` passed in `internal/drive/health` and proves degraded/failing thresholds plus preserved retryable work for scan, monitor, and retrieve attempts. Live E2E `TestDriveConnectorDetailSurfacesProviderOutageAndRetryState` passed and verifies the API/UI read model exposes `status=failing`, `retryable_work_count=3`, and a visible provider error reason.
+
+- [x] Screen 3 progress, activity, health, and empty/degraded states match the UX contract.
+
+  **Phase:** implement
+  **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`; `./smackerel.sh --env test build --no-cache`
+  **Exit Code:** 0; 0
+  **Claim Source:** executed
+  Evidence: live E2E `TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts`, `TestDriveScanE2E_EmptyDriveCreatesNoArtifacts`, and `TestDriveConnectorDetailSurfacesProviderOutageAndRetryState` all passed. The PWA detail screen now renders `scan-progress`, recent activity, health reason, retryable work count, indexed/skipped counts, and empty-drive state from the API read model; the no-cache test build rebuilt fresh core and ML images after the PWA changes.
+
+- [x] Gherkin-to-test mapping for SCN-038-004 through SCN-038-006 is implemented exactly as planned.
+
+  **Phase:** implement
+  **Command:** `./smackerel.sh test unit`; `./smackerel.sh test integration`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
+  **Exit Code:** 0; 0; 0
+  **Claim Source:** executed
+  Evidence: all eight planned Scope 2 rows exist at the planned paths and pass through the repo CLI: `TestBulkScanPersistsDriveFilesWithArtifactLinks`, `TestDriveScanFixturePreservesHierarchyAndMetadata`, `TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts`, `TestEmptyDriveStaysHealthyAndDetectsLaterUpload`, `TestDriveScanE2E_EmptyDriveCreatesNoArtifacts`, `TestProviderErrorsTransitionHealthAndPreserveRetryableWork`, `TestDriveConnectorDetailSurfacesProviderOutageAndRetryState`, and `TestDriveFixtureCanary_ProductionProviderPathConsumesFixtureServer`.
+
+- [x] Scenario-specific E2E regression tests for every scan/monitor behavior pass.
+
+  **Phase:** implement
+  **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
+  **Exit Code:** 0
+  **Claim Source:** executed
+  Evidence: live E2E drive package passed all Scope 2 regressions: `TestDriveConnectorDetailSurfacesProviderOutageAndRetryState`, `TestDriveScanE2E_EmptyDriveCreatesNoArtifacts`, and `TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts`. The same run also kept Scope 1 drive regressions green (`TestDriveConnectFlowShowsHealthyEmptyDriveConnector`, `TestDriveFoundationE2E_MissingRequiredConfigFailsLoudly`, `TestDriveFoundationE2E_SecondProviderUsesNeutralContract`).
+
+- [x] Broader E2E regression suite passes.
+
+  **Phase:** implement
+  **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
+  **Exit Code:** 0
+  **Claim Source:** executed
+  Evidence: the full E2E command passed with shell E2E `35` total, `35` passed, `0` failed; Go E2E packages passed (`tests/e2e`, `tests/e2e/agent`, `tests/e2e/drive`); and the final runner emitted `PASS: go-e2e` before clean project-scoped teardown.
+
+- [x] Shared Infrastructure Impact Sweep canary coverage passes before broad suite reruns.
+
+  **Phase:** implement
+  **Command:** `./smackerel.sh test integration`
+  **Exit Code:** 0
+  **Claim Source:** executed
+  Evidence: `TestDriveFixtureCanary_ProductionProviderPathConsumesFixtureServer` passed before the final broad E2E rerun and proves Scope 2 fixture responses are consumed through the production Google provider path, including `ListFolder`, `GetFile`, and `InitialScan`. The integration runner now serializes packages (`go test -p 1`) to protect shared disposable test storage from cross-package cleanup races.
+
+- [x] Rollback or restore path for fixture/server/test storage changes is documented and verified.
+
+  **Phase:** implement
+  **Command:** `./smackerel.sh test integration`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
+  **Exit Code:** 0; 0
+  **Claim Source:** executed
+  Evidence: the owned fixture server is in-memory per test and closed with `defer fixtureServer.Close()`. Scope 2 integration/e2e helpers delete `drive_connections` and drive artifact rows for each generated connection during `t.Cleanup`, and the final E2E command verified disposable stack teardown by removing test containers, `smackerel-test-postgres-data`, `smackerel-test-nats-data`, and the `smackerel-test_default` network.
+
+- [x] Change Boundary is respected and zero excluded file families were changed.
+
+  **Phase:** implement
+  **Command:** `git status --short`; `./smackerel.sh check`; `./smackerel.sh lint`
+  **Exit Code:** 0; 0; 0
+  **Claim Source:** interpreted from executed commands
+  Evidence: changed files are limited to drive scan/monitor/health/provider code, additive drive migration `024`, connector-detail API/PWA files, drive integration/e2e tests, the owned fixture server, and one test-runner isolation fix in `scripts/runtime/go-integration.sh`. No excluded Scope 2 surfaces were changed: ML extraction/classification, Save Rules, Telegram retrieval, and cross-feature domain processors remain untouched. `./smackerel.sh check` and `./smackerel.sh lint` both passed.
+
+- [x] `./smackerel.sh check`, `lint`, `format --check`, `test unit`, `test integration`, and `test e2e` pass for this scope.
+
+  **Phase:** implement
+  **Command:** `./smackerel.sh check`; `./smackerel.sh format --check`; `./smackerel.sh lint`; `./smackerel.sh test unit`; `./smackerel.sh test integration`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`; `./smackerel.sh --env test build --no-cache`
+  **Exit Code:** 0; 0; 0; 0; 0; 0; 0
+  **Claim Source:** executed
+  Evidence: check reported `Config is in sync with SST`, `env_file drift guard: OK`, and `scenario-lint: OK`; format reported `42 files already formatted`; lint reported `All checks passed!` and `Web validation passed`; unit passed all Go packages including `internal/drive/scan`, `internal/drive/monitor`, and `internal/drive/health` plus Python `352 passed, 2 warnings`; integration passed full suite including `tests/integration/drive` in `5.841s`; E2E passed shell `35/35` and all Go E2E packages; no-cache test build rebuilt `smackerel-core` and `smackerel-ml`.
 
 ---
 
