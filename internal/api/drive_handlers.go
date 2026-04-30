@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -219,15 +220,41 @@ func redirectWithDriveError(w http.ResponseWriter, r *http.Request, msg string) 
 // DriveConnectionView is the JSON shape returned by GET
 // /v1/connectors/drive/connection/{id}.
 type DriveConnectionView struct {
-	ID           string            `json:"id"`
-	ProviderID   string            `json:"provider_id"`
-	AccountLabel string            `json:"account_label"`
-	AccessMode   string            `json:"access_mode"`
-	Status       string            `json:"status"`
-	Scope        DriveConnectScope `json:"scope"`
-	IndexedCount int64             `json:"indexed_count"`
-	SkippedCount int64             `json:"skipped_count"`
-	EmptyDrive   bool              `json:"empty_drive"`
+	ID                 string              `json:"id"`
+	ProviderID         string              `json:"provider_id"`
+	AccountLabel       string              `json:"account_label"`
+	AccessMode         string              `json:"access_mode"`
+	Status             string              `json:"status"`
+	HealthReason       string              `json:"health_reason"`
+	Scope              DriveConnectScope   `json:"scope"`
+	IndexedCount       int64               `json:"indexed_count"`
+	SkippedCount       int64               `json:"skipped_count"`
+	RetryableWorkCount int64               `json:"retryable_work_count"`
+	EmptyDrive         bool                `json:"empty_drive"`
+	Progress           *DriveProgressView  `json:"progress,omitempty"`
+	RecentActivity     []DriveActivityView `json:"recent_activity"`
+}
+
+// DriveProgressView is the latest scan/monitor progress row rendered by
+// Screen 3.
+type DriveProgressView struct {
+	Phase           string `json:"phase"`
+	Status          string `json:"status"`
+	TotalSeen       int64  `json:"total_seen"`
+	IndexedCount    int64  `json:"indexed_count"`
+	SkippedCount    int64  `json:"skipped_count"`
+	UpsertedCount   int64  `json:"upserted_count"`
+	MovedCount      int64  `json:"moved_count"`
+	TombstonedCount int64  `json:"tombstoned_count"`
+	LastError       string `json:"last_error"`
+}
+
+// DriveActivityView is one recent scan/monitor activity row.
+type DriveActivityView struct {
+	Phase        string `json:"phase"`
+	Status       string `json:"status"`
+	IndexedCount int64  `json:"indexed_count"`
+	UpdatedAt    string `json:"updated_at"`
 }
 
 // GetConnection handles GET /v1/connectors/drive/connection/{id}. It
@@ -251,12 +278,13 @@ func (h *DriveHandlers) GetConnection(w http.ResponseWriter, r *http.Request) {
 		accountLabel string
 		accessMode   string
 		status       string
+		healthReason string
 		scopeJSON    []byte
 	)
 	err := h.pool.QueryRow(r.Context(),
-		`SELECT provider_id, account_label, access_mode, status, scope
+		`SELECT provider_id, account_label, access_mode, status, COALESCE(last_health_reason, ''), scope
 		   FROM drive_connections WHERE id=$1`, id,
-	).Scan(&providerID, &accountLabel, &accessMode, &status, &scopeJSON)
+	).Scan(&providerID, &accountLabel, &accessMode, &status, &healthReason, &scopeJSON)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "CONNECTION_NOT_FOUND", "no drive connection with id "+id)
 		return
@@ -281,6 +309,30 @@ func (h *DriveHandlers) GetConnection(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
 	}
+	var skipped int64
+	if err := h.pool.QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM drive_files WHERE connection_id=$1 AND extraction_state IN ('skipped', 'blocked')`, id,
+	).Scan(&skipped); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		return
+	}
+	var retryableWork int64
+	if err := h.pool.QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM drive_provider_work_queue WHERE connection_id=$1 AND status IN ('queued', 'retryable', 'running')`, id,
+	).Scan(&retryableWork); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		return
+	}
+	progress, err := h.latestDriveProgress(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		return
+	}
+	recentActivity, err := h.recentDriveActivity(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		return
+	}
 
 	view := DriveConnectionView{
 		ID:           id,
@@ -288,13 +340,63 @@ func (h *DriveHandlers) GetConnection(w http.ResponseWriter, r *http.Request) {
 		AccountLabel: accountLabel,
 		AccessMode:   accessMode,
 		Status:       status,
+		HealthReason: healthReason,
 		Scope: DriveConnectScope{
 			FolderIDs:     scopePayload.FolderIDs,
 			IncludeShared: scopePayload.IncludeShared,
 		},
-		IndexedCount: indexed,
-		SkippedCount: 0,
-		EmptyDrive:   indexed == 0,
+		IndexedCount:       indexed,
+		SkippedCount:       skipped,
+		RetryableWorkCount: retryableWork,
+		EmptyDrive:         indexed == 0,
+		Progress:           progress,
+		RecentActivity:     recentActivity,
 	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *DriveHandlers) latestDriveProgress(ctx context.Context, connectionID string) (*DriveProgressView, error) {
+	rows, err := h.pool.Query(ctx,
+		`SELECT phase, status, total_seen, indexed_count, skipped_count, upserted_count,
+		        moved_count, tombstoned_count, last_error
+		   FROM drive_scan_jobs
+		  WHERE connection_id=$1
+		  ORDER BY updated_at DESC
+		  LIMIT 1`, connectionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, rows.Err()
+	}
+	var progress DriveProgressView
+	if err := rows.Scan(&progress.Phase, &progress.Status, &progress.TotalSeen, &progress.IndexedCount, &progress.SkippedCount, &progress.UpsertedCount, &progress.MovedCount, &progress.TombstonedCount, &progress.LastError); err != nil {
+		return nil, err
+	}
+	return &progress, rows.Err()
+}
+
+func (h *DriveHandlers) recentDriveActivity(ctx context.Context, connectionID string) ([]DriveActivityView, error) {
+	rows, err := h.pool.Query(ctx,
+		`SELECT phase, status, indexed_count, updated_at::text
+		   FROM drive_scan_jobs
+		  WHERE connection_id=$1
+		  ORDER BY updated_at DESC
+		  LIMIT 5`, connectionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	activity := []DriveActivityView{}
+	for rows.Next() {
+		var item DriveActivityView
+		if err := rows.Scan(&item.Phase, &item.Status, &item.IndexedCount, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		activity = append(activity, item)
+	}
+	return activity, rows.Err()
 }

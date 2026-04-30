@@ -19,8 +19,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
+	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -375,23 +378,117 @@ func (p *Provider) Disconnect(_ context.Context, _ string) error {
 }
 
 // Scope implements drive.Provider.
-func (p *Provider) Scope(_ context.Context, _ string) (drive.Scope, error) {
-	return drive.Scope{}, drive.ErrNotImplemented
+func (p *Provider) Scope(ctx context.Context, connectionID string) (drive.Scope, error) {
+	if p.pool == nil {
+		return drive.Scope{}, fmt.Errorf("google: Scope called before ConfigureRuntime (pool is nil)")
+	}
+	var scopeJSON []byte
+	if err := p.pool.QueryRow(ctx, `SELECT scope FROM drive_connections WHERE id=$1`, connectionID).Scan(&scopeJSON); err != nil {
+		return drive.Scope{}, fmt.Errorf("google: load scope: %w", err)
+	}
+	var payload struct {
+		FolderIDs     []string `json:"folder_ids"`
+		IncludeShared bool     `json:"include_shared"`
+	}
+	if len(scopeJSON) > 0 {
+		if err := json.Unmarshal(scopeJSON, &payload); err != nil {
+			return drive.Scope{}, fmt.Errorf("google: decode scope: %w", err)
+		}
+	}
+	return drive.Scope{FolderIDs: payload.FolderIDs, IncludeShared: payload.IncludeShared}, nil
 }
 
 // SetScope implements drive.Provider.
-func (p *Provider) SetScope(_ context.Context, _ string, _ drive.Scope) error {
-	return drive.ErrNotImplemented
+func (p *Provider) SetScope(ctx context.Context, connectionID string, scope drive.Scope) error {
+	if p.pool == nil {
+		return fmt.Errorf("google: SetScope called before ConfigureRuntime (pool is nil)")
+	}
+	scopeJSON, err := json.Marshal(map[string]any{"folder_ids": scope.FolderIDs, "include_shared": scope.IncludeShared})
+	if err != nil {
+		return fmt.Errorf("google: marshal scope: %w", err)
+	}
+	if _, err := p.pool.Exec(ctx, `UPDATE drive_connections SET scope=$2, updated_at=now() WHERE id=$1`, connectionID, scopeJSON); err != nil {
+		return fmt.Errorf("google: update scope: %w", err)
+	}
+	return nil
 }
 
 // ListFolder implements drive.Provider.
-func (p *Provider) ListFolder(_ context.Context, _ string, _ string, _ string) ([]drive.FolderItem, string, error) {
-	return nil, "", drive.ErrNotImplemented
+func (p *Provider) ListFolder(ctx context.Context, connectionID string, folderID string, pageToken string) ([]drive.FolderItem, string, error) {
+	if folderID == "" {
+		folderID = "root"
+	}
+	accessToken, err := p.accessToken(ctx, connectionID)
+	if err != nil {
+		return nil, "", err
+	}
+	baseURL, err := url.Parse(strings.TrimRight(p.cfg.APIBaseURL, "/") + "/drive/v3/files")
+	if err != nil {
+		return nil, "", fmt.Errorf("google: parse files URL: %w", err)
+	}
+	query := baseURL.Query()
+	query.Set("q", "'"+folderID+"' in parents and trashed = false")
+	query.Set("pageSize", "100")
+	if pageToken != "" {
+		query.Set("pageToken", pageToken)
+	}
+	query.Set("fields", "nextPageToken,files(id,name,mimeType,size,parents,webViewLink,modifiedTime,headRevisionId,owners,sharingUser,shared,trashed,appProperties)")
+	baseURL.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL.String(), nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("google: build list request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("google: list folder: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("google: list folder status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var parsed googleFilesResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, "", fmt.Errorf("google: decode files response: %w", err)
+	}
+	items := make([]drive.FolderItem, 0, len(parsed.Files))
+	for _, file := range parsed.Files {
+		items = append(items, file.toFolderItem())
+	}
+	return items, parsed.NextPageToken, nil
 }
 
 // GetFile implements drive.Provider.
-func (p *Provider) GetFile(_ context.Context, _ string, _ string) (drive.FileBytes, error) {
-	return drive.FileBytes{}, drive.ErrNotImplemented
+func (p *Provider) GetFile(ctx context.Context, connectionID string, providerFileID string) (drive.FileBytes, error) {
+	accessToken, err := p.accessToken(ctx, connectionID)
+	if err != nil {
+		return drive.FileBytes{}, err
+	}
+	fileURL := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/drive/v3/files/" + path.Clean(providerFileID)
+	reqURL, err := url.Parse(fileURL)
+	if err != nil {
+		return drive.FileBytes{}, fmt.Errorf("google: parse file URL: %w", err)
+	}
+	query := reqURL.Query()
+	query.Set("alt", "media")
+	reqURL.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return drive.FileBytes{}, fmt.Errorf("google: build get file request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return drive.FileBytes{}, fmt.Errorf("google: get file: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return drive.FileBytes{}, fmt.Errorf("google: get file status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return drive.FileBytes{MimeType: mediaType(resp.Header.Get("Content-Type")), Reader: resp.Body, Size: resp.ContentLength}, nil
 }
 
 // PutFile implements drive.Provider.
@@ -400,8 +497,58 @@ func (p *Provider) PutFile(_ context.Context, _ string, _ string, _ string, _ dr
 }
 
 // Changes implements drive.Provider.
-func (p *Provider) Changes(_ context.Context, _ string, _ string) ([]drive.Change, string, error) {
-	return nil, "", drive.ErrNotImplemented
+func (p *Provider) Changes(ctx context.Context, connectionID string, cursor string) ([]drive.Change, string, error) {
+	accessToken, err := p.accessToken(ctx, connectionID)
+	if err != nil {
+		return nil, "", err
+	}
+	changesURL, err := url.Parse(strings.TrimRight(p.cfg.APIBaseURL, "/") + "/drive/v3/changes")
+	if err != nil {
+		return nil, "", fmt.Errorf("google: parse changes URL: %w", err)
+	}
+	query := changesURL.Query()
+	query.Set("pageToken", cursor)
+	query.Set("fields", "newStartPageToken,nextPageToken,changes(fileId,removed,kind,file(id,name,mimeType,size,parents,webViewLink,modifiedTime,headRevisionId,owners,sharingUser,shared,trashed,appProperties))")
+	changesURL.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, changesURL.String(), nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("google: build changes request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("google: changes: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusGone {
+		return []drive.Change{{Kind: drive.ChangeCursorInv}}, "", nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("google: changes status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var parsed googleChangesResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, "", fmt.Errorf("google: decode changes response: %w", err)
+	}
+	changes := make([]drive.Change, 0, len(parsed.Changes))
+	for _, item := range parsed.Changes {
+		changeKind := mapGoogleChangeKind(item.Kind, item.Removed)
+		change := drive.Change{ProviderFileID: item.FileID, Kind: changeKind}
+		if item.File.ID != "" {
+			change.Item = item.File.toFolderItem()
+			if change.ProviderFileID == "" {
+				change.ProviderFileID = change.Item.ProviderFileID
+			}
+		}
+		changes = append(changes, change)
+	}
+	nextCursor := parsed.NextPageToken
+	if nextCursor == "" {
+		nextCursor = parsed.NewStartPageToken
+	}
+	return changes, nextCursor, nil
 }
 
 // Health implements drive.Provider. When ConfigureRuntime has wired the
@@ -428,6 +575,164 @@ func (p *Provider) Health(ctx context.Context, connectionID string) (drive.Healt
 		return drive.Health{Status: drive.HealthFailing, Reason: err.Error(), ObservedAt: time.Now()}, nil
 	}
 	return drive.Health{Status: drive.HealthHealthy, Reason: "about call succeeded", ObservedAt: time.Now()}, nil
+}
+
+type googleFilesResponse struct {
+	NextPageToken string       `json:"nextPageToken"`
+	Files         []googleFile `json:"files"`
+}
+
+type googleChangesResponse struct {
+	NewStartPageToken string         `json:"newStartPageToken"`
+	NextPageToken     string         `json:"nextPageToken"`
+	Changes           []googleChange `json:"changes"`
+}
+
+type googleChange struct {
+	FileID  string     `json:"fileId"`
+	Removed bool       `json:"removed"`
+	Kind    string     `json:"kind"`
+	File    googleFile `json:"file"`
+}
+
+type googleFile struct {
+	ID             string            `json:"id"`
+	Name           string            `json:"name"`
+	MimeType       string            `json:"mimeType"`
+	Size           json.RawMessage   `json:"size"`
+	Parents        []string          `json:"parents"`
+	WebViewLink    string            `json:"webViewLink"`
+	ModifiedTime   string            `json:"modifiedTime"`
+	HeadRevisionID string            `json:"headRevisionId"`
+	Owners         []googleUser      `json:"owners"`
+	SharingUser    *googleUser       `json:"sharingUser"`
+	Shared         bool              `json:"shared"`
+	Trashed        bool              `json:"trashed"`
+	AppProperties  map[string]string `json:"appProperties"`
+}
+
+type googleUser struct {
+	DisplayName  string `json:"displayName"`
+	EmailAddress string `json:"emailAddress"`
+}
+
+func (file googleFile) toFolderItem() drive.FolderItem {
+	ownerLabel := ""
+	if len(file.Owners) > 0 {
+		ownerLabel = file.Owners[0].EmailAddress
+		if ownerLabel == "" {
+			ownerLabel = file.Owners[0].DisplayName
+		}
+	}
+	lastModifiedBy := ""
+	if file.SharingUser != nil {
+		lastModifiedBy = file.SharingUser.EmailAddress
+		if lastModifiedBy == "" {
+			lastModifiedBy = file.SharingUser.DisplayName
+		}
+	}
+	modifiedAt, _ := time.Parse(time.RFC3339, file.ModifiedTime)
+	return drive.FolderItem{
+		ProviderFileID:     file.ID,
+		ProviderRevisionID: file.HeadRevisionID,
+		Title:              file.Name,
+		MimeType:           file.MimeType,
+		SizeBytes:          parseGoogleSize(file.Size),
+		FolderPath:         folderPathFromProperties(file.AppProperties),
+		IsFolder:           file.MimeType == "application/vnd.google-apps.folder",
+		OwnerLabel:         ownerLabel,
+		LastModifiedBy:     lastModifiedBy,
+		ProviderURL:        file.WebViewLink,
+		ModifiedAt:         modifiedAt,
+		SharingState: map[string]any{
+			"shared":  file.Shared,
+			"trashed": file.Trashed,
+			"parents": file.Parents,
+		},
+	}
+}
+
+func (p *Provider) accessToken(ctx context.Context, connectionID string) (string, error) {
+	if p.pool == nil {
+		return "", fmt.Errorf("google: provider called before ConfigureRuntime (pool is nil)")
+	}
+	if p.client == nil {
+		return "", fmt.Errorf("google: provider called before ConfigureRuntime (client is nil)")
+	}
+	if p.cfg.APIBaseURL == "" {
+		return "", fmt.Errorf("google: api_base_url not configured")
+	}
+	var credsRef string
+	if err := p.pool.QueryRow(ctx, `SELECT credentials_ref FROM drive_connections WHERE id=$1`, connectionID).Scan(&credsRef); err != nil {
+		return "", fmt.Errorf("google: lookup connection credentials: %w", err)
+	}
+	if !strings.HasPrefix(credsRef, "bearer:") {
+		return "", fmt.Errorf("google: credentials_ref unsupported format")
+	}
+	return strings.TrimPrefix(credsRef, "bearer:"), nil
+}
+
+func parseGoogleSize(raw json.RawMessage) int64 {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0
+	}
+	var asNumber int64
+	if err := json.Unmarshal(raw, &asNumber); err == nil {
+		return asNumber
+	}
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err == nil {
+		parsed, _ := strconv.ParseInt(asString, 10, 64)
+		return parsed
+	}
+	return 0
+}
+
+func folderPathFromProperties(props map[string]string) []string {
+	if props == nil {
+		return nil
+	}
+	rawPath := strings.Trim(props["smackerel_folder_path"], "/")
+	if rawPath == "" {
+		return nil
+	}
+	parts := strings.Split(rawPath, "/")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func mapGoogleChangeKind(kind string, removed bool) drive.ChangeKind {
+	if removed {
+		return drive.ChangeDelete
+	}
+	switch kind {
+	case "move":
+		return drive.ChangeMove
+	case "trash":
+		return drive.ChangeTrash
+	case "permission_lost":
+		return drive.ChangePermLost
+	case "cursor_invalid":
+		return drive.ChangeCursorInv
+	default:
+		return drive.ChangeUpsert
+	}
+}
+
+func mediaType(contentType string) string {
+	if contentType == "" {
+		return "application/octet-stream"
+	}
+	parsed, _, err := mime.ParseMediaType(contentType)
+	if err != nil || parsed == "" {
+		return contentType
+	}
+	return parsed
 }
 
 // init registers a Google provider with DefaultCapabilities into the

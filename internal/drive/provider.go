@@ -106,8 +106,10 @@ type FolderItem struct {
 	FolderPath         []string
 	IsFolder           bool
 	OwnerLabel         string
+	LastModifiedBy     string
 	ProviderURL        string
 	ModifiedAt         time.Time
+	SharingState       map[string]any
 }
 
 // FileBytes is the payload returned by GetFile / accepted by PutFile. The
@@ -123,6 +125,7 @@ type Change struct {
 	ProviderFileID string
 	Kind           ChangeKind
 	NewCursor      string
+	Item           FolderItem
 }
 
 // ChangeKind enumerates the possible delta types so downstream code does not

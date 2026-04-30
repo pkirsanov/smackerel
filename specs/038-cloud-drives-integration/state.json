@@ -5,14 +5,15 @@
   "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.workflow",
+    "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "Scope 1: Drive Foundation",
+    "currentScope": "Scope 2: Scan And Monitor",
     "runStartedAt": "2026-04-26T00:00:06Z",
     "workflowRunStartedAt": "2026-04-26T23:13:58Z",
-    "workflowRunLastEnvelopeAt": "2026-04-27T17:50:00Z",
-    "currentRound": 10,
+    "workflowRunLastEnvelopeAt": "2026-04-30T04:50:23Z",
+    "currentRound": 11,
     "scope1DoDProgress": "12/12",
+    "scope2DoDProgress": "12/12",
     "completedPhaseClaims": [
       "select",
       "bootstrap",
@@ -367,12 +368,25 @@
       "startedAt": "2026-04-27T18:04:00Z",
       "completedAt": "2026-04-27T18:10:00Z",
       "summary": "Deep validate pass for Scope 1: Drive Foundation. Verdict: certified-done for Scope 1 only (overall spec status remains in_progress per G024 because Scopes 2-8 are still Not Started). Gates run: (a) bash .github/bubbles/scripts/state-transition-guard.sh specs/038-cloud-drives-integration -> exit=1 with the only currently-relevant blocker being G056 status mismatch (top-level in_progress vs certification not_started), which this validate run resolves by setting certification.status=in_progress + populating completedScopes=[Scope 1: Drive Foundation] + scopeProgress[Scope 1]=Done 12/12 + adding bubbles.validate certifiedCompletedPhases entry. Other guard BLOCKs are zero-unchecked-required-for-done checks (DoD across all 8 scopes, all-specialist-phases-recorded, scenario-specific regression DoD items per scope, consumer-trace planning) that fire because the guard runs all checks regardless of current status; these are by-design incomplete for partial Scope 1 certification and will be cleared as Scopes 2-8 land. (b) bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration -> exit=1 with one issue: top-level/certification status mismatch (resolved by this entry; rerun confirms). (c) timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration -> exit=0 PASSED (24 scenarios mapped to test-plan rows, 24 mapped to concrete test files, 24 mapped to report evidence, 24 mapped to DoD items via Gate G068). DoD evidence spot-check (G025): all 12 [x] DoD items in Scope 1 carry inline raw evidence with >=10 lines authentic terminal output. Items 8 (Broader E2E regression suite passes) and 12 (./smackerel.sh config generate/check/lint/format/test unit/integration/e2e pass) closed in Round 10 carry the deepest evidence: multi-block (Evidence A-E for item 8; one block per command for item 12) covering drive integration 9/9 PASS with named tests + ok line + timing; 30+ live e2e drive-adjacent scenarios PASS list; drive-specific e2e 3/3 PASS carried from Round 8 with build-prerequisite confirmation (grep modernc go.mod -> modernc.org/sqlite v1.38.2); pre-existing-failure triage table tracing the three NATS workqueue failures to BUG-022-001 plus telegram-format harness race to spec 031; adversarial git diff confirming Scope 1's NATS contract changes (DRIVE stream + 4 drive.* subjects) did NOT touch ARTIFACTS/DOMAIN stream filter semantics; full config/lint/format/unit output. Scope-spec coherence: 8 scopes still defined in scopes.md (Scope 1 Done, Scopes 2-8 Not Started); scenario-manifest.json covers 24 scenarios matching the scopes.md Gherkin count; test-plan paths exist (verified internal/config/drive_config_test.go, internal/drive/provider_registry_test.go, tests/integration/drive/*.go incl fixtures/server.go, tests/e2e/drive/*.go). Findings recorded for follow-up routing (none block Scope 1 certification): F-V1 MEDIUM scenario-manifest.json scenarios lack structured requiredTestType + linkedTests fields required by Gate G057 (currently uses freeform liveTestExpectation strings) - affects all 24 scenarios equally, owned by bubbles.plan; F-V2 INFO state-transition-guard reports 4 phase-claim-provenance gaps (select/bootstrap/spec-review/design-reconcile in completedPhaseClaims without matching agent executionHistory entries) - pre-existing, will be cleared at full-spec-done promotion or by retroactive plan/workflow normalization. state.json edits: certification.status not_started -> in_progress; certification.completedScopes [] -> [Scope 1: Drive Foundation]; certification.scopeProgress [] -> [{scope: Scope 1, status: Done, dodCompleted: 12, dodTotal: 12, certifiedAt}]; certification.certifiedCompletedPhases [] -> [{phase: validate, agent: bubbles.validate, scope: Scope 1, certifiedAt, mode: deep}]; lastUpdatedAt 17:50:00Z -> 18:10:00Z; this executionHistory entry appended. Top-level status remains in_progress (G024 requireAllScopesDoneBeforeSpecDone - only Scope 1 of 8 is Done). Re-run of artifact-lint after edit confirms G056 status mismatch resolved. Next required owner: bubbles.goal -> dispatch bubbles.workflow for Scope 2: Scan And Monitor; recommend routing bubbles.plan first to clear F-V1 by adding requiredTestType/linkedTests structured fields to scenario-manifest.json before Scope 2 begins."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "scope": "Scope 2: Scan And Monitor",
+      "round": 11,
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-30T04:29:18Z",
+      "completedAt": "2026-04-30T04:50:23Z",
+      "summary": "Scope 2 implementation completed from the implement surface. Landed scan and monitor read models (migration 024), provider-neutral metadata extensions, Google provider Scope/SetScope/ListFolder/GetFile/Changes against configured fixture endpoints, scan/monitor/health services, fixture-backed integration tests, connector-detail API/PWA progress/activity/health UI, drive E2E regressions, and integration runner serialization with go test -p 1 to prevent cross-package disposable DB cleanup races. RED proof captured before implementation with ./smackerel.sh test unit --go exit=1 on missing Scope 2 symbols. Current validation passed: ./smackerel.sh test unit exit=0 (all Go packages including internal/drive/scan, internal/drive/monitor, internal/drive/health; Python 352 passed, 2 warnings), ./smackerel.sh test integration exit=0 (full suite; tests/integration/drive ok 5.841s with TestDriveScanFixturePreservesHierarchyAndMetadata, TestEmptyDriveStaysHealthyAndDetectsLaterUpload, and TestDriveFixtureCanary_ProductionProviderPathConsumesFixtureServer), ./smackerel.sh check exit=0, ./smackerel.sh format --check exit=0 (42 files already formatted), ./smackerel.sh lint exit=0 (All checks passed + Web validation passed), COMPOSE_PROGRESS=plain ./smackerel.sh test e2e exit=0 (shell 35/35 pass; Go e2e packages pass; tests/e2e/drive ok 0.989s with three Scope 2 regressions), and ./smackerel.sh --env test build --no-cache exit=0 (fresh test core/ML images built after PWA changes). Updated scopes.md Scope 2 status to Done and checked 12/12 DoD items with inline evidence; appended Scope 2 report evidence. certification.* untouched; validation/certification remains owned by bubbles.validate."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-27T18:10:00Z",
+  "lastUpdatedAt": "2026-04-30T04:50:23Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",
@@ -396,12 +410,12 @@
     ],
     "specReviewHook": "once-before-implement",
     "specReviewHookExecuted": false,
-    "activeScope": "Scope 1: Drive Foundation",
+    "activeScope": "Scope 2: Scan And Monitor",
     "completedPhasesThisRound": [
       "select",
       "bootstrap"
     ],
-    "nextPhase": "implement"
+    "nextPhase": "validate"
   },
   "scopeLayout": "single-file",
   "artifacts": {
@@ -445,5 +459,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Planning initialized and refined. spec.md and design.md exist; scopes.md, report.md, uservalidation.md, scenario-manifest.json, and test-plan.json have been created by bubbles.plan. Scope execution has not started."
+  "notes": "Planning initialized and refined. Scope 1 is certified complete. Scope 2 implementation is complete with 12/12 DoD checked in scopes.md and report evidence appended; validation/certification remains owned by bubbles.validate."
 }
