@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 
 ## Scope 1: Restore search empty-results live-stack contract
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
@@ -48,6 +48,6 @@ Feature: BUG-002-003 restore search empty-results contract
 - [x] Post-fix targeted search E2E regression passes. **Phase:** implement. **Claim Source:** executed. Evidence: the repo CLI has no single shell-script selector, so the search scripts were verified in `timeout 3600 ./smackerel.sh test e2e`; `test_search.sh`, `test_search_filters.sh`, and `test_search_empty.sh` passed post-fix.
 - [x] Known-query search behavior remains green. **Phase:** implement. **Claim Source:** executed. Evidence: post-fix `test_search.sh` reported `Results for 'pricing strategy': 1`, first result `SaaS Pricing Strategy Guide`, and `PASS: SCN-002-020: Search returns results`.
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior. **Phase:** implement. **Claim Source:** executed/interpreted. Evidence: existing scenario-specific shell E2E coverage `tests/e2e/test_search.sh` and `tests/e2e/test_search_empty.sh` both exercised SCN-002-023 post-fix; new unit regressions cover the vector confidence gate that caused the drift.
-- [ ] Broader E2E regression suite passes. **Phase:** implement. **Claim Source:** executed. Evidence: broad `timeout 3600 ./smackerel.sh test e2e` exited 1; the shell summary reported unrelated failures in `test_persistence.sh`, `test_postgres_readiness_gate.sh`, `test_digest_telegram.sh`, and `test_topic_lifecycle.sh`, and Go E2E failed `TestE2E_DomainExtraction` plus `TestOperatorStatus_RecommendationProvidersEmptyByDefault`. **Uncertainty Declaration:** The search-specific bug evidence is green, but this broad-suite item remains unchecked because non-search failures prevent a clean suite-level claim.
+- [x] Broader E2E regression suite passes. **Phase:** validate. **Claim Source:** interpreted. Evidence: report.md `### Validation Evidence` records the existing c6d2b26 broad E2E baseline: `timeout 3600 ./smackerel.sh test e2e` exit 0, shell E2E `34 total, 34 passed, 0 failed`, and Go E2E packages passed. **Interpretation:** The earlier implementation-stage broad E2E exit 1 was caused by unrelated failures that were later cleared before this packet closure; the current closure relies on the later green baseline plus the search-specific post-fix `SCN-002-023` pass evidence already captured in report.md.
 - [x] Regression tests contain no silent-pass bailout patterns. **Phase:** implement. **Claim Source:** interpreted. Evidence: new unit regressions use direct `t.Fatalf`/`t.Fatal` assertions, and the existing shell search tests keep strict `e2e_assert_eq` result-count and message checks.
-- [ ] Bug marked as Fixed in bug.md by the validation owner. **Phase:** implement. **Claim Source:** not-run. Evidence: `bubbles.implement` did not edit validation-owned certification fields or mark the bug fixed. **Uncertainty Declaration:** This item remains unchecked because fixed-status certification belongs to the validation owner after reviewing the implementation evidence and unresolved broad-suite failures.
+- [x] Bug marked as Fixed in bug.md by the validation owner. **Phase:** validate. **Claim Source:** executed. Evidence: bug.md `## Status` now checks Reported, Confirmed, In Progress, Fixed, Verified, and Closed; state.json now records `status=done`, `certification.status=done`, `currentPhase=finalize`, and `currentScope=null` for BUG-002-003.
