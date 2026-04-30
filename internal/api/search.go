@@ -80,6 +80,19 @@ type SearchResult struct {
 	Rating       *int            `json:"rating,omitempty"`
 	TimesUsed    int             `json:"times_used,omitempty"`
 	Tags         []string        `json:"tags,omitempty"`
+
+	// Snippet is the search-time excerpt of the artifact's extracted
+	// content. Spec 038 Scope 4 SCN-038-010 requires Screen 5 to render
+	// a snippet alongside breadcrumb/sharing/sensitivity badges so the
+	// user sees why the result matched the query.
+	Snippet string `json:"snippet,omitempty"`
+
+	// Drive carries the drive-specific metadata Screen 5 / Screen 6 need
+	// to render the provider chip, folder breadcrumb, sharing/sensitivity
+	// badges, version chain, and tombstone/permission-lost banner. It is
+	// non-nil only for drive_file artifact_type results so non-drive
+	// callers continue to receive their existing payload unchanged.
+	Drive *DriveSearchMetadata `json:"drive,omitempty"`
 }
 
 // SearchEngine handles semantic search operations.
@@ -294,6 +307,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	// Temporal-only query — use time-range-filtered recency query, skip embedding
 	if req.Query == "" {
 		results, total, err := s.timeRangeSearch(ctx, req)
+		results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
 		return results, total, "time_range", err
 	}
 
@@ -301,6 +315,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	if !s.isMLHealthy(ctx) {
 		slog.Info("ML sidecar unhealthy, using text fallback", "query", req.Query)
 		results, total, err := s.textSearch(ctx, req)
+		results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
 		return results, total, "text_fallback", err
 	}
 
@@ -311,6 +326,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	if err != nil {
 		slog.Warn("embedding subscription failed, falling back to text search", "error", err)
 		results, total, err := s.textSearch(ctx, req)
+		results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
 		return results, total, "text_fallback", err
 	}
 	defer sub.Unsubscribe()
@@ -337,6 +353,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		// Fallback: text-based search if embedding fails
 		slog.Warn("embedding failed, falling back to text search", "error", err)
 		results, total, err := s.textSearch(ctx, req)
+		results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
 		return results, total, "text_fallback", err
 	}
 
@@ -350,6 +367,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		if textErr != nil {
 			slog.Warn("text fallback after empty vector search failed", "error", textErr, "query", req.Query)
 		} else if len(textResults) > 0 {
+			textResults = EnrichDriveResults(ctx, s.Pool, req.Query, textResults)
 			return textResults, textTotal, "text_fallback", nil
 		}
 	}
@@ -372,6 +390,11 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 			results = reranked
 		}
 	}
+
+	// Step 7: enrich drive_file results with provider/folder/sharing/sensitivity
+	// metadata so Screen 5 can render breadcrumb, badges, and snippet without
+	// a second per-result fetch.
+	results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
 
 	return results, total, "semantic", nil
 }
