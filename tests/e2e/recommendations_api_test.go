@@ -46,11 +46,12 @@ func TestReactiveRamenRegression_BS001(t *testing.T) {
 		Status          string `json:"status"`
 		TraceID         string `json:"trace_id"`
 		Recommendations []struct {
-			ID              string   `json:"id"`
-			Title           string   `json:"title"`
-			Rank            int      `json:"rank"`
-			GraphSignalRefs []string `json:"graph_signal_refs"`
-			Rationale       []string `json:"rationale"`
+			ID                     string   `json:"id"`
+			Title                  string   `json:"title"`
+			Rank                   int      `json:"rank"`
+			PersonalSignalsApplied bool     `json:"personal_signals_applied"`
+			GraphSignalRefs        []string `json:"graph_signal_refs"`
+			Rationale              []string `json:"rationale"`
 			ProviderBadges  []struct {
 				ProviderID string `json:"provider_id"`
 				Label      string `json:"label"`
@@ -80,12 +81,19 @@ func TestReactiveRamenRegression_BS001(t *testing.T) {
 			t.Fatalf("recommendation[%d] has no provider badge: %+v", i, rec)
 		}
 	}
+	if parsed.Recommendations[0].Title != "Menkichi" {
+		t.Fatalf("top recommendation = %q, want Menkichi; body=%s", parsed.Recommendations[0].Title, string(body))
+	}
+	if !parsed.Recommendations[0].PersonalSignalsApplied {
+		t.Fatalf("top recommendation did not mark personal signals applied: %+v", parsed.Recommendations[0])
+	}
 	if !contains(parsed.Recommendations[0].GraphSignalRefs, "ART-123") {
 		t.Fatalf("top recommendation missing ART-123 graph signal: %+v", parsed.Recommendations[0])
 	}
 	if !rationaleMentions(parsed.Recommendations[0].Rationale, "ART-123") {
 		t.Fatalf("top recommendation rationale does not cite ART-123: %+v", parsed.Recommendations[0].Rationale)
 	}
+	assertDeliveredRecommendationsBackedByProviderFacts(t, parsed.RequestID)
 }
 
 func seedRamenSignalArtifact(t *testing.T) {
@@ -106,8 +114,8 @@ INSERT INTO artifacts (
     id, artifact_type, title, summary, content_raw, content_hash,
     source_id, source_ref, source_quality, processing_status, key_ideas, entities, action_items, topics, source_qualifiers
 ) VALUES (
-    'ART-123', 'note', 'Ramen preference signal', 'Prefers quiet ramen counters',
-    'The actor likes quiet ramen places with rich broth and short waits.', 'scope-039-art-123',
+	'ART-123', 'note', 'Sarah recommended Menkichi for ramen', 'Sarah recommended Menkichi for ramen',
+	'Sarah recommended Menkichi for ramen after a quiet dinner.', 'scope-039-art-123',
     'e2e', 'scope-039-art-123', 'trusted', 'processed', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '{}'::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET
@@ -118,6 +126,35 @@ ON CONFLICT (id) DO UPDATE SET
 `)
 	if err != nil {
 		t.Fatalf("seed ART-123 artifact: %v", err)
+	}
+}
+
+func assertDeliveredRecommendationsBackedByProviderFacts(t *testing.T, requestID string) {
+	t.Helper()
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("e2e: DATABASE_URL not set - live stack not available")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		t.Fatalf("connect e2e database: %v", err)
+	}
+	defer pool.Close()
+
+	var unbacked int
+	err = pool.QueryRow(ctx, `
+SELECT COUNT(*)
+FROM recommendations r
+LEFT JOIN recommendation_candidate_provider_facts cpf ON cpf.candidate_id = r.candidate_id
+WHERE r.request_id = $1 AND r.status = 'delivered' AND cpf.provider_fact_id IS NULL
+`, requestID).Scan(&unbacked)
+	if err != nil {
+		t.Fatalf("check delivered recommendation provider backing: %v", err)
+	}
+	if unbacked != 0 {
+		t.Fatalf("delivered recommendations without provider facts = %d", unbacked)
 	}
 }
 

@@ -13,7 +13,9 @@ import (
 
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/recommendation"
 	"github.com/smackerel/smackerel/internal/recommendation/provider"
+	"github.com/smackerel/smackerel/internal/recommendation/reactive"
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
 )
 
@@ -74,4 +76,71 @@ func TestRecommendationProviders_EmptyRegistryReturnsNoProvidersAndPersistsTrace
 	if traceOutcome != "no_providers" {
 		t.Fatalf("trace outcome = %q, want no_providers", traceOutcome)
 	}
+}
+
+func TestRecommendationProviders_OneProviderOutageDegradesWithoutBlocking(t *testing.T) {
+	pool := testPool(t)
+	registry := provider.NewRegistry()
+	google := provider.NewFixtureProvider("fixture_google_places", "Fixture Google Places", []recommendation.Category{recommendation.CategoryPlace})
+	yelp := provider.NewFixtureProvider("fixture_yelp", "Fixture Yelp", []recommendation.Category{recommendation.CategoryPlace})
+	yelp.SetHealth(provider.StatusFailing, "fixture outage")
+	registry.Register(google)
+	registry.Register(yelp)
+
+	engine := reactive.NewEngine(reactive.Options{
+		Store:    recstore.New(pool),
+		Registry: registry,
+		Config:   recommendationTestConfig(),
+		Clock:    func() time.Time { return time.Date(2026, 4, 27, 12, 0, 0, 0, time.UTC) },
+	})
+
+	outcome, err := engine.Run(context.Background(), reactive.Request{
+		ActorUserID:     "integration-provider-outage",
+		Source:          "api",
+		Query:           "quiet ramen near mission",
+		LocationRef:     "gps:37.7749,-122.4194",
+		PrecisionPolicy: recommendation.PrecisionNeighborhood,
+		ResultCount:     3,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if outcome.Status != "delivered" {
+		t.Fatalf("status = %q, want delivered", outcome.Status)
+	}
+	if len(outcome.Recommendations) == 0 {
+		t.Fatal("expected recommendations from the healthy provider")
+	}
+	for _, rec := range outcome.Recommendations {
+		for _, badge := range rec.ProviderBadges {
+			if badge.ProviderID == "fixture_yelp" {
+				t.Fatalf("failing provider appeared in delivered badge: %+v", rec.ProviderBadges)
+			}
+		}
+	}
+	if !traceToolResultHasProviderStatus(outcome.ToolCalls, "fixture_yelp", "degraded") {
+		t.Fatalf("trace tool calls did not record Yelp degradation: %+v", outcome.ToolCalls)
+	}
+}
+
+func traceToolResultHasProviderStatus(calls []recstore.ToolCallRecord, providerID, status string) bool {
+	for _, call := range calls {
+		if call.Name != "recommendation_fetch_candidates" {
+			continue
+		}
+		statuses, _ := call.Result["provider_status"].([]map[string]any)
+		for _, providerStatus := range statuses {
+			if providerStatus["provider_id"] == providerID && providerStatus["status"] == status {
+				return true
+			}
+		}
+		genericStatuses, _ := call.Result["provider_status"].([]any)
+		for _, raw := range genericStatuses {
+			providerStatus, _ := raw.(map[string]any)
+			if providerStatus["provider_id"] == providerID && providerStatus["status"] == status {
+				return true
+			}
+		}
+	}
+	return false
 }

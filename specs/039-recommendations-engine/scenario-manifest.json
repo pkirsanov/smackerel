@@ -88,9 +88,14 @@
       "liveTestExpectation": "Regression e2e-api: tests/e2e/recommendations_api_test.go :: TestReactiveRamenRegression_BS001",
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/e2e/recommendations_api_test.go",
+          "testId": "TestReactiveRamenRegression_BS001"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-02-reactive-place-recommendation 2026-04-30 06:14 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-011",
@@ -102,9 +107,18 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendations_test.go :: TestRecommendations_NoPersonalSignalsLabelOnEveryCandidate",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendations_test.go",
+          "testId": "TestRecommendations_NoPersonalSignalsLabelOnEveryCandidate"
+        },
+        {
+          "file": "tests/e2e/recommendations_confidence_test.go",
+          "testId": "TestRecommendationsConfidence_BS032_LowConfidenceDisclosedWithoutOverstatingPersonalization"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-02-reactive-place-recommendation 2026-04-30 06:14 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-012",
@@ -116,9 +130,14 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_privacy_test.go :: TestRecommendationPrivacy_PrecisionReducedBeforeProviderCall",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendation_privacy_test.go",
+          "testId": "TestRecommendationPrivacy_PrecisionReducedBeforeProviderCall"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-02-reactive-place-recommendation 2026-04-30 06:14 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-020",

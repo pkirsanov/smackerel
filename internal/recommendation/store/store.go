@@ -129,19 +129,23 @@ type ProviderBadge struct {
 
 // RenderedRecommendation is the API/web read model for a delivered item.
 type RenderedRecommendation struct {
-	ID               string             `json:"id"`
-	CandidateID      string             `json:"candidate_id"`
-	Title            string             `json:"title"`
-	Rank             int                `json:"rank"`
-	ProviderBadges   []ProviderBadge    `json:"provider_badges"`
-	Attribution      []ProviderBadge    `json:"attribution"`
-	Rationale        []string           `json:"rationale"`
-	GraphSignalRefs  []string           `json:"graph_signal_refs"`
-	NoPersonalSignal bool               `json:"no_personal_signal"`
-	SourceConflict   bool               `json:"source_conflict"`
-	ScoreBreakdown   map[string]float64 `json:"score_breakdown"`
-	PolicyDecisions  []map[string]any   `json:"policy_decisions"`
-	QualityDecisions []map[string]any   `json:"quality_decisions"`
+	ID                     string             `json:"id"`
+	CandidateID            string             `json:"candidate_id"`
+	Title                  string             `json:"title"`
+	Rank                   int                `json:"rank"`
+	ProviderBadges         []ProviderBadge    `json:"provider_badges"`
+	Attribution            []ProviderBadge    `json:"attribution"`
+	Rationale              []string           `json:"rationale"`
+	GraphSignalRefs        []string           `json:"graph_signal_refs"`
+	PersonalSignalsApplied bool               `json:"personal_signals_applied"`
+	NoPersonalSignal       bool               `json:"no_personal_signal"`
+	SourceConflict         bool               `json:"source_conflict"`
+	LowConfidence          bool               `json:"low_confidence"`
+	DistanceBasis          string             `json:"distance_basis,omitempty"`
+	DistanceLabel          string             `json:"distance_label,omitempty"`
+	ScoreBreakdown         map[string]float64 `json:"score_breakdown"`
+	PolicyDecisions        []map[string]any   `json:"policy_decisions"`
+	QualityDecisions       []map[string]any   `json:"quality_decisions"`
 }
 
 // Clarification is returned when the request is too ambiguous for provider calls.
@@ -717,6 +721,7 @@ INSERT INTO recommendation_delivery_attempts (
 	if err != nil {
 		return RenderedRequest{}, err
 	}
+	rendered.Clarification = input.Clarification
 	rendered.ToolCalls = append([]ToolCallRecord(nil), input.ToolCalls...)
 	return rendered, nil
 }
@@ -736,7 +741,7 @@ WHERE id = $1`, requestID).Scan(&rendered.ID, &rendered.TraceID, &rendered.Statu
 	}
 
 	rows, err := s.pool.Query(ctx, `
-SELECT r.id, r.candidate_id, c.title, COALESCE(r.rank_position, 0),
+SELECT r.id, r.candidate_id, c.title, COALESCE(r.rank_position, 0), c.canonical_fact,
        r.score_breakdown, r.rationale, r.graph_signal_refs,
        r.policy_decisions, r.quality_decisions
 FROM recommendations r
@@ -750,12 +755,13 @@ ORDER BY r.rank_position ASC NULLS LAST, r.created_at ASC`, requestID)
 
 	for rows.Next() {
 		var rec RenderedRecommendation
-		var scoreJSON, rationaleJSON, graphRefsJSON, policyJSON, qualityJSON []byte
+		var canonicalJSON, scoreJSON, rationaleJSON, graphRefsJSON, policyJSON, qualityJSON []byte
 		if err := rows.Scan(
 			&rec.ID,
 			&rec.CandidateID,
 			&rec.Title,
 			&rec.Rank,
+			&canonicalJSON,
 			&scoreJSON,
 			&rationaleJSON,
 			&graphRefsJSON,
@@ -779,14 +785,23 @@ ORDER BY r.rank_position ASC NULLS LAST, r.created_at ASC`, requestID)
 		if err := json.Unmarshal(qualityJSON, &rec.QualityDecisions); err != nil {
 			return RenderedRequest{}, fmt.Errorf("decode quality decisions for %s: %w", rec.ID, err)
 		}
-		rec.NoPersonalSignal = len(rec.GraphSignalRefs) == 0
-		badges, sourceConflict, err := s.providerBadgesForCandidate(ctx, rec.CandidateID)
+		var canonical map[string]any
+		if err := json.Unmarshal(canonicalJSON, &canonical); err != nil {
+			return RenderedRequest{}, fmt.Errorf("decode canonical fact for %s: %w", rec.ID, err)
+		}
+		rec.PersonalSignalsApplied = len(rec.GraphSignalRefs) > 0
+		rec.NoPersonalSignal = !rec.PersonalSignalsApplied
+		rec.LowConfidence = qualityDecisionMatches(rec.QualityDecisions, "confidence", "disclose")
+		rec.DistanceBasis = stringFromAny(canonical["distance_basis"])
+		rec.DistanceLabel = stringFromAny(canonical["distance_label"])
+		badges, sourceConflict, err := s.providerBadgesForCandidate(ctx, rec.CandidateID, rendered.ID)
 		if err != nil {
 			return RenderedRequest{}, err
 		}
 		rec.ProviderBadges = badges
 		rec.Attribution = badges
-		rec.SourceConflict = sourceConflict
+		canonicalConflict, _ := canonical["source_conflict"].(bool)
+		rec.SourceConflict = sourceConflict || canonicalConflict
 		rendered.Recommendations = append(rendered.Recommendations, rec)
 	}
 	if err := rows.Err(); err != nil {
@@ -883,13 +898,13 @@ LIMIT $2`, query, limit)
 	return refs, nil
 }
 
-func (s *Store) providerBadgesForCandidate(ctx context.Context, candidateID string) ([]ProviderBadge, bool, error) {
+func (s *Store) providerBadgesForCandidate(ctx context.Context, candidateID, requestID string) ([]ProviderBadge, bool, error) {
 	rows, err := s.pool.Query(ctx, `
 SELECT pf.provider_id, pf.attribution, pf.normalized_fact
 FROM recommendation_candidate_provider_facts cpf
 JOIN recommendation_provider_facts pf ON pf.id = cpf.provider_fact_id
-WHERE cpf.candidate_id = $1
-ORDER BY pf.provider_id ASC`, candidateID)
+WHERE cpf.candidate_id = $1 AND pf.request_id = $2
+ORDER BY pf.provider_id ASC`, candidateID, requestID)
 	if err != nil {
 		return nil, false, fmt.Errorf("load provider badges for candidate %s: %w", candidateID, err)
 	}
@@ -971,6 +986,20 @@ func copyFloatMap(values map[string]float64) map[string]float64 {
 		out[key] = value
 	}
 	return out
+}
+
+func qualityDecisionMatches(decisions []map[string]any, kind, outcome string) bool {
+	for _, decision := range decisions {
+		if decision["kind"] == kind && decision["outcome"] == outcome {
+			return true
+		}
+	}
+	return false
+}
+
+func stringFromAny(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func newTextID(prefix string) (string, error) {

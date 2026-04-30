@@ -1138,7 +1138,194 @@ state.json status MUST NOT be set to 'done'.
 
 ### scope-02-reactive-place-recommendation
 
-Pending implementation. Evidence to be appended by `bubbles.implement`.
+### Scope: scope-02-reactive-place-recommendation - 2026-04-30 06:14 UTC - Implementation
+
+#### Summary
+
+`bubbles.implement` delivered the Scope 2 reactive place recommendation slice across the fixture provider boundary, reactive engine, persistence/read model, web renderer, Telegram formatter coverage, integration tests, and live E2E tests. The implementation preserves Scope 1's empty default provider registry and `/status` zero-provider behavior while adding e2e-build fixture providers for reactive recommendation flows.
+
+#### Decision Record
+
+- Kept the default provider registry empty; e2e providers remain registered only by the e2e runtime registry path so production `/status` keeps the Scope 1 zero-provider block.
+- Removed reactive-engine fallback defaults for result count/provider limit/style. Missing required ranking config now fails loud instead of silently using hardcoded values.
+- Scoped rendered provider badges to the current request so globally deduped candidates cannot inherit stale provider attribution from previous requests.
+- Preserved ambiguous clarification responses in the immediate read model after persistence and proved no provider fetch or provider fact occurs before clarification.
+
+#### Completion Statement
+
+Scope 2 is marked `Done` in [scopes.md](scopes.md). All Scope 2 DoD items have inline implement evidence with `Phase` and `Claim Source` tags. This implementation pass did not edit validate-owned certification fields in [state.json](state.json).
+
+#### Code Diff Evidence
+
+Files changed for this scope:
+
+- `internal/recommendation/provider/fixture_integration.go`
+- `internal/recommendation/reactive/engine.go`
+- `internal/recommendation/store/store.go`
+- `internal/recommendation/tools/scenario_contract_test.go`
+- `internal/web/recommendations.go`
+- `tests/e2e/recommendations_api_test.go`
+- `tests/e2e/recommendations_clarification_test.go`
+- `tests/e2e/recommendations_constraints_test.go`
+- `tests/e2e/recommendations_confidence_test.go`
+- `tests/e2e/recommendations_web_test.go`
+- `tests/e2e/recommendations_telegram_test.go`
+- `tests/integration/recommendation_attribution_test.go`
+- `tests/integration/recommendation_conflicts_test.go`
+- `tests/integration/recommendation_provider_registry_test.go`
+- `tests/integration/recommendation_providers_test.go`
+- `tests/integration/recommendation_schema_test.go`
+
+**Phase:** implement
+**Command:** `git diff --stat`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+.../fixture_integration.go       | 42 ++++--
+.../reactive/engine.go           | 54 ++++---
+.../store/store.go               | 71 +++++++---
+internal/web/recommendations.go  |  7 +
+.../recommendations_api_test.go  | 51 ++++++-
+...ommendation_providers_test.go | 69 +++++++++
+6 files changed, 242 insertions(+), 52 deletions(-)
+```
+
+**Phase:** implement
+**Command:** `git status --short`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+ M internal/recommendation/provider/fixture_integration.go
+ M internal/recommendation/reactive/engine.go
+ M internal/recommendation/store/store.go
+ M internal/web/recommendations.go
+ M tests/e2e/recommendations_api_test.go
+ M tests/integration/recommendation_providers_test.go
+?? internal/recommendation/tools/scenario_contract_test.go
+?? tests/e2e/recommendations_clarification_test.go
+?? tests/e2e/recommendations_confidence_test.go
+?? tests/e2e/recommendations_constraints_test.go
+?? tests/e2e/recommendations_telegram_test.go
+?? tests/e2e/recommendations_web_test.go
+?? tests/integration/recommendation_attribution_test.go
+?? tests/integration/recommendation_conflicts_test.go
+?? tests/integration/recommendation_provider_registry_test.go
+?? tests/integration/recommendation_schema_test.go
+```
+
+#### Test Evidence
+
+**Phase:** implement
+**Command:** `timeout 1800 ./smackerel.sh test e2e --go-run 'TestReactiveRamenRegression_BS001$'`
+**Exit Code:** 1
+**Claim Source:** executed
+
+```text
+RED proof captured before production-code changes. The first run exited 1 after the new Scope 2 regression was introduced. The initial failure surfaced a duplicate package/build-tag syntax issue in tests/e2e/recommendations_clarification_test.go, which was fixed before rerunning behavior-level checks. A second pre-implementation focused ramen run also exited 1, establishing the reactive ramen path as red before the engine/provider/store changes.
+```
+
+**Phase:** implement
+**Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run 'TestReactiveRamenRegression_BS001|TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification|TestRecommendationsConstraints_BS020_VegetarianHardConstraintExcludesIncompatible|TestRecommendationsConstraints_BS029_NoSilentRelaxationWhenNoCandidateQualifies|TestRecommendationsConfidence_BS032_LowConfidenceDisclosedWithoutOverstatingPersonalization|TestRecommendationsWeb_RendersAPIBoundResultsAndProvenance|TestRecommendationsTelegram_ReactiveCardUsesCompactActions'`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+Focused Scope 2 E2E passed after implementation. Covered tests:
+- TestReactiveRamenRegression_BS001
+- TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification
+- TestRecommendationsConstraints_BS020_VegetarianHardConstraintExcludesIncompatible
+- TestRecommendationsConstraints_BS029_NoSilentRelaxationWhenNoCandidateQualifies
+- TestRecommendationsConfidence_BS032_LowConfidenceDisclosedWithoutOverstatingPersonalization
+- TestRecommendationsWeb_RendersAPIBoundResultsAndProvenance
+- TestRecommendationsTelegram_ReactiveCardUsesCompactActions
+PASS: go-e2e
+```
+
+**Phase:** implement
+**Command:** `./smackerel.sh test e2e`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+Shell E2E phase passed with 35 scenarios and Failed: 0.
+Go E2E packages passed.
+Scope 2 recommendation E2E tests passed in the broad run:
+- TestReactiveRamenRegression_BS001
+- TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification
+- TestRecommendationsConstraints_BS020_VegetarianHardConstraintExcludesIncompatible
+- TestRecommendationsConstraints_BS029_NoSilentRelaxationWhenNoCandidateQualifies
+- TestRecommendationsConfidence_BS032_LowConfidenceDisclosedWithoutOverstatingPersonalization
+- TestRecommendationsWeb_RendersAPIBoundResultsAndProvenance
+- TestRecommendationsTelegram_ReactiveCardUsesCompactActions
+```
+
+**Phase:** implement
+**Command:** `./smackerel.sh test unit`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+Go unit packages passed, including internal/recommendation/location, internal/recommendation/rank, internal/recommendation/tools, internal/telegram, and web-related package tests.
+Python unit tests passed: 352 passed, 2 warnings.
+Scope 2 unit coverage includes:
+- TestReducerFailsClosedOnMissingOrInvalidPrecision
+- TestReducerRedactsRawGPSForNeighborhoodPrecision
+- TestValidateProviderBackedRankingsRejectsInjectedCandidate
+- TestValidateProviderBackedRankingsAcceptsProviderBackedCandidates
+- TestRecommendationReactiveScenarioAllowlist
+```
+
+**Phase:** implement
+**Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`
+**Exit Code:** 0
+**Claim Source:** executed
+
+```text
+Recommendation integration tests passed:
+- TestRecommendationAttribution_BadgeAndLinkPersisted
+- TestRecommendationConflicts_OpeningHoursConflictVisible
+- TestRecommendationPrivacy_PrecisionReducedBeforeProviderCall in `tests/integration/recommendation_privacy_test.go`
+- TestRecommendationProviderRegistry_AdditionalProviderParticipatesWithoutScenarioChange
+- TestRecommendationProviders_EmptyRegistryReturnsNoProvidersAndPersistsTrace
+- TestRecommendationProviders_OneProviderOutageDegradesWithoutBlocking
+- TestRecommendationSchema_RejectsUnknownCandidateBeforeDelivery
+- TestRecommendations_NoPersonalSignalsLabelOnEveryCandidate in `tests/integration/recommendations_test.go`
+Integration command exited 0. Pre-existing browser-history fixture and GuestHost stub skips remain unrelated to Scope 2; no Scope 2 recommendation test was skipped.
+```
+
+**Phase:** implement
+**Command:** `./smackerel.sh --env test check`; `./smackerel.sh format --check`; `./smackerel.sh lint`
+**Exit Code:** 0 for all
+**Claim Source:** executed
+
+```text
+Check: Config is in sync with SST; env_file drift guard OK; scenario-lint OK.
+Format: 42 files already formatted.
+Lint: All checks passed! Web validation passed.
+```
+
+#### Scenario Contract Evidence
+
+- `SCN-039-010`: `TestReactiveRamenRegression_BS001` passed in focused and broad E2E; scenario manifest now links the test.
+- `SCN-039-011`: `TestRecommendations_NoPersonalSignalsLabelOnEveryCandidate` in `tests/integration/recommendations_test.go` passed in integration and low-confidence E2E confirmed no overstated personalization.
+- `SCN-039-012`: `TestRecommendationPrivacy_PrecisionReducedBeforeProviderCall` in `tests/integration/recommendation_privacy_test.go` passed in integration.
+- Reactive scenario contract: `TestRecommendationReactiveScenarioAllowlist` passed and `./smackerel.sh --env test check` scenario-lint passed.
+
+#### Tier 2 Implement Checks
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| I1 Scope DoD evidence updated inline | Pass | Scope 2 DoD entries in [scopes.md](scopes.md) carry implement evidence with `Phase` and `Claim Source` tags |
+| I2 Required tests pass | Pass | unit, integration, focused Scope 2 e2e, broad e2e, check, format, and lint all exited 0 |
+| I3 Docs synchronized | Pass | No managed docs changed; scope artifacts and scenario manifest were updated with execution evidence/test links |
+| I4 Scope state coherent | Pass | [scopes.md](scopes.md) marks Scope 2 `Done`; certification fields remain validate-owned |
+| I5 No new policy violations | Pass | SST check passed; generated config was not edited; runtime commands used `./smackerel.sh` |
+
+#### Validation Summary
+
+Scope 2 implementation evidence is green. Remaining feature work is factual: scopes 03-06 are still `Not Started`, and validation-owned certification fields were not changed by this implement pass.
 
 ### scope-03-feedback-suppression-why
 
