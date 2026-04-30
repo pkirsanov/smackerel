@@ -11,11 +11,11 @@ SCN-002-023 reports an unknown search query returning 5 results instead of the e
 
 ## Status
 - [x] Reported
-- [ ] Confirmed (targeted red-stage output must be captured by the fix owner)
-- [ ] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Confirmed (red-stage and root-cause evidence captured in report.md)
+- [x] In Progress
+- [x] Fixed
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 1. Run the broad E2E command through `./smackerel.sh test e2e`.
@@ -40,8 +40,11 @@ Broad E2E classification input:
 tests/e2e/test_search.sh SCN-002-023 unknown query expected 0 results, actual 5.
 ```
 
-## Root Cause (initial analysis)
-Root cause is unproven at packetization time. Candidate surfaces include broad-suite fixture isolation, unknown-query fixture design, search thresholding in text or vector fallback paths, stale artifacts leaking between E2E scenarios, or a mismatch between `test_search.sh` and the canonical `SCN-002-023` empty-results contract in spec 002.
+## Root Cause
+The vector search path returned nearest pgvector candidates without a raw similarity confidence gate. In a broad live E2E run with unrelated prior artifacts, the unknown-query case could therefore return low-confidence nearest neighbors instead of the honest empty result.
+
+## Verification
+The fix adds raw vector-confidence gating before annotation/domain boosts, preserves explicit filtered searches, and keeps text fallback behavior for low-confidence vector matches. Post-fix evidence records `SCN-002-023` passing in both `test_search.sh` and `test_search_empty.sh`; the later c6d2b26 broad E2E baseline records `./smackerel.sh test e2e` exit 0 with 34/34 shell E2E scripts passed and Go E2E packages passed.
 
 ## Related
 - Feature: `specs/002-phase1-foundation/`
