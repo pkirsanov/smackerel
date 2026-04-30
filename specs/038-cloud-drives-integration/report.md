@@ -1995,6 +1995,19 @@ Search hits were limited to the intended Scope 3 surfaces: `config/nats_contract
 
 Scope 3 status is Done from the implementation surface: 11/11 DoD items are checked in [scopes.md](scopes.md) with inline executed evidence. Certification remains owned by `bubbles.validate`; `state.json.certification.*` was not modified by this implementation pass.
 
+### Validation Certification
+
+**Phase:** validate
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration`; `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration`; `bash .github/bubbles/scripts/state-transition-guard.sh specs/038-cloud-drives-integration`; `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/038-cloud-drives-integration --verbose`; `bash .github/bubbles/scripts/artifact-freshness-guard.sh specs/038-cloud-drives-integration`; `./smackerel.sh check`; `./smackerel.sh format --check`; `./smackerel.sh lint`; `./smackerel.sh test unit`; `./smackerel.sh test integration`; `./smackerel.sh test e2e`; `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run TestDriveExtractE2E_MultiFormatFilesBecomeSearchable`
+**Exit Code:** 0; 0; 1; 0; 0; 0; 0; 0; 0; 0; 0; 0
+**Claim Source:** executed
+
+Validation certified Scope 3 on 2026-04-30T09:50:21Z. Artifact lint passed with required artifacts present, status coherence intact, checked DoD evidence present, and no repo-CLI bypass detected. Traceability guard passed with 24 scenarios checked, 70 test rows checked, 24 scenario-to-row mappings, 24 concrete test file references, 24 report evidence references, and Scope 3 mappings for SCN-038-007 through SCN-038-009. State-transition guard was executed and returned exit 1 because it evaluates full-feature promotion while Scopes 4-8 are still active work and because older single-file/manifest heuristic gaps remain; it still reported the certification prerequisites relevant to Scope 3 as present: policy snapshot, certification block, empty transition/rework queues, artifact lint pass, artifact freshness pass, implementation delta evidence pass, implementation reality scan pass, consumer impact sweep present, and change-boundary containment present. The dedicated traceability guard contradicted the state guard's heuristic G068 Scope 3 warning and passed G068 for Scope 3.
+
+Current-session repo CLI validation passed: `./smackerel.sh check` reported config SST sync, env-file drift guard OK, and scenario lint OK; `./smackerel.sh format --check` ended with `48 files already formatted`; `./smackerel.sh lint` ended with `All checks passed!` and `Web validation passed`; `./smackerel.sh test unit` passed all Go packages and Python reported `402 passed, 1 warning`; `./smackerel.sh test integration` passed the live stack with Scope 3 drive tests `TestDriveExtractClassifyPersistsSearchableDomainMetadata`, `TestFolderMoveRefreshesTaxonomyWithoutReextractingContent`, and `TestSkippedAndBlockedFilesPersistReasonAndAction`; broad `./smackerel.sh test e2e` returned exit 0; focused Scope 3 E2E returned exit 0 for `TestFolderMoveUpdatesArtifactContextWithoutDuplicateExtractionActivity` and `TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions`; and the readable SCN-038-007 rerun returned exit 0 with `=== RUN   TestDriveExtractE2E_MultiFormatFilesBecomeSearchable`, `--- PASS`, `ok github.com/smackerel/smackerel/tests/e2e/drive`, and `PASS: go-e2e`.
+
+State certification updated `certification.completedScopes`, `certification.scopeProgress`, and `certification.certifiedCompletedPhases` for `Scope 3: Extraction And Classification` at `2026-04-30T09:50:21Z`. Execution is advanced to `Scope 4: Search And Artifact Detail` with `nextPhase` set to `implement`. Overall feature status remains `in_progress`; `uservalidation.md` already had no unchecked user-reported regressions and was not changed.
+
 ## Scope 4: Search And Artifact Detail
 
 ### Summary
