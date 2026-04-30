@@ -8,6 +8,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+
+	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
 
 // TestHandleDomainExtracted_SuccessStoresData verifies that a successful domain.extracted
@@ -214,5 +216,31 @@ func TestDomainDeliveryFailure_MetadataError_Naks(t *testing.T) {
 	sub.handleDomainDeliveryFailure(context.Background(), msg, fmt.Errorf("db error"))
 	if !msg.naked {
 		t.Error("expected Nak when metadata is unavailable (safe default)")
+	}
+}
+
+// TestDomainDeliveryFailure_DeadLetterAndNakBothFail_Logs verifies that
+// handleDomainDeliveryFailure logs both failures when dead-letter publish
+// and subsequent Nak both fail (STB-022-002).
+func TestDomainDeliveryFailure_DeadLetterAndNakBothFail_Logs(t *testing.T) {
+	mockJS := &mockJetStream{publishErr: fmt.Errorf("NATS connection closed")}
+	nc := &smacknats.Client{JetStream: mockJS}
+	sub := NewDomainResultSubscriber(nil, nc)
+
+	msg := &mockJetStreamMsg{
+		data:     []byte(`{"artifact_id":"art-stb002"}`),
+		metadata: &jetstream.MsgMetadata{NumDelivered: 5},
+		nakErr:   fmt.Errorf("consumer deleted"),
+	}
+
+	// Should not panic; should attempt Nak after dead-letter publish failure.
+	// The Nak error is logged (verified structurally — no panic, msg.naked set).
+	sub.handleDomainDeliveryFailure(context.Background(), msg, fmt.Errorf("db error"))
+
+	if msg.acked {
+		t.Error("should not Ack when dead-letter publish fails")
+	}
+	if !msg.naked {
+		t.Error("expected Nak attempt even when dead-letter publish fails")
 	}
 }

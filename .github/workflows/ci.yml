@@ -133,6 +133,10 @@ jobs:
           psql -h localhost -U smackerel -d smackerel_test -f "$f"
         done
 
+    # NOTE: CI integration uses raw go test because GitHub Actions service
+    # containers replace the Docker Compose stack that ./smackerel.sh test
+    # integration manages. The CLI command expects to bring up/down its own
+    # Compose project, which conflicts with Actions service lifecycle.
     - name: Run integration tests
       env:
         DATABASE_URL: postgres://smackerel:smackerel@localhost:5432/smackerel_test?sslmode=disable

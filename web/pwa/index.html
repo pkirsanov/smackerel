@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#e94560">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self' https: http:; object-src 'none'; base-uri 'self'">
   <title>Smackerel</title>
   <link rel="manifest" href="/pwa/manifest.json">
   <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
@@ -34,9 +34,21 @@
     ">Install Smackerel</button>
   </div>
 
+  <div class="card" id="settings-card">
+    <h2>Settings</h2>
+    <label class="field-label" for="pwa-server-url">Server URL</label>
+    <input type="url" id="pwa-server-url" placeholder="https://your-server.example.com" autocomplete="url">
+    <label class="field-label" for="pwa-auth-token">Auth Token</label>
+    <input type="password" id="pwa-auth-token" placeholder="Paste your auth token" autocomplete="off">
+    <div id="pwa-settings-status" class="hidden" style="margin-top:0.75rem"></div>
+    <button id="pwa-test-btn" class="btn btn-primary" style="margin-top:0.75rem;width:100%">Test Connection</button>
+    <button id="pwa-save-btn" class="btn btn-primary hidden" style="margin-top:0.5rem;width:100%">Save Settings</button>
+  </div>
+
   <div class="card">
     <h2>How it works</h2>
     <ol style="padding-left: 1.25rem; line-height: 1.8; color: var(--text-muted);">
+      <li>Configure your server URL and auth token above</li>
       <li>Install this PWA to your home screen</li>
       <li>Find something interesting in any app</li>
       <li>Tap Share → Smackerel</li>

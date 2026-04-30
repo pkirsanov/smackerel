@@ -95,6 +95,10 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
     <div class="status success">✅ Saved!</div>
   </div>
 
+  <div class="card hidden" id="result-duplicate">
+    <div class="status info">ℹ️ Already captured</div>
+  </div>
+
   <div class="card hidden" id="result-error">
     <div class="status error" id="error-msg">❌ Save failed</div>
     <button id="retry-btn" style="
@@ -126,6 +130,7 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
     function doCapture() {
       document.getElementById('saving').classList.remove('hidden');
       document.getElementById('result-success').classList.add('hidden');
+      document.getElementById('result-duplicate').classList.add('hidden');
       document.getElementById('result-error').classList.add('hidden');
       document.getElementById('queued').classList.add('hidden');
 
@@ -162,7 +167,7 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
         if (resp.ok) {
           showSuccess();
         } else if (resp.status === 409) {
-          showSuccess(); // duplicate — still counts as saved
+          showDuplicate();
         } else {
           return resp.text().then(function(text) {
             try {
@@ -185,6 +190,13 @@ var sharePageTemplate = template.Must(template.New("share").Parse(`<!DOCTYPE htm
       document.getElementById('result-success').classList.remove('hidden');
       // Auto-close after 1.5s to return to source app
       setTimeout(function() { window.close(); }, 1500);
+    }
+
+    function showDuplicate() {
+      document.getElementById('saving').classList.add('hidden');
+      document.getElementById('result-duplicate').classList.remove('hidden');
+      // Auto-close after 2s to return to source app
+      setTimeout(function() { window.close(); }, 2000);
     }
 
     function showError(msg) {

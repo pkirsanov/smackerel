@@ -245,7 +245,13 @@ func (d *DomainResultSubscriber) handleDomainDeliveryFailure(ctx context.Context
 
 	if _, err := d.NATS.JetStream.PublishMsg(ctx, dlMsg); err != nil {
 		slog.Error("domain dead-letter publish failed, Nak to preserve message", "error", err)
-		_ = msg.Nak()
+		if nakErr := msg.Nak(); nakErr != nil {
+			slog.Error("Nak also failed after dead-letter failure — domain message may be lost",
+				"nak_error", nakErr,
+				"dead_letter_error", err,
+				"subject", smacknats.SubjectDomainExtracted,
+			)
+		}
 		return
 	}
 
