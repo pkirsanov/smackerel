@@ -33,10 +33,10 @@ func TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification(t 
 	}
 
 	var parsed struct {
-		RequestID      string `json:"request_id"`
-		Status         string `json:"status"`
-		TraceID        string `json:"trace_id"`
-		Clarification  *struct {
+		RequestID     string `json:"request_id"`
+		Status        string `json:"status"`
+		TraceID       string `json:"trace_id"`
+		Clarification *struct {
 			Question string   `json:"question"`
 			Choices  []string `json:"choices"`
 		} `json:"clarification"`

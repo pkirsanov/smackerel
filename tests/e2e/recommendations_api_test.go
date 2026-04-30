@@ -52,7 +52,7 @@ func TestReactiveRamenRegression_BS001(t *testing.T) {
 			PersonalSignalsApplied bool     `json:"personal_signals_applied"`
 			GraphSignalRefs        []string `json:"graph_signal_refs"`
 			Rationale              []string `json:"rationale"`
-			ProviderBadges  []struct {
+			ProviderBadges         []struct {
 				ProviderID string `json:"provider_id"`
 				Label      string `json:"label"`
 			} `json:"provider_badges"`
