@@ -5,12 +5,12 @@
   "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": "bubbles.workflow",
     "currentPhase": "implement",
-    "currentScope": "Scope 2: Scan And Monitor",
+    "currentScope": "Scope 3: Extraction And Classification",
     "runStartedAt": "2026-04-26T00:00:06Z",
     "workflowRunStartedAt": "2026-04-26T23:13:58Z",
-    "workflowRunLastEnvelopeAt": "2026-04-30T04:50:23Z",
+    "workflowRunLastEnvelopeAt": "2026-04-30T05:17:15Z",
     "currentRound": 11,
     "scope1DoDProgress": "12/12",
     "scope2DoDProgress": "12/12",
@@ -25,7 +25,8 @@
   "certification": {
     "status": "in_progress",
     "completedScopes": [
-      "Scope 1: Drive Foundation"
+      "Scope 1: Drive Foundation",
+      "Scope 2: Scan And Monitor"
     ],
     "certifiedCompletedPhases": [
       {
@@ -34,6 +35,13 @@
         "scope": "Scope 1: Drive Foundation",
         "certifiedAt": "2026-04-27T18:10:00Z",
         "mode": "deep"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "Scope 2: Scan And Monitor",
+        "certifiedAt": "2026-04-30T05:17:15Z",
+        "mode": "full-delivery"
       }
     ],
     "scopeProgress": [
@@ -43,6 +51,13 @@
         "dodCompleted": 12,
         "dodTotal": 12,
         "certifiedAt": "2026-04-27T18:10:00Z"
+      },
+      {
+        "scope": "Scope 2: Scan And Monitor",
+        "status": "Done",
+        "dodCompleted": 12,
+        "dodTotal": 12,
+        "certifiedAt": "2026-04-30T05:17:15Z"
       }
     ],
     "lockdownState": {
@@ -381,12 +396,24 @@
       "startedAt": "2026-04-30T04:29:18Z",
       "completedAt": "2026-04-30T04:50:23Z",
       "summary": "Scope 2 implementation completed from the implement surface. Landed scan and monitor read models (migration 024), provider-neutral metadata extensions, Google provider Scope/SetScope/ListFolder/GetFile/Changes against configured fixture endpoints, scan/monitor/health services, fixture-backed integration tests, connector-detail API/PWA progress/activity/health UI, drive E2E regressions, and integration runner serialization with go test -p 1 to prevent cross-package disposable DB cleanup races. RED proof captured before implementation with ./smackerel.sh test unit --go exit=1 on missing Scope 2 symbols. Current validation passed: ./smackerel.sh test unit exit=0 (all Go packages including internal/drive/scan, internal/drive/monitor, internal/drive/health; Python 352 passed, 2 warnings), ./smackerel.sh test integration exit=0 (full suite; tests/integration/drive ok 5.841s with TestDriveScanFixturePreservesHierarchyAndMetadata, TestEmptyDriveStaysHealthyAndDetectsLaterUpload, and TestDriveFixtureCanary_ProductionProviderPathConsumesFixtureServer), ./smackerel.sh check exit=0, ./smackerel.sh format --check exit=0 (42 files already formatted), ./smackerel.sh lint exit=0 (All checks passed + Web validation passed), COMPOSE_PROGRESS=plain ./smackerel.sh test e2e exit=0 (shell 35/35 pass; Go e2e packages pass; tests/e2e/drive ok 0.989s with three Scope 2 regressions), and ./smackerel.sh --env test build --no-cache exit=0 (fresh test core/ML images built after PWA changes). Updated scopes.md Scope 2 status to Done and checked 12/12 DoD items with inline evidence; appended Scope 2 report evidence. certification.* untouched; validation/certification remains owned by bubbles.validate."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "scope": "Scope 2: Scan And Monitor",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-30T04:57:35Z",
+      "completedAt": "2026-04-30T05:17:15Z",
+      "summary": "Full-delivery validation certified Scope 2 only. Scope 2 DoD is 12/12 checked with inline executed evidence; uservalidation.md has no unchecked user-reported regressions; artifact-lint and traceability-guard passed; check, format --check, lint, unit, integration, E2E, artifact freshness, implementation reality scan, git diff --check, and no-cache test build all passed. state-transition-guard was executed and exited 1 because it evaluates whole-feature promotion while Scopes 3-8 remain incomplete and scenario-manifest structured requiredTestType/linkedTests gaps predate this scope; top-level status remains in_progress. Certification updated completedScopes and scopeProgress for Scope 2, recorded this validate phase, and advanced execution to Scope 3 implement."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-30T04:50:23Z",
+  "lastUpdatedAt": "2026-04-30T05:17:15Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",
@@ -410,12 +437,14 @@
     ],
     "specReviewHook": "once-before-implement",
     "specReviewHookExecuted": false,
-    "activeScope": "Scope 2: Scan And Monitor",
+    "activeScope": "Scope 3: Extraction And Classification",
     "completedPhasesThisRound": [
       "select",
-      "bootstrap"
+      "bootstrap",
+      "implement",
+      "validate"
     ],
-    "nextPhase": "validate"
+    "nextPhase": "implement"
   },
   "scopeLayout": "single-file",
   "artifacts": {
@@ -459,5 +488,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Planning initialized and refined. Scope 1 is certified complete. Scope 2 implementation is complete with 12/12 DoD checked in scopes.md and report evidence appended; validation/certification remains owned by bubbles.validate."
+  "notes": "Planning initialized and refined. Scope 1 and Scope 2 are certified complete. Scope 3 is the next eligible scope; overall feature status remains in_progress because Scopes 3-8 are not complete."
 }
