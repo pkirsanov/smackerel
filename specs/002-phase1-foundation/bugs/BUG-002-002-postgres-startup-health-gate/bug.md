@@ -14,11 +14,11 @@ The canonical live E2E suite aborts during `SCN-002-004: Data persistence across
 ## Status
 
 - [x] Reported
-- [ ] Confirmed by this bug packet
+- [x] Confirmed by this bug packet
 - [x] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Fixed
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 
