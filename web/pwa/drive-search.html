@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Drive search — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Drive search</h1>
+  <p class="subtitle">Find drive files by extracted content, folder, or metadata</p>
+
+  <!--
+    Spec 038 Scope 4 Screen 5 — drive-aware unified search results.
+    Renders snippet, folder breadcrumb, provider chip, sharing badge,
+    sensitivity badge, provider URL, and accessible action states for
+    every drive_file result returned by /api/search.
+  -->
+  <form id="drive-search-form" class="card" aria-labelledby="drive-search-heading" novalidate>
+    <h2 id="drive-search-heading">Search</h2>
+    <label class="field">
+      <span>Query</span>
+      <input
+        id="drive-search-query"
+        type="text"
+        name="query"
+        placeholder="air-fryer manual or dumpling dough hydration"
+        autocomplete="off"
+        required
+      >
+    </label>
+    <button type="submit" class="primary">Search drive</button>
+  </form>
+
+  <section
+    id="drive-search-results"
+    class="card"
+    aria-labelledby="drive-search-results-heading"
+    aria-live="polite"
+    aria-busy="false"
+  >
+    <h2 id="drive-search-results-heading">Results</h2>
+    <p id="drive-search-empty" class="status status-info" hidden>No drive files matched that search.</p>
+    <ul id="drive-search-list" class="drive-results"></ul>
+  </section>
+
+  <!--
+    Result row template. Each item renders:
+      • snippet excerpt
+      • provider chip
+      • folder breadcrumb
+      • sharing badge
+      • sensitivity badge
+      • Open in Drive link / Open detail action
+      • tombstone or access-revoked banner when availability != "available"
+  -->
+  <template id="drive-result-template">
+    <li class="drive-result" data-availability="">
+      <h3 class="drive-result-title"></h3>
+      <p class="drive-result-snippet"></p>
+      <nav class="drive-folder-breadcrumb" aria-label="Folder breadcrumb">
+        <ol class="folder-breadcrumb-list"></ol>
+      </nav>
+      <div class="drive-result-badges">
+        <span class="provider-chip" data-provider=""></span>
+        <span class="sharing-badge" data-state=""></span>
+        <span class="sensitivity-badge" data-level=""></span>
+      </div>
+      <p class="drive-availability-banner" role="status" hidden></p>
+      <div class="drive-result-actions">
+        <a class="drive-open-in-drive" href="#" rel="noopener">Open in Drive ↗</a>
+        <a class="drive-open-detail" href="#">View details</a>
+      </div>
+    </li>
+  </template>
+
+  <script src="/pwa/drive-search.js"></script>
+</body>
+</html>

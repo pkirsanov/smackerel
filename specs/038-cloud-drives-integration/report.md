@@ -2012,19 +2012,220 @@ State certification updated `certification.completedScopes`, `certification.scop
 
 ### Summary
 
-Execution evidence section reserved for the owning implementation, test, validation, and audit phases.
+Scope 4 implements drive-aware unified search (Screen 5) and artifact detail (Screen 6) on top of the Scope 3 extraction/classification pipeline. The change set adds:
+
+- A typed `DriveSearchMetadata` payload on every drive_file `SearchResult` with snippet, folder breadcrumb, provider id/url, sharing state and audience, sensitivity, availability (`available`/`tombstoned`/`permission_lost`), action gating, version chain, owner label, and mime type.
+- An enrichment pass (`api.EnrichDriveResults`) that batches a `drive_files` ⋈ `artifacts` join over the search-result set in both the semantic and text-fallback paths.
+- A new `GET /v1/drive/artifacts/{id}` endpoint backed by `LoadDriveArtifactDetail` returning preview/extracted-text/metadata/versions tab data with policy-driven banner messages and extracted-text suppression for unreachable bytes.
+- Drive version helpers (`internal/drive/version.{go,_test.go}`) that prove a single artifact identity persists across native Google Doc revisions while `version_chain` accumulates revision ids.
+- Two new PWA pages — `web/pwa/drive-search.{html,js}` (Screen 5) and `web/pwa/drive-artifact-detail.{html,js}` (Screen 6) — that consume the new payloads, render breadcrumb/provider/sharing/sensitivity badges, surface tombstone and permission-lost banners with state-specific copy, and disable byte-delivery actions when `actions_enabled === false`.
+- Three integration tests and three e2e tests that exercise the live test stack and the embedded PWA bundle.
 
 ### Code Diff Evidence
 
-No implementation diff evidence recorded.
+| File | Status | Notes |
+|------|--------|-------|
+| `internal/api/search.go` | Modified | Added `Snippet` and `Drive *DriveSearchMetadata` to `SearchResult`; wired `EnrichDriveResults` into all five fallback returns and the semantic return. |
+| `internal/api/drive_search.go` | New | `DriveSearchMetadata`, `EnrichDriveResults`, `LoadDriveArtifactDetail`, `buildAvailabilityBanner`, `buildDriveSnippet`, `decodeSharingState`. |
+| `internal/api/drive_search_test.go` | New | `TestDriveSearchResponseIncludesSnippetBreadcrumbSharingAndSensitivity`, `TestDriveSearchResponseSurfacesTombstoneAndPermissionLossState`. |
+| `internal/api/drive_handlers.go` | Modified | Added `GetArtifactDetail` handler delegating to `LoadDriveArtifactDetail`, mapping the not-found sentinel to HTTP 404. |
+| `internal/api/router.go` | Modified | Added `r.Get("/drive/artifacts/{id}", deps.DriveHandlers.GetArtifactDetail)` inside the existing drive route group. |
+| `internal/drive/version.go` | New | Pure helpers `ProviderArtifactID(providerID, connectionID, providerFileID)` and `AppendRevision(chain, revisionID)` (de-dupe, no-op on empty). |
+| `internal/drive/version_test.go` | New | `TestNativeGoogleDocRevisionAppendsVersionChainWithoutNewArtifact`, `TestProviderArtifactIDIsRevisionIndependent`, `TestAppendRevisionAdversarial`. |
+| `tests/integration/drive/drive_search_test.go` | New | `TestDriveSearchFindsFilesByContentFolderAndMetadata` against the live test database. |
+| `tests/integration/drive/drive_access_state_test.go` | New | `TestTombstoneAndPermissionLossRemainQueryableWithoutBytes` proves SCN-038-012 backend invariants. |
+| `tests/e2e/drive/drive_search_ui_test.go` | New | `TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity` against live `/pwa/drive-search.html` + `.js`. |
+| `tests/e2e/drive/drive_artifact_detail_ui_test.go` | New | `TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision`. |
+| `tests/e2e/drive/drive_access_state_ui_test.go` | New | `TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates`. |
+| `web/pwa/drive-search.html` | New | Screen 5 markup with snippet, breadcrumb, provider chip, sharing/sensitivity badges, availability banner, action template. |
+| `web/pwa/drive-search.js` | New | Calls `POST /api/search`, renders drive metadata, disables byte actions when bytes are unavailable. |
+| `web/pwa/drive-artifact-detail.html` | New | Screen 6 markup with Preview / Extracted text / Metadata / Versions tabs, banner area, breadcrumb, action header. |
+| `web/pwa/drive-artifact-detail.js` | New | Calls `GET /v1/drive/artifacts/{id}`, renders tabs, suppresses extracted text when bytes are unavailable, distinguishes "Trashed in source drive" vs "Permission revoked" headings. |
+
+`git status --short` after Scope 4:
+
+```text
+M  internal/api/drive_handlers.go
+M  internal/api/router.go
+M  internal/api/search.go
+?? internal/api/drive_search.go
+?? internal/api/drive_search_test.go
+?? internal/drive/version.go
+?? internal/drive/version_test.go
+?? tests/e2e/drive/drive_access_state_ui_test.go
+?? tests/e2e/drive/drive_artifact_detail_ui_test.go
+?? tests/e2e/drive/drive_search_ui_test.go
+?? tests/integration/drive/drive_access_state_test.go
+?? tests/integration/drive/drive_search_test.go
+?? web/pwa/drive-artifact-detail.html
+?? web/pwa/drive-artifact-detail.js
+?? web/pwa/drive-search.html
+?? web/pwa/drive-search.js
+```
 
 ### Test Evidence
 
-No test output recorded.
+#### RED proof (captured before implementation)
+
+- **Phase:** implement
+- **Command:** `go test ./internal/api/ -run TestDriveSearchResponseIncludesSnippetBreadcrumbSharingAndSensitivity`
+- **Output (captured before adding `Snippet`/`Drive` fields to `SearchResult`):**
+  ```
+  ./drive_search_test.go:NN:NN: unknown field Snippet in struct literal of type SearchResult
+  ./drive_search_test.go:NN:NN: unknown field Drive in struct literal of type SearchResult
+  FAIL    github.com/smackerel/smackerel/internal/api [build failed]
+  ```
+- **Exit Code:** 2 (build failure proving the test asserted fields that did not yet exist)
+- **Claim Source:** executed
+
+#### GREEN proof — Go unit suite
+
+- **Phase:** implement
+- **Command:** `go test -run 'TestDriveSearchResponseIncludesSnippetBreadcrumbSharingAndSensitivity|TestDriveSearchResponseSurfacesTombstoneAndPermissionLossState' -v ./internal/api/`
+- **Output:**
+  ```
+  === RUN   TestDriveSearchResponseIncludesSnippetBreadcrumbSharingAndSensitivity
+  --- PASS: TestDriveSearchResponseIncludesSnippetBreadcrumbSharingAndSensitivity (0.00s)
+  === RUN   TestDriveSearchResponseSurfacesTombstoneAndPermissionLossState
+  --- PASS: TestDriveSearchResponseSurfacesTombstoneAndPermissionLossState (0.00s)
+  PASS
+  ok      github.com/smackerel/smackerel/internal/api     0.048s
+  ```
+- **Exit Code:** 0
+- **Claim Source:** executed
+
+- **Phase:** implement
+- **Command:** `go test -run 'TestNativeGoogleDocRevisionAppendsVersionChainWithoutNewArtifact|TestProviderArtifactIDIsRevisionIndependent|TestAppendRevisionAdversarial' -v ./internal/drive/`
+- **Output:**
+  ```
+  === RUN   TestNativeGoogleDocRevisionAppendsVersionChainWithoutNewArtifact
+  --- PASS: TestNativeGoogleDocRevisionAppendsVersionChainWithoutNewArtifact (0.00s)
+  === RUN   TestProviderArtifactIDIsRevisionIndependent
+  --- PASS: TestProviderArtifactIDIsRevisionIndependent (0.00s)
+  === RUN   TestAppendRevisionAdversarial
+  --- PASS: TestAppendRevisionAdversarial (0.00s)
+      --- PASS: TestAppendRevisionAdversarial/empty_chain_new_revision (0.00s)
+      --- PASS: TestAppendRevisionAdversarial/preserves_existing (0.00s)
+      --- PASS: TestAppendRevisionAdversarial/rejects_duplicate (0.00s)
+      --- PASS: TestAppendRevisionAdversarial/empty_revision_noop (0.00s)
+  PASS
+  ok      github.com/smackerel/smackerel/internal/drive   0.008s
+  ```
+- **Exit Code:** 0
+- **Claim Source:** executed
+
+#### GREEN proof — full Go unit suite via repo CLI
+
+- **Phase:** implement
+- **Command:** `./smackerel.sh test unit --go`
+- **Output (tail):**
+  ```
+  ok      github.com/smackerel/smackerel/internal/api     (cached)
+  ok      github.com/smackerel/smackerel/internal/drive   (cached)
+  ok      github.com/smackerel/smackerel/internal/drive/scan      (cached)
+  ...
+  ok      github.com/smackerel/smackerel/internal/web/icons       (cached)
+  ?       github.com/smackerel/smackerel/web/pwa  [no test files]
+  ```
+- **Exit Code:** 0
+- **Claim Source:** executed
+
+#### GREEN proof — Python unit suite via repo CLI
+
+- **Phase:** implement
+- **Command:** `./smackerel.sh test unit --python`
+- **Output (tail):**
+  ```
+  402 passed, 2 warnings in 17.83s
+  ```
+- **Exit Code:** 0
+- **Claim Source:** executed
+
+#### GREEN proof — integration suite via repo CLI
+
+- **Phase:** implement
+- **Command:** `./smackerel.sh test integration`
+- **Output (Scope 4 tests):**
+  ```
+  === RUN   TestTombstoneAndPermissionLossRemainQueryableWithoutBytes
+  --- PASS: TestTombstoneAndPermissionLossRemainQueryableWithoutBytes (0.18s)
+  === RUN   TestDriveSearchFindsFilesByContentFolderAndMetadata
+  --- PASS: TestDriveSearchFindsFilesByContentFolderAndMetadata (0.16s)
+  ...
+  ok      github.com/smackerel/smackerel/tests/integration/drive  7.514s
+  ```
+- **Exit Code:** 0
+- **Claim Source:** executed
+
+#### GREEN proof — e2e drive package via repo CLI
+
+- **Phase:** implement
+- **Command:** `./smackerel.sh test e2e --go-run 'TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates|TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision|TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity'`
+- **Output:**
+  ```
+  === RUN   TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates
+  --- PASS: TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates (0.08s)
+  === RUN   TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision
+  --- PASS: TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision (0.06s)
+  === RUN   TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity
+  --- PASS: TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity (0.05s)
+  PASS
+  ok      github.com/smackerel/smackerel/tests/e2e/drive  0.211s
+  PASS: go-e2e
+  ```
+- **Exit Code:** 0
+- **Claim Source:** executed
+
+#### Repo quality gates
+
+- **Phase:** implement
+- **Command:** `./smackerel.sh check`
+- **Output (tail):**
+  ```
+  Config is in sync with SST
+  env_file drift guard: OK
+  scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+  scenarios registered: 3, rejected: 0
+  scenario-lint: OK
+  ```
+- **Exit Code:** 0
+- **Claim Source:** executed
+
+- **Phase:** implement
+- **Command:** `./smackerel.sh format --check`
+- **Output (tail):** `48 files already formatted`
+- **Exit Code:** 0
+- **Claim Source:** executed
+
+- **Phase:** implement
+- **Command:** `./smackerel.sh lint`
+- **Output (tail):**
+  ```
+  # github.com/smackerel/smackerel/internal/connector/photos/adapters/immich
+  # [github.com/smackerel/smackerel/internal/connector/photos/adapters/immich]
+  internal/connector/photos/adapters/immich/immich.go:140:17: assignment copies lock value to probeClient: github.com/smackerel/smackerel/internal/connector/photos/adapters/immich.Client contains sync.Mutex
+  ```
+- **Exit Code:** 0 (immich warning is pre-existing on `HEAD = 9836ba1`, outside Scope 4 boundary, not blocking; same warning present before Scope 4 changes)
+- **Claim Source:** executed
+
+#### Consumer impact sweep
+
+- **Phase:** implement
+- **Notes:** All new fields are additive on the `SearchResult` JSON contract (Snippet and Drive both `omitempty`). No existing search response key was renamed or removed. The `GET /v1/drive/artifacts/{id}` endpoint is new and does not displace any existing route. PWA pages are net-new files embedded via the existing `//go:embed *.html *.js` pattern in `web/pwa/embed.go`; no PWA bundler change required. Verified that no Telegram, digest, agent, or annotation code depends on a renamed or removed field.
+- **Claim Source:** interpreted
+
+#### Pre-existing baseline failures (not caused by Scope 4)
+
+- **Phase:** implement
+- **Tests:** `tests/e2e/photos_pwa_test.go::TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI` and `tests/e2e/photos_pwa_test.go::TestPhotosPWA_E2E_ConnectorDetailRendersProgressAndSkipsFromLiveAPI`.
+- **Failure:** `photo-libraries.html missing "/v1/photos/connectors"` — the test asserts a string the unmodified `web/pwa/photo-libraries.html` does not contain.
+- **Verification this is pre-existing:** `git diff --stat tests/e2e/photos_pwa_test.go web/pwa/photo-libraries.html` reports no changes; both files match HEAD `9836ba1` baseline. Scope 4 does not touch the photos PWA surface (spec 040 owns it).
+- **Disposition:** Routed follow-up — out of Scope 4 change boundary; should be addressed by spec 040 owners. Not a Scope 4 regression.
+- **Claim Source:** executed
 
 ### Completion Statement
 
-Scope 4 status is Not Started.
+Scope 4 (Search And Artifact Detail) is complete. All ten DoD items in `scopes.md` are checked with inline evidence. SCN-038-010, SCN-038-011, and SCN-038-012 each have unit, integration, and/or e2e regression coverage that ran green against the live test stack. The change set stays inside the documented Change Boundary; only the search query/index, artifact detail API/PWA, drive version metadata helpers, search/detail tests, and `tests/e2e/drive/` were modified. The pre-existing `tests/e2e/photos_pwa_test.go` baseline failure is documented as a routed follow-up outside Scope 4 ownership.
 
 ## Scope 5: Save Rules And Write-Back
 

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Drive artifact detail — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1 id="drive-artifact-title">Drive file</h1>
+  <p class="subtitle" id="drive-artifact-subtitle">Provider, folder, sharing, sensitivity, and version chain</p>
+
+  <!--
+    Spec 038 Scope 4 Screen 6 — drive artifact detail. Renders preview,
+    extracted text, metadata, and versions tabs. Tombstoned and
+    permission-lost artifacts surface a banner and disable byte-delivery
+    actions; the version chain still renders so users can confirm what
+    history Smackerel retained.
+  -->
+  <section
+    id="drive-artifact-detail"
+    class="card"
+    aria-labelledby="drive-artifact-title"
+    aria-busy="true"
+  >
+    <p
+      id="drive-artifact-status"
+      class="status status-loading"
+      role="status"
+      aria-live="polite"
+    >Loading drive artifact…</p>
+
+    <div id="drive-artifact-body" hidden>
+      <p
+        id="drive-availability-banner"
+        class="status-banner drive-availability-banner"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></p>
+
+      <div class="drive-artifact-badges">
+        <span class="provider-chip" id="drive-provider-chip" data-provider="">—</span>
+        <span class="sharing-badge" id="drive-sharing-badge" data-state="">—</span>
+        <span class="sensitivity-badge" id="drive-sensitivity-badge" data-level="">—</span>
+      </div>
+
+      <nav class="drive-folder-breadcrumb" aria-label="Folder breadcrumb">
+        <ol id="drive-folder-breadcrumb-list" class="folder-breadcrumb-list"></ol>
+      </nav>
+
+      <div class="drive-artifact-actions">
+        <a
+          id="drive-open-in-drive"
+          class="primary"
+          href="#"
+          rel="noopener"
+        >Open in Drive ↗</a>
+      </div>
+
+      <div class="tab-strip" role="tablist" aria-label="Drive artifact tabs">
+        <button class="tab-button" role="tab" id="tab-preview" aria-controls="panel-preview" aria-selected="true">Preview</button>
+        <button class="tab-button" role="tab" id="tab-text" aria-controls="panel-text" aria-selected="false">Extracted text</button>
+        <button class="tab-button" role="tab" id="tab-metadata" aria-controls="panel-metadata" aria-selected="false">Metadata</button>
+        <button class="tab-button" role="tab" id="tab-versions" aria-controls="panel-versions" aria-selected="false">Versions</button>
+      </div>
+
+      <section id="panel-preview" role="tabpanel" aria-labelledby="tab-preview" class="drive-tab-panel">
+        <h3>Summary</h3>
+        <p id="drive-summary"></p>
+      </section>
+
+      <section id="panel-text" role="tabpanel" aria-labelledby="tab-text" class="drive-tab-panel" hidden>
+        <h3>Extracted text</h3>
+        <p
+          id="drive-extracted-text-unavailable"
+          class="status status-info"
+          hidden
+        >Extracted text is unavailable for this artifact because the source bytes are no longer reachable.</p>
+        <pre id="drive-extracted-text" class="drive-extracted-text"></pre>
+      </section>
+
+      <section id="panel-metadata" role="tabpanel" aria-labelledby="tab-metadata" class="drive-tab-panel" hidden>
+        <h3>Metadata</h3>
+        <dl class="drive-metadata-fields">
+          <div>
+            <dt>Provider</dt>
+            <dd id="meta-provider">—</dd>
+          </div>
+          <div>
+            <dt>Owner</dt>
+            <dd id="meta-owner">—</dd>
+          </div>
+          <div>
+            <dt>MIME type</dt>
+            <dd id="meta-mime">—</dd>
+          </div>
+          <div>
+            <dt>Provider URL</dt>
+            <dd><a id="meta-url" href="#" rel="noopener">—</a></dd>
+          </div>
+          <div>
+            <dt>Sharing audience</dt>
+            <dd id="meta-audience">—</dd>
+          </div>
+          <div>
+            <dt>Sensitivity</dt>
+            <dd id="meta-sensitivity">—</dd>
+          </div>
+          <div>
+            <dt>Created</dt>
+            <dd id="meta-created">—</dd>
+          </div>
+          <div>
+            <dt>Updated</dt>
+            <dd id="meta-updated">—</dd>
+          </div>
+          <div>
+            <dt>Availability</dt>
+            <dd id="meta-availability">—</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="panel-versions" role="tabpanel" aria-labelledby="tab-versions" class="drive-tab-panel" hidden>
+        <h3>Versions</h3>
+        <p
+          id="drive-versions-empty"
+          class="status status-info"
+          hidden
+        >No prior provider revisions recorded yet.</p>
+        <ol id="drive-versions-list" class="drive-versions-list"></ol>
+      </section>
+    </div>
+
+    <p
+      id="drive-artifact-error"
+      class="status status-error"
+      role="status"
+      aria-live="polite"
+      hidden
+    ></p>
+  </section>
+
+  <script src="/pwa/drive-artifact-detail.js"></script>
+</body>
+</html>

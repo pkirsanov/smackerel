@@ -229,6 +229,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 				r.Get("/connectors/drive/oauth/callback", deps.DriveHandlers.OAuthCallback)
 				r.Get("/connectors/drive/connection/{id}", deps.DriveHandlers.GetConnection)
 				r.Get("/connectors/drive/connection/{id}/skipped", deps.DriveHandlers.GetSkippedBlocked)
+				r.Get("/drive/artifacts/{id}", deps.DriveHandlers.GetArtifactDetail)
 			}
 
 			if deps.PhotosHandlers != nil {

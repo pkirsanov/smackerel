@@ -373,6 +373,34 @@ func (h *DriveHandlers) GetConnection(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
+// GetArtifactDetail handles GET /v1/drive/artifacts/{id}. It returns the
+// Screen 6 detail payload — preview/text/metadata/versions — for one
+// drive artifact. Tombstoned and permission-lost artifacts MUST stay
+// queryable (SCN-038-012, design.md §11) so this handler still serves
+// the row but suppresses extracted bytes and surfaces a banner so the
+// PWA can disable byte-delivery actions.
+func (h *DriveHandlers) GetArtifactDetail(w http.ResponseWriter, r *http.Request) {
+	if h.pool == nil {
+		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "drive detail DB pool is not wired")
+		return
+	}
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "missing artifact id")
+		return
+	}
+	detail, err := LoadDriveArtifactDetail(r.Context(), h.pool, id)
+	if errors.Is(err, errDriveDetailNotFound) {
+		writeError(w, http.StatusNotFound, "ARTIFACT_NOT_FOUND", "no drive artifact with id "+id)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, detail)
+}
+
 // GetSkippedBlocked handles GET
 // /v1/connectors/drive/connection/{id}/skipped.
 func (h *DriveHandlers) GetSkippedBlocked(w http.ResponseWriter, r *http.Request) {
