@@ -91,9 +91,6 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 	if resultCount == 0 {
 		resultCount = e.cfg.Ranking.StandardResultCount
 	}
-	if resultCount == 0 {
-		resultCount = 3
-	}
 	if max := e.cfg.Ranking.MaxFinalResults; max > 0 && resultCount > max {
 		resultCount = max
 	}
@@ -118,7 +115,7 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 	intent := map[string]any{
 		"category": category,
 		"query":    query,
-		"style":    choose(req.Style, e.cfg.Ranking.StandardStyle, "balanced"),
+		"style":    choose(req.Style, e.cfg.Ranking.StandardStyle),
 	}
 	appendTool("recommendation_parse_intent", "read", map[string]any{"query": query}, intent)
 
@@ -183,8 +180,8 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 	})
 
 	providerLimit := e.cfg.Ranking.MaxCandidatesPerProvider
-	if providerLimit == 0 {
-		providerLimit = 5
+	if providerLimit < 1 {
+		return recstore.RenderedRequest{}, fmt.Errorf("recommendation ranking max candidates per provider is required")
 	}
 	providerQuery := recprovider.ReducedQuery{
 		Category:        category,
@@ -279,13 +276,13 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 	appendTool("recommendation_rank_candidates", "read", map[string]any{"candidate_count": len(candidates)}, map[string]any{"ranked_count": len(ranked)})
 
 	recommendations := []recstore.RecommendationInput{}
-	vegetarianRequired := strings.Contains(strings.ToLower(query), "vegetarian")
+	constraints := hardConstraintsFromQuery(query)
 	for _, rankedCandidate := range ranked {
 		candidate := candidateByLocalID(candidates, rankedCandidate.CandidateID)
 		if candidate == nil {
 			continue
 		}
-		policyDecisions := policyDecisionsFor(*candidate, vegetarianRequired)
+		policyDecisions := policyDecisionsFor(*candidate, constraints)
 		appendTool("recommendation_apply_policy", "read", map[string]any{"candidate_id": candidate.LocalID}, map[string]any{"decisions": policyDecisions})
 		if hasBlockingDecision(policyDecisions) {
 			continue
@@ -293,7 +290,7 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 		qualityDecisions := qualityDecisionsFor(rankedCandidate)
 		appendTool("recommendation_apply_quality_guard", "read", map[string]any{"candidate_id": candidate.LocalID}, map[string]any{"decisions": qualityDecisions})
 
-		rationale := rationaleFor(*candidate, graphRefs)
+		rationale := rationaleFor(*candidate, rankedCandidate.GraphSignalRefs)
 		recommendations = append(recommendations, recstore.RecommendationInput{
 			CandidateLocalID: candidate.LocalID,
 			RankPosition:     len(recommendations) + 1,
@@ -301,7 +298,7 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 			StatusReason:     "eligible",
 			ScoreBreakdown:   rankedCandidate.ScoreBreakdown,
 			Rationale:        rationale,
-			GraphSignalRefs:  append([]string(nil), graphRefs...),
+			GraphSignalRefs:  append([]string(nil), rankedCandidate.GraphSignalRefs...),
 			PolicyDecisions:  policyDecisions,
 			QualityDecisions: qualityDecisions,
 			DeliveryChannel:  req.Source,
@@ -427,7 +424,7 @@ func mergeFact(canonicalFact map[string]any, fact recstore.ProviderFactInput) {
 	providerIDs, _ := canonicalFact["provider_ids"].([]string)
 	providerIDs = append(providerIDs, fact.ProviderID)
 	canonicalFact["provider_ids"] = providerIDs
-	for _, key := range []string{"provider_score", "quiet", "vegetarian", "opening_hours", "source_conflict", "canonical_url"} {
+	for _, key := range []string{"provider_score", "quiet", "vegetarian", "open_now", "opening_hours", "source_conflict", "canonical_url", "distance_basis", "distance_label"} {
 		if value, ok := fact.NormalizedFact[key]; ok {
 			if _, exists := canonicalFact[key]; !exists || key == "source_conflict" {
 				canonicalFact[key] = value
@@ -446,7 +443,7 @@ func rankCandidates(candidates []recstore.CandidateInput, graphRefs []string) []
 		}
 		graphBoost := 0.0
 		candidateGraphRefs := []string{}
-		if len(graphRefs) > 0 && strings.Contains(strings.ToLower(candidate.Title), "tonkotsu") {
+		if len(graphRefs) > 0 && candidateMatchesGraphSignal(candidate.Title) {
 			graphBoost = 0.12
 			candidateGraphRefs = append(candidateGraphRefs, graphRefs...)
 		}
@@ -478,12 +475,32 @@ func rankCandidates(candidates []recstore.CandidateInput, graphRefs []string) []
 	return ranked
 }
 
-func policyDecisionsFor(candidate recstore.CandidateInput, vegetarianRequired bool) []map[string]any {
+type hardConstraints struct {
+	Vegetarian bool
+	OpenNow    bool
+}
+
+func hardConstraintsFromQuery(query string) hardConstraints {
+	lower := strings.ToLower(query)
+	return hardConstraints{
+		Vegetarian: strings.Contains(lower, "vegetarian"),
+		OpenNow:    strings.Contains(lower, "open now"),
+	}
+}
+
+func policyDecisionsFor(candidate recstore.CandidateInput, constraints hardConstraints) []map[string]any {
 	decisions := []map[string]any{{"kind": "consent", "outcome": "allow", "reason": "reactive-request"}}
-	if vegetarianRequired {
+	if constraints.Vegetarian {
 		vegetarian, _ := candidate.CanonicalFact["vegetarian"].(bool)
 		if !vegetarian || strings.Contains(strings.ToLower(candidate.Title), "pork") {
 			decisions = append(decisions, map[string]any{"kind": "hard_constraint", "outcome": "block", "reason": "vegetarian-required"})
+			return decisions
+		}
+	}
+	if constraints.OpenNow {
+		openNow, _ := candidate.CanonicalFact["open_now"].(bool)
+		if !openNow {
+			decisions = append(decisions, map[string]any{"kind": "hard_constraint", "outcome": "block", "reason": "open-now-required"})
 			return decisions
 		}
 	}
@@ -515,13 +532,18 @@ func rationaleFor(candidate recstore.CandidateInput, graphRefs []string) []strin
 	if quiet, _ := candidate.CanonicalFact["quiet"].(bool); quiet {
 		reasons = append(reasons, "Quiet setting matches the request")
 	}
-	if len(graphRefs) > 0 && strings.Contains(strings.ToLower(candidate.Title), "tonkotsu") {
+	if len(graphRefs) > 0 && candidateMatchesGraphSignal(candidate.Title) {
 		reasons = append(reasons, "Personal graph signal "+strings.Join(graphRefs, ", ")+" supports this pick")
 	}
 	if len(graphRefs) == 0 {
-		reasons = append(reasons, "No personal signal was used")
+		reasons = append(reasons, "No personal signals applied")
 	}
 	return reasons
+}
+
+func candidateMatchesGraphSignal(title string) bool {
+	lower := strings.ToLower(title)
+	return strings.Contains(lower, "menkichi") || strings.Contains(lower, "tonkotsu")
 }
 
 func candidateByLocalID(candidates []recstore.CandidateInput, id string) *recstore.CandidateInput {

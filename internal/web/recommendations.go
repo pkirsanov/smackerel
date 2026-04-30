@@ -96,9 +96,16 @@ func (h *Handler) renderRecommendationCards(w http.ResponseWriter, outcome recst
 	for _, rec := range outcome.Recommendations {
 		_, _ = fmt.Fprintf(w, `<article class="card recommendation-card" data-recommendation-id="%s"><h2>%d. %s</h2><p>`, template.HTMLEscapeString(rec.ID), rec.Rank, template.HTMLEscapeString(rec.Title))
 		for _, badge := range rec.ProviderBadges {
+			if badge.URL != "" {
+				_, _ = fmt.Fprintf(w, `<a class="badge" href="%s">%s</a> `, template.HTMLEscapeString(badge.URL), template.HTMLEscapeString(badge.Label))
+				continue
+			}
 			_, _ = fmt.Fprintf(w, `<span class="badge">%s</span> `, template.HTMLEscapeString(badge.Label))
 		}
 		_, _ = fmt.Fprint(w, `</p><ul>`)
+		if rec.DistanceLabel != "" {
+			_, _ = fmt.Fprintf(w, `<li>%s distance: %s</li>`, template.HTMLEscapeString(rec.DistanceBasis), template.HTMLEscapeString(rec.DistanceLabel))
+		}
 		for _, reason := range rec.Rationale {
 			_, _ = fmt.Fprintf(w, `<li>%s</li>`, template.HTMLEscapeString(reason))
 		}

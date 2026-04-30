@@ -104,10 +104,27 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 		score       float64
 		quiet       bool
 		vegetarian  bool
+		openNow     bool
 		hours       string
 		conflicting bool
+		distance    string
 	}
 	switch {
+	case strings.Contains(lowerQuery, "low confidence"):
+		rows = []struct {
+			id          string
+			title       string
+			url         string
+			score       float64
+			quiet       bool
+			vegetarian  bool
+			openNow     bool
+			hours       string
+			conflicting bool
+			distance    string
+		}{
+			{id: "coffee-maybe", title: "Maybe Coffee Counter", url: "https://fixture.example/coffee/maybe", score: 0.41, quiet: false, vegetarian: true, openNow: false, hours: "unknown", distance: "distance unknown"},
+		}
 	case strings.Contains(lowerQuery, "coffee"):
 		rows = []struct {
 			id          string
@@ -116,12 +133,14 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 			score       float64
 			quiet       bool
 			vegetarian  bool
+			openNow     bool
 			hours       string
 			conflicting bool
+			distance    string
 		}{
-			{id: "coffee-fogline", title: "Fogline Coffee", url: "https://fixture.example/coffee/fogline", score: 0.82, quiet: true, hours: "07:00-16:00"},
-			{id: "coffee-mission-bean", title: "Mission Bean", url: "https://fixture.example/coffee/mission-bean", score: 0.74, quiet: true, hours: "08:00-15:00"},
-			{id: "coffee-corner", title: "Corner Espresso", url: "https://fixture.example/coffee/corner", score: 0.68, quiet: false, hours: "07:30-17:00"},
+			{id: "coffee-fogline", title: "Fogline Coffee", url: "https://fixture.example/coffee/fogline", score: 0.82, quiet: true, vegetarian: true, openNow: true, hours: "07:00-16:00", distance: "8 min walk"},
+			{id: "coffee-mission-bean", title: "Mission Bean", url: "https://fixture.example/coffee/mission-bean", score: 0.74, quiet: true, vegetarian: true, openNow: true, hours: "08:00-15:00", distance: "11 min walk"},
+			{id: "coffee-corner", title: "Corner Espresso", url: "https://fixture.example/coffee/corner", score: 0.68, quiet: false, vegetarian: true, openNow: true, hours: "07:30-17:00", distance: "15 min walk"},
 		}
 	case strings.Contains(lowerQuery, "conflict"):
 		rows = []struct {
@@ -131,10 +150,12 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 			score       float64
 			quiet       bool
 			vegetarian  bool
+			openNow     bool
 			hours       string
 			conflicting bool
+			distance    string
 		}{
-			{id: "ramen-late-lab", title: "Late Ramen Lab", url: "https://fixture.example/ramen/late-lab", score: 0.79, quiet: true, hours: p.conflictHours(), conflicting: true},
+			{id: "ramen-late-lab", title: "Late Ramen Lab", url: "https://fixture.example/ramen/late-lab", score: 0.79, quiet: true, vegetarian: true, openNow: false, hours: p.conflictHours(), conflicting: true, distance: "12 min walk"},
 		}
 	default:
 		rows = []struct {
@@ -144,13 +165,15 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 			score       float64
 			quiet       bool
 			vegetarian  bool
+			openNow     bool
 			hours       string
 			conflicting bool
+			distance    string
 		}{
-			{id: "ramen-tonkotsu", title: "Tonkotsu Workshop", url: "https://fixture.example/ramen/tonkotsu", score: 0.91, quiet: true, hours: "11:00-21:00"},
-			{id: "ramen-quiet-noodle", title: "Quiet Noodle Bar", url: "https://fixture.example/ramen/quiet-noodle", score: 0.83, quiet: true, vegetarian: true, hours: "12:00-20:00"},
-			{id: "ramen-mission-shoyu", title: "Mission Shoyu", url: "https://fixture.example/ramen/mission-shoyu", score: 0.76, quiet: false, vegetarian: true, hours: "11:30-22:00"},
-			{id: "ramen-pork-broth", title: "Pork Broth Ramen", url: "https://fixture.example/ramen/pork-broth", score: 0.72, quiet: false, vegetarian: false, hours: "10:00-22:30"},
+			{id: "ramen-menkichi", title: "Menkichi", url: "https://fixture.example/ramen/menkichi", score: 0.86, quiet: true, vegetarian: false, openNow: false, hours: "11:00-21:00", distance: "10 min walk"},
+			{id: "ramen-quiet-noodle", title: "Quiet Noodle Bar", url: "https://fixture.example/ramen/quiet-noodle", score: 0.83, quiet: true, vegetarian: true, openNow: false, hours: "12:00-20:00", distance: "9 min walk"},
+			{id: "ramen-mission-shoyu", title: "Mission Shoyu", url: "https://fixture.example/ramen/mission-shoyu", score: 0.76, quiet: false, vegetarian: true, openNow: false, hours: "11:30-22:00", distance: "14 min walk"},
+			{id: "ramen-pork-broth", title: "Pork Broth Ramen", url: "https://fixture.example/ramen/pork-broth", score: 0.72, quiet: false, vegetarian: false, openNow: false, hours: "10:00-22:30", distance: "16 min walk"},
 		}
 	}
 
@@ -174,9 +197,12 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 				"provider_score":  row.score,
 				"quiet":           row.quiet,
 				"vegetarian":      row.vegetarian,
+				"open_now":        row.openNow,
 				"opening_hours":   row.hours,
 				"source_conflict": row.conflicting,
 				"location_cell":   query.Geometry.CellID,
+				"distance_basis":  "route",
+				"distance_label":  row.distance,
 			},
 			Attribution: map[string]any{
 				"label": providerName,
