@@ -23,7 +23,7 @@ Commands:
   package extension           Package browser extension for Chrome and Firefox distribution
   test unit [--go|--python]   Run unit tests
   test integration            Run live-stack integration validation
-  test e2e [--go-run <regex>] Run E2E tests; optionally run only matching Go E2E tests
+  test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
   test stress                 Run live-stack stress smoke test
   up                          Start the stack for the current environment
   down [--volumes]            Stop the stack; optionally remove named volumes
@@ -557,6 +557,7 @@ case "$COMMAND" in
         ;;
       e2e)
         GO_E2E_RUN_SELECTOR=""
+        SHELL_E2E_RUN_TARGET=""
         while [[ $# -gt 0 ]]; do
           case "$1" in
             --go-run)
@@ -579,6 +580,26 @@ case "$COMMAND" in
               fi
               shift
               ;;
+            --shell-run)
+              if [[ $# -lt 2 ]]; then
+                echo "ERROR: --shell-run requires a non-empty shell test path" >&2
+                exit 1
+              fi
+              if [[ -z "$2" ]]; then
+                echo "ERROR: --shell-run requires a non-empty shell test path" >&2
+                exit 1
+              fi
+              SHELL_E2E_RUN_TARGET="$2"
+              shift 2
+              ;;
+            --shell-run=*)
+              SHELL_E2E_RUN_TARGET="${1#*=}"
+              if [[ -z "$SHELL_E2E_RUN_TARGET" ]]; then
+                echo "ERROR: --shell-run requires a non-empty shell test path" >&2
+                exit 1
+              fi
+              shift
+              ;;
             *)
               echo "Unknown test e2e option: $1" >&2
               usage
@@ -586,6 +607,11 @@ case "$COMMAND" in
               ;;
           esac
         done
+
+        if [[ -n "$GO_E2E_RUN_SELECTOR" && -n "$SHELL_E2E_RUN_TARGET" ]]; then
+          echo "ERROR: --go-run and --shell-run cannot be combined" >&2
+          exit 1
+        fi
 
         e2e_child_pid=""
         e2e_cleanup_ran=0
@@ -596,10 +622,43 @@ case "$COMMAND" in
 
         e2e_stop_child() {
           if [[ -n "${e2e_child_pid:-}" ]] && kill -0 "$e2e_child_pid" 2>/dev/null; then
-            kill -TERM "-$e2e_child_pid" 2>/dev/null || kill -TERM "$e2e_child_pid" 2>/dev/null || true
-            wait "$e2e_child_pid" 2>/dev/null || true
+            local child_pid="$e2e_child_pid"
+            local attempt
+
+            kill -TERM "-$child_pid" 2>/dev/null || kill -TERM "$child_pid" 2>/dev/null || true
+            for attempt in {1..20}; do
+              if ! kill -0 "$child_pid" 2>/dev/null; then
+                break
+              fi
+              sleep 0.1
+            done
+            if kill -0 "$child_pid" 2>/dev/null; then
+              kill -KILL "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
+            else
+              kill -KILL "-$child_pid" 2>/dev/null || true
+            fi
+            wait "$child_pid" 2>/dev/null || true
           fi
           e2e_child_pid=""
+        }
+
+        e2e_validate_shell_test_target() {
+          local shell_test_target="$1"
+
+          case "$shell_test_target" in
+            ""|/*|*..*|*//*)
+              echo "ERROR: --shell-run must reference a tests/e2e relative .sh path" >&2
+              exit 1
+              ;;
+          esac
+          if [[ "$shell_test_target" != *.sh ]]; then
+            echo "ERROR: --shell-run target must be a .sh file" >&2
+            exit 1
+          fi
+          if [[ ! -f "$SCRIPT_DIR/tests/e2e/$shell_test_target" ]]; then
+            echo "ERROR: --shell-run target does not exist: tests/e2e/$shell_test_target" >&2
+            exit 1
+          fi
         }
 
         e2e_print_test_stack_state() {
@@ -734,10 +793,22 @@ case "$COMMAND" in
           echo ""
         }
 
+        if [[ -n "$SHELL_E2E_RUN_TARGET" ]]; then
+          e2e_validate_shell_test_target "$SHELL_E2E_RUN_TARGET"
+          echo "Running targeted shell E2E: $SHELL_E2E_RUN_TARGET"
+          e2e_run_shell_test "$SHELL_E2E_RUN_TARGET" timeout 300 env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$SHELL_E2E_RUN_TARGET"
+          e2e_print_shell_summary
+          if [[ "$e2e_overall_status" -ne 0 ]]; then
+            exit "$e2e_overall_status"
+          fi
+          exit 0
+        fi
+
         if [[ -z "$GO_E2E_RUN_SELECTOR" ]]; then
           # Lifecycle E2E scripts intentionally own their own stack boot,
           # restart, and teardown semantics.
           e2e_lifecycle_scripts=(
+            test_timeout_process_cleanup.sh
             test_compose_start.sh
             test_persistence.sh
             test_postgres_readiness_gate.sh
