@@ -67,6 +67,19 @@ type createRecommendationResponse struct {
 	Clarification   *recstore.Clarification           `json:"clarification,omitempty"`
 }
 
+type recommendationFeedbackRequest struct {
+	FeedbackType   string         `json:"feedback_type"`
+	SourceWatchID  string         `json:"source_watch_id"`
+	PreferenceKey  string         `json:"preference_key"`
+	CorrectionKind string         `json:"correction_kind"`
+	Payload        map[string]any `json:"payload"`
+}
+
+type preferenceCorrectionRequest struct {
+	CorrectionKind string         `json:"correction_kind"`
+	Payload        map[string]any `json:"payload"`
+}
+
 // CreateRequest handles POST /api/recommendations/requests. Scope 1 persists
 // and returns the no-provider outcome without invoking any provider calls.
 func (h *RecommendationHandlers) CreateRequest(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +206,128 @@ func (h *RecommendationHandlers) GetRecommendation(w http.ResponseWriter, r *htt
 		return
 	}
 	writeJSON(w, http.StatusOK, recommendation)
+}
+
+// GetWhy handles GET /api/recommendations/{id}/why.
+func (h *RecommendationHandlers) GetWhy(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.store.(*recstore.Store)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "recommendation_store_unavailable", "recommendation store is unavailable")
+		return
+	}
+	recommendationID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if recommendationID == "" {
+		writeError(w, http.StatusBadRequest, "missing_recommendation_id", "recommendation id is required")
+		return
+	}
+	why, err := store.ExplainRecommendation(r.Context(), recommendationID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "recommendation_why_not_found", "recommendation why explanation not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, why)
+}
+
+// RecordFeedback handles POST /api/recommendations/{id}/feedback.
+func (h *RecommendationHandlers) RecordFeedback(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.store.(*recstore.Store)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "recommendation_store_unavailable", "recommendation store is unavailable")
+		return
+	}
+	recommendationID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if recommendationID == "" {
+		writeError(w, http.StatusBadRequest, "missing_recommendation_id", "recommendation id is required")
+		return
+	}
+	var req recommendationFeedbackRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid recommendation feedback JSON")
+		return
+	}
+	result, err := store.RecordFeedback(r.Context(), recstore.FeedbackInput{
+		RecommendationID: recommendationID,
+		ActorUserID:      "local",
+		FeedbackType:     req.FeedbackType,
+		SourceWatchID:    req.SourceWatchID,
+		PreferenceKey:    req.PreferenceKey,
+		CorrectionKind:   req.CorrectionKind,
+		Payload:          req.Payload,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "recommendation_feedback_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// ListPreferences handles GET /api/recommendations/preferences.
+func (h *RecommendationHandlers) ListPreferences(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.store.(*recstore.Store)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "recommendation_store_unavailable", "recommendation store is unavailable")
+		return
+	}
+	view, err := store.ListPreferences(r.Context(), "local")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "recommendation_preferences_failed", "failed to list recommendation preferences")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+// CreatePreferenceCorrection handles POST /api/recommendations/preferences/{key}/corrections.
+func (h *RecommendationHandlers) CreatePreferenceCorrection(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.store.(*recstore.Store)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "recommendation_store_unavailable", "recommendation store is unavailable")
+		return
+	}
+	preferenceKey := strings.TrimSpace(chi.URLParam(r, "key"))
+	if preferenceKey == "" {
+		writeError(w, http.StatusBadRequest, "missing_preference_key", "preference key is required")
+		return
+	}
+	var req preferenceCorrectionRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid preference correction JSON")
+		return
+	}
+	correction, err := store.CreatePreferenceCorrection(r.Context(), recstore.CreatePreferenceCorrectionInput{
+		ActorUserID:    "local",
+		PreferenceKey:  preferenceKey,
+		CorrectionKind: req.CorrectionKind,
+		Payload:        req.Payload,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "preference_correction_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, correction)
+}
+
+// RevokePreferenceCorrection handles DELETE /api/recommendations/preferences/{key}/corrections/{correctionID}.
+func (h *RecommendationHandlers) RevokePreferenceCorrection(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.store.(*recstore.Store)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "recommendation_store_unavailable", "recommendation store is unavailable")
+		return
+	}
+	preferenceKey := strings.TrimSpace(chi.URLParam(r, "key"))
+	correctionID := strings.TrimSpace(chi.URLParam(r, "correctionID"))
+	if preferenceKey == "" || correctionID == "" {
+		writeError(w, http.StatusBadRequest, "missing_preference_correction", "preference key and correction id are required")
+		return
+	}
+	if err := store.RevokePreferenceCorrection(r.Context(), "local", preferenceKey, correctionID); err != nil {
+		writeError(w, http.StatusNotFound, "preference_correction_not_found", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "revoked", "correction_id": correctionID})
 }
 
 func (h *RecommendationHandlers) validateCreateRequest(req createRecommendationRequest) error {

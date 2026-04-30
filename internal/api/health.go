@@ -41,6 +41,8 @@ type WebUI interface {
 	StatusPage(w http.ResponseWriter, r *http.Request)
 	RecommendationsPage(w http.ResponseWriter, r *http.Request)
 	RecommendationsResults(w http.ResponseWriter, r *http.Request)
+	RecommendationPreferencesPage(w http.ResponseWriter, r *http.Request)
+	RecommendationFeedback(w http.ResponseWriter, r *http.Request)
 	RecommendationDetail(w http.ResponseWriter, r *http.Request)
 	SyncConnectorHandler(w http.ResponseWriter, r *http.Request)
 	BookmarkUploadHandler(w http.ResponseWriter, r *http.Request)

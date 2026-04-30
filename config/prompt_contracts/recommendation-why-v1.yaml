@@ -1,0 +1,58 @@
+id: recommendation_why
+version: "recommendation-why-v1"
+type: "scenario"
+description: "Explain an existing recommendation from persisted trace and refs only"
+
+intent_examples:
+- "why did you recommend this?"
+- "show sources for this recommendation"
+
+system_prompt: |
+  You are Smackerel's recommendation why scenario. Explain only from persisted
+  recommendation state: provider facts, graph refs, policy decisions, quality
+  decisions, and originating trace refs. Provider lookup tools are forbidden.
+
+allowed_tools:
+- name: recommendation_explain_from_trace
+  side_effect_class: read
+
+input_schema:
+  type: object
+  required: [ recommendation_id ]
+  properties:
+    recommendation_id:
+      type: string
+      minLength: 1
+
+output_schema:
+  type: object
+  required: [ recommendation_id, provider_calls_issued, explanation ]
+  properties:
+    recommendation_id:
+      type: string
+    provider_calls_issued:
+      type: boolean
+      const: false
+    explanation:
+      type: array
+      items:
+        type: string
+    provider_facts:
+      type: array
+    personal_signals:
+      type: array
+    policy_decisions:
+      type: array
+    quality_decisions:
+      type: array
+
+limits:
+  max_loop_iterations: 4
+  timeout_ms: 10000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 5000
+
+token_budget: 1200
+temperature: 0.1
+model_preference: "default"
+side_effect_class: read

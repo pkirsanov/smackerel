@@ -142,6 +142,11 @@ func NewRouter(deps *Dependencies) http.Handler {
 				r.Route("/recommendations", func(r chi.Router) {
 					r.Post("/requests", deps.RecommendationHandlers.CreateRequest)
 					r.Get("/requests/{id}", deps.RecommendationHandlers.GetRequest)
+					r.Get("/preferences", deps.RecommendationHandlers.ListPreferences)
+					r.Post("/preferences/{key}/corrections", deps.RecommendationHandlers.CreatePreferenceCorrection)
+					r.Delete("/preferences/{key}/corrections/{correctionID}", deps.RecommendationHandlers.RevokePreferenceCorrection)
+					r.Get("/{id}/why", deps.RecommendationHandlers.GetWhy)
+					r.Post("/{id}/feedback", deps.RecommendationHandlers.RecordFeedback)
 					r.Get("/{id}", deps.RecommendationHandlers.GetRecommendation)
 				})
 			}
@@ -175,6 +180,8 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Get("/status", deps.WebHandler.StatusPage)
 			r.Get("/recommendations", deps.WebHandler.RecommendationsPage)
 			r.Post("/recommendations/results", deps.WebHandler.RecommendationsResults)
+			r.Get("/recommendations/preferences", deps.WebHandler.RecommendationPreferencesPage)
+			r.Post("/recommendations/{id}/feedback", deps.WebHandler.RecommendationFeedback)
 			r.Get("/recommendations/{id}", deps.WebHandler.RecommendationDetail)
 
 			// Knowledge layer web routes

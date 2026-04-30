@@ -20,6 +20,8 @@ func init() {
 	registerTool("recommendation_apply_policy", agent.SideEffectRead)
 	registerTool("recommendation_apply_quality_guard", agent.SideEffectRead)
 	registerTool("recommendation_persist_outcome", agent.SideEffectWrite)
+	registerTool("recommendation_record_feedback", agent.SideEffectWrite)
+	registerTool("recommendation_explain_from_trace", agent.SideEffectRead)
 }
 
 func registerTool(name string, sideEffect agent.SideEffectClass) {

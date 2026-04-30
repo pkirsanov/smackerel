@@ -48,3 +48,50 @@ func TestRecommendationReactiveScenarioAllowlist(t *testing.T) {
 		}
 	}
 }
+
+func TestRecommendationWhyScenarioAllowlistExcludesProviderTools(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "config", "prompt_contracts")
+	scenarios, rejected, fatal := agent.DefaultLoader().Load(dir, "recommendation-why-v1.yaml")
+	if fatal != nil {
+		t.Fatalf("scenario load fatal: %v", fatal)
+	}
+	if len(rejected) != 0 {
+		t.Fatalf("scenario rejected: %+v", rejected)
+	}
+	if len(scenarios) != 1 {
+		t.Fatalf("loaded scenarios = %d, want 1", len(scenarios))
+	}
+	scenario := scenarios[0]
+	if scenario.ID != "recommendation_why" || scenario.Version != "recommendation-why-v1" {
+		t.Fatalf("scenario identity = %s/%s", scenario.ID, scenario.Version)
+	}
+	if len(scenario.AllowedTools) != 1 || scenario.AllowedTools[0].Name != "recommendation_explain_from_trace" {
+		t.Fatalf("why allowed tools = %+v, want only recommendation_explain_from_trace", scenario.AllowedTools)
+	}
+	for _, tool := range scenario.AllowedTools {
+		if tool.Name == "recommendation_fetch_candidates" || tool.SideEffectClass == agent.SideEffectExternal {
+			t.Fatalf("why scenario allowed provider/external tool: %+v", tool)
+		}
+	}
+}
+
+func TestRecommendationFeedbackScenarioAllowlist(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "config", "prompt_contracts")
+	scenarios, rejected, fatal := agent.DefaultLoader().Load(dir, "recommendation-feedback-v1.yaml")
+	if fatal != nil {
+		t.Fatalf("scenario load fatal: %v", fatal)
+	}
+	if len(rejected) != 0 {
+		t.Fatalf("scenario rejected: %+v", rejected)
+	}
+	if len(scenarios) != 1 {
+		t.Fatalf("loaded scenarios = %d, want 1", len(scenarios))
+	}
+	scenario := scenarios[0]
+	if scenario.ID != "recommendation_feedback" || scenario.Version != "recommendation-feedback-v1" {
+		t.Fatalf("scenario identity = %s/%s", scenario.ID, scenario.Version)
+	}
+	if len(scenario.AllowedTools) != 1 || scenario.AllowedTools[0].Name != "recommendation_record_feedback" {
+		t.Fatalf("feedback allowed tools = %+v, want only recommendation_record_feedback", scenario.AllowedTools)
+	}
+}

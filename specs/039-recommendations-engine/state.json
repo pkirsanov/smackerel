@@ -5,7 +5,7 @@
   "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.workflow",
+    "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
     "currentScope": "scope-03-feedback-suppression-why",
     "runStartedAt": "2026-04-27T02:05:00Z",
@@ -39,6 +39,13 @@
         "agent": "bubbles.plan",
         "timestamp": "2026-04-27T01:15:00Z",
         "summary": "Authored the plan-owned artifact set for feature 039. Replaced the prior 8-scope planning skeleton with 6 sequential vertical-slice scopes: 01-foundation-schema, 02-reactive-place-recommendation, 03-feedback-suppression-why, 04-watches-and-scheduler, 05-policy-quality-and-trip-dossier, 06-observability-stress-and-cutover. Each scope defines Gherkin scenarios, UI scenario matrix where applicable, implementation plan, consumer/shared-infrastructure impact sweeps, change boundary, full Test Plan with scenario-specific E2E rows and a mandatory Regression E2E row, and Tiered DoD. Rebuilt scenario-manifest.json to exactly match the 30 active Gherkin scenarios in scopes.md (SCN-039-001..003, 010..012, 020..023, 030..039, 040..045, 050..053); every scenario retains its live regression test expectation. Refreshed report.md to a 6-scope evidence skeleton with a per-block evidence template. Refreshed uservalidation.md to a checked-by-default user-acceptance checklist mapped to BS-001..BS-032 and the NFR set. No certification fields changed; certification.scopeProgress remains empty pending implementation."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "scope": "scope-03-feedback-suppression-why",
+        "timestamp": "2026-04-30T13:27:54Z",
+        "summary": "Implemented Scope 3 feedback suppression, preference correction, why explanations, and preferences UI. Added recommendation-feedback-v1 and recommendation-why-v1 scenario contracts, store/API/web/rank behavior, persistent integration and E2E regression coverage, and implement evidence in scopes.md/report.md/scenario-manifest.json. Required implement gates passed: format --check, check, lint, unit, integration, focused E2E, and broad E2E. Certification fields were not modified."
       }
     ],
     "pendingTransitionRequests": []

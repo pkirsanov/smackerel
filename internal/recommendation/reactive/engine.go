@@ -265,7 +265,17 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 	}
 	appendTool("recommendation_get_graph_snapshot", "read", map[string]any{"candidate_count": len(candidates)}, map[string]any{"graph_signal_refs": graphRefs})
 
-	ranked := rankCandidates(candidates, graphRefs)
+	preferenceCorrections, err := e.store.ActivePreferenceCorrections(ctx, req.ActorUserID)
+	if err != nil {
+		return recstore.RenderedRequest{}, err
+	}
+	rankingCorrections := make([]rank.PreferenceCorrection, 0, len(preferenceCorrections))
+	for _, correction := range preferenceCorrections {
+		rankingCorrections = append(rankingCorrections, rank.PreferenceCorrection{ID: correction.ID, PreferenceKey: correction.PreferenceKey, CorrectionKind: correction.CorrectionKind})
+	}
+	preferenceKey := inferredPreferenceKey(query)
+	activeCorrection, boostBlocked := rank.ActiveCorrectionForPreference(preferenceKey, rankingCorrections)
+	ranked := rankCandidates(candidates, graphRefs, preferenceKey, rankingCorrections)
 	providerBackedIDs := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
 		providerBackedIDs = append(providerBackedIDs, candidate.LocalID)
@@ -273,13 +283,53 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 	if err := rank.ValidateProviderBackedRankings(ranked, providerBackedIDs); err != nil {
 		return recstore.RenderedRequest{}, err
 	}
-	appendTool("recommendation_rank_candidates", "read", map[string]any{"candidate_count": len(candidates)}, map[string]any{"ranked_count": len(ranked)})
+	rankResult := map[string]any{"ranked_count": len(ranked)}
+	if boostBlocked {
+		rankResult["active_correction_ids"] = []string{activeCorrection.ID}
+		rankResult["preference_boost_blocked"] = preferenceKey
+	}
+	appendTool("recommendation_rank_candidates", "read", map[string]any{"candidate_count": len(candidates)}, rankResult)
+
+	canonicalKeys := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		canonicalKeys = append(canonicalKeys, candidate.CanonicalKey)
+	}
+	suppressionDecisions, err := e.store.ActiveSuppressionDecisions(ctx, recstore.SuppressionLookupInput{
+		ActorUserID:   req.ActorUserID,
+		Category:      string(category),
+		CanonicalKeys: canonicalKeys,
+	})
+	if err != nil {
+		return recstore.RenderedRequest{}, err
+	}
+	suppressionByKey := map[string]recstore.SuppressionDecision{}
+	for _, decision := range suppressionDecisions {
+		if _, exists := suppressionByKey[decision.CanonicalKey]; !exists {
+			suppressionByKey[decision.CanonicalKey] = decision
+		}
+	}
 
 	recommendations := []recstore.RecommendationInput{}
 	constraints := hardConstraintsFromQuery(query)
 	for _, rankedCandidate := range ranked {
 		candidate := candidateByLocalID(candidates, rankedCandidate.CandidateID)
 		if candidate == nil {
+			continue
+		}
+		if suppression, ok := suppressionByKey[candidate.CanonicalKey]; ok {
+			decisions := []map[string]any{{"kind": "suppression", "outcome": "block", "reason": suppression.Reason, "suppression_id": suppression.SuppressionID}}
+			appendTool("recommendation_apply_policy", "read", map[string]any{"candidate_id": candidate.LocalID}, map[string]any{"decisions": decisions})
+			recommendations = append(recommendations, recstore.RecommendationInput{
+				CandidateLocalID: candidate.LocalID,
+				Status:           "suppressed",
+				StatusReason:     suppression.Reason,
+				ScoreBreakdown:   rankedCandidate.ScoreBreakdown,
+				Rationale:        []string{suppression.Reason},
+				GraphSignalRefs:  []string{},
+				PolicyDecisions:  decisions,
+				QualityDecisions: []map[string]any{{"kind": "suppression", "outcome": "withheld", "reason": suppression.Reason}},
+				DeliveryChannel:  req.Source,
+			})
 			continue
 		}
 		policyDecisions := policyDecisionsFor(*candidate, constraints)
@@ -290,7 +340,7 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 		qualityDecisions := qualityDecisionsFor(rankedCandidate)
 		appendTool("recommendation_apply_quality_guard", "read", map[string]any{"candidate_id": candidate.LocalID}, map[string]any{"decisions": qualityDecisions})
 
-		rationale := rationaleFor(*candidate, rankedCandidate.GraphSignalRefs)
+		rationale := rationaleFor(*candidate, rankedCandidate.GraphSignalRefs, preferenceKey, activeCorrection, boostBlocked)
 		recommendations = append(recommendations, recstore.RecommendationInput{
 			CandidateLocalID: candidate.LocalID,
 			RankPosition:     len(recommendations) + 1,
@@ -433,7 +483,7 @@ func mergeFact(canonicalFact map[string]any, fact recstore.ProviderFactInput) {
 	}
 }
 
-func rankCandidates(candidates []recstore.CandidateInput, graphRefs []string) []rank.RankedCandidate {
+func rankCandidates(candidates []recstore.CandidateInput, graphRefs []string, preferenceKey string, corrections []rank.PreferenceCorrection) []rank.RankedCandidate {
 	ranked := make([]rank.RankedCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		providerScore := floatFromAny(candidate.CanonicalFact["provider_score"])
@@ -443,7 +493,7 @@ func rankCandidates(candidates []recstore.CandidateInput, graphRefs []string) []
 		}
 		graphBoost := 0.0
 		candidateGraphRefs := []string{}
-		if len(graphRefs) > 0 && candidateMatchesGraphSignal(candidate.Title) {
+		if len(graphRefs) > 0 && candidateMatchesGraphSignal(candidate.Title) && rank.PositiveBoostAllowed(preferenceKey, corrections) {
 			graphBoost = 0.12
 			candidateGraphRefs = append(candidateGraphRefs, graphRefs...)
 		}
@@ -473,6 +523,14 @@ func rankCandidates(candidates []recstore.CandidateInput, graphRefs []string) []
 		ranked[i].Rank = i + 1
 	}
 	return ranked
+}
+
+func inferredPreferenceKey(query string) string {
+	lower := strings.ToLower(query)
+	if strings.Contains(lower, "spicy") {
+		return "loves_spicy"
+	}
+	return ""
 }
 
 type hardConstraints struct {
@@ -527,7 +585,7 @@ func qualityDecisionsFor(candidate rank.RankedCandidate) []map[string]any {
 	return decisions
 }
 
-func rationaleFor(candidate recstore.CandidateInput, graphRefs []string) []string {
+func rationaleFor(candidate recstore.CandidateInput, graphRefs []string, preferenceKey string, correction rank.PreferenceCorrection, boostBlocked bool) []string {
 	reasons := []string{"Provider facts support " + candidate.Title}
 	if quiet, _ := candidate.CanonicalFact["quiet"].(bool); quiet {
 		reasons = append(reasons, "Quiet setting matches the request")
@@ -537,6 +595,9 @@ func rationaleFor(candidate recstore.CandidateInput, graphRefs []string) []strin
 	}
 	if len(graphRefs) == 0 {
 		reasons = append(reasons, "No personal signals applied")
+	}
+	if boostBlocked && preferenceKey != "" && correction.ID != "" {
+		reasons = append(reasons, "Preference correction "+correction.ID+" blocks "+preferenceKey+" as a positive ranking signal")
 	}
 	return reasons
 }

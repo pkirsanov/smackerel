@@ -35,6 +35,12 @@ func (m *mockWebUI) RecommendationsPage(w http.ResponseWriter, r *http.Request) 
 func (m *mockWebUI) RecommendationsResults(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
+func (m *mockWebUI) RecommendationPreferencesPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) RecommendationFeedback(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
 func (m *mockWebUI) RecommendationDetail(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
