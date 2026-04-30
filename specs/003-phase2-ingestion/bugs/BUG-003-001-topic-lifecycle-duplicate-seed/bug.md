@@ -11,11 +11,11 @@
 
 ## Status
 - [x] Reported
-- [ ] Confirmed (targeted red-stage output must be captured by the fix owner)
-- [ ] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Confirmed
+- [x] In Progress
+- [x] Fixed
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 1. Run the broad E2E command through `./smackerel.sh test e2e`.
@@ -42,8 +42,17 @@ duplicate key value violates unique constraint "topics_name_key"
 Key (name)=(pricing) already exists.
 ```
 
-## Root Cause (initial analysis)
-Root cause is unproven at packetization time. Candidate surfaces include non-unique E2E fixture names, missing cleanup, non-idempotent seed SQL/API calls, broad-suite ordering leaks, or the topic repository lacking an upsert/reuse path for test-owned topics.
+## Root Cause
+The duplicate seed was caused by shared-stack E2E fixture ownership drift. `test_graph_entities.sh` seeded a topic named `pricing` with id `e2e-topic-pricing`; the pre-fix topic lifecycle fixture then attempted to insert another `pricing` row using a different id and `ON CONFLICT (id) DO NOTHING`, which did not protect the unique `topics.name` constraint.
+
+## Resolution
+`tests/e2e/test_topic_lifecycle.sh` now preserves the pre-existing `pricing` row as the adversarial fixture, seeds lifecycle-owned topics with unique `topic-lifecycle-*` names, and verifies lifecycle assertions against the owned fixture topic instead of the shared `pricing` topic.
+
+## Verification
+- Focused pre-fix evidence reproduced `topics_name_key` for `pricing` after `test_graph_entities.sh` seeded the shared topic.
+- Focused post-fix topic lifecycle E2E passed twice on the same shared stack with an existing `pricing` topic.
+- Broad implementation-stage shell E2E reached 34/34 passing and `test_topic_lifecycle.sh` passed; remaining broad failures were unrelated Go E2E failures.
+- The later `c6d2b26` baseline recorded full `./smackerel.sh test e2e` pass with shell E2E 34/34 and Go E2E packages passed, so the broad suite no longer reports the `topics_name_key` collision.
 
 ## Related
 - Feature: `specs/003-phase2-ingestion/`

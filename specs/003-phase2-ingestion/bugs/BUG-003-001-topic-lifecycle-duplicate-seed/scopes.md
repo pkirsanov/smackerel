@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 
 ## Scope 1: Restore idempotent topic lifecycle E2E setup
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
@@ -209,7 +209,26 @@ Feature: BUG-003-001 restore topic lifecycle E2E fixture idempotency
 
     === Topic Lifecycle E2E tests passed ===
     ```
-- [ ] Broader E2E regression suite passes
+- [x] Broader E2E regression suite passes
+  - **Phase:** validate
+  - **Command:** existing BUG-003-001 report evidence review plus c6d2b26 broad E2E baseline evidence from `specs/039-recommendations-engine/report.md`
+  - **Exit Code:** c6d2b26 broad baseline 0; not rerun during metadata-only closeout
+  - **Claim Source:** interpreted from existing executed evidence
+  - **Interpretation:** The earlier implementation-stage broad E2E command exited 1 only after `test_topic_lifecycle.sh` passed and shell E2E reached 34/34; the remaining failures were unrelated Go E2E failures. The later c6d2b26 baseline records full `./smackerel.sh test e2e` exit 0, proving the broad suite no longer reports the BUG-003-001 `topics_name_key` collision.
+  - **Evidence:**
+    ```text
+    BUG-003-001 implementation broad shell evidence:
+    PASS: test_topic_lifecycle.sh
+    Total:  34
+    Passed: 34
+    Failed: 0
+
+    c6d2b26 broad E2E baseline evidence from specs/039-recommendations-engine/report.md:
+    Command: timeout 3600 ./smackerel.sh test e2e
+    Exit Code: 0
+    Shell e2e phase: Total: 34, Passed: 34, Failed: 0
+    Go e2e packages passed.
+    ```
 - [x] Regression tests contain no silent-pass bailout patterns
   - **Phase:** implement
   - **Command:** `timeout 120 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/e2e/test_topic_lifecycle.sh`
@@ -230,4 +249,9 @@ Feature: BUG-003-001 restore topic lifecycle E2E fixture idempotency
     Files scanned: 1
     Files with adversarial signals: 1
     ```
-- [ ] Bug marked as Fixed in bug.md by the validation owner
+- [x] Bug marked as Fixed in bug.md by the validation owner
+  - **Phase:** validate
+  - **Command:** bug-packet closeout edits plus `bash .github/bubbles/scripts/artifact-lint.sh specs/003-phase2-ingestion/bugs/BUG-003-001-topic-lifecycle-duplicate-seed`
+  - **Exit Code:** 0 after closeout validation
+  - **Claim Source:** executed
+  - **Evidence:** bug.md now checks Reported, Confirmed, In Progress, Fixed, Verified, and Closed; state.json records `status=done`, `certification.status=done`, `currentPhase=finalize`, and `currentScope=null`; report.md records validation and audit evidence for the closeout.
