@@ -23,6 +23,15 @@ func TestMetricsRegistered(t *testing.T) {
 	ListGenerationLatency.WithLabelValues("_test_reg")
 	ListItemStatusChanges.WithLabelValues("_test_reg")
 	ListsCompleted.WithLabelValues("_test_reg")
+	// Spec 039 Scope 6 — recommendation observability metrics.
+	RecommendationProviderRequests.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
+	RecommendationProviderLatency.WithLabelValues("_test_reg", "_test_reg")
+	RecommendationCandidates.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
+	RecommendationWatchRuns.WithLabelValues("_test_reg", "_test_reg")
+	RecommendationDelivery.WithLabelValues("_test_reg", "_test_reg")
+	RecommendationSuppression.WithLabelValues("_test_reg")
+	RecommendationRankingConfidence.WithLabelValues("_test_reg")
+	RecommendationLocationPrecision.WithLabelValues("_test_reg", "_test_reg")
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -30,18 +39,26 @@ func TestMetricsRegistered(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"smackerel_artifacts_ingested_total":        false,
-		"smackerel_capture_total":                   false,
-		"smackerel_search_latency_seconds":          false,
-		"smackerel_domain_extraction_total":         false,
-		"smackerel_connector_sync_total":            false,
-		"smackerel_nats_deadletter_total":           false,
-		"smackerel_db_connections_active":           false,
-		"smackerel_digest_generation_total":         false,
-		"smackerel_lists_generated_total":           false,
-		"smackerel_list_generation_latency_seconds": false,
-		"smackerel_list_item_status_changes_total":  false,
-		"smackerel_lists_completed_total":           false,
+		"smackerel_artifacts_ingested_total":                false,
+		"smackerel_capture_total":                           false,
+		"smackerel_search_latency_seconds":                  false,
+		"smackerel_domain_extraction_total":                 false,
+		"smackerel_connector_sync_total":                    false,
+		"smackerel_nats_deadletter_total":                   false,
+		"smackerel_db_connections_active":                   false,
+		"smackerel_digest_generation_total":                 false,
+		"smackerel_lists_generated_total":                   false,
+		"smackerel_list_generation_latency_seconds":         false,
+		"smackerel_list_item_status_changes_total":          false,
+		"smackerel_lists_completed_total":                   false,
+		"smackerel_recommendation_provider_requests_total":  false,
+		"smackerel_recommendation_provider_latency_seconds": false,
+		"smackerel_recommendation_candidates_total":         false,
+		"smackerel_recommendation_watch_runs_total":         false,
+		"smackerel_recommendation_delivery_total":           false,
+		"smackerel_recommendation_suppression_total":        false,
+		"smackerel_recommendation_ranking_confidence_total": false,
+		"smackerel_recommendation_location_precision_total": false,
 	}
 
 	for _, fam := range families {

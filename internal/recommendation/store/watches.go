@@ -474,6 +474,100 @@ WHERE watch_id = $1 AND window_start >= $2`, watchID, windowStart).Scan(&count)
 	return count, nil
 }
 
+// WatchAuditCounts is the bounded per-watch outcome rollup computed by
+// joining `recommendation_watch_runs` on `watch_id`. Per-watch counts
+// MUST come from this audit join — never from a high-cardinality
+// Prometheus label (see SCN-039-051 / R-034).
+type WatchAuditCounts struct {
+	WatchID              string
+	WatchKind            string
+	TotalRuns            int
+	DeliveredRuns        int
+	WithheldRuns         int
+	NoMatchRuns          int
+	RateLimitedRuns      int
+	QuietHoursRuns       int
+	ProviderDegradedRuns int
+	FailedRuns           int
+	OtherRuns            int
+	LastRunAt            *time.Time
+}
+
+// GetWatchAuditCounts returns the bounded per-watch outcome rollup for
+// one watch. The query joins `recommendation_watches` with
+// `recommendation_watch_runs` on `watch_id` and groups by the closed
+// `status` enum from the run table. The function returns
+// (WatchAuditCounts{}, false, nil) when no watch row exists.
+//
+// SCN-039-051 / R-034: this is the operator-visible per-watch view that
+// replaces the watch_id Prometheus label. The bounded
+// `smackerel_recommendation_watch_runs_total{kind,outcome}` metric
+// reports global per-kind activity; the per-watch breakdown uses this
+// audit join.
+func (s *Store) GetWatchAuditCounts(ctx context.Context, watchID string) (WatchAuditCounts, bool, error) {
+	var (
+		exists    bool
+		watchKind string
+	)
+	err := s.pool.QueryRow(ctx, `SELECT kind FROM recommendation_watches WHERE id = $1`, watchID).Scan(&watchKind)
+	if err == pgx.ErrNoRows {
+		return WatchAuditCounts{}, false, nil
+	}
+	if err != nil {
+		return WatchAuditCounts{}, false, fmt.Errorf("load watch for audit counts: %w", err)
+	}
+	exists = true
+	rows, err := s.pool.Query(ctx, `
+SELECT status, COUNT(*) AS run_count, MAX(started_at) AS last_started
+FROM recommendation_watch_runs
+WHERE watch_id = $1
+GROUP BY status`, watchID)
+	if err != nil {
+		return WatchAuditCounts{}, exists, fmt.Errorf("audit counts query: %w", err)
+	}
+	defer rows.Close()
+	out := WatchAuditCounts{WatchID: watchID, WatchKind: watchKind}
+	for rows.Next() {
+		var (
+			status      string
+			count       int
+			lastStarted *time.Time
+		)
+		if err := rows.Scan(&status, &count, &lastStarted); err != nil {
+			return WatchAuditCounts{}, exists, fmt.Errorf("audit counts scan: %w", err)
+		}
+		out.TotalRuns += count
+		switch status {
+		case "delivered":
+			out.DeliveredRuns += count
+		case "withheld":
+			out.WithheldRuns += count
+		case "no_match":
+			out.NoMatchRuns += count
+		case "rate_limited":
+			out.RateLimitedRuns += count
+		case "quiet_hours":
+			out.QuietHoursRuns += count
+		case "provider_degraded":
+			out.ProviderDegradedRuns += count
+		case "failed":
+			out.FailedRuns += count
+		default:
+			out.OtherRuns += count
+		}
+		if lastStarted != nil {
+			if out.LastRunAt == nil || lastStarted.After(*out.LastRunAt) {
+				ts := *lastStarted
+				out.LastRunAt = &ts
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return WatchAuditCounts{}, exists, fmt.Errorf("audit counts rows: %w", err)
+	}
+	return out, exists, nil
+}
+
 // SeenStateInput is the upsert payload for repeat-cooldown tracking. The
 // candidate is identified by its (category, canonical_key) pair so the seen
 // state can reference the persisted recommendation_candidates.id row written

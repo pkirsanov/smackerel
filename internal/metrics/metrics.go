@@ -252,6 +252,17 @@ func init() {
 		DriveConfirmationsTotal,
 		DrivePolicyDecisionsTotal,
 		DriveRuleConflictsTotal,
+		// Spec 039 Scope 6 recommendation metrics — defined in
+		// recommendations.go; bounded labels enforced (no watch_id,
+		// no recommendation_id, no request_id).
+		RecommendationProviderRequests,
+		RecommendationProviderLatency,
+		RecommendationCandidates,
+		RecommendationWatchRuns,
+		RecommendationDelivery,
+		RecommendationSuppression,
+		RecommendationRankingConfidence,
+		RecommendationLocationPrecision,
 	)
 }
 

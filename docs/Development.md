@@ -214,7 +214,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/intelligence/` | Intelligence engine — cross-domain synthesis, expertise mapping (R-501), learning paths (R-502), subscription detection (R-504), serendipity resurfacing (R-505), content fuel (R-506), quick references (R-507), monthly reports (R-508), seasonal patterns, momentum tracking, alerts, expense classification (7-level rule chain), vendor normalization (LRU cache + pre-seeded aliases), expense suggestion generation |
 | `internal/knowledge/` | Knowledge synthesis layer — concept pages, entity profiles, lint reports, cross-source connection assessment, store with trigram search, prompt contract integration |
 | `internal/list/` | Actionable list model — lists and list items, domain-aware aggregation from extracted data, completion tracking, PostgreSQL store |
-| `internal/metrics/` | Prometheus metrics (ingestion, capture, search latency, domain extraction, connector sync, NATS dead-letter counters, DB connection gauge) and W3C traceparent propagation via NATS headers |
+| `internal/metrics/` | Prometheus metrics (ingestion, capture, search latency, domain extraction, connector sync, NATS dead-letter counters, DB connection gauge, **eight bounded recommendation metrics — see `docs/Operations.md` Recommendations table**) and W3C traceparent propagation via NATS headers |
 | `internal/nats/` | NATS JetStream client — stream/consumer creation, publish/subscribe helpers, subject constants matching `config/nats_contract.json` |
 | `internal/pipeline/` | Artifact processing pipeline — NATS subscribers for process/embed/rerank/digest/synthesis/domain-extract, result handlers, retry logic |
 | `internal/scheduler/` | Cron-based task scheduler — digest generation (configurable cron), intelligence synthesis (2AM), momentum (hourly), resurfacing (8AM), knowledge lint (configurable), alert checks |
@@ -224,6 +224,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/recipe/` | Shared recipe types, serving scaler, kitchen fraction formatter, quantity parsing (extracted from list aggregator for reuse by scaler and cook mode) |
 | `internal/topics/` | Topic extraction and management — topic CRUD, promotion/archival lifecycle, hot topic detection |
 | `internal/web/` | HTMX web UI — search, artifact detail, digest, topics, settings, status, knowledge dashboard (concepts, entities, lint), embedded HTML templates |
+| `internal/recommendation/` | Spec 039 recommendation runtime — reactive engine (`reactive/`), watch evaluator (`watch/`), provider registry (`provider/`), candidate ranking (`rank/`), quality dedupe (`quality/`), policy enforcement (`policy/`), trip dossier composer, persistence store (`store/`) including the `AssertRedactSafe` log/trace redaction guard and `GetWatchAuditCounts` audit-table accessor used by the per-watch operator visibility view |
 
 ## Database Migrations
 
