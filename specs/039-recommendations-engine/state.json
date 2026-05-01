@@ -5,9 +5,9 @@
   "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": null,
     "currentPhase": "implement",
-    "currentScope": "scope-05-policy-quality-and-trip-dossier",
+    "currentScope": "scope-06-observability-stress-and-cutover",
     "runStartedAt": "2026-04-27T02:05:00Z",
     "completedPhaseClaims": [
       {
@@ -53,6 +53,20 @@
         "scope": "scope-04-watches-and-scheduler",
         "timestamp": "2026-05-01T00:49:00Z",
         "summary": "Implemented Scope 4 watches and scheduler end-to-end: consent JSONB with current snapshot plus append-only revisions[] and 422 CONSENT_REQUIRED broadening rejection; watch CRUD store/API/web; recommendation-watch-evaluate-v1 scenario contract with 10 allowed tools; scheduler poller fires only on due watches via scheduler.FireScenario; full evaluator pipeline honoring quiet hours, cross-evaluation rate windows, repeat cooldown via recommendation_seen_state, freshness, scope filter, queue|summarize|drop policy; the four watch kinds (location_radius, topic_keyword, price_drop, trip_context); Telegram /watch list|pause|resume|silence|delete commands with destructive-confirmation tokens; alert renderer matching the markers-only design template. Added migration 027_recommendation_watch_runtime.sql. SCN-039-030..039 covered by 6 new integration tests, 6 new e2e tests, scenario contract test, and 11 consent unit tests; all PASS. Required implement gates passed: format --check, check, lint, unit, integration. Broad E2E green except pre-existing photos PWA baseline (out-of-boundary). Certification fields were deliberately not modified."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "scope": "scope-05-policy-quality-and-trip-dossier",
+        "timestamp": "2026-05-01T16:29:02Z",
+        "summary": "Implemented Scope 5 policy, quality, and trip dossier end-to-end. Added internal/recommendation/policy/{sponsored,restricted,safety,attribution}.go for policy guards (sponsored:label/sponsored_boost:deny/withheld:restricted:<category>/withheld:safety-policy/attribution:withheld). Added internal/recommendation/quality/{diversity,totalcost}.go for near-duplicate variant grouping (kind=diversity with variant_keys/variant_titles) and total-cost transparency (disclose_unknown + block_label_cheapest). Wired both guard layers into reactive engine and watch evaluator; persists policy_decisions and quality_decisions; surfaces withheld-reason summaries and variant disclosure. Added internal/web/trip_dossier.go and internal/recommendation/store/trip_dossier.go for the trip dossier rendering surface (data-testid=trip-dossier, recommendation-group, dossier-recommendation-row, <details> variants). Added GET /api/recommendations/providers (sanitized public view + operator-only detail view; no API keys ever exposed). Added /admin/agent/traces?scenario=recommendation-* server-side filter via translateScenarioPattern in internal/agent/store.go. SCN-039-040..045 covered by 5 new integration tests, 5 new e2e tests (incl. SCN-039-040/BS-023 adversarial regression with documented RED\u2192GREEN proof from fixture inversion), and 6 new unit tests in quality/diversity_test.go; all PASS. Required implement gates: check EXIT=0, format --check EXIT=0, lint EXIT=0, test unit EXIT=0 (402 passed), test integration EXIT=0 (120 PASS / 0 FAIL aggregate), test e2e EXIT=0 (171 PASS aggregate, single diagnostic FAIL line is intentional SCN-002-BUG-002-001 readiness-probe assertion which itself PASSES). Certification fields were deliberately not modified."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-05-policy-quality-and-trip-dossier",
+        "timestamp": "2026-05-01T16:31:00Z",
+        "summary": "Certified Scope 5 (policy, quality, and trip dossier) on commit 0ca7847. Verified implement evidence in scopes.md and report.md is real and complete: 14/14 DoD items checked with executed Claim Source, RED\u2192GREEN proof for SCN-039-040/BS-023 adversarial sponsored regression (fixture inverted from 0.95 to 0.78 so the absence of any boost is the only path to organic-leads), Code Diff Evidence enumerates 11 modified + 14 new files including 5 new integration tests, 5 new e2e tests, 6 new unit tests, and the providers/trip-dossier/admin-trace-filter handlers. Baseline governance guards PASSED before promotion: artifact-lint EXIT=0 (anti-fabrication checks all green; no unfilled placeholders), traceability-guard EXIT=0 (30 scenarios checked, 30 mapped to DoD, 30 with concrete test files, 30 with report evidence references; 0 warnings). Promoted scope-05 scopeProgress to Done; appended scope-05 to certification.completedScopes; appended scope-05 validate entry to certification.certifiedCompletedPhases; advanced execution.currentScope to scope-06-observability-stress-and-cutover; cleared execution.activeAgent. No code, spec, or scope content modified by this validate run."
       }
     ],
     "pendingTransitionRequests": []
@@ -63,7 +77,8 @@
       "scope-01-foundation-schema",
       "scope-02-reactive-place-recommendation",
       "scope-03-feedback-suppression-why",
-      "scope-04-watches-and-scheduler"
+      "scope-04-watches-and-scheduler",
+      "scope-05-policy-quality-and-trip-dossier"
     ],
     "certifiedCompletedPhases": [
       {
@@ -92,6 +107,13 @@
         "agent": "bubbles.validate",
         "scope": "scope-04-watches-and-scheduler",
         "certifiedAt": "2026-04-30T00:00:00Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-05-policy-quality-and-trip-dossier",
+        "certifiedAt": "2026-05-01T16:31:00Z",
         "mode": "full-delivery"
       }
     ],
@@ -135,11 +157,11 @@
       {
         "scope": 5,
         "name": "scope-05-policy-quality-and-trip-dossier",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": ["scope-04-watches-and-scheduler"],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-05-01T16:31:00Z"
       },
       {
         "scope": 6,
@@ -279,7 +301,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-30T00:00:00Z",
+  "lastUpdatedAt": "2026-05-01T16:31:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
