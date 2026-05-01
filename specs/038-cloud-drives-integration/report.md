@@ -2352,19 +2352,139 @@ Scope 5 (Save Rules And Write-Back) is complete. All thirteen DoD items in `scop
 
 ### Summary
 
-Execution evidence section reserved for the owning implementation, test, validation, and audit phases.
+Scope 6 ships the low-confidence confirmation surface and the sensitivity policy engine, plus the rule-conflict audit metric. The Save Service and Search/Retrieval surfaces now have a single deterministic decision point for sensitive Drive content (`internal/drive/policy/sensitivity_policy.go`) and a persistent confirmation workflow (`internal/drive/confirm/confirmations.go`) that pauses provider writes until the user replies through Screen 11 or a Telegram numbered reply. Both web and Telegram paths flow through `/v1/drive/confirmations/{id}` with HTTP 200 / 400 / 404 / 409 / 410 / 500 disambiguation so callers can detect first-writer-wins. New Postgres migration 030 adds `drive_confirmations` and `drive_share_change_alerts` with CHECK constraints on `kind`, `status`, `channel`, `sensitivity_after`, and `alert_status`. SST is preserved: `drive.classification.confirm_threshold` and `drive.classification.confirmation_ttl_seconds` flow through `config/smackerel.yaml` → `scripts/commands/config.sh` → `config/generated/{dev,test}.env` and are enforced by `internal/config/drive.go` and the integration config-contract tests. Three Prometheus counters back the new dashboards: `smackerel_drive_confirmations_total{status,channel}`, `smackerel_drive_policy_decisions_total{surface,decision,sensitivity}`, `smackerel_drive_rule_conflicts_total{rule_id}`.
 
 ### Code Diff Evidence
 
-No implementation diff evidence recorded.
+| Area | Files |
+|------|-------|
+| Confirmation persistence | `internal/drive/confirm/confirmations.go`, `internal/drive/confirm/memory_store.go` |
+| Sensitivity policy engine | `internal/drive/policy/sensitivity_policy.go`, `internal/drive/policy/metrics_observer.go` |
+| HTTP route | `internal/api/drive_confirmations_handlers.go`, `internal/api/router.go`, `internal/api/health.go` |
+| Conflict metric | `internal/api/drive_save_handlers.go` (one-line `metrics.DriveRuleConflictsTotal.Inc`) |
+| Schema | `internal/db/migrations/030_drive_confirmations_and_share_changes.sql` |
+| Metrics | `internal/metrics/metrics.go` (+ `DriveConfirmationsTotal`, `DrivePolicyDecisionsTotal`, `DriveRuleConflictsTotal`) |
+| SST plumbing | `config/smackerel.yaml`, `internal/config/drive.go`, `scripts/commands/config.sh`, `config/generated/dev.env`, `config/generated/test.env`, `internal/config/drive_config_test.go`, `internal/config/validate_test.go` |
+| Wiring | `cmd/core/wiring.go` (confirm.Store + DriveConfirmationsHandlers wired with `cfg.Drive.Classification.ConfirmationTTLSeconds`) |
+| Tests | `internal/drive/confirm/confirmations_test.go`, `internal/drive/policy/sensitivity_policy_test.go`, `internal/drive/rules/rule_conflict_test.go`, `tests/integration/drive/drive_sensitivity_policy_test.go`, `tests/integration/drive/drive_config_contract_test.go`, `tests/integration/drive/drive_foundation_canary_test.go`, `tests/e2e/drive/drive_confirmation_ui_test.go`, `tests/e2e/drive/drive_policy_e2e_test.go`, `tests/e2e/drive/drive_rule_conflict_ui_test.go` |
 
 ### Test Evidence
 
-No test output recorded.
+**SCN-038-016 — Low-confidence routing requires user confirmation before provider write.**
+
+- Unit anchor: `internal/drive/confirm/confirmations_test.go` `TestLowConfidenceRoutingRequiresUserConfirmationBeforeProviderWrite` (concurrent-resolve subtest fires 8 goroutines and asserts exactly-once; expired/unknown-outcome adversarial subtests guarantee the contract; subtests for commit, no_save, reroute exercise each Status terminal).
+- E2E anchor: `tests/e2e/drive/drive_confirmation_ui_test.go` `TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome` exercises GET, POST commit, and adversarial double-POST against `cfg.CoreURL + "/v1/drive/confirmations/" + id`.
+
+```text
+=== RUN   TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome
+--- PASS: TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome (0.10s)
+```
+
+```text
+ok      github.com/smackerel/smackerel/internal/drive/confirm   0.020s
+```
+
+**SCN-038-017 — Sensitivity policy blocks unsafe auto-link sharing and bytes-mode delivery for sensitive Drive content.**
+
+- Unit anchor: `internal/drive/policy/sensitivity_policy_test.go` `TestMedicalPolicyBlocksAutoLinkShareWithoutProviderMutation` covers SaveLinkShare refuse, guardrail-wins-on-non-sensitive, Retrieval downgrade, ShareChangeAlert refuse on widened audience, DigestInclusion refuse for shared/public audience, SearchOpen confirmation, and adversarial unknown surface/tier (`ErrInvalidAction`).
+- Integration anchor: `tests/integration/drive/drive_sensitivity_policy_test.go` `TestSensitivityPolicyDowngradesOrRejectsUnsafeDelivery` proves the engine plus migration 030 against the live test database (medical link-share refuse, identity retrieval downgrade to SecureLink, alert insertion success, adversarial bogus alert_status REJECTED by CHECK, exactly-once confirmation Resolve).
+- E2E anchor: `tests/e2e/drive/drive_policy_e2e_test.go` `TestDrivePolicyE2E_SensitiveFileNeverReturnsTelegramBytesOrPublicShare` re-runs the same surface-by-surface assertions through the live stack with the production `policy.MetricsObserver`.
+
+```text
+ok      github.com/smackerel/smackerel/internal/drive/policy    0.014s
+```
+
+```text
+=== RUN   TestSensitivityPolicyDowngradesOrRejectsUnsafeDelivery
+--- PASS: TestSensitivityPolicyDowngradesOrRejectsUnsafeDelivery (0.13s)
+```
+
+```text
+=== RUN   TestDrivePolicyE2E_SensitiveFileNeverReturnsTelegramBytesOrPublicShare
+--- PASS: TestDrivePolicyE2E_SensitiveFileNeverReturnsTelegramBytesOrPublicShare (2.06s)
+```
+
+**SCN-038-018 — Overlapping save rules audit conflict and execute the stable winner.**
+
+- Unit anchor: `internal/drive/rules/rule_conflict_test.go` `TestOverlappingRulesAuditConflictAndExecuteStableMatch` covers first-stable-match wins, non-matching exclusion, single-match-no-conflicts, and identical-CreatedAt-ID-tiebreak.
+- E2E anchor: `tests/e2e/drive/drive_rule_conflict_ui_test.go` `TestSaveRulesListShowsConflictChipAndAuditRowsForOverlappingRules` creates three live save rules (two overlapping, one non-overlapping), runs the engine against a real artifact, asserts `decision.Selected.RuleID` is the older rule, and queries `drive_rule_audit` for two `outcome='conflict'` rows with `reason="stable_winner=<id>"`. Adversarial assertion: the non-overlapping rule must NOT appear in the conflicts list.
+
+```text
+ok      github.com/smackerel/smackerel/internal/drive/rules     0.010s
+```
+
+```text
+=== RUN   TestSaveRulesListShowsConflictChipAndAuditRowsForOverlappingRules
+--- PASS: TestSaveRulesListShowsConflictChipAndAuditRowsForOverlappingRules (2.09s)
+```
+
+**Gate suite results.**
+
+```text
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+```
+
+```text
+$ ./smackerel.sh format --check
+49 files already formatted
+```
+
+```text
+$ ./smackerel.sh lint
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+```
+
+```text
+$ ./smackerel.sh test unit
+ok      github.com/smackerel/smackerel/internal/drive/confirm   0.020s
+ok      github.com/smackerel/smackerel/internal/drive/policy    0.014s
+ok      github.com/smackerel/smackerel/internal/drive/rules     0.010s
+ok      github.com/smackerel/smackerel/internal/api     2.116s
+ok      github.com/smackerel/smackerel/internal/metrics 0.033s
+ok      github.com/smackerel/smackerel/internal/config  0.136s
+ok      github.com/smackerel/smackerel/cmd/core 0.482s
+```
+
+```text
+$ ./smackerel.sh test integration
+ok      github.com/smackerel/smackerel/tests/integration        34.867s
+ok      github.com/smackerel/smackerel/tests/integration/agent  2.668s
+ok      github.com/smackerel/smackerel/tests/integration/drive  8.033s
+```
+
+```text
+$ ./smackerel.sh test e2e
+ok      github.com/smackerel/smackerel/tests/e2e        109.337s
+ok      github.com/smackerel/smackerel/tests/e2e/agent  5.440s
+ok      github.com/smackerel/smackerel/tests/e2e/drive  26.444s
+PASS: go-e2e
+```
 
 ### Completion Statement
 
-Scope 6 status is Not Started.
+Scope 6 (Policy And Confirmation) is complete. All ten DoD items in `scopes.md` are checked with inline evidence (Phase: implement, Command, Exit Code, Claim Source: executed). SCN-038-016, SCN-038-017, and SCN-038-018 each have the planned unit, integration (where applicable), and e2e tests, all green against the live `smackerel-test` Compose stack (Postgres + NATS + ML sidecar + core). The change set stays inside the documented Change Boundary: confirmation API/storage, policy engine, rule-conflict audit/metric, Screen 11 / Telegram resolution endpoint, sensitivity-aware action checks, and policy tests. Provider OAuth, scan/monitor persistence, extraction algorithms, and provider write mechanics were not modified except the rule-conflict metric increment in `drive_save_handlers.go`. SST is preserved: every new env value (`DRIVE_CLASSIFICATION_CONFIRM_THRESHOLD`, `DRIVE_CLASSIFICATION_CONFIRMATION_TTL_SECONDS`) flows through `config/smackerel.yaml` → `scripts/commands/config.sh` → `config/generated/{dev,test}.env` and is exercised by the foundation canary, `drive_config_contract_test.go`, and `validate_test.go`.
 
 ## Scope 7: Retrieval And Agent Tools
 

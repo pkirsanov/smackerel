@@ -26,9 +26,11 @@ type DriveConfig struct {
 }
 
 type DriveClassificationConfig struct {
-	Enabled             bool
-	ConfidenceThreshold float64
-	LowConfidenceAction string // pause | skip | allow
+	Enabled                bool
+	ConfidenceThreshold    float64
+	LowConfidenceAction    string // pause | skip | allow
+	ConfirmThreshold       float64
+	ConfirmationTTLSeconds int
 }
 
 type DriveScanConfig struct {
@@ -142,6 +144,16 @@ func loadDriveConfig() (DriveConfig, error) {
 	} else if _, ok := validLowConfidenceActions[cfg.Classification.LowConfidenceAction]; !ok {
 		errs = append(errs, "DRIVE_CLASSIFICATION_LOW_CONFIDENCE_ACTION (must be one of pause|skip|allow)")
 	}
+
+	if v := os.Getenv("DRIVE_CLASSIFICATION_CONFIRM_THRESHOLD"); v == "" {
+		errs = append(errs, "DRIVE_CLASSIFICATION_CONFIRM_THRESHOLD")
+	} else if f, err := strconv.ParseFloat(v, 64); err != nil || f < 0 || f > 1 {
+		errs = append(errs, "DRIVE_CLASSIFICATION_CONFIRM_THRESHOLD (must be a float in [0, 1])")
+	} else {
+		cfg.Classification.ConfirmThreshold = f
+	}
+
+	cfg.Classification.ConfirmationTTLSeconds, errs = parsePositiveInt("DRIVE_CLASSIFICATION_CONFIRMATION_TTL_SECONDS", errs)
 
 	// scan
 	cfg.Scan.Parallelism, errs = parsePositiveInt("DRIVE_SCAN_PARALLELISM", errs)

@@ -15,6 +15,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/drive/rules"
 	"github.com/smackerel/smackerel/internal/drive/save"
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // DriveSaveHandlers exposes Spec 038 Scope 5 save endpoints.
@@ -141,6 +142,7 @@ func (h *DriveSaveHandlers) Save(w http.ResponseWriter, r *http.Request) {
 		for _, conflict := range decision.Conflicts {
 			_ = h.repo.AppendAudit(r.Context(), conflict.RuleID, req.SourceArtifactID, rules.OutcomeConflict, "stable_winner="+rule.ID)
 		}
+		metrics.DriveRuleConflictsTotal.WithLabelValues(rule.ID).Inc()
 	}
 
 	saveReq := save.Request{

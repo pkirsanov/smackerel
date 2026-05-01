@@ -141,6 +141,9 @@ type Dependencies struct {
 	// Spec 038 Scope 5 — POST /v1/drive/save + recent requests listing.
 	DriveSaveHandlers *DriveSaveHandlers
 
+	// Spec 038 Scope 6 — POST/GET /v1/drive/confirmations/{id}.
+	DriveConfirmationsHandlers *DriveConfirmationsHandlers
+
 	// Spec 040 Scope 1 — photo library API handlers.
 	PhotosHandlers *PhotosHandlers
 

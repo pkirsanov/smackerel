@@ -14,6 +14,8 @@ var driveSSTKeys = []string{
 	"DRIVE_CLASSIFICATION_ENABLED",
 	"DRIVE_CLASSIFICATION_CONFIDENCE_THRESHOLD",
 	"DRIVE_CLASSIFICATION_LOW_CONFIDENCE_ACTION",
+	"DRIVE_CLASSIFICATION_CONFIRM_THRESHOLD",
+	"DRIVE_CLASSIFICATION_CONFIRMATION_TTL_SECONDS",
 	"DRIVE_SCAN_PARALLELISM",
 	"DRIVE_SCAN_BATCH_SIZE",
 	"DRIVE_MONITOR_POLL_INTERVAL_SECONDS",
@@ -102,6 +104,12 @@ func TestDriveConfigPopulatesEveryField(t *testing.T) {
 	if d.Classification.LowConfidenceAction != "pause" {
 		t.Errorf("LowConfidenceAction = %q, want pause", d.Classification.LowConfidenceAction)
 	}
+	if d.Classification.ConfirmThreshold != 0.6 {
+		t.Errorf("ConfirmThreshold = %v, want 0.6", d.Classification.ConfirmThreshold)
+	}
+	if d.Classification.ConfirmationTTLSeconds != 86400 {
+		t.Errorf("ConfirmationTTLSeconds = %d, want 86400", d.Classification.ConfirmationTTLSeconds)
+	}
 	if d.Scan.Parallelism != 4 || d.Scan.BatchSize != 100 {
 		t.Errorf("Scan parallelism/batch_size = %d/%d, want 4/100", d.Scan.Parallelism, d.Scan.BatchSize)
 	}
@@ -151,6 +159,8 @@ func TestDriveConfigRejectsInvalidEnumValues(t *testing.T) {
 		{"DRIVE_CLASSIFICATION_LOW_CONFIDENCE_ACTION", "drop", "DRIVE_CLASSIFICATION_LOW_CONFIDENCE_ACTION"},
 		{"DRIVE_POLICY_SENSITIVITY_DEFAULT", "topsecret", "DRIVE_POLICY_SENSITIVITY_DEFAULT"},
 		{"DRIVE_CLASSIFICATION_CONFIDENCE_THRESHOLD", "1.5", "DRIVE_CLASSIFICATION_CONFIDENCE_THRESHOLD"},
+		{"DRIVE_CLASSIFICATION_CONFIRM_THRESHOLD", "1.5", "DRIVE_CLASSIFICATION_CONFIRM_THRESHOLD"},
+		{"DRIVE_CLASSIFICATION_CONFIRMATION_TTL_SECONDS", "0", "DRIVE_CLASSIFICATION_CONFIRMATION_TTL_SECONDS"},
 		{"DRIVE_SCAN_PARALLELISM", "0", "DRIVE_SCAN_PARALLELISM"},
 		{"DRIVE_PROVIDER_GOOGLE_SCOPE_DEFAULTS", "[]", "DRIVE_PROVIDER_GOOGLE_SCOPE_DEFAULTS"},
 	}
