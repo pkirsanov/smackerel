@@ -137,20 +137,25 @@ func (client *Client) Capabilities() photolib.CapabilityReport {
 }
 
 func (client *Client) ProbeCapabilities(ctx context.Context, config connector.ConnectorConfig) (photolib.CapabilityReport, error) {
-	probeClient := *client
-	if probeClient.baseURL == "" {
+	probeBaseURL := client.baseURL
+	probeAPIKey := client.apiKey
+	if probeBaseURL == "" {
 		if baseURL, ok := config.SourceConfig["base_url"].(string); ok {
-			probeClient.baseURL = strings.TrimRight(baseURL, "/")
+			probeBaseURL = strings.TrimRight(baseURL, "/")
 		}
 	}
-	if probeClient.apiKey == "" {
-		probeClient.apiKey = config.Credentials["api_key"]
+	if probeAPIKey == "" {
+		probeAPIKey = config.Credentials["api_key"]
 	}
-	request, err := probeClient.newRequest(ctx, http.MethodGet, "/api/server/version", nil)
+	httpClient := client.httpClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	request, err := buildImmichRequest(ctx, probeBaseURL, probeAPIKey, http.MethodGet, "/api/server/version", nil)
 	if err != nil {
 		return photolib.CapabilityReport{}, err
 	}
-	response, err := probeClient.httpClient.Do(request)
+	response, err := httpClient.Do(request)
 	if err != nil {
 		return photolib.CapabilityReport{}, fmt.Errorf("immich: capability probe failed: %w", err)
 	}
@@ -314,7 +319,11 @@ func MapAsset(asset Asset) (photolib.PhotoEvent, *photolib.SkipEntry, error) {
 }
 
 func (client *Client) newRequest(ctx context.Context, method string, endpoint string, body any) (*http.Request, error) {
-	if strings.TrimSpace(client.baseURL) == "" {
+	return buildImmichRequest(ctx, client.baseURL, client.apiKey, method, endpoint, body)
+}
+
+func buildImmichRequest(ctx context.Context, baseURL string, apiKey string, method string, endpoint string, body any) (*http.Request, error) {
+	if strings.TrimSpace(baseURL) == "" {
 		return nil, fmt.Errorf("immich: base_url is required")
 	}
 	var reader io.Reader
@@ -325,7 +334,7 @@ func (client *Client) newRequest(ctx context.Context, method string, endpoint st
 		}
 		reader = bytes.NewReader(encoded)
 	}
-	request, err := http.NewRequestWithContext(ctx, method, client.baseURL+endpoint, reader)
+	request, err := http.NewRequestWithContext(ctx, method, baseURL+endpoint, reader)
 	if err != nil {
 		return nil, err
 	}
@@ -333,8 +342,8 @@ func (client *Client) newRequest(ctx context.Context, method string, endpoint st
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	if client.apiKey != "" {
-		request.Header.Set("x-api-key", client.apiKey)
+	if apiKey != "" {
+		request.Header.Set("x-api-key", apiKey)
 	}
 	return request, nil
 }

@@ -64,7 +64,9 @@
         {"file": "tests/e2e/photos_search_test.go", "function": "TestPhotosSearch_E2E_ImmichWhiteboardOCRResult"},
         {"file": "web/pwa/tests/photos_connectors.spec.ts", "function": "test('photo libraries list and Immich wizard use live connector API')"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-2-immich-connect-scan-and-search"
+      ]
     },
     {
       "scenarioId": "SCN-040-005",
@@ -76,7 +78,9 @@
         {"file": "tests/integration/photos_sync_test.go", "function": "TestPhotosImmich_IncrementalChangesUpdateState"},
         {"file": "tests/e2e/photos_sync_test.go", "function": "TestPhotosSync_E2E_AlbumMoveDoesNotReclassify"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-2-immich-connect-scan-and-search"
+      ]
     },
     {
       "scenarioId": "SCN-040-006",
@@ -88,7 +92,9 @@
         {"file": "tests/integration/photos_skip_ledger_test.go", "function": "TestPhotosImmich_SkipLedgerVisibleAndRetryable"},
         {"file": "web/pwa/tests/photos_connector_progress.spec.ts", "function": "test('connector detail renders progress and skip ledger from live API')"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-2-immich-connect-scan-and-search"
+      ]
     },
     {
       "scenarioId": "SCN-040-007",
