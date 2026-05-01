@@ -469,6 +469,16 @@ drive:
     enabled: true
     confidence_threshold: 0.7 # min confidence to apply classification automatically
     low_confidence_action: "pause"
+    # Spec 038 Scope 6 — Policy And Confirmation.
+    # confirm_threshold is the policy floor: when classifier confidence is
+    # below this value the Save Service MUST persist a drive_confirmation
+    # row and refuse to commit until /api/v1/drive/confirmations/{id}
+    # resolves. Distinct from confidence_threshold so operators can set
+    # auto-classify higher than the absolute confirmation floor.
+    confirm_threshold: 0.6
+    # confirmation_ttl_seconds bounds how long a pending confirmation
+    # stays actionable before the resolver marks it 'expired'.
+    confirmation_ttl_seconds: 86400
   scan:
     parallelism: 4
     batch_size: 100

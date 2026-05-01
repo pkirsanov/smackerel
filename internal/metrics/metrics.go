@@ -193,6 +193,42 @@ var ListsCompleted = prometheus.NewCounterVec(
 	[]string{"list_type"},
 )
 
+// DriveConfirmationsTotal counts spec 038 Scope 6 drive confirmation
+// resolutions by terminal status (committed, rerouted, no_save, expired,
+// already_resolved) and the channel that delivered the user choice
+// (web, telegram). Used to detect a stuck pending backlog or a sudden
+// spike in expired confirmations.
+var DriveConfirmationsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_drive_confirmations_total",
+		Help: "Drive low-confidence confirmation resolutions by status and channel",
+	},
+	[]string{"status", "channel"},
+)
+
+// DrivePolicyDecisionsTotal counts spec 038 Scope 6 sensitivity policy
+// decisions by enforcement surface, decision verdict, and sensitivity
+// tier. The labels match the policy.Engine outputs so dashboards can
+// reconstruct the decision table from metric output alone.
+var DrivePolicyDecisionsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_drive_policy_decisions_total",
+		Help: "Drive sensitivity policy decisions by surface, decision, and sensitivity",
+	},
+	[]string{"surface", "decision", "sensitivity"},
+)
+
+// DriveRuleConflictsTotal counts spec 038 Scope 6 Save Rule conflict
+// audit rows. The label is the rule id of the stable winner so an
+// operator can spot a single rule consistently colliding.
+var DriveRuleConflictsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_drive_rule_conflicts_total",
+		Help: "Drive save rule conflicts audited per stable-winner rule_id",
+	},
+	[]string{"rule_id"},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -213,6 +249,9 @@ func init() {
 		ListGenerationLatency,
 		ListItemStatusChanges,
 		ListsCompleted,
+		DriveConfirmationsTotal,
+		DrivePolicyDecisionsTotal,
+		DriveRuleConflictsTotal,
 	)
 }
 

@@ -240,7 +240,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 		})
 	}
 
-	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil || deps.PhotosHandlers != nil || deps.DriveRulesHandlers != nil || deps.DriveSaveHandlers != nil {
+	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil || deps.PhotosHandlers != nil || deps.DriveRulesHandlers != nil || deps.DriveSaveHandlers != nil || deps.DriveConfirmationsHandlers != nil {
 		r.Route("/v1", func(r chi.Router) {
 			r.Use(middleware.Throttle(100))
 
@@ -273,6 +273,18 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Use(deps.bearerAuthMiddleware)
 					r.Post("/drive/save", deps.DriveSaveHandlers.Save)
 					r.Get("/drive/save/requests", deps.DriveSaveHandlers.ListRequests)
+				})
+			}
+
+			// Spec 038 Scope 6 — Low-confidence confirmation resolution.
+			// Both web (Screen 11) and Telegram numbered replies route
+			// through the same handler so the exactly-once contract
+			// holds across channels.
+			if deps.DriveConfirmationsHandlers != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(deps.bearerAuthMiddleware)
+					r.Get("/drive/confirmations/{id}", deps.DriveConfirmationsHandlers.Get)
+					r.Post("/drive/confirmations/{id}", deps.DriveConfirmationsHandlers.Resolve)
 				})
 			}
 

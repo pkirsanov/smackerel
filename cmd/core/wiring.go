@@ -12,6 +12,7 @@ import (
 	"github.com/smackerel/smackerel/internal/config"
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 	"github.com/smackerel/smackerel/internal/drive"
+	"github.com/smackerel/smackerel/internal/drive/confirm"
 	"github.com/smackerel/smackerel/internal/drive/google"
 	"github.com/smackerel/smackerel/internal/drive/rules"
 	"github.com/smackerel/smackerel/internal/drive/save"
@@ -103,6 +104,17 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 	svc.driveSaveService = saveService
 	slog.Info("drive save service wired",
 		"provider_url_prefix", cfg.Drive.Save.ProviderURLPrefix)
+
+	// Spec 038 Scope 6 — wire low-confidence confirmations store and
+	// HTTP handler. The store backs both Screen 11 web modal and the
+	// Telegram numbered-reply path; both flow through
+	// /v1/drive/confirmations/{id}.
+	confirmTTL := time.Duration(cfg.Drive.Classification.ConfirmationTTLSeconds) * time.Second
+	confirmStore := confirm.NewStore(svc.pg.Pool, confirmTTL)
+	deps.DriveConfirmationsHandlers = api.NewDriveConfirmationsHandlers(confirmStore)
+	slog.Info("drive confirmations handler wired",
+		"confirm_threshold", cfg.Drive.Classification.ConfirmThreshold,
+		"confirmation_ttl_seconds", cfg.Drive.Classification.ConfirmationTTLSeconds)
 
 	// Wire annotation handlers (spec 027)
 	annotationStore := annotation.NewStore(svc.pg.Pool, svc.nc)
