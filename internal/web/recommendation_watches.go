@@ -111,6 +111,30 @@ func (h *Handler) RecommendationWatchDetailPage(w http.ResponseWriter, r *http.R
 		return
 	}
 	_, _ = fmt.Fprintf(w, `<div class="container"><h1>%s</h1><p>Kind: %s &middot; Delivery: %s &middot; Precision: %s</p>`, template.HTMLEscapeString(watch.Name), template.HTMLEscapeString(watch.Kind), template.HTMLEscapeString(watch.DeliveryChannel), template.HTMLEscapeString(watch.LocationPrecision))
+	// SCN-039-051: per-watch operator visibility via the audit-table
+	// join. Counts come from `recommendation_watch_runs` joined on
+	// `watch_id`, NOT from a high-cardinality Prometheus label. The
+	// bounded `smackerel_recommendation_watch_runs_total{kind,outcome}`
+	// metric reports global per-kind activity; the per-watch breakdown
+	// below uses the persisted audit table so label cardinality stays
+	// bounded by config.
+	if counts, exists, auditErr := h.RecommendationStore.GetWatchAuditCounts(r.Context(), watch.ID); auditErr == nil && exists {
+		_, _ = fmt.Fprint(w, `<section class="watch-audit" data-testid="watch-audit-counts" data-source="recommendation_watch_runs"><h2>Per-watch run counts (audit join)</h2>`)
+		_, _ = fmt.Fprintf(w, `<dl class="watch-audit-counts"><dt>kind</dt><dd>%s</dd><dt>total runs</dt><dd>%d</dd>`, template.HTMLEscapeString(counts.WatchKind), counts.TotalRuns)
+		_, _ = fmt.Fprintf(w, `<dt>delivered</dt><dd>%d</dd><dt>withheld</dt><dd>%d</dd><dt>no_match</dt><dd>%d</dd><dt>rate_limited</dt><dd>%d</dd><dt>quiet_hours</dt><dd>%d</dd><dt>provider_degraded</dt><dd>%d</dd><dt>failed</dt><dd>%d</dd>`,
+			counts.DeliveredRuns,
+			counts.WithheldRuns,
+			counts.NoMatchRuns,
+			counts.RateLimitedRuns,
+			counts.QuietHoursRuns,
+			counts.ProviderDegradedRuns,
+			counts.FailedRuns,
+		)
+		if counts.LastRunAt != nil {
+			_, _ = fmt.Fprintf(w, `<dt>last run</dt><dd>%s</dd>`, template.HTMLEscapeString(counts.LastRunAt.Format(time.RFC3339)))
+		}
+		_, _ = fmt.Fprint(w, `</dl><p class="watch-audit-note">Counts come from the persisted recommendation_watch_runs join — Prometheus labels stay bounded.</p></section>`)
+	}
 	_, _ = fmt.Fprint(w, `<section><h2>Consent ledger</h2><ol class="consent-ledger">`)
 	for _, revision := range watch.Consent.Revisions {
 		_, _ = fmt.Fprintf(w, `<li><strong>%s</strong> &mdash; %s &mdash; rate %d/%ds, precision %s, sources %s</li>`,

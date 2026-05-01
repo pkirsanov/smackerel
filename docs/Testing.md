@@ -94,6 +94,16 @@ All 38 Go packages have tests:
 - `internal/web` — handler, search, artifact detail, status
 - `internal/web/icons` — SVG validation
 
+### Recommendation Runtime Test Surface (Spec 039)
+
+| Test type | File | Purpose |
+|-----------|------|---------|
+| unit | `internal/recommendation/store/redact_test.go` | Verifies serialized recommendation logs/traces never leak provider keys, raw payloads, exact GPS, or sensitive graph prompt text (SCN-039-053) |
+| integration | `tests/integration/recommendation_metrics_test.go` | Verifies all eight `smackerel_recommendation_*` metrics are emitted with bounded labels (SCN-039-050) |
+| integration | `tests/integration/recommendation_watch_audit_test.go` | Verifies per-watch operator counts come from joining `recommendation_watch_runs` on `watch_id` rather than from a high-cardinality Prometheus label (SCN-039-051) |
+| stress | `tests/stress/recommendations_test.go` | Drives 50 concurrent warm reactive requests for 5 minutes against the live dev stack and asserts the spec-039 NFR (warm p95 ≤ 10s) is met (SCN-039-052) |
+| e2e-api | `tests/e2e/recommendations_full_regression_test.go` | Broad regression covering reactive + watch detail + feedback + why paths, including redaction smoke checks (SCN-039-050..053) |
+
 ## Environment Isolation Rules
 
 ### Development State Is Sacred

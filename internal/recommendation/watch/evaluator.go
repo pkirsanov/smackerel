@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/recommendation"
 	"github.com/smackerel/smackerel/internal/recommendation/location"
 	"github.com/smackerel/smackerel/internal/recommendation/policy"
@@ -359,6 +360,30 @@ func (e *Evaluator) EvaluateWatch(ctx context.Context, watchID string, trigger T
 	}
 	envelopes := buildNotifyEnvelopes(watch, delivered)
 
+	// SCN-039-050 / SCN-039-051: emit the bounded watch_runs metric labeled
+	// only by watch kind and outcome. Per-watch counts are computed via the
+	// `recommendation_watch_runs` join in the operator audit view.
+	metrics.RecommendationWatchRuns.WithLabelValues(watch.Kind, runStatus).Inc()
+	// SCN-039-050: per-reason suppression metric for withheld watch outcomes.
+	for reason, count := range withheldReasons {
+		if count <= 0 || strings.TrimSpace(reason) == "" {
+			continue
+		}
+		metrics.RecommendationSuppression.WithLabelValues(reason).Add(float64(count))
+	}
+	// SCN-039-050: delivery metric for the watch's configured channel. We
+	// emit one observation per envelope sent and one drop observation when
+	// the run produced no deliverable envelopes.
+	channel := strings.TrimSpace(watch.DeliveryChannel)
+	if channel == "" {
+		channel = "telegram"
+	}
+	if len(envelopes) > 0 {
+		metrics.RecommendationDelivery.WithLabelValues(channel, "sent").Add(float64(len(envelopes)))
+	} else if runStatus != "no_match" {
+		metrics.RecommendationDelivery.WithLabelValues(channel, "drop").Inc()
+	}
+
 	return Outcome{
 		WatchID:           watch.ID,
 		WatchRunID:        runID,
@@ -428,6 +453,13 @@ func (e *Evaluator) persistEmptyRun(
 		if err != nil {
 			return Outcome{}, err
 		}
+	}
+	// SCN-039-050: count empty/short-circuit watch runs against the same
+	// bounded `kind`/`outcome` watch metric so dashboards reflect total
+	// scheduler activity, not just runs that reached the gather phase.
+	metrics.RecommendationWatchRuns.WithLabelValues(watch.Kind, status).Inc()
+	if reason := strings.TrimSpace(reason); reason != "" {
+		metrics.RecommendationSuppression.WithLabelValues(reason).Inc()
 	}
 	return Outcome{
 		WatchID:          watch.ID,

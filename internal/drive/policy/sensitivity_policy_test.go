@@ -1,4 +1,5 @@
 package policy
+
 // Spec 038 Scope 6 — SCN-038-017 unit anchor.
 //
 // TestMedicalPolicyBlocksAutoLinkShareWithoutProviderMutation asserts
@@ -25,7 +26,6 @@ package policy
 //  8. Adversarial: an unknown surface or sensitivity tier MUST surface
 //     ErrInvalidAction so a future regression that adds a new tier
 //     fails loud instead of silently allowing.
-package policy
 
 import (
 	"errors"

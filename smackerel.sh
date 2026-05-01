@@ -948,6 +948,21 @@ case "$COMMAND" in
       stress)
         timeout 300 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"
         timeout 600 bash "$SCRIPT_DIR/tests/stress/test_search_stress.sh"
+        # Go-based stress tests (recommendations NFR profile etc.). Runs
+        # against the live dev stack — caller MUST have the stack up.
+        smackerel_generate_config dev >/dev/null
+        env_file="$(smackerel_require_env_file dev)"
+        core_host_port="$(smackerel_env_value "$env_file" "CORE_HOST_PORT")"
+        auth_token="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
+        timeout 900 docker run --rm \
+          --network host \
+          -v "$SCRIPT_DIR:/workspace" \
+          -v smackerel-gomod-cache:/go/pkg/mod \
+          -v smackerel-gobuild-cache:/root/.cache/go-build \
+          -w /workspace \
+          -e "CORE_EXTERNAL_URL=http://127.0.0.1:${core_host_port}" \
+          -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+          golang:1.24.3-bookworm bash /workspace/scripts/runtime/go-stress.sh
         ;;
       *)
         usage

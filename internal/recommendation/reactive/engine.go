@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/recommendation"
 	"github.com/smackerel/smackerel/internal/recommendation/location"
 	"github.com/smackerel/smackerel/internal/recommendation/policy"
@@ -180,6 +181,9 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 		"cell_id":   geometry.CellID,
 		"label":     geometry.Label,
 	})
+	// SCN-039-050: precision audit metric (requested vs sent). Bounded to the
+	// closed precision enum (exact|neighborhood|city) on both axes.
+	metrics.RecommendationLocationPrecision.WithLabelValues(string(precision), string(geometry.Precision)).Inc()
 
 	providerLimit := e.cfg.Ranking.MaxCandidatesPerProvider
 	if providerLimit < 1 {
@@ -196,23 +200,30 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 	allowedSources := allowedSourceSet(req.AllowedSources)
 	providerFacts := []recstore.ProviderFactInput{}
 	providerStatuses := []map[string]any{}
+	categoryLabel := string(category)
 	for _, providerEntry := range e.registry.List() {
 		if len(allowedSources) > 0 {
 			if _, ok := allowedSources[providerEntry.ID()]; !ok {
 				continue
 			}
 		}
+		// SCN-039-050: provider request count and latency metric. Provider id
+		// is bounded by config; category is the closed enum.
+		providerStart := e.clock()
 		bundle, err := providerEntry.Fetch(ctx, providerQuery)
+		metrics.RecommendationProviderLatency.WithLabelValues(providerEntry.ID(), categoryLabel).Observe(e.clock().Sub(providerStart).Seconds())
 		status := map[string]any{"provider_id": providerEntry.ID()}
 		if err != nil {
 			status["status"] = "degraded"
 			status["error_kind"] = "provider_fetch_failed"
 			providerStatuses = append(providerStatuses, status)
+			metrics.RecommendationProviderRequests.WithLabelValues(providerEntry.ID(), categoryLabel, "degraded").Inc()
 			continue
 		}
 		status["status"] = "healthy"
 		status["fact_count"] = len(bundle.Facts)
 		providerStatuses = append(providerStatuses, status)
+		metrics.RecommendationProviderRequests.WithLabelValues(providerEntry.ID(), categoryLabel, "success").Inc()
 		for i, fact := range bundle.Facts {
 			providerFacts = append(providerFacts, recstore.ProviderFactInput{
 				LocalID:             fmt.Sprintf("fact_%s_%d", providerEntry.ID(), i),
@@ -260,6 +271,14 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 
 	candidates := groupCandidates(providerFacts)
 	appendTool("recommendation_dedupe_candidates", "read", map[string]any{"fact_count": len(providerFacts)}, map[string]any{"candidate_count": len(candidates)})
+	// SCN-039-050: candidate funnel — raw fact count and deduped candidate
+	// count, both bounded by category and stage labels.
+	if len(providerFacts) > 0 {
+		metrics.RecommendationCandidates.WithLabelValues(categoryLabel, "raw", "count").Add(float64(len(providerFacts)))
+	}
+	if len(candidates) > 0 {
+		metrics.RecommendationCandidates.WithLabelValues(categoryLabel, "deduped", "count").Add(float64(len(candidates)))
+	}
 
 	graphRefs, err := e.store.GraphSignalRefs(ctx, query, 3)
 	if err != nil {
@@ -458,9 +477,44 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 			deliveredCount++
 		}
 	}
+	// SCN-039-050: candidate funnel + delivery + suppression metrics. Each
+	// recommendation row is recorded against its terminal stage and any
+	// suppression/withhold reason is bounded by the closed reason enum
+	// emitted by the policy and quality guards.
+	for _, rec := range recommendations {
+		switch rec.Status {
+		case "delivered":
+			metrics.RecommendationCandidates.WithLabelValues(categoryLabel, "delivered", "count").Inc()
+			metrics.RecommendationDelivery.WithLabelValues(req.Source, "sent").Inc()
+		case "withheld":
+			metrics.RecommendationCandidates.WithLabelValues(categoryLabel, "withheld", "count").Inc()
+			if reason := strings.TrimSpace(rec.StatusReason); reason != "" {
+				metrics.RecommendationSuppression.WithLabelValues(reason).Inc()
+			}
+		case "suppressed":
+			metrics.RecommendationCandidates.WithLabelValues(categoryLabel, "suppressed", "count").Inc()
+			if reason := strings.TrimSpace(rec.StatusReason); reason != "" {
+				metrics.RecommendationSuppression.WithLabelValues(reason).Inc()
+			}
+		}
+	}
+	// SCN-039-050: ranking confidence band distribution. Confidence is the
+	// closed enum (high|medium|low) emitted by the ranker; we count one
+	// observation per ranked candidate that survived to the persisted
+	// recommendation rows.
+	for _, candidate := range ranked {
+		band := strings.TrimSpace(candidate.Confidence)
+		if band == "" {
+			band = "unknown"
+		}
+		metrics.RecommendationRankingConfidence.WithLabelValues(band).Inc()
+	}
 	status := "delivered"
 	if deliveredCount == 0 {
 		status = "no_eligible"
+		// No row was delivered — record one delivery `drop` so operators can
+		// distinguish "request received, nothing delivered" from "no request".
+		metrics.RecommendationDelivery.WithLabelValues(req.Source, "drop").Inc()
 	}
 	appendTool("recommendation_persist_outcome", "write", map[string]any{"status": status}, map[string]any{"candidate_count": len(candidates), "recommendation_count": len(recommendations)})
 

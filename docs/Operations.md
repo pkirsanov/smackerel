@@ -326,6 +326,25 @@ All containers have health checks configured in docker-compose.yml:
 | `smackerel_db_connections_active` | Gauge | — | Active database connections |
 | `smackerel_digest_generation_total` | Counter | `status` | Digest generation (published, fallback, quiet) |
 
+#### Recommendations (Spec 039 Scope 6)
+
+The recommendation runtime exposes eight Prometheus metrics with bounded labels (no `watch_id`, `recommendation_id`, `request_id`, `trace_id`, or `actor_user_id` labels). Per-watch operator visibility is provided by joining the bounded `*_watch_runs_total` metric with the persisted `recommendation_watch_runs` table on `watch_id` — never by embedding the watch id as a Prometheus label.
+
+| Metric | Type | Labels | Purpose |
+|--------|------|--------|---------|
+| `smackerel_recommendation_provider_requests_total` | Counter | `provider`, `category`, `outcome` | Provider request count by outcome (success, error, timeout, degraded) |
+| `smackerel_recommendation_provider_latency_seconds` | Histogram | `provider`, `category` | Provider call latency distribution (buckets 0.05..30s) |
+| `smackerel_recommendation_candidates_total` | Counter | `category`, `stage`, `outcome` | Candidate counts at each ranking/dedupe/policy stage |
+| `smackerel_recommendation_watch_runs_total` | Counter | `kind`, `outcome` | Watch evaluation runs by kind and outcome |
+| `smackerel_recommendation_delivery_total` | Counter | `channel`, `outcome` | Delivery outcomes per channel (telegram, digest, drop) |
+| `smackerel_recommendation_suppression_total` | Counter | `reason` | Recommendations suppressed by policy/quiet hours/rate limit |
+| `smackerel_recommendation_ranking_confidence_total` | Counter | `confidence` | Distribution of ranking confidence bands |
+| `smackerel_recommendation_location_precision_total` | Counter | `requested`, `sent` | Requested vs. sent location precision (privacy reduction) |
+
+**Operator audit view:** `GET /recommendations/watches/{id}` renders a `data-testid="watch-audit-counts"` block sourced from `recommendation_watch_runs` (data-source marker on the section). Use this surface — not Prometheus — for per-watch run counts.
+
+**Log/trace redaction:** All serialized recommendation logs and traces are scanned for forbidden substrings (provider API keys, raw provider payloads, sensitive graph prompt text, raw GPS coordinates) at the persistence boundary via `internal/recommendation/store.AssertRedactSafe`. The unit test `internal/recommendation/store/redact_test.go::TestRecommendationRedaction_NoSecretsOrRawLocationInLogsOrTraces` is the regression guard.
+
 #### ML Sidecar (`http://127.0.0.1:40002/metrics`)
 
 | Metric | Type | Labels | Purpose |

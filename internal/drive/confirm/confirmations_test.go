@@ -1,4 +1,5 @@
 package confirm
+
 // Spec 038 Scope 6 — SCN-038-016 unit anchor.
 //
 // TestLowConfidenceRoutingRequiresUserConfirmationBeforeProviderWrite asserts
@@ -21,7 +22,6 @@ package confirm
 //  6. Adversarial: an unknown outcome MUST surface ErrInvalidChoice so
 //     callers cannot accidentally write 'pending' choices that look like
 //     they committed.
-package confirm
 
 import (
 	"context"

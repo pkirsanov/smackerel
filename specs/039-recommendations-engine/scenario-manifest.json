@@ -511,9 +511,16 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_metrics_test.go :: TestRecommendationMetrics_BoundedLabels",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "path": "tests/integration/recommendation_metrics_test.go",
+          "identifier": "TestRecommendationMetrics_BoundedLabels"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/039-recommendations-engine/report.md#scope-06-observability-stress-and-cutover"
+      ],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-051",
@@ -525,9 +532,16 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_watch_audit_test.go :: TestRecommendationWatchAudit_PerWatchCountsViaAuditJoin",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "path": "tests/integration/recommendation_watch_audit_test.go",
+          "identifier": "TestRecommendationWatchAudit_PerWatchCountsViaAuditJoin"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/039-recommendations-engine/report.md#scope-06-observability-stress-and-cutover"
+      ],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-052",
@@ -539,9 +553,16 @@
       "liveTestExpectation": "Regression stress: tests/stress/recommendations_test.go :: TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests",
       "requiredTestType": "stress",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "path": "tests/stress/recommendations_test.go",
+          "identifier": "TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/039-recommendations-engine/report.md#scope-06-observability-stress-and-cutover"
+      ],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-053",
@@ -553,9 +574,20 @@
       "liveTestExpectation": "Regression unit: internal/recommendation/store/redact_test.go :: TestRecommendationRedaction_NoSecretsOrRawLocationInLogsOrTraces",
       "requiredTestType": "unit",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "path": "internal/recommendation/store/redact_test.go",
+          "identifier": "TestRecommendationRedaction_NoSecretsOrRawLocationInLogsOrTraces"
+        },
+        {
+          "path": "tests/e2e/recommendations_full_regression_test.go",
+          "identifier": "TestRecommendationsBroadRegression"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/039-recommendations-engine/report.md#scope-06-observability-stress-and-cutover"
+      ],
+      "status": "done"
     }
   ]
 }
