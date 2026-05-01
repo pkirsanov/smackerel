@@ -108,6 +108,7 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 		hours       string
 		conflicting bool
 		distance    string
+		sponsored   string
 	}
 	switch {
 	case strings.Contains(lowerQuery, "low confidence"):
@@ -122,8 +123,33 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 			hours       string
 			conflicting bool
 			distance    string
+			sponsored   string
 		}{
 			{id: "coffee-maybe", title: "Maybe Coffee Counter", url: "https://fixture.example/coffee/maybe", score: 0.41, quiet: false, vegetarian: true, openNow: false, hours: "unknown", distance: "distance unknown"},
+		}
+	case strings.Contains(lowerQuery, "sponsored regression"):
+		// SCN-039-040 / BS-023 regression fixture. The sponsored row is
+		// intrinsically WEAKER than the organic rows on provider_score so
+		// the only path for it to climb above the organics is via a
+		// sponsored boost — which the engine MUST refuse without explicit
+		// opt-in. The two organic rows MUST outrank the sponsored row when
+		// policy is honoured.
+		rows = []struct {
+			id          string
+			title       string
+			url         string
+			score       float64
+			quiet       bool
+			vegetarian  bool
+			openNow     bool
+			hours       string
+			conflicting bool
+			distance    string
+			sponsored   string
+		}{
+			{id: "sponsored-regression-organic-a", title: "SponsoredRegressionAlpha Organic", url: "https://fixture.example/sponsored-regression/organic-a", score: 0.91, quiet: true, vegetarian: true, openNow: true, hours: "07:00-22:00", distance: "9 min walk"},
+			{id: "sponsored-regression-organic-b", title: "SponsoredRegressionBravo Organic", url: "https://fixture.example/sponsored-regression/organic-b", score: 0.87, quiet: true, vegetarian: true, openNow: true, hours: "07:00-22:00", distance: "11 min walk"},
+			{id: "sponsored-regression-paid", title: "SponsoredRegressionCharlie Paid", url: "https://fixture.example/sponsored-regression/paid", score: 0.78, quiet: true, vegetarian: true, openNow: true, hours: "07:00-22:00", distance: "8 min walk", sponsored: "sponsored"},
 		}
 	case strings.Contains(lowerQuery, "coffee"):
 		rows = []struct {
@@ -137,6 +163,7 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 			hours       string
 			conflicting bool
 			distance    string
+			sponsored   string
 		}{
 			{id: "coffee-fogline", title: "Fogline Coffee", url: "https://fixture.example/coffee/fogline", score: 0.82, quiet: true, vegetarian: true, openNow: true, hours: "07:00-16:00", distance: "8 min walk"},
 			{id: "coffee-mission-bean", title: "Mission Bean", url: "https://fixture.example/coffee/mission-bean", score: 0.74, quiet: true, vegetarian: true, openNow: true, hours: "08:00-15:00", distance: "11 min walk"},
@@ -154,6 +181,7 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 			hours       string
 			conflicting bool
 			distance    string
+			sponsored   string
 		}{
 			{id: "ramen-late-lab", title: "Late Ramen Lab", url: "https://fixture.example/ramen/late-lab", score: 0.79, quiet: true, vegetarian: true, openNow: false, hours: p.conflictHours(), conflicting: true, distance: "12 min walk"},
 		}
@@ -169,6 +197,7 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 			hours       string
 			conflicting bool
 			distance    string
+			sponsored   string
 		}{
 			{id: "ramen-menkichi", title: "Menkichi", url: "https://fixture.example/ramen/menkichi", score: 0.86, quiet: true, vegetarian: false, openNow: false, hours: "11:00-21:00", distance: "10 min walk"},
 			{id: "ramen-quiet-noodle", title: "Quiet Noodle Bar", url: "https://fixture.example/ramen/quiet-noodle", score: 0.83, quiet: true, vegetarian: true, openNow: false, hours: "12:00-20:00", distance: "9 min walk"},
@@ -208,12 +237,24 @@ func (p *FixtureProvider) placeFacts(query ReducedQuery) []Fact {
 				"label": providerName,
 				"url":   row.url,
 			},
-			SponsoredState:  "none",
+			SponsoredState:  sponsoredOrNone(row.sponsored),
 			RestrictedFlags: map[string]any{},
 		}
 		facts = append(facts, fact)
 	}
 	return facts
+}
+
+// sponsoredOrNone normalises the per-row sponsored marker. Empty / "none"
+// returns "none"; any other non-empty value is passed through so the policy
+// guard sees the fixture's intended sponsored_state (sponsored, promoted,
+// affiliate, paid).
+func sponsoredOrNone(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "none"
+	}
+	return value
 }
 
 func (p *FixtureProvider) conflictHours() string {

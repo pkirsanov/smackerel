@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -328,6 +329,107 @@ func (h *RecommendationHandlers) RevokePreferenceCorrection(w http.ResponseWrite
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "revoked", "correction_id": correctionID})
+}
+
+// providerView is the sanitized end-user view of one configured provider.
+// This shape is what `GET /api/recommendations/providers` returns by default.
+// The end-user view MUST NOT include API keys, quota state, last-error
+// strings, or any operator-only telemetry.
+type providerView struct {
+	ProviderID  string   `json:"provider_id"`
+	DisplayName string   `json:"display_name"`
+	Categories  []string `json:"categories"`
+	Status      string   `json:"status"`
+}
+
+// providerOperatorView is the operator-detail view returned when the caller
+// explicitly requests `?view=operator`. It SHOULD NOT include API keys —
+// keys live only in SST and are NEVER surfaced over HTTP — but it MAY
+// include observed status reasons, observed_at timestamps, attribution
+// labels, and quota window settings sourced from config (not from runtime
+// secrets).
+type providerOperatorView struct {
+	providerView
+	Reason               string   `json:"reason,omitempty"`
+	ObservedAt           string   `json:"observed_at"`
+	AttributionLabel     string   `json:"attribution_label,omitempty"`
+	QuotaWindowSeconds   int      `json:"quota_window_seconds,omitempty"`
+	MaxRequestsWindow    int      `json:"max_requests_per_window,omitempty"`
+	ConfiguredCategories []string `json:"configured_categories,omitempty"`
+}
+
+// ListProviders handles GET /api/recommendations/providers. The default
+// response is the sanitized end-user view; operators may pass
+// `?view=operator` to request the detailed view that includes provider
+// reasons, attribution labels, and config-sourced quota windows. API keys
+// MUST NEVER be included in either view.
+func (h *RecommendationHandlers) ListProviders(w http.ResponseWriter, r *http.Request) {
+	if h.registry == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"providers": []any{}})
+		return
+	}
+	view := strings.TrimSpace(r.URL.Query().Get("view"))
+	providers := h.registry.List()
+	if view == "operator" {
+		out := make([]providerOperatorView, 0, len(providers))
+		for _, p := range providers {
+			health := p.Health(r.Context())
+			cats := make([]string, 0, len(p.Categories()))
+			for _, c := range p.Categories() {
+				cats = append(cats, string(c))
+			}
+			detail := providerOperatorView{
+				providerView: providerView{
+					ProviderID:  p.ID(),
+					DisplayName: p.DisplayName(),
+					Categories:  cats,
+					Status:      string(health.Status),
+				},
+				Reason:     health.Reason,
+				ObservedAt: health.ObservedAt.UTC().Format(time.RFC3339),
+			}
+			detail = enrichOperatorViewFromConfig(detail, h.cfg)
+			out = append(out, detail)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"providers": out, "view": "operator"})
+		return
+	}
+	out := make([]providerView, 0, len(providers))
+	for _, p := range providers {
+		health := p.Health(r.Context())
+		cats := make([]string, 0, len(p.Categories()))
+		for _, c := range p.Categories() {
+			cats = append(cats, string(c))
+		}
+		out = append(out, providerView{
+			ProviderID:  p.ID(),
+			DisplayName: p.DisplayName(),
+			Categories:  cats,
+			Status:      string(health.Status),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"providers": out, "view": "sanitized"})
+}
+
+// enrichOperatorViewFromConfig populates the operator-only fields by mapping
+// the configured providers under recommendations.providers. Returns the view
+// unchanged when no matching provider config exists. NEVER reads API keys.
+func enrichOperatorViewFromConfig(view providerOperatorView, cfg config.RecommendationsConfig) providerOperatorView {
+	candidates := map[string]config.RecommendationProviderConfig{
+		"google_places":         cfg.Providers.GooglePlaces,
+		"yelp":                  cfg.Providers.Yelp,
+		"fixture_google_places": cfg.Providers.GooglePlaces,
+		"fixture_yelp":          cfg.Providers.Yelp,
+	}
+	pc, ok := candidates[view.ProviderID]
+	if !ok {
+		return view
+	}
+	view.AttributionLabel = pc.AttributionLabel
+	view.QuotaWindowSeconds = pc.QuotaWindowSeconds
+	view.MaxRequestsWindow = pc.MaxRequestsPerWindow
+	view.ConfiguredCategories = append([]string(nil), pc.Categories...)
+	return view
 }
 
 func (h *RecommendationHandlers) validateCreateRequest(req createRecommendationRequest) error {

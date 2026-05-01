@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,7 +22,8 @@ import (
 // TraceListFilter narrows which traces ListTraces returns. Empty fields
 // mean "no filter applied".
 type TraceListFilter struct {
-	Outcome string // exact match on agent_traces.outcome (indexed)
+	Outcome         string // exact match on agent_traces.outcome (indexed)
+	ScenarioPattern string // SQL LIKE pattern; matches scenario_id OR scenario_version. Use `*` and `?` wildcards (translated to `%` and `_`).
 }
 
 // ListTraces returns up to limit trace rows newest-first, skipping the
@@ -51,9 +53,17 @@ FROM agent_traces
 `
 	args := []any{limit, offset}
 	q := baseQuery
+	clauses := []string{}
 	if filter.Outcome != "" {
-		q += "WHERE outcome = $3\n"
 		args = append(args, filter.Outcome)
+		clauses = append(clauses, fmt.Sprintf("outcome = $%d", len(args)))
+	}
+	if pattern := translateScenarioPattern(filter.ScenarioPattern); pattern != "" {
+		args = append(args, pattern)
+		clauses = append(clauses, fmt.Sprintf("(scenario_id LIKE $%d OR scenario_version LIKE $%d)", len(args), len(args)))
+	}
+	if len(clauses) > 0 {
+		q += "WHERE " + strings.Join(clauses, " AND ") + "\n"
 	}
 	q += "ORDER BY created_at DESC\nLIMIT $1 OFFSET $2"
 
@@ -102,9 +112,17 @@ func CountTraces(ctx context.Context, pool *pgxpool.Pool, filter TraceListFilter
 	}
 	q := "SELECT COUNT(*) FROM agent_traces"
 	var args []any
+	clauses := []string{}
 	if filter.Outcome != "" {
-		q += " WHERE outcome = $1"
 		args = append(args, filter.Outcome)
+		clauses = append(clauses, fmt.Sprintf("outcome = $%d", len(args)))
+	}
+	if pattern := translateScenarioPattern(filter.ScenarioPattern); pattern != "" {
+		args = append(args, pattern)
+		clauses = append(clauses, fmt.Sprintf("(scenario_id LIKE $%d OR scenario_version LIKE $%d)", len(args), len(args)))
+	}
+	if len(clauses) > 0 {
+		q += " WHERE " + strings.Join(clauses, " AND ")
 	}
 	var n int
 	row := pool.QueryRow(ctx, q, args...)
@@ -115,4 +133,20 @@ func CountTraces(ctx context.Context, pool *pgxpool.Pool, filter TraceListFilter
 		return 0, fmt.Errorf("count agent_traces: %w", err)
 	}
 	return n, nil
+}
+
+// translateScenarioPattern converts the operator-friendly wildcard syntax
+// (`*` matches any sequence, `?` matches one character) to SQL LIKE
+// (`%` and `_`). Returns the empty string for empty/whitespace input so
+// callers can treat empty patterns as "no filter".
+func translateScenarioPattern(pattern string) string {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return ""
+	}
+	pattern = strings.ReplaceAll(pattern, "%", "\\%")
+	pattern = strings.ReplaceAll(pattern, "_", "\\_")
+	pattern = strings.ReplaceAll(pattern, "*", "%")
+	pattern = strings.ReplaceAll(pattern, "?", "_")
+	return pattern
 }

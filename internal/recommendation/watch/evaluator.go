@@ -18,6 +18,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/recommendation"
 	"github.com/smackerel/smackerel/internal/recommendation/location"
+	"github.com/smackerel/smackerel/internal/recommendation/policy"
 	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
 )
@@ -203,6 +204,19 @@ func (e *Evaluator) EvaluateWatch(ctx context.Context, watchID string, trigger T
 		appendTool("recommendation_apply_quality_guard", "read", map[string]any{"candidate_canonical_key": key, "guard": "price_drop"}, map[string]any{"decision": "withheld:no-threshold-crossing"})
 	}
 
+	// Safety/restricted-category policy guard runs AFTER price-drop so a
+	// recalled or restricted candidate is never delivered as an ordinary
+	// alert (SCN-039-041 / SCN-039-042 / BS-025 / BS-026). Withheld
+	// candidates are persisted with `withheld:safety-policy` or
+	// `restricted:<category>` so audit + UI can surface the reason.
+	safetyFiltered, safetyWithheldKeys, restrictedWithheldKeys := filterSafetyAndRestricted(priceFiltered, providerFacts, nil)
+	for _, key := range safetyWithheldKeys {
+		appendTool("recommendation_apply_policy", "read", map[string]any{"candidate_canonical_key": key, "guard": "safety"}, map[string]any{"decision": "withheld:safety-policy"})
+	}
+	for _, key := range restrictedWithheldKeys {
+		appendTool("recommendation_apply_policy", "read", map[string]any{"candidate_canonical_key": key, "guard": "restricted_category"}, map[string]any{"decision": "withheld:restricted-category"})
+	}
+
 	// Rate-limit guard. SCN-039-030/031 require that the rate window is
 	// enforced both within a single evaluation AND across consecutive
 	// evaluations of the same watch — once max_alerts_per_window has been
@@ -225,19 +239,19 @@ func (e *Evaluator) EvaluateWatch(ctx context.Context, watchID string, trigger T
 	if remaining < 0 {
 		remaining = 0
 	}
-	deliveredCount := len(priceFiltered)
+	deliveredCount := len(safetyFiltered)
 	if deliveredCount > remaining {
 		deliveredCount = remaining
 	}
-	delivered := priceFiltered[:deliveredCount]
-	rateWithheld := priceFiltered[deliveredCount:]
+	delivered := safetyFiltered[:deliveredCount]
+	rateWithheld := safetyFiltered[deliveredCount:]
 	for range rateWithheld {
 		appendTool("recommendation_apply_quality_guard", "read", map[string]any{"guard": "rate_limit"}, map[string]any{"decision": "withheld:rate-limit"})
 	}
 
 	// Build the recommendation input rows. Delivered ones get rank positions
 	// and a delivery channel; withheld ones carry their reason.
-	recommendations := buildRecommendationInputs(watch, delivered, rateWithheld, scopeWithheldKeys, staleWithheldKeys, cooldownWithheldKeys, priceSkippedKeys, candidates)
+	recommendations := buildRecommendationInputs(watch, delivered, rateWithheld, scopeWithheldKeys, staleWithheldKeys, cooldownWithheldKeys, priceSkippedKeys, safetyWithheldKeys, restrictedWithheldKeys, candidates)
 	totalWithheld := len(recommendations) - len(delivered)
 
 	// PersistWatchRun first to obtain run_id; then PersistWatchOutcome to
@@ -337,6 +351,12 @@ func (e *Evaluator) EvaluateWatch(ctx context.Context, watchID string, trigger T
 		withheldReasons["withheld:no-threshold-crossing"] = len(priceSkippedKeys)
 	}
 
+	if len(safetyWithheldKeys) > 0 {
+		withheldReasons["withheld:safety-policy"] = len(safetyWithheldKeys)
+	}
+	if len(restrictedWithheldKeys) > 0 {
+		withheldReasons["withheld:restricted-category"] = len(restrictedWithheldKeys)
+	}
 	envelopes := buildNotifyEnvelopes(watch, delivered)
 
 	return Outcome{
@@ -579,7 +599,7 @@ func (e *Evaluator) gatherPriceDropCandidates(watch recstore.WatchRecord, trigge
 			SourceUpdatedAt: &now,
 			Attribution:     map[string]any{"label": providerID},
 			SponsoredState:  "none",
-			RestrictedFlags: map[string]any{},
+			RestrictedFlags: restrictedFlagsFromAny(entry["restricted_flags"]),
 		})
 		if crossed {
 			deliverable[canonicalKey] = true
@@ -735,7 +755,55 @@ func filterPriceDrop(watch recstore.WatchRecord, candidates []recstore.Candidate
 	return kept, skipped
 }
 
-func buildRecommendationInputs(watch recstore.WatchRecord, delivered, rateWithheld []recstore.CandidateInput, scopeWithheld, staleWithheld, cooldownWithheld, priceSkipped []string, allCandidates []recstore.CandidateInput) []recstore.RecommendationInput {
+// filterSafetyAndRestricted withholds candidates whose underlying provider
+// facts carry a safety advisory (recall/safety_advisory) or a restricted
+// category that intersects the user's restricted-category list. Returns the
+// surviving candidates plus the canonical keys of safety- and
+// restricted-withheld candidates so the caller can audit each reason.
+//
+// The restrictedCategories argument MAY be nil — in that case only the
+// safety guard runs. The watch evaluator passes nil today because watch
+// flows do not yet wire the SST `recommendations.policy.restricted_categories`
+// list; the safety guard alone covers SCN-039-042 / BS-026.
+func filterSafetyAndRestricted(candidates []recstore.CandidateInput, providerFacts []recstore.ProviderFactInput, restrictedCategories []string) ([]recstore.CandidateInput, []string, []string) {
+	factsByLocalID := map[string]recstore.ProviderFactInput{}
+	for _, fact := range providerFacts {
+		factsByLocalID[fact.LocalID] = fact
+	}
+	kept := []recstore.CandidateInput{}
+	safetyKeys := []string{}
+	restrictedKeys := []string{}
+	for _, candidate := range candidates {
+		fact, hasFact := lookupCandidateFact(candidate, factsByLocalID)
+		var restrictedFlags map[string]any
+		if hasFact {
+			restrictedFlags = fact.RestrictedFlags
+		}
+		if safetyDecision := policy.EvaluateSafety(restrictedFlags); safetyDecision.Outcome == "withhold" {
+			safetyKeys = append(safetyKeys, candidate.CanonicalKey)
+			continue
+		}
+		if restrictedDecision := policy.EvaluateRestricted(restrictedFlags, restrictedCategories); restrictedDecision.Outcome == "withhold" {
+			restrictedKeys = append(restrictedKeys, candidate.CanonicalKey)
+			continue
+		}
+		kept = append(kept, candidate)
+	}
+	return kept, safetyKeys, restrictedKeys
+}
+
+// lookupCandidateFact returns the first provider fact referenced by the
+// candidate; returns false when the candidate has no associated facts.
+func lookupCandidateFact(candidate recstore.CandidateInput, byLocalID map[string]recstore.ProviderFactInput) (recstore.ProviderFactInput, bool) {
+	for _, factID := range candidate.ProviderFactLocalIDs {
+		if fact, ok := byLocalID[factID]; ok {
+			return fact, true
+		}
+	}
+	return recstore.ProviderFactInput{}, false
+}
+
+func buildRecommendationInputs(watch recstore.WatchRecord, delivered, rateWithheld []recstore.CandidateInput, scopeWithheld, staleWithheld, cooldownWithheld, priceSkipped, safetyWithheld, restrictedWithheld []string, allCandidates []recstore.CandidateInput) []recstore.RecommendationInput {
 	keyToCandidate := map[string]recstore.CandidateInput{}
 	for _, candidate := range allCandidates {
 		keyToCandidate[candidate.CanonicalKey] = candidate
@@ -796,6 +864,8 @@ func buildRecommendationInputs(watch recstore.WatchRecord, delivered, rateWithhe
 	addWithheldByKey("withheld:stale-source-data", "freshness", staleWithheld)
 	addWithheldByKey("withheld:repeat-cooldown", "repeat_cooldown", cooldownWithheld)
 	addWithheldByKey("withheld:no-threshold-crossing", "price_drop", priceSkipped)
+	addWithheldByKey("withheld:safety-policy", "safety", safetyWithheld)
+	addWithheldByKey("withheld:restricted-category", "restricted_category", restrictedWithheld)
 	return out
 }
 
@@ -916,6 +986,28 @@ func numericFromAny(value any) float64 {
 		return float64(typed)
 	}
 	return 0
+}
+
+// restrictedFlagsFromAny normalises a trigger.Context entry's
+// `restricted_flags` field into a `map[string]any` so the policy guard can
+// inspect it without a type assertion at the call site. Returns an empty
+// map when the value is missing or not a map.
+func restrictedFlagsFromAny(value any) map[string]any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for k, v := range typed {
+			out[k] = v
+		}
+		return out
+	case map[string]string:
+		out := make(map[string]any, len(typed))
+		for k, v := range typed {
+			out[k] = v
+		}
+		return out
+	}
+	return map[string]any{}
 }
 
 func timeFromAny(value any) (time.Time, bool) {

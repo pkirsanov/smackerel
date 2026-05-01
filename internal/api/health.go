@@ -51,6 +51,7 @@ type WebUI interface {
 	RecommendationWatchResumeAction(w http.ResponseWriter, r *http.Request)
 	RecommendationWatchSilenceAction(w http.ResponseWriter, r *http.Request)
 	RecommendationWatchDeleteAction(w http.ResponseWriter, r *http.Request)
+	TripDossierPage(w http.ResponseWriter, r *http.Request)
 	SyncConnectorHandler(w http.ResponseWriter, r *http.Request)
 	BookmarkUploadHandler(w http.ResponseWriter, r *http.Request)
 	KnowledgeDashboard(w http.ResponseWriter, r *http.Request)
