@@ -46,6 +46,7 @@ type RecommendationWatchesConfig struct {
 	AlertWindowSeconds    int
 	CooldownSecondsByKind map[string]int
 	QuietHoursPolicy      map[string]any
+	PollCron              string
 }
 
 type RecommendationRetentionConfig struct {
@@ -104,6 +105,7 @@ func loadRecommendationsConfig() (RecommendationsConfig, error) {
 	cfg.Watches.AlertWindowSeconds, errs = parsePositiveInt("RECOMMENDATIONS_WATCHES_ALERT_WINDOW_SECONDS", errs)
 	cfg.Watches.CooldownSecondsByKind, errs = requiredIntMap("RECOMMENDATIONS_WATCHES_COOLDOWN_SECONDS_BY_KIND", errs)
 	cfg.Watches.QuietHoursPolicy, errs = requiredObject("RECOMMENDATIONS_WATCHES_QUIET_HOURS_POLICY", errs)
+	cfg.Watches.PollCron, errs = requiredNonEmptyString("RECOMMENDATIONS_WATCHES_POLL_CRON", errs)
 
 	cfg.Retention.RawProviderPayloadSeconds, errs = parsePositiveInt("RECOMMENDATIONS_RETENTION_RAW_PROVIDER_PAYLOAD_SECONDS", errs)
 	cfg.Retention.TraceRetentionSeconds, errs = parsePositiveInt("RECOMMENDATIONS_RETENTION_TRACE_RETENTION_SECONDS", errs)

@@ -44,6 +44,13 @@ type WebUI interface {
 	RecommendationPreferencesPage(w http.ResponseWriter, r *http.Request)
 	RecommendationFeedback(w http.ResponseWriter, r *http.Request)
 	RecommendationDetail(w http.ResponseWriter, r *http.Request)
+	RecommendationWatchesPage(w http.ResponseWriter, r *http.Request)
+	RecommendationWatchEditorPage(w http.ResponseWriter, r *http.Request)
+	RecommendationWatchDetailPage(w http.ResponseWriter, r *http.Request)
+	RecommendationWatchPauseAction(w http.ResponseWriter, r *http.Request)
+	RecommendationWatchResumeAction(w http.ResponseWriter, r *http.Request)
+	RecommendationWatchSilenceAction(w http.ResponseWriter, r *http.Request)
+	RecommendationWatchDeleteAction(w http.ResponseWriter, r *http.Request)
 	SyncConnectorHandler(w http.ResponseWriter, r *http.Request)
 	BookmarkUploadHandler(w http.ResponseWriter, r *http.Request)
 	KnowledgeDashboard(w http.ResponseWriter, r *http.Request)
@@ -155,6 +162,9 @@ type Dependencies struct {
 
 	// Recommendation handlers (optional — nil when recommendations not enabled)
 	RecommendationHandlers *RecommendationHandlers
+
+	// Recommendation watch handlers (optional — nil when recommendations not enabled)
+	RecommendationWatchHandlers *RecommendationWatchHandlers
 
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string

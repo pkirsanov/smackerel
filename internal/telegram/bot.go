@@ -41,6 +41,8 @@ type Bot struct {
 	done            chan struct{}                   // closed when the update goroutine exits
 	replyFunc       func(chatID int64, text string) // test hook: overrides reply()
 	callbackFunc    func(callbackID, text string)   // test hook: overrides callback answer
+	watchService    WatchService                    // spec 039 Scope 4 — watch CRUD/list service for /watch commands
+	defaultChatID   int64                           // spec 039 Scope 4 — chat used to deliver scheduler-fired watch alerts
 }
 
 // Config holds Telegram bot configuration.
@@ -319,6 +321,8 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 			b.handleList(ctx, msg, msg.CommandArguments())
 		case "expense":
 			b.handleExpenseCommand(ctx, msg, msg.CommandArguments())
+		case "watch":
+			b.handleWatchCommand(ctx, msg, msg.CommandArguments())
 		case "digest":
 			b.handleDigest(ctx, msg)
 		case "status":
@@ -330,7 +334,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		case "start", "help":
 			b.handleHelp(ctx, msg)
 		default:
-			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /digest, /done, /status, or /recent")
+			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, or /recent")
 		}
 		return
 	}

@@ -95,3 +95,50 @@ func TestRecommendationFeedbackScenarioAllowlist(t *testing.T) {
 		t.Fatalf("feedback allowed tools = %+v, want only recommendation_record_feedback", scenario.AllowedTools)
 	}
 }
+
+// TestRecommendationWatchEvaluateScenarioAllowlist locks the spec 039 Scope 4
+// watch evaluation scenario contract (SCN-039-030..039 / BS-018, BS-022) so a
+// future change cannot silently widen the watch agent's tool surface beyond the
+// 10 read/write tools the design grants it.
+func TestRecommendationWatchEvaluateScenarioAllowlist(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "config", "prompt_contracts")
+	scenarios, rejected, fatal := agent.DefaultLoader().Load(dir, "recommendation-watch-evaluate-v1.yaml")
+	if fatal != nil {
+		t.Fatalf("scenario load fatal: %v", fatal)
+	}
+	if len(rejected) != 0 {
+		t.Fatalf("scenario rejected: %+v", rejected)
+	}
+	if len(scenarios) != 1 {
+		t.Fatalf("loaded scenarios = %d, want 1", len(scenarios))
+	}
+	scenario := scenarios[0]
+	if scenario.ID != "recommendation_watch_evaluate" || scenario.Version != "recommendation-watch-evaluate-v1" {
+		t.Fatalf("scenario identity = %s/%s", scenario.ID, scenario.Version)
+	}
+	want := []string{
+		"recommendation_parse_intent",
+		"recommendation_reduce_location",
+		"recommendation_fetch_candidates",
+		"recommendation_dedupe_candidates",
+		"recommendation_get_graph_snapshot",
+		"recommendation_apply_suppression",
+		"recommendation_rank_candidates",
+		"recommendation_apply_policy",
+		"recommendation_apply_quality_guard",
+		"recommendation_persist_outcome",
+	}
+	if len(scenario.AllowedTools) != len(want) {
+		t.Fatalf("allowed tool count = %d, want %d: %+v", len(scenario.AllowedTools), len(want), scenario.AllowedTools)
+	}
+	for i, wantName := range want {
+		if scenario.AllowedTools[i].Name != wantName {
+			t.Fatalf("allowed tool[%d] = %q, want %q", i, scenario.AllowedTools[i].Name, wantName)
+		}
+	}
+	for _, tool := range scenario.AllowedTools {
+		if tool.Name == "recommendation_record_feedback" || tool.Name == "recommendation_explain_from_trace" {
+			t.Fatalf("watch evaluate scenario allowed cross-scope tool %q", tool.Name)
+		}
+	}
+}
