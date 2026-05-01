@@ -100,6 +100,7 @@ func run() error {
 	wireKnowledgeLinter(sched, cfg, svc)
 	wireExpenseTracking(ctx, cfg, svc, deps)
 	wireMealPlanning(cfg, svc, deps, sched, listResolver, listStore, tgBot)
+	wireRecommendationWatchPoller(sched, agentBridge, svc, cfg, tgBot, deps.RecommendationWatchHandlers)
 
 	if err := sched.Start(ctx, cfg.DigestCron); err != nil {
 		slog.Warn("digest scheduler failed to start", "error", err)

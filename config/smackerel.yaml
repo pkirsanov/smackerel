@@ -398,6 +398,7 @@ recommendations:
       enabled: true
       start: "22:00"
       end: "07:00"
+    poll_cron: "*/5 * * * *"
   retention:
     raw_provider_payload_seconds: 604800
     trace_retention_seconds: 2592000

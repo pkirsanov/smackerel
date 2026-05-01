@@ -73,6 +73,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		DriveHandlers:                   api.NewDriveHandlersWithPool(drive.DefaultRegistry, svc.pg.Pool),
 		PhotosHandlers:                  api.NewPhotosHandlers(photolib.NewStore(svc.pg.Pool), cfg.Photos),
 		RecommendationHandlers:          api.NewRecommendationHandlers(svc.recommendationStore, svc.recommendationRegistry, cfg.Recommendations),
+		RecommendationWatchHandlers:     api.NewRecommendationWatchHandlers(svc.recommendationStore),
 	}
 
 	if provider, ok := drive.DefaultRegistry.Get("google"); ok {

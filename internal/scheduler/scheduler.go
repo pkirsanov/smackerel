@@ -16,37 +16,42 @@ import (
 
 // Scheduler manages cron-triggered tasks.
 type Scheduler struct {
-	cron               *cron.Cron
-	digestGen          *digest.Generator
-	bot                *telegram.Bot
-	engine             *intelligence.Engine
-	lifecycle          *topics.Lifecycle
-	mu                 sync.Mutex // protects digestPendingRetry and digestPendingDate
-	digestPendingRetry bool
-	digestPendingDate  string
-	baseCtx            context.Context
-	baseCancel         context.CancelFunc
-	done               chan struct{}
-	wg                 sync.WaitGroup
-	stopOnce           sync.Once
-	muDigest           sync.Mutex
-	muHourly           sync.Mutex
-	muDaily            sync.Mutex
-	muWeekly           sync.Mutex
-	muMonthly          sync.Mutex
-	muBriefs           sync.Mutex
-	muAlerts           sync.Mutex
-	muAlertProd        sync.Mutex
-	muResurface        sync.Mutex
-	muLookups          sync.Mutex
-	muSubs             sync.Mutex
-	muRelCool          sync.Mutex
-	muKnowledgeLint    sync.Mutex
-	knowledgeLinter    *knowledge.Linter
-	knowledgeLintCron  string
-	muMealPlanComplete sync.Mutex
-	mealPlanSvc        MealPlanAutoCompleter
-	mealPlanCron       string
+	cron                      *cron.Cron
+	digestGen                 *digest.Generator
+	bot                       *telegram.Bot
+	engine                    *intelligence.Engine
+	lifecycle                 *topics.Lifecycle
+	mu                        sync.Mutex // protects digestPendingRetry and digestPendingDate
+	digestPendingRetry        bool
+	digestPendingDate         string
+	baseCtx                   context.Context
+	baseCancel                context.CancelFunc
+	done                      chan struct{}
+	wg                        sync.WaitGroup
+	stopOnce                  sync.Once
+	muDigest                  sync.Mutex
+	muHourly                  sync.Mutex
+	muDaily                   sync.Mutex
+	muWeekly                  sync.Mutex
+	muMonthly                 sync.Mutex
+	muBriefs                  sync.Mutex
+	muAlerts                  sync.Mutex
+	muAlertProd               sync.Mutex
+	muResurface               sync.Mutex
+	muLookups                 sync.Mutex
+	muSubs                    sync.Mutex
+	muRelCool                 sync.Mutex
+	muKnowledgeLint           sync.Mutex
+	knowledgeLinter           *knowledge.Linter
+	knowledgeLintCron         string
+	muMealPlanComplete        sync.Mutex
+	mealPlanSvc               MealPlanAutoCompleter
+	mealPlanCron              string
+	muRecommendationWatchPoll sync.Mutex
+	muWatchPoller             sync.Mutex
+	recommendationWatchSource RecommendationWatchSource
+	recommendationWatchRunner AgentRunner
+	recommendationWatchCron   string
 }
 
 // New creates a new scheduler.
@@ -91,6 +96,7 @@ func (s *Scheduler) Start(_ context.Context, cronExpr string) error {
 			slog.Info("meal plan auto-complete scheduled", "cron", s.mealPlanCron)
 		}
 	}
+	s.scheduleRecommendationWatchPoller()
 	s.cron.Start()
 	slog.Info("scheduler started", "digest_cron", cronExpr)
 	return nil

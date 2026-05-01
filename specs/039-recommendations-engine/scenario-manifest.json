@@ -233,9 +233,14 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_watches_test.go :: TestRecommendationWatches_DwellFiresOnceWithinRateWindow",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendation_watches_test.go",
+          "testId": "TestRecommendationWatches_DwellFiresOnceWithinRateWindow"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-031",
@@ -247,9 +252,14 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_watches_test.go :: TestRecommendationWatches_RateLimitWithholdsSurplusInOneCycle",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendation_watches_test.go",
+          "testId": "TestRecommendationWatches_RateLimitWithholdsSurplusInOneCycle"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-032",
@@ -261,9 +271,14 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_watches_test.go :: TestRecommendationWatches_QuietHoursWithholdAndAudit",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendation_watches_test.go",
+          "testId": "TestRecommendationWatches_QuietHoursWithholdAndAudit"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-033",
@@ -275,9 +290,18 @@
       "liveTestExpectation": "Regression e2e-api: tests/e2e/recommendation_watch_consent_test.go :: TestConsentRegression_BS022_NoSilentBroadening",
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/e2e/recommendation_watch_consent_test.go",
+          "testId": "TestConsentRegression_BS022_NoSilentBroadening"
+        },
+        {
+          "file": "tests/e2e/recommendation_watch_consent_test.go",
+          "testId": "TestRecommendationWatchConsent_ScopeCannotBroadenSilently"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-034",
@@ -289,9 +313,14 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_price_watches_test.go :: TestRecommendationPriceWatches_FiresOnlyOnThresholdCrossing",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendation_price_watches_test.go",
+          "testId": "TestRecommendationPriceWatches_FiresOnlyOnThresholdCrossing"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-035",
@@ -303,9 +332,14 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_watches_test.go :: TestRecommendationWatches_StaleSourceDataCannotAlert",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendation_watches_test.go",
+          "testId": "TestRecommendationWatches_StaleSourceDataCannotAlert"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-036",
@@ -317,9 +351,14 @@
       "liveTestExpectation": "Regression integration: tests/integration/recommendation_watches_test.go :: TestRecommendationWatches_RepeatCooldownSuppressesUnchanged",
       "requiredTestType": "integration",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/integration/recommendation_watches_test.go",
+          "testId": "TestRecommendationWatches_RepeatCooldownSuppressesUnchanged"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-037",
@@ -331,9 +370,14 @@
       "liveTestExpectation": "Regression e2e-api: tests/e2e/recommendations_trip_dossier_test.go :: TestRecommendationsTripDossier_TripContextWatchAttachesRecommendations",
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/e2e/recommendations_trip_dossier_test.go",
+          "testId": "TestRecommendationsTripDossier_TripContextWatchAttachesRecommendations"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-038",
@@ -345,9 +389,14 @@
       "liveTestExpectation": "Regression e2e-api: tests/e2e/recommendation_watch_consent_test.go :: TestRecommendationWatchConsent_NoAutoWatchFromPassiveBehavior",
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/e2e/recommendation_watch_consent_test.go",
+          "testId": "TestRecommendationWatchConsent_NoAutoWatchFromPassiveBehavior"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-039",
@@ -359,9 +408,14 @@
       "liveTestExpectation": "Regression e2e-api: tests/e2e/recommendation_watch_consent_test.go :: TestRecommendationWatchConsent_ScopeCannotBroadenSilently",
       "requiredTestType": "e2e-api",
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": [],
-      "status": "not_started"
+      "linkedTests": [
+        {
+          "file": "tests/e2e/recommendation_watch_consent_test.go",
+          "testId": "TestRecommendationWatchConsent_ScopeCannotBroadenSilently"
+        }
+      ],
+      "evidenceRefs": ["report.md: Scope scope-04-watches-and-scheduler 2026-05-01 00:49 UTC"],
+      "status": "done"
     },
     {
       "scenarioId": "SCN-039-040",

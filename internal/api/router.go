@@ -148,6 +148,17 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Get("/{id}/why", deps.RecommendationHandlers.GetWhy)
 					r.Post("/{id}/feedback", deps.RecommendationHandlers.RecordFeedback)
 					r.Get("/{id}", deps.RecommendationHandlers.GetRecommendation)
+					if deps.RecommendationWatchHandlers != nil {
+						r.Get("/watches", deps.RecommendationWatchHandlers.ListWatches)
+						r.Post("/watches", deps.RecommendationWatchHandlers.CreateWatch)
+						r.Get("/watches/{id}", deps.RecommendationWatchHandlers.GetWatch)
+						r.Put("/watches/{id}", deps.RecommendationWatchHandlers.UpdateWatch)
+						r.Delete("/watches/{id}", deps.RecommendationWatchHandlers.DeleteWatch)
+						r.Post("/watches/{id}/pause", deps.RecommendationWatchHandlers.PauseWatch)
+						r.Post("/watches/{id}/resume", deps.RecommendationWatchHandlers.ResumeWatch)
+						r.Post("/watches/{id}/silence", deps.RecommendationWatchHandlers.SilenceWatch)
+						r.Post("/watches/{id}/trigger", deps.RecommendationWatchHandlers.TriggerWatch)
+					}
 				})
 			}
 		})
@@ -181,6 +192,14 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Get("/recommendations", deps.WebHandler.RecommendationsPage)
 			r.Post("/recommendations/results", deps.WebHandler.RecommendationsResults)
 			r.Get("/recommendations/preferences", deps.WebHandler.RecommendationPreferencesPage)
+			r.Get("/recommendations/watches", deps.WebHandler.RecommendationWatchesPage)
+			r.Get("/recommendations/watches/new", deps.WebHandler.RecommendationWatchEditorPage)
+			r.Get("/recommendations/watches/{id}", deps.WebHandler.RecommendationWatchDetailPage)
+			r.Get("/recommendations/watches/{id}/edit", deps.WebHandler.RecommendationWatchEditorPage)
+			r.Post("/recommendations/watches/{id}/pause", deps.WebHandler.RecommendationWatchPauseAction)
+			r.Post("/recommendations/watches/{id}/resume", deps.WebHandler.RecommendationWatchResumeAction)
+			r.Post("/recommendations/watches/{id}/silence", deps.WebHandler.RecommendationWatchSilenceAction)
+			r.Delete("/recommendations/watches/{id}", deps.WebHandler.RecommendationWatchDeleteAction)
 			r.Post("/recommendations/{id}/feedback", deps.WebHandler.RecommendationFeedback)
 			r.Get("/recommendations/{id}", deps.WebHandler.RecommendationDetail)
 

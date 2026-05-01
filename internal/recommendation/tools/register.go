@@ -16,6 +16,7 @@ func init() {
 	registerTool("recommendation_fetch_candidates", agent.SideEffectExternal)
 	registerTool("recommendation_dedupe_candidates", agent.SideEffectRead)
 	registerTool("recommendation_get_graph_snapshot", agent.SideEffectRead)
+	registerTool("recommendation_apply_suppression", agent.SideEffectRead)
 	registerTool("recommendation_rank_candidates", agent.SideEffectRead)
 	registerTool("recommendation_apply_policy", agent.SideEffectRead)
 	registerTool("recommendation_apply_quality_guard", agent.SideEffectRead)
