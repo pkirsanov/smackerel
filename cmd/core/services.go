@@ -13,9 +13,11 @@ import (
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/domain"
+	"github.com/smackerel/smackerel/internal/drive/save"
 	"github.com/smackerel/smackerel/internal/graph"
 	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/knowledge"
+	"github.com/smackerel/smackerel/internal/mealplan"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/pipeline"
 	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
@@ -48,6 +50,8 @@ type coreServices struct {
 	contextHandler         *api.ContextHandler
 	recommendationStore    *recstore.Store
 	recommendationRegistry *recprovider.Registry
+	driveSaveService       *save.Service
+	mealPlanSaveBack       *mealplan.DriveSaveBack
 }
 
 // buildCoreServices constructs all infrastructure and service dependencies.

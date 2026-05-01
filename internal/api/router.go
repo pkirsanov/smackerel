@@ -238,7 +238,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 		})
 	}
 
-	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil || deps.PhotosHandlers != nil {
+	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil || deps.PhotosHandlers != nil || deps.DriveRulesHandlers != nil || deps.DriveSaveHandlers != nil {
 		r.Route("/v1", func(r chi.Router) {
 			r.Use(middleware.Throttle(100))
 
@@ -249,6 +249,29 @@ func NewRouter(deps *Dependencies) http.Handler {
 				r.Get("/connectors/drive/connection/{id}", deps.DriveHandlers.GetConnection)
 				r.Get("/connectors/drive/connection/{id}/skipped", deps.DriveHandlers.GetSkippedBlocked)
 				r.Get("/drive/artifacts/{id}", deps.DriveHandlers.GetArtifactDetail)
+			}
+
+			// Spec 038 Scope 5 — Save Rules CRUD + audit + dry-run.
+			if deps.DriveRulesHandlers != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(deps.bearerAuthMiddleware)
+					r.Get("/drive/rules", deps.DriveRulesHandlers.List)
+					r.Post("/drive/rules", deps.DriveRulesHandlers.Create)
+					r.Get("/drive/rules/audit", deps.DriveRulesHandlers.Audit)
+					r.Get("/drive/rules/{id}", deps.DriveRulesHandlers.Get)
+					r.Put("/drive/rules/{id}", deps.DriveRulesHandlers.Update)
+					r.Delete("/drive/rules/{id}", deps.DriveRulesHandlers.Delete)
+					r.Post("/drive/rules/{id}/test", deps.DriveRulesHandlers.Test)
+				})
+			}
+
+			// Spec 038 Scope 5 — POST /v1/drive/save + recent requests.
+			if deps.DriveSaveHandlers != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(deps.bearerAuthMiddleware)
+					r.Post("/drive/save", deps.DriveSaveHandlers.Save)
+					r.Get("/drive/save/requests", deps.DriveSaveHandlers.ListRequests)
+				})
 			}
 
 			if deps.PhotosHandlers != nil {

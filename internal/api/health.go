@@ -134,6 +134,12 @@ type Dependencies struct {
 	// Spec 038 Scope 1 — drive connector API handlers.
 	DriveHandlers *DriveHandlers
 
+	// Spec 038 Scope 5 — Save Rules CRUD + audit + dry-run.
+	DriveRulesHandlers *DriveRulesHandlers
+
+	// Spec 038 Scope 5 — POST /v1/drive/save + recent requests listing.
+	DriveSaveHandlers *DriveSaveHandlers
+
 	// Spec 040 Scope 1 — photo library API handlers.
 	PhotosHandlers *PhotosHandlers
 

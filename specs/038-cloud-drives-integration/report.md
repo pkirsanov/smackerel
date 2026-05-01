@@ -2231,19 +2231,122 @@ Scope 4 (Search And Artifact Detail) is complete. All ten DoD items in `scopes.m
 
 ### Summary
 
-Execution evidence section reserved for the owning implementation, test, validation, and audit phases.
+Scope 5 delivers the Save Rules engine, transactional folder resolver, Save Service, Telegram receipt save bridge, meal-plan save-back, HTTP CRUD/dry-run/audit/save APIs, Screens 7-9 PWA, and the SST plumbing for `DRIVE_SAVE_PROVIDER_URL_PREFIX`. Source-kind / classification / sensitivity / confidence-floor filters select rules; idempotency keys collapse duplicate save attempts; concurrent missing-folder requests resolve through `drive_folder_resolutions` UNIQUE(connection_id, folder_path) with `ON CONFLICT DO NOTHING` plus an in-process `sync.WaitGroup` coalescer; provider neutrality is preserved via `drive.Provider` + the optional `FolderEnsurer` type-assertion only inside the save package.
 
 ### Code Diff Evidence
 
-No implementation diff evidence recorded.
+| File | Role |
+|------|------|
+| `internal/db/migrations/028_drive_save_back.sql` | Adds connection_id/provider_id/provider_file_id/provider_url/target_folder_id + idx_drive_save_requests_rule_created + idx_drive_save_requests_source_artifact + meal_plans.provider_url. |
+| `internal/drive/rules/engine.go` + `template.go` + `repository.go` | SourceKind / Sensitivity / OnMissingFolder / OnExistingFile constants; Engine.Evaluate; RenderTargetPath + ErrInvalidToken; Repository CRUD + AppendAudit/ListAudit. |
+| `internal/drive/save/service.go` + `folder_resolver.go` + `bytes.go` | Save service with idempotency-key dedup (incl. unique-violation re-read), confirm short-circuit, attempts/last_error tracking, edge insert with ON CONFLICT, in-process folder-resolution coalescer. |
+| `internal/api/drive_rules_handlers.go` + `drive_save_handlers.go` | List/Get/Create/Update/Delete/Test/Audit + Save/ListRequests handlers with timestamptz scanning. |
+| `internal/api/router.go` + `internal/api/health.go` | `/v1/drive/rules` + `/v1/drive/save` routes under bearer auth; deps wiring. |
+| `internal/telegram/drive_save_bridge.go` + `internal/telegram/bot.go` | DriveSaveBridge.SaveReceipt + FormatReceiptReply; Bot.SetDriveSaveBridge + CaptureAndSaveReceipt. |
+| `internal/mealplan/drive_save_back.go` + `internal/mealplan/store.go` | DriveSaveBack.SavePlan with Markdown render + UpdatePlanProviderURL. |
+| `internal/drive/google/google.go` | PutFile + EnsureFolder against `{APIBaseURL}/upload/drive/v3/files` and `{APIBaseURL}/drive/v3/folders`. |
+| `cmd/core/services.go` + `cmd/core/wiring.go` + `cmd/core/main.go` | Save service + meal-plan save-back + Telegram bridge attachment. |
+| `internal/config/drive.go` + `config/smackerel.yaml` + `config/generated/{dev,test}.env` + `scripts/commands/config.sh` + `internal/config/drive_config_test.go` + `internal/config/validate_test.go` + `tests/integration/drive/drive_foundation_canary_test.go` | DRIVE_SAVE_PROVIDER_URL_PREFIX SST + canary list update. |
+| `web/pwa/drive-rules.{html,js}` + `web/pwa/drive-rule-edit.{html,js}` | Screens 7 + 8 PWA. |
+| `tests/integration/drive/fixtures/server.go` | folders/folderCreated/uploads maps; SetFolderCreateDelay/FolderCreateCount/Uploads accessors; handleFolders + handleUpload endpoints. |
+| `internal/drive/rules/rule_engine_test.go` + `internal/drive/save/folder_resolution_test.go` | Unit RED→GREEN proofs. |
+| `tests/integration/drive/drive_save_canary_test.go` + `drive_save_telegram_test.go` + `drive_save_mealplan_test.go` | Live-stack integration RED→GREEN proofs. |
+| `tests/e2e/drive/drive_save_e2e_test.go` + `drive_telegram_save_ui_test.go` | E2E regression coverage for SCN-038-013, SCN-038-014, and SCN-038-015. |
 
 ### Test Evidence
 
-No test output recorded.
+```text
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+exit=0
+```
+
+```text
+$ ./smackerel.sh lint
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: web/extension/manifest.json
+  OK: web/extension/manifest.firefox.json
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+exit=0
+```
+
+```text
+$ ./smackerel.sh format --check
+48 files already formatted
+exit=0
+```
+
+```text
+$ ./smackerel.sh test unit
+ok      github.com/smackerel/smackerel/internal/drive/rules     (cached)
+ok      github.com/smackerel/smackerel/internal/drive/save      (cached)
+ok      github.com/smackerel/smackerel/internal/api             (cached)
+ok      github.com/smackerel/smackerel/internal/telegram        (cached)
+ok      github.com/smackerel/smackerel/internal/mealplan        (cached)
+... (all packages OK or no test files)
+402 passed, 1 warning in 14.78s   (Python sidecar)
+exit=0
+```
+
+```text
+$ ./smackerel.sh test integration
+--- PASS: TestDriveSaveCanary_IdempotentFolderResolutionAndGraphLinks (0.31s)
+--- PASS: TestMealPlanSaveBackCreatesDriveFileAndDigestLink (0.17s)
+--- PASS: TestTelegramReceiptSaveWritesProviderFileAndArtifactLocation (0.15s)
+ok      github.com/smackerel/smackerel/tests/integration        34.004s
+ok      github.com/smackerel/smackerel/tests/integration/agent  6.786s
+ok      github.com/smackerel/smackerel/tests/integration/drive  13.531s
+exit=0
+```
+
+```text
+$ ./smackerel.sh test e2e
+--- PASS: TestDriveSaveE2E_MealPlanSavedBackAndDigestLinkAvailable (0.54s)
+--- PASS: TestDriveSaveE2E_ConcurrentMissingFolderCreatesExactlyOneFolder (0.45s)
+--- PASS: TestTelegramReceiptSaveReplyShowsDriveFolderAndCorrectionAction (2.13s)
+ok      github.com/smackerel/smackerel/tests/e2e        105.074s
+ok      github.com/smackerel/smackerel/tests/e2e/agent  12.371s
+ok      github.com/smackerel/smackerel/tests/e2e/drive  13.629s
+PASS: go-e2e
+exit=0
+```
+
+DB-level signals (asserted by integration + e2e tests):
+- `drive_folder_resolutions` count for the concurrent target folder = 1 across 12-16 simultaneous callers.
+- `drive_save_requests` row count for the canary idempotency key = 1.
+- `edges` row count where `edge_type='drive_save'` per save request = 1.
+- `meal_plans.provider_url` is populated and matches Save Service ProviderURL after `DriveSaveBack.SavePlan`.
+- Provider fixture `Uploads()` count = 1 per Telegram receipt save (no duplicate uploads).
+
+Concrete test files exercised under this scope:
+
+- `tests/integration/drive/drive_save_canary_test.go`
+- `tests/integration/drive/drive_save_telegram_test.go`
+- `tests/integration/drive/drive_save_mealplan_test.go`
+- `tests/e2e/drive/drive_save_e2e_test.go`
+- `tests/e2e/drive/drive_telegram_save_ui_test.go`
+- `internal/drive/rules/rule_engine_test.go`
+- `internal/drive/save/folder_resolution_test.go`
 
 ### Completion Statement
 
-Scope 5 status is Not Started.
+Scope 5 (Save Rules And Write-Back) is complete. All thirteen DoD items in `scopes.md` are checked with inline evidence (Phase: implement, Command, Exit Code, Claim Source: executed). SCN-038-013, SCN-038-014, and SCN-038-015 each have the planned unit, integration, and e2e tests, all green against the live `smackerel-test` Compose stack (Postgres + NATS + ML sidecar + core). The change set stays inside the documented Change Boundary; extraction/classification internals, retrieval delivery, and non-drive Telegram routes were not modified. SST is preserved: every new env value (`DRIVE_SAVE_PROVIDER_URL_PREFIX`) flows through `config/smackerel.yaml` → `scripts/commands/config.sh` → `config/generated/{dev,test}.env` and is exercised by the foundation canary and `validate_test.go`.
 
 ## Scope 6: Policy And Confirmation
 

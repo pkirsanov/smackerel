@@ -167,6 +167,26 @@ func (s *Store) UpdatePlanTitle(ctx context.Context, planID, title string) error
 	return nil
 }
 
+// UpdatePlanProviderURL records the most recent successful Drive save URL
+// onto the plan row. Spec 038 Scope 5 — exposed via DriveSaveBack so the
+// digest layer can include "Open meal plan in Drive" links inline. The
+// schema column is added by migration 028 with a NOT NULL DEFAULT ” so
+// callers may safely write an empty string to clear the link without
+// violating the constraint.
+func (s *Store) UpdatePlanProviderURL(ctx context.Context, planID, providerURL string) error {
+	tag, err := s.Pool.Exec(ctx,
+		`UPDATE meal_plans SET provider_url = $1, updated_at = NOW() WHERE id = $2`,
+		providerURL, planID,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("plan not found: %s", planID)
+	}
+	return nil
+}
+
 // DeletePlan removes a plan (slots cascade via FK).
 func (s *Store) DeletePlan(ctx context.Context, planID string) error {
 	tag, err := s.Pool.Exec(ctx, `DELETE FROM meal_plans WHERE id = $1`, planID)
