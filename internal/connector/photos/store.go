@@ -552,6 +552,53 @@ func ArtifactID(provider string, providerRef string) string {
 	return "photo:" + provider + ":" + providerRef
 }
 
+// QualityHistogramBucket is one row returned by QualityHistogram.
+type QualityHistogramBucket struct {
+	Bucket string `json:"bucket"`
+	Count  int    `json:"count"`
+}
+
+// QualityHistogram returns confidence buckets for every photo with a
+// classification recorded. Used by /v1/photos/health/quality so the
+// dashboard has live data without depending on the dedicated aesthetic
+// model pipeline (Scope 5).
+func (store *Store) QualityHistogram(ctx context.Context) ([]QualityHistogramBucket, error) {
+	if store == nil || store.pool == nil {
+		return nil, fmt.Errorf("photos: store pool is nil")
+	}
+	rows, err := store.pool.Query(ctx, `
+		SELECT bucket, COUNT(*)::int AS total FROM (
+			SELECT CASE
+				WHEN classification_confidence IS NULL THEN 'unclassified'
+				WHEN classification_confidence >= 0.9 THEN 'excellent'
+				WHEN classification_confidence >= 0.75 THEN 'good'
+				WHEN classification_confidence >= 0.5 THEN 'fair'
+				ELSE 'poor'
+			END AS bucket
+			FROM photos
+			WHERE lifecycle_state::text <> 'deleted'
+		) bucketed
+		GROUP BY bucket
+		ORDER BY bucket
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query quality histogram: %w", err)
+	}
+	defer rows.Close()
+	var buckets []QualityHistogramBucket
+	for rows.Next() {
+		var bucket QualityHistogramBucket
+		if err := rows.Scan(&bucket.Bucket, &bucket.Count); err != nil {
+			return nil, fmt.Errorf("scan quality bucket: %w", err)
+		}
+		buckets = append(buckets, bucket)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate quality buckets: %w", err)
+	}
+	return buckets, nil
+}
+
 func fallbackContentHash(parts ...string) string {
 	h := sha256.Sum256([]byte(strings.Join(parts, ":")))
 	return "sha256:" + hex.EncodeToString(h[:])

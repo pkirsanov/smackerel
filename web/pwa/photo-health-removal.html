@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Photo Health — Removal Review — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/photo-libraries.html" class="logo-link" aria-label="Back to Photo Libraries">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Photo Health: Removal Review</h1>
+  <p class="subtitle">Reviewer-driven archive/delete queue — feature 040 Scope 3.</p>
+
+  <section id="photo-health-removal" class="card" aria-labelledby="photo-health-removal-heading"
+           aria-busy="true" data-endpoint="/v1/photos/health/removal">
+    <h2 id="photo-health-removal-heading">Pending review</h2>
+    <p id="photo-health-removal-status" class="status info" role="status" aria-live="polite">Loading removal queue...</p>
+    <ul id="photo-health-removal-list" class="removal-list"></ul>
+    <div class="removal-actions">
+      <p class="status warning" role="status">No removal happens before <code>/v1/photos/actions/confirm</code> succeeds.</p>
+      <a class="btn-primary" href="/pwa/photo-confirm-action.html">Open confirmation flow</a>
+    </div>
+  </section>
+
+  <script src="/pwa/photo-health-removal.js"></script>
+</body>
+</html>

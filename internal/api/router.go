@@ -286,6 +286,17 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Get("/photos/connectors/{id}", deps.PhotosHandlers.GetConnector)
 					r.Get("/photos/{id}/preview", deps.PhotosHandlers.Preview)
 					r.Get("/photos/{id}", deps.PhotosHandlers.GetPhoto)
+					// Spec 040 Scope 3 — lifecycle, duplicates,
+					// removal, and action-token confirmation.
+					r.Post("/photos/actions/plan", deps.PhotosHandlers.PlanAction)
+					r.Post("/photos/actions/confirm", deps.PhotosHandlers.ConfirmAction)
+					r.Get("/photos/health/lifecycle", deps.PhotosHandlers.HealthLifecycle)
+					r.Get("/photos/health/duplicates", deps.PhotosHandlers.HealthDuplicates)
+					r.Get("/photos/health/duplicates/{id}", deps.PhotosHandlers.HealthDuplicatesGet)
+					r.Post("/photos/health/duplicates/{id}/best-pick", deps.PhotosHandlers.SetClusterBestPick)
+					r.Post("/photos/health/duplicates/{id}/resolve", deps.PhotosHandlers.ResolveCluster)
+					r.Get("/photos/health/removal", deps.PhotosHandlers.HealthRemoval)
+					r.Get("/photos/health/quality", deps.PhotosHandlers.HealthQuality)
 				})
 			}
 
