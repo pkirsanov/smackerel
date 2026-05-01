@@ -61,8 +61,11 @@ pre { background: #f3f4f6; padding: 0.6rem; border-radius: 0.3rem; overflow: aut
       {{end}}
     </select>
   </label>
+  <label>Scenario:
+    <input type="text" name="scenario" value="{{.ScenarioFilter}}" placeholder="recommendation-*" size="32">
+  </label>
   <input type="hidden" name="limit" value="{{.Limit}}">
-  <noscript><button type="submit">Apply</button></noscript>
+  <button type="submit">Apply</button>
 </form>
 <p class="muted">Total matching: {{.Total}} — showing {{len .Rows}} (offset {{.Offset}})</p>
 {{if .Rows}}
@@ -84,8 +87,8 @@ pre { background: #f3f4f6; padding: 0.6rem; border-radius: 0.3rem; overflow: aut
 </tbody>
 </table>
 <p class="pager">
-  {{if gt .Offset 0}}<a href="?outcome={{.OutcomeFilter}}&offset={{.PrevOffset}}&limit={{.Limit}}">&laquo; prev</a>{{end}}
-  {{if gt .Total .NextOffset}}<a href="?outcome={{.OutcomeFilter}}&offset={{.NextOffset}}&limit={{.Limit}}">next &raquo;</a>{{end}}
+  {{if gt .Offset 0}}<a href="?outcome={{.OutcomeFilter}}&scenario={{.ScenarioFilter}}&offset={{.PrevOffset}}&limit={{.Limit}}">&laquo; prev</a>{{end}}
+  {{if gt .Total .NextOffset}}<a href="?outcome={{.OutcomeFilter}}&scenario={{.ScenarioFilter}}&offset={{.NextOffset}}&limit={{.Limit}}">next &raquo;</a>{{end}}
 </p>
 {{else}}
 <p>No traces match the current filter.</p>

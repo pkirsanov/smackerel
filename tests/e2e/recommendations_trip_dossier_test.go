@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -132,5 +133,149 @@ func TestRecommendationsTripDossier_TripContextWatchAttachesRecommendations(t *t
 	}
 	if len(triggered.RecommendationIDs) < 10 {
 		t.Fatalf("recommendation_ids count = %d, want >= 10; body=%s", len(triggered.RecommendationIDs), string(triggerBody))
+	}
+}
+
+// TestRecommendationsTripDossier_RendersGroupedRecommendationBlock proves
+// SCN-039-045 (BS-027 / Scope 5 DoD): the trip dossier page renders a
+// grouped recommendation block per design Component Tree —
+//
+//	TripDossier
+//	  └─ RecommendationGroupByCategory
+//	      └─ DossierRecommendationRow
+//	          └─ VariantGroup (when diversity grouping fired)
+//
+// We reuse the trip-context watch + 10-candidate trigger from the SCN-039-037
+// fixture to seed delivered recommendations, then GET the dossier page and
+// assert the markup contract used by downstream consumers (data-testid attrs,
+// rank rows, group-by-category headings).
+func TestRecommendationsTripDossier_RendersGroupedRecommendationBlock(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 120*time.Second)
+
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	name := "trip-dossier-render-" + suffix
+	tripID := "trip_render_" + suffix
+
+	createResp, err := apiPostJSON(cfg, "/api/recommendations/watches", map[string]any{
+		"name":                  name,
+		"kind":                  "trip_context",
+		"enabled":               true,
+		"scope":                 map[string]any{"category": "place"},
+		"filters":               map[string]any{"category": "place"},
+		"allowed_sources":       []string{},
+		"schedule":              map[string]any{"kind": "trip_window"},
+		"max_alerts_per_window": 10,
+		"alert_window_seconds":  86400,
+		"cooldown_seconds":      0,
+		"quiet_hours":           map[string]any{},
+		"location_precision":    "city",
+		"delivery_channel":      "telegram",
+		"queue_policy":          "drop",
+		"freshness_seconds":     86400,
+		"consent": map[string]any{
+			"scope":            map[string]any{"category": "place"},
+			"sources":          []string{},
+			"delivery_channel": "telegram",
+			"max_alerts":       10,
+			"window_seconds":   86400,
+			"precision":        "city",
+			"hard_constraints": []string{},
+		},
+		"consent_confirmation": map[string]any{
+			"scope_named":       true,
+			"sources_named":     true,
+			"rate_limit_named":  true,
+			"precision_named":   true,
+			"delivery_named":    true,
+			"constraints_named": true,
+			"sponsored_named":   true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create dossier-render watch failed: %v", err)
+	}
+	createBody, err := readBody(createResp)
+	if err != nil {
+		t.Fatalf("read create body: %v", err)
+	}
+	if createResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create watch status = %d, want 201; body=%s", createResp.StatusCode, string(createBody))
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(createBody, &created); err != nil {
+		t.Fatalf("parse create body: %v; body=%s", err, string(createBody))
+	}
+	if created.ID == "" {
+		t.Fatalf("created watch missing id: %s", string(createBody))
+	}
+	t.Cleanup(func() {
+		_, _ = httpDelete(cfg, "/api/recommendations/watches/"+created.ID+"?confirm=yes")
+	})
+
+	tripStart := time.Now().UTC().Add(7 * 24 * time.Hour).Format(time.RFC3339)
+	candidates := []any{}
+	for i := 0; i < 4; i++ {
+		candidates = append(candidates, map[string]any{
+			"canonical_key": "place:trip_render_" + suffix + "_" + strconv.Itoa(i),
+			"title":         "Trip dossier render candidate " + strconv.Itoa(i),
+			"provider_id":   "fixture_trip_provider",
+			"category":      "place",
+		})
+	}
+	triggerResp, err := apiPostJSON(cfg, "/api/recommendations/watches/"+created.ID+"/trigger", map[string]any{
+		"trigger_kind": "trip_window",
+		"trigger_context": map[string]any{
+			"trip_id":    tripID,
+			"trip_start": tripStart,
+			"candidates": candidates,
+		},
+	})
+	if err != nil {
+		t.Fatalf("trigger render watch failed: %v", err)
+	}
+	triggerBody, err := readBody(triggerResp)
+	if err != nil {
+		t.Fatalf("read trigger body: %v", err)
+	}
+	if triggerResp.StatusCode != http.StatusOK {
+		t.Fatalf("trigger status = %d, want 200; body=%s", triggerResp.StatusCode, string(triggerBody))
+	}
+	var triggered struct {
+		Delivered int `json:"delivered"`
+	}
+	if err := json.Unmarshal(triggerBody, &triggered); err != nil {
+		t.Fatalf("parse trigger body: %v; body=%s", err, string(triggerBody))
+	}
+	if triggered.Delivered < 1 {
+		t.Fatalf("delivered = %d, expected >= 1 trip-context recommendation; body=%s", triggered.Delivered, string(triggerBody))
+	}
+
+	// Render the dossier page.
+	dossierResp, err := apiGet(cfg, "/recommendations/trip-dossier/"+tripID)
+	if err != nil {
+		t.Fatalf("dossier page GET failed: %v", err)
+	}
+	if dossierResp.StatusCode != http.StatusOK {
+		body, _ := readBody(dossierResp)
+		t.Fatalf("dossier page status = %d, want 200; body=%s", dossierResp.StatusCode, string(body))
+	}
+	dossierBody, err := readBody(dossierResp)
+	if err != nil {
+		t.Fatalf("read dossier body: %v", err)
+	}
+	html := string(dossierBody)
+	wantMarkers := []string{
+		`data-testid="trip-dossier"`,
+		`data-trip-id="` + tripID + `"`,
+		`data-testid="recommendation-group"`,
+		`data-testid="dossier-recommendation-row"`,
+	}
+	for _, marker := range wantMarkers {
+		if !strings.Contains(html, marker) {
+			t.Fatalf("dossier page HTML missing marker %q; got: %s", marker, html)
+		}
 	}
 }

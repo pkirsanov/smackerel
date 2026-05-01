@@ -10,7 +10,9 @@ import (
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/recommendation"
 	"github.com/smackerel/smackerel/internal/recommendation/location"
+	"github.com/smackerel/smackerel/internal/recommendation/policy"
 	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
+	"github.com/smackerel/smackerel/internal/recommendation/quality"
 	"github.com/smackerel/smackerel/internal/recommendation/rank"
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
 )
@@ -311,6 +313,16 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 
 	recommendations := []recstore.RecommendationInput{}
 	constraints := hardConstraintsFromQuery(query)
+	policyOpts := policy.SponsoredOptions{
+		PromotionsEnabled: e.cfg.Policy.SponsoredPromotionsEnabled,
+		QueryOptIn:        false,
+		WatchOptIn:        false,
+	}
+	restrictedCategories := append([]string(nil), e.cfg.Policy.RestrictedCategories...)
+	// Phase A: walk ranked candidates, drop blocked ones, build a list of
+	// eligible-with-decisions entries that diversity grouping can then thin
+	// before we materialize the final top-K recommendations.
+	eligible := []reactiveEligibleEntry{}
 	for _, rankedCandidate := range ranked {
 		candidate := candidateByLocalID(candidates, rankedCandidate.CandidateID)
 		if candidate == nil {
@@ -332,35 +344,122 @@ func (e *Engine) Run(ctx context.Context, req Request) (recstore.RenderedRequest
 			})
 			continue
 		}
-		policyDecisions := policyDecisionsFor(*candidate, constraints)
+		factForCandidate := firstFactForCandidate(providerFacts, *candidate)
+		policyDecisions := policyDecisionsFor(*candidate, factForCandidate, constraints, policyOpts, restrictedCategories)
 		appendTool("recommendation_apply_policy", "read", map[string]any{"candidate_id": candidate.LocalID}, map[string]any{"decisions": policyDecisions})
-		if hasBlockingDecision(policyDecisions) {
+		if blockReason := blockingDecisionReason(policyDecisions); blockReason != "" {
+			recommendations = append(recommendations, recstore.RecommendationInput{
+				CandidateLocalID: candidate.LocalID,
+				Status:           "withheld",
+				StatusReason:     blockReason,
+				ScoreBreakdown:   rankedCandidate.ScoreBreakdown,
+				Rationale:        []string{blockReason},
+				GraphSignalRefs:  []string{},
+				PolicyDecisions:  policyDecisions,
+				QualityDecisions: []map[string]any{{"kind": "policy_block", "outcome": "withheld", "reason": blockReason}},
+				DeliveryChannel:  req.Source,
+			})
 			continue
 		}
-		qualityDecisions := qualityDecisionsFor(rankedCandidate)
+		qualityDecisions := qualityDecisionsFor(rankedCandidate, *candidate)
 		appendTool("recommendation_apply_quality_guard", "read", map[string]any{"candidate_id": candidate.LocalID}, map[string]any{"decisions": qualityDecisions})
 
 		rationale := rationaleFor(*candidate, rankedCandidate.GraphSignalRefs, preferenceKey, activeCorrection, boostBlocked)
+		eligible = append(eligible, reactiveEligibleEntry{
+			candidate:   *candidate,
+			ranked:      rankedCandidate,
+			policyDecs:  policyDecisions,
+			qualityDecs: qualityDecisions,
+			rationale:   rationale,
+			chainKey:    quality.ChainKeyOf(candidate.CanonicalFact, candidate.Title),
+		})
+	}
+
+	// Phase B: diversity grouping — at most one same-chain candidate keeps
+	// its top-K slot; the rest are recorded as variants on the parent and
+	// persisted as withheld with reason `withheld:diversity-grouped`.
+	diversityInput := make([]quality.CandidateForDiversity, 0, len(eligible))
+	for _, entry := range eligible {
+		diversityInput = append(diversityInput, quality.CandidateForDiversity{
+			LocalID:      entry.candidate.LocalID,
+			CanonicalKey: entry.candidate.CanonicalKey,
+			Title:        entry.candidate.Title,
+			ChainKey:     entry.chainKey,
+		})
+	}
+	diversity := quality.GroupNearDuplicates(diversityInput)
+	keptOrder := make(map[string]int, len(diversity.KeptOrder))
+	for i, id := range diversity.KeptOrder {
+		keptOrder[id] = i
+	}
+
+	// Phase C: emit top-K kept candidates + persist diversity-withheld variants.
+	parentDeliveredOrder := map[string]int{} // parent local id -> rank position
+	for _, id := range diversity.KeptOrder {
+		entry, found := findEligible(eligible, id)
+		if !found {
+			continue
+		}
+		variants := diversity.VariantsByParent[id]
+		qualityDecs := append([]map[string]any(nil), entry.qualityDecs...)
+		rationale := append([]string(nil), entry.rationale...)
+		if len(variants) > 0 {
+			qualityDecs = append(qualityDecs, quality.VariantsDecision(variants))
+			rationale = append(rationale, fmt.Sprintf("Grouped %d same-chain branches under this card (variants disclosed)", len(variants)))
+			appendTool("recommendation_apply_quality_guard", "read", map[string]any{"candidate_id": entry.candidate.LocalID, "guard": "diversity"}, map[string]any{"variant_count": len(variants)})
+		}
 		recommendations = append(recommendations, recstore.RecommendationInput{
-			CandidateLocalID: candidate.LocalID,
-			RankPosition:     len(recommendations) + 1,
+			CandidateLocalID: entry.candidate.LocalID,
+			RankPosition:     len(parentDeliveredOrder) + 1,
 			Status:           "delivered",
 			StatusReason:     "eligible",
-			ScoreBreakdown:   rankedCandidate.ScoreBreakdown,
+			ScoreBreakdown:   entry.ranked.ScoreBreakdown,
 			Rationale:        rationale,
-			GraphSignalRefs:  append([]string(nil), rankedCandidate.GraphSignalRefs...),
-			PolicyDecisions:  policyDecisions,
-			QualityDecisions: qualityDecisions,
+			GraphSignalRefs:  append([]string(nil), entry.ranked.GraphSignalRefs...),
+			PolicyDecisions:  entry.policyDecs,
+			QualityDecisions: qualityDecs,
 			DeliveryChannel:  req.Source,
 		})
-		if len(recommendations) == resultCount {
+		parentDeliveredOrder[entry.candidate.LocalID] = len(parentDeliveredOrder)
+		if len(parentDeliveredOrder) == resultCount {
 			break
 		}
 	}
+	// Persist variants whose parent landed in top-K so audit can list them.
+	for variantID, parentID := range diversity.ParentByVariant {
+		if _, parentDelivered := parentDeliveredOrder[parentID]; !parentDelivered {
+			continue
+		}
+		entry, found := findEligible(eligible, variantID)
+		if !found {
+			continue
+		}
+		recommendations = append(recommendations, recstore.RecommendationInput{
+			CandidateLocalID: entry.candidate.LocalID,
+			Status:           "withheld",
+			StatusReason:     "withheld:diversity-grouped",
+			ScoreBreakdown:   entry.ranked.ScoreBreakdown,
+			Rationale:        []string{"Grouped under same-chain parent " + parentID},
+			GraphSignalRefs:  []string{},
+			PolicyDecisions:  entry.policyDecs,
+			QualityDecisions: append(entry.qualityDecs, map[string]any{"kind": "diversity", "outcome": "variant_withheld", "reason": "same-chain", "parent_local_id": parentID}),
+			DeliveryChannel:  req.Source,
+		})
+	}
 	appendTool("recommendation_apply_quality_guard", "read", map[string]any{"delivered_count": len(recommendations)}, map[string]any{"status": "complete"})
 
+	// Status reflects whether at least one recommendation was actually
+	// delivered. Withheld / diversity-grouped / suppressed entries are
+	// audit rows and MUST NOT promote a request from no_eligible to
+	// delivered (BS-029 / no silent relaxation when no candidate qualifies).
+	deliveredCount := 0
+	for _, rec := range recommendations {
+		if rec.Status == "delivered" {
+			deliveredCount++
+		}
+	}
 	status := "delivered"
-	if len(recommendations) == 0 {
+	if deliveredCount == 0 {
 		status = "no_eligible"
 	}
 	appendTool("recommendation_persist_outcome", "write", map[string]any{"status": status}, map[string]any{"candidate_count": len(candidates), "recommendation_count": len(recommendations)})
@@ -474,7 +573,16 @@ func mergeFact(canonicalFact map[string]any, fact recstore.ProviderFactInput) {
 	providerIDs, _ := canonicalFact["provider_ids"].([]string)
 	providerIDs = append(providerIDs, fact.ProviderID)
 	canonicalFact["provider_ids"] = providerIDs
-	for _, key := range []string{"provider_score", "quiet", "vegetarian", "open_now", "opening_hours", "source_conflict", "canonical_url", "distance_basis", "distance_label"} {
+	for _, key := range []string{
+		"provider_score", "quiet", "vegetarian", "open_now", "opening_hours",
+		"source_conflict", "canonical_url", "distance_basis", "distance_label",
+		// Diversity grouping inputs (BS-027 / SCN-039-043).
+		"chain_id", "chain_name",
+		// Total-cost transparency inputs (BS-031 / SCN-039-044).
+		"headline_price", "shipping_cost", "shipping_known",
+		"return_policy", "return_policy_known", "taxes_included",
+		"total_cost", "cheapest_claimed",
+	} {
 		if value, ok := fact.NormalizedFact[key]; ok {
 			if _, exists := canonicalFact[key]; !exists || key == "source_conflict" {
 				canonicalFact[key] = value
@@ -546,8 +654,40 @@ func hardConstraintsFromQuery(query string) hardConstraints {
 	}
 }
 
-func policyDecisionsFor(candidate recstore.CandidateInput, constraints hardConstraints) []map[string]any {
+func policyDecisionsFor(candidate recstore.CandidateInput, fact recstore.ProviderFactInput, constraints hardConstraints, sponsoredOpts policy.SponsoredOptions, restrictedCategories []string) []map[string]any {
 	decisions := []map[string]any{{"kind": "consent", "outcome": "allow", "reason": "reactive-request"}}
+	// Sponsored guard runs first so the renderer can label the candidate
+	// even when other guards later allow it.
+	for _, decision := range policy.EvaluateSponsored(fact.SponsoredState, sponsoredOpts) {
+		decisions = append(decisions, map[string]any{
+			"kind":    decision.Kind,
+			"outcome": decision.Outcome,
+			"reason":  decision.Reason,
+		})
+	}
+	// Restricted-category guard withholds candidates that match the user's
+	// blocked or restricted category list with a category-level reason.
+	if restrictedDecision := policy.EvaluateRestricted(fact.RestrictedFlags, restrictedCategories); restrictedDecision.Kind != "" {
+		decisions = append(decisions, map[string]any{
+			"kind":    restrictedDecision.Kind,
+			"outcome": restrictedDecision.Outcome,
+			"reason":  restrictedDecision.Reason,
+		})
+		if restrictedDecision.Outcome == "withhold" {
+			return decisions
+		}
+	}
+	// Safety/recall guard withholds candidates carrying any safety advisory.
+	if safetyDecision := policy.EvaluateSafety(fact.RestrictedFlags); safetyDecision.Kind != "" {
+		decisions = append(decisions, map[string]any{
+			"kind":    safetyDecision.Kind,
+			"outcome": safetyDecision.Outcome,
+			"reason":  safetyDecision.Reason,
+		})
+		if safetyDecision.Outcome == "withhold" {
+			return decisions
+		}
+	}
 	if constraints.Vegetarian {
 		vegetarian, _ := candidate.CanonicalFact["vegetarian"].(bool)
 		if !vegetarian || strings.Contains(strings.ToLower(candidate.Title), "pork") {
@@ -568,21 +708,80 @@ func policyDecisionsFor(candidate recstore.CandidateInput, constraints hardConst
 
 func hasBlockingDecision(decisions []map[string]any) bool {
 	for _, decision := range decisions {
-		if outcome, _ := decision["outcome"].(string); outcome == "block" {
+		outcome, _ := decision["outcome"].(string)
+		if outcome == "block" || outcome == "withhold" {
 			return true
 		}
 	}
 	return false
 }
 
-func qualityDecisionsFor(candidate rank.RankedCandidate) []map[string]any {
+// blockingDecisionReason returns the first block/withhold reason found in
+// decisions, or empty string when none is present.
+func blockingDecisionReason(decisions []map[string]any) string {
+	for _, decision := range decisions {
+		outcome, _ := decision["outcome"].(string)
+		if outcome == "block" || outcome == "withhold" {
+			reason, _ := decision["reason"].(string)
+			if reason == "" {
+				return outcome
+			}
+			return reason
+		}
+	}
+	return ""
+}
+
+func qualityDecisionsFor(candidate rank.RankedCandidate, ci recstore.CandidateInput) []map[string]any {
 	decisions := []map[string]any{{"kind": "provider_fact_ref", "outcome": "allow", "reason": "ranked-candidate-has-provider-fact"}}
 	if candidate.Confidence == "low" {
 		decisions = append(decisions, map[string]any{"kind": "confidence", "outcome": "disclose", "reason": "low-confidence"})
 	} else {
 		decisions = append(decisions, map[string]any{"kind": "confidence", "outcome": "allow", "reason": candidate.Confidence})
 	}
+	// Total-cost transparency disclosures (BS-031 / SCN-039-044).
+	totalCostFacts := quality.TotalCostFactsFromMap(ci.CanonicalFact)
+	decisions = append(decisions, quality.EvaluateTotalCost(totalCostFacts)...)
 	return decisions
+}
+
+// firstFactForCandidate returns the first persisted provider fact whose
+// LocalID is referenced by the candidate. When no match is found a
+// zero-valued ProviderFactInput is returned so guard callers can still
+// inspect the (empty) sponsored_state and restricted_flags safely.
+func firstFactForCandidate(facts []recstore.ProviderFactInput, candidate recstore.CandidateInput) recstore.ProviderFactInput {
+	if len(candidate.ProviderFactLocalIDs) == 0 {
+		return recstore.ProviderFactInput{RestrictedFlags: map[string]any{}, Attribution: map[string]any{}}
+	}
+	for _, factID := range candidate.ProviderFactLocalIDs {
+		for _, fact := range facts {
+			if fact.LocalID == factID {
+				return fact
+			}
+		}
+	}
+	return recstore.ProviderFactInput{RestrictedFlags: map[string]any{}, Attribution: map[string]any{}}
+}
+
+// reactiveEligibleEntry is the per-candidate working record built by the
+// reactive engine after policy guards but before diversity grouping.
+type reactiveEligibleEntry struct {
+	candidate   recstore.CandidateInput
+	ranked      rank.RankedCandidate
+	policyDecs  []map[string]any
+	qualityDecs []map[string]any
+	rationale   []string
+	chainKey    string
+}
+
+// findEligible returns the eligible entry whose candidate matches localID.
+func findEligible(entries []reactiveEligibleEntry, localID string) (reactiveEligibleEntry, bool) {
+	for _, entry := range entries {
+		if entry.candidate.LocalID == localID {
+			return entry, true
+		}
+	}
+	return reactiveEligibleEntry{}, false
 }
 
 func rationaleFor(candidate recstore.CandidateInput, graphRefs []string, preferenceKey string, correction rank.PreferenceCorrection, boostBlocked bool) []string {

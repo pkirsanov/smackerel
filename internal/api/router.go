@@ -145,6 +145,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Get("/preferences", deps.RecommendationHandlers.ListPreferences)
 					r.Post("/preferences/{key}/corrections", deps.RecommendationHandlers.CreatePreferenceCorrection)
 					r.Delete("/preferences/{key}/corrections/{correctionID}", deps.RecommendationHandlers.RevokePreferenceCorrection)
+					r.Get("/providers", deps.RecommendationHandlers.ListProviders)
 					r.Get("/{id}/why", deps.RecommendationHandlers.GetWhy)
 					r.Post("/{id}/feedback", deps.RecommendationHandlers.RecordFeedback)
 					r.Get("/{id}", deps.RecommendationHandlers.GetRecommendation)
@@ -202,6 +203,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Delete("/recommendations/watches/{id}", deps.WebHandler.RecommendationWatchDeleteAction)
 			r.Post("/recommendations/{id}/feedback", deps.WebHandler.RecommendationFeedback)
 			r.Get("/recommendations/{id}", deps.WebHandler.RecommendationDetail)
+			r.Get("/recommendations/trip-dossier/{trip_id}", deps.WebHandler.TripDossierPage)
 
 			// Knowledge layer web routes
 			r.Get("/knowledge", deps.WebHandler.KnowledgeDashboard)

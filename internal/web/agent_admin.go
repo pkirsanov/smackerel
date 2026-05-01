@@ -76,19 +76,21 @@ func (h *AgentAdminHandler) TracesIndex(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "unknown outcome class", http.StatusBadRequest)
 		return
 	}
+	scenario := r.URL.Query().Get("scenario")
 	limit := parsePositiveInt(r.URL.Query().Get("limit"), 50, 1000)
 	offset := parseNonNegativeInt(r.URL.Query().Get("offset"), 0)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10_000_000_000) // 10s
 	defer cancel()
 
-	rows, err := agent.ListTraces(ctx, h.Pool, agent.TraceListFilter{Outcome: outcome}, limit, offset)
+	filter := agent.TraceListFilter{Outcome: outcome, ScenarioPattern: scenario}
+	rows, err := agent.ListTraces(ctx, h.Pool, filter, limit, offset)
 	if err != nil {
 		slog.Error("agent admin: list traces failed", "error", err)
 		http.Error(w, "list traces failed", http.StatusInternalServerError)
 		return
 	}
-	total, err := agent.CountTraces(ctx, h.Pool, agent.TraceListFilter{Outcome: outcome})
+	total, err := agent.CountTraces(ctx, h.Pool, filter)
 	if err != nil {
 		slog.Warn("agent admin: count traces failed", "error", err)
 		total = len(rows)
@@ -103,6 +105,7 @@ func (h *AgentAdminHandler) TracesIndex(w http.ResponseWriter, r *http.Request) 
 		"Rows":           summaries,
 		"Total":          total,
 		"OutcomeFilter":  outcome,
+		"ScenarioFilter": scenario,
 		"OutcomeClasses": render.AllOutcomeClasses(),
 		"Limit":          limit,
 		"Offset":         offset,

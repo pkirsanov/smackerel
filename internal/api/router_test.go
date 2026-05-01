@@ -65,6 +65,9 @@ func (m *mockWebUI) RecommendationWatchSilenceAction(w http.ResponseWriter, r *h
 func (m *mockWebUI) RecommendationWatchDeleteAction(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
+func (m *mockWebUI) TripDossierPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
 func (m *mockWebUI) SyncConnectorHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
