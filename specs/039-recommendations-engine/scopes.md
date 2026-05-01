@@ -41,16 +41,16 @@ This plan delivers feature 039 in six sequential, vertical scopes. Each scope is
 |---|-------|------------|----------|--------|
 | 01 | foundation-schema | — | DB, internal/recommendation, config, /status | Done |
 | 02 | reactive-place-recommendation | 01 | API, web, telegram, scenario, providers | Done |
-| 03 | feedback-suppression-why | 02 | API, web, scenario, store | In Progress |
-| 04 | watches-and-scheduler | 03 | API, web, telegram, scheduler, scenario | Not Started |
-| 05 | policy-quality-and-trip-dossier | 04 | API, web, scenario, admin/agent/traces, trip dossier | Not Started |
-| 06 | observability-stress-and-cutover | 05 | metrics, logs, config validate, docs, stress | Not Started |
+| 03 | feedback-suppression-why | 02 | API, web, scenario, store | Done |
+| 04 | watches-and-scheduler | 03 | API, web, telegram, scheduler, scenario | Done |
+| 05 | policy-quality-and-trip-dossier | 04 | API, web, scenario, admin/agent/traces, trip dossier | Done |
+| 06 | observability-stress-and-cutover | 05 | metrics, logs, config validate, docs, stress | Done |
 
 ---
 
 ## Scope 1: scope-01-foundation-schema
 
-**Status:** In Progress
+**Status:** Done
 **Depends On:** —
 
 ### Gherkin Scenarios
