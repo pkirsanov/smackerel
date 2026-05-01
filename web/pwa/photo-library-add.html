@@ -17,7 +17,7 @@
   <h1>Photo Libraries</h1>
   <p class="subtitle">Connect Immich</p>
 
-  <form id="photo-library-add" class="card" aria-labelledby="photo-library-add-heading">
+  <form id="photo-library-add" class="card" aria-labelledby="photo-library-add-heading" data-test-endpoint="/v1/photos/connectors/test" data-connect-endpoint="/v1/photos/connectors">
     <h2 id="photo-library-add-heading">Immich</h2>
     <label class="field-label" for="base-url">Base URL</label>
     <input id="base-url" name="base_url" autocomplete="url" required>
