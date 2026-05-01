@@ -7,7 +7,7 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "scope-02-immich-connect-scan-search",
+    "currentScope": "scope-03-lifecycle-duplicates-removal",
     "runStartedAt": "2026-04-27T19:50:00Z",
     "completedPhaseClaims": [
       {
@@ -28,6 +28,13 @@
         "timestamp": "2026-04-30T08:14:49Z",
         "scope": "Scope 1: Photo Platform Foundation",
         "summary": "Completed Scope 1 implementation: provider-neutral photo domain/store, stable-signal versus LLM decision boundary, photos SST config flow, PHOTOS NATS stream/subjects across Go/Python/JSON, ML photo contract validators and live canary, photo schema migration, read-only photo API, integration privacy/canary tests, focused photo e2e, and broad repo gates. Verified via ./smackerel.sh config generate, ./smackerel.sh config generate --env test, ./smackerel.sh check, ./smackerel.sh format --check, ./smackerel.sh lint, ./smackerel.sh build, ./smackerel.sh test unit, COMPOSE_PROGRESS=plain ./smackerel.sh test integration, COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI, and COMPOSE_PROGRESS=plain ./smackerel.sh test e2e. certification.* untouched."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-01T01:16:00Z",
+        "scope": "Scope 2: Immich Connect, Scan, And Search",
+        "summary": "Completed Scope 2 implementation: Immich provider adapter (connect/test, capability probe, scope enumeration, scanner/monitor/skip-ledger, fetch, writer surfaces incl. AddToAlbum/Tag/Favorite/Archive/Delete/Upload/RenameFaceCluster), fail-loud SST validation for photos.providers.immich credentials, /v1/photos/connectors[/test|/{id}], /v1/photos/search, /v1/photos/{id} API family, and PWA Screens 1-5 (connectors list, add wizard, connector detail, search results, photo detail) consuming the live API. Fixed pre-existing baseline failures: go vet 'assignment copies lock value' at internal/connector/photos/adapters/immich/immich.go:140 (replaced probeClient := *client with parameterized buildImmichRequest helper) and the two TestPhotosPWA_E2E_* assertions for HTML endpoint declarations. Verified via go vet ./... (exit 0), ./smackerel.sh check, ./smackerel.sh format --check, ./smackerel.sh lint, ./smackerel.sh test unit (Go all ok, Python 402 passed), COMPOSE_PROGRESS=plain ./smackerel.sh test integration (TestPhotosImmich_ConnectScopeAndScanLiveProvider, TestPhotosImmich_IncrementalChangesUpdateState, TestPhotosImmich_SkipLedgerVisibleAndRetryable PASS), and COMPOSE_PROGRESS=plain ./smackerel.sh test e2e (35/35 shell + Go e2e packages ok including 5 TestPhotos*_E2E_* tests). certification.* untouched."
       }
     ],
     "pendingTransitionRequests": []
@@ -35,7 +42,8 @@
   "certification": {
     "status": "in_progress",
     "completedScopes": [
-      "scope-01-photo-platform-foundation"
+      "scope-01-photo-platform-foundation",
+      "scope-02-immich-connect-scan-search"
     ],
     "certifiedCompletedPhases": [
       {
@@ -43,6 +51,13 @@
         "agent": "bubbles.validate",
         "scope": "scope-01-photo-platform-foundation",
         "certifiedAt": "2026-04-30T08:23:21Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-02-immich-connect-scan-search",
+        "certifiedAt": "2026-04-30T00:00:00Z",
         "mode": "full-delivery"
       }
     ],
@@ -59,11 +74,11 @@
       {
         "scope": 2,
         "name": "scope-02-immich-connect-scan-search",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": ["scope-01-photo-platform-foundation"],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-04-30T00:00:00Z"
       },
       {
         "scope": 3,
@@ -171,12 +186,21 @@
       "startedAt": "2026-04-30T08:21:00Z",
       "completedAt": "2026-04-30T08:23:21Z",
       "summary": "Certified Scope 1: Photo Platform Foundation only. Artifact lint passed. The traceability guard has no scope-only option; Scope 1 rows passed scenario-to-row, test-file, report-evidence, and DoD-fidelity checks, while remaining failures were missing linked test files for Scopes 2-5 while those scopes are Not Started. Full-feature state guard remains red for whole-feature completion, so feature certification stays in_progress and execution advances to Scope 2 implement."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-01T02:46:00Z",
+      "completedAt": "2026-05-01T02:46:10Z",
+      "summary": "Certified Scope 2: Immich Connect, Scan, And Search. Verified evidence freshness on HEAD e8314199: ./smackerel.sh check (Config in sync with SST, env_file drift OK, scenario-lint OK), ./smackerel.sh format --check (48 files already formatted), ./smackerel.sh lint (All checks passed!, Web validation passed), ./smackerel.sh test unit (Go all packages ok including internal/connector/photos and internal/connector/photos/adapters/immich; Python 402 passed, 1 warning), and go vet ./... (exit 0, prior immich.go:140 warning resolved). Did not re-run full E2E because the just-implemented run on the same SHA was already green (35/35 shell + Go e2e packages ok including 5 TestPhotos*_E2E_* tests). Artifact lint passed (1 deprecated-field warning on scopeProgress is feature-wide, not Scope 2 specific). Traceability guard remaining 26 failures are pre-existing Scope 3/4/5 (Not Started) territory. Certification of Scope 2 advances execution to Scope 3 implement; feature certification stays in_progress until Scopes 3-5 complete."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-30T08:23:21Z",
+  "lastUpdatedAt": "2026-05-01T02:46:10Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
