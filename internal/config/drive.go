@@ -21,6 +21,7 @@ type DriveConfig struct {
 	Telegram       DriveTelegramConfig
 	Limits         DriveLimitsConfig
 	RateLimits     DriveRateLimitsConfig
+	Save           DriveSaveConfig
 	Providers      DriveProvidersConfig
 }
 
@@ -63,6 +64,14 @@ type DriveLimitsConfig struct {
 
 type DriveRateLimitsConfig struct {
 	RequestsPerMinute int
+}
+
+// DriveSaveConfig captures the Save Rules and Write-Back configuration
+// added in spec 038 Scope 5. ProviderURLPrefix is required even in dev so
+// the framework's SST guard can prove the value flows from
+// config/smackerel.yaml all the way to runtime.
+type DriveSaveConfig struct {
+	ProviderURLPrefix string
 }
 
 type DriveProvidersConfig struct {
@@ -164,6 +173,12 @@ func loadDriveConfig() (DriveConfig, error) {
 
 	// rate_limits
 	cfg.RateLimits.RequestsPerMinute, errs = parsePositiveInt("DRIVE_RATE_LIMITS_REQUESTS_PER_MINUTE", errs)
+
+	// save (spec 038 Scope 5)
+	cfg.Save.ProviderURLPrefix = os.Getenv("DRIVE_SAVE_PROVIDER_URL_PREFIX")
+	if cfg.Save.ProviderURLPrefix == "" {
+		errs = append(errs, "DRIVE_SAVE_PROVIDER_URL_PREFIX")
+	}
 
 	// providers.google
 	cfg.Providers.Google.OAuthClientID = os.Getenv("DRIVE_PROVIDER_GOOGLE_OAUTH_CLIENT_ID")

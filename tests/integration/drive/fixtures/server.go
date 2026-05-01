@@ -25,9 +25,11 @@ package fixtures
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -71,9 +73,30 @@ type Server struct {
 	// /drive/v3/about. Tokens are minted by /oauth2/token.
 	tokens        map[string]string
 	files         map[string]File
+	folders       map[string]string // folder_path -> provider folder id
+	folderCreated map[string]int    // folder_path -> create count (Spec 038 Scope 5 BS-016 audit)
+	uploads       []Upload
 	changes       []Change
 	requestCounts map[string]int
 	outageStatus  int
+	// uploadDelay simulates concurrent-upload latency. When > 0, every
+	// folder-create call sleeps for the configured duration before
+	// inserting into the folders map. Tests that exercise BS-016
+	// (concurrent missing-folder saves) set this to widen the race
+	// window so the unique-constraint guard is exercised.
+	folderCreateDelay time.Duration
+}
+
+// Upload is a record of a successful POST /upload/drive/v3/files (or POST
+// /drive/v3/files?uploadType=resumable) call. Tests assert provider-side
+// write activity through Server.Uploads().
+type Upload struct {
+	ProviderFileID string
+	FolderID       string
+	Title          string
+	MimeType       string
+	SizeBytes      int64
+	Bytes          []byte
 }
 
 // NewServer constructs and starts a fixture server. Callers MUST defer
@@ -83,6 +106,8 @@ func NewServer() *Server {
 		codes:         make(map[string]string),
 		tokens:        make(map[string]string),
 		files:         make(map[string]File),
+		folders:       make(map[string]string),
+		folderCreated: make(map[string]int),
 		requestCounts: make(map[string]int),
 	}
 	mux := http.NewServeMux()
@@ -92,6 +117,8 @@ func NewServer() *Server {
 	mux.HandleFunc("/drive/v3/files", s.handleFiles)
 	mux.HandleFunc("/drive/v3/files/", s.handleFileBytes)
 	mux.HandleFunc("/drive/v3/changes", s.handleChanges)
+	mux.HandleFunc("/upload/drive/v3/files", s.handleUpload)
+	mux.HandleFunc("/drive/v3/folders", s.handleFolders)
 	s.Server = httptest.NewServer(mux)
 	return s
 }
@@ -385,4 +412,206 @@ func (file File) toGoogleJSON() map[string]any {
 			"smackerel_folder_path": strings.Join(file.FolderPath, "/"),
 		},
 	}
+}
+
+// SetFolderCreateDelay slows folder-create responses to widen the BS-016
+// race window in tests that exercise concurrent missing-folder saves.
+func (s *Server) SetFolderCreateDelay(d time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.folderCreateDelay = d
+}
+
+// FolderCreateCount returns how many distinct create attempts were issued
+// for the supplied folder path. The fixture honors the first writer, so
+// values >1 prove the BS-016 contract has been enforced cross-process by
+// drive_folder_resolutions (the unique constraint coalesces them to one).
+func (s *Server) FolderCreateCount(folderPath string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.folderCreated[folderPath]
+}
+
+// Uploads returns a copy of the recorded upload audit log.
+func (s *Server) Uploads() []Upload {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Upload, len(s.uploads))
+	copy(out, s.uploads)
+	return out
+}
+
+// FolderID returns the provider folder id assigned to the supplied path.
+// Tests use this to assert "exactly one folder created" cross-call.
+func (s *Server) FolderID(folderPath string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id, ok := s.folders[folderPath]
+	return id, ok
+}
+
+// handleFolders services Spec 038 Scope 5 folder lookup + create. The real
+// Google Drive API uses /drive/v3/files with a metadata query; the fixture
+// exposes a dedicated /drive/v3/folders surface so the client can probe and
+// create without conflating with file uploads. Contract:
+//
+//	GET  /drive/v3/folders?path={folder_path}
+//	     → 200 {"id": "<folder-id>"} when the path exists, 404 otherwise.
+//	POST /drive/v3/folders          (JSON body {"path": "..."})
+//	     → 200 {"id": "<folder-id>"} after recording the create attempt.
+//	     → If the path already exists, returns the existing folder id and
+//	       increments the create counter (proves the BS-016 audit trail
+//	       even when our resolver loses the race).
+func (s *Server) handleFolders(w http.ResponseWriter, r *http.Request) {
+	if s.maybeOutage(w, r) {
+		return
+	}
+	s.count("/drive/v3/folders")
+	if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		path := r.URL.Query().Get("path")
+		if path == "" {
+			http.Error(w, `{"error":"missing_path"}`, http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		id, ok := s.folders[path]
+		s.mu.Unlock()
+		if !ok {
+			http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"id": id})
+	case http.MethodPost:
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, `{"error":"bad_body"}`, http.StatusBadRequest)
+			return
+		}
+		var req struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil || req.Path == "" {
+			http.Error(w, `{"error":"bad_json"}`, http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		delay := s.folderCreateDelay
+		s.mu.Unlock()
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		s.mu.Lock()
+		s.folderCreated[req.Path] = s.folderCreated[req.Path] + 1
+		if existing, ok := s.folders[req.Path]; ok {
+			s.mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]string{"id": existing})
+			return
+		}
+		newID := "folder-" + randHex(8)
+		s.folders[req.Path] = newID
+		s.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"id": newID})
+	default:
+		http.Error(w, `{"error":"method_not_allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleUpload services Spec 038 Scope 5 file uploads. The real Google
+// Drive API uses POST /upload/drive/v3/files?uploadType=multipart with a
+// related-multipart payload. The fixture accepts a simpler JSON body
+// because the runtime client (internal/drive/google) wraps the bytes in a
+// JSON envelope when talking to the fixture, which keeps the integration
+// test surface narrow and inspectable.
+//
+// Body:
+//
+//	{"folder_id": "...", "title": "...", "mime_type": "...",
+//	 "data_b64": "..."}
+//
+// On success the fixture stores the file in `files`, records an Upload
+// audit row, and returns:
+//
+//	{"id": "<file-id>", "webViewLink": "...", "headRevisionId": "..."}
+func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
+	if s.maybeOutage(w, r) {
+		return
+	}
+	s.count("/upload/drive/v3/files")
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method_not_allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"bad_body"}`, http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		FolderID string `json:"folder_id"`
+		Title    string `json:"title"`
+		MimeType string `json:"mime_type"`
+		DataB64  string `json:"data_b64"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, `{"error":"bad_json"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Title == "" || req.FolderID == "" {
+		http.Error(w, `{"error":"missing_fields"}`, http.StatusBadRequest)
+		return
+	}
+	data, err := decodeBase64(req.DataB64)
+	if err != nil {
+		http.Error(w, `{"error":"bad_b64"}`, http.StatusBadRequest)
+		return
+	}
+	fileID := "file-" + randHex(8)
+	revisionID := "rev-" + randHex(6)
+	url := "https://drive.example/" + fileID
+	s.mu.Lock()
+	s.files[fileID] = File{
+		ID:         fileID,
+		Name:       req.Title,
+		MimeType:   req.MimeType,
+		SizeBytes:  int64(len(data)),
+		FolderPath: []string{req.FolderID},
+		RevisionID: revisionID,
+		Owner:      "fixture-user@example.com",
+		URL:        url,
+		Content:    data,
+	}
+	s.uploads = append(s.uploads, Upload{
+		ProviderFileID: fileID,
+		FolderID:       req.FolderID,
+		Title:          req.Title,
+		MimeType:       req.MimeType,
+		SizeBytes:      int64(len(data)),
+		Bytes:          append([]byte(nil), data...),
+	})
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"id":             fileID,
+		"webViewLink":    url,
+		"headRevisionId": revisionID,
+	})
+}
+
+func decodeBase64(s string) ([]byte, error) {
+	if s == "" {
+		return nil, nil
+	}
+	return base64.StdEncoding.DecodeString(s)
 }

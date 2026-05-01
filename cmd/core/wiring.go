@@ -13,6 +13,8 @@ import (
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 	"github.com/smackerel/smackerel/internal/drive"
 	"github.com/smackerel/smackerel/internal/drive/google"
+	"github.com/smackerel/smackerel/internal/drive/rules"
+	"github.com/smackerel/smackerel/internal/drive/save"
 	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	"github.com/smackerel/smackerel/internal/list"
@@ -89,6 +91,19 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		slog.Warn("google drive provider is not registered")
 	}
 
+	// Spec 038 Scope 5 — wire Save Rules + Save Service against the
+	// drive.DefaultRegistry. The Save Service runs in-process; HTTP
+	// handlers and Telegram/meal-plan bridges all share this instance so
+	// idempotency keys, drive_save_requests rows, and folder mappings
+	// remain coherent across surfaces.
+	saveResolver := api.NewProviderResolverAdapter(drive.DefaultRegistry)
+	saveService := save.NewService(svc.pg.Pool, saveResolver, cfg.Drive.Save.ProviderURLPrefix)
+	deps.DriveRulesHandlers = api.NewDriveRulesHandlers(svc.pg.Pool, saveResolver)
+	deps.DriveSaveHandlers = api.NewDriveSaveHandlers(svc.pg.Pool, saveService)
+	svc.driveSaveService = saveService
+	slog.Info("drive save service wired",
+		"provider_url_prefix", cfg.Drive.Save.ProviderURLPrefix)
+
 	// Wire annotation handlers (spec 027)
 	annotationStore := annotation.NewStore(svc.pg.Pool, svc.nc)
 	deps.AnnotationHandlers = &api.AnnotationHandlers{Store: annotationStore}
@@ -137,6 +152,22 @@ func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps 
 	deps.TelegramBot = tgBot
 	slog.Info("telegram bot started")
 	return tgBot
+}
+
+// attachDriveSaveBridgeToTelegram wires the spec 038 Scope 5 Drive write-back
+// bridge to a running Telegram bot. Safe to call when either side is missing.
+func attachDriveSaveBridgeToTelegram(svc *coreServices, tgBot *telegram.Bot) {
+	if svc == nil || tgBot == nil || svc.driveSaveService == nil {
+		return
+	}
+	bridge := telegram.NewDriveSaveBridge(
+		svc.pg.Pool,
+		rules.NewRepository(svc.pg.Pool),
+		rules.NewEngine(time.Now),
+		svc.driveSaveService,
+	)
+	tgBot.SetDriveSaveBridge(bridge)
+	slog.Info("telegram drive save bridge wired")
 }
 
 // wireKnowledgeLinter attaches the knowledge linter to the scheduler when the
@@ -207,6 +238,21 @@ func wireMealPlanning(
 	shoppingBridge := mealplan.NewShoppingBridge(listResolver, &list.RecipeAggregator{}, listStore)
 
 	deps.MealPlanHandler = api.NewMealPlanHandler(mealPlanService, shoppingBridge, nil)
+
+	// Spec 038 Scope 5 — wire meal-plan Drive write-back if the Save
+	// Service is configured. The bridge is purely additive: callers who
+	// don't trigger SavePlan don't pay any cost.
+	if svc.driveSaveService != nil {
+		mealPlanSaveBack := mealplan.NewDriveSaveBack(
+			svc.pg.Pool,
+			rules.NewRepository(svc.pg.Pool),
+			rules.NewEngine(time.Now),
+			svc.driveSaveService,
+			mealPlanStore,
+		)
+		svc.mealPlanSaveBack = mealPlanSaveBack
+		slog.Info("meal plan drive write-back wired")
+	}
 
 	// Wire auto-complete scheduler
 	if cfg.MealPlanAutoComplete && cfg.MealPlanAutoCompleteCron != "" {

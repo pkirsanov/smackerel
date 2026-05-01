@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Drive save rules — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Drive save rules</h1>
+  <p class="subtitle">Spec 038 Screen 7 — manage write-back rules, review conflicts, attempts, and failures.</p>
+
+  <section id="rules-list-section" class="card" aria-labelledby="rules-list-heading">
+    <h2 id="rules-list-heading">Configured rules</h2>
+    <p id="rules-empty" class="status status-info" hidden>No save rules configured. <a href="/pwa/drive-rule-edit.html">Create one</a>.</p>
+    <table id="rules-table" class="rules-table" hidden>
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Source</th>
+          <th scope="col">Classification</th>
+          <th scope="col">Provider</th>
+          <th scope="col">Folder template</th>
+          <th scope="col">Status</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rules-tbody"></tbody>
+    </table>
+    <p><a class="primary" href="/pwa/drive-rule-edit.html">+ New rule</a></p>
+  </section>
+
+  <section id="conflicts-section" class="card" aria-labelledby="conflicts-heading">
+    <h2 id="conflicts-heading">Recent conflicts</h2>
+    <p class="subtitle">When two or more rules match the same artifact, the older rule wins. Adjust priorities below.</p>
+    <ul id="conflicts-list" class="conflicts" aria-live="polite"></ul>
+    <p id="conflicts-empty" class="status status-info" hidden>No recent conflicts.</p>
+  </section>
+
+  <section id="attempts-section" class="card" aria-labelledby="attempts-heading">
+    <h2 id="attempts-heading">Recent save attempts</h2>
+    <p class="subtitle">Most recent 50 save requests across all rules. Failures show last_error so you can retry.</p>
+    <table id="attempts-table" class="attempts-table" hidden>
+      <thead>
+        <tr>
+          <th scope="col">Created</th>
+          <th scope="col">Rule</th>
+          <th scope="col">Artifact</th>
+          <th scope="col">Target</th>
+          <th scope="col">Status</th>
+          <th scope="col">Attempts</th>
+          <th scope="col">Error</th>
+        </tr>
+      </thead>
+      <tbody id="attempts-tbody"></tbody>
+    </table>
+    <p id="attempts-empty" class="status status-info" hidden>No save attempts yet.</p>
+  </section>
+
+  <section id="audit-section" class="card" aria-labelledby="audit-heading">
+    <h2 id="audit-heading">Audit feed</h2>
+    <p class="subtitle">Every rule evaluation outcome (matched, skipped, conflict, failed, awaiting_confirmation).</p>
+    <ul id="audit-list" class="audit-list" aria-live="polite"></ul>
+    <p id="audit-empty" class="status status-info" hidden>No audit rows yet.</p>
+  </section>
+
+  <p class="back-link"><a href="/pwa/connectors.html">← Connectors</a></p>
+
+  <script src="/pwa/drive-rules.js"></script>
+</body>
+</html>

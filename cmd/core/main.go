@@ -78,6 +78,7 @@ func run() error {
 
 	// Start Telegram bot if configured
 	tgBot := startTelegramBotIfConfigured(ctx, cfg, deps)
+	attachDriveSaveBridgeToTelegram(svc, tgBot)
 
 	// Start digest scheduler + intelligence jobs
 	sched := scheduler.New(svc.digestGen, tgBot, svc.intEngine, svc.topicLifecycle)

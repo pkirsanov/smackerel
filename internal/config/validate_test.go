@@ -433,6 +433,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("DRIVE_TELEGRAM_MAX_LINK_FILES_PER_REPLY", "10")
 	t.Setenv("DRIVE_LIMITS_MAX_FILE_SIZE_BYTES", "104857600")
 	t.Setenv("DRIVE_RATE_LIMITS_REQUESTS_PER_MINUTE", "600")
+	t.Setenv("DRIVE_SAVE_PROVIDER_URL_PREFIX", "https://drive.google.com/file/d")
 	t.Setenv("DRIVE_PROVIDER_GOOGLE_OAUTH_CLIENT_ID", "")
 	t.Setenv("DRIVE_PROVIDER_GOOGLE_OAUTH_CLIENT_SECRET", "")
 	t.Setenv("DRIVE_PROVIDER_GOOGLE_OAUTH_REDIRECT_URL", "http://127.0.0.1:40001/v1/connectors/drive/oauth/callback")

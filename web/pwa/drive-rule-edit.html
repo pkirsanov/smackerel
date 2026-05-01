@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Edit save rule — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1 id="page-heading">Save rule editor</h1>
+  <p class="subtitle">Spec 038 Screen 8 — define matchers, target folder template, guardrails, and dry-run against an artifact.</p>
+
+  <form id="rule-form" class="card" aria-labelledby="rule-form-heading" novalidate>
+    <h2 id="rule-form-heading">Rule definition</h2>
+
+    <label class="field">
+      <span>Name</span>
+      <input id="rule-name" type="text" name="name" required placeholder="Save Telegram receipts">
+    </label>
+
+    <label class="field">
+      <input id="rule-enabled" type="checkbox" name="enabled" checked>
+      Enabled
+    </label>
+
+    <fieldset class="field">
+      <legend>Source kinds (which channels does this rule cover?)</legend>
+      <label><input type="checkbox" name="source_kinds" value="telegram"> Telegram capture</label>
+      <label><input type="checkbox" name="source_kinds" value="mobile"> Mobile capture</label>
+      <label><input type="checkbox" name="source_kinds" value="meal_plan"> Meal plan</label>
+      <label><input type="checkbox" name="source_kinds" value="recipe"> Recipe</label>
+      <label><input type="checkbox" name="source_kinds" value="expense"> Expense</label>
+      <label><input type="checkbox" name="source_kinds" value="list"> List</label>
+    </fieldset>
+
+    <label class="field">
+      <span>Classification</span>
+      <input id="rule-classification" type="text" name="classification" required placeholder="receipt">
+    </label>
+
+    <fieldset class="field">
+      <legend>Sensitivity (which sensitivity levels qualify?)</legend>
+      <label><input type="checkbox" name="sensitivity_in" value="none"> none</label>
+      <label><input type="checkbox" name="sensitivity_in" value="financial"> financial</label>
+      <label><input type="checkbox" name="sensitivity_in" value="medical"> medical</label>
+      <label><input type="checkbox" name="sensitivity_in" value="identity"> identity</label>
+    </fieldset>
+
+    <label class="field">
+      <span>Confidence floor (0.0 - 1.0)</span>
+      <input id="rule-confidence-min" type="number" min="0" max="1" step="0.01" value="0.7" name="confidence_min">
+    </label>
+
+    <label class="field">
+      <span>Provider id</span>
+      <input id="rule-provider-id" type="text" name="provider_id" required placeholder="google">
+    </label>
+
+    <label class="field">
+      <span>Target folder template</span>
+      <input id="rule-target-template" type="text" name="target_folder_template" required placeholder="Receipts/{year}">
+      <small>Tokens: <code>{year}</code> <code>{month}</code> <code>{isoweek}</code> <code>{isoyear}</code> <code>{classification}</code> + any artifact tokens.</small>
+    </label>
+
+    <label class="field">
+      <span>On missing folder</span>
+      <select id="rule-on-missing-folder" name="on_missing_folder">
+        <option value="create">create</option>
+        <option value="fail">fail</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>On existing file</span>
+      <select id="rule-on-existing-file" name="on_existing_file">
+        <option value="version">version</option>
+        <option value="replace">replace</option>
+        <option value="skip">skip</option>
+      </select>
+    </label>
+
+    <fieldset class="field">
+      <legend>Guardrails</legend>
+      <label><input id="rule-guardrails-never-link-share" type="checkbox" name="never_link_share"> Never enable link-share for files this rule writes</label>
+      <label class="field">
+        <span>Require confirm below confidence</span>
+        <input id="rule-guardrails-require-confirm-below" type="number" min="0" max="1" step="0.01" value="0" name="require_confirm_below">
+      </label>
+    </fieldset>
+
+    <div class="actions">
+      <button id="rule-save" type="submit" class="primary">Save rule</button>
+      <button id="rule-delete" type="button" class="danger" hidden>Delete</button>
+    </div>
+    <p id="rule-status" class="status" aria-live="polite"></p>
+  </form>
+
+  <section id="dry-run-section" class="card" aria-labelledby="dry-run-heading">
+    <h2 id="dry-run-heading">Dry run against an artifact</h2>
+    <p class="subtitle">Test the rule without writing to Drive. Provide artifact metadata to evaluate.</p>
+    <form id="dry-run-form" novalidate>
+      <label class="field">
+        <span>Source artifact id</span>
+        <input id="dr-artifact-id" type="text" name="source_artifact_id" required>
+      </label>
+      <label class="field">
+        <span>Source kind</span>
+        <input id="dr-source-kind" type="text" name="source_kind" placeholder="telegram">
+      </label>
+      <label class="field">
+        <span>Classification</span>
+        <input id="dr-classification" type="text" name="classification" placeholder="receipt">
+      </label>
+      <label class="field">
+        <span>Sensitivity</span>
+        <input id="dr-sensitivity" type="text" name="sensitivity" placeholder="financial">
+      </label>
+      <label class="field">
+        <span>Confidence (0.0 - 1.0)</span>
+        <input id="dr-confidence" type="number" min="0" max="1" step="0.01" value="0.9" name="confidence">
+      </label>
+      <label class="field">
+        <span>Captured at (RFC3339, optional)</span>
+        <input id="dr-captured-at" type="text" name="captured_at" placeholder="2026-04-15T10:30:00Z">
+      </label>
+      <label class="field">
+        <span>Tokens (JSON, optional)</span>
+        <textarea id="dr-tokens" name="tokens" rows="3" placeholder='{"vendor":"Acme"}'></textarea>
+      </label>
+      <button type="submit" class="primary">Run dry test</button>
+    </form>
+    <pre id="dry-run-result" class="result" hidden></pre>
+  </section>
+
+  <p class="back-link"><a href="/pwa/drive-rules.html">← Back to rules</a></p>
+
+  <script src="/pwa/drive-rule-edit.js"></script>
+</body>
+</html>

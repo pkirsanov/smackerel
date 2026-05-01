@@ -43,6 +43,7 @@ type Bot struct {
 	callbackFunc    func(callbackID, text string)   // test hook: overrides callback answer
 	watchService    WatchService                    // spec 039 Scope 4 — watch CRUD/list service for /watch commands
 	defaultChatID   int64                           // spec 039 Scope 4 — chat used to deliver scheduler-fired watch alerts
+	driveSaveBridge *DriveSaveBridge                // spec 038 Scope 5 — drive write-back bridge for receipt captures
 }
 
 // Config holds Telegram bot configuration.
@@ -885,6 +886,87 @@ func (b *Bot) Healthy() bool {
 // SetMealPlanHandler configures the meal plan command handler. Must be called before Start().
 func (b *Bot) SetMealPlanHandler(h *MealPlanCommandHandler) {
 	b.mealPlanHandler = h
+}
+
+// SetDriveSaveBridge attaches the spec 038 Scope 5 Drive write-back bridge.
+// Must be called before Start(). The bridge is invoked from receipt-style
+// capture handlers; SetDriveSaveBridge is a no-op when bridge is nil.
+func (b *Bot) SetDriveSaveBridge(bridge *DriveSaveBridge) {
+	if b == nil {
+		return
+	}
+	b.driveSaveBridge = bridge
+}
+
+// DriveSaveBridge exposes the configured spec 038 Scope 5 Drive write-back
+// bridge so receipt-handling code paths can save matched artifacts and reply
+// with the destination folder. Returns nil when no bridge is configured.
+func (b *Bot) DriveSaveBridge() *DriveSaveBridge {
+	if b == nil {
+		return nil
+	}
+	return b.driveSaveBridge
+}
+
+// CaptureAndSaveReceipt is the spec 038 Scope 5 entrypoint used by receipt
+// capture flows (Telegram media handlers, integration tests, end-to-end
+// suites) to: (1) submit a captured photo via the existing /api/capture
+// endpoint, (2) fan the resulting artifact_id through the configured Save
+// Rules, and (3) format a reply summarizing the save outcome.
+//
+// CaptureAndSaveReceipt does not auto-detect classification — callers
+// MUST pass the classification + sensitivity + confidence the upstream
+// pipeline assigned. This keeps the Telegram bot stateless about
+// classification logic and makes the end-to-end behavior deterministic
+// in tests.
+//
+// The first return value is the rendered reply text so callers can either
+// send it to the originating chat or assert on it in tests. The second is
+// the structured save outcome.
+func (b *Bot) CaptureAndSaveReceipt(
+	ctx context.Context,
+	chatID int64,
+	captureBody map[string]interface{},
+	classification string,
+	sensitivity string,
+	confidence float64,
+	tokens map[string]string,
+	title string,
+	mimeType string,
+	bodyBytes []byte,
+) (string, ReceiptSaveOutcome, error) {
+	if b == nil {
+		return "", ReceiptSaveOutcome{}, fmt.Errorf("telegram: CaptureAndSaveReceipt: bot is nil")
+	}
+	if b.driveSaveBridge == nil {
+		return "", ReceiptSaveOutcome{}, fmt.Errorf("telegram: CaptureAndSaveReceipt: drive save bridge not configured")
+	}
+	res, err := b.callCapture(ctx, captureBody)
+	if err != nil {
+		return "", ReceiptSaveOutcome{}, fmt.Errorf("telegram: CaptureAndSaveReceipt: capture: %w", err)
+	}
+	artifactID, _ := res["artifact_id"].(string)
+	if artifactID == "" {
+		return "", ReceiptSaveOutcome{}, fmt.Errorf("telegram: CaptureAndSaveReceipt: capture response missing artifact_id")
+	}
+	outcome, saveErr := b.driveSaveBridge.SaveReceipt(ctx, ReceiptSaveInput{
+		ArtifactID:     artifactID,
+		Classification: classification,
+		Sensitivity:    sensitivity,
+		Confidence:     confidence,
+		Tokens:         tokens,
+		Title:          title,
+		MimeType:       mimeType,
+		Body:           bodyBytes,
+	})
+	reply := FormatReceiptReply(outcome)
+	if chatID != 0 && reply != "" {
+		b.reply(chatID, reply)
+	}
+	if saveErr != nil {
+		return reply, outcome, saveErr
+	}
+	return reply, outcome, nil
 }
 
 // handleExpenseCommand handles /expense <args>.

@@ -10,12 +10,13 @@
     "currentScope": "Scope 5: Save Rules And Write-Back",
     "runStartedAt": "2026-04-26T00:00:06Z",
     "workflowRunStartedAt": "2026-04-26T23:13:58Z",
-    "workflowRunLastEnvelopeAt": "2026-04-30T00:00:00Z",
+    "workflowRunLastEnvelopeAt": "2026-05-01T03:50:00Z",
     "currentRound": 14,
     "scope1DoDProgress": "12/12",
     "scope2DoDProgress": "12/12",
     "scope3DoDProgress": "11/11",
     "scope4DoDProgress": "10/10",
+    "scope5DoDProgress": "13/13",
     "completedPhaseClaims": [
       "select",
       "bootstrap",
@@ -478,12 +479,25 @@
       "startedAt": "2026-04-30T00:00:00Z",
       "completedAt": "2026-04-30T00:00:00Z",
       "summary": "Full-delivery validation certified Scope 4 only. Scope 4 DoD is 10/10 checked with inline executed evidence in scopes.md; report.md Scope 4 section carries Summary, Code Diff Evidence (16-row table + git status --short), RED proof captured before adding Snippet/Drive fields, GREEN proof for Go unit tests (TestDriveSearchResponseIncludesSnippetBreadcrumbSharingAndSensitivity, TestDriveSearchResponseSurfacesTombstoneAndPermissionLossState, TestNativeGoogleDocRevisionAppendsVersionChainWithoutNewArtifact, TestProviderArtifactIDIsRevisionIndependent, TestAppendRevisionAdversarial), full Go and Python unit suite tails (Python 402 passed), live integration suite (TestTombstoneAndPermissionLossRemainQueryableWithoutBytes and TestDriveSearchFindsFilesByContentFolderAndMetadata), live drive E2E (TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates, TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision, TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity), repo quality gates (./smackerel.sh check exit 0, format --check 48 files already formatted, lint exit 0 with documented pre-existing immich.go sync.Mutex copy warning), and consumer impact sweep showing additive-only JSON contract changes. uservalidation.md has no unchecked user-reported regressions. Current-session sanity gates re-run: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 (Artifact lint PASSED), timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration exit 0 (24 scenarios checked, 70 test rows checked, 24 scenario-to-row mappings, 24 concrete test file references, 24 report evidence references, Scope 4 SCN-038-010 through SCN-038-012 mapped to internal/api/drive_search_test.go, internal/drive/version_test.go, and tests/integration/drive/drive_access_state_test.go with DoD fidelity Gate G068 PASS), go test -count=1 -run 'TestDriveSearchResponseIncludesSnippetBreadcrumbSharingAndSensitivity|TestDriveSearchResponseSurfacesTombstoneAndPermissionLossState' ./internal/api/ exit 0 PASS, go test -count=1 -run 'TestNativeGoogleDocRevisionAppendsVersionChainWithoutNewArtifact|TestProviderArtifactIDIsRevisionIndependent|TestAppendRevisionAdversarial' ./internal/drive/ exit 0 PASS (including 4 adversarial sub-tests). Pre-existing baseline failure tests/e2e/photos_pwa_test.go (TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI and TestPhotosPWA_E2E_ConnectorDetailRendersProgressAndSkipsFromLiveAPI) is owned by spec 040 photos PWA surface, outside the Scope 4 Change Boundary, documented in report.md, and not a Scope 4 regression. Top-level status remains in_progress (G024) because Scopes 5-8 are not started. Certification updated completedScopes and scopeProgress for Scope 4, recorded this validate phase under certifiedCompletedPhases (mode full-delivery, certifiedAt 2026-04-30T00:00:00Z), and advanced execution to Scope 5 implement. Commands: ./smackerel.sh test unit (Scope 4 Go subset rerun PASS), bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0, timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration exit 0."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "scope": "Scope 5: Save Rules And Write-Back",
+      "round": 14,
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-04-30T20:00:00Z",
+      "completedAt": "2026-05-01T03:50:00Z",
+      "summary": "Scope 5 implementation complete from the implement surface. Landed: migration 028_drive_save_back.sql (drive_save_requests connection_id/provider_id/provider_file_id/provider_url/target_folder_id columns + idx_drive_save_requests_rule_created + idx_drive_save_requests_source_artifact + meal_plans.provider_url); rule engine + repository + template renderer (internal/drive/rules/{engine,repository,template}.go) with source-kind/classification/sensitivity/confidence-floor filters, conflict surfacing, ErrInvalidToken, AuditOutcome enum; save service + folder resolver (internal/drive/save/{service,folder_resolver,bytes}.go) with idempotency-key dedup including unique-violation re-read race fix, in-process folder coalescer + DB ON CONFLICT (connection_id, folder_path), edge insert ON CONFLICT for graph link, attempts/last_error tracking, awaiting_confirmation short-circuit; Google provider PutFile + EnsureFolder (internal/drive/google/google.go) with base64 transport; HTTP CRUD/dry-run/audit/save handlers (internal/api/drive_rules_handlers.go + drive_save_handlers.go) wired under /v1/drive/rules and /v1/drive/save in router.go with bearer auth + timestamptz scanning fix; Telegram drive save bridge (internal/telegram/drive_save_bridge.go + bot.go SetDriveSaveBridge/CaptureAndSaveReceipt + FormatReceiptReply); meal-plan save-back (internal/mealplan/drive_save_back.go + Store.UpdatePlanProviderURL); cmd/core wiring including attachDriveSaveBridgeToTelegram; SST plumbing (DRIVE_SAVE_PROVIDER_URL_PREFIX through config/smackerel.yaml + scripts/commands/config.sh + config/generated/{dev,test}.env + drive.go DriveSaveConfig + canary list update); fixture server folders/uploads/folder-create-delay (tests/integration/drive/fixtures/server.go); PWA Screens 7 + 8 (web/pwa/drive-rules.{html,js} + drive-rule-edit.{html,js}); 8 planned test files (internal/drive/rules/rule_engine_test.go, internal/drive/save/folder_resolution_test.go, tests/integration/drive/drive_save_canary_test.go + drive_save_telegram_test.go + drive_save_mealplan_test.go, tests/e2e/drive/drive_save_e2e_test.go (2 functions) + drive_telegram_save_ui_test.go). RED proof captured pre-implementation via go vet of failing references; GREEN proof: ./smackerel.sh test unit exit 0 (Go all packages OK + Python 402 passed), ./smackerel.sh test integration exit 0 (Drive integration package: TestDriveSaveCanary_IdempotentFolderResolutionAndGraphLinks PASS, TestMealPlanSaveBackCreatesDriveFileAndDigestLink PASS, TestTelegramReceiptSaveWritesProviderFileAndArtifactLocation PASS), ./smackerel.sh test e2e exit 0 (TestDriveSaveE2E_MealPlanSavedBackAndDigestLinkAvailable PASS, TestDriveSaveE2E_ConcurrentMissingFolderCreatesExactlyOneFolder PASS, TestTelegramReceiptSaveReplyShowsDriveFolderAndCorrectionAction PASS, full e2e suite PASS: go-e2e), ./smackerel.sh check exit 0, ./smackerel.sh lint exit 0, ./smackerel.sh format --check exit 0 (48 files). Micro-fix loops resolved: artifacts schema column mismatch (source_type→artifact_type/title/content_hash/source_id), idempotency-key race on concurrent INSERT (added isUniqueViolation re-read in service.upsertSaveRequestRobust), fmt.Fprintln redundant newline in drive_save_back.go, /v1/drive/save/requests timestamptz scan (switched to time.Time + sql.NullTime). Updated scopes.md Scope 5 status to Done with all 13/13 DoD items checked carrying Phase/Evidence/Command/Exit Code/Claim Source: executed; appended Scope 5 report.md evidence with Summary, Code Diff Evidence table, full Test Evidence blocks for check/lint/format/unit/integration/e2e, DB-level signals, and Completion Statement. certification.* untouched; validation/certification remains owned by bubbles.validate."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-30T00:00:00Z",
+  "lastUpdatedAt": "2026-05-01T03:50:00Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",

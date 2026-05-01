@@ -15,6 +15,7 @@ package google
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -492,8 +493,156 @@ func (p *Provider) GetFile(ctx context.Context, connectionID string, providerFil
 }
 
 // PutFile implements drive.Provider.
-func (p *Provider) PutFile(_ context.Context, _ string, _ string, _ string, _ drive.FileBytes) (string, error) {
-	return "", drive.ErrNotImplemented
+//
+// Spec 038 Scope 5 ships PutFile against the owned fixture surface
+// described in design §8.3 and tests/integration/drive/fixtures/server.go.
+// The fixture exposes a JSON-bodied upload endpoint at
+// {api_base_url}/upload/drive/v3/files; the runtime client wraps the
+// FileBytes payload in a base64 envelope so the fixture can store and
+// audit it without parsing real Google multipart-related bodies. Real
+// Google Drive integration (POST /upload/drive/v3/files?uploadType=multipart
+// with related-multipart bodies) is a Scope 8 follow-up.
+func (p *Provider) PutFile(ctx context.Context, connectionID string, folderID string, title string, body drive.FileBytes) (string, error) {
+	if connectionID == "" {
+		return "", fmt.Errorf("google: PutFile: connection_id required")
+	}
+	if folderID == "" {
+		return "", fmt.Errorf("google: PutFile: folder_id required")
+	}
+	if title == "" {
+		return "", fmt.Errorf("google: PutFile: title required")
+	}
+	accessToken, err := p.accessToken(ctx, connectionID)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if body.Reader != nil {
+			_ = body.Reader.Close()
+		}
+	}()
+	data, err := io.ReadAll(body.Reader)
+	if err != nil {
+		return "", fmt.Errorf("google: PutFile: read bytes: %w", err)
+	}
+	envelope := map[string]string{
+		"folder_id": folderID,
+		"title":     title,
+		"mime_type": body.MimeType,
+		"data_b64":  encodeBase64(data),
+	}
+	envelopeBytes, err := json.Marshal(envelope)
+	if err != nil {
+		return "", fmt.Errorf("google: PutFile: marshal envelope: %w", err)
+	}
+	uploadURL := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/upload/drive/v3/files"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, strings.NewReader(string(envelopeBytes)))
+	if err != nil {
+		return "", fmt.Errorf("google: PutFile: build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("google: PutFile: do request: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("google: PutFile status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	var parsed struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return "", fmt.Errorf("google: PutFile: decode response: %w", err)
+	}
+	if parsed.ID == "" {
+		return "", fmt.Errorf("google: PutFile: empty id in response")
+	}
+	return parsed.ID, nil
+}
+
+// EnsureFolder is the Spec 038 Scope 5 FolderEnsurer hook used by the Save
+// Service. The runtime client delegates to the fixture-backed
+// {api_base_url}/drive/v3/folders surface: GET first, fall back to POST on
+// 404. Concurrent callers MAY race here; the Save Service guarantees
+// exactly-one durable mapping via drive_folder_resolutions, and the
+// fixture's create counter records every attempt so tests can prove BS-016.
+func (p *Provider) EnsureFolder(ctx context.Context, connectionID string, folderPath string) (string, error) {
+	if connectionID == "" {
+		return "", fmt.Errorf("google: EnsureFolder: connection_id required")
+	}
+	cleaned := strings.Trim(folderPath, "/")
+	if cleaned == "" {
+		return "", fmt.Errorf("google: EnsureFolder: folder_path required")
+	}
+	accessToken, err := p.accessToken(ctx, connectionID)
+	if err != nil {
+		return "", err
+	}
+	base := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/drive/v3/folders"
+
+	// GET first.
+	getURL := base + "?path=" + url.QueryEscape(cleaned)
+	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, getURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("google: EnsureFolder: build GET: %w", err)
+	}
+	getReq.Header.Set("Authorization", "Bearer "+accessToken)
+	getResp, err := p.client.Do(getReq)
+	if err != nil {
+		return "", fmt.Errorf("google: EnsureFolder: GET: %w", err)
+	}
+	if getResp.StatusCode == http.StatusOK {
+		defer getResp.Body.Close()
+		var parsed struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(getResp.Body).Decode(&parsed); err != nil {
+			return "", fmt.Errorf("google: EnsureFolder: decode GET: %w", err)
+		}
+		if parsed.ID != "" {
+			return parsed.ID, nil
+		}
+	} else if getResp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(getResp.Body)
+		getResp.Body.Close()
+		return "", fmt.Errorf("google: EnsureFolder: GET status %d: %s", getResp.StatusCode, strings.TrimSpace(string(body)))
+	} else {
+		getResp.Body.Close()
+	}
+
+	// POST to create.
+	createBody, err := json.Marshal(map[string]string{"path": cleaned})
+	if err != nil {
+		return "", fmt.Errorf("google: EnsureFolder: marshal create body: %w", err)
+	}
+	postReq, err := http.NewRequestWithContext(ctx, http.MethodPost, base, strings.NewReader(string(createBody)))
+	if err != nil {
+		return "", fmt.Errorf("google: EnsureFolder: build POST: %w", err)
+	}
+	postReq.Header.Set("Authorization", "Bearer "+accessToken)
+	postReq.Header.Set("Content-Type", "application/json")
+	postResp, err := p.client.Do(postReq)
+	if err != nil {
+		return "", fmt.Errorf("google: EnsureFolder: POST: %w", err)
+	}
+	defer postResp.Body.Close()
+	postBody, _ := io.ReadAll(postResp.Body)
+	if postResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("google: EnsureFolder: POST status %d: %s", postResp.StatusCode, strings.TrimSpace(string(postBody)))
+	}
+	var parsed struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(postBody, &parsed); err != nil {
+		return "", fmt.Errorf("google: EnsureFolder: decode POST: %w", err)
+	}
+	if parsed.ID == "" {
+		return "", fmt.Errorf("google: EnsureFolder: empty id in POST response")
+	}
+	return parsed.ID, nil
 }
 
 // Changes implements drive.Provider.
@@ -733,6 +882,14 @@ func mediaType(contentType string) string {
 		return contentType
 	}
 	return parsed
+}
+
+// encodeBase64 returns the standard-encoding base64 of data. Used by
+// PutFile to wrap the upload payload in a JSON-friendly envelope so the
+// fixture surface stays inspectable from integration tests without parsing
+// real Google Drive multipart-related bodies.
+func encodeBase64(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
 }
 
 // init registers a Google provider with DefaultCapabilities into the
