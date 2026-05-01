@@ -5,9 +5,9 @@
   "status": "in_progress",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.implement",
+    "activeAgent": null,
     "currentPhase": "implement",
-    "currentScope": "scope-03-lifecycle-duplicates-removal",
+    "currentScope": "scope-04-capture-telegram-routing",
     "runStartedAt": "2026-04-27T19:50:00Z",
     "completedPhaseClaims": [
       {
@@ -35,6 +35,13 @@
         "timestamp": "2026-05-01T01:16:00Z",
         "scope": "Scope 2: Immich Connect, Scan, And Search",
         "summary": "Completed Scope 2 implementation: Immich provider adapter (connect/test, capability probe, scope enumeration, scanner/monitor/skip-ledger, fetch, writer surfaces incl. AddToAlbum/Tag/Favorite/Archive/Delete/Upload/RenameFaceCluster), fail-loud SST validation for photos.providers.immich credentials, /v1/photos/connectors[/test|/{id}], /v1/photos/search, /v1/photos/{id} API family, and PWA Screens 1-5 (connectors list, add wizard, connector detail, search results, photo detail) consuming the live API. Fixed pre-existing baseline failures: go vet 'assignment copies lock value' at internal/connector/photos/adapters/immich/immich.go:140 (replaced probeClient := *client with parameterized buildImmichRequest helper) and the two TestPhotosPWA_E2E_* assertions for HTML endpoint declarations. Verified via go vet ./... (exit 0), ./smackerel.sh check, ./smackerel.sh format --check, ./smackerel.sh lint, ./smackerel.sh test unit (Go all ok, Python 402 passed), COMPOSE_PROGRESS=plain ./smackerel.sh test integration (TestPhotosImmich_ConnectScopeAndScanLiveProvider, TestPhotosImmich_IncrementalChangesUpdateState, TestPhotosImmich_SkipLedgerVisibleAndRetryable PASS), and COMPOSE_PROGRESS=plain ./smackerel.sh test e2e (35/35 shell + Go e2e packages ok including 5 TestPhotos*_E2E_* tests). certification.* untouched."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-01T03:30:00Z",
+        "scope": "Scope 3: Lifecycle, Duplicates, And Removal Review",
+        "summary": "Completed Scope 3 implementation: RAW-to-processed lifecycle analyzer (editor signature, confidence, rationale, review_state), duplicate analyzer for exact/burst/HDR/panorama/near-duplicate/cross-provider clusters with best-pick rationale, removal-candidate analyzer enforcing reason+confidence+rationale+method with reversible decision states, PhotoActionToken mint/confirm with scope-hash drift checks and text-confirmation for delete, ConfirmedWriter guard wrapping every ProviderWriter so archive/delete/album-removal cannot fire before confirmation, /v1/photos/health/* and /v1/photos/actions/* endpoints, PWA Photo Health Lifecycle/Duplicates/Removal/Quality and Confirm Destructive Action screens with data-action-status attributes, and database migration 029_photo_scope3_lifecycle_dedupe_removal.sql adding photo_raw_export_links plus extending photo_clusters/photo_removal_candidates/photo_action_tokens. Verified via ./smackerel.sh check, ./smackerel.sh format --check (49 files), ./smackerel.sh lint, ./smackerel.sh test unit (Go all ok, Python 407 passed), COMPOSE_PROGRESS=plain ./smackerel.sh test integration (TestPhotosLifecycle_RAWExportsLinkedWithRationale, TestPhotosDedupe_BurstHDRPanoramaAndExactClusters all 4 subtests, TestPhotosRemovalCandidates_RequireRationaleAndNoMutationBeforeConfirm PASS), and COMPOSE_PROGRESS=plain ./smackerel.sh test e2e (Go e2e packages ok plus 35/35 shell tests, including TestPhotosDedupe_E2E_CrossProviderDuplicateReturnedOnce, TestPhotosPWA_E2E_HealthDashboardsRenderLifecycleAndDuplicates, TestPhotosRemoval_E2E_ActionPlanDoesNotMutateBeforeConfirm). certification.* untouched."
       }
     ],
     "pendingTransitionRequests": []
@@ -43,7 +50,8 @@
     "status": "in_progress",
     "completedScopes": [
       "scope-01-photo-platform-foundation",
-      "scope-02-immich-connect-scan-search"
+      "scope-02-immich-connect-scan-search",
+      "scope-03-lifecycle-duplicates-removal"
     ],
     "certifiedCompletedPhases": [
       {
@@ -58,6 +66,13 @@
         "agent": "bubbles.validate",
         "scope": "scope-02-immich-connect-scan-search",
         "certifiedAt": "2026-04-30T00:00:00Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-03-lifecycle-duplicates-removal",
+        "certifiedAt": "2026-05-01T03:35:00Z",
         "mode": "full-delivery"
       }
     ],
@@ -83,11 +98,11 @@
       {
         "scope": 3,
         "name": "scope-03-lifecycle-duplicates-removal",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": ["scope-02-immich-connect-scan-search"],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-05-01T03:35:00Z"
       },
       {
         "scope": 4,
@@ -195,12 +210,21 @@
       "startedAt": "2026-05-01T02:46:00Z",
       "completedAt": "2026-05-01T02:46:10Z",
       "summary": "Certified Scope 2: Immich Connect, Scan, And Search. Verified evidence freshness on HEAD e8314199: ./smackerel.sh check (Config in sync with SST, env_file drift OK, scenario-lint OK), ./smackerel.sh format --check (48 files already formatted), ./smackerel.sh lint (All checks passed!, Web validation passed), ./smackerel.sh test unit (Go all packages ok including internal/connector/photos and internal/connector/photos/adapters/immich; Python 402 passed, 1 warning), and go vet ./... (exit 0, prior immich.go:140 warning resolved). Did not re-run full E2E because the just-implemented run on the same SHA was already green (35/35 shell + Go e2e packages ok including 5 TestPhotos*_E2E_* tests). Artifact lint passed (1 deprecated-field warning on scopeProgress is feature-wide, not Scope 2 specific). Traceability guard remaining 26 failures are pre-existing Scope 3/4/5 (Not Started) territory. Certification of Scope 2 advances execution to Scope 3 implement; feature certification stays in_progress until Scopes 3-5 complete."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-01T03:33:00Z",
+      "completedAt": "2026-05-01T03:35:00Z",
+      "summary": "Certified Scope 3: Lifecycle, Duplicates, And Removal Review on HEAD 05ce8f9. Verified Scope 3 evidence in report.md and scopes.md is real: all 9 DoD items checked with inline 'Phase: implement, Claim Source: executed' blocks pointing at concrete files (internal/connector/photos/{lifecycle,dedupe,removal,action_tokens,writer_guard}.go, internal/api/photos_actions.go, internal/db/migrations/029_photo_scope3_lifecycle_dedupe_removal.sql, ml/tests/test_photos_decisions.py, web/pwa/photo-health-{lifecycle,duplicates,removal,quality}.{html,js}, photo-confirm-action.{html,js}) and Test Evidence section captures executed ./smackerel.sh check, format --check (49 files), lint, test unit (Go ok + Python 407 passed), test integration (TestPhotosLifecycle_RAWExportsLinkedWithRationale, TestPhotosDedupe_BurstHDRPanoramaAndExactClusters incl. burst/hdr/panorama/exact subtests, TestPhotosRemovalCandidates_RequireRationaleAndNoMutationBeforeConfirm all PASS, EXIT=0), and test e2e (Go e2e packages ok + 35/35 shell, including TestPhotosDedupe_E2E_CrossProviderDuplicateReturnedOnce, TestPhotosPWA_E2E_HealthDashboardsRenderLifecycleAndDuplicates, TestPhotosRemoval_E2E_ActionPlanDoesNotMutateBeforeConfirm). Re-ran governance gates on HEAD 05ce8f9: artifact-lint PASSED (1 deprecated-field warning on scopeProgress is feature-wide, not Scope 3 specific); traceability-guard --verbose reports all Scope 3 entries green (✅ scenario-to-row, ✅ concrete test file, ✅ report evidence, ✅ DoD mapping for SCN-040-007/008/009), with 15 remaining failures confined to Scope 4/5 missing test files (photos_upload, photos_telegram, photos_docscan, photos_routing, photos_sensitivity*, photos_capability*, photos_provider_neutrality, photos_health, photos_capability_banner, photos_ingest_stress) for Not Started scopes. Certification advances execution to Scope 4 implement; feature certification stays in_progress until Scopes 4-5 complete."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-01T02:46:10Z",
+  "lastUpdatedAt": "2026-05-01T03:35:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
