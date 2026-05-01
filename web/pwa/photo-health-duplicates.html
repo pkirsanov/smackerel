@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Photo Health — Duplicates — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/photo-libraries.html" class="logo-link" aria-label="Back to Photo Libraries">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Photo Health: Duplicates</h1>
+  <p class="subtitle">Burst, HDR, panorama, near-duplicate, and cross-provider clusters — feature 040 Scope 3.</p>
+
+  <section id="photo-health-duplicates" class="card" aria-labelledby="photo-health-duplicates-heading"
+           aria-busy="true" data-endpoint="/v1/photos/health/duplicates">
+    <h2 id="photo-health-duplicates-heading">Open clusters</h2>
+    <p id="photo-health-duplicates-status" class="status info" role="status" aria-live="polite">Loading duplicate clusters...</p>
+    <ul id="photo-health-duplicates-list" class="cluster-list"></ul>
+    <div id="photo-health-duplicates-action" class="cluster-action" hidden>
+      <p class="status warning" role="status">Destructive cluster resolution waits for confirmation.</p>
+      <button id="photo-health-duplicates-best-pick" type="button">Override best-pick</button>
+      <button id="photo-health-duplicates-resolve" type="button">Resolve cluster (requires action_token)</button>
+    </div>
+  </section>
+
+  <script src="/pwa/photo-health-duplicates.js"></script>
+</body>
+</html>

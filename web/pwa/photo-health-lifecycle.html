@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Photo Health — Lifecycle — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/photo-libraries.html" class="logo-link" aria-label="Back to Photo Libraries">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Photo Health: Lifecycle</h1>
+  <p class="subtitle">RAW vs. processed across all connected libraries — feature 040 Scope 3.</p>
+
+  <section id="photo-health-lifecycle" class="card" aria-labelledby="photo-health-lifecycle-heading"
+           aria-busy="true" data-endpoint="/v1/photos/health/lifecycle">
+    <h2 id="photo-health-lifecycle-heading">Editor signatures</h2>
+    <p id="photo-health-lifecycle-status" class="status info" role="status" aria-live="polite">Loading lifecycle summary...</p>
+    <table id="photo-health-lifecycle-editors" class="data-table">
+      <thead><tr><th>Editor</th><th>Total links</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <h3>Review queue (low confidence)</h3>
+    <ul id="photo-health-lifecycle-review" class="review-queue"></ul>
+  </section>
+
+  <script src="/pwa/photo-health-lifecycle.js"></script>
+</body>
+</html>

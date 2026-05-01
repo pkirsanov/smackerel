@@ -107,7 +107,9 @@
         {"file": "ml/tests/test_photos_decisions.py", "function": "test_lifecycle_dedupe_removal_results_require_rationale_and_confidence"},
         {"file": "web/pwa/tests/photos_lifecycle_review.spec.ts", "function": "test('low confidence RAW match stays in review until user confirms')"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-3-lifecycle-duplicates-and-removal-review"
+      ]
     },
     {
       "scenarioId": "SCN-040-008",
@@ -121,7 +123,9 @@
         {"file": "tests/e2e/photos_cross_provider_dedupe_test.go", "function": "TestPhotosDedupe_E2E_CrossProviderDuplicateReturnedOnce"},
         {"file": "web/pwa/tests/photos_duplicates.spec.ts", "function": "test('duplicate cluster best-pick and resolve flow uses live API')"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-3-lifecycle-duplicates-and-removal-review"
+      ]
     },
     {
       "scenarioId": "SCN-040-009",
@@ -135,7 +139,9 @@
         {"file": "tests/e2e/photos_removal_review_test.go", "function": "TestPhotosRemoval_E2E_ActionPlanDoesNotMutateBeforeConfirm"},
         {"file": "web/pwa/tests/photos_confirm_action.spec.ts", "function": "test('destructive photo action requires exact batch confirmation')"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-3-lifecycle-duplicates-and-removal-review"
+      ]
     },
     {
       "scenarioId": "SCN-040-010",

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Confirm Photo Action — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/photo-health-removal.html" class="logo-link" aria-label="Back to removal review">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Confirm photo action</h1>
+  <p class="subtitle">Two-step confirmation: plan first, confirm with explicit text — feature 040 Scope 3.</p>
+
+  <section id="photo-confirm-action" class="card" aria-labelledby="photo-confirm-action-heading"
+           data-plan-endpoint="/v1/photos/actions/plan"
+           data-confirm-endpoint="/v1/photos/actions/confirm">
+    <h2 id="photo-confirm-action-heading">Plan</h2>
+    <form id="photo-confirm-action-plan-form">
+      <label>Action
+        <select id="photo-confirm-action-action" required>
+          <option value="archive">archive</option>
+          <option value="delete">delete</option>
+          <option value="album_remove">album_remove</option>
+        </select>
+      </label>
+      <label>Photo IDs (one per line)
+        <textarea id="photo-confirm-action-photo-ids" rows="4" required></textarea>
+      </label>
+      <button type="submit">Mint action token</button>
+    </form>
+    <p id="photo-confirm-action-plan-status" class="status info" role="status" aria-live="polite"></p>
+    <pre id="photo-confirm-action-plan-output" class="json-output" hidden></pre>
+
+    <h2>Confirm</h2>
+    <form id="photo-confirm-action-confirm-form">
+      <label>Action token
+        <input id="photo-confirm-action-token" type="text" required>
+      </label>
+      <label>Type DELETE or ARCHIVE to authorise
+        <input id="photo-confirm-action-text" type="text">
+      </label>
+      <button type="submit">Confirm and execute</button>
+    </form>
+    <p id="photo-confirm-action-confirm-status" class="status info" role="status" aria-live="polite"></p>
+    <pre id="photo-confirm-action-confirm-output" class="json-output" hidden></pre>
+  </section>
+
+  <script src="/pwa/photo-confirm-action.js"></script>
+</body>
+</html>
