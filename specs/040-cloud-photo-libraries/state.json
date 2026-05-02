@@ -6,7 +6,7 @@
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "audit",
+    "currentPhase": "chaos",
     "currentScope": null,
     "runStartedAt": "2026-04-27T19:50:00Z",
     "completedPhaseClaims": [
@@ -103,6 +103,13 @@
         "agent": "bubbles.validate",
         "scope": "scope-05-multi-provider-operations",
         "certifiedAt": "2026-05-02T14:54:17Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "scope": null,
+        "certifiedAt": "2026-05-02T17:57:00Z",
         "mode": "full-delivery"
       }
     ],
@@ -267,12 +274,21 @@
       "startedAt": "2026-05-02T14:54:00Z",
       "completedAt": "2026-05-02T14:54:17Z",
       "summary": "Certified Scope 5: Multi-Provider Capability Governance And Operations (FINAL scope) on HEAD e4348b6. Verified Scope 5 evidence in scopes.md and report.md is real and complete: all 12 DoD items checked with inline 'Phase: implement, Claim Source: executed' blocks pointing at concrete on-disk files (internal/connector/photos/adapters/photoprism/{photoprism,photoprism_test,fixture_test}.go, internal/connector/photos/{capability_taxonomy,capabilities_test,cross_provider,cross_provider_test,store}.go, internal/api/{photos_capability,photos,router}.go, internal/metrics/photos.go, internal/config/{photos,validate_test}.go, scripts/commands/config.sh, smackerel.sh, config/smackerel.yaml, web/pwa/photo-health.{html,js}, tests/integration/photos_{capability,capability_taxonomy_canary,provider_neutrality,health,photoprism_fixture,capability_canary_router}_test.go, tests/e2e/photos_{capability,search}_test.go, tests/stress/photos_ingest_stress_test.go, web/pwa/tests/photos_{capability_banner,health}.spec.ts). Pre-flight ran artifact-lint at status=in_progress (PASSED, exit 0, only deprecated 'scopeProgress' field warning) AND at status=done strict mode: Scope 5's own 7 Test Evidence blocks (report.md L752-888) all pass the ≥3 lines + ≥2 distinct terminal-output signals requirement (real exit codes, PASS markers, file paths with extensions, byte counts, timing). Strict status=done revealed 26 BLOCKING failures NOT introduced by Scope 5 implementation: (a) certifiedCompletedPhases lacks audit/chaos/docs/test/spec-review specialist phase records — only validate is recorded, blocking Gate G022 5/6 specialist phases missing + spec-review-for-full-delivery, (b) report.md lacks top-level '### Validation Evidence', '### Audit Evidence', '### Chaos Evidence' sections required by full-delivery done — only per-scope '### Validation Summary'/'### Audit Verdict'/'### Validate Certification Evidence — Scope N' subsections exist, (c) 3 short evidence blocks at report.md L167-170 (Scope 2 'go vet ./...'), L181-184 (Scope 2 'format --check 48 files'), L332-335 (Scope 3 'format --check 49 files') need ≥3 lines each, (d) 1 weak-signal block at report.md L88 (Scope 1 'Validate Certification Evidence' artifact-lint output) only triggers PASSED signal, needs file paths or counts, (e) 1 narrative summary phrase outside code block at report.md L71 contains literal 'All checks passed!' which the lint matches as fabrication. traceability-guard --verbose at HEAD e4348b6: PASSED, all 15 scenarios mapped to Test Plan rows + concrete test files + report evidence + DoD with 0 warnings. regression-baseline-guard --verbose: PASSED. scenario-manifest.json already has evidenceRefs populated for SCN-040-013/014/015 pointing at report.md#scope-5-multi-provider-capability-governance-and-operations (set by plan, no change needed). Promoted certification.completedScopes (+ scope-05-multi-provider-operations, now all 5), certifiedCompletedPhases (+ validate/scope-05-multi-provider-operations/2026-05-02T14:54:17Z/full-delivery), and scopeProgress[5] status Not Started → Done with certifiedAt. execution.currentScope→null, currentPhase→audit (next routed phase), activeAgent→null. Top-level status REMAINS in_progress because strict-mode promotion to status=done would fail with 26 blockers; promotion is conditional on strict lint passing per user lesson from 039 rollback. Returning route_required to bubbles.implement to enrich the 4 weak Scope 1-3 evidence blocks and rephrase the L71 narrative summary phrase, plus broader follow-up specialist runs (bubbles.audit, bubbles.chaos, bubbles.docs, bubbles.spec-review) before status=done is achievable."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-02T17:57:00Z",
+      "completedAt": "2026-05-02T17:57:00Z",
+      "summary": "Pre-feature-done audit on HEAD 4baf7c7 (status=in_progress). Verdict: SHIP_WITH_NOTES. Independently re-ran ./smackerel.sh check (exit 0, Config in sync with SST + env_file drift OK + scenario-lint OK), ./smackerel.sh format --check (exit 0, 49 files), ./smackerel.sh lint (exit 0, All checks passed! + Web validation passed), ./smackerel.sh test unit (Python 407 passed, 1 warning), and go test ./... (exit 0, all Go packages ok including internal/connector/photos + adapters/immich + adapters/photoprism + internal/api + internal/config + internal/metrics + internal/nats), and go vet ./... (exit 0). Ran governance gates: artifact-lint at status=in_progress PASSED (only deprecated scopeProgress warning); traceability-guard --verbose PASSED 0 warnings (15/15 scenarios mapped to Test Plan rows + concrete test files + report evidence + DoD); regression-baseline-guard --verbose PASSED; state-transition-guard returned 45 failures and 1 warning — all are status=done strict-promotion blockers that this audit phase explicitly does NOT need to pass (audit runs at status=in_progress). Verified all 17 photo route handlers in internal/api/router.go are wrapped in r.Use(deps.bearerAuthMiddleware). Hardcoded-secret scan: clean. Secrets-in-logs scan: clean. TODO/FIXME/HACK scan in feature 040 source: clean. Skip-marker scan: 4 environment-conditional t.Skip guards (NATS_URL/DATABASE_URL/-short) which are acceptable because the canonical Scope 5 stress run reported PASS with DATABASE_URL set by smackerel.sh. Implementation reality scan re-confirmed 1 pre-existing DEFAULT_FALLBACK violation at ml/app/main.py:75 (Scope 1 inheritance, fail-WARN auth_token loader) which MUST be hardened to fail-FAST before status=done strict promotion. Manual security review found one additional non-blocking finding: MintReveal (internal/api/photos_upload.go:288-290) accepts actor_id from request body before falling back to actorIDFromRequest(r) X-Actor-Id header — for a single-tenant local system this is a defense-in-depth audit label since bearer auth is the primary boundary, but should be hardened per Gate G047 strict reading before status=done. Wrote ## Audit Phase / ### Audit Evidence section to report.md with ~13 evidence blocks (≥2 distinct signals each) + Audit Findings Summary table + Audit Verdict + Spot-Check Recommendations. Promoted certification.certifiedCompletedPhases += {phase:audit, agent:bubbles.audit, scope:null, certifiedAt:2026-05-02T17:57:00Z, mode:full-delivery}. Advanced execution.currentPhase audit → chaos. Top-level status remains in_progress until chaos/docs/test/spec-review specialist phases are recorded and the 2 non-blocking findings are addressed."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-02T14:54:17Z",
+  "lastUpdatedAt": "2026-05-02T17:57:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
