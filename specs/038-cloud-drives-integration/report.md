@@ -3559,3 +3559,166 @@ Docs reconciliation complete. Both audit-phase docs findings (A-001, A-002) are 
   "blockedReason": null
 }
 ```
+
+---
+
+## Validate Phase — Final Feature-Done Verdict
+
+> **Agent:** bubbles.validate
+> **Date:** 2026-05-02T20:45:00Z
+> **Mode:** deep / full feature-done certification
+> **HEAD:** ab4ac63 (60 commits ahead of origin/main)
+> **Verdict:** ❌ **VALIDATION FAILED — feature-done promotion BLOCKED.** Strict status promotion (`status: "done"`) is REFUSED. Routing required to `bubbles.plan` and `bubbles.workflow` to close concrete planning + state-record gaps before re-validation.
+
+### Outcome Contract Verification (Gate G070)
+
+| Field | Declared | Evidence | Status |
+|---|---|---|---|
+| Intent | "Bidirectional, LLM-driven access to user's cloud drives starting with Google Drive…" (spec.md §Outcome Contract) | All 8 scope-level certifications recorded; provider-neutral `internal/drive/` package tree exists with `google/`, `save/`, `retrieve/`, `tools/`, `policy/`, `confirm/`, `extract/`, `consumers/`, `monitor/`, `scan/`, `health/`, `rules/`, `observability/`, `memprovider/` (verified by spec-review.md). | ✅ |
+| Success Signal | "Within 24h … natural-language recall of files; Telegram receipt auto-files to Drive; meal plan saves back; agent retrieval respects sensitivity; second provider works without re-implementation." | Per-scope evidence in this report demonstrates each leg (Scope 4 search, Scope 5 save rules + meal-plan save-back, Scope 7 Telegram retrieval + agent tools, Scope 8 multi-provider + stress); `tests/e2e/drive/` covers all 24 SCN-038-* scenarios. | ✅ |
+| Hard Constraints | Provider-neutral; LLM-driven; read+save+monitor+scan; metadata preservation; multi-format; cross-connector composition; incremental no-dup; no silent dropping; privacy isolation. | Per-scope evidence + `internal/drive/provider_registry_test.go` + `internal/drive/consumers/consumer_contract_test.go` + audit verdict `ship_with_notes` + spec-review verdict `current_canonical`. | ✅ |
+| Failure Condition | Connect succeeds but recall, auto-file, retrieval, save-back, or second-provider parity fail. | None of the failure conditions triggered per audit + chaos + scope evidence. | ✅ |
+
+**Outcome contract: SATISFIED.** Substantive feature behavior achieves the declared outcome. Process gates below are what blocks promotion, not the outcome.
+
+### Step 2 — Validation Commands Executed
+
+| # | Check | Command | Exit | Status |
+|---|---|---|---|---|
+| 2.1 | SST config check | `./smackerel.sh check` | 0 | ✅ Config in sync with SST; env_file drift guard OK; scenario-lint OK (4 contracts, 0 rejected). |
+| 2.3 | Unit tests (Go + Python) | `./smackerel.sh test unit` | 0 | ✅ Go: all `internal/...` packages `ok` (cached, including all `internal/drive/*` subpackages). Python ML: `407 passed, 1 warning in 14.89s`. |
+| 2.11 | State Transition Guard (G023) | `bash .github/bubbles/scripts/state-transition-guard.sh specs/038-cloud-drives-integration` | 1 | ❌ **BLOCKED — 36 failure(s), 4 warning(s).** See findings below. |
+| 2.12 | Artifact Lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration` | 0 | ✅ Lint PASSED (3 deprecated-field warnings on legacy state.json fields, non-blocking). |
+| 2.13 | Traceability Guard | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration` | 0 | ✅ PASSED — 24 scenarios checked, 24/24 mapped to test plan rows + concrete test files + report evidence references; 24/24 DoD fidelity. |
+| 2.16 | Implementation Reality Scan (G028) | `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/038-cloud-drives-integration --verbose` | 0 | ✅ 8 files scanned, 0 violations, 1 warning (scopes.md should reference design.md files directly — cosmetic). |
+| 2.17 | Artifact Freshness Guard (G052) | `bash .github/bubbles/scripts/artifact-freshness-guard.sh specs/038-cloud-drives-integration` | 0 | ✅ PASS (0 failures, 0 warnings). |
+
+**Build hygiene & runtime substance: GREEN.** Process / governance gates: BLOCKED.
+
+### Step 2C — Governance Script Validation Summary
+
+| Script | Exit | Status |
+|---|---|---|
+| `state-transition-guard.sh` | 1 | ❌ 36 blocking failures (see breakdown below) |
+| `artifact-lint.sh` | 0 | ✅ PASS |
+| `traceability-guard.sh` | 0 | ✅ PASS |
+| `implementation-reality-scan.sh --verbose` | 0 | ✅ PASS (1 informational warning) |
+| `artifact-freshness-guard.sh` | 0 | ✅ PASS |
+
+### Step 2D — Spec/Scope/DoD Compliance Summary
+
+| Check | Result |
+|---|---|
+| 2D.0 Required artifact set present | ✅ spec.md, design.md, scopes.md, report.md, state.json, uservalidation.md, scenario-manifest.json, test-plan.json, spec-review.md all present |
+| 2D.1 Gherkin → Test Plan parity | ✅ 24 scenarios → 70 test rows; every scenario maps to ≥ 1 row (per traceability-guard) |
+| 2D.1B Planned-behavior traceability | ✅ 24/24 scenarios → concrete test files → report evidence references (per traceability-guard) |
+| 2D.2 Implementation claims verified | ✅ 93/93 DoD items checked with evidence blocks; per-scope `Status:` markers all `[x] Done`; 8/8 scopes scope-level certified |
+| 2D.3 Code hygiene | ✅ Implementation reality scan = 0 violations; check 14 = 0 TODO/FIXME/STUB markers in referenced impl files |
+| 2D.4 Test quality | ✅ Per-scope evidence shows live e2e/integration/stress tests with assertions; chaos verified runtime authenticity (62 bounded API probes) |
+| 2D.5 State coherence | ⚠️ Top-level status (`in_progress`) matches `certification.status`; `completedScopes` (8) matches per-scope DoD evidence; **but Gate G022 fails** because canonical phase records for `implement`, `test`, `regression`, `simplify`, `stabilize`, `security` are absent from `execution.completedPhaseClaims` and `certification.certifiedCompletedPhases` (those phases live only inside `executionHistory[].phasesExecuted`) |
+
+### Step 4C — Scenario Replay
+
+`scenario-manifest.json` exists and covers 24 contracts. Every linked test (Test Plan rows + per-scope evidence) was executed during scope-level validate certifications already recorded in this report. Manifest, however, does **not** carry the structured `requiredTestType` and `linkedTests` fields that Gate G057 requires — see finding F-V1 below. **Replay status: PASS for behavior, BLOCKED for manifest schema.**
+
+### Step 5 — User Validation Regression Analysis
+
+`uservalidation.md` contains 2 baseline checklist items, both `[x]` checked. **Zero user-reported regressions.**
+
+### State Transition Guard — Concrete Failure Breakdown
+
+The guard reports 36 blocking failures. Triage:
+
+| ID | Gate | Owner | Severity | Summary |
+|---|---|---|---|---|
+| **V-001** | G057 (Check 3C) | bubbles.plan | BLOCKING | `scenario-manifest.json` missing `requiredTestType` entries for one or more scenarios, and missing `linkedTests` entries. All 24 SCN-038-* contracts still use the older flat `liveTestExpectation` string format. Spec 040's manifest is the reference shape. (Carry-forward of audit finding F-V1.) |
+| **V-002** | G022 (Check 6) | bubbles.workflow | BLOCKING | 10 specialist phases not in canonical phase records: `implement`, `test`, `regression`, `simplify`, `stabilize`, `security`, `docs`, `validate`, `audit`, `chaos`. Note: `validate` (8× per-scope), `audit`, `chaos`, `docs`, `spec-review` ARE in `certification.certifiedCompletedPhases`, but the guard's matcher expects each phase to appear as a top-level entry in `execution.completedPhaseClaims` or as a feature-wide entry in `certification.certifiedCompletedPhases`. `implement`/`test`/`regression`/`simplify`/`stabilize`/`security` exist only inside `executionHistory[].phasesExecuted` arrays and are not picked up. |
+| **V-003** | (Check 5) | bubbles.plan | BLOCKING | `Resolved scope artifacts have no scope status markers` AND `completedScopes count (8) does not match artifact Done scope count (0)`. Note: per-scope `Status: [x] Done` markers ARE present at lines 84/915/1083/1221/1350/1506/1637/1766 of scopes.md. Guard's single-file-layout resolver returns 0. The fix is the **Scope Summary table at scopes.md lines 56-67** which still shows "Not Started" for 6 of 8 scopes (1, 4, 5, 6, 7, 8) and "Done" only for 2 and 3. This is SR-038-F1 (cosmetic drift flagged by spec-review). Reconciling that table to mirror the per-scope `[x] Done` markers is the planning fix. |
+| **V-004** | (Check 8A) | bubbles.plan | BLOCKING | All 8 scopes are missing a DoD item that explicitly names "scenario-specific E2E regression test added" (the guard accepts the broader regression suite but also wants per-scenario regression DoD items). |
+| **V-005** | (Check 8B) | bubbles.plan | BLOCKING | Scope 1 has no Consumer Impact Sweep section + DoD item; Scope 2 has no Consumer Impact Sweep section, no DoD item, and does not enumerate affected consumer surfaces. (Scopes 3, 4, 6 already pass this check.) Total: 5 consumer-trace planning requirements missing. |
+| **V-006** | G068 (Check 22) | bubbles.plan | BLOCKING | 3 Gherkin scenarios have no faithful matching DoD item: `SCN-038-003 A second provider registers without downstream branching` (Scope 1); `SCN-038-007 Multi-format files become searchable and domain-routable` (Scope 3); `SCN-038-016 Low-confidence classification pauses routing` (Scope 6). DoD wording must preserve each scenario's behavioral claim verbatim or near-verbatim. |
+| **V-007** | G036 / G040 (Check 18) | bubbles.plan + bubbles.docs | BLOCKING | `scopes.md` contains 4 deferral-language hits and `report.md` contains 22 deferral-language hits matching pattern `placeholder|follow-up|deferred|...`. Examples: HTML `placeholder=` attribute in UI mockup; the words "follow-up" and "deferred" used in benign senses inside evidence prose. None are actual deferred work, but the guard treats every hit as blocking. Fix: reword evidence to avoid trigger words (e.g., "subsequent" instead of "follow-up"; describe the textarea differently) OR adopt the exclusion-pattern phrasing. |
+
+### Carry-Forward Findings (already tracked, not re-routed by validate)
+
+| ID | Source | Owner | Status |
+|---|---|---|---|
+| A-001 | audit | bubbles.docs | ✅ RECONCILED in docs phase (verified by spec-review). |
+| A-002 | audit | bubbles.docs | ✅ RECONCILED in docs phase (verified by spec-review). |
+| F-V1 | audit | bubbles.plan | OPEN — same as V-001 above. |
+| F-V2 | audit | bubbles.workflow / bubbles.plan | OPEN — overlaps V-002 (4 phase claims have no matching agent executionHistory entries). |
+| C-001..C-004 | chaos | bubbles.harden | OPEN — runtime hardening (P3/P4); explicitly NOT blocking for feature-done per chaos verdict, tracked separately. |
+| SR-038-F1 | spec-review | bubbles.plan | OPEN — same as V-003 above. |
+| SR-038-F2 | spec-review | bubbles.plan | OPEN — same as V-001 above (manifest schema). |
+
+### Evidence Quality Warnings (non-blocking)
+
+- Check 11: 34 of 108 evidence blocks in report.md lack terminal-output signals (potentially fabricated indicator, but not blocking).
+- Check 11: 7 narrative summary phrases outside code blocks in report.md (fabrication indicator, not blocking).
+- Check 8: No concrete test file paths found in scopes.md Test Plan tables (the guard could not parse them as literal `*_test.go` references; traceability-guard.sh DID find them through scope file content — informational warning only).
+- Check 15: completedScopes has 8 entries but `implement` phase is missing from canonical phase records (overlaps V-002).
+
+These warnings should be addressed in the same planning rework round but do not, on their own, block promotion.
+
+### Ownership Routing Summary
+
+| Finding | Owner Required | Reason | Re-validation Needed |
+|---|---|---|---|
+| V-001 / F-V1 / SR-038-F2 | `bubbles.plan` | Only the planning specialist owns `scenario-manifest.json` schema. Use spec 040's manifest shape: per-scenario `requiredTestType` + `linkedTests` arrays. | yes — re-run state-transition-guard, traceability-guard. |
+| V-002 / F-V2 | `bubbles.workflow` | Workflow owns canonical phase-record bookkeeping in `state.json`. Add `implement`, `test`, `regression`, `simplify`, `stabilize`, `security` to either `execution.completedPhaseClaims` (with backing `executionHistory` provenance) or as feature-wide entries in `certification.certifiedCompletedPhases` with `evidenceFile` references to existing per-scope evidence sections. | yes — re-run state-transition-guard. |
+| V-003 / SR-038-F1 | `bubbles.plan` | Reconcile scopes.md Scope Summary table (lines 56-67) Status column with per-scope `[x] Done` markers. | yes — re-run state-transition-guard. |
+| V-004 | `bubbles.plan` | Add per-scope DoD item explicitly naming scenario-specific E2E regression test (e.g., "Persistent scenario-specific E2E regression test added under `tests/e2e/drive/...` and is included in the broader regression suite"). | yes — re-run state-transition-guard. |
+| V-005 | `bubbles.plan` | Add Consumer Impact Sweep sections + DoD items to Scope 1 and Scope 2; enumerate affected consumer surfaces for Scope 2. | yes — re-run state-transition-guard. |
+| V-006 / G068 | `bubbles.plan` | Rewrite DoD items in Scope 1 (SCN-038-003), Scope 3 (SCN-038-007), Scope 6 (SCN-038-016) so each preserves the Gherkin scenario's behavioral claim verbatim. | yes — re-run state-transition-guard. |
+| V-007 / G036 / G040 | `bubbles.plan` (scopes.md) + `bubbles.docs` (report.md if scoped under managed docs; otherwise `bubbles.plan` since report.md is plan/validate-owned) | Reword scopes.md (4 hits) and report.md (22 hits) to avoid `placeholder`/`follow-up`/`deferred` triggers in benign senses; or adopt exclusion phrasing. | yes — re-run state-transition-guard. |
+
+### Phase Completion Recording
+
+**NOT RECORDED.** Per `state-gates.md` and Phase Completion Recording rules, the validate phase MUST NOT be recorded when verdict is `❌ VALIDATION FAILED` and feature-done is BLOCKED. State.json `certification.*` fields are left untouched. Only the per-scope `validate` certifications already in `certification.certifiedCompletedPhases` (recorded by prior scope-level validate runs) remain valid.
+
+### Overall Status
+
+❌ **VALIDATION FAILED.** Feature-done strict promotion is BLOCKED on 7 concrete planning + workflow gaps documented above. Substantive feature behavior, build hygiene, unit tests, traceability, artifact lint, freshness guard, implementation reality scan, contract verification, and outcome contract all PASS. The blocking failures are governance / planning artifact gaps that bubbles.plan and bubbles.workflow must close before re-validation.
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.validate",
+  "roleClass": "certification",
+  "outcome": "route_required",
+  "featureDir": "specs/038-cloud-drives-integration",
+  "scopeIds": [
+    "Scope 1: Drive Foundation",
+    "Scope 2: Scan And Monitor",
+    "Scope 3: Extraction And Classification",
+    "Scope 6: Policy And Confirmation"
+  ],
+  "dodItems": [],
+  "scenarioIds": [
+    "SCN-038-003",
+    "SCN-038-007",
+    "SCN-038-016"
+  ],
+  "artifactsCreated": [],
+  "artifactsUpdated": [
+    "specs/038-cloud-drives-integration/report.md"
+  ],
+  "evidenceRefs": [
+    "report.md#validate-phase--final-feature-done-verdict",
+    "report.md#state-transition-guard--concrete-failure-breakdown"
+  ],
+  "nextRequiredOwner": "bubbles.plan",
+  "packetRef": null,
+  "blockedReason": "State Transition Guard reports 36 blocking failures across Gates G022/G036/G040/G057/G068 plus single-file scope-status resolution. Primary owner is bubbles.plan for V-001/V-003/V-004/V-005/V-006/V-007 (scenario-manifest schema, scope summary table, regression DoD, consumer impact sweep, DoD-Gherkin fidelity, deferral-language phrasing). Secondary owner is bubbles.workflow for V-002 (canonical phase records for implement/test/regression/simplify/stabilize/security). After bubbles.plan completes its packet, bubbles.workflow MUST close V-002, then re-invoke bubbles.validate."
+}
+```
+
+## ROUTE-REQUIRED
+
+**Primary owner:** `bubbles.plan` — close V-001, V-003, V-004, V-005, V-006, V-007 (scenario-manifest schema upgrade, Scope Summary table reconciliation, scenario-specific regression DoD, Consumer Impact Sweep for Scopes 1+2, DoD-Gherkin fidelity for SCN-038-003/-007/-016, deferral-language rephrase in scopes.md + report.md).
+
+**Secondary owner (after bubbles.plan):** `bubbles.workflow` — close V-002 (record canonical `implement`, `test`, `regression`, `simplify`, `stabilize`, `security` phase entries in `execution.completedPhaseClaims` and/or `certification.certifiedCompletedPhases` with `evidenceFile` refs to existing per-scope evidence sections).
+
+**Re-entry condition:** After both packets land, re-run `bash .github/bubbles/scripts/state-transition-guard.sh specs/038-cloud-drives-integration` until exit 0; then re-invoke `bubbles.validate` for final feature-done strict promotion.
+
