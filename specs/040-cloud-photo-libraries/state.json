@@ -6,8 +6,8 @@
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "implement",
-    "currentScope": "scope-05-multi-provider-operations",
+    "currentPhase": "audit",
+    "currentScope": null,
     "runStartedAt": "2026-04-27T19:50:00Z",
     "completedPhaseClaims": [
       {
@@ -66,7 +66,8 @@
       "scope-01-photo-platform-foundation",
       "scope-02-immich-connect-scan-search",
       "scope-03-lifecycle-duplicates-removal",
-      "scope-04-capture-telegram-routing"
+      "scope-04-capture-telegram-routing",
+      "scope-05-multi-provider-operations"
     ],
     "certifiedCompletedPhases": [
       {
@@ -95,6 +96,13 @@
         "agent": "bubbles.validate",
         "scope": "scope-04-capture-telegram-routing",
         "certifiedAt": "2026-05-02T02:50:00Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-05-multi-provider-operations",
+        "certifiedAt": "2026-05-02T14:54:17Z",
         "mode": "full-delivery"
       }
     ],
@@ -138,11 +146,11 @@
       {
         "scope": 5,
         "name": "scope-05-multi-provider-operations",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": ["scope-04-capture-telegram-routing"],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-05-02T14:54:17Z"
       }
     ],
     "lockdownState": {
@@ -250,12 +258,21 @@
       "startedAt": "2026-05-02T02:46:00Z",
       "completedAt": "2026-05-02T02:50:00Z",
       "summary": "Certified Scope 4: Capture, Telegram, And Cross-Feature Routing on HEAD bb72d42. Verified Scope 4 evidence in scopes.md and report.md is real and complete: all 10 DoD items checked with inline 'Phase: implement, Claim Source: executed' blocks pointing at concrete on-disk files (internal/api/photos_upload.go + photos_upload_test.go, internal/connector/photos/{routing,sensitivity}.go + routing_test.go, internal/telegram/photo_upload.go + bot.go handleFind, web/pwa/photo-docscan.{html,js}, internal/db/migrations/031_photo_scope4_capture_routing_sensitivity.sql, tests/integration/photos_{upload,docscan,sensitivity}_test.go, tests/e2e/photos_{telegram,routing,sensitivity_retrieval}_test.go, web/pwa/tests/photos_docscan.spec.ts) — confirmed all 16 referenced files exist on disk via ls -la. Pre-flight ran artifact-lint at status=in_progress (PASSED, exit 0, only deprecated 'scopeProgress' field warning) AND at status=done strict mode: confirmed all 7 Scope 4 evidence code blocks pass the ≥2 distinct terminal-output signals + ≥3 lines requirement (block@468:25 lines/3 sigs [exit/path/fs], block@498:7 lines/4 sigs [test/exit/path/fs], block@508:3/3, block@514:15/4, block@532:5/6 [test/exit/path/time/count/fs], block@540:11/4 [exit/path/time/fs], block@554:13/5 [test/exit/path/time/fs]) — all clean. Strict-mode failures observed are entirely (a) pre-existing feature-completion gates that fire only at full feature done (Scope 5 still Not Started, missing future-phase records for audit/chaos/docs/test/spec-review, missing Validation/Audit/Chaos sections), (b) pre-existing earlier-scope evidence quality issues in Scope 1/2 blocks (4 short blocks at lines 88/167/181/332, 4 narrative summary lines at 71/275/424/597) NOT introduced by Scope 4, (c) 1 ml/app/main.py:75 DEFAULT_FALLBACK reality scan violation pre-existing from Scope 1 — none block Scope 4 promotion under the same precedent that certified Scopes 1-3. traceability-guard --verbose: all Scope 4 entries green (✅ SCN-040-010/011/012 scenario-to-row + concrete test file + report evidence + DoD mapping), 8 remaining failures all Scope 5 future-scope test files (photos_capability*, photos_health, photos_provider_neutrality, photos_capability_banner, photos_ingest_stress, photos_capability_taxonomy_canary). Updated scenario-manifest.json to populate evidenceRefs for SCN-040-010/011/012 pointing at report.md#scope-4-capture-telegram-and-cross-feature-routing. Promoted certification.completedScopes (+ scope-04-capture-telegram-routing), certifiedCompletedPhases (+ validate/scope-04-capture-telegram-routing/2026-05-02T02:50:00Z/full-delivery), and scopeProgress[4] status Not Started → Done with certifiedAt. Top-level status remains in_progress until Scope 5 completes."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-02T14:54:00Z",
+      "completedAt": "2026-05-02T14:54:17Z",
+      "summary": "Certified Scope 5: Multi-Provider Capability Governance And Operations (FINAL scope) on HEAD e4348b6. Verified Scope 5 evidence in scopes.md and report.md is real and complete: all 12 DoD items checked with inline 'Phase: implement, Claim Source: executed' blocks pointing at concrete on-disk files (internal/connector/photos/adapters/photoprism/{photoprism,photoprism_test,fixture_test}.go, internal/connector/photos/{capability_taxonomy,capabilities_test,cross_provider,cross_provider_test,store}.go, internal/api/{photos_capability,photos,router}.go, internal/metrics/photos.go, internal/config/{photos,validate_test}.go, scripts/commands/config.sh, smackerel.sh, config/smackerel.yaml, web/pwa/photo-health.{html,js}, tests/integration/photos_{capability,capability_taxonomy_canary,provider_neutrality,health,photoprism_fixture,capability_canary_router}_test.go, tests/e2e/photos_{capability,search}_test.go, tests/stress/photos_ingest_stress_test.go, web/pwa/tests/photos_{capability_banner,health}.spec.ts). Pre-flight ran artifact-lint at status=in_progress (PASSED, exit 0, only deprecated 'scopeProgress' field warning) AND at status=done strict mode: Scope 5's own 7 Test Evidence blocks (report.md L752-888) all pass the ≥3 lines + ≥2 distinct terminal-output signals requirement (real exit codes, PASS markers, file paths with extensions, byte counts, timing). Strict status=done revealed 26 BLOCKING failures NOT introduced by Scope 5 implementation: (a) certifiedCompletedPhases lacks audit/chaos/docs/test/spec-review specialist phase records — only validate is recorded, blocking Gate G022 5/6 specialist phases missing + spec-review-for-full-delivery, (b) report.md lacks top-level '### Validation Evidence', '### Audit Evidence', '### Chaos Evidence' sections required by full-delivery done — only per-scope '### Validation Summary'/'### Audit Verdict'/'### Validate Certification Evidence — Scope N' subsections exist, (c) 3 short evidence blocks at report.md L167-170 (Scope 2 'go vet ./...'), L181-184 (Scope 2 'format --check 48 files'), L332-335 (Scope 3 'format --check 49 files') need ≥3 lines each, (d) 1 weak-signal block at report.md L88 (Scope 1 'Validate Certification Evidence' artifact-lint output) only triggers PASSED signal, needs file paths or counts, (e) 1 narrative summary phrase outside code block at report.md L71 contains literal 'All checks passed!' which the lint matches as fabrication. traceability-guard --verbose at HEAD e4348b6: PASSED, all 15 scenarios mapped to Test Plan rows + concrete test files + report evidence + DoD with 0 warnings. regression-baseline-guard --verbose: PASSED. scenario-manifest.json already has evidenceRefs populated for SCN-040-013/014/015 pointing at report.md#scope-5-multi-provider-capability-governance-and-operations (set by plan, no change needed). Promoted certification.completedScopes (+ scope-05-multi-provider-operations, now all 5), certifiedCompletedPhases (+ validate/scope-05-multi-provider-operations/2026-05-02T14:54:17Z/full-delivery), and scopeProgress[5] status Not Started → Done with certifiedAt. execution.currentScope→null, currentPhase→audit (next routed phase), activeAgent→null. Top-level status REMAINS in_progress because strict-mode promotion to status=done would fail with 26 blockers; promotion is conditional on strict lint passing per user lesson from 039 rollback. Returning route_required to bubbles.implement to enrich the 4 weak Scope 1-3 evidence blocks and rephrase the L71 narrative summary phrase, plus broader follow-up specialist runs (bubbles.audit, bubbles.chaos, bubbles.docs, bubbles.spec-review) before status=done is achievable."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-02T02:50:00Z",
+  "lastUpdatedAt": "2026-05-02T14:54:17Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
