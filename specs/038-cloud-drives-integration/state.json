@@ -6,11 +6,11 @@
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "implement",
-    "currentScope": "Scope 8: Cross-Feature And Scale Convergence",
+    "currentPhase": "audit",
+    "currentScope": null,
     "runStartedAt": "2026-04-26T00:00:06Z",
     "workflowRunStartedAt": "2026-04-26T23:13:58Z",
-    "workflowRunLastEnvelopeAt": "2026-05-02T00:00:00Z",
+    "workflowRunLastEnvelopeAt": "2026-05-02T18:00:00Z",
     "currentRound": 14,
     "scope1DoDProgress": "12/12",
     "scope2DoDProgress": "12/12",
@@ -19,6 +19,7 @@
     "scope5DoDProgress": "13/13",
     "scope6DoDProgress": "10/10",
     "scope7DoDProgress": "12/12",
+    "scope8DoDProgress": "12/12",
     "completedPhaseClaims": [
       "select",
       "bootstrap",
@@ -36,7 +37,8 @@
       "Scope 4: Search And Artifact Detail",
       "Scope 5: Save Rules And Write-Back",
       "Scope 6: Policy And Confirmation",
-      "Scope 7: Retrieval And Agent Tools"
+      "Scope 7: Retrieval And Agent Tools",
+      "Scope 8: Cross-Feature And Scale Convergence"
     ],
     "certifiedCompletedPhases": [
       {
@@ -86,6 +88,13 @@
         "agent": "bubbles.validate",
         "scope": "Scope 7: Retrieval And Agent Tools",
         "certifiedAt": "2026-05-02T00:00:00Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "Scope 8: Cross-Feature And Scale Convergence",
+        "certifiedAt": "2026-05-02T18:00:00Z",
         "mode": "full-delivery"
       }
     ],
@@ -141,6 +150,14 @@
         "dodCompleted": 12,
         "dodTotal": 12,
         "certifiedAt": "2026-05-02T00:00:00Z",
+        "evidenceFile": "report.md"
+      },
+      {
+        "scope": "Scope 8: Cross-Feature And Scale Convergence",
+        "status": "Done",
+        "dodCompleted": 12,
+        "dodTotal": 12,
+        "certifiedAt": "2026-05-02T18:00:00Z",
         "evidenceFile": "report.md"
       }
     ],
@@ -591,12 +608,24 @@
       "startedAt": "2026-05-02T00:00:00Z",
       "completedAt": "2026-05-02T00:00:00Z",
       "summary": "Full-delivery validation certified Scope 7 only. Scope 7 DoD is 12/12 checked with executed evidence in scopes.md; report.md Scope 7 section carries Summary, Code Diff Evidence (11-row git diff --stat table + Service contract Go snippet + agent-tool registration Go snippet + production wiring Go snippet), and full Test Evidence blocks for SCN-038-019/020/021 with named PASS lines (TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates with 5 sub-tests including non_sensitive_within_inline_cap_returns_bytes_with_candidate, non_sensitive_oversized_downgrades_to_provider_link_no_bytes_fetch, multiple_candidates_returns_disambiguation_with_full_labels, zero_candidates_refuses_with_localized_hint, disambiguation_pick_routes_through_policy_again; TestDriveToolsRegisterWithPolicyAndTraceContracts with 7 sub-tests including all_four_tools_registered_with_correct_side_effect_class, tool_names_constant_matches_registry, input_schemas_compile_and_reject_invalid_args, handlers_return_not_configured_envelope_before_setservices, drive_get_file_with_sensitive_candidate_returns_secure_link_no_bytes, drive_search_returns_provider_neutral_candidates, output_schema_validates_drive_search_payload; TestTelegramRetrievalFindsDriveBoardingPassAndDisambiguates 0.12s; TestDriveToolsCanary_ExistingAgentToolsStillRegisterAndTrace 0.00s; TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy 0.31s; TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly 2.24s; TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels 2.31s), full ./smackerel.sh check + format --check + lint + test unit + test integration + test e2e tails (Config is in sync with SST + scenario-lint OK with 4 scenarios registered + 0 rejected; 49 files already formatted; All checks passed! + Web validation passed; ok internal/drive/retrieve + ok internal/drive/tools + ok internal/telegram + 407 passed 1 warning in 13.81s; ok tests/integration/drive 8.150s; ok tests/e2e/agent 8.059s + ok tests/e2e/drive 32.854s + PASS go-e2e), and Completion Statement. uservalidation.md has no unchecked user-reported regressions. Current-session sanity gates run: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration at status=in_progress exit 0 (Artifact lint PASSED); pre-flight strict run after temporarily flipping top-level status to done confirmed all Scope 7 evidence blocks at lines 2489-2682 of report.md satisfy the >=3-line and >=2-distinct-terminal-output-signal bars (12 of 12 Scope 7 fenced blocks measured: 12/13/9/12/7/3/14/6/11/13/6/8 lines, every block carrying $ prompt + exit code + file paths + PASS/ok signals); the 27 strict-mode evidence-block fail counts in the pre-flight report are entirely in lines 208-2432 belonging to already-certified Scopes 1-6 and the strict-mode section/phase requirements (Validation/Audit/Chaos Evidence sections + audit/chaos completedPhases) belong to the future spec-wide done promotion, not to this Scope 7 partial certification; state.json was reverted to status=in_progress before the actual promotion edits below; post-promotion artifact-lint and traceability-guard rerun PASS. Top-level status remains in_progress (G024) because Scope 8 is not started. Certification updated completedScopes and scopeProgress for Scope 7, recorded this validate phase under certifiedCompletedPhases (mode full-delivery, certifiedAt 2026-05-02T00:00:00Z), and advanced execution to Scope 8 implement. Commands: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0, timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration --verbose exit 0."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "scope": "Scope 8: Cross-Feature And Scale Convergence",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-02T17:50:00Z",
+      "completedAt": "2026-05-02T18:00:00Z",
+      "summary": "Scope-level validation certified Scope 8 only. Feature-wide promotion to status=done is intentionally NOT performed here: the orchestrator will route 038 through audit, chaos, docs, and spec-review next per the lesson learned from 040 Scope 5 cert (full feature done-promotion requires those lifecycle phases to be recorded in certification.certifiedCompletedPhases AND backed by Validation/Audit/Chaos Evidence sections in report.md). Scope 8 evidence verification: scopes.md Scope 8 status header is [x] Done; all 12/12 DoD items are [x] with inline Phase/Claim Source: executed/Code/Evidence markers and named PASS lines for each scenario (SCN-038-022 unit TestDriveConsumersUseArtifactStoreAndNeverProviderPackages, integration TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest 0.28s, integration canary TestDriveConsumerCanary_OneArtifactFlowsThroughArtifactStoreToDigest 0.20s, e2e TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers 5.28s; SCN-038-023 stress TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst 182.43s with google_indexed=5000 / monitor_changes=60 / extract_processed=5040 / mem_indexed=200 / total_duration=2m59.291894426s, e2e TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture 2.46s; SCN-038-024 integration TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters 0.31s, e2e-ui TestMultiProviderDriveSearchReturnsOneRankedListWithAudienceFilters 0.08s); report.md Scope 8 section carries Summary, Code Diff Evidence (11 new files + 7 modified files, all inside the documented Change Boundary - new internal/drive/{consumers,observability,memprovider} packages plus 4 new test files plus updates to internal/drive/{scan,extract,save,retrieve}/service.go and internal/api/{search,drive_search}.go and go.mod/go.sum), full Test Evidence blocks for check / format --check / lint / test unit / test integration / test e2e / test stress with named PASS lines and ok-line totals, live observability proof (curl /metrics shows all 5 smackerel_drive_* HELP/TYPE families registered from container start), and Completion Statement. Implement-phase gate evidence already captured: ./smackerel.sh check exit 0 (Config in sync with SST + env_file drift OK + 4 scenarios registered + scenario-lint OK), format --check exit 0 (49 files), lint exit 0 (All checks passed + Web validation passed), test unit exit 0 (ok internal/drive/consumers 0.036s + Python 407 passed), test integration exit 0 (ok tests/integration/drive 16.137s with 25 drive integration tests including 3 new Scope 8), test e2e exit 0 (ok tests/e2e 148.720s + ok tests/e2e/agent 34.850s + ok tests/e2e/drive 54.215s + PASS go-e2e with 17 drive e2e tests including 3 new Scope 8), test stress exit 0 (ok tests/stress/drive 182.509s). uservalidation.md has no unchecked user-reported regressions. Current-session sanity gates run: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration at status=in_progress exit 0 (Artifact lint PASSED with 3 deprecated-field warnings - scopeProgress/statusDiscipline/scopeLayout - which are non-blocking schema-v2 advisories carried since spec creation). Top-level status remains in_progress (G024) because feature-wide done-promotion requires audit + chaos + docs + spec-review phases to be recorded next; certification.status remains in_progress for the same reason. certification.completedScopes appended Scope 8: Cross-Feature And Scale Convergence (now lists all 8 scopes); certification.scopeProgress appended Scope 8 entry (Done, 12/12, certifiedAt 2026-05-02T18:00:00Z, evidenceFile report.md); certification.certifiedCompletedPhases appended this validate phase (mode full-delivery, certifiedAt 2026-05-02T18:00:00Z); execution advanced to currentScope=null + currentPhase=audit + activeAgent=null; execution.scope8DoDProgress=12/12; workflowDispatch.activeScope=null + nextPhase=audit + completedPhasesThisRound includes implement and validate; lastUpdatedAt 2026-05-02T18:00:00Z. Findings carried forward (do not block Scope 8 cert): F-V1 MEDIUM scenario-manifest.json scenarios still use freeform liveTestExpectation strings rather than structured requiredTestType/linkedTests fields per Gate G057 (owned by bubbles.plan, will be cleared at full-spec-done promotion); F-V2 INFO state-transition-guard reports phase-claim-provenance gaps (select/bootstrap/spec-review/design-reconcile in completedPhaseClaims without matching agent executionHistory entries) which are pre-existing and will be normalized at full-spec-done promotion. Next required owners for feature done-promotion: bubbles.audit -> bubbles.chaos -> bubbles.docs -> bubbles.spec-review -> bubbles.validate (final feature-wide certification with Validation/Audit/Chaos Evidence sections in report.md). Commands: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 (pre-promotion), bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 (post-promotion)."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-02T00:00:00Z",
+  "lastUpdatedAt": "2026-05-02T18:00:00Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",
@@ -620,9 +649,12 @@
     ],
     "specReviewHook": "once-before-implement",
     "specReviewHookExecuted": false,
-    "activeScope": "Scope 8: Cross-Feature And Scale Convergence",
-    "completedPhasesThisRound": [],
-    "nextPhase": "implement"
+    "activeScope": null,
+    "completedPhasesThisRound": [
+      "implement",
+      "validate"
+    ],
+    "nextPhase": "audit"
   },
   "scopeLayout": "single-file",
   "artifacts": {
@@ -666,5 +698,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Planning initialized and refined. Scope 1, Scope 2, Scope 3, Scope 4, Scope 5, Scope 6, and Scope 7 are certified complete. Overall feature status remains in_progress because Scope 8 is not complete."
+  "notes": "Planning initialized and refined. Scopes 1-8 are all certified complete (Scope 8: Cross-Feature And Scale Convergence certified 2026-05-02T18:00:00Z). Overall feature status remains in_progress because feature-wide done-promotion requires audit, chaos, docs, and spec-review phases to be recorded next per the lesson learned from 040 Scope 5 cert."
 }
