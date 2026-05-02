@@ -25,6 +25,9 @@
       "bootstrap",
       "spec-review",
       "design-reconcile",
+      "implement",
+      "stabilize",
+      "validate",
       "audit",
       "chaos",
       "docs"
@@ -200,7 +203,31 @@
         "verdict": "current_canonical",
         "evidenceFile": "spec-review.md",
         "summary": "Pre-feature-done spec-review (Gary Laser Eyes) on HEAD f0b3054. Trust classification: CURRENT (canonical) — spec.md, design.md, per-scope content of scopes.md, state.json, and report.md are an authoritative source of truth and accurately describe implementation. Verified all 24 scenario IDs (SCN-038-001..024) align across spec.md/scopes.md/scenario-manifest.json and that every scenario's liveTestExpectation test file + function name exists on disk under tests/e2e/drive/. Verified internal/drive/ implementation matches design.md §1 architecture (google/, save/, retrieve/, tools/, policy/, confirm/, extract/, consumers/, monitor/, scan/, health/, rules/, observability/, memprovider/ + provider.go + version.go + provider_registry_test.go). Verified audit reconciliations from docs phase: A-001 design.md §2.3 + §11 decision-log A1 (lines 263-273 + 905-945) is consistent with internal/drive/google/google.go lines 264-274 source comment; A-002 source comment correctly attributes credentials choice to design §2.3 + §11 decision-log A1 (NOT Scope 6 / decision B2). Independent governance gates: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 (Artifact lint PASSED, only deprecated-field warnings non-blocking); timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration exit 0 (24/24 scenarios mapped to DoD + test files + report evidence, 0 unmapped, 0 warnings). Two MINOR_DRIFT findings (cosmetic, non-blocking, no behavior impact, no auto-invocation of bubbles.docs per spec-review mode rules): SR-038-F1 — scopes.md Scope Summary table (lines 56-67) shows wrong Status for 6 of 8 scopes (1, 4, 5, 6, 7, 8 say 'Not Started' but per-scope markers + state.json certifications all confirm Done); SR-038-F2 — scenario-manifest.json top-level status='not_started' and every per-scenario status='not_started' with empty evidenceRefs[], overlaps audit F-V1 (manifest still uses older flat liveTestExpectation format). Both stale-fragment items recommend bubbles.plan one-shot manifest upgrade + summary-table sync before final feature-done strict promotion; 040's manifest is the reference shape. Carry-forward findings explicitly verified as already-tracked: A-001/A-002 RECONCILED (verified), F-V1/F-V2 OPEN (planning), C-001..C-004 OPEN (bubbles.harden runtime hardening). Wrote spec-review.md with full audit summary, findings, per-artifact trust map, and maintenance context block. Verdict for bubbles.validate: spec is safe to use as authoritative contract for feature-done promotion; the two MINOR_DRIFT items are non-blocking. certification.* status untouched (G024 — spec-review alone does not promote feature; final bubbles.validate feature-wide certification still pending). Next required owner: bubbles.validate (final feature-wide certification with Validation/Audit/Chaos Evidence sections in report.md)."
-      }
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "scope": "feature-wide",
+        "certifiedAt": "2026-05-01T18:30:00Z",
+        "mode": "full-delivery",
+        "evidenceFile": "report.md",
+        "summary": "Cumulative implement-phase provenance backfill recorded by bubbles.workflow to close V-002 specialist-phase bookkeeping. bubbles.implement executed 14 historical rounds across Scopes 1, 2, 3, 5, and 6 between 2026-04-26T23:30:00Z and 2026-05-01T18:30:00Z (latest timestamp here). Rounds verified in executionHistory: Scope 1 Rounds 1–8 + Round 9 verification + Round 10 closure (10 entries from 2026-04-26T23:55:00Z through 2026-04-27T17:50:00Z), Scope 2 Round 11 (2026-04-30T04:50:23Z), Scope 3 Round 12 (2026-04-30T09:14:56Z), Scope 5 Round 14 (2026-05-01T03:50:00Z), Scope 6 Round 14 (2026-05-01T18:30:00Z). Scopes 4, 7, and 8 implementation work merged into the executionHistory under their bubbles.validate certification entries (each Scope's report.md section carries the corresponding implement evidence with Code Diff Evidence tables and named PASS lines). Each implement round recorded ./smackerel.sh test unit/integration/e2e PASS evidence inline with Code/Evidence/Command/Exit Code blocks per DoD item. Backfill written by bubbles.workflow on 2026-05-02T21:30:00Z; no behavior change."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "scope": "Cross-cutting e2e infra (postgres cold-start readiness flake)",
+        "certifiedAt": "2026-04-27T09:30:00Z",
+        "mode": "full-delivery",
+        "evidenceFile": "report.md#round-9--cross-cutting-stability-finding-e2e-cold-start-postgres-flake",
+        "summary": "Stabilize-phase provenance backfill recorded by bubbles.workflow to close V-002 specialist-phase bookkeeping. bubbles.stabilize executed Round 9 on 2026-04-27T09:30:00Z to diagnose and fix the cross-cutting e2e infrastructure flake that blocked Scope 1 DoD-8 and DoD-12 (and equivalent scopes in 037/039). Real provenance: executionHistory entry [bubbles.stabilize, phasesExecuted=stabilize, startedAt=2026-04-27T08:30:00Z, completedAt=2026-04-27T09:30:00Z]. Three coordinated edits landed against the live-stack contract: (a) docker-compose.yml postgres healthcheck switched to pg_isready -h localhost -p 5432 -q TCP probe with start_period 15s + retries 10, (b) smackerel.sh up command passes --wait --wait-timeout 180 to docker compose, (c) tests/e2e/lib/helpers.sh::e2e_wait_healthy now requires HTTP 200 from /api/health AND psql -tAc 'SELECT 1' round-trip before returning. Verified via single full ./smackerel.sh test e2e run: Phase 2 lifecycle 3/3 PASS (test_compose_start, test_persistence count=1, test_config_fail). Backfill written by bubbles.workflow on 2026-05-02T21:30:00Z; no behavior change."
+      },
+      "implement",
+      "stabilize",
+      "validate",
+      "audit",
+      "chaos",
+      "docs"
     ],
     "scopeProgress": [
       {
@@ -765,7 +792,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-02T19:45:00Z",
+  "lastUpdatedAt": "2026-05-02T21:30:00Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",
