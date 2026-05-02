@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/drive"
 	drivehealth "github.com/smackerel/smackerel/internal/drive/health"
+	driveobs "github.com/smackerel/smackerel/internal/drive/observability"
 )
 
 // Connection is the provider-neutral connection snapshot a scan/monitor run
@@ -114,6 +116,13 @@ func (service *Service) InitialScan(ctx context.Context, connectionID string) (R
 		for {
 			items, nextPageToken, listErr := service.provider.ListFolder(ctx, connectionID, folderID, pageToken)
 			if listErr != nil {
+				driveobs.DriveProviderErrors.WithLabelValues(conn.ProviderID, "scan").Inc()
+				slog.Error("drive scan: list folder failed",
+					"provider", conn.ProviderID,
+					"connection_id", connectionID,
+					"folder_id", folderID,
+					"error", listErr,
+				)
 				_ = service.store.RecordProviderError(ctx, connectionID, "scan", listErr)
 				_ = service.store.FailJob(ctx, jobID, listErr)
 				return result, listErr
@@ -124,11 +133,19 @@ func (service *Service) InitialScan(ctx context.Context, connectionID string) (R
 					continue
 				}
 				if _, upsertErr := service.store.UpsertFile(ctx, conn, item); upsertErr != nil {
+					driveobs.DriveScanFiles.WithLabelValues(conn.ProviderID, string(driveobs.OutcomeError)).Inc()
+					slog.Error("drive scan: upsert file failed",
+						"provider", conn.ProviderID,
+						"connection_id", connectionID,
+						"provider_file_id", item.ProviderFileID,
+						"error", upsertErr,
+					)
 					_ = service.store.FailJob(ctx, jobID, upsertErr)
 					return result, upsertErr
 				}
 				result.IndexedCount = result.IndexedCount + 1
 				result.UpsertedCount = result.UpsertedCount + 1
+				driveobs.DriveScanFiles.WithLabelValues(conn.ProviderID, string(driveobs.OutcomeOK)).Inc()
 			}
 			if updateErr := service.store.UpdateJob(ctx, jobID, result); updateErr != nil {
 				return result, updateErr
@@ -145,6 +162,13 @@ func (service *Service) InitialScan(ctx context.Context, connectionID string) (R
 	if err := service.store.CompleteJob(ctx, jobID, result); err != nil {
 		return result, err
 	}
+	slog.Info("drive scan: completed",
+		"provider", conn.ProviderID,
+		"connection_id", connectionID,
+		"seen", result.SeenCount,
+		"indexed", result.IndexedCount,
+		"skipped", result.SkippedCount,
+	)
 	return result, nil
 }
 

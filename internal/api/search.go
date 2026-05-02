@@ -41,6 +41,15 @@ type SearchFilters struct {
 	MaxRating      *int    `json:"max_rating,omitempty"`
 	Tag            string  `json:"tag,omitempty"`
 	HasInteraction bool    `json:"has_interaction,omitempty"`
+
+	// Spec 038 Scope 8: provider-neutral drive search filters. These
+	// apply only to drive_file artifacts and are silently ignored by
+	// non-drive results so legacy callers stay unaffected.
+	DriveProvider    string `json:"drive_provider,omitempty"`
+	DriveFolder      string `json:"drive_folder,omitempty"`
+	DriveSharing     string `json:"drive_sharing,omitempty"`
+	DriveAudience    string `json:"drive_audience,omitempty"`
+	DriveSensitivity string `json:"drive_sensitivity,omitempty"`
 }
 
 // SearchResponse is the response for POST /api/search.
@@ -143,7 +152,12 @@ func hasExplicitSearchFilter(filters SearchFilters) bool {
 		filters.MinRating != nil ||
 		filters.MaxRating != nil ||
 		filters.Tag != "" ||
-		filters.HasInteraction
+		filters.HasInteraction ||
+		filters.DriveProvider != "" ||
+		filters.DriveFolder != "" ||
+		filters.DriveSharing != "" ||
+		filters.DriveAudience != "" ||
+		filters.DriveSensitivity != ""
 }
 
 // SearchHandler handles POST /api/search.
@@ -308,6 +322,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	if req.Query == "" {
 		results, total, err := s.timeRangeSearch(ctx, req)
 		results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
+		results = ApplyDriveSearchFilters(req.Filters, results)
 		return results, total, "time_range", err
 	}
 
@@ -316,6 +331,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		slog.Info("ML sidecar unhealthy, using text fallback", "query", req.Query)
 		results, total, err := s.textSearch(ctx, req)
 		results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
+		results = ApplyDriveSearchFilters(req.Filters, results)
 		return results, total, "text_fallback", err
 	}
 
@@ -327,6 +343,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		slog.Warn("embedding subscription failed, falling back to text search", "error", err)
 		results, total, err := s.textSearch(ctx, req)
 		results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
+		results = ApplyDriveSearchFilters(req.Filters, results)
 		return results, total, "text_fallback", err
 	}
 	defer sub.Unsubscribe()
@@ -354,6 +371,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		slog.Warn("embedding failed, falling back to text search", "error", err)
 		results, total, err := s.textSearch(ctx, req)
 		results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
+		results = ApplyDriveSearchFilters(req.Filters, results)
 		return results, total, "text_fallback", err
 	}
 
@@ -368,6 +386,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 			slog.Warn("text fallback after empty vector search failed", "error", textErr, "query", req.Query)
 		} else if len(textResults) > 0 {
 			textResults = EnrichDriveResults(ctx, s.Pool, req.Query, textResults)
+			textResults = ApplyDriveSearchFilters(req.Filters, textResults)
 			return textResults, textTotal, "text_fallback", nil
 		}
 	}
@@ -395,6 +414,7 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 	// metadata so Screen 5 can render breadcrumb, badges, and snippet without
 	// a second per-result fetch.
 	results = EnrichDriveResults(ctx, s.Pool, req.Query, results)
+	results = ApplyDriveSearchFilters(req.Filters, results)
 
 	return results, total, "semantic", nil
 }

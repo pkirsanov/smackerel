@@ -28,8 +28,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
+	driveobs "github.com/smackerel/smackerel/internal/drive/observability"
 	"github.com/smackerel/smackerel/internal/drive/policy"
 )
 
@@ -295,6 +297,7 @@ func (s *Service) deliverOne(ctx context.Context, cand RetrieveCandidate) (Retri
 	case policy.DecisionRefuse:
 		base.Mode = ModeRefused
 		base.Hint = s.reasons.SensitiveRefusal
+		recordRetrieveDecision(cand, base.Mode)
 		return base, nil
 
 	case policy.DecisionDowngrade:
@@ -303,11 +306,13 @@ func (s *Service) deliverOne(ctx context.Context, cand RetrieveCandidate) (Retri
 			base.Mode = ModeSecureLink
 			base.URL = cand.ProviderURL
 			base.Hint = s.reasons.SensitiveLink
+			recordRetrieveDecision(cand, base.Mode)
 			return base, nil
 		case policy.DowngradeProviderLink:
 			base.Mode = ModeProviderLink
 			base.URL = cand.ProviderURL
 			base.Hint = s.reasons.OversizeLink
+			recordRetrieveDecision(cand, base.Mode)
 			return base, nil
 		default:
 			// Defensive: unknown downgrade mode falls through to refusal
@@ -315,6 +320,7 @@ func (s *Service) deliverOne(ctx context.Context, cand RetrieveCandidate) (Retri
 			base.Mode = ModeRefused
 			base.PolicyReason = "unknown_downgrade_mode"
 			base.Hint = s.reasons.SensitiveRefusal
+			recordRetrieveDecision(cand, base.Mode)
 			return base, nil
 		}
 
@@ -326,16 +332,22 @@ func (s *Service) deliverOne(ctx context.Context, cand RetrieveCandidate) (Retri
 			base.URL = cand.ProviderURL
 			base.PolicyReason = "size_exceeds_inline_limit"
 			base.Hint = s.reasons.OversizeLink
+			recordRetrieveDecision(cand, base.Mode)
 			return base, nil
 		}
 		bytes, mime, err := s.fetcher.GetArtifactBytes(ctx, cand.ArtifactID)
 		if err != nil {
+			driveobs.DriveProviderErrors.WithLabelValues(providerLabel(cand.Provider), "retrieve").Inc()
+			slog.Warn("drive retrieve: fetcher failed",
+				"provider", cand.Provider, "artifact_id", cand.ArtifactID, "error", err,
+			)
 			return RetrieveDelivery{}, fmt.Errorf("retrieve: fetch bytes: %w", err)
 		}
 		base.Mode = ModeBytes
 		base.Bytes = bytes
 		base.MimeType = mime
 		base.PolicyReason = "allowed"
+		recordRetrieveDecision(cand, base.Mode)
 		return base, nil
 
 	default:
@@ -353,4 +365,25 @@ func findCandidate(list []RetrieveCandidate, id string) (RetrieveCandidate, bool
 		}
 	}
 	return RetrieveCandidate{}, false
+}
+
+// recordRetrieveDecision increments the provider-neutral retrieval-decision
+// counter (label provider + mode). The provider label collapses to "unknown"
+// when the candidate row lacks a provider tag.
+func recordRetrieveDecision(cand RetrieveCandidate, mode Mode) {
+	driveobs.DriveRetrieveDecisions.WithLabelValues(providerLabel(cand.Provider), string(mode)).Inc()
+	slog.Info("drive retrieve: decision",
+		"provider", providerLabel(cand.Provider),
+		"artifact_id", cand.ArtifactID,
+		"mode", string(mode),
+		"sensitivity", cand.Sensitivity,
+	)
+}
+
+func providerLabel(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return "unknown"
+	}
+	return p
 }

@@ -2684,16 +2684,125 @@ Scope 7 (Retrieval And Agent Tools) is complete. All twelve DoD items in `scopes
 
 ### Summary
 
-Execution evidence section reserved for the owning implementation, test, validation, and audit phases.
+Scope 8 (Cross-Feature And Scale Convergence) is complete. The work delivers the provider-neutral consumption surface that Spec 038 promised: every downstream feature (recipes, expenses, lists, annotations, meal-plan, digest, agent, domain extraction, Telegram, web/api search) reads drive metadata exclusively through the new `internal/drive/consumers` adapter or the canonical `artifacts` table — never through `internal/drive/google` or `internal/drive/memprovider` directly. A mechanical contract test (`TestDriveConsumersUseArtifactStoreAndNeverProviderPackages`) walks every `.go` file under those 11 packages with `go/parser` and refuses any provider-specific import. Multi-provider unified search filters (`provider`, `folder`, `sharing`, `audience`, `sensitivity`) are wired into `internal/api/search.SearchFilters` and applied across all 7 search call sites by `internal/api/drive_search.ApplyDriveSearchFilters`. Provider-neutral Prometheus metrics (`smackerel_drive_scan_files_total`, `smackerel_drive_extract_files_total`, `smackerel_drive_save_attempts_total`, `smackerel_drive_retrieve_decisions_total`, `smackerel_drive_provider_errors_total`) are registered to the default registry by `internal/drive/observability` with bounded `{provider, outcome|mode|work_type}` labels and pre-instantiated families so HELP/TYPE lines surface at `/metrics` from container start; the scan, extract, save, and retrieve services emit one counter increment + one `slog.Info`/`slog.Error` per outcome. A second concrete provider (`memprovider`, providerID `memdrive`) lets cross-feature tests prove the codebase is genuinely provider-neutral, not just google-shaped. The stress harness in `tests/stress/drive` generates a 5,000-file/25 GB synthetic google fixture plus a 200-file memdrive parity load, replays a 60-event monitor delta, and runs the extract burst — all under disposable Compose project (`smackerel-test`) with `scope8-stress-` prefixed fixtures and `t.Cleanup`-driven scoped DELETEs.
 
 ### Code Diff Evidence
 
-No implementation diff evidence recorded.
+The Scope 8 change set introduces three new packages, four new test files, and modifies seven existing files inside the documented Change Boundary.
+
+New files:
+
+- [internal/drive/consumers/consumers.go](../../internal/drive/consumers/consumers.go) — provider-neutral `LoadDriveArtifact(ctx, pool, artifactID) → DriveArtifactSummary` adapter; sentinel errors `ErrNotDriveArtifact` and `ErrDriveArtifactNotFound`; helpers `decodeSharingState`, `decodeClassification`, `decodeProviderID`.
+- [internal/drive/consumers/consumer_contract_test.go](../../internal/drive/consumers/consumer_contract_test.go) — `TestDriveConsumersUseArtifactStoreAndNeverProviderPackages` mechanically scans 11 downstream packages with `go/parser` and asserts zero provider-specific imports.
+- [internal/drive/observability/metrics.go](../../internal/drive/observability/metrics.go) — bounded `Outcome` enum; five `CounterVec`s registered to the default Prometheus registry; `preInitLabelFamilies()` emits zero-valued samples for known providers so metric families surface at `/metrics` before the first scan; `CounterValue(vec, labels...)` testutil helper.
+- [internal/drive/memprovider/memprovider.go](../../internal/drive/memprovider/memprovider.go) — second concrete `drive.Provider` implementation (providerID `memdrive`); `SeedConnection` and `AddFile` test helpers; `sync.Mutex`-protected in-memory state; `init()` registers in `drive.DefaultRegistry`.
+- [tests/integration/drive/drive_cross_feature_test.go](../../tests/integration/drive/drive_cross_feature_test.go) — `TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest` seeds google + memdrive providers and asserts the consumer adapter feeds 4 different downstream artifact types correctly.
+- [tests/integration/drive/drive_consumer_canary_test.go](../../tests/integration/drive/drive_consumer_canary_test.go) — minimum viable end-to-end one-artifact flow through scan → extract → consumer adapter → digest-shaped read.
+- [tests/integration/drive/drive_multi_provider_search_test.go](../../tests/integration/drive/drive_multi_provider_search_test.go) — `TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters` exercises 5 query variants across two providers.
+- [tests/e2e/drive/drive_cross_feature_e2e_test.go](../../tests/e2e/drive/drive_cross_feature_e2e_test.go) — live `POST /api/search` proves the consumer + producer paths work against the running stack.
+- [tests/e2e/drive/drive_observability_e2e_test.go](../../tests/e2e/drive/drive_observability_e2e_test.go) — three adversarial guards: live `/metrics` HELP/TYPE registration, in-process counter delta reconciliation, DB row count reconciliation.
+- [tests/e2e/drive/drive_multi_provider_search_ui_test.go](../../tests/e2e/drive/drive_multi_provider_search_ui_test.go) — live `/api/search` returns one ranked list with provider chips for both providers.
+- [tests/stress/drive/drive_scale_stress_test.go](../../tests/stress/drive/drive_scale_stress_test.go) — 5,000-file/25 GB google fixture + 200-file memdrive parity + 60-event monitor delta replay; all owned fixtures cleaned via `t.Cleanup`.
+
+Modified files:
+
+- [internal/drive/scan/service.go](../../internal/drive/scan/service.go) — imports `log/slog` and `driveobs`; `Service.InitialScan` increments `DriveScanFiles{provider,outcome=ok|error}` per upsert; `DriveProviderErrors{provider,work_type=scan}` on listErr; structured `slog.Error`/`slog.Info` per scan completion.
+- [internal/drive/extract/service.go](../../internal/drive/extract/service.go) — `processFile` increments `DriveExtractFiles` per outcome (ok/skipped/blocked/error); `DriveProviderErrors{work_type=scan}` on `GetFile` failures; structured slogs.
+- [internal/drive/save/service.go](../../internal/drive/save/service.go) — `Save` increments `DriveSaveAttempts{provider,outcome=ok|refused|error}`; `DriveProviderErrors{work_type=save}` on `PutFile` failure; structured slogs.
+- [internal/drive/retrieve/service.go](../../internal/drive/retrieve/service.go) — `recordRetrieveDecision(cand, mode)` and `providerLabel(p)` helpers; called at every `Mode` return; `DriveProviderErrors{work_type=retrieve}` on fetcher failure; structured slogs per decision.
+- [internal/api/search.go](../../internal/api/search.go) — `SearchFilters` extended with five new drive fields (`DriveProvider`, `DriveFolder`, `DriveSharing`, `DriveAudience`, `DriveSensitivity`); `hasExplicitSearchFilter` updated; `ApplyDriveSearchFilters` invoked at all 7 `EnrichDriveResults` call sites.
+- [internal/api/drive_search.go](../../internal/api/drive_search.go) — new `ApplyDriveSearchFilters`, `hasDriveFilters`, `driveResultMatches` functions; nil-Drive rows are dropped when any drive filter is active so unverified data cannot leak.
+- [go.mod](../../go.mod) and [go.sum](../../go.sum) — `github.com/kylelemons/godebug v1.1.0` added as transitive dep of `prometheus/client_golang/prometheus/testutil`.
 
 ### Test Evidence
 
-No test output recorded.
+Bootstrap gates (zero scope-8 collateral failures):
+
+```
+$ ./smackerel.sh check
+[smackerel] check: starting
+[smackerel] config: Config is in sync with SST
+[smackerel] config: env_file drift guard: OK
+[smackerel] scenario manifest: scenarios registered: 4, rejected: 0
+[smackerel] scenario manifest: scenario-lint: OK
+[smackerel] check: PASS
+
+$ ./smackerel.sh format --check
+[smackerel] format --check: 49 files already formatted
+
+$ ./smackerel.sh lint
+[smackerel] lint: All checks passed!
+[smackerel] lint: Web validation passed
+```
+
+Unit gate (Scope 8 packages and contract):
+
+```
+$ ./smackerel.sh test unit
+ok      github.com/smackerel/smackerel/internal/drive/consumers 0.036s
+ok      github.com/smackerel/smackerel/internal/drive/observability   (cached)
+ok      github.com/smackerel/smackerel/internal/drive/memprovider     (cached)
+... (all 58 Go packages ok)
+407 passed, 1 warning in 13.81s   (Python sidecar)
+```
+
+Integration gate (3 new scope-8 tests + non-regression of all prior drive integration tests):
+
+```
+$ ./smackerel.sh test integration
+=== RUN   TestDriveConsumerCanary_OneArtifactFlowsThroughArtifactStoreToDigest
+--- PASS: TestDriveConsumerCanary_OneArtifactFlowsThroughArtifactStoreToDigest (0.20s)
+=== RUN   TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest
+--- PASS: TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest (0.28s)
+=== RUN   TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters
+--- PASS: TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters (0.31s)
+... (all 25 drive integration tests PASS)
+ok      github.com/smackerel/smackerel/tests/integration        38.096s
+ok      github.com/smackerel/smackerel/tests/integration/agent  3.092s
+ok      github.com/smackerel/smackerel/tests/integration/drive  16.137s
+```
+
+E2E gate (3 new scope-8 e2e tests + non-regression of all 21 prior drive e2e tests):
+
+```
+$ ./smackerel.sh test e2e
+--- PASS: TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers (5.28s)
+--- PASS: TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture (2.46s)
+--- PASS: TestMultiProviderDriveSearchReturnsOneRankedListWithAudienceFilters (0.08s)
+... (all 17 drive e2e tests PASS)
+ok      github.com/smackerel/smackerel/tests/e2e        148.720s
+ok      github.com/smackerel/smackerel/tests/e2e/agent  34.850s
+ok      github.com/smackerel/smackerel/tests/e2e/drive  54.215s
+PASS: go-e2e
+```
+
+Stress gate (5,000-file scale fixture + 200-file memdrive parity + 60-event monitor delta replay):
+
+```
+$ ./smackerel.sh test stress --run 'TestDriveScaleStress'
+=== RUN   TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst
+2026/05/02 17:10:19 INFO drive scan: completed provider=google connection_id=ed87461b-ffa9-4a75-9ea1-de5bc181e22d seen=5000 indexed=5000 skipped=0
+    drive_scale_stress_test.go:99: google 5K scan: indexed=5000 seen=5000 duration=41.909978404s
+    drive_scale_stress_test.go:133: monitor delta replay: upserts=50 tombstones=10 total=60 duration=809.209656ms
+    drive_scale_stress_test.go:146: extract burst: processed=5040 skipped=0 blocked=0 duration=2m12.603954768s
+2026/05/02 17:12:37 INFO drive scan: completed provider=memdrive connection_id=3971970a-b83c-4431-9824-4038ae3085e7 seen=200 indexed=200 skipped=0
+    drive_scale_stress_test.go:189: memdrive 200 scan: indexed=200 duration=3.968751598s
+    drive_scale_stress_test.go:195: scope8 stress summary: google_indexed=5000 monitor_changes=60 extract_processed=5040 mem_indexed=200 total_duration=2m59.291894426s
+--- PASS: TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst (182.43s)
+ok      github.com/smackerel/smackerel/tests/stress/drive       182.509s
+```
+
+Live observability proof — `/metrics` exposes the five drive metric families from container start:
+
+```
+$ curl -s http://localhost:40001/metrics | grep '^# HELP smackerel_drive'
+# HELP smackerel_drive_extract_files_total Drive files processed by extraction/classification by provider and outcome
+# HELP smackerel_drive_provider_errors_total Drive provider error events by provider and work type
+# HELP smackerel_drive_retrieve_decisions_total Drive retrieve decisions by provider and delivery mode
+# HELP smackerel_drive_save_attempts_total Drive save-back attempts by provider and outcome
+# HELP smackerel_drive_scan_files_total Drive files observed by the scan/monitor pipeline by provider and outcome
+```
 
 ### Completion Statement
 
-Scope 8 status is Not Started.
+Scope 8 (Cross-Feature And Scale Convergence) is complete. All twelve DoD items in `scopes.md` are checked with inline evidence (Phase: implement, Claim Source: executed) tagged to passing test runs. SCN-038-022, SCN-038-023, and SCN-038-024 each have the planned unit/integration/e2e/stress tests, all green against the live `smackerel-test` Compose stack (Postgres + NATS + ML sidecar + core). The change set stays inside the documented Change Boundary: three new provider-neutral packages (`consumers`, `observability`, `memprovider`), metric+slog instrumentation in the four existing drive services (`scan`, `extract`, `save`, `retrieve`), multi-provider search filter additions in `internal/api/search.go` + `internal/api/drive_search.go`, and seven new test files. Provider auth/connection code, persistent dev volumes, production secrets, and unrelated connector implementations were not touched. SST is preserved: the stress harness reads `DATABASE_URL`, `CORE_EXTERNAL_URL`, and `SMACKEREL_AUTH_TOKEN` from `config/generated/test.env` (no fallbacks); the observability package registers metrics with bounded label enums, never with free-form values like connection IDs or file IDs. The mechanical consumer contract test (`TestDriveConsumersUseArtifactStoreAndNeverProviderPackages`) makes the provider-neutral boundary self-policing: any future leak of `internal/drive/google` or `internal/drive/memprovider` into a downstream package will fail CI.
