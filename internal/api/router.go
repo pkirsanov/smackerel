@@ -296,8 +296,6 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Post("/photos/connectors", deps.PhotosHandlers.Connect)
 					r.Post("/photos/connectors/test", deps.PhotosHandlers.TestConnector)
 					r.Get("/photos/connectors/{id}", deps.PhotosHandlers.GetConnector)
-					r.Get("/photos/{id}/preview", deps.PhotosHandlers.Preview)
-					r.Get("/photos/{id}", deps.PhotosHandlers.GetPhoto)
 					// Spec 040 Scope 3 — lifecycle, duplicates,
 					// removal, and action-token confirmation.
 					r.Post("/photos/actions/plan", deps.PhotosHandlers.PlanAction)
@@ -309,10 +307,22 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Post("/photos/health/duplicates/{id}/resolve", deps.PhotosHandlers.ResolveCluster)
 					r.Get("/photos/health/removal", deps.PhotosHandlers.HealthRemoval)
 					r.Get("/photos/health/quality", deps.PhotosHandlers.HealthQuality)
+					// Spec 040 Scope 5 — multi-provider capability
+					// governance + photo health aggregate. Registered
+					// BEFORE the /photos/{id} catch-all so the literal
+					// `health` segment wins routing.
+					r.Post("/photos/connectors/capabilities/{capability}/exercise", deps.PhotosHandlers.ExerciseCapability)
+					r.Get("/photos/health", deps.PhotosHandlers.HealthAggregate)
 					// Spec 040 Scope 4 — upload (Telegram/mobile/web)
 					// + sensitivity reveal token mint.
 					r.Post("/photos/upload", deps.PhotosHandlers.Upload)
 					r.Post("/photos/{id}/reveal", deps.PhotosHandlers.MintReveal)
+					// Catch-all photo lookups MUST be registered last
+					// so `/photos/health` and `/photos/upload` resolve
+					// to their literal handlers instead of being
+					// mistaken for a UUID lookup.
+					r.Get("/photos/{id}/preview", deps.PhotosHandlers.Preview)
+					r.Get("/photos/{id}", deps.PhotosHandlers.GetPhoto)
 				})
 			}
 

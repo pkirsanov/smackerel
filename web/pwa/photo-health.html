@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Photo Health — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Photo Health</h1>
+  <p class="subtitle">Live cross-provider lifecycle, duplicate, capability and skip metrics</p>
+
+  <!--
+    Spec 040 Scope 5 — Photo Health dashboard.
+    Every section reads LIVE numbers from `/v1/photos/health`.
+    Capability limitations carry stable `data-limitation-code`
+    attributes whose values come from the Go capability taxonomy
+    registry (`internal/connector/photos/capability_taxonomy.go`).
+    The `data-limitation-code` value is the canary surface that
+    proves Go ↔ API ↔ PWA ↔ NATS ↔ Telegram banner copy stays
+    in sync. Drift here fails
+    `TestPhotosCapabilityTaxonomyCanary_GoRegistryMatchesPWALimitationCodes`.
+  -->
+
+  <section id="photo-health-summary" class="card" aria-labelledby="photo-health-summary-heading" aria-busy="true" data-endpoint="/v1/photos/health">
+    <h2 id="photo-health-summary-heading">Summary</h2>
+    <p id="photo-health-status" class="status info" role="status" aria-live="polite">Loading photo health...</p>
+    <p id="photo-health-error" class="status error" role="alert" hidden></p>
+    <dl id="photo-health-counts" class="health-grid" hidden>
+      <dt>Lifecycle states</dt><dd id="photo-health-lifecycle"></dd>
+      <dt>Open duplicate clusters</dt><dd id="photo-health-duplicates-total"></dd>
+      <dt>Removal pending review</dt><dd id="photo-health-removal-pending"></dd>
+    </dl>
+  </section>
+
+  <section id="photo-health-capability-limits" class="card" aria-labelledby="photo-health-capability-heading">
+    <h2 id="photo-health-capability-heading">Provider Capability Limits</h2>
+    <p id="photo-health-capability-status" class="status info" role="status" aria-live="polite">Loading capability matrix...</p>
+    <ul id="photo-health-capability-list" class="capability-list" hidden></ul>
+    <!--
+      Static limitation banner anchors. The `data-limitation-code`
+      value MUST equal a `LimitationCode` constant in
+      `internal/connector/photos/capability_taxonomy.go`. The canary
+      integration test reads these anchors and compares them against
+      the Go registry — drift on either side fails the test.
+    -->
+    <ul class="visually-hidden" aria-hidden="true">
+      <li data-limitation-code="faces_write_not_supported_by_provider">Faces are read-only on this provider.</li>
+      <li data-limitation-code="sensitivity_not_inferred_by_provider">Sensitivity is inferred locally; provider does not tag it.</li>
+      <li data-limitation-code="upload_not_supported_by_provider">Upload is unavailable on this provider.</li>
+      <li data-limitation-code="archive_not_supported_by_provider">Archive is unavailable on this provider.</li>
+      <li data-limitation-code="delete_not_supported_by_provider">Delete is unavailable on this provider.</li>
+      <li data-limitation-code="write_album_not_supported_by_provider">Album writes are unavailable on this provider.</li>
+      <li data-limitation-code="write_tag_not_supported_by_provider">Tag writes are unavailable on this provider.</li>
+      <li data-limitation-code="write_favorite_not_supported_by_provider">Favorite writes are unavailable on this provider.</li>
+    </ul>
+  </section>
+
+  <section id="photo-health-skips" class="card" aria-labelledby="photo-health-skips-heading">
+    <h2 id="photo-health-skips-heading">Provider Skips</h2>
+    <p id="photo-health-skips-status" class="status info" role="status" aria-live="polite">Loading skip ledger...</p>
+    <ul id="photo-health-skips-list" class="capability-list" hidden></ul>
+  </section>
+
+  <p class="footer"><a href="/pwa/">Back to home</a></p>
+  <script src="/pwa/photo-health.js"></script>
+</body>
+</html>

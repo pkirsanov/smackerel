@@ -54,6 +54,7 @@ type photoSummary struct {
 	ArtifactID      string                          `json:"artifact_id"`
 	Provider        string                          `json:"provider"`
 	ProviderRef     string                          `json:"provider_ref"`
+	ContentHash     string                          `json:"content_hash"`
 	Filename        string                          `json:"filename"`
 	CapturedAt      *time.Time                      `json:"captured_at,omitempty"`
 	Albums          []string                        `json:"albums"`
@@ -128,6 +129,23 @@ func (h *PhotosHandlers) ListConnectors(w http.ResponseWriter, r *http.Request) 
 			Capabilities:         []string{"read", "monitor", "upload", "write_album", "write_tag", "write_favorite", "faces_read"},
 			SupportedAPIVersions: h.config.Providers.Immich.SupportedAPIVersions,
 			PollIntervalSeconds:  h.config.Providers.Immich.PollIntervalSeconds,
+		})
+	}
+	if !hasProvider(connectors, "photoprism") {
+		// Spec 040 Scope 5 — register the second provider so the
+		// PWA shows BOTH providers and the capability matrix
+		// canary can validate the limitation banner copy. The
+		// PhotoPrism adapter marks `faces_write` UNSUPPORTED and
+		// `sensitivity` LIMITED to genuinely exercise the
+		// capability governance surface.
+		connectors = append(connectors, photoConnectorResponse{
+			Provider:             "photoprism",
+			DisplayName:          "PhotoPrism",
+			Status:               statusFromConfig(h.config.Enabled && h.config.Providers.Photoprism.Enabled),
+			Enabled:              h.config.Enabled && h.config.Providers.Photoprism.Enabled,
+			Capabilities:         []string{"read", "monitor", "upload", "write_album", "write_tag", "write_favorite", "archive", "delete", "faces_read"},
+			SupportedAPIVersions: h.config.Providers.Photoprism.SupportedAPIVersions,
+			PollIntervalSeconds:  h.config.Providers.Photoprism.PollIntervalSeconds,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"connectors": connectors})
@@ -215,6 +233,10 @@ func (h *PhotosHandlers) Search(w http.ResponseWriter, r *http.Request) {
 	for _, result := range results {
 		summaries = append(summaries, photoSummaryFromRecord(result.PhotoRecord, result.MatchConfidence))
 	}
+	// Spec 040 Scope 5 — collapse cross-provider duplicates so a
+	// single content_hash present in both Immich and PhotoPrism
+	// renders as one row with both provider links surfaced.
+	summaries = crossProviderRerank(summaries)
 	writeJSON(w, http.StatusOK, map[string]any{"results": summaries, "total": len(summaries)})
 }
 
@@ -397,6 +419,7 @@ func photoSummaryFromRecord(record photolib.PhotoRecord, matchConfidence float64
 		ArtifactID:      record.ArtifactID,
 		Provider:        record.Provider,
 		ProviderRef:     record.ProviderRef,
+		ContentHash:     record.ContentHash,
 		Filename:        record.Filename,
 		CapturedAt:      record.CapturedAt,
 		Albums:          nonNilStringSlice(record.Albums),
@@ -493,8 +516,11 @@ func statusFromConfig(enabled bool) string {
 }
 
 func displayNameForPhotoProvider(provider string) string {
-	if provider == "immich" {
+	switch provider {
+	case "immich":
 		return "Immich"
+	case "photoprism":
+		return "PhotoPrism"
 	}
 	return provider
 }

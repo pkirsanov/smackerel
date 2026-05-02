@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -100,6 +101,22 @@ func (store *Store) PublishPhotoEvent(ctx context.Context, connectorID string, p
 		return nil, fmt.Errorf("begin photo publish transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	// Spec 040 Scope 5: a single content_hash may be ingested by more
+	// than one provider. The artifacts table enforces a unique
+	// content_hash, so the second provider must REUSE the existing
+	// artifact row instead of creating a duplicate. This preserves
+	// the canonical artifact-level dedupe AND lets the cross-provider
+	// rerank link both `photos` rows to the same artifact.
+	var existingArtifactID string
+	if err := tx.QueryRow(ctx, `SELECT id FROM artifacts WHERE content_hash=$1 LIMIT 1`, contentHash).Scan(&existingArtifactID); err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("lookup artifact by content_hash: %w", err)
+		}
+	}
+	if existingArtifactID != "" {
+		artifactID = existingArtifactID
+	}
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO artifacts (

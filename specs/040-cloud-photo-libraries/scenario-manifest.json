@@ -198,7 +198,9 @@
         {"file": "tests/e2e/photos_capability_test.go", "function": "TestPhotosCapability_E2E_AlbumWriteBlockedWhileSearchWorks"},
         {"file": "web/pwa/tests/photos_capability_banner.spec.ts", "function": "test('provider limitation banner renders exact live limitation code')"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-5-multi-provider-capability-governance-and-operations"
+      ]
     },
     {
       "scenarioId": "SCN-040-014",
@@ -210,7 +212,9 @@
         {"file": "tests/integration/photos_provider_neutrality_test.go", "function": "TestPhotosProviderNeutrality_SecondAdapterMatchesImmichShape"},
         {"file": "tests/e2e/photos_search_test.go", "function": "TestPhotosSearch_E2E_CrossProviderUnifiedRanking"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-5-multi-provider-capability-governance-and-operations"
+      ]
     },
     {
       "scenarioId": "SCN-040-015",
@@ -223,7 +227,9 @@
         {"file": "web/pwa/tests/photos_health.spec.ts", "function": "test('photo health dashboard renders lifecycle duplicate sensitivity and confidence metrics')"},
         {"file": "tests/stress/photos_ingest_stress_test.go", "function": "TestPhotosIngestStress_Synthetic15000PhotoLibrarySearchableWithinTarget"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-5-multi-provider-capability-governance-and-operations"
+      ]
     }
   ]
 }

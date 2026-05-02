@@ -954,6 +954,10 @@ case "$COMMAND" in
         env_file="$(smackerel_require_env_file dev)"
         core_host_port="$(smackerel_env_value "$env_file" "CORE_HOST_PORT")"
         auth_token="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
+        pg_host_port="$(smackerel_env_value "$env_file" "POSTGRES_HOST_PORT")"
+        pg_user="$(smackerel_env_value "$env_file" "POSTGRES_USER")"
+        pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
+        pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
         timeout 900 docker run --rm \
           --network host \
           -v "$SCRIPT_DIR:/workspace" \
@@ -962,6 +966,7 @@ case "$COMMAND" in
           -w /workspace \
           -e "CORE_EXTERNAL_URL=http://127.0.0.1:${core_host_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+          -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
           golang:1.24.3-bookworm bash /workspace/scripts/runtime/go-stress.sh
         ;;
       *)
