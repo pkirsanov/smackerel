@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strings"
@@ -23,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/smackerel/smackerel/internal/drive"
+	driveobs "github.com/smackerel/smackerel/internal/drive/observability"
 )
 
 const defaultMaxFileSizeBytes int64 = 25 * 1024 * 1024
@@ -219,43 +221,71 @@ func (service *Service) validate() error {
 }
 
 func (service *Service) processFile(ctx context.Context, file FileRecord) (string, error) {
+	prov := service.provider.ID()
 	if file.SizeBytes > service.maxFileSizeBytes {
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeSkipped)).Inc()
+		slog.Info("drive extract: file skipped",
+			"provider", prov, "connection_id", file.ConnectionID,
+			"provider_file_id", file.ProviderFileID, "reason", "file_too_large",
+			"size_bytes", file.SizeBytes,
+		)
 		return "skipped", service.store.PersistSkippedBlocked(ctx, file, "skipped", "file_too_large", recommendedAction("file_too_large"))
 	}
 	if isBlockedBinary(file.MimeType) {
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeBlocked)).Inc()
+		slog.Info("drive extract: file blocked",
+			"provider", prov, "connection_id", file.ConnectionID,
+			"provider_file_id", file.ProviderFileID, "reason", "unsupported_binary",
+			"mime_type", file.MimeType,
+		)
 		return "blocked", service.store.PersistSkippedBlocked(ctx, file, "blocked", "unsupported_binary", recommendedAction("unsupported_binary"))
 	}
 
 	body, err := service.provider.GetFile(ctx, file.ConnectionID, file.ProviderFileID)
 	if err != nil {
+		driveobs.DriveProviderErrors.WithLabelValues(prov, "extract").Inc()
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeError)).Inc()
+		slog.Warn("drive extract: provider GetFile failed",
+			"provider", prov, "connection_id", file.ConnectionID,
+			"provider_file_id", file.ProviderFileID, "error", err,
+		)
 		return "blocked", service.store.PersistSkippedBlocked(ctx, file, "blocked", "provider_read_failed", recommendedAction("provider_read_failed"))
 	}
 	defer body.Reader.Close()
 	content, err := io.ReadAll(io.LimitReader(body.Reader, service.maxFileSizeBytes+1))
 	if err != nil {
+		driveobs.DriveProviderErrors.WithLabelValues(prov, "extract").Inc()
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeError)).Inc()
 		return "blocked", service.store.PersistSkippedBlocked(ctx, file, "blocked", "provider_read_failed", recommendedAction("provider_read_failed"))
 	}
 	if int64(len(content)) > service.maxFileSizeBytes {
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeSkipped)).Inc()
 		return "skipped", service.store.PersistSkippedBlocked(ctx, file, "skipped", "file_too_large", recommendedAction("file_too_large"))
 	}
 	extraction, err := service.worker.Extract(ctx, file, content)
 	if err != nil {
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeError)).Inc()
 		return "blocked", err
 	}
 	if extraction.State != "complete" {
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeSkipped)).Inc()
 		return extraction.State, service.store.PersistSkippedBlocked(ctx, file, extraction.State, extraction.SkipReason, extraction.RecommendedAction)
 	}
 	folder, err := service.worker.SummarizeFolder(ctx, file, extraction.Text)
 	if err != nil {
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeError)).Inc()
 		return "blocked", err
 	}
 	classification, err := service.worker.Classify(ctx, file, extraction.Text, folder)
 	if err != nil {
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeError)).Inc()
 		return "blocked", err
 	}
 	if err := service.store.PersistExtracted(ctx, file, extraction, folder, classification); err != nil {
+		driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeError)).Inc()
 		return "blocked", err
 	}
+	driveobs.DriveExtractFiles.WithLabelValues(prov, string(driveobs.OutcomeOK)).Inc()
 	return "complete", nil
 }
 

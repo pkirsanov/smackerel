@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/smackerel/smackerel/internal/drive"
+	driveobs "github.com/smackerel/smackerel/internal/drive/observability"
 	"github.com/smackerel/smackerel/internal/drive/rules"
 )
 
@@ -247,6 +249,12 @@ func (s *Service) Save(ctx context.Context, req Request) (Result, error) {
 	}
 
 	if accessMode != drive.AccessReadSave {
+		driveobs.DriveSaveAttempts.WithLabelValues(req.Rule.ProviderID, string(driveobs.OutcomeRefused)).Inc()
+		slog.Warn("drive save: refused (read-only connection)",
+			"provider", req.Rule.ProviderID,
+			"connection_id", connectionID,
+			"rule_id", req.Rule.ID,
+		)
 		failErr := s.markFailed(ctx, requestID, ErrReadOnlyConnection.Error())
 		if failErr != nil {
 			return Result{}, failErr
@@ -280,6 +288,15 @@ func (s *Service) Save(ctx context.Context, req Request) (Result, error) {
 		Size:     int64(len(req.Bytes.Body)),
 	})
 	if err != nil {
+		driveobs.DriveSaveAttempts.WithLabelValues(req.Rule.ProviderID, string(driveobs.OutcomeError)).Inc()
+		driveobs.DriveProviderErrors.WithLabelValues(req.Rule.ProviderID, "save").Inc()
+		slog.Warn("drive save: provider PutFile failed",
+			"provider", req.Rule.ProviderID,
+			"connection_id", connectionID,
+			"rule_id", req.Rule.ID,
+			"target_path", targetPath,
+			"error", err,
+		)
 		_ = s.markFailed(ctx, requestID, err.Error())
 		return Result{
 			RequestID:      requestID,
@@ -296,6 +313,14 @@ func (s *Service) Save(ctx context.Context, req Request) (Result, error) {
 	if err := s.markWritten(ctx, requestID, connectionID, req.Rule.ProviderID, providerFileID, providerURL, folderID); err != nil {
 		return Result{}, err
 	}
+	driveobs.DriveSaveAttempts.WithLabelValues(req.Rule.ProviderID, string(driveobs.OutcomeOK)).Inc()
+	slog.Info("drive save: written",
+		"provider", req.Rule.ProviderID,
+		"connection_id", connectionID,
+		"rule_id", req.Rule.ID,
+		"target_path", targetPath,
+		"size_bytes", len(req.Bytes.Body),
+	)
 	if err := s.linkArtifactGraph(ctx, req.SourceArtifactID, requestID, providerFileID); err != nil {
 		// Linking failure does not roll back the save — the provider file
 		// already exists. The error is surfaced so callers/log lines see it.

@@ -537,3 +537,70 @@ func buildAvailabilityBanner(availability string) (string, string) {
 		return "", ""
 	}
 }
+
+// ApplyDriveSearchFilters drops drive_file results that do not match the
+// optional drive-specific filters (provider/folder/sharing/audience/
+// sensitivity). Non-drive results are returned untouched. Empty filter
+// values are no-ops so callers can pass SearchFilters{} freely. Spec 038
+// Scope 8 — multi-provider search returns one unified ranked list with
+// provider-neutral filters; this is the post-enrichment gate that the
+// SearchEngine applies before returning to the caller.
+func ApplyDriveSearchFilters(filters SearchFilters, results []SearchResult) []SearchResult {
+	if !hasDriveFilters(filters) {
+		return results
+	}
+	out := results[:0]
+	for _, result := range results {
+		if result.ArtifactType != "drive_file" {
+			out = append(out, result)
+			continue
+		}
+		if result.Drive == nil {
+			// Drive enrichment failed; refuse to leak the row past
+			// a filter we cannot apply. Honest filtering > silent passthrough.
+			continue
+		}
+		if !driveResultMatches(filters, *result.Drive) {
+			continue
+		}
+		out = append(out, result)
+	}
+	return out
+}
+
+func hasDriveFilters(filters SearchFilters) bool {
+	return filters.DriveProvider != "" ||
+		filters.DriveFolder != "" ||
+		filters.DriveSharing != "" ||
+		filters.DriveAudience != "" ||
+		filters.DriveSensitivity != ""
+}
+
+func driveResultMatches(filters SearchFilters, meta DriveSearchMetadata) bool {
+	if filters.DriveProvider != "" && !strings.EqualFold(meta.ProviderID, filters.DriveProvider) {
+		return false
+	}
+	if filters.DriveSharing != "" && !strings.EqualFold(meta.SharingState, filters.DriveSharing) {
+		return false
+	}
+	if filters.DriveAudience != "" && !strings.EqualFold(meta.SharingAudience, filters.DriveAudience) {
+		return false
+	}
+	if filters.DriveSensitivity != "" && !strings.EqualFold(meta.Sensitivity, filters.DriveSensitivity) {
+		return false
+	}
+	if filters.DriveFolder != "" {
+		needle := strings.ToLower(filters.DriveFolder)
+		match := false
+		for _, segment := range meta.FolderBreadcrumb {
+			if strings.Contains(strings.ToLower(segment), needle) {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return false
+		}
+	}
+	return true
+}
