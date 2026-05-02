@@ -6,7 +6,7 @@
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "chaos",
+    "currentPhase": "docs",
     "currentScope": null,
     "runStartedAt": "2026-04-27T19:50:00Z",
     "completedPhaseClaims": [
@@ -111,6 +111,62 @@
         "scope": null,
         "certifiedAt": "2026-05-02T17:57:00Z",
         "mode": "full-delivery"
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.chaos",
+        "scope": "feature-wide",
+        "certifiedAt": "2026-05-02T18:34:00Z",
+        "mode": "weighted-mix",
+        "seed": "940040",
+        "runId": "chaos-940040-1777746810",
+        "target": "http://127.0.0.1:45001 (disposable test stack)",
+        "evidenceFile": "report.md#chaos-evidence",
+        "summary": "72 bounded API probes across 14 phases (17 common + 28 uncommon + 27 random/journey incl. parallel-3/parallel-5 bursts). 69 PASS / 3 expectation-mismatch / 0 errors. Stack stayed healthy throughout. No P0/P1/P2 regressions; 6 P3/P4 hardening observations recorded.",
+        "findings": [
+          {
+            "id": "C-001",
+            "severity": "low",
+            "class": "api/error-code",
+            "owner": "bubbles.harden",
+            "summary": "POST /v1/photos/connectors/test and POST /v1/photos/connectors with empty body return 502 BAD_GATEWAY for what is a local input-validation failure ('immich: base_url is required'). Should map to 400 INVALID_REQUEST since the request never reached an upstream."
+          },
+          {
+            "id": "C-002",
+            "severity": "low",
+            "class": "input-validation",
+            "owner": "bubbles.harden",
+            "summary": "POST /v1/photos/actions/plan with scope.photo_ids:['not-a-uuid'] returns 200 and mints a real action token (photo_count:1). UUID format validation happens later at confirm time. No data harm (confirm rejects), but the plan endpoint should validate UUID format up front."
+          },
+          {
+            "id": "C-003",
+            "severity": "low",
+            "class": "contract-inconsistency",
+            "owner": "bubbles.harden",
+            "summary": "GET /v1/photos/connectors advertises both immich AND photoprism, but POST /v1/photos/connectors[/test] rejects provider='photoprism' with 'only immich photo connectors are supported in this scope'. Either drop PhotoPrism from the list endpoint or allow the connect path to accept it."
+          },
+          {
+            "id": "C-004",
+            "severity": "low",
+            "class": "error-message-leakage",
+            "owner": "bubbles.harden",
+            "summary": "GET /v1/photos/health/duplicates/{id} (404) and POST /v1/photos/health/duplicates/{id}/best-pick (400) leak the raw lib/pq sentinel 'no rows in result set' to the client. Scrub internal error wording before reaching the response."
+          },
+          {
+            "id": "C-005",
+            "severity": "low",
+            "class": "input-hardening",
+            "owner": "bubbles.harden",
+            "summary": "GET /v1/photos/search?q=<control-chars> returns 500 photo_search_failed. Other malformed queries (mega body, negative limit, emoji) return clean 200. Validate/strip control characters at handler. Same finding family as 038 G3 — fold into one hardening pass."
+          },
+          {
+            "id": "C-006",
+            "severity": "info",
+            "class": "resource-limits",
+            "owner": "bubbles.harden",
+            "summary": "POST /v1/photos/actions/plan accepts scope with 200 random UUIDs (photo_count:200) and mints token without an upper bound. Worth bounding scope size at plan time to prevent very-large-token resource amplification."
+          }
+        ]
       }
     ],
     "scopeProgress": [
