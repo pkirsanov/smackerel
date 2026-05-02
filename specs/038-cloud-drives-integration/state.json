@@ -6,12 +6,12 @@
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "chaos",
+    "currentPhase": "docs",
     "currentScope": null,
     "runStartedAt": "2026-04-26T00:00:06Z",
     "workflowRunStartedAt": "2026-04-26T23:13:58Z",
-    "workflowRunLastEnvelopeAt": "2026-05-02T18:30:00Z",
-    "currentRound": 14,
+    "workflowRunLastEnvelopeAt": "2026-05-02T18:55:00Z",
+    "currentRound": 15,
     "scope1DoDProgress": "12/12",
     "scope2DoDProgress": "12/12",
     "scope3DoDProgress": "11/11",
@@ -134,6 +134,48 @@
             "class": "provenance",
             "owner": "bubbles.workflow / bubbles.plan",
             "summary": "Carry-forward: 4 phase claims in execution.completedPhaseClaims have no matching agent executionHistory entries"
+          }
+        ]
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.chaos",
+        "scope": "feature-wide",
+        "certifiedAt": "2026-05-02T18:55:00Z",
+        "mode": "weighted-mix",
+        "seed": "538024",
+        "runId": "chaos-538024-1777745911",
+        "target": "http://127.0.0.1:45001 (disposable test stack)",
+        "evidenceFile": "report.md#chaos-evidence",
+        "summary": "62 bounded API probes across 14 phases (15 common + 14 uncommon + 33 random/journey incl. parallel-2/parallel-3/parallel-5 bursts). 56 PASS / 6 expectation-mismatch / 0 errors. Stack stayed healthy throughout. No P0/P1/P2 regressions; 4 P3/P4 hardening observations recorded.",
+        "findings": [
+          {
+            "id": "C-001",
+            "severity": "low",
+            "class": "api/consistency",
+            "owner": "bubbles.harden",
+            "summary": "GET /v1/connectors/drive/connection/{id}/skipped returns 200 with empty groups for a non-existent connection id, while the parent GET /v1/connectors/drive/connection/{id} returns 404 (CONNECTION_NOT_FOUND). Inconsistent error contract; no data exposure."
+          },
+          {
+            "id": "C-002",
+            "severity": "low",
+            "class": "error-handling/hardening",
+            "owner": "bubbles.harden",
+            "summary": "GET /v1/connectors/drive/connection/{id} with non-UUID path param returns 500 with raw 'invalid input syntax for type uuid: \"not-a-uuid\" (SQLSTATE 22P02)' message. No injection (parameterized query rejected the cast); validate UUID at handler boundary and return 400 with stable error code."
+          },
+          {
+            "id": "C-003",
+            "severity": "low",
+            "class": "input-hardening",
+            "owner": "bubbles.harden",
+            "summary": "POST /api/search with control-character query (\\u0000\\u0001 + injection-style suffix) returns 500 SEARCH_FAILED. Other malformed queries return clean 200 text_fallback. Strip/reject control characters at handler."
+          },
+          {
+            "id": "C-004",
+            "severity": "info",
+            "class": "oauth/info-leak-minor",
+            "owner": "bubbles.harden",
+            "summary": "OAuth callback redirect URL reflects raw provider/database error string ('error=google%3A+lookup+oauth+state%3A+no+rows+in+result+set') to the browser. Emit stable error code (e.g. error=oauth_state_invalid) instead of leaking internal wording."
           }
         ]
       }
@@ -672,12 +714,24 @@
       "startedAt": "2026-05-02T18:15:00Z",
       "completedAt": "2026-05-02T18:30:00Z",
       "summary": "Pre-feature-done audit pass for spec 038. Verdict: SHIP_WITH_NOTES. Independent verification: bash .github/bubbles/scripts/artifact-lint.sh exit 0 (Artifact lint PASSED, 3 deprecated-field warnings non-blocking); timeout 600 bash .github/bubbles/scripts/traceability-guard.sh exit 0 (24 scenarios checked, 70 test rows checked, 24/24 scenario-to-row mappings, 24/24 concrete test file references, 24/24 report evidence references, 24/24 DoD fidelity Gate G068 mapped); bash .github/bubbles/scripts/state-transition-guard.sh exit 1 (36 BLOCKs but ALL are whole-feature-done readiness checks against intentionally-pending audit/chaos/docs/spec-review phases plus heuristic false positives - guard's parser does not aggregate per-scope certifiedCompletedPhases; reported substantive issue is carry-forward F-V1 owned by bubbles.plan); bash .github/bubbles/scripts/implementation-reality-scan.sh exit 0 (8 files scanned, 0 violations, 1 INFO warning re design.md fallback file resolution); ./smackerel.sh check exit 0 (Config in sync with SST + env_file drift OK + scenario-lint OK); ./smackerel.sh format --check exit 0 (49 files already formatted); ./smackerel.sh lint exit 0 (All checks passed + Web validation passed); go test -count=1 ./internal/drive/... exit 0 (12 drive Go packages PASS including TestDriveConsumersUseArtifactStoreAndNeverProviderPackages contract); zero TODO/FIXME/XXX/HACK in internal/drive/, zero hardcoded secrets, zero secret-leaking log statements. Spec/design/code coherence verified: drive package layout matches design.md §1 (provider/scan/monitor/extract/save/retrieve/rules/policy/confirm/tools/observability/consumers + memprovider second-provider proof), migrations 021/023/024/028/030 align to scope deliveries, NATS DRIVE stream + 8 subjects in config/nats_contract.json per design §1, 26 DRIVE_* SST keys in config/generated/dev.env (22 baseline + 4 added through Scopes 5/6), all 8 PWA screens have HTML+JS assets, agent registry has 4 drive_* tool registrations. NEW findings recorded in report.md#audit-evidence (none block phase advance to chaos but A-001 MUST be addressed before final feature-done): A-001 MEDIUM (security/docs) - plaintext OAuth access-token storage in internal/drive/google/google.go credentials_ref deviates from spec NFR + design §2.3; refresh_token discarded despite access_type=offline; reconcile design wording with deferred-credentials-vault decision; route to bubbles.docs (+ bubbles.security advisory). A-002 INFO (docs) - source comment at internal/drive/google/google.go:265-266 misattributes credentials vault to Scope 6 / decision B2 (Scope 6 is Policy and Confirmation, B2 was Connect-signature split); route to bubbles.docs. Carry-forward findings (acknowledged by bubbles.validate Scope 1 cert): F-V1 MEDIUM scenario-manifest.json missing structured requiredTestType/linkedTests fields per Gate G057 (owned by bubbles.plan); F-V2 INFO 4 phase claims in execution.completedPhaseClaims have no matching agent executionHistory entries (owned by bubbles.workflow / bubbles.plan). state.json edits: certification.certifiedCompletedPhases appended audit phase entry (verdict ship_with_notes, mode pre-feature-done, evidenceFile report.md, findings list with A-001/A-002/F-V1/F-V2); execution.completedPhaseClaims appended audit; execution.currentPhase audit -> chaos; workflowDispatch.completedPhasesThisRound appended audit; workflowDispatch.nextPhase audit -> chaos; lastUpdatedAt 2026-05-02T18:30:00Z. Top-level status remains in_progress; certification.status remains in_progress (G024 - audit alone does not promote feature; chaos + docs + spec-review + final validate still pending). Post-edit sanity gate: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 confirmed clean. Next required owner: bubbles.chaos."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "scope": "feature-wide",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-02T18:35:00Z",
+      "completedAt": "2026-05-02T18:55:00Z",
+      "summary": "Chaos pass for spec 038 against the disposable test stack (./smackerel.sh --env test up; smackerel-test-* containers on host ports 45001/45002/47001/47002; persistent dev stack on 40001/42001 untouched). Outcome: completed_owned, no P0/P1/P2 regressions. Driver: seeded bash+curl harness at /tmp/smackerel-chaos-038/chaos-538024.sh (out-of-tree, deleted post-run), seed=538024 (deterministic via RANDOM=$SEED). Plan: weighted-mix profile, 14 phases, 62 bounded API probes (15 common health/read + 14 uncommon OAuth/rules-CRUD/confirmation/auth + 33 random/journey incl. parallel-2 and parallel-5 bursts). Surfaces exercised: GET /v1/connectors/drive (auth+noauth+public), POST /v1/connectors/drive/connect (empty/bad-provider/sql-injection-payload/2KB-folder-id), GET /v1/connectors/drive/oauth/callback (no-state, bad-state, error=access_denied), GET /v1/connectors/drive/connection/{id}, GET /.../skipped, GET /v1/drive/artifacts/{id} (incl. path-traversal ../../etc/passwd), GET /v1/drive/rules + audit, POST/PUT/DELETE /v1/drive/rules (empty body, no body, malformed JSON, sql-injection in name, 1KB+3KB mega payload), POST /v1/drive/rules/{id}/test, POST /v1/drive/save (empty/no-body/bad-art/path-traversal-folder/200-deep folder path), GET /v1/drive/save/requests, GET /v1/drive/confirmations/{id}, POST /v1/drive/confirmations/{id} (3-way concurrent race, invalid resolution), POST /api/search (empty/drive-filter/control-bytes injection/5KB query/negative limit/2KB query). Concurrency proofs: 5 parallel saves with same Idempotency-Key (all 400 at validation gate), 3 parallel confirmation resolves on same id (all 400 at channel-validation gate), 5 parallel multi-provider searches (all 200 ~2.0s no contention degradation). Auth boundary stress (Phase N): no-token -> 401, wrong-token -> 401, public connectors endpoint -> 200 (matches design §3.4). Stack remained healthy throughout: pre-run /readyz {ready:true}, post-run /readyz {ready:true} and /api/health degraded baseline preserved. No chaos data successfully written (every write probe rejected by validation gates), GET /v1/drive/rules + /audit + /save/requests all empty after run, no cleanup needed. Driver classified 56 PASS / 6 expectation-mismatch / 0 errors; triage classified all 6 mismatches: 1 test-harness artifact (B1 curl-rejected empty Authorization value), 4 by-design 302 OAuth callbacks, 1 P3 contract-parity observation (B5 skipped endpoint returns 200 for non-existent connection id while parent returns 404). Three additional P3/P4 observations triaged from raw transcript: B4 500+SQLSTATE 22P02 leak when path param is non-UUID, G3 500 SEARCH_FAILED on control-character query (\u0000\u0001), C6/H3 OAuth callback redirect URL reflects raw 'lookup oauth state: no rows in result set' wording. All 4 observations recorded as findings C-001..C-004 routed to bubbles.harden post-feature-done backlog (severity low/info, no bug artifacts mandated per chaos doctrine for sub-P2 findings). state.json edits: certification.certifiedCompletedPhases appended chaos phase entry (mode weighted-mix, seed 538024, runId chaos-538024-1777745911, evidenceFile report.md#chaos-evidence, findings C-001..C-004); execution.completedPhaseClaims left as-is (chaos not in select/bootstrap/spec-review/design-reconcile set); execution.currentPhase chaos -> docs; execution.currentRound 14 -> 15; workflowDispatch.completedPhasesThisRound appended chaos; workflowDispatch.nextPhase chaos -> docs; workflowRunLastEnvelopeAt and lastUpdatedAt advanced to 2026-05-02T18:55:00Z. Top-level status remains in_progress; certification.status remains in_progress (G024 - chaos alone does not promote feature; docs + spec-review + final validate still pending). Post-edit sanity gate: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 confirmed clean. Test stack torn down via ./smackerel.sh --env test down --volumes (disposable; volumes removed). Next required owner: bubbles.docs (carry forward audit A-001/A-002 reconciliation; chaos C-001..C-004 are post-feature-done backlog)."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-02T18:30:00Z",
+  "lastUpdatedAt": "2026-05-02T18:55:00Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",
@@ -705,9 +759,10 @@
     "completedPhasesThisRound": [
       "implement",
       "validate",
-      "audit"
+      "audit",
+      "chaos"
     ],
-    "nextPhase": "chaos"
+    "nextPhase": "docs"
   },
   "scopeLayout": "single-file",
   "artifacts": {
@@ -751,5 +806,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Planning initialized and refined. Scopes 1-8 are all certified complete (Scope 8: Cross-Feature And Scale Convergence certified 2026-05-02T18:00:00Z). Pre-feature-done audit recorded by bubbles.audit on 2026-05-02T18:30:00Z with verdict ship_with_notes (A-001 plaintext OAuth credentials_ref deviation from spec NFR + design §2.3 routed to bubbles.docs; A-002 source comment misattribution routed to bubbles.docs; F-V1/F-V2 carry-forward findings). Overall feature status remains in_progress because feature-wide done-promotion requires chaos, docs, and spec-review phases (plus a final feature-wide validate) to be recorded next per the lesson learned from 040 Scope 5 cert."
+  "notes": "Planning initialized and refined. Scopes 1-8 are all certified complete (Scope 8: Cross-Feature And Scale Convergence certified 2026-05-02T18:00:00Z). Pre-feature-done audit recorded by bubbles.audit on 2026-05-02T18:30:00Z with verdict ship_with_notes (A-001 plaintext OAuth credentials_ref deviation from spec NFR + design §2.3 routed to bubbles.docs; A-002 source comment misattribution routed to bubbles.docs; F-V1/F-V2 carry-forward findings). Chaos pass recorded by bubbles.chaos on 2026-05-02T18:55:00Z (seed 538024, mode weighted-mix, 62 probes / 14 phases / 56 PASS / 6 triaged expectation-mismatch / 0 errors against the disposable test stack at 127.0.0.1:45001) with no P0/P1/P2 regressions; 4 P3/P4 hardening observations C-001..C-004 routed to bubbles.harden post-feature-done backlog. Overall feature status remains in_progress because feature-wide done-promotion still requires docs and spec-review phases (plus a final feature-wide validate) to be recorded next per the lesson learned from 040 Scope 5 cert."
 }
