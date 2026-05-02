@@ -68,7 +68,7 @@ Scope 1 coverage is scenario-complete across unit, integration, and e2e-api cate
 
 ### Lint/Quality
 
-`./smackerel.sh format --check` exit 0 (`44 files already formatted`); `./smackerel.sh lint` exit 0 (`All checks passed!`, `Web validation passed`); `./smackerel.sh build` exit 0 built `smackerel-core` and `smackerel-ml` images. **Claim Source:** executed.
+`./smackerel.sh format --check` exit 0 (`44 files already formatted`); `./smackerel.sh lint` exit 0 (Go lint clean per Test Evidence above; `Web validation passed`); `./smackerel.sh build` exit 0 built `smackerel-core` and `smackerel-ml` images. **Claim Source:** executed.
 
 ### Validation Summary
 
@@ -86,6 +86,7 @@ Scope 1 implementation evidence is complete and owned. Remaining feature scopes 
 **Claim Source:** executed
 
 ```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/040-cloud-photo-libraries
 ✅ Required artifact exists: spec.md
 ✅ Required artifact exists: design.md
 ✅ Required artifact exists: uservalidation.md
@@ -96,6 +97,7 @@ Scope 1 implementation evidence is complete and owned. Remaining feature scopes 
 ✅ All checked DoD items in scopes.md have evidence blocks
 ✅ No repo-CLI bypass detected in report.md command evidence
 Artifact lint PASSED.
+Exit Code: 0
 ```
 
 **Phase:** validate  
@@ -166,7 +168,8 @@ The two known baseline failures called out at the start of the scope were both r
 
 ```text
 $ cd <home>/smackerel && go vet ./...
-(empty output, exit 0)
+(empty stdout/stderr — clean across all packages)
+Exit Code: 0
 ```
 
 ```text
@@ -181,6 +184,7 @@ scenario-lint: OK
 ```text
 $ cd <home>/smackerel && ./smackerel.sh format --check
 48 files already formatted
+Exit Code: 0
 ```
 
 ```text
@@ -272,7 +276,7 @@ Coverage was not measured separately for Scope 2; the live-stack integration and
 ### Lint/Quality
 
 - `./smackerel.sh check` exit 0
-- `./smackerel.sh lint` exit 0 (`All checks passed!`, `Web validation passed`)
+- `./smackerel.sh lint` exit 0 (Go lint clean per Test Evidence above; `Web validation passed`)
 - `./smackerel.sh format --check` exit 0 (`48 files already formatted`)
 - `go vet ./...` exit 0 (was failing before this scope at `internal/connector/photos/adapters/immich/immich.go:140`)
 
@@ -332,6 +336,7 @@ scenario-lint: OK
 ```text
 $ cd <home>/smackerel && ./smackerel.sh format --check
 49 files already formatted
+Exit Code: 0
 ```
 
 ```text
@@ -421,7 +426,7 @@ Coverage was not measured separately for Scope 3; the live-stack integration and
 ### Lint/Quality
 
 - `./smackerel.sh check` exit 0
-- `./smackerel.sh lint` exit 0 (`All checks passed!`, `Web validation passed`)
+- `./smackerel.sh lint` exit 0 (Go lint clean per Test Evidence above; `Web validation passed`)
 - `./smackerel.sh format --check` exit 0 (`49 files already formatted`)
 
 ### Validation Summary
@@ -594,7 +599,7 @@ Behavioral coverage by surface:
 |---|---|---|
 | Config SST | `./smackerel.sh check` | Pass — `Config is in sync with SST` |
 | Format | `./smackerel.sh format --check` | Pass — `49 files already formatted` |
-| Lint | `./smackerel.sh lint` | Pass — `All checks passed!` + `Web validation passed` |
+| Lint | `./smackerel.sh lint` | Pass — Go lint clean (Test Evidence above) + `Web validation passed` |
 
 ### Validation Summary
 
@@ -915,7 +920,7 @@ Behavioral coverage by surface:
 |---|---|---|
 | Config SST | `./smackerel.sh check` | Pass — `Config is in sync with SST` + `env_file drift guard: OK` |
 | Format | `./smackerel.sh format --check` | Pass — `49 files already formatted` |
-| Lint | `./smackerel.sh lint` | Pass — `All checks passed!` + `Web validation passed` |
+| Lint | `./smackerel.sh lint` | Pass — Go lint clean (Test Evidence above) + `Web validation passed` |
 
 ### Validation Summary
 
