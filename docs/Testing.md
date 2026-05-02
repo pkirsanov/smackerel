@@ -104,6 +104,64 @@ All 38 Go packages have tests:
 | stress | `tests/stress/recommendations_test.go` | Drives 50 concurrent warm reactive requests for 5 minutes against the live dev stack and asserts the spec-039 NFR (warm p95 ≤ 10s) is met (SCN-039-052) |
 | e2e-api | `tests/e2e/recommendations_full_regression_test.go` | Broad regression covering reactive + watch detail + feedback + why paths, including redaction smoke checks (SCN-039-050..053) |
 
+### Cloud Drives Test Surface (Spec 038)
+
+The cloud-drives surface (Google Drive in scope today) MUST exercise the OAuth web flow, scan + monitor loop on the `DRIVE` NATS stream, Save Rules + Save Service + confirmation flow, and the search/artifact-detail surface.
+
+| Test type | Coverage |
+|-----------|----------|
+| unit | `DriveProvider` interface compliance per provider, OAuth nonce lifecycle, scan-rule include/exclude + max_depth, Save Rules first-stable-match + conflict audit, sensitivity policy decision matrix, cursor invalidation + bounded-rescan strategy, low-confidence confirmation envelope, agent retrieval tools |
+| integration | Live Google Drive fixture against the test stack (`tests/integration/drive/`): `BeginConnect`/`FinalizeConnect` end-to-end with a `drive_oauth_states` row, `drive_connections` row with healthy status + scope JSON + bearer `credentials_ref`, scan/monitor producing `drive_files` rows, change-monitor cursor durability, Save Service routing through provider writers, exactly-once confirmation across web + Telegram |
+| e2e-api | Drive-side journeys against the live test stack: Connect → scan progress → search hit → artifact detail with folder context, Save Request → confirmation → provider write, sensitive content blocked at retrieval until reveal/confirm |
+| e2e-ui | Screen 2 (provider selector + OAuth handoff), Screen 3 (scan progress + counters), Screen 4 (skipped/blocked grouping), Screen 7 (rule audit + recent saves), Screen 8 (rule dry-run), Screen 11 (low-confidence confirmation) |
+| stress | Bulk scan of synthetic large-folder fixtures, sustained change-monitor throughput, and Save Rules evaluation under burst load — all against the disposable test stack |
+
+Required adversarial cases:
+
+- A Save Rule with overlapping conditions must surface every conflicting match in the audit feed, not silently pick first match without provenance.
+- A `drive_cursors` row marked "cursor invalid" must trigger a bounded rescan that re-emits only true deltas — duplicates are forbidden.
+- A sensitive artifact must NOT appear in retrieval responses without a confirmation/reveal step.
+- An OAuth `state` nonce reuse must be rejected at `FinalizeConnect`.
+
+### Cloud Photo Libraries Test Surface (Spec 040)
+
+The cloud-photos surface (Immich and PhotoPrism providers) MUST exercise the provider-neutral `photolib.PhotoLibrary` contract, the unified upload pipeline shared by Telegram/PWA/web, the action-token mint+confirm flow, sensitivity reveal, and the capability taxonomy SST.
+
+| Test type | Coverage |
+|-----------|----------|
+| unit | `photolib.PhotoLibrary` shape per adapter, capability taxonomy `CheckCapability` + `LimitationDescriptorFor`, cross-provider duplicate signal (strict-hash + weak fallback), lifecycle/dedupe/removal analyzers, scope-hash `PhotoActionToken` mint and drift detection, ConfirmedWriter guard, sensitivity reveal token mint + single-use enforcement, photo routing target classification |
+| integration | Live Immich fixture against the test stack (`tests/integration/`): connect/scope/scan, incremental changes, skip-ledger visibility, capability canary (`TestPhotosCapabilityTaxonomyCanary_GoRegistryMatchesPWALimitationCodes`), provider-neutrality canary against the second adapter, lifecycle/dedupe/removal, unified upload pipeline (`TestPhotosUpload_TelegramMobileWebEnterSamePipeline`), document-scan multi-page grouping, sensitivity reveal + audit, `409 PROVIDER_LIMITATION` mapping for unsupported writes |
+| e2e-api | Telegram + mobile + web upload → classify → search → retrieve, cross-feature routing produces downstream artifacts (receipt → expense, recipe photo → recipe, document → document), Telegram does NOT auto-send sensitive photos, action plan does NOT mutate before confirm, cross-provider duplicate returned once across two providers |
+| e2e-ui | PWA Screens 1–5 (connectors list, add wizard, connector detail, search, photo detail), Photo Health dashboards (lifecycle, duplicates, removal, quality), Photo Health limitations dashboard (8 `data-limitation-code` anchors), confirm-destructive-action screen, mobile docscan |
+| stress | `tests/stress/`: synthetic 15,000-photo library ingest with cross-provider duplicates, search p95 budget under burst load |
+
+Required adversarial cases:
+
+- A destructive action must NOT be executed when the action token's scope hash differs from the confirmed scope (drift detection).
+- A second adapter (PhotoPrism) marking face-cluster rename UNSUPPORTED MUST return a stable `LimitationCode` from the shared taxonomy, not an ad-hoc string.
+- The same photo content present in two providers MUST surface as a single canonical artifact in cross-provider search results.
+- A reveal token MUST fail closed on reuse, after TTL, or when used by a different actor than the one who minted it.
+- Sensitive search results MUST omit preview URLs and set `requires_reveal=true`.
+
+### QF Companion Connector Test Surface (Spec 041)
+
+Spec 041 adds a pre-MVP connector and companion-surface contract. Tests must prove the connector preserves QF authority rather than turning packets into Smackerel recommendations.
+
+| Test type | Required coverage |
+|-----------|-------------------|
+| unit | Connector config validation, cursor parsing, packet normalization, required ID/badge validation, evidence-bundle serialization |
+| integration | Sync against a QF-compatible test read surface, preserve packet IDs, badges, trace IDs, approval state, and degraded-state behavior |
+| e2e-api | Ingest a QF packet, retrieve it through search/recent/detail APIs, and export a consent-scoped `PersonalEvidenceBundle` |
+| e2e-ui | Web and Telegram/digest surfaces show QF packet content as read-only with QF source, trust badges, trace/deep links, and no execution controls |
+| stress | Connector sync cycles remain bounded under repeated packet updates and do not duplicate artifacts or lose cursor state |
+
+Required adversarial cases:
+
+- A packet missing calibration or provenance metadata must be degraded rather than silently trusted.
+- A packet with a stale cursor must not duplicate an existing QF packet.
+- A local Smackerel synthesis must not rewrite the QF thesis or approval state.
+- A context export without explicit consent or source provenance must fail.
+
 ## Environment Isolation Rules
 
 ### Development State Is Sacred

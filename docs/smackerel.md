@@ -109,7 +109,19 @@ The user's primary job is **to live their life.** The system watches, absorbs, p
 - Financial advice or automated transactions
 - Medical or health diagnosis
 
-### 1.6 What This Is NOT
+### 1.6 QF Companion Boundary
+
+Smackerel may act as a companion surface for QuantitativeFinance (QF), but not as a financial-decision system. QF remains the system of record for intents, scenarios, decision packets, approval state, mandates, execution attempts, calibration, and provenance. Smackerel can ingest QF decision artifacts, preserve their trust metadata, surface them in digest/search/Web/Telegram experiences, and export personal context back to QF as a consent-scoped evidence bundle.
+
+| Boundary | Smackerel behavior |
+|----------|--------------------|
+| QF packet ingestion | Treat QF packets as external authoritative artifacts, not local recommendations |
+| Trust metadata | Preserve QF `CalibrationBadge`, `DataProvenanceBadge`, packet IDs, intent/scenario IDs, trace IDs, and deep links without modification |
+| Personal context | Export `PersonalEvidenceBundle`s with source, sensitivity, consent, and provenance metadata |
+| Actions | No trade approval, mandate change, execution, or financial advice in the pre-MVP companion connector |
+| Source of truth | QF owns decisions; Smackerel owns personal memory, reminders, digesting, retrieval, and context assembly |
+
+### 1.7 What This Is NOT
 
 Smackerel is **not** a to-do app, not a note-taking app, not a bookmarking tool, and not a personal CRM. It is a **knowledge engine** — it observes your digital life, processes everything into refined knowledge, connects it all into a graph, and feeds you smackerels of exactly what you need, when you need it.
 
@@ -153,6 +165,7 @@ graph TB
         WEATHER[Weather API]
         ALERTS_CONN[Gov Alerts]
         MARKETS[Financial Markets]
+        QF_DECISIONS[QF Decision Packets]
         TWITTER[Twitter / X]
         DISCORD_CONN[Discord - discordgo]
         HOSPITABLE[Hospitable]

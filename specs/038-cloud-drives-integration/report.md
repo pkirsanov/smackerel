@@ -3369,3 +3369,193 @@ The 6 raw "FAIL" lines above are the chaos driver's expectation checks (regex on
   "blockedReason": null
 }
 ```
+
+---
+
+## Docs Phase — Evidence
+
+**Phase:** docs
+**Agent:** bubbles.docs
+**Started:** 2026-05-02T19:15:00Z
+**Mode:** pre-feature-done docs sweep + audit reconciliation
+
+### Summary
+
+Docs phase reconciles audit-phase findings A-001 (medium, security/docs) and A-002 (info, docs), and publishes Spec 038 cloud-drives runtime surface into the Bubbles-managed docs (Connector_Development.md, Operations.md, Development.md, Testing.md). Both reconciliation findings target documentation truth, not behavior change — the implementation in `internal/drive/google/google.go` (plaintext bearer in `drive_connections.credentials_ref`, refresh-token discarded) is intentional per design decision-log A1 and is preserved as-is.
+
+### Drift Detected (cross-referenced against committed code)
+
+| Doc | Section | Doc Said (before) | Code Says | Action |
+|-----|---------|-------------------|-----------|--------|
+| `specs/038-cloud-drives-integration/design.md` §2.3 | OAuth credential storage | "Refresh tokens are written into approved secret storage at `Connect()` time and read by the provider on each call" | `FinalizeConnect` persists access token plaintext as `bearer:<access_token>` in `drive_connections.credentials_ref`; refresh token discarded; expires_at written from provider | Reconciled — wording rewritten to truthfully describe Scope 1, link to decision-log A1, preserve the credentials-vault deferral rationale and the §2.0 "Patterns to Avoid" direction-of-travel |
+| `internal/drive/google/google.go:265-266` | Source comment | "a proper credentials vault lands in Scope 6 (design §10 / decision B2)" | Scope 6 is "Policy and Confirmation"; decision B2 was the rejected single-`Connect` OAuth shape; the actual deferral lives in §11 decision-log "Resolved A1" | Reconciled — comment rewritten to point at design.md §2.3 + §11 decision-log "Resolved A1" |
+| `docs/Connector_Development.md` | Connector inventory + Existing Connectors | Drive provider absent | `internal/drive/google/` implements `DriveProvider`; spec 038 fully shipped | Added Cloud Drives — Google Drive row + new "Cloud Drives Connector Boundary (Spec 038)" section + Existing Connectors footer entry |
+| `docs/Operations.md` | New "Cloud Drives Operations (Spec 038)" section | Drive operations absent | Drive surface is operated via `/v1/connectors/drive`, `/v1/drive/rules`, `/v1/drive/save`, `/v1/drive/confirmations`, `/v1/drive/artifacts` | Added — covers enable, OAuth flow, connection health, Save Rules, Save Service, confirmation, search/artifact detail, cursor reset, schema tables |
+| `docs/Development.md` | Implemented capabilities + `internal/drive/` package row + NATS streams | "15 passive connectors"; no `internal/drive/`; 11 streams listed (DRIVE/PHOTOS/AGENT/WEATHER absent) | Spec 038 ships `internal/drive/` (10 sub-packages) and the `DRIVE` stream; runtime now provisions 15 streams per `internal/nats/client.go` `AllStreams()` | Added Cloud Drives capability bullet, `internal/drive/` package row, expanded NATS streams table to all 15 streams |
+| `docs/Testing.md` | New "Cloud Drives Test Surface (Spec 038)" section | Drive test surface undocumented | Tests live in `tests/integration/drive/`, `tests/e2e/drive*`, `internal/drive/*/`, `tests/stress/drive/` | Added test surface table + adversarial-cases checklist |
+
+### Audit Finding Reconciliation
+
+#### A-001 (MEDIUM, security/docs) — Plaintext OAuth access-token in `drive_connections.credentials_ref`
+
+**Disposition:** Documentation-only fix. The implementation is intentional per design decision-log A1; the audit's request was specifically to "reconcile design wording with deferred-credentials-vault decision".
+
+- Updated [specs/038-cloud-drives-integration/design.md](specs/038-cloud-drives-integration/design.md) §2.3 to truthfully describe what Scope 1 persists, why (decision-log A1 + smallest-correct-change rationale), what is intentionally NOT persisted (refresh token), and what the future credentials-vault scope MUST do. The §2.0 "Patterns to Avoid" rule about refresh tokens in PostgreSQL plaintext remains unchanged — `credentials_ref` for the bearer token is now documented as the explicit, time-bounded exception.
+- The implementation in `internal/drive/google/google.go` is unchanged; behavior is unchanged.
+
+#### A-002 (INFO, docs) — Source comment misattribution at `internal/drive/google/google.go:265-266`
+
+**Disposition:** Documentation-only fix.
+
+- Updated [internal/drive/google/google.go](internal/drive/google/google.go) lines 264-279 to point at `design.md §2.3 + §11 decision-log "Resolved A1"` instead of the incorrect "Scope 6 (design §10 / decision B2)" attribution.
+- Verified compile cleanliness: `./smackerel.sh check` returns "Config in sync with SST" with `scenario-lint: OK`. Comment-only change; no behavior delta.
+
+### API Doc Verification
+
+All Drive endpoints documented in `docs/Operations.md` were cross-referenced against `internal/api/router.go` (lines 247-289).
+
+```
+**Phase:** docs
+**Command:** grep -E '/v1/(connectors/drive|drive)' internal/api/router.go
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+247			if deps.DriveHandlers != nil {
+248				r.Get("/connectors/drive", deps.DriveHandlers.ListConnectors)
+249				r.Post("/connectors/drive/connect", deps.DriveHandlers.Connect)
+250				r.Get("/connectors/drive/oauth/callback", deps.DriveHandlers.OAuthCallback)
+251				r.Get("/connectors/drive/connection/{id}", deps.DriveHandlers.GetConnection)
+252				r.Get("/connectors/drive/connection/{id}/skipped", deps.DriveHandlers.GetSkippedBlocked)
+253				r.Get("/drive/artifacts/{id}", deps.DriveHandlers.GetArtifactDetail)
+257			if deps.DriveRulesHandlers != nil {
+260					r.Get("/drive/rules", deps.DriveRulesHandlers.List)
+261					r.Post("/drive/rules", deps.DriveRulesHandlers.Create)
+262					r.Get("/drive/rules/audit", deps.DriveRulesHandlers.Audit)
+263					r.Get("/drive/rules/{id}", deps.DriveRulesHandlers.Get)
+264					r.Put("/drive/rules/{id}", deps.DriveRulesHandlers.Update)
+265					r.Delete("/drive/rules/{id}", deps.DriveRulesHandlers.Delete)
+266					r.Post("/drive/rules/{id}/test", deps.DriveRulesHandlers.Test)
+271					r.Post("/drive/save", deps.DriveSaveHandlers.Save)
+272					r.Get("/drive/save/requests", deps.DriveSaveHandlers.ListRequests)
+281					r.Get("/drive/confirmations/{id}", deps.DriveConfirmationsHandlers.Get)
+282					r.Post("/drive/confirmations/{id}", deps.DriveConfirmationsHandlers.Resolve)
+```
+
+| Endpoint Group | In Router | In Operations.md | Status |
+|----------------|-----------|------------------|--------|
+| `/v1/connectors/drive*` (5 routes) | ✅ | ✅ | Match |
+| `/v1/drive/artifacts/{id}` | ✅ | ✅ | Match |
+| `/v1/drive/rules*` (7 routes) | ✅ | ✅ | Match |
+| `/v1/drive/save*` (2 routes) | ✅ | ✅ | Match |
+| `/v1/drive/confirmations/{id}` (2 routes) | ✅ | ✅ | Match |
+
+No router endpoint is undocumented; no documented endpoint is absent from the router.
+
+### Validation Evidence
+
+```
+**Phase:** docs
+**Command:** bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration
+**Exit Code:** 0
+**Claim Source:** executed
+**Output (tail):**
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+```
+
+```
+**Phase:** docs
+**Command:** timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration
+**Exit Code:** 0
+**Claim Source:** executed
+**Output (tail):**
+ℹ️  Scenarios checked: 24
+ℹ️  Test rows checked: 70
+ℹ️  Scenario-to-row mappings: 24
+ℹ️  Concrete test file references: 24
+ℹ️  Report evidence references: 24
+ℹ️  DoD fidelity scenarios: 24 (mapped: 24, unmapped: 0)
+RESULT: PASSED (0 warnings)
+```
+
+```
+**Phase:** docs
+**Command:** timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/038-cloud-drives-integration --verbose
+**Exit Code:** 0
+**Claim Source:** executed
+**Output (tail):**
+🐾 Regression baseline guard: PASSED
+   All 0 checks passed.
+```
+
+```
+**Phase:** docs
+**Command:** ./smackerel.sh check
+**Exit Code:** 0
+**Claim Source:** executed
+**Output:**
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+```
+
+### Routing Required (foreign owners)
+
+| Owner | Item | Reason |
+|-------|------|--------|
+| `bubbles.harden` (backlog) | Chaos-phase findings C-001..C-004 (skipped/blocked 200 vs 404 inconsistency, UUID-validation 500, control-character 500, OAuth callback raw-error reflection). | Out of docs scope — code hardening. Already routed during chaos phase. |
+
+### Files Touched
+
+| File | Change |
+|------|--------|
+| `specs/038-cloud-drives-integration/design.md` | §2.3 wording reconciled with Scope 1 implementation + decision-log A1 (audit A-001) |
+| `internal/drive/google/google.go` (lines 264-279) | Source-comment attribution corrected to design.md §2.3 + §11 decision-log A1 (audit A-002) |
+| `docs/Connector_Development.md` | Inventory + Existing Connectors + new Cloud Drives Connector Boundary section |
+| `docs/Operations.md` | New Cloud Drives Operations section |
+| `docs/Development.md` | Implemented capabilities + `internal/drive/` package row + NATS streams expanded to 15 |
+| `docs/Testing.md` | New Cloud Drives Test Surface section |
+| `specs/038-cloud-drives-integration/report.md` | Docs phase evidence (this section) |
+| `specs/038-cloud-drives-integration/state.json` | docs phase recorded in `completedPhaseClaims`; certifiedCompletedPhases entry appended |
+
+### Phase Outcome
+
+Docs reconciliation complete. Both audit-phase docs findings (A-001, A-002) are resolved without behavior change. Cloud Drives runtime surface is now published into the Bubbles-managed docs registry. No further documentation drift detected against current Spec 038 implementation. Phase advances docs → ready for `bubbles.system-review` / feature-done strict promotion.
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.docs",
+  "roleClass": "execution",
+  "outcome": "completed_owned",
+  "featureDir": "specs/038-cloud-drives-integration",
+  "scopeIds": ["feature-wide"],
+  "dodItems": [],
+  "scenarioIds": [],
+  "artifactsCreated": [],
+  "artifactsUpdated": [
+    "specs/038-cloud-drives-integration/design.md",
+    "internal/drive/google/google.go",
+    "docs/Connector_Development.md",
+    "docs/Operations.md",
+    "docs/Development.md",
+    "docs/Testing.md",
+    "specs/038-cloud-drives-integration/report.md",
+    "specs/038-cloud-drives-integration/state.json"
+  ],
+  "evidenceRefs": [
+    "report.md#docs-phase--evidence",
+    "report.md#audit-finding-reconciliation",
+    "report.md#api-doc-verification"
+  ],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```

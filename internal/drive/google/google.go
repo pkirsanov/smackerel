@@ -261,10 +261,16 @@ func (p *Provider) FinalizeConnect(ctx context.Context, state string, code strin
 		tokenExpiresAt = &t
 	}
 
-	// credentials_ref carries the bearer token plaintext for Scope 1; a
-	// proper credentials vault lands in Scope 6 (design §10 / decision
-	// B2). Persisting the bearer token here is what enables Health() to
-	// re-issue Drive API calls without a separate token-store lookup.
+	// credentials_ref carries the bearer (access) token plaintext for
+	// Scope 1; the refresh token returned by the provider is intentionally
+	// not persisted yet. A dedicated credentials vault — either an external
+	// secret store or a `drive_credentials` child table backed by one — is
+	// deferred until a non-Google provider's token model demands it
+	// (design.md §2.3 + §11 decision-log "Resolved A1"). Persisting the
+	// bearer token here is what enables Health() to re-issue Drive API
+	// calls without a separate token-store lookup; once the access token
+	// expires, the connection moves to a non-`healthy` state and the user
+	// re-authorizes through the standard OAuth flow.
 	credsRef := "bearer:" + tokenResp.AccessToken
 
 	if _, err := p.pool.Exec(ctx,

@@ -10,8 +10,8 @@
     "currentScope": null,
     "runStartedAt": "2026-04-26T00:00:06Z",
     "workflowRunStartedAt": "2026-04-26T23:13:58Z",
-    "workflowRunLastEnvelopeAt": "2026-05-02T18:55:00Z",
-    "currentRound": 15,
+    "workflowRunLastEnvelopeAt": "2026-05-02T19:25:00Z",
+    "currentRound": 16,
     "scope1DoDProgress": "12/12",
     "scope2DoDProgress": "12/12",
     "scope3DoDProgress": "11/11",
@@ -25,7 +25,9 @@
       "bootstrap",
       "spec-review",
       "design-reconcile",
-      "audit"
+      "audit",
+      "chaos",
+      "docs"
     ],
     "pendingTransitionRequests": []
   },
@@ -178,6 +180,16 @@
             "summary": "OAuth callback redirect URL reflects raw provider/database error string ('error=google%3A+lookup+oauth+state%3A+no+rows+in+result+set') to the browser. Emit stable error code (e.g. error=oauth_state_invalid) instead of leaking internal wording."
           }
         ]
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "scope": "feature-wide",
+        "certifiedAt": "2026-05-02T19:25:00Z",
+        "mode": "pre-feature-done",
+        "verdict": "completed_owned",
+        "evidenceFile": "report.md#docs-phase--evidence",
+        "summary": "Reconciled audit findings A-001 (design.md §2.3 wording aligned with Scope 1 implementation + decision-log A1) and A-002 (internal/drive/google/google.go:265-266 source-comment attribution corrected to design §2.3 + §11 decision-log A1). Published Spec 038 cloud-drives runtime surface into Bubbles-managed docs: docs/Connector_Development.md (inventory + Cloud Drives Connector Boundary section + Existing Connectors footer), docs/Operations.md (new Cloud Drives Operations section), docs/Development.md (capabilities bullet + internal/drive/ package row + NATS streams expanded to 15), docs/Testing.md (new Cloud Drives Test Surface section). API-doc verification confirmed every documented /v1/connectors/drive*, /v1/drive/* endpoint is registered in internal/api/router.go (lines 247-289). Verified via ./smackerel.sh check (Config in sync with SST, scenario-lint OK), bash .github/bubbles/scripts/artifact-lint.sh (PASSED), timeout 600 bash .github/bubbles/scripts/traceability-guard.sh (PASSED, 24/24 scenarios mapped, 0 unmapped), timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh --verbose (PASSED). No behavior change. certification.* status untouched."
       }
     ],
     "scopeProgress": [

@@ -20,6 +20,65 @@ How to build and integrate a new passive data connector into Smackerel.
 | Weather | `internal/connector/weather` | None | Open-Meteo API | `016-weather-connector` |
 | Government Alerts | `internal/connector/alerts` | None | USGS Earthquake API | `017-gov-alerts-connector` |
 | Financial Markets | `internal/connector/markets` | Finnhub API key | Finnhub + CoinGecko | `018-financial-markets-connector` |
+| Cloud Drives — Google Drive | `internal/drive/google` | OAuth2 (Google) | Google Drive REST API v3 | `038-cloud-drives-integration` |
+| Cloud Photos — Immich | `internal/connector/photos/adapters/immich` | API key | Immich REST API | `040-cloud-photo-libraries` |
+| Cloud Photos — PhotoPrism | `internal/connector/photos/adapters/photoprism` | API key | PhotoPrism REST API | `040-cloud-photo-libraries` |
+| QF Decisions | `internal/connector/qfdecisions` | QF token / service credential | QuantitativeFinance decision-packet read surface | `041-qf-companion-connector` |
+
+## QF Decisions Connector Boundary
+
+The QF Decisions connector is a companion connector, not a markets connector and not a recommendation engine. Its job is to ingest QF-owned decision artifacts and preserve their authority boundary inside Smackerel.
+
+| Concern | Requirement |
+|---------|-------------|
+| Connector ID | Use `qf-decisions` for the default connector instance |
+| Artifact type | Emit QF packets as source-qualified artifacts such as `qf/decision-packet`, not as Smackerel-local recommendations |
+| Required metadata | Preserve QF `packet_id`, `intent_id`, `scenario_id`, `trace_id`, `approval_state`, deep link, `CalibrationBadge`, and `DataProvenanceBadge` |
+| Trust metadata | Never synthesize, upgrade, rewrite, or hide QF-provided trust badges |
+| Actions | Pre-MVP connector exposes read-only packet surfacing and `PersonalEvidenceBundle` export only |
+| Evidence bundle export | Include source artifact IDs, user consent, sensitivity classification, and provenance when exporting context back to QF |
+| Failure behavior | If required packet IDs, trace IDs, or badges are missing, mark the artifact degraded and avoid action prompts |
+
+## Cloud Drives Connector Boundary (Spec 038)
+
+Cloud Drive providers (Google Drive in scope today) live under
+`internal/drive/` and implement the `DriveProvider` interface in
+`internal/drive/provider.go`, **not** the generic `connector.Connector`
+interface above. The two surfaces are intentionally different because
+Drive providers are bidirectional (read + save), folder-aware, and OAuth-redirect-driven.
+
+| Concern | Requirement |
+|---------|-------------|
+| Provider package | One subpackage per provider under `internal/drive/<provider>/` (e.g., `internal/drive/google/`). |
+| OAuth flow | Implement `BeginConnect` (issue auth URL + nonce row in `drive_oauth_states`) and `FinalizeConnect` (consume nonce, exchange code, persist `drive_connections`). The OAuth callback is `GET /v1/connectors/drive/oauth/callback`. |
+| Credential storage | Persist the bearer (access) token plaintext as `bearer:<token>` in `drive_connections.credentials_ref` with the provider-supplied `expires_at`. Refresh tokens are intentionally not persisted in Scope 1; the dedicated credentials vault is deferred per spec 038 design.md §2.3 + decision-log A1. Until then, do not introduce a parallel secret path. |
+| Scan + monitor | Drive providers MUST publish to NATS subjects on the `DRIVE` stream (`drive.scan.request.<provider>`, `drive.scan.progress.<provider>`, `drive.change.<provider>`, `drive.extract.request`, `drive.classify.request`). Cursor durability lives in `drive_cursors` with bounded-rescan fallback. |
+| Save Rules engine | Provider writes flow through the rule engine (`internal/drive/rules/`) and the Save Service (`internal/drive/save/`). Direct provider writes from `internal/pipeline/` or `internal/telegram/` are forbidden. |
+| Sensitivity + confirmation | Low-confidence and sensitive outcomes route through the Screen 11 confirmation surface (`/v1/drive/confirmations/{id}`) and Telegram numbered replies; both share one handler so the exactly-once contract holds across channels. |
+| Configuration | All provider knobs (folder include/exclude, `max_depth`, sync interval, MIME allow-lists, sensitivity thresholds) live under `drive.providers.<id>` in `config/smackerel.yaml`; no Go-source literals. |
+
+The Save Rules engine, retrieval service, scan loop, and tool registrations
+work unchanged when a new provider is added (BS-008 acceptance criterion).
+
+## Cloud Photo Libraries Connector Boundary (Spec 040)
+
+Photo-library providers (Immich and PhotoPrism in scope today) live under
+`internal/connector/photos/adapters/<provider>/` and implement the
+provider-neutral `photolib.PhotoLibrary` contract in
+`internal/connector/photos/library.go`. They are first-class providers
+alongside cloud drives, but with their own data model (photo-specific
+artifacts, dedupe clusters, lifecycle, sensitivity reveal).
+
+| Concern | Requirement |
+|---------|-------------|
+| Provider package | One adapter per provider under `internal/connector/photos/adapters/<provider>/`. Both adapters share the same Go contract — capability probe, scope enumeration, scanner/monitor/skip-ledger, fetch, writers (AddToAlbum/Tag/Favorite/Archive/Delete/Upload/RenameFaceCluster). |
+| Credential storage | Provider API keys live under `photos.providers.<provider>.access_token` in `config/smackerel.yaml`. Empty values fail-loud at startup. |
+| Capability taxonomy | Unsupported / limited operations MUST use a `LimitationCode` constant from `internal/connector/photos/capability_taxonomy.go`. The same codes appear in API responses (`409 PROVIDER_LIMITATION`), Prometheus metrics (`smackerel_photos_capabilities_limited_total`), and the PWA Photo Health dashboard. The taxonomy canary integration test asserts those three surfaces stay in sync. |
+| Cross-provider dedupe | Use `internal/connector/photos.SameCrossProviderDuplicate` (strict-hash equality, weak bytes+captured_at fallback) and the artifact-id reuse path in `store.go` so the same content from two providers maps to one canonical artifact. |
+| Action confirmation | Destructive actions (archive, delete, album removal) MUST flow through `PhotoActionToken` mint/confirm (`/v1/photos/actions/plan` → `/v1/photos/actions/confirm`) with scope-hash drift checks; `ConfirmedWriter` wraps every `ProviderWriter` so a write cannot fire before confirmation. Delete also requires a text-confirmation step. |
+| Sensitivity reveal | Sensitive previews are gated server-side at `/v1/photos/{id}/preview` (returns `403 sensitivity_requires_reveal` without a reveal token); single-use, actor-bound, TTL + hash-protected reveal tokens are minted via `/v1/photos/{id}/reveal`. Search results omit preview URLs and set `requires_reveal=true` for sensitive rows. |
+| NATS surface | Photo-library providers publish to the `PHOTOS` stream (`photos.classify`, `photos.ocr`, `photos.embed`, `photos.lifecycle`, `photos.dedupe`, plus `.result`/`.classified`/`.embedded`/`.ocred` responses). |
+| Capture + cross-feature routing | The unified `POST /v1/photos/upload` pipeline is shared by Telegram, the mobile PWA, and the web; cross-feature routing (`internal/connector/photos/routing.go`) classifies into `expense`, `recipe`, `document`, `knowledge`, `annotation`, `list`, `mealplan`, or `intelligence` and persists to `photo_routing_decisions` with `UNIQUE(photo_id, target)`. |
 
 ## Connector Interface
 
@@ -334,5 +393,8 @@ For reference, the codebase has these connector implementations:
 | Google Keep | `internal/connector/keep/` | None (Takeout) / gkeepapi | Timestamp |
 | Google Maps Timeline | `internal/connector/maps/` | None (Takeout file) | Processed file list |
 | Hospitable | `internal/connector/hospitable/` | API token | Timestamp |
+| Google Drive | `internal/drive/google/` | OAuth2 (Google) | `drive_cursors` (provider sync token) with bounded-rescan fallback |
+| Immich (photos) | `internal/connector/photos/adapters/immich/` | API key | Timestamp/asset cursor in `photo_sync_state` |
+| PhotoPrism (photos) | `internal/connector/photos/adapters/photoprism/` | API key | Timestamp/asset cursor in `photo_sync_state` |
 
-The **bookmarks connector** (`internal/connector/bookmarks/connector.go`) is the simplest implementation and a good starting point for new connectors.
+The **bookmarks connector** (`internal/connector/bookmarks/connector.go`) is the simplest implementation and a good starting point for new generic `connector.Connector` connectors. For Drive providers, start from `internal/drive/google/` and the `DriveProvider` interface in `internal/drive/provider.go`. For photo-library providers, start from `internal/connector/photos/adapters/immich/` and the `photolib.PhotoLibrary` contract in `internal/connector/photos/library.go`.

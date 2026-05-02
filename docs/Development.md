@@ -29,6 +29,9 @@ Implemented runtime capabilities:
 - Telegram bot (share-sheet, forwards, conversation assembly, media groups, 9 commands)
 - Web UI (HTMX semantic search, artifact detail, digest, topics, settings, status, knowledge dashboard)
 - 15 passive connectors (IMAP email, CalDAV calendar, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps, Hospitable STR, GuestHost STR, Discord, Twitter/X archive, Weather via Open-Meteo, Government Alerts via USGS, Financial Markets via Finnhub/CoinGecko)
+- Cloud Drives integration (spec 038): Google Drive provider with OAuth `BeginConnect`/`FinalizeConnect`, scan + monitor loop on the `DRIVE` NATS stream, classification + sensitivity policy, Save Rules engine with audit/dry-run, Save Service with confirmations (`/v1/drive/confirmations/{id}`), Drive search/artifact-detail surface (`/v1/drive/artifacts/{id}`), agent retrieval tools, and 17 `drive_*` schema tables
+- Cloud Photo Libraries integration (spec 040): provider-neutral `photolib.PhotoLibrary` contract with Immich and PhotoPrism adapters, capability taxonomy SST, lifecycle/duplicates/removal analyzers, scope-hash `PhotoActionToken` mint/confirm flow, sensitivity reveal tokens (`/v1/photos/{id}/reveal`), unified `/v1/photos/upload` capture pipeline shared by Telegram/PWA/web, cross-feature routing (8 RouteTargets), and 7 `photo_*` schema tables
+- 17 connector source families across `internal/connector/` and `internal/drive/`
 - Intelligence engine (synthesis at 2AM, momentum hourly, resurfacing at 8AM, overdue alerts)
 - Knowledge synthesis layer (concept pages, entity profiles, cross-source connections, lint auditing, prompt contract validation)
 - Domain extraction pipeline (recipe and product schemas) with NATS-backed async processing and Prometheus metrics
@@ -42,6 +45,13 @@ Implemented runtime capabilities:
 - NATS JetStream with token authentication (11 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 - CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
+
+Planned pre-MVP integration work:
+
+- QF companion connector (`qf-decisions`) from `specs/041-qf-companion-connector/`
+- Read-only ingestion of QF `DecisionPacket` envelopes with QF-owned trust metadata preserved
+- Web, Telegram, digest, and search surfacing for QF packets without local financial advice or execution authority
+- `PersonalEvidenceBundle` export back to QF with source, sensitivity, consent, and provenance metadata
 
 Do not bypass `./smackerel.sh` with ad-hoc `go`, `python`, `pytest`, or `docker compose` commands as the normal repo workflow.
 
@@ -205,7 +215,8 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists, expense API (7 endpoints: query, export CSV, correction, classification, suggestions), meal plan API (12 endpoints), recipe domain scaling endpoint), Bearer auth, security headers, rate limiting |
 | `internal/auth/` | OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, token storage |
 | `internal/config/` | SST-compliant configuration loader — reads all env vars, validates required fields, parses numeric config, cross-validates constraints |
-| `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `rss/`, `twitter/`, `weather/`, `youtube/` |
+| `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `rss/`, `twitter/`, `weather/`, `youtube/`, plus the `photos/` provider-neutral library and adapters under `photos/adapters/{immich,photoprism}/` |
+| `internal/drive/` | Spec 038 cloud-drives surface — `DriveProvider` interface, `google/` provider implementation (OAuth `BeginConnect`/`FinalizeConnect`, plaintext bearer in `drive_connections.credentials_ref` per design.md §2.3 + decision-log A1), `scan/` + `monitor/` loops on the `DRIVE` NATS stream, `extract/` content extraction, `rules/` Save Rules engine, `save/` Save Service, `confirm/` low-confidence confirmation handler, `policy/` sensitivity policy enforcement, `retrieve/` retrieval service, `tools/` agent tool registrations, `health/` cursor durability and bounded rescan, `consumers/` NATS consumer wiring, `memprovider/` in-memory test provider |
 | `internal/db/` | PostgreSQL connection pool wrapper, migration runner (embed.FS), artifact CRUD, export with cursor pagination, guest/property repos |
 | `internal/digest/` | Daily digest assembly (action items, overnight artifacts, hot topics, hospitality context, knowledge health, expense digest section (summary, needs-review, suggestions, missing receipts, word limit enforcement)), LLM generation via NATS, Telegram delivery with retry |
 | `internal/domain/` | Domain extraction schema registry — maps artifact content types to prompt contracts for structured extraction (recipes, products), expense metadata types, vendor alias types |
@@ -459,7 +470,7 @@ is the design choice that makes "add a tool" a one-package change.
 
 ## NATS JetStream Streams
 
-All NATS subjects and streams are defined in `config/nats_contract.json`. Both Go core and Python ML sidecar have tests that verify their local constants match this contract.
+All NATS subjects and streams are defined in `config/nats_contract.json`. Both Go core and Python ML sidecar have tests that verify their local constants match this contract. The runtime currently provisions 15 streams.
 
 | Stream | Subjects Pattern | Purpose |
 |--------|-----------------|---------|
@@ -471,6 +482,11 @@ All NATS subjects and streams are defined in `config/nats_contract.json`. Both G
 | `ALERTS` | `alerts.>` | Contextual alert notifications (core → external) |
 | `SYNTHESIS` | `synthesis.>` | Knowledge synthesis and cross-source connection assessment (core → ML → core) |
 | `DOMAIN` | `domain.>` | Domain-aware structured extraction (core → ML → core) |
+| `DRIVE` | `drive.>` | Spec 038 cloud-drives surface — `drive.scan.request`, `drive.scan.result`, `drive.change.notify`, `drive.health.report`, `drive.extract.request`/`.result`, `drive.classify.request`/`.result` (core → ML → core) |
+| `PHOTOS` | `photos.>` | Spec 040 cloud-photos surface — `photos.classify`/`.classified`, `photos.ocr`/`.ocred`, `photos.embed`/`.embedded`, `photos.lifecycle`/`.result`, `photos.dedupe`/`.result` (core → ML → core) |
 | `ANNOTATIONS` | `annotations.>` | Annotation event notifications (core internal) |
 | `LISTS` | `lists.>` | List lifecycle events (core internal) |
+| `AGENT` | `agent.>` | Spec 037 agent loop — `agent.invoke.request`, `agent.invoke.response`, `agent.tool_call.executed`, `agent.complete` |
+| `WEATHER` | `weather.>` | Weather connector reactive subjects |
+| `DEADLETTER` | `deadletter.>` | Dead-letter queue for messages that exhaust retry budgets |
 | `DEADLETTER` | `deadletter.>` | Failed message storage for debugging |
