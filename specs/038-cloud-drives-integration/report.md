@@ -2805,4 +2805,258 @@ $ curl -s http://localhost:40001/metrics | grep '^# HELP smackerel_drive'
 
 ### Completion Statement
 
-Scope 8 (Cross-Feature And Scale Convergence) is complete. All twelve DoD items in `scopes.md` are checked with inline evidence (Phase: implement, Claim Source: executed) tagged to passing test runs. SCN-038-022, SCN-038-023, and SCN-038-024 each have the planned unit/integration/e2e/stress tests, all green against the live `smackerel-test` Compose stack (Postgres + NATS + ML sidecar + core). The change set stays inside the documented Change Boundary: three new provider-neutral packages (`consumers`, `observability`, `memprovider`), metric+slog instrumentation in the four existing drive services (`scan`, `extract`, `save`, `retrieve`), multi-provider search filter additions in `internal/api/search.go` + `internal/api/drive_search.go`, and seven new test files. Provider auth/connection code, persistent dev volumes, production secrets, and unrelated connector implementations were not touched. SST is preserved: the stress harness reads `DATABASE_URL`, `CORE_EXTERNAL_URL`, and `SMACKEREL_AUTH_TOKEN` from `config/generated/test.env` (no fallbacks); the observability package registers metrics with bounded label enums, never with free-form values like connection IDs or file IDs. The mechanical consumer contract test (`TestDriveConsumersUseArtifactStoreAndNeverProviderPackages`) makes the provider-neutral boundary self-policing: any future leak of `internal/drive/google` or `internal/drive/memprovider` into a downstream package will fail CI.
+Scope 8 (Cross-Feature And Scale Convergence) is complete. All twelve DoD items in `scopes.md` are checked with inline evidence (Phase: implement, Claim Source: executed) tagged to passing test runs. SCN-038-022, SCN-038-023, and SCN-038-024 each have the planned unit/integration/e2e/stress tests, all green against the live `smackerel-test` Compose stack (Postgres + NATS + ML sidecar + core). The change set stays inside the documented Change Boundary: three new provider-neutral packages (`consumers`, `observability`, `memprovider`), metric+slog instrumentation in the four existing drive services (`scan`, `extract`, `save`, `retrieve`), multi-provider search filter additions in `internal/api/search.go` + `internal/api/drive_search.go`, and seven new test files. Provider auth/connection code, persistent dev volumes, production secrets, and unrelated connector implementations were not touched. SST is preserved: the stress harness reads `DATABASE_URL`, `CORE_EXTERNAL_URL`, and `SMACKEREL_AUTH_TOKEN` from `config/generated/test.env` (no fallbacks); the observability package registers metrics with bounded label enums, never with free-form values like connection IDs or file IDs. The mechanical consumer contract test (`TestDriveConsumersUseArtifactStoreAndNeverProviderPackages`) makes the provider-neutral boundary self-policing: any future leak of `internal/drive/google` or `internal/drive/memprovider` into a downstream pack
+
+---
+
+## Audit Phase
+
+### Audit Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.audit
+**Mode:** pre-feature-done audit (full-delivery; status remains in_progress; phase advances to chaos)
+**Date:** 2026-05-02
+**Verdict:** ⚠️ SHIP_WITH_NOTES — proceed to chaos. Three findings routed (one MEDIUM security/docs deviation, one INFO docs comment, plus carry-forward F-V1/F-V2 documented by validate). No fabricated evidence detected.
+
+#### Command 1: Artifact Lint
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration
+✅ All required artifacts exist
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: full-delivery
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+⚠️  state.json uses deprecated field 'statusDiscipline' — see scope-workflow.md state.json canonical schema v2
+⚠️  state.json uses deprecated field 'scopeLayout' — see scope-workflow.md state.json canonical schema v2
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+EXIT=0
+```
+
+Three deprecated-field warnings are non-blocking schema-v2 advisories carried since spec creation; F-V1/F-V2 will normalize them at full-spec-done promotion.
+
+#### Command 2: Traceability Guard (Gate G068 + scenario-to-test-to-evidence chain)
+
+```text
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration
+--- Gherkin → DoD Content Fidelity (Gate G068) ---
+✅ Scope 1 scenario maps to DoD item: SCN-038-001 / SCN-038-002 / SCN-038-003
+✅ Scope 2 scenario maps to DoD item: SCN-038-004 / SCN-038-005 / SCN-038-006
+✅ Scope 3 scenario maps to DoD item: SCN-038-007 / SCN-038-008 / SCN-038-009
+✅ Scope 4 scenario maps to DoD item: SCN-038-010 / SCN-038-011 / SCN-038-012
+✅ Scope 5 scenario maps to DoD item: SCN-038-013 / SCN-038-014 / SCN-038-015
+✅ Scope 6 scenario maps to DoD item: SCN-038-016 / SCN-038-017 / SCN-038-018
+✅ Scope 7 scenario maps to DoD item: SCN-038-019 / SCN-038-020 / SCN-038-021
+✅ Scope 8 scenario maps to DoD item: SCN-038-022 / SCN-038-023 / SCN-038-024
+ℹ️  DoD fidelity: 24 scenarios checked, 24 mapped to DoD, 0 unmapped
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 24
+ℹ️  Test rows checked: 70
+ℹ️  Scenario-to-row mappings: 24
+ℹ️  Concrete test file references: 24
+ℹ️  Report evidence references: 24
+ℹ️  DoD fidelity scenarios: 24 (mapped: 24, unmapped: 0)
+RESULT: PASSED (0 warnings)
+EXIT=0
+```
+
+All 24 scenarios trace cleanly: scenario → scope DoD → test plan row → concrete test file → report.md evidence block.
+
+#### Command 3: State Transition Guard
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/038-cloud-drives-integration
+ℹ️  Current state.json status: in_progress
+✅ All 93 DoD items are checked [x]
+✅ All scope statuses are canonical (Not Started / In Progress / Done / Blocked)
+✅ All 93 checked DoD items across resolved scope files have evidence blocks
+✅ Artifact lint passes (exit 0)
+✅ Artifact freshness guard passes (exit 0)
+✅ Implementation delta evidence recorded with git-backed proof and non-artifact file paths (Gate G053)
+✅ Implementation reality scan passed — no stub/fake/hardcoded data patterns detected
+🔴 TRANSITION BLOCKED: 36 failure(s), 4 warning(s)
+state.json status MUST NOT be set to 'done'.
+EXIT=1
+```
+
+Guard exits 1 because it evaluates whole-feature done-promotion readiness while audit/chaos/docs/spec-review phases are intentionally still pending. The substantive blocks are (a) Gate G057 scenario-manifest.json missing structured `requiredTestType`/`linkedTests` fields (carry-forward F-V1, owner bubbles.plan, will be cleared at full-spec-done promotion); (b) 10 specialist phases reported missing — the guard's parser does not aggregate per-scope `certifiedCompletedPhases`; state.json shows 8 `implement` + 8 `validate` phase records under `certification.certifiedCompletedPhases` (verified by inspection); (c) heuristic false positives on Consumer Impact Sweep for additive packages and on regression-DoD wording. None of (a)/(b)/(c) introduces NEW work for the audit phase.
+
+#### Command 4: Implementation Reality Scan
+
+```text
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh specs/038-cloud-drives-integration
+ℹ️  Resolved 8 implementation file(s) to scan
+--- Scan 1..8 (gateway/handler/decode/IDOR/auth-bypass/silent-decode/...) ---
+  Files scanned:  8
+  Violations:     0
+  Warnings:       1
+🟡 PASSED with 1 warning(s) — manual review advised
+EXIT=0
+```
+
+One warning is the resolver falling back from scopes.md to design.md for file discovery (parser limitation in audit harness, not a real fabrication signal). Zero IDOR/auth-bypass/silent-decode/stub patterns.
+
+#### Command 5: Independent Test Verification
+
+```text
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+EXIT=0
+
+$ ./smackerel.sh format --check
+49 files already formatted
+EXIT=0
+
+$ ./smackerel.sh lint
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: web/extension/manifest.json
+  OK: web/extension/manifest.firefox.json
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+EXIT=0
+
+$ go test -count=1 -timeout 60s ./internal/drive/...
+ok      github.com/smackerel/smackerel/internal/drive   0.007s
+ok      github.com/smackerel/smackerel/internal/drive/confirm   0.017s
+ok      github.com/smackerel/smackerel/internal/drive/consumers 0.020s
+ok      github.com/smackerel/smackerel/internal/drive/google    0.011s
+ok      github.com/smackerel/smackerel/internal/drive/health    0.010s
+ok      github.com/smackerel/smackerel/internal/drive/monitor   0.037s
+ok      github.com/smackerel/smackerel/internal/drive/policy    0.012s
+ok      github.com/smackerel/smackerel/internal/drive/retrieve  0.022s
+ok      github.com/smackerel/smackerel/internal/drive/rules     0.009s
+ok      github.com/smackerel/smackerel/internal/drive/save      0.015s
+ok      github.com/smackerel/smackerel/internal/drive/scan      0.015s
+ok      github.com/smackerel/smackerel/internal/drive/tools     0.033s
+EXIT=0
+```
+
+Targeted re-run of the consumer contract test (Scope 8 self-policing gate):
+
+```text
+$ go test -count=1 -timeout 60s -v ./internal/drive/consumers/
+=== RUN   TestDriveConsumersUseArtifactStoreAndNeverProviderPackages
+--- PASS: TestDriveConsumersUseArtifactStoreAndNeverProviderPackages (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/internal/drive/consumers 0.013s
+EXIT=0
+```
+
+All 12 drive Go packages compile and pass; the mechanical provider-neutrality contract holds. No discrepancy between independently-run results and report.md claims for Scopes 1–8.
+
+#### Command 6: Code Quality / Security Spot Checks
+
+```text
+$ grep -rn "TODO\|FIXME\|XXX\|HACK" internal/drive/ | grep -v "_test.go" | wc -l
+0
+
+$ grep -rn 'password\s*=\s*"\|api_key\s*=\s*"\|secret\s*=\s*"' internal/drive/ ml/app/ | grep -v "_test.go" | wc -l
+0
+
+$ grep -rEn 'slog\.(Info|Debug|Error).*[Tt]oken|slog.*[Ss]ecret|slog.*[Pp]assword' internal/drive/ | wc -l
+0
+```
+
+Zero TODO/FIXME/HACK markers, zero hardcoded secrets, zero secret-leaking log statements in `internal/drive/` or `ml/app/`.
+
+#### Command 7: Spec/Design/Code Coherence Spot Checks
+
+```text
+$ ls internal/drive/
+confirm  consumers  context.go  extract  google  health  memprovider  monitor
+observability  policy  provider.go  provider_registry_test.go  retrieve  rules  save  scan  tools  version.go  version_test.go
+
+$ ls internal/db/migrations/ | grep -E "^(021|023|024|028|030)"
+021_drive_schema.sql                             # Scope 1
+023_drive_connection_expires_at.sql              # Scope 1 (decision-log A1 + B1)
+024_drive_scan_monitor_read_models.sql           # Scope 2
+028_drive_save_back.sql                          # Scope 5
+030_drive_confirmations_and_share_changes.sql    # Scope 6
+
+$ grep -c '"DRIVE":\|"drive\.' config/nats_contract.json
+9
+
+$ grep -c '^DRIVE_' config/generated/dev.env
+26
+
+$ ls config/prompt_contracts/ | grep drive
+drive-classification-v1.yaml
+drive-folder-context-v1.yaml
+
+$ ls web/pwa/ | grep -E "^(connector|drive)"
+connector-detail.html  connector-detail.js
+connectors-add.html    connectors-add.js
+connectors.html        connectors.js
+drive-artifact-detail.html  drive-artifact-detail.js
+drive-rule-edit.html        drive-rule-edit.js
+drive-rules.html            drive-rules.js
+drive-search.html           drive-search.js
+```
+
+Implementation surface matches design.md §1 (provider/scan/monitor/extract/classify/save/retrieve/rules/policy/confirm/tools/observability/consumers + memprovider second-provider proof) and the screen inventory in spec.md (Screens 1–8 PWA assets present). NATS DRIVE stream + 8 subjects per design §1. SST emits 26 `DRIVE_*` keys (22 baseline from Scope 1 + 4 added through Scopes 5/6).
+
+#### Findings Summary
+
+| Severity | ID | Class | Owner | Description |
+|----------|-----|-------|-------|-------------|
+| MEDIUM | A-001 | security/docs | bubbles.docs (+ bubbles.security review) | Plaintext OAuth access-token storage in `internal/drive/google/google.go` (`credentials_ref = "bearer:" + tokenResp.AccessToken`) deviates from spec.md NFR ("Provider refresh tokens stored only in approved secret storage; never logged") and design.md §2.3 ("Refresh tokens are written into approved secret storage"). The implementation discards `tokenResp.RefreshToken` despite requesting `access_type=offline`, so connections lose health after the access token expires. The deviation is intentional per design.md decision-log A1 (additive `expires_at` column, rejecting child credentials table A2), but the design's own §2.3 wording remains inconsistent with that decision. Reconcile design.md §2.3 + spec.md NFR with the deferred-credentials-vault posture before final feature-done promotion, and either land refresh-token persistence or document the residual session-only login model as an explicit residual risk. |
+| INFO | A-002 | docs | bubbles.docs | Source comment misattribution at `internal/drive/google/google.go:265-266`: "a proper credentials vault lands in Scope 6 (design §10 / decision B2)". Scope 6 is "Policy and Confirmation" (no credentials vault), and decision-log B2 was about the OAuth Connect signature split (rejected in favour of B1), not credentials storage. Correct the attribution when A-001 is addressed. |
+| MEDIUM (carry-fwd) | F-V1 | planning | bubbles.plan | scenario-manifest.json scenarios use freeform `liveTestExpectation` strings rather than structured `requiredTestType`/`linkedTests` fields per Gate G057. Pre-existing finding noted by bubbles.validate Scope 1 cert; will be cleared at full-spec-done promotion. |
+| INFO (carry-fwd) | F-V2 | provenance | bubbles.workflow / bubbles.plan | `state.json.execution.completedPhaseClaims` lists `select`/`bootstrap`/`spec-review`/`design-reconcile` without matching `executionHistory` agent entries for those four phase strings. Pre-existing; will be normalized at full-spec-done promotion. Per-scope implement/validate phases ARE recorded under `certification.certifiedCompletedPhases` (8+8 entries verified). |
+
+#### Spot-Check Recommendations
+
+The audit verdict is interpreted from machine output where noted. The following items warrant manual confirmation before final feature-done promotion:
+
+1. **A-001 token storage:** Manually inspect `internal/drive/google/google.go` lines 260–290 and confirm whether the deferred-credentials-vault decision is acceptable for the planned production posture, or whether refresh-token persistence + secret-storage indirection should land in this feature before promotion.
+2. **State-transition-guard heuristic gaps:** Manually confirm that the 10 reported missing specialist phases are in fact recorded under `certification.certifiedCompletedPhases` (per-scope). The guard's full-feature-done parser does not aggregate that field.
+3. **F-V1 scenario-manifest schema:** Confirm with bubbles.plan that the schema-v2 upgrade (structured `requiredTestType`/`linkedTests`) will be batched with similar carry-forward findings on adjacent specs (037, 040) rather than filed per-spec.
+4. **Drive credentials persistence test gap:** Verify whether SCN-038-002's integration test asserts only `expires_at` is populated (it does) and not any refresh-token-on-disk invariant (correct for the current decision but would need to change if A-001 is addressed).
+
+#### Disposition
+
+| Action | Owner | Trigger |
+|--------|-------|---------|
+| Phase advance audit → chaos | bubbles.workflow | This audit pass |
+| Reconcile spec.md NFR + design.md §2.3 with deferred-credentials posture; fix `google.go:265-266` comment | bubbles.docs | Before final feature-done promotion (post-chaos) |
+| Decide whether to land refresh-token persistence + secret-storage indirection or accept residual risk | bubbles.security (advisory) + bubbles.workflow | During chaos/docs/spec-review window |
+| Upgrade scenario-manifest.json to structured G057 schema | bubbles.plan | Before final feature-done promotion |
+| Normalize F-V2 phase-claim provenance | bubbles.workflow / bubbles.plan | Before final feature-done promotion |
+
+#### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.audit",
+  "roleClass": "certification",
+  "outcome": "completed_diagnostic",
+  "featureDir": "specs/038-cloud-drives-integration",
+  "scopeIds": ["all"],
+  "dodItems": [],
+  "scenarioIds": ["SCN-038-001..SCN-038-024"],
+  "artifactsCreated": [],
+  "artifactsUpdated": ["report.md", "state.json"],
+  "evidenceRefs": [
+    "report.md#audit-evidence",
+    "report.md#findings-summary"
+  ],
+  "nextRequiredOwner": "bubbles.chaos",
+  "packetRef": null,
+  "blockedReason": null
+}
+```
+
+#### Verdict
+
+⚠️ **SHIP_WITH_NOTES** — proceed to chaos phase. Implementation/test/quality fundamentals are real and verified independently against report.md claims (zero discrepancy). One MEDIUM security/docs deviation (A-001) and one INFO docs comment (A-002) MUST be addressed by bubbles.docs before final feature-done promotion. Two pre-existing carry-forward findings (F-V1, F-V2) remain owned by bubbles.plan/workflow for clearing at promotion time. State-transition-guard's whole-feature-done blocks are heuristic / carry-forward in nature; none introduces NEW audit-phase work.age will fail CI.
