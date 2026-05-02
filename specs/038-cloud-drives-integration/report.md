@@ -2490,19 +2490,195 @@ Scope 6 (Policy And Confirmation) is complete. All ten DoD items in `scopes.md` 
 
 ### Summary
 
-Execution evidence section reserved for the owning implementation, test, validation, and audit phases.
+Scope 7 (Retrieval And Agent Tools) is complete. The Retrieval Service in `internal/drive/retrieve/` materialises the design.md §6 contract: provider-neutral candidates from a Postgres-backed `Searcher`, channel-aware policy evaluation through `policy.SurfaceRetrieval`, size-driven downgrade to `provider_link`, sensitivity downgrade to `secure_link`, and zero/one/many disambiguation. The Telegram bridge (`internal/telegram/drive_retrieve_bridge.go`) wraps the service and renders title + folder + provider + sensitivity labels for every candidate. The four spec-037 agent tools (`drive_search`, `drive_get_file`, `drive_save_file`, `drive_list_rules`) register from `internal/drive/tools/` and route through the same runtime services the HTTP API and Telegram bot use, inheriting the BS-025 policy contract end-to-end. Production wiring lives in `cmd/core/wiring.go` (function-injected provider lookup keeps the retrieve package free of an `internal/drive` import).
 
 ### Code Diff Evidence
 
-No implementation diff evidence recorded.
+The Scope 7 change set introduces eight new files and modifies five existing files inside the documented Change Boundary.
+
+```text
+$ git diff --stat HEAD -- internal/drive/retrieve internal/drive/tools internal/telegram/drive_retrieve_bridge.go internal/telegram/bot.go cmd/core
+ cmd/core/main.go                                |    1 +
+ cmd/core/services.go                            |    3 +
+ cmd/core/wiring.go                              |   62 ++
+ internal/drive/retrieve/postgres.go             |  176 +++++
+ internal/drive/retrieve/retrieve_test.go        |  329 ++++++++
+ internal/drive/retrieve/sensitive_delivery_test.go |  181 +++++
+ internal/drive/retrieve/service.go              |  331 ++++++++
+ internal/drive/tools/tools.go                   |  474 ++++++++++++
+ internal/drive/tools/tools_test.go              |  287 +++++++
+ internal/telegram/bot.go                        |   23 +
+ internal/telegram/drive_retrieve_bridge.go      |  119 +++
+```
+
+The Service contract introduces five public types and a default reason table:
+
+```go
+// internal/drive/retrieve/service.go
+type Mode string
+
+const (
+    ModeBytes        Mode = "bytes"
+    ModeSecureLink   Mode = "secure_link"
+    ModeProviderLink Mode = "provider_link"
+    ModeRefused      Mode = "refused"
+    ModeDisambiguate Mode = "disambiguate"
+)
+
+func NewService(s Searcher, b BytesFetcher, p *policy.Engine, maxInline int64, table ReasonTable) *Service
+func (s *Service) Retrieve(ctx context.Context, req RetrieveRequest) (RetrieveDelivery, error)
+```
+
+The agent-tool registration uses spec-037's `agent.RegisterTool` from `init()` with full JSON Schema Draft 2020-12 input/output schemas:
+
+```go
+// internal/drive/tools/tools.go
+var ToolNames = []string{
+    "drive_search",
+    "drive_get_file",
+    "drive_save_file",
+    "drive_list_rules",
+}
+
+func init() { registerDriveTools() }
+```
+
+Production wiring closes the import-cycle gap with function injection so `retrieve` never imports `drive`:
+
+```go
+// cmd/core/wiring.go
+retrieveFetcher := retrieve.NewProviderBytesFetcher(svc.pg.Pool, func(ctx context.Context, providerID, connectionID, providerFileID string) (io.ReadCloser, string, error) {
+    provider, ok := drive.DefaultRegistry.Get(providerID)
+    if !ok {
+        return nil, "", fmt.Errorf("retrieve wiring: provider %q not registered", providerID)
+    }
+    body, err := provider.GetFile(ctx, connectionID, providerFileID)
+    if err != nil {
+        return nil, "", err
+    }
+    return body.Reader, body.MimeType, nil
+})
+```
 
 ### Test Evidence
 
-No test output recorded.
+#### Static gates
+
+```text
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+exit code: 0
+```
+
+```text
+$ ./smackerel.sh format --check
+49 files already formatted
+exit code: 0
+```
+
+```text
+$ ./smackerel.sh lint
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: web/extension/manifest.json
+  OK: web/extension/manifest.firefox.json
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/extension/background.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+exit code: 0
+```
+
+#### Unit tests
+
+The Go unit suite covers the Retrieval Service contract (`internal/drive/retrieve/`) and the agent-tool registration (`internal/drive/tools/`). The Python sidecar tests run unchanged.
+
+```text
+$ ./smackerel.sh test unit
+ok      github.com/smackerel/smackerel/internal/drive/retrieve  (cached)
+ok      github.com/smackerel/smackerel/internal/drive/tools     (cached)
+ok      github.com/smackerel/smackerel/internal/telegram        (cached)
+407 passed, 1 warning in 13.81s
+exit code: 0
+```
+
+The retrieve tests exercise the SCN-038-019 and SCN-038-020 anchors:
+
+```text
+$ go test ./internal/drive/retrieve/... -v -run TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates
+=== RUN   TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates
+=== RUN   TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates/non_sensitive_within_inline_cap_returns_bytes_with_candidate
+=== RUN   TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates/non_sensitive_oversized_downgrades_to_provider_link_no_bytes_fetch
+=== RUN   TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates/multiple_candidates_returns_disambiguation_with_full_labels
+=== RUN   TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates/zero_candidates_refuses_with_localized_hint
+=== RUN   TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates/disambiguation_pick_routes_through_policy_again
+--- PASS: TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/drive/retrieve  0.016s
+exit code: 0
+```
+
+The tools tests prove registration + schema validation + the `drive_tools_not_configured` envelope:
+
+```text
+$ go test ./internal/drive/tools/... -v
+=== RUN   TestDriveToolsRegisterWithPolicyAndTraceContracts
+=== RUN   TestDriveToolsRegisterWithPolicyAndTraceContracts/all_four_tools_registered_with_correct_side_effect_class
+=== RUN   TestDriveToolsRegisterWithPolicyAndTraceContracts/tool_names_constant_matches_registry
+=== RUN   TestDriveToolsRegisterWithPolicyAndTraceContracts/input_schemas_compile_and_reject_invalid_args
+=== RUN   TestDriveToolsRegisterWithPolicyAndTraceContracts/handlers_return_not_configured_envelope_before_setservices
+=== RUN   TestDriveToolsRegisterWithPolicyAndTraceContracts/drive_get_file_with_sensitive_candidate_returns_secure_link_no_bytes
+=== RUN   TestDriveToolsRegisterWithPolicyAndTraceContracts/drive_search_returns_provider_neutral_candidates
+=== RUN   TestDriveToolsRegisterWithPolicyAndTraceContracts/output_schema_validates_drive_search_payload
+--- PASS: TestDriveToolsRegisterWithPolicyAndTraceContracts (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/drive/tools     0.029s
+exit code: 0
+```
+
+#### Integration tests
+
+```text
+$ ./smackerel.sh test integration
+--- PASS: TestTelegramRetrievalFindsDriveBoardingPassAndDisambiguates (0.12s)
+--- PASS: TestDriveToolsCanary_ExistingAgentToolsStillRegisterAndTrace (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/drive  8.150s
+exit code: 0
+```
+
+Both new tests run against the live `smackerel-test` Compose stack (Postgres + NATS) — `TestTelegramRetrievalFindsDriveBoardingPassAndDisambiguates` seeds two boarding-pass artifacts via the Scope 2 fixture flow, runs `InitialScan` + `ProcessPending`, and proves the bridge returns disambiguation with both candidates labelled (title/folder/provider/sensitivity), then re-routes through the bytes path on user selection. The canary asserts the four drive tools and four sample recommendation tools all coexist in the registry without duplicates.
+
+#### End-to-end tests
+
+```text
+$ ./smackerel.sh test e2e
+--- PASS: TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy (0.31s)
+--- PASS: TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly (2.24s)
+--- PASS: TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels (2.31s)
+ok      github.com/smackerel/smackerel/tests/e2e/agent  8.059s
+ok      github.com/smackerel/smackerel/tests/e2e/drive  32.854s
+PASS: go-e2e
+exit code: 0
+```
+
+The e2e suite runs three Scope 7 anchors against the live test stack:
+
+- `TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels` (file: tests/e2e/drive/drive_telegram_retrieve_ui_test.go) — covers all three retrieval modes (disambiguate, provider_link for >5 MB fixture, bytes for <5 MB fixture) with adversarial size differentiation.
+- `TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly` (file: tests/e2e/drive/drive_retrieve_e2e_test.go) — proves a medical-tagged fixture downgrades to `secure_link` with zero `BytesFetcher` calls (BS-025), and an adversarial control fixture (`Lab schedule readme`) confirms the bytes path stays reachable.
+- `TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy` (file: tests/e2e/drive/drive_agent_tools_e2e_test.go) — drives all four agent tools through the live stack: `drive_search` finds a sensitive insurance card, `drive_get_file` returns `secure_link` with no bytes_base64, `drive_save_file` with `sensitivity=medical` refuses via `policy_refuse`, `drive_list_rules` lists the seeded rule.
 
 ### Completion Statement
 
-Scope 7 status is Not Started.
+Scope 7 (Retrieval And Agent Tools) is complete. All twelve DoD items in `scopes.md` are checked with inline evidence (Phase: implement, Claim Source: executed) tagged to passing test runs. SCN-038-019, SCN-038-020, and SCN-038-021 each have the planned unit, integration (where applicable), and e2e tests, all green against the live `smackerel-test` Compose stack (Postgres + NATS + ML sidecar + core). The change set stays inside the documented Change Boundary: `internal/drive/retrieve/`, `internal/drive/tools/` (delivered as a subpackage rather than `internal/drive/tools.go` because the drive subpackages already import `internal/drive` and the literal location would create an import cycle), Telegram retrieval bridge, and the `cmd/core` wiring required to attach the new services. Provider OAuth, scan/monitor persistence, extraction algorithms, classification workers, and provider write mechanics were not modified. SST is preserved: the new tool wiring consumes `cfg.Drive.Telegram.MaxInlineSizeBytes` and `cfg.Drive.Telegram.MaxLinkFilesPerReply` straight from `config/smackerel.yaml` through `cmd/core/wiring.go`, with no shadow defaults.
 
 ## Scope 8: Cross-Feature And Scale Convergence
 

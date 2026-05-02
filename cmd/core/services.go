@@ -13,6 +13,7 @@ import (
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/domain"
+	"github.com/smackerel/smackerel/internal/drive/retrieve"
 	"github.com/smackerel/smackerel/internal/drive/save"
 	"github.com/smackerel/smackerel/internal/graph"
 	"github.com/smackerel/smackerel/internal/intelligence"
@@ -51,6 +52,7 @@ type coreServices struct {
 	recommendationStore    *recstore.Store
 	recommendationRegistry *recprovider.Registry
 	driveSaveService       *save.Service
+	driveRetrieveService   *retrieve.Service // spec 038 Scope 7 — drive retrieval
 	mealPlanSaveBack       *mealplan.DriveSaveBack
 }
 

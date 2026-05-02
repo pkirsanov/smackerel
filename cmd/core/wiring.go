@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,8 +16,11 @@ import (
 	"github.com/smackerel/smackerel/internal/drive"
 	"github.com/smackerel/smackerel/internal/drive/confirm"
 	"github.com/smackerel/smackerel/internal/drive/google"
+	drivepolicy "github.com/smackerel/smackerel/internal/drive/policy"
+	"github.com/smackerel/smackerel/internal/drive/retrieve"
 	"github.com/smackerel/smackerel/internal/drive/rules"
 	"github.com/smackerel/smackerel/internal/drive/save"
+	drivetools "github.com/smackerel/smackerel/internal/drive/tools"
 	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	"github.com/smackerel/smackerel/internal/list"
@@ -105,6 +110,52 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 	slog.Info("drive save service wired",
 		"provider_url_prefix", cfg.Drive.Save.ProviderURLPrefix)
 
+	// Spec 038 Scope 7 — wire Retrieval Service against the same pool
+	// and provider registry. The provider lookup is injected as a pure
+	// function so the retrieve package does not depend on internal/drive
+	// (which would create an import cycle once internal/drive/tools
+	// registers agent tools that import retrieve).
+	retrieveSearcher := retrieve.NewPostgresSearcher(svc.pg.Pool)
+	retrieveFetcher := retrieve.NewProviderBytesFetcher(svc.pg.Pool, func(ctx context.Context, providerID, connectionID, providerFileID string) (io.ReadCloser, string, error) {
+		provider, ok := drive.DefaultRegistry.Get(providerID)
+		if !ok {
+			return nil, "", fmt.Errorf("retrieve wiring: provider %q not registered", providerID)
+		}
+		body, err := provider.GetFile(ctx, connectionID, providerFileID)
+		if err != nil {
+			return nil, "", err
+		}
+		return body.Reader, body.MimeType, nil
+	})
+	retrievePolicy := drivepolicy.NewEngine()
+	retrieveService := retrieve.NewService(
+		retrieveSearcher,
+		retrieveFetcher,
+		retrievePolicy,
+		cfg.Drive.Telegram.MaxInlineSizeBytes,
+		retrieve.DefaultReasonTable(),
+	)
+	svc.driveRetrieveService = retrieveService
+	slog.Info("drive retrieve service wired",
+		"max_inline_size_bytes", cfg.Drive.Telegram.MaxInlineSizeBytes,
+		"max_link_files_per_reply", cfg.Drive.Telegram.MaxLinkFilesPerReply,
+	)
+
+	// Spec 037 + 038 Scope 7 — wire the four drive agent tools so the
+	// scenario-agent runtime can call them through the registry. The
+	// tools are read/external; agent traces inherit the same policy
+	// refusals (BS-025) that the HTTP and Telegram surfaces enforce.
+	drivetools.SetToolServices(&drivetools.ToolServices{
+		Retriever:   retrieveService,
+		SaveService: saveService,
+		RulesRepo:   rules.NewRepository(svc.pg.Pool),
+		RulesEngine: rules.NewEngine(time.Now),
+		Policy:      retrievePolicy,
+	})
+	slog.Info("drive agent tools wired",
+		"tools", drivetools.ToolNames,
+	)
+
 	// Spec 038 Scope 6 — wire low-confidence confirmations store and
 	// HTTP handler. The store backs both Screen 11 web modal and the
 	// Telegram numbered-reply path; both flow through
@@ -180,6 +231,20 @@ func attachDriveSaveBridgeToTelegram(svc *coreServices, tgBot *telegram.Bot) {
 	)
 	tgBot.SetDriveSaveBridge(bridge)
 	slog.Info("telegram drive save bridge wired")
+}
+
+// attachDriveRetrieveBridgeToTelegram wires the spec 038 Scope 7 Drive
+// retrieval bridge to a running Telegram bot. Safe to call when either
+// side is missing. The bridge enables "send me X" style prompts to flow
+// through retrieve.Service under the same policy contract the HTTP API
+// uses.
+func attachDriveRetrieveBridgeToTelegram(svc *coreServices, tgBot *telegram.Bot) {
+	if svc == nil || tgBot == nil || svc.driveRetrieveService == nil {
+		return
+	}
+	bridge := telegram.NewDriveRetrieveBridge(svc.driveRetrieveService)
+	tgBot.SetDriveRetrieveBridge(bridge)
+	slog.Info("telegram drive retrieve bridge wired")
 }
 
 // wireKnowledgeLinter attaches the knowledge linter to the scheduler when the
