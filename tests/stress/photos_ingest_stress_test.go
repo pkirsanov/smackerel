@@ -5,10 +5,10 @@
 // SCN-040-015: ingest a synthetic 15,000-photo library into the live
 // Smackerel stack and prove that:
 //
-//   • Cross-provider search returns within the configured target
+//   - Cross-provider search returns within the configured target
 //     latency under the synthetic load
-//   • Capability limit + skip ledger surfaces stay live and bounded
-//   • No bytes are leaked into logs (asserted indirectly: the API
+//   - Capability limit + skip ledger surfaces stay live and bounded
+//   - No bytes are leaked into logs (asserted indirectly: the API
 //     response MUST NOT echo `bytes` payload fields)
 //
 // The synthetic library is mixed: RAW originals, exports, scanned
