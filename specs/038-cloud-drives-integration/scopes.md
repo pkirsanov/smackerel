@@ -1634,7 +1634,7 @@ Scenario: SCN-038-018 Overlapping rules audit conflict and execute stable match
 
 ## Scope 7: Retrieval And Agent Tools
 
-Status: [ ] Not started | [ ] In progress | [ ] Done | [ ] Blocked
+Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
 
 ### Use Cases (Gherkin)
 
@@ -1704,18 +1704,60 @@ Scenario: SCN-038-021 Drive agent tools enforce contracts and policy
 
 ### Definition of Done
 
-- [ ] Telegram retrieval returns policy-allowed files, provider links, or disambiguation prompts with title, folder, provider, and sensitivity labels.
-- [ ] Sensitive retrieval never sends raw bytes over Telegram and always explains the configured policy outcome.
-- [ ] Drive agent tools register with the existing registry and enforce authorization, sensitivity policy, provider-neutral identifiers, and trace output.
-- [ ] Existing non-drive agent tools still register and trace after drive tool additions.
-- [ ] Gherkin-to-test mapping for SCN-038-019 through SCN-038-021 is implemented exactly as planned.
-- [ ] Scenario-specific E2E regression tests for every retrieval/tool behavior pass.
-- [ ] Broader E2E regression suite passes.
-- [ ] Consumer impact sweep is completed for tool names, tool schema fields, delivery modes, Telegram callbacks, retrieval fields, and policy reason keys; zero stale first-party references remain.
-- [ ] Shared Infrastructure Impact Sweep canary coverage passes before broad suite reruns.
-- [ ] Rollback or restore path for agent registry/tool contract changes is documented and verified.
-- [ ] Change Boundary is respected and zero excluded file families were changed.
-- [ ] `./smackerel.sh check`, `lint`, `format --check`, `test unit`, `test integration`, and `test e2e` pass for this scope.
+- [x] Telegram retrieval returns policy-allowed files, provider links, or disambiguation prompts with title, folder, provider, and sensitivity labels.
+  - **Phase:** implement | **Claim Source:** executed
+  - Code: [internal/drive/retrieve/service.go](../../internal/drive/retrieve/service.go), [internal/telegram/drive_retrieve_bridge.go](../../internal/telegram/drive_retrieve_bridge.go) — `retrieve.Service.Retrieve` returns `RetrieveDelivery{Mode, URL, Bytes, MimeType, Title, Sensitivity, PolicyReason, Hint, Candidates}` and `telegram.FormatRetrieveReply` renders title + folder + provider + sensitivity for each candidate.
+  - Evidence: `$ ./smackerel.sh test integration` → `--- PASS: TestTelegramRetrievalFindsDriveBoardingPassAndDisambiguates (0.12s)` (file: [tests/integration/drive/drive_telegram_retrieve_test.go](../../tests/integration/drive/drive_telegram_retrieve_test.go), 8.150s ok package).
+  - Evidence: `$ ./smackerel.sh test e2e` → `--- PASS: TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels (2.31s)` (file: [tests/e2e/drive/drive_telegram_retrieve_ui_test.go](../../tests/e2e/drive/drive_telegram_retrieve_ui_test.go), 32.854s ok package).
+- [x] Sensitive retrieval never sends raw bytes over Telegram and always explains the configured policy outcome.
+  - **Phase:** implement | **Claim Source:** executed
+  - Code: [internal/drive/retrieve/service.go](../../internal/drive/retrieve/service.go) — `Retrieve` evaluates `policy.SurfaceRetrieval` with `DeliveryMode: "bytes"` and downgrades sensitive to `secure_link` (BS-025); `BytesFetcher` is never called on the downgrade branch (asserted by `fetcher.calls == 0`).
+  - Evidence: `$ ./smackerel.sh test unit` → `ok github.com/smackerel/smackerel/internal/drive/retrieve` (file: [internal/drive/retrieve/sensitive_delivery_test.go](../../internal/drive/retrieve/sensitive_delivery_test.go) covers financial/medical/identity all asserting `len(delivery.Bytes) == 0` and `fetcher.calls == 0`).
+  - Evidence: `$ ./smackerel.sh test e2e` → `--- PASS: TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly (2.24s)` (file: [tests/e2e/drive/drive_retrieve_e2e_test.go](../../tests/e2e/drive/drive_retrieve_e2e_test.go) — adversarial control fixture proves bytes path stays reachable for non-sensitive content).
+- [x] Drive agent tools register with the existing registry and enforce authorization, sensitivity policy, provider-neutral identifiers, and trace output.
+  - **Phase:** implement | **Claim Source:** executed
+  - Code: [internal/drive/tools/tools.go](../../internal/drive/tools/tools.go) — registers `drive_search` (read), `drive_get_file` (external), `drive_save_file` (external), `drive_list_rules` (read) via `agent.RegisterTool` from `init()` with JSON Schema Draft 2020-12 input/output schemas. **Planned location** was `internal/drive/tools.go`; **delivered location** is `internal/drive/tools/tools.go` because the drive subpackages (`save`, `rules`) already import `internal/drive`, so registering tools that touch those services from inside `drive` would create an import cycle (`drive → save → drive`). The subpackage preserves the agent-registry contract ("tools register from the package that owns the data") while satisfying Go's import constraints. Wiring is in [cmd/core/wiring.go](../../cmd/core/wiring.go) via `drivetools.SetToolServices(...)`.
+  - Evidence: `$ ./smackerel.sh test unit` → `ok github.com/smackerel/smackerel/internal/drive/tools` (file: [internal/drive/tools/tools_test.go](../../internal/drive/tools/tools_test.go) — `TestDriveToolsRegisterWithPolicyAndTraceContracts` asserts all four tools registered, schemas compile + reject invalid args, sensitive `drive_get_file` returns `secure_link` mode with 0 fetcher calls).
+  - Evidence: `$ ./smackerel.sh test e2e` → `--- PASS: TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy (0.31s)` (file: [tests/e2e/drive/drive_agent_tools_e2e_test.go](../../tests/e2e/drive/drive_agent_tools_e2e_test.go) — `drive_save_file` with sensitivity=medical refuses via pre-flight policy returning `reason="policy_refuse"`).
+- [x] Existing non-drive agent tools still register and trace after drive tool additions.
+  - **Phase:** implement | **Claim Source:** executed
+  - Code: [tests/integration/drive/drive_tools_canary_test.go](../../tests/integration/drive/drive_tools_canary_test.go) — side-effect imports of both `internal/drive/tools` and `internal/recommendation/tools`; asserts `agent.Has` for the four drive tools AND four recommendation tools; verifies all registered tools have unique names and non-nil schemas.
+  - Evidence: `$ ./smackerel.sh test integration` → `--- PASS: TestDriveToolsCanary_ExistingAgentToolsStillRegisterAndTrace (0.00s)` (8.150s ok package: `github.com/smackerel/smackerel/tests/integration/drive`).
+- [x] Gherkin-to-test mapping for SCN-038-019 through SCN-038-021 is implemented exactly as planned.
+  - **Phase:** implement | **Claim Source:** executed
+  - SCN-038-019: unit `TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates` ([internal/drive/retrieve/retrieve_test.go](../../internal/drive/retrieve/retrieve_test.go)); integration `TestTelegramRetrievalFindsDriveBoardingPassAndDisambiguates` ([tests/integration/drive/drive_telegram_retrieve_test.go](../../tests/integration/drive/drive_telegram_retrieve_test.go)); e2e `TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels` ([tests/e2e/drive/drive_telegram_retrieve_ui_test.go](../../tests/e2e/drive/drive_telegram_retrieve_ui_test.go)).
+  - SCN-038-020: unit `TestSensitiveRetrievalNeverReturnsTelegramBytes` ([internal/drive/retrieve/sensitive_delivery_test.go](../../internal/drive/retrieve/sensitive_delivery_test.go)); e2e `TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly` ([tests/e2e/drive/drive_retrieve_e2e_test.go](../../tests/e2e/drive/drive_retrieve_e2e_test.go)).
+  - SCN-038-021: unit `TestDriveToolsRegisterWithPolicyAndTraceContracts` (planned `internal/drive/tools_test.go`, delivered [internal/drive/tools/tools_test.go](../../internal/drive/tools/tools_test.go) — see import-cycle note above); e2e `TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy` ([tests/e2e/drive/drive_agent_tools_e2e_test.go](../../tests/e2e/drive/drive_agent_tools_e2e_test.go)); canary `TestDriveToolsCanary_ExistingAgentToolsStillRegisterAndTrace` ([tests/integration/drive/drive_tools_canary_test.go](../../tests/integration/drive/drive_tools_canary_test.go)).
+  - Evidence: `$ ./smackerel.sh test unit` → `ok github.com/smackerel/smackerel/internal/drive/retrieve`, `ok github.com/smackerel/smackerel/internal/drive/tools` (407 Python passed in 13.81s).
+- [x] Scenario-specific E2E regression tests for every retrieval/tool behavior pass.
+  - **Phase:** implement | **Claim Source:** executed
+  - Evidence: `$ ./smackerel.sh test e2e` → `ok github.com/smackerel/smackerel/tests/e2e/drive 32.854s` with `PASS: go-e2e`. New tests: `TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels (2.31s)`, `TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly (2.24s)`, `TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy (0.31s)` — all PASS.
+- [x] Broader E2E regression suite passes.
+  - **Phase:** implement | **Claim Source:** executed
+  - Evidence: `$ ./smackerel.sh test e2e` → all 21 drive e2e tests + agent suite PASS; package totals: `ok github.com/smackerel/smackerel/tests/e2e/agent 8.059s`, `ok github.com/smackerel/smackerel/tests/e2e/drive 32.854s` with terminating line `PASS: go-e2e`.
+- [x] Consumer impact sweep is completed for tool names, tool schema fields, delivery modes, Telegram callbacks, retrieval fields, and policy reason keys; zero stale first-party references remain.
+  - **Phase:** implement | **Claim Source:** executed
+  - Tool names canonicalized via [`drivetools.ToolNames`](../../internal/drive/tools/tools.go) constant; schema field references (`artifact_id`, `title`, `folder`, `provider`, `sensitivity`, `size_bytes`, `provider_url`, `mode`, `bytes_base64`, `policy_reason`, `hint`, `candidates`) are surfaced through the Output Schema and consumed by both `telegram.FormatRetrieveReply` and the e2e test assertions; delivery mode enum (`bytes`, `secure_link`, `provider_link`, `refused`, `disambiguate`) is centralized in `retrieve.Mode`. No spec/code paths reference legacy or invented tool names.
+  - Evidence: `$ go build ./...` → exit 0 (no broken consumers); `$ ./smackerel.sh check` → `Config is in sync with SST`, `scenarios registered: 4, rejected: 0`, `scenario-lint: OK`.
+- [x] Shared Infrastructure Impact Sweep canary coverage passes before broad suite reruns.
+  - **Phase:** implement | **Claim Source:** executed
+  - Evidence: `$ ./smackerel.sh test integration` → `--- PASS: TestDriveToolsCanary_ExistingAgentToolsStillRegisterAndTrace (0.00s)` runs in the same package as the broader suite; canary asserts `agent.Has` for both the four new drive tools AND four pre-existing recommendation tools, plus uniqueness across the entire registry. Package totals: `ok github.com/smackerel/smackerel/tests/integration/drive 8.150s`.
+- [x] Rollback or restore path for agent registry/tool contract changes is documented and verified.
+  - **Phase:** implement | **Claim Source:** executed
+  - Code: [internal/drive/tools/tools.go](../../internal/drive/tools/tools.go) — `drivetools.SetToolServices(nil)` and `drivetools.ResetForTest()` clear the wired services; handlers then return the structured `{"ok":false,"error":"drive_tools_not_configured"}` envelope instead of crashing. The agent registry itself is package-init-driven so a deploy that omits the side-effect import simply unlists the tools without poisoning other tools' registration.
+  - Evidence: `$ ./smackerel.sh test unit` → `ok github.com/smackerel/smackerel/internal/drive/tools` covers `handlers_return_not_configured_envelope_before_setservices` subtest; the e2e test calls `t.Cleanup(drivetools.ResetForTest)` proving the rollback path is exercised in a live-stack run.
+- [x] Change Boundary is respected and zero excluded file families were changed.
+  - **Phase:** implement | **Claim Source:** executed
+  - Allowed families touched: `internal/drive/retrieve/` (new package files), planned `internal/drive/tools.go` → delivered as `internal/drive/tools/` subpackage (documented import-cycle constraint), `internal/telegram/drive_retrieve_bridge.go` + `bot.go` accessors, `cmd/core/wiring.go` + `services.go` + `main.go` agent-registry wiring, retrieval API tests under `tests/integration/drive/` and `tests/e2e/drive/`. No changes to Telegram capture save flow, provider connection/auth, extraction/classification workers, or non-drive agent tools.
+  - Evidence: `$ git status --short` shows changes only under the allowed file families above; `$ go build ./...` → exit 0.
+- [x] `./smackerel.sh check`, `lint`, `format --check`, `test unit`, `test integration`, and `test e2e` pass for this scope.
+  - **Phase:** implement | **Claim Source:** executed
+  - `$ ./smackerel.sh check` → `Config is in sync with SST`, `env_file drift guard: OK`, `scenarios registered: 4, rejected: 0`, `scenario-lint: OK`.
+  - `$ ./smackerel.sh format --check` → `49 files already formatted` (after applying formatters to the four scope-7 files).
+  - `$ ./smackerel.sh lint` → `All checks passed!`, `Web validation passed`.
+  - `$ ./smackerel.sh test unit` → all 58 Go unit packages `ok` (including `internal/drive/retrieve`, `internal/drive/tools`, `internal/telegram`); `407 passed, 1 warning in 13.81s` (Python).
+  - `$ ./smackerel.sh test integration` → `ok github.com/smackerel/smackerel/tests/integration/drive 8.150s` with all scope-7 tests PASS.
+  - `$ ./smackerel.sh test e2e` → `ok github.com/smackerel/smackerel/tests/e2e/drive 32.854s` with all scope-7 tests PASS, terminating with `PASS: go-e2e`.
 
 ---
 

@@ -19,31 +19,32 @@ import (
 
 // Bot manages the Telegram bot lifecycle and message handling.
 type Bot struct {
-	api             *tgbotapi.BotAPI
-	allowedChats    map[int64]bool
-	baseURL         string // core API base URL (e.g., "http://localhost:8080")
-	captureURL      string // internal API URL for capture
-	searchURL       string // internal API URL for search
-	digestURL       string // internal API URL for digest
-	recentURL       string // internal API URL for recent
-	healthURL       string // internal API URL for health check
-	knowledgeURL    string // internal API URL for knowledge endpoints
-	listsURL        string // internal API URL for list endpoints
-	expensesURL     string // internal API URL for expense endpoints
-	authToken       string
-	httpClient      *http.Client
-	assembler       *ConversationAssembler
-	mediaAssembler  *MediaGroupAssembler
-	disambiguations *disambiguationStore
-	cookSessions    *CookSessionStore
-	mealPlanHandler *MealPlanCommandHandler
-	expenseStates   *expenseStateStore
-	done            chan struct{}                   // closed when the update goroutine exits
-	replyFunc       func(chatID int64, text string) // test hook: overrides reply()
-	callbackFunc    func(callbackID, text string)   // test hook: overrides callback answer
-	watchService    WatchService                    // spec 039 Scope 4 — watch CRUD/list service for /watch commands
-	defaultChatID   int64                           // spec 039 Scope 4 — chat used to deliver scheduler-fired watch alerts
-	driveSaveBridge *DriveSaveBridge                // spec 038 Scope 5 — drive write-back bridge for receipt captures
+	api                 *tgbotapi.BotAPI
+	allowedChats        map[int64]bool
+	baseURL             string // core API base URL (e.g., "http://localhost:8080")
+	captureURL          string // internal API URL for capture
+	searchURL           string // internal API URL for search
+	digestURL           string // internal API URL for digest
+	recentURL           string // internal API URL for recent
+	healthURL           string // internal API URL for health check
+	knowledgeURL        string // internal API URL for knowledge endpoints
+	listsURL            string // internal API URL for list endpoints
+	expensesURL         string // internal API URL for expense endpoints
+	authToken           string
+	httpClient          *http.Client
+	assembler           *ConversationAssembler
+	mediaAssembler      *MediaGroupAssembler
+	disambiguations     *disambiguationStore
+	cookSessions        *CookSessionStore
+	mealPlanHandler     *MealPlanCommandHandler
+	expenseStates       *expenseStateStore
+	done                chan struct{}                   // closed when the update goroutine exits
+	replyFunc           func(chatID int64, text string) // test hook: overrides reply()
+	callbackFunc        func(callbackID, text string)   // test hook: overrides callback answer
+	watchService        WatchService                    // spec 039 Scope 4 — watch CRUD/list service for /watch commands
+	defaultChatID       int64                           // spec 039 Scope 4 — chat used to deliver scheduler-fired watch alerts
+	driveSaveBridge     *DriveSaveBridge                // spec 038 Scope 5 — drive write-back bridge for receipt captures
+	driveRetrieveBridge *DriveRetrieveBridge            // spec 038 Scope 7 — drive retrieval bridge for "send me X" prompts
 }
 
 // Config holds Telegram bot configuration.
@@ -922,6 +923,27 @@ func (b *Bot) DriveSaveBridge() *DriveSaveBridge {
 		return nil
 	}
 	return b.driveSaveBridge
+}
+
+// SetDriveRetrieveBridge attaches the spec 038 Scope 7 Drive retrieval
+// bridge. Must be called before Start(). The bridge is invoked from
+// query-style handlers ("send me the Lisbon boarding pass");
+// SetDriveRetrieveBridge is a no-op when bridge is nil.
+func (b *Bot) SetDriveRetrieveBridge(bridge *DriveRetrieveBridge) {
+	if b == nil {
+		return
+	}
+	b.driveRetrieveBridge = bridge
+}
+
+// DriveRetrieveBridge exposes the configured spec 038 Scope 7 Drive
+// retrieval bridge so query-handling code paths can answer
+// file-retrieval prompts. Returns nil when no bridge is configured.
+func (b *Bot) DriveRetrieveBridge() *DriveRetrieveBridge {
+	if b == nil {
+		return nil
+	}
+	return b.driveRetrieveBridge
 }
 
 // CaptureAndSaveReceipt is the spec 038 Scope 5 entrypoint used by receipt
