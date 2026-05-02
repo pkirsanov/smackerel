@@ -133,6 +133,40 @@ type PhotoEvent struct {
 	Faces             []FaceClusterRef    `json:"faces"`
 	Sensitivity       ProviderSensitivity `json:"sensitivity"`
 	RawProvider       map[string]any      `json:"raw_provider"`
+
+	// Spec 040 Scope 4 — capture-channel fields. Provider scans omit
+	// them (defaults persist as `source_channel='provider'`); the
+	// upload pipeline (`POST /v1/photos/upload`) populates them with
+	// the inbound channel + opaque source reference plus the document
+	// group when running mobile document scan.
+	SourceChannel     SourceChannel `json:"source_channel,omitempty"`
+	SourceRef         string        `json:"source_ref,omitempty"`
+	DocumentGroupRef  string        `json:"document_group_ref,omitempty"`
+	DocumentPageIndex int           `json:"document_page_index,omitempty"`
+}
+
+// SourceChannel identifies the inbound transport that produced a photo
+// event. The `provider` value is reserved for provider scans; uploads
+// from the user-visible channels carry the matching transport tag so the
+// store can answer "where did this photo come from" without parsing the
+// provider payload.
+type SourceChannel string
+
+const (
+	SourceChannelProvider SourceChannel = "provider"
+	SourceChannelTelegram SourceChannel = "telegram"
+	SourceChannelMobile   SourceChannel = "mobile"
+	SourceChannelWeb      SourceChannel = "web"
+	SourceChannelAgent    SourceChannel = "agent"
+)
+
+func (channel SourceChannel) Valid() bool {
+	switch channel {
+	case SourceChannelProvider, SourceChannelTelegram,
+		SourceChannelMobile, SourceChannelWeb, SourceChannelAgent:
+		return true
+	}
+	return false
 }
 
 type PhotoLibrary interface {
@@ -234,6 +268,10 @@ func (event PhotoEvent) ProviderNeutralPayload() map[string]any {
 		"faces":               event.Faces,
 		"sensitivity":         event.Sensitivity,
 		"raw_provider":        event.RawProvider,
+		"source_channel":      string(event.SourceChannel),
+		"source_ref":          event.SourceRef,
+		"document_group_ref":  event.DocumentGroupRef,
+		"document_page_index": event.DocumentPageIndex,
 	}
 }
 

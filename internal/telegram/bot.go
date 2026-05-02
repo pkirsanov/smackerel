@@ -359,15 +359,13 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		return
 	}
 
-	// Handle photos without media group (single photo share)
+	// Handle photos without media group (single photo share). Spec 040
+	// Scope 4 routes the bytes through the unified upload pipeline so
+	// classification + sensitivity gating + cross-feature routing run
+	// uniformly with mobile/web uploads.
 	if msg.Photo != nil && msg.MediaGroupID == "" {
-		// Treat as text capture with caption
 		caption := msg.Caption
-		if caption != "" {
-			b.handleTextCapture(ctx, msg, caption)
-		} else {
-			b.reply(chatID, "? Photo received but no caption to capture. Add a description.")
-		}
+		b.handlePhotoUpload(ctx, msg, caption)
 		return
 	}
 
@@ -519,6 +517,24 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 			summary = stringutil.TruncateUTF8(summary, 100) + "..."
 		}
 		entry := fmt.Sprintf("> %s (%s)\n- %s", title, artType, summary)
+
+		// Spec 040 Scope 4 — sensitivity-aware retrieval. If the
+		// result is a photo flagged as requires_reveal, do NOT include
+		// any preview URL (`auto-send` is forbidden). The user must
+		// /reveal first.
+		if strings.Contains(strings.ToLower(artType), "photo") {
+			if preview, ok := result["preview"].(map[string]interface{}); ok {
+				requires := false
+				if v, ok := preview["requires_reveal"].(bool); ok {
+					requires = v
+				}
+				if requires {
+					entry += "\n* sensitive — use /reveal to authorise sending"
+				} else if url, ok := preview["url"].(string); ok && url != "" {
+					entry += "\n* preview: " + url
+				}
+			}
+		}
 
 		// Append domain card if domain_data is present
 		if dd, ok := result["domain_data"]; ok && dd != nil {

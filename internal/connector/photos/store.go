@@ -45,6 +45,10 @@ type PhotoRecord struct {
 	Classification           json.RawMessage  `json:"classification"`
 	ClassificationConfidence *float64         `json:"classification_confidence,omitempty"`
 	RawProvider              json.RawMessage  `json:"raw_provider"`
+	SourceChannel            SourceChannel    `json:"source_channel"`
+	SourceRef                string           `json:"source_ref"`
+	DocumentGroupID          *uuid.UUID       `json:"document_group_id,omitempty"`
+	DocumentPageIndex        *int             `json:"document_page_index,omitempty"`
 }
 
 type PhotoSearchRecord struct {
@@ -115,19 +119,41 @@ func (store *Store) PublishPhotoEvent(ctx context.Context, connectorID string, p
 	}
 
 	photoID := uuid.New()
+	sourceChannel := event.SourceChannel
+	if sourceChannel == "" {
+		sourceChannel = SourceChannelProvider
+	}
+	if !sourceChannel.Valid() {
+		return nil, fmt.Errorf("photos: invalid source_channel %q", sourceChannel)
+	}
+	var documentGroupID *uuid.UUID
+	var documentPageIndex *int
+	if strings.TrimSpace(event.DocumentGroupRef) != "" {
+		groupID, err := store.upsertDocumentGroupTx(ctx, tx, event.DocumentGroupRef)
+		if err != nil {
+			return nil, err
+		}
+		documentGroupID = &groupID
+		if event.DocumentPageIndex > 0 {
+			page := event.DocumentPageIndex
+			documentPageIndex = &page
+		}
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO photos (
 			id, artifact_id, connector_id, provider, provider_ref, provider_media_kind,
 			media_role, mime_type, bytes, bytes_estimated, filename, captured_at,
 			uploaded_at, geo_lat, geo_lon, content_hash, exif, albums, tags,
 			sensitivity, sensitivity_labels, sensitivity_src, lifecycle_state,
-			classification, classification_confidence, raw_provider
+			classification, classification_confidence, raw_provider,
+			source_channel, source_ref, document_group_id, document_page_index
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11, $12,
 			$13, $14, $15, $16, $17, $18, $19,
 			$20, $21, $22, $23,
-			$24, $25, $26
+			$24, $25, $26,
+			$27, $28, $29, $30
 		)
 		ON CONFLICT (provider, provider_ref) DO UPDATE SET
 			artifact_id = EXCLUDED.artifact_id,
@@ -150,12 +176,17 @@ func (store *Store) PublishPhotoEvent(ctx context.Context, connectorID string, p
 			sensitivity_labels = EXCLUDED.sensitivity_labels,
 			sensitivity_src = EXCLUDED.sensitivity_src,
 			raw_provider = EXCLUDED.raw_provider,
+			source_channel = EXCLUDED.source_channel,
+			source_ref = EXCLUDED.source_ref,
+			document_group_id = EXCLUDED.document_group_id,
+			document_page_index = EXCLUDED.document_page_index,
 			updated_at = now()
 	`, photoID, artifactID, connectorID, provider, event.ProviderRef, event.ProviderMediaKind,
 		string(event.MediaRole), event.MIMEType, event.Bytes, event.BytesEstimated, event.Filename, capturedAt,
 		uploadedAt, event.GeoLat, event.GeoLon, contentHash, exifBytes, nonNilStrings(event.Albums), nonNilStrings(event.Tags),
 		string(event.Sensitivity.Level), nonNilStrings(event.Sensitivity.Labels), event.Sensitivity.Source, "unknown",
-		classificationBytes, nil, rawProviderBytes)
+		classificationBytes, nil, rawProviderBytes,
+		string(sourceChannel), event.SourceRef, documentGroupID, documentPageIndex)
 	if err != nil {
 		return nil, fmt.Errorf("upsert photo: %w", err)
 	}
@@ -189,12 +220,14 @@ func (store *Store) get(ctx context.Context, where string, args ...any) (*PhotoR
 		       p.geo_lat, p.geo_lon, COALESCE(p.content_hash, ''), p.exif,
 		       p.albums, p.tags, p.sensitivity::text, p.sensitivity_labels,
 		       p.sensitivity_src, p.lifecycle_state::text, p.classification,
-		       p.classification_confidence, p.raw_provider
+		       p.classification_confidence, p.raw_provider,
+		       p.source_channel, p.source_ref, p.document_group_id, p.document_page_index
 		  FROM photos p
 		 WHERE ` + where
 	var rec PhotoRecord
 	var role string
 	var sensitivity string
+	var sourceChannel string
 	if err := store.pool.QueryRow(ctx, query, args...).Scan(
 		&rec.ID, &rec.ArtifactID, &rec.ConnectorID, &rec.Provider, &rec.ProviderRef,
 		&rec.ProviderMediaKind, &role, &rec.MIMEType, &rec.Bytes,
@@ -203,11 +236,13 @@ func (store *Store) get(ctx context.Context, where string, args ...any) (*PhotoR
 		&rec.Albums, &rec.Tags, &sensitivity, &rec.SensitivityLabels,
 		&rec.SensitivitySource, &rec.LifecycleState, &rec.Classification,
 		&rec.ClassificationConfidence, &rec.RawProvider,
+		&sourceChannel, &rec.SourceRef, &rec.DocumentGroupID, &rec.DocumentPageIndex,
 	); err != nil {
 		return nil, err
 	}
 	rec.MediaRole = MediaRole(role)
 	rec.Sensitivity = SensitivityLevel(sensitivity)
+	rec.SourceChannel = SourceChannel(sourceChannel)
 	return &rec, nil
 }
 
@@ -353,6 +388,7 @@ func (store *Store) Search(ctx context.Context, query string, limit int) ([]Phot
 		       p.albums, p.tags, p.sensitivity::text, p.sensitivity_labels,
 		       p.sensitivity_src, p.lifecycle_state::text, p.classification,
 		       p.classification_confidence, p.raw_provider,
+		       p.source_channel, p.source_ref, p.document_group_id, p.document_page_index,
 		       COALESCE(p.classification_confidence, 0.25) AS match_confidence
 		  FROM searchable_photos p
 		 WHERE p.lifecycle_state::text <> 'deleted'
@@ -374,6 +410,7 @@ func (store *Store) Search(ctx context.Context, query string, limit int) ([]Phot
 		var rec PhotoRecord
 		var role string
 		var sensitivity string
+		var sourceChannel string
 		var matchConfidence float64
 		if err := rows.Scan(
 			&rec.ID, &rec.ArtifactID, &rec.ConnectorID, &rec.Provider, &rec.ProviderRef,
@@ -382,12 +419,15 @@ func (store *Store) Search(ctx context.Context, query string, limit int) ([]Phot
 			&rec.GeoLat, &rec.GeoLon, &rec.ContentHash, &rec.EXIF,
 			&rec.Albums, &rec.Tags, &sensitivity, &rec.SensitivityLabels,
 			&rec.SensitivitySource, &rec.LifecycleState, &rec.Classification,
-			&rec.ClassificationConfidence, &rec.RawProvider, &matchConfidence,
+			&rec.ClassificationConfidence, &rec.RawProvider,
+			&sourceChannel, &rec.SourceRef, &rec.DocumentGroupID, &rec.DocumentPageIndex,
+			&matchConfidence,
 		); err != nil {
 			return nil, fmt.Errorf("scan photo search row: %w", err)
 		}
 		rec.MediaRole = MediaRole(role)
 		rec.Sensitivity = SensitivityLevel(sensitivity)
+		rec.SourceChannel = SourceChannel(sourceChannel)
 		var classification ClassificationDecision
 		if len(rec.Classification) > 0 {
 			_ = json.Unmarshal(rec.Classification, &classification)
