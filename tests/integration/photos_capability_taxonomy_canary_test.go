@@ -26,9 +26,9 @@ import (
 // proves the capability taxonomy SST is enforced across THREE
 // surfaces:
 //
-//   • Go registry (`internal/connector/photos/capability_taxonomy.go`)
-//   • API limitation envelopes (`/v1/photos/.../exercise` 409 body)
-//   • PWA banner anchors (`web/pwa/photo-health.html` data-limitation-code)
+//   - Go registry (`internal/connector/photos/capability_taxonomy.go`)
+//   - API limitation envelopes (`/v1/photos/.../exercise` 409 body)
+//   - PWA banner anchors (`web/pwa/photo-health.html` data-limitation-code)
 //
 // Drift on any side fails this test. SCN-040-013.
 func TestPhotosCapabilityTaxonomyCanary_GoRegistryMatchesPWALimitationCodes(t *testing.T) {
