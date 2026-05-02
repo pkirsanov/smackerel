@@ -58,7 +58,8 @@
     "completedScopes": [
       "scope-01-photo-platform-foundation",
       "scope-02-immich-connect-scan-search",
-      "scope-03-lifecycle-duplicates-removal"
+      "scope-03-lifecycle-duplicates-removal",
+      "scope-04-capture-telegram-routing"
     ],
     "certifiedCompletedPhases": [
       {
@@ -80,6 +81,13 @@
         "agent": "bubbles.validate",
         "scope": "scope-03-lifecycle-duplicates-removal",
         "certifiedAt": "2026-05-01T03:35:00Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "scope-04-capture-telegram-routing",
+        "certifiedAt": "2026-05-02T02:50:00Z",
         "mode": "full-delivery"
       }
     ],
@@ -114,11 +122,11 @@
       {
         "scope": 4,
         "name": "scope-04-capture-telegram-routing",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": ["scope-03-lifecycle-duplicates-removal"],
         "scopeDir": ".",
         "evidenceFile": "report.md",
-        "certifiedAt": null
+        "certifiedAt": "2026-05-02T02:50:00Z"
       },
       {
         "scope": 5,
@@ -226,12 +234,21 @@
       "startedAt": "2026-05-01T03:33:00Z",
       "completedAt": "2026-05-01T03:35:00Z",
       "summary": "Certified Scope 3: Lifecycle, Duplicates, And Removal Review on HEAD 05ce8f9. Verified Scope 3 evidence in report.md and scopes.md is real: all 9 DoD items checked with inline 'Phase: implement, Claim Source: executed' blocks pointing at concrete files (internal/connector/photos/{lifecycle,dedupe,removal,action_tokens,writer_guard}.go, internal/api/photos_actions.go, internal/db/migrations/029_photo_scope3_lifecycle_dedupe_removal.sql, ml/tests/test_photos_decisions.py, web/pwa/photo-health-{lifecycle,duplicates,removal,quality}.{html,js}, photo-confirm-action.{html,js}) and Test Evidence section captures executed ./smackerel.sh check, format --check (49 files), lint, test unit (Go ok + Python 407 passed), test integration (TestPhotosLifecycle_RAWExportsLinkedWithRationale, TestPhotosDedupe_BurstHDRPanoramaAndExactClusters incl. burst/hdr/panorama/exact subtests, TestPhotosRemovalCandidates_RequireRationaleAndNoMutationBeforeConfirm all PASS, EXIT=0), and test e2e (Go e2e packages ok + 35/35 shell, including TestPhotosDedupe_E2E_CrossProviderDuplicateReturnedOnce, TestPhotosPWA_E2E_HealthDashboardsRenderLifecycleAndDuplicates, TestPhotosRemoval_E2E_ActionPlanDoesNotMutateBeforeConfirm). Re-ran governance gates on HEAD 05ce8f9: artifact-lint PASSED (1 deprecated-field warning on scopeProgress is feature-wide, not Scope 3 specific); traceability-guard --verbose reports all Scope 3 entries green (✅ scenario-to-row, ✅ concrete test file, ✅ report evidence, ✅ DoD mapping for SCN-040-007/008/009), with 15 remaining failures confined to Scope 4/5 missing test files (photos_upload, photos_telegram, photos_docscan, photos_routing, photos_sensitivity*, photos_capability*, photos_provider_neutrality, photos_health, photos_capability_banner, photos_ingest_stress) for Not Started scopes. Certification advances execution to Scope 4 implement; feature certification stays in_progress until Scopes 4-5 complete."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-02T02:46:00Z",
+      "completedAt": "2026-05-02T02:50:00Z",
+      "summary": "Certified Scope 4: Capture, Telegram, And Cross-Feature Routing on HEAD bb72d42. Verified Scope 4 evidence in scopes.md and report.md is real and complete: all 10 DoD items checked with inline 'Phase: implement, Claim Source: executed' blocks pointing at concrete on-disk files (internal/api/photos_upload.go + photos_upload_test.go, internal/connector/photos/{routing,sensitivity}.go + routing_test.go, internal/telegram/photo_upload.go + bot.go handleFind, web/pwa/photo-docscan.{html,js}, internal/db/migrations/031_photo_scope4_capture_routing_sensitivity.sql, tests/integration/photos_{upload,docscan,sensitivity}_test.go, tests/e2e/photos_{telegram,routing,sensitivity_retrieval}_test.go, web/pwa/tests/photos_docscan.spec.ts) — confirmed all 16 referenced files exist on disk via ls -la. Pre-flight ran artifact-lint at status=in_progress (PASSED, exit 0, only deprecated 'scopeProgress' field warning) AND at status=done strict mode: confirmed all 7 Scope 4 evidence code blocks pass the ≥2 distinct terminal-output signals + ≥3 lines requirement (block@468:25 lines/3 sigs [exit/path/fs], block@498:7 lines/4 sigs [test/exit/path/fs], block@508:3/3, block@514:15/4, block@532:5/6 [test/exit/path/time/count/fs], block@540:11/4 [exit/path/time/fs], block@554:13/5 [test/exit/path/time/fs]) — all clean. Strict-mode failures observed are entirely (a) pre-existing feature-completion gates that fire only at full feature done (Scope 5 still Not Started, missing future-phase records for audit/chaos/docs/test/spec-review, missing Validation/Audit/Chaos sections), (b) pre-existing earlier-scope evidence quality issues in Scope 1/2 blocks (4 short blocks at lines 88/167/181/332, 4 narrative summary lines at 71/275/424/597) NOT introduced by Scope 4, (c) 1 ml/app/main.py:75 DEFAULT_FALLBACK reality scan violation pre-existing from Scope 1 — none block Scope 4 promotion under the same precedent that certified Scopes 1-3. traceability-guard --verbose: all Scope 4 entries green (✅ SCN-040-010/011/012 scenario-to-row + concrete test file + report evidence + DoD mapping), 8 remaining failures all Scope 5 future-scope test files (photos_capability*, photos_health, photos_provider_neutrality, photos_capability_banner, photos_ingest_stress, photos_capability_taxonomy_canary). Updated scenario-manifest.json to populate evidenceRefs for SCN-040-010/011/012 pointing at report.md#scope-4-capture-telegram-and-cross-feature-routing. Promoted certification.completedScopes (+ scope-04-capture-telegram-routing), certifiedCompletedPhases (+ validate/scope-04-capture-telegram-routing/2026-05-02T02:50:00Z/full-delivery), and scopeProgress[4] status Not Started → Done with certifiedAt. Top-level status remains in_progress until Scope 5 completes."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-01T03:35:00Z",
+  "lastUpdatedAt": "2026-05-02T02:50:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",

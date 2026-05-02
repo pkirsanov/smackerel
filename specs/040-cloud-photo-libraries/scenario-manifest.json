@@ -153,7 +153,9 @@
         {"file": "tests/integration/photos_upload_test.go", "function": "TestPhotosUpload_TelegramMobileWebEnterSamePipeline"},
         {"file": "tests/e2e/photos_telegram_test.go", "function": "TestPhotosTelegram_E2E_UploadClassifySearchAndRetrieve"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-4-capture-telegram-and-cross-feature-routing"
+      ]
     },
     {
       "scenarioId": "SCN-040-011",
@@ -166,7 +168,9 @@
         {"file": "tests/e2e/photos_routing_test.go", "function": "TestPhotosRouting_E2E_ReceiptRecipeDocumentCreateDownstreamArtifacts"},
         {"file": "web/pwa/tests/photos_docscan.spec.ts", "function": "test('mobile document scan creates multi-page OCR artifact from live upload API')"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-4-capture-telegram-and-cross-feature-routing"
+      ]
     },
     {
       "scenarioId": "SCN-040-012",
@@ -178,7 +182,9 @@
         {"file": "tests/integration/photos_sensitivity_test.go", "function": "TestPhotosSensitivity_ServerSidePreviewRevealAndAudit"},
         {"file": "tests/e2e/photos_sensitivity_retrieval_test.go", "function": "TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto"}
       ],
-      "evidenceRefs": []
+      "evidenceRefs": [
+        "report.md#scope-4-capture-telegram-and-cross-feature-routing"
+      ]
     },
     {
       "scenarioId": "SCN-040-013",

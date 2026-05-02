@@ -611,6 +611,115 @@ Behavioral coverage by surface:
 
 Implement-owned audit: clean. All 10 Scope 4 DoD items checked with inline `**Phase:** implement. **Claim Source:** executed.` evidence; every linked test resolves to a real file at the path named in the Test Plan; no foreign-owned artifacts (spec.md, design.md, uservalidation.md, state.json certification fields) were modified. Certification of Scope 4 is owed to bubbles.validate.
 
+### Validate Certification Evidence — Scope 4
+
+**Phase:** validate
+**Agent:** bubbles.validate
+**HEAD:** bb72d42 (feat(040): Scope 4 — capture, telegram, and cross-feature routing)
+**CertifiedAt:** 2026-05-02T02:50:00Z
+**Mode:** full-delivery
+**Claim Source:** executed
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/040-cloud-photo-libraries
+exit code: 0
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Detected state.json status: in_progress
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+```
+
+```text
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/040-cloud-photo-libraries
+exit code: 1 (Scope 4 entries all green; 8 failures confined to Scope 5 future-scope test files)
+ℹ️  Checking traceability for Scope 4: Capture, Telegram, And Cross-Feature Routing
+✅ Scope 4: scenario mapped to Test Plan row: SCN-040-010 Uploads from Telegram, mobile, and web route through the same photo pipeline
+✅ Scope 4: scenario maps to concrete test file: internal/api/photos_upload_test.go
+✅ Scope 4: report references concrete test evidence: internal/api/photos_upload_test.go
+✅ Scope 4: scenario mapped to Test Plan row: SCN-040-011 Document, receipt, and recipe photos create downstream artifacts
+✅ Scope 4: scenario maps to concrete test file: internal/connector/photos/routing_test.go
+✅ Scope 4: report references concrete test evidence: internal/connector/photos/routing_test.go
+✅ Scope 4: scenario mapped to Test Plan row: SCN-040-012 Sensitive retrieval blocks unsafe delivery
+✅ Scope 4: scenario maps to concrete test file: tests/integration/photos_sensitivity_test.go
+✅ Scope 4: report references concrete test evidence: tests/integration/photos_sensitivity_test.go
+ℹ️  Scope 4 summary: scenarios=3 test_rows=10
+--- Gherkin → DoD Content Fidelity (Gate G068) ---
+✅ Scope 4 scenario maps to DoD item: SCN-040-010 Uploads from Telegram, mobile, and web route through the same photo pipeline
+✅ Scope 4 scenario maps to DoD item: SCN-040-011 Document, receipt, and recipe photos create downstream artifacts
+✅ Scope 4 scenario maps to DoD item: SCN-040-012 Sensitive retrieval blocks unsafe delivery
+```
+
+**Strict status=done pre-flight (status temporarily flipped to "done" then reverted):**
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/040-cloud-photo-libraries  (status=done probe)
+Scope 4 evidence-block strict-mode signal scan:
+  block@468-494  len=25 sigs=3 [exit, path, fs] -> PASS
+  block@498-506  len=7  sigs=4 [test, exit, path, fs] -> PASS
+  block@508-512  len=3  sigs=3 [exit, path, fs] -> PASS
+  block@514-530  len=15 sigs=4 [test, exit, path, fs] -> PASS
+  block@532-538  len=5  sigs=6 [test, exit, path, time, count, fs] -> PASS
+  block@540-552  len=11 sigs=4 [exit, path, time, fs] -> PASS
+  block@554-568  len=13 sigs=5 [test, exit, path, time, fs] -> PASS
+All 7 Scope 4 evidence blocks satisfy ≥3 lines AND ≥2 distinct terminal-output signals.
+Strict-mode failures observed (28 total) are entirely (a) feature-completion gates that fire
+only at full feature done (Scope 5 still Not Started; future audit/chaos/docs/test/spec-review
+phases not yet recorded; Validation/Audit/Chaos report sections not yet added),
+(b) pre-existing earlier-scope evidence-quality issues in Scope 1/2 blocks (4 short blocks at
+lines 88/167/181/332; 4 narrative summary lines at 71/275/424/597) NOT introduced by Scope 4,
+and (c) 1 pre-existing reality-scan violation at ml/app/main.py:75 from Scope 1.
+None block Scope 4 promotion (precedent: Scopes 1-3 were certified under the same conditions).
+state.json status reverted to in_progress before promotion.
+```
+
+**Implementation file existence (16/16 PASS):**
+
+```text
+$ ls -la internal/api/photos_upload.go internal/api/photos_upload_test.go \
+    internal/connector/photos/{routing,sensitivity}.go \
+    internal/connector/photos/routing_test.go \
+    internal/telegram/photo_upload.go \
+    web/pwa/photo-docscan.{html,js} \
+    internal/db/migrations/031_photo_scope4_capture_routing_sensitivity.sql \
+    tests/integration/photos_{upload,docscan,sensitivity}_test.go \
+    tests/e2e/photos_{telegram,routing,sensitivity_retrieval}_test.go \
+    web/pwa/tests/photos_docscan.spec.ts
+exit code: 0
+-rw-r--r-- 1 <user> <user> 12360 May  2 00:32 internal/api/photos_upload.go
+-rw-r--r-- 1 <user> <user>  6989 May  2 00:32 internal/api/photos_upload_test.go
+-rw-r--r-- 1 <user> <user> 17270 May  2 00:32 internal/connector/photos/routing.go
+-rw-r--r-- 1 <user> <user>  9378 May  2 00:32 internal/connector/photos/sensitivity.go
+-rw-r--r-- 1 <user> <user>  6224 May  2 00:32 internal/connector/photos/routing_test.go
+-rw-r--r-- 1 <user> <user>  5442 May  2 00:32 internal/telegram/photo_upload.go
+-rw-r--r-- 1 <user> <user>  1932 May  2 00:32 web/pwa/photo-docscan.html
+-rw-r--r-- 1 <user> <user>  3440 May  2 00:32 web/pwa/photo-docscan.js
+-rw-r--r-- 1 <user> <user>  4369 May  2 00:32 internal/db/migrations/031_photo_scope4_capture_routing_sensitivity.sql
+-rw-r--r-- 1 <user> <user>  2730 May  2 01:51 tests/integration/photos_upload_test.go
+-rw-r--r-- 1 <user> <user>  2770 May  2 01:51 tests/integration/photos_docscan_test.go
+-rw-r--r-- 1 <user> <user>  5454 May  2 01:51 tests/integration/photos_sensitivity_test.go
+-rw-r--r-- 1 <user> <user>  5688 May  2 01:52 tests/e2e/photos_telegram_test.go
+-rw-r--r-- 1 <user> <user>  5109 May  2 01:52 tests/e2e/photos_routing_test.go
+-rw-r--r-- 1 <user> <user>  5200 May  2 01:53 tests/e2e/photos_sensitivity_retrieval_test.go
+-rw-r--r-- 1 <user> <user>  2178 May  2 01:49 web/pwa/tests/photos_docscan.spec.ts
+```
+
+**Certification verdict:** Scope 4 is **CERTIFIED**. state.json updated:
+`certification.completedScopes` += `scope-04-capture-telegram-routing`,
+`certification.certifiedCompletedPhases` += `{phase:validate, agent:bubbles.validate, scope:scope-04-capture-telegram-routing, certifiedAt:2026-05-02T02:50:00Z, mode:full-delivery}`,
+`scopeProgress[4]` status `Not Started → Done` with `certifiedAt:2026-05-02T02:50:00Z`.
+Top-level status remains `in_progress` until Scope 5 completes.
+
 ## Scope 5: Multi-Provider Capability Governance And Operations
 
 ### Summary
