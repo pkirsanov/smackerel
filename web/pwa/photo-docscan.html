@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Mobile document scan — Smackerel</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <a href="/pwa/photo-search.html" class="logo-link" aria-label="Back to photo search">
+    <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
+  </a>
+  <h1>Mobile document scan</h1>
+  <p class="subtitle">Capture multi-page documents with the camera. Each page enters the unified upload pipeline (spec 040 Scope 4).</p>
+
+  <section id="photo-docscan" class="card" aria-labelledby="photo-docscan-heading"
+           data-upload-endpoint="/v1/photos/upload"
+           data-source-channel="web">
+    <h2 id="photo-docscan-heading">Add pages</h2>
+    <form id="photo-docscan-form">
+      <label>Document group label
+        <input id="photo-docscan-label" type="text" placeholder="e.g. council tax 2026" required>
+      </label>
+      <label>Pages
+        <input id="photo-docscan-files" type="file" accept="image/*" multiple required
+               capture="environment">
+      </label>
+      <button type="submit">Upload pages</button>
+    </form>
+    <p id="photo-docscan-status" class="status info" role="status" aria-live="polite"
+       data-action-status="idle"></p>
+    <ol id="photo-docscan-pages" class="page-list" aria-label="Uploaded pages">
+    </ol>
+    <pre id="photo-docscan-output" class="json-output" hidden></pre>
+  </section>
+
+  <script src="/pwa/photo-docscan.js"></script>
+</body>
+</html>

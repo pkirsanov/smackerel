@@ -89,6 +89,14 @@ type photoDetail struct {
 	ClassificationDecision   photolib.ClassificationDecision `json:"classification_view"`
 	ClassificationConfidence *float64                        `json:"classification_confidence,omitempty"`
 	RawProvider              json.RawMessage                 `json:"raw_provider"`
+	// Spec 040 Scope 4 — capture-channel + multi-page document
+	// metadata. These fields surface so Telegram, the PWA, and the
+	// agent tools can audit which channel originated each photo.
+	SourceChannel     photolib.SourceChannel `json:"source_channel"`
+	SourceRef         string                 `json:"source_ref"`
+	DocumentGroupID   string                 `json:"document_group_id,omitempty"`
+	DocumentPageIndex int                    `json:"document_page_index,omitempty"`
+	RequiresReveal    bool                   `json:"requires_reveal"`
 }
 
 func NewPhotosHandlers(store *photolib.Store, cfg config.PhotosConfig) *PhotosHandlers {
@@ -233,7 +241,85 @@ func (h *PhotosHandlers) GetPhoto(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PhotosHandlers) Preview(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNoContent)
+	if h.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "photos_store_unavailable", "photo store is unavailable")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_photo_id", "photo id must be a UUID")
+		return
+	}
+	record, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "photo_not_found", "photo not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "photo_lookup_failed", "failed to look up photo")
+		return
+	}
+	revealParam := strings.TrimSpace(r.URL.Query().Get("reveal_token"))
+	hasValidReveal := false
+	now := time.Now().UTC()
+	actor := actorIDFromRequest(r)
+	if record.Sensitivity != photolib.SensitivityNone && revealParam != "" {
+		if _, consumeErr := h.store.ConsumeRevealToken(r.Context(), id, actor, revealParam, now); consumeErr == nil {
+			hasValidReveal = true
+		} else {
+			_ = h.store.WriteAuditEvent(r.Context(), photolib.AuditEvent{
+				Action:    "sensitivity_reveal_failed",
+				PhotoID:   &id,
+				Outcome:   "blocked",
+				Reason:    consumeErr.Error(),
+				Actor:     actor,
+				CreatedAt: now,
+			})
+		}
+	}
+	decision := photolib.EvaluateRetrieval(*record, hasValidReveal)
+	if !decision.Allowed {
+		_ = h.store.WriteAuditEvent(r.Context(), photolib.AuditEvent{
+			Action:    "sensitivity_preview_blocked",
+			PhotoID:   &id,
+			Outcome:   "blocked",
+			Reason:    string(decision.Reason),
+			Actor:     actor,
+			Metadata:  map[string]any{"sensitivity": string(record.Sensitivity), "labels": record.SensitivityLabels},
+			CreatedAt: now,
+		})
+		writeJSON(w, http.StatusForbidden, map[string]any{
+			"error": map[string]any{
+				"code":    "sensitivity_requires_reveal",
+				"message": "preview blocked — request a reveal token via POST /v1/photos/{id}/reveal",
+				"reason":  string(decision.Reason),
+			},
+			"sensitivity":        string(record.Sensitivity),
+			"sensitivity_labels": record.SensitivityLabels,
+			"requires_reveal":    decision.RequiresReveal,
+		})
+		return
+	}
+	if record.Sensitivity != photolib.SensitivityNone && hasValidReveal {
+		_ = h.store.WriteAuditEvent(r.Context(), photolib.AuditEvent{
+			Action:    "sensitivity_preview_revealed",
+			PhotoID:   &id,
+			Outcome:   "revealed",
+			Reason:    string(record.Sensitivity),
+			Actor:     actor,
+			Metadata:  map[string]any{"labels": record.SensitivityLabels},
+			CreatedAt: now,
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"photo_id":           id.String(),
+		"preview":            map[string]any{"available": true, "size": r.URL.Query().Get("size")},
+		"sensitivity":        string(record.Sensitivity),
+		"sensitivity_labels": record.SensitivityLabels,
+		"requires_reveal":    decision.RequiresReveal,
+	})
 }
 
 func (h *PhotosHandlers) immichClientFromRequest(request photoConnectorRequest) (*immich.Client, connector.ConnectorConfig, error) {
@@ -295,6 +381,17 @@ func photoConnectorFromState(state photolib.ConnectorState) photoConnectorRespon
 
 func photoSummaryFromRecord(record photolib.PhotoRecord, matchConfidence float64) photoSummary {
 	classification := decodeClassification(record.Classification)
+	requiresReveal := record.Sensitivity != photolib.SensitivityNone
+	preview := map[string]any{
+		"available":       true,
+		"requires_reveal": requiresReveal,
+	}
+	if !requiresReveal {
+		preview["url"] = "/v1/photos/" + record.ID.String() + "/preview?size=thumb"
+	} else {
+		preview["url"] = ""
+		preview["sensitivity"] = string(record.Sensitivity)
+	}
 	return photoSummary{
 		PhotoID:         record.ID.String(),
 		ArtifactID:      record.ArtifactID,
@@ -309,15 +406,23 @@ func photoSummaryFromRecord(record photolib.PhotoRecord, matchConfidence float64
 		SensitivityTags: nonNilStringSlice(record.SensitivityLabels),
 		MatchConfidence: matchConfidence,
 		Classification:  classification,
-		Preview: map[string]any{
-			"available":       true,
-			"requires_reveal": record.Sensitivity != photolib.SensitivityNone,
-			"url":             "/v1/photos/" + record.ID.String() + "/preview?size=thumb",
-		},
+		Preview:         preview,
 	}
 }
 
 func photoDetailFromRecord(record photolib.PhotoRecord) photoDetail {
+	documentGroupID := ""
+	if record.DocumentGroupID != nil {
+		documentGroupID = record.DocumentGroupID.String()
+	}
+	documentPageIndex := 0
+	if record.DocumentPageIndex != nil {
+		documentPageIndex = *record.DocumentPageIndex
+	}
+	sourceChannel := record.SourceChannel
+	if sourceChannel == "" {
+		sourceChannel = photolib.SourceChannelProvider
+	}
 	return photoDetail{
 		PhotoID:                  record.ID.String(),
 		ArtifactID:               record.ArtifactID,
@@ -341,6 +446,11 @@ func photoDetailFromRecord(record photolib.PhotoRecord) photoDetail {
 		ClassificationDecision:   decodeClassification(record.Classification),
 		ClassificationConfidence: record.ClassificationConfidence,
 		RawProvider:              record.RawProvider,
+		SourceChannel:            sourceChannel,
+		SourceRef:                record.SourceRef,
+		DocumentGroupID:          documentGroupID,
+		DocumentPageIndex:        documentPageIndex,
+		RequiresReveal:           record.Sensitivity != photolib.SensitivityNone,
 	}
 }
 

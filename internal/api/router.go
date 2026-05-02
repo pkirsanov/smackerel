@@ -309,6 +309,10 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Post("/photos/health/duplicates/{id}/resolve", deps.PhotosHandlers.ResolveCluster)
 					r.Get("/photos/health/removal", deps.PhotosHandlers.HealthRemoval)
 					r.Get("/photos/health/quality", deps.PhotosHandlers.HealthQuality)
+					// Spec 040 Scope 4 — upload (Telegram/mobile/web)
+					// + sensitivity reveal token mint.
+					r.Post("/photos/upload", deps.PhotosHandlers.Upload)
+					r.Post("/photos/{id}/reveal", deps.PhotosHandlers.MintReveal)
 				})
 			}
 
