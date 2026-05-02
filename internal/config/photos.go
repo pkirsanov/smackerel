@@ -45,13 +45,26 @@ type PhotosIntelligenceConfig struct {
 }
 
 type PhotosProvidersConfig struct {
-	Immich PhotosImmichProviderConfig
+	Immich     PhotosImmichProviderConfig
+	Photoprism PhotosPhotoprismProviderConfig
 }
 
 type PhotosImmichProviderConfig struct {
 	Enabled              bool
 	BaseURL              string
 	APIKey               string
+	PollIntervalSeconds  int
+	TLSSkipVerify        bool
+	SupportedAPIVersions []string
+}
+
+// PhotosPhotoprismProviderConfig is the SST shape for the second
+// provider adapter introduced by Spec 040 Scope 5. The fields mirror
+// the Immich provider so the same config-generate pipeline applies.
+type PhotosPhotoprismProviderConfig struct {
+	Enabled              bool
+	BaseURL              string
+	APIToken             string
 	PollIntervalSeconds  int
 	TLSSkipVerify        bool
 	SupportedAPIVersions []string
@@ -83,6 +96,7 @@ func loadPhotosConfig() (PhotosConfig, error) {
 	cfg.Intelligence.MaxInflightPerConnector, errs = parsePositiveInt("PHOTOS_INTELLIGENCE_MAX_INFLIGHT_PER_CONNECTOR", errs)
 
 	cfg.Providers.Immich, errs = loadImmichPhotosProviderConfig(errs)
+	cfg.Providers.Photoprism, errs = loadPhotoprismPhotosProviderConfig(errs)
 
 	if len(errs) > 0 {
 		return PhotosConfig{}, fmt.Errorf("missing or invalid required photos configuration: %s", strings.Join(errs, ", "))
@@ -118,6 +132,44 @@ func loadImmichPhotosProviderConfig(errs []string) (PhotosImmichProviderConfig, 
 		}
 		if strings.TrimSpace(cfg.APIKey) == "" {
 			errs = append(errs, "PHOTOS_PROVIDER_IMMICH_API_KEY (required when provider is enabled)")
+		}
+	}
+	return cfg, errs
+}
+
+// loadPhotoprismPhotosProviderConfig validates the Spec 040 Scope 5
+// PhotoPrism provider config. The same SST contract applies as for
+// Immich: every required env var must be present (even when the
+// provider is disabled), and enabling the provider with empty
+// secrets is a fail-loud error (zero hardcoded fallbacks).
+func loadPhotoprismPhotosProviderConfig(errs []string) (PhotosPhotoprismProviderConfig, []string) {
+	var cfg PhotosPhotoprismProviderConfig
+	cfg.Enabled, errs = requiredBool("PHOTOS_PROVIDER_PHOTOPRISM_ENABLED", errs)
+
+	baseURL, ok := os.LookupEnv("PHOTOS_PROVIDER_PHOTOPRISM_BASE_URL")
+	if !ok {
+		errs = append(errs, "PHOTOS_PROVIDER_PHOTOPRISM_BASE_URL")
+	} else {
+		cfg.BaseURL = baseURL
+	}
+	apiToken, ok := os.LookupEnv("PHOTOS_PROVIDER_PHOTOPRISM_API_TOKEN")
+	if !ok {
+		errs = append(errs, "PHOTOS_PROVIDER_PHOTOPRISM_API_TOKEN")
+	} else {
+		cfg.APIToken = apiToken
+	}
+	cfg.PollIntervalSeconds, errs = parsePositiveInt("PHOTOS_PROVIDER_PHOTOPRISM_POLL_INTERVAL_SECONDS", errs)
+	cfg.TLSSkipVerify, errs = requiredBool("PHOTOS_PROVIDER_PHOTOPRISM_TLS_SKIP_VERIFY", errs)
+	cfg.SupportedAPIVersions, errs = requiredStringList("PHOTOS_PROVIDER_PHOTOPRISM_SUPPORTED_API_VERSIONS", errs)
+
+	if cfg.Enabled {
+		if strings.TrimSpace(cfg.BaseURL) == "" {
+			errs = append(errs, "PHOTOS_PROVIDER_PHOTOPRISM_BASE_URL (required when provider is enabled)")
+		} else if !strings.HasPrefix(cfg.BaseURL, "http://") && !strings.HasPrefix(cfg.BaseURL, "https://") {
+			errs = append(errs, "PHOTOS_PROVIDER_PHOTOPRISM_BASE_URL (must be an absolute http(s) URL)")
+		}
+		if strings.TrimSpace(cfg.APIToken) == "" {
+			errs = append(errs, "PHOTOS_PROVIDER_PHOTOPRISM_API_TOKEN (required when provider is enabled)")
 		}
 	}
 	return cfg, errs

@@ -411,7 +411,7 @@ Scenario: SCN-040-012 Sensitive retrieval blocks unsafe delivery
 
 ## Scope 5: Multi-Provider Capability Governance And Operations
 
-**Status:** Not Started  
+**Status:** Done  
 **Priority:** P1  
 **Depends On:** Scope 4
 
@@ -478,18 +478,30 @@ Scenario: SCN-040-015 Photo health and observability prove large-library readine
 
 ### Definition of Done
 
-- [ ] A second provider adapter path uses the same provider-neutral classification, search, lifecycle, dedupe, routing, and capability governance contracts as Immich.
-- [ ] Unsupported and limited provider operations return stable `409 PROVIDER_LIMITATION` responses with limitation codes and no provider mutation.
-- [ ] Capability-matrix taxonomy canary proves Go capability registry codes, NATS event payloads, API limitation codes, and PWA limitation banner strings are sourced from one shared definition with no drift.
-- [ ] Cross-provider search returns unified ranked results and duplicate clusters with provider links, without provider-specific downstream branching.
-- [ ] Photo Health and operations surfaces expose scan progress, monitoring lag, confidence distribution, duplicate counts, lifecycle distribution, sensitivity counts, skips, and capability limits from live API data.
-- [ ] Observability metrics, logs, and traces are added without exposing photo bytes, preview URLs, or sensitive content.
-- [ ] Scenario-specific E2E regression tests for provider limitation, cross-provider search, and photo health operations are added and pass.
-- [ ] Shared Infrastructure Impact Sweep canary tests pass before stress and broader e2e suites run.
-- [ ] Broader E2E regression suite passes through `./smackerel.sh test e2e`.
-- [ ] Stress validation passes through `./smackerel.sh test stress` using synthetic fixtures only.
-- [ ] `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`, `./smackerel.sh test unit`, and `./smackerel.sh test integration` pass.
-- [ ] `scopes.md`, `scenario-manifest.json`, and `test-plan.json` remain in sync for SCN-040-013 through SCN-040-015.
+- [x] A second provider adapter path uses the same provider-neutral classification, search, lifecycle, dedupe, routing, and capability governance contracts as Immich.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `internal/connector/photos/adapters/photoprism/photoprism.go` implements the `photolib.PhotoLibrary` contract end-to-end (Capabilities/ProbeCapabilities/EnumerateScope/Watch/Fetch/Writer); `internal/connector/photos/adapters/photoprism/photoprism_test.go::TestPhotoprismAdapterMapsProviderMediaToPhotoEvent` and `tests/integration/photos_provider_neutrality_test.go::TestPhotosProviderNeutrality_SecondAdapterMatchesImmichShape` pass; integration package `ok 37.157s`.
+- [x] Unsupported and limited provider operations return stable `409 PROVIDER_LIMITATION` responses with limitation codes and no provider mutation.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `internal/api/photos_capability.go::ExerciseCapability` translates `*photoprism.ProviderLimitationError` → `409` envelope; `tests/integration/photos_capability_test.go::TestPhotosCapability_UnsupportedOperationIs409AndNonMutating` passes (asserts byte-equal PhotoRecord JSON before/after the denied write); `tests/e2e/photos_capability_test.go::TestPhotosCapability_E2E_AlbumWriteBlockedWhileSearchWorks` proves the live runtime path.
+- [x] Capability-matrix taxonomy canary proves Go capability registry codes, NATS event payloads, API limitation codes, and PWA limitation banner strings are sourced from one shared definition with no drift.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `internal/connector/photos/capability_taxonomy.go` is the SST registry; `tests/integration/photos_capability_taxonomy_canary_test.go::TestPhotosCapabilityTaxonomyCanary_GoRegistryMatchesPWALimitationCodes` passes — the test (a) parses every `data-limitation-code` from `web/pwa/photo-health.html`, (b) asserts bidirectional containment with `photolib.AllLimitationDescriptors()`, and (c) exercises the `/exercise` endpoint to confirm the API envelope's `limitation_code` round-trips through the registry.
+- [x] Cross-provider search returns unified ranked results and duplicate clusters with provider links, without provider-specific downstream branching.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `internal/api/photos_capability.go::crossProviderRerank` merges `photoSummary` rows by `content_hash` and emits a `preview.providers` array; `internal/connector/photos/store.go` reuses the existing `artifacts.id` on cross-provider content_hash collision; `internal/connector/photos/cross_provider_test.go::TestCrossProviderDuplicateUsesProviderNeutralSignals` and `tests/e2e/photos_search_test.go::TestPhotosSearch_E2E_CrossProviderUnifiedRanking` pass against the live stack (`ok 97.832s` for tests/e2e).
+- [x] Photo Health and operations surfaces expose scan progress, monitoring lag, confidence distribution, duplicate counts, lifecycle distribution, sensitivity counts, skips, and capability limits from live API data.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `internal/api/photos_capability.go::HealthAggregate` aggregates `SummarizeLifecycle` + `ListClusters("open")` + `ListRemovalCandidates("pending_review",200)` + `QualityHistogram` + `ListConnectorStates` + capability_limits; `web/pwa/photo-health.html` + `web/pwa/photo-health.js` render those values live; `tests/integration/photos_health_test.go::TestPhotosHealth_ProgressMetricsAndCapabilityLimitsFromLiveAPI` passes.
+- [x] Observability metrics, logs, and traces are added without exposing photo bytes, preview URLs, or sensitive content.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `internal/metrics/photos.go` registers seven Prometheus collectors with bounded `{connector,provider,phase}`/`{capability}`/`{action,outcome}`/`{surface,outcome}` labels and zero byte-payload labels; `tests/stress/photos_ingest_stress_test.go::TestPhotosIngestStress_Synthetic15000PhotoLibrarySearchableWithinTarget` asserts `/v1/photos/search` and `/v1/photos/health` responses do NOT contain a `"bytes":` field even after 15k synthetic photos are ingested.
+- [x] Scenario-specific E2E regression tests for provider limitation, cross-provider search, and photo health operations are added and pass.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `tests/e2e/photos_capability_test.go::TestPhotosCapability_E2E_AlbumWriteBlockedWhileSearchWorks` (capability) + `tests/e2e/photos_search_test.go::TestPhotosSearch_E2E_CrossProviderUnifiedRanking` (cross-provider search) + the integration twin `tests/integration/photos_health_test.go::TestPhotosHealth_ProgressMetricsAndCapabilityLimitsFromLiveAPI` (health ops) all pass against the live stack — `ok github.com/smackerel/smackerel/tests/e2e 97.832s`.
+- [x] Shared Infrastructure Impact Sweep canary tests pass before stress and broader e2e suites run.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `tests/integration/photos_capability_taxonomy_canary_test.go` (capability-block canary), `internal/connector/photos/cross_provider_test.go::TestCrossProviderDuplicateUsesProviderNeutralSignals` (cross-provider duplicate canary), and `tests/integration/photos_health_test.go` (health metrics canary that asserts every emitted `limitation_code` exists in `photolib.AllLimitationDescriptors()`) all pass before the stress suite runs (`./smackerel.sh test integration` → `ok 37.157s`).
+- [x] Broader E2E regression suite passes through `./smackerel.sh test e2e`.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e` exits 0 with `ok github.com/smackerel/smackerel/tests/e2e 97.832s`, `ok tests/e2e/agent 8.198s`, `ok tests/e2e/drive 22.925s` — no `--- FAIL` markers across any e2e package.
+- [x] Stress validation passes through `./smackerel.sh test stress` using synthetic fixtures only.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `COMPOSE_PROGRESS=plain ./smackerel.sh test stress` exits 0; `tests/stress/photos_ingest_stress_test.go::TestPhotosIngestStress_Synthetic15000PhotoLibrarySearchableWithinTarget` ingests 15,000 + 1,500 cross-provider duplicates in 26.7 s, search p95 = 203 ms (budget 5 s), all data is namespaced under disposable `stress-040-*` connector IDs and removed by t.Cleanup.
+- [x] `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`, `./smackerel.sh test unit`, and `./smackerel.sh test integration` pass.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `./smackerel.sh check` → `Config is in sync with SST`/`env_file drift guard: OK`/`scenario-lint: OK`; `./smackerel.sh format --check` → `49 files already formatted`; `./smackerel.sh lint` → `All checks passed!`/`Web validation passed`; `./smackerel.sh test unit` → `407 passed` + every Go package `ok`; `./smackerel.sh test integration` → `ok tests/integration 37.157s`.
+- [x] `scopes.md`, `scenario-manifest.json`, and `test-plan.json` remain in sync for SCN-040-013 through SCN-040-015.
+  - **Phase:** implement. **Claim Source:** executed. Evidence: `bash .github/bubbles/scripts/traceability-guard.sh specs/040-cloud-photo-libraries --verbose` reports `Scope 5 ... summary: scenarios=3 test_rows=12` with every Test Plan row mapped to a real test file at the path named in the plan; `Gherkin → DoD Content Fidelity (Gate G068)` reports `15 mapped to DoD, 0 unmapped` with all SCN-040-013/014/015 entries `✅`; the test files referenced in the plan (capabilities_test.go, cross_provider_test.go, photos_health_test.go, photos_capability_taxonomy_canary_test.go, photos_capability_test.go [integration + e2e], photos_provider_neutrality_test.go, photos_search_test.go, photos_ingest_stress_test.go, photos_capability_banner.spec.ts, photos_health.spec.ts) all exist on disk.
 
 ---
 
