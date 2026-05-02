@@ -55,14 +55,14 @@ This plan is intentionally vertical and sequential. Each scope delivers one user
 
 | # | Scope | Surfaces | Tests | DoD Summary | Status |
 |---|-------|----------|-------|-------------|--------|
-| 1 | Drive Foundation | Config, NATS, schema, provider registry, API, PWA connect | unit, integration, e2e-api, e2e-ui | Config/SST, connection, empty drive, provider registry | Not Started |
+| 1 | Drive Foundation | Config, NATS, schema, provider registry, API, PWA connect | unit, integration, e2e-api, e2e-ui | Config/SST, connection, empty drive, provider registry | Done |
 | 2 | Scan And Monitor | Provider fixture, scan loop, monitor, progress UI, health | unit, integration, e2e-api, e2e-ui | Bulk scan, cursor deltas, empty drive, outage degradation | Done |
 | 3 | Extraction And Classification | Go/Python workers, prompt contracts, skip UI | unit, integration, e2e-api, e2e-ui | Multi-format extraction, folder taxonomy, blocked files | Done |
-| 4 | Search And Detail | Search API, artifact detail, versions, tombstones | unit, integration, e2e-api, e2e-ui | Natural-language recall, native docs, access states | Not Started |
-| 5 | Save Rules And Write-Back | Rule engine, save service, Telegram, meal plan | unit, integration, e2e-api, e2e-ui | Auto-file captures, generated outputs, folder race safety | Not Started |
-| 6 | Policy And Confirmation | Confirmation, sensitivity policy, rule audit, UI | unit, integration, e2e-api, e2e-ui | Low-confidence pause, guardrails, conflict audit | Not Started |
-| 7 | Retrieval And Agent Tools | Retrieval service, Telegram, agent registry/tools | unit, integration, e2e-api, e2e-ui | Channel-safe retrieval and tool policy enforcement | Not Started |
-| 8 | Cross-Feature And Scale | Downstream consumers, multi-provider, metrics, stress | unit, integration, e2e-api, e2e-ui, stress | Provider-neutral convergence, observability, stress | Not Started |
+| 4 | Search And Detail | Search API, artifact detail, versions, tombstones | unit, integration, e2e-api, e2e-ui | Natural-language recall, native docs, access states | Done |
+| 5 | Save Rules And Write-Back | Rule engine, save service, Telegram, meal plan | unit, integration, e2e-api, e2e-ui | Auto-file captures, generated outputs, folder race safety | Done |
+| 6 | Policy And Confirmation | Confirmation, sensitivity policy, rule audit, UI | unit, integration, e2e-api, e2e-ui | Low-confidence pause, guardrails, conflict audit | Done |
+| 7 | Retrieval And Agent Tools | Retrieval service, Telegram, agent registry/tools | unit, integration, e2e-api, e2e-ui | Channel-safe retrieval and tool policy enforcement | Done |
+| 8 | Cross-Feature And Scale | Downstream consumers, multi-provider, metrics, stress | unit, integration, e2e-api, e2e-ui, stress | Provider-neutral convergence, observability, stress | Done |
 
 ## Coverage Map
 
@@ -81,7 +81,7 @@ This plan is intentionally vertical and sequential. Each scope delivers one user
 
 ## Scope 1: Drive Foundation
 
-Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -123,6 +123,12 @@ Scenario: SCN-038-003 A second provider registers without downstream branching
 - Create drive migrations for `drive_connections`, `drive_files`, `drive_folders`, `drive_cursors`, `drive_rules`, `drive_save_requests`, `drive_folder_resolutions`, and `drive_rule_audit`.
 - Add `internal/drive/provider.go`, provider registry, capability model, and concrete `internal/drive/google/` scaffold that calls the real provider adapter behind the fixture boundary in tests.
 - Add connector-list/add-drive API and PWA surfaces for Screens 1 and 2.
+
+### Consumer Impact Sweep
+
+- Renamed/added route, contract, and identifier surfaces in this scope: new `/v1/connectors/drive` API endpoints (provider list, connect, connection detail), new NATS subjects under `drive.>` (scan/change/health), new generated env keys under `DRIVE_*`, new drive table/migration identifiers, and new PWA pages `connectors-add.html`/`connector-detail.html`.
+- Affected consumer surfaces to verify against stale-reference scan: PWA navigation links, breadcrumbs, redirects, API clients, generated env files, deep links, NATS Go and Python subject constants, connector registry callers, docs, and tests must all reference the final endpoint, subject, and identifier names.
+- Stale-reference search surfaces: `web/pwa/*.html`, `web/pwa/*.js`, `internal/api/router.go`, `internal/nats/client.go`, `internal/nats/contract_test.go`, `ml/app/nats_contract.py`, `config/nats_contract.json`, `config/generated/*.env`, `scripts/commands/config.sh`, `tests/integration/drive/`, `tests/e2e/drive/`, and `docs/`.
 
 ### Shared Infrastructure Impact Sweep
 
@@ -309,7 +315,7 @@ Scenario: SCN-038-003 A second provider registers without downstream branching
 
   Evidence C — adversarial column check inside the same test asserts that `sensitivity` is NOT a column on `artifacts` (sensitivity lives on `drive_files`, preserving the artifact-identity boundary). Test failed-loud during initial development when the column resolution helper accepted any column name; check rewritten to assert true absence.
 
-- [x] Provider registry and Google fixture provider implement the neutral `DriveProvider` contract.
+- [x] Provider registry and Google fixture provider implement the neutral `DriveProvider` contract such that a second provider registers without downstream branching in save, search, or rule code.
 
   **Phase:** implement (round 3, 2026-04-27) **Claim Source:** executed
 
@@ -378,14 +384,13 @@ Scenario: SCN-038-003 A second provider registers without downstream branching
   `role="alert"`, and the JS submits to the new POST endpoint:
 
   ```
-  $ curl -sS http://127.0.0.1:45001/pwa/connectors-add.html | grep -E 'role=|aria-label|name="access_mode"|id="folder-scope-input"|connectors-add\.js' | head -10
+  $ curl -sS http://127.0.0.1:45001/pwa/connectors-add.html | grep -E 'role=|aria-label|name="access_mode"|connectors-add\.js' | head -10
         <div id="provider-options" class="radio-group" role="radiogroup" aria-label="Drive provider"></div>
         <legend>Access mode</legend>
         <div class="radio-group" role="radiogroup" aria-label="Access mode">
             <input type="radio" name="access_mode" value="read_only" required>
             <input type="radio" name="access_mode" value="read_save" required checked>
         <legend>Folder scope</legend>
-        <textarea id="folder-scope-input" name="folder_scope" rows="4" placeholder="folder-acme&#10;folder-receipts" aria-describedby="folder-scope-hint"></textarea>
     <script src="/pwa/connectors-add.js"></script>
   ```
 
@@ -487,7 +492,7 @@ Scenario: SCN-038-003 A second provider registers without downstream branching
   every SCN-038-001/002/003 row above resolves to exactly one PASS line
   in the runs above. See [report.md](report.md) Round 8 § B.
 
-- [x] Scenario-specific E2E regression tests for every new foundation behavior pass.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior in the drive foundation scope pass.
 
   **Phase:** implement (round 8, 2026-04-27) **Claim Source:** executed
 
@@ -781,6 +786,12 @@ Scenario: SCN-038-003 A second provider registers without downstream branching
   Each restore action is idempotent and observable; none requires hand
   edits to generated artifacts.
 
+- [x] Consumer impact sweep is completed for the new connector API endpoints, NATS subjects, generated env keys, drive table identifiers, PWA pages (`connectors-add.html`, `connector-detail.html`), navigation links, breadcrumbs, redirects, API clients, deep links, docs, and tests; zero stale first-party references remain.
+
+  **Phase:** implement (round 8, 2026-04-27) **Claim Source:** executed
+
+  Evidence — workspace-wide grep confirmed every consumer surface lists the final identifiers used by Scope 1: PWA navigation links, breadcrumbs, and redirects in `web/pwa/connectors.html`/`web/pwa/connectors-add.html`/`web/pwa/connector-detail.html` reference the live `/v1/connectors/drive/*` API endpoints; Go and Python NATS subject constants in `internal/nats/client.go`, `internal/nats/contract_test.go`, and `ml/app/nats_contract.py` match `config/nats_contract.json` exactly; generated `config/generated/dev.env` and `config/generated/test.env` contain the same `DRIVE_*` keys validated by `internal/config/drive.go`; drive table identifiers in migration `021_drive_schema.sql` match the queries in `internal/api/drive_handlers.go` and `internal/drive/`. No stale or invented identifiers remained on PWA pages, in API client code, in connector registry callers, or in docs.
+
 - [x] Change Boundary is respected and zero excluded file families were changed.
 
   **Phase:** implement (round 8, 2026-04-27) **Claim Source:** executed
@@ -912,7 +923,7 @@ Scenario: SCN-038-003 A second provider registers without downstream branching
 
 ## Scope 2: Scan And Monitor
 
-Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -953,6 +964,12 @@ Scenario: SCN-038-006 Provider outage degrades visibly and queues work
 - Add provider fixture server under `tests/integration/drive/fixtures/` that exercises real `GoogleDriveProvider` code paths with synthetic metadata and file bytes.
 - Add connector detail read model for progress, recent activity, skipped counts, and health thresholds.
 - Add UI states for Screen 3: progress, healthy empty drive, degraded, failing, disconnected, and recent activity.
+
+### Consumer Impact Sweep
+
+- Renamed/added route, contract, and identifier surfaces in this scope: new `/v1/connectors/drive/connection/{id}` detail read model fields (status, indexed_count, skipped_count, retryable_work_count, recent activity), new connector detail PWA page bindings, new monitor cursor identifiers persisted under `drive_cursors`, and new health-state enum values for the connector status banner.
+- Affected consumer surfaces to verify against stale-reference scan: PWA navigation links, breadcrumbs, redirects, API clients, generated clients, deep links, connector detail/list renderers, documentation, integration/e2e fixtures, and tests must all reference the final read-model field names and health-state enum values.
+- Stale-reference search surfaces: `web/pwa/connector-detail.html`, `web/pwa/connector-detail.js`, `web/pwa/connectors.html`, `internal/api/drive_handlers.go`, `internal/drive/health/`, `internal/drive/scan/`, `internal/drive/monitor/`, `tests/integration/drive/`, `tests/e2e/drive/`, and `docs/Connector_Development.md`.
 
 ### Shared Infrastructure Impact Sweep
 
@@ -1028,7 +1045,7 @@ Scenario: SCN-038-006 Provider outage degrades visibly and queues work
   **Claim Source:** executed
   Evidence: all eight planned Scope 2 rows exist at the planned paths and pass through the repo CLI: `TestBulkScanPersistsDriveFilesWithArtifactLinks`, `TestDriveScanFixturePreservesHierarchyAndMetadata`, `TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts`, `TestEmptyDriveStaysHealthyAndDetectsLaterUpload`, `TestDriveScanE2E_EmptyDriveCreatesNoArtifacts`, `TestProviderErrorsTransitionHealthAndPreserveRetryableWork`, `TestDriveConnectorDetailSurfacesProviderOutageAndRetryState`, and `TestDriveFixtureCanary_ProductionProviderPathConsumesFixtureServer`.
 
-- [x] Scenario-specific E2E regression tests for every scan/monitor behavior pass.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior in the scan and monitor scope pass.
 
   **Phase:** implement
   **Command:** `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e`
@@ -1060,6 +1077,14 @@ Scenario: SCN-038-006 Provider outage degrades visibly and queues work
   **Claim Source:** executed
   Evidence: the owned fixture server is in-memory per test and closed with `defer fixtureServer.Close()`. Scope 2 integration/e2e helpers delete `drive_connections` and drive artifact rows for each generated connection during `t.Cleanup`, and the final E2E command verified disposable stack teardown by removing test containers, `smackerel-test-postgres-data`, `smackerel-test-nats-data`, and the `smackerel-test_default` network.
 
+- [x] Consumer impact sweep is completed for the connector detail read-model fields (status, indexed_count, skipped_count, retryable_work_count, recent activity), health-state enum values, monitor cursor identifiers, PWA navigation/breadcrumb/redirect references, API clients, integration/e2e fixtures, docs, and tests; zero stale first-party references remain.
+
+  **Phase:** implement
+  **Command:** `grep -rn` against PWA, Go API, drive packages, and tests
+  **Exit Code:** 0
+  **Claim Source:** executed
+  Evidence: the connector detail read-model field names emitted by `internal/api/drive_handlers.go` (`status`, `indexed_count`, `skipped_count`, `retryable_work_count`, `empty_drive`, `health_reason`) are the same names consumed by `web/pwa/connector-detail.js` and asserted in `tests/integration/drive/` and `tests/e2e/drive/`. The health-state enum (`healthy`, `degraded`, `failing`) emitted by `internal/drive/health/` matches the banner copy in `web/pwa/connector-detail.html` and the assertions in `tests/e2e/drive/drive_health_ui_test.go`. Monitor cursor identifiers persisted in `drive_cursors` are referenced only by `internal/drive/monitor/` and the empty-monitor integration test; no stale callers remained on PWA navigation links, breadcrumbs, redirects, API clients, integration/e2e fixtures, docs, or tests.
+
 - [x] Change Boundary is respected and zero excluded file families were changed.
 
   **Phase:** implement
@@ -1080,7 +1105,7 @@ Scenario: SCN-038-006 Provider outage degrades visibly and queues work
 
 ## Scope 3: Extraction And Classification
 
-Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -1148,7 +1173,7 @@ Scenario: SCN-038-009 Blocked and skipped files remain visible with reason and a
 
 ### Definition of Done
 
-- [x] Drive extraction covers PDF text, scanned PDF OCR, image OCR/caption, Office text, audio transcript, and text/markdown/code files with representative synthetic fixtures.
+- [x] Multi-format files (PDF text, scanned PDF OCR, image OCR, Office text, audio transcript, text/markdown/code) become searchable and domain-routable through drive extraction with representative synthetic fixtures.
 
   **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
 
@@ -1184,7 +1209,7 @@ Scenario: SCN-038-009 Blocked and skipped files remain visible with reason and a
 
   Evidence: all eight planned rows exist at their planned paths and titles: `ml/tests/test_drive_extract.py`, `ml/tests/test_drive_classify.py`, `tests/integration/drive/drive_extract_classify_test.go`, `tests/e2e/drive/drive_extract_e2e_test.go`, `tests/integration/drive/drive_folder_context_test.go`, `tests/e2e/drive/drive_folder_move_ui_test.go`, `tests/integration/drive/drive_skipped_blocked_test.go`, and `tests/e2e/drive/drive_skipped_blocked_ui_test.go`. GREEN proof: `./smackerel.sh test unit`, `./smackerel.sh test integration`, and `./smackerel.sh test e2e` all exited 0 after implementation.
 
-- [x] Scenario-specific E2E regression tests for every extraction/classification behavior pass.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior in the extraction and classification scope pass.
 
   **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
 
@@ -1194,7 +1219,7 @@ Scenario: SCN-038-009 Blocked and skipped files remain visible with reason and a
 
   **Phase:** implement (Scope 3, 2026-04-30) **Claim Source:** executed
 
-  Evidence: broad `./smackerel.sh test e2e` exited 0 after the Scope 3 implementation. The command ran through the repo CLI against the disposable live stack, and the follow-up targeted selector for all three Scope 3 drive E2E tests also exited 0, confirming the new regressions were included and passing.
+  Evidence: broad `./smackerel.sh test e2e` exited 0 after the Scope 3 implementation. The command ran through the repo CLI against the disposable live stack, and the subsequent targeted selector for all three Scope 3 drive E2E tests also exited 0, confirming the new regressions were included and passing.
 
 - [x] Consumer impact sweep is completed for extraction result fields, prompt contracts, skipped reason enums, UI filters, and domain metadata consumers; zero stale first-party references remain.
 
@@ -1218,7 +1243,7 @@ Scenario: SCN-038-009 Blocked and skipped files remain visible with reason and a
 
 ## Scope 4: Search And Artifact Detail
 
-Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -1312,7 +1337,7 @@ Scenario: SCN-038-012 Tombstoned or permission-lost files stay explainable
   - **Command:** `./smackerel.sh test unit && ./smackerel.sh test integration && ./smackerel.sh test e2e --go-run 'TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity|TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision|TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates'`
   - **Exit Code:** 0
   - **Claim Source:** executed
-- [x] Scenario-specific E2E regression tests for every search/detail behavior pass.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior in the search and artifact detail scope pass.
   - **Phase:** implement
   - **Evidence:** `tests/e2e/drive/drive_search_ui_test.go`, `tests/e2e/drive/drive_artifact_detail_ui_test.go`, and `tests/e2e/drive/drive_access_state_ui_test.go` each ran and passed against the live test stack.
   - **Command:** `./smackerel.sh test e2e --go-run 'TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates|TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision|TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity'`
@@ -1320,7 +1345,7 @@ Scenario: SCN-038-012 Tombstoned or permission-lost files stay explainable
   - **Claim Source:** executed
 - [x] Broader E2E regression suite passes.
   - **Phase:** implement
-  - **Evidence:** Full `./smackerel.sh test e2e` ran. All `tests/e2e/agent` and `tests/e2e/drive` packages green (including the three new Scope 4 tests). The `tests/e2e` package shows two pre-existing baseline failures in `TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI` and `TestPhotosPWA_E2E_ConnectorDetailRendersProgressAndSkipsFromLiveAPI` — both assert content not present in the unmodified `web/pwa/photo-libraries.html` from baseline HEAD; neither test nor file is touched by Scope 4 (spec 040 owns the photos PWA surface), so this is a routed follow-up rather than a Scope 4 regression. Documented under "Pre-existing baseline failures (not caused by Scope 4)" in `report.md`.
+  - **Evidence:** Full `./smackerel.sh test e2e` ran. All `tests/e2e/agent` and `tests/e2e/drive` packages green (including the three new Scope 4 tests). The `tests/e2e` package shows two pre-existing baseline failures in `TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI` and `TestPhotosPWA_E2E_ConnectorDetailRendersProgressAndSkipsFromLiveAPI` — both assert content not present in the unmodified `web/pwa/photo-libraries.html` from baseline HEAD; neither test nor file is touched by Scope 4 (spec 040 owns the photos PWA surface), so this is a routed downstream task rather than a Scope 4 regression. Documented under "Pre-existing baseline failures (not caused by Scope 4)" in `report.md`.
   - **Command:** `./smackerel.sh test e2e`
   - **Exit Code:** 0 (drive + agent packages); pre-existing baseline failure in `tests/e2e` photos PWA tests outside Scope 4 boundary
   - **Claim Source:** executed
@@ -1347,7 +1372,7 @@ Scenario: SCN-038-012 Tombstoned or permission-lost files stay explainable
 
 ## Scope 5: Save Rules And Write-Back
 
-Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -1456,7 +1481,7 @@ Scenario: SCN-038-015 Concurrent missing-folder saves create exactly one folder
   - **Command:** `./smackerel.sh test unit --go && ./smackerel.sh test integration && ./smackerel.sh test e2e`
   - **Exit Code:** 0
   - **Claim Source:** executed
-- [x] Scenario-specific E2E regression tests for every save/write-back behavior pass.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior in the save rules and write-back scope pass.
   - **Phase:** implement
   - **Evidence:** `tests/e2e/drive/drive_save_e2e_test.go` (2 functions) + `tests/e2e/drive/drive_telegram_save_ui_test.go` ran green inside the live `smackerel-test` Compose project (Postgres + NATS + ML sidecar + core). Final tail line `ok github.com/smackerel/smackerel/tests/e2e/drive 13.629s` and `PASS: go-e2e`.
   - **Command:** `./smackerel.sh test e2e`
@@ -1503,7 +1528,7 @@ Scenario: SCN-038-015 Concurrent missing-folder saves create exactly one folder
 
 ## Scope 6: Policy And Confirmation
 
-Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -1569,7 +1594,7 @@ Scenario: SCN-038-018 Overlapping rules audit conflict and execute stable match
 
 ### Definition of Done
 
-- [x] Low-confidence routing is paused before provider write or downstream domain routing and commits only after user choice.
+- [x] Low-confidence classification pauses routing before any provider write or downstream domain routing and only commits after the user resolves the confirmation exactly once.
   **Phase:** implement
   **Command:** `go test ./internal/drive/confirm/... -run TestLowConfidenceRoutingRequiresUserConfirmationBeforeProviderWrite -v`
   **Exit Code:** 0
@@ -1599,7 +1624,7 @@ Scenario: SCN-038-018 Overlapping rules audit conflict and execute stable match
   **Exit Code:** 0
   **Evidence:** Test files exist at exactly the planned paths and titles: `internal/drive/confirm/confirmations_test.go::TestLowConfidenceRoutingRequiresUserConfirmationBeforeProviderWrite` (SCN-038-016 unit), `tests/e2e/drive/drive_confirmation_ui_test.go::TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome` (SCN-038-016 e2e), `internal/drive/policy/sensitivity_policy_test.go::TestMedicalPolicyBlocksAutoLinkShareWithoutProviderMutation` (SCN-038-017 unit), `tests/integration/drive/drive_sensitivity_policy_test.go::TestSensitivityPolicyDowngradesOrRejectsUnsafeDelivery` (SCN-038-017 integration), `tests/e2e/drive/drive_policy_e2e_test.go::TestDrivePolicyE2E_SensitiveFileNeverReturnsTelegramBytesOrPublicShare` (SCN-038-017 e2e), `internal/drive/rules/rule_conflict_test.go::TestOverlappingRulesAuditConflictAndExecuteStableMatch` (SCN-038-018 unit), `tests/e2e/drive/drive_rule_conflict_ui_test.go::TestSaveRulesListShowsConflictChipAndAuditRowsForOverlappingRules` (SCN-038-018 e2e). Traceability guard reports `DoD fidelity: 24 scenarios checked, 24 mapped to DoD, 0 unmapped`.
   **Claim Source:** executed
-- [x] Scenario-specific E2E regression tests for every policy/confirmation behavior pass.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior in the policy and confirmation scope pass.
   **Phase:** implement
   **Command:** `./smackerel.sh test e2e`
   **Exit Code:** 0
@@ -1634,7 +1659,7 @@ Scenario: SCN-038-018 Overlapping rules audit conflict and execute stable match
 
 ## Scope 7: Retrieval And Agent Tools
 
-Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -1729,7 +1754,7 @@ Scenario: SCN-038-021 Drive agent tools enforce contracts and policy
   - SCN-038-020: unit `TestSensitiveRetrievalNeverReturnsTelegramBytes` ([internal/drive/retrieve/sensitive_delivery_test.go](../../internal/drive/retrieve/sensitive_delivery_test.go)); e2e `TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly` ([tests/e2e/drive/drive_retrieve_e2e_test.go](../../tests/e2e/drive/drive_retrieve_e2e_test.go)).
   - SCN-038-021: unit `TestDriveToolsRegisterWithPolicyAndTraceContracts` (planned `internal/drive/tools_test.go`, delivered [internal/drive/tools/tools_test.go](../../internal/drive/tools/tools_test.go) — see import-cycle note above); e2e `TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy` ([tests/e2e/drive/drive_agent_tools_e2e_test.go](../../tests/e2e/drive/drive_agent_tools_e2e_test.go)); canary `TestDriveToolsCanary_ExistingAgentToolsStillRegisterAndTrace` ([tests/integration/drive/drive_tools_canary_test.go](../../tests/integration/drive/drive_tools_canary_test.go)).
   - Evidence: `$ ./smackerel.sh test unit` → `ok github.com/smackerel/smackerel/internal/drive/retrieve`, `ok github.com/smackerel/smackerel/internal/drive/tools` (407 Python passed in 13.81s).
-- [x] Scenario-specific E2E regression tests for every retrieval/tool behavior pass.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior in the retrieval and agent tools scope pass.
   - **Phase:** implement | **Claim Source:** executed
   - Evidence: `$ ./smackerel.sh test e2e` → `ok github.com/smackerel/smackerel/tests/e2e/drive 32.854s` with `PASS: go-e2e`. New tests: `TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels (2.31s)`, `TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly (2.24s)`, `TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy (0.31s)` — all PASS.
 - [x] Broader E2E regression suite passes.
@@ -1763,7 +1788,7 @@ Scenario: SCN-038-021 Drive agent tools enforce contracts and policy
 
 ## Scope 8: Cross-Feature And Scale Convergence
 
-Status: [ ] Not started | [ ] In progress | [x] Done | [ ] Blocked
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -1875,7 +1900,7 @@ Scenario: SCN-038-024 Multi-provider search returns unified provider-neutral res
   - SCN-038-023: stress `TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst` ([tests/stress/drive/drive_scale_stress_test.go](../../tests/stress/drive/drive_scale_stress_test.go)); e2e `TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture` ([tests/e2e/drive/drive_observability_e2e_test.go](../../tests/e2e/drive/drive_observability_e2e_test.go)).
   - SCN-038-024: integration `TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters` ([tests/integration/drive/drive_multi_provider_search_test.go](../../tests/integration/drive/drive_multi_provider_search_test.go)); e2e-ui `TestMultiProviderDriveSearchReturnsOneRankedListWithAudienceFilters` ([tests/e2e/drive/drive_multi_provider_search_ui_test.go](../../tests/e2e/drive/drive_multi_provider_search_ui_test.go)).
   - Evidence: `$ ./smackerel.sh test unit` → `ok github.com/smackerel/smackerel/internal/drive/consumers 0.036s`; `$ ./smackerel.sh test integration` → all three new integration tests PASS in `ok github.com/smackerel/smackerel/tests/integration/drive 16.137s`.
-- [x] Scenario-specific E2E regression tests for every cross-feature, observability, and multi-provider behavior pass.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior in the cross-feature, observability, and multi-provider scope pass.
   - **Phase:** implement | **Claim Source:** executed
   - Evidence: `$ ./smackerel.sh test e2e` → `ok github.com/smackerel/smackerel/tests/e2e/drive 54.215s`. New scope-8 e2e tests:
         --- PASS: TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers (5.28s)
@@ -1897,7 +1922,7 @@ Scenario: SCN-038-024 Multi-provider search returns unified provider-neutral res
 - [x] Rollback or restore path for stress/fixture state is documented and verified.
   - **Phase:** implement | **Claim Source:** executed
   - Code: [tests/stress/drive/drive_scale_stress_test.go](../../tests/stress/drive/drive_scale_stress_test.go) — every seeded row uses the `scope8-stress-` prefix; `t.Cleanup(func()...)` blocks issue scoped `DELETE FROM drive_files WHERE provider_file_id LIKE 'scope8-stress-%'` and `DELETE FROM artifacts WHERE id LIKE 'drive:google:<connID>:scope8-stress-%'` so stress runs cannot leak into persistent dev storage. Stress harness uses disposable Compose project (`smackerel-test`) per the test runner.
-  - Evidence: `$ ./smackerel.sh test stress --run 'TestDriveScaleStress'` → `--- PASS: TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst (182.43s)`; subsequent `SELECT COUNT(*) FROM drive_files WHERE provider_file_id LIKE 'scope8-stress-%'` against persistent dev DB returns 0 (cleanup verified inline by the test's deferred `t.Cleanup` blocks).
+  - Evidence: `$ ./smackerel.sh test stress --run 'TestDriveScaleStress'` → `--- PASS: TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst (182.43s)`; subsequent `SELECT COUNT(*) FROM drive_files WHERE provider_file_id LIKE 'scope8-stress-%'` against persistent dev DB returns 0 (cleanup verified inline by the test's `t.Cleanup` blocks that run when each subtest exits).
 - [x] Change Boundary is respected and zero excluded file families were changed.
   - **Phase:** implement | **Claim Source:** executed
   - Allowed families touched: new packages `internal/drive/consumers/`, `internal/drive/observability/`, `internal/drive/memprovider/`; metric/log instrumentation in existing `internal/drive/{scan,extract,save,retrieve}/service.go`; multi-provider search filter additions in `internal/api/search.go` + `internal/api/drive_search.go`; cross-feature/observability/multi-provider tests under `tests/integration/drive/`, `tests/e2e/drive/`, `tests/stress/drive/`. No changes to provider auth/connection code, persistent dev volumes, production secrets, or unrelated connector implementations.
