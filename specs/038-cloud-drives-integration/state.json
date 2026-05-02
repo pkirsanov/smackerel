@@ -6,11 +6,11 @@
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "audit",
+    "currentPhase": "chaos",
     "currentScope": null,
     "runStartedAt": "2026-04-26T00:00:06Z",
     "workflowRunStartedAt": "2026-04-26T23:13:58Z",
-    "workflowRunLastEnvelopeAt": "2026-05-02T18:00:00Z",
+    "workflowRunLastEnvelopeAt": "2026-05-02T18:30:00Z",
     "currentRound": 14,
     "scope1DoDProgress": "12/12",
     "scope2DoDProgress": "12/12",
@@ -24,7 +24,8 @@
       "select",
       "bootstrap",
       "spec-review",
-      "design-reconcile"
+      "design-reconcile",
+      "audit"
     ],
     "pendingTransitionRequests": []
   },
@@ -96,6 +97,45 @@
         "scope": "Scope 8: Cross-Feature And Scale Convergence",
         "certifiedAt": "2026-05-02T18:00:00Z",
         "mode": "full-delivery"
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "scope": "feature-wide",
+        "certifiedAt": "2026-05-02T18:30:00Z",
+        "mode": "pre-feature-done",
+        "verdict": "ship_with_notes",
+        "evidenceFile": "report.md",
+        "findings": [
+          {
+            "id": "A-001",
+            "severity": "medium",
+            "class": "security/docs",
+            "owner": "bubbles.docs",
+            "summary": "Plaintext OAuth access-token in drive_connections.credentials_ref deviates from spec NFR + design §2.3; refresh_token discarded; reconcile design wording with deferred-credentials-vault decision before final feature-done"
+          },
+          {
+            "id": "A-002",
+            "severity": "info",
+            "class": "docs",
+            "owner": "bubbles.docs",
+            "summary": "internal/drive/google/google.go:265-266 source comment misattributes credentials vault to Scope 6 / decision B2 (incorrect)"
+          },
+          {
+            "id": "F-V1",
+            "severity": "medium",
+            "class": "planning",
+            "owner": "bubbles.plan",
+            "summary": "Carry-forward: scenario-manifest.json missing structured requiredTestType/linkedTests fields per Gate G057"
+          },
+          {
+            "id": "F-V2",
+            "severity": "info",
+            "class": "provenance",
+            "owner": "bubbles.workflow / bubbles.plan",
+            "summary": "Carry-forward: 4 phase claims in execution.completedPhaseClaims have no matching agent executionHistory entries"
+          }
+        ]
       }
     ],
     "scopeProgress": [
@@ -620,12 +660,24 @@
       "startedAt": "2026-05-02T17:50:00Z",
       "completedAt": "2026-05-02T18:00:00Z",
       "summary": "Scope-level validation certified Scope 8 only. Feature-wide promotion to status=done is intentionally NOT performed here: the orchestrator will route 038 through audit, chaos, docs, and spec-review next per the lesson learned from 040 Scope 5 cert (full feature done-promotion requires those lifecycle phases to be recorded in certification.certifiedCompletedPhases AND backed by Validation/Audit/Chaos Evidence sections in report.md). Scope 8 evidence verification: scopes.md Scope 8 status header is [x] Done; all 12/12 DoD items are [x] with inline Phase/Claim Source: executed/Code/Evidence markers and named PASS lines for each scenario (SCN-038-022 unit TestDriveConsumersUseArtifactStoreAndNeverProviderPackages, integration TestDriveArtifactsFeedRecipesExpensesListsAnnotationsMealPlanDigest 0.28s, integration canary TestDriveConsumerCanary_OneArtifactFlowsThroughArtifactStoreToDigest 0.20s, e2e TestDriveCrossFeatureE2E_ProviderNeutralConsumersAndProducers 5.28s; SCN-038-023 stress TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst 182.43s with google_indexed=5000 / monitor_changes=60 / extract_processed=5040 / mem_indexed=200 / total_duration=2m59.291894426s, e2e TestDriveObservabilityE2E_MetricsAndCountersReconcileAfterStressFixture 2.46s; SCN-038-024 integration TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters 0.31s, e2e-ui TestMultiProviderDriveSearchReturnsOneRankedListWithAudienceFilters 0.08s); report.md Scope 8 section carries Summary, Code Diff Evidence (11 new files + 7 modified files, all inside the documented Change Boundary - new internal/drive/{consumers,observability,memprovider} packages plus 4 new test files plus updates to internal/drive/{scan,extract,save,retrieve}/service.go and internal/api/{search,drive_search}.go and go.mod/go.sum), full Test Evidence blocks for check / format --check / lint / test unit / test integration / test e2e / test stress with named PASS lines and ok-line totals, live observability proof (curl /metrics shows all 5 smackerel_drive_* HELP/TYPE families registered from container start), and Completion Statement. Implement-phase gate evidence already captured: ./smackerel.sh check exit 0 (Config in sync with SST + env_file drift OK + 4 scenarios registered + scenario-lint OK), format --check exit 0 (49 files), lint exit 0 (All checks passed + Web validation passed), test unit exit 0 (ok internal/drive/consumers 0.036s + Python 407 passed), test integration exit 0 (ok tests/integration/drive 16.137s with 25 drive integration tests including 3 new Scope 8), test e2e exit 0 (ok tests/e2e 148.720s + ok tests/e2e/agent 34.850s + ok tests/e2e/drive 54.215s + PASS go-e2e with 17 drive e2e tests including 3 new Scope 8), test stress exit 0 (ok tests/stress/drive 182.509s). uservalidation.md has no unchecked user-reported regressions. Current-session sanity gates run: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration at status=in_progress exit 0 (Artifact lint PASSED with 3 deprecated-field warnings - scopeProgress/statusDiscipline/scopeLayout - which are non-blocking schema-v2 advisories carried since spec creation). Top-level status remains in_progress (G024) because feature-wide done-promotion requires audit + chaos + docs + spec-review phases to be recorded next; certification.status remains in_progress for the same reason. certification.completedScopes appended Scope 8: Cross-Feature And Scale Convergence (now lists all 8 scopes); certification.scopeProgress appended Scope 8 entry (Done, 12/12, certifiedAt 2026-05-02T18:00:00Z, evidenceFile report.md); certification.certifiedCompletedPhases appended this validate phase (mode full-delivery, certifiedAt 2026-05-02T18:00:00Z); execution advanced to currentScope=null + currentPhase=audit + activeAgent=null; execution.scope8DoDProgress=12/12; workflowDispatch.activeScope=null + nextPhase=audit + completedPhasesThisRound includes implement and validate; lastUpdatedAt 2026-05-02T18:00:00Z. Findings carried forward (do not block Scope 8 cert): F-V1 MEDIUM scenario-manifest.json scenarios still use freeform liveTestExpectation strings rather than structured requiredTestType/linkedTests fields per Gate G057 (owned by bubbles.plan, will be cleared at full-spec-done promotion); F-V2 INFO state-transition-guard reports phase-claim-provenance gaps (select/bootstrap/spec-review/design-reconcile in completedPhaseClaims without matching agent executionHistory entries) which are pre-existing and will be normalized at full-spec-done promotion. Next required owners for feature done-promotion: bubbles.audit -> bubbles.chaos -> bubbles.docs -> bubbles.spec-review -> bubbles.validate (final feature-wide certification with Validation/Audit/Chaos Evidence sections in report.md). Commands: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 (pre-promotion), bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 (post-promotion)."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": [
+        "audit"
+      ],
+      "scope": "feature-wide",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-02T18:15:00Z",
+      "completedAt": "2026-05-02T18:30:00Z",
+      "summary": "Pre-feature-done audit pass for spec 038. Verdict: SHIP_WITH_NOTES. Independent verification: bash .github/bubbles/scripts/artifact-lint.sh exit 0 (Artifact lint PASSED, 3 deprecated-field warnings non-blocking); timeout 600 bash .github/bubbles/scripts/traceability-guard.sh exit 0 (24 scenarios checked, 70 test rows checked, 24/24 scenario-to-row mappings, 24/24 concrete test file references, 24/24 report evidence references, 24/24 DoD fidelity Gate G068 mapped); bash .github/bubbles/scripts/state-transition-guard.sh exit 1 (36 BLOCKs but ALL are whole-feature-done readiness checks against intentionally-pending audit/chaos/docs/spec-review phases plus heuristic false positives - guard's parser does not aggregate per-scope certifiedCompletedPhases; reported substantive issue is carry-forward F-V1 owned by bubbles.plan); bash .github/bubbles/scripts/implementation-reality-scan.sh exit 0 (8 files scanned, 0 violations, 1 INFO warning re design.md fallback file resolution); ./smackerel.sh check exit 0 (Config in sync with SST + env_file drift OK + scenario-lint OK); ./smackerel.sh format --check exit 0 (49 files already formatted); ./smackerel.sh lint exit 0 (All checks passed + Web validation passed); go test -count=1 ./internal/drive/... exit 0 (12 drive Go packages PASS including TestDriveConsumersUseArtifactStoreAndNeverProviderPackages contract); zero TODO/FIXME/XXX/HACK in internal/drive/, zero hardcoded secrets, zero secret-leaking log statements. Spec/design/code coherence verified: drive package layout matches design.md §1 (provider/scan/monitor/extract/save/retrieve/rules/policy/confirm/tools/observability/consumers + memprovider second-provider proof), migrations 021/023/024/028/030 align to scope deliveries, NATS DRIVE stream + 8 subjects in config/nats_contract.json per design §1, 26 DRIVE_* SST keys in config/generated/dev.env (22 baseline + 4 added through Scopes 5/6), all 8 PWA screens have HTML+JS assets, agent registry has 4 drive_* tool registrations. NEW findings recorded in report.md#audit-evidence (none block phase advance to chaos but A-001 MUST be addressed before final feature-done): A-001 MEDIUM (security/docs) - plaintext OAuth access-token storage in internal/drive/google/google.go credentials_ref deviates from spec NFR + design §2.3; refresh_token discarded despite access_type=offline; reconcile design wording with deferred-credentials-vault decision; route to bubbles.docs (+ bubbles.security advisory). A-002 INFO (docs) - source comment at internal/drive/google/google.go:265-266 misattributes credentials vault to Scope 6 / decision B2 (Scope 6 is Policy and Confirmation, B2 was Connect-signature split); route to bubbles.docs. Carry-forward findings (acknowledged by bubbles.validate Scope 1 cert): F-V1 MEDIUM scenario-manifest.json missing structured requiredTestType/linkedTests fields per Gate G057 (owned by bubbles.plan); F-V2 INFO 4 phase claims in execution.completedPhaseClaims have no matching agent executionHistory entries (owned by bubbles.workflow / bubbles.plan). state.json edits: certification.certifiedCompletedPhases appended audit phase entry (verdict ship_with_notes, mode pre-feature-done, evidenceFile report.md, findings list with A-001/A-002/F-V1/F-V2); execution.completedPhaseClaims appended audit; execution.currentPhase audit -> chaos; workflowDispatch.completedPhasesThisRound appended audit; workflowDispatch.nextPhase audit -> chaos; lastUpdatedAt 2026-05-02T18:30:00Z. Top-level status remains in_progress; certification.status remains in_progress (G024 - audit alone does not promote feature; chaos + docs + spec-review + final validate still pending). Post-edit sanity gate: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 confirmed clean. Next required owner: bubbles.chaos."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-02T18:00:00Z",
+  "lastUpdatedAt": "2026-05-02T18:30:00Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",
@@ -652,9 +704,10 @@
     "activeScope": null,
     "completedPhasesThisRound": [
       "implement",
-      "validate"
+      "validate",
+      "audit"
     ],
-    "nextPhase": "audit"
+    "nextPhase": "chaos"
   },
   "scopeLayout": "single-file",
   "artifacts": {
@@ -698,5 +751,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Planning initialized and refined. Scopes 1-8 are all certified complete (Scope 8: Cross-Feature And Scale Convergence certified 2026-05-02T18:00:00Z). Overall feature status remains in_progress because feature-wide done-promotion requires audit, chaos, docs, and spec-review phases to be recorded next per the lesson learned from 040 Scope 5 cert."
+  "notes": "Planning initialized and refined. Scopes 1-8 are all certified complete (Scope 8: Cross-Feature And Scale Convergence certified 2026-05-02T18:00:00Z). Pre-feature-done audit recorded by bubbles.audit on 2026-05-02T18:30:00Z with verdict ship_with_notes (A-001 plaintext OAuth credentials_ref deviation from spec NFR + design §2.3 routed to bubbles.docs; A-002 source comment misattribution routed to bubbles.docs; F-V1/F-V2 carry-forward findings). Overall feature status remains in_progress because feature-wide done-promotion requires chaos, docs, and spec-review phases (plus a final feature-wide validate) to be recorded next per the lesson learned from 040 Scope 5 cert."
 }
