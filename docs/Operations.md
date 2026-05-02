@@ -150,6 +150,20 @@ curl -X POST -H "Authorization: Bearer <token>" \
 2. Regenerate config: `./smackerel.sh config generate`
 3. Restart: `./smackerel.sh down && ./smackerel.sh up`
 
+### QF Decisions Connector Operations
+
+The `qf-decisions` connector is governed as a companion read surface for QuantitativeFinance.
+
+| Operation | Requirement |
+|-----------|-------------|
+| Credential rotation | Rotate the QF service credential from `config/smackerel.yaml`, regenerate config, and restart the stack |
+| Connector health | Treat missing QF packet IDs, trace IDs, calibration badges, or provenance badges as degraded health until corrected upstream |
+| Cursor reset | Reset only the `qf-decisions` cursor when replaying QF packets; deduplication must keep packet IDs stable |
+| Evidence export | Export `PersonalEvidenceBundle`s only with explicit user consent, source artifact references, sensitivity labels, and provenance metadata |
+| Incident response | If Smackerel displays QF packets without required trust metadata or shows action controls, disable the connector before resuming sync |
+
+Smackerel operators must not use this connector to approve trades, alter QF mandates, submit execution requests, or rewrite QF-provided decision content.
+
 ### Reset a Connector's Sync Cursor
 
 If a connector is stuck or you want to re-sync from scratch, clear its cursor in the database. This requires the stack to be running:
@@ -680,3 +694,174 @@ The PWA uses the Web Share Target API to receive shared content. It posts the sh
 | Share target not appearing? | The PWA must be installed to the home screen. Reinstall if missing |
 | Captures failing? | Verify the Smackerel stack is running and the server URL is reachable from your device |
 | Service worker not registering? | Check browser console for errors. The SW scope must match `/pwa/` |
+
+## Cloud Drives Operations (Spec 038)
+
+The cloud-drives surface (Google Drive provider in scope today) is operated through the `/v1/connectors/drive` and `/v1/drive/*` endpoints, the `DRIVE` NATS stream, and the `drive_*` PostgreSQL tables.
+
+### Enabling A Drive Provider
+
+1. Add OAuth credentials to `config/smackerel.yaml` under `drive.providers.<provider_id>` — required keys include `oauth_client_id`, `oauth_client_secret`, `oauth_redirect_url`, `oauth_base_url`, `api_base_url`, scan/monitor intervals, MIME allow-lists, and sensitivity thresholds. Empty secret values fail-loud at startup; do not rely on env fallbacks.
+2. Regenerate config: `./smackerel.sh config generate`.
+3. Restart: `./smackerel.sh down && ./smackerel.sh up`.
+4. Connect a user account by issuing the OAuth web flow:
+   ```bash
+   curl -X POST -H "Authorization: Bearer <token>" \
+     -H "Content-Type: application/json" \
+     http://127.0.0.1:40001/v1/connectors/drive/connect \
+     -d '{"provider":"google","owner_user_id":"<uuid>","access_mode":"read_only","scope":{"folder_ids":["<id>"]}}'
+   ```
+   The handler returns an authorization URL; the user authorizes, and the provider redirects back to `/v1/connectors/drive/oauth/callback?state=…&code=…` which calls `FinalizeConnect`. A row lands in `drive_connections` with `status='healthy'`, the provider-supplied `expires_at`, and the bearer token in `credentials_ref`.
+
+### Drive Connection Health
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /v1/connectors/drive` | List provider catalog and capabilities (provider-neutral). |
+| `GET /v1/connectors/drive/connection/{id}` | Inspect a single connection (status, scope, last health reason, expires_at). Returns `404 CONNECTION_NOT_FOUND` for unknown ids. |
+| `GET /v1/connectors/drive/connection/{id}/skipped` | Group skipped/blocked files by reason for Screen 4. |
+
+**Token expiry behaviour.** Per spec 038 design.md §2.3 + decision-log A1, only the bearer (access) token is persisted; refresh tokens are intentionally not stored in this scope. When `expires_at` passes, the connection moves out of `healthy`; the user must re-authorize through the OAuth flow above. A dedicated credentials vault is a follow-up scope and MUST move both access and refresh tokens out of `credentials_ref` when it lands.
+
+### Save Rules And Save Service
+
+The Save Rules engine (`/v1/drive/rules`) and Save Service (`/v1/drive/save`) gate every provider write. All endpoints require Bearer auth.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /v1/drive/rules` / `POST /v1/drive/rules` | List or create Save Rules. |
+| `GET/PUT/DELETE /v1/drive/rules/{id}` | Inspect, update, or delete a single rule. |
+| `POST /v1/drive/rules/{id}/test` | Screen 8 dry-run — evaluate a rule against a candidate artifact without committing. |
+| `GET /v1/drive/rules/audit` | Screen 7 audit feed — first-stable-match outcomes plus all conflicting matches per evaluation. |
+| `POST /v1/drive/save` | Submit a save request; the rule engine evaluates, the Save Service routes through the provider writer, and a row lands in `drive_save_requests`. |
+| `GET /v1/drive/save/requests` | Recent save requests for Screen 7. |
+
+### Low-Confidence Confirmation
+
+Low-confidence routing decisions and sensitive-content saves are paused at the Save Service and surfaced through Screen 11 and the Telegram numbered-reply path. Both channels share one handler so the exactly-once contract holds.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /v1/drive/confirmations/{id}` | Fetch the pending confirmation payload. |
+| `POST /v1/drive/confirmations/{id}` | Resolve a confirmation (`confirm` / `reject`). The first call wins; subsequent calls return the resolved state. |
+
+### Drive Search And Artifact Detail
+
+Drive content participates in the standard `/api/search` semantic surface. The Drive-specific artifact detail endpoint exposes folder context, version history, save provenance, and skipped/blocked grouping:
+
+```bash
+curl -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/v1/drive/artifacts/<artifact-id>
+```
+
+### Resetting A Drive Cursor
+
+Drive providers use `drive_cursors(provider_id, connection_id, cursor, valid_until)`. To force a bulk re-scan after a provider cursor invalidation:
+
+```sql
+DELETE FROM drive_cursors WHERE connection_id = '<uuid>';
+```
+
+The next monitor cycle falls back to a bounded rescan of in-scope folders, computes a delta against `drive_files`, and re-issues only those deltas as change events.
+
+### Drive Database Tables
+
+`drive_connections`, `drive_oauth_states`, `drive_files`, `drive_folders`, `drive_cursors`, `drive_rules`, `drive_save_requests`, `drive_folder_resolutions`, `drive_rule_audit`, `drive_scan_jobs`, `drive_provider_work_queue`, `drive_confirmations`, `drive_share_changes`, plus the consolidated migrations 021/024/030. Backups produced by `./smackerel.sh backup` cover all of them.
+
+## Cloud Photo Libraries Operations (Spec 040)
+
+The cloud-photos surface (Immich and PhotoPrism providers in scope today) is operated through the `/v1/photos/*` endpoints, the `PHOTOS` NATS stream, and the `photo_*` PostgreSQL tables.
+
+### Enabling A Photo Provider
+
+1. Add provider credentials under `photos.providers.<provider>` in `config/smackerel.yaml` (`base_url` + `access_token` for both Immich and PhotoPrism). Empty `access_token` values fail-loud at startup.
+2. Regenerate config: `./smackerel.sh config generate`.
+3. Restart: `./smackerel.sh down && ./smackerel.sh up`.
+4. Test the connection without persisting it:
+   ```bash
+   curl -X POST -H "Authorization: Bearer <token>" \
+     -H "Content-Type: application/json" \
+     http://127.0.0.1:40001/v1/photos/connectors/test \
+     -d '{"provider":"immich","base_url":"https://immich.example.com","access_token":"<key>"}'
+   ```
+5. Connect:
+   ```bash
+   curl -X POST -H "Authorization: Bearer <token>" \
+     -H "Content-Type: application/json" \
+     http://127.0.0.1:40001/v1/photos/connectors \
+     -d '{"provider":"immich","base_url":"https://immich.example.com","access_token":"<key>"}'
+   ```
+
+### Photo Provider Endpoints
+
+All `/v1/photos/*` endpoints require Bearer auth.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /v1/photos/connectors` | List configured photo providers (Immich, PhotoPrism). |
+| `POST /v1/photos/connectors` | Create a new provider connection. |
+| `POST /v1/photos/connectors/test` | Test credentials without persisting. |
+| `GET /v1/photos/connectors/{id}` | Inspect a single connection. |
+| `POST /v1/photos/connectors/capabilities/{capability}/exercise` | Exercise a provider capability; unsupported operations return `409 PROVIDER_LIMITATION` with a stable `LimitationCode`. |
+| `GET /v1/photos/health` | Aggregate photo health (sync progress, capability limitations). |
+| `GET /v1/photos/search?q=<text>` | Semantic photo search; sensitive results omit preview URLs and set `requires_reveal=true`. |
+| `GET /v1/photos/{id}` | Fetch a photo record. |
+| `GET /v1/photos/{id}/preview?size=thumb\|full` | Sensitive previews return `403 sensitivity_requires_reveal` without a reveal token. |
+| `POST /v1/photos/{id}/reveal` | Mint a single-use, actor-bound, TTL + hash-protected reveal token. |
+| `POST /v1/photos/upload` | Unified multipart upload pipeline shared by Telegram, the mobile PWA, and web; preserves `source_channel` + `source_ref`. |
+
+### Lifecycle, Duplicates, And Removal Review
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /v1/photos/health/lifecycle` | RAW-to-processed lifecycle dashboard (editor signature, confidence, rationale, review_state). |
+| `GET /v1/photos/health/duplicates` | Duplicate clusters (exact, burst, HDR, panorama, near-duplicate, cross-provider). |
+| `GET /v1/photos/health/duplicates/{id}` | Inspect a single cluster. |
+| `POST /v1/photos/health/duplicates/{id}/best-pick` | Set the best-pick photo for a cluster. |
+| `POST /v1/photos/health/duplicates/{id}/resolve` | Resolve a cluster (keep / archive / delete). |
+| `GET /v1/photos/health/removal` | Removal-candidate review with reason + confidence + rationale + method, in reversible decision states. |
+| `GET /v1/photos/health/quality` | Quality dashboard (Scope 3 placeholder rows). |
+
+### Action Tokens And Destructive Confirmation
+
+Every destructive write (archive, delete, album removal) MUST flow through plan → confirm:
+
+```bash
+# Plan a destructive action — returns a scope-hashed PhotoActionToken.
+curl -X POST -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  http://127.0.0.1:40001/v1/photos/actions/plan \
+  -d '{"action":"delete","scope":{"photo_ids":["<uuid>"]}}'
+
+# Confirm with the token (and a text-confirmation phrase for delete).
+curl -X POST -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  http://127.0.0.1:40001/v1/photos/actions/confirm \
+  -d '{"token":"<photo_action_token>","confirmation":"DELETE"}'
+```
+
+`ConfirmedWriter` wraps every `ProviderWriter` so a write cannot fire before confirmation. If the planning scope changes between plan and confirm (scope-hash drift), the confirm call is rejected.
+
+### Capability Taxonomy
+
+Provider capability gaps surface through one taxonomy (`internal/connector/photos/capability_taxonomy.go`) used by:
+
+- API responses (`409 PROVIDER_LIMITATION` envelopes carry a `LimitationCode`).
+- Prometheus metrics (`smackerel_photos_capabilities_limited_total{code=…}`).
+- The PWA Photo Health dashboard banner strings.
+
+The taxonomy canary integration test asserts those three surfaces stay in sync. When adding a new provider, register limitations through the taxonomy registry — never inline ad-hoc strings.
+
+### Sensitivity Reveal Tokens
+
+Sensitive photo previews are gated server-side. The reveal token lifecycle:
+
+1. Search and detail endpoints return `requires_reveal=true` for sensitive rows and omit preview URLs.
+2. Calling `GET /v1/photos/{id}/preview` without a reveal token returns `403 sensitivity_requires_reveal`.
+3. The user (or surface) requests a token via `POST /v1/photos/{id}/reveal`.
+4. The token is single-use, actor-bound, TTL-bounded, and hash-protected; reuse fails closed.
+5. Telegram's `handleFind` substitutes a reveal-required notice for sensitive results so the bot does not auto-deliver sensitive content.
+
+### Photo Database Tables
+
+Migration `025_photo_libraries.sql` plus `029_photo_scope3_lifecycle_dedupe_removal.sql` and `031_photo_scope4_capture_routing_sensitivity.sql` provide: `photo_lifecycle_links`, `photo_clusters`, `photo_cluster_members`, `photo_removal_candidates`, `photo_capabilities`, `photo_sync_state`, `photo_face_links`, `photo_embeddings`, `photo_action_tokens`, `photo_audit_events`, `photo_raw_export_links`, `photo_routing_decisions`, `photo_document_groups`. All are covered by the standard `./smackerel.sh backup` and the disposable test stack.

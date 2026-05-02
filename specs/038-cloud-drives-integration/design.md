@@ -257,10 +257,30 @@ work unchanged when a new provider is added. (BS-008 acceptance criterion.)
 ### 2.3 Google Drive concrete provider (FR-002, BS-018)
 
 Lives in `internal/drive/google/`. Uses the official Google Drive REST API
-via the project's OAuth client. Refresh tokens are written into approved
-secret storage at `Connect()` time and read by the provider on each call;
-they never enter `config/smackerel.yaml`. Scope set is the smallest needed
-for the user's chosen access mode (Screen 2 step 2).
+via the project's OAuth client. Scope set is the smallest needed for the
+user's chosen access mode (Screen 2 step 2).
+
+**OAuth credential storage in this scope (decision-log A1).** `FinalizeConnect`
+exchanges the authorization code at the provider's token endpoint and persists
+the resulting bearer (access) token plaintext in `drive_connections.credentials_ref`
+as `bearer:<access_token>`, alongside the provider-supplied `expires_at`. The
+refresh token returned by the provider is **not** persisted in Scope 1 — once
+the access token expires, the connection moves to a non-`healthy` state and
+the user re-authorizes through the standard OAuth flow. This single-column
+placement is the smallest correct change for one provider; introducing a
+dedicated `drive_credentials` child table or external secret-vault indirection
+is deferred until a non-Google provider's token model demands it (see §11
+decision log "Resolved A1"). The OAuth client still requests `access_type=offline`
+so the refresh-token field is available the day a future scope adopts it.
+
+**Out-of-scope hardening targets.** The "Patterns to Avoid" rule against
+storing OAuth refresh tokens in PostgreSQL plaintext (§2.0) remains the
+direction of travel: when the credentials-vault scope lands it MUST move
+both access and refresh tokens out of `credentials_ref` into approved
+secret storage (or a `drive_credentials` table backed by the secret store),
+never into `config/smackerel.yaml`. Until then, `credentials_ref` is the
+explicit, time-bounded exception documented here so implementation, audit,
+and operations stay aligned.
 
 ---
 

@@ -167,6 +167,16 @@
             "summary": "POST /v1/photos/actions/plan accepts scope with 200 random UUIDs (photo_count:200) and mints token without an upper bound. Worth bounding scope size at plan time to prevent very-large-token resource amplification."
           }
         ]
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "scope": "feature-wide",
+        "certifiedAt": "2026-05-02T19:25:00Z",
+        "mode": "pre-feature-done",
+        "verdict": "completed_owned",
+        "evidenceFile": "report.md#docs-phase--evidence",
+        "summary": "Published Spec 040 cloud-photos runtime surface into Bubbles-managed docs: docs/Connector_Development.md (inventory + Cloud Photo Libraries Connector Boundary section + Existing Connectors footer), docs/Operations.md (new Cloud Photo Libraries Operations section), docs/Development.md (capabilities bullet + internal/connector/photos mention + NATS streams expanded to 15), docs/Testing.md (new Cloud Photo Libraries Test Surface section). Audit non-blocking observation at ml/app/main.py:75 (SMACKEREL_AUTH_TOKEN warn-on-empty) is ROUTED to bubbles.harden — code SST hardening change is foreign to bubbles.docs ownership. API-doc verification confirmed every documented /v1/photos/* endpoint is registered in internal/api/router.go (lines 290-326). Verified via ./smackerel.sh check (Config in sync with SST, scenario-lint OK), bash .github/bubbles/scripts/artifact-lint.sh (PASSED), timeout 600 bash .github/bubbles/scripts/traceability-guard.sh (PASSED, 15/15 scenarios mapped, 0 unmapped), timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh --verbose (PASSED). No behavior change. nextRequiredOwner=bubbles.harden for the non-blocking observations before status=done strict promotion. certification.* status untouched."
       }
     ],
     "scopeProgress": [
