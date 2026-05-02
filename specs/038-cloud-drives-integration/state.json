@@ -7,10 +7,10 @@
   "execution": {
     "activeAgent": null,
     "currentPhase": "implement",
-    "currentScope": "Scope 7: Retrieval And Agent Tools",
+    "currentScope": "Scope 8: Cross-Feature And Scale Convergence",
     "runStartedAt": "2026-04-26T00:00:06Z",
     "workflowRunStartedAt": "2026-04-26T23:13:58Z",
-    "workflowRunLastEnvelopeAt": "2026-05-01T19:30:00Z",
+    "workflowRunLastEnvelopeAt": "2026-05-02T00:00:00Z",
     "currentRound": 14,
     "scope1DoDProgress": "12/12",
     "scope2DoDProgress": "12/12",
@@ -18,6 +18,7 @@
     "scope4DoDProgress": "10/10",
     "scope5DoDProgress": "13/13",
     "scope6DoDProgress": "10/10",
+    "scope7DoDProgress": "12/12",
     "completedPhaseClaims": [
       "select",
       "bootstrap",
@@ -34,7 +35,8 @@
       "Scope 3: Extraction And Classification",
       "Scope 4: Search And Artifact Detail",
       "Scope 5: Save Rules And Write-Back",
-      "Scope 6: Policy And Confirmation"
+      "Scope 6: Policy And Confirmation",
+      "Scope 7: Retrieval And Agent Tools"
     ],
     "certifiedCompletedPhases": [
       {
@@ -77,6 +79,13 @@
         "agent": "bubbles.validate",
         "scope": "Scope 6: Policy And Confirmation",
         "certifiedAt": "2026-05-01T19:30:00Z",
+        "mode": "full-delivery"
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "scope": "Scope 7: Retrieval And Agent Tools",
+        "certifiedAt": "2026-05-02T00:00:00Z",
         "mode": "full-delivery"
       }
     ],
@@ -124,6 +133,14 @@
         "dodCompleted": 10,
         "dodTotal": 10,
         "certifiedAt": "2026-05-01T19:30:00Z",
+        "evidenceFile": "report.md"
+      },
+      {
+        "scope": "Scope 7: Retrieval And Agent Tools",
+        "status": "Done",
+        "dodCompleted": 12,
+        "dodTotal": 12,
+        "certifiedAt": "2026-05-02T00:00:00Z",
         "evidenceFile": "report.md"
       }
     ],
@@ -562,12 +579,24 @@
       "startedAt": "2026-05-01T19:25:00Z",
       "completedAt": "2026-05-01T19:30:00Z",
       "summary": "Full-delivery validation certified Scope 6 only. Scope 6 DoD is 10/10 checked with executed evidence in scopes.md; report.md Scope 6 section carries Summary, Code Diff Evidence (10-row table), full Test Evidence blocks for SCN-038-016/017/018 with named PASS lines (TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome 0.10s, TestSensitivityPolicyDowngradesOrRejectsUnsafeDelivery 0.13s, TestDrivePolicyE2E_SensitiveFileNeverReturnsTelegramBytesOrPublicShare 2.06s, TestSaveRulesListShowsConflictChipAndAuditRowsForOverlappingRules 2.09s, TestMedicalPolicyBlocksAutoLinkShareWithoutProviderMutation, TestOverlappingRulesAuditConflictAndExecuteStableMatch, TestLowConfidenceRoutingRequiresUserConfirmationBeforeProviderWrite), full ./smackerel.sh check + format --check + lint + test unit + test integration + test e2e tails (ok internal/drive/confirm 0.020s, ok internal/drive/policy 0.014s, ok internal/drive/rules 0.010s, ok internal/api 2.116s, ok internal/metrics 0.033s, ok cmd/core 0.482s, ok tests/integration/drive 8.033s, ok tests/e2e/drive 26.444s, PASS go-e2e), and Completion Statement. uservalidation.md has no unchecked user-reported regressions. Current-session sanity gates re-run: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0 (Artifact lint PASSED); timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration --verbose exit 0 (24 scenarios checked, 70 test rows checked, 24 scenario-to-row mappings, 24 concrete test file references, 24 report evidence references, Scope 6 SCN-038-016/017/018 mapped to internal/drive/confirm/confirmations_test.go, internal/drive/policy/sensitivity_policy_test.go, internal/drive/rules/rule_conflict_test.go with DoD fidelity Gate G068 PASS, RESULT PASSED 0 warnings). Top-level status remains in_progress (G024) because Scopes 7-8 are not started. Certification updated completedScopes and scopeProgress for Scope 6, recorded this validate phase under certifiedCompletedPhases (mode full-delivery, certifiedAt 2026-05-01T19:30:00Z), and advanced execution to Scope 7 implement. Commands: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0, timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration --verbose exit 0."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "scope": "Scope 7: Retrieval And Agent Tools",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-02T00:00:00Z",
+      "completedAt": "2026-05-02T00:00:00Z",
+      "summary": "Full-delivery validation certified Scope 7 only. Scope 7 DoD is 12/12 checked with executed evidence in scopes.md; report.md Scope 7 section carries Summary, Code Diff Evidence (11-row git diff --stat table + Service contract Go snippet + agent-tool registration Go snippet + production wiring Go snippet), and full Test Evidence blocks for SCN-038-019/020/021 with named PASS lines (TestRetrievePolicyAllowedFileReturnsBytesOrProviderLinkWithCandidates with 5 sub-tests including non_sensitive_within_inline_cap_returns_bytes_with_candidate, non_sensitive_oversized_downgrades_to_provider_link_no_bytes_fetch, multiple_candidates_returns_disambiguation_with_full_labels, zero_candidates_refuses_with_localized_hint, disambiguation_pick_routes_through_policy_again; TestDriveToolsRegisterWithPolicyAndTraceContracts with 7 sub-tests including all_four_tools_registered_with_correct_side_effect_class, tool_names_constant_matches_registry, input_schemas_compile_and_reject_invalid_args, handlers_return_not_configured_envelope_before_setservices, drive_get_file_with_sensitive_candidate_returns_secure_link_no_bytes, drive_search_returns_provider_neutral_candidates, output_schema_validates_drive_search_payload; TestTelegramRetrievalFindsDriveBoardingPassAndDisambiguates 0.12s; TestDriveToolsCanary_ExistingAgentToolsStillRegisterAndTrace 0.00s; TestDriveAgentToolsE2E_SearchGetSaveListRulesRespectPolicy 0.31s; TestDriveRetrieveE2E_SensitiveTelegramRequestUsesSafeModeOnly 2.24s; TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels 2.31s), full ./smackerel.sh check + format --check + lint + test unit + test integration + test e2e tails (Config is in sync with SST + scenario-lint OK with 4 scenarios registered + 0 rejected; 49 files already formatted; All checks passed! + Web validation passed; ok internal/drive/retrieve + ok internal/drive/tools + ok internal/telegram + 407 passed 1 warning in 13.81s; ok tests/integration/drive 8.150s; ok tests/e2e/agent 8.059s + ok tests/e2e/drive 32.854s + PASS go-e2e), and Completion Statement. uservalidation.md has no unchecked user-reported regressions. Current-session sanity gates run: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration at status=in_progress exit 0 (Artifact lint PASSED); pre-flight strict run after temporarily flipping top-level status to done confirmed all Scope 7 evidence blocks at lines 2489-2682 of report.md satisfy the >=3-line and >=2-distinct-terminal-output-signal bars (12 of 12 Scope 7 fenced blocks measured: 12/13/9/12/7/3/14/6/11/13/6/8 lines, every block carrying $ prompt + exit code + file paths + PASS/ok signals); the 27 strict-mode evidence-block fail counts in the pre-flight report are entirely in lines 208-2432 belonging to already-certified Scopes 1-6 and the strict-mode section/phase requirements (Validation/Audit/Chaos Evidence sections + audit/chaos completedPhases) belong to the future spec-wide done promotion, not to this Scope 7 partial certification; state.json was reverted to status=in_progress before the actual promotion edits below; post-promotion artifact-lint and traceability-guard rerun PASS. Top-level status remains in_progress (G024) because Scope 8 is not started. Certification updated completedScopes and scopeProgress for Scope 7, recorded this validate phase under certifiedCompletedPhases (mode full-delivery, certifiedAt 2026-05-02T00:00:00Z), and advanced execution to Scope 8 implement. Commands: bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration exit 0, timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration --verbose exit 0."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-01T19:30:00Z",
+  "lastUpdatedAt": "2026-05-02T00:00:00Z",
   "workflowDispatch": {
     "mode": "full-delivery",
     "dispatchedAt": "2026-04-26T23:13:58Z",
@@ -591,7 +620,7 @@
     ],
     "specReviewHook": "once-before-implement",
     "specReviewHookExecuted": false,
-    "activeScope": "Scope 7: Retrieval And Agent Tools",
+    "activeScope": "Scope 8: Cross-Feature And Scale Convergence",
     "completedPhasesThisRound": [],
     "nextPhase": "implement"
   },
@@ -637,5 +666,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Planning initialized and refined. Scope 1, Scope 2, Scope 3, Scope 4, Scope 5, and Scope 6 are certified complete. Overall feature status remains in_progress because Scopes 7-8 are not complete."
+  "notes": "Planning initialized and refined. Scope 1, Scope 2, Scope 3, Scope 4, Scope 5, Scope 6, and Scope 7 are certified complete. Overall feature status remains in_progress because Scope 8 is not complete."
 }
