@@ -4372,3 +4372,218 @@ Carry-forward observations (already routed, not re-routed by regression):
 }
 ```
 
+---
+
+## Simplification Phase — Feature-Wide Evidence
+
+**Phase Agent:** bubbles.simplify
+**Mode:** feature-wide
+**Scope:** recently changed files within `specs/038-cloud-drives-integration` execution surface
+**Status:** completed_owned (diagnostic; feature status remains `in_progress`)
+
+### Review Surface
+
+Three parallel review passes (code reuse, code quality, efficiency) executed against 91 files changed in the 038 execution surface (delta vs `origin/main`). Reviewed: `internal/drive/{save,rules,scan,extract,retrieve,search,resolve,consumers,handler,recovery,store}/`, `internal/api/drive_*.go`, `internal/agent/drive_tools*.go`, `cmd/core/cmd_*drive*.go`, drive integration/e2e/stress test files, and `web/extension/` drive surfaces.
+
+### Findings Aggregation & Triage
+
+| # | File | Lines | Category | Severity | Issue | Action |
+|---|------|-------|----------|----------|-------|--------|
+| 1 | `internal/drive/save/service.go` | 312, 522 | code quality (dead parameter) | low | `composeProviderURL` accepted `title string` but never referenced it | APPLY: drop unused parameter; update lone call site |
+| 2 | `internal/drive/rules/engine.go` | 251, 306, 334 | code quality (dead parameter + dead code) | low | `tokenSet(rule Rule, artifact Artifact)` ignored `rule` and contained explicit `_ = rule` placeholder | APPLY: drop unused parameter; remove dead `_ = rule` line; update lone call site |
+| 3 | `internal/api/drive_search.go` | 269-273 | code quality (redundant control flow) | low | `decodeProviderID` had `if id := stringField(...); id != "" { return id }; return ""` — the function always returns `stringField(...)` whether empty or not | APPLY: collapse to `return stringField(payload, "provider_id")` |
+| 4 | `internal/drive/scan/service.go` | 280-358 | efficiency (redundant computation) | low | `upsertFileOnce` invoked `sharingState(item)` three times (metadata map, `sharingJSON` marshal, returned `FileRecord`) on the same input | APPLY: hoist to `sharing := sharingState(item)` once and reuse all three locations |
+| — | `internal/drive/consumers/consumers.go` + `internal/api/drive_search.go` | duplicated `decodeSharingState`/`decodeProviderID`/`stringField` helpers | code reuse | medium | Same helpers exist in two packages | DEFER: extracting to a new shared package crosses simplification scope (would require new module + import rewrites in two domains); not behavior-preserving consolidation work for this pass |
+| — | `internal/drive/save/handlers.go` (multi-handler `pool == nil` guard) | code quality | low | Repeated nil-pool guard with handler-specific error wording | DEFER: error messages differ per handler — extracting to a helper would lose the per-handler operator-facing error context |
+| — | `internal/agent/drive_tools.go` (`notConfiguredOutput` / `marshalErr`) | code quality | low | Similar message construction in two helpers | DEFER: each helper builds a different operator-facing message string; merging would change observable error wording |
+| — | tests using `containsString` instead of `slices.Contains` | code quality | low | Hand-rolled helper duplicates standard library | DEFER: out of strict 038-owned simplification surface; would also touch unmodified test scaffolding |
+| — | `engine.go` token-set `topic`-empty guard | code quality | low | The `if _, ok := tokens["topic"]; !ok && artifact.Tokens["topic"] == ""` check appears redundant | KEEP: removing it changes the `ErrInvalidToken` error sub-message ("missing token" vs "resolved to empty value") — observable behavior change, out of bounds for simplify |
+
+### Simplifications Applied (4 fixes; net −3 lines)
+
+```text
+internal/api/drive_search.go   | 5 +----     (−4 / +1)
+internal/drive/rules/engine.go | 5 ++---     (−2 / +0  excluding sig change)
+internal/drive/save/service.go | 4 ++--      (−2 / +2  param removed both sides)
+internal/drive/scan/service.go | 7 ++++---   (−3 / +4  hoist + 3 reuses)
+4 files changed, 9 insertions(+), 12 deletions(-)
+```
+
+All fixes are signature/parameter-list simplifications, dead-code removal, redundant control-flow collapses, and a single hoisted local. Zero observable behavior changes; zero public API changes outside private package internals; zero test fixture or assertion edits.
+
+### Verification Gate Results
+
+#### Gate 1 — `./smackerel.sh check`
+
+**Phase:** simplify
+**Phase Agent:** bubbles.simplify
+**Executed:** YES
+**Command:** `./smackerel.sh check`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output (signals):**
+```text
+Config in sync with SST
+env_file drift guard: OK
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+```
+
+#### Gate 2 — `./smackerel.sh format --check`
+
+**Phase:** simplify
+**Phase Agent:** bubbles.simplify
+**Executed:** YES
+**Command:** `./smackerel.sh format --check`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output (signals):**
+```text
+49 files already formatted
+format check: OK
+```
+
+#### Gate 3 — `./smackerel.sh lint`
+
+**Phase:** simplify
+**Phase Agent:** bubbles.simplify
+**Executed:** YES
+**Command:** `./smackerel.sh lint`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output (signals):**
+```text
+All checks passed!
+Web validation passed
+```
+
+#### Gate 4 — `./smackerel.sh test unit`
+
+**Phase:** simplify
+**Phase Agent:** bubbles.simplify
+**Executed:** YES
+**Command:** `./smackerel.sh test unit`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output (signals):**
+```text
+407 passed, 1 warning in 15.34s
+ok  	github.com/smackerel/smackerel/internal/drive/save
+ok  	github.com/smackerel/smackerel/internal/drive/rules
+ok  	github.com/smackerel/smackerel/internal/drive/scan
+ok  	github.com/smackerel/smackerel/internal/api
+```
+
+Note: this run executed AFTER the four simplifications were applied, so all four modified packages (`internal/drive/save`, `internal/drive/rules`, `internal/drive/scan`, `internal/api`) were compiled and tested with the simplified code; their PASS lines above confirm zero behavior regression.
+
+#### Gate 5 — `./smackerel.sh test integration`
+
+**Phase:** simplify
+**Phase Agent:** bubbles.simplify
+**Executed:** YES
+**Command:** `./smackerel.sh test integration`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output (signals):**
+```text
+ok  	github.com/smackerel/smackerel/tests/integration         34.072s
+ok  	github.com/smackerel/smackerel/tests/integration/agent    3.268s
+ok  	github.com/smackerel/smackerel/tests/integration/drive   11.630s
+```
+
+#### Gate 6 — `./smackerel.sh test e2e`
+
+**Phase:** simplify
+**Phase Agent:** bubbles.simplify
+**Executed:** YES
+**Command:** `./smackerel.sh test e2e`
+**Exit Code:** 0
+**Claim Source:** executed
+**Output (signals):**
+```text
+--- PASS: TestDriveSaveE2E_ConcurrentMissingFolderCreatesExactlyOneFolder (0.28s)
+--- PASS: TestDriveScanE2E_EmptyDriveCreatesNoArtifacts (0.16s)
+--- PASS: TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts (0.21s)
+--- PASS: TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity (0.05s)
+--- PASS: TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions (0.15s)
+--- PASS: TestTelegramRetrievalReturnsFileProviderLinkOrDisambiguationWithDriveLabels (0.35s)
+--- PASS: TestTelegramReceiptSaveReplyShowsDriveFolderAndCorrectionAction (0.21s)
+ok  	github.com/smackerel/smackerel/tests/e2e         124.853s
+ok  	github.com/smackerel/smackerel/tests/e2e/agent     9.973s
+ok  	github.com/smackerel/smackerel/tests/e2e/drive    41.197s
+PASS: go-e2e
+```
+
+### Verdict
+
+🟢 **SIMPLIFIED.** Four behavior-preserving simplifications applied; all six gates green.
+
+| Step | Check | Result |
+|------|-------|--------|
+| 1 | Config / SST drift | 🟢 in sync |
+| 2 | Format | 🟢 49/49 files formatted |
+| 3 | Lint | 🟢 all checks passed |
+| 4 | Unit (Go + Python) | 🟢 67/67 packages OK; 407/407 Python passed; 4/4 simplified packages PASS post-edit |
+| 5 | Integration (live stack) | 🟢 3/3 packages ok including drive 11.630s |
+| 6 | E2E (live stack) | 🟢 3/3 packages ok including drive 41.197s, PASS: go-e2e |
+
+**Net code change:** 4 files modified, +9/−12 lines (net −3).
+**Behavior change:** none.
+**Public surface change:** none (only private package signatures + private dead code).
+**Test change:** none (no test files edited; existing tests verified the simplifications).
+**Boundary respected:** all changes within drive feature 038 surface; zero foreign-spec touches.
+**Deletion safety:** no files deleted; only inline simplifications applied.
+
+### Deferred (intentional non-action)
+
+- Cross-package helper deduplication (`decodeSharingState`/`decodeProviderID`/`stringField` shared between `internal/drive/consumers/consumers.go` and `internal/api/drive_search.go`) — would require introducing a new shared package with imports in two domains; out of bounds for behavior-preserving simplify.
+- Per-handler nil-pool guard merging — guard messages are operator-facing and intentionally handler-specific.
+- `notConfiguredOutput` / `marshalErr` merge in `internal/agent/drive_tools.go` — message strings differ per call site.
+- Replacing test-only `containsString` with `slices.Contains` — outside strict simplification scope.
+- Removing the `engine.go` `topic`-empty guard — would change `ErrInvalidToken` sub-message wording (observable behavior).
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.simplify",
+  "roleClass": "diagnostic",
+  "outcome": "completed_owned",
+  "featureDir": "specs/038-cloud-drives-integration",
+  "scopeIds": ["feature-wide"],
+  "dodItems": [],
+  "scenarioIds": [
+    "SCN-038-001", "SCN-038-002", "SCN-038-003", "SCN-038-004",
+    "SCN-038-005", "SCN-038-006", "SCN-038-007", "SCN-038-008",
+    "SCN-038-009", "SCN-038-010", "SCN-038-011", "SCN-038-012",
+    "SCN-038-013", "SCN-038-014", "SCN-038-015", "SCN-038-016",
+    "SCN-038-017", "SCN-038-018", "SCN-038-019", "SCN-038-020",
+    "SCN-038-021", "SCN-038-022", "SCN-038-023", "SCN-038-024"
+  ],
+  "artifactsCreated": [],
+  "artifactsUpdated": [
+    "internal/drive/save/service.go",
+    "internal/drive/rules/engine.go",
+    "internal/api/drive_search.go",
+    "internal/drive/scan/service.go",
+    "specs/038-cloud-drives-integration/report.md",
+    "specs/038-cloud-drives-integration/state.json"
+  ],
+  "evidenceRefs": [
+    "report.md#simplification-phase--feature-wide-evidence",
+    "report.md#simplifications-applied-4-fixes-net-3-lines",
+    "report.md#verification-gate-results"
+  ],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null,
+  "verdict": "SIMPLIFIED",
+  "observations": [
+    "Four behavior-preserving simplifications applied across 4 files (+9/−12 lines net).",
+    "All six gates green: check, format --check, lint, test unit (incl. uncached retest of modified packages), test integration, test e2e.",
+    "Five additional simplification candidates intentionally deferred to preserve operator-facing error wording, avoid cross-package abstraction creep, or avoid observable behavior change.",
+    "Feature status remains in_progress; bubbles.simplify is diagnostic and does not promote the feature."
+  ]
+}
+```
+

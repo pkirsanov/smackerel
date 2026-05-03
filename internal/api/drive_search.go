@@ -266,10 +266,7 @@ func decodeProviderID(raw []byte) string {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return ""
 	}
-	if id := stringField(payload, "provider_id"); id != "" {
-		return id
-	}
-	return ""
+	return stringField(payload, "provider_id")
 }
 
 func stringField(payload map[string]any, key string) string {

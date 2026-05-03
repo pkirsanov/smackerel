@@ -248,7 +248,7 @@ func (e *Engine) Evaluate(_ context.Context, artifact Artifact, rules []Rule) De
 			decision.Outcomes = append(decision.Outcomes, outcome)
 			continue
 		}
-		rendered, renderErr := RenderTargetPath(rule.TargetFolderTemplate, e.tokenSet(rule, artifact))
+		rendered, renderErr := RenderTargetPath(rule.TargetFolderTemplate, e.tokenSet(artifact))
 		outcome.Matched = true
 		outcome.Reason = "matched"
 		outcome.RenderedPath = rendered
@@ -303,7 +303,7 @@ func matchSensitivity(rule Rule, artifact Artifact) (string, bool) {
 	return "sensitivity_mismatch", false
 }
 
-func (e *Engine) tokenSet(rule Rule, artifact Artifact) map[string]string {
+func (e *Engine) tokenSet(artifact Artifact) map[string]string {
 	tokens := make(map[string]string, len(artifact.Tokens)+8)
 	for k, v := range artifact.Tokens {
 		tokens[k] = v
@@ -331,6 +331,5 @@ func (e *Engine) tokenSet(rule Rule, artifact Artifact) map[string]string {
 	if _, ok := tokens["topic"]; !ok && artifact.Tokens["topic"] == "" {
 		tokens["topic"] = ""
 	}
-	_ = rule
 	return tokens
 }

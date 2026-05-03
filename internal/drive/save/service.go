@@ -309,7 +309,7 @@ func (s *Service) Save(ctx context.Context, req Request) (Result, error) {
 		}, err
 	}
 
-	providerURL := s.composeProviderURL(req.Rule.ProviderID, folderID, providerFileID, req.Bytes.Title)
+	providerURL := s.composeProviderURL(req.Rule.ProviderID, folderID, providerFileID)
 	if err := s.markWritten(ctx, requestID, connectionID, req.Rule.ProviderID, providerFileID, providerURL, folderID); err != nil {
 		return Result{}, err
 	}
@@ -519,7 +519,7 @@ func (s *Service) linkArtifactGraph(ctx context.Context, sourceArtifactID, reque
 	return nil
 }
 
-func (s *Service) composeProviderURL(providerID, folderID, fileID, title string) string {
+func (s *Service) composeProviderURL(providerID, folderID, fileID string) string {
 	prefix := s.urlPrefix
 	if prefix == "" {
 		prefix = "drive://" + providerID
