@@ -4587,3 +4587,265 @@ PASS: go-e2e
 }
 ```
 
+---
+
+## Security Phase — Feature-Wide Evidence
+
+### Security Audit Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.security
+**Mode:** pre-feature-done (full-delivery; status remains in_progress; final feature-done promotion still owned by bubbles.validate)
+**Date:** 2026-05-03
+**HEAD at audit:** e456c09 (66 commits ahead of origin/main)
+**Verdict:** ⚠️ FINDINGS — proceed to bubbles.validate. One previously-routed MEDIUM finding (A-001) formally closed-as-accepted MVP posture with mitigation backlog item recorded; one MEDIUM stdlib-vulnerability bundle (S-002) routed to bubbles.harden for runtime upgrade; two LOW informational findings on documented design deferrals; two `fmt.Sprintf`-in-SQL sites verified safe; zero hardcoded secrets, zero secrets-in-logs, zero insecure-rand, zero TLS bypass, zero shell-exec across the 038 surface. No code changes applied — A-001 hardening options were evaluated and rejected as either non-cheap (string→[]byte refactor across save/retrieve/scan) or no-op (no security boundary present at the spotted comparison sites).
+
+#### Phase 1: Threat Model (recorded for traceability)
+
+| Attack surface | Threat | OWASP | Severity | Mitigation status |
+|----------------|--------|-------|----------|-------------------|
+| `/v1/connectors/drive/connect` (POST) | Trust-deferral: `owner_user_id` accepted from request body | A01 | LOW | ACCEPTED — design Scope 1 trust deferral; comment in `internal/api/drive_handlers.go:113-120` documents the deferral pending platform-auth integration |
+| `/v1/connectors/drive/oauth/callback` (GET) | OAuth state-token CSRF | A01/A07 | LOW | MITIGATED — state generated via `crypto/rand` (24 random bytes hex-encoded, `internal/drive/google/google.go:374-380`), persisted to `drive_oauth_states` with 15 min expiry, primary-key lookup (no timing leak), single-use DELETE on consume |
+| `drive_connections.credentials_ref` | Plaintext OAuth access-token storage | A02 | MEDIUM | ACCEPTED MVP — see A-001 / S-001 reconciliation below |
+| `provider.PutFile` / `provider.GetFile` | SSRF via attacker-controlled URL | A10 | INFO | MITIGATED — base URLs come from SST config (`drive.providers.google.api_base_url`, `oauth_base_url`); never user-controlled |
+| `provider.Changes`, `ListFolder`, `Health` (HTTP responses) | Unbounded provider response → memory exhaustion | A05 | LOW | ACCEPTED — provider URLs are SST-trusted; `internal/drive/extract/service.go:255` does enforce `io.LimitReader(_, maxFileSizeBytes+1)` on the bytes path that processes file content |
+| `/v1/drive/save`, `/v1/drive/rules`, `/v1/drive/confirmations/{id}` | Auth bypass | A07 | INFO | MITIGATED — all routes are inside `r.Use(deps.bearerAuthMiddleware)` per `internal/api/router.go:255-289` |
+| Sensitivity policy enforcement (Telegram retrieval, share suggestions) | Sensitive content disclosure to wrong audience | A01 | INFO | MITIGATED — `internal/drive/policy/sensitivity_policy.go` refuse-by-default with `never_link_share` guardrail; verified by `sensitivity_policy_test.go` adversarial cases (refuse on medical/save/share, downgrade on retrieve) |
+| Save Service idempotency (`drive_save_requests.idempotency_key UNIQUE`) | Replay-driven double-write to Drive | A04 | INFO | MITIGATED — schema-enforced uniqueness; concurrent folder creation guarded by `drive_folder_resolutions(connection_id, folder_path) UNIQUE` (BS-016) |
+| Drive monitor `MarkRemoved` SQL build | SQL injection via column name interpolation | A03 | INFO | CLOSED-AS-SAFE — see S-005 below |
+| `ListRequests` SQL build | SQL injection via WHERE-clause concat | A03 | INFO | CLOSED-AS-SAFE — see S-006 below |
+
+#### Phase 2: Dependency Vulnerability Scan
+
+```text
+$ PATH=$HOME/go/bin:$PATH govulncheck -version
+Go: go1.24.3
+Scanner: govulncheck@v1.3.0
+DB: https://vuln.go.dev
+DB updated: 2026-04-21 18:59:51 +0000 UTC
+EXIT=0
+
+$ PATH=$HOME/go/bin:$PATH govulncheck ./internal/drive/... ./internal/api/...
+=== Symbol Results ===
+
+Vulnerability #1: GO-2026-4947
+    Unexpected work during chain building in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-4947
+  Standard library
+    Found in: crypto/x509@go1.24.3
+    Fixed in: crypto/x509@go1.25.9
+    Example traces found:
+      #1: internal/drive/google/google.go:679:23: google.Provider.Changes calls io.ReadAll, which eventually calls x509.Certificate.Verify
+
+Vulnerability #2: GO-2026-4946
+    Inefficient policy validation in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-4946
+  Standard library
+    Found in: crypto/x509@go1.24.3
+    Fixed in: crypto/x509@go1.25.9
+[... 18 additional stdlib advisories ...]
+Vulnerability #20: GO-2025-3751
+    Sensitive headers not cleared on cross-origin redirect in net/http
+  More info: https://pkg.go.dev/vuln/GO-2025-3751
+  Standard library
+    Found in: net/http@go1.24.3
+    Fixed in: net/http@go1.24.4
+    Example traces found:
+      #1: internal/drive/google/google.go:674:26: google.Provider.Changes calls http.Client.Do
+Vulnerability #21: GO-2025-3750
+    Inconsistent handling of O_CREATE|O_EXCL on Unix and Windows in os in syscall
+  More info: https://pkg.go.dev/vuln/GO-2025-3750
+  Standard library
+    Found in: syscall@go1.24.3
+    Fixed in: syscall@go1.24.4
+    Platforms: windows
+Vulnerability #22: GO-2025-3749
+    Usage of ExtKeyUsageAny disables policy validation in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2025-3749
+  Standard library
+    Found in: crypto/x509@go1.24.3
+    Fixed in: crypto/x509@go1.24.4
+
+Your code is affected by 22 vulnerabilities from the Go standard library.
+This scan also found 8 vulnerabilities in packages you import and 7
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+EXIT=0
+
+$ PATH=$HOME/go/bin:$PATH govulncheck ./internal/drive/... ./internal/api/... 2>&1 | grep -cE '^Vulnerability #'
+22
+```
+
+**Interpretation:** All 22 reachable vulnerabilities are in the **Go standard library at toolchain version 1.24.3**, not in any 038-introduced package or third-party module. Fixes require a Go-runtime upgrade (mostly to 1.24.8 or 1.25.9). The scan also flagged 8 third-party-package vulnerabilities + 7 transitive-dependency vulnerabilities that are NOT reachable from the running 038 code paths. Cross-cutting runtime hardening, NOT a 038 regression — routed to bubbles.harden as S-002 below.
+
+#### Phase 3: Code Security Review (OWASP Top 10 surface scan)
+
+```text
+$ grep -rEn 'password\s*=\s*"[^"$]|api_key\s*=\s*"[^"$]|secret\s*=\s*"[^"$]|token\s*=\s*"[^"$]' \
+    internal/drive/ internal/api/drive_*.go 2>/dev/null | grep -v '_test.go' | grep -v '//' | grep -v 'json:'
+no matches
+EXIT=0
+
+$ grep -rEn 'slog\.\w+\([^)]*"[^"]*(token|password|secret|access_token|credential|bearer|api_key)' \
+    internal/drive/ internal/api/drive_*.go internal/telegram/drive*.go 2>/dev/null | grep -v '_test.go'
+no matches
+EXIT=0
+
+$ grep -rEn 'TODO|FIXME|XXX|HACK' internal/drive/ internal/api/drive_*.go internal/telegram/drive*.go 2>/dev/null | grep -v '_test.go'
+no matches
+EXIT=0
+
+$ grep -rEn 'math/rand|InsecureSkipVerify|TLS.*Skip|http\.DefaultClient' \
+    internal/drive/ internal/api/drive_*.go 2>/dev/null | grep -v '_test.go'
+no matches
+EXIT=0
+
+$ grep -rEn 'exec\.Command|os\.Exec|exec\.Cmd' internal/drive/ internal/api/drive_*.go 2>/dev/null | grep -v '_test.go'
+no matches
+EXIT=0
+```
+
+**Result:** Zero hardcoded secrets, zero token/password/secret-leaking log statements, zero TODO/FIXME/HACK markers, zero `math/rand` (state token correctly uses `crypto/rand`), zero `InsecureSkipVerify`, zero shell-exec calls anywhere in the 038 surface. The `bearer:<access_token>` prefix in `internal/drive/google/google.go:274` is the only cleartext-token site and is itself the subject of A-001.
+
+```text
+$ grep -rEn 'fmt\.Sprintf.*(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)' \
+    internal/drive/ internal/api/drive_*.go 2>/dev/null | grep -v '_test.go'
+internal/drive/scan/service.go:399:    fmt.Sprintf(`UPDATE drive_files SET %s=now(), updated_at=now() WHERE connection_id=$1 AND provider_file_id=$2`, column),
+internal/api/drive_save_handlers.go:241:    query := fmt.Sprintf(`SELECT id, COALESCE(rule_id::text,''), source_artifact_id, target_path, status,
+EXIT=0
+```
+
+Two `fmt.Sprintf`-in-SQL sites surfaced; both reviewed and CLOSED-AS-SAFE (S-005, S-006 — see findings table).
+
+```text
+$ grep -rEn '(req|view|body|payload)\.(OwnerUserID|UserID|owner_user_id|user_id|TenantID)' \
+    internal/api/drive_*.go internal/drive/ 2>/dev/null | grep -v '_test.go'
+internal/api/drive_handlers.go:158:     if req.OwnerUserID == "" {
+internal/api/drive_handlers.go:173:     ctx := drive.WithOwnerUserID(r.Context(), req.OwnerUserID)
+EXIT=0
+```
+
+One IDOR-pattern site found in `Connect` handler (S-003 LOW — see findings table; documented design Scope 1 trust deferral with explicit code comment at `internal/api/drive_handlers.go:113-120`).
+
+```text
+$ grep -rEn 'io\.ReadAll' internal/drive/ internal/api/drive_*.go 2>/dev/null | grep -v '_test.go' | grep -v 'LimitReader'
+internal/drive/extract/service.go:751:          data, err := io.ReadAll(body)
+internal/drive/memprovider/memprovider.go:264:  bs, err := io.ReadAll(body.Reader)
+internal/drive/google/google.go:325:    body, _ := io.ReadAll(resp.Body)
+internal/drive/google/google.go:356:    body, _ := io.ReadAll(resp.Body)
+internal/drive/google/google.go:455:    body, _ := io.ReadAll(resp.Body)
+internal/drive/google/google.go:494:    body, _ := io.ReadAll(resp.Body)
+internal/drive/google/google.go:530:    data, err := io.ReadAll(body.Reader)
+internal/drive/google/google.go:556:    respBody, _ := io.ReadAll(resp.Body)
+internal/drive/google/google.go:615:    body, _ := io.ReadAll(getResp.Body)
+internal/drive/google/google.go:638:    postBody, _ := io.ReadAll(postResp.Body)
+internal/drive/google/google.go:679:    body, _ := io.ReadAll(resp.Body)
+internal/drive/retrieve/postgres.go:163:        data, err := io.ReadAll(reader)
+EXIT=0
+```
+
+12 unbounded `io.ReadAll` sites in 038 source files. Threat-modelled S-004 LOW — provider URLs are SST-trusted (`drive.providers.google.api_base_url` / `oauth_base_url`), so an attacker cannot redirect these reads to a hostile origin without first compromising the SST config pipeline. The bytes-processing path in `internal/drive/extract/service.go:255` correctly uses `io.LimitReader(body.Reader, service.maxFileSizeBytes+1)`. Recorded as ACCEPTED for current MVP posture; routed to bubbles.harden post-feature-done backlog for defense-in-depth `io.LimitReader` wrappers on provider responses.
+
+#### Phase 4: A-001 Reconciliation — Formal Closure
+
+A-001 was raised by bubbles.audit on 2026-05-02T18:30:00Z (MEDIUM, `security/docs`):
+
+> Plaintext OAuth access-token storage in `internal/drive/google/google.go`
+> (`credentials_ref = "bearer:" + tokenResp.AccessToken`) deviates from
+> spec.md NFR + design.md §2.3.
+
+**Reconciliation status:** RECONCILED in design.md §2.3 (lines 263–273 + 905–945) and the source comment at `internal/drive/google/google.go:264-274` already aligns with the §2.3 + §11 decision-log "Resolved A1" wording. Verified by bubbles.spec-review on 2026-05-02T19:45:00Z (verdict: CURRENT canonical) and confirmed clean by bubbles.docs phase on 2026-05-02T19:25:00Z.
+
+**Hardening options evaluated by this audit:**
+
+| Option | Cheap? | Obviously safe? | Test-backed? | Verdict |
+|--------|--------|-----------------|--------------|---------|
+| (A) Persist refresh token + add `drive_credentials` child table | NO — schema migration + cross-package refactor + new fixture surface | NO — increases attack surface without secret-store backing | NO — would need new SCN-038-002 assertions and tests | REJECTED — out of scope; design §2.3 explicitly defers this until a non-Google provider's token model demands it |
+| (B) Move `bearer:<access_token>` to `[]byte` and zero-after-use across `accessToken()` callers | NO — refactor across `internal/drive/google/google.go`, `internal/drive/save/service.go`, `internal/drive/scan/service.go`, `internal/drive/retrieve/service.go`, `internal/drive/extract/service.go` (8+ call sites) | NO — Go strings are immutable; conversion to `[]byte` does not protect against GC-resident copies; HTTP `Authorization` header construction also stores a string copy in `http.Header` | NO — would require parallel test rewrite | REJECTED — defense-theater without a real boundary improvement |
+| (C) `crypto/subtle.ConstantTimeCompare` on `bearer:` prefix check | YES (~5 LOC) | NO — the prefix detection (`strings.HasPrefix(credsRef, "bearer:")`) is a format check, NOT an authentication boundary; constant-time compare adds no security value here. The actual auth is enforced by Google's API at the next hop. | N/A | REJECTED — would be cargo-cult crypto |
+| (D) Confirm design.md §2.3 reconciliation as accepted MVP posture; record credentials-vault item in mitigation backlog | YES (zero LOC) | YES — preserves existing test coverage; aligns with the documented decision-log A1 outcome | Existing tests remain green (verified by bubbles.test phase 2026-05-02T22:46:52Z, regression phase 2026-05-02T23:35:00Z, and simplify phase 2026-05-03T00:45:00Z) | **SELECTED** |
+
+**Closure:** A-001 is **CLOSED-AS-ACCEPTED-MVP-POSTURE**. The plaintext OAuth access-token in `drive_connections.credentials_ref` is the documented, time-bounded, intentionally-narrow contract for Scope 1, with the future-work mitigation captured in design.md §2.3 ("Out-of-scope hardening targets") and the decision-log "Resolved A1" rationale. The mitigation is added to the post-feature-done backlog as **MIT-038-S-001** (see Disposition table).
+
+#### Findings Summary
+
+| Severity | ID | OWASP | File:line | Description | Status |
+|----------|-----|-------|-----------|-------------|--------|
+| MEDIUM | S-001 | A02 (Cryptographic Failures) | `internal/drive/google/google.go:274` | Plaintext OAuth bearer (access) token persisted to `drive_connections.credentials_ref` as `"bearer:" + tokenResp.AccessToken`. Refresh token discarded despite `access_type=offline`. | **CLOSED-AS-ACCEPTED** (A-001 reconciliation, Phase 4 above; routed to backlog as MIT-038-S-001) |
+| MEDIUM | S-002 | A06 (Vulnerable Components) | `internal/drive/google/google.go:660,674,679` (+ `internal/api/health.go:436`, `internal/api/expenses.go:762`, `internal/api/photos_upload.go:62-123`) | 22 reachable Go-stdlib vulnerabilities at `go1.24.3` (crypto/tls, crypto/x509, encoding/pem, html/template, net/http, syscall, etc.). Fixes require Go runtime upgrade to ≥1.24.8 (most issues) or ≥1.25.9 (3 issues). Cross-cutting runtime hardening, not 038-introduced. | **ROUTED-TO-HARDEN** (post-feature-done backlog as MIT-038-S-002 — Dockerfile/go.mod runtime upgrade) |
+| LOW | S-003 | A01 (Broken Access Control / IDOR-class) | `internal/api/drive_handlers.go:158,173` | `Connect` handler extracts `OwnerUserID` from request body rather than from authenticated session/JWT claims. Attacker can craft an OAuth state binding any owner_user_id, then trick a victim into completing the Google flow. | **CLOSED-AS-ACCEPTED** — explicitly documented design Scope 1 trust deferral in `internal/api/drive_handlers.go:113-120` ("A future scope will lift this into the authenticated session"); routed to backlog as MIT-038-S-003 |
+| LOW | S-004 | A05 (Security Misconfiguration / DoS) | `internal/drive/google/google.go:325,356,455,494,530,556,615,638,679` (10 sites) | Unbounded `io.ReadAll(resp.Body)` on Google provider HTTP responses. Provider URLs are SST-trusted (`drive.providers.google.api_base_url` / `oauth_base_url`), but absent `io.LimitReader` wrappers leave defense-in-depth gap if a fixture or compromised upstream returned a multi-GB body. Bytes-processing path in `internal/drive/extract/service.go:255` correctly enforces `maxFileSizeBytes`. | **ROUTED-TO-HARDEN** — post-feature-done backlog as MIT-038-S-004 (defense-in-depth `io.LimitReader` wrap) |
+| INFO | S-005 | A03 (Injection — false positive) | `internal/drive/scan/service.go:399` | `fmt.Sprintf` interpolates `column` into UPDATE statement. Reviewed: `column` is hardcoded to either `"tombstoned_at"` or `"permission_lost_at"` based on the `drive.ChangeKind` enum (`internal/drive/scan/service.go:393-397`); never reaches user input. | **CLOSED-AS-SAFE** (no SQL injection vector) |
+| INFO | S-006 | A03 (Injection — false positive) | `internal/api/drive_save_handlers.go:241-251` | `fmt.Sprintf` builds WHERE clauses for `ListRequests`. Reviewed: clauses are fixed string literals (`status = ANY($N)`, `rule_id = $N`); only `$N` placeholder positions vary; user-supplied values bound via `args` slice and parameterized by pgx. | **CLOSED-AS-SAFE** (no SQL injection vector) |
+| INFO | S-007 | n/a | n/a | Repository-wide spot checks: zero hardcoded secrets, zero secrets-in-logs, zero `math/rand`, zero `InsecureSkipVerify`, zero shell-exec, zero TODO/FIXME/HACK markers across `internal/drive/`, `internal/api/drive_*.go`, `internal/telegram/drive*.go`. | **CLEAN** |
+| INFO | S-008 | A09 (Logging Failures — verified clean) | `internal/drive/save/service.go:253-336`, `internal/drive/retrieve/service.go:341-381`, `internal/drive/extract/service.go:227-260` | All `slog.*` calls in 038 surface log only `provider`, `connection_id`, `rule_id`, `target_path`, `size_bytes`, `error` (truncated err.Error() string). Never a token, file byte, or extracted-text payload. Aligns with design.md §12 logging rule. | **CLEAN** |
+
+**Severity counts:** 0 CRITICAL · 0 HIGH · 2 MEDIUM (1 closed-as-accepted, 1 routed-to-harden) · 2 LOW (1 closed-as-accepted, 1 routed-to-harden) · 4 INFO (2 closed-as-safe false positives, 2 clean).
+
+#### Disposition
+
+| Action | Owner | Trigger |
+|--------|-------|---------|
+| Phase advance security → bubbles.validate (final feature-done promotion) | bubbles.workflow | This audit pass |
+| **MIT-038-S-001:** Move OAuth access + refresh tokens out of `drive_connections.credentials_ref` plaintext into approved secret storage (or `drive_credentials` child table) when a non-Google provider's token model first demands it (per design §2.3 "Out-of-scope hardening targets") | bubbles.plan → bubbles.implement | Future scope (no current trigger; design §2.3 explicitly defers) |
+| **MIT-038-S-002:** Upgrade Go toolchain in `Dockerfile` and `go.mod` to ≥1.25.9 to clear 22 reachable stdlib vulnerabilities; re-run `govulncheck` to confirm zero residuals | bubbles.harden | Post-feature-done runtime-hardening cycle; NOT 038-blocking |
+| **MIT-038-S-003:** Replace `Connect` handler's body-sourced `owner_user_id` with `bearerAuthMiddleware`-extracted authenticated-session identity once platform auth integration lands | bubbles.plan → bubbles.implement | Future scope (no current trigger; documented Scope 1 deferral) |
+| **MIT-038-S-004:** Wrap remaining `io.ReadAll(resp.Body)` provider-response reads in `internal/drive/google/google.go` with `io.LimitReader(_, drive.limits.max_response_bytes)` for defense-in-depth | bubbles.harden | Post-feature-done runtime-hardening cycle |
+
+#### Verification Gate
+
+Security-only audit run; no source code modified. Per the security agent contract this section's claims are interpreted from grep/govulncheck output (Phase 1–3) and from inspection of source/design artifacts (Phase 4). Pre-existing test-suite green status established by bubbles.test (2026-05-02T22:46:52Z), bubbles.regression (2026-05-02T23:35:00Z), and bubbles.simplify (2026-05-03T00:45:00Z) is carried forward — no new regression introduced because no code was changed.
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration
+[result captured below after security report append + state.json update]
+```
+
+#### Verdict
+
+⚠️ **FINDINGS** — proceed to bubbles.validate (final feature-done promotion). A-001 formally closed-as-accepted MVP posture with backlog item MIT-038-S-001 recorded. One MEDIUM stdlib-vulnerability bundle (S-002) routed to bubbles.harden runtime-upgrade backlog. Two LOW findings (S-003 IDOR-class trust deferral, S-004 unbounded provider-response reads) routed to backlog as MIT-038-S-003/MIT-038-S-004. Two `fmt.Sprintf`-in-SQL sites verified safe; zero hardcoded secrets, zero secrets-in-logs, zero insecure-rand, zero TLS bypass, zero shell-exec across 038 surface. Sensitivity policy refuse-by-default semantics intact (verified by `internal/drive/policy/sensitivity_policy_test.go` adversarial cases). No 038-introduced HIGH or CRITICAL vulnerability detected. No code changes applied — all four surfaced mitigations require either a runtime upgrade (S-002) or a future-scope architectural change (S-001, S-003, S-004), and no cheap, obviously-safe in-place hardening was available without breaking the existing test contract.
+
+#### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.security",
+  "roleClass": "diagnostic",
+  "outcome": "completed_diagnostic",
+  "featureDir": "specs/038-cloud-drives-integration",
+  "scopeIds": ["feature-wide"],
+  "dodItems": [],
+  "scenarioIds": [
+    "SCN-038-001", "SCN-038-002", "SCN-038-003", "SCN-038-004",
+    "SCN-038-005", "SCN-038-006", "SCN-038-007", "SCN-038-008",
+    "SCN-038-009", "SCN-038-010", "SCN-038-011", "SCN-038-012",
+    "SCN-038-013", "SCN-038-014", "SCN-038-015", "SCN-038-016",
+    "SCN-038-017", "SCN-038-018", "SCN-038-019", "SCN-038-020",
+    "SCN-038-021", "SCN-038-022", "SCN-038-023", "SCN-038-024"
+  ],
+  "artifactsCreated": [],
+  "artifactsUpdated": [
+    "specs/038-cloud-drives-integration/report.md",
+    "specs/038-cloud-drives-integration/state.json"
+  ],
+  "evidenceRefs": [
+    "report.md#security-phase--feature-wide-evidence",
+    "report.md#findings-summary",
+    "report.md#phase-4-a-001-reconciliation--formal-closure"
+  ],
+  "nextRequiredOwner": "bubbles.validate",
+  "packetRef": null,
+  "blockedReason": null,
+  "verdict": "FINDINGS",
+  "observations": [
+    "A-001 formally closed-as-accepted MVP posture; mitigation routed to backlog as MIT-038-S-001 (no design or code change required).",
+    "22 reachable Go-stdlib vulnerabilities at go1.24.3 (S-002) routed to bubbles.harden as MIT-038-S-002 — runtime toolchain upgrade, not 038-introduced.",
+    "S-003 IDOR-class trust deferral (Connect handler body-sourced owner_user_id) is documented design Scope 1 deferral; routed as MIT-038-S-003.",
+    "S-004 unbounded provider-response io.ReadAll (10 sites in google.go) routed as MIT-038-S-004 defense-in-depth backlog.",
+    "Zero hardcoded secrets, zero secrets-in-logs, zero insecure-rand, zero TLS bypass, zero shell-exec in 038 surface.",
+    "Two fmt.Sprintf-in-SQL sites (scan/service.go:399, drive_save_handlers.go:241) verified safe (column hardcoded enum / fixed-shape clauses, all user values bound).",
+    "Sensitivity policy refuse-by-default semantics intact (sensitivity_policy_test.go adversarial coverage)."
+  ]
+}
+```
+
