@@ -277,6 +277,7 @@ func (store *PostgresStore) upsertFileOnce(ctx context.Context, conn Connection,
 		return FileRecord{}, fmt.Errorf("drive scan: provider file id is empty")
 	}
 	artifactID := artifactID(conn.ProviderID, conn.ID, item.ProviderFileID)
+	sharing := sharingState(item)
 	metadata := map[string]any{
 		"provider_id":          conn.ProviderID,
 		"provider_file_id":     item.ProviderFileID,
@@ -286,7 +287,7 @@ func (store *PostgresStore) upsertFileOnce(ctx context.Context, conn Connection,
 		"provider_url":         item.ProviderURL,
 		"mime_type":            item.MimeType,
 		"size_bytes":           item.SizeBytes,
-		"sharing_state":        sharingState(item),
+		"sharing_state":        sharing,
 	}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
@@ -301,7 +302,7 @@ func (store *PostgresStore) upsertFileOnce(ctx context.Context, conn Connection,
 	if err != nil {
 		return FileRecord{}, fmt.Errorf("drive scan: marshal version chain: %w", err)
 	}
-	sharingJSON, err := json.Marshal(sharingState(item))
+	sharingJSON, err := json.Marshal(sharing)
 	if err != nil {
 		return FileRecord{}, fmt.Errorf("drive scan: marshal sharing state: %w", err)
 	}
@@ -354,7 +355,7 @@ func (store *PostgresStore) upsertFileOnce(ctx context.Context, conn Connection,
 	if err != nil {
 		return FileRecord{}, fmt.Errorf("drive scan: upsert drive_files: %w", err)
 	}
-	return FileRecord{ArtifactID: artifactID, ProviderFileID: item.ProviderFileID, ProviderRevisionID: item.ProviderRevisionID, Title: item.Title, MimeType: item.MimeType, SizeBytes: item.SizeBytes, FolderPath: item.FolderPath, OwnerLabel: item.OwnerLabel, ProviderURL: item.ProviderURL, VersionChain: versionChain, SharingState: sharingState(item), ProviderModifiedAt: item.ModifiedAt}, nil
+	return FileRecord{ArtifactID: artifactID, ProviderFileID: item.ProviderFileID, ProviderRevisionID: item.ProviderRevisionID, Title: item.Title, MimeType: item.MimeType, SizeBytes: item.SizeBytes, FolderPath: item.FolderPath, OwnerLabel: item.OwnerLabel, ProviderURL: item.ProviderURL, VersionChain: versionChain, SharingState: sharing, ProviderModifiedAt: item.ModifiedAt}, nil
 }
 
 func isRetryablePostgresConflict(err error) bool {
