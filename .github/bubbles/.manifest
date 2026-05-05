@@ -17,6 +17,7 @@ bubbles/scripts/continuation-routing-selftest.sh
 bubbles/scripts/developer-profile.sh
 bubbles/scripts/docs-registry-effective.sh
 bubbles/scripts/docs-registry-resolve.sh
+bubbles/scripts/done-spec-audit-selftest.sh
 bubbles/scripts/done-spec-audit.sh
 bubbles/scripts/downstream-framework-write-guard.sh
 bubbles/scripts/finding-closure-selftest.sh

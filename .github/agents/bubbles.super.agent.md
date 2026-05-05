@@ -694,7 +694,7 @@ bash bubbles/scripts/cli.sh lint <spec>              # Run artifact lint
 bash bubbles/scripts/cli.sh guard <spec>             # Run state transition guard
 bash bubbles/scripts/cli.sh scan <spec>              # Run implementation reality scan
 bash bubbles/scripts/cli.sh regression-quality [args] # Bailout/adversarial quality scan
-bash bubbles/scripts/cli.sh audit-done [--fix]       # Audit all specs marked done
+bash bubbles/scripts/cli.sh audit-done [--changed|--recertify-all] # Advisory/changed-spec/recertification audit
 bash bubbles/scripts/cli.sh autofix <spec>           # Scaffold missing report sections
 
 # Framework integrity

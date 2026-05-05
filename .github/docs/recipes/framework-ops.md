@@ -74,7 +74,9 @@ This is a framework-source operation, not a downstream repo command.
 
 This installs:
 - **pre-commit:** Portable-surface agnosticity lint plus fast artifact lint on staged spec files
-- **pre-push:** Full portable-surface agnosticity lint plus state transition guard on specs claiming "done"
+- **pre-push:** Full portable-surface agnosticity lint plus changed-spec artifact checks and current-policy guard on changed or newly promoted done specs
+
+Manual historical recertification remains available through `bash bubbles/scripts/cli.sh audit-done --recertify-all`; routine hooks do not recertify every historical done spec.
 
 ## Add a Custom Quality Gate
 
