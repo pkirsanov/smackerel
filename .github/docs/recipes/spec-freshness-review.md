@@ -8,6 +8,10 @@
 
 Your specs were written months ago. Code has evolved — bug fixes, refactors, dependency changes — but the specs haven't been updated. Now maintenance agents (simplify, security, stabilize) are treating stale specs as truth and making wrong decisions.
 
+Framework upgrades strengthen future gates, but they do not automatically revoke old closure decisions. Historical `done` specs stay grandfathered under the policy epoch that closed them until they are touched, reopened, used as authority for new work, or explicitly recertified. Active, reopened, and changed specs must migrate to current control-plane schemas before they can be recertified under the current policy.
+
+Spec freshness review is diagnostic by default: it produces a trust map and recommendations. It does not mutate spec artifacts, reopen specs, or rewrite state unless the user asks for that deliberate follow-up.
+
 Typical signals:
 
 - Maintenance agents flag correct code as "non-compliant" because the spec describes an old design

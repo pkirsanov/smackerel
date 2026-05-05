@@ -28,6 +28,13 @@ The control plane is not just a greenfield template system. Existing repos need 
 4. Migrate only active specs immediately; untouched historical specs can convert later.
 5. Downgrade stale certification before claiming progress.
 
+Framework upgrade invariant:
+- Framework upgrades improve future gates; they do not retroactively invalidate specs that were already closed under an older policy epoch.
+- Historical `done` specs are grandfathered under their closure epoch until they are touched, reopened, used as authority for new work, or explicitly recertified.
+- Active, reopened, and changed specs must migrate to current control-plane schemas before recertification.
+- Spec freshness review is diagnostic by default. It builds a trust map and recommends migration or recertification work, but it must not mutate spec state unless the user explicitly requests mutation.
+- Historical all-spec recertification is a deliberate action, separate from routine framework refreshes and routine validation.
+
 Downstream framework-authoring rule:
 - Consumer repos must not hand-edit framework-managed Bubbles files in place.
 - Record requested framework changes under `.github/bubbles-project/proposals/` or via `bubbles framework-proposal <slug>`.

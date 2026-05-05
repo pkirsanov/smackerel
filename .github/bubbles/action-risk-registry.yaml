@@ -63,6 +63,12 @@ commands:
     defaultRiskClass: owned_mutation
   audit-done:
     defaultRiskClass: read_only
+    overrides:
+      --fix: owned_mutation
+      --reopen-failing: owned_mutation
+    notes:
+    - Default advisory and changed-spec profiles are read-only.
+    - Historical recertification is read-only unless paired with --reopen-failing or deprecated --fix.
   autofix:
     defaultRiskClass: owned_mutation
   dag:

@@ -159,7 +159,7 @@ In `deep`/`full` mode, command green status alone is insufficient. Validation MU
 | 2.11 | State Transition Guard (G023) | `state-transition-guard.sh` | Exit 0, 0 blocking failures |
 | 2.12 | Artifact Lint | `artifact-lint.sh` | Exit 0, 0 issues |
 | 2.13 | Traceability Guard | `traceability-guard.sh` | Every planned scenario maps to concrete tests and report evidence |
-| 2.14 | Done-Spec Audit (full mode) | `done-spec-audit.sh` | All done specs pass lint |
+| 2.14 | Changed-Spec Done Audit (prospective mode) | `done-spec-audit.sh --profile changed` | Changed/reopened/newly promoted done specs pass current gates |
 | 2.15 | Phase-Scope Coherence (G027) | Guard script Check 15 | execution claims / certified phases match certified completed scopes |
 | 2.16 | Implementation Reality Scan (G028) | `implementation-reality-scan.sh` | 0 violations |
 | 2.17 | Artifact Freshness Guard (G052) | `artifact-freshness-guard.sh` | Superseded content isolated; superseded scopes non-executable |
@@ -243,20 +243,26 @@ bash bubbles/scripts/traceability-guard.sh {FEATURE_DIR}
 - This is a mechanical minimum bar for scenario → plan → test file → evidence traceability
 - Record the full output in the validation report
 
-#### 2C.4: Done-Spec Audit (Cross-Feature)
+#### 2C.4: Changed-Spec Done Audit (Prospective Cross-Feature)
 
-If running full validation (not scoped to one feature), audit ALL specs claiming "done" status:
+Routine validation audits changed, reopened, or newly promoted specs against the current gates. It MUST NOT require every historical `done` spec in the repository to pass current-policy gates by default; historical done specs remain grandfathered under their closure epoch until they are touched, reopened, used as current authority, or explicitly recertified.
 
 ```bash
-bash bubbles/scripts/done-spec-audit.sh
+bash bubbles/scripts/done-spec-audit.sh --profile changed {changed-spec-dirs...}
 ```
 
-- Reports which done-specs pass/fail artifact lint
-- Use `--fix` to auto-downgrade fabricated done specs to in_progress:
-  ```bash
-   bash bubbles/scripts/done-spec-audit.sh --fix
-  ```
-- Record the summary (done specs scanned, lint passed, lint failed) in the validation report
+- Reports current-policy failures only for changed/reopened/newly promoted specs.
+- If no changed spec directories can be determined, record that the changed-spec audit was not applicable instead of substituting a blanket historical recertification.
+- Manual historical recertification remains available as a separate deliberate action:
+   ```bash
+   bash bubbles/scripts/done-spec-audit.sh --recertify-all
+   ```
+- Reopening/downgrading failing historical done specs is explicit mutation, not part of routine validation:
+   ```bash
+   bash bubbles/scripts/done-spec-audit.sh --recertify-all --reopen-failing
+   ```
+- `--fix` is a deprecated alias for explicit reopen behavior and still requires `--recertify-all`.
+- Record the summary (changed specs scanned, done specs scanned, current-policy failures, advisory findings if any) in the validation report.
 
 #### 2C.5: Implementation Reality Scan (Gate G028)
 
@@ -318,7 +324,7 @@ bash bubbles/scripts/handoff-cycle-check.sh {FEATURE_DIR}
 | State Transition Guard | `bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
 | Artifact Lint | `bash bubbles/scripts/artifact-lint.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
 | Traceability Guard | `bash bubbles/scripts/traceability-guard.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
-| Done-Spec Audit | `bash bubbles/scripts/done-spec-audit.sh` | [actual] | ✅/❌ |
+| Changed-Spec Done Audit | `bash bubbles/scripts/done-spec-audit.sh --profile changed {changed-spec-dirs...}` | [actual] | ✅/❌/⚪ |
 | Implementation Reality Scan | `bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose` | [actual] | ✅/❌ |
 | Artifact Freshness Guard | `bash bubbles/scripts/artifact-freshness-guard.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
 | Implementation Delta Evidence | `bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
@@ -662,7 +668,7 @@ If NO unchecked items:
 | State Guard (G023) | ✅/❌ | [Guard script exit code + failure count] |
 | Artifact Lint | ✅/❌ | [Lint exit code + issue count] |
 | Traceability Guard | ✅/❌ | [scenario → row → test file → report evidence status] |
-| Done-Spec Audit | ✅/❌/⚪ | [done specs pass/fail count — or N/A if single-feature] |
+| Changed-Spec Done Audit | ✅/❌/⚪ | [changed specs scanned, done specs pass/fail count, or N/A if no changed specs] |
 | Phase-Scope Coherence (G027) | ✅/❌ | [execution claims / certified phases match certified completed scopes — from guard Check 15] |
 | Implementation Reality (G028) | ✅/❌ | [reality scan violations — 0 required] |
 | Scopes | ✅/❌/⚪ | [if scopes.md exists: X/Y scopes Done; else N/A] |
@@ -688,7 +694,7 @@ If NO unchecked items:
 - State Guard: `bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}`
 - Artifact Lint: `bash bubbles/scripts/artifact-lint.sh {FEATURE_DIR}`
 - Traceability Guard: `bash bubbles/scripts/traceability-guard.sh {FEATURE_DIR}`
-- Done-Spec Audit: `bash bubbles/scripts/done-spec-audit.sh`
+- Changed-Spec Done Audit: `bash bubbles/scripts/done-spec-audit.sh --profile changed {changed-spec-dirs...}`
 
 ### User Validation Regressions (if any)
 
