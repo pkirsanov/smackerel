@@ -1,0 +1,362 @@
+{
+  "version": 3,
+  "specId": "016-weather-connector",
+  "bugId": "BUG-016-W3-source-ref-collision",
+  "featureDir": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "certified",
+    "currentScope": "01-source-ref-uniqueness-and-sync-test-stability",
+    "runStartedAt": "2026-05-04T03:30:07Z",
+    "completedPhaseClaims": [
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "documentation",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-04T00:00:00Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Created BUG-016-W3 packet under specs/016-weather-connector/bugs. Classified the red 039 broad-regression evidence as weather connector owned: SourceRef duplicate risk in internal/connector/weather/weather.go and test-server double-close instability in internal/connector/weather/weather_test.go. No code or tests were modified."
+      },
+      {
+        "phase": "analysis",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-04T00:00:00Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Root cause triage recorded in design.md: time.RFC3339 seconds are insufficient for per-sync SourceRef uniqueness, and direct close(syncStarted) in repeated httptest handlers can panic. Next owner is bubbles.implement, followed by bubbles.test."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-04T02:37:09Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Recorded implementation-owned BUG-016-W3 evidence provenance: Code Diff Evidence in report.md, implementation DoD evidence for SourceRef uniqueness and idempotent weather sync test signals in scopes.md, and no validate-owned certification/status promotion. Production code was not changed in this cleanup pass."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-04T02:46:39Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Recorded test-owned BUG-016-W3 evidence closure: regression-quality guard, Go/full unit, format, check, and lint passed; SourceRef and repeated-handler adversarial shapes were source-verified; integration and E2E were recorded as honest blockers under explicit timeout evidence. Certification fields remain validate-owned."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-05-04T02:56:08Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Reconciled BUG-016-W3 design.md with implemented truth and accepted DOD-BUG016W3-001: seconds-level RFC3339 SourceRefs collided for same-location rapid syncs; selected design uses RFC3339Nano plus connector-local monotonic sequence; direct close(syncStarted) was replaced by idempotent sync.Once signaling with repeated-handler assertions. No certification fields changed."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-05-04T03:11:17Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Regression-owned verification completed for BUG-016-W3 protected scenarios. Ran repo-standard Go unit command, bugfix regression-quality guard, SourceRef no-sleep invariant scans, repeated-handler no-panic scans, regression-baseline guard, and CLI coverage-surface inspection. Protected weather scenarios are clean; live-stack stress, E2E, parent validation, and certification remain routed to their existing owners."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-04T03:17:53Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Simplify-owned review completed for the recently changed weather SourceRef and sync-signal code. Code reuse, quality, and efficiency passes found no narrow behavior-preserving cleanup to apply. Repo-standard Go unit, check, lint, format, and bugfix regression-quality guard commands passed. No source code, generated config, certification fields, or validate-owned status fields changed."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-05-04T03:24:04Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Stabilize-owned diagnostic completed for BUG-016-W3. Audited the weather SourceRef and sync-signal delta for startup, lifecycle, performance, config, build, reliability, and resource risk. Repo-standard Go unit, check, lint, format, bugfix regression-quality, artifact lint, and traceability commands passed. No source, generated config, certification fields, or validate-owned status fields changed. Shared live-stack readiness remains routed to BUG-031-005."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-05-04T03:34:06Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Security-owned diagnostic completed for BUG-016-W3. Reviewed internal/connector/weather/weather.go and internal/connector/weather/weather_test.go for secrets exposure, auth/IDOR, injection, unsafe logging, privacy leakage, SSRF-relevant request behavior, and data-leak risk from the SourceRef/test-signal delta. No findings. Repo-standard Go unit, check, lint, format, implementation-reality scan, artifact lint, and traceability commands passed; dedicated dependency scanner command was not exposed by repo CLI. No source, generated config, certification fields, or validate-owned status fields changed."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-04T05:10:00Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Validate-owned certification closure completed after green BUG-016-W3 runtime, artifact, traceability, implementation-reality, freshness, regression-quality, regression-baseline, integration, and E2E evidence was recorded. Parent weather user validation received the checked BUG-016-W3 entry, Scope 1 moved to Done, and certification fields were promoted. Shared stress readiness remains routed to BUG-031-005."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-04T05:12:00Z",
+        "scope": "01-source-ref-uniqueness-and-sync-test-stability",
+        "summary": "Audit-owned certification review completed for BUG-016-W3 after the validate/audit ordering deadlock was isolated. The audit verified that the lane has one completed scope, required phase provenance, checked DoD evidence, no framework-managed file edits, and explicit routing of shared stress readiness to BUG-031-005."
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "phase": "documentation",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-04T00:00:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, and state.json. Planning-only invocation; no runtime commands run and no source files changed."
+      },
+      {
+        "phase": "planning-repair",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-04T02:04:07Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": [
+          "bootstrap"
+        ],
+        "summary": "Repaired Scope 1 DoD structure so G068 can map all five SCN-BUG016W3 scenarios to canonical DoD checkbox items. No production code, tests, or certification fields changed."
+      },
+      {
+        "phase": "planning-repair",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-04T02:32:07Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": [
+          "bootstrap",
+          "plan"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-04T02:30:47Z",
+        "runCompletedAt": "2026-05-04T02:32:07Z",
+        "summary": "Repaired planning-owned state-transition blockers: canonical policySnapshot shape, canonical scope status wording, explicit regression E2E planning rows, and non-deferral change-boundary wording. No production code, tests, DoD checkbox completion, Code Diff Evidence, user validation proof, or certification fields changed."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-04T02:37:09Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": [
+          "implement"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-04T02:37:09Z",
+        "runCompletedAt": "2026-05-04T02:38:35Z",
+        "summary": "Implementation evidence/provenance cleanup for the already-applied weather SourceRef and sync-signal fix. Added Code Diff Evidence and checked only implementation-owned DoD items supported by the current git diff. No production code, generated config, certification status, or validate-owned completion fields changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-04T02:46:39Z",
+        "outcome": "route_required",
+        "phasesExecuted": [
+          "test"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Test evidence closure for BUG-016-W3. Passed regression-quality guard, Go/full unit, format, check, and lint. Recorded SourceRef no-sleep adversarial evidence and repeated-handler panic-accounting evidence. Integration and E2E reruns terminated with exit 143 and remain live-stack blockers; no certification or scope completion was claimed."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-05-04T02:56:08Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": [
+          "bootstrap",
+          "design-reconcile"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-04T02:56:08Z",
+        "runCompletedAt": "2026-05-04T02:59:58Z",
+        "summary": "Resolved design-owned BUG-016-W3 blocker DOD-BUG016W3-001 by reconciling design.md with the accepted root cause and selected implementation/test design, then recording design evidence in report.md and scopes.md. Certification status remains in_progress."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-05-04T03:11:17Z",
+        "outcome": "route_required",
+        "phasesExecuted": [
+          "regression"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-04T03:09:00Z",
+        "runCompletedAt": "2026-05-04T03:11:17Z",
+        "summary": "Verified protected weather regression scenarios without production code edits. Commands: timeout 600 ./smackerel.sh test unit --go (0); timeout 600 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix internal/connector/weather/weather_test.go (0); SourceRef invariant grep (0); no one-second sleep grep (1 expected absence); repeated-handler invariant grep (0); timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision --verbose (0); CLI coverage-surface grep (0, no coverage command exposed). Certification fields remain unchanged."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-04T03:17:53Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": [
+          "simplify"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-04T03:16:00Z",
+        "runCompletedAt": "2026-05-04T03:17:53Z",
+        "summary": "Clean simplify verdict for BUG-016-W3 weather SourceRef and sync-signal changes. Three review passes found no simplification worth applying. Verified with timeout 600 ./smackerel.sh test unit --go (0), timeout 600 ./smackerel.sh check (0), timeout 600 ./smackerel.sh lint (0), timeout 600 ./smackerel.sh format --check (0), and timeout 600 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix internal/connector/weather/weather_test.go (0). No source, generated config, certification, or validate-owned status fields changed."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-05-04T03:24:04Z",
+        "outcome": "route_required",
+        "phasesExecuted": [
+          "stabilize"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-04T03:21:00Z",
+        "runCompletedAt": "2026-05-04T03:24:04Z",
+        "summary": "Stabilize verdict for the BUG-016-W3 weather SourceRef and sync-signal change is stable: the delta adds one connector-local atomic sequence increment per Sync and idempotent test signaling only, with no config, Docker, startup, service lifecycle, schema, or persistent-state changes. Verified with timeout 600 ./smackerel.sh test unit --go (0), timeout 600 ./smackerel.sh check (0), timeout 600 ./smackerel.sh lint (0), timeout 600 ./smackerel.sh format --check (0), timeout 600 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix internal/connector/weather/weather_test.go (0), artifact lint (0), and traceability guard (0). Shared live-stack readiness remains routed to specs/031-live-stack-testing/bugs/BUG-031-005-stress-stack-health-readiness. Certification fields remain unchanged."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-05-04T03:34:06Z",
+        "outcome": "completed_diagnostic",
+        "phasesExecuted": [
+          "security"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-04T03:30:07Z",
+        "runCompletedAt": "2026-05-04T03:34:06Z",
+        "summary": "Security verdict for the BUG-016-W3 weather SourceRef and sync-signal delta is secure: no secrets, auth/IDOR, injection, unsafe logging, privacy, SSRF, or data-leak findings in the changed weather files. Verified with targeted security grep scans, timeout 600 ./smackerel.sh test unit --go (0), timeout 600 ./smackerel.sh check (0), timeout 600 ./smackerel.sh lint (0), timeout 600 ./smackerel.sh format --check (0), implementation-reality scan (0), artifact lint (0), and traceability guard (0). Dedicated dependency scanner command was not exposed by repo CLI. Certification fields remain unchanged."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-04T05:10:00Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": [
+          "validate",
+          "certification"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-04T05:10:00Z",
+        "runCompletedAt": "2026-05-04T05:11:30Z",
+        "summary": "Validated BUG-016-W3 closure using the existing green runtime/governance evidence recorded in report.md, then updated validate-owned certification state, completed scope accounting, parent weather user-validation entry, and fixed/verified bug status. Shared stress readiness remains routed to BUG-031-005 and is not a BUG-016-W3 completion claim."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-04T05:12:00Z",
+        "outcome": "completed_diagnostic",
+        "phasesExecuted": [
+          "audit"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-04T05:12:00Z",
+        "runCompletedAt": "2026-05-04T05:13:00Z",
+        "summary": "Audited BUG-016-W3 final certification packet: all DoD items are checked with evidence, Scope 1 is Done, required bugfix-fastlane phases have provenance, completedScopes and certifiedCompletedPhases are populated, no generated config or framework-managed files were edited, and shared stress readiness is still routed to BUG-031-005."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "Scope 1: Make weather sync SourceRefs unique below one second and stabilize sync tests"
+    ],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Make weather sync SourceRefs unique below one second and stabilize sync tests",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-04T05:10:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "workflow-forced"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [
+    "BUG-016-W3-source-ref-collision"
+  ],
+  "failures": [
+    {
+      "id": "BUG-016-W3-F1",
+      "summary": "Same-second weather SourceRef collision risks pipeline dedup collision.",
+      "source": "specs/039-recommendations-engine/report.md#Feature-Level Regression Phase - 2026-05-03T22:05:34Z",
+      "status": "resolved"
+    },
+    {
+      "id": "BUG-016-W3-F2",
+      "summary": "Weather sync test handlers can panic with close of closed channel when invoked repeatedly.",
+      "source": "specs/039-recommendations-engine/report.md#Feature-Level Regression Phase - 2026-05-03T22:05:34Z",
+      "status": "resolved"
+    }
+  ],
+  "lastUpdatedAt": "2026-05-04T05:13:00Z",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "invocationLedger": [
+    {
+      "phase": "validate/audit-certification",
+      "agent": "bubbles.workflow(parent-expanded)",
+      "timestamp": "2026-05-04T05:13:00Z",
+      "purpose": "Resolve BUG-016-W3 validate/audit certification ordering deadlock without editing framework-managed files.",
+      "outcome": "completed_owned",
+      "evidence": "Updated validate/audit provenance, final DoD items, parent user-validation entry, completedScopes, certifiedCompletedPhases, and bug fixed/verified status; post-edit Bubbles guards are recorded in report.md."
+    }
+  ],
+  "notes": "BUG-016-W3 is certified done. Design, implement, test, regression, simplify, stabilize, security, validate, and audit evidence are recorded with phase provenance. Regression verified the protected weather scenarios: same-second SourceRef uniqueness, no one-second sleep escape, repeated-handler no-panic assertions, and weather Go unit package health. Validation/audit closed the certification-deadlock state by recording parent weather user validation, fixed/verified bug status, Scope 1 Done, completedScopes, and certifiedCompletedPhases. Shared live-stack/stress readiness remains separately routed to BUG-031-005 and is not claimed by this weather SourceRef lane."
+}

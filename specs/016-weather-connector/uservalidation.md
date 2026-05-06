@@ -14,6 +14,7 @@
 - [x] Coordinates rounded for privacy before API calls
 - [x] Connector implements standard Connector interface
 - [x] Config schema follows smackerel.yaml conventions
+- [x] BUG-016-W3 weather SourceRef collision fix verified: rapid same-location weather syncs emit unique current/forecast SourceRefs and repeated weather sync test handlers are panic-free; validation evidence is recorded in `specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/report.md`.
 - [ ] NWS alerts fetched and classified by CAP severity
 - [ ] High-severity alerts routed to proactive notification
 - [ ] Historical weather enrichment serves NATS request/response
