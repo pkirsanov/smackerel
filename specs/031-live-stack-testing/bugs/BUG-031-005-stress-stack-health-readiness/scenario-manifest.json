@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-005-stress-stack-health-readiness",
+  "generatedAt": "2026-05-04T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-031-005-SCN-001",
+      "scope": "scope-1-repair-stress-stack-readiness-and-env-handoff",
+      "title": "Go stress uses the same disposable test stack as shell stress",
+      "gherkin": {
+        "given": "the repo stress command has prepared the disposable test stack",
+        "when": "the Go stress phase starts inside its container",
+        "then": "CORE_EXTERNAL_URL, DATABASE_URL, NATS_URL, and SMACKEREL_AUTH_TOKEN resolve from the same SST environment and readiness passes before workloads run"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "smackerel.sh",
+          "testId": "test stress"
+        },
+        {
+          "file": "scripts/runtime/go-stress.sh",
+          "testId": "go stress runner"
+        },
+        {
+          "file": "tests/stress/readiness/live_canary_test.go",
+          "testId": "TestStressReadinessCanary_Live"
+        },
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestConfigFromEnvRequiresAllStressValues"
+        },
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "stressWaitForHealth"
+        }
+      ],
+      "evidenceRefs": ["report.md#scope-classify-and-route-stress-stack-health-readiness-2026-05-04-0000-utc", "report.md#devops-repair-phase-2026-05-04t060200z"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-031-005-SCN-002",
+      "scope": "scope-1-repair-stress-stack-readiness-and-env-handoff",
+      "title": "Unhealthy stress stack fails clearly before workloads",
+      "gherkin": {
+        "given": "the stress stack health endpoint is unreachable or bound to the wrong environment",
+        "when": "./smackerel.sh test stress reaches the readiness canary",
+        "then": "the command fails with a single infrastructure readiness diagnostic and package workload failures are not reported as if they ran"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "smackerel.sh",
+          "testId": "test stress"
+        },
+        {
+          "file": "scripts/runtime/go-stress.sh",
+          "testId": "go stress runner"
+        },
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestCheckWithProbes_WrongStackCoreURLFailsBeforeDatabaseOrNATS"
+        },
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestCheckWithProbes_UnreachableDatabaseFailsBeforeNATS"
+        },
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestCheckWithProbes_MissingNATSURLFailsBeforeNetworkProbes"
+        },
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestCheckWithProbes_UnreachableNATSFailsAfterDatabase"
+        },
+        {
+          "file": "tests/stress/agent/concurrency_test.go",
+          "testId": "livePool"
+        }
+      ],
+      "evidenceRefs": ["report.md#scope-classify-and-route-stress-stack-health-readiness-2026-05-04-0000-utc", "report.md#devops-repair-phase-2026-05-04t060200z"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-031-005-SCN-003",
+      "scope": "scope-1-repair-stress-stack-readiness-and-env-handoff",
+      "title": "Workload failures remain visible after readiness succeeds",
+      "gherkin": {
+        "given": "the stress stack health, database, NATS, and auth canary has passed",
+        "when": "a feature-owned stress workload violates its latency or correctness budget",
+        "then": "./smackerel.sh test stress reports that workload failure directly and readiness does not convert it into a skip or pass"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/recommendations_test.go",
+          "testId": "TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests"
+        },
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_SearchWithKnowledgeLayerPerformance"
+        },
+        {
+          "file": "tests/stress/photos_ingest_stress_test.go",
+          "testId": "TestPhotosIngestStress_Synthetic15000PhotoLibrarySearchableWithinTarget"
+        },
+        {
+          "file": "tests/stress/drive/drive_scale_stress_test.go",
+          "testId": "TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst"
+        },
+        {
+          "file": "tests/stress/readiness/canary_test.go",
+          "testId": "TestGoStressHarness_WorkloadFailurePropagatesAfterCanary"
+        }
+      ],
+      "evidenceRefs": ["report.md#scope-classify-and-route-stress-stack-health-readiness-2026-05-04-0000-utc", "report.md#devops-repair-phase-2026-05-04t060200z"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-031-005-SCN-004",
+      "scope": "scope-1-repair-stress-stack-readiness-and-env-handoff",
+      "title": "Agent stress DB and NATS wiring are complete",
+      "gherkin": {
+        "given": "the agent concurrency stress package runs in the Go stress phase",
+        "when": "it connects to the database and NATS using environment values provided by the stress runner",
+        "then": "database ping and NATS connection succeed before concurrent invocation isolation assertions run"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "smackerel.sh",
+          "testId": "test stress"
+        },
+        {
+          "file": "scripts/runtime/go-stress.sh",
+          "testId": "go stress runner"
+        },
+        {
+          "file": "tests/stress/readiness/live_canary_test.go",
+          "testId": "TestStressReadinessCanary_Live"
+        },
+        {
+          "file": "tests/stress/agent/concurrency_test.go",
+          "testId": "TestConcurrentInvocationIsolation_BS018"
+        }
+      ],
+      "evidenceRefs": ["report.md#scope-classify-and-route-stress-stack-health-readiness-2026-05-04-0000-utc", "report.md#devops-repair-phase-2026-05-04t060200z"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

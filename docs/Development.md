@@ -72,7 +72,7 @@ Use `./smackerel.sh` for runtime work and keep the committed Bubbles validation 
 | Unit tests | `./smackerel.sh test unit [--go\|--python]` | Run Go and Python unit tests (or one language only) |
 | Integration tests | `./smackerel.sh test integration` | Run live-stack foundation integration validation |
 | E2E tests | `./smackerel.sh test e2e` | Run compose start, persistence, and config-failure E2E checks |
-| Stress smoke | `./smackerel.sh test stress` | Run live-stack health burst validation |
+| Stress smoke | `./smackerel.sh test stress` | Run disposable test-stack shell and Go stress validation |
 | Start stack | `./smackerel.sh up` | Start the foundation runtime |
 | Stop stack | `./smackerel.sh down [--volumes]` | Stop the current runtime stack; optionally remove named volumes |
 | Backup database | `./smackerel.sh backup` | Create a compressed pg_dump backup in `backups/` |

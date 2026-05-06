@@ -1,0 +1,321 @@
+{
+  "version": 3,
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-005-stress-stack-health-readiness",
+  "parentFeatureDir": "specs/031-live-stack-testing",
+  "featureName": "BUG-031-005: Stress stack health readiness",
+  "bugId": "BUG-031-005",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-05-04T00:00:00Z",
+    "completedPhaseClaims": ["bug", "stabilize", "devops", "implement", "test", "regression", "simplify", "security", "validate", "audit"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-04T00:00:00Z",
+        "summary": "Created planning-only bug packet for shared stress/live-stack readiness regression blocking spec 039. Classified ownership under spec 031 and routed implementation to stabilize/devops/test owners. No runtime fix was attempted."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-05-04T05:31:28Z",
+        "summary": "Confirmed BUG-031-005 with current source inspection and a fresh repo-standard stress diagnostic. Shell health/search stress passed against the disposable test stack; Go stress then ran package workloads in a transient Go container after the test stack was gone, while dev core timed out and test core refused connections. No runtime fix was applied. Routed primary repair to bubbles.devops, with bubbles.implement for source changes and bubbles.test for adversarial readiness regressions."
+      },
+      {
+        "phase": "devops",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-04T06:02:00Z",
+        "summary": "Repaired the stress command lifecycle/env handoff so shell and Go phases share the disposable test stack. Go stress now receives CORE_EXTERNAL_URL, DATABASE_URL, NATS_URL, and SMACKEREL_AUTH_TOKEN from generated test env and runs a live readiness canary before workload packages. Repo-standard format, Go unit, check, format check, lint, integration, and E2E gates passed. Stress still exits 1 only after readiness due TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests collecting zero samples; residual routed to specs/039-recommendations-engine. No certification claimed."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-04T15:08:00Z",
+        "summary": "Recorded implementation-owned BUG-031-005 Code Diff Evidence in report.md and phase provenance for the already-applied shared stress lifecycle/env handoff repair. Verified the current diff touches the allowed stress harness, readiness tests, docs, and bug packet surfaces. No production code, validation-owned certification fields, or final bug-fixed DoD item were changed by this evidence-closure pass."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-04T15:10:47Z",
+        "summary": "Recorded test-owned BUG-031-005 evidence closure. Go unit passed, full stress proved the readiness canary runs and passes before workloads, regression-quality guard passed with no violations, and readiness test skip-marker scan found no skip/only/todo markers. Full stress remains red only after readiness due specs/039 recommendation workload zero samples, with a visible post-readiness knowledge lint-report skip. No certification fields changed."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-05-04T15:30:32Z",
+        "summary": "Recorded regression-owned verification for BUG-031-005. Commands: timeout 600 ./smackerel.sh test unit --go (0), regression-quality guard --bugfix (0), regression-baseline guard --verbose (0), changed-file inventory (0), and COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress (1 after readiness due recommendation zero samples, with knowledge lint skip visible). Protected readiness scenarios remain covered; no certification fields changed."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-04T16:00:15Z",
+        "summary": "Recorded simplify-owned BUG-031-005 cleanup provenance. The simplify report shows smackerel.sh now reuses smackerel_require_env_value for required stress env values, tests/stress/readiness/canary.go checks response body read errors immediately after io.ReadAll, repo-standard format/unit/check/format-check/lint passed, stress remained red only after readiness due routed workload failures, and regression-quality guard passed. No files were deleted and no certification, status, scope-status, or bug fixed fields changed."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-05-04T16:11:01Z",
+        "summary": "Security-owned diagnostic reviewed BUG-031-005 stress readiness changes for secrets exposure, auth-token handling, unsafe logging, config fallback/default drift, SSRF/wrong-host behavior, shell injection, Docker lifecycle safety, and test isolation risk. Repo-standard unit/check/format/lint and implementation-reality scan passed; direct security pattern scans found no confirmed vulnerability. Dependency CVE scan remains not-run because no repo-standard scanner command is exposed. No certification fields changed."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-04T16:35:00Z",
+        "summary": "Validate-owned BUG-031-005 certification review accepted the shared-readiness evidence. Artifact lint, traceability guard, repo-standard check/format-check/lint/Go unit, implementation-reality scan, and artifact-freshness guard passed. The pre-certification state-transition guard showed only the final validate-owned DoD/status items, validate phase record, audit phase record, and G027 completedScopes/scope Done accounting as blockers. Marked bug.md Fixed, Scope 1 Done, completedScopes populated, certifiedCompletedPhases populated through validate, and residual post-readiness stress failures routed to package owners. Audit remains unclaimed."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-04T16:47:00Z",
+        "summary": "Audit-owned final review passed for the BUG-031-005 shared readiness boundary. Independently reran Bubbles guards, repo-standard check/format-check/lint/Go unit, full stress, test-integrity scans, and security/code-quality scans. Full stress still exits 1 only after the readiness canary passes, with residual package-owned recommendation zero-samples and knowledge health timing signals routed outside this bug. No validate-owned certification or top-level status fields were changed."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-04T16:58:00Z",
+        "summary": "Final validate-owned status promotion after audit. State-transition guard exited 0 with TRANSITION PERMITTED and 3 warnings, audit was already present in certifiedCompletedPhases, and the top-level status plus certification.status were promoted to done. Residual recommendation and knowledge workload signals remain routed outside BUG-031-005."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-05-04T16:58:00Z",
+    "completedScopes": ["scope-1-repair-stress-stack-readiness-and-env-handoff"],
+    "certifiedCompletedPhases": ["bug", "stabilize", "devops", "implement", "test", "regression", "simplify", "security", "validate", "audit"],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Repair stress stack readiness and env handoff",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-04T16:35:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug", "analysis", "routing"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T00:00:00Z",
+      "runCompletedAt": "2026-05-04T00:00:00Z",
+      "summary": "Packetized shared stress readiness failure. Existing spec 031 bugs cover integration volume/migration hang, DoD fidelity, capture processing timeout, and E2E timeout process cleanup; none covers Go stress test-stack readiness/env handoff."
+    },
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["artifact-lint", "traceability-guard"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T00:16:10Z",
+      "runCompletedAt": "2026-05-04T00:17:19Z",
+      "summary": "Validated the planning-only bug packet. Artifact lint exited 0. Traceability guard initially exposed missing future test-file links, the packet was corrected to reference existing harness surfaces, and the rerun exited 0."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize", "diagnostic", "routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T05:31:28Z",
+      "runCompletedAt": "2026-05-04T05:31:28Z",
+      "outcome": "route_required",
+      "summary": "Ran current-session stress readiness diagnostic through the repo CLI. The shell health and search phases passed, then the Go stress phase ran workload packages without a coherent live stack. Confirmed dev core health timed out on 40001, test core refused on 45001 after shell cleanup, and Go stress lacked a harness readiness canary. Stopped the transient Go container and cleaned the disposable test stack through ./smackerel.sh --env test down --volumes."
+    },
+    {
+      "agent": "bubbles.devops",
+      "phasesExecuted": ["devops", "implementation", "validation-routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T06:02:00Z",
+      "runCompletedAt": "2026-05-04T06:02:00Z",
+      "outcome": "route_required",
+      "summary": "Repaired BUG-031-005 shared stress readiness. Commands: timeout 600 ./smackerel.sh format (0), timeout 600 ./smackerel.sh test unit --go (0), timeout 120 ./smackerel.sh check (0), timeout 600 ./smackerel.sh format --check (0), timeout 600 ./smackerel.sh lint (0), timeout 1800 ./smackerel.sh test stress (1 after readiness due recommendation workload zero samples), timeout 900 ./smackerel.sh test integration (0), timeout 1200 ./smackerel.sh test e2e (0), regression-quality guard (0). Devops-owned shared readiness is repaired; residual recommendation workload failure routed to specs/039-recommendations-engine."
+    },
+    {
+      "agent": "bubbles.devops",
+      "phasesExecuted": ["artifact-lint", "traceability-guard"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T06:07:16Z",
+      "runCompletedAt": "2026-05-04T06:07:16Z",
+      "outcome": "completed_owned",
+      "summary": "Post-edit BUG-031-005 artifact validation passed. Artifact lint exited 0 with existing state-schema deprecation warnings only; traceability guard exited 0 with 4 scenarios checked, 4 mapped to DoD, all linked tests existing, and 0 warnings. Certification remains validate-owned and in_progress."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate", "artifact-lint", "traceability-guard", "state-transition-guard", "implementation-reality-scan", "artifact-freshness-guard", "repo-standard-checks", "routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T14:40:00Z",
+      "runCompletedAt": "2026-05-04T14:45:39Z",
+      "outcome": "route_required",
+      "summary": "Validate review accepted the shared-readiness evidence shape with residual recommendation stress failure routed to specs/039-recommendations-engine, but did not certify BUG-031-005. Commands: artifact-lint (0), traceability guard (0), state-transition guard (1 with 14 failures and 3 warnings), implementation reality scan (0 with 1 warning), artifact freshness guard (0), handoff-cycle check (2 not applicable: no .agent.md files), regression-quality guard feature-dir invocation (2 no test files resolved), ./smackerel.sh check (0), ./smackerel.sh format --check (0), ./smackerel.sh lint (0), ./smackerel.sh test unit --go (0). Route first to bubbles.plan for scopes.md guard blockers; bug.md status remains bubbles.bug-owned; spec 039 recommendation workload residual remains with the recommendation owner."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement", "evidence-closure"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T15:02:00Z",
+      "runCompletedAt": "2026-05-04T15:08:00Z",
+      "outcome": "completed_owned",
+      "summary": "Implementation evidence closure for BUG-031-005. Inspected the current diff/status for smackerel.sh, scripts/runtime/go-stress.sh, tests/stress/test_health_stress.sh, tests/stress/readiness/*, docs/Development.md, docs/Testing.md, and the bug packet. Added report.md Code Diff Evidence proving the shared stress command now uses one generated test-stack environment, passes core/DB/NATS/auth into Go stress, runs the live readiness canary before workloads, and preserves post-readiness workload failures. Added only the implement phase claim/provenance; no production code, final validation-owned DoD, scope status, or certification fields changed."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test", "evidence-closure"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T15:08:00Z",
+      "runCompletedAt": "2026-05-04T15:10:47Z",
+      "outcome": "completed_owned",
+      "summary": "Test evidence closure for BUG-031-005. Commands: timeout 600 ./smackerel.sh test unit --go (0), timeout 1800 ./smackerel.sh test stress (1 after readiness due TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests zero samples, with TestKnowledge_LintAt1000ArtifactScale skipped after readiness due missing lint report), timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/stress/readiness/canary_test.go tests/stress/readiness/live_canary_test.go scripts/runtime/go-stress.sh smackerel.sh tests/stress/test_health_stress.sh (0), and readiness skip-marker grep (1 expected no-match). Readiness contract is tested; certification remains validate-owned."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression", "baseline-guard", "protected-scenario-verification", "routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T15:18:24Z",
+      "runCompletedAt": "2026-05-04T15:30:32Z",
+      "outcome": "route_required",
+      "summary": "Regression-owned verification reran Go unit (0), regression-quality guard (0), regression-baseline guard (0), changed-file inventory (0), and full stress with plain Compose progress (1). Protected BUG-031-005 scenarios remain covered: one disposable test stack/env handoff, readiness canary before workloads, workload failure visibility after readiness, and agent DB/NATS wiring before concurrency assertions. Full stress remains red after readiness due specs/039 recommendation zero samples and a knowledge lint-report skip; no certification fields changed."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "outcome": "completed_owned",
+      "summary": "Simplify ledger repair for BUG-031-005. Verified the existing simplify report evidence and current code still match the cleanup: smackerel.sh uses smackerel_require_env_value for stress env reads and tests/stress/readiness/canary.go handles io.ReadAll errors before status handling. Added only the simplify phase claim/provenance; no certification, validation/status, scope status, or bug fixed fields changed."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security", "threat-model", "sast-review", "security-scan-review"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T16:05:10Z",
+      "runCompletedAt": "2026-05-04T16:11:01Z",
+      "outcome": "completed_diagnostic",
+      "summary": "Security diagnostic completed without confirmed BUG-031-005 vulnerabilities. Commands: timeout 600 ./smackerel.sh test unit --go (0), timeout 120 ./smackerel.sh check (0), timeout 600 ./smackerel.sh format --check (0), timeout 600 ./smackerel.sh lint (0), implementation-reality scan (0 with 1 file-discovery warning), secret logging grep (1 expected no-match), shell execution grep (0 interpreted safe), config/host grep (0 interpreted safe), URL/auth grep (0 interpreted safe), and hardcoded-secret grep (0 interpreted fake-test/env-handoff only). Dependency CVE scan not run because no repo-standard scanner command is exposed. No certification fields changed."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate", "certification-accounting", "routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T16:25:00Z",
+      "runCompletedAt": "2026-05-04T16:35:00Z",
+      "outcome": "route_required",
+      "summary": "Validate-owned certification accounting completed for BUG-031-005. Pre-edit artifact lint and traceability passed; pre-edit state-transition guard identified only final validate/audit/status-family blockers; repo-standard check, format-check, lint, Go unit, implementation-reality scan, and artifact-freshness guard passed. Marked bug.md Fixed, Scope 1 Done, completedScopes populated, certifiedCompletedPhases populated through validate, and routing moved to audit. Top-level certification status remains in_progress because audit phase was not claimed. Residual post-readiness package stress failures remain routed to specs/039-recommendations-engine and knowledge/spec 025 owners."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit", "final-review", "routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T16:39:31Z",
+      "runCompletedAt": "2026-05-04T16:47:00Z",
+      "outcome": "route_required",
+      "summary": "Final audit passed for BUG-031-005 shared stress stack readiness. State-transition guard initially blocked only on missing audit phase plus warnings. Artifact lint, traceability, implementation reality scan, freshness guard, regression-quality guard, check, format-check, lint, and Go unit passed. Full stress independently reached a green disposable stack and readiness canary before post-readiness knowledge and recommendation workload failures. Audit recorded no certification/status promotion; final top-level promotion remains validate/workflow-owned."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate", "final-status-promotion"],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-04T16:55:19Z",
+      "runCompletedAt": "2026-05-04T17:07:20Z",
+      "outcome": "completed_diagnostic",
+      "summary": "Final validate-owned promotion completed after audit. Pre-promotion state-transition guard exited 0 with TRANSITION PERMITTED and 3 warnings; top-level status and certification.status now both equal done. Audit was already listed in certifiedCompletedPhases. Residual post-readiness recommendation zero-samples and knowledge health/lint signals remain routed outside BUG-031-005."
+    }
+  ],
+  "activeBugs": [
+    {
+      "bugId": "BUG-031-005",
+      "status": "fixed",
+      "summary": "Shared Go stress phase health and DB/NATS readiness mismatch blocks spec 039 finalization and cross-feature stress packages."
+    }
+  ],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "specs/039-recommendations-engine/report.md feature-level regression phase 2026-05-03T22:05:34Z",
+      "summary": "Knowledge, photos, recommendation, drive, and agent stress packages failed or timed out on shared stack health or DB reachability."
+    },
+    {
+      "source": "smackerel.sh stress command source inspection",
+      "summary": "Shell stress uses test environment, while Go stress uses dev env values and omits NATS_URL."
+    },
+    {
+      "source": "BUG-031-005 stabilize diagnostic 2026-05-04T05:31:28Z",
+      "summary": "Fresh stress diagnostic confirmed shell stress passed, Go stress ran package workloads in a transient Go container after the test stack was gone, dev core timed out on 40001, and test core refused on 45001."
+    },
+    {
+      "source": "BUG-031-005 devops repair phase 2026-05-04T06:02:00Z",
+      "summary": "Shared stress readiness repaired: shell and Go stress use the disposable test stack, Go readiness canary passes, and agent DB/NATS stress passes. Residual stress failure is TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests with zero samples collected after readiness."
+    },
+    {
+      "source": "BUG-031-005 validate review 2026-05-04T14:45:39Z",
+      "summary": "Certification blocked by state-transition guard: unchecked final DoD, scope still In Progress, missing phase records, missing guard-recognized canary DoD wording, missing Code Diff Evidence, deferral-language hits in scopes.md, and direct regression-quality guard could not resolve test files from the feature directory."
+    },
+    {
+      "source": "BUG-031-005 test evidence closure 2026-05-04T15:10:47Z",
+      "summary": "Current stress evidence shows the shared readiness canary passing before workloads, agent DB/NATS stress passing, and test-stack cleanup completing. Full stress still exits 1 because TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests collects zero samples after readiness; TestKnowledge_LintAt1000ArtifactScale also skips after readiness because no lint report is available."
+    },
+    {
+      "source": "BUG-031-005 regression phase 2026-05-04T15:30:32Z",
+      "summary": "Regression verification found no BUG-031-005 protected-scenario regression. Go unit, regression-quality guard, and regression-baseline guard passed. Full stress still exits 1 after readiness due specs/039 recommendation workload zero samples, with a knowledge lint-report skip visible after readiness."
+    }
+  ],
+  "lastUpdatedAt": "2026-05-04T17:07:20Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single shared-infrastructure bug scope; stabilize/devops owner starts with red-stage proof and readiness canary design before edits.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G036", "G057", "G060"],
+    "specDoneRequires": "bubbles.validate certification after stress readiness repair, adversarial regression evidence, and repo-standard broad validation."
+  },
+  "routing": {
+    "nextOwner": null,
+    "supportingOwners": ["bubbles.plan", "bubbles.bug", "bubbles.validate", "bubbles.implement", "bubbles.stabilize", "bubbles.test", "bubbles.security"],
+    "implementationOwnerIfCodeChangeNeeded": "bubbles.implement",
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "targetSpec": "specs/031-live-stack-testing",
+    "blockedFeature": "specs/039-recommendations-engine",
+    "residualOwner": "specs/039-recommendations-engine recommendation workload owner and knowledge/spec 025 owner",
+    "reason": "BUG-031-005 is promoted to done after audit and validate-owned final status promotion. The shared stress readiness boundary is closed; residual post-readiness stress failures remain routed to specs/039-recommendations-engine and knowledge/spec 025 owners outside this bug packet."
+  }
+}
