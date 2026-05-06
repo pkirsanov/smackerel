@@ -268,31 +268,28 @@ func (store *Store) ListRemovalCandidatesByIDs(ctx context.Context, ids []uuid.U
 }
 
 func scanRemovalCandidate(row pgx.Row) (*RemovalCandidate, error) {
-	var c RemovalCandidate
-	var reason string
-	var actionTokenID *uuid.UUID
-	var decidedBy *string
-	if err := row.Scan(&c.ID, &c.PhotoID, &reason, &c.Confidence, &c.Rationale, &c.Method,
-		&c.ActionStatus, &actionTokenID, &c.DecidedAt, &decidedBy, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	c, err := scanRemovalCandidateScanner(row)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRemovalCandidateNotFound
 		}
-		return nil, fmt.Errorf("scan removal candidate: %w", err)
+		return nil, err
 	}
-	c.Reason = RemovalReason(reason)
-	c.ActionTokenID = actionTokenID
-	if decidedBy != nil {
-		c.DecidedBy = *decidedBy
-	}
-	return &c, nil
+	return c, nil
 }
 
 func scanRemovalCandidateRow(rows pgx.Rows) (*RemovalCandidate, error) {
+	return scanRemovalCandidateScanner(rows)
+}
+
+// scanRemovalCandidateScanner accepts both pgx.Row and pgx.Rows so the
+// candidate field list lives in exactly one place.
+func scanRemovalCandidateScanner(scanner interface{ Scan(...any) error }) (*RemovalCandidate, error) {
 	var c RemovalCandidate
 	var reason string
 	var actionTokenID *uuid.UUID
 	var decidedBy *string
-	if err := rows.Scan(&c.ID, &c.PhotoID, &reason, &c.Confidence, &c.Rationale, &c.Method,
+	if err := scanner.Scan(&c.ID, &c.PhotoID, &reason, &c.Confidence, &c.Rationale, &c.Method,
 		&c.ActionStatus, &actionTokenID, &c.DecidedAt, &decidedBy, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, fmt.Errorf("scan removal candidate: %w", err)
 	}

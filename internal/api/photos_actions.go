@@ -247,20 +247,23 @@ func (h *PhotosHandlers) actionTokenTTL(action photolib.ActionKind) time.Duratio
 	if h == nil {
 		return time.Minute
 	}
+	seconds := 0
 	switch action {
 	case photolib.ActionDelete:
-		if h.config.Policy.DeleteActionTokenTTLSeconds > 0 {
-			return time.Duration(h.config.Policy.DeleteActionTokenTTLSeconds) * time.Second
-		}
+		seconds = h.config.Policy.DeleteActionTokenTTLSeconds
 	case photolib.ActionArchive:
-		if h.config.Policy.ArchiveActionTokenTTLSeconds > 0 {
-			return time.Duration(h.config.Policy.ArchiveActionTokenTTLSeconds) * time.Second
-		}
+		seconds = h.config.Policy.ArchiveActionTokenTTLSeconds
 	}
-	if h.config.Policy.ArchiveActionTokenTTLSeconds > 0 {
-		return time.Duration(h.config.Policy.ArchiveActionTokenTTLSeconds) * time.Second
+	// Fall back to the archive TTL for any action without its own policy
+	// value (covers ActionAlbumRemove / ActionTag / ActionMarkSensitive /
+	// ActionFavorite plus the case where a configured action TTL is 0).
+	if seconds <= 0 {
+		seconds = h.config.Policy.ArchiveActionTokenTTLSeconds
 	}
-	return 5 * time.Minute
+	if seconds <= 0 {
+		return 5 * time.Minute
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func decisionForAction(kind photolib.ActionKind) string {
