@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "featureDir": "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples",
+  "parentFeatureDir": "specs/039-recommendations-engine",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-05-04T17:20:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-039-003-SCN-001",
+      "scope": "scope-1-restore-recommendation-stress-observations-and-diagnostics",
+      "title": "Recommendation stress collects observations after readiness",
+      "gherkin": {
+        "given": "the disposable stress stack is healthy and the Go stress readiness canary has passed for core, database, NATS, and auth",
+        "when": "the recommendation stress profile runs 50 concurrent warm reactive requests",
+        "then": "the workload records at least one observation and the output includes total sample counts plus latency/error summaries"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/recommendations_test.go",
+          "testId": "TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests"
+        },
+        {
+          "file": "tests/stress/readiness/live_canary_test.go",
+          "testId": "TestStressReadinessCanary_Live"
+        }
+      ],
+      "evidenceRefs": ["report.md#classification-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-039-003-SCN-002",
+      "scope": "scope-1-restore-recommendation-stress-observations-and-diagnostics",
+      "title": "Warm reactive stress keeps the parent latency contract",
+      "gherkin": {
+        "given": "fixture-backed recommendation providers and the reactive recommendation API are available in the stress stack",
+        "when": "the warm reactive stress profile completes",
+        "then": "p95 latency is within the 10 second warm budget, unexpected error rate remains within threshold, and provider runtime state remains reachable"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/recommendations_test.go",
+          "testId": "TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests"
+        }
+      ],
+      "evidenceRefs": ["report.md#classification-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-039-003-SCN-003",
+      "scope": "scope-1-restore-recommendation-stress-observations-and-diagnostics",
+      "title": "Worker timeout outcomes are not silently dropped",
+      "gherkin": {
+        "given": "concurrent recommendation workers hit deadline, timeout, transport, server, or unexpected-status paths",
+        "when": "the stress harness aggregates worker outcomes",
+        "then": "each outcome is counted or reported as a workload diagnostic and the test cannot fail only with zero samples and no classified observations"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/recommendations_test.go",
+          "testId": "timeout/deadline observation accounting regression"
+        }
+      ],
+      "evidenceRefs": ["report.md#classification-evidence"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
