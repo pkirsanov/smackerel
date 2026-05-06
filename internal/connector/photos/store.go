@@ -230,22 +230,43 @@ func (store *Store) get(ctx context.Context, where string, args ...any) (*PhotoR
 	if store == nil || store.pool == nil {
 		return nil, fmt.Errorf("photos: store pool is nil")
 	}
-	query := `
-		SELECT p.id, p.artifact_id, p.connector_id, p.provider, p.provider_ref,
-		       p.provider_media_kind, p.media_role::text, p.mime_type, p.bytes,
-		       p.bytes_estimated, p.filename, p.captured_at, p.uploaded_at,
-		       p.geo_lat, p.geo_lon, COALESCE(p.content_hash, ''), p.exif,
-		       p.albums, p.tags, p.sensitivity::text, p.sensitivity_labels,
-		       p.sensitivity_src, p.lifecycle_state::text, p.classification,
-		       p.classification_confidence, p.raw_provider,
-		       p.source_channel, p.source_ref, p.document_group_id, p.document_page_index
-		  FROM photos p
-		 WHERE ` + where
+	query := `SELECT ` + photoRecordColumnsSQL + ` FROM photos p WHERE ` + where
+	row := store.pool.QueryRow(ctx, query, args...)
+	return scanPhotoRecordRow(row)
+}
+
+// photoRecordColumnsSQL is the canonical projection used by every query
+// that produces a PhotoRecord. Keeping the column list in a single place
+// guarantees that every scanner sees the same columns in the same order
+// (see scanPhotoRecordRow).
+const photoRecordColumnsSQL = `
+		p.id, p.artifact_id, p.connector_id, p.provider, p.provider_ref,
+		p.provider_media_kind, p.media_role::text, p.mime_type, p.bytes,
+		p.bytes_estimated, p.filename, p.captured_at, p.uploaded_at,
+		p.geo_lat, p.geo_lon, COALESCE(p.content_hash, ''), p.exif,
+		p.albums, p.tags, p.sensitivity::text, p.sensitivity_labels,
+		p.sensitivity_src, p.lifecycle_state::text, p.classification,
+		p.classification_confidence, p.raw_provider,
+		p.source_channel, p.source_ref, p.document_group_id, p.document_page_index`
+
+// photoRowScanner is the small intersection of pgx.Row and pgx.Rows that
+// scanPhotoRecordRow needs. Both interfaces expose Scan with the same
+// signature; modelling that intersection lets a single helper serve
+// every PhotoRecord-producing query without copying the field list.
+type photoRowScanner interface {
+	Scan(dest ...any) error
+}
+
+// scanPhotoRecordRow scans the columns produced by photoRecordColumnsSQL
+// into a PhotoRecord. Optional trailing destinations let callers append
+// extra columns (e.g. match_confidence in the search query) without
+// duplicating the photo field list.
+func scanPhotoRecordRow(scanner photoRowScanner, extra ...any) (*PhotoRecord, error) {
 	var rec PhotoRecord
 	var role string
 	var sensitivity string
 	var sourceChannel string
-	if err := store.pool.QueryRow(ctx, query, args...).Scan(
+	dest := []any{
 		&rec.ID, &rec.ArtifactID, &rec.ConnectorID, &rec.Provider, &rec.ProviderRef,
 		&rec.ProviderMediaKind, &role, &rec.MIMEType, &rec.Bytes,
 		&rec.BytesEstimated, &rec.Filename, &rec.CapturedAt, &rec.UploadedAt,
@@ -254,7 +275,9 @@ func (store *Store) get(ctx context.Context, where string, args ...any) (*PhotoR
 		&rec.SensitivitySource, &rec.LifecycleState, &rec.Classification,
 		&rec.ClassificationConfidence, &rec.RawProvider,
 		&sourceChannel, &rec.SourceRef, &rec.DocumentGroupID, &rec.DocumentPageIndex,
-	); err != nil {
+	}
+	dest = append(dest, extra...)
+	if err := scanner.Scan(dest...); err != nil {
 		return nil, err
 	}
 	rec.MediaRole = MediaRole(role)
@@ -398,14 +421,7 @@ func (store *Store) Search(ctx context.Context, query string, limit int) ([]Phot
 			  FROM photos p
 			  JOIN artifacts a ON a.id = p.artifact_id
 		)
-		SELECT p.id, p.artifact_id, p.connector_id, p.provider, p.provider_ref,
-		       p.provider_media_kind, p.media_role::text, p.mime_type, p.bytes,
-		       p.bytes_estimated, p.filename, p.captured_at, p.uploaded_at,
-		       p.geo_lat, p.geo_lon, COALESCE(p.content_hash, ''), p.exif,
-		       p.albums, p.tags, p.sensitivity::text, p.sensitivity_labels,
-		       p.sensitivity_src, p.lifecycle_state::text, p.classification,
-		       p.classification_confidence, p.raw_provider,
-		       p.source_channel, p.source_ref, p.document_group_id, p.document_page_index,
+		SELECT `+photoRecordColumnsSQL+`,
 		       COALESCE(p.classification_confidence, 0.25) AS match_confidence
 		  FROM searchable_photos p
 		 WHERE p.lifecycle_state::text <> 'deleted'
@@ -424,32 +440,16 @@ func (store *Store) Search(ctx context.Context, query string, limit int) ([]Phot
 
 	var results []PhotoSearchRecord
 	for rows.Next() {
-		var rec PhotoRecord
-		var role string
-		var sensitivity string
-		var sourceChannel string
 		var matchConfidence float64
-		if err := rows.Scan(
-			&rec.ID, &rec.ArtifactID, &rec.ConnectorID, &rec.Provider, &rec.ProviderRef,
-			&rec.ProviderMediaKind, &role, &rec.MIMEType, &rec.Bytes,
-			&rec.BytesEstimated, &rec.Filename, &rec.CapturedAt, &rec.UploadedAt,
-			&rec.GeoLat, &rec.GeoLon, &rec.ContentHash, &rec.EXIF,
-			&rec.Albums, &rec.Tags, &sensitivity, &rec.SensitivityLabels,
-			&rec.SensitivitySource, &rec.LifecycleState, &rec.Classification,
-			&rec.ClassificationConfidence, &rec.RawProvider,
-			&sourceChannel, &rec.SourceRef, &rec.DocumentGroupID, &rec.DocumentPageIndex,
-			&matchConfidence,
-		); err != nil {
+		rec, err := scanPhotoRecordRow(rows, &matchConfidence)
+		if err != nil {
 			return nil, fmt.Errorf("scan photo search row: %w", err)
 		}
-		rec.MediaRole = MediaRole(role)
-		rec.Sensitivity = SensitivityLevel(sensitivity)
-		rec.SourceChannel = SourceChannel(sourceChannel)
 		var classification ClassificationDecision
 		if len(rec.Classification) > 0 {
 			_ = json.Unmarshal(rec.Classification, &classification)
 		}
-		results = append(results, PhotoSearchRecord{PhotoRecord: rec, Classification: classification, MatchConfidence: matchConfidence})
+		results = append(results, PhotoSearchRecord{PhotoRecord: *rec, Classification: classification, MatchConfidence: matchConfidence})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate photo search rows: %w", err)

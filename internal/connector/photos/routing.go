@@ -283,15 +283,7 @@ func (store *Store) ListPhotosBySource(ctx context.Context, channel SourceChanne
 	if store == nil || store.pool == nil {
 		return nil, fmt.Errorf("photos: store pool is nil")
 	}
-	rows, err := store.pool.Query(ctx, `
-		SELECT p.id, p.artifact_id, p.connector_id, p.provider, p.provider_ref,
-		       p.provider_media_kind, p.media_role::text, p.mime_type, p.bytes,
-		       p.bytes_estimated, p.filename, p.captured_at, p.uploaded_at,
-		       p.geo_lat, p.geo_lon, COALESCE(p.content_hash, ''), p.exif,
-		       p.albums, p.tags, p.sensitivity::text, p.sensitivity_labels,
-		       p.sensitivity_src, p.lifecycle_state::text, p.classification,
-		       p.classification_confidence, p.raw_provider,
-		       p.source_channel, p.source_ref, p.document_group_id, p.document_page_index
+	rows, err := store.pool.Query(ctx, `SELECT `+photoRecordColumnsSQL+`
 		  FROM photos p
 		 WHERE p.source_channel=$1 AND p.source_ref=$2
 		 ORDER BY p.captured_at DESC NULLS LAST, p.updated_at DESC`,
@@ -302,26 +294,11 @@ func (store *Store) ListPhotosBySource(ctx context.Context, channel SourceChanne
 	defer rows.Close()
 	var records []PhotoRecord
 	for rows.Next() {
-		var rec PhotoRecord
-		var role string
-		var sensitivity string
-		var sourceChannel string
-		if err := rows.Scan(
-			&rec.ID, &rec.ArtifactID, &rec.ConnectorID, &rec.Provider, &rec.ProviderRef,
-			&rec.ProviderMediaKind, &role, &rec.MIMEType, &rec.Bytes,
-			&rec.BytesEstimated, &rec.Filename, &rec.CapturedAt, &rec.UploadedAt,
-			&rec.GeoLat, &rec.GeoLon, &rec.ContentHash, &rec.EXIF,
-			&rec.Albums, &rec.Tags, &sensitivity, &rec.SensitivityLabels,
-			&rec.SensitivitySource, &rec.LifecycleState, &rec.Classification,
-			&rec.ClassificationConfidence, &rec.RawProvider,
-			&sourceChannel, &rec.SourceRef, &rec.DocumentGroupID, &rec.DocumentPageIndex,
-		); err != nil {
+		rec, err := scanPhotoRecordRow(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan photo by source: %w", err)
 		}
-		rec.MediaRole = MediaRole(role)
-		rec.Sensitivity = SensitivityLevel(sensitivity)
-		rec.SourceChannel = SourceChannel(sourceChannel)
-		records = append(records, rec)
+		records = append(records, *rec)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate photos by source: %w", err)
@@ -337,15 +314,7 @@ func (store *Store) ListPhotosByDocumentGroup(ctx context.Context, groupID uuid.
 	if store == nil || store.pool == nil {
 		return nil, fmt.Errorf("photos: store pool is nil")
 	}
-	rows, err := store.pool.Query(ctx, `
-		SELECT p.id, p.artifact_id, p.connector_id, p.provider, p.provider_ref,
-		       p.provider_media_kind, p.media_role::text, p.mime_type, p.bytes,
-		       p.bytes_estimated, p.filename, p.captured_at, p.uploaded_at,
-		       p.geo_lat, p.geo_lon, COALESCE(p.content_hash, ''), p.exif,
-		       p.albums, p.tags, p.sensitivity::text, p.sensitivity_labels,
-		       p.sensitivity_src, p.lifecycle_state::text, p.classification,
-		       p.classification_confidence, p.raw_provider,
-		       p.source_channel, p.source_ref, p.document_group_id, p.document_page_index
+	rows, err := store.pool.Query(ctx, `SELECT `+photoRecordColumnsSQL+`
 		  FROM photos p
 		 WHERE p.document_group_id=$1
 		 ORDER BY COALESCE(p.document_page_index, 0), p.captured_at`, groupID)
@@ -355,26 +324,11 @@ func (store *Store) ListPhotosByDocumentGroup(ctx context.Context, groupID uuid.
 	defer rows.Close()
 	var records []PhotoRecord
 	for rows.Next() {
-		var rec PhotoRecord
-		var role string
-		var sensitivity string
-		var sourceChannel string
-		if err := rows.Scan(
-			&rec.ID, &rec.ArtifactID, &rec.ConnectorID, &rec.Provider, &rec.ProviderRef,
-			&rec.ProviderMediaKind, &role, &rec.MIMEType, &rec.Bytes,
-			&rec.BytesEstimated, &rec.Filename, &rec.CapturedAt, &rec.UploadedAt,
-			&rec.GeoLat, &rec.GeoLon, &rec.ContentHash, &rec.EXIF,
-			&rec.Albums, &rec.Tags, &sensitivity, &rec.SensitivityLabels,
-			&rec.SensitivitySource, &rec.LifecycleState, &rec.Classification,
-			&rec.ClassificationConfidence, &rec.RawProvider,
-			&sourceChannel, &rec.SourceRef, &rec.DocumentGroupID, &rec.DocumentPageIndex,
-		); err != nil {
+		rec, err := scanPhotoRecordRow(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan document group photo: %w", err)
 		}
-		rec.MediaRole = MediaRole(role)
-		rec.Sensitivity = SensitivityLevel(sensitivity)
-		rec.SourceChannel = SourceChannel(sourceChannel)
-		records = append(records, rec)
+		records = append(records, *rec)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate document group: %w", err)
