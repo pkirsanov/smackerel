@@ -1,0 +1,246 @@
+{
+  "version": 3,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-003-health-endpoint-stress-budget",
+  "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
+  "featureName": "BUG-025-003: Health endpoint stress budget",
+  "bugId": "BUG-025-003",
+  "status": "blocked",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "validate",
+    "currentScope": "scope-1-restore-knowledge-health-stress-budget",
+    "runStartedAt": "2026-05-05T10:02:00Z",
+    "completedPhaseClaims": ["bug", "implement", "test", "regression", "simplify", "stabilize", "security"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-05T07:06:50Z",
+        "claimSource": "interpreted",
+        "summary": "Created classification-only BUG-025-003 packet for the residual knowledge health endpoint stress budget failure found during BUG-039 test phase. Existing BUG-025-001 and BUG-025-002 do not cover this /api/health latency residual. No production code, tests, generated config, BUG-039 artifacts, parent 025 artifacts, or certification-owned fields were changed."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-05T08:05:00Z",
+        "claimSource": "executed",
+        "summary": "Implemented and verified the BUG-025-003 health budget fix. /api/health now bounds auxiliary health work below the 2s stress budget, overlaps authenticated knowledge health refresh with auxiliary probe fan-out, and returns stale knowledge cache when refresh exceeds the bounded context. Repo-standard unit, check, lint, format-check, build, integration, e2e, full stress, and regression-quality guard commands passed. Full stress exited 0; TestKnowledge_HealthEndpointIncludesKnowledgeSection passed in 1.62s and BUG-039 recommendation stress remained green. Certification and fixed status remain validate-owned."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-05T08:37:23Z",
+        "claimSource": "executed",
+        "summary": "Independently verified BUG-025-003 current repo state. Regression-quality guard exited 0 with 0 violations and 0 warnings; Go unit exited 0 including internal/api health regressions; full stress exited 0 with TestKnowledge_HealthEndpointIncludesKnowledgeSection passing, parsed knowledge stats logged, and BUG-039 recommendation stress green; targeted knowledge health E2E passed after disposable test-stack cleanup. Existing skip markers remain in shared knowledge stress helper/other tests, but the BUG-025-003 health stress body executed and passed. Certification and fixed status remain validate-owned."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-05-05T09:11:04Z",
+        "claimSource": "executed",
+        "summary": "Verified protected BUG-025-003 regression scenarios and broader surfaces. Regression-quality guard exited 0 with 0 violations and 0 warnings; Go unit exited 0; Python unit exited 0 with 407 passed and 1 warning; integration exited 0; broader E2E exited 0 with shell 35/35 and health E2E green; full stress exited 0 with health stress 25/25, TestKnowledge_HealthEndpointIncludesKnowledgeSection passing, BUG-039 recommendation stress green, and stress packages passing; regression-baseline guard exited 0 with no route/endpoint collisions. No numeric coverage delta is claimed because the repo CLI exposes no sanctioned coverage command. Certification and fixed status remain validate-owned."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-05T09:24:59Z",
+        "claimSource": "executed",
+        "summary": "Reviewed BUG-025-003 health/knowledge changes for reuse, quality, and efficiency. Applied one narrow test-only cleanup by removing a dead callCount local and discard assignment from internal/api/health_test.go. Go unit, check, lint, format-check, and regression-quality guard passed after the cleanup. Certification and fixed status remain validate-owned."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-05-05T10:01:53Z",
+        "claimSource": "executed",
+        "summary": "Stabilization review found no remaining performance, infrastructure, configuration, build, reliability, or resource-usage blocker in the current BUG-025-003 state. Repo-standard Go unit, check, format-check, lint, build, integration, E2E, and full stress commands exited 0. Full stress reported health stress 25/25, TestKnowledge_HealthEndpointIncludesKnowledgeSection passing in 1.31s, and BUG-039 recommendation stress green with p95 936.265382ms. No code, tests, config, Docker lifecycle files, parent artifacts, or validate-owned certification fields were changed."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-05-05T10:16:02Z",
+        "claimSource": "executed",
+        "summary": "Reviewed BUG-025-003 health endpoint changes for auth behavior, sensitive health data, stale-cache behavior, timeout handling, logging, secrets, injection, and denial-of-service/resource risk. Current-session Go unit, check, format-check, lint, implementation-reality scan, and targeted security grep scans completed. No scoped security/privacy vulnerability was found; dependency CVE status is not claimed because no repo-standard dependency audit command is exposed by ./smackerel.sh or .specify/memory/agents.md. No certification or fixed status claimed."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "blocked",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Restore knowledge health stress budget",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [
+      {
+        "owner": "policy",
+        "summary": "Policy deadlock confirmed by bubbles.validate on 2026-05-05T16:18:00Z: state-transition guard requires an audit phase before final certification, but validate must not record audit. Current state has no audit phase claim."
+      },
+      {
+        "owner": "bubbles.validate",
+        "summary": "Current state-transition guard exits 1 with remaining blockers for two unchecked final DoD items, Scope 1 still In Progress, completedScopes empty, missing validate/audit phase records, and phase-scope coherence. Validate did not promote status to done."
+      },
+      {
+        "owner": "artifact-ownership",
+        "summary": "Current ownership policy does not permit bubbles.validate to edit scopes.md, bug.md, or uservalidation.md directly, so validate did not mark Scope 1 Done, check final DoD items, mark the bug Fixed/Verified, or alter user validation checkboxes."
+      }
+    ],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug", "classification", "routing"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T07:06:50Z",
+      "runCompletedAt": "2026-05-05T07:06:50Z",
+      "outcome": "route_required",
+      "summary": "Packetized the residual full-stress failure under feature 025. The BUG-039 recommendation workload passed; the remaining red condition is tests/stress/knowledge_stress_test.go::TestKnowledge_HealthEndpointIncludesKnowledgeSection exceeding the current <2s health budget by a few milliseconds."
+    },
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["artifact-lint", "traceability-guard"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T07:10:15Z",
+      "runCompletedAt": "2026-05-05T07:10:15Z",
+      "outcome": "completed_owned",
+      "summary": "Validated the BUG-025-003 packet shape. Artifact lint exited 0 with deprecated-field warnings only. Traceability guard exited 0 with 3 scenarios checked and all scenarios mapped to Test Plan rows, concrete test files, report evidence references, and DoD items."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement", "red-reproduction", "regression-coverage", "validation-routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T07:10:15Z",
+      "runCompletedAt": "2026-05-05T08:05:00Z",
+      "outcome": "completed_owned",
+      "summary": "Reproduced the knowledge health stress budget failure after shared readiness and BUG-039 recommendation stress passed, then fixed the 025-owned /api/health budget path. Commands passed after implementation: ./smackerel.sh test unit --go, ./smackerel.sh check, ./smackerel.sh lint, ./smackerel.sh format --check, COMPOSE_PROGRESS=plain ./smackerel.sh build, COMPOSE_PROGRESS=plain ./smackerel.sh test integration, COMPOSE_PROGRESS=plain ./smackerel.sh test e2e, COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress, and regression-quality guard. Full stress exited 0 with knowledge health stress at 1.62s. No certification or fixed status claimed."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test", "independent-verification", "regression-quality", "stress", "e2e-routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T08:09:38Z",
+      "runCompletedAt": "2026-05-05T08:37:23Z",
+      "outcome": "completed_owned",
+      "summary": "Independent BUG-025-003 test verification completed. Commands: regression-quality guard --bugfix internal/api/health_test.go tests/stress/knowledge_stress_test.go tests/e2e/knowledge_health_test.go (0); timeout 600 ./smackerel.sh test unit --go (0); COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress (0); broader E2E (0); targeted health E2E initially hit a disposable-stack port collision, then passed after ./smackerel.sh --env test down --volumes cleanup. Full stress preserved the 25 rapid authenticated health-call contract, logged parsed knowledge stats on first response, and kept recommendation stress green. No certification or fixed status claimed."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression", "baseline-comparison", "cross-spec-impact", "design-coherence", "coverage-regression-check"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T08:37:23Z",
+      "runCompletedAt": "2026-05-05T09:11:04Z",
+      "outcome": "completed_diagnostic",
+      "summary": "Regression verification found no protected BUG-025-003 regression. Current-session commands passed: regression-quality guard (0), Go unit (0), Python unit (0; 407 passed, 1 warning), integration (0), broader E2E (0), full stress (0), and regression-baseline guard (0). Health stress reported 25/25 successful requests, knowledge health stress passed with parsed stats, stale/slow health regressions stayed green through Go unit, BUG-039 recommendation stress stayed green, and no route/endpoint collisions were detected. Numeric line coverage was not compared because the repo CLI exposes no sanctioned coverage command. No certification or fixed status claimed."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T09:11:04Z",
+      "runCompletedAt": "2026-05-05T09:24:59Z",
+      "outcome": "completed_owned",
+      "summary": "Simplify review completed for BUG-025-003 scoped health/knowledge changes. Removed only a dead test-local callCount variable and discard assignment from TestHealthKnowledgeCache; left stress-budget timeout, concurrency, stale-cache, and context-cancellation behavior unchanged. Validation passed: Go unit, check, lint, format-check, and regression-quality guard. No certification, top-level status, scope status, bug.md, generated config, Docker lifecycle file, or parent feature artifact was changed."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T09:24:59Z",
+      "runCompletedAt": "2026-05-05T10:01:53Z",
+      "outcome": "completed_diagnostic",
+      "summary": "Stabilization pass reviewed the health budget fix for startup/lifecycle, config, stale-cache fallback, performance, reliability, and resource-usage risk. Current-session commands passed through the repo CLI: Go unit, check, format-check, lint, build, integration, E2E, and full stress. Full stress kept BUG-025-003 health stress green and BUG-039 recommendation stress green. No stability remediation or routed fix cycle was required, and no validate-owned certification was claimed."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T10:02:00Z",
+      "runCompletedAt": "2026-05-05T10:16:02Z",
+      "outcome": "completed_diagnostic",
+      "summary": "Security review completed for the scoped health endpoint changes. Reviewed auth gating, sensitive health response data, stale-cache behavior, timeout handling, logging, secrets, injection, and denial-of-service/resource risk. Go unit, check, format-check, lint, implementation-reality scan, and targeted security grep scans completed with no scoped vulnerability found. Dependency CVE status is not claimed because no repo-standard dependency audit command exists. Certification and fixed status remain validate-owned."
+    }
+  ],
+  "activeBugs": [
+    {
+      "bugId": "BUG-025-003",
+      "status": "in_progress",
+      "summary": "Implementation, independent test, regression, simplify, and stabilize evidence are green: rapid authenticated /api/health calls with knowledge section pass the protected stress budget, full stress exits 0, and BUG-039 recommendation stress remains green. Validate/audit certification remains pending."
+    }
+  ],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "BUG-039 test phase full stress residual",
+      "summary": "Full stress exited 1 outside BUG-039: TestKnowledge_HealthEndpointIncludesKnowledgeSection reported rapid /api/health calls at 2.004s to 2.027s, expected < 2s."
+    },
+    {
+      "source": "BUG-025-003 implement phase 2026-05-05T08:05:00Z",
+      "summary": "Implementation resolved the knowledge health stress residual. Full stress exited 0; TestKnowledge_HealthEndpointIncludesKnowledgeSection passed in 1.62s, and TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests remained green with p95 1.156118085s and unexpected rate 0.00%."
+    },
+    {
+      "source": "BUG-025-003 stabilize phase 2026-05-05T10:01:53Z",
+      "summary": "Stabilization found no remaining operational blocker. Current repo-standard validation exited 0 for Go unit, check, format-check, lint, build, integration, E2E, and stress; full stress reported health stress 25/25 and TestKnowledge_HealthEndpointIncludesKnowledgeSection passing in 1.31s."
+    }
+  ],
+  "lastUpdatedAt": "2026-05-05T16:18:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single bug scope; implementation starts with red-stage full-stress reproduction after shared readiness passes and BUG-039 recommendation stress is green.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G036", "G057", "G060", "G068"],
+    "specDoneRequires": "bubbles.validate certification after regression tests, full stress evidence, artifact lint, traceability guard, and state-transition guard pass."
+  },
+  "routing": {
+    "nextOwner": null,
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "targetSpec": "specs/025-knowledge-synthesis-layer",
+    "targetScope": "scope-8-digest-integration-health",
+    "targetScenario": "SCN-025-23",
+    "blockedFeatureContext": "The original knowledge health endpoint stress residual is green in current implementation, test, regression, simplify, stabilize, security, and validate evidence. Final certification is blocked by a governance/accounting deadlock: audit is required but not recorded, and validate must not record audit or edit foreign-owned scope/bug/user-validation artifacts.",
+    "reason": "No next owner is set by this validate attempt. State-transition guard requires audit before final certification, but validate cannot record audit and the state was not changed in a way that makes another audit pass newly actionable."
+  }
+}

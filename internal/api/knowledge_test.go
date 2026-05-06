@@ -65,9 +65,15 @@ func (m *mockKnowledgeStore) GetStats(_ context.Context) (*knowledge.KnowledgeSt
 	return m.stats, m.statsErr
 }
 
-func (m *mockKnowledgeStore) GetKnowledgeHealthStats(_ context.Context) (*knowledge.KnowledgeHealthStats, error) {
+func (m *mockKnowledgeStore) GetKnowledgeHealthStats(ctx context.Context) (*knowledge.KnowledgeHealthStats, error) {
 	if m.healthDelay > 0 {
-		time.Sleep(m.healthDelay)
+		timer := time.NewTimer(m.healthDelay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
 	}
 	return m.healthStats, m.healthErr
 }
