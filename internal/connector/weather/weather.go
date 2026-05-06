@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -53,6 +54,7 @@ type Connector struct {
 	cache      map[string]*cacheEntry
 	baseURL    string // overridable for testing; defaults to Open-Meteo API
 	archiveURL string // overridable for testing; defaults to Open-Meteo Archive API
+	syncSeq    atomic.Uint64
 
 	// NWS alert integration (Scope 04). nws is always non-nil so that
 	// SetNWSURL on a fresh connector works without an extra construction
@@ -145,6 +147,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var failCount int
 	now := time.Now()
 	syncStart := now
+	sourceRefSuffix := c.nextSourceRefSuffix(now)
 
 	for _, loc := range cfg.Locations {
 		// Check for context cancellation between locations.
@@ -167,7 +170,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 
 		artifacts = append(artifacts, connector.RawArtifact{
 			SourceID:    "weather",
-			SourceRef:   fmt.Sprintf("current-%s-%s", loc.Name, now.Format(time.RFC3339)),
+			SourceRef:   weatherSourceRef("current", loc.Name, sourceRefSuffix),
 			ContentType: "weather/current",
 			Title:       fmt.Sprintf("Weather: %s — %s", loc.Name, current.Description),
 			RawContent:  fmt.Sprintf("%s — Temperature: %.1f°C (feels like %.1f°C), Humidity: %d%%, Wind: %.1f km/h", current.Description, current.Temperature, current.ApparentTemp, current.Humidity, current.WindSpeed),
@@ -210,7 +213,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			}
 			artifacts = append(artifacts, connector.RawArtifact{
 				SourceID:    "weather",
-				SourceRef:   fmt.Sprintf("forecast-%s-%s", loc.Name, now.Format(time.RFC3339)),
+				SourceRef:   weatherSourceRef("forecast", loc.Name, sourceRefSuffix),
 				ContentType: "weather/forecast",
 				Title:       fmt.Sprintf("Forecast: %s — %d days", loc.Name, len(forecast)),
 				RawContent:  fmt.Sprintf("Forecast for %s:\n%s", loc.Name, strings.Join(forecastLines, "\n")),
@@ -256,6 +259,15 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	}
 
 	return artifacts, now.Format(time.RFC3339), nil
+}
+
+func (c *Connector) nextSourceRefSuffix(syncTime time.Time) string {
+	sequence := c.syncSeq.Add(1)
+	return fmt.Sprintf("%s-%d", syncTime.UTC().Format(time.RFC3339Nano), sequence)
+}
+
+func weatherSourceRef(artifactType, locationName, syncSuffix string) string {
+	return fmt.Sprintf("%s-%s-%s", artifactType, locationName, syncSuffix)
 }
 
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {

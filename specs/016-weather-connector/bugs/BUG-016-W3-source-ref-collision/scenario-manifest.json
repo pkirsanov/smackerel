@@ -1,0 +1,139 @@
+{
+  "version": 2,
+  "specId": "016-weather-connector",
+  "bugId": "BUG-016-W3-source-ref-collision",
+  "featureDir": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-05-04T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG016W3-001",
+      "name": "Same-second syncs produce unique SourceRefs",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/scopes.md",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestSync_SourceRefUniquePerSync"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "pre-fix-unit-failure",
+          "location": "specs/039-recommendations-engine/report.md::Feature-Level Regression Phase - 2026-05-03T22:05:34Z"
+        },
+        {
+          "type": "post-fix-unit-pass",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/report.md::Test-Owned Evidence Closure - 2026-05-04T02:46:39Z"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W3-002", "DOD-BUG016W3-003", "DOD-BUG016W3-004", "DOD-BUG016W3-008"]
+    },
+    {
+      "scenarioId": "SCN-BUG016W3-002",
+      "name": "Adversarial seconds-only SourceRef fails",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestSync_SourceRefUniquePerSync"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "pre-fix-unit-failure",
+          "location": "specs/039-recommendations-engine/report.md::weather_test.go:818"
+        },
+        {
+          "type": "adversarial-source-inspection",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/report.md::Adversarial SourceRef Evidence"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W3-002", "DOD-BUG016W3-003"]
+    },
+    {
+      "scenarioId": "SCN-BUG016W3-003",
+      "name": "Health-sync test handler tolerates repeated requests",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestSync_HealthSetToSyncingDuringSync"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "pre-fix-unit-panic",
+          "location": "specs/039-recommendations-engine/report.md::weather_test.go:1046"
+        },
+        {
+          "type": "repeated-handler-source-inspection",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/report.md::Repeated Handler Evidence"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W3-005", "DOD-BUG016W3-008"]
+    },
+    {
+      "scenarioId": "SCN-BUG016W3-004",
+      "name": "Config-generation guard handler tolerates repeated requests",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestSync_ConfigGenGuard_ConnectDuringSync"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "pre-fix-unit-panic",
+          "location": "specs/039-recommendations-engine/report.md::weather_test.go:1529"
+        },
+        {
+          "type": "repeated-handler-source-inspection",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/report.md::Repeated Handler Evidence"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W3-006", "DOD-BUG016W3-008"]
+    },
+    {
+      "scenarioId": "SCN-BUG016W3-005",
+      "name": "No silent-pass bailout in bug regressions",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/scopes.md",
+      "requiredTestType": ["unit", "regression-quality"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestSync_SourceRefUniquePerSync"
+        },
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestSync_HealthSetToSyncingDuringSync"
+        },
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestSync_ConfigGenGuard_ConnectDuringSync"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "regression-quality-guard-pass",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/report.md::Regression Quality Guard Evidence"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W3-007", "DOD-BUG016W3-016"]
+    }
+  ]
+}

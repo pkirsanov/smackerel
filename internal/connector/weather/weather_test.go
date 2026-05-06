@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -778,6 +780,10 @@ func TestSync_ProducesArtifacts(t *testing.T) {
 func TestSync_SourceRefUniquePerSync(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
+		if strings.Contains(r.URL.RawQuery, "daily=") {
+			fmt.Fprint(w, `{"daily":{"time":["2026-05-04"],"temperature_2m_max":[21],"temperature_2m_min":[12],"weather_code":[0],"precipitation_sum":[0]}}`)
+			return
+		}
 		fmt.Fprint(w, `{"current":{"temperature_2m":20,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
 	}))
 	defer srv.Close()
@@ -792,31 +798,46 @@ func TestSync_SourceRefUniquePerSync(t *testing.T) {
 		},
 	})
 
-	// First sync
-	a1, _, err := c.Sync(context.Background(), "")
-	if err != nil {
-		t.Fatalf("first sync error: %v", err)
-	}
-	// Clear cache to force second HTTP call
-	c.mu.Lock()
-	c.cache = make(map[string]*cacheEntry)
-	c.mu.Unlock()
+	for attempt := 0; attempt < 20; attempt++ {
+		firstArtifacts, _, err := c.Sync(context.Background(), "")
+		if err != nil {
+			t.Fatalf("first sync error: %v", err)
+		}
 
-	// Tiny sleep so time.Now() differs (RFC3339 has second precision)
-	time.Sleep(time.Second)
+		c.mu.Lock()
+		c.cache = make(map[string]*cacheEntry)
+		c.mu.Unlock()
 
-	// Second sync
-	a2, _, err := c.Sync(context.Background(), "")
-	if err != nil {
-		t.Fatalf("second sync error: %v", err)
+		secondArtifacts, _, err := c.Sync(context.Background(), "")
+		if err != nil {
+			t.Fatalf("second sync error: %v", err)
+		}
+
+		if len(firstArtifacts) != 2 || len(secondArtifacts) != 2 {
+			t.Fatalf("expected current and forecast artifact per sync, got %d and %d", len(firstArtifacts), len(secondArtifacts))
+		}
+
+		if firstArtifacts[0].CapturedAt.Format(time.RFC3339) != secondArtifacts[0].CapturedAt.Format(time.RFC3339) {
+			c.mu.Lock()
+			c.cache = make(map[string]*cacheEntry)
+			c.mu.Unlock()
+			continue
+		}
+
+		for idx, artifactType := range []string{"current", "forecast"} {
+			firstRef := firstArtifacts[idx].SourceRef
+			secondRef := secondArtifacts[idx].SourceRef
+			if !strings.HasPrefix(firstRef, artifactType+"-City-") || !strings.HasPrefix(secondRef, artifactType+"-City-") {
+				t.Fatalf("%s SourceRef should preserve type and location, got %q and %q", artifactType, firstRef, secondRef)
+			}
+			if firstRef == secondRef {
+				t.Fatalf("same-second syncs produced identical %s SourceRef %q; seconds-only RFC3339 would deduplicate distinct weather artifacts", artifactType, firstRef)
+			}
+		}
+		return
 	}
 
-	if len(a1) != 1 || len(a2) != 1 {
-		t.Fatalf("expected 1 artifact per sync, got %d and %d", len(a1), len(a2))
-	}
-	if a1[0].SourceRef == a2[0].SourceRef {
-		t.Errorf("consecutive syncs produced identical SourceRef %q — would cause pipeline dedup collision", a1[0].SourceRef)
-	}
+	t.Fatal("could not exercise two weather syncs inside the same RFC3339 second")
 }
 
 func TestSync_MultipleLocations(t *testing.T) {
@@ -1041,9 +1062,13 @@ func TestSync_AllFail_HealthError(t *testing.T) {
 func TestSync_HealthSetToSyncingDuringSync(t *testing.T) {
 	syncStarted := make(chan struct{})
 	proceed := make(chan struct{})
+	var signalOnce sync.Once
+	var signalPanics atomic.Int32
+	var handlerCalls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		close(syncStarted)
+		handlerCalls.Add(1)
+		notifySyncStarted(&signalOnce, syncStarted, &signalPanics)
 		<-proceed
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, `{"current":{"temperature_2m":20,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
@@ -1074,6 +1099,21 @@ func TestSync_HealthSetToSyncingDuringSync(t *testing.T) {
 	}
 	close(proceed)
 	<-done
+	if calls := handlerCalls.Load(); calls < 2 {
+		t.Fatalf("expected repeated weather handler invocations, got %d", calls)
+	}
+	if panics := signalPanics.Load(); panics != 0 {
+		t.Fatalf("sync-start signal panicked %d time(s) under repeated weather handler invocation", panics)
+	}
+}
+
+func notifySyncStarted(signalOnce *sync.Once, syncStarted chan struct{}, signalPanics *atomic.Int32) {
+	defer func() {
+		if recover() != nil {
+			signalPanics.Add(1)
+		}
+	}()
+	signalOnce.Do(func() { close(syncStarted) })
 }
 
 // --- Security regression tests ---
@@ -1524,9 +1564,13 @@ func TestSync_ConfigGenGuard_ConnectDuringSync(t *testing.T) {
 	// the Connect health.
 	syncStarted := make(chan struct{})
 	proceed := make(chan struct{})
+	var signalOnce sync.Once
+	var signalPanics atomic.Int32
+	var handlerCalls atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		close(syncStarted)
+		handlerCalls.Add(1)
+		notifySyncStarted(&signalOnce, syncStarted, &signalPanics)
 		<-proceed
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, `{"current":{"temperature_2m":20,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
@@ -1561,6 +1605,12 @@ func TestSync_ConfigGenGuard_ConnectDuringSync(t *testing.T) {
 
 	close(proceed)
 	<-done
+	if calls := handlerCalls.Load(); calls < 2 {
+		t.Fatalf("expected repeated weather handler invocations, got %d", calls)
+	}
+	if panics := signalPanics.Load(); panics != 0 {
+		t.Fatalf("sync-start signal panicked %d time(s) under repeated weather handler invocation", panics)
+	}
 
 	// After Sync finishes, health should be what Connect set (Healthy), not what
 	// the stale Sync would have computed. The configGen guard prevents clobbering.
