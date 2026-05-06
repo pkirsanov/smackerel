@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/038-cloud-drives-integration",
   "featureName": "Cloud Drives Integration",
-  "status": "in_progress",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -39,7 +39,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "Scope 1: Drive Foundation",
       "Scope 2: Scan And Monitor",
