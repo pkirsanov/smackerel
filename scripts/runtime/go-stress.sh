@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /workspace
+workspace_dir="${SMACKEREL_STRESS_WORKSPACE:-/workspace}"
+cd "$workspace_dir"
 
 go_run_selector=""
 
@@ -36,6 +37,10 @@ done
 
 # Stress profile is bounded by the spec NFR (5min duration + warmup).
 # Allow generous timeout for the full profile plus one extra cycle.
+echo "go-stress: running readiness canary"
+go test -tags stress -v -count=1 -timeout 90s -run '^TestStressReadinessCanary_Live$' ./tests/stress/readiness
+echo "go-stress: readiness canary passed"
+
 go_test_args=(-tags stress -v -count=1 -timeout 720s)
 if [[ -n "$go_run_selector" ]]; then
 	echo "go-stress: applying -run selector: $go_run_selector"

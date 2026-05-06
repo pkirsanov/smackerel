@@ -34,7 +34,7 @@ The repository now exposes a sanctioned CLI-owned runtime test surface for the f
 | Go + Python unit | `./smackerel.sh test unit` | Runtime code changes |
 | Integration | `./smackerel.sh test integration` | Runtime lifecycle or health changes |
 | End-to-end | `./smackerel.sh test e2e` | Runtime, compose, or config changes |
-| Stress smoke | `./smackerel.sh test stress` | Runtime health or lifecycle changes |
+| Stress smoke | `./smackerel.sh test stress` | Runtime health, lifecycle, or stress env handoff changes |
 | Framework doctor | `bash .github/bubbles/scripts/cli.sh doctor` | Project-owned bootstrap docs change |
 | Framework validate | `timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate` | Before claiming bootstrap health |
 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>` | Spec or bug artifacts change |
