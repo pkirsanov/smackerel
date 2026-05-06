@@ -6,14 +6,20 @@ REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$REPO_DIR/scripts/lib/runtime.sh"
 
 TEST_ENV="test"
+STACK_MANAGED="${STACK_MANAGED:-0}"
 
 cleanup() {
+  if [ "$STACK_MANAGED" = "1" ]; then
+    return 0
+  fi
   timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
-cleanup
-"$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
+if [ "$STACK_MANAGED" = "0" ]; then
+  cleanup
+  "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
+fi
 
 ENV_FILE="$(smackerel_require_env_file "$TEST_ENV")"
 CORE_URL="$(smackerel_env_value "$ENV_FILE" "CORE_EXTERNAL_URL")"

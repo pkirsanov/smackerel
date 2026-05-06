@@ -1366,7 +1366,6 @@ func TestHealthOmitsKnowledgeWhenDisabled(t *testing.T) {
 
 // T8-03 continued: Knowledge health uses cache for repeated requests.
 func TestHealthKnowledgeCache(t *testing.T) {
-	callCount := 0
 	synthTime := time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC)
 	store := &mockKnowledgeStore{
 		healthStats: &knowledge.KnowledgeHealthStats{
@@ -1397,7 +1396,6 @@ func TestHealthKnowledgeCache(t *testing.T) {
 	if resp1.Knowledge == nil {
 		t.Fatal("expected knowledge section on first call")
 	}
-	_ = callCount
 
 	// Update store to return different values
 	store.healthStats = &knowledge.KnowledgeHealthStats{
@@ -1470,6 +1468,138 @@ func TestHealthKnowledgeHiddenWithoutAuth(t *testing.T) {
 	}
 	if resp2.Knowledge == nil {
 		t.Error("expected knowledge section for authenticated request")
+	}
+}
+
+func TestHealthKnowledgeStressBudgetWithSlowProbesAndColdStats(t *testing.T) {
+	const stressBudget = 2 * time.Second
+	slowProbe := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(5 * time.Second):
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+	probeServer := httptest.NewServer(slowProbe)
+	defer probeServer.Close()
+
+	synthTime := time.Date(2026, 5, 5, 7, 30, 0, 0, time.UTC)
+	store := &mockKnowledgeStore{
+		healthStats: &knowledge.KnowledgeHealthStats{
+			ConceptCount:     7,
+			EntityCount:      11,
+			SynthesisPending: 1100,
+			LastSynthesisAt:  &synthTime,
+		},
+		healthDelay: 600 * time.Millisecond,
+	}
+
+	deps := &Dependencies{
+		DB:                      &mockDB{healthy: true, artifactCount: 1100},
+		NATS:                    &mockNATS{healthy: true},
+		StartTime:               time.Now(),
+		MLSidecarURL:            probeServer.URL,
+		OllamaURL:               probeServer.URL,
+		MLClient:                &http.Client{Timeout: 5 * time.Second},
+		KnowledgeStore:          store,
+		KnowledgeHealthCacheTTL: 30 * time.Second,
+		AuthToken:               "secret-token",
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rec := httptest.NewRecorder()
+
+	start := time.Now()
+	deps.HealthHandler(rec, req)
+	elapsed := time.Since(start)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if elapsed >= stressBudget {
+		t.Fatalf("authenticated health with cold knowledge stats took %v, expected < %v", elapsed, stressBudget)
+	}
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Knowledge == nil {
+		t.Fatal("expected knowledge section to remain present")
+	}
+	if resp.Knowledge.SynthesisPending != 1100 {
+		t.Errorf("expected synthesis_pending 1100, got %d", resp.Knowledge.SynthesisPending)
+	}
+	if resp.Services["ml_sidecar"].Status != "down" {
+		t.Errorf("expected timed-out ml_sidecar probe to report down, got %s", resp.Services["ml_sidecar"].Status)
+	}
+	if resp.Services["ollama"].Status != "down" {
+		t.Errorf("expected timed-out ollama probe to report down, got %s", resp.Services["ollama"].Status)
+	}
+}
+
+func TestHealthKnowledgeReturnsStaleCacheWhenRefreshTimesOut(t *testing.T) {
+	const stressBudget = 2 * time.Second
+	staleSynthesis := time.Date(2026, 5, 5, 7, 45, 0, 0, time.UTC)
+	freshSynthesis := staleSynthesis.Add(15 * time.Minute)
+	store := &mockKnowledgeStore{
+		healthStats: &knowledge.KnowledgeHealthStats{
+			ConceptCount:     99,
+			EntityCount:      99,
+			SynthesisPending: 99,
+			LastSynthesisAt:  &freshSynthesis,
+		},
+		healthDelay: 3 * time.Second,
+	}
+
+	deps := &Dependencies{
+		DB:                      &mockDB{healthy: true, artifactCount: 1100},
+		NATS:                    &mockNATS{healthy: true},
+		StartTime:               time.Now(),
+		KnowledgeStore:          store,
+		KnowledgeHealthCacheTTL: time.Millisecond,
+		AuthToken:               "secret-token",
+		knowledgeHealthCache: &KnowledgeHealthSection{
+			ConceptCount:     12,
+			EntityCount:      34,
+			SynthesisPending: 1100,
+			LastSynthesisAt:  &staleSynthesis,
+		},
+		knowledgeHealthAt: time.Now().Add(-time.Hour),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rec := httptest.NewRecorder()
+
+	start := time.Now()
+	deps.HealthHandler(rec, req)
+	elapsed := time.Since(start)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if elapsed >= stressBudget {
+		t.Fatalf("health refresh with stale knowledge cache took %v, expected < %v", elapsed, stressBudget)
+	}
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Knowledge == nil {
+		t.Fatal("expected stale knowledge section to remain present")
+	}
+	if resp.Knowledge.SynthesisPending != 1100 {
+		t.Errorf("expected stale synthesis_pending 1100, got %d", resp.Knowledge.SynthesisPending)
+	}
+	if resp.Knowledge.LastSynthesisAt == nil {
+		t.Fatal("expected stale synthesis timestamp to remain present")
+	}
+	if !resp.Knowledge.LastSynthesisAt.Equal(staleSynthesis) {
+		t.Errorf("expected stale synthesis timestamp %v, got %v", staleSynthesis, resp.Knowledge.LastSynthesisAt)
 	}
 }
 

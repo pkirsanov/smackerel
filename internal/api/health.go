@@ -231,10 +231,21 @@ type ServiceStatus struct {
 	ModelLoaded   *bool  `json:"model_loaded,omitempty"`
 }
 
+const healthAuxiliaryProbeTimeout = 1500 * time.Millisecond
+
 // HealthHandler handles GET /api/health.
 func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	authenticated := d.isAuthenticated(r)
 	services := make(map[string]ServiceStatus)
+
+	var knowledgeHealthCh chan *KnowledgeHealthSection
+	if authenticated && d.KnowledgeStore != nil {
+		knowledgeHealthCh = make(chan *KnowledgeHealthSection, 1)
+		go func() {
+			knowledgeHealthCh <- d.getCachedKnowledgeHealth(ctx)
+		}()
+	}
 
 	// API status
 	uptime := int64(time.Since(d.StartTime).Seconds())
@@ -261,8 +272,8 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	services["nats"] = natsStatus
 
 	// Start external health probes in parallel (IMP-023-R19-001).
-	// Each probe has a 2s context timeout; sequential execution would
-	// bottleneck at 4s+ when both services are unreachable, exceeding
+	// Each probe has a bounded context timeout; sequential execution would
+	// bottleneck at 3s+ when both services are unreachable, exceeding
 	// Docker HEALTHCHECK's typical 3s timeout and causing false restarts.
 	var (
 		mlStatus     ServiceStatus
@@ -351,15 +362,15 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	// Only expose service topology, version, and commit to authenticated callers
 	// to prevent infrastructure reconnaissance (CWE-200). Unauthenticated callers
 	// (including Docker healthcheck) only see the overall status.
-	if d.isAuthenticated(r) {
+	if authenticated {
 		resp.Services = services
 		resp.Version = d.Version
 		resp.CommitHash = d.CommitHash
 		resp.BuildTime = d.BuildTime
 
 		// Knowledge layer health (optional — nil when knowledge is disabled)
-		if d.KnowledgeStore != nil {
-			resp.Knowledge = d.getCachedKnowledgeHealth(ctx)
+		if knowledgeHealthCh != nil {
+			resp.Knowledge = <-knowledgeHealthCh
 		}
 	}
 
@@ -399,7 +410,9 @@ func (d *Dependencies) getCachedKnowledgeHealth(ctx context.Context) *KnowledgeH
 	d.knowledgeHealthMu.RUnlock()
 
 	// Slow path: fetch fresh data WITHOUT holding any lock.
-	stats, err := d.KnowledgeStore.GetKnowledgeHealthStats(ctx)
+	refreshCtx, cancel := context.WithTimeout(ctx, healthAuxiliaryProbeTimeout)
+	defer cancel()
+	stats, err := d.KnowledgeStore.GetKnowledgeHealthStats(refreshCtx)
 	if err != nil {
 		slog.Warn("knowledge health stats query failed", "error", err)
 		return stale // return stale cache if available
@@ -435,7 +448,7 @@ func (d *Dependencies) isAuthenticated(r *http.Request) bool {
 func (d *Dependencies) mlClient() *http.Client {
 	d.mlClientOnce.Do(func() {
 		if d.MLClient == nil {
-			d.MLClient = &http.Client{Timeout: 2 * time.Second}
+			d.MLClient = &http.Client{Timeout: healthAuxiliaryProbeTimeout}
 		}
 	})
 	return d.MLClient
@@ -447,7 +460,7 @@ func checkMLSidecar(ctx context.Context, baseURL string, client *http.Client) Se
 		return ServiceStatus{Status: "not_configured"}
 	}
 
-	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, healthAuxiliaryProbeTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, baseURL+"/health", nil)
@@ -477,7 +490,7 @@ func checkOllama(ctx context.Context, ollamaURL string, client *http.Client) Ser
 		return ServiceStatus{Status: "not_configured"}
 	}
 
-	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, healthAuxiliaryProbeTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, ollamaURL+"/api/tags", nil)

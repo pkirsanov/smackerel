@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-003-health-endpoint-stress-budget",
+  "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-05-05T07:06:50Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-025-003-SCN-001",
+      "scope": "scope-1-restore-knowledge-health-stress-budget",
+      "title": "Rapid health checks stay within budget",
+      "gherkin": {
+        "given": "the disposable stress stack is healthy, the Go stress readiness canary has passed, and the knowledge layer is enabled",
+        "when": "the stress suite performs 25 rapid authenticated GET /api/health calls",
+        "then": "each call satisfies the protected stress latency budget and every call returns HTTP 200"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "stress",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_HealthEndpointIncludesKnowledgeSection"
+        },
+        {
+          "file": "tests/stress/readiness/live_canary_test.go",
+          "testId": "TestStressReadinessCanary_Live"
+        }
+      ],
+      "evidenceRefs": ["report.md#final-validate-certification-attempt---2026-05-05t161800z"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-025-003-SCN-002",
+      "scope": "scope-1-restore-knowledge-health-stress-budget",
+      "title": "Knowledge section contract is preserved",
+      "gherkin": {
+        "given": "the knowledge layer has health stats available",
+        "when": "an authenticated caller requests GET /api/health",
+        "then": "the response includes the knowledge section with concept_count, entity_count, synthesis_pending, and last_synthesis_at when available, and existing health fields remain present"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/api/health_test.go",
+          "testId": "TestSCN02524_HealthIncludesKnowledgeSection"
+        },
+        {
+          "file": "internal/api/health_test.go",
+          "testId": "TestHealthKnowledgeCache"
+        },
+        {
+          "file": "tests/e2e/knowledge_health_test.go",
+          "testId": "TestKnowledgeHealth_SectionPresent"
+        },
+        {
+          "file": "tests/e2e/knowledge_health_test.go",
+          "testId": "TestKnowledgeHealth_ExistingFieldsPreserved"
+        }
+      ],
+      "evidenceRefs": ["report.md#final-validate-certification-attempt---2026-05-05t161800z"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-025-003-SCN-003",
+      "scope": "scope-1-restore-knowledge-health-stress-budget",
+      "title": "Slow knowledge stats cannot serialize rapid health checks",
+      "gherkin": {
+        "given": "the knowledge health stats path is slow, cold, or cache-expired",
+        "when": "multiple health checks arrive rapidly",
+        "then": "the health endpoint avoids serial multi-second work across requests and the regression test fails if the slow path can push rapid health checks beyond the stress budget"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/api/health_test.go",
+          "testId": "TestChaos_ConcurrentHealthWithSlowKnowledgeStore"
+        },
+        {
+          "file": "tests/stress/knowledge_stress_test.go",
+          "testId": "TestKnowledge_HealthEndpointIncludesKnowledgeSection"
+        }
+      ],
+      "evidenceRefs": ["report.md#final-validate-certification-attempt---2026-05-05t161800z"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
