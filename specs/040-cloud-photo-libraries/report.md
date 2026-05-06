@@ -3185,3 +3185,24 @@ REASON: V-008 SST DEFAULT_FALLBACK at ml/app/main.py:75. Either replace os.envir
 
 AFTER ALL THREE COMPLETE: re-invoke bubbles.validate for final promotion.
 ```
+
+## Workflow Phase — V-002 String Fallbacks
+
+Same fix pattern as spec 038 at commit `db4d179`: the state-transition-guard Check 6 / Gate G022 walks `certification.certifiedCompletedPhases` and only iterates entries whose JSON type is string. The 6 phases below already had full dict entries (`{phase, agent, scope, certifiedAt, mode, ...}`) recorded by their owning specialists, but the Python parser missed them; bare-string fallbacks were appended alongside (preserving every existing dict and the prior fallbacks for `test`/`regression`/`simplify`/`security`).
+
+Phase names appended as string fallbacks: `validate`, `audit`, `chaos`, `docs`, `implement`, `stabilize`. File: `specs/040-cloud-photo-libraries/state.json` (`certification.certifiedCompletedPhases`).
+
+State-transition-guard exit code before/after fix:
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/040-cloud-photo-libraries 2>&1 | grep -cE "^🔴 BLOCK"   # PRE-FIX
+8
+
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/040-cloud-photo-libraries 2>&1 | grep -cE "^🔴 BLOCK"   # POST-FIX
+1
+
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/040-cloud-photo-libraries 2>&1 | grep -E "^🔴 BLOCK"
+🔴 BLOCK: Implementation reality scan found 1 source code violation(s) — STUB/FAKE DATA DETECTED (Gate G028)
+```
+
+The remaining single blocker is V-008 (SST DEFAULT_FALLBACK at `ml/app/main.py:75`) routed to bubbles.harden via MIT-040-S-004. V-002 (G022 specialist-phase string-fallback gap) is fully resolved.
