@@ -1,0 +1,235 @@
+{
+  "version": 3,
+  "featureDir": "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples",
+  "parentFeatureDir": "specs/039-recommendations-engine",
+  "featureName": "BUG-039-003: Recommendation stress zero samples",
+  "bugId": "BUG-039-003",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "validate",
+    "currentScope": "scope-1-restore-recommendation-stress-observations-and-diagnostics",
+    "runStartedAt": "2026-05-04T17:20:00Z",
+    "completedPhaseClaims": ["stabilize", "test"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "completedAt": "2026-05-04T18:11:07Z",
+        "claimSource": "executed",
+        "summary": "Stabilize reproduced the post-fix recommendation stress failure and inspected the API, reactive engine, provider registry, fixture provider, store transaction, DB pool config, and live provider surface. No source code, tests, generated config, Docker lifecycle files, parent 039 artifacts, or certification-owned fields were changed.",
+        "filesModified": [
+          "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples/report.md",
+          "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples/scopes.md",
+          "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples/state.json"
+        ],
+        "validationCommands": [
+          "COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress",
+          "COMPOSE_PROGRESS=plain timeout 360 ./smackerel.sh --env test up",
+          "curl --max-time 5 -fsS -H 'Authorization: Bearer <redacted>' '<CORE_EXTERNAL_URL>/api/recommendations/providers'",
+          "COMPOSE_PROGRESS=plain timeout 180 ./smackerel.sh --env test down --volumes"
+        ]
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-05-05T06:34:35Z",
+        "claimSource": "executed",
+        "summary": "Implemented and verified the final recommendation stress fix. Store.GetRequest now releases the delivered-recommendations cursor before provider badge lookups, avoiding nested pgxpool acquisition while an outer rows cursor holds a connection. Integration regression covers concurrent readback above pool size, and full stress passed SCN-039-052 with 16978 successful samples, p95 1.769574395s, and 0 unexpected errors.",
+        "filesModified": [
+          "internal/recommendation/store/store.go",
+          "internal/recommendation/store/graph_signal_test.go",
+          "tests/integration/recommendation_schema_test.go",
+          "tests/stress/recommendations_test.go",
+          "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples/report.md",
+          "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples/scopes.md",
+          "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples/state.json"
+        ],
+        "validationCommands": [
+          "./smackerel.sh format",
+          "./smackerel.sh test unit --go",
+          "COMPOSE_PROGRESS=plain ./smackerel.sh test integration",
+          "COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress",
+          "./smackerel.sh format --check",
+          "./smackerel.sh check",
+          "./smackerel.sh lint",
+          "COMPOSE_PROGRESS=plain ./smackerel.sh test e2e",
+          "timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/stress/recommendations_test.go tests/integration/recommendation_schema_test.go internal/recommendation/store/graph_signal_test.go"
+        ]
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "completedAt": "2026-05-05T16:44:25Z",
+        "claimSource": "executed",
+        "summary": "Independently reran BUG-039-003 validation after the separately owned BUG-025 stress health fix. Full stress now exits 0; SCN-039-052 recorded 29791 recommendation observations, p95 910.160165ms against the 10s budget, 0.00% unexpected errors, and direct provider diagnostics returned healthy fixture providers. Integration regression and regression-quality guard also passed. No certification/status promotion claimed.",
+        "filesModified": [
+          "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples/report.md",
+          "specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples/state.json"
+        ],
+        "validationCommands": [
+          "COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress",
+          "COMPOSE_PROGRESS=plain ./smackerel.sh test integration",
+          "timeout 300 bash .github/bubbles/scripts/regression-quality-guard.sh --bugfix tests/stress/recommendations_test.go tests/integration/recommendation_schema_test.go internal/recommendation/store/graph_signal_test.go",
+          "COMPOSE_PROGRESS=plain timeout 360 ./smackerel.sh --env test up",
+          "curl --max-time 5 -fsS -H 'Authorization: Bearer <redacted>' '<CORE_EXTERNAL_URL>/api/recommendations/providers'",
+          "COMPOSE_PROGRESS=plain timeout 180 ./smackerel.sh --env test down --volumes"
+        ]
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "certifiedBy": null,
+    "certifiedAt": null,
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Restore recommendation stress observations and diagnostics",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [
+      {
+        "owner": "bubbles.validate",
+        "summary": "Implementation-owned runtime fix and regression evidence are complete. Validate-owned artifact/state guard interpretation, bug fixed status, and certification remain pending."
+      }
+    ],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["classification", "routing"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T17:20:00Z",
+      "runCompletedAt": "2026-05-04T17:20:00Z",
+      "summary": "Packetized the residual recommendation stress zero-samples failure after BUG-031-005 shared readiness repair. Existing BUG-039-001 and BUG-039-002 do not cover SCN-039-052 stress workload behavior."
+    },
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["artifact-lint", "traceability-guard"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T17:22:00Z",
+      "runCompletedAt": "2026-05-04T17:22:40Z",
+      "summary": "Validated the BUG-039-003 packet shape. Artifact lint exited 0 with deprecated-field warnings only. Traceability guard exited 0 with 3 scenarios checked and all scenarios mapped to Test Plan rows, concrete test files, report evidence references, and DoD items."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement", "red-reproduction", "regression-coverage", "validation-routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T17:32:00Z",
+      "runCompletedAt": "2026-05-04T17:49:27Z",
+      "outcome": "route_required",
+      "summary": "Reproduced the zero-sample stress failure after TestStressReadinessCanary_Live passed, then repaired the first confirmed 039-owned root cause: timeout/deadline worker outcomes were returned without enqueueing observations. Updated tests/stress/recommendations_test.go to classify all outcomes and added TestRecommendationsStress_TimeoutOutcomesAreClassified. Commands: timeout 600 ./smackerel.sh test unit --go (0), regression-quality guard --bugfix tests/stress/recommendations_test.go (0), timeout 120 ./smackerel.sh check (0), timeout 600 ./smackerel.sh format --check (0), timeout 600 ./smackerel.sh lint (0), COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress (1 after readiness with zero-sample fixed but 50/50 classified recommendation timeouts and a separate knowledge health timing residual). No certification or fixed status claimed."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize", "diagnosis", "routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-04T17:49:27Z",
+      "runCompletedAt": "2026-05-04T18:11:07Z",
+      "outcome": "route_required",
+      "summary": "Reproduced the current BUG-039-003 residual with COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress (exit 1): readiness passed, knowledge health passed, the recommendation workload recorded total=50 and timeout_errors=50, and p95 was 1m0.074954266s against a 10s budget. Probed /api/recommendations/providers on the disposable test stack and confirmed healthy fixture_google_places and fixture_yelp providers. Source inspection classified the residual as a 039-owned synchronous recommendation endpoint/database-performance issue centered on internal/recommendation/reactive and internal/recommendation/store. No code changes or certification claims made; routed to bubbles.implement."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement", "runtime-fix", "regression-coverage", "validation-routing"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T06:34:35Z",
+      "runCompletedAt": "2026-05-05T06:37:10Z",
+      "outcome": "completed_owned",
+      "summary": "Implemented the final BUG-039-003 store/readback fix after stabilizing diagnostics. Root cause: Store.GetRequest held delivered-recommendations rows open while providerBadgesForCandidate acquired another pool connection, allowing pgxpool self-deadlock at max_conns=10 under 50 concurrent requests. Fix: scan recommendations into memory, close rows, then render provider badges. Added TestRecommendationSchema_ConcurrentReadbackDoesNotDeadlockPool. Commands passed: format, Go unit, integration, full stress, format-check, check, lint, E2E, and regression-quality guard. Full stress passed with total=16978, ok=16978, unexpected_errors=0, p95=1.769574395s. No certification or fixed status claimed."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test", "stress-closure", "integration-regression", "regression-quality", "provider-diagnostics"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-05T16:36:00Z",
+      "runCompletedAt": "2026-05-05T16:44:25Z",
+      "outcome": "completed_owned",
+      "summary": "Test closure reran the BUG-039-003 relevant validation after BUG-025 made full stress clean. Full stress exited 0 with recommendation stress total=29791, ok=29791, unexpected_errors=0, timeout_errors=0, p95=910.160165ms, and max=3.038820229s. Integration exited 0 with TestRecommendationSchema_ConcurrentReadbackDoesNotDeadlockPool passing in 0.42s. Regression-quality guard exited 0 with 0 violations and adversarial signals in the stress and integration regression files. Direct provider diagnostics on the disposable test stack returned healthy fixture_google_places and fixture_yelp providers. No certification, bug fixed status, or scope Done status claimed."
+    }
+  ],
+  "activeBugs": [
+    {
+      "bugId": "BUG-039-003",
+      "status": "in_progress",
+      "summary": "Independent test-closure evidence is green after the separately owned BUG-025 stress health fix: full stress exits 0, recommendation stress records 29791 samples with p95 910.160165ms and 0 unexpected errors, provider diagnostics are reachable, and integration regression passes. Validate-owned certification remains pending."
+    }
+  ],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "BUG-031-005 stress validation after readiness repair",
+      "summary": "TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests failed with zero samples collected after shell health/search, Go readiness canary, agent DB/NATS, and drive stress passed."
+    },
+    {
+      "source": "BUG-039-003 implement phase 2026-05-04T17:49:27Z",
+      "summary": "Zero-sample symptom fixed: post-fix stress records total=50, timeout_errors=50, started=50, ended=50. Residual recommendation workload still fails p95 and unexpected error budget because all 50 requests time out at about 60 seconds after readiness passes."
+    },
+    {
+      "source": "BUG-039-003 stabilize phase 2026-05-04T18:11:07Z",
+      "summary": "Repo-standard stress reproduced the same recommendation residual with total=50, timeout_errors=50, p95=1m0.074954266s, and exit 1. Authenticated provider probe confirmed fixture providers are present and healthy, narrowing classification to feature 039 synchronous endpoint/database-performance behavior."
+    },
+    {
+      "source": "BUG-039-003 implement phase 2026-05-05T06:34:35Z",
+      "summary": "Final runtime fix resolved the recommendation stress residual. Store.GetRequest no longer holds the delivered-recommendations rows cursor while provider badge lookups query the pool. Full stress exited 0 with total=16978, ok=16978, unexpected_errors=0, timeout_errors=0, p95=1.769574395s, and max=2.90203102s."
+    }
+  ],
+  "lastUpdatedAt": "2026-05-05T16:44:25Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "Single bug scope; implementation starts only after red-stage stress reproduction following shared readiness pass.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G025", "G036", "G057", "G060", "G068"],
+    "specDoneRequires": "bubbles.validate certification after regression tests, stress evidence, artifact lint, traceability guard, and state-transition guard pass."
+  },
+  "routing": {
+    "nextOwner": "bubbles.validate",
+    "testOwner": "bubbles.test",
+    "validationOwner": "bubbles.validate",
+    "targetSpec": "specs/039-recommendations-engine",
+    "targetScope": "scope-06-observability-stress-and-cutover",
+    "targetScenario": "SCN-039-052",
+    "blockedFeatureContext": "specs/039-recommendations-engine is full-delivery done, but this residual workload bug is active under its bug lane.",
+    "reason": "Implementation completed the recommendation runtime/store fix and bubbles.test independently confirmed full stress, provider diagnostics, integration regression, and regression-quality evidence are green after BUG-025. The next owner is validate for artifact/state guard interpretation and final bug certification."
+  }
+}

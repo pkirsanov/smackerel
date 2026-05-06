@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -506,6 +508,7 @@ INSERT INTO recommendation_requests (
 		if retrievedAt.IsZero() {
 			retrievedAt = now
 		}
+		retrievedAt = requestScopedProviderFactRetrievedAt(retrievedAt, requestID, fact.LocalID)
 		sponsoredState := fact.SponsoredState
 		if sponsoredState == "" {
 			sponsoredState = "none"
@@ -572,12 +575,7 @@ INSERT INTO recommendation_candidates (
     canonical_fact, dedupe_reason, created_at, updated_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (category, canonical_key)
-DO UPDATE SET
-    title = EXCLUDED.title,
-    canonical_url = EXCLUDED.canonical_url,
-    canonical_fact = EXCLUDED.canonical_fact,
-    dedupe_reason = EXCLUDED.dedupe_reason,
-    updated_at = EXCLUDED.updated_at
+DO NOTHING
 RETURNING id`,
 			candidateID,
 			candidate.Category,
@@ -589,6 +587,12 @@ RETURNING id`,
 			now,
 			now,
 		).Scan(&persistedID)
+		if err == pgx.ErrNoRows {
+			err = tx.QueryRow(ctx, `
+SELECT id
+FROM recommendation_candidates
+WHERE category = $1 AND canonical_key = $2`, candidate.Category, candidate.CanonicalKey).Scan(&persistedID)
+		}
 		if err != nil {
 			return RenderedRequest{}, fmt.Errorf("insert candidate %s: %w", candidate.LocalID, err)
 		}
@@ -751,8 +755,8 @@ ORDER BY r.rank_position ASC NULLS LAST, r.created_at ASC`, requestID)
 	if err != nil {
 		return RenderedRequest{}, fmt.Errorf("load recommendations for request %s: %w", requestID, err)
 	}
-	defer rows.Close()
 
+	recommendations := []RenderedRecommendation{}
 	for rows.Next() {
 		var rec RenderedRecommendation
 		var canonicalJSON, scoreJSON, rationaleJSON, graphRefsJSON, policyJSON, qualityJSON []byte
@@ -794,19 +798,26 @@ ORDER BY r.rank_position ASC NULLS LAST, r.created_at ASC`, requestID)
 		rec.LowConfidence = qualityDecisionMatches(rec.QualityDecisions, "confidence", "disclose")
 		rec.DistanceBasis = stringFromAny(canonical["distance_basis"])
 		rec.DistanceLabel = stringFromAny(canonical["distance_label"])
-		badges, sourceConflict, err := s.providerBadgesForCandidate(ctx, rec.CandidateID, rendered.ID)
+		canonicalConflict, _ := canonical["source_conflict"].(bool)
+		rec.SourceConflict = canonicalConflict
+		recommendations = append(recommendations, rec)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return RenderedRequest{}, fmt.Errorf("iterate recommendations: %w", err)
+	}
+	rows.Close()
+
+	for i := range recommendations {
+		badges, sourceConflict, err := s.providerBadgesForCandidate(ctx, recommendations[i].CandidateID, rendered.ID)
 		if err != nil {
 			return RenderedRequest{}, err
 		}
-		rec.ProviderBadges = badges
-		rec.Attribution = badges
-		canonicalConflict, _ := canonical["source_conflict"].(bool)
-		rec.SourceConflict = sourceConflict || canonicalConflict
-		rendered.Recommendations = append(rendered.Recommendations, rec)
+		recommendations[i].ProviderBadges = badges
+		recommendations[i].Attribution = badges
+		recommendations[i].SourceConflict = recommendations[i].SourceConflict || sourceConflict
 	}
-	if err := rows.Err(); err != nil {
-		return RenderedRequest{}, fmt.Errorf("iterate recommendations: %w", err)
-	}
+	rendered.Recommendations = recommendations
 
 	toolRows, err := s.pool.Query(ctx, `
 SELECT tool_name, side_effect_class, arguments, result, rejection_reason, error, latency_ms, started_at
@@ -870,16 +881,17 @@ func (s *Store) GraphSignalRefs(ctx context.Context, query string, limit int) ([
 	if limit < 1 {
 		limit = 3
 	}
+	term := graphSignalSearchTerm(query)
+	if term == "" {
+		return []string{}, nil
+	}
 	rows, err := s.pool.Query(ctx, `
 SELECT id
 FROM artifacts
 WHERE processing_status IN ('processed', 'completed')
-  AND (
-    LOWER(COALESCE(title, '') || ' ' || COALESCE(summary, '') || ' ' || COALESCE(content_raw, '')) LIKE '%' || LOWER($1) || '%'
-    OR (LOWER($1) LIKE '%ramen%' AND LOWER(COALESCE(title, '') || ' ' || COALESCE(summary, '') || ' ' || COALESCE(content_raw, '')) LIKE '%ramen%')
-  )
+  AND title ILIKE '%' || $1 || '%'
 ORDER BY updated_at DESC
-LIMIT $2`, query, limit)
+LIMIT $2`, term, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load recommendation graph refs: %w", err)
 	}
@@ -896,6 +908,33 @@ LIMIT $2`, query, limit)
 		return nil, fmt.Errorf("iterate graph refs: %w", err)
 	}
 	return refs, nil
+}
+
+func graphSignalSearchTerm(query string) string {
+	lower := strings.ToLower(strings.TrimSpace(query))
+	if lower == "" {
+		return ""
+	}
+	for _, preferred := range []string{"ramen", "coffee", "restaurant", "dinner", "lunch", "spicy"} {
+		if strings.Contains(lower, preferred) {
+			return preferred
+		}
+	}
+	stopwords := map[string]struct{}{
+		"near": {}, "within": {}, "worker": {}, "seq": {}, "mission": {}, "open": {}, "now": {},
+	}
+	for _, token := range strings.FieldsFunc(lower, func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	}) {
+		if len(token) < 3 {
+			continue
+		}
+		if _, skip := stopwords[token]; skip {
+			continue
+		}
+		return token
+	}
+	return ""
 }
 
 func (s *Store) providerBadgesForCandidate(ctx context.Context, candidateID, requestID string) ([]ProviderBadge, bool, error) {
@@ -968,6 +1007,13 @@ func marshalAny(value any) ([]byte, error) {
 func payloadHash(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func requestScopedProviderFactRetrievedAt(retrievedAt time.Time, requestID, localID string) time.Time {
+	base := retrievedAt.UTC().Truncate(time.Microsecond)
+	sum := sha256.Sum256([]byte(requestID + "\x00" + localID))
+	offsetMicros := binary.BigEndian.Uint32(sum[:4]) % 65536
+	return base.Add(time.Duration(offsetMicros) * time.Microsecond)
 }
 
 func nullableText(value string) any {

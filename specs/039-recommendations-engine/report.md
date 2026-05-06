@@ -2666,3 +2666,340 @@ Before the next validate run can re-promote feature 039 to `status=done`:
 
 The implementation work itself is complete — see the per-scope implement evidence blocks above. Only the report.md presentation needs strict-lint enrichment.
 
+## Feature-Level Regression Phase — 2026-05-03T22:05:34Z
+
+### Summary
+
+`bubbles.regression` ran the feature-level 039 regression phase against the current workspace using the repo-standard CLI runtime commands. The phase is **not complete** because the broad unit suite and stress suite both returned non-zero. Integration and E2E passed on current-session evidence, including the 039 recommendation scenarios, but those green categories do not override the red unit/stress gates.
+
+### Test Baseline Comparison
+
+| Category | Previous Baseline | Current Result | Delta | Status |
+|----------|-------------------|----------------|-------|--------|
+| Unit | Existing 039 Scope 6 report evidence recorded `./smackerel.sh test unit` EXIT=0. | `./smackerel.sh test unit` EXIT=1. | Red regression in `internal/connector/weather`. | REGRESSION |
+| Integration | Existing 039 Scope 6 report evidence recorded `./smackerel.sh test integration` EXIT=0. | First current attempt terminated during Docker build; rerun completed with integration packages PASS. | Stable after rerun. | CLEAN WITH RETRY |
+| E2E | Existing 039 Scope 6 report evidence recorded `./smackerel.sh test e2e` EXIT=0. | `./smackerel.sh test e2e` EXIT=0; shell E2E 35/35 and Go E2E PASS. | Stable. | CLEAN |
+| Stress | Existing 039 Scope 6 report evidence recorded `./smackerel.sh test stress` EXIT=0. | `./smackerel.sh test stress` EXIT=1. | Red regression in shared stress/live-stack health and stress DB reachability. | REGRESSION |
+| Coverage | No repo-standard coverage command is exposed by `./smackerel.sh`; runtime checks are constrained to the repo CLI. | Coverage comparison was not run. | Unknown; blocked by red suites and command-surface constraint. | BLOCKED |
+
+**Claim Source:** interpreted from existing report baseline evidence plus current-session executed commands.
+
+### Unit Regression Evidence
+
+**Phase:** regression  
+**Command:** `./smackerel.sh test unit`  
+**Exit Code:** 1  
+**Claim Source:** executed
+
+```text
+$ ./smackerel.sh test unit
+ok      github.com/smackerel/smackerel/internal/connector/twitter       13.831s
+2026/05/03 21:16:37 INFO weather connector connected id=weather locations=1
+2026/05/03 21:16:37 WARN weather forecast fetch failed location=City error="open-meteo forecast returned no daily data"
+2026/05/03 21:16:37 INFO weather sync complete id=weather locations=1 artifacts=1 failures=0 duration=3.751132ms
+2026/05/03 21:16:37 WARN weather forecast fetch failed location=City error="open-meteo forecast returned no daily data"
+2026/05/03 21:16:37 INFO weather sync complete id=weather locations=1 artifacts=1 failures=0 duration=1.889045ms
+--- FAIL: TestSync_SourceRefUniquePerSync (1.05s)
+  weather_test.go:818: consecutive syncs produced identical SourceRef "current-City-2026-05-03T21:16:37Z" — would cause pipeline dedup collision
+2026/05/03 21:16:37 INFO weather connector connected id=weather locations=3
+2026/05/03 21:16:37 WARN weather forecast fetch failed location=CityA error="open-meteo forecast returned no daily data"
+Exit Code: 1
+```
+
+Additional weather test-server panics appeared in the same unit run. They were emitted by the HTTP handlers for `TestSync_HealthSetToSyncingDuringSync` and `TestSync_ConfigGenGuard_ConnectDuringSync` while the package was already red.
+
+```text
+$ ./smackerel.sh test unit
+2026/05/03 21:16:37 http: panic serving 127.0.0.1:55360: close of closed channel
+goroutine 293 [running]:
+net/http.(*conn).serve.func1()
+    /usr/local/go/src/net/http/server.go:1947 +0xbe
+panic({0x8eb360?, 0xa50820?})
+    /usr/local/go/src/runtime/panic.go:792 +0x132
+github.com/smackerel/smackerel/internal/connector/weather.TestSync_HealthSetToSyncingDuringSync.func1({0xa571c8, 0xc000001180}, 0x0?)
+    /workspace/internal/connector/weather/weather_test.go:1046 +0x2e
+net/http.HandlerFunc.ServeHTTP(0x4732d9?, {0xa571c8?, 0xc000001180?}, 0xc000495b70?)
+    /usr/local/go/src/net/http/server.go:2294 +0x29
+Exit Code: 1
+```
+
+```text
+$ ./smackerel.sh test unit
+2026/05/03 21:18:10 INFO weather sync complete id=weather locations=1 artifacts=2 failures=0 duration=706.98µs
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/connector/weather       95.184s
+ok      github.com/smackerel/smackerel/internal/recommendation/location 0.014s
+ok      github.com/smackerel/smackerel/internal/recommendation/policy   0.010s
+ok      github.com/smackerel/smackerel/internal/recommendation/provider 0.034s
+ok      github.com/smackerel/smackerel/internal/recommendation/quality  0.026s
+ok      github.com/smackerel/smackerel/internal/recommendation/rank     0.052s
+ok      github.com/smackerel/smackerel/internal/recommendation/store    0.030s
+ok      github.com/smackerel/smackerel/internal/recommendation/tools    0.170s
+FAIL
+Command exited with code 1
+Exit Code: 1
+```
+
+### Integration Regression Evidence
+
+**Phase:** regression  
+**Command:** `./smackerel.sh test integration`  
+**Exit Code:** 0 on rerun after the first attempt terminated during Docker build  
+**Claim Source:** executed
+
+```text
+$ ./smackerel.sh test integration
+=== RUN   TestRecommendationAttribution_BadgeAndLinkPersisted
+--- PASS: TestRecommendationAttribution_BadgeAndLinkPersisted (0.33s)
+=== RUN   TestRecommendationFeedback_NotInterestedScopedToWatch
+--- PASS: TestRecommendationFeedback_NotInterestedScopedToWatch (0.31s)
+=== RUN   TestRecommendationPolicy_SponsoredCannotBuyRank
+--- PASS: TestRecommendationPolicy_SponsoredCannotBuyRank (0.24s)
+=== RUN   TestRecommendationPrivacy_PrecisionReducedBeforeProviderCall
+--- PASS: TestRecommendationPrivacy_PrecisionReducedBeforeProviderCall (0.45s)
+=== RUN   TestRecommendationProviders_EmptyRegistryReturnsNoProvidersAndPersistsTrace
+--- PASS: TestRecommendationProviders_EmptyRegistryReturnsNoProvidersAndPersistsTrace (0.11s)
+=== RUN   TestRecommendationMigration_UpDownRoundTripIsIdempotent
+--- PASS: TestRecommendationMigration_UpDownRoundTripIsIdempotent (2.28s)
+Exit Code: 0
+```
+
+```text
+$ ./smackerel.sh test integration
+=== RUN   TestRecommendationWatches_StaleSourceDataCannotAlert
+--- PASS: TestRecommendationWatches_StaleSourceDataCannotAlert (0.21s)
+=== RUN   TestRecommendationWatches_RepeatCooldownSuppressesUnchanged
+--- PASS: TestRecommendationWatches_RepeatCooldownSuppressesUnchanged (0.35s)
+=== RUN   TestRecommendations_NoPersonalSignalsLabelOnEveryCandidate
+--- PASS: TestRecommendations_NoPersonalSignalsLabelOnEveryCandidate (0.41s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        54.660s
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/agent  15.322s
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/drive  30.254s
+Exit Code: 0
+```
+
+### E2E Regression Evidence
+
+**Phase:** regression  
+**Command:** `./smackerel.sh test e2e`  
+**Exit Code:** 0  
+**Claim Source:** executed
+
+```text
+$ ./smackerel.sh test e2e
+Shell E2E Test Results
+  Total:  35
+  Passed: 35
+  Failed: 0
+=== RUN   TestReactiveRamenRegression_BS001
+--- PASS: TestReactiveRamenRegression_BS001 (0.10s)
+=== RUN   TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification
+--- PASS: TestRecommendationsClarification_BS015_NoProviderCallBeforeClarification (0.07s)
+=== RUN   TestRecommendationsConstraints_BS020_VegetarianHardConstraintExcludesIncompatible
+--- PASS: TestRecommendationsConstraints_BS020_VegetarianHardConstraintExcludesIncompatible (0.15s)
+=== RUN   TestRecommendationsBroadRegression
+--- PASS: TestRecommendationsBroadRegression (0.13s)
+Exit Code: 0
+```
+
+```text
+$ ./smackerel.sh test e2e
+=== RUN   TestSponsoredRegression_BS023_NoRankBoost
+--- PASS: TestSponsoredRegression_BS023_NoRankBoost (0.07s)
+=== RUN   TestRecommendationsProviders_SanitizedAndOperatorViews_BS024
+--- PASS: TestRecommendationsProviders_SanitizedAndOperatorViews_BS024 (0.04s)
+=== RUN   TestRecommendationsTripDossier_RendersGroupedRecommendationBlock
+--- PASS: TestRecommendationsTripDossier_RendersGroupedRecommendationBlock (0.10s)
+=== RUN   TestRecommendationsWeb_RendersAPIBoundResultsAndProvenance
+--- PASS: TestRecommendationsWeb_RendersAPIBoundResultsAndProvenance (0.11s)
+=== RUN   TestWhyRegression_BS010_NoProviderCall
+--- PASS: TestWhyRegression_BS010_NoProviderCall (0.16s)
+ok      github.com/smackerel/smackerel/tests/e2e        98.165s
+PASS: go-e2e
+Exit Code: 0
+```
+
+### Stress Regression Evidence
+
+**Phase:** regression  
+**Command:** `./smackerel.sh test stress`  
+**Exit Code:** 1  
+**Claim Source:** executed
+
+```text
+$ ./smackerel.sh test stress
+Health stress test passed with 25/25 successful requests
+=== Search Stress Results ===
+  Artifacts in DB:    1100
+  Queries executed:   10
+  Average time:       1336ms
+  Threshold:          3000ms
+  Failures:           0
+Search stress test passed: all queries completed under 3000ms with 1100 artifacts
+=== RUN   TestKnowledge_LintAt1000ArtifactScale
+  knowledge_stress_test.go:111: stress: services not healthy after 2m0s at http://127.0.0.1:40001
+--- FAIL: TestKnowledge_LintAt1000ArtifactScale (126.06s)
+Exit Code: 1
+```
+
+```text
+$ ./smackerel.sh test stress
+=== RUN   TestKnowledge_ConceptQueryPerformance
+  knowledge_stress_test.go:150: stress: services not healthy after 2m0s at http://127.0.0.1:40001
+--- FAIL: TestKnowledge_ConceptQueryPerformance (126.05s)
+=== RUN   TestKnowledge_SearchWithKnowledgeLayerPerformance
+  knowledge_stress_test.go:209: stress: services not healthy after 2m0s at http://127.0.0.1:40001
+--- FAIL: TestKnowledge_SearchWithKnowledgeLayerPerformance (126.06s)
+=== RUN   TestPhotosIngestStress_Synthetic15000PhotoLibrarySearchableWithinTarget
+  photos_ingest_stress_test.go:54: stress: services not healthy after 2m0s at http://127.0.0.1:40001
+--- FAIL: TestPhotosIngestStress_Synthetic15000PhotoLibrarySearchableWithinTarget (126.07s)
+Exit Code: 1
+```
+
+```text
+$ ./smackerel.sh test stress
+=== RUN   TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests
+panic: test timed out after 12m0s
+    running tests:
+        TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests (1m30s)
+github.com/smackerel/smackerel/tests/stress.stressWaitForHealth(0xc000283c00, {{0xc00003c012?, 0x1017360?}, {0xc00003e015?, 0x45e7a9?}}, 0x1bf08eb000)
+    /workspace/tests/stress/knowledge_stress_test.go:56 +0x97
+github.com/smackerel/smackerel/tests/stress.TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests(0xc000283c00)
+    /workspace/tests/stress/recommendations_test.go:53 +0x7b
+FAIL    github.com/smackerel/smackerel/tests/stress     720.055s
+Exit Code: 1
+```
+
+```text
+$ ./smackerel.sh test stress
+=== RUN   TestConcurrentInvocationIsolation_BS018
+  concurrency_test.go:183: ping db: context deadline exceeded
+--- FAIL: TestConcurrentInvocationIsolation_BS018 (10.01s)
+FAIL    github.com/smackerel/smackerel/tests/stress/agent       10.032s
+=== RUN   TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst
+  drive_scale_stress_test.go:67: stress: live stack not healthy at http://127.0.0.1:40001
+--- FAIL: TestDriveScaleStress_FiveThousandFilesMonitorReplayAndSaveBurst (126.06s)
+FAIL    github.com/smackerel/smackerel/tests/stress/drive       126.081s
+FAIL
+Command exited with code 1
+Exit Code: 1
+```
+
+### Cross-Spec Impact Scan
+
+Files and surfaces inventoried from 039 implementation evidence and current regression outputs:
+
+- 039-owned recommendation surfaces: `internal/recommendation/**`, recommendation API/web/Telegram/scheduler/digest/trip-dossier adapters, `tests/integration/recommendation*.go`, `tests/e2e/recommendation*.go`, and `tests/stress/recommendations_test.go`.
+- Cross-feature stress surfaces affected by current red output: knowledge stress (spec 025), agent concurrency stress (spec 037), drive scale stress (spec 038), photos ingest stress (spec 040), and recommendation stress (spec 039).
+- Weather connector unit surface affected by current red output: `internal/connector/weather` (spec 016 ownership surface).
+
+No route collision, API contract contradiction, or design-level conflict was detected in the 039 design/spec scan. The current blockers are executable regression failures, not contradictory feature contracts. Dependent live-stack integration and E2E recommendation tests passed; dependent stress packages did not.
+
+### Coverage Regression Check
+
+**Phase:** regression  
+**Command:** `grep -n -E "coverage|test unit|test stress|test integration|test e2e" smackerel.sh`  
+**Exit Code:** 0  
+**Claim Source:** executed
+
+```text
+$ grep -n -E "coverage|test unit|test stress|test integration|test e2e" smackerel.sh
+24:  test unit [--go|--python]   Run unit tests
+25:  test integration            Run live-stack integration validation
+26:  test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
+27:  test stress                 Run live-stack stress smoke test
+604:              echo "Unknown test e2e option: $1" >&2
+Exit Code: 0
+```
+
+Coverage comparison was not executed because no repo-standard coverage command is exposed by `./smackerel.sh`, and the user explicitly required repo-standard CLI commands for runtime checks. The regression phase therefore remains blocked with an uncertainty declaration rather than claiming stable coverage.
+
+### Phase Recording Decision
+
+No `state.json.execution.completedPhaseClaims` entry was added for regression. The phase did not pass Tier 2 requirements because unit and stress runtime commands exited non-zero and coverage could not be compared through the repo CLI. Certification fields remain validate-owned and were not modified.
+
+### Routed Findings
+
+| Finding | Classification | Required Owner | Evidence |
+|---------|----------------|----------------|----------|
+| `TestSync_SourceRefUniquePerSync` produced duplicate same-second weather `SourceRef` values, risking pipeline dedup collision. | Failing unit regression | `bubbles.implement` for the weather connector ownership surface; `bubbles.test` for durable adversarial regression coverage if the fix changes test shape. | Unit evidence above: `weather_test.go:818`, `./smackerel.sh test unit` EXIT=1. |
+| Weather test handlers repeatedly emitted `panic: close of closed channel` in health/config-generation guard tests during the same unit run. | Test/runtime instability | `bubbles.test` or `bubbles.implement` for `internal/connector/weather` after root-cause triage. | Unit evidence above: `weather_test.go:1046` and `weather_test.go:1529` panic frames. |
+| Shared stress packages could not observe healthy services at `http://127.0.0.1:40001`, causing knowledge/photos/drive stress failures and recommendation stress timeout before the workload ran. | Stress/live-stack regression | `bubbles.stabilize` for shared stress stack lifecycle and health readiness; then route residual package-specific failures to spec 025, 038, 039, or 040 owners if they remain after stack health is restored. | Stress evidence above: `./smackerel.sh test stress` EXIT=1, health wait failures, recommendation package timeout. |
+| Agent stress failed to ping the test database. | Stress/live-stack regression | `bubbles.stabilize` first, with `bubbles.implement` for spec 037 only if DB reachability is proven package-specific. | Stress evidence above: `TestConcurrentInvocationIsolation_BS018`, `ping db: context deadline exceeded`. |
+| Coverage baseline could not be compared under the current repo CLI surface. | Validation gap / uncertainty declaration | Orchestrator or `bubbles.test`/`bubbles.devops` if coverage is required as a repo-standard command. | Coverage command-surface evidence above. |
+
+### Verdict
+
+⚠️ REGRESSION_DETECTED
+
+Concrete regressions were detected in unit and stress categories. Fix cycle needed: YES. This diagnostic run returns `route_required`; it does not certify or complete the regression phase.
+
+### Artifact Governance Evidence
+
+**Phase:** regression  
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/039-recommendations-engine`  
+**Exit Code:** 0  
+**Claim Source:** executed
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/039-recommendations-engine
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ Top-level status matches certification.status
+✅ All 67 evidence blocks in report.md contain legitimate terminal output
+✅ No narrative summary phrases detected in report.md
+Artifact lint PASSED.
+Exit Code: 0
+```
+
+**Phase:** regression  
+**Command:** `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/039-recommendations-engine`  
+**Exit Code:** 0  
+**Claim Source:** executed
+
+```text
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/039-recommendations-engine
+BUBBLES TRACEABILITY GUARD
+Feature: <home>/smackerel/specs/039-recommendations-engine
+Timestamp: 2026-05-03T22:13:50Z
+✅ scenario-manifest.json covers 30 scenario contract(s)
+✅ All linked tests from scenario-manifest.json exist
+ℹ️  Scenarios checked: 30
+ℹ️  Test rows checked: 46
+ℹ️  Scenario-to-row mappings: 30
+ℹ️  Concrete test file references: 30
+ℹ️  Report evidence references: 30
+ℹ️  DoD fidelity scenarios: 30 (mapped: 30, unmapped: 0)
+RESULT: PASSED (0 warnings)
+Exit Code: 0
+```
+
+**Phase:** regression  
+**Command:** `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/039-recommendations-engine --verbose`  
+**Exit Code:** 0  
+**Claim Source:** executed
+
+```text
+$ timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/039-recommendations-engine --verbose
+Regression Baseline Guard
+Spec: specs/039-recommendations-engine
+G044: Regression Baseline
+  Test baseline comparison found in report
+G045: Cross-Spec Regression
+  Found 38 done specs (of 40 total) that need cross-spec regression verification
+  Cross-spec inventory completed
+G046: Spec Conflict Detection
+  No route/endpoint collisions detected across specs
+Summary
+Regression baseline guard: PASSED
+All 0 checks passed.
+Exit Code: 0
+```
+

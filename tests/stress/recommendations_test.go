@@ -88,12 +88,7 @@ func TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), recommendationsStressDuration+30*time.Second)
 	defer cancel()
 
-	type sample struct {
-		latency time.Duration
-		status  int
-		errKind string
-	}
-	samplesCh := make(chan sample, recommendationsStressConcurrency*64)
+	samplesCh := make(chan recommendationStressSample, recommendationsStressConcurrency*64)
 	var (
 		started int64
 		ended   int64
@@ -116,21 +111,10 @@ func TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests(t *testing.T)
 				status, _, err := stressClientPost(sharedClient, cfg, "/api/recommendations/requests", body)
 				latency := time.Since(start)
 				atomic.AddInt64(&ended, 1)
-				switch {
-				case err != nil && errors.Is(err, context.DeadlineExceeded):
+				sample := classifyRecommendationStressSample(status, err, latency)
+				samplesCh <- sample
+				if sample.errKind == "timeout" || ctx.Err() != nil {
 					return
-				case err != nil:
-					samplesCh <- sample{latency: latency, status: 0, errKind: "transport"}
-				case status == http.StatusTooManyRequests:
-					samplesCh <- sample{latency: latency, status: status, errKind: "rate_limit"}
-				case status == http.StatusForbidden:
-					samplesCh <- sample{latency: latency, status: status, errKind: "quota"}
-				case status >= 500:
-					samplesCh <- sample{latency: latency, status: status, errKind: "server_error"}
-				case status != http.StatusOK && status != http.StatusCreated && status != http.StatusAccepted:
-					samplesCh <- sample{latency: latency, status: status, errKind: "unexpected_status"}
-				default:
-					samplesCh <- sample{latency: latency, status: status}
 				}
 			}
 		}()
@@ -144,31 +128,19 @@ func TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests(t *testing.T)
 		close(doneCh)
 	}()
 
-	var (
-		latencies   []time.Duration
-		errorCount  int
-		acceptedErr int // expected rate_limit / quota outcomes
-		serverErr   int
-	)
+	summary := recommendationStressSummary{}
 	for s := range samplesCh {
-		switch s.errKind {
-		case "":
-			latencies = append(latencies, s.latency)
-		case "rate_limit", "quota":
-			acceptedErr++
-			latencies = append(latencies, s.latency)
-		case "server_error", "transport", "unexpected_status":
-			serverErr++
-			errorCount++
-		}
+		summary.Observe(s)
 	}
 	<-doneCh
 
-	totalSamples := len(latencies) + serverErr
+	totalSamples := summary.TotalSamples
 	if totalSamples == 0 {
-		t.Fatal("stress: zero samples collected — workers never produced any observations")
+		t.Fatalf("stress: zero samples collected — workers never produced any classified observations (started=%d ended=%d)",
+			atomic.LoadInt64(&started), atomic.LoadInt64(&ended))
 	}
 
+	latencies := summary.Latencies
 	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
 	p50 := percentile(latencies, 0.50)
 	p95 := percentile(latencies, 0.95)
@@ -177,10 +149,11 @@ func TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests(t *testing.T)
 	if len(latencies) > 0 {
 		maxLat = latencies[len(latencies)-1]
 	}
-	errPct := 100.0 * float64(serverErr) / float64(totalSamples)
+	errPct := 100.0 * float64(summary.UnexpectedErrors) / float64(totalSamples)
 
-	t.Logf("stress samples: total=%d ok=%d accepted_errors=%d server_errors=%d (rate %.2f%%)",
-		totalSamples, len(latencies)-acceptedErr, acceptedErr, serverErr, errPct)
+	t.Logf("stress samples: total=%d ok=%d accepted_errors=%d unexpected_errors=%d server_errors=%d transport_errors=%d timeout_errors=%d unexpected_status=%d started=%d ended=%d (unexpected rate %.2f%%)",
+		totalSamples, summary.OK, summary.AcceptedErrors, summary.UnexpectedErrors, summary.ServerErrors, summary.TransportErrors,
+		summary.TimeoutErrors, summary.UnexpectedStatus, atomic.LoadInt64(&started), atomic.LoadInt64(&ended), errPct)
 	t.Logf("stress latency: p50=%s p95=%s p99=%s max=%s budget=%s",
 		p50, p95, p99, maxLat, recommendationsStressP95Budget)
 
@@ -188,8 +161,8 @@ func TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests(t *testing.T)
 		t.Errorf("p95 %s exceeds NFR budget %s", p95, recommendationsStressP95Budget)
 	}
 	if errPct > recommendationsStressMaxErrorPct {
-		t.Errorf("server error rate %.2f%% exceeds %.2f%% budget (server_errors=%d, total=%d)",
-			errPct, recommendationsStressMaxErrorPct, serverErr, totalSamples)
+		t.Errorf("unexpected error rate %.2f%% exceeds %.2f%% budget (unexpected_errors=%d, total=%d, server=%d, transport=%d, timeout=%d, unexpected_status=%d)",
+			errPct, recommendationsStressMaxErrorPct, summary.UnexpectedErrors, totalSamples, summary.ServerErrors, summary.TransportErrors, summary.TimeoutErrors, summary.UnexpectedStatus)
 	}
 
 	// Provider runtime state must reflect observed degradation when any
@@ -212,6 +185,107 @@ func TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests(t *testing.T)
 		}
 	}
 }
+
+func TestRecommendationsStress_TimeoutOutcomesAreClassified(t *testing.T) {
+	samples := []recommendationStressSample{
+		classifyRecommendationStressSample(0, context.DeadlineExceeded, 60*time.Second),
+		classifyRecommendationStressSample(0, recommendationStressTimeoutError{}, 61*time.Second),
+	}
+
+	summary := recommendationStressSummary{}
+	for _, sample := range samples {
+		summary.Observe(sample)
+	}
+
+	if summary.TotalSamples != len(samples) {
+		t.Fatalf("timeout observations were dropped: got total=%d want %d", summary.TotalSamples, len(samples))
+	}
+	if summary.TimeoutErrors != len(samples) {
+		t.Fatalf("timeout observations not classified: got timeout_errors=%d want %d", summary.TimeoutErrors, len(samples))
+	}
+	if summary.UnexpectedErrors != len(samples) {
+		t.Fatalf("timeout observations not counted as unexpected errors: got unexpected_errors=%d want %d", summary.UnexpectedErrors, len(samples))
+	}
+	if len(summary.Latencies) != len(samples) {
+		t.Fatalf("timeout latencies were dropped: got %d want %d", len(summary.Latencies), len(samples))
+	}
+}
+
+type recommendationStressSample struct {
+	latency time.Duration
+	status  int
+	errKind string
+}
+
+type recommendationStressSummary struct {
+	TotalSamples     int
+	OK               int
+	AcceptedErrors   int
+	UnexpectedErrors int
+	ServerErrors     int
+	TransportErrors  int
+	TimeoutErrors    int
+	UnexpectedStatus int
+	Latencies        []time.Duration
+}
+
+func (s *recommendationStressSummary) Observe(sample recommendationStressSample) {
+	s.TotalSamples++
+	s.Latencies = append(s.Latencies, sample.latency)
+	switch sample.errKind {
+	case "":
+		s.OK++
+	case "rate_limit", "quota":
+		s.AcceptedErrors++
+	case "server_error":
+		s.ServerErrors++
+		s.UnexpectedErrors++
+	case "transport":
+		s.TransportErrors++
+		s.UnexpectedErrors++
+	case "timeout":
+		s.TimeoutErrors++
+		s.UnexpectedErrors++
+	case "unexpected_status":
+		s.UnexpectedStatus++
+		s.UnexpectedErrors++
+	default:
+		s.UnexpectedErrors++
+	}
+}
+
+func classifyRecommendationStressSample(status int, err error, latency time.Duration) recommendationStressSample {
+	switch {
+	case err != nil && isRecommendationStressTimeout(err):
+		return recommendationStressSample{latency: latency, status: 0, errKind: "timeout"}
+	case err != nil:
+		return recommendationStressSample{latency: latency, status: 0, errKind: "transport"}
+	case status == http.StatusTooManyRequests:
+		return recommendationStressSample{latency: latency, status: status, errKind: "rate_limit"}
+	case status == http.StatusForbidden:
+		return recommendationStressSample{latency: latency, status: status, errKind: "quota"}
+	case status >= 500:
+		return recommendationStressSample{latency: latency, status: status, errKind: "server_error"}
+	case status != http.StatusOK && status != http.StatusCreated && status != http.StatusAccepted:
+		return recommendationStressSample{latency: latency, status: status, errKind: "unexpected_status"}
+	default:
+		return recommendationStressSample{latency: latency, status: status}
+	}
+}
+
+func isRecommendationStressTimeout(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
+}
+
+type recommendationStressTimeoutError struct{}
+
+func (recommendationStressTimeoutError) Error() string   { return "request timed out" }
+func (recommendationStressTimeoutError) Timeout() bool   { return true }
+func (recommendationStressTimeoutError) Temporary() bool { return false }
 
 func percentile(sorted []time.Duration, q float64) time.Duration {
 	if len(sorted) == 0 {
